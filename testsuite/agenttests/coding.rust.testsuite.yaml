@@ -1,0 +1,89 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.rust
+  description: "Rust-focused prompts for the coding agent (easy→hard)."
+spec:
+  agent_name: coding
+  manifest: ../agents/coding-rust.yaml
+  workspace:
+    strategy: in_place
+    exclude:
+      - .git/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: codellama:13b
+      endpoint: http://localhost:11434
+  cases:
+    - name: easy_fix_bug_and_run_tests
+      task_type: code_modification
+      requires:
+        executables: ["cargo"]
+        tools: ["cli_cargo"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+            content: |
+              pub fn add(a: i32, b: i32) -> i32 {
+                  a + b + 1
+              }
+
+              #[cfg(test)]
+              mod tests {
+                  use super::*;
+
+                  #[test]
+                  fn test_add() {
+                      assert_eq!(add(2, 2), 4);
+                  }
+              }
+      overrides:
+        allowed_tools: ["cli_cargo", "cli_rustfmt"]
+      prompt: "Fix the failing tests in testsuite/agenttest_fixtures/rustsuite (do not change test expectations), then run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+        tool_calls_must_include:
+          - cli_cargo
+        tool_calls_must_exclude:
+          - exec_run_tests
+    - name: medium_add_mul_and_test
+      task_type: code_modification
+      requires:
+        executables: ["cargo"]
+        tools: ["cli_cargo"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+            content: |
+              pub fn add(a: i32, b: i32) -> i32 {
+                  a + b
+              }
+
+              #[cfg(test)]
+              mod tests {
+                  use super::*;
+
+                  #[test]
+                  fn test_add() {
+                      assert_eq!(add(2, 2), 4);
+                  }
+
+                  #[test]
+                  fn test_mul() {
+                      assert_eq!(mul(3, 4), 12);
+                  }
+              }
+      overrides:
+        allowed_tools: ["cli_cargo", "cli_rustfmt"]
+      prompt: "Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/lib.rs (do not change tests), then run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+        tool_calls_must_include:
+          - cli_cargo
+        tool_calls_must_exclude:
+          - exec_run_tests
+
