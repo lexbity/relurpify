@@ -59,6 +59,7 @@ func NewRootCmd() *cobra.Command {
 		newAgentsCmd(),
 		newConfigCmd(),
 		newSessionCmd(),
+		newAgentTestCmd(),
 	)
 	return root
 }
