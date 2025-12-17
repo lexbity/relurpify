@@ -118,6 +118,55 @@ func (r *ToolRegistry) All() []Tool {
 	return res
 }
 
+// CloneFiltered returns a new registry that contains the same tool wrappers and
+// registry policies, but only keeps tools that match the predicate. This is
+// useful when a higher-level agent wants to expose a subset of tools (e.g.,
+// mode-specific scopes) without losing telemetry/permission wiring.
+func (r *ToolRegistry) CloneFiltered(keep func(Tool) bool) *ToolRegistry {
+	if r == nil {
+		return NewToolRegistry()
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	clone := &ToolRegistry{
+		tools:             make(map[string]Tool),
+		permissionManager: r.permissionManager,
+		registeredAgentID: r.registeredAgentID,
+		agentSpec:         r.agentSpec,
+		telemetry:         r.telemetry,
+		toolPolicies:      make(map[string]ToolPolicy, len(r.toolPolicies)),
+	}
+	for name, pol := range r.toolPolicies {
+		clone.toolPolicies[name] = pol
+	}
+	for name, tool := range r.tools {
+		if keep != nil && !keep(tool) {
+			continue
+		}
+		clone.tools[name] = cloneTool(tool)
+	}
+	return clone
+}
+
+func cloneTool(tool Tool) Tool {
+	if tool == nil {
+		return nil
+	}
+	if t, ok := tool.(*instrumentedTool); ok {
+		// Create a fresh wrapper so per-mode registries don't mutate each other's
+		// telemetry/permission pointers.
+		return &instrumentedTool{
+			Tool:      t.Tool,
+			manager:   t.manager,
+			agentID:   t.agentID,
+			telemetry: t.telemetry,
+			policy:    t.policy,
+			hasPolicy: t.hasPolicy,
+		}
+	}
+	return tool
+}
+
 // UsePermissionManager enables default-deny enforcement for all tools.
 func (r *ToolRegistry) UsePermissionManager(agentID string, manager *PermissionManager) {
 	r.mu.Lock()
