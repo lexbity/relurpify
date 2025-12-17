@@ -76,4 +76,3 @@ func permissionRequiresExecute(perms *PermissionSet) bool {
 func permissionRequiresNetwork(perms *PermissionSet) bool {
 	return len(perms.Network) > 0
 }
-
