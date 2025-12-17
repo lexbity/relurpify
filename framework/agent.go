@@ -64,17 +64,17 @@ type PlanStep struct {
 // reference shared defaults (model name, iteration caps, etc.) inside their
 // graph-building logic.
 type Config struct {
-	Name               string
-	DefaultAgent       string
-	MaxIterations      int
-	Model              string
-	OllamaEndpoint     string
-	LanguageServers    map[string]map[string]string
-	OllamaToolCalling  bool
-	DebugLLM           bool
-	DebugAgent         bool
-	AgentSpec          *AgentRuntimeSpec
-	Telemetry          Telemetry
+	Name              string
+	DefaultAgent      string
+	MaxIterations     int
+	Model             string
+	OllamaEndpoint    string
+	LanguageServers   map[string]map[string]string
+	OllamaToolCalling bool
+	DebugLLM          bool
+	DebugAgent        bool
+	AgentSpec         *AgentRuntimeSpec
+	Telemetry         Telemetry
 }
 
 // Result captures the result of a graph or agent execution. Creating a shared
