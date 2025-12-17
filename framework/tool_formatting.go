@@ -15,7 +15,7 @@ func RenderToolsToPrompt(tools []Tool) string {
 	}
 	var b strings.Builder
 	b.WriteString("You have access to the following tools. To call a tool, return a JSON object with 'tool' (name) and 'arguments' (map).\n\n")
-	
+
 	for _, tool := range tools {
 		b.WriteString(fmt.Sprintf("## %s\n", tool.Name()))
 		b.WriteString(fmt.Sprintf("%s\n", tool.Description()))
@@ -43,11 +43,11 @@ func RenderToolsToPrompt(tools []Tool) string {
 // It looks for JSON blocks that match the tool call schema.
 func ParseToolCallsFromText(text string) []ToolCall {
 	var calls []ToolCall
-	
+
 	// Attempt to find Markdown JSON blocks
-	jsonBlockRegex := regexp.MustCompile("`json\n(.*?)\n`")
+	jsonBlockRegex := regexp.MustCompile("(?s)```json\\s*(.*?)```")
 	matches := jsonBlockRegex.FindAllStringSubmatch(text, -1)
-	
+
 	for _, match := range matches {
 		if len(match) > 1 {
 			call, ok := tryParseSingleToolCall(match[1])
@@ -56,7 +56,7 @@ func ParseToolCallsFromText(text string) []ToolCall {
 			}
 		}
 	}
-	
+
 	// Also attempt to parse the entire text if it looks like JSON
 	// This covers cases where the model only outputs JSON without markdown code fences
 	trimmed := strings.TrimSpace(text)
@@ -76,11 +76,11 @@ func tryParseSingleToolCall(jsonText string) (ToolCall, bool) {
 		Arguments map[string]interface{} `json:"arguments"`
 		Args      map[string]interface{} `json:"args"` // alias for 'arguments'
 	}
-	
+
 	if err := json.Unmarshal([]byte(jsonText), &raw); err != nil {
 		return ToolCall{}, false
 	}
-	
+
 	name := raw.Tool
 	if name == "" {
 		name = raw.Name
@@ -88,7 +88,7 @@ func tryParseSingleToolCall(jsonText string) (ToolCall, bool) {
 	if name == "" {
 		return ToolCall{}, false
 	}
-	
+
 	args := raw.Arguments
 	if args == nil {
 		args = raw.Args
@@ -96,10 +96,10 @@ func tryParseSingleToolCall(jsonText string) (ToolCall, bool) {
 	if args == nil {
 		args = make(map[string]interface{})
 	}
-	
+
 	return ToolCall{
-		Name: name,
-		Args: args,
-	},
+			Name: name,
+			Args: args,
+		},
 		true
 }
