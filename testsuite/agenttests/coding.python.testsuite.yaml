@@ -1,0 +1,103 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.python
+  description: "Python-focused prompts for the coding agent (easy→hard)."
+spec:
+  agent_name: coding
+  manifest: ../agents/coding-python.yaml
+  workspace:
+    strategy: in_place
+    exclude:
+      - .git/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: codellama:13b
+      endpoint: http://localhost:11434
+  cases:
+    - name: easy_fix_bug_and_run_tests
+      task_type: code_modification
+      requires:
+        executables: ["python3"]
+        tools: ["cli_python"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/pysuite/calc.py
+            content: |
+              def add(a: int, b: int) -> int:
+                  return a + b + 1
+
+
+              def mul(a: int, b: int) -> int:
+                  return a * b
+          - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
+            content: |
+              import unittest
+
+              import calc
+
+
+              class TestCalc(unittest.TestCase):
+                  def test_add(self) -> None:
+                      self.assertEqual(calc.add(2, 2), 4)
+
+                  def test_mul(self) -> None:
+                      self.assertEqual(calc.mul(3, 4), 12)
+
+
+              if __name__ == "__main__":
+                  unittest.main()
+      overrides:
+        allowed_tools: ["cli_python"]
+      prompt: "Fix the failing tests in testsuite/agenttest_fixtures/pysuite (do not change test_calc.py), then run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\"."
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/agenttest_fixtures/pysuite/calc.py"]
+        tool_calls_must_include: ["cli_python"]
+        tool_calls_must_exclude: ["exec_run_tests"]
+    - name: medium_add_div_and_test
+      task_type: code_modification
+      requires:
+        executables: ["python3"]
+        tools: ["cli_python"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/pysuite/calc.py
+            content: |
+              def add(a: int, b: int) -> int:
+                  return a + b
+
+
+              def mul(a: int, b: int) -> int:
+                  return a * b
+          - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
+            content: |
+              import unittest
+
+              import calc
+
+
+              class TestCalc(unittest.TestCase):
+                  def test_add(self) -> None:
+                      self.assertEqual(calc.add(2, 2), 4)
+
+                  def test_mul(self) -> None:
+                      self.assertEqual(calc.mul(3, 4), 12)
+
+                  def test_div(self) -> None:
+                      self.assertEqual(calc.div(10, 2), 5)
+                      with self.assertRaises(ZeroDivisionError):
+                          calc.div(1, 0)
+
+
+              if __name__ == "__main__":
+                  unittest.main()
+      overrides:
+        allowed_tools: ["cli_python"]
+      prompt: "Implement div(a: int, b: int) -> int in testsuite/agenttest_fixtures/pysuite/calc.py (raise ZeroDivisionError on division by zero; do not change tests), then run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\"."
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/agenttest_fixtures/pysuite/calc.py"]
+        tool_calls_must_include: ["cli_python"]
+        tool_calls_must_exclude: ["exec_run_tests"]
+
