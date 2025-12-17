@@ -17,9 +17,9 @@ type Rule struct {
 
 // Ruleset groups project instructions.
 type Ruleset struct {
-	Rules          []Rule   `yaml:"rules"`
+	Rules           []Rule   `yaml:"rules"`
 	CodingStandards []string `yaml:"coding_standards"`
-	BestPractices  []string `yaml:"best_practices"`
+	BestPractices   []string `yaml:"best_practices"`
 }
 
 // LoadRuleset reads relurpify_cfg/rules.yaml when present.
