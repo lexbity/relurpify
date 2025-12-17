@@ -23,8 +23,8 @@ func NewInstrumentedModel(inner framework.LanguageModel, telemetry framework.Tel
 
 func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *framework.LLMOptions) (*framework.LLMResponse, error) {
 	m.emitPrompt(ctx, "generate", map[string]interface{}{
-		"model":         modelFromOptions(options),
-		"prompt_chars":  len(prompt),
+		"model":          modelFromOptions(options),
+		"prompt_chars":   len(prompt),
 		"prompt_preview": clip(prompt, 1024),
 	}, m.Debug, map[string]interface{}{"prompt": clip(prompt, 8192)})
 	resp, err := m.Inner.Generate(ctx, prompt, options)
@@ -34,8 +34,8 @@ func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options
 
 func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *framework.LLMOptions) (<-chan string, error) {
 	m.emitPrompt(ctx, "generate_stream", map[string]interface{}{
-		"model":         modelFromOptions(options),
-		"prompt_chars":  len(prompt),
+		"model":          modelFromOptions(options),
+		"prompt_chars":   len(prompt),
 		"prompt_preview": clip(prompt, 1024),
 	}, m.Debug, map[string]interface{}{"prompt": clip(prompt, 8192)})
 	ch, err := m.Inner.GenerateStream(ctx, prompt, options)
@@ -88,12 +88,12 @@ func chatMeta(messages []framework.Message, tools []framework.Tool, options *fra
 		toolNames = append(toolNames, t.Name())
 	}
 	base := map[string]interface{}{
-		"model":         modelFromOptions(options),
-		"message_count": len(messages),
-		"roles":         roles,
+		"model":            modelFromOptions(options),
+		"message_count":    len(messages),
+		"roles":            roles,
 		"messages_preview": preview,
-		"tool_count":    len(tools),
-		"tool_names":    toolNames,
+		"tool_count":       len(tools),
+		"tool_names":       toolNames,
 	}
 	debug := map[string]interface{}{}
 	if len(messages) > 0 {
@@ -211,4 +211,3 @@ func min(a, b int) int {
 	}
 	return b
 }
-
