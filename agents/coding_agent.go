@@ -195,13 +195,9 @@ func (a *CodingAgent) scopedTools(scope ToolScope) *framework.ToolRegistry {
 	if a.Tools == nil {
 		return framework.NewToolRegistry()
 	}
-	registry := framework.NewToolRegistry()
-	for _, tool := range a.Tools.All() {
-		if toolAllowed(tool, scope) {
-			_ = registry.Register(tool)
-		}
-	}
-	return registry
+	return a.Tools.CloneFiltered(func(tool framework.Tool) bool {
+		return toolAllowed(tool, scope)
+	})
 }
 
 // toolAllowed checks whether the tool's declared permissions fit inside the
