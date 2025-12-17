@@ -412,24 +412,38 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) 
 		}
 		state.Set("react.tool_calls", resp.ToolCalls)
 	} else if useToolCalling {
-		parsed, err := parseDecision(resp.Text)
-		if err == nil && (parsed.Tool != "" || parsed.Complete) {
-			decision = parsed
+		// Some Ollama models return tool calls as JSON blobs in plain text even
+		// when the chat_with_tools API is used. Prefer extracting those calls
+		// before falling back to the decision parser.
+		detectedCalls := framework.ParseToolCallsFromText(resp.Text)
+		detectedCalls = filterToolCalls(detectedCalls)
+		if len(detectedCalls) > 0 {
+			state.Set("react.tool_calls", detectedCalls)
+			decision = decisionPayload{
+				Thought:   resp.Text,
+				Complete:  false,
+				Timestamp: time.Now().UTC(),
+			}
 		} else {
-			decision = decisionPayload{Thought: resp.Text, Complete: true}
+			parsed, err := parseDecision(resp.Text)
+			if err == nil && (parsed.Tool != "" || parsed.Complete) {
+				decision = parsed
+			} else {
+				decision = decisionPayload{Thought: resp.Text, Complete: true}
+			}
+			state.Set("react.tool_calls", []framework.ToolCall{})
 		}
-		state.Set("react.tool_calls", []framework.ToolCall{})
 	} else {
 		parsed, err := parseDecision(resp.Text)
-		
+
 		// Fallback: Check if the framework helper finds distinct tool calls (e.g. in markdown blocks)
 		// even if the single-object parser failed or found nothing.
 		detectedCalls := framework.ParseToolCallsFromText(resp.Text)
-		
+
 		if len(detectedCalls) > 0 {
 			// Found tools via text parsing
 			state.Set("react.tool_calls", detectedCalls)
-			
+
 			// Use thought from parsed if available, else full text
 			thought := parsed.Thought
 			if thought == "" {
@@ -458,6 +472,22 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) 
 			"decision": decision,
 		},
 	}, nil
+}
+
+func filterToolCalls(calls []framework.ToolCall) []framework.ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]framework.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		name := strings.TrimSpace(call.Name)
+		if name == "" || strings.EqualFold(name, "none") {
+			continue
+		}
+		call.Name = name
+		out = append(out, call)
+	}
+	return out
 }
 
 // buildPrompt returns a textual prompt when tool-calling chat APIs are not
@@ -560,6 +590,7 @@ func (n *reactThinkNode) buildSystemPrompt(tools []framework.Tool) string {
 	return fmt.Sprintf(`You are a ReAct agent. Think carefully, call tools when required, and finish with a concise summary.
 Available tools:
 %s%s
+If the task asks about the contents of a file (e.g. "Summarize README.md"), you MUST call file_read to fetch it before answering.
 When you call a tool, wait for its response before continuing. When the work is complete, provide the final answer as plain text.`, strings.Join(lines, "\n"), guidance.String())
 }
 
@@ -650,6 +681,11 @@ func (n *reactActNode) Execute(ctx context.Context, state *framework.Context) (*
 	if err != nil {
 		return nil, err
 	}
+	appendToolMessage(state, framework.ToolCall{
+		ID:   NewUUID(),
+		Name: decision.Tool,
+		Args: decision.Arguments,
+	}, res)
 	state.Set("react.last_tool_result", res.Data)
 	n.agent.debugf("%s tool=%s result=%v", n.id, decision.Tool, res.Data)
 	result := &framework.Result{
