@@ -12,18 +12,18 @@ import (
 type EventType string
 
 const (
-	EventGraphStart   EventType = "graph_start"
-	EventGraphFinish  EventType = "graph_finish"
-	EventNodeStart    EventType = "node_start"
-	EventNodeFinish   EventType = "node_finish"
-	EventNodeError    EventType = "node_error"
-	EventAgentStart   EventType = "agent_start"
-	EventAgentFinish  EventType = "agent_finish"
-	EventLLMPrompt    EventType = "llm_prompt"
-	EventLLMResponse  EventType = "llm_response"
-	EventToolCall     EventType = "tool_call"
-	EventToolResult   EventType = "tool_result"
-	EventStateChange  EventType = "state_change"
+	EventGraphStart  EventType = "graph_start"
+	EventGraphFinish EventType = "graph_finish"
+	EventNodeStart   EventType = "node_start"
+	EventNodeFinish  EventType = "node_finish"
+	EventNodeError   EventType = "node_error"
+	EventAgentStart  EventType = "agent_start"
+	EventAgentFinish EventType = "agent_finish"
+	EventLLMPrompt   EventType = "llm_prompt"
+	EventLLMResponse EventType = "llm_response"
+	EventToolCall    EventType = "tool_call"
+	EventToolResult  EventType = "tool_result"
+	EventStateChange EventType = "state_change"
 )
 
 // Event captures structured telemetry data.
