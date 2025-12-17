@@ -41,13 +41,13 @@ func (a *ExpertCoderAgent) Initialize(cfg *framework.Config) error {
 	a.coordinator = NewAgentCoordinator(cfg.Telemetry, framework.NewContextBudget(16000))
 	a.coordinator.RegisterAgent("planner", planner)
 	a.coordinator.RegisterAgent("executor", coder)
-	
+
 	// Register an 'ask' agent for self-healing diagnostics if available
 	asker := &ReActAgent{
-		Model: a.Model, 
-		Tools: a.Tools, 
+		Model:  a.Model,
+		Tools:  a.Tools,
 		Memory: a.Memory,
-		Mode: "ask",
+		Mode:   "ask",
 	}
 	if err := asker.Initialize(cfg); err == nil {
 		a.coordinator.RegisterAgent("ask", asker)
@@ -101,7 +101,7 @@ type expertCoordinatorNode struct {
 	task  *framework.Task
 }
 
-func (n *expertCoordinatorNode) ID() string { return n.id }
+func (n *expertCoordinatorNode) ID() string               { return n.id }
 func (n *expertCoordinatorNode) Type() framework.NodeType { return framework.NodeTypeSystem }
 func (n *expertCoordinatorNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
 	return n.agent.Execute(ctx, n.task, state)
