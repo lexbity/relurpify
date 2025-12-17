@@ -103,12 +103,12 @@ func (ac *AgentCoordinator) Execute(ctx context.Context, task *framework.Task, s
 	if task == nil {
 		return nil, fmt.Errorf("task is required")
 	}
-	
+
 	// If external state is provided, we sync it with our internal shared context
 	if state != nil {
 		ac.sharedContext.Context.Merge(state)
 	}
-	
+
 	strategy := ac.determineStrategy(task)
 	var result *framework.Result
 	var err error
@@ -174,7 +174,7 @@ func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*f
 	// 2. Loop until all completed.
 	// 3. Find steps where all dependencies are completed.
 	// 4. Run them in parallel (if >1).
-	
+
 	completedSteps := make(map[string]bool)
 	stepMap := make(map[string]PlanStep)
 	for _, s := range plan.Steps {
@@ -229,7 +229,7 @@ func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*f
 		} else {
 			var wg sync.WaitGroup
 			errChan := make(chan error, len(readySteps))
-			
+
 			for _, step := range readySteps {
 				wg.Add(1)
 				step := step
@@ -237,22 +237,22 @@ func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*f
 					defer wg.Done()
 					// Clone context for isolation
 					branchCtx := ac.sharedContext.Context.Clone()
-					
-					// We need a thread-safe way to run the agent. 
+
+					// We need a thread-safe way to run the agent.
 					// Agents are stateless usually, but we need to ensure we don't race on shared resources if tools aren't safe.
 					// Most framework tools are safe (file locks, etc).
-					
+
 					// Create a transient coordinator/wrapper to run this step?
 					// No, just call executor.Execute.
-					
+
 					sErr := ac.executeSingleStep(context.Background(), step, executor, task, plan)
 					if sErr != nil {
 						errChan <- sErr
 						return
 					}
-					
+
 					// In a real implementation we would merge branchCtx back.
-					// For now, we assume steps are modifying FS state (side effects), 
+					// For now, we assume steps are modifying FS state (side effects),
 					// so we don't strictly need to merge memory unless they output new variables.
 					// To be safe, we acquire lock and merge "step results" only?
 					// framework.Context.Merge handles this.
@@ -313,13 +313,13 @@ func (ac *AgentCoordinator) executeSingleStep(ctx context.Context, step PlanStep
 	stepTask.Instruction = fmt.Sprintf("Execute step %s: %s\nFiles: %v", step.ID, step.Description, step.Files)
 	stepTask.Context["plan"] = plan
 	stepTask.Context["current_step"] = step
-	
+
 	// Retry logic per step
 	var stepErr error
 	for attempt := 0; attempt <= ac.Config.MaxRecoveryAttempts; attempt++ {
 		if attempt > 0 {
 			stepTask.Instruction += fmt.Sprintf("\nRetry %d: Last error: %v", attempt, stepErr)
-			
+
 			// Add diagnostic info if available
 			if diagAgent, hasDiag := ac.agents["ask"]; hasDiag && stepErr != nil {
 				diagTask := cloneTask(originalTask)
@@ -389,7 +389,7 @@ func (ac *AgentCoordinator) executeReviewIterateStrategy(task *framework.Task) (
 			break
 		}
 		ac.contextBroker.StoreReviewIssues(reviewResult)
-		
+
 		issues, hasIssues := reviewResult.Data["issues"].([]ReviewIssue)
 		if !hasIssues || len(issues) == 0 {
 			break
@@ -418,7 +418,7 @@ func (ac *AgentCoordinator) executeReviewIterateStrategy(task *framework.Task) (
 			task.Context = map[string]any{}
 		}
 		task.Context["review_issues"] = criticalIssues
-		
+
 		// Update instruction to focus on fixing issues
 		var issueDesc strings.Builder
 		issueDesc.WriteString("Fix the following review issues:\n")
