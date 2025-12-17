@@ -29,4 +29,3 @@ func TaskContextFrom(ctx context.Context) (TaskContext, bool) {
 	task, ok := val.(TaskContext)
 	return task, ok
 }
-
