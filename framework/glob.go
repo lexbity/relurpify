@@ -61,4 +61,3 @@ func globToRegexPublic(pattern string) string {
 	b.WriteString("$")
 	return b.String()
 }
-
