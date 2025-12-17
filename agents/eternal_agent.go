@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework"
@@ -13,21 +14,34 @@ import (
 type EternalAgent struct {
 	Model  framework.LanguageModel
 	Config *framework.Config
-	
+
 	// Configuration
 	MaxTokensPerCycle int
 	ResetDuration     time.Duration
 	Infinite          bool
+	MaxCycles         int
+	SleepPerCycle     time.Duration
 }
 
 // Initialize configures the agent.
 func (a *EternalAgent) Initialize(cfg *framework.Config) error {
 	a.Config = cfg
-	// Defaults
-	a.MaxTokensPerCycle = 4096
-	a.ResetDuration = 1 * time.Hour
-	a.Infinite = true
-	
+	// Defaults (safe for non-interactive runs).
+	if a.MaxTokensPerCycle <= 0 {
+		a.MaxTokensPerCycle = 512
+	}
+	if a.ResetDuration <= 0 {
+		a.ResetDuration = 1 * time.Hour
+	}
+	if a.MaxCycles <= 0 {
+		a.MaxCycles = 1
+	}
+	// Infinite loops should be opt-in via task context.
+	a.Infinite = false
+	if a.SleepPerCycle < 0 {
+		a.SleepPerCycle = 0
+	}
+
 	// Override from AgentSpec if available (assuming generic metadata or struct fields mapping)
 	// For now, hardcoded defaults or simple mapping if we extended Config.
 	return nil
@@ -54,11 +68,51 @@ ASCII art is permittable in replies.`
 			streamCallback = fn
 		}
 	}
+	infinite := a.Infinite
+	maxCycles := a.MaxCycles
+	sleepPerCycle := a.SleepPerCycle
+	if task != nil && task.Context != nil {
+		if raw, ok := task.Context["eternal.infinite"]; ok {
+			if v, ok := raw.(bool); ok {
+				infinite = v
+			}
+		}
+		if raw, ok := task.Context["eternal.max_cycles"]; ok {
+			switch v := raw.(type) {
+			case int:
+				maxCycles = v
+			case int64:
+				maxCycles = int(v)
+			case float64:
+				maxCycles = int(v)
+			case string:
+				if parsed, err := strconv.Atoi(v); err == nil {
+					maxCycles = parsed
+				}
+			}
+		}
+		if raw, ok := task.Context["eternal.sleep"]; ok {
+			switch v := raw.(type) {
+			case string:
+				if d, err := time.ParseDuration(v); err == nil {
+					sleepPerCycle = d
+				}
+			case float64:
+				sleepPerCycle = time.Duration(v) * time.Millisecond
+			case int:
+				sleepPerCycle = time.Duration(v) * time.Millisecond
+			}
+		}
+	}
+	if maxCycles <= 0 && !infinite {
+		maxCycles = 1
+	}
 
 	startTime := time.Now()
 	tokensGenerated := 0
 
 	// 4. The Loop
+	cycle := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -68,7 +122,7 @@ ASCII art is permittable in replies.`
 
 		// Check Reset Conditions
 		if time.Since(startTime) > a.ResetDuration {
-			if !a.Infinite {
+			if !infinite {
 				break
 			}
 			// Reset
@@ -85,22 +139,22 @@ ASCII art is permittable in replies.`
 		// Construct Prompt (System + History/Current)
 		// We use GenerateStream directly.
 		fullPrompt := fmt.Sprintf("%s\n\n%s", systemPrompt, currentPrompt)
-		
-		// If we had history in 'state', we could append it. 
+
+		// If we had history in 'state', we could append it.
 		// For "Eternal", let's assume it feeds its own output back as the next prompt?
 		// Or acts as a chatbot.
 		// Let's use Chat if we want history, but the requirements said "converses with itself".
 		// Simple implementation: Generate -> Output -> Append to Prompt?
 		// Risk: Prompt grows indefinitely.
 		// Better: Use a rolling window of recent "thoughts".
-		
+
 		// Let's try to stream.
 		stream, err := a.Model.GenerateStream(ctx, fullPrompt, &framework.LLMOptions{
 			Model:       a.Config.Model,
 			Temperature: 0.9, // Creative/Hyperstition
-			MaxTokens:   512, // Per turn
+			MaxTokens:   a.MaxTokensPerCycle,
 		})
-		
+
 		if err != nil {
 			return nil, err
 		}
@@ -112,23 +166,25 @@ ASCII art is permittable in replies.`
 			}
 			responseBuffer += token
 		}
-		
+
 		// Post-generation logic
 		tokensGenerated += len(responseBuffer) / 4 // Approx
-		
+
 		// Add to state
 		state.AddInteraction("assistant", responseBuffer, nil)
-		
+
 		// "Converses with itself": The response becomes the seed for the next turn?
 		// Or we assume the LLM just continues?
 		// Let's append the response to the "currentPrompt" for the next iteration (rolling).
 		// But truncate to avoid overflow.
 		currentPrompt = responseBuffer
-		
-		// Optional delay for effect?
-		time.Sleep(500 * time.Millisecond)
-		
-		if !a.Infinite {
+
+		if sleepPerCycle > 0 {
+			time.Sleep(sleepPerCycle)
+		}
+
+		cycle++
+		if !infinite && cycle >= maxCycles {
 			break
 		}
 	}
