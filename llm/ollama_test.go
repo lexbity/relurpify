@@ -87,6 +87,24 @@ func TestClientChat(t *testing.T) {
 	assert.Equal(t, "ok", resp.Text)
 }
 
+func TestClientChatTrimsOpenAIv1Endpoint(t *testing.T) {
+	client := NewClient("http://fake/v1", "chat-model")
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) *http.Response {
+			assert.Equal(t, "/api/chat", req.URL.Path)
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader(`{"text":"ok"}`)),
+				Header:     make(http.Header),
+			}
+		}),
+	}
+
+	resp, err := client.Chat(context.Background(), []framework.Message{{Role: "user", Content: "ping"}}, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "ok", resp.Text)
+}
+
 func TestClientChatWithToolsParsesToolCalls(t *testing.T) {
 	client := NewClient("http://fake", "model")
 	client.client = &http.Client{
