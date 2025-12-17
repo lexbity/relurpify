@@ -9,6 +9,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -99,7 +101,7 @@ func (c *Client) GenerateStream(ctx context.Context, prompt string, options *fra
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint+"/api/generate", bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+"/api/generate", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
@@ -184,13 +186,36 @@ func (c *Client) applyOptions(payload map[string]interface{}, options *framework
 	}
 }
 
+// ollamaAPIEndpoint normalizes the configured endpoint for Ollama-native APIs.
+// In particular, it strips an OpenAI-compatible "/v1" suffix so we don't hit
+// "/v1/api/chat" and "/v1/api/generate" (which return 404 on Ollama).
+func (c *Client) ollamaAPIEndpoint() string {
+	endpoint := strings.TrimSpace(c.Endpoint)
+	if endpoint == "" {
+		endpoint = "http://localhost:11434"
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return strings.TrimRight(endpoint, "/")
+	}
+	if parsed.Path != "" {
+		clean := path.Clean(parsed.Path)
+		if clean == "/v1" {
+			parsed.Path = ""
+		}
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return strings.TrimRight(parsed.String(), "/")
+}
+
 func (c *Client) doRequest(ctx context.Context, path string, payload interface{}) (*framework.LLMResponse, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
 	c.logPayload(path, body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint+path, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +236,7 @@ func (c *Client) doRequest(ctx context.Context, path string, payload interface{}
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
-}
+	}
 	c.logResponse(path, responseBody)
 	return decodeLLMResponse(bytes.NewReader(responseBody))
 }
