@@ -28,4 +28,3 @@ func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defau
 	}
 	return defaultDecision, ""
 }
-
