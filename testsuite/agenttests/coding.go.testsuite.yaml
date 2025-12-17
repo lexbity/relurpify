@@ -1,0 +1,126 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.go
+  description: "Go-focused prompts for the coding agent (easy→hard)."
+spec:
+  agent_name: coding
+  manifest: ../agents/coding-go.yaml
+  workspace:
+    strategy: in_place
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: codellama:13b
+      endpoint: http://localhost:11434
+  cases:
+    - name: easy_fix_bug_and_run_tests
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              // Add returns the sum of a and b.
+              func Add(a, b int) int {
+              	return a + b + 1
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      overrides:
+        allowed_tools: ["cli_go"]
+      prompt: "Fix the failing test in testsuite/agenttest_fixtures/gosuite/mathutil (do not change the test), then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        tool_calls_must_include:
+          - cli_go
+        tool_calls_must_exclude:
+          - exec_run_tests
+    - name: medium_add_function_and_test
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              // Add returns the sum of a and b.
+              func Add(a, b int) int {
+              	return a + b
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mul_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestMul(t *testing.T) {
+              	if Mul(3, 4) != 12 {
+              		t.Fatalf("expected Mul(3,4)=12")
+              	}
+              }
+      overrides:
+        allowed_tools: ["cli_go"]
+      prompt: "Implement Mul(a,b int) in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go (do not change tests), then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        tool_calls_must_include:
+          - cli_go
+        tool_calls_must_exclude:
+          - exec_run_tests
+    - name: hard_add_sumall_and_test
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              // Add returns the sum of a and b.
+              func Add(a, b int) int {
+              	return a + b
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/sumall_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestSumAll(t *testing.T) {
+              	if SumAll(nil) != 0 {
+              		t.Fatalf("expected SumAll(nil)=0")
+              	}
+              	if SumAll([]int{}) != 0 {
+              		t.Fatalf("expected SumAll([])=0")
+              	}
+              	if SumAll([]int{1, 2, 3}) != 6 {
+              		t.Fatalf("expected SumAll([1,2,3])=6")
+              	}
+              }
+      overrides:
+        allowed_tools: ["cli_go"]
+      prompt: "Implement SumAll(nums []int) int in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go (do not change tests), then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
+      expect:
+        must_succeed: true
+        tool_calls_must_include:
+          - cli_go
+        tool_calls_must_exclude:
+          - exec_run_tests
+
