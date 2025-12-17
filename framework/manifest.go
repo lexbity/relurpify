@@ -110,22 +110,22 @@ func (m *AgentManifest) Validate() error {
 // manifest. These fields are optional from the sandbox point of view but
 // provide the additional metadata needed by the orchestrator.
 type AgentRuntimeSpec struct {
-	Implementation    string               `yaml:"implementation" json:"implementation"` // e.g. "react", "planner", "coding"
-	Mode              AgentMode            `yaml:"mode" json:"mode"`
-	Version           string               `yaml:"version,omitempty" json:"version,omitempty"`
-	Prompt            string               `yaml:"prompt,omitempty" json:"prompt,omitempty"`
-	Model             AgentModelConfig     `yaml:"model" json:"model"`
-	Tools             AgentToolMatrix      `yaml:"tools" json:"tools"`
+	Implementation    string                `yaml:"implementation" json:"implementation"` // e.g. "react", "planner", "coding"
+	Mode              AgentMode             `yaml:"mode" json:"mode"`
+	Version           string                `yaml:"version,omitempty" json:"version,omitempty"`
+	Prompt            string                `yaml:"prompt,omitempty" json:"prompt,omitempty"`
+	Model             AgentModelConfig      `yaml:"model" json:"model"`
+	Tools             AgentToolMatrix       `yaml:"tools" json:"tools"`
 	ToolPolicies      map[string]ToolPolicy `yaml:"tool_policies,omitempty" json:"tool_policies,omitempty"`
-	Bash              AgentBashPermissions `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
-	Files             AgentFileMatrix      `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
-	Invocation        AgentInvocationSpec  `yaml:"invocation,omitempty" json:"invocation,omitempty"`
-	Context           AgentContextSpec     `yaml:"context,omitempty" json:"context,omitempty"`
-	LSP               AgentLSPSpec         `yaml:"lsp,omitempty" json:"lsp,omitempty"`
-	Search            AgentSearchSpec      `yaml:"search,omitempty" json:"search,omitempty"`
-	Metadata          AgentMetadata        `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	OllamaToolCalling *bool                `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
-	Logging           *AgentLoggingSpec    `yaml:"logging,omitempty" json:"logging,omitempty"`
+	Bash              AgentBashPermissions  `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
+	Files             AgentFileMatrix       `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
+	Invocation        AgentInvocationSpec   `yaml:"invocation,omitempty" json:"invocation,omitempty"`
+	Context           AgentContextSpec      `yaml:"context,omitempty" json:"context,omitempty"`
+	LSP               AgentLSPSpec          `yaml:"lsp,omitempty" json:"lsp,omitempty"`
+	Search            AgentSearchSpec       `yaml:"search,omitempty" json:"search,omitempty"`
+	Metadata          AgentMetadata         `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	OllamaToolCalling *bool                 `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
+	Logging           *AgentLoggingSpec     `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
 
 // AgentLSPSpec configures Language Server Protocol features.
@@ -294,11 +294,10 @@ func (m AgentModelConfig) Validate() error {
 	return nil
 }
 
-// Validate ensures at least one capability is enabled.
+// Validate ensures the tool matrix configuration is valid. An agent may disable
+// every builtin tool (for example, pure chat/streaming agents that never touch
+// the filesystem or shell), so an empty matrix is allowed.
 func (t AgentToolMatrix) Validate() error {
-	if !t.FileRead && !t.FileWrite && !t.SearchCodebase && !t.BashExecute && !t.LSPQuery {
-		return fmt.Errorf("agent tools must enable at least one capability")
-	}
 	return nil
 }
 
