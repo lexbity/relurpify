@@ -697,6 +697,12 @@ func matchGlob(pattern, value string) bool {
 	}
 	pattern = filepath.ToSlash(pattern)
 	value = filepath.ToSlash(value)
+	if strings.HasSuffix(pattern, "/**") {
+		base := strings.TrimSuffix(pattern, "/**")
+		if value == base {
+			return true
+		}
+	}
 	if !strings.Contains(pattern, "**") {
 		ok, err := filepath.Match(pattern, value)
 		if err != nil {
