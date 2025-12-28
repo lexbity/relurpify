@@ -3,24 +3,24 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"strconv"
 	"strings"
-
-	"github.com/lexcodex/relurpify/framework"
-	"github.com/lexcodex/relurpify/framework/ast"
 )
 
 // DocumentSymbolToolProvider wraps the lsp_document_symbols tool so AST
 // indexing can source symbols through the existing permission and proxy
 // infrastructure.
 type DocumentSymbolToolProvider struct {
-	tool framework.Tool
+	tool core.Tool
 }
 
 // NewDocumentSymbolToolProvider builds a provider that executes the wrapped
 // tool directly. The supplied tool should be fetched from a ToolRegistry so it
 // carries the permission manager wrapper.
-func NewDocumentSymbolToolProvider(tool framework.Tool) *DocumentSymbolToolProvider {
+func NewDocumentSymbolToolProvider(tool core.Tool) *DocumentSymbolToolProvider {
 	if tool == nil {
 		return nil
 	}
@@ -32,7 +32,7 @@ func (p *DocumentSymbolToolProvider) DocumentSymbols(ctx context.Context, path s
 	if p == nil || p.tool == nil {
 		return nil, fmt.Errorf("document symbol tool unavailable")
 	}
-	state := framework.NewContext()
+	state := core.NewContext()
 	res, err := p.tool.Execute(ctx, state, map[string]interface{}{"file": path})
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func (p *DocumentSymbolToolProvider) DocumentSymbols(ctx context.Context, path s
 
 // AttachASTSymbolProvider inspects the registry for the LSP document symbols
 // tool and wires it into the AST indexer when present.
-func AttachASTSymbolProvider(manager *ast.IndexManager, registry *framework.ToolRegistry) {
+func AttachASTSymbolProvider(manager *ast.IndexManager, registry *toolsys.ToolRegistry) {
 	if manager == nil || registry == nil {
 		return
 	}
@@ -58,7 +58,7 @@ func AttachASTSymbolProvider(manager *ast.IndexManager, registry *framework.Tool
 	if !ok || tool == nil {
 		return
 	}
-	if !tool.IsAvailable(context.Background(), framework.NewContext()) {
+	if !tool.IsAvailable(context.Background(), core.NewContext()) {
 		return
 	}
 	provider := NewDocumentSymbolToolProvider(tool)
