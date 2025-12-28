@@ -3,10 +3,11 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"strings"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // RunTestsTool executes test commands.
@@ -14,18 +15,18 @@ type RunTestsTool struct {
 	Command []string
 	Workdir string
 	Timeout time.Duration
-	Runner  framework.CommandRunner
-	manager *framework.PermissionManager
+	Runner  runtime.CommandRunner
+	manager *runtime.PermissionManager
 	agentID string
-	spec    *framework.AgentRuntimeSpec
+	spec    *core.AgentRuntimeSpec
 }
 
-func (t *RunTestsTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *RunTestsTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *RunTestsTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *RunTestsTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -33,12 +34,12 @@ func (t *RunTestsTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID st
 func (t *RunTestsTool) Name() string        { return "exec_run_tests" }
 func (t *RunTestsTool) Description() string { return "Runs project tests." }
 func (t *RunTestsTool) Category() string    { return "execution" }
-func (t *RunTestsTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *RunTestsTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "pattern", Type: "string", Required: false},
 	}
 }
-func (t *RunTestsTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *RunTestsTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	pattern := fmt.Sprint(args["pattern"])
 	cmdline := append([]string{}, t.Command...)
 	if pattern != "" {
@@ -49,7 +50,7 @@ func (t *RunTestsTool) Execute(ctx context.Context, state *framework.Context, ar
 	}
 	stdout, stderr, err := t.run(ctx, cmdline, "")
 	if err != nil {
-		return &framework.ToolResult{
+		return &core.ToolResult{
 			Success: false,
 			Data: map[string]interface{}{
 				"stdout": stdout,
@@ -58,7 +59,7 @@ func (t *RunTestsTool) Execute(ctx context.Context, state *framework.Context, ar
 			Error: err.Error(),
 		}, nil
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"stdout": stdout,
@@ -66,22 +67,22 @@ func (t *RunTestsTool) Execute(ctx context.Context, state *framework.Context, ar
 		},
 	}, nil
 }
-func (t *RunTestsTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *RunTestsTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return len(t.Command) > 0
 }
 
-func (t *RunTestsTool) Permissions() framework.ToolPermissions {
+func (t *RunTestsTool) Permissions() core.ToolPermissions {
 	if len(t.Command) == 0 {
-		return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.Workdir, framework.FileSystemRead, framework.FileSystemList)}
+		return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.Workdir, core.FileSystemRead, core.FileSystemList)}
 	}
-	return framework.ToolPermissions{Permissions: framework.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
+	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
 }
 
 func (t *RunTestsTool) run(ctx context.Context, args []string, input string) (string, string, error) {
 	if t.Runner == nil {
 		return "", "", fmt.Errorf("command runner missing")
 	}
-	req := framework.CommandRequest{
+	req := runtime.CommandRequest{
 		Workdir: t.Workdir,
 		Args:    args,
 		Input:   input,
@@ -95,18 +96,18 @@ type ExecuteCodeTool struct {
 	Command []string
 	Workdir string
 	Timeout time.Duration
-	Runner  framework.CommandRunner
-	manager *framework.PermissionManager
+	Runner  runtime.CommandRunner
+	manager *runtime.PermissionManager
 	agentID string
-	spec    *framework.AgentRuntimeSpec
+	spec    *core.AgentRuntimeSpec
 }
 
-func (t *ExecuteCodeTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *ExecuteCodeTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *ExecuteCodeTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *ExecuteCodeTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -116,12 +117,12 @@ func (t *ExecuteCodeTool) Description() string {
 	return "Executes arbitrary code snippets in a sandbox."
 }
 func (t *ExecuteCodeTool) Category() string { return "execution" }
-func (t *ExecuteCodeTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *ExecuteCodeTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "code", Type: "string", Required: true},
 	}
 }
-func (t *ExecuteCodeTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ExecuteCodeTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	code := fmt.Sprint(args["code"])
 	cmdline := append([]string{}, t.Command...)
 	cmdline = append(cmdline, code)
@@ -134,7 +135,7 @@ func (t *ExecuteCodeTool) Execute(ctx context.Context, state *framework.Context,
 	if err != nil {
 		resultErr = err.Error()
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: success,
 		Data: map[string]interface{}{
 			"stdout": stdout,
@@ -143,15 +144,15 @@ func (t *ExecuteCodeTool) Execute(ctx context.Context, state *framework.Context,
 		Error: resultErr,
 	}, nil
 }
-func (t *ExecuteCodeTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *ExecuteCodeTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return len(t.Command) > 0
 }
 
-func (t *ExecuteCodeTool) Permissions() framework.ToolPermissions {
+func (t *ExecuteCodeTool) Permissions() core.ToolPermissions {
 	if len(t.Command) == 0 {
-		return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.Workdir, framework.FileSystemRead)}
+		return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.Workdir, core.FileSystemRead)}
 	}
-	perms := framework.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])
+	perms := core.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])
 	// Arbitrary code execution should always require HITL.
 	for i := range perms.FileSystem {
 		perms.FileSystem[i].HITLRequired = true
@@ -159,14 +160,14 @@ func (t *ExecuteCodeTool) Permissions() framework.ToolPermissions {
 	if len(perms.Executables) > 0 {
 		perms.Executables[0].HITLRequired = true
 	}
-	return framework.ToolPermissions{Permissions: perms}
+	return core.ToolPermissions{Permissions: perms}
 }
 
 func (t *ExecuteCodeTool) run(ctx context.Context, args []string, input string) (string, string, error) {
 	if t.Runner == nil {
 		return "", "", fmt.Errorf("command runner missing")
 	}
-	req := framework.CommandRequest{
+	req := runtime.CommandRequest{
 		Workdir: t.Workdir,
 		Args:    args,
 		Input:   input,
@@ -180,18 +181,18 @@ type RunLinterTool struct {
 	Command []string
 	Workdir string
 	Timeout time.Duration
-	Runner  framework.CommandRunner
-	manager *framework.PermissionManager
+	Runner  runtime.CommandRunner
+	manager *runtime.PermissionManager
 	agentID string
-	spec    *framework.AgentRuntimeSpec
+	spec    *core.AgentRuntimeSpec
 }
 
-func (t *RunLinterTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *RunLinterTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *RunLinterTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *RunLinterTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -199,12 +200,12 @@ func (t *RunLinterTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID s
 func (t *RunLinterTool) Name() string        { return "exec_run_linter" }
 func (t *RunLinterTool) Description() string { return "Runs linting tools." }
 func (t *RunLinterTool) Category() string    { return "execution" }
-func (t *RunLinterTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *RunLinterTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "path", Type: "string", Required: false},
 	}
 }
-func (t *RunLinterTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *RunLinterTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	cmdline := append([]string{}, t.Command...)
 	if path := fmt.Sprint(args["path"]); path != "" {
 		cmdline = append(cmdline, path)
@@ -218,7 +219,7 @@ func (t *RunLinterTool) Execute(ctx context.Context, state *framework.Context, a
 	if err != nil {
 		errStr = err.Error()
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: success,
 		Data: map[string]interface{}{
 			"stdout": stdout,
@@ -227,22 +228,22 @@ func (t *RunLinterTool) Execute(ctx context.Context, state *framework.Context, a
 		Error: errStr,
 	}, nil
 }
-func (t *RunLinterTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *RunLinterTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return len(t.Command) > 0
 }
 
-func (t *RunLinterTool) Permissions() framework.ToolPermissions {
+func (t *RunLinterTool) Permissions() core.ToolPermissions {
 	if len(t.Command) == 0 {
-		return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.Workdir, framework.FileSystemRead)}
+		return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.Workdir, core.FileSystemRead)}
 	}
-	return framework.ToolPermissions{Permissions: framework.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
+	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
 }
 
 func (t *RunLinterTool) run(ctx context.Context, args []string) (string, string, error) {
 	if t.Runner == nil {
 		return "", "", fmt.Errorf("command runner missing")
 	}
-	req := framework.CommandRequest{
+	req := runtime.CommandRequest{
 		Workdir: t.Workdir,
 		Args:    args,
 		Timeout: t.Timeout,
@@ -255,18 +256,18 @@ type RunBuildTool struct {
 	Command []string
 	Workdir string
 	Timeout time.Duration
-	Runner  framework.CommandRunner
-	manager *framework.PermissionManager
+	Runner  runtime.CommandRunner
+	manager *runtime.PermissionManager
 	agentID string
-	spec    *framework.AgentRuntimeSpec
+	spec    *core.AgentRuntimeSpec
 }
 
-func (t *RunBuildTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *RunBuildTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *RunBuildTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *RunBuildTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -274,10 +275,10 @@ func (t *RunBuildTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID st
 func (t *RunBuildTool) Name() string        { return "exec_run_build" }
 func (t *RunBuildTool) Description() string { return "Runs builds or compiles the project." }
 func (t *RunBuildTool) Category() string    { return "execution" }
-func (t *RunBuildTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{}
+func (t *RunBuildTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{}
 }
-func (t *RunBuildTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *RunBuildTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	if err := t.authorizeCommand(ctx, t.Command); err != nil {
 		return nil, err
 	}
@@ -287,7 +288,7 @@ func (t *RunBuildTool) Execute(ctx context.Context, state *framework.Context, ar
 	if err != nil {
 		errStr = err.Error()
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: success,
 		Data: map[string]interface{}{
 			"stdout": stdout,
@@ -296,22 +297,22 @@ func (t *RunBuildTool) Execute(ctx context.Context, state *framework.Context, ar
 		Error: errStr,
 	}, nil
 }
-func (t *RunBuildTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *RunBuildTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return len(t.Command) > 0
 }
 
-func (t *RunBuildTool) Permissions() framework.ToolPermissions {
+func (t *RunBuildTool) Permissions() core.ToolPermissions {
 	if len(t.Command) == 0 {
-		return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.Workdir, framework.FileSystemRead)}
+		return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.Workdir, core.FileSystemRead)}
 	}
-	return framework.ToolPermissions{Permissions: framework.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
+	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
 }
 
 func (t *RunBuildTool) run(ctx context.Context) (string, string, error) {
 	if t.Runner == nil {
 		return "", "", fmt.Errorf("command runner missing")
 	}
-	req := framework.CommandRequest{
+	req := runtime.CommandRequest{
 		Workdir: t.Workdir,
 		Args:    t.Command,
 		Timeout: t.Timeout,
@@ -335,7 +336,7 @@ func (t *RunBuildTool) authorizeCommand(ctx context.Context, cmdline []string) e
 	return authorizeCommand(ctx, t.manager, t.agentID, t.spec, cmdline)
 }
 
-func authorizeCommand(ctx context.Context, manager *framework.PermissionManager, agentID string, spec *framework.AgentRuntimeSpec, cmdline []string) error {
+func authorizeCommand(ctx context.Context, manager *runtime.PermissionManager, agentID string, spec *core.AgentRuntimeSpec, cmdline []string) error {
 	if len(cmdline) == 0 {
 		return fmt.Errorf("command empty")
 	}
@@ -351,20 +352,20 @@ func authorizeCommand(ctx context.Context, manager *framework.PermissionManager,
 	}
 	if spec != nil {
 		commandString := strings.TrimSpace(binary + " " + strings.Join(args, " "))
-		decision, _ := framework.DecideByPatterns(commandString, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
+		decision, _ := toolsys.DecideByPatterns(commandString, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
 		switch decision {
-		case framework.AgentPermissionDeny:
+		case core.AgentPermissionDeny:
 			return fmt.Errorf("command blocked: denied by bash_permissions")
-		case framework.AgentPermissionAsk:
+		case core.AgentPermissionAsk:
 			if manager == nil {
 				return fmt.Errorf("command blocked: approval required but permission manager missing")
 			}
-			return manager.RequireApproval(ctx, agentID, framework.PermissionDescriptor{
-				Type:         framework.PermissionTypeHITL,
+			return manager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
+				Type:         core.PermissionTypeHITL,
 				Action:       "bash:exec",
 				Resource:     commandString,
 				RequiresHITL: true,
-			}, "bash permission policy", framework.GrantScopeOneTime, framework.RiskLevelMedium, 0)
+			}, "bash permission policy", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0)
 		}
 	}
 	return nil
