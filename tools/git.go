@@ -3,28 +3,29 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"strings"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // GitCommandTool executes predefined git commands.
 type GitCommandTool struct {
 	RepoPath string
 	Command  string
-	Runner   framework.CommandRunner
-	manager  *framework.PermissionManager
+	Runner   runtime.CommandRunner
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
-func (t *GitCommandTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *GitCommandTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *GitCommandTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *GitCommandTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -50,32 +51,32 @@ func (t *GitCommandTool) Description() string {
 
 func (t *GitCommandTool) Category() string { return "git" }
 
-func (t *GitCommandTool) Parameters() []framework.ToolParameter {
+func (t *GitCommandTool) Parameters() []core.ToolParameter {
 	switch t.Command {
 	case "history":
-		return []framework.ToolParameter{
+		return []core.ToolParameter{
 			{Name: "file", Type: "string", Required: true},
 			{Name: "limit", Type: "int", Required: false, Default: 5},
 		}
 	case "branch":
-		return []framework.ToolParameter{{Name: "name", Type: "string", Required: true}}
+		return []core.ToolParameter{{Name: "name", Type: "string", Required: true}}
 	case "commit":
-		return []framework.ToolParameter{
+		return []core.ToolParameter{
 			{Name: "message", Type: "string", Required: true},
 			{Name: "files", Type: "array", Required: false},
 		}
 	case "blame":
-		return []framework.ToolParameter{
+		return []core.ToolParameter{
 			{Name: "file", Type: "string", Required: true},
 			{Name: "start", Type: "int", Required: false, Default: 1},
 			{Name: "end", Type: "int", Required: false, Default: 1},
 		}
 	default:
-		return []framework.ToolParameter{}
+		return []core.ToolParameter{}
 	}
 }
 
-func (t *GitCommandTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *GitCommandTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	if !t.IsAvailable(ctx, state) {
 		return nil, fmt.Errorf("git repository not detected")
 	}
@@ -116,7 +117,7 @@ func (t *GitCommandTool) Execute(ctx context.Context, state *framework.Context, 
 	}
 }
 
-func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*framework.ToolResult, error) {
+func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*core.ToolResult, error) {
 	if t.Runner == nil {
 		return nil, fmt.Errorf("command runner missing for git tool")
 	}
@@ -127,25 +128,25 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*framework.
 	}
 	if t.spec != nil {
 		cmdline := strings.TrimSpace("git " + strings.Join(args, " "))
-		decision, _ := framework.DecideByPatterns(cmdline, t.spec.Bash.AllowPatterns, t.spec.Bash.DenyPatterns, t.spec.Bash.Default)
+		decision, _ := toolsys.DecideByPatterns(cmdline, t.spec.Bash.AllowPatterns, t.spec.Bash.DenyPatterns, t.spec.Bash.Default)
 		switch decision {
-		case framework.AgentPermissionDeny:
+		case core.AgentPermissionDeny:
 			return nil, fmt.Errorf("git blocked: denied by bash_permissions")
-		case framework.AgentPermissionAsk:
+		case core.AgentPermissionAsk:
 			if t.manager == nil {
 				return nil, fmt.Errorf("git blocked: approval required but permission manager missing")
 			}
-			if err := t.manager.RequireApproval(ctx, t.agentID, framework.PermissionDescriptor{
-				Type:         framework.PermissionTypeHITL,
+			if err := t.manager.RequireApproval(ctx, t.agentID, core.PermissionDescriptor{
+				Type:         core.PermissionTypeHITL,
 				Action:       "bash:git",
 				Resource:     cmdline,
 				RequiresHITL: true,
-			}, "bash permission policy", framework.GrantScopeOneTime, framework.RiskLevelMedium, 0); err != nil {
+			}, "bash permission policy", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0); err != nil {
 				return nil, err
 			}
 		}
 	}
-	stdout, stderr, err := t.Runner.Run(ctx, framework.CommandRequest{
+	stdout, stderr, err := t.Runner.Run(ctx, runtime.CommandRequest{
 		Workdir: t.RepoPath,
 		Args:    append([]string{"git"}, args...),
 		Timeout: 30 * time.Second,
@@ -153,7 +154,7 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*framework.
 	if err != nil {
 		return nil, fmt.Errorf("git %s failed: %s", strings.Join(args, " "), stderr)
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"output": stdout,
@@ -162,7 +163,7 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*framework.
 	}, nil
 }
 
-func (t *GitCommandTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *GitCommandTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	if t.Runner == nil {
 		return false
 	}
@@ -171,7 +172,7 @@ func (t *GitCommandTool) IsAvailable(ctx context.Context, state *framework.Conte
 			return false
 		}
 	}
-	_, _, err := t.Runner.Run(ctx, framework.CommandRequest{
+	_, _, err := t.Runner.Run(ctx, runtime.CommandRequest{
 		Workdir: t.RepoPath,
 		Args:    []string{"git", "rev-parse", "--is-inside-work-tree"},
 		Timeout: 5 * time.Second,
@@ -179,6 +180,6 @@ func (t *GitCommandTool) IsAvailable(ctx context.Context, state *framework.Conte
 	return err == nil
 }
 
-func (t *GitCommandTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewExecutionPermissionSet(t.RepoPath, "git", []string{"*"})}
+func (t *GitCommandTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.RepoPath, "git", []string{"*"})}
 }
