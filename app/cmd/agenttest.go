@@ -3,16 +3,15 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/agenttest"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
-
-	"github.com/lexcodex/relurpify/agenttest"
-	"github.com/lexcodex/relurpify/framework"
 )
 
 func newAgentTestCmd() *cobra.Command {
@@ -61,7 +60,7 @@ func newAgentTestInitCmd() *cobra.Command {
 				manifest.Spec.Agent.Implementation = agentImplementation(name)
 				manifest.Spec.Agent.Prompt = defaultAgentPrompt(name)
 				manifest.Spec.Agent.Model.Name = model
-				manifest.Spec.Permissions.Network = []framework.NetworkPermission{{
+				manifest.Spec.Permissions.Network = []core.NetworkPermission{{
 					Direction:   "egress",
 					Protocol:    "tcp",
 					Host:        "localhost",
@@ -111,17 +110,17 @@ func newAgentTestInitCmd() *cobra.Command {
 					_ = writeLanguageSuite(filepath.Join(suitesDir, "coding.go.testsuite.yaml"), "coding.go", "../agents/coding-go.yaml", "Go-focused coding prompts", model, endpoint, force)
 
 					// Rust-specific (needs cargo executable permission).
-					execAdd := []framework.ExecutablePermission{{Binary: "cargo", Args: []string{"*"}}}
+					execAdd := []core.ExecutablePermission{{Binary: "cargo", Args: []string{"*"}}}
 					_ = writeDerivedManifest(filepath.Join(agentsDir, "coding-rust.yaml"), codingManifestPath, "coding-rust", "Rust-focused coding agent manifest", execAdd, force)
 					_ = writeLanguageSuite(filepath.Join(suitesDir, "coding.rust.testsuite.yaml"), "coding.rust", "../agents/coding-rust.yaml", "Rust-focused coding prompts", model, endpoint, force)
 
 					// Python-specific.
-					execAdd = []framework.ExecutablePermission{{Binary: "python3", Args: []string{"*"}}}
+					execAdd = []core.ExecutablePermission{{Binary: "python3", Args: []string{"*"}}}
 					_ = writeDerivedManifest(filepath.Join(agentsDir, "coding-python.yaml"), codingManifestPath, "coding-python", "Python-focused coding agent manifest", execAdd, force)
 					_ = writeLanguageSuite(filepath.Join(suitesDir, "coding.python.testsuite.yaml"), "coding.python", "../agents/coding-python.yaml", "Python-focused coding prompts", model, endpoint, force)
 
 					// Node.js-specific.
-					execAdd = []framework.ExecutablePermission{
+					execAdd = []core.ExecutablePermission{
 						{Binary: "node", Args: []string{"*"}},
 						{Binary: "npm", Args: []string{"*"}},
 					}
@@ -129,7 +128,7 @@ func newAgentTestInitCmd() *cobra.Command {
 					_ = writeLanguageSuite(filepath.Join(suitesDir, "coding.node.testsuite.yaml"), "coding.node", "../agents/coding-node.yaml", "Node.js-focused coding prompts", model, endpoint, force)
 
 					// SQLite-specific.
-					execAdd = []framework.ExecutablePermission{{Binary: "sqlite3", Args: []string{"*"}}}
+					execAdd = []core.ExecutablePermission{{Binary: "sqlite3", Args: []string{"*"}}}
 					_ = writeDerivedManifest(filepath.Join(agentsDir, "coding-sqlite.yaml"), codingManifestPath, "coding-sqlite", "SQLite-focused coding agent manifest", execAdd, force)
 					_ = writeLanguageSuite(filepath.Join(suitesDir, "coding.sqlite.testsuite.yaml"), "coding.sqlite", "../agents/coding-sqlite.yaml", "SQLite-focused coding prompts", model, endpoint, force)
 				}
@@ -163,13 +162,13 @@ func containsString(list []string, value string) bool {
 	return false
 }
 
-func writeDerivedManifest(outPath, basePath, name, description string, extraExec []framework.ExecutablePermission, force bool) error {
+func writeDerivedManifest(outPath, basePath, name, description string, extraExec []core.ExecutablePermission, force bool) error {
 	if !force {
 		if _, err := os.Stat(outPath); err == nil {
 			return nil
 		}
 	}
-	manifest, err := framework.LoadAgentManifest(basePath)
+	manifest, err := manifest.LoadAgentManifest(basePath)
 	if err != nil {
 		return err
 	}
@@ -221,7 +220,7 @@ func writeLanguageSuite(outPath, suiteName, manifestRel, description, model, end
 		suite.Spec.Cases = []agenttest.CaseSpec{
 			{
 				Name:     "easy_fix_bug_and_run_tests",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Setup: agenttest.SetupSpec{Files: []agenttest.SetupFileSpec{
 					{
 						Path: "testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go",
@@ -258,7 +257,7 @@ func TestAdd(t *testing.T) {
 			},
 			{
 				Name:     "medium_add_mul_and_test",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Setup: agenttest.SetupSpec{Files: []agenttest.SetupFileSpec{
 					{
 						Path: "testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go",
@@ -295,7 +294,7 @@ func TestMul(t *testing.T) {
 			},
 			{
 				Name:     "hard_add_sumall_and_test",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Setup: agenttest.SetupSpec{Files: []agenttest.SetupFileSpec{
 					{
 						Path: "testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go",
@@ -340,7 +339,7 @@ func TestSumAll(t *testing.T) {
 		suite.Spec.Cases = []agenttest.CaseSpec{
 			{
 				Name:     "easy_fix_bug_and_run_tests",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Requires: agenttest.RequiresSpec{
 					Executables: []string{"cargo"},
 					Tools:       []string{"cli_cargo"},
@@ -373,7 +372,7 @@ mod tests {
 			},
 			{
 				Name:     "medium_add_mul_and_test",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Requires: agenttest.RequiresSpec{
 					Executables: []string{"cargo"},
 					Tools:       []string{"cli_cargo"},
@@ -414,7 +413,7 @@ mod tests {
 		suite.Spec.Cases = []agenttest.CaseSpec{
 			{
 				Name:     "easy_fix_bug_and_run_tests",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Requires: agenttest.RequiresSpec{
 					Executables: []string{"python3"},
 					Tools:       []string{"cli_python"},
@@ -461,7 +460,7 @@ if __name__ == "__main__":
 			},
 			{
 				Name:     "medium_add_div_and_test",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Requires: agenttest.RequiresSpec{
 					Executables: []string{"python3"},
 					Tools:       []string{"cli_python"},
@@ -516,7 +515,7 @@ if __name__ == "__main__":
 		suite.Spec.Cases = []agenttest.CaseSpec{
 			{
 				Name:     "easy_fix_bug_and_run_tests",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Requires: agenttest.RequiresSpec{
 					Executables: []string{"node"},
 					Tools:       []string{"cli_node"},
@@ -554,7 +553,7 @@ console.log("ok");
 			},
 			{
 				Name:     "medium_add_mul_and_run_tests",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Requires: agenttest.RequiresSpec{
 					Executables: []string{"node"},
 					Tools:       []string{"cli_node"},
@@ -595,7 +594,7 @@ console.log("ok");
 		suite.Spec.Cases = []agenttest.CaseSpec{
 			{
 				Name:     "easy_fix_query_and_run",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Requires: agenttest.RequiresSpec{
 					Executables: []string{"sqlite3"},
 					Tools:       []string{"cli_sqlite3"},
@@ -776,32 +775,32 @@ func newAgentTestRunCmd() *cobra.Command {
 	return cmd
 }
 
-func baseManifestTemplate(wsGlob, model, endpoint string) framework.AgentManifest {
+func baseManifestTemplate(wsGlob, model, endpoint string) manifest.AgentManifest {
 	defaultToolCalling := true
-	return framework.AgentManifest{
+	return manifest.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: framework.ManifestMetadata{
+		Metadata: manifest.ManifestMetadata{
 			Name:        "coding",
 			Version:     "1.0.0",
 			Description: "Agent manifest generated by agenttest init",
 		},
-		Spec: framework.ManifestSpec{
+		Spec: manifest.ManifestSpec{
 			Image:   "ghcr.io/lexcodex/relurpify/runtime:latest",
 			Runtime: "gvisor",
-			Permissions: framework.PermissionSet{
-				FileSystem: []framework.FileSystemPermission{
-					{Action: framework.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
-					{Action: framework.FileSystemList, Path: wsGlob, Justification: "List workspace"},
-					{Action: framework.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
-					{Action: framework.FileSystemExecute, Path: wsGlob, Justification: "Execute tooling inside workspace"},
+			Permissions: core.PermissionSet{
+				FileSystem: []core.FileSystemPermission{
+					{Action: core.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
+					{Action: core.FileSystemList, Path: wsGlob, Justification: "List workspace"},
+					{Action: core.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
+					{Action: core.FileSystemExecute, Path: wsGlob, Justification: "Execute tooling inside workspace"},
 				},
-				Executables: []framework.ExecutablePermission{
+				Executables: []core.ExecutablePermission{
 					{Binary: "bash", Args: []string{"-c", "*"}},
 					{Binary: "go", Args: []string{"*"}},
 					{Binary: "git", Args: []string{"*"}},
 				},
-				Network: []framework.NetworkPermission{{
+				Network: []core.NetworkPermission{{
 					Direction:   "egress",
 					Protocol:    "tcp",
 					Host:        "localhost",
@@ -809,35 +808,35 @@ func baseManifestTemplate(wsGlob, model, endpoint string) framework.AgentManifes
 					Description: "Ollama",
 				}},
 			},
-			Resources: framework.ResourceSpec{
-				Limits: framework.ResourceLimit{
+			Resources: manifest.ResourceSpec{
+				Limits: manifest.ResourceLimit{
 					CPU:    "2",
 					Memory: "4Gi",
 					DiskIO: "200MBps",
 				},
 			},
-			Security: framework.SecuritySpec{
+			Security: manifest.SecuritySpec{
 				RunAsUser:       1000,
 				ReadOnlyRoot:    false,
 				NoNewPrivileges: true,
 			},
-			Audit: framework.AuditSpec{
+			Audit: manifest.AuditSpec{
 				Level:         "verbose",
 				RetentionDays: 7,
 			},
-			Agent: &framework.AgentRuntimeSpec{
+			Agent: &core.AgentRuntimeSpec{
 				Implementation:    "coding",
-				Mode:              framework.AgentModePrimary,
+				Mode:              core.AgentModePrimary,
 				Version:           "1.0.0",
 				Prompt:            defaultAgentPrompt("coding"),
 				OllamaToolCalling: &defaultToolCalling,
-				Model: framework.AgentModelConfig{
+				Model: core.AgentModelConfig{
 					Provider:    "ollama",
 					Name:        model,
 					Temperature: 0.2,
 					MaxTokens:   4096,
 				},
-				Tools: framework.AgentToolMatrix{
+				Tools: core.AgentToolMatrix{
 					FileRead:       true,
 					FileWrite:      true,
 					FileEdit:       true,
@@ -850,13 +849,13 @@ func baseManifestTemplate(wsGlob, model, endpoint string) framework.AgentManifes
 	}
 }
 
-func setToolMatrixForAgent(m *framework.AgentManifest, name string) {
+func setToolMatrixForAgent(m *manifest.AgentManifest, name string) {
 	if m == nil || m.Spec.Agent == nil {
 		return
 	}
 	switch strings.ToLower(name) {
 	case "eternal":
-		m.Spec.Agent.Tools = framework.AgentToolMatrix{
+		m.Spec.Agent.Tools = core.AgentToolMatrix{
 			FileRead:       false,
 			FileWrite:      false,
 			FileEdit:       false,
@@ -921,7 +920,7 @@ func defaultSuite(workspace, agentName, endpoint, model string) agenttest.Suite 
 	case "eternal":
 		suite.Spec.Cases = []agenttest.CaseSpec{{
 			Name:     "one_cycle_ascii",
-			TaskType: string(framework.TaskTypeCodeGeneration),
+			TaskType: string(core.TaskTypeCodeGeneration),
 			Prompt:   "write a 3 line ascii cat then stop",
 			Context: map[string]any{
 				"eternal.infinite":   false,
@@ -938,7 +937,7 @@ func defaultSuite(workspace, agentName, endpoint, model string) agenttest.Suite 
 		suite.Spec.Cases = []agenttest.CaseSpec{
 			{
 				Name:     "summarize_readme",
-				TaskType: string(framework.TaskTypeCodeGeneration),
+				TaskType: string(core.TaskTypeCodeGeneration),
 				Prompt:   "Summarize README.md in 5 bullets.",
 				Context:  map[string]any{"path": "README.md"},
 				Expect: agenttest.ExpectSpec{
@@ -949,7 +948,7 @@ func defaultSuite(workspace, agentName, endpoint, model string) agenttest.Suite 
 			},
 			{
 				Name:     "edit_fixture_file",
-				TaskType: string(framework.TaskTypeCodeModification),
+				TaskType: string(core.TaskTypeCodeModification),
 				Setup: agenttest.SetupSpec{Files: []agenttest.SetupFileSpec{{
 					Path:    "testsuite/agenttest_fixtures/hello.txt",
 					Content: "hello\n",
