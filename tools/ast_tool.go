@@ -3,9 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
-
-	"github.com/lexcodex/relurpify/framework"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // ASTTool exposes the AST index for querying.
@@ -23,8 +22,8 @@ func (t *ASTTool) Description() string {
 	return "Query the universal AST index to explore symbols, callers, callees, and dependencies without loading entire files."
 }
 func (t *ASTTool) Category() string { return "search" }
-func (t *ASTTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *ASTTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "action", Type: "string", Description: "list_symbols|get_signature|find_callers|find_callees|get_imports|get_dependencies|search", Required: true},
 		{Name: "symbol", Type: "string", Description: "Target symbol name", Required: false},
 		{Name: "type", Type: "string", Description: "Filter by node type", Required: false},
@@ -33,7 +32,7 @@ func (t *ASTTool) Parameters() []framework.ToolParameter {
 	}
 }
 
-func (t *ASTTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ASTTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	if t.manager == nil {
 		return nil, fmt.Errorf("ast index unavailable")
 	}
@@ -71,7 +70,7 @@ func (t *ASTTool) querySymbol(args map[string]interface{}) (*ast.Node, error) {
 	return nodes[0], nil
 }
 
-func (t *ASTTool) handleList(args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ASTTool) handleList(args map[string]interface{}) (*core.ToolResult, error) {
 	query := ast.NodeQuery{Limit: 100}
 	if nodeType := fmt.Sprint(args["type"]); nodeType != "" {
 		query.Types = []ast.NodeType{ast.NodeType(nodeType)}
@@ -92,7 +91,7 @@ func (t *ASTTool) handleList(args map[string]interface{}) (*framework.ToolResult
 	}), nil
 }
 
-func (t *ASTTool) handleSignature(args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ASTTool) handleSignature(args map[string]interface{}) (*core.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
@@ -108,7 +107,7 @@ func (t *ASTTool) handleSignature(args map[string]interface{}) (*framework.ToolR
 	}), nil
 }
 
-func (t *ASTTool) handleCallers(args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ASTTool) handleCallers(args map[string]interface{}) (*core.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
@@ -123,7 +122,7 @@ func (t *ASTTool) handleCallers(args map[string]interface{}) (*framework.ToolRes
 	}), nil
 }
 
-func (t *ASTTool) handleCallees(args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ASTTool) handleCallees(args map[string]interface{}) (*core.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
@@ -138,7 +137,7 @@ func (t *ASTTool) handleCallees(args map[string]interface{}) (*framework.ToolRes
 	}), nil
 }
 
-func (t *ASTTool) handleImports(args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ASTTool) handleImports(args map[string]interface{}) (*core.ToolResult, error) {
 	node, err := t.querySymbol(args)
 	if err != nil {
 		return nil, err
@@ -153,7 +152,7 @@ func (t *ASTTool) handleImports(args map[string]interface{}) (*framework.ToolRes
 	}), nil
 }
 
-func (t *ASTTool) handleDependencies(args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ASTTool) handleDependencies(args map[string]interface{}) (*core.ToolResult, error) {
 	symbol := fmt.Sprint(args["symbol"])
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol parameter required")
@@ -169,18 +168,18 @@ func (t *ASTTool) handleDependencies(args map[string]interface{}) (*framework.To
 	}), nil
 }
 
-func (t *ASTTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *ASTTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.manager != nil
 }
 
-func (t *ASTTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{
-		Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemList),
+func (t *ASTTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{
+		Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList),
 	}
 }
 
-func successResult(data map[string]interface{}) *framework.ToolResult {
-	return &framework.ToolResult{
+func successResult(data map[string]interface{}) *core.ToolResult {
+	return &core.ToolResult{
 		Success: true,
 		Data:    data,
 	}
