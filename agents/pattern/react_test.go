@@ -4,44 +4,44 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"testing"
-
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/lexcodex/relurpify/framework"
+	"testing"
 )
 
 type stubLLM struct {
-	responses      []*framework.LLMResponse
+	responses      []*core.LLMResponse
 	idx            int
 	generateCalls  int
 	withToolsCalls int
 }
 
 // Generate returns the next queued LLM response for deterministic tests.
-func (s *stubLLM) Generate(ctx context.Context, prompt string, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (s *stubLLM) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
 	s.generateCalls++
 	return s.nextResponse()
 }
 
 // GenerateStream is unused in tests.
-func (s *stubLLM) GenerateStream(ctx context.Context, prompt string, options *framework.LLMOptions) (<-chan string, error) {
+func (s *stubLLM) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
 	return nil, errors.New("not implemented")
 }
 
 // Chat is unused in tests.
-func (s *stubLLM) Chat(ctx context.Context, messages []framework.Message, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (s *stubLLM) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
 // ChatWithTools returns the next queued response and increments instrumentation.
-func (s *stubLLM) ChatWithTools(ctx context.Context, messages []framework.Message, tools []framework.Tool, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (s *stubLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
 	s.withToolsCalls++
 	return s.nextResponse()
 }
 
 // nextResponse pops the next canned response or returns an error when empty.
-func (s *stubLLM) nextResponse() (*framework.LLMResponse, error) {
+func (s *stubLLM) nextResponse() (*core.LLMResponse, error) {
 	if s.idx >= len(s.responses) {
 		return nil, errors.New("no response")
 	}
@@ -64,15 +64,15 @@ func (t stubTool) Description() string { return "stub tool" }
 func (t stubTool) Category() string { return "test" }
 
 // Parameters exposes the single optional argument accepted by the stub.
-func (t stubTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t stubTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "value", Type: "string", Required: false},
 	}
 }
 
 // Execute echoes the provided "value" argument to simulate tool output.
-func (t stubTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
-	return &framework.ToolResult{
+func (t stubTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"echo": args["value"],
@@ -81,13 +81,13 @@ func (t stubTool) Execute(ctx context.Context, state *framework.Context, args ma
 }
 
 // IsAvailable always returns true for simplicity.
-func (t stubTool) IsAvailable(ctx context.Context, state *framework.Context) bool { return true }
+func (t stubTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
 
 // Permissions returns a read-only filesystem grant.
-func (t stubTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: &framework.PermissionSet{
-		FileSystem: []framework.FileSystemPermission{
-			{Action: framework.FileSystemRead, Path: "**"},
+func (t stubTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{
+			{Action: core.FileSystemRead, Path: "**"},
 		},
 	}}
 }
@@ -95,29 +95,29 @@ func (t stubTool) Permissions() framework.ToolPermissions {
 // TestReActAgentExecute validates a minimal think-act-observe pass.
 func TestReActAgentExecute(t *testing.T) {
 	llm := &stubLLM{
-		responses: []*framework.LLMResponse{
+		responses: []*core.LLMResponse{
 			{Text: `{"thought":"finished","tool":"none","arguments":{},"complete":true}`},
 		},
 	}
-	registry := framework.NewToolRegistry()
+	registry := toolsys.NewToolRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &framework.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: true}
 	assert.NoError(t, agent.Initialize(cfg))
 
-	task := &framework.Task{ID: "task-1", Instruction: "do something"}
-	state := framework.NewContext()
+	task := &core.Task{ID: "task-1", Instruction: "do something"}
+	state := core.NewContext()
 	state.Set("task.id", task.ID)
 
 	think := &reactThinkNode{id: "think", agent: agent, task: task}
 	act := &reactActNode{id: "act", agent: agent}
 	observe := &reactObserveNode{id: "observe", agent: agent, task: task}
-	terminal := framework.NewTerminalNode("done")
+	terminal := graph.NewTerminalNode("done")
 
-	graph := framework.NewGraph()
+	graph := graph.NewGraph()
 	assert.NoError(t, graph.AddNode(think))
 	assert.NoError(t, graph.AddNode(act))
 	assert.NoError(t, graph.AddNode(observe))
@@ -143,29 +143,29 @@ func TestReActAgentExecute(t *testing.T) {
 // TestReActAgentToolCallingDisabled ensures the agent falls back to plain text.
 func TestReActAgentToolCallingDisabled(t *testing.T) {
 	llm := &stubLLM{
-		responses: []*framework.LLMResponse{
+		responses: []*core.LLMResponse{
 			{Text: `{"thought":"finished","tool":"none","arguments":{},"complete":true}`},
 		},
 	}
-	registry := framework.NewToolRegistry()
+	registry := toolsys.NewToolRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &framework.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: false}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: false}
 	assert.NoError(t, agent.Initialize(cfg))
 
-	task := &framework.Task{ID: "task-2", Instruction: "do something"}
-	state := framework.NewContext()
+	task := &core.Task{ID: "task-2", Instruction: "do something"}
+	state := core.NewContext()
 	state.Set("task.id", task.ID)
 
 	think := &reactThinkNode{id: "think", agent: agent, task: task}
 	act := &reactActNode{id: "act", agent: agent}
 	observe := &reactObserveNode{id: "observe", agent: agent, task: task}
-	terminal := framework.NewTerminalNode("done")
+	terminal := graph.NewTerminalNode("done")
 
-	graph := framework.NewGraph()
+	graph := graph.NewGraph()
 	assert.NoError(t, graph.AddNode(think))
 	assert.NoError(t, graph.AddNode(act))
 	assert.NoError(t, graph.AddNode(observe))
@@ -186,30 +186,30 @@ func TestReActAgentToolCallingDisabled(t *testing.T) {
 // TestReActAgentToolCalling verifies tool call handling and transcript storage.
 func TestReActAgentToolCalling(t *testing.T) {
 	llm := &stubLLM{
-		responses: []*framework.LLMResponse{
-			{Text: "", ToolCalls: []framework.ToolCall{{Name: "echo", Args: map[string]interface{}{"value": "hi"}}}},
+		responses: []*core.LLMResponse{
+			{Text: "", ToolCalls: []core.ToolCall{{Name: "echo", Args: map[string]interface{}{"value": "hi"}}}},
 			{Text: "all done"},
 		},
 	}
-	registry := framework.NewToolRegistry()
+	registry := toolsys.NewToolRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &framework.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
 	assert.NoError(t, agent.Initialize(cfg))
 
-	task := &framework.Task{ID: "task-2", Instruction: "use tool"}
-	state := framework.NewContext()
+	task := &core.Task{ID: "task-2", Instruction: "use tool"}
+	state := core.NewContext()
 	state.Set("task.id", task.ID)
 
 	think := &reactThinkNode{id: "think", agent: agent, task: task}
 	act := &reactActNode{id: "act", agent: agent}
 	observe := &reactObserveNode{id: "observe", agent: agent, task: task}
-	terminal := framework.NewTerminalNode("done")
+	terminal := graph.NewTerminalNode("done")
 
-	graph := framework.NewGraph()
+	graph := graph.NewGraph()
 	assert.NoError(t, graph.AddNode(think))
 	assert.NoError(t, graph.AddNode(act))
 	assert.NoError(t, graph.AddNode(observe))
@@ -231,7 +231,7 @@ func TestReActAgentToolCalling(t *testing.T) {
 
 	messagesVal, ok := state.Get("react.messages")
 	assert.True(t, ok)
-	messages, ok := messagesVal.([]framework.Message)
+	messages, ok := messagesVal.([]core.Message)
 	assert.True(t, ok)
 	var toolMessages int
 	for _, msg := range messages {
