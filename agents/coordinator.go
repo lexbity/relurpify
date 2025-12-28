@@ -3,19 +3,20 @@ package agents
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/contextmgr"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // AgentCoordinator manages multiple agents with shared context.
 type AgentCoordinator struct {
-	agents        map[string]framework.Agent
-	sharedContext *framework.SharedContext
+	agents        map[string]graph.Agent
+	sharedContext *core.SharedContext
 	contextBroker *ContextBroker
-	telemetry     framework.Telemetry
+	telemetry     core.Telemetry
 	Config        CoordinatorConfig
 }
 
@@ -31,27 +32,12 @@ type ContextBroker struct {
 	mu sync.RWMutex
 
 	indexerCache   map[string]interface{}
-	plannerPlan    *PlanContext
+	plannerPlan    *core.Plan
 	executorFocus  *ExecutorContext
 	reviewerIssues []ReviewIssue
 
-	contextManager *framework.ContextManager
-	budget         *framework.ContextBudget
-}
-
-// PlanContext captures planner output.
-type PlanContext struct {
-	Steps        []PlanStep
-	Files        []string
-	Dependencies map[string][]string
-}
-
-// PlanStep describes an execution step.
-type PlanStep struct {
-	ID              string
-	Description     string
-	Files           []string
-	EstimatedTokens int
+	contextManager *contextmgr.ContextManager
+	budget         *core.ContextBudget
 }
 
 // ExecutorContext tracks executor focus.
@@ -70,18 +56,18 @@ type ReviewIssue struct {
 }
 
 // NewAgentCoordinator builds an agent coordinator with shared context.
-func NewAgentCoordinator(telemetry framework.Telemetry, budget *framework.ContextBudget) *AgentCoordinator {
+func NewAgentCoordinator(telemetry core.Telemetry, budget *core.ContextBudget) *AgentCoordinator {
 	if budget == nil {
-		budget = framework.NewContextBudget(8192)
+		budget = core.NewContextBudget(8192)
 	}
-	shared := framework.NewSharedContext(framework.NewContext(), budget, &framework.SimpleSummarizer{})
+	shared := core.NewSharedContext(core.NewContext(), budget, &core.SimpleSummarizer{})
 	return &AgentCoordinator{
-		agents:        make(map[string]framework.Agent),
+		agents:        make(map[string]graph.Agent),
 		sharedContext: shared,
 		contextBroker: &ContextBroker{
 			indexerCache:   make(map[string]interface{}),
 			executorFocus:  &ExecutorContext{LoadedFiles: make(map[string]DetailLevel)},
-			contextManager: framework.NewContextManager(budget),
+			contextManager: contextmgr.NewContextManager(budget),
 			budget:         budget,
 		},
 		telemetry: telemetry,
@@ -94,12 +80,12 @@ func NewAgentCoordinator(telemetry framework.Telemetry, budget *framework.Contex
 }
 
 // RegisterAgent adds an agent to coordination pool.
-func (ac *AgentCoordinator) RegisterAgent(name string, agent framework.Agent) {
+func (ac *AgentCoordinator) RegisterAgent(name string, agent graph.Agent) {
 	ac.agents[name] = agent
 }
 
 // Execute implements the agent execution interface, allowing the coordinator to be used as a sub-agent.
-func (ac *AgentCoordinator) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (ac *AgentCoordinator) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	if task == nil {
 		return nil, fmt.Errorf("task is required")
 	}
@@ -110,7 +96,7 @@ func (ac *AgentCoordinator) Execute(ctx context.Context, task *framework.Task, s
 	}
 
 	strategy := ac.determineStrategy(task)
-	var result *framework.Result
+	var result *core.Result
 	var err error
 
 	switch strategy {
@@ -132,11 +118,11 @@ func (ac *AgentCoordinator) Execute(ctx context.Context, task *framework.Task, s
 }
 
 // ExecuteTask coordinates multiple agents to complete a task.
-func (ac *AgentCoordinator) ExecuteTask(task *framework.Task) (*framework.Result, error) {
+func (ac *AgentCoordinator) ExecuteTask(task *core.Task) (*core.Result, error) {
 	return ac.Execute(context.Background(), task, nil)
 }
 
-func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*framework.Result, error) {
+func (ac *AgentCoordinator) executePlanExecuteStrategy(task *core.Task) (*core.Result, error) {
 	indexer, ok := ac.agents["indexer"]
 	if ok {
 		ac.emitEvent("indexer_start")
@@ -160,6 +146,9 @@ func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*f
 		return nil, fmt.Errorf("planner failed: %w", err)
 	}
 	plan := ac.contextBroker.ExtractPlan(planResult)
+	if plan == nil {
+		return nil, fmt.Errorf("planner returned no plan")
+	}
 
 	executor, ok := ac.agents["executor"]
 	if !ok {
@@ -168,118 +157,33 @@ func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*f
 	ac.emitEvent("executor_start")
 	ac.contextBroker.LoadFullFilesForPlan(ac.sharedContext.Context, plan)
 
-	// Execute Plan Steps
-	// We treat the plan as a dependency graph.
-	// 1. Mark all steps as pending.
-	// 2. Loop until all completed.
-	// 3. Find steps where all dependencies are completed.
-	// 4. Run them in parallel (if >1).
-
-	completedSteps := make(map[string]bool)
-	stepMap := make(map[string]PlanStep)
-	for _, s := range plan.Steps {
-		stepMap[s.ID] = s
+	planExecutor := &graph.PlanExecutor{
+		Options: graph.PlanExecutionOptions{
+			MaxRecoveryAttempts: ac.Config.MaxRecoveryAttempts,
+			Diagnose: func(ctx context.Context, step core.PlanStep, err error) (string, error) {
+				diagAgent, hasDiag := ac.agents["ask"]
+				if !hasDiag || err == nil {
+					return "", nil
+				}
+				diagTask := cloneTask(task)
+				diagTask.Instruction = fmt.Sprintf("Analyze why this error occurred: %v", err)
+				diagRes, dErr := diagAgent.Execute(ctx, diagTask, ac.sharedContext.Context)
+				if dErr != nil || diagRes == nil {
+					return "", dErr
+				}
+				if diagnosis, ok := diagRes.Data["text"].(string); ok {
+					return diagnosis, nil
+				}
+				return "", nil
+			},
+		},
 	}
-
-	// Safety break
-	maxLoops := len(plan.Steps) * 2
-	loops := 0
-
-	for len(completedSteps) < len(plan.Steps) {
-		loops++
-		if loops > maxLoops {
-			return nil, fmt.Errorf("plan execution stuck (cycle or dependency error)")
-		}
-
-		var readySteps []PlanStep
-		for _, step := range plan.Steps {
-			if completedSteps[step.ID] {
-				continue
-			}
-			// Check dependencies
-			ready := true
-			if deps, hasDeps := plan.Dependencies[step.ID]; hasDeps {
-				for _, depID := range deps {
-					if !completedSteps[depID] {
-						ready = false
-						break
-					}
-				}
-			}
-			if ready {
-				readySteps = append(readySteps, step)
-			}
-		}
-
-		if len(readySteps) == 0 {
-			if len(completedSteps) < len(plan.Steps) {
-				return nil, fmt.Errorf("deadlock in plan execution")
-			}
-			break
-		}
-
-		// Execute ready steps
-		// If 1 step, run inline. If multiple, run parallel.
-		if len(readySteps) == 1 {
-			step := readySteps[0]
-			if err := ac.executeSingleStep(context.Background(), step, executor, task, plan); err != nil {
-				return nil, err
-			}
-			completedSteps[step.ID] = true
-		} else {
-			var wg sync.WaitGroup
-			errChan := make(chan error, len(readySteps))
-
-			for _, step := range readySteps {
-				wg.Add(1)
-				step := step
-				go func() {
-					defer wg.Done()
-					// Clone context for isolation
-					branchCtx := ac.sharedContext.Context.Clone()
-
-					// We need a thread-safe way to run the agent.
-					// Agents are stateless usually, but we need to ensure we don't race on shared resources if tools aren't safe.
-					// Most framework tools are safe (file locks, etc).
-
-					// Create a transient coordinator/wrapper to run this step?
-					// No, just call executor.Execute.
-
-					sErr := ac.executeSingleStep(context.Background(), step, executor, task, plan)
-					if sErr != nil {
-						errChan <- sErr
-						return
-					}
-
-					// In a real implementation we would merge branchCtx back.
-					// For now, we assume steps are modifying FS state (side effects),
-					// so we don't strictly need to merge memory unless they output new variables.
-					// To be safe, we acquire lock and merge "step results" only?
-					// framework.Context.Merge handles this.
-					ac.sharedContext.Context.Merge(branchCtx)
-				}()
-			}
-			wg.Wait()
-			close(errChan)
-			for err := range errChan {
-				if err != nil {
-					return nil, err // Fail fast on parallel error
-				}
-			}
-			for _, s := range readySteps {
-				completedSteps[s.ID] = true
-			}
-		}
+	execResult, err := planExecutor.Execute(context.Background(), executor, task, plan, ac.sharedContext.Context)
+	if err != nil {
+		return nil, err
 	}
 
 	// Aggregate result (for the reviewer)
-	execResult := &framework.Result{
-		Success: true,
-		Data: map[string]any{
-			"steps_completed": len(completedSteps),
-		},
-	}
-
 	reviewer, ok := ac.agents["reviewer"]
 	if ok {
 		ac.emitEvent("reviewer_start")
@@ -292,7 +196,7 @@ func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*f
 		if reviewResult, err := reviewer.Execute(context.Background(), reviewTask, ac.sharedContext.Context); err == nil {
 			ac.contextBroker.StoreReviewIssues(reviewResult)
 		} else if ac.telemetry != nil {
-			ac.telemetry.Emit(framework.Event{
+			ac.telemetry.Emit(core.Event{
 				Type:      "reviewer_failed",
 				Timestamp: timeNow(),
 				Metadata: map[string]interface{}{
@@ -304,47 +208,7 @@ func (ac *AgentCoordinator) executePlanExecuteStrategy(task *framework.Task) (*f
 	return execResult, nil
 }
 
-func (ac *AgentCoordinator) executeSingleStep(ctx context.Context, step PlanStep, executor framework.Agent, originalTask *framework.Task, plan *PlanContext) error {
-	stepTask := cloneTask(originalTask)
-	if stepTask.Context == nil {
-		stepTask.Context = make(map[string]any)
-	}
-	// Focus instruction
-	stepTask.Instruction = fmt.Sprintf("Execute step %s: %s\nFiles: %v", step.ID, step.Description, step.Files)
-	stepTask.Context["plan"] = plan
-	stepTask.Context["current_step"] = step
-
-	// Retry logic per step
-	var stepErr error
-	for attempt := 0; attempt <= ac.Config.MaxRecoveryAttempts; attempt++ {
-		if attempt > 0 {
-			stepTask.Instruction += fmt.Sprintf("\nRetry %d: Last error: %v", attempt, stepErr)
-
-			// Add diagnostic info if available
-			if diagAgent, hasDiag := ac.agents["ask"]; hasDiag && stepErr != nil {
-				diagTask := cloneTask(originalTask)
-				diagTask.Instruction = fmt.Sprintf("Analyze why this error occurred: %v", stepErr)
-				if diagRes, dErr := diagAgent.Execute(ctx, diagTask, ac.sharedContext.Context); dErr == nil {
-					if diagnosis, ok := diagRes.Data["text"].(string); ok {
-						stepTask.Instruction += fmt.Sprintf("\nDiagnosis: %s", diagnosis)
-					}
-				}
-			}
-		}
-		res, err := executor.Execute(ctx, stepTask, ac.sharedContext.Context)
-		if err == nil && res.Success {
-			return nil
-		}
-		stepErr = err
-		if stepErr == nil && !res.Success {
-			stepErr = fmt.Errorf("step failed without error")
-		}
-		ac.emitEvent("executor_retry")
-	}
-	return fmt.Errorf("step %s failed: %w", step.ID, stepErr)
-}
-
-func (ac *AgentCoordinator) executeExploreModifyStrategy(task *framework.Task) (*framework.Result, error) {
+func (ac *AgentCoordinator) executeExploreModifyStrategy(task *core.Task) (*core.Result, error) {
 	asker, ok := ac.agents["ask"]
 	if ok {
 		exploreTask := cloneTask(task)
@@ -360,13 +224,13 @@ func (ac *AgentCoordinator) executeExploreModifyStrategy(task *framework.Task) (
 	return executor.Execute(context.Background(), task, ac.sharedContext.Context)
 }
 
-func (ac *AgentCoordinator) executeReviewIterateStrategy(task *framework.Task) (*framework.Result, error) {
+func (ac *AgentCoordinator) executeReviewIterateStrategy(task *core.Task) (*core.Result, error) {
 	executor, ok := ac.agents["executor"]
 	reviewer, rok := ac.agents["reviewer"]
 	if !ok || !rok {
 		return nil, fmt.Errorf("executor or reviewer not registered")
 	}
-	var result *framework.Result
+	var result *core.Result
 	var err error
 	var lastIssues []ReviewIssue
 
@@ -455,7 +319,7 @@ func areIssuesIdentical(a, b []ReviewIssue) bool {
 	return true
 }
 
-func (ac *AgentCoordinator) executeSingleAgentStrategy(task *framework.Task) (*framework.Result, error) {
+func (ac *AgentCoordinator) executeSingleAgentStrategy(task *core.Task) (*core.Result, error) {
 	executor, ok := ac.agents["executor"]
 	if ok {
 		return executor.Execute(context.Background(), task, ac.sharedContext.Context)
@@ -466,7 +330,7 @@ func (ac *AgentCoordinator) executeSingleAgentStrategy(task *framework.Task) (*f
 	return nil, fmt.Errorf("no agents registered")
 }
 
-func (ac *AgentCoordinator) determineStrategy(task *framework.Task) string {
+func (ac *AgentCoordinator) determineStrategy(task *core.Task) string {
 	if task.Metadata != nil {
 		if strategy, ok := task.Metadata["strategy"]; ok && strategy != "" {
 			return strategy
@@ -500,14 +364,14 @@ func (ac *AgentCoordinator) emitEvent(name string) {
 	if ac.telemetry == nil {
 		return
 	}
-	ac.telemetry.Emit(framework.Event{
-		Type:      framework.EventType(name),
+	ac.telemetry.Emit(core.Event{
+		Type:      core.EventType(name),
 		Timestamp: timeNow(),
 	})
 }
 
 // ContextBroker helpers.
-func (cb *ContextBroker) CacheIndexResults(ctx *framework.Context) {
+func (cb *ContextBroker) CacheIndexResults(ctx *core.Context) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	if summaries, ok := ctx.Get("ast_summaries"); ok {
@@ -515,7 +379,7 @@ func (cb *ContextBroker) CacheIndexResults(ctx *framework.Context) {
 	}
 }
 
-func (cb *ContextBroker) LoadSummariesIntoContext(ctx *framework.Context) {
+func (cb *ContextBroker) LoadSummariesIntoContext(ctx *core.Context) {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	if summaries, ok := cb.indexerCache["ast_summaries"]; ok {
@@ -523,28 +387,43 @@ func (cb *ContextBroker) LoadSummariesIntoContext(ctx *framework.Context) {
 	}
 }
 
-func (cb *ContextBroker) ExtractPlan(result *framework.Result) *PlanContext {
+func (cb *ContextBroker) ExtractPlan(result *core.Result) *core.Plan {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	if result == nil {
 		return nil
 	}
-	plan := &PlanContext{
-		Steps:        make([]PlanStep, 0),
-		Files:        make([]string, 0),
-		Dependencies: make(map[string][]string),
+	var plan *core.Plan
+	if value, ok := result.Data["plan"]; ok {
+		switch typed := value.(type) {
+		case core.Plan:
+			copy := typed
+			plan = &copy
+		case *core.Plan:
+			plan = typed
+		}
 	}
-	if steps, ok := result.Data["plan_steps"].([]PlanStep); ok {
+	if plan == nil {
+		plan = &core.Plan{
+			Steps:        make([]core.PlanStep, 0),
+			Files:        make([]string, 0),
+			Dependencies: make(map[string][]string),
+		}
+	}
+	if steps, ok := result.Data["plan_steps"].([]core.PlanStep); ok {
 		plan.Steps = steps
 	}
-	if files, ok := result.Data["files"].([]string); ok {
+	if files, ok := result.Data["files"].([]string); ok && len(plan.Files) == 0 {
 		plan.Files = files
+	}
+	if plan.Dependencies == nil {
+		plan.Dependencies = make(map[string][]string)
 	}
 	cb.plannerPlan = plan
 	return plan
 }
 
-func (cb *ContextBroker) LoadFullFilesForPlan(ctx *framework.Context, plan *PlanContext) {
+func (cb *ContextBroker) LoadFullFilesForPlan(ctx *core.Context, plan *core.Plan) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	if plan == nil {
@@ -556,7 +435,7 @@ func (cb *ContextBroker) LoadFullFilesForPlan(ctx *framework.Context, plan *Plan
 	ctx.Set("executor_files", plan.Files)
 }
 
-func (cb *ContextBroker) StoreReviewIssues(result *framework.Result) {
+func (cb *ContextBroker) StoreReviewIssues(result *core.Result) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	if result == nil {
@@ -567,7 +446,7 @@ func (cb *ContextBroker) StoreReviewIssues(result *framework.Result) {
 	}
 }
 
-func (cb *ContextBroker) CacheExplorationResults(result *framework.Result) {
+func (cb *ContextBroker) CacheExplorationResults(result *core.Result) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	if result != nil {
@@ -575,7 +454,7 @@ func (cb *ContextBroker) CacheExplorationResults(result *framework.Result) {
 	}
 }
 
-func cloneTask(task *framework.Task) *framework.Task {
+func cloneTask(task *core.Task) *core.Task {
 	if task == nil {
 		return nil
 	}
