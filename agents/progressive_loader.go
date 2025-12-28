@@ -1,19 +1,20 @@
 package agents
 
 import (
-	contextual "github.com/lexcodex/relurpify/agents/contextual"
-	"github.com/lexcodex/relurpify/framework"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/contextmgr"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/search"
 )
 
-type ProgressiveLoader = contextual.ProgressiveLoader
+type ProgressiveLoader = contextmgr.ProgressiveLoader
 
 func NewProgressiveLoader(
-	contextManager *framework.ContextManager,
+	contextManager *contextmgr.ContextManager,
 	indexManager *ast.IndexManager,
-	searchEngine *framework.SearchEngine,
-	budget *framework.ContextBudget,
-	summarizer framework.Summarizer,
+	searchEngine *search.SearchEngine,
+	budget *core.ContextBudget,
+	summarizer core.Summarizer,
 ) *ProgressiveLoader {
-	return contextual.NewProgressiveLoader(contextManager, indexManager, searchEngine, budget, summarizer)
+	return contextmgr.NewProgressiveLoader(contextManager, indexManager, searchEngine, budget, summarizer)
 }
