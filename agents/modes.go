@@ -1,6 +1,9 @@
 package agents
 
-import "github.com/lexcodex/relurpify/framework"
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/search"
+)
 
 // Mode enumerates the supported execution profiles for the coding agent.
 type Mode string
@@ -29,7 +32,7 @@ type ModeProfile struct {
 	Title        string
 	Description  string
 	Temperature  float64
-	Capabilities []framework.Capability
+	Capabilities []core.Capability
 	ToolScope    ToolScope
 	Restrictions []string
 
@@ -44,7 +47,7 @@ type ContextProfile struct {
 	MaxConciseFiles      int
 	CompressionThreshold float64
 	MinHistorySize       int
-	SearchMode           framework.SearchMode
+	SearchMode           search.SearchMode
 	MaxSearchResults     int
 	PreloadPatterns      []string
 	PreloadDependencies  bool
@@ -73,11 +76,11 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Code Mode",
 		Description: "General-purpose development with read/write/execute access.",
 		Temperature: 0.3,
-		Capabilities: []framework.Capability{
-			framework.CapabilityPlan,
-			framework.CapabilityCode,
-			framework.CapabilityExplain,
-			framework.CapabilityRefactor,
+		Capabilities: []core.Capability{
+			core.CapabilityPlan,
+			core.CapabilityCode,
+			core.CapabilityExplain,
+			core.CapabilityRefactor,
 		},
 		ToolScope: ToolScope{
 			AllowRead:    true,
@@ -91,7 +94,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 			MaxConciseFiles:      30,
 			CompressionThreshold: 0.8,
 			MinHistorySize:       5,
-			SearchMode:           framework.SearchHybrid,
+			SearchMode:           search.SearchHybrid,
 			MaxSearchResults:     15,
 			PreloadPatterns:      []string{"**/*.go", "**/*.py"},
 			PreloadDependencies:  true,
@@ -109,9 +112,9 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Architect Mode",
 		Description: "High-level architecture planning with read-only tools.",
 		Temperature: 0.1,
-		Capabilities: []framework.Capability{
-			framework.CapabilityPlan,
-			framework.CapabilityExplain,
+		Capabilities: []core.Capability{
+			core.CapabilityPlan,
+			core.CapabilityExplain,
 		},
 		ToolScope: ToolScope{
 			AllowRead:    true,
@@ -129,7 +132,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 			MaxConciseFiles:      100,
 			CompressionThreshold: 0.9,
 			MinHistorySize:       10,
-			SearchMode:           framework.SearchSemantic,
+			SearchMode:           search.SearchSemantic,
 			MaxSearchResults:     30,
 			PreloadPatterns:      []string{"**/*"},
 			PreloadDependencies:  false,
@@ -147,8 +150,8 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Ask Mode",
 		Description: "Information retrieval, explanation, and documentation lookup.",
 		Temperature: 0.2,
-		Capabilities: []framework.Capability{
-			framework.CapabilityExplain,
+		Capabilities: []core.Capability{
+			core.CapabilityExplain,
 		},
 		ToolScope: ToolScope{
 			AllowRead:    true,
@@ -162,7 +165,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 			MaxConciseFiles:      50,
 			CompressionThreshold: 0.85,
 			MinHistorySize:       5,
-			SearchMode:           framework.SearchHybrid,
+			SearchMode:           search.SearchHybrid,
 			MaxSearchResults:     20,
 			PreloadDependencies:  false,
 			DependencyDepth:      0,
@@ -179,9 +182,9 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Debug Mode",
 		Description: "Focused on diagnostics, log analysis, and running tests.",
 		Temperature: 0.1,
-		Capabilities: []framework.Capability{
-			framework.CapabilityExplain,
-			framework.CapabilityExecute,
+		Capabilities: []core.Capability{
+			core.CapabilityExplain,
+			core.CapabilityExecute,
 		},
 		ToolScope: ToolScope{
 			AllowRead:    true,
@@ -195,7 +198,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 			MaxConciseFiles:      20,
 			CompressionThreshold: 0.75,
 			MinHistorySize:       3,
-			SearchMode:           framework.SearchKeyword,
+			SearchMode:           search.SearchKeyword,
 			MaxSearchResults:     10,
 			PreloadDependencies:  true,
 			DependencyDepth:      2,
@@ -212,9 +215,9 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Documentation Mode",
 		Description: "Produces README and API docs; writes limited to doc files.",
 		Temperature: 0.4,
-		Capabilities: []framework.Capability{
-			framework.CapabilityExplain,
-			framework.CapabilityPlan,
+		Capabilities: []core.Capability{
+			core.CapabilityExplain,
+			core.CapabilityPlan,
 		},
 		ToolScope: ToolScope{
 			AllowRead:    true,
@@ -231,7 +234,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 			MaxConciseFiles:      40,
 			CompressionThreshold: 0.8,
 			MinHistorySize:       5,
-			SearchMode:           framework.SearchSemantic,
+			SearchMode:           search.SearchSemantic,
 			MaxSearchResults:     25,
 			PreloadPatterns:      []string{"**/*.go", "**/*.md"},
 			PreloadDependencies:  false,
