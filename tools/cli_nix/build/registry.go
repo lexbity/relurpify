@@ -1,10 +1,12 @@
 package build
 
-import "github.com/lexcodex/relurpify/framework"
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+)
 
 // Tools returns build-system helpers.
-func Tools(basePath string) []framework.Tool {
-	return []framework.Tool{
+func Tools(basePath string) []core.Tool {
+	return []core.Tool{
 		NewMakeTool(basePath),
 		NewCMakeTool(basePath),
 		NewCargoTool(basePath),
