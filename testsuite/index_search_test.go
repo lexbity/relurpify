@@ -2,13 +2,13 @@ package testsuite
 
 import (
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/search"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/lexcodex/relurpify/framework"
-	"github.com/lexcodex/relurpify/framework/ast"
 )
 
 func TestIndexManagerSearchIntegration(t *testing.T) {
@@ -40,8 +40,8 @@ func HighlightFeature() string {
 	}
 
 	codeIndex := &astCodeIndex{store: store}
-	engine := framework.NewSearchEngine(nil, codeIndex)
-	results, err := engine.Search(framework.SearchQuery{Text: "highlight", Mode: framework.SearchHybrid, MaxResults: 3})
+	engine := search.NewSearchEngine(nil, codeIndex)
+	results, err := engine.Search(search.SearchQuery{Text: "highlight", Mode: search.SearchHybrid, MaxResults: 3})
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}
@@ -49,13 +49,13 @@ func HighlightFeature() string {
 		t.Fatal("expected AST-backed search results")
 	}
 
-	shared := framework.NewSharedContext(framework.NewContext(), nil, &framework.SimpleSummarizer{})
+	shared := core.NewSharedContext(core.NewContext(), nil, &core.SimpleSummarizer{})
 	target := results[0]
 	data, err := os.ReadFile(target.File)
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
-	if _, err := shared.AddFile(target.File, string(data), "go", framework.DetailBodyOnly); err != nil {
+	if _, err := shared.AddFile(target.File, string(data), "go", core.DetailBodyOnly); err != nil {
 		t.Fatalf("AddFile failed: %v", err)
 	}
 	if _, ok := shared.GetFile(target.File); !ok {
@@ -67,28 +67,28 @@ type astCodeIndex struct {
 	store *ast.SQLiteStore
 }
 
-func (a *astCodeIndex) GetFileMetadata(string) (*framework.FileMetadata, bool)      { return nil, false }
-func (a *astCodeIndex) ListFiles() []string                                         { return nil }
-func (a *astCodeIndex) GetSymbolsByName(string) ([]framework.SymbolLocation, error) { return nil, nil }
-func (a *astCodeIndex) GetSymbolDefinition(string) (*framework.SymbolLocation, error) {
+func (a *astCodeIndex) GetFileMetadata(string) (*core.FileMetadata, bool)      { return nil, false }
+func (a *astCodeIndex) ListFiles() []string                                    { return nil }
+func (a *astCodeIndex) GetSymbolsByName(string) ([]core.SymbolLocation, error) { return nil, nil }
+func (a *astCodeIndex) GetSymbolDefinition(string) (*core.SymbolLocation, error) {
 	return nil, nil
 }
-func (a *astCodeIndex) GetSymbolReferences(string) ([]framework.SymbolLocation, error) {
+func (a *astCodeIndex) GetSymbolReferences(string) ([]core.SymbolLocation, error) {
 	return nil, nil
 }
-func (a *astCodeIndex) GetFileDependencies(string) []string                              { return nil }
-func (a *astCodeIndex) GetDependents(string) []string                                    { return nil }
-func (a *astCodeIndex) GetChunksForFile(string) []*framework.CodeChunk                   { return nil }
-func (a *astCodeIndex) GetChunkByID(string) (*framework.CodeChunk, bool)                 { return nil, false }
-func (a *astCodeIndex) FindChunksByName(string) []*framework.CodeChunk                   { return nil }
-func (a *astCodeIndex) FindChunksByFileAndRange(string, int, int) []*framework.CodeChunk { return nil }
-func (a *astCodeIndex) SearchChunks(query string, limit int) []*framework.CodeChunk {
+func (a *astCodeIndex) GetFileDependencies(string) []string                         { return nil }
+func (a *astCodeIndex) GetDependents(string) []string                               { return nil }
+func (a *astCodeIndex) GetChunksForFile(string) []*core.CodeChunk                   { return nil }
+func (a *astCodeIndex) GetChunkByID(string) (*core.CodeChunk, bool)                 { return nil, false }
+func (a *astCodeIndex) FindChunksByName(string) []*core.CodeChunk                   { return nil }
+func (a *astCodeIndex) FindChunksByFileAndRange(string, int, int) []*core.CodeChunk { return nil }
+func (a *astCodeIndex) SearchChunks(query string, limit int) []*core.CodeChunk {
 	nodes, err := a.store.SearchNodes(ast.NodeQuery{})
 	if err != nil {
 		return nil
 	}
 	query = strings.ToLower(query)
-	results := make([]*framework.CodeChunk, 0, len(nodes))
+	results := make([]*core.CodeChunk, 0, len(nodes))
 	seen := make(map[string]struct{})
 	for _, node := range nodes {
 		if node.Name == "" || !strings.Contains(strings.ToLower(node.Name), query) {
@@ -107,10 +107,10 @@ func (a *astCodeIndex) SearchChunks(query string, limit int) []*framework.CodeCh
 		if lineSpan <= 0 {
 			lineSpan = 1
 		}
-		results = append(results, &framework.CodeChunk{
+		results = append(results, &core.CodeChunk{
 			ID:         chunkID,
 			File:       meta.Path,
-			Kind:       framework.ChunkFunction,
+			Kind:       core.ChunkFunction,
 			Name:       node.Name,
 			StartLine:  node.StartLine,
 			EndLine:    node.EndLine,
