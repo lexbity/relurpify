@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/contextmgr"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"log"
 	"strings"
 	"time"
-
-	agentctx "github.com/lexcodex/relurpify/agents/contextual"
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // ReActAgent implements the Reason+Act pattern.
@@ -24,33 +26,28 @@ type ModeRuntimeProfile struct {
 
 // ContextPreferences tune context management for a mode.
 type ContextPreferences struct {
-	PreferredDetailLevel agentctx.DetailLevel
+	PreferredDetailLevel contextmgr.DetailLevel
 	MinHistorySize       int
 	CompressionThreshold float64
 }
 
 // ReActAgent implements the Reason+Act pattern.
 type ReActAgent struct {
-	Model               framework.LanguageModel
-	Tools               *framework.ToolRegistry
-	Memory              framework.MemoryStore
-	Config              *framework.Config
-	maxIterations       int
-	budget              *framework.ContextBudget
-	contextManager      *framework.ContextManager
-	compressionStrategy framework.CompressionStrategy
+	Model         core.LanguageModel
+	Tools         *toolsys.ToolRegistry
+	Memory        memory.MemoryStore
+	Config        *core.Config
+	maxIterations int
+	contextPolicy *contextmgr.ContextPolicy
 
 	Mode            string
 	ModeProfile     ModeRuntimeProfile
-	contextStrategy agentctx.ContextStrategy
-	progressive     *agentctx.ProgressiveLoader
-	sharedContext   *framework.SharedContext
-	summarizer      framework.Summarizer
+	sharedContext   *core.SharedContext
 	initialLoadDone bool
 }
 
 // Initialize wires configuration.
-func (a *ReActAgent) Initialize(config *framework.Config) error {
+func (a *ReActAgent) Initialize(config *core.Config) error {
 	a.Config = config
 	if config.MaxIterations <= 0 {
 		a.maxIterations = 8
@@ -58,17 +55,7 @@ func (a *ReActAgent) Initialize(config *framework.Config) error {
 		a.maxIterations = config.MaxIterations
 	}
 	if a.Tools == nil {
-		a.Tools = framework.NewToolRegistry()
-	}
-	if a.budget == nil {
-		a.budget = framework.NewContextBudget(8000)
-	}
-	a.budget.SetReservations(1000, 2000, 1000)
-	if a.contextManager == nil {
-		a.contextManager = framework.NewContextManager(a.budget)
-	}
-	if a.compressionStrategy == nil {
-		a.compressionStrategy = framework.NewSimpleCompressionStrategy()
+		a.Tools = toolsys.NewToolRegistry()
 	}
 	if a.Mode == "" {
 		a.Mode = "code"
@@ -79,28 +66,49 @@ func (a *ReActAgent) Initialize(config *framework.Config) error {
 			Description: "Reason + Act agent",
 			Temperature: 0.2,
 			Context: ContextPreferences{
-				PreferredDetailLevel: agentctx.DetailDetailed,
+				PreferredDetailLevel: contextmgr.DetailDetailed,
 				MinHistorySize:       5,
 				CompressionThreshold: 0.8,
 			},
 		}
 	}
-	if a.contextStrategy == nil {
+	strategy := contextmgr.ContextStrategy(nil)
+	if a.contextPolicy != nil {
+		strategy = a.contextPolicy.Strategy
+	}
+	if strategy == nil {
 		switch strings.ToLower(a.Mode) {
 		case "debug", "ask":
-			a.contextStrategy = agentctx.NewAggressiveStrategy()
+			strategy = contextmgr.NewAggressiveStrategy()
 		case "architect":
-			a.contextStrategy = agentctx.NewConservativeStrategy()
+			strategy = contextmgr.NewConservativeStrategy()
 		default:
-			a.contextStrategy = agentctx.NewAdaptiveStrategy()
+			strategy = contextmgr.NewAdaptiveStrategy()
 		}
 	}
-	if a.summarizer == nil {
-		a.summarizer = &framework.SimpleSummarizer{}
+	var spec *core.AgentContextSpec
+	if config != nil && config.AgentSpec != nil {
+		spec = &config.AgentSpec.Context
 	}
-	if a.progressive == nil {
-		a.progressive = agentctx.NewProgressiveLoader(a.contextManager, nil, nil, a.budget, a.summarizer)
+	if a.contextPolicy == nil {
+		a.contextPolicy = contextmgr.NewContextPolicy(contextmgr.ContextPolicyConfig{
+			Strategy: strategy,
+			Preferences: contextmgr.ContextPolicyPreferences{
+				PreferredDetailLevel: a.ModeProfile.Context.PreferredDetailLevel,
+				MinHistorySize:       a.ModeProfile.Context.MinHistorySize,
+				CompressionThreshold: a.ModeProfile.Context.CompressionThreshold,
+			},
+		}, spec)
+	} else {
+		a.contextPolicy.Strategy = strategy
+		a.contextPolicy.Preferences = contextmgr.ContextPolicyPreferences{
+			PreferredDetailLevel: a.ModeProfile.Context.PreferredDetailLevel,
+			MinHistorySize:       a.ModeProfile.Context.MinHistorySize,
+			CompressionThreshold: a.ModeProfile.Context.CompressionThreshold,
+		}
+		a.contextPolicy.ApplyAgentContextSpec(spec)
 	}
+	a.contextPolicy.Budget.SetReservations(1000, 2000, 1000)
 	return nil
 }
 
@@ -113,15 +121,15 @@ func (a *ReActAgent) debugf(format string, args ...interface{}) {
 }
 
 // Execute runs the task through the workflow graph.
-func (a *ReActAgent) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	graph, err := a.BuildGraph(task)
 	if err != nil {
 		return nil, err
 	}
 	a.initialLoadDone = false
-	a.sharedContext = framework.NewSharedContext(state, a.budget, a.summarizer)
-	if a.progressive != nil && a.contextStrategy != nil && task != nil {
-		if err := a.progressive.InitialLoad(task, a.contextStrategy); err != nil {
+	a.sharedContext = core.NewSharedContext(state, a.contextPolicy.Budget, a.contextPolicy.Summarizer)
+	if a.contextPolicy != nil && task != nil {
+		if err := a.contextPolicy.InitialLoad(task); err != nil {
 			a.debugf("initial context load failed: %v", err)
 		} else {
 			a.initialLoadDone = true
@@ -139,20 +147,19 @@ func (a *ReActAgent) Execute(ctx context.Context, task *framework.Task, state *f
 }
 
 // Capabilities describes what the agent can do.
-func (a *ReActAgent) Capabilities() []framework.Capability {
-	return []framework.Capability{
-		framework.CapabilityPlan,
-		framework.CapabilityCode,
-		framework.CapabilityExplain,
+func (a *ReActAgent) Capabilities() []core.Capability {
+	return []core.Capability{
+		core.CapabilityPlan,
+		core.CapabilityCode,
+		core.CapabilityExplain,
 	}
 }
 
 // BuildGraph constructs the ReAct workflow.
-func (a *ReActAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) {
+func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if a.Model == nil {
 		return nil, fmt.Errorf("react agent missing language model")
 	}
-	graph := framework.NewGraph()
 	think := &reactThinkNode{
 		id:    "react_think",
 		agent: a,
@@ -167,176 +174,49 @@ func (a *ReActAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) 
 		agent: a,
 		task:  task,
 	}
-	terminal := framework.NewTerminalNode("react_done")
-
-	for _, node := range []framework.Node{think, act, observe, terminal} {
-		if err := graph.AddNode(node); err != nil {
-			return nil, err
-		}
-	}
-	if err := graph.SetStart(think.ID()); err != nil {
-		return nil, err
-	}
-	if err := graph.AddEdge(think.ID(), act.ID(), nil, false); err != nil {
-		return nil, err
-	}
-	if err := graph.AddEdge(act.ID(), observe.ID(), nil, false); err != nil {
-		return nil, err
-	}
-	if err := graph.AddEdge(observe.ID(), think.ID(), func(result *framework.Result, ctx *framework.Context) bool {
-		done, _ := ctx.Get("react.done")
-		return done == false || done == nil
-	}, false); err != nil {
-		return nil, err
-	}
-	if err := graph.AddEdge(observe.ID(), terminal.ID(), func(result *framework.Result, ctx *framework.Context) bool {
-		done, _ := ctx.Get("react.done")
-		return done == true
-	}, false); err != nil {
-		return nil, err
-	}
-	return graph, nil
+	return graph.BuildThinkActObserveGraph(
+		think,
+		act,
+		observe,
+		func(result *core.Result, ctx *core.Context) bool {
+			done, _ := ctx.Get("react.done")
+			return done == false || done == nil
+		},
+		func(result *core.Result, ctx *core.Context) bool {
+			done, _ := ctx.Get("react.done")
+			return done == true
+		},
+		"react_done",
+	)
 }
 
-func (a *ReActAgent) enforceBudget(state *framework.Context) {
-	if a.budget == nil {
+func (a *ReActAgent) enforceBudget(state *core.Context) {
+	if a.contextPolicy == nil {
 		return
 	}
-	var tools []framework.Tool
+	var tools []core.Tool
 	if a.Tools != nil {
 		tools = a.Tools.All()
 	}
-	a.budget.UpdateUsage(state, tools)
-	budgetState := a.budget.CheckBudget()
-	if budgetState >= framework.BudgetNeedsCompression && a.Model != nil {
-		compressed := false
-		if a.sharedContext != nil && a.contextStrategy != nil && a.compressionStrategy != nil {
-			if a.contextStrategy.ShouldCompress(a.sharedContext) {
-				keep := a.ModeProfile.Context.MinHistorySize
-				if keep <= 0 {
-					keep = a.compressionStrategy.KeepRecent()
-				}
-				if keep <= 0 {
-					keep = 5
-				}
-				if err := a.sharedContext.CompressHistory(keep, a.Model, a.compressionStrategy); err != nil {
-					a.debugf("shared context compression failed: %v", err)
-				} else {
-					compressed = true
-				}
-			}
-		}
-		if !compressed && a.compressionStrategy != nil {
-			if err := state.CompressHistory(a.compressionStrategy.KeepRecent(), a.Model, a.compressionStrategy); err != nil {
-				a.debugf("compression failed: %v", err)
-			} else {
-				compressed = true
-			}
-		}
-		if compressed {
-			a.budget.UpdateUsage(state, tools)
-		}
-	}
-	if budgetState == framework.BudgetCritical && a.contextManager != nil {
-		targetTokens := a.budget.AvailableForContext / 4
-		if targetTokens == 0 {
-			targetTokens = 1
-		}
-		if err := a.contextManager.MakeSpace(targetTokens); err != nil {
-			a.debugf("context pruning failed: %v", err)
-		}
-	}
+	a.contextPolicy.EnforceBudget(state, a.sharedContext, a.Model, tools, a.debugf)
 }
 
-func (a *ReActAgent) recordLatestInteraction(state *framework.Context) {
-	if a.contextManager == nil {
+func (a *ReActAgent) recordLatestInteraction(state *core.Context) {
+	if a.contextPolicy == nil {
 		return
 	}
-	interaction, ok := state.LatestInteraction()
-	if !ok {
-		return
-	}
-	item := &framework.InteractionContextItem{
-		Interaction: interaction,
-		Relevance:   1.0,
-		PriorityVal: 1,
-	}
-	if err := a.contextManager.AddItem(item); err != nil {
-		a.debugf("context item add failed: %v", err)
-	}
+	a.contextPolicy.RecordLatestInteraction(state, a.debugf)
 }
 
-func (a *ReActAgent) manageContextSignals(state *framework.Context) {
-	if a.contextStrategy == nil {
+func (a *ReActAgent) manageContextSignals(state *core.Context) {
+	if a.contextPolicy == nil {
 		return
 	}
 	lastResult := a.getLastResult(state)
-	if a.sharedContext != nil && a.progressive != nil && a.contextStrategy.ShouldExpandContext(a.sharedContext, lastResult) {
-		a.expandContextFromResult(lastResult)
-	}
-	if a.detectUncertainty(state) {
-		a.handleUncertainty(state)
-	}
+	a.contextPolicy.HandleSignals(state, a.sharedContext, lastResult)
 }
 
-func (a *ReActAgent) expandContextFromResult(result *framework.Result) {
-	if result == nil || result.Data == nil || a.progressive == nil {
-		return
-	}
-	if file, ok := result.Data["file"].(string); ok && file != "" {
-		_ = a.progressive.DrillDown(file)
-		return
-	}
-	if focus, ok := result.Data["focus_area"].(string); ok && focus != "" {
-		_ = a.progressive.LoadRelatedFiles(focus, 1)
-	}
-}
-
-func (a *ReActAgent) detectUncertainty(state *framework.Context) bool {
-	if state == nil {
-		return false
-	}
-	history := state.History()
-	if len(history) == 0 {
-		return false
-	}
-	last := history[len(history)-1]
-	content := strings.ToLower(last.Content)
-	markers := []string{
-		"not sure", "unclear", "need more information",
-		"cannot determine", "insufficient context", "missing information",
-	}
-	for _, marker := range markers {
-		if strings.Contains(content, marker) {
-			return true
-		}
-	}
-	return false
-}
-
-func (a *ReActAgent) handleUncertainty(state *framework.Context) {
-	if state == nil || a.progressive == nil {
-		return
-	}
-	history := state.History()
-	if len(history) == 0 {
-		return
-	}
-	last := history[len(history)-1]
-	for _, file := range agentctx.ExtractFileReferences(last.Content) {
-		_ = a.progressive.ExpandContext(file, agentctx.DetailDetailed)
-	}
-	if len(agentctx.ExtractSymbolReferences(last.Content)) > 0 {
-		request := &agentctx.ContextRequest{
-			ASTQueries: []agentctx.ASTQuery{
-				{Type: agentctx.ASTQueryListSymbols},
-			},
-		}
-		_ = a.progressive.ExecuteContextRequest(request, "symbol_lookup")
-	}
-}
-
-func (a *ReActAgent) getLastResult(state *framework.Context) *framework.Result {
+func (a *ReActAgent) getLastResult(state *core.Context) *core.Result {
 	if state == nil {
 		return nil
 	}
@@ -344,7 +224,7 @@ func (a *ReActAgent) getLastResult(state *framework.Context) *framework.Result {
 	if !ok {
 		return nil
 	}
-	if res, ok := val.(*framework.Result); ok {
+	if res, ok := val.(*core.Result); ok {
 		return res
 	}
 	return nil
@@ -355,34 +235,34 @@ func (a *ReActAgent) getLastResult(state *framework.Context) *framework.Result {
 type reactThinkNode struct {
 	id    string
 	agent *ReActAgent
-	task  *framework.Task
+	task  *core.Task
 }
 
 // ID returns the think node identifier.
 func (n *reactThinkNode) ID() string { return n.id }
 
 // Type marks the think step as an observation node.
-func (n *reactThinkNode) Type() framework.NodeType { return framework.NodeTypeObservation }
+func (n *reactThinkNode) Type() graph.NodeType { return graph.NodeTypeObservation }
 
 // Execute drives the “think” portion of the ReAct loop and either emits a tool
 // call or final answer instructions.
-func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	state.SetExecutionPhase("planning")
 	n.agent.enforceBudget(state)
 	n.agent.manageContextSignals(state)
-	var resp *framework.LLMResponse
+	var resp *core.LLMResponse
 	var err error
 	tools := n.agent.Tools.All()
 	useToolCalling := len(tools) > 0 && (n.agent.Config == nil || n.agent.Config.OllamaToolCalling)
 	if useToolCalling {
 		messages := n.ensureMessages(state, tools)
-		resp, err = n.agent.Model.ChatWithTools(ctx, messages, tools, &framework.LLMOptions{
+		resp, err = n.agent.Model.ChatWithTools(ctx, messages, tools, &core.LLMOptions{
 			Model:       n.agent.Config.Model,
 			Temperature: 0.1,
 			MaxTokens:   512,
 		})
 		if err == nil {
-			messages = append(messages, framework.Message{
+			messages = append(messages, core.Message{
 				Role:      "assistant",
 				Content:   resp.Text,
 				ToolCalls: resp.ToolCalls,
@@ -391,7 +271,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) 
 		}
 	} else {
 		prompt := n.buildPrompt(state)
-		resp, err = n.agent.Model.Generate(ctx, prompt, &framework.LLMOptions{
+		resp, err = n.agent.Model.Generate(ctx, prompt, &core.LLMOptions{
 			Model:       n.agent.Config.Model,
 			Temperature: 0.1,
 			MaxTokens:   512,
@@ -415,7 +295,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) 
 		// Some Ollama models return tool calls as JSON blobs in plain text even
 		// when the chat_with_tools API is used. Prefer extracting those calls
 		// before falling back to the decision parser.
-		detectedCalls := framework.ParseToolCallsFromText(resp.Text)
+		detectedCalls := toolsys.ParseToolCallsFromText(resp.Text)
 		detectedCalls = filterToolCalls(detectedCalls)
 		if len(detectedCalls) > 0 {
 			state.Set("react.tool_calls", detectedCalls)
@@ -431,14 +311,14 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) 
 			} else {
 				decision = decisionPayload{Thought: resp.Text, Complete: true}
 			}
-			state.Set("react.tool_calls", []framework.ToolCall{})
+			state.Set("react.tool_calls", []core.ToolCall{})
 		}
 	} else {
 		parsed, err := parseDecision(resp.Text)
 
 		// Fallback: Check if the framework helper finds distinct tool calls (e.g. in markdown blocks)
 		// even if the single-object parser failed or found nothing.
-		detectedCalls := framework.ParseToolCallsFromText(resp.Text)
+		detectedCalls := toolsys.ParseToolCallsFromText(resp.Text)
 
 		if len(detectedCalls) > 0 {
 			// Found tools via text parsing
@@ -460,12 +340,12 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) 
 			} else {
 				decision = parsed
 			}
-			state.Set("react.tool_calls", []framework.ToolCall{})
+			state.Set("react.tool_calls", []core.ToolCall{})
 		}
 	}
 	state.Set("react.decision", decision)
 	n.agent.debugf("%s decision=%+v tool_calls=%d", n.id, decision, len(resp.ToolCalls))
-	return &framework.Result{
+	return &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]interface{}{
@@ -474,11 +354,11 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *framework.Context) 
 	}, nil
 }
 
-func filterToolCalls(calls []framework.ToolCall) []framework.ToolCall {
+func filterToolCalls(calls []core.ToolCall) []core.ToolCall {
 	if len(calls) == 0 {
 		return nil
 	}
-	out := make([]framework.ToolCall, 0, len(calls))
+	out := make([]core.ToolCall, 0, len(calls))
 	for _, call := range calls {
 		name := strings.TrimSpace(call.Name)
 		if name == "" || strings.EqualFold(name, "none") {
@@ -492,7 +372,7 @@ func filterToolCalls(calls []framework.ToolCall) []framework.ToolCall {
 
 // buildPrompt returns a textual prompt when tool-calling chat APIs are not
 // available.
-func (n *reactThinkNode) buildPrompt(state *framework.Context) string {
+func (n *reactThinkNode) buildPrompt(state *core.Context) string {
 	var hasLSP, hasAST bool
 	for _, tool := range n.agent.Tools.All() {
 		if strings.HasPrefix(tool.Name(), "lsp_") {
@@ -507,7 +387,7 @@ func (n *reactThinkNode) buildPrompt(state *framework.Context) string {
 		last = fmt.Sprint(res)
 	}
 
-	toolSection := framework.RenderToolsToPrompt(n.agent.Tools.All())
+	toolSection := toolsys.RenderToolsToPrompt(n.agent.Tools.All())
 
 	var guidance strings.Builder
 	if hasLSP || hasAST {
@@ -536,14 +416,14 @@ Provide your response as a JSON object with "thought" and "tool"/"arguments" fie
 
 // ensureMessages seeds the chat history when tool calling is enabled so each
 // iteration builds on prior reasoning.
-func (n *reactThinkNode) ensureMessages(state *framework.Context, tools []framework.Tool) []framework.Message {
+func (n *reactThinkNode) ensureMessages(state *core.Context, tools []core.Tool) []core.Message {
 	messages := getReactMessages(state)
 	if len(messages) > 0 {
 		return messages
 	}
 	systemPrompt := n.buildSystemPrompt(tools)
 	userPrompt := fmt.Sprintf("Task: %s", n.task.Instruction)
-	messages = []framework.Message{
+	messages = []core.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
 	}
@@ -552,7 +432,7 @@ func (n *reactThinkNode) ensureMessages(state *framework.Context, tools []framew
 }
 
 // buildSystemPrompt summarizes tool descriptions for the chat-based workflow.
-func (n *reactThinkNode) buildSystemPrompt(tools []framework.Tool) string {
+func (n *reactThinkNode) buildSystemPrompt(tools []core.Tool) string {
 	var lines []string
 	var hasLSP, hasAST bool
 	for _, tool := range tools {
@@ -603,16 +483,16 @@ type reactActNode struct {
 func (n *reactActNode) ID() string { return n.id }
 
 // Type labels the node as a tool execution step.
-func (n *reactActNode) Type() framework.NodeType { return framework.NodeTypeTool }
+func (n *reactActNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
 // Execute runs any pending tool calls or directly invokes the requested tool
 // referenced in the latest decision payload.
-func (n *reactActNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	state.SetExecutionPhase("executing")
 	if pending, ok := state.Get("react.tool_calls"); ok {
 		if n.agent.Config != nil && !n.agent.Config.OllamaToolCalling {
-			state.Set("react.tool_calls", []framework.ToolCall{})
-		} else if calls, ok := pending.([]framework.ToolCall); ok && len(calls) > 0 {
+			state.Set("react.tool_calls", []core.ToolCall{})
+		} else if calls, ok := pending.([]core.ToolCall); ok && len(calls) > 0 {
 			results := make(map[string]interface{})
 			toolErrors := make([]string, 0)
 			overallSuccess := true
@@ -645,8 +525,8 @@ func (n *reactActNode) Execute(ctx context.Context, state *framework.Context) (*
 				}
 			}
 			state.Set("react.last_tool_result", results)
-			state.Set("react.tool_calls", []framework.ToolCall{})
-			result := &framework.Result{NodeID: n.id, Success: overallSuccess, Data: results}
+			state.Set("react.tool_calls", []core.ToolCall{})
+			result := &core.Result{NodeID: n.id, Success: overallSuccess, Data: results}
 			if len(toolErrors) > 0 {
 				result.Error = fmt.Errorf("%s", strings.Join(toolErrors, "; "))
 			}
@@ -662,7 +542,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *framework.Context) (*
 	toolName := strings.TrimSpace(decision.Tool)
 	if decision.Complete || toolName == "" || strings.EqualFold(toolName, "none") {
 		state.Set("react.last_tool_result", map[string]interface{}{})
-		result := &framework.Result{NodeID: n.id, Success: true}
+		result := &core.Result{NodeID: n.id, Success: true}
 		state.Set("react.last_result", result)
 		return result, nil
 	}
@@ -671,7 +551,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *framework.Context) (*
 		lower := strings.ToLower(toolName)
 		if lower == "" || strings.Contains(lower, "none") {
 			state.Set("react.last_tool_result", map[string]interface{}{})
-			result := &framework.Result{NodeID: n.id, Success: true}
+			result := &core.Result{NodeID: n.id, Success: true}
 			state.Set("react.last_result", result)
 			return result, nil
 		}
@@ -681,14 +561,14 @@ func (n *reactActNode) Execute(ctx context.Context, state *framework.Context) (*
 	if err != nil {
 		return nil, err
 	}
-	appendToolMessage(state, framework.ToolCall{
+	appendToolMessage(state, core.ToolCall{
 		ID:   NewUUID(),
 		Name: decision.Tool,
 		Args: decision.Arguments,
 	}, res)
 	state.Set("react.last_tool_result", res.Data)
 	n.agent.debugf("%s tool=%s result=%v", n.id, decision.Tool, res.Data)
-	result := &framework.Result{
+	result := &core.Result{
 		NodeID:  n.id,
 		Success: res.Success,
 		Data:    res.Data,
@@ -701,18 +581,18 @@ func (n *reactActNode) Execute(ctx context.Context, state *framework.Context) (*
 type reactObserveNode struct {
 	id    string
 	agent *ReActAgent
-	task  *framework.Task
+	task  *core.Task
 }
 
 // ID returns the node identifier for the observe step.
 func (n *reactObserveNode) ID() string { return n.id }
 
 // Type marks the step as an observation/validation pass.
-func (n *reactObserveNode) Type() framework.NodeType { return framework.NodeTypeObservation }
+func (n *reactObserveNode) Type() graph.NodeType { return graph.NodeTypeObservation }
 
 // Execute captures tool output, tracks loop iterations, and determines whether
 // the ReAct loop should continue.
-func (n *reactObserveNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *reactObserveNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	state.SetExecutionPhase("validating")
 	iterVal, _ := state.Get("react.iteration")
 	iter, _ := iterVal.(int)
@@ -734,7 +614,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *framework.Context
 	}
 	completed := decision.Complete || iter >= n.agent.maxIterations
 	if res, ok := state.Get("react.tool_calls"); ok {
-		if calls, ok := res.([]framework.ToolCall); ok && len(calls) > 0 {
+		if calls, ok := res.([]core.ToolCall); ok && len(calls) > 0 {
 			completed = false
 		}
 	}
@@ -745,7 +625,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *framework.Context
 			"task":      n.task.Instruction,
 			"iteration": iter,
 			"decision":  decision,
-		}, framework.MemoryScopeSession)
+		}, memory.MemoryScopeSession)
 	}
 
 	if completed {
@@ -755,7 +635,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *framework.Context
 		})
 	}
 	n.agent.debugf("%s completed=%v diagnostic=%s", n.id, completed, diagnostic.String())
-	result := &framework.Result{
+	result := &core.Result{
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]interface{}{
@@ -846,34 +726,34 @@ func parseError(err string) error {
 const reactMessagesKey = "react.messages"
 
 // getReactMessages reads a copy of the stored chat transcript.
-func getReactMessages(state *framework.Context) []framework.Message {
+func getReactMessages(state *core.Context) []core.Message {
 	raw, ok := state.Get(reactMessagesKey)
 	if !ok {
 		return nil
 	}
-	messages, ok := raw.([]framework.Message)
+	messages, ok := raw.([]core.Message)
 	if !ok || len(messages) == 0 {
 		return nil
 	}
-	copyMessages := make([]framework.Message, len(messages))
+	copyMessages := make([]core.Message, len(messages))
 	copy(copyMessages, messages)
 	return copyMessages
 }
 
 // saveReactMessages overwrites the stored transcript with a defensive copy.
-func saveReactMessages(state *framework.Context, messages []framework.Message) {
+func saveReactMessages(state *core.Context, messages []core.Message) {
 	if len(messages) == 0 {
-		state.Set(reactMessagesKey, []framework.Message{})
+		state.Set(reactMessagesKey, []core.Message{})
 		return
 	}
-	copyMessages := make([]framework.Message, len(messages))
+	copyMessages := make([]core.Message, len(messages))
 	copy(copyMessages, messages)
 	state.Set(reactMessagesKey, copyMessages)
 }
 
 // appendToolMessage records tool responses in the transcript so the LLM can
 // observe prior results when tool calling is used.
-func appendToolMessage(state *framework.Context, call framework.ToolCall, res *framework.ToolResult) {
+func appendToolMessage(state *core.Context, call core.ToolCall, res *core.ToolResult) {
 	messages := getReactMessages(state)
 	if len(messages) == 0 || res == nil {
 		return
@@ -895,7 +775,7 @@ func appendToolMessage(state *framework.Context, call framework.ToolCall, res *f
 	if err != nil {
 		content = fmt.Sprintf("success=%t data=%v error=%s", res.Success, res.Data, res.Error)
 	}
-	messages = append(messages, framework.Message{
+	messages = append(messages, core.Message{
 		Role:       "tool",
 		Name:       call.Name,
 		Content:    content,
