@@ -2,12 +2,11 @@ package runtime
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 // TestWorkspaceGlob ensures workspace paths convert into recursive globs.
