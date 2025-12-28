@@ -1,10 +1,12 @@
 package fileops
 
-import "github.com/lexcodex/relurpify/framework"
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+)
 
 // Tools returns file navigation/search helpers.
-func Tools(basePath string) []framework.Tool {
-	return []framework.Tool{
+func Tools(basePath string) []core.Tool {
+	return []core.Tool{
 		NewFindTool(basePath),
 		NewFDTool(basePath),
 		NewRGTool(basePath),
