@@ -3,18 +3,17 @@ package tui
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
-	"time"
-
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
 // Run bootstraps the new agentic TUI experience.
@@ -39,11 +38,11 @@ type Model struct {
 	runtime *runtimesvc.Runtime
 	config  runtimesvc.Config
 	hitl    hitlService
-	hitlCh  <-chan framework.HITLEvent
+	hitlCh  <-chan runtime.HITLEvent
 	hitlOff func()
 
-	feed  *viewport.Model
-	input textinput.Model
+	feed    *viewport.Model
+	input   textinput.Model
 	spinner spinner.Model
 
 	statusBar StatusBar
@@ -66,7 +65,7 @@ type Model struct {
 	autoFollow bool
 
 	// HITL prompt state (temporarily replaces normal prompt)
-	hitlRequest        *framework.PermissionRequest
+	hitlRequest        *runtime.PermissionRequest
 	hitlPreviousMode   InputMode
 	hitlPreviousValue  string
 	hitlPreviousPrompt string
@@ -251,7 +250,7 @@ func (ac *AgentContext) List() []string {
 func NewModel(rt *runtimesvc.Runtime) Model {
 	cfg := rt.Config
 	hitlSvc := hitlServiceFromRuntime(rt)
-	var hitlCh <-chan framework.HITLEvent
+	var hitlCh <-chan runtime.HITLEvent
 	var hitlOff func()
 	if hitlSvc != nil {
 		hitlCh, hitlOff = hitlSvc.SubscribeHITL()
@@ -273,7 +272,7 @@ func NewModel(rt *runtimesvc.Runtime) Model {
 		Workspace: cfg.Workspace,
 		Model:     cfg.OllamaModel,
 		Agent:     cfg.AgentLabel(),
-		Mode:      string(framework.AgentModePrimary),
+		Mode:      string(core.AgentModePrimary),
 	}
 
 	if rt.Registration != nil && rt.Registration.Manifest != nil {
@@ -327,7 +326,7 @@ func NewModel(rt *runtimesvc.Runtime) Model {
 	}
 }
 
-func (m Model) enterHITL(req *framework.PermissionRequest) Model {
+func (m Model) enterHITL(req *runtime.PermissionRequest) Model {
 	if req == nil {
 		return m
 	}
@@ -415,7 +414,7 @@ func (m Model) runAgentStream(ch chan tea.Msg, prompt string) {
 	if _, ok := metadata["strategy"]; !ok && m.session != nil && m.session.Strategy != "" {
 		metadata["strategy"] = m.session.Strategy
 	}
-	
+
 	// Create a streaming callback if supported by the agent
 	if ch != nil {
 		metadata["stream_callback"] = func(token string) {
@@ -423,7 +422,7 @@ func (m Model) runAgentStream(ch chan tea.Msg, prompt string) {
 		}
 	}
 
-	result, err := m.runtime.ExecuteInstruction(ctx, prompt, framework.TaskTypeCodeGeneration, metadata)
+	result, err := m.runtime.ExecuteInstruction(ctx, prompt, core.TaskTypeCodeGeneration, metadata)
 	if err != nil {
 		ch <- StreamErrorMsg{Error: err}
 		ch <- StreamCompleteMsg{Duration: time.Since(start), TokensUsed: 0}
@@ -440,8 +439,8 @@ func (m Model) runAgentStream(ch chan tea.Msg, prompt string) {
 	close(ch)
 }
 
-// summarizeResult turns a framework.Result into human readable feed text.
-func summarizeResult(res *framework.Result) string {
+// summarizeResult turns a core.Result into human readable feed text.
+func summarizeResult(res *core.Result) string {
 	if res == nil {
 		return ""
 	}
