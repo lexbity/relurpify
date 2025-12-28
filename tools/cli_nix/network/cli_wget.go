@@ -1,12 +1,12 @@
 package network
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewWgetTool exposes the wget CLI.
-func NewWgetTool(basePath string) framework.Tool {
+func NewWgetTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_wget",
 		Description: "Downloads resources with wget.",
