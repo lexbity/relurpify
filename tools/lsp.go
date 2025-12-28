@@ -3,12 +3,12 @@ package tools
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // Position follows the LSP specification.
@@ -147,12 +147,12 @@ func (p *Proxy) cached(key string, fetch func() (interface{}, error)) (interface
 
 // DefinitionTool implements the GetDefinition tool.
 type DefinitionTool struct {
-	Proxy *Proxy
-	manager *framework.PermissionManager
+	Proxy   *Proxy
+	manager *runtime.PermissionManager
 	agentID string
 }
 
-func (t *DefinitionTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *DefinitionTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -169,8 +169,8 @@ func (t *DefinitionTool) Description() string {
 func (t *DefinitionTool) Category() string { return "lsp" }
 
 // Parameters implements Tool.
-func (t *DefinitionTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *DefinitionTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "file", Type: "string", Description: "File path", Required: true},
 		{Name: "symbol", Type: "string", Description: "Symbol name", Required: true},
 		{Name: "line", Type: "int", Description: "Line number", Required: true},
@@ -179,10 +179,10 @@ func (t *DefinitionTool) Parameters() []framework.ToolParameter {
 }
 
 // Execute implements Tool.
-func (t *DefinitionTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *DefinitionTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, file); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, file); err != nil {
 			return nil, err
 		}
 	}
@@ -206,7 +206,7 @@ func (t *DefinitionTool) Execute(ctx context.Context, state *framework.Context, 
 		return nil, err
 	}
 	res := resAny.(DefinitionResult)
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"location":  res.Location,
@@ -217,22 +217,22 @@ func (t *DefinitionTool) Execute(ctx context.Context, state *framework.Context, 
 }
 
 // IsAvailable implements Tool.
-func (t *DefinitionTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *DefinitionTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *DefinitionTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemList)}
+func (t *DefinitionTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
 
 // ReferencesTool implements GetReferences tool.
 type ReferencesTool struct {
-	Proxy *Proxy
-	manager *framework.PermissionManager
+	Proxy   *Proxy
+	manager *runtime.PermissionManager
 	agentID string
 }
 
-func (t *ReferencesTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *ReferencesTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -242,18 +242,18 @@ func (t *ReferencesTool) Description() string {
 	return "Lists references for a symbol."
 }
 func (t *ReferencesTool) Category() string { return "lsp" }
-func (t *ReferencesTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *ReferencesTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "file", Type: "string", Description: "File path", Required: true},
 		{Name: "symbol", Type: "string", Description: "Symbol name", Required: true},
 		{Name: "line", Type: "int", Description: "Line number", Required: true},
 		{Name: "character", Type: "int", Description: "Character offset", Required: true},
 	}
 }
-func (t *ReferencesTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ReferencesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, file); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, file); err != nil {
 			return nil, err
 		}
 	}
@@ -276,29 +276,29 @@ func (t *ReferencesTool) Execute(ctx context.Context, state *framework.Context, 
 		return nil, err
 	}
 	res := resAny.([]Location)
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"locations": res,
 		},
 	}, nil
 }
-func (t *ReferencesTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *ReferencesTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *ReferencesTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemList)}
+func (t *ReferencesTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
 
 // HoverTool implements GetHover.
 type HoverTool struct {
-	Proxy *Proxy
-	manager *framework.PermissionManager
+	Proxy   *Proxy
+	manager *runtime.PermissionManager
 	agentID string
 }
 
-func (t *HoverTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *HoverTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -308,17 +308,17 @@ func (t *HoverTool) Description() string {
 	return "Retrieves type information for a position."
 }
 func (t *HoverTool) Category() string { return "lsp" }
-func (t *HoverTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *HoverTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "file", Type: "string", Required: true},
 		{Name: "line", Type: "int", Required: true},
 		{Name: "character", Type: "int", Required: true},
 	}
 }
-func (t *HoverTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *HoverTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, file); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, file); err != nil {
 			return nil, err
 		}
 	}
@@ -340,7 +340,7 @@ func (t *HoverTool) Execute(ctx context.Context, state *framework.Context, args 
 		return nil, err
 	}
 	res := resAny.(HoverResult)
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"type": res.TypeInfo,
@@ -348,22 +348,22 @@ func (t *HoverTool) Execute(ctx context.Context, state *framework.Context, args 
 		},
 	}, nil
 }
-func (t *HoverTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *HoverTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *HoverTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemList)}
+func (t *HoverTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
 
 // DiagnosticsTool implements diagnostics retrieval.
 type DiagnosticsTool struct {
-	Proxy *Proxy
-	manager *framework.PermissionManager
+	Proxy   *Proxy
+	manager *runtime.PermissionManager
 	agentID string
 }
 
-func (t *DiagnosticsTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *DiagnosticsTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -373,13 +373,13 @@ func (t *DiagnosticsTool) Description() string {
 	return "Retrieves diagnostics for a file."
 }
 func (t *DiagnosticsTool) Category() string { return "lsp" }
-func (t *DiagnosticsTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{{Name: "file", Type: "string", Required: true}}
+func (t *DiagnosticsTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "file", Type: "string", Required: true}}
 }
-func (t *DiagnosticsTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *DiagnosticsTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, file); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, file); err != nil {
 			return nil, err
 		}
 	}
@@ -394,29 +394,29 @@ func (t *DiagnosticsTool) Execute(ctx context.Context, state *framework.Context,
 		return nil, err
 	}
 	res := resAny.([]Diagnostic)
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"diagnostics": res,
 		},
 	}, nil
 }
-func (t *DiagnosticsTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *DiagnosticsTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *DiagnosticsTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemList)}
+func (t *DiagnosticsTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
 
 // SearchSymbolsTool implements symbol lookup.
 type SearchSymbolsTool struct {
-	Proxy *Proxy
-	manager *framework.PermissionManager
+	Proxy   *Proxy
+	manager *runtime.PermissionManager
 	agentID string
 }
 
-func (t *SearchSymbolsTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *SearchSymbolsTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -426,10 +426,10 @@ func (t *SearchSymbolsTool) Description() string {
 	return "Searches workspace symbols."
 }
 func (t *SearchSymbolsTool) Category() string { return "lsp" }
-func (t *SearchSymbolsTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{{Name: "query", Type: "string", Required: true}}
+func (t *SearchSymbolsTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "query", Type: "string", Required: true}}
 }
-func (t *SearchSymbolsTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *SearchSymbolsTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	query := fmt.Sprint(args["query"])
 	resAny, err := t.Proxy.cached("symbols:"+query, func() (interface{}, error) {
 		t.Proxy.mu.RLock()
@@ -448,24 +448,24 @@ func (t *SearchSymbolsTool) Execute(ctx context.Context, state *framework.Contex
 		return nil, err
 	}
 	res := resAny.([]SymbolInformation)
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"symbols": res}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"symbols": res}}, nil
 }
-func (t *SearchSymbolsTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *SearchSymbolsTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *SearchSymbolsTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemList)}
+func (t *SearchSymbolsTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
 
 // DocumentSymbolsTool returns structure of a file.
 type DocumentSymbolsTool struct {
-	Proxy *Proxy
-	manager *framework.PermissionManager
+	Proxy   *Proxy
+	manager *runtime.PermissionManager
 	agentID string
 }
 
-func (t *DocumentSymbolsTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *DocumentSymbolsTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -475,13 +475,13 @@ func (t *DocumentSymbolsTool) Description() string {
 	return "Lists symbols in a document."
 }
 func (t *DocumentSymbolsTool) Category() string { return "lsp" }
-func (t *DocumentSymbolsTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{{Name: "file", Type: "string", Required: true}}
+func (t *DocumentSymbolsTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "file", Type: "string", Required: true}}
 }
-func (t *DocumentSymbolsTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *DocumentSymbolsTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, file); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, file); err != nil {
 			return nil, err
 		}
 	}
@@ -496,29 +496,29 @@ func (t *DocumentSymbolsTool) Execute(ctx context.Context, state *framework.Cont
 		return nil, err
 	}
 	res := resAny.([]SymbolInformation)
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"symbols": res,
 		},
 	}, nil
 }
-func (t *DocumentSymbolsTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *DocumentSymbolsTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *DocumentSymbolsTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemList)}
+func (t *DocumentSymbolsTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
 
 // FormatTool formats code through the LSP.
 type FormatTool struct {
-	Proxy *Proxy
-	manager *framework.PermissionManager
+	Proxy   *Proxy
+	manager *runtime.PermissionManager
 	agentID string
 }
 
-func (t *FormatTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *FormatTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -526,16 +526,16 @@ func (t *FormatTool) SetPermissionManager(manager *framework.PermissionManager, 
 func (t *FormatTool) Name() string        { return "lsp_format" }
 func (t *FormatTool) Description() string { return "Formats code using the language server." }
 func (t *FormatTool) Category() string    { return "lsp" }
-func (t *FormatTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *FormatTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "file", Type: "string", Required: true},
 		{Name: "code", Type: "string", Required: true},
 	}
 }
-func (t *FormatTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *FormatTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	file := fmt.Sprint(args["file"])
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, file); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, file); err != nil {
 			return nil, err
 		}
 	}
@@ -550,19 +550,19 @@ func (t *FormatTool) Execute(ctx context.Context, state *framework.Context, args
 	if err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"code": formatted,
 		},
 	}, nil
 }
-func (t *FormatTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *FormatTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.Proxy != nil
 }
 
-func (t *FormatTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet("", framework.FileSystemRead, framework.FileSystemWrite)}
+func (t *FormatTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemWrite)}
 }
 
 func toInt(value interface{}) int {
