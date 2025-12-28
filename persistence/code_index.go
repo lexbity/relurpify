@@ -6,14 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // IndexData is the persisted representation of the code index.
@@ -21,11 +20,11 @@ type IndexData struct {
 	RootPath       string
 	Version        string
 	LastUpdate     time.Time
-	Symbols        map[string][]framework.SymbolLocation
-	Files          map[string]*framework.FileMetadata
+	Symbols        map[string][]core.SymbolLocation
+	Files          map[string]*core.FileMetadata
 	Dependencies   map[string][]string
 	ReverseImports map[string][]string
-	Chunks         map[string]*framework.CodeChunk
+	Chunks         map[string]*core.CodeChunk
 	ChunksByFile   map[string][]string
 }
 
@@ -173,7 +172,7 @@ func (ci *CodeIndex) Version() string {
 }
 
 // GetFileMetadata fetches metadata for a file.
-func (ci *CodeIndex) GetFileMetadata(path string) (*framework.FileMetadata, bool) {
+func (ci *CodeIndex) GetFileMetadata(path string) (*core.FileMetadata, bool) {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
 	meta, ok := ci.data.Files[path]
@@ -192,17 +191,17 @@ func (ci *CodeIndex) ListFiles() []string {
 }
 
 // GetSymbolsByName finds definitions for the provided symbol.
-func (ci *CodeIndex) GetSymbolsByName(name string) ([]framework.SymbolLocation, error) {
+func (ci *CodeIndex) GetSymbolsByName(name string) ([]core.SymbolLocation, error) {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
 	if ci.data == nil {
 		return nil, fmt.Errorf("index not loaded")
 	}
-	return append([]framework.SymbolLocation(nil), ci.data.Symbols[name]...), nil
+	return append([]core.SymbolLocation(nil), ci.data.Symbols[name]...), nil
 }
 
 // GetSymbolDefinition returns the first matching definition.
-func (ci *CodeIndex) GetSymbolDefinition(name string) (*framework.SymbolLocation, error) {
+func (ci *CodeIndex) GetSymbolDefinition(name string) (*core.SymbolLocation, error) {
 	locations, err := ci.GetSymbolsByName(name)
 	if err != nil || len(locations) == 0 {
 		return nil, err
@@ -211,7 +210,7 @@ func (ci *CodeIndex) GetSymbolDefinition(name string) (*framework.SymbolLocation
 }
 
 // GetSymbolReferences returns all recorded references for a symbol.
-func (ci *CodeIndex) GetSymbolReferences(name string) ([]framework.SymbolLocation, error) {
+func (ci *CodeIndex) GetSymbolReferences(name string) ([]core.SymbolLocation, error) {
 	return ci.GetSymbolsByName(name)
 }
 
@@ -230,11 +229,11 @@ func (ci *CodeIndex) GetDependents(path string) []string {
 }
 
 // GetChunksForFile retrieves all chunk IDs for the file.
-func (ci *CodeIndex) GetChunksForFile(path string) []*framework.CodeChunk {
+func (ci *CodeIndex) GetChunksForFile(path string) []*core.CodeChunk {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
 	ids := ci.data.ChunksByFile[path]
-	chunks := make([]*framework.CodeChunk, 0, len(ids))
+	chunks := make([]*core.CodeChunk, 0, len(ids))
 	for _, id := range ids {
 		if chunk, ok := ci.data.Chunks[id]; ok {
 			chunks = append(chunks, chunk)
@@ -244,7 +243,7 @@ func (ci *CodeIndex) GetChunksForFile(path string) []*framework.CodeChunk {
 }
 
 // GetChunkByID fetches a chunk by ID.
-func (ci *CodeIndex) GetChunkByID(id string) (*framework.CodeChunk, bool) {
+func (ci *CodeIndex) GetChunkByID(id string) (*core.CodeChunk, bool) {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
 	chunk, ok := ci.data.Chunks[id]
@@ -252,10 +251,10 @@ func (ci *CodeIndex) GetChunkByID(id string) (*framework.CodeChunk, bool) {
 }
 
 // FindChunksByName returns matching chunks using substring matching.
-func (ci *CodeIndex) FindChunksByName(name string) []*framework.CodeChunk {
+func (ci *CodeIndex) FindChunksByName(name string) []*core.CodeChunk {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
-	results := make([]*framework.CodeChunk, 0)
+	results := make([]*core.CodeChunk, 0)
 	for _, chunk := range ci.data.Chunks {
 		if strings.Contains(strings.ToLower(chunk.Name), strings.ToLower(name)) {
 			results = append(results, chunk)
@@ -265,10 +264,10 @@ func (ci *CodeIndex) FindChunksByName(name string) []*framework.CodeChunk {
 }
 
 // FindChunksByFileAndRange returns chunks overlapping the provided range.
-func (ci *CodeIndex) FindChunksByFileAndRange(path string, start, end int) []*framework.CodeChunk {
+func (ci *CodeIndex) FindChunksByFileAndRange(path string, start, end int) []*core.CodeChunk {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
-	results := make([]*framework.CodeChunk, 0)
+	results := make([]*core.CodeChunk, 0)
 	for _, id := range ci.data.ChunksByFile[path] {
 		chunk := ci.data.Chunks[id]
 		if chunk.StartLine <= end && chunk.EndLine >= start {
@@ -279,10 +278,10 @@ func (ci *CodeIndex) FindChunksByFileAndRange(path string, start, end int) []*fr
 }
 
 // SearchChunks performs a simple substring search across chunk previews.
-func (ci *CodeIndex) SearchChunks(query string, limit int) []*framework.CodeChunk {
+func (ci *CodeIndex) SearchChunks(query string, limit int) []*core.CodeChunk {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
-	results := make([]*framework.CodeChunk, 0, limit)
+	results := make([]*core.CodeChunk, 0, limit)
 	query = strings.ToLower(query)
 	for _, chunk := range ci.data.Chunks {
 		if strings.Contains(strings.ToLower(chunk.Preview), query) {
@@ -295,7 +294,7 @@ func (ci *CodeIndex) SearchChunks(query string, limit int) []*framework.CodeChun
 	return results
 }
 
-func (ci *CodeIndex) indexFile(path string) (*framework.FileMetadata, []*framework.CodeChunk) {
+func (ci *CodeIndex) indexFile(path string) (*core.FileMetadata, []*core.CodeChunk) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, nil
@@ -308,7 +307,7 @@ func (ci *CodeIndex) indexFile(path string) (*framework.FileMetadata, []*framewo
 	lines := strings.Split(text, "\n")
 	loc := len(lines)
 	language := inferLanguage(path)
-	meta := &framework.FileMetadata{
+	meta := &core.FileMetadata{
 		Path:         path,
 		Language:     language,
 		LOC:          loc,
@@ -319,10 +318,10 @@ func (ci *CodeIndex) indexFile(path string) (*framework.FileMetadata, []*framewo
 		LastIndexed:  time.Now().UTC(),
 	}
 	meta.Imports = extractImports(lines)
-	chunk := &framework.CodeChunk{
+	chunk := &core.CodeChunk{
 		ID:         hashString(path),
 		File:       path,
-		Kind:       framework.ChunkBlock,
+		Kind:       core.ChunkBlock,
 		Name:       filepath.Base(path),
 		StartLine:  1,
 		EndLine:    loc,
@@ -330,17 +329,17 @@ func (ci *CodeIndex) indexFile(path string) (*framework.FileMetadata, []*framewo
 		TokenCount: len(text) / 4,
 		Preview:    preview(text),
 	}
-	return meta, []*framework.CodeChunk{chunk}
+	return meta, []*core.CodeChunk{chunk}
 }
 
-func (ci *CodeIndex) extractSymbols(meta *framework.FileMetadata, chunks []*framework.CodeChunk) map[string][]framework.SymbolLocation {
-	result := make(map[string][]framework.SymbolLocation)
+func (ci *CodeIndex) extractSymbols(meta *core.FileMetadata, chunks []*core.CodeChunk) map[string][]core.SymbolLocation {
+	result := make(map[string][]core.SymbolLocation)
 	for _, chunk := range chunks {
 		lines := strings.Split(chunk.Preview, "\n")
 		for idx, line := range lines {
 			if sym := parseSymbol(line, chunk.File, idx+chunk.StartLine); sym != nil {
 				meta.Symbols = append(meta.Symbols, *sym)
-				result[sym.Name] = append(result[sym.Name], framework.SymbolLocation{
+				result[sym.Name] = append(result[sym.Name], core.SymbolLocation{
 					File:   sym.File,
 					Line:   sym.Line,
 					Column: sym.Column,
@@ -352,18 +351,18 @@ func (ci *CodeIndex) extractSymbols(meta *framework.FileMetadata, chunks []*fram
 	return result
 }
 
-func parseSymbol(line, file string, lineNum int) *framework.Symbol {
+func parseSymbol(line, file string, lineNum int) *core.Symbol {
 	trimmed := strings.TrimSpace(line)
 	switch {
 	case strings.HasPrefix(trimmed, "func "):
 		name := strings.Fields(strings.TrimPrefix(trimmed, "func "))[0]
-		return &framework.Symbol{Name: name, Kind: framework.SymbolFunction, File: file, Line: lineNum, Signature: trimmed}
+		return &core.Symbol{Name: name, Kind: core.SymbolFunction, File: file, Line: lineNum, Signature: trimmed}
 	case strings.HasPrefix(trimmed, "type "):
 		name := strings.Fields(strings.TrimPrefix(trimmed, "type "))[0]
-		return &framework.Symbol{Name: name, Kind: framework.SymbolType, File: file, Line: lineNum, Signature: trimmed}
+		return &core.Symbol{Name: name, Kind: core.SymbolType, File: file, Line: lineNum, Signature: trimmed}
 	case strings.HasPrefix(trimmed, "class "):
 		name := strings.Fields(strings.TrimPrefix(trimmed, "class "))[0]
-		return &framework.Symbol{Name: name, Kind: framework.SymbolClass, File: file, Line: lineNum, Signature: trimmed}
+		return &core.Symbol{Name: name, Kind: core.SymbolClass, File: file, Line: lineNum, Signature: trimmed}
 	}
 	return nil
 }
@@ -377,11 +376,11 @@ func (ci *CodeIndex) newIndexData() *IndexData {
 	return &IndexData{
 		RootPath:       ci.rootPath,
 		Version:        "",
-		Symbols:        make(map[string][]framework.SymbolLocation),
-		Files:          make(map[string]*framework.FileMetadata),
+		Symbols:        make(map[string][]core.SymbolLocation),
+		Files:          make(map[string]*core.FileMetadata),
 		Dependencies:   make(map[string][]string),
 		ReverseImports: make(map[string][]string),
-		Chunks:         make(map[string]*framework.CodeChunk),
+		Chunks:         make(map[string]*core.CodeChunk),
 		ChunksByFile:   make(map[string][]string),
 	}
 }
