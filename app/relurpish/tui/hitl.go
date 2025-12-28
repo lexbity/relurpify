@@ -2,19 +2,17 @@ package tui
 
 import (
 	"fmt"
-	"time"
-
 	tea "github.com/charmbracelet/bubbletea"
-
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"time"
 )
 
 type hitlService interface {
-	PendingHITL() []*framework.PermissionRequest
-	ApproveHITL(requestID, approver string, scope framework.GrantScope, duration time.Duration) error
+	PendingHITL() []*runtime.PermissionRequest
+	ApproveHITL(requestID, approver string, scope runtime.GrantScope, duration time.Duration) error
 	DenyHITL(requestID, reason string) error
-	SubscribeHITL() (<-chan framework.HITLEvent, func())
+	SubscribeHITL() (<-chan runtime.HITLEvent, func())
 }
 
 func hitlServiceFromRuntime(rt *runtimesvc.Runtime) hitlService {
@@ -24,9 +22,9 @@ func hitlServiceFromRuntime(rt *runtimesvc.Runtime) hitlService {
 	return rt
 }
 
-type hitlEventMsg struct{ event framework.HITLEvent }
+type hitlEventMsg struct{ event runtime.HITLEvent }
 
-func listenHITLEvents(ch <-chan framework.HITLEvent) tea.Cmd {
+func listenHITLEvents(ch <-chan runtime.HITLEvent) tea.Cmd {
 	if ch == nil {
 		return nil
 	}
@@ -50,7 +48,7 @@ func approveHITLCmd(svc hitlService, requestID string) tea.Cmd {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}
 		}
-		err := svc.ApproveHITL(requestID, "tui", framework.GrantScopeOneTime, 5*time.Minute)
+		err := svc.ApproveHITL(requestID, "tui", runtime.GrantScopeOneTime, 5*time.Minute)
 		return hitlResolvedMsg{requestID: requestID, approved: true, err: err}
 	}
 }
@@ -64,4 +62,3 @@ func denyHITLCmd(svc hitlService, requestID string) tea.Cmd {
 		return hitlResolvedMsg{requestID: requestID, approved: false, err: err}
 	}
 }
-
