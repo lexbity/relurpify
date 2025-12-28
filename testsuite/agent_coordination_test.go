@@ -3,41 +3,46 @@ package testsuite
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"strings"
 	"testing"
-
-	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/framework"
 )
 
-// MockAgent implements framework.Agent for testing
+// MockAgent implements graph.Agent for testing
 type MockAgent struct {
-	ExecuteFunc func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error)
+	ExecuteFunc func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error)
 }
 
-func (m *MockAgent) Initialize(config *framework.Config) error { return nil }
-func (m *MockAgent) Capabilities() []framework.Capability    { return nil }
-func (m *MockAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) {
+func (m *MockAgent) Initialize(config *core.Config) error { return nil }
+func (m *MockAgent) Capabilities() []core.Capability      { return nil }
+func (m *MockAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }
-func (m *MockAgent) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (m *MockAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	if m.ExecuteFunc != nil {
 		return m.ExecuteFunc(ctx, task, state)
 	}
-	return &framework.Result{Success: true}, nil
+	return &core.Result{Success: true}, nil
 }
 
 func TestCoordinatorSelfHealing(t *testing.T) {
-	coordinator := agents.NewAgentCoordinator(nil, framework.NewContextBudget(1024))
+	coordinator := agents.NewAgentCoordinator(nil, core.NewContextBudget(1024))
 
 	// 1. Planner - returns a dummy plan
 	planner := &MockAgent{
-		ExecuteFunc: func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
-			return &framework.Result{
+		ExecuteFunc: func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+			plan := core.Plan{
+				Steps: []core.PlanStep{{ID: "1", Description: "Step 1"}},
+				Files: []string{"main.go"},
+			}
+			return &core.Result{
 				Success: true,
 				Data: map[string]interface{}{
-					"plan_steps": []agents.PlanStep{{ID: "1", Description: "Step 1"}},
-					"files":      []string{"main.go"},
+					"plan":       plan,
+					"plan_steps": plan.Steps,
+					"files":      plan.Files,
 				},
 			}, nil
 		},
@@ -47,7 +52,7 @@ func TestCoordinatorSelfHealing(t *testing.T) {
 	// 2. Executor - Fails first time, succeeds second time
 	attempts := 0
 	executor := &MockAgent{
-		ExecuteFunc: func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+		ExecuteFunc: func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 			attempts++
 			if attempts == 1 {
 				return nil, fmt.Errorf("transient failure")
@@ -58,15 +63,15 @@ func TestCoordinatorSelfHealing(t *testing.T) {
 					t.Errorf("expected instruction to contain diagnosis, got: %s", task.Instruction)
 				}
 			}
-			return &framework.Result{Success: true, Data: map[string]interface{}{"status": "fixed"}}, nil
+			return &core.Result{Success: true, Data: map[string]interface{}{"status": "fixed"}}, nil
 		},
 	}
 	coordinator.RegisterAgent("executor", executor)
 
 	// 3. Ask (Diagnosis)
 	asker := &MockAgent{
-		ExecuteFunc: func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
-			return &framework.Result{
+		ExecuteFunc: func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+			return &core.Result{
 				Success: true,
 				Data: map[string]interface{}{
 					"text": "The executor failed because of a transient error.",
@@ -76,9 +81,9 @@ func TestCoordinatorSelfHealing(t *testing.T) {
 	}
 	coordinator.RegisterAgent("ask", asker)
 
-	task := &framework.Task{
+	task := &core.Task{
 		Instruction: "Refactor the code",
-		Type:        framework.TaskTypeCodeModification,
+		Type:        core.TaskTypeCodeModification,
 	}
 
 	result, err := coordinator.ExecuteTask(task)
@@ -94,7 +99,7 @@ func TestCoordinatorSelfHealing(t *testing.T) {
 }
 
 func TestCoordinatorReviewLoop(t *testing.T) {
-	coordinator := agents.NewAgentCoordinator(nil, framework.NewContextBudget(1024))
+	coordinator := agents.NewAgentCoordinator(nil, core.NewContextBudget(1024))
 	// Configure for fast iterations
 	coordinator.Config.MaxReviewIterations = 3
 	coordinator.Config.ReviewSeverity = "error"
@@ -102,9 +107,9 @@ func TestCoordinatorReviewLoop(t *testing.T) {
 	// 1. Executor - Always succeeds
 	execCalls := 0
 	executor := &MockAgent{
-		ExecuteFunc: func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+		ExecuteFunc: func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 			execCalls++
-			return &framework.Result{Success: true, Data: map[string]interface{}{"changed": true}}, nil
+			return &core.Result{Success: true, Data: map[string]interface{}{"changed": true}}, nil
 		},
 	}
 	coordinator.RegisterAgent("executor", executor)
@@ -112,10 +117,10 @@ func TestCoordinatorReviewLoop(t *testing.T) {
 	// 2. Reviewer - Returns issues first time, then passes
 	reviewCalls := 0
 	reviewer := &MockAgent{
-		ExecuteFunc: func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+		ExecuteFunc: func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 			reviewCalls++
 			if reviewCalls == 1 {
-				return &framework.Result{
+				return &core.Result{
 					Success: true,
 					Data: map[string]interface{}{
 						"passed": false,
@@ -125,7 +130,7 @@ func TestCoordinatorReviewLoop(t *testing.T) {
 					},
 				}, nil
 			}
-			return &framework.Result{
+			return &core.Result{
 				Success: true,
 				Data: map[string]interface{}{
 					"passed": true,
@@ -136,9 +141,9 @@ func TestCoordinatorReviewLoop(t *testing.T) {
 	}
 	coordinator.RegisterAgent("reviewer", reviewer)
 
-	task := &framework.Task{
+	task := &core.Task{
 		Instruction: "Review the code",
-		Type:        framework.TaskTypeReview,
+		Type:        core.TaskTypeReview,
 		Metadata:    map[string]string{"require_review": "true"},
 	}
 
@@ -160,20 +165,20 @@ func TestCoordinatorReviewLoop(t *testing.T) {
 }
 
 func TestCoordinatorReviewStalemate(t *testing.T) {
-	coordinator := agents.NewAgentCoordinator(nil, framework.NewContextBudget(1024))
+	coordinator := agents.NewAgentCoordinator(nil, core.NewContextBudget(1024))
 	coordinator.Config.MaxReviewIterations = 5
 
 	executor := &MockAgent{
-		ExecuteFunc: func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
-			return &framework.Result{Success: true}, nil
+		ExecuteFunc: func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+			return &core.Result{Success: true}, nil
 		},
 	}
 	coordinator.RegisterAgent("executor", executor)
 
 	// Reviewer always returns the SAME issue
 	reviewer := &MockAgent{
-		ExecuteFunc: func(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
-			return &framework.Result{
+		ExecuteFunc: func(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+			return &core.Result{
 				Success: true,
 				Data: map[string]interface{}{
 					"passed": false,
@@ -186,9 +191,9 @@ func TestCoordinatorReviewStalemate(t *testing.T) {
 	}
 	coordinator.RegisterAgent("reviewer", reviewer)
 
-	task := &framework.Task{
+	task := &core.Task{
 		Instruction: "Review the code",
-		Type:        framework.TaskTypeReview,
+		Type:        core.TaskTypeReview,
 	}
 
 	_, err := coordinator.ExecuteTask(task)
