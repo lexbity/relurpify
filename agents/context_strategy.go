@@ -1,45 +1,45 @@
 package agents
 
-import contextual "github.com/lexcodex/relurpify/agents/contextual"
+import contextmgr "github.com/lexcodex/relurpify/framework/contextmgr"
 
 type (
-	ContextStrategy  = contextual.ContextStrategy
-	ContextRequest   = contextual.ContextRequest
-	FileRequest      = contextual.FileRequest
-	DetailLevel      = contextual.DetailLevel
-	ASTQuery         = contextual.ASTQuery
-	ASTQueryType     = contextual.ASTQueryType
-	ASTFilter        = contextual.ASTFilter
-	MemoryQuery      = contextual.MemoryQuery
-	SearchQuery      = contextual.SearchQuery
-	ContextLoadEvent = contextual.ContextLoadEvent
+	ContextStrategy  = contextmgr.ContextStrategy
+	ContextRequest   = contextmgr.ContextRequest
+	FileRequest      = contextmgr.FileRequest
+	DetailLevel      = contextmgr.DetailLevel
+	ASTQuery         = contextmgr.ASTQuery
+	ASTQueryType     = contextmgr.ASTQueryType
+	ASTFilter        = contextmgr.ASTFilter
+	MemoryQuery      = contextmgr.MemoryQuery
+	SearchQuery      = contextmgr.SearchQuery
+	ContextLoadEvent = contextmgr.ContextLoadEvent
 )
 
 const (
-	DetailFull          = contextual.DetailFull
-	DetailDetailed      = contextual.DetailDetailed
-	DetailConcise       = contextual.DetailConcise
-	DetailMinimal       = contextual.DetailMinimal
-	DetailSignatureOnly = contextual.DetailSignatureOnly
+	DetailFull          = contextmgr.DetailFull
+	DetailDetailed      = contextmgr.DetailDetailed
+	DetailConcise       = contextmgr.DetailConcise
+	DetailMinimal       = contextmgr.DetailMinimal
+	DetailSignatureOnly = contextmgr.DetailSignatureOnly
 
-	ASTQueryListSymbols     = contextual.ASTQueryListSymbols
-	ASTQueryGetSignature    = contextual.ASTQueryGetSignature
-	ASTQueryFindCallers     = contextual.ASTQueryFindCallers
-	ASTQueryFindCallees     = contextual.ASTQueryFindCallees
-	ASTQueryGetDependencies = contextual.ASTQueryGetDependencies
+	ASTQueryListSymbols     = contextmgr.ASTQueryListSymbols
+	ASTQueryGetSignature    = contextmgr.ASTQueryGetSignature
+	ASTQueryFindCallers     = contextmgr.ASTQueryFindCallers
+	ASTQueryFindCallees     = contextmgr.ASTQueryFindCallees
+	ASTQueryGetDependencies = contextmgr.ASTQueryGetDependencies
 )
 
-func NewAggressiveStrategy() *contextual.AggressiveStrategy {
-	return contextual.NewAggressiveStrategy()
+func NewAggressiveStrategy() *contextmgr.AggressiveStrategy {
+	return contextmgr.NewAggressiveStrategy()
 }
-func NewConservativeStrategy() *contextual.ConservativeStrategy {
-	return contextual.NewConservativeStrategy()
+func NewConservativeStrategy() *contextmgr.ConservativeStrategy {
+	return contextmgr.NewConservativeStrategy()
 }
-func NewAdaptiveStrategy() *contextual.AdaptiveStrategy { return contextual.NewAdaptiveStrategy() }
+func NewAdaptiveStrategy() *contextmgr.AdaptiveStrategy { return contextmgr.NewAdaptiveStrategy() }
 
-func ExtractFileReferences(text string) []string   { return contextual.ExtractFileReferences(text) }
-func ExtractSymbolReferences(text string) []string { return contextual.ExtractSymbolReferences(text) }
-func ExtractKeywords(text string) string           { return contextual.ExtractKeywords(text) }
+func ExtractFileReferences(text string) []string   { return contextmgr.ExtractFileReferences(text) }
+func ExtractSymbolReferences(text string) []string { return contextmgr.ExtractSymbolReferences(text) }
+func ExtractKeywords(text string) string           { return contextmgr.ExtractKeywords(text) }
 func ContainsInsensitive(text, substr string) bool {
-	return contextual.ContainsInsensitive(text, substr)
+	return contextmgr.ContainsInsensitive(text, substr)
 }
