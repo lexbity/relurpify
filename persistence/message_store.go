@@ -4,17 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/lexcodex/relurpify/framework/core"
 	"os"
 	"path/filepath"
 	"sync"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // MessageStore persists interaction histories per workflow/task.
 type MessageStore interface {
-	Append(ctx context.Context, workflowID string, interactions ...framework.Interaction) error
-	History(ctx context.Context, workflowID string) ([]framework.Interaction, error)
+	Append(ctx context.Context, workflowID string, interactions ...core.Interaction) error
+	History(ctx context.Context, workflowID string) ([]core.Interaction, error)
 	Clear(ctx context.Context, workflowID string) error
 }
 
@@ -41,7 +40,7 @@ func (s *FileMessageStore) pathFor(id string) string {
 }
 
 // Append stores interactions for a workflow.
-func (s *FileMessageStore) Append(ctx context.Context, workflowID string, interactions ...framework.Interaction) error {
+func (s *FileMessageStore) Append(ctx context.Context, workflowID string, interactions ...core.Interaction) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -68,7 +67,7 @@ func (s *FileMessageStore) Append(ctx context.Context, workflowID string, intera
 }
 
 // History returns the conversation for a workflow.
-func (s *FileMessageStore) History(ctx context.Context, workflowID string) ([]framework.Interaction, error) {
+func (s *FileMessageStore) History(ctx context.Context, workflowID string) ([]core.Interaction, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -93,7 +92,7 @@ func (s *FileMessageStore) Clear(ctx context.Context, workflowID string) error {
 
 // read loads the persisted conversation for a workflow, tolerating missing
 // files by returning an empty history.
-func (s *FileMessageStore) read(workflowID string) ([]framework.Interaction, error) {
+func (s *FileMessageStore) read(workflowID string) ([]core.Interaction, error) {
 	path := s.pathFor(workflowID)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -102,7 +101,7 @@ func (s *FileMessageStore) read(workflowID string) ([]framework.Interaction, err
 		}
 		return nil, err
 	}
-	var interactions []framework.Interaction
+	var interactions []core.Interaction
 	if err := json.Unmarshal(data, &interactions); err != nil {
 		return nil, err
 	}
