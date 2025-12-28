@@ -3,21 +3,22 @@ package clinix
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // CommandToolConfig captures metadata for wrapping an external CLI utility.
 type CommandToolConfig struct {
-	Name        string
-	Description string
-	Command     string
-	Category    string
-	DefaultArgs []string
-	Timeout     time.Duration
+	Name         string
+	Description  string
+	Command      string
+	Category     string
+	DefaultArgs  []string
+	Timeout      time.Duration
 	HITLRequired bool
 }
 
@@ -25,10 +26,10 @@ type CommandToolConfig struct {
 type CommandTool struct {
 	cfg      CommandToolConfig
 	basePath string
-	runner   framework.CommandRunner
-	manager  *framework.PermissionManager
+	runner   runtime.CommandRunner
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
 // NewCommandTool builds a reusable CLI wrapper.
@@ -45,29 +46,29 @@ func NewCommandTool(basePath string, cfg CommandToolConfig) *CommandTool {
 func (t *CommandTool) Name() string        { return t.cfg.Name }
 func (t *CommandTool) Description() string { return t.cfg.Description }
 func (t *CommandTool) Category() string    { return t.cfg.Category }
-func (t *CommandTool) SetCommandRunner(r framework.CommandRunner) {
+func (t *CommandTool) SetCommandRunner(r runtime.CommandRunner) {
 	t.runner = r
 }
 
-func (t *CommandTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *CommandTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *CommandTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *CommandTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
 
-func (t *CommandTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *CommandTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "args", Type: "array", Required: false, Description: "Arguments passed to the CLI tool."},
 		{Name: "stdin", Type: "string", Required: false, Description: "Optional standard input piped to the command."},
 		{Name: "working_directory", Type: "string", Required: false, Description: "Directory to run the command in (relative to workspace)."},
 	}
 }
 
-func (t *CommandTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	if t.runner == nil {
 		return nil, fmt.Errorf("command runner missing")
 	}
@@ -84,20 +85,20 @@ func (t *CommandTool) Execute(ctx context.Context, state *framework.Context, arg
 	}
 	if t.spec != nil {
 		cmdline := strings.TrimSpace(t.cfg.Command + " " + strings.Join(finalArgs, " "))
-		decision, _ := framework.DecideByPatterns(cmdline, t.spec.Bash.AllowPatterns, t.spec.Bash.DenyPatterns, t.spec.Bash.Default)
+		decision, _ := toolsys.DecideByPatterns(cmdline, t.spec.Bash.AllowPatterns, t.spec.Bash.DenyPatterns, t.spec.Bash.Default)
 		switch decision {
-		case framework.AgentPermissionDeny:
+		case core.AgentPermissionDeny:
 			return nil, fmt.Errorf("command blocked: denied by bash_permissions")
-		case framework.AgentPermissionAsk:
+		case core.AgentPermissionAsk:
 			if t.manager == nil {
 				return nil, fmt.Errorf("command blocked: approval required but permission manager missing")
 			}
-			if err := t.manager.RequireApproval(ctx, t.agentID, framework.PermissionDescriptor{
-				Type:         framework.PermissionTypeHITL,
+			if err := t.manager.RequireApproval(ctx, t.agentID, core.PermissionDescriptor{
+				Type:         core.PermissionTypeHITL,
 				Action:       "bash:cli",
 				Resource:     cmdline,
 				RequiresHITL: true,
-			}, "bash permission policy", framework.GrantScopeOneTime, framework.RiskLevelMedium, 0); err != nil {
+			}, "bash permission policy", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0); err != nil {
 				return nil, err
 			}
 		}
@@ -113,7 +114,7 @@ func (t *CommandTool) Execute(ctx context.Context, state *framework.Context, arg
 	if raw, ok := args["stdin"]; ok && raw != nil {
 		input = fmt.Sprint(raw)
 	}
-	stdout, stderr, err := t.runner.Run(ctx, framework.CommandRequest{
+	stdout, stderr, err := t.runner.Run(ctx, runtime.CommandRequest{
 		Workdir: workdir,
 		Args:    append([]string{t.cfg.Command}, finalArgs...),
 		Input:   input,
@@ -124,7 +125,7 @@ func (t *CommandTool) Execute(ctx context.Context, state *framework.Context, arg
 	if err != nil {
 		errMsg = err.Error()
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: success,
 		Data: map[string]interface{}{
 			"stdout": stdout,
@@ -139,16 +140,16 @@ func (t *CommandTool) Execute(ctx context.Context, state *framework.Context, arg
 	}, nil
 }
 
-func (t *CommandTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *CommandTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.runner != nil
 }
 
-func (t *CommandTool) Permissions() framework.ToolPermissions {
-	perms := framework.NewExecutionPermissionSet(t.basePath, t.cfg.Command, append([]string{}, t.cfg.DefaultArgs...))
+func (t *CommandTool) Permissions() core.ToolPermissions {
+	perms := core.NewExecutionPermissionSet(t.basePath, t.cfg.Command, append([]string{}, t.cfg.DefaultArgs...))
 	if t.cfg.HITLRequired && len(perms.Executables) > 0 {
 		perms.Executables[0].HITLRequired = true
 	}
-	return framework.ToolPermissions{Permissions: perms}
+	return core.ToolPermissions{Permissions: perms}
 }
 
 func toStringSlice(value interface{}) ([]string, error) {
