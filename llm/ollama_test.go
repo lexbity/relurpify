@@ -3,14 +3,12 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 type roundTripFunc func(*http.Request) *http.Response
@@ -26,24 +24,24 @@ type stubTool struct {
 func (t stubTool) Name() string        { return t.name }
 func (t stubTool) Description() string { return "stub tool" }
 func (t stubTool) Category() string    { return "test" }
-func (t stubTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t stubTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "value", Type: "string", Required: false},
 	}
 }
-func (t stubTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
-	return &framework.ToolResult{
+func (t stubTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"echo": args["value"],
 		},
 	}, nil
 }
-func (t stubTool) IsAvailable(ctx context.Context, state *framework.Context) bool { return true }
-func (t stubTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: &framework.PermissionSet{
-		FileSystem: []framework.FileSystemPermission{
-			{Action: framework.FileSystemRead, Path: "**"},
+func (t stubTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
+func (t stubTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{
+			{Action: core.FileSystemRead, Path: "**"},
 		},
 	}}
 }
@@ -64,7 +62,7 @@ func TestClientGenerate(t *testing.T) {
 		}),
 	}
 
-	resp, err := client.Generate(context.Background(), "hello", &framework.LLMOptions{})
+	resp, err := client.Generate(context.Background(), "hello", &core.LLMOptions{})
 	assert.NoError(t, err)
 	assert.Equal(t, "response", resp.Text)
 }
@@ -82,7 +80,7 @@ func TestClientChat(t *testing.T) {
 		}),
 	}
 
-	resp, err := client.Chat(context.Background(), []framework.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "ok", resp.Text)
 }
@@ -100,7 +98,7 @@ func TestClientChatTrimsOpenAIv1Endpoint(t *testing.T) {
 		}),
 	}
 
-	resp, err := client.Chat(context.Background(), []framework.Message{{Role: "user", Content: "ping"}}, nil)
+	resp, err := client.Chat(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "ok", resp.Text)
 }
@@ -129,11 +127,11 @@ func TestClientChatWithToolsParsesToolCalls(t *testing.T) {
 		}),
 	}
 
-	tools := []framework.Tool{stubTool{name: "echo"}}
-	messages := []framework.Message{
+	tools := []core.Tool{stubTool{name: "echo"}}
+	messages := []core.Message{
 		{Role: "user", Content: "say hi"},
 	}
-	resp, err := client.ChatWithTools(context.Background(), messages, tools, &framework.LLMOptions{})
+	resp, err := client.ChatWithTools(context.Background(), messages, tools, &core.LLMOptions{})
 	assert.NoError(t, err)
 	if assert.Len(t, resp.ToolCalls, 1) {
 		assert.Equal(t, "echo", resp.ToolCalls[0].Name)
