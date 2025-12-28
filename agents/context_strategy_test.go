@@ -1,18 +1,17 @@
 package agents
 
 import (
+	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 func TestAggressiveStrategySelectContext(t *testing.T) {
 	strategy := NewAggressiveStrategy()
-	task := &framework.Task{
+	task := &core.Task{
 		ID:          "test-1",
 		Instruction: "Fix bug in user authentication",
 	}
-	budget := framework.NewContextBudget(8000)
+	budget := core.NewContextBudget(8000)
 	request, err := strategy.SelectContext(task, budget)
 	if err != nil {
 		t.Fatalf("SelectContext failed: %v", err)
@@ -30,11 +29,11 @@ func TestAggressiveStrategySelectContext(t *testing.T) {
 
 func TestConservativeStrategyBudgetUsage(t *testing.T) {
 	strategy := NewConservativeStrategy()
-	task := &framework.Task{
+	task := &core.Task{
 		ID:          "test-2",
 		Instruction: "Refactor authentication module",
 	}
-	budget := framework.NewContextBudget(8000)
+	budget := core.NewContextBudget(8000)
 	request, err := strategy.SelectContext(task, budget)
 	if err != nil {
 		t.Fatalf("SelectContext failed: %v", err)
@@ -49,8 +48,8 @@ func TestConservativeStrategyBudgetUsage(t *testing.T) {
 
 func TestAdaptiveStrategyExpandsOnFailure(t *testing.T) {
 	strategy := NewAdaptiveStrategy()
-	shared := framework.NewSharedContext(framework.NewContext(), framework.NewContextBudget(2048), &framework.SimpleSummarizer{})
-	result := &framework.Result{
+	shared := core.NewSharedContext(core.NewContext(), core.NewContextBudget(2048), &core.SimpleSummarizer{})
+	result := &core.Result{
 		Success: false,
 		Data: map[string]any{
 			"error_type": "insufficient_context",
