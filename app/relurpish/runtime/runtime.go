@@ -4,6 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
+	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/telemetry"
+	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/llm"
+	"github.com/lexcodex/relurpify/server"
+	"github.com/lexcodex/relurpify/tools"
 	"io"
 	"log"
 	"os"
@@ -11,26 +22,19 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/framework"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/llm"
-	"github.com/lexcodex/relurpify/server"
-	"github.com/lexcodex/relurpify/tools"
 )
 
 // Runtime wires the relurpish CLI, Bubble Tea UI, and API server to the shared
-// agent runtime. It centralizes tool registration, manifests, sandbox
+// agent fruntime. It centralizes tool registration, manifests, sandbox
 // registration, and log management.
 type Runtime struct {
 	Config       Config
-	Tools        *framework.ToolRegistry
-	Memory       framework.MemoryStore
-	Context      *framework.Context
-	Agent        framework.Agent
-	Model        framework.LanguageModel
-	Registration *framework.AgentRegistration
+	Tools        *toolsys.ToolRegistry
+	Memory       memory.MemoryStore
+	Context      *core.Context
+	Agent        graph.Agent
+	Model        core.LanguageModel
+	Registration *fruntime.AgentRegistration
 	Logger       *log.Logger
 	Workspace    WorkspaceConfig
 
@@ -40,7 +44,7 @@ type Runtime struct {
 	serverCancel context.CancelFunc
 }
 
-// New builds a runtime. It always returns a usable Runtime instance even when
+// New builds a fruntime. It always returns a usable Runtime instance even when
 // sandbox or manifest verification fails so that the wizard/status views can
 // surface actionable diagnostics.
 func New(ctx context.Context, cfg Config) (*Runtime, error) {
@@ -56,7 +60,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 	logger := log.New(logFile, "relurpish ", log.LstdFlags|log.Lmicroseconds)
 
-	memory, err := framework.NewHybridMemory(cfg.MemoryPath)
+	memory, err := memory.NewHybridMemory(cfg.MemoryPath)
 	if err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("memory init: %w", err)
@@ -79,7 +83,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		}
 	}
 
-	registration, err := framework.RegisterAgent(ctx, framework.RuntimeConfig{
+	registration, err := fruntime.RegisterAgent(ctx, fruntime.RuntimeConfig{
 		ManifestPath: cfg.ManifestPath,
 		Sandbox:      cfg.Sandbox,
 		AuditLimit:   cfg.AuditLimit,
@@ -99,15 +103,15 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent.model.name")
 	}
-	runner, err := framework.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
+	runner, err := fruntime.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
 	if err != nil {
 		logFile.Close()
 		return nil, err
 	}
 	registry, err := BuildToolRegistry(cfg.Workspace, runner, ToolRegistryOptions{
-		AgentID:            registration.ID,
-		PermissionManager:  registration.Permissions,
-		AgentSpec:          nil,
+		AgentID:           registration.ID,
+		PermissionManager: registration.Permissions,
+		AgentSpec:         nil,
 	})
 	if err != nil {
 		logFile.Close()
@@ -133,19 +137,19 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 
 	// Setup Telemetry
-	var sinks []framework.Telemetry
-	sinks = append(sinks, framework.LoggerTelemetry{Logger: logger})
+	var sinks []core.Telemetry
+	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
 
 	if cfg.TelemetryPath != "" {
 		if err := os.MkdirAll(filepath.Dir(cfg.TelemetryPath), 0o755); err == nil {
-			if fileSink, err := framework.NewJSONFileTelemetry(cfg.TelemetryPath); err == nil {
+			if fileSink, err := telemetry.NewJSONFileTelemetry(cfg.TelemetryPath); err == nil {
 				sinks = append(sinks, fileSink)
 			} else {
 				logger.Printf("warning: failed to init json telemetry: %v", err)
 			}
 		}
 	}
-	telemetry := framework.MultiplexTelemetry{Sinks: sinks}
+	telemetry := telemetry.MultiplexTelemetry{Sinks: sinks}
 	registry.UseTelemetry(telemetry)
 
 	logLLM := false
@@ -157,7 +161,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	model := llm.NewInstrumentedModel(modelClient, telemetry, logLLM)
 
 	// Create base config derived from manifest + CLI args
-	agentCfg := &framework.Config{
+	agentCfg := &core.Config{
 		Name:              cfg.AgentLabel(),
 		Model:             cfg.OllamaModel,
 		OllamaEndpoint:    cfg.OllamaEndpoint,
@@ -171,7 +175,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 	// Enforce the effective (post-definition) tool policies before initializing.
 	if agentCfg.AgentSpec != nil {
-		framework.RestrictToolRegistryByMatrix(registry, agentCfg.AgentSpec.Tools)
+		toolsys.RestrictToolRegistryByMatrix(registry, agentCfg.AgentSpec.Tools)
 		registry.UseAgentSpec(registration.ID, agentCfg.AgentSpec)
 	}
 
@@ -191,7 +195,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		Config:       cfg,
 		Tools:        registry,
 		Memory:       memory,
-		Context:      framework.NewContext(),
+		Context:      core.NewContext(),
 		Agent:        agent,
 		Model:        model,
 		Logger:       logger,
@@ -202,7 +206,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	return rt, nil
 }
 
-// Close releases resources managed by runtime.
+// Close releases resources managed by fruntime.
 func (r *Runtime) Close() error {
 	if r.logFile != nil {
 		return r.logFile.Close()
@@ -213,12 +217,12 @@ func (r *Runtime) Close() error {
 // ToolRegistryOptions carries optional manifest/runtime policies into tool construction.
 type ToolRegistryOptions struct {
 	AgentID           string
-	PermissionManager *framework.PermissionManager
-	AgentSpec         *framework.AgentRuntimeSpec
+	PermissionManager *fruntime.PermissionManager
+	AgentSpec         *core.AgentRuntimeSpec
 }
 
 // BuildToolRegistry registers builtin tools scoped to the workspace.
-func BuildToolRegistry(workspace string, runner framework.CommandRunner, opts ...ToolRegistryOptions) (*framework.ToolRegistry, error) {
+func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...ToolRegistryOptions) (*toolsys.ToolRegistry, error) {
 	if workspace == "" {
 		workspace = "."
 	}
@@ -229,14 +233,14 @@ func BuildToolRegistry(workspace string, runner framework.CommandRunner, opts ..
 	if len(opts) > 0 {
 		cfg = opts[0]
 	}
-	registry := framework.NewToolRegistry()
+	registry := toolsys.NewToolRegistry()
 	if cfg.PermissionManager != nil {
 		registry.UsePermissionManager(cfg.AgentID, cfg.PermissionManager)
 	}
 	if cfg.AgentSpec != nil {
 		registry.UseAgentSpec(cfg.AgentID, cfg.AgentSpec)
 	}
-	register := func(tool framework.Tool) error {
+	register := func(tool core.Tool) error {
 		if err := registry.Register(tool); err != nil {
 			return err
 		}
@@ -247,7 +251,7 @@ func BuildToolRegistry(workspace string, runner framework.CommandRunner, opts ..
 			return nil, err
 		}
 	}
-	for _, tool := range []framework.Tool{
+	for _, tool := range []core.Tool{
 		&tools.GrepTool{BasePath: workspace},
 		&tools.SimilarityTool{BasePath: workspace},
 		&tools.SemanticSearchTool{BasePath: workspace},
@@ -256,7 +260,7 @@ func BuildToolRegistry(workspace string, runner framework.CommandRunner, opts ..
 			return nil, err
 		}
 	}
-	for _, tool := range []framework.Tool{
+	for _, tool := range []core.Tool{
 		&tools.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: runner},
 		&tools.GitCommandTool{RepoPath: workspace, Command: "history", Runner: runner},
 		&tools.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: runner},
@@ -267,7 +271,7 @@ func BuildToolRegistry(workspace string, runner framework.CommandRunner, opts ..
 			return nil, err
 		}
 	}
-	for _, tool := range []framework.Tool{
+	for _, tool := range []core.Tool{
 		&tools.RunTestsTool{Command: []string{"go", "test", "./..."}, Workdir: workspace, Timeout: 10 * time.Minute, Runner: runner},
 		&tools.RunLinterTool{Command: []string{"golangci-lint", "run"}, Workdir: workspace, Timeout: 5 * time.Minute, Runner: runner},
 		&tools.RunBuildTool{Command: []string{"go", "build", "./..."}, Workdir: workspace, Timeout: 10 * time.Minute, Runner: runner},
@@ -296,9 +300,9 @@ func BuildToolRegistry(workspace string, runner framework.CommandRunner, opts ..
 	})
 	if cfg.PermissionManager != nil {
 		manager.SetPathFilter(func(path string, isDir bool) bool {
-			action := framework.FileSystemRead
+			action := core.FileSystemRead
 			if isDir {
-				action = framework.FileSystemList
+				action = core.FileSystemList
 			}
 			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
 		})
@@ -312,8 +316,8 @@ func BuildToolRegistry(workspace string, runner framework.CommandRunner, opts ..
 }
 
 // LoadAgentDefinitions scans the directory for YAML files and parses them.
-func LoadAgentDefinitions(dir string) (map[string]*framework.AgentDefinition, error) {
-	defs := make(map[string]*framework.AgentDefinition)
+func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) {
+	defs := make(map[string]*core.AgentDefinition)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -323,9 +327,9 @@ func LoadAgentDefinitions(dir string) (map[string]*framework.AgentDefinition, er
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		def, err := framework.LoadAgentDefinition(path)
+		def, err := core.LoadAgentDefinition(path)
 		if err != nil {
-			if errors.Is(err, framework.ErrNotAgentDefinition) {
+			if errors.Is(err, core.ErrNotAgentDefinition) {
 				continue
 			}
 			return nil, fmt.Errorf("load %s: %w", entry.Name(), err)
@@ -339,7 +343,7 @@ func LoadAgentDefinitions(dir string) (map[string]*framework.AgentDefinition, er
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, model framework.LanguageModel, registry *framework.ToolRegistry, memory framework.MemoryStore, defs map[string]*framework.AgentDefinition, agentCfg *framework.Config) framework.Agent {
+func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.ToolRegistry, memory memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config) graph.Agent {
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
 		// Update config with the definition's spec
@@ -384,7 +388,7 @@ func instantiateAgent(cfg Config, model framework.LanguageModel, registry *frame
 
 // RunTask executes a task against the configured agent while preserving shared
 // context state for future status screens.
-func (r *Runtime) RunTask(ctx context.Context, task *framework.Task) (*framework.Result, error) {
+func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, error) {
 	if task == nil {
 		return nil, errors.New("task required")
 	}
@@ -405,9 +409,9 @@ func (r *Runtime) RunTask(ctx context.Context, task *framework.Task) (*framework
 }
 
 // ExecuteInstruction convenience helper.
-func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, taskType framework.TaskType, metadata map[string]any) (*framework.Result, error) {
+func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any) (*core.Result, error) {
 	if taskType == "" {
-		taskType = framework.TaskTypeCodeModification
+		taskType = core.TaskTypeCodeModification
 	}
 
 	metaStrings := make(map[string]string)
@@ -419,7 +423,7 @@ func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, ta
 		}
 	}
 
-	task := &framework.Task{
+	task := &core.Task{
 		ID:          fmt.Sprintf("chat-%d", time.Now().UnixNano()),
 		Instruction: instruction,
 		Type:        taskType,
@@ -477,7 +481,7 @@ func (r *Runtime) ServerRunning() bool {
 }
 
 // PendingHITL exposes outstanding permission requests.
-func (r *Runtime) PendingHITL() []*framework.PermissionRequest {
+func (r *Runtime) PendingHITL() []*fruntime.PermissionRequest {
 	if r.Registration == nil || r.Registration.HITL == nil {
 		return nil
 	}
@@ -486,9 +490,9 @@ func (r *Runtime) PendingHITL() []*framework.PermissionRequest {
 
 // SubscribeHITL streams HITL lifecycle events (requested/resolved/expired).
 // The returned cancel function can be called to unsubscribe.
-func (r *Runtime) SubscribeHITL() (<-chan framework.HITLEvent, func()) {
+func (r *Runtime) SubscribeHITL() (<-chan fruntime.HITLEvent, func()) {
 	if r == nil || r.Registration == nil || r.Registration.HITL == nil {
-		ch := make(chan framework.HITLEvent)
+		ch := make(chan fruntime.HITLEvent)
 		close(ch)
 		return ch, func() {}
 	}
@@ -496,14 +500,14 @@ func (r *Runtime) SubscribeHITL() (<-chan framework.HITLEvent, func()) {
 }
 
 // ApproveHITL approves a pending request with the supplied scope.
-func (r *Runtime) ApproveHITL(requestID, approver string, scope framework.GrantScope, duration time.Duration) error {
+func (r *Runtime) ApproveHITL(requestID, approver string, scope fruntime.GrantScope, duration time.Duration) error {
 	if r.Registration == nil || r.Registration.HITL == nil {
 		return errors.New("hitl broker unavailable")
 	}
 	if scope == "" {
-		scope = framework.GrantScopeOneTime
+		scope = fruntime.GrantScopeOneTime
 	}
-	decision := framework.PermissionDecision{
+	decision := fruntime.PermissionDecision{
 		RequestID:  requestID,
 		Approved:   true,
 		ApprovedBy: approver,
