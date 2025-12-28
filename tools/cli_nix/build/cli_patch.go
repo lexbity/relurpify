@@ -1,12 +1,12 @@
 package build
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewPatchTool creates a patch wrapper.
-func NewPatchTool(basePath string) framework.Tool {
+func NewPatchTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_patch",
 		Description: "Apply a diff file to an original.",
@@ -16,7 +16,7 @@ func NewPatchTool(basePath string) framework.Tool {
 }
 
 // NewDiffTool creates a diff wrapper.
-func NewDiffTool(basePath string) framework.Tool {
+func NewDiffTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_diff",
 		Description: "Compare files line by line.",
