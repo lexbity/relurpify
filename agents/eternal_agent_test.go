@@ -2,10 +2,9 @@ package agents
 
 import (
 	"context"
+	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 type fixedStreamModel struct {
@@ -13,11 +12,11 @@ type fixedStreamModel struct {
 	text  string
 }
 
-func (m *fixedStreamModel) Generate(context.Context, string, *framework.LLMOptions) (*framework.LLMResponse, error) {
-	return &framework.LLMResponse{Text: "unused"}, nil
+func (m *fixedStreamModel) Generate(context.Context, string, *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{Text: "unused"}, nil
 }
 
-func (m *fixedStreamModel) GenerateStream(context.Context, string, *framework.LLMOptions) (<-chan string, error) {
+func (m *fixedStreamModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
 	m.calls++
 	ch := make(chan string, 1)
 	ch <- m.text
@@ -25,34 +24,34 @@ func (m *fixedStreamModel) GenerateStream(context.Context, string, *framework.LL
 	return ch, nil
 }
 
-func (m *fixedStreamModel) Chat(context.Context, []framework.Message, *framework.LLMOptions) (*framework.LLMResponse, error) {
-	return &framework.LLMResponse{Text: "unused"}, nil
+func (m *fixedStreamModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{Text: "unused"}, nil
 }
 
-func (m *fixedStreamModel) ChatWithTools(context.Context, []framework.Message, []framework.Tool, *framework.LLMOptions) (*framework.LLMResponse, error) {
-	return &framework.LLMResponse{Text: "unused"}, nil
+func (m *fixedStreamModel) ChatWithTools(context.Context, []core.Message, []core.Tool, *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{Text: "unused"}, nil
 }
 
 func TestEternalAgentFiniteCycles(t *testing.T) {
 	t.Helper()
 	model := &fixedStreamModel{text: "meow"}
 	agent := &EternalAgent{Model: model}
-	if err := agent.Initialize(&framework.Config{Model: "test"}); err != nil {
+	if err := agent.Initialize(&core.Config{Model: "test"}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	task := &framework.Task{
+	task := &core.Task{
 		ID:          "eternal-test",
 		Instruction: "initiate sequence",
-		Type:        framework.TaskTypeCodeGeneration,
+		Type:        core.TaskTypeCodeGeneration,
 		Context: map[string]any{
 			"eternal.infinite":   false,
 			"eternal.max_cycles": 2,
 			"eternal.sleep":      "0s",
 		},
 	}
-	state := framework.NewContext()
+	state := core.NewContext()
 	res, err := agent.Execute(ctx, task, state)
 	if err != nil {
 		t.Fatalf("execute: %v", err)
