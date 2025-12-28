@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // WorkflowStatus enumerates snapshot states.
@@ -24,12 +24,12 @@ const (
 
 // WorkflowSnapshot persists graph execution state on disk.
 type WorkflowSnapshot struct {
-	ID        string                   `json:"id"`
-	Task      *framework.Task          `json:"task"`
-	Graph     *framework.GraphSnapshot `json:"graph"`
-	Status    WorkflowStatus           `json:"status"`
-	Metadata  map[string]interface{}   `json:"metadata,omitempty"`
-	UpdatedAt time.Time                `json:"updated_at"`
+	ID        string                 `json:"id"`
+	Task      *core.Task             `json:"task"`
+	Graph     *graph.GraphSnapshot   `json:"graph"`
+	Status    WorkflowStatus         `json:"status"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	UpdatedAt time.Time              `json:"updated_at"`
 }
 
 // WorkflowStore persists snapshots between runs.
