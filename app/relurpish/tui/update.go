@@ -2,15 +2,13 @@ package tui
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"strings"
+	"time"
 )
 
 // Init fulfills the Bubble Tea Model interface.
@@ -375,19 +373,19 @@ func (m Model) handleHITLEvent(msg hitlEventMsg) (tea.Model, tea.Cmd) {
 	next := listenHITLEvents(m.hitlCh)
 
 	// Sync to current pending list for robustness (handles bursts/missed events).
-	var pending []*framework.PermissionRequest
+	var pending []*runtime.PermissionRequest
 	if m.hitl != nil {
 		pending = m.hitl.PendingHITL()
 	}
 
 	switch msg.event.Type {
-	case framework.HITLEventRequested:
+	case runtime.HITLEventRequested:
 		if len(pending) > 0 && m.mode != ModeHITL {
 			req := pending[0]
 			m = m.enterHITL(req)
 			m = m.addSystemMessage(fmt.Sprintf("Permission requested: %s %s (%s)", req.ID, req.Permission.Action, req.Justification))
 		}
-	case framework.HITLEventResolved, framework.HITLEventExpired:
+	case runtime.HITLEventResolved, runtime.HITLEventExpired:
 		// If current request is gone, exit HITL or advance to next pending.
 		if m.mode == ModeHITL && m.hitlRequest != nil {
 			current := m.hitlRequest.ID
@@ -407,7 +405,7 @@ func (m Model) handleHITLEvent(msg hitlEventMsg) (tea.Model, tea.Cmd) {
 		} else if len(pending) > 0 && m.mode != ModeHITL {
 			m = m.enterHITL(pending[0])
 		}
-		if msg.event.Type == framework.HITLEventExpired && msg.event.Request != nil {
+		if msg.event.Type == runtime.HITLEventExpired && msg.event.Request != nil {
 			reason := msg.event.Error
 			if reason == "" {
 				reason = "expired"
