@@ -1,12 +1,12 @@
 package text
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewTRTool exposes the tr CLI.
-func NewTRTool(basePath string) framework.Tool {
+func NewTRTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_tr",
 		Description: "Translates or deletes characters with tr.",
