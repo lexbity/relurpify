@@ -1,15 +1,16 @@
-package framework
+package framework_test
 
 import (
+	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
 	"time"
 )
 
 func TestSimpleCompressionStrategyCompress(t *testing.T) {
-	strategy := NewSimpleCompressionStrategy()
+	strategy := core.NewSimpleCompressionStrategy()
 	llm := &stubLLM{text: `Summary: Completed refactor.
 Key Facts: [{"type":"decision","content":"Refactored module","relevance":0.9}]`}
-	interactions := []Interaction{
+	interactions := []core.Interaction{
 		{ID: 1, Role: "user", Content: "Please refactor the module", Timestamp: time.Now()},
 		{ID: 2, Role: "assistant", Content: "Working on it", Timestamp: time.Now()},
 	}
@@ -32,37 +33,37 @@ Key Facts: [{"type":"decision","content":"Refactored module","relevance":0.9}]`}
 }
 
 func TestSimpleCompressionStrategyShouldCompress(t *testing.T) {
-	strategy := NewSimpleCompressionStrategy()
-	ctx := NewContext()
+	strategy := core.NewSimpleCompressionStrategy()
+	ctx := core.NewContext()
 	for i := 0; i < 12; i++ {
 		ctx.AddInteraction("user", "message", nil)
 	}
 	if !strategy.ShouldCompress(ctx, nil) {
 		t.Fatal("expected compression recommendation when history exceeds threshold")
 	}
-	budget := NewContextBudget(1000)
-	budget.mu.Lock()
-	budget.currentUsage.ContextUsagePercent = 0.5
-	budget.mu.Unlock()
+	budget := core.NewContextBudget(1000)
+	usage := budget.GetCurrentUsage()
+	usage.ContextUsagePercent = 0.5
+	budget.SetCurrentUsage(usage)
 	if strategy.ShouldCompress(ctx, budget) {
 		t.Fatal("expected compression to stay disabled when usage below threshold")
 	}
-	budget.mu.Lock()
-	budget.currentUsage.ContextUsagePercent = 0.9
-	budget.mu.Unlock()
+	usage = budget.GetCurrentUsage()
+	usage.ContextUsagePercent = 0.9
+	budget.SetCurrentUsage(usage)
 	if !strategy.ShouldCompress(ctx, budget) {
 		t.Fatal("expected compression once usage exceeds threshold")
 	}
 }
 
 func TestContextCompressHistory(t *testing.T) {
-	ctx := NewContext()
+	ctx := core.NewContext()
 	for i := 0; i < 15; i++ {
 		ctx.AddInteraction("user", "long message content", nil)
 	}
 	llm := &stubLLM{text: `Summary: summary
 Key Facts: [{"type":"decision","content":"fact","relevance":0.8}]`}
-	strategy := NewSimpleCompressionStrategy()
+	strategy := core.NewSimpleCompressionStrategy()
 	err := ctx.CompressHistory(strategy.KeepRecentCount, llm, strategy)
 	if err != nil {
 		t.Fatalf("CompressHistory returned error: %v", err)
@@ -71,10 +72,11 @@ Key Facts: [{"type":"decision","content":"fact","relevance":0.8}]`}
 	if stats.CompressionEvents == 0 {
 		t.Fatal("expected compression event to be logged")
 	}
-	if len(ctx.compressedHistory) == 0 {
+	compressed, history := ctx.GetFullHistory()
+	if len(compressed) == 0 {
 		t.Fatal("expected compressed history entries")
 	}
-	if len(ctx.history) != strategy.KeepRecentCount {
-		t.Fatalf("expected recent history length %d, got %d", strategy.KeepRecentCount, len(ctx.history))
+	if len(history) != strategy.KeepRecentCount {
+		t.Fatalf("expected recent history length %d, got %d", strategy.KeepRecentCount, len(history))
 	}
 }
