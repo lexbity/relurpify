@@ -2,8 +2,10 @@ package agents
 
 import (
 	"context"
-
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 )
 
 // ExpertCoderAgent chains the architect planner with the coding delegate,
@@ -12,19 +14,19 @@ import (
 // Deprecated: This logic has been consolidated into AgentCoordinator.
 // This struct now acts as a pre-configured wrapper around AgentCoordinator.
 type ExpertCoderAgent struct {
-	Model  framework.LanguageModel
-	Tools  *framework.ToolRegistry
-	Memory framework.MemoryStore
-	Config *framework.Config
+	Model  core.LanguageModel
+	Tools  *toolsys.ToolRegistry
+	Memory memory.MemoryStore
+	Config *core.Config
 
 	coordinator *AgentCoordinator
 }
 
 // Initialize configures the planner and coding delegates.
-func (a *ExpertCoderAgent) Initialize(cfg *framework.Config) error {
+func (a *ExpertCoderAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
-		a.Tools = framework.NewToolRegistry()
+		a.Tools = toolsys.NewToolRegistry()
 	}
 
 	planner := &PlannerAgent{Model: a.Model, Tools: a.Tools, Memory: a.Memory}
@@ -38,7 +40,7 @@ func (a *ExpertCoderAgent) Initialize(cfg *framework.Config) error {
 	}
 
 	// Initialize coordinator with a default budget
-	a.coordinator = NewAgentCoordinator(cfg.Telemetry, framework.NewContextBudget(16000))
+	a.coordinator = NewAgentCoordinator(cfg.Telemetry, core.NewContextBudget(16000))
 	a.coordinator.RegisterAgent("planner", planner)
 	a.coordinator.RegisterAgent("executor", coder)
 
@@ -57,18 +59,18 @@ func (a *ExpertCoderAgent) Initialize(cfg *framework.Config) error {
 }
 
 // Capabilities merges planning and coding skills.
-func (a *ExpertCoderAgent) Capabilities() []framework.Capability {
-	return []framework.Capability{
-		framework.CapabilityPlan,
-		framework.CapabilityCode,
-		framework.CapabilityReview,
-		framework.CapabilityExplain,
+func (a *ExpertCoderAgent) Capabilities() []core.Capability {
+	return []core.Capability{
+		core.CapabilityPlan,
+		core.CapabilityCode,
+		core.CapabilityReview,
+		core.CapabilityExplain,
 	}
 }
 
 // BuildGraph constructs a pipeline graph.
-func (a *ExpertCoderAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) {
-	graph := framework.NewGraph()
+func (a *ExpertCoderAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+	graph := graph.NewGraph()
 	// We wrap the coordinator in a single system node
 	node := &expertCoordinatorNode{
 		id:    "expert_coordination",
@@ -86,7 +88,7 @@ func (a *ExpertCoderAgent) BuildGraph(task *framework.Task) (*framework.Graph, e
 }
 
 // Execute runs plan then coding mode.
-func (a *ExpertCoderAgent) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (a *ExpertCoderAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	if task.Metadata == nil {
 		task.Metadata = make(map[string]string)
 	}
@@ -98,11 +100,11 @@ func (a *ExpertCoderAgent) Execute(ctx context.Context, task *framework.Task, st
 type expertCoordinatorNode struct {
 	id    string
 	agent *ExpertCoderAgent
-	task  *framework.Task
+	task  *core.Task
 }
 
-func (n *expertCoordinatorNode) ID() string               { return n.id }
-func (n *expertCoordinatorNode) Type() framework.NodeType { return framework.NodeTypeSystem }
-func (n *expertCoordinatorNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *expertCoordinatorNode) ID() string           { return n.id }
+func (n *expertCoordinatorNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *expertCoordinatorNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	return n.agent.Execute(ctx, n.task, state)
 }
