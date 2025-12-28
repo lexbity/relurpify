@@ -4,21 +4,21 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // GrepTool implements plain text search.
 type GrepTool struct {
 	BasePath string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
 }
 
-func (t *GrepTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *GrepTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -26,20 +26,20 @@ func (t *GrepTool) SetPermissionManager(manager *framework.PermissionManager, ag
 func (t *GrepTool) Name() string        { return "search_grep" }
 func (t *GrepTool) Description() string { return "Searches files using substring matching." }
 func (t *GrepTool) Category() string    { return "search" }
-func (t *GrepTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *GrepTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "pattern", Type: "string", Required: true},
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *GrepTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	root := fmt.Sprint(args["directory"])
 	if root == "" {
 		root = "."
 	}
 	root = preparePath(t.BasePath, root)
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, root); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, root); err != nil {
 			return nil, err
 		}
 	}
@@ -59,14 +59,14 @@ func (t *GrepTool) Execute(ctx context.Context, state *framework.Context, args m
 				return filepath.SkipDir
 			}
 			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, path); err != nil {
+				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
 					return filepath.SkipDir
 				}
 			}
 			return nil
 		}
 		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, path); err != nil {
+			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
 				return nil
 			}
 		}
@@ -89,22 +89,22 @@ func (t *GrepTool) Execute(ctx context.Context, state *framework.Context, args m
 	if err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
-func (t *GrepTool) IsAvailable(ctx context.Context, state *framework.Context) bool { return true }
+func (t *GrepTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
 
-func (t *GrepTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemRead, framework.FileSystemList)}
+func (t *GrepTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
 
 // SimilarityTool finds similar snippets using a naive approach.
 type SimilarityTool struct {
 	BasePath string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
 }
 
-func (t *SimilarityTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *SimilarityTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -112,16 +112,16 @@ func (t *SimilarityTool) SetPermissionManager(manager *framework.PermissionManag
 func (t *SimilarityTool) Name() string        { return "search_find_similar" }
 func (t *SimilarityTool) Description() string { return "Finds structurally similar code snippets." }
 func (t *SimilarityTool) Category() string    { return "search" }
-func (t *SimilarityTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *SimilarityTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "snippet", Type: "string", Required: true},
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *SimilarityTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	root := preparePath(t.BasePath, fmt.Sprint(args["directory"]))
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, root); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, root); err != nil {
 			return nil, err
 		}
 	}
@@ -138,14 +138,14 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *framework.Context, 
 				return filepath.SkipDir
 			}
 			if err == nil && info != nil && info.IsDir() && t.manager != nil {
-				if perr := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, path); perr != nil {
+				if perr := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); perr != nil {
 					return filepath.SkipDir
 				}
 			}
 			return err
 		}
 		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, path); err != nil {
+			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
 				return nil
 			}
 		}
@@ -163,22 +163,22 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *framework.Context, 
 	if err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
-func (t *SimilarityTool) IsAvailable(ctx context.Context, state *framework.Context) bool { return true }
+func (t *SimilarityTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
 
-func (t *SimilarityTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemRead, framework.FileSystemList)}
+func (t *SimilarityTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
 
 // SemanticSearchTool uses a vector-like heuristic (currently substring).
 type SemanticSearchTool struct {
 	BasePath string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
 }
 
-func (t *SemanticSearchTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *SemanticSearchTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -188,14 +188,14 @@ func (t *SemanticSearchTool) Description() string {
 	return "Performs semantic search using heuristic embeddings."
 }
 func (t *SemanticSearchTool) Category() string { return "search" }
-func (t *SemanticSearchTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{{Name: "query", Type: "string", Required: true}}
+func (t *SemanticSearchTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "query", Type: "string", Required: true}}
 }
-func (t *SemanticSearchTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	query := strings.ToLower(fmt.Sprint(args["query"]))
 	var hits []map[string]interface{}
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, t.BasePath); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, t.BasePath); err != nil {
 			return nil, err
 		}
 	}
@@ -208,14 +208,14 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *framework.Conte
 				return filepath.SkipDir
 			}
 			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, path); err != nil {
+				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
 					return filepath.SkipDir
 				}
 			}
 			return nil
 		}
 		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, path); err != nil {
+			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
 				return nil
 			}
 		}
@@ -236,14 +236,14 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *framework.Conte
 	if err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
 }
-func (t *SemanticSearchTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *SemanticSearchTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return true
 }
 
-func (t *SemanticSearchTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemRead, framework.FileSystemList)}
+func (t *SemanticSearchTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
 
 func sanitizeSnippet(snippet string) string {
