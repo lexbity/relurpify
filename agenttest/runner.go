@@ -5,6 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lexcodex/relurpify/agents"
+	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/memory"
+	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/telemetry"
+	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/llm"
 	"log"
 	"os"
 	"os/exec"
@@ -13,11 +23,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework"
-	"github.com/lexcodex/relurpify/llm"
 )
 
 type RunOptions struct {
@@ -198,12 +203,12 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 
 	agentName := suite.Spec.AgentName
-	telemetrySink, err := framework.NewJSONFileTelemetry(telemetryPath)
+	telemetrySink, err := telemetry.NewJSONFileTelemetry(telemetryPath)
 	if err != nil {
 		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
 	}
 	defer telemetrySink.Close()
-	telemetry := framework.MultiplexTelemetry{Sinks: []framework.Telemetry{telemetrySink}}
+	telemetry := telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{telemetrySink}}
 
 	modelName := firstNonEmpty(opts.ModelOverride, model.Name)
 	endpoint := firstNonEmpty(opts.EndpointOverride, model.Endpoint)
@@ -218,7 +223,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	client := llm.NewClient(endpoint, modelName)
 	client.SetDebugLogging(opts.DebugLLM)
 
-	lm := framework.LanguageModel(client)
+	lm := core.LanguageModel(client)
 	recording := suite.Spec.Recording
 	if c.Overrides.Recording != nil {
 		recording = *c.Overrides.Recording
@@ -241,16 +246,16 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	instrumented := llm.NewInstrumentedModel(lm, telemetry, opts.DebugLLM)
 
-	spec := &framework.AgentRuntimeSpec{}
-	manifest, err := framework.LoadAgentManifest(manifestAbs)
+	spec := &core.AgentRuntimeSpec{}
+	manifest, err := manifest.LoadAgentManifest(manifestAbs)
 	if err == nil && manifest.Spec.Agent != nil {
 		spec = manifest.Spec.Agent
 	}
 	spec = effectiveAgentSpecForCase(spec, c)
 	// Apply any case tool matrix overrides (useful for prompt-only tests).
 	if len(c.Overrides.ToolMatrix) > 0 {
-		if spec.Tools == (framework.AgentToolMatrix{}) {
-			spec.Tools = framework.AgentToolMatrix{}
+		if spec.Tools == (core.AgentToolMatrix{}) {
+			spec.Tools = core.AgentToolMatrix{}
 		}
 		for k, v := range c.Overrides.ToolMatrix {
 			switch strings.ToLower(k) {
@@ -297,11 +302,11 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 	}
 
-	taskType := framework.TaskType(c.TaskType)
+	taskType := core.TaskType(c.TaskType)
 	if taskType == "" {
-		taskType = framework.TaskTypeCodeGeneration
+		taskType = core.TaskTypeCodeGeneration
 	}
-	task := &framework.Task{
+	task := &core.Task{
 		ID:          fmt.Sprintf("agenttest-%d", time.Now().UnixNano()),
 		Instruction: c.Prompt,
 		Type:        taskType,
@@ -312,7 +317,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	state.Set("task.type", string(task.Type))
 	state.Set("task.instruction", task.Instruction)
 
-	var res *framework.Result
+	var res *core.Result
 	var execErr error
 	attempts := 1
 	if len(opts.OllamaResetOn) > 0 {
@@ -320,7 +325,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	for attempt := 1; attempt <= attempts; attempt++ {
 		runCtx, cancel := context.WithTimeout(ctx, timeout)
-		taskCtx := framework.WithTaskContext(runCtx, framework.TaskContext{
+		taskCtx := core.WithTaskContext(runCtx, core.TaskContext{
 			ID:          task.ID,
 			Type:        task.Type,
 			Instruction: task.Instruction,
@@ -385,7 +390,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 }
 
-func shouldSkipCase(req RequiresSpec, agent framework.Agent) (reason string, ok bool) {
+func shouldSkipCase(req RequiresSpec, agent graph.Agent) (reason string, ok bool) {
 	for _, bin := range req.Executables {
 		bin = strings.TrimSpace(bin)
 		if bin == "" {
@@ -413,7 +418,7 @@ func shouldSkipCase(req RequiresSpec, agent framework.Agent) (reason string, ok 
 	return "", false
 }
 
-func extractToolRegistry(agent framework.Agent) *framework.ToolRegistry {
+func extractToolRegistry(agent graph.Agent) *toolsys.ToolRegistry {
 	switch a := agent.(type) {
 	case *agents.CodingAgent:
 		return a.Tools
@@ -472,16 +477,16 @@ func mergeStrings(a, b []string) []string {
 	return out
 }
 
-func effectiveAgentSpecForCase(base *framework.AgentRuntimeSpec, c CaseSpec) *framework.AgentRuntimeSpec {
+func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.AgentRuntimeSpec {
 	if base == nil {
-		base = &framework.AgentRuntimeSpec{}
+		base = &core.AgentRuntimeSpec{}
 	}
 	clone := *base
 
 	// Agenttest defaults: keep writes safe without relying on filesystem-permission
 	// rewrites (tools declare broad perms for authorization).
-	clone.Files.Write.Default = framework.AgentPermissionDeny
-	clone.Files.Edit.Default = framework.AgentPermissionDeny
+	clone.Files.Write.Default = core.AgentPermissionDeny
+	clone.Files.Edit.Default = core.AgentPermissionDeny
 	clone.Files.Write.RequireApproval = false
 	clone.Files.Edit.RequireApproval = false
 
@@ -509,24 +514,24 @@ func effectiveAgentSpecForCase(base *framework.AgentRuntimeSpec, c CaseSpec) *fr
 	return &clone
 }
 
-func buildAgent(workspace, manifestPath, agentName string, agentSpec *framework.AgentRuntimeSpec, model framework.LanguageModel, telemetry framework.Telemetry, opts RunOptions, extraEnv []string, allowedTools []string) (framework.Agent, *framework.Context, error) {
-	manifest, err := framework.LoadAgentManifest(manifestPath)
+func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedTools []string) (graph.Agent, *core.Context, error) {
+	manifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	audit := framework.NewInMemoryAuditLogger(512)
-	hitl := framework.NewHITLBroker(30 * time.Second)
-	permMgr, err := framework.NewPermissionManager(workspace, &manifest.Spec.Permissions, audit, hitl)
+	audit := core.NewInMemoryAuditLogger(512)
+	hitl := fruntime.NewHITLBroker(30 * time.Second)
+	permMgr, err := fruntime.NewPermissionManager(workspace, &manifest.Spec.Permissions, audit, hitl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var runner framework.CommandRunner
+	var runner fruntime.CommandRunner
 	if opts.Sandbox {
-		reg, err := framework.RegisterAgent(context.Background(), framework.RuntimeConfig{
+		reg, err := fruntime.RegisterAgent(context.Background(), fruntime.RuntimeConfig{
 			ManifestPath: manifestPath,
-			Sandbox:      runtime.DefaultConfig().Sandbox,
+			Sandbox:      appruntime.DefaultConfig().Sandbox,
 			AuditLimit:   512,
 			BaseFS:       workspace,
 			HITLTimeout:  30 * time.Second,
@@ -534,16 +539,16 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *framework.
 		if err != nil {
 			return nil, nil, err
 		}
-		runner, err = framework.NewSandboxCommandRunner(reg.Manifest, reg.Runtime, workspace)
+		runner, err = fruntime.NewSandboxCommandRunner(reg.Manifest, reg.Runtime, workspace)
 		if err != nil {
 			return nil, nil, err
 		}
 		permMgr = reg.Permissions
 	} else {
-		runner = framework.NewLocalCommandRunner(workspace, extraEnv)
+		runner = fruntime.NewLocalCommandRunner(workspace, extraEnv)
 	}
 
-	registry, err := runtime.BuildToolRegistry(workspace, runner, runtime.ToolRegistryOptions{
+	registry, err := appruntime.BuildToolRegistry(workspace, runner, appruntime.ToolRegistryOptions{
 		AgentID:           manifest.Metadata.Name,
 		PermissionManager: permMgr,
 		AgentSpec:         agentSpec,
@@ -551,13 +556,13 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *framework.
 	if err != nil {
 		return nil, nil, err
 	}
-	framework.RestrictToolRegistryByMatrix(registry, agentSpec.Tools)
+	toolsys.RestrictToolRegistryByMatrix(registry, agentSpec.Tools)
 	applyAgentTestToolDefaults(registry, allowedTools)
 	registry.UseTelemetry(telemetry)
 	registry.UsePermissionManager(manifest.Metadata.Name, permMgr)
 	registry.UseAgentSpec(manifest.Metadata.Name, agentSpec)
 
-	memory, err := framework.NewHybridMemory(filepath.Join(workspace, "relurpify_cfg", "memory"))
+	memory, err := memory.NewHybridMemory(filepath.Join(workspace, "relurpify_cfg", "memory"))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -568,7 +573,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *framework.
 	if maxIterations <= 0 {
 		maxIterations = 8
 	}
-	cfg := &framework.Config{
+	cfg := &core.Config{
 		Name:              manifest.Metadata.Name,
 		Model:             firstNonEmpty(opts.ModelOverride, agentSpec.Model.Name),
 		OllamaEndpoint:    firstNonEmpty(opts.EndpointOverride, "http://localhost:11434"),
@@ -585,7 +590,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *framework.
 	if reflection, ok := agent.(*agents.ReflectionAgent); ok && reflection.Delegate != nil {
 		_ = reflection.Delegate.Initialize(cfg)
 	}
-	return agent, framework.NewContext(), nil
+	return agent, core.NewContext(), nil
 }
 
 func defaultAgenttestAllowedTools() []string {
@@ -609,7 +614,7 @@ func defaultAgenttestAllowedTools() []string {
 	}
 }
 
-func applyAgentTestToolDefaults(registry *framework.ToolRegistry, allowedTools []string) {
+func applyAgentTestToolDefaults(registry *toolsys.ToolRegistry, allowedTools []string) {
 	if registry == nil {
 		return
 	}
@@ -618,7 +623,7 @@ func applyAgentTestToolDefaults(registry *framework.ToolRegistry, allowedTools [
 	registry.RestrictTo(uniqueStrings(allowedTools))
 }
 
-func registerToolAlias(registry *framework.ToolRegistry, alias, target string) error {
+func registerToolAlias(registry *toolsys.ToolRegistry, alias, target string) error {
 	if registry == nil || alias == "" || target == "" {
 		return nil
 	}
@@ -637,26 +642,26 @@ func registerToolAlias(registry *framework.ToolRegistry, alias, target string) e
 
 type aliasTool struct {
 	alias  string
-	target framework.Tool
+	target core.Tool
 }
 
 func (t *aliasTool) Name() string        { return t.alias }
 func (t *aliasTool) Description() string { return "Alias for " + t.target.Name() }
 func (t *aliasTool) Category() string    { return t.target.Category() }
-func (t *aliasTool) Parameters() []framework.ToolParameter {
+func (t *aliasTool) Parameters() []core.ToolParameter {
 	return t.target.Parameters()
 }
-func (t *aliasTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *aliasTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	return t.target.Execute(ctx, state, args)
 }
-func (t *aliasTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *aliasTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return t.target.IsAvailable(ctx, state)
 }
-func (t *aliasTool) Permissions() framework.ToolPermissions {
+func (t *aliasTool) Permissions() core.ToolPermissions {
 	return t.target.Permissions()
 }
 
-func instantiateAgentByName(name string, model framework.LanguageModel, tools *framework.ToolRegistry, memory framework.MemoryStore) framework.Agent {
+func instantiateAgentByName(name string, model core.LanguageModel, tools *toolsys.ToolRegistry, memory memory.MemoryStore) graph.Agent {
 	switch strings.ToLower(name) {
 	case "planner":
 		return &agents.PlannerAgent{Model: model, Tools: tools, Memory: memory}
@@ -723,7 +728,7 @@ func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Log
 	return cleanup, nil
 }
 
-func extractOutput(state *framework.Context, res *framework.Result) string {
+func extractOutput(state *core.Context, res *core.Result) string {
 	if res != nil && res.Data != nil {
 		if val, ok := res.Data["final_output"]; ok {
 			if s, ok := val.(string); ok && s != "" {
