@@ -1,6 +1,8 @@
-package framework
+package framework_test
 
 import (
+	"github.com/lexcodex/relurpify/framework/contextmgr"
+	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
 	"time"
 )
@@ -15,7 +17,7 @@ type fakeContextItem struct {
 func (f *fakeContextItem) TokenCount() int         { return f.tokens }
 func (f *fakeContextItem) RelevanceScore() float64 { return f.relevance }
 func (f *fakeContextItem) Priority() int           { return f.priority }
-func (f *fakeContextItem) Compress() (ContextItem, error) {
+func (f *fakeContextItem) Compress() (core.ContextItem, error) {
 	return &fakeContextItem{
 		tokens:    f.tokens / 2,
 		relevance: f.relevance * 0.8,
@@ -23,13 +25,13 @@ func (f *fakeContextItem) Compress() (ContextItem, error) {
 		age:       f.age,
 	}, nil
 }
-func (f *fakeContextItem) Type() ContextItemType { return ContextTypeMemory }
-func (f *fakeContextItem) Age() time.Duration    { return f.age }
+func (f *fakeContextItem) Type() core.ContextItemType { return core.ContextTypeMemory }
+func (f *fakeContextItem) Age() time.Duration         { return f.age }
 
 func TestContextManagerAddItem(t *testing.T) {
-	budget := NewContextBudget(8000)
+	budget := core.NewContextBudget(8000)
 	budget.SetReservations(500, 500, 500)
-	manager := NewContextManager(budget)
+	manager := contextmgr.NewContextManager(budget)
 	item := &fakeContextItem{tokens: 10, relevance: 1.0, priority: 1, age: time.Hour}
 	if err := manager.AddItem(item); err != nil {
 		t.Fatalf("AddItem returned error: %v", err)
@@ -40,29 +42,33 @@ func TestContextManagerAddItem(t *testing.T) {
 }
 
 func TestContextManagerCompression(t *testing.T) {
-	budget := NewContextBudget(1000)
-	manager := NewContextManager(budget)
-	manager.items = []ContextItem{
-		&fakeContextItem{tokens: 100, relevance: 0.05, priority: 5, age: time.Hour},
+	budget := core.NewContextBudget(1000)
+	budget.SetReservations(0, 0, 0)
+	manager := contextmgr.NewContextManager(budget)
+	if err := manager.AddItem(&fakeContextItem{tokens: 100, relevance: 0.05, priority: 5, age: time.Hour}); err != nil {
+		t.Fatalf("AddItem returned error: %v", err)
 	}
-	budget.mu.Lock()
-	budget.currentUsage.ContextUsagePercent = 0.85
-	budget.mu.Unlock()
+	usage := budget.GetCurrentUsage()
+	usage.ContextUsagePercent = 0.85
+	budget.SetCurrentUsage(usage)
 	if err := manager.MakeSpace(20); err != nil {
 		t.Fatalf("expected MakeSpace to succeed via compression, got %v", err)
 	}
 }
 
 func TestContextManagerPrune(t *testing.T) {
-	budget := NewContextBudget(1000)
-	manager := NewContextManager(budget)
-	manager.items = []ContextItem{
-		&fakeContextItem{tokens: 100, relevance: 0.0, priority: 5, age: 48 * time.Hour},
-		&fakeContextItem{tokens: 80, relevance: 0.0, priority: 6, age: 24 * time.Hour},
+	budget := core.NewContextBudget(1000)
+	budget.SetReservations(0, 0, 0)
+	manager := contextmgr.NewContextManager(budget)
+	if err := manager.AddItem(&fakeContextItem{tokens: 100, relevance: 0.0, priority: 5, age: 48 * time.Hour}); err != nil {
+		t.Fatalf("AddItem returned error: %v", err)
 	}
-	budget.mu.Lock()
-	budget.currentUsage.ContextUsagePercent = 0.95
-	budget.mu.Unlock()
+	if err := manager.AddItem(&fakeContextItem{tokens: 80, relevance: 0.0, priority: 6, age: 24 * time.Hour}); err != nil {
+		t.Fatalf("AddItem returned error: %v", err)
+	}
+	usage := budget.GetCurrentUsage()
+	usage.ContextUsagePercent = 0.95
+	budget.SetCurrentUsage(usage)
 	if err := manager.MakeSpace(50); err != nil {
 		t.Fatalf("expected pruning to succeed, got %v", err)
 	}
