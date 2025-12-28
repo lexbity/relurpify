@@ -1,12 +1,12 @@
 package fileops
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewTouchTool exposes the touch CLI utility.
-func NewTouchTool(basePath string) framework.Tool {
+func NewTouchTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_touch",
 		Description: "Creates empty files or updates timestamps via touch.",
