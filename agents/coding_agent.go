@@ -3,10 +3,12 @@ package agents
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"strings"
 	"sync"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // CodingAgent orchestrates multiple specialized modes inspired by the
@@ -14,21 +16,21 @@ import (
 // tool scopes and temperatures while keeping a consistent interface for the
 // runtime.
 type CodingAgent struct {
-	Model        framework.LanguageModel
-	Tools        *framework.ToolRegistry
-	Memory       framework.MemoryStore
-	Config       *framework.Config
+	Model        core.LanguageModel
+	Tools        *toolsys.ToolRegistry
+	Memory       memory.MemoryStore
+	Config       *core.Config
 	modeProfiles map[Mode]ModeProfile
 
 	mu        sync.Mutex
-	delegates map[Mode]framework.Agent
+	delegates map[Mode]graph.Agent
 }
 
 // Initialize wires configuration and default mode data.
-func (a *CodingAgent) Initialize(cfg *framework.Config) error {
+func (a *CodingAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
-		a.Tools = framework.NewToolRegistry()
+		a.Tools = toolsys.NewToolRegistry()
 	}
 
 	// If the config carries a manifest spec, apply its constraints
@@ -36,7 +38,7 @@ func (a *CodingAgent) Initialize(cfg *framework.Config) error {
 		// Apply tool matrix filtering (disable tools not in the matrix)
 		// Note: PermissionManager handles security (file access),
 		// but this matrix handles logical capability (can I even see the tool?).
-		framework.RestrictToolRegistryByMatrix(a.Tools, cfg.AgentSpec.Tools)
+		toolsys.RestrictToolRegistryByMatrix(a.Tools, cfg.AgentSpec.Tools)
 
 		// If mode profiles are not yet customized, we can inject the mode from spec
 		// The AgentRuntimeSpec defines one primary mode, but CodingAgent supports many.
@@ -55,15 +57,15 @@ func (a *CodingAgent) Initialize(cfg *framework.Config) error {
 		a.modeProfiles = defaultModeProfiles()
 	}
 	if a.delegates == nil {
-		a.delegates = make(map[Mode]framework.Agent)
+		a.delegates = make(map[Mode]graph.Agent)
 	}
 	return nil
 }
 
 // Capabilities aggregates capabilities from all modes.
-func (a *CodingAgent) Capabilities() []framework.Capability {
-	seen := map[framework.Capability]struct{}{}
-	var caps []framework.Capability
+func (a *CodingAgent) Capabilities() []core.Capability {
+	seen := map[core.Capability]struct{}{}
+	var caps []core.Capability
 	for _, profile := range a.modeProfiles {
 		for _, cap := range profile.Capabilities {
 			if _, ok := seen[cap]; ok {
@@ -77,7 +79,7 @@ func (a *CodingAgent) Capabilities() []framework.Capability {
 }
 
 // BuildGraph delegates to the default mode graph.
-func (a *CodingAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) {
+func (a *CodingAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	delegate, err := a.delegateForMode(defaultMode)
 	if err != nil {
 		return nil, err
@@ -88,7 +90,7 @@ func (a *CodingAgent) BuildGraph(task *framework.Task) (*framework.Graph, error)
 // Execute selects the correct mode and proxies execution to the underlying
 // pattern agent. The context is augmented with the mode metadata so downstream
 // tooling can render diagnostics.
-func (a *CodingAgent) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (a *CodingAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	mode := a.modeFromTask(task)
 	profile, ok := a.modeProfiles[mode]
 	if !ok {
@@ -122,7 +124,7 @@ func (a *CodingAgent) Execute(ctx context.Context, task *framework.Task, state *
 
 // modeFromTask inspects task metadata/context to decide which mode should own
 // execution. It defaults to the general coding mode when nothing is specified.
-func (a *CodingAgent) modeFromTask(task *framework.Task) Mode {
+func (a *CodingAgent) modeFromTask(task *core.Task) Mode {
 	if task == nil {
 		return defaultMode
 	}
@@ -143,7 +145,7 @@ func (a *CodingAgent) modeFromTask(task *framework.Task) Mode {
 
 // delegateForMode lazily instantiates the underlying agent for the requested
 // mode and reuses it on subsequent calls.
-func (a *CodingAgent) delegateForMode(mode Mode) (framework.Agent, error) {
+func (a *CodingAgent) delegateForMode(mode Mode) (graph.Agent, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if agent, ok := a.delegates[mode]; ok {
@@ -153,7 +155,7 @@ func (a *CodingAgent) delegateForMode(mode Mode) (framework.Agent, error) {
 	if !ok {
 		return nil, fmt.Errorf("mode %s not configured", mode)
 	}
-	var agent framework.Agent
+	var agent graph.Agent
 	switch mode {
 	case ModeArchitect:
 		agent = &PlannerAgent{Model: a.Model, Tools: a.scopedTools(profile.ToolScope), Memory: a.Memory}
@@ -191,29 +193,29 @@ func (a *CodingAgent) delegateForMode(mode Mode) (framework.Agent, error) {
 
 // scopedTools clones the global registry but drops tools outside the mode's
 // permission envelope.
-func (a *CodingAgent) scopedTools(scope ToolScope) *framework.ToolRegistry {
+func (a *CodingAgent) scopedTools(scope ToolScope) *toolsys.ToolRegistry {
 	if a.Tools == nil {
-		return framework.NewToolRegistry()
+		return toolsys.NewToolRegistry()
 	}
-	return a.Tools.CloneFiltered(func(tool framework.Tool) bool {
+	return a.Tools.CloneFiltered(func(tool core.Tool) bool {
 		return toolAllowed(tool, scope)
 	})
 }
 
 // toolAllowed checks whether the tool's declared permissions fit inside the
 // mode's scope before the agent exposes it to the LLM.
-func toolAllowed(tool framework.Tool, scope ToolScope) bool {
+func toolAllowed(tool core.Tool, scope ToolScope) bool {
 	perms := tool.Permissions()
 	if perms.Permissions == nil {
 		return true
 	}
 	for _, fs := range perms.Permissions.FileSystem {
 		switch fs.Action {
-		case framework.FileSystemWrite:
+		case core.FileSystemWrite:
 			if !scope.AllowWrite {
 				return false
 			}
-		case framework.FileSystemExecute:
+		case core.FileSystemExecute:
 			if !scope.AllowExecute {
 				return false
 			}
