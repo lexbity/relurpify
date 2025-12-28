@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 var errBinaryFile = errors.New("binary file detected")
@@ -19,17 +20,17 @@ var errBinaryFile = errors.New("binary file detected")
 // ReadFileTool reads files from disk.
 type ReadFileTool struct {
 	BasePath string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
-func (t *ReadFileTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *ReadFileTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *ReadFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *ReadFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -37,14 +38,14 @@ func (t *ReadFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID st
 func (t *ReadFileTool) Name() string        { return "file_read" }
 func (t *ReadFileTool) Description() string { return "Reads a UTF-8 file from disk." }
 func (t *ReadFileTool) Category() string    { return "file" }
-func (t *ReadFileTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{{Name: "path", Type: "string", Required: true}}
+func (t *ReadFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "path", Type: "string", Required: true}}
 }
-func (t *ReadFileTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ReadFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, path); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
 			return nil, err
 		}
 	}
@@ -60,7 +61,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, state *framework.Context, ar
 	if err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"content": string(data),
@@ -69,29 +70,29 @@ func (t *ReadFileTool) Execute(ctx context.Context, state *framework.Context, ar
 		},
 	}, nil
 }
-func (t *ReadFileTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *ReadFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return true
 }
 
-func (t *ReadFileTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemRead)}
+func (t *ReadFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
 }
 
 // WriteFileTool writes content to disk.
 type WriteFileTool struct {
 	BasePath string
 	Backup   bool
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
-func (t *WriteFileTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *WriteFileTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *WriteFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *WriteFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -99,17 +100,17 @@ func (t *WriteFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID s
 func (t *WriteFileTool) Name() string        { return "file_write" }
 func (t *WriteFileTool) Description() string { return "Writes content to a file with backup." }
 func (t *WriteFileTool) Category() string    { return "file" }
-func (t *WriteFileTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *WriteFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "path", Type: "string", Required: true},
 		{Name: "content", Type: "string", Required: true},
 	}
 }
-func (t *WriteFileTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *WriteFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemWrite, path); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
 			return nil, err
 		}
 	}
@@ -126,7 +127,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, state *framework.Context, a
 		if _, err := os.Stat(path); err == nil {
 			backup := path + ".bak"
 			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemWrite, backup); err != nil {
+				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, backup); err != nil {
 					return nil, fmt.Errorf("backup blocked: %w", err)
 				}
 			}
@@ -142,30 +143,30 @@ func (t *WriteFileTool) Execute(ctx context.Context, state *framework.Context, a
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
 }
-func (t *WriteFileTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *WriteFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return true
 }
 
-func (t *WriteFileTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemWrite)}
+func (t *WriteFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
 
 // ListFilesTool lists files filtered by pattern.
 type ListFilesTool struct {
 	BasePath string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
-func (t *ListFilesTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *ListFilesTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *ListFilesTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *ListFilesTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -173,17 +174,17 @@ func (t *ListFilesTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID s
 func (t *ListFilesTool) Name() string        { return "file_list" }
 func (t *ListFilesTool) Description() string { return "Lists files recursively using glob filtering." }
 func (t *ListFilesTool) Category() string    { return "file" }
-func (t *ListFilesTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *ListFilesTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 		{Name: "pattern", Type: "string", Required: false, Default: "*"},
 	}
 }
-func (t *ListFilesTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	dir := t.preparePath(fmt.Sprint(args["directory"]))
 
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, dir); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, dir); err != nil {
 			return nil, err
 		}
 	}
@@ -199,7 +200,7 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *framework.Context, a
 				return fs.SkipDir
 			}
 			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, path); err != nil {
+				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
 					return fs.SkipDir
 				}
 			}
@@ -207,7 +208,7 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *framework.Context, a
 		}
 
 		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, path); err != nil {
+			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
 				// Skip files we lack explicit read rights for rather than failing the request.
 				return nil
 			}
@@ -222,30 +223,30 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *framework.Context, a
 	if err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"files": files}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"files": files}}, nil
 }
-func (t *ListFilesTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *ListFilesTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return true
 }
 
-func (t *ListFilesTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemList)}
+func (t *ListFilesTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemList)}
 }
 
 // SearchInFilesTool greps for a pattern.
 type SearchInFilesTool struct {
 	BasePath string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
-func (t *SearchInFilesTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *SearchInFilesTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *SearchInFilesTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *SearchInFilesTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -253,18 +254,18 @@ func (t *SearchInFilesTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agent
 func (t *SearchInFilesTool) Name() string        { return "file_search" }
 func (t *SearchInFilesTool) Description() string { return "Searches text inside files." }
 func (t *SearchInFilesTool) Category() string    { return "file" }
-func (t *SearchInFilesTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *SearchInFilesTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 		{Name: "pattern", Type: "string", Required: true},
 	}
 }
-func (t *SearchInFilesTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	dir := t.preparePath(fmt.Sprint(args["directory"]))
 
 	if t.manager != nil {
 		// Search implies reading files
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, dir); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, dir); err != nil {
 			return nil, err
 		}
 	}
@@ -285,7 +286,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *framework.Contex
 				return fs.SkipDir
 			}
 			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemList, path); err != nil {
+				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
 					return fs.SkipDir
 				}
 			}
@@ -294,7 +295,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *framework.Contex
 
 		// Verify read access for each file while walking.
 		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemRead, path); err != nil {
+			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
 				return nil // Skip unreadable
 			}
 		}
@@ -321,30 +322,30 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *framework.Contex
 	if err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
-func (t *SearchInFilesTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *SearchInFilesTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return true
 }
 
-func (t *SearchInFilesTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemRead, framework.FileSystemList)}
+func (t *SearchInFilesTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
 
 // CreateFileTool creates a file from a template string.
 type CreateFileTool struct {
 	BasePath string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
-func (t *CreateFileTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *CreateFileTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *CreateFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *CreateFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -352,17 +353,17 @@ func (t *CreateFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID 
 func (t *CreateFileTool) Name() string        { return "file_create" }
 func (t *CreateFileTool) Description() string { return "Creates a new file if it does not exist." }
 func (t *CreateFileTool) Category() string    { return "file" }
-func (t *CreateFileTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *CreateFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "path", Type: "string", Required: true},
 		{Name: "content", Type: "string", Required: false},
 	}
 }
-func (t *CreateFileTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *CreateFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemWrite, path); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
 			return nil, err
 		}
 	}
@@ -379,31 +380,31 @@ func (t *CreateFileTool) Execute(ctx context.Context, state *framework.Context, 
 	if err := os.WriteFile(path, []byte(fmt.Sprint(args["content"])), 0o644); err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
 }
-func (t *CreateFileTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *CreateFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return true
 }
 
-func (t *CreateFileTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemWrite)}
+func (t *CreateFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
 
 // DeleteFileTool moves a file to .trash folder instead of deleting permanently.
 type DeleteFileTool struct {
 	BasePath string
 	TrashDir string
-	manager  *framework.PermissionManager
+	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *framework.AgentRuntimeSpec
+	spec     *core.AgentRuntimeSpec
 }
 
-func (t *DeleteFileTool) SetPermissionManager(manager *framework.PermissionManager, agentID string) {
+func (t *DeleteFileTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
 
-func (t *DeleteFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID string) {
+func (t *DeleteFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
 }
@@ -411,14 +412,14 @@ func (t *DeleteFileTool) SetAgentSpec(spec *framework.AgentRuntimeSpec, agentID 
 func (t *DeleteFileTool) Name() string        { return "file_delete" }
 func (t *DeleteFileTool) Description() string { return "Deletes a file after confirmation." }
 func (t *DeleteFileTool) Category() string    { return "file" }
-func (t *DeleteFileTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{{Name: "path", Type: "string", Required: true}}
+func (t *DeleteFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "path", Type: "string", Required: true}}
 }
-func (t *DeleteFileTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *DeleteFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
 	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, framework.FileSystemWrite, path); err != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
 			return nil, err
 		}
 	}
@@ -441,14 +442,14 @@ func (t *DeleteFileTool) Execute(ctx context.Context, state *framework.Context, 
 	if err := os.Rename(path, dest); err != nil {
 		return nil, err
 	}
-	return &framework.ToolResult{Success: true, Data: map[string]interface{}{"path": dest}}, nil
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"path": dest}}, nil
 }
-func (t *DeleteFileTool) IsAvailable(ctx context.Context, state *framework.Context) bool {
+func (t *DeleteFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 	return true
 }
 
-func (t *DeleteFileTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{Permissions: framework.NewFileSystemPermissionSet(t.BasePath, framework.FileSystemWrite)}
+func (t *DeleteFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
 
 func (t *ReadFileTool) preparePath(path string) string  { return preparePath(t.BasePath, path) }
@@ -520,7 +521,7 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-func enforceFileMatrix(ctx context.Context, manager *framework.PermissionManager, agentID, basePath, action, absPath string, matrix framework.AgentFileMatrix) error {
+func enforceFileMatrix(ctx context.Context, manager *runtime.PermissionManager, agentID, basePath, action, absPath string, matrix core.AgentFileMatrix) error {
 	rel := absPath
 	if basePath != "" {
 		if r, err := filepath.Rel(basePath, absPath); err == nil {
@@ -538,33 +539,33 @@ func enforceFileMatrix(ctx context.Context, manager *framework.PermissionManager
 	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
 		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
 	}
-	decision, _ := framework.DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
+	decision, _ := toolsys.DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
 	if perm.RequireApproval {
-		decision = framework.AgentPermissionAsk
+		decision = core.AgentPermissionAsk
 	}
 	switch decision {
-	case framework.AgentPermissionAllow:
+	case core.AgentPermissionAllow:
 		return nil
-	case framework.AgentPermissionDeny:
+	case core.AgentPermissionDeny:
 		return fmt.Errorf("file %s blocked: denied by file_permissions", rel)
-	case framework.AgentPermissionAsk:
+	case core.AgentPermissionAsk:
 		if manager == nil {
 			return fmt.Errorf("file %s blocked: approval required but permission manager missing", rel)
 		}
-		return manager.RequireApproval(ctx, agentID, framework.PermissionDescriptor{
-			Type:         framework.PermissionTypeHITL,
+		return manager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
+			Type:         core.PermissionTypeHITL,
 			Action:       fmt.Sprintf("file_matrix:%s", action),
 			Resource:     rel,
 			RequiresHITL: true,
-		}, "file permission matrix", framework.GrantScopeOneTime, framework.RiskLevelMedium, 0)
+		}, "file permission matrix", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0)
 	default:
 		return nil
 	}
 }
 
 // FileOperations registers default file tools into a registry.
-func FileOperations(basePath string) []framework.Tool {
-	return []framework.Tool{
+func FileOperations(basePath string) []core.Tool {
+	return []core.Tool{
 		&ReadFileTool{BasePath: basePath},
 		&WriteFileTool{BasePath: basePath, Backup: true},
 		&ListFilesTool{BasePath: basePath},
