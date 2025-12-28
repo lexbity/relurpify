@@ -90,7 +90,7 @@ Added concrete tooling that fulfills the required capabilities: multi-language L
 
 Implemented the complete agent stack: ReAct loops with JSON tool selection (agents/react.go (line 13)), planner/verification pipelines (agents/planner.go (line 11)), reflection/self-correction wrapper (agents/reflection.go (line 11)), and a coding-specialized workflow that chains analysis, modification, and validation on top of ReAct (agents/coder.go (line 10), helper UUID generator in agents/util.go (line 1)).
 
-Delivered integration layers so the framework can talk to a local Ollama server and editors: the Ollama client now satisfies framework.LanguageModel for completions, chat, streaming, and tool calls (llm/ollama.go (line 15)), the LSP server/API wire editor events to agents and expose HTTP endpoints for testing (server/lsp_server.go (line 16), server/api.go (line 13)).
+Delivered integration layers so the framework can talk to a local Ollama server and editors: the Ollama client now satisfies core.LanguageModel for completions, chat, streaming, and tool calls (llm/ollama.go (line 15)), the LSP server/API wire editor events to agents and expose HTTP endpoints for testing (server/lsp_server.go (line 16), server/api.go (line 13)).
 Rewrote the README with repository layout, onboarding steps, command references, and the full architecture flow so contributors can stand up the system quickly (README.md (line 3)).
 Tests
 
