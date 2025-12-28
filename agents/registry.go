@@ -2,13 +2,13 @@ package agents
 
 import (
 	"errors"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // RegistryOptions configures the agent discovery behavior.
@@ -22,7 +22,7 @@ type RegistryOptions struct {
 type Registry struct {
 	opts    RegistryOptions
 	mu      sync.RWMutex
-	agents  map[string]*framework.AgentManifest
+	agents  map[string]*manifest.AgentManifest
 	watchCh []chan struct{}
 	rules   *Ruleset
 	loaded  time.Time
@@ -32,7 +32,7 @@ type Registry struct {
 func NewRegistry(opts RegistryOptions) *Registry {
 	return &Registry{
 		opts:   opts,
-		agents: make(map[string]*framework.AgentManifest),
+		agents: make(map[string]*manifest.AgentManifest),
 	}
 }
 
@@ -40,7 +40,7 @@ func NewRegistry(opts RegistryOptions) *Registry {
 func (r *Registry) Load() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.agents = make(map[string]*framework.AgentManifest)
+	r.agents = make(map[string]*manifest.AgentManifest)
 	for _, dir := range r.searchPaths() {
 		r.loadDir(dir)
 	}
@@ -71,7 +71,7 @@ func (r *Registry) List() []AgentSummary {
 }
 
 // Get retrieves a manifest by name.
-func (r *Registry) Get(name string) (*framework.AgentManifest, bool) {
+func (r *Registry) Get(name string) (*manifest.AgentManifest, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	manifest, ok := r.agents[name]
@@ -118,7 +118,7 @@ func (r *Registry) loadDir(dir string) {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		if manifest, err := framework.LoadAgentManifest(path); err == nil {
+		if manifest, err := manifest.LoadAgentManifest(path); err == nil {
 			r.agents[manifest.Metadata.Name] = manifest
 		}
 	}
@@ -205,20 +205,20 @@ var ErrAgentNotFound = errors.New("agent not found")
 type AgentSummary struct {
 	Name        string
 	Description string
-	Mode        framework.AgentMode
+	Mode        core.AgentMode
 	Model       string
 	Source      string
 }
 
 // summarizeManifest converts the manifest metadata into a lightweight CLI view.
-func summarizeManifest(m *framework.AgentManifest, workspace string) AgentSummary {
+func summarizeManifest(m *manifest.AgentManifest, workspace string) AgentSummary {
 	source := m.SourcePath
 	if workspace != "" {
 		if rel, err := filepath.Rel(workspace, source); err == nil {
 			source = rel
 		}
 	}
-	var mode framework.AgentMode
+	var mode core.AgentMode
 	var modelName string
 	if m.Spec.Agent != nil {
 		mode = m.Spec.Agent.Mode
