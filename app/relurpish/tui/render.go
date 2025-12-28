@@ -111,7 +111,7 @@ func renderThinkingSection(steps []ThinkingStep, expanded bool, width int, spinn
 		if isLast && step.EndTime.IsZero() {
 			icon = spinnerView
 		}
-		
+
 		duration := ""
 		if !step.EndTime.IsZero() {
 			d := step.EndTime.Sub(step.StartTime)
