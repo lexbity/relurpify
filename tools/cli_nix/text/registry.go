@@ -1,10 +1,12 @@
 package text
 
-import "github.com/lexcodex/relurpify/framework"
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+)
 
 // Tools returns text-processing related CLI helpers.
-func Tools(basePath string) []framework.Tool {
-	return []framework.Tool{
+func Tools(basePath string) []core.Tool {
+	return []core.Tool{
 		NewAwkTool(basePath),
 		NewEchoTool(basePath),
 		NewSedTool(basePath),
