@@ -4,24 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
 	"strings"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // InstrumentedModel wraps a LanguageModel and emits telemetry for prompts and responses.
 type InstrumentedModel struct {
-	Inner     framework.LanguageModel
-	Telemetry framework.Telemetry
+	Inner     core.LanguageModel
+	Telemetry core.Telemetry
 	Debug     bool
 }
 
-func NewInstrumentedModel(inner framework.LanguageModel, telemetry framework.Telemetry, debug bool) *InstrumentedModel {
+func NewInstrumentedModel(inner core.LanguageModel, telemetry core.Telemetry, debug bool) *InstrumentedModel {
 	return &InstrumentedModel{Inner: inner, Telemetry: telemetry, Debug: debug}
 }
 
-func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
 	m.emitPrompt(ctx, "generate", map[string]interface{}{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
@@ -32,7 +31,7 @@ func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options
 	return resp, err
 }
 
-func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *framework.LLMOptions) (<-chan string, error) {
+func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
 	m.emitPrompt(ctx, "generate_stream", map[string]interface{}{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
@@ -43,12 +42,12 @@ func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, o
 	if err != nil {
 		m.emitResponse(ctx, "generate_stream", nil, err)
 	} else {
-		m.emitResponse(ctx, "generate_stream", &framework.LLMResponse{FinishReason: "stream"}, nil)
+		m.emitResponse(ctx, "generate_stream", &core.LLMResponse{FinishReason: "stream"}, nil)
 	}
 	return ch, err
 }
 
-func (m *InstrumentedModel) Chat(ctx context.Context, messages []framework.Message, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (m *InstrumentedModel) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
 	meta := chatMeta(messages, nil, options)
 	m.emitPrompt(ctx, "chat", meta.base, m.Debug, meta.debug)
 	resp, err := m.Inner.Chat(ctx, messages, options)
@@ -56,7 +55,7 @@ func (m *InstrumentedModel) Chat(ctx context.Context, messages []framework.Messa
 	return resp, err
 }
 
-func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []framework.Message, tools []framework.Tool, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
 	meta := chatMeta(messages, tools, options)
 	m.emitPrompt(ctx, "chat_with_tools", meta.base, m.Debug, meta.debug)
 	resp, err := m.Inner.ChatWithTools(ctx, messages, tools, options)
@@ -69,7 +68,7 @@ type chatMetaPayload struct {
 	debug map[string]interface{}
 }
 
-func chatMeta(messages []framework.Message, tools []framework.Tool, options *framework.LLMOptions) chatMetaPayload {
+func chatMeta(messages []core.Message, tools []core.Tool, options *core.LLMOptions) chatMetaPayload {
 	var roles []string
 	preview := make([]map[string]interface{}, 0, min(len(messages), 20))
 	for i, msg := range messages {
@@ -132,8 +131,8 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 			metadata[k] = v
 		}
 	}
-	m.Telemetry.Emit(framework.Event{
-		Type:      framework.EventLLMPrompt,
+	m.Telemetry.Emit(core.Event{
+		Type:      core.EventLLMPrompt,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s prompt", kind),
@@ -141,7 +140,7 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 	})
 }
 
-func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *framework.LLMResponse, err error) {
+func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *core.LLMResponse, err error) {
 	if m == nil || m.Telemetry == nil {
 		return
 	}
@@ -164,8 +163,8 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
-	m.Telemetry.Emit(framework.Event{
-		Type:      framework.EventLLMResponse,
+	m.Telemetry.Emit(core.Event{
+		Type:      core.EventLLMResponse,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s response", kind),
@@ -173,7 +172,7 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	})
 }
 
-func modelFromOptions(options *framework.LLMOptions) string {
+func modelFromOptions(options *core.LLMOptions) string {
 	if options != nil && options.Model != "" {
 		return options.Model
 	}
@@ -181,7 +180,7 @@ func modelFromOptions(options *framework.LLMOptions) string {
 }
 
 func taskInfo(ctx context.Context) (string, map[string]interface{}) {
-	task, ok := framework.TaskContextFrom(ctx)
+	task, ok := core.TaskContextFrom(ctx)
 	if !ok {
 		return "", nil
 	}
