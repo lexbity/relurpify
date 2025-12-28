@@ -1,12 +1,12 @@
 package fileops
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewLocateTool exposes the locate CLI.
-func NewLocateTool(basePath string) framework.Tool {
+func NewLocateTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_locate",
 		Description: "Queries the file database via locate.",
