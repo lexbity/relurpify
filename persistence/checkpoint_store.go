@@ -3,11 +3,10 @@ package persistence
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // CheckpointStore persists graph checkpoints to disk.
@@ -21,7 +20,7 @@ func NewCheckpointStore(basePath string) *CheckpointStore {
 }
 
 // Save writes the checkpoint to disk using task/checkpoint identifiers.
-func (cs *CheckpointStore) Save(checkpoint *framework.GraphCheckpoint) error {
+func (cs *CheckpointStore) Save(checkpoint *graph.GraphCheckpoint) error {
 	if checkpoint == nil {
 		return fmt.Errorf("nil checkpoint")
 	}
@@ -37,13 +36,13 @@ func (cs *CheckpointStore) Save(checkpoint *framework.GraphCheckpoint) error {
 }
 
 // Load retrieves a checkpoint from disk.
-func (cs *CheckpointStore) Load(taskID, checkpointID string) (*framework.GraphCheckpoint, error) {
+func (cs *CheckpointStore) Load(taskID, checkpointID string) (*graph.GraphCheckpoint, error) {
 	path := filepath.Join(cs.basePath, taskID, checkpointID+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var checkpoint framework.GraphCheckpoint
+	var checkpoint graph.GraphCheckpoint
 	if err := json.Unmarshal(data, &checkpoint); err != nil {
 		return nil, err
 	}
