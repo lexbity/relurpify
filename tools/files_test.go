@@ -3,19 +3,17 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 func TestReadWriteListFileTools(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
-	state := framework.NewContext()
+	state := core.NewContext()
 
 	writeTool := &WriteFileTool{BasePath: dir, Backup: true}
 	_, err := writeTool.Execute(ctx, state, map[string]interface{}{
@@ -46,7 +44,7 @@ func TestSearchInFilesTool(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("package main\n// TODO: fix bug\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), framework.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
 		"directory": ".",
 		"pattern":   "TODO",
 	})
