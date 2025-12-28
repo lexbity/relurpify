@@ -1,33 +1,34 @@
-package framework
+package framework_test
 
 import (
 	"context"
-	"testing"
-
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 // TestPermissionSetValidate ensures Validate catches missing paths/binaries and
 // accepts well-formed permission sets.
 func TestPermissionSetValidate(t *testing.T) {
-	valid := &PermissionSet{
-		FileSystem: []FileSystemPermission{
-			{Action: FileSystemRead, Path: "/workspace/**"},
+	valid := &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{
+			{Action: core.FileSystemRead, Path: "/workspace/**"},
 		},
-		Executables: []ExecutablePermission{
+		Executables: []core.ExecutablePermission{
 			{Binary: "go", Args: []string{"test"}},
 		},
 	}
 	require.NoError(t, valid.Validate())
 
-	invalid := &PermissionSet{
-		FileSystem: []FileSystemPermission{{Action: FileSystemRead}},
+	invalid := &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead}},
 	}
 	require.Error(t, invalid.Validate(), "missing path should fail validation")
 
-	badExec := &PermissionSet{
-		FileSystem: []FileSystemPermission{{Action: FileSystemRead, Path: "/**"}},
-		Executables: []ExecutablePermission{
+	badExec := &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "/**"}},
+		Executables: []core.ExecutablePermission{
 			{Binary: ""},
 		},
 	}
@@ -38,18 +39,18 @@ func TestPermissionSetValidate(t *testing.T) {
 // manifests cannot request filesystem scopes beyond the agent manifest.
 func TestPermissionManagerAuthorizeToolEnforcesSubset(t *testing.T) {
 	ctx := context.Background()
-	manager := newTestManager(t, "/workspace", &PermissionSet{
-		FileSystem: []FileSystemPermission{
-			{Action: FileSystemRead, Path: "/workspace/**"},
-			{Action: FileSystemList, Path: "/workspace/**"},
+	manager := newTestManager(t, "/workspace", &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{
+			{Action: core.FileSystemRead, Path: "/workspace/**"},
+			{Action: core.FileSystemList, Path: "/workspace/**"},
 		},
 	})
 
 	okTool := stubTool{
 		name: "list",
-		perms: &PermissionSet{
-			FileSystem: []FileSystemPermission{
-				{Action: FileSystemRead, Path: "/workspace/**"},
+		perms: &core.PermissionSet{
+			FileSystem: []core.FileSystemPermission{
+				{Action: core.FileSystemRead, Path: "/workspace/**"},
 			},
 		},
 	}
@@ -57,9 +58,9 @@ func TestPermissionManagerAuthorizeToolEnforcesSubset(t *testing.T) {
 
 	badTool := stubTool{
 		name: "escape",
-		perms: &PermissionSet{
-			FileSystem: []FileSystemPermission{
-				{Action: FileSystemRead, Path: "/etc/**"},
+		perms: &core.PermissionSet{
+			FileSystem: []core.FileSystemPermission{
+				{Action: core.FileSystemRead, Path: "/etc/**"},
 			},
 		},
 	}
@@ -72,37 +73,37 @@ func TestPermissionManagerAuthorizeToolEnforcesSubset(t *testing.T) {
 // traversal attempts and unauthorized actions.
 func TestPermissionManagerCheckFileAccess(t *testing.T) {
 	ctx := context.Background()
-	manager := newTestManager(t, "/workspace", &PermissionSet{
-		FileSystem: []FileSystemPermission{
-			{Action: FileSystemRead, Path: "/workspace/src/**"},
+	manager := newTestManager(t, "/workspace", &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{
+			{Action: core.FileSystemRead, Path: "/workspace/src/**"},
 		},
 	})
 
-	require.NoError(t, manager.CheckFileAccess(ctx, "agent-1", FileSystemRead, "src/main.go"))
+	require.NoError(t, manager.CheckFileAccess(ctx, "agent-1", core.FileSystemRead, "src/main.go"))
 
-	err := manager.CheckFileAccess(ctx, "agent-1", FileSystemRead, "../etc/passwd")
+	err := manager.CheckFileAccess(ctx, "agent-1", core.FileSystemRead, "../etc/passwd")
 	require.Error(t, err, "path traversal should be denied")
 
-	err = manager.CheckFileAccess(ctx, "agent-1", FileSystemWrite, "src/main.go")
+	err = manager.CheckFileAccess(ctx, "agent-1", core.FileSystemWrite, "src/main.go")
 	require.Error(t, err, "write action not declared should be denied")
 }
 
 // TestPermissionHelpers confirms helper constructors produce intuitive globs
 // and executable permissions.
 func TestPermissionHelpers(t *testing.T) {
-	fs := NewFileSystemPermissionSet("/workspace", FileSystemRead, FileSystemList)
+	fs := core.NewFileSystemPermissionSet("/workspace", core.FileSystemRead, core.FileSystemList)
 	require.Len(t, fs.FileSystem, 2)
 	require.Equal(t, "/workspace/**", fs.FileSystem[0].Path)
 
-	exec := NewExecutionPermissionSet("/workspace", "python3", []string{"script.py"})
+	exec := core.NewExecutionPermissionSet("/workspace", "python3", []string{"script.py"})
 	require.Len(t, exec.Executables, 1)
 	require.Equal(t, "python3", exec.Executables[0].Binary)
-	require.Contains(t, exec.FileSystem, FileSystemPermission{Action: FileSystemExecute, Path: "/workspace/**"})
+	require.Contains(t, exec.FileSystem, core.FileSystemPermission{Action: core.FileSystemExecute, Path: "/workspace/**"})
 }
 
 type stubTool struct {
 	name  string
-	perms *PermissionSet
+	perms *core.PermissionSet
 }
 
 // Name identifies the stub tool in registry lookups.
@@ -115,25 +116,27 @@ func (t stubTool) Description() string { return "stub" }
 func (t stubTool) Category() string { return "test" }
 
 // Parameters indicates the stub tool takes no arguments.
-func (t stubTool) Parameters() []ToolParameter { return nil }
+func (t stubTool) Parameters() []core.ToolParameter { return nil }
 
 // Execute returns a successful result so authorization paths can be tested in
 // isolation.
-func (t stubTool) Execute(context.Context, *Context, map[string]interface{}) (*ToolResult, error) {
-	return &ToolResult{Success: true}, nil
+func (t stubTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true}, nil
 }
 
 // IsAvailable indicates the stub is always ready to run.
-func (t stubTool) IsAvailable(context.Context, *Context) bool { return true }
+func (t stubTool) IsAvailable(context.Context, *core.Context) bool { return true }
 
 // Permissions returns the configured permission set for the stub tool.
-func (t stubTool) Permissions() ToolPermissions { return ToolPermissions{Permissions: t.perms} }
+func (t stubTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: t.perms}
+}
 
 // newTestManager is a helper that fails tests immediately when the permission
 // manager cannot be constructed.
-func newTestManager(t *testing.T, base string, perms *PermissionSet) *PermissionManager {
+func newTestManager(t *testing.T, base string, perms *core.PermissionSet) *runtime.PermissionManager {
 	t.Helper()
-	manager, err := NewPermissionManager(base, perms, nil, nil)
+	manager, err := runtime.NewPermissionManager(base, perms, nil, nil)
 	require.NoError(t, err)
 	return manager
 }
@@ -141,40 +144,40 @@ func newTestManager(t *testing.T, base string, perms *PermissionSet) *Permission
 func TestPermissionManagerHITLFlow(t *testing.T) {
 	ctx := context.Background()
 	hitl := &stubHITLProvider{
-		grants: []*PermissionGrant{{
+		grants: []*runtime.PermissionGrant{{
 			ID: "grant-1",
-			Permission: PermissionDescriptor{
-				Type:     PermissionTypeFilesystem,
-				Action:   string(FileSystemRead),
+			Permission: core.PermissionDescriptor{
+				Type:     core.PermissionTypeFilesystem,
+				Action:   string(core.FileSystemRead),
 				Resource: "/workspace/file.txt",
 			},
-			Scope: GrantScopeSession,
+			Scope: runtime.GrantScopeSession,
 		}},
 	}
-	perms := &PermissionSet{
-		FileSystem: []FileSystemPermission{{
-			Action:       FileSystemRead,
+	perms := &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{
+			Action:       core.FileSystemRead,
 			Path:         "/workspace/**",
 			HITLRequired: true,
 		}},
 	}
-	manager, err := NewPermissionManager("/workspace", perms, nil, hitl)
+	manager, err := runtime.NewPermissionManager("/workspace", perms, nil, hitl)
 	require.NoError(t, err)
 
-	require.NoError(t, manager.CheckFileAccess(ctx, "agent-hitl", FileSystemRead, "file.txt"))
+	require.NoError(t, manager.CheckFileAccess(ctx, "agent-hitl", core.FileSystemRead, "file.txt"))
 	require.Len(t, hitl.requests, 1, "expected HITL approval request")
 
-	require.NoError(t, manager.CheckFileAccess(ctx, "agent-hitl", FileSystemRead, "file.txt"))
+	require.NoError(t, manager.CheckFileAccess(ctx, "agent-hitl", core.FileSystemRead, "file.txt"))
 	require.Len(t, hitl.requests, 1, "cached grant should avoid duplicate HITL calls")
 }
 
 func TestPermissionManagerCapabilityCheck(t *testing.T) {
 	ctx := context.Background()
-	manager := newTestManager(t, "/workspace", &PermissionSet{
-		FileSystem: []FileSystemPermission{
-			{Action: FileSystemRead, Path: "/workspace/**"},
+	manager := newTestManager(t, "/workspace", &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{
+			{Action: core.FileSystemRead, Path: "/workspace/**"},
 		},
-		Capabilities: []CapabilityPermission{
+		Capabilities: []core.CapabilityPermission{
 			{Capability: "NET_ADMIN"},
 		},
 	})
@@ -184,18 +187,18 @@ func TestPermissionManagerCapabilityCheck(t *testing.T) {
 }
 
 type stubHITLProvider struct {
-	grants   []*PermissionGrant
-	requests []PermissionRequest
+	grants   []*runtime.PermissionGrant
+	requests []runtime.PermissionRequest
 }
 
-func (s *stubHITLProvider) RequestPermission(ctx context.Context, req PermissionRequest) (*PermissionGrant, error) {
+func (s *stubHITLProvider) RequestPermission(ctx context.Context, req runtime.PermissionRequest) (*runtime.PermissionGrant, error) {
 	s.requests = append(s.requests, req)
-	var grant *PermissionGrant
+	var grant *runtime.PermissionGrant
 	if len(s.grants) > 0 {
 		grant = s.grants[0]
 		s.grants = s.grants[1:]
 	} else {
-		grant = &PermissionGrant{}
+		grant = &runtime.PermissionGrant{}
 	}
 	if grant.Permission.Action == "" {
 		grant.Permission = req.Permission
