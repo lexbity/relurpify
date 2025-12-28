@@ -4,31 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // APIServer exposes HTTP endpoints for testing agents without an editor.
 type APIServer struct {
-	Agent   framework.Agent
-	Context *framework.Context
+	Agent   graph.Agent
+	Context *core.Context
 	Logger  *log.Logger
 }
 
 // TaskRequest describes incoming API payload.
 type TaskRequest struct {
 	Instruction string                 `json:"instruction"`
-	Type        framework.TaskType     `json:"type"`
+	Type        core.TaskType          `json:"type"`
 	Context     map[string]interface{} `json:"context"`
 }
 
 // TaskResponse describes API response.
 type TaskResponse struct {
-	Result *framework.Result `json:"result"`
-	Error  string            `json:"error,omitempty"`
+	Result *core.Result `json:"result"`
+	Error  string       `json:"error,omitempty"`
 }
 
 // Serve starts listening on the provided address.
@@ -81,11 +81,11 @@ func (s *APIServer) handleTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Type == "" {
-		req.Type = framework.TaskTypeCodeModification
+		req.Type = core.TaskTypeCodeModification
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	task := &framework.Task{
+	task := &core.Task{
 		ID:          time.Now().Format("20060102150405"),
 		Type:        req.Type,
 		Instruction: req.Instruction,
