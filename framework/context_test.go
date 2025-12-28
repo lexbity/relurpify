@@ -1,11 +1,14 @@
-package framework
+package framework_test
 
-import "testing"
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+	"testing"
+)
 
 // TestContextSnapshotRestore verifies snapshot and restore round-trips all
 // portions of the context (values, variables, history) without data loss.
 func TestContextSnapshotRestore(t *testing.T) {
-	ctx := NewContext()
+	ctx := core.NewContext()
 	ctx.Set("task.id", "123")
 	ctx.SetVariable("cursor", 42)
 	ctx.SetKnowledge("analysis", "done")
