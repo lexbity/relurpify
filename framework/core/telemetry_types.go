@@ -1,0 +1,50 @@
+package core
+
+import "time"
+
+// EventType categorizes telemetry events.
+type EventType string
+
+const (
+	EventGraphStart  EventType = "graph_start"
+	EventGraphFinish EventType = "graph_finish"
+	EventNodeStart   EventType = "node_start"
+	EventNodeFinish  EventType = "node_finish"
+	EventNodeError   EventType = "node_error"
+	EventAgentStart  EventType = "agent_start"
+	EventAgentFinish EventType = "agent_finish"
+	EventLLMPrompt   EventType = "llm_prompt"
+	EventLLMResponse EventType = "llm_response"
+	EventToolCall    EventType = "tool_call"
+	EventToolResult  EventType = "tool_result"
+	EventStateChange EventType = "state_change"
+)
+
+// Event captures structured telemetry data.
+type Event struct {
+	Type      EventType              `json:"type"`
+	NodeID    string                 `json:"node_id,omitempty"`
+	TaskID    string                 `json:"task_id,omitempty"`
+	Message   string                 `json:"message,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// Telemetry captures execution traces emitted by the graph runtime.
+type Telemetry interface {
+	Emit(event Event)
+}
+
+// ContextTelemetry extends telemetry with context-management specific signals.
+type ContextTelemetry interface {
+	OnContextCompression(taskID string, stats CompressionStats)
+	OnContextPruning(taskID string, itemsRemoved int, tokensFreed int)
+	OnBudgetExceeded(taskID string, attempted int, available int)
+}
+
+// CheckpointTelemetry extends telemetry with checkpoint lifecycle events.
+type CheckpointTelemetry interface {
+	OnCheckpointCreated(taskID string, checkpointID string, nodeID string)
+	OnCheckpointRestored(taskID string, checkpointID string)
+	OnGraphResume(taskID string, checkpointID string, nodeID string)
+}
