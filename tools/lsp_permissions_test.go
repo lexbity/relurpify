@@ -1,13 +1,12 @@
 package tools
 
 import (
+	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 func TestLSPToolPermissionsValidate(t *testing.T) {
-	tools := []framework.Tool{
+	tools := []core.Tool{
 		&DefinitionTool{},
 		&ReferencesTool{},
 		&HoverTool{},
