@@ -4,38 +4,37 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 type stubAgent struct{}
 
-func (stubAgent) Initialize(config *framework.Config) error { return nil }
-func (stubAgent) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (stubAgent) Initialize(config *core.Config) error { return nil }
+func (stubAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	state.Set("handled", true)
-	return &framework.Result{NodeID: "stub", Success: true, Data: map[string]interface{}{"ok": true}}, nil
+	return &core.Result{NodeID: "stub", Success: true, Data: map[string]interface{}{"ok": true}}, nil
 }
-func (stubAgent) Capabilities() []framework.Capability { return nil }
-func (stubAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) {
-	return framework.NewGraph(), nil
+func (stubAgent) Capabilities() []core.Capability { return nil }
+func (stubAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+	return graph.NewGraph(), nil
 }
 
 func TestAPIServerHandleTask(t *testing.T) {
 	api := &APIServer{
 		Agent:   stubAgent{},
-		Context: framework.NewContext(),
+		Context: core.NewContext(),
 		Logger:  log.New(io.Discard, "", 0),
 	}
 	reqBody, _ := json.Marshal(TaskRequest{
 		Instruction: "test",
-		Type:        framework.TaskTypeAnalysis,
+		Type:        core.TaskTypeAnalysis,
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/task", bytes.NewReader(reqBody))
