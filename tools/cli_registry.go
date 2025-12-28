@@ -1,7 +1,8 @@
 package tools
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
 	cliarchive "github.com/lexcodex/relurpify/tools/cli_nix/archive"
 	clibuild "github.com/lexcodex/relurpify/tools/cli_nix/build"
 	clifileops "github.com/lexcodex/relurpify/tools/cli_nix/fileops"
@@ -12,8 +13,8 @@ import (
 )
 
 // CommandLineTools exposes the default Unix-style CLI helpers.
-func CommandLineTools(basePath string, runner framework.CommandRunner) []framework.Tool {
-	sourceGroups := [][]framework.Tool{
+func CommandLineTools(basePath string, runner runtime.CommandRunner) []core.Tool {
+	sourceGroups := [][]core.Tool{
 		clitext.Tools(basePath),
 		clifileops.Tools(basePath),
 		clisystem.Tools(basePath),
@@ -23,7 +24,7 @@ func CommandLineTools(basePath string, runner framework.CommandRunner) []framewo
 		clischeduler.Tools(basePath),
 	}
 	seen := make(map[string]struct{})
-	var res []framework.Tool
+	var res []core.Tool
 	for _, group := range sourceGroups {
 		for _, tool := range group {
 			name := tool.Name()
@@ -35,7 +36,7 @@ func CommandLineTools(basePath string, runner framework.CommandRunner) []framewo
 		}
 	}
 	for i, tool := range res {
-		if setter, ok := tool.(interface{ SetCommandRunner(framework.CommandRunner) }); ok {
+		if setter, ok := tool.(interface{ SetCommandRunner(runtime.CommandRunner) }); ok {
 			setter.SetCommandRunner(runner)
 			res[i] = tool
 		}
