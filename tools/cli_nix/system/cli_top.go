@@ -1,12 +1,12 @@
 package system
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewTopTool exposes the top CLI.
-func NewTopTool(basePath string) framework.Tool {
+func NewTopTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_top",
 		Description: "Monitors processes interactively with top.",
