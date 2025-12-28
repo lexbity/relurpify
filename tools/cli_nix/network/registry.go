@@ -1,10 +1,12 @@
 package network
 
-import "github.com/lexcodex/relurpify/framework"
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+)
 
 // Tools returns networking helpers.
-func Tools(basePath string) []framework.Tool {
-	return []framework.Tool{
+func Tools(basePath string) []core.Tool {
+	return []core.Tool{
 		NewCurlTool(basePath),
 		NewWgetTool(basePath),
 		NewNCTool(basePath),
