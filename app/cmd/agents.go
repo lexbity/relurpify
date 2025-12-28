@@ -2,15 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
-
-	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // newAgentsCmd wires the `agents` command group.
@@ -77,59 +76,59 @@ func newAgentsCreateCmd() *cobra.Command {
 			}
 			wsGlob := filepath.ToSlash(filepath.Join(ws, "**"))
 			defaultToolCalling := true
-			manifest := framework.AgentManifest{
+			manifest := manifest.AgentManifest{
 				APIVersion: "relurpify/v1alpha1",
 				Kind:       "AgentManifest",
-				Metadata: framework.ManifestMetadata{
+				Metadata: manifest.ManifestMetadata{
 					Name:        name,
 					Version:     "1.0.0",
 					Description: description,
 				},
-				Spec: framework.ManifestSpec{
+				Spec: manifest.ManifestSpec{
 					Image:   "ghcr.io/relurpify/runtime:latest",
 					Runtime: "gvisor",
-					Permissions: framework.PermissionSet{
-						FileSystem: []framework.FileSystemPermission{
-							{Action: framework.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
-							{Action: framework.FileSystemList, Path: wsGlob, Justification: "List workspace"},
-							{Action: framework.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
+					Permissions: core.PermissionSet{
+						FileSystem: []core.FileSystemPermission{
+							{Action: core.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
+							{Action: core.FileSystemList, Path: wsGlob, Justification: "List workspace"},
+							{Action: core.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
 						},
-						Executables: []framework.ExecutablePermission{
+						Executables: []core.ExecutablePermission{
 							{Binary: "bash", Args: []string{"-c"}},
 							{Binary: "go", Args: []string{"*"}},
 						},
-						Network: []framework.NetworkPermission{
+						Network: []core.NetworkPermission{
 							{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434, Description: "Ollama"},
 						},
 					},
-					Resources: framework.ResourceSpec{
-						Limits: framework.ResourceLimit{
+					Resources: manifest.ResourceSpec{
+						Limits: manifest.ResourceLimit{
 							CPU:    "2",
 							Memory: "4Gi",
 							DiskIO: "500MBps",
 						},
 					},
-					Security: framework.SecuritySpec{
+					Security: manifest.SecuritySpec{
 						RunAsUser:       1000,
 						ReadOnlyRoot:    false,
 						NoNewPrivileges: true,
 					},
-					Audit: framework.AuditSpec{
+					Audit: manifest.AuditSpec{
 						Level:         "verbose",
 						RetentionDays: 7,
 					},
-					Agent: &framework.AgentRuntimeSpec{
-						Mode:              framework.AgentMode(kind),
+					Agent: &core.AgentRuntimeSpec{
+						Mode:              core.AgentMode(kind),
 						Version:           "1.0.0",
 						Prompt:            defaultManifestPrompt(name),
 						OllamaToolCalling: &defaultToolCalling,
-						Model: framework.AgentModelConfig{
+						Model: core.AgentModelConfig{
 							Provider:    "ollama",
 							Name:        model,
 							Temperature: 0.2,
 							MaxTokens:   4096,
 						},
-						Tools: framework.AgentToolMatrix{
+						Tools: core.AgentToolMatrix{
 							FileRead:       true,
 							FileWrite:      true,
 							FileEdit:       true,
@@ -137,25 +136,25 @@ func newAgentsCreateCmd() *cobra.Command {
 							LSPQuery:       true,
 							SearchCodebase: true,
 						},
-						Bash: framework.AgentBashPermissions{
-							Default:       framework.AgentPermissionAsk,
+						Bash: core.AgentBashPermissions{
+							Default:       core.AgentPermissionAsk,
 							AllowPatterns: []string{"git diff*", "git status"},
 							DenyPatterns:  []string{"rm -rf*", "sudo*"},
 						},
-						Files: framework.AgentFileMatrix{
-							Write: framework.AgentFilePermissionSet{AllowPatterns: []string{"**/*.go", "docs/**/*.md"}, Default: framework.AgentPermissionAsk},
-							Edit:  framework.AgentFilePermissionSet{Default: framework.AgentPermissionAsk, RequireApproval: true},
+						Files: core.AgentFileMatrix{
+							Write: core.AgentFilePermissionSet{AllowPatterns: []string{"**/*.go", "docs/**/*.md"}, Default: core.AgentPermissionAsk},
+							Edit:  core.AgentFilePermissionSet{Default: core.AgentPermissionAsk, RequireApproval: true},
 						},
-						Invocation: framework.AgentInvocationSpec{
+						Invocation: core.AgentInvocationSpec{
 							CanInvokeSubagents: true,
 							MaxDepth:           2,
 						},
-						Context: framework.AgentContextSpec{
+						Context: core.AgentContextSpec{
 							MaxFiles:            20,
 							MaxTokens:           20000,
 							IncludeDependencies: true,
 						},
-						Metadata: framework.AgentMetadata{
+						Metadata: core.AgentMetadata{
 							Author:   os.Getenv("USER"),
 							Tags:     []string{"generated"},
 							Priority: 5,
@@ -178,7 +177,7 @@ func newAgentsCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Agent name")
-	cmd.Flags().StringVar(&kind, "kind", string(framework.AgentModePrimary), "Agent kind (primary|subagent|system)")
+	cmd.Flags().StringVar(&kind, "kind", string(core.AgentModePrimary), "Agent kind (primary|subagent|system)")
 	cmd.Flags().StringVar(&model, "model", "", "Model name")
 	cmd.Flags().StringVar(&description, "description", "Custom agent", "Description")
 	return cmd
