@@ -3,56 +3,57 @@ package testsuite
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {
-	base := framework.NewContext()
+	base := core.NewContext()
 	base.Set("task.id", "graph-integration")
-	shared := framework.NewSharedContext(base, nil, &framework.SimpleSummarizer{})
+	shared := core.NewSharedContext(base, nil, &core.SimpleSummarizer{})
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "main.go")
 	content := strings.Repeat("func hi() {}\n", 20)
-	if _, err := shared.AddFile(filePath, content, "go", framework.DetailFull); err != nil {
+	if _, err := shared.AddFile(filePath, content, "go", core.DetailFull); err != nil {
 		t.Fatalf("AddFile failed: %v", err)
 	}
 	for i := 0; i < 12; i++ {
 		shared.AddInteraction("user", fmt.Sprintf("message %d", i), nil)
 	}
 
-	memoryStore, err := framework.NewHybridMemory(t.TempDir())
+	memoryStore, err := memory.NewHybridMemory(t.TempDir())
 	if err != nil {
 		t.Fatalf("memory init failed: %v", err)
 	}
-	if err := memoryStore.Remember(context.Background(), "plan", map[string]interface{}{"status": "draft"}, framework.MemoryScopeProject); err != nil {
+	if err := memoryStore.Remember(context.Background(), "plan", map[string]interface{}{"status": "draft"}, memory.MemoryScopeProject); err != nil {
 		t.Fatalf("remember failed: %v", err)
 	}
 
-	strategy := framework.NewSimpleCompressionStrategy()
+	strategy := core.NewSimpleCompressionStrategy()
 	llm := &fakeLLM{text: "Summary: done\nKey Facts: []"}
-	graph := framework.NewGraph()
-	worker := &recordingNode{id: "worker", run: func(state *framework.Context) {
+	g := graph.NewGraph()
+	worker := &recordingNode{id: "worker", run: func(state *core.Context) {
 		state.Set("resume.history", len(state.History()))
 	}}
-	done := framework.NewTerminalNode("done")
-	if err := graph.AddNode(worker); err != nil {
+	done := graph.NewTerminalNode("done")
+	if err := g.AddNode(worker); err != nil {
 		t.Fatalf("add worker: %v", err)
 	}
-	if err := graph.AddNode(done); err != nil {
+	if err := g.AddNode(done); err != nil {
 		t.Fatalf("add terminal: %v", err)
 	}
-	if err := graph.AddEdge(worker.ID(), done.ID(), nil, false); err != nil {
+	if err := g.AddEdge(worker.ID(), done.ID(), nil, false); err != nil {
 		t.Fatalf("edge worker->done: %v", err)
 	}
-	if err := graph.SetStart(worker.ID()); err != nil {
+	if err := g.SetStart(worker.ID()); err != nil {
 		t.Fatalf("set start: %v", err)
 	}
 
-	checkpoint, err := graph.CreateCompressedCheckpoint("graph-integration", worker.ID(), shared.Context, llm, strategy)
+	checkpoint, err := g.CreateCompressedCheckpoint("graph-integration", worker.ID(), shared.Context, llm, strategy)
 	if err != nil {
 		t.Fatalf("CreateCompressedCheckpoint error: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {
 		t.Fatalf("expected history trimmed to %d entries, got %d", strategy.KeepRecent(), len(checkpoint.Context.History()))
 	}
 
-	result, err := graph.ResumeFromCheckpoint(context.Background(), checkpoint)
+	result, err := g.ResumeFromCheckpoint(context.Background(), checkpoint)
 	if err != nil {
 		t.Fatalf("ResumeFromCheckpoint error: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {
 		t.Fatalf("expected resume history %d, got %v", strategy.KeepRecent(), value)
 	}
 
-	record, ok, err := memoryStore.Recall(context.Background(), "plan", framework.MemoryScopeProject)
+	record, ok, err := memoryStore.Recall(context.Background(), "plan", memory.MemoryScopeProject)
 	if err != nil || !ok {
 		t.Fatalf("expected memory recall to succeed, err=%v", err)
 	}
@@ -84,13 +85,13 @@ func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {
 }
 
 func TestSharedContextBudgetCompressionFlow(t *testing.T) {
-	ctx := framework.NewContext()
-	budget := framework.NewContextBudget(256)
+	ctx := core.NewContext()
+	budget := core.NewContextBudget(256)
 	budget.SetReservations(0, 0, 0)
-	shared := framework.NewSharedContext(ctx, budget, &framework.SimpleSummarizer{})
+	shared := core.NewSharedContext(ctx, budget, &core.SimpleSummarizer{})
 	filePath := filepath.Join(t.TempDir(), "large.go")
 	content := strings.Repeat("func big() {}\n", 200)
-	fc, err := shared.AddFile(filePath, content, "go", framework.DetailFull)
+	fc, err := shared.AddFile(filePath, content, "go", core.DetailFull)
 	if err != nil {
 		t.Fatalf("AddFile failed: %v", err)
 	}
@@ -98,15 +99,15 @@ func TestSharedContextBudgetCompressionFlow(t *testing.T) {
 		shared.AddInteraction("user", strings.Repeat("step "+fmt.Sprint(i)+" ", 40), nil)
 	}
 	budget.UpdateUsage(shared.Context, nil)
-	if budget.CheckBudget() == framework.BudgetOK {
+	if budget.CheckBudget() == core.BudgetOK {
 		t.Fatal("expected budget pressure after loading context")
 	}
 
 	shared.OnBudgetWarning(0.9)
-	if fc.Level != framework.DetailSummary {
+	if fc.Level != core.DetailSummary {
 		t.Fatalf("expected file downgraded to summary, got %v", fc.Level)
 	}
-	strategy := framework.NewSimpleCompressionStrategy()
+	strategy := core.NewSimpleCompressionStrategy()
 	llm := &fakeLLM{text: "Summary: trimmed\nKey Facts: []"}
 	if err := shared.Context.CompressHistory(strategy.KeepRecent(), llm, strategy); err != nil {
 		t.Fatalf("CompressHistory error: %v", err)
@@ -118,31 +119,31 @@ func TestSharedContextBudgetCompressionFlow(t *testing.T) {
 }
 
 func TestGraphParallelExecution(t *testing.T) {
-	graph := framework.NewGraph()
+	g := graph.NewGraph()
 
 	// Start Node
 	start := &recordingNode{id: "start"}
 	// Branch A: sets "a"=1
-	branchA := &recordingNode{id: "branchA", run: func(state *framework.Context) {
+	branchA := &recordingNode{id: "branchA", run: func(state *core.Context) {
 		state.Set("val.a", 1)
 	}}
 	// Branch B: sets "b"=2
-	branchB := &recordingNode{id: "branchB", run: func(state *framework.Context) {
+	branchB := &recordingNode{id: "branchB", run: func(state *core.Context) {
 		state.Set("val.b", 2)
 	}}
 	// Merge Node (implicitly happens when branches join)
-	end := framework.NewTerminalNode("end")
+	end := graph.NewTerminalNode("end")
 
-	graph.AddNode(start)
-	graph.AddNode(branchA)
-	graph.AddNode(branchB)
-	graph.AddNode(end)
+	g.AddNode(start)
+	g.AddNode(branchA)
+	g.AddNode(branchB)
+	g.AddNode(end)
 
-	graph.SetStart("start")
+	g.SetStart("start")
 
 	// Split: Start -> A (Parallel), Start -> B (Parallel)
-	graph.AddEdge("start", "branchA", nil, true)
-	graph.AddEdge("start", "branchB", nil, true)
+	g.AddEdge("start", "branchA", nil, true)
+	g.AddEdge("start", "branchB", nil, true)
 
 	// Join: A -> End, B -> End
 	// Note: The framework supports merging context from parallel branches.
@@ -170,12 +171,12 @@ func TestGraphParallelExecution(t *testing.T) {
 	// Both will merge "End" modifications back.
 	//
 	// To verify state merge, we just need A and B to set variables.
-	
-	graph.AddEdge("branchA", "end", nil, false)
-	graph.AddEdge("branchB", "end", nil, false)
 
-	ctx := framework.NewContext()
-	_, err := graph.Execute(context.Background(), ctx)
+	g.AddEdge("branchA", "end", nil, false)
+	g.AddEdge("branchB", "end", nil, false)
+
+	ctx := core.NewContext()
+	_, err := g.Execute(context.Background(), ctx)
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
@@ -193,31 +194,31 @@ func TestGraphParallelExecution(t *testing.T) {
 
 type recordingNode struct {
 	id  string
-	run func(*framework.Context)
+	run func(*core.Context)
 }
 
-func (n *recordingNode) ID() string               { return n.id }
-func (n *recordingNode) Type() framework.NodeType { return framework.NodeTypeSystem }
-func (n *recordingNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *recordingNode) ID() string           { return n.id }
+func (n *recordingNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *recordingNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	if n.run != nil {
 		n.run(state)
 	}
-	return &framework.Result{NodeID: n.id, Success: true}, nil
+	return &core.Result{NodeID: n.id, Success: true}, nil
 }
 
 type fakeLLM struct {
 	text string
 }
 
-func (f *fakeLLM) Generate(ctx context.Context, prompt string, options *framework.LLMOptions) (*framework.LLMResponse, error) {
-	return &framework.LLMResponse{Text: f.text}, nil
+func (f *fakeLLM) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{Text: f.text}, nil
 }
-func (f *fakeLLM) GenerateStream(ctx context.Context, prompt string, options *framework.LLMOptions) (<-chan string, error) {
+func (f *fakeLLM) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLLM) Chat(ctx context.Context, messages []framework.Message, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (f *fakeLLM) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLLM) ChatWithTools(ctx context.Context, messages []framework.Message, tools []framework.Tool, options *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (f *fakeLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
