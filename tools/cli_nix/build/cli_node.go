@@ -1,12 +1,12 @@
 package build
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewNodeTool exposes the node CLI for running JavaScript inside the workspace.
-func NewNodeTool(basePath string) framework.Tool {
+func NewNodeTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_node",
 		Description: "Executes Node.js commands inside the workspace.",
@@ -14,4 +14,3 @@ func NewNodeTool(basePath string) framework.Tool {
 		Category:    "cli_build",
 	})
 }
-
