@@ -3,23 +3,22 @@ package agenttest
 import (
 	"bufio"
 	"encoding/json"
+	"github.com/lexcodex/relurpify/framework/core"
 	"os"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
-func ReadTelemetryJSONL(path string) ([]framework.Event, error) {
+func ReadTelemetryJSONL(path string) ([]core.Event, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	var events []framework.Event
+	var events []core.Event
 	sc := bufio.NewScanner(f)
 	// Allow large lines (debug prompt logging).
 	sc.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	for sc.Scan() {
-		var ev framework.Event
+		var ev core.Event
 		if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
 			continue
 		}
@@ -31,10 +30,10 @@ func ReadTelemetryJSONL(path string) ([]framework.Event, error) {
 	return events, nil
 }
 
-func CountToolCalls(events []framework.Event) (total int, byTool map[string]int) {
+func CountToolCalls(events []core.Event) (total int, byTool map[string]int) {
 	byTool = make(map[string]int)
 	for _, ev := range events {
-		if ev.Type != framework.EventToolCall {
+		if ev.Type != core.EventToolCall {
 			continue
 		}
 		total++
