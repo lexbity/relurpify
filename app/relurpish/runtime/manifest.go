@@ -3,13 +3,13 @@ package runtime
 import (
 	"context"
 	"errors"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
-	"gopkg.in/yaml.v3"
 )
 
 // PermissionProfile controls how aggressively the generated manifest grants
@@ -78,35 +78,35 @@ func SaveManifest(ctx context.Context, cfg Config, selection WizardSelection) (M
 		profile = DefaultPermissionProfile()
 	}
 	perms := buildPermissionSet(cfg.Workspace, profile)
-	manifest := framework.AgentManifest{
+	agentManifest := manifest.AgentManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",
-		Metadata: framework.ManifestMetadata{
+		Metadata: manifest.ManifestMetadata{
 			Name:        agentName,
 			Version:     time.Now().Format("20060102"),
 			Description: buildManifestDescription(selection),
 		},
-		Spec: framework.ManifestSpec{
+		Spec: manifest.ManifestSpec{
 			Image:       "ghcr.io/relurpify/runtime:latest",
 			Runtime:     "gvisor",
 			Permissions: perms,
-			Resources: framework.ResourceSpec{Limits: framework.ResourceLimit{
+			Resources: manifest.ResourceSpec{Limits: manifest.ResourceLimit{
 				CPU:    "2",
 				Memory: "4Gi",
 				DiskIO: "500MBps",
 			}},
-			Security: framework.SecuritySpec{
+			Security: manifest.SecuritySpec{
 				RunAsUser:       1000,
 				ReadOnlyRoot:    false,
 				NoNewPrivileges: true,
 			},
-			Audit: framework.AuditSpec{
+			Audit: manifest.AuditSpec{
 				Level:         "verbose",
 				RetentionDays: 7,
 			},
 		},
 	}
-	data, err := yaml.Marshal(manifest)
+	data, err := yaml.Marshal(agentManifest)
 	if err != nil {
 		return ManifestSummary{}, err
 	}
@@ -131,23 +131,23 @@ func SaveManifest(ctx context.Context, cfg Config, selection WizardSelection) (M
 
 // buildPermissionSet creates the filesystem/network grants implied by the
 // wizard profile selection.
-func buildPermissionSet(workspace string, profile PermissionProfile) framework.PermissionSet {
+func buildPermissionSet(workspace string, profile PermissionProfile) core.PermissionSet {
 	glob := workspaceGlob(workspace)
-	perms := framework.PermissionSet{
-		FileSystem: []framework.FileSystemPermission{
-			{Action: framework.FileSystemRead, Path: glob, Justification: "Read workspace"},
-			{Action: framework.FileSystemList, Path: glob, Justification: "List workspace"},
+	perms := core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{
+			{Action: core.FileSystemRead, Path: glob, Justification: "Read workspace"},
+			{Action: core.FileSystemList, Path: glob, Justification: "List workspace"},
 		},
-		Executables: []framework.ExecutablePermission{
+		Executables: []core.ExecutablePermission{
 			{Binary: "go", Args: []string{"*"}},
 			{Binary: "bash", Args: []string{"-c"}},
 		},
-		Network: []framework.NetworkPermission{
+		Network: []core.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434, Description: "Ollama"},
 		},
 	}
 	if profile == PermissionProfileWorkspaceWrite {
-		perms.FileSystem = append(perms.FileSystem, framework.FileSystemPermission{Action: framework.FileSystemWrite, Path: glob, Justification: "Modify workspace"})
+		perms.FileSystem = append(perms.FileSystem, core.FileSystemPermission{Action: core.FileSystemWrite, Path: glob, Justification: "Modify workspace"})
 	}
 	return perms
 }
@@ -193,7 +193,7 @@ func summarizeManifest(path string) ManifestSummary {
 	}
 	summary.Exists = true
 	summary.UpdatedAt = info.ModTime()
-	manifest, err := framework.LoadAgentManifest(path)
+	manifest, err := manifest.LoadAgentManifest(path)
 	if err != nil {
 		summary.Error = err.Error()
 		return summary
