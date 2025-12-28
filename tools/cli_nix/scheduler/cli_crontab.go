@@ -1,12 +1,12 @@
 package scheduler
 
 import (
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
 // NewCrontabTool exposes the crontab CLI.
-func NewCrontabTool(basePath string) framework.Tool {
+func NewCrontabTool(basePath string) core.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_crontab",
 		Description: "Edits or lists cron jobs via crontab.",
