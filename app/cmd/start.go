@@ -3,17 +3,19 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/agents"
+	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
+	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/telemetry"
+	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/llm"
+	"github.com/spf13/cobra"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/spf13/cobra"
-
-	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework"
-	"github.com/lexcodex/relurpify/llm"
 )
 
 // newStartCmd constructs the `relurpify start` CLI command that runs an agent.
@@ -82,13 +84,13 @@ func newStartCmd() *cobra.Command {
 			}
 			client := llm.NewClient(defaultEndpoint(), modelName)
 			client.SetDebugLogging(logLLM)
-			runtimeCfg := runtime.DefaultConfig()
+			runtimeCfg := appruntime.DefaultConfig()
 			runtimeCfg.Workspace = ws
 			runtimeCfg.ManifestPath = manifest.SourcePath
 			if err := runtimeCfg.Normalize(); err != nil {
 				return err
 			}
-			registration, err := framework.RegisterAgent(runCtx, framework.RuntimeConfig{
+			registration, err := fruntime.RegisterAgent(runCtx, fruntime.RuntimeConfig{
 				ManifestPath: runtimeCfg.ManifestPath,
 				Sandbox:      runtimeCfg.Sandbox,
 				AuditLimit:   runtimeCfg.AuditLimit,
@@ -98,11 +100,11 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			runner, err := framework.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, runtimeCfg.Workspace)
+			runner, err := fruntime.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, runtimeCfg.Workspace)
 			if err != nil {
 				return err
 			}
-			tools, err := runtime.BuildToolRegistry(ws, runner, runtime.ToolRegistryOptions{
+			tools, err := appruntime.BuildToolRegistry(ws, runner, appruntime.ToolRegistryOptions{
 				AgentID:           registration.ID,
 				PermissionManager: registration.Permissions,
 				AgentSpec:         spec,
@@ -110,15 +112,15 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			framework.RestrictToolRegistryByMatrix(tools, spec.Tools)
+			toolsys.RestrictToolRegistryByMatrix(tools, spec.Tools)
 			tools.UseAgentSpec(registration.ID, spec)
-			telemetry := framework.LoggerTelemetry{Logger: log.Default()}
+			telemetry := telemetry.LoggerTelemetry{Logger: log.Default()}
 			tools.UseTelemetry(telemetry)
 			if registration.Permissions != nil {
 				tools.UsePermissionManager(registration.ID, registration.Permissions)
 			}
 			memoryPath := filepath.Join(ws, "relurpify_cfg", "memory")
-			memory, err := framework.NewHybridMemory(memoryPath)
+			memory, err := memory.NewHybridMemory(memoryPath)
 			if err != nil {
 				return err
 			}
@@ -127,7 +129,7 @@ func newStartCmd() *cobra.Command {
 				Tools:  tools,
 				Memory: memory,
 			}
-			cfg := &framework.Config{
+			cfg := &core.Config{
 				Name:              agentName,
 				Model:             modelName,
 				OllamaEndpoint:    defaultEndpoint(),
@@ -142,15 +144,15 @@ func newStartCmd() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			task := &framework.Task{
+			task := &core.Task{
 				ID:          fmt.Sprintf("cli-%d", time.Now().UnixNano()),
 				Instruction: instruction,
-				Type:        framework.TaskTypeCodeGeneration,
+				Type:        core.TaskTypeCodeGeneration,
 				Context: map[string]any{
 					"mode": mode,
 				},
 			}
-			state := framework.NewContext()
+			state := core.NewContext()
 			state.Set("task.id", task.ID)
 			state.Set("task.type", string(task.Type))
 			state.Set("task.instruction", task.Instruction)
