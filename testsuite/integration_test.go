@@ -3,14 +3,17 @@ package testsuite
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/search"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/lexcodex/relurpify/framework"
-	"github.com/lexcodex/relurpify/framework/ast"
 )
 
 func TestGraphToolExecutionIntegration(t *testing.T) {
@@ -22,13 +25,13 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 		t.Fatalf("write note: %v", err)
 	}
 
-	perms := framework.NewFileSystemPermissionSet(base, framework.FileSystemRead, framework.FileSystemList)
-	manager, err := framework.NewPermissionManager(base, perms, nil, nil)
+	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead, core.FileSystemList)
+	manager, err := runtime.NewPermissionManager(base, perms, nil, nil)
 	if err != nil {
 		t.Fatalf("permission manager: %v", err)
 	}
 
-	registry := framework.NewToolRegistry()
+	registry := toolsys.NewToolRegistry()
 	fileTool := &integrationFileTool{
 		name: "read_note",
 		base: base,
@@ -43,9 +46,9 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 		t.Fatalf("wrapped tool missing")
 	}
 
-	graph := framework.NewGraph()
+	g := graph.NewGraph()
 	telemetry := &recordingTelemetry{}
-	graph.SetTelemetry(telemetry)
+	g.SetTelemetry(telemetry)
 
 	llmNode := &llmPlanNode{
 		name:   "planner",
@@ -59,7 +62,7 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 	}
 	condNode := &stateConditionalNode{
 		name: "gate",
-		decide: func(state *framework.Context) (string, error) {
+		decide: func(state *core.Context) (string, error) {
 			status, _ := state.Get("use-tool.status")
 			if fmt.Sprint(status) == "ok" {
 				return "done", nil
@@ -67,32 +70,32 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 			return "", fmt.Errorf("tool status missing")
 		},
 	}
-	terminal := framework.NewTerminalNode("done")
+	terminal := graph.NewTerminalNode("done")
 
-	for _, node := range []framework.Node{llmNode, toolNode, condNode, terminal} {
-		if err := graph.AddNode(node); err != nil {
+	for _, node := range []graph.Node{llmNode, toolNode, condNode, terminal} {
+		if err := g.AddNode(node); err != nil {
 			t.Fatalf("add node %s: %v", node.ID(), err)
 		}
 	}
-	if err := graph.SetStart(llmNode.ID()); err != nil {
+	if err := g.SetStart(llmNode.ID()); err != nil {
 		t.Fatalf("set start: %v", err)
 	}
-	if err := graph.AddEdge(llmNode.ID(), toolNode.ID(), nil, false); err != nil {
+	if err := g.AddEdge(llmNode.ID(), toolNode.ID(), nil, false); err != nil {
 		t.Fatalf("edge planner->tool: %v", err)
 	}
-	if err := graph.AddEdge(toolNode.ID(), condNode.ID(), nil, false); err != nil {
+	if err := g.AddEdge(toolNode.ID(), condNode.ID(), nil, false); err != nil {
 		t.Fatalf("edge tool->gate: %v", err)
 	}
-	if err := graph.AddEdge(condNode.ID(), terminal.ID(), func(result *framework.Result, _ *framework.Context) bool {
+	if err := g.AddEdge(condNode.ID(), terminal.ID(), func(result *core.Result, _ *core.Context) bool {
 		next, _ := result.Data["next"].(string)
 		return next == "done"
 	}, false); err != nil {
 		t.Fatalf("edge gate->done: %v", err)
 	}
 
-	state := framework.NewContext()
+	state := core.NewContext()
 	state.Set("task.id", "graph-tool")
-	result, err := graph.Execute(context.Background(), state)
+	result, err := g.Execute(context.Background(), state)
 	if err != nil {
 		t.Fatalf("graph execute: %v", err)
 	}
@@ -106,10 +109,10 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 	if len(state.History()) < 2 {
 		t.Fatalf("expected llm and tool interactions recorded, got %d", len(state.History()))
 	}
-	if telemetry.count(framework.EventGraphStart) != 1 || telemetry.count(framework.EventGraphFinish) != 1 {
+	if telemetry.count(core.EventGraphStart) != 1 || telemetry.count(core.EventGraphFinish) != 1 {
 		t.Fatalf("graph telemetry mismatch: %+v", telemetry.events)
 	}
-	if telemetry.count(framework.EventNodeStart) != 4 || telemetry.count(framework.EventNodeFinish) != 4 {
+	if telemetry.count(core.EventNodeStart) != 4 || telemetry.count(core.EventNodeFinish) != 4 {
 		t.Fatalf("node telemetry mismatch: %+v", telemetry.events)
 	}
 }
@@ -139,7 +142,7 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 	}
 	codeIndex := &astCodeIndex{store: store}
 	vector := &stubVectorStore{
-		results: []framework.VectorMatch{{
+		results: []search.VectorMatch{{
 			ID:      "semantic-1",
 			Content: "notes mention highlight integration",
 			Metadata: map[string]any{
@@ -148,10 +151,10 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 			Score: 0.91,
 		}},
 	}
-	engine := framework.NewSearchEngine(vector, codeIndex)
-	results, err := engine.Search(framework.SearchQuery{
+	engine := search.NewSearchEngine(vector, codeIndex)
+	results, err := engine.Search(search.SearchQuery{
 		Text:       "HighlightFeature",
-		Mode:       framework.SearchHybrid,
+		Mode:       search.SearchHybrid,
 		MaxResults: 4,
 	})
 	if err != nil {
@@ -161,7 +164,7 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 		t.Fatal("expected hybrid search results")
 	}
 
-	shared := framework.NewSharedContext(framework.NewContext(), framework.NewContextBudget(4096), &framework.SimpleSummarizer{})
+	shared := core.NewSharedContext(core.NewContext(), core.NewContextBudget(4096), &core.SimpleSummarizer{})
 	seen := make(map[string]struct{})
 	for _, result := range results {
 		if result.File == "" {
@@ -180,7 +183,7 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 		} else if strings.HasSuffix(strings.ToLower(result.File), ".md") {
 			lang = "markdown"
 		}
-		if _, err := shared.AddFile(result.File, string(data), lang, framework.DetailFull); err != nil {
+		if _, err := shared.AddFile(result.File, string(data), lang, core.DetailFull); err != nil {
 			t.Fatalf("AddFile %s: %v", result.File, err)
 		}
 		seen[result.File] = struct{}{}
@@ -202,7 +205,7 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 
 	shared.OnBudgetWarning(0.95)
 	if fc, ok := shared.GetFile(goFile); ok {
-		if fc.Level != framework.DetailSummary || fc.Content != "" {
+		if fc.Level != core.DetailSummary || fc.Content != "" {
 			t.Fatalf("expected go file downgraded to summary, got level=%v content len=%d", fc.Level, len(fc.Content))
 		}
 	}
@@ -210,16 +213,16 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 
 type recordingTelemetry struct {
 	mu     sync.Mutex
-	events []framework.Event
+	events []core.Event
 }
 
-func (r *recordingTelemetry) Emit(event framework.Event) {
+func (r *recordingTelemetry) Emit(event core.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
 }
 
-func (r *recordingTelemetry) count(eventType framework.EventType) int {
+func (r *recordingTelemetry) count(eventType core.EventType) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	total := 0
@@ -240,19 +243,19 @@ type integrationFileTool struct {
 func (t *integrationFileTool) Name() string        { return t.name }
 func (t *integrationFileTool) Description() string { return "reads a workspace note" }
 func (t *integrationFileTool) Category() string    { return "filesystem" }
-func (t *integrationFileTool) Parameters() []framework.ToolParameter {
-	return []framework.ToolParameter{
+func (t *integrationFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
 		{Name: "path", Type: "string", Description: "file to read"},
 	}
 }
 
-func (t *integrationFileTool) Execute(ctx context.Context, state *framework.Context, args map[string]interface{}) (*framework.ToolResult, error) {
+func (t *integrationFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		return nil, err
 	}
 	state.AddInteraction("tool:"+t.name, string(data), nil)
-	return &framework.ToolResult{
+	return &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"status":  "ok",
@@ -261,19 +264,19 @@ func (t *integrationFileTool) Execute(ctx context.Context, state *framework.Cont
 	}, nil
 }
 
-func (t *integrationFileTool) IsAvailable(context.Context, *framework.Context) bool { return true }
+func (t *integrationFileTool) IsAvailable(context.Context, *core.Context) bool { return true }
 
-func (t *integrationFileTool) Permissions() framework.ToolPermissions {
-	return framework.ToolPermissions{
-		Permissions: framework.NewFileSystemPermissionSet(t.base, framework.FileSystemRead),
+func (t *integrationFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{
+		Permissions: core.NewFileSystemPermissionSet(t.base, core.FileSystemRead),
 	}
 }
 
 type stubVectorStore struct {
-	results []framework.VectorMatch
+	results []search.VectorMatch
 }
 
-func (s *stubVectorStore) Query(context.Context, string, int) ([]framework.VectorMatch, error) {
+func (s *stubVectorStore) Query(context.Context, string, int) ([]search.VectorMatch, error) {
 	return s.results, nil
 }
 
@@ -281,33 +284,33 @@ type scriptedLLM struct {
 	text string
 }
 
-func (s *scriptedLLM) Generate(ctx context.Context, prompt string, options *framework.LLMOptions) (*framework.LLMResponse, error) {
-	return &framework.LLMResponse{Text: s.text}, nil
+func (s *scriptedLLM) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{Text: s.text}, nil
 }
 
-func (s *scriptedLLM) GenerateStream(context.Context, string, *framework.LLMOptions) (<-chan string, error) {
+func (s *scriptedLLM) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
 	return nil, fmt.Errorf("streaming not supported")
 }
 
-func (s *scriptedLLM) Chat(context.Context, []framework.Message, *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (s *scriptedLLM) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, fmt.Errorf("chat not supported")
 }
 
-func (s *scriptedLLM) ChatWithTools(context.Context, []framework.Message, []framework.Tool, *framework.LLMOptions) (*framework.LLMResponse, error) {
+func (s *scriptedLLM) ChatWithTools(context.Context, []core.Message, []core.Tool, *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, fmt.Errorf("chat tools not supported")
 }
 
 type llmPlanNode struct {
 	name   string
-	model  framework.LanguageModel
+	model  core.LanguageModel
 	prompt string
 }
 
 func (n *llmPlanNode) ID() string { return n.name }
 
-func (n *llmPlanNode) Type() framework.NodeType { return framework.NodeTypeLLM }
+func (n *llmPlanNode) Type() graph.NodeType { return graph.NodeTypeLLM }
 
-func (n *llmPlanNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *llmPlanNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	if n.model == nil {
 		return nil, fmt.Errorf("llm model missing")
 	}
@@ -316,7 +319,7 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *framework.Context) (*f
 		return nil, err
 	}
 	state.AddInteraction("assistant", resp.Text, map[string]interface{}{"node": n.name})
-	return &framework.Result{
+	return &core.Result{
 		NodeID:  n.name,
 		Success: true,
 		Data: map[string]interface{}{
@@ -327,15 +330,15 @@ func (n *llmPlanNode) Execute(ctx context.Context, state *framework.Context) (*f
 
 type toolExecNode struct {
 	name string
-	tool framework.Tool
+	tool core.Tool
 	args map[string]interface{}
 }
 
 func (n *toolExecNode) ID() string { return n.name }
 
-func (n *toolExecNode) Type() framework.NodeType { return framework.NodeTypeTool }
+func (n *toolExecNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
-func (n *toolExecNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *toolExecNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	if n.tool == nil {
 		return nil, fmt.Errorf("tool missing")
 	}
@@ -360,7 +363,7 @@ func (n *toolExecNode) Execute(ctx context.Context, state *framework.Context) (*
 	if res != nil && res.Error != "" {
 		execErr = fmt.Errorf("%s", res.Error)
 	}
-	return &framework.Result{
+	return &core.Result{
 		NodeID:  n.name,
 		Success: success,
 		Data:    data,
@@ -370,14 +373,14 @@ func (n *toolExecNode) Execute(ctx context.Context, state *framework.Context) (*
 
 type stateConditionalNode struct {
 	name   string
-	decide func(*framework.Context) (string, error)
+	decide func(*core.Context) (string, error)
 }
 
 func (n *stateConditionalNode) ID() string { return n.name }
 
-func (n *stateConditionalNode) Type() framework.NodeType { return framework.NodeTypeConditional }
+func (n *stateConditionalNode) Type() graph.NodeType { return graph.NodeTypeConditional }
 
-func (n *stateConditionalNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *stateConditionalNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	if n.decide == nil {
 		return nil, fmt.Errorf("conditional missing decision function")
 	}
@@ -385,7 +388,7 @@ func (n *stateConditionalNode) Execute(ctx context.Context, state *framework.Con
 	if err != nil {
 		return nil, err
 	}
-	return &framework.Result{
+	return &core.Result{
 		NodeID:  n.name,
 		Success: true,
 		Data: map[string]interface{}{
