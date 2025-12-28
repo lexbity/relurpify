@@ -19,7 +19,7 @@ tools/       File, git, search, execution, and LSP proxy implementations
 cmd/         CLI entry points (server, relurpify toolbox, coder helper)
 server/      HTTP + LSP servers and dependency wiring
 persistence/ Workflow + message stores for pause/resume and logging
-llm/         Ollama HTTP client that satisfies framework.LanguageModel
+llm/         Ollama HTTP client that satisfies core.LanguageModel
 scripts/     Helper scripts (documentation generation, etc.)
 ```
 
@@ -113,7 +113,7 @@ open docs/index.html   # or serve docs/ via any static file server
 The [`server/lsp_server.go`](server/lsp_server.go) package adapts the framework to language-server events:
 
 1. Editors trigger custom commands (e.g., “AI fix”, “AI refactor”).
-2. The LSP server collects document context and forwards it as a `framework.Task`.
+2. The LSP server collects document context and forwards it as a `core.Task`.
 3. The configured agent (default: coding agent with reflection) builds a graph, invokes tools/LLMs, and streams edits back.
 
 Use `go run ./cmd/coder apply --file path --instruction "..."` for a Cursor-like CLI workflow that mirrors the LSP commands when you do not have an editor integration handy.
