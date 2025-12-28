@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/runtime"
 	"net/http"
 	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
 )
 
 // SandboxReport captures runtime detection results needed by the wizard/status
@@ -56,9 +56,9 @@ type EnvironmentReport struct {
 // StatusSnapshot enriches the environment report with live runtime details.
 type StatusSnapshot struct {
 	Environment  EnvironmentReport
-	PendingHITL  []*framework.PermissionRequest
+	PendingHITL  []*runtime.PermissionRequest
 	ServerActive bool
-	Context      *framework.ContextSnapshot
+	Context      *core.ContextSnapshot
 }
 
 // ProbeEnvironment inspects sandbox binaries, Ollama availability, and the
