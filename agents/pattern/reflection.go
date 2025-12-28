@@ -4,20 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 )
 
 // ReflectionAgent reviews outputs and triggers revisions when needed.
 type ReflectionAgent struct {
-	Reviewer      framework.LanguageModel
-	Delegate      framework.Agent
-	Config        *framework.Config
+	Reviewer      core.LanguageModel
+	Delegate      graph.Agent
+	Config        *core.Config
 	maxIterations int
 }
 
 // Initialize configures the reviewer.
-func (a *ReflectionAgent) Initialize(cfg *framework.Config) error {
+func (a *ReflectionAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if cfg.MaxIterations <= 0 {
 		a.maxIterations = 3
@@ -28,7 +28,7 @@ func (a *ReflectionAgent) Initialize(cfg *framework.Config) error {
 }
 
 // Execute runs the review workflow.
-func (a *ReflectionAgent) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (a *ReflectionAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	graph, err := a.BuildGraph(task)
 	if err != nil {
 		return nil, err
@@ -40,69 +40,69 @@ func (a *ReflectionAgent) Execute(ctx context.Context, task *framework.Task, sta
 }
 
 // Capabilities returns capabilities.
-func (a *ReflectionAgent) Capabilities() []framework.Capability {
-	return []framework.Capability{framework.CapabilityReview}
+func (a *ReflectionAgent) Capabilities() []core.Capability {
+	return []core.Capability{core.CapabilityReview}
 }
 
 // BuildGraph builds the review workflow.
-func (a *ReflectionAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) {
+func (a *ReflectionAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if a.Delegate == nil {
 		return nil, fmt.Errorf("reflection agent missing delegate")
 	}
 	if a.Reviewer == nil {
 		return nil, fmt.Errorf("reflection agent missing reviewer model")
 	}
-	graph := framework.NewGraph()
+	g := graph.NewGraph()
 	run := &reflectionDelegateNode{id: "reflection_execute", agent: a, task: task}
 	review := &reflectionReviewNode{id: "reflection_review", agent: a, task: task}
 	decision := &reflectionDecisionNode{id: "reflection_decide", agent: a}
-	done := framework.NewTerminalNode("reflection_done")
-	for _, node := range []framework.Node{run, review, decision, done} {
-		if err := graph.AddNode(node); err != nil {
+	done := graph.NewTerminalNode("reflection_done")
+	for _, node := range []graph.Node{run, review, decision, done} {
+		if err := g.AddNode(node); err != nil {
 			return nil, err
 		}
 	}
-	if err := graph.SetStart(run.ID()); err != nil {
+	if err := g.SetStart(run.ID()); err != nil {
 		return nil, err
 	}
-	if err := graph.AddEdge(run.ID(), review.ID(), nil, false); err != nil {
+	if err := g.AddEdge(run.ID(), review.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	if err := graph.AddEdge(review.ID(), decision.ID(), nil, false); err != nil {
+	if err := g.AddEdge(review.ID(), decision.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	if err := graph.AddEdge(decision.ID(), run.ID(), func(res *framework.Result, ctx *framework.Context) bool {
+	if err := g.AddEdge(decision.ID(), run.ID(), func(res *core.Result, ctx *core.Context) bool {
 		revise, _ := ctx.Get("reflection.revise")
 		return revise == true
 	}, false); err != nil {
 		return nil, err
 	}
-	if err := graph.AddEdge(decision.ID(), done.ID(), func(res *framework.Result, ctx *framework.Context) bool {
+	if err := g.AddEdge(decision.ID(), done.ID(), func(res *core.Result, ctx *core.Context) bool {
 		revise, _ := ctx.Get("reflection.revise")
 		return revise != true
 	}, false); err != nil {
 		return nil, err
 	}
-	return graph, nil
+	return g, nil
 }
 
 type reflectionDelegateNode struct {
 	id    string
 	agent *ReflectionAgent
-	task  *framework.Task
+	task  *core.Task
 }
 
 // ID returns the graph identifier for the delegate execution step.
 func (n *reflectionDelegateNode) ID() string { return n.id }
 
 // Type indicates this node executes system steps rather than tools.
-func (n *reflectionDelegateNode) Type() framework.NodeType {
-	return framework.NodeTypeSystem
+func (n *reflectionDelegateNode) Type() graph.NodeType {
+	return graph.NodeTypeSystem
 }
 
 // Execute runs the delegate agent while isolating state mutations until the
 // child run succeeds.
-func (n *reflectionDelegateNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *reflectionDelegateNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	state.SetExecutionPhase("executing")
 	child := state.Clone()
 	result, err := n.agent.Delegate.Execute(ctx, n.task, child)
@@ -117,27 +117,27 @@ func (n *reflectionDelegateNode) Execute(ctx context.Context, state *framework.C
 type reflectionReviewNode struct {
 	id    string
 	agent *ReflectionAgent
-	task  *framework.Task
+	task  *core.Task
 }
 
 // ID returns the review node identifier.
 func (n *reflectionReviewNode) ID() string { return n.id }
 
 // Type marks the node as an observation step since it inspects output.
-func (n *reflectionReviewNode) Type() framework.NodeType {
-	return framework.NodeTypeObservation
+func (n *reflectionReviewNode) Type() graph.NodeType {
+	return graph.NodeTypeObservation
 }
 
 // Execute asks the reviewer model to evaluate the last result and captures the
 // structured feedback in the shared state.
-func (n *reflectionReviewNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *reflectionReviewNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	resultVal, _ := state.Get("reflection.last_result")
-	lastResult, _ := resultVal.(*framework.Result)
+	lastResult, _ := resultVal.(*core.Result)
 	prompt := fmt.Sprintf(`Review the following result for task "%s".
 Consider correctness, completeness, quality, security, performance.
 Respond JSON {"issues":[{"severity":"high|medium|low","description":"...","suggestion":"..."}],"approve":bool}
 Result: %+v`, n.task.Instruction, lastResult)
-	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &framework.LLMOptions{
+	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &core.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
 		MaxTokens:   600,
@@ -150,7 +150,7 @@ Result: %+v`, n.task.Instruction, lastResult)
 		return nil, err
 	}
 	state.Set("reflection.review", review)
-	return &framework.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{"review": review}}, nil
+	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{"review": review}}, nil
 }
 
 type reflectionDecisionNode struct {
@@ -162,13 +162,13 @@ type reflectionDecisionNode struct {
 func (n *reflectionDecisionNode) ID() string { return n.id }
 
 // Type declares the node as a conditional branch in the graph.
-func (n *reflectionDecisionNode) Type() framework.NodeType {
-	return framework.NodeTypeConditional
+func (n *reflectionDecisionNode) Type() graph.NodeType {
+	return graph.NodeTypeConditional
 }
 
 // Execute inspects review feedback and decides if another delegate iteration
 // should run.
-func (n *reflectionDecisionNode) Execute(ctx context.Context, state *framework.Context) (*framework.Result, error) {
+func (n *reflectionDecisionNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	reviewVal, _ := state.Get("reflection.review")
 	review, _ := reviewVal.(reviewPayload)
 	iterVal, _ := state.Get("reflection.iteration")
@@ -177,7 +177,7 @@ func (n *reflectionDecisionNode) Execute(ctx context.Context, state *framework.C
 	state.Set("reflection.iteration", iter)
 	revise := !review.Approve && iter < n.agent.maxIterations
 	state.Set("reflection.revise", revise)
-	return &framework.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{"revise": revise}}, nil
+	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{"revise": revise}}, nil
 }
 
 type reviewPayload struct {
