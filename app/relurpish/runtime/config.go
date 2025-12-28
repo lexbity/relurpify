@@ -2,12 +2,11 @@ package runtime
 
 import (
 	"fmt"
+	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
-	"gopkg.in/yaml.v3"
 )
 
 // Config captures every knob shared across the relurpish CLI, TUI, and server
@@ -25,7 +24,7 @@ type Config struct {
 	OllamaModel    string
 	AgentName      string
 	ServerAddr     string
-	Sandbox        framework.SandboxConfig
+	Sandbox        fruntime.SandboxConfig
 	AuditLimit     int
 	HITLTimeout    time.Duration
 }
@@ -50,7 +49,7 @@ func DefaultConfig() Config {
 		ServerAddr:    ":8080",
 		AuditLimit:    512,
 		HITLTimeout:   45 * time.Second,
-		Sandbox: framework.SandboxConfig{
+		Sandbox: fruntime.SandboxConfig{
 			RunscPath:        "runsc",
 			ContainerRuntime: "docker",
 			Platform:         "",
