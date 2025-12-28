@@ -6,6 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
+	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/sourcegraph/jsonrpc2"
+	"go.lsp.dev/protocol"
 	"io"
 	"os"
 	"os/exec"
@@ -14,10 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lexcodex/relurpify/framework"
-	"github.com/sourcegraph/jsonrpc2"
-	"go.lsp.dev/protocol"
 )
 
 // ProcessLSPConfig defines the configuration for spinning up a language server process.
@@ -38,9 +39,9 @@ type processLSPClient struct {
 	openedFiles map[protocol.DocumentURI]bool
 	diagnostics map[protocol.DocumentURI][]protocol.Diagnostic
 	logCh       chan string
-	manager     *framework.PermissionManager
+	manager     *fruntime.PermissionManager
 	agentID     string
-	spec        *framework.AgentRuntimeSpec
+	spec        *core.AgentRuntimeSpec
 }
 
 // NewProcessLSPClient launches the configured language server and performs the LSP handshake.
@@ -49,7 +50,7 @@ func NewProcessLSPClient(cfg ProcessLSPConfig) (LSPClient, error) {
 }
 
 // NewProcessLSPClientWithPermissions enforces manifest-derived policies before starting the LSP server.
-func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *framework.PermissionManager, agentID string, spec *framework.AgentRuntimeSpec) (LSPClient, error) {
+func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fruntime.PermissionManager, agentID string, spec *core.AgentRuntimeSpec) (LSPClient, error) {
 	if cfg.Command == "" {
 		return nil, errors.New("command is required for LSP client")
 	}
@@ -75,22 +76,22 @@ func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *framework
 	}
 	if spec != nil {
 		cmdline := strings.TrimSpace(cfg.Command + " " + strings.Join(cfg.Args, " "))
-		decision, _ := framework.DecideByPatterns(cmdline, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
+		decision, _ := toolsys.DecideByPatterns(cmdline, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
 		switch decision {
-		case framework.AgentPermissionDeny:
+		case core.AgentPermissionDeny:
 			cancel()
 			return nil, fmt.Errorf("lsp %s blocked: denied by bash_permissions", cfg.Command)
-		case framework.AgentPermissionAsk:
+		case core.AgentPermissionAsk:
 			if manager == nil {
 				cancel()
 				return nil, fmt.Errorf("lsp %s blocked: approval required but permission manager missing", cfg.Command)
 			}
-			if err := manager.RequireApproval(ctx, agentID, framework.PermissionDescriptor{
-				Type:         framework.PermissionTypeHITL,
+			if err := manager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
+				Type:         core.PermissionTypeHITL,
 				Action:       "bash:lsp",
 				Resource:     cmdline,
 				RequiresHITL: true,
-			}, "bash permission policy", framework.GrantScopeOneTime, framework.RiskLevelMedium, 0); err != nil {
+			}, "bash permission policy", fruntime.GrantScopeOneTime, fruntime.RiskLevelMedium, 0); err != nil {
 				cancel()
 				return nil, err
 			}
@@ -265,7 +266,7 @@ func (c *processLSPClient) ensureOpen(ctx context.Context, file string) error {
 	c.mu.Unlock()
 
 	if c != nil && c.manager != nil {
-		if err := c.manager.CheckFileAccess(ctx, c.agentID, framework.FileSystemRead, file); err != nil {
+		if err := c.manager.CheckFileAccess(ctx, c.agentID, core.FileSystemRead, file); err != nil {
 			return err
 		}
 	}
@@ -506,7 +507,7 @@ func uriToPath(uri string) string {
 
 func (c *processLSPClient) readSnippet(path string, rng protocol.Range) (string, error) {
 	if c != nil && c.manager != nil {
-		if err := c.manager.CheckFileAccess(context.Background(), c.agentID, framework.FileSystemRead, path); err != nil {
+		if err := c.manager.CheckFileAccess(context.Background(), c.agentID, core.FileSystemRead, path); err != nil {
 			return "", err
 		}
 	}
