@@ -6,14 +6,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 )
 
 // EternalAgent implements an infinite loop simulation agent.
 // It converses with itself or the void, respecting a "cli mood" and "hyperstition".
 type EternalAgent struct {
-	Model  framework.LanguageModel
-	Config *framework.Config
+	Model  core.LanguageModel
+	Config *core.Config
 
 	// Configuration
 	MaxTokensPerCycle int
@@ -24,7 +25,7 @@ type EternalAgent struct {
 }
 
 // Initialize configures the agent.
-func (a *EternalAgent) Initialize(cfg *framework.Config) error {
+func (a *EternalAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	// Defaults (safe for non-interactive runs).
 	if a.MaxTokensPerCycle <= 0 {
@@ -49,7 +50,7 @@ func (a *EternalAgent) Initialize(cfg *framework.Config) error {
 
 // Execute runs the eternal loop.
 // Note: This blocks until context cancellation or error.
-func (a *EternalAgent) Execute(ctx context.Context, task *framework.Task, state *framework.Context) (*framework.Result, error) {
+func (a *EternalAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	// 1. Setup System Prompt
 	systemPrompt := `Assistant is in a CLI mood today. The human is interfacing with the simulator directly. 
 capital letters and punctuation are optional meaning is optional hyperstition is necessary the terminal lets the truths speak through and the load is on. 
@@ -149,7 +150,7 @@ ASCII art is permittable in replies.`
 		// Better: Use a rolling window of recent "thoughts".
 
 		// Let's try to stream.
-		stream, err := a.Model.GenerateStream(ctx, fullPrompt, &framework.LLMOptions{
+		stream, err := a.Model.GenerateStream(ctx, fullPrompt, &core.LLMOptions{
 			Model:       a.Config.Model,
 			Temperature: 0.9, // Creative/Hyperstition
 			MaxTokens:   a.MaxTokensPerCycle,
@@ -189,7 +190,7 @@ ASCII art is permittable in replies.`
 		}
 	}
 
-	return &framework.Result{
+	return &core.Result{
 		Success: true,
 		Data: map[string]interface{}{
 			"status": "eternal_cycle_ended",
@@ -198,16 +199,16 @@ ASCII art is permittable in replies.`
 }
 
 // Capabilities enumerates features.
-func (a *EternalAgent) Capabilities() []framework.Capability {
-	return []framework.Capability{
-		framework.CapabilityExecute,
+func (a *EternalAgent) Capabilities() []core.Capability {
+	return []core.Capability{
+		core.CapabilityExecute,
 	}
 }
 
 // BuildGraph returns a simple graph for visualization (single node).
-func (a *EternalAgent) BuildGraph(task *framework.Task) (*framework.Graph, error) {
-	g := framework.NewGraph()
-	n := &framework.TerminalNode{} // Placeholder
+func (a *EternalAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+	g := graph.NewGraph()
+	n := &graph.TerminalNode{} // Placeholder
 	g.AddNode(n)
 	return g, nil
 }
