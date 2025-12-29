@@ -101,7 +101,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
 	}
-	agentSpec := registration.Manifest.Spec.Agent
+	agentSpec := agents.ApplyManifestDefaults(registration.Manifest.Spec.Agent, registration.Manifest.Spec.Defaults)
 	if agentSpec.Model.Name == "" {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent.model.name")
@@ -263,7 +263,7 @@ func (r *Runtime) SwitchAgent(name string) error {
 	}
 	cfg := r.Config
 	cfg.AgentName = name
-	baseSpec := r.Registration.Manifest.Spec.Agent
+	baseSpec := agents.ApplyManifestDefaults(r.Registration.Manifest.Spec.Agent, r.Registration.Manifest.Spec.Defaults)
 	agentCfg := &core.Config{
 		Name:              cfg.AgentLabel(),
 		Model:             cfg.OllamaModel,
