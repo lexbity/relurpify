@@ -69,6 +69,7 @@ func (cs *ConservativeStrategy) SelectContext(task *core.Task, budget *core.Cont
 		Query:      task.Instruction,
 		MaxResults: 10,
 	})
+	AppendContextFiles(request, task, DetailFull)
 	return request, nil
 }
 
