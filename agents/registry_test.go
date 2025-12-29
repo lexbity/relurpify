@@ -58,14 +58,13 @@ spec:
       name: codellama:13b
       temperature: 0.1
       max_tokens: 1024
-    tools:
-      file_read: true
-      file_write: true
-      file_edit: true
-      bash_execute: true
-      lsp_query: true
-      search_codebase: true
-      web_search: false
+    allowed_tools:
+      - file_read
+      - file_write
+      - file_edit
+      - file_list
+      - file_search
+      - search_grep
     bash_permissions:
       allow_patterns: []
       deny_patterns: ["rm -rf*"]
@@ -136,8 +135,8 @@ spec:
       name: codellama:13b
       temperature: 0.1
       max_tokens: 1024
-    tools:
-      file_read: true
+    allowed_tools:
+      - file_read
 `
 	require.NoError(t, os.WriteFile(manifestPath, []byte(content), 0o644))
 
