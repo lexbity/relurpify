@@ -65,6 +65,9 @@ type Model struct {
 	lastPrompt    string
 	runStates     map[string]*RunState
 
+	filePicker     filePickerState
+	commandPalette commandPaletteState
+
 	// HITL prompt state (temporarily replaces normal prompt)
 	hitlRequest        *runtime.PermissionRequest
 	hitlPreviousMode   InputMode
@@ -136,6 +139,10 @@ func NewModel(adapter RuntimeAdapter) Model {
 		expandTarget:  "thinking",
 		allowParallel: false,
 		runStates:     make(map[string]*RunState),
+		commandPalette: commandPaletteState{
+			items:    nil,
+			selected: 0,
+		},
 	}
 }
 
@@ -152,6 +159,19 @@ func (m Model) refreshFeedContent() Model {
 	if m.autoFollow {
 		m.feed.GotoBottom()
 	}
+	return m
+}
+
+func (m Model) adjustLayout() Model {
+	if m.width == 0 || m.height == 0 || m.feed == nil {
+		return m
+	}
+	statusBarHeight := 1
+	promptBarHeight := 1
+	panelHeight := m.panelHeight()
+	feedHeight := max(1, m.height-statusBarHeight-promptBarHeight-panelHeight)
+	m.feed.Width = m.width
+	m.feed.Height = feedHeight
 	return m
 }
 
