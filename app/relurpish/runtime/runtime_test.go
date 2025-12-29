@@ -20,7 +20,7 @@ func TestWorkspaceGlob(t *testing.T) {
 func TestBuildPermissionSetProfiles(t *testing.T) {
 	dir := t.TempDir()
 	readonly := buildPermissionSet(dir, PermissionProfileReadOnly)
-	require.Len(t, readonly.FileSystem, 2)
+	require.Len(t, readonly.FileSystem, 3)
 
 	write := buildPermissionSet(dir, PermissionProfileWorkspaceWrite)
 	require.Greater(t, len(write.FileSystem), len(readonly.FileSystem))
