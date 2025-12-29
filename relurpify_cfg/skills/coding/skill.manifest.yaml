@@ -1,0 +1,23 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: coding
+  version: 1.0.0
+  description: General coding tools (git + repo hygiene).
+spec:
+  inherits: [system]
+  prompt_snippets:
+    - "Follow project conventions and summarize changes."
+  allowed_tools:
+    - git_diff
+    - git_history
+    - git_blame
+    - git_branch
+    - git_commit
+  tool_policies:
+    git_commit:
+      execute: ask
+  permissions:
+    executables:
+      - binary: git
+        args: ["*"]
