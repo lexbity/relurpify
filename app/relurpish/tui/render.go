@@ -223,7 +223,7 @@ func renderChangesSection(changes []FileChange, expanded bool, width int) string
 	}
 	if pending {
 		b.WriteString("\n")
-		b.WriteString(buttonStyle.Render("[A]pprove All") + "  " + buttonStyle.Render("[R]eject All"))
+		b.WriteString(buttonStyle.Render("/approve") + "  " + buttonStyle.Render("/reject"))
 	}
 	return b.String()
 }
