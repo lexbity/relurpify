@@ -35,6 +35,14 @@ type ManifestSpec struct {
 	Agent         *core.AgentRuntimeSpec           `yaml:"agent,omitempty" json:"agent,omitempty"`
 	Skills        []string                         `yaml:"skills,omitempty" json:"skills,omitempty"`
 	SkillOverlays map[string]core.AgentSpecOverlay `yaml:"skill_overlays,omitempty" json:"skill_overlays,omitempty"`
+	Defaults      *ManifestDefaults                `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+}
+
+// ManifestDefaults defines global defaults applied before skill/agent overlays.
+type ManifestDefaults struct {
+	Agent       *core.AgentSpecOverlay `yaml:"agent,omitempty" json:"agent,omitempty"`
+	Permissions *core.PermissionSet    `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	Resources   *ResourceSpec          `yaml:"resources,omitempty" json:"resources,omitempty"`
 }
 
 // ResourceSpec declares resource limits.
@@ -97,8 +105,18 @@ func (m *AgentManifest) Validate() error {
 	if strings.ToLower(m.Spec.Runtime) != "gvisor" {
 		return fmt.Errorf("runtime must be gVisor, got %s", m.Spec.Runtime)
 	}
-	if err := m.Spec.Permissions.Validate(); err != nil {
-		return fmt.Errorf("permissions invalid: %w", err)
+	if hasPermissionScopes(m.Spec.Permissions) {
+		if err := m.Spec.Permissions.Validate(); err != nil {
+			return fmt.Errorf("permissions invalid: %w", err)
+		}
+	}
+	if m.Spec.Defaults != nil && m.Spec.Defaults.Permissions != nil {
+		if err := m.Spec.Defaults.Permissions.Validate(); err != nil {
+			return fmt.Errorf("defaults permissions invalid: %w", err)
+		}
+	}
+	if !hasPermissionScopes(m.Spec.Permissions) && (m.Spec.Defaults == nil || m.Spec.Defaults.Permissions == nil) {
+		return fmt.Errorf("manifest missing permissions (spec.permissions or spec.defaults.permissions required)")
 	}
 	if m.Spec.Agent != nil {
 		if err := m.Spec.Agent.Validate(); err != nil {
@@ -111,4 +129,12 @@ func (m *AgentManifest) Validate() error {
 		}
 	}
 	return nil
+}
+
+func hasPermissionScopes(perms core.PermissionSet) bool {
+	return len(perms.FileSystem) > 0 ||
+		len(perms.Executables) > 0 ||
+		len(perms.Network) > 0 ||
+		len(perms.Capabilities) > 0 ||
+		len(perms.IPC) > 0
 }
