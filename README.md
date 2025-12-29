@@ -15,12 +15,14 @@ is to one day re-write itself.
 ```
 framework/   Graph runtime, shared context, memory, telemetry, tool registry
 agents/      Planner, coder, reflection, and ReAct-inspired orchestrators
+agents/templates  Reference agent manifest templates for relurpify_cfg init
 tools/       File, git, search, execution, and LSP proxy implementations
 cmd/         CLI entry points (server, relurpify toolbox, coder helper)
 server/      HTTP + LSP servers and dependency wiring
 persistence/ Workflow + message stores for pause/resume and logging
 llm/         Ollama HTTP client that satisfies core.LanguageModel
 scripts/     Helper scripts (documentation generation, etc.)
+relurpify_cfg/ Workspace configuration, manifests, memory, and telemetry outputs
 ```
 
 Use `ARCHITECTURE.md` for a high-level diagram and data-flow outline. The generated docs website (via `scripts/gen-docs.sh`) bundles that outline next to the Golds API pages.
