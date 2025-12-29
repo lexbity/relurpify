@@ -53,7 +53,7 @@ func (m Model) renderPromptBar() string {
 			promptText = "Approve pending permission?"
 		}
 	}
-	if m.streaming && m.mode == ModeNormal {
+	if m.hasActiveRuns() && m.mode == ModeNormal {
 		hint = dimStyle.Render(" streaming... pgup/down to scroll | ctrl+c to quit")
 	}
 
