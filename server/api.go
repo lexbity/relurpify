@@ -92,6 +92,10 @@ func (s *APIServer) handleTask(w http.ResponseWriter, r *http.Request) {
 		Context:     req.Context,
 	}
 	state := s.Context.Clone()
+	scope := task.ID
+	if scope != "" {
+		defer state.ClearHandleScope(scope)
+	}
 	result, err := s.Agent.Execute(ctx, task, state)
 	resp := TaskResponse{Result: result}
 	if err != nil {
