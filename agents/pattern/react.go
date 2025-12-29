@@ -220,12 +220,16 @@ func (a *ReActAgent) getLastResult(state *core.Context) *core.Result {
 	if state == nil {
 		return nil
 	}
-	val, ok := state.Get("react.last_result")
-	if !ok {
-		return nil
+	if val, ok := state.GetHandle("react.last_result"); ok {
+		if res, ok := val.(*core.Result); ok {
+			return res
+		}
 	}
-	if res, ok := val.(*core.Result); ok {
-		return res
+	val, ok := state.Get("react.last_result")
+	if ok {
+		if res, ok := val.(*core.Result); ok {
+			return res
+		}
 	}
 	return nil
 }
@@ -406,6 +410,14 @@ func (n *reactThinkNode) buildPrompt(state *core.Context) string {
 			guidance.WriteRune('\n')
 		}
 	}
+	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
+		prompt := strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
+		if prompt != "" {
+			guidance.WriteString("\nSkill Guidance:\n")
+			guidance.WriteString(prompt)
+			guidance.WriteRune('\n')
+		}
+	}
 
 	return fmt.Sprintf(`You are a ReAct agent tasked with "%s".
 %s
@@ -463,6 +475,14 @@ func (n *reactThinkNode) buildSystemPrompt(tools []core.Tool) string {
 		if planJSON, err := json.MarshalIndent(val, "", "  "); err == nil {
 			guidance.WriteString("\n\n### Execution Plan\nFollow this plan:\n")
 			guidance.Write(planJSON)
+			guidance.WriteRune('\n')
+		}
+	}
+	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
+		prompt := strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
+		if prompt != "" {
+			guidance.WriteString("\n\n### Skill Guidance\n")
+			guidance.WriteString(prompt)
 			guidance.WriteRune('\n')
 		}
 	}
@@ -530,7 +550,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 			if len(toolErrors) > 0 {
 				result.Error = fmt.Errorf("%s", strings.Join(toolErrors, "; "))
 			}
-			state.Set("react.last_result", result)
+			state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 			return result, nil
 		}
 	}
@@ -543,7 +563,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 	if decision.Complete || toolName == "" || strings.EqualFold(toolName, "none") {
 		state.Set("react.last_tool_result", map[string]interface{}{})
 		result := &core.Result{NodeID: n.id, Success: true}
-		state.Set("react.last_result", result)
+		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 		return result, nil
 	}
 	tool, ok := n.agent.Tools.Get(toolName)
@@ -552,7 +572,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 		if lower == "" || strings.Contains(lower, "none") {
 			state.Set("react.last_tool_result", map[string]interface{}{})
 			result := &core.Result{NodeID: n.id, Success: true}
-			state.Set("react.last_result", result)
+			state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 			return result, nil
 		}
 		return nil, fmt.Errorf("unknown tool %s", toolName)
@@ -574,7 +594,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 		Data:    res.Data,
 		Error:   parseError(res.Error),
 	}
-	state.Set("react.last_result", result)
+	state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 	return result, nil
 }
 
@@ -643,7 +663,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *core.Context) (*c
 			"complete":   completed,
 		},
 	}
-	state.Set("react.last_result", result)
+	state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 	return result, nil
 }
 
@@ -782,4 +802,11 @@ func appendToolMessage(state *core.Context, call core.ToolCall, res *core.ToolRe
 		ToolCallID: call.ID,
 	})
 	saveReactMessages(state, messages)
+}
+
+func reactTaskScope(state *core.Context) string {
+	if state == nil {
+		return ""
+	}
+	return state.GetString("task.id")
 }
