@@ -56,10 +56,36 @@ go mod tidy
 go build ./...
 ```
 
+### Build CLI apps
+
+```bash
+go build ./cmd/coding-agent
+go build ./app/relurpish
+```
+
 ### Run the full test suite
 
 ```bash
 go test ./...
+```
+
+### Coverage report
+
+```bash
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
+
+### Run integration agent tests
+
+```bash
+go run ./cmd/coding-agent agenttest run --suite testsuite/agenttests/coding.testsuite.yaml
+```
+
+### CI helper
+
+```bash
+RELURPIFY_AGENTTEST_SUITE=testsuite/agenttests/coding.testsuite.yaml ./scripts/ci.sh
 ```
 
 ### Launch the HTTP server
@@ -68,7 +94,7 @@ go test ./...
 export OLLAMA_ENDPOINT=http://localhost:11434
 export OLLAMA_MODEL=deepseek-r1:7b
 
-go run ./cmd/server
+go run ./cmd/coding-agent start --instruction "Summarize README.md"
 ```
 
 The server exposes `POST /api/task`. Example request:
@@ -86,19 +112,30 @@ curl -s http://localhost:8080/api/task \
 ### Use the CLI toolbox instead of the raw server
 
 ```bash
-# Serve the same API but with CLI-configured model + memory paths
-go run ./cmd/relurpify serve --workspace . --addr :8080
+# Start a session with the coding agent
+go run ./cmd/coding-agent start --agent coding --instruction "Add logging to framework/context.go"
 
-# Run a one-off task
-go run ./cmd/relurpify task \
-  --instruction "Add logging to framework/context.go" \
-  --type code_modification
+# Validate manifests
+go run ./cmd/coding-agent agents validate --name coding
 
-# List persisted workflow snapshots (pause/resume state)
-go run ./cmd/relurpify workflow list
+# Initialize testsuites + manifests
+go run ./cmd/coding-agent agenttest init
+```
 
-# Inspect shared memory entries
-go run ./cmd/relurpify memory list
+### Skill workflows
+
+```bash
+# Scaffold a new skill
+go run ./cmd/coding-agent skill init my-skill --description "My focused workflow" --with-tests
+
+# Validate skill manifest + resources
+go run ./cmd/coding-agent skill validate my-skill
+
+# Diagnose tool/permission compatibility (optional agent manifest)
+go run ./cmd/coding-agent skill doctor my-skill --manifest relurpify_cfg/agent.manifest.yaml
+
+# Run the skill testsuite.yaml
+go run ./cmd/coding-agent skill test my-skill
 ```
 
 ### Generate documentation (HTML site + architecture outline)
