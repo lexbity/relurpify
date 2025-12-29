@@ -102,3 +102,51 @@ spec:
 	require.Len(t, list, 1)
 	require.Equal(t, "demo", list[0].Name)
 }
+
+func TestRegistryLoadFilePath(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := ConfigDir(dir)
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	manifestPath := filepath.Join(cfgDir, "agent.manifest.yaml")
+
+	content := `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: solo
+  version: "1.0.0"
+  description: solo agent
+spec:
+  image: ghcr.io/relurpify/runtime:latest
+  runtime: gvisor
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: ` + filepath.ToSlash(filepath.Join(dir, "**")) + `
+        justification: Read workspace
+    executables:
+      - binary: bash
+        args: ["-c"]
+  agent:
+    mode: primary
+    version: "1.0.0"
+    prompt: "Be helpful"
+    model:
+      provider: ollama
+      name: codellama:13b
+      temperature: 0.1
+      max_tokens: 1024
+    tools:
+      file_read: true
+`
+	require.NoError(t, os.WriteFile(manifestPath, []byte(content), 0o644))
+
+	reg := NewRegistry(RegistryOptions{
+		Workspace: dir,
+		Paths:     []string{manifestPath},
+	})
+	require.NoError(t, reg.Load())
+	list := reg.List()
+	require.Len(t, list, 1)
+	require.Equal(t, "solo", list[0].Name)
+}
