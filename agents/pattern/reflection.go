@@ -110,7 +110,7 @@ func (n *reflectionDelegateNode) Execute(ctx context.Context, state *core.Contex
 		return nil, err
 	}
 	state.Merge(child)
-	state.Set("reflection.last_result", result)
+	state.SetHandleScoped("reflection.last_result", result, taskScope(n.task, state))
 	return result, nil
 }
 
@@ -131,8 +131,7 @@ func (n *reflectionReviewNode) Type() graph.NodeType {
 // Execute asks the reviewer model to evaluate the last result and captures the
 // structured feedback in the shared state.
 func (n *reflectionReviewNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	resultVal, _ := state.Get("reflection.last_result")
-	lastResult, _ := resultVal.(*core.Result)
+	lastResult := resolveResultHandle(state, "reflection.last_result")
 	prompt := fmt.Sprintf(`Review the following result for task "%s".
 Consider correctness, completeness, quality, security, performance.
 Respond JSON {"issues":[{"severity":"high|medium|low","description":"...","suggestion":"..."}],"approve":bool}
@@ -196,4 +195,31 @@ func parseReview(raw string) (reviewPayload, error) {
 		return payload, err
 	}
 	return payload, nil
+}
+
+func resolveResultHandle(state *core.Context, key string) *core.Result {
+	if state == nil {
+		return nil
+	}
+	if value, ok := state.GetHandle(key); ok {
+		if res, ok := value.(*core.Result); ok {
+			return res
+		}
+	}
+	if value, ok := state.Get(key); ok {
+		if res, ok := value.(*core.Result); ok {
+			return res
+		}
+	}
+	return nil
+}
+
+func taskScope(task *core.Task, state *core.Context) string {
+	if task != nil && task.ID != "" {
+		return task.ID
+	}
+	if state != nil {
+		return state.GetString("task.id")
+	}
+	return ""
 }
