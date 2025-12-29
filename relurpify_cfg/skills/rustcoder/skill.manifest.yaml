@@ -1,0 +1,17 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: rustcoder
+  version: 1.0.0
+  description: Rust tooling for cargo workflows.
+spec:
+  inherits: [coding]
+  allowed_tools:
+    - cli_cargo
+    - cli_rustfmt
+  permissions:
+    executables:
+      - binary: cargo
+        args: ["*"]
+      - binary: rustfmt
+        args: ["*"]
