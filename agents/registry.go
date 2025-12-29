@@ -2,6 +2,7 @@ package agents
 
 import (
 	"errors"
+	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"os"
@@ -23,6 +24,7 @@ type Registry struct {
 	opts    RegistryOptions
 	mu      sync.RWMutex
 	agents  map[string]*manifest.AgentManifest
+	errors  map[string]string
 	watchCh []chan struct{}
 	rules   *Ruleset
 	loaded  time.Time
@@ -33,6 +35,7 @@ func NewRegistry(opts RegistryOptions) *Registry {
 	return &Registry{
 		opts:   opts,
 		agents: make(map[string]*manifest.AgentManifest),
+		errors: make(map[string]string),
 	}
 }
 
@@ -41,8 +44,9 @@ func (r *Registry) Load() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.agents = make(map[string]*manifest.AgentManifest)
+	r.errors = make(map[string]string)
 	for _, dir := range r.searchPaths() {
-		r.loadDir(dir)
+		r.loadPath(dir)
 	}
 	if r.opts.RulesPath != "" {
 		if rules, err := LoadRuleset(r.opts.RulesPath); err == nil {
@@ -68,6 +72,17 @@ func (r *Registry) List() []AgentSummary {
 		summaries = append(summaries, summarizeManifest(manifest, r.opts.Workspace))
 	}
 	return summaries
+}
+
+// Errors returns manifest load errors keyed by source path.
+func (r *Registry) Errors() []RegistryLoadError {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	errs := make([]RegistryLoadError, 0, len(r.errors))
+	for path, message := range r.errors {
+		errs = append(errs, RegistryLoadError{Path: path, Error: message})
+	}
+	return errs
 }
 
 // Get retrieves a manifest by name.
@@ -104,9 +119,24 @@ func (r *Registry) broadcast() {
 	}
 }
 
-// loadDir loads every manifest file inside the specified directory.
-func (r *Registry) loadDir(dir string) {
-	entries, err := os.ReadDir(dir)
+// loadPath loads a manifest file or every manifest inside a directory.
+func (r *Registry) loadPath(path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if !info.IsDir() {
+		if !strings.HasSuffix(path, ".yaml") && !strings.HasSuffix(path, ".yml") {
+			return
+		}
+		if manifest, err := manifest.LoadAgentManifest(path); err == nil {
+			r.agents[manifest.Metadata.Name] = manifest
+		} else {
+			r.recordLoadError(path, err)
+		}
+		return
+	}
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		return
 	}
@@ -117,9 +147,11 @@ func (r *Registry) loadDir(dir string) {
 		if !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".yml") {
 			continue
 		}
-		path := filepath.Join(dir, entry.Name())
-		if manifest, err := manifest.LoadAgentManifest(path); err == nil {
+		entryPath := filepath.Join(path, entry.Name())
+		if manifest, err := manifest.LoadAgentManifest(entryPath); err == nil {
 			r.agents[manifest.Metadata.Name] = manifest
+		} else {
+			r.recordLoadError(entryPath, err)
 		}
 	}
 }
@@ -186,6 +218,36 @@ func (r *Registry) snapshot() time.Time {
 		})
 	}
 	return newest
+}
+
+// RegistryLoadError represents a manifest load failure.
+type RegistryLoadError struct {
+	Path  string
+	Error string
+}
+
+func (r *Registry) recordLoadError(path string, err error) {
+	if r == nil || err == nil {
+		return
+	}
+	r.errors[path] = err.Error()
+	logRegistryError(r.opts.Workspace, path, err)
+}
+
+func logRegistryError(workspace, path string, err error) {
+	if workspace == "" {
+		return
+	}
+	logDir := filepath.Join(ConfigDir(workspace), "logs")
+	if mkErr := os.MkdirAll(logDir, 0o755); mkErr != nil {
+		return
+	}
+	file := filepath.Join(logDir, "agent_registry.log")
+	entry := fmt.Sprintf("%s load error for %s: %s\n", time.Now().UTC().Format(time.RFC3339), path, err.Error())
+	if f, openErr := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); openErr == nil {
+		defer f.Close()
+		_, _ = f.WriteString(entry)
+	}
 }
 
 // fetchModTime retrieves the modification time, returning the zero time on
