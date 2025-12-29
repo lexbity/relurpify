@@ -14,9 +14,19 @@ func (m Model) View() string {
 	}
 
 	feed := m.feed.View()
+	panel := ""
+	switch m.mode {
+	case ModeCommand:
+		panel = m.renderCommandPalette()
+	case ModeFilePicker:
+		panel = m.renderFilePicker()
+	}
 	prompt := m.renderPromptBar()
 	status := m.statusBar.View(m.width)
 
+	if panel != "" {
+		return lipgloss.JoinVertical(lipgloss.Left, feed, panel, prompt, status)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, feed, prompt, status)
 }
 
@@ -40,10 +50,10 @@ func (m Model) renderPromptBar() string {
 	switch m.mode {
 	case ModeCommand:
 		prefix = "/ "
-		hint = dimStyle.Render(" Enter to run | Esc to cancel")
+		hint = dimStyle.Render(" Enter to run | Esc to cancel | Tab to autocomplete | ↑/↓ select")
 	case ModeFilePicker:
 		prefix = "@ "
-		hint = dimStyle.Render(" Enter to add file | Esc to cancel")
+		hint = dimStyle.Render(" Enter to add file | Esc to cancel | ↑/↓ select")
 	case ModeHITL:
 		prefix = "! "
 		hint = dimStyle.Render(" y approve | n deny | Esc cancel")
@@ -67,4 +77,46 @@ func (m Model) renderPromptBar() string {
 		content += " " + hint
 	}
 	return promptBarStyle.Width(m.width).Render(content)
+}
+
+func (m Model) renderFilePicker() string {
+	if m.filePicker.loading {
+		return panelStyle.Width(m.width).Render("Indexing files...")
+	}
+	if m.filePicker.err != nil {
+		return panelStyle.Width(m.width).Render(fmt.Sprintf("File index error: %v", m.filePicker.err))
+	}
+	if len(m.filePicker.filtered) == 0 {
+		return panelStyle.Width(m.width).Render("No matching files")
+	}
+	lines := make([]string, 0, len(m.filePicker.filtered)+1)
+	lines = append(lines, panelHeaderStyle.Render("Context Files"))
+	for i, entry := range m.filePicker.filtered {
+		line := renderFileEntry(entry)
+		if i == m.filePicker.selected {
+			line = panelItemActiveStyle.Render(line)
+		} else {
+			line = panelItemStyle.Render(line)
+		}
+		lines = append(lines, line)
+	}
+	return panelStyle.Width(m.width).Render(strings.Join(lines, "\n"))
+}
+
+func (m Model) renderCommandPalette() string {
+	if len(m.commandPalette.items) == 0 {
+		return panelStyle.Width(m.width).Render("No matching commands")
+	}
+	lines := make([]string, 0, len(m.commandPalette.items)+1)
+	lines = append(lines, panelHeaderStyle.Render("Command Palette"))
+	for i, item := range m.commandPalette.items {
+		line := renderCommandItem(item)
+		if i == m.commandPalette.selected {
+			line = panelItemActiveStyle.Render(line)
+		} else {
+			line = panelItemStyle.Render(line)
+		}
+		lines = append(lines, line)
+	}
+	return panelStyle.Width(m.width).Render(strings.Join(lines, "\n"))
 }
