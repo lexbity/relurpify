@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -71,6 +72,20 @@ func init() {
 		Description: "Reject pending changes",
 		Usage:       "/reject",
 		Handler:     handleReject,
+	})
+	registerCommand(Command{
+		Name:        "diff",
+		Aliases:     []string{"d"},
+		Description: "Toggle diff expansion for recent changes",
+		Usage:       "/diff [index|path]",
+		Handler:     handleDiff,
+	})
+	registerCommand(Command{
+		Name:        "export",
+		Aliases:     []string{"ex"},
+		Description: "Export session (markdown/json)",
+		Usage:       "/export [md|json] [path]",
+		Handler:     handleExport,
 	})
 	registerCommand(Command{
 		Name:        "hitl",
@@ -196,7 +211,15 @@ func handleAdd(m Model, args []string) (Model, tea.Cmd) {
 	if err := m.context.AddFile(path); err != nil {
 		return m.addSystemMessage(fmt.Sprintf("Context error: %v", err)), nil
 	}
-	return m.addSystemMessage(fmt.Sprintf("Added to context: %s", path)), nil
+	size := int64(0)
+	tokens := 0
+	if m.session != nil {
+		if entry, err := fileEntryForSelection(m.session.Workspace, path); err == nil {
+			size = entry.SizeBytes
+			tokens = entry.TokenEstimate
+		}
+	}
+	return m.addSystemMessage(fmt.Sprintf("Added to context: %s (%s)", path, formatSizeToken(size, tokens))), nil
 }
 
 func handleRemove(m Model, args []string) (Model, tea.Cmd) {
@@ -228,35 +251,110 @@ func handleClear(m Model, args []string) (Model, tea.Cmd) {
 }
 
 func handleApprove(m Model, args []string) (Model, tea.Cmd) {
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		msg := &m.messages[i]
-		if msg.Role != RoleAgent {
-			continue
-		}
-		for j := range msg.Content.Changes {
-			if msg.Content.Changes[j].Status == StatusPending {
-				msg.Content.Changes[j].Status = StatusApproved
-				return m.addSystemMessage(fmt.Sprintf("Approved %s", msg.Content.Changes[j].Path)), nil
-			}
-		}
+	var count int
+	m, count = m.applyPendingChanges(StatusApproved)
+	if count == 0 {
+		return m.addSystemMessage("No pending changes"), nil
 	}
-	return m.addSystemMessage("No pending changes"), nil
+	return m.addSystemMessage(fmt.Sprintf("Approved %d change(s)", count)), nil
 }
 
 func handleReject(m Model, args []string) (Model, tea.Cmd) {
+	var count int
+	m, count = m.applyPendingChanges(StatusRejected)
+	if count == 0 {
+		return m.addSystemMessage("No pending changes"), nil
+	}
+	return m.addSystemMessage(fmt.Sprintf("Rejected %d change(s)", count)), nil
+}
+
+func handleDiff(m Model, args []string) (Model, tea.Cmd) {
+	index := -1
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		msg := &m.messages[i]
-		if msg.Role != RoleAgent {
-			continue
-		}
-		for j := range msg.Content.Changes {
-			if msg.Content.Changes[j].Status == StatusPending {
-				msg.Content.Changes[j].Status = StatusRejected
-				return m.addSystemMessage(fmt.Sprintf("Rejected %s", msg.Content.Changes[j].Path)), nil
-			}
+		if msg.Role == RoleAgent && len(msg.Content.Changes) > 0 {
+			index = i
+			break
 		}
 	}
-	return m.addSystemMessage("No pending changes"), nil
+	if index == -1 {
+		return m.addSystemMessage("No recent changes to show diffs"), nil
+	}
+
+	changes := m.messages[index].Content.Changes
+	if len(args) == 0 {
+		var b strings.Builder
+		b.WriteString("Recent changes:\n\n")
+		for i, change := range changes {
+			state := "collapsed"
+			if change.Expanded {
+				state = "expanded"
+			}
+			b.WriteString(fmt.Sprintf("  %d) %s (%s)\n", i+1, change.Path, state))
+		}
+		return m.addSystemMessage(b.String()), nil
+	}
+
+	arg := strings.TrimSpace(args[0])
+	if arg == "" {
+		return m.addSystemMessage("Usage: /diff [index|path]"), nil
+	}
+
+	if pos, err := strconv.Atoi(arg); err == nil {
+		pos--
+		if pos < 0 || pos >= len(changes) {
+			return m.addSystemMessage("Diff index out of range"), nil
+		}
+		m.messages[index].Content.Changes[pos].Expanded = !m.messages[index].Content.Changes[pos].Expanded
+		return m.refreshFeedContent(), nil
+	}
+
+	matches := []int{}
+	for i, change := range changes {
+		if change.Path == arg || strings.Contains(change.Path, arg) {
+			matches = append(matches, i)
+		}
+	}
+	if len(matches) == 0 {
+		return m.addSystemMessage(fmt.Sprintf("No diff matched: %s", arg)), nil
+	}
+	if len(matches) > 1 {
+		var b strings.Builder
+		b.WriteString("Multiple diffs matched:\n\n")
+		for _, i := range matches {
+			b.WriteString(fmt.Sprintf("  %d) %s\n", i+1, changes[i].Path))
+		}
+		return m.addSystemMessage(b.String()), nil
+	}
+	target := matches[0]
+	m.messages[index].Content.Changes[target].Expanded = !m.messages[index].Content.Changes[target].Expanded
+	return m.refreshFeedContent(), nil
+}
+
+func handleExport(m Model, args []string) (Model, tea.Cmd) {
+	format, path := parseExportArgs(args)
+	if format == "" {
+		return m.addSystemMessage("Usage: /export [md|json] [path]"), nil
+	}
+	opts := ExportOptions{
+		Format:        format,
+		Path:          path,
+		Limit:         200,
+		WorkspaceRoot: "",
+	}
+	if m.session != nil {
+		opts.WorkspaceRoot = m.session.Workspace
+	}
+	if m.runtime != nil {
+		artifacts := m.runtime.SessionArtifacts()
+		opts.TelemetryPath = artifacts.TelemetryPath
+		opts.LogPath = artifacts.LogPath
+	}
+	out, err := WriteSessionExport(m, opts)
+	if err != nil {
+		return m.addSystemMessage(fmt.Sprintf("Export failed: %v", err)), nil
+	}
+	return m.addSystemMessage(fmt.Sprintf("Exported session to %s", out)), nil
 }
 
 func handleHITL(m Model, args []string) (Model, tea.Cmd) {
