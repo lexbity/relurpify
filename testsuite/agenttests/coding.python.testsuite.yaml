@@ -5,7 +5,7 @@ metadata:
   description: "Python-focused prompts for the coding agent (easy→hard)."
 spec:
   agent_name: coding
-  manifest: ../agents/coding-python.yaml
+  manifest: relurpify_cfg/agents/coding-python.yaml
   workspace:
     strategy: in_place
     exclude:
