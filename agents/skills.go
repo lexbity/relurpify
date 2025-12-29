@@ -58,6 +58,10 @@ func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames [
 			continue
 		}
 		paths := resolveSkillPaths(skillManifest)
+		if err := validateSkillPaths(paths); err != nil {
+			results = append(results, logSkillError(workspace, skillName, "missing_resources", err, paths))
+			continue
+		}
 		if ok, err := skillToolsAvailable(skillManifest, registry, permissions, agentID); !ok {
 			if err == nil {
 				err = fmt.Errorf("required tools unavailable")
@@ -120,6 +124,21 @@ func skillToolsAvailable(skill *manifest.SkillManifest, registry *toolsys.ToolRe
 	return true, nil
 }
 
+// CheckSkillToolsAvailable validates required tool availability and permissions.
+func CheckSkillToolsAvailable(skill *manifest.SkillManifest, registry *toolsys.ToolRegistry, permissions *toolsys.PermissionManager, agentID string) (bool, error) {
+	return skillToolsAvailable(skill, registry, permissions, agentID)
+}
+
+// ResolveSkillPaths exposes the resolved resource paths for a skill.
+func ResolveSkillPaths(skill *manifest.SkillManifest) SkillPaths {
+	return resolveSkillPaths(skill)
+}
+
+// ValidateSkillPaths ensures resource entries exist on disk.
+func ValidateSkillPaths(paths SkillPaths) error {
+	return validateSkillPaths(paths)
+}
+
 func resolveSkillPaths(skill *manifest.SkillManifest) SkillPaths {
 	root := ""
 	if skill != nil && skill.SourcePath != "" {
@@ -155,6 +174,27 @@ func resolveSkillList(root string, entries []string, fallback string) []string {
 		paths = append(paths, filepath.Join(root, entry))
 	}
 	return paths
+}
+
+func validateSkillPaths(paths SkillPaths) error {
+	var missing []string
+	check := func(label string, entries []string) {
+		for _, entry := range entries {
+			if entry == "" {
+				continue
+			}
+			if _, err := os.Stat(entry); err != nil {
+				missing = append(missing, fmt.Sprintf("%s:%s", label, entry))
+			}
+		}
+	}
+	check("scripts", paths.Scripts)
+	check("resources", paths.Resources)
+	check("templates", paths.Templates)
+	if len(missing) > 0 {
+		return fmt.Errorf("missing skill resources: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func mergePromptSnippets(base string, snippets []string) string {
