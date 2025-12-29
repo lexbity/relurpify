@@ -71,7 +71,11 @@ func DefaultConfigPath(workspace string) string {
 
 // DefaultAgentPaths returns the canonical search paths rooted in relurpify_cfg.
 func DefaultAgentPaths(workspace string) []string {
-	return []string{filepath.Join(ConfigDir(workspace), "agents")}
+	cfgDir := ConfigDir(workspace)
+	return []string{
+		filepath.Join(cfgDir, "agents"),
+		filepath.Join(cfgDir, "agent.manifest.yaml"),
+	}
 }
 
 // LoadGlobalConfig loads the config or returns defaults when missing.
