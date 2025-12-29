@@ -9,7 +9,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/lexcodex/relurpify/llm"
 	"github.com/spf13/cobra"
 	"log"
@@ -49,6 +48,7 @@ func newStartCmd() *cobra.Command {
 			if spec == nil {
 				return fmt.Errorf("agent %s missing spec.agent section", manifest.Metadata.Name)
 			}
+			spec = agents.ResolveAgentSpec(globalCfg, spec)
 			if mode == "" {
 				if spec.Mode != "" {
 					mode = string(spec.Mode)
@@ -78,12 +78,6 @@ func newStartCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "Dry run: %s in %s mode with instruction: %s\n", agentName, mode, instruction)
 				return nil
 			}
-			modelName := spec.Model.Name
-			if modelName == "" {
-				modelName = defaultModelName()
-			}
-			client := llm.NewClient(defaultEndpoint(), modelName)
-			client.SetDebugLogging(logLLM)
 			runtimeCfg := appruntime.DefaultConfig()
 			runtimeCfg.Workspace = ws
 			runtimeCfg.ManifestPath = manifest.SourcePath
@@ -112,7 +106,15 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			toolsys.RestrictToolRegistryByMatrix(tools, spec.Tools)
+			spec, skillResults := agents.ApplySkills(ws, spec, manifest.Spec.Skills, manifest.Spec.SkillOverlays, tools, registration.Permissions, registration.ID)
+			if spec.Logging != nil {
+				if spec.Logging.LLM != nil {
+					logLLM = *spec.Logging.LLM
+				}
+				if spec.Logging.Agent != nil {
+					logAgent = *spec.Logging.Agent
+				}
+			}
 			tools.UseAgentSpec(registration.ID, spec)
 			telemetry := telemetry.LoggerTelemetry{Logger: log.Default()}
 			tools.UseTelemetry(telemetry)
@@ -124,6 +126,12 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			modelName := spec.Model.Name
+			if modelName == "" {
+				modelName = defaultModelName()
+			}
+			client := llm.NewClient(defaultEndpoint(), modelName)
+			client.SetDebugLogging(logLLM)
 			agent := &agents.CodingAgent{
 				Model:  llm.NewInstrumentedModel(client, telemetry, logLLM),
 				Tools:  tools,
@@ -156,6 +164,15 @@ func newStartCmd() *cobra.Command {
 			state.Set("task.id", task.ID)
 			state.Set("task.type", string(task.Type))
 			state.Set("task.instruction", task.Instruction)
+			for _, skill := range skillResults {
+				if !skill.Applied || skill.Paths.Root == "" {
+					continue
+				}
+				state.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
+			}
+			if task.ID != "" {
+				defer state.ClearHandleScope(task.ID)
+			}
 			result, err := agent.Execute(ctx, task, state)
 			if err != nil {
 				return err
