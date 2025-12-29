@@ -52,12 +52,18 @@ func (r *ToolRegistry) Register(tool Tool) error {
 		return fmt.Errorf("tool %s already registered", tool.Name())
 	}
 	if policy, ok := r.toolPolicies[tool.Name()]; ok {
-		if policy.Visible != nil && !*policy.Visible {
-			return nil
+		if policy.Visible != nil {
+			if !*policy.Visible {
+				return nil
+			}
 		}
 	}
-	if r.hasToolMatrix && !toolAllowedByMatrix(tool, r.toolMatrix) {
-		return nil
+	if r.hasToolMatrix {
+		if policy, ok := r.toolPolicies[tool.Name()]; ok && policy.Visible != nil && *policy.Visible {
+			// Explicitly visible tool overrides matrix.
+		} else if !toolAllowedByMatrix(tool, r.toolMatrix) {
+			return nil
+		}
 	}
 	// If we already have a manager, inject it immediately
 	if r.permissionManager != nil {
