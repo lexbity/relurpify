@@ -6,6 +6,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -249,13 +250,12 @@ func (ac *AgentCoordinator) executeReviewIterateStrategy(task *core.Task) (*core
 		if err != nil {
 			break
 		}
-		if passed, ok := reviewResult.Data["passed"].(bool); ok && passed {
+		passed, issues := extractReviewOutcome(reviewResult)
+		if passed {
 			break
 		}
 		ac.contextBroker.StoreReviewIssues(reviewResult)
-
-		issues, hasIssues := reviewResult.Data["issues"].([]ReviewIssue)
-		if !hasIssues || len(issues) == 0 {
+		if len(issues) == 0 {
 			break
 		}
 
@@ -441,7 +441,7 @@ func (cb *ContextBroker) StoreReviewIssues(result *core.Result) {
 	if result == nil {
 		return
 	}
-	if issues, ok := result.Data["issues"].([]ReviewIssue); ok {
+	if issues := extractReviewIssues(result); len(issues) > 0 {
 		cb.reviewerIssues = issues
 	}
 }
@@ -476,4 +476,169 @@ func cloneTask(task *core.Task) *core.Task {
 
 func timeNow() time.Time {
 	return time.Now().UTC()
+}
+
+func extractReviewOutcome(result *core.Result) (bool, []ReviewIssue) {
+	if result == nil || result.Data == nil {
+		return false, nil
+	}
+	if passed, ok := result.Data["passed"].(bool); ok {
+		return passed, extractReviewIssues(result)
+	}
+	passed, ok := extractReviewPassedFromReview(result.Data["review"])
+	if ok {
+		return passed, extractReviewIssues(result)
+	}
+	return false, extractReviewIssues(result)
+}
+
+func extractReviewIssues(result *core.Result) []ReviewIssue {
+	if result == nil || result.Data == nil {
+		return nil
+	}
+	if issues, ok := result.Data["issues"].([]ReviewIssue); ok {
+		return issues
+	}
+	_, issues, ok := extractReviewPayload(result.Data["review"])
+	if ok {
+		return issues
+	}
+	return nil
+}
+
+func extractReviewPassedFromReview(review interface{}) (bool, bool) {
+	approved, _, ok := extractReviewPayload(review)
+	return approved, ok
+}
+
+func extractReviewPayload(review interface{}) (bool, []ReviewIssue, bool) {
+	if review == nil {
+		return false, nil, false
+	}
+	if reviewMap, ok := review.(map[string]interface{}); ok {
+		approved, okApproved := reviewMap["approve"].(bool)
+		issues := issuesFromInterface(reviewMap["issues"])
+		if okApproved || len(issues) > 0 {
+			return approved, issues, true
+		}
+		return false, nil, false
+	}
+
+	rv := reflect.ValueOf(review)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return false, nil, false
+		}
+		rv = rv.Elem()
+	}
+	if rv.Kind() != reflect.Struct {
+		return false, nil, false
+	}
+	approved := false
+	approvedSet := false
+	if approveField := rv.FieldByName("Approve"); approveField.IsValid() && approveField.Kind() == reflect.Bool {
+		approved = approveField.Bool()
+		approvedSet = true
+	}
+	var issues []ReviewIssue
+	if issuesField := rv.FieldByName("Issues"); issuesField.IsValid() && issuesField.Kind() == reflect.Slice {
+		issues = issuesFromSliceValue(issuesField)
+	}
+	if approvedSet || len(issues) > 0 {
+		return approved, issues, true
+	}
+	return false, nil, false
+}
+
+func issuesFromInterface(value interface{}) []ReviewIssue {
+	if value == nil {
+		return nil
+	}
+	if issues, ok := value.([]ReviewIssue); ok {
+		return issues
+	}
+	rv := reflect.ValueOf(value)
+	if rv.Kind() == reflect.Slice {
+		return issuesFromSliceValue(rv)
+	}
+	return nil
+}
+
+func issuesFromSliceValue(rv reflect.Value) []ReviewIssue {
+	var issues []ReviewIssue
+	for i := 0; i < rv.Len(); i++ {
+		item := rv.Index(i).Interface()
+		if issue, ok := issueFromInterface(item); ok {
+			issues = append(issues, issue)
+		}
+	}
+	return issues
+}
+
+func issueFromInterface(item interface{}) (ReviewIssue, bool) {
+	if item == nil {
+		return ReviewIssue{}, false
+	}
+	if issue, ok := item.(ReviewIssue); ok {
+		return issue, true
+	}
+	if issueMap, ok := item.(map[string]interface{}); ok {
+		return issueFromMap(issueMap), true
+	}
+	rv := reflect.ValueOf(item)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return ReviewIssue{}, false
+		}
+		rv = rv.Elem()
+	}
+	if rv.Kind() != reflect.Struct {
+		return ReviewIssue{}, false
+	}
+	return issueFromStruct(rv), true
+}
+
+func issueFromMap(data map[string]interface{}) ReviewIssue {
+	issue := ReviewIssue{}
+	if file, ok := data["file"].(string); ok {
+		issue.File = file
+	}
+	if line, ok := data["line"].(int); ok {
+		issue.Line = line
+	} else if lineFloat, ok := data["line"].(float64); ok {
+		issue.Line = int(lineFloat)
+	}
+	if severity, ok := data["severity"].(string); ok {
+		issue.Severity = severity
+	}
+	if msg, ok := data["message"].(string); ok {
+		issue.Message = msg
+	} else if desc, ok := data["description"].(string); ok {
+		issue.Message = desc
+	}
+	return issue
+}
+
+func issueFromStruct(rv reflect.Value) ReviewIssue {
+	issue := ReviewIssue{}
+	if fileField := rv.FieldByName("File"); fileField.IsValid() && fileField.Kind() == reflect.String {
+		issue.File = fileField.String()
+	}
+	if lineField := rv.FieldByName("Line"); lineField.IsValid() {
+		switch lineField.Kind() {
+		case reflect.Int, reflect.Int64:
+			issue.Line = int(lineField.Int())
+		case reflect.Float64:
+			issue.Line = int(lineField.Float())
+		}
+	}
+	if severityField := rv.FieldByName("Severity"); severityField.IsValid() && severityField.Kind() == reflect.String {
+		issue.Severity = severityField.String()
+	}
+	if msgField := rv.FieldByName("Message"); msgField.IsValid() && msgField.Kind() == reflect.String {
+		issue.Message = msgField.String()
+	} else if descField := rv.FieldByName("Description"); descField.IsValid() && descField.Kind() == reflect.String {
+		issue.Message = descField.String()
+	}
+	return issue
 }
