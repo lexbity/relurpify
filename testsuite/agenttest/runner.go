@@ -179,6 +179,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if strings.EqualFold(workspaceStrategy, "copy") {
 		manifestAbs = mapTargetPathToWorkspace(suiteManifestAbs, targetWorkspace, workspace)
 	}
+	manifestAbs = fallbackManifestPath(manifestAbs, workspace)
 	// In in-place mode we keep the manifest as-is (tool authorization depends on
 	// broad tool-level permissions), and enforce safety via the agent file matrix
 	// instead (default-deny with allowlisted paths).
@@ -451,6 +452,28 @@ func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string
 		return candidate
 	}
 	return resolvedBySuite
+}
+
+func fallbackManifestPath(manifestPath, workspace string) string {
+	if manifestPath != "" {
+		if _, err := os.Stat(manifestPath); err == nil {
+			return manifestPath
+		}
+	}
+	if workspace == "" {
+		return manifestPath
+	}
+	candidates := []string{
+		filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml"),
+		filepath.Join(workspace, "relurpify_cfg", "testsuites", "agent.manifest.yaml"),
+		filepath.Join(workspace, "relurpify_cfg", "testsuite", "agent.manifest.yaml"),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return manifestPath
 }
 
 func uniqueStrings(in []string) []string {
