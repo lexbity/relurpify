@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/toolsys"
+	"strings"
 )
 
 // PlannerAgent builds a plan before executing. It is intentionally explicit:
@@ -80,11 +81,18 @@ func (n *plannerPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 // enough that contributors can tweak it without retraining anything.
 func (n *plannerPlanNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	state.SetExecutionPhase("planning")
+	extraPrompt := ""
+	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
+		extraPrompt = strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
+	}
+	if extraPrompt != "" {
+		extraPrompt = fmt.Sprintf("Additional Guidance:\n%s\n\n", extraPrompt)
+	}
 	prompt := fmt.Sprintf(`You are a planning agent. Break this task into steps with dependencies.
-Task: %s
+%sTask: %s
 Return valid JSON Plan struct with fields goal, steps (array of {id, description, tool, params, expected, verification, files}), dependencies (map of step id -> [step id]), files.
 Use string step ids (UUID-safe).
-`, n.task.Instruction)
+`, extraPrompt, n.task.Instruction)
 	resp, err := n.agent.Model.Generate(ctx, prompt, &core.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
