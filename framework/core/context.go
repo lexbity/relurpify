@@ -58,6 +58,7 @@ type Context struct {
 	phase             string
 	maxHistory        int
 	maxSnapshot       int
+	registry          *ObjectRegistry
 }
 
 // NewContext builds an empty execution context with sensible history limits so
@@ -73,6 +74,7 @@ func NewContext() *Context {
 		phase:             "planning",
 		maxHistory:        200,
 		maxSnapshot:       32,
+		registry:          NewObjectRegistry(),
 	}
 }
 
@@ -143,6 +145,36 @@ func (c *Context) Merge(other *Context) {
 	other.mu.RLock()
 	defer other.mu.RUnlock()
 
+	type interactionKey struct {
+		ID        int
+		Role      string
+		Content   string
+		Timestamp time.Time
+	}
+	type compressedKey struct {
+		Start       int
+		End         int
+		Compressed  time.Time
+		OriginalTok int
+	}
+	type compressionEventKey struct {
+		Start       int
+		End         int
+		Method      string
+		Timestamp   time.Time
+		SavedTokens int
+	}
+
+	existingInteractions := make(map[interactionKey]struct{}, len(c.history))
+	for _, interaction := range c.history {
+		existingInteractions[interactionKey{
+			ID:        interaction.ID,
+			Role:      interaction.Role,
+			Content:   interaction.Content,
+			Timestamp: interaction.Timestamp,
+		}] = struct{}{}
+	}
+
 	for k, v := range other.state {
 		c.state[k] = v
 	}
@@ -152,9 +184,67 @@ func (c *Context) Merge(other *Context) {
 	for k, v := range other.knowledge {
 		c.knowledge[k] = v
 	}
-	c.history = append(c.history, other.history...)
-	c.compressedHistory = append(c.compressedHistory, other.compressedHistory...)
-	c.compressionLog = append(c.compressionLog, other.compressionLog...)
+	for _, interaction := range other.history {
+		key := interactionKey{
+			ID:        interaction.ID,
+			Role:      interaction.Role,
+			Content:   interaction.Content,
+			Timestamp: interaction.Timestamp,
+		}
+		if _, ok := existingInteractions[key]; ok {
+			continue
+		}
+		existingInteractions[key] = struct{}{}
+		c.history = append(c.history, interaction)
+	}
+
+	existingCompressed := make(map[compressedKey]struct{}, len(c.compressedHistory))
+	for _, cc := range c.compressedHistory {
+		existingCompressed[compressedKey{
+			Start:       cc.StartInteractionID,
+			End:         cc.EndInteractionID,
+			Compressed:  cc.CompressedAt,
+			OriginalTok: cc.OriginalTokens,
+		}] = struct{}{}
+	}
+	for _, cc := range other.compressedHistory {
+		key := compressedKey{
+			Start:       cc.StartInteractionID,
+			End:         cc.EndInteractionID,
+			Compressed:  cc.CompressedAt,
+			OriginalTok: cc.OriginalTokens,
+		}
+		if _, ok := existingCompressed[key]; ok {
+			continue
+		}
+		existingCompressed[key] = struct{}{}
+		c.compressedHistory = append(c.compressedHistory, cc)
+	}
+
+	existingEvents := make(map[compressionEventKey]struct{}, len(c.compressionLog))
+	for _, event := range c.compressionLog {
+		existingEvents[compressionEventKey{
+			Start:       event.StartInteractionID,
+			End:         event.EndInteractionID,
+			Method:      event.CompressionMethod,
+			Timestamp:   event.Timestamp,
+			SavedTokens: event.TokensSaved,
+		}] = struct{}{}
+	}
+	for _, event := range other.compressionLog {
+		key := compressionEventKey{
+			Start:       event.StartInteractionID,
+			End:         event.EndInteractionID,
+			Method:      event.CompressionMethod,
+			Timestamp:   event.Timestamp,
+			SavedTokens: event.TokensSaved,
+		}
+		if _, ok := existingEvents[key]; ok {
+			continue
+		}
+		existingEvents[key] = struct{}{}
+		c.compressionLog = append(c.compressionLog, event)
+	}
 	if other.interactionIDCtr > c.interactionIDCtr {
 		c.interactionIDCtr = other.interactionIDCtr
 	}
@@ -168,54 +258,23 @@ func (c *Context) Clone() *Context {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(c.state); err != nil {
-		return NewContext()
-	}
-	if err := enc.Encode(c.variables); err != nil {
-		return NewContext()
-	}
-	if err := enc.Encode(c.knowledge); err != nil {
-		return NewContext()
-	}
-	if err := enc.Encode(c.history); err != nil {
-		return NewContext()
-	}
-	if err := enc.Encode(c.compressedHistory); err != nil {
-		return NewContext()
-	}
-	if err := enc.Encode(c.compressionLog); err != nil {
-		return NewContext()
-	}
-	if err := enc.Encode(c.interactionIDCtr); err != nil {
-		return NewContext()
+	clone := NewContext()
+	if err := cloneFromGob(c, clone); err == nil {
+		clone.phase = c.phase
+		clone.registry = c.registry
+		return clone
 	}
 
-	dec := gob.NewDecoder(bytes.NewBuffer(buf.Bytes()))
-	clone := NewContext()
-	if err := dec.Decode(&clone.state); err != nil {
-		return NewContext()
-	}
-	if err := dec.Decode(&clone.variables); err != nil {
-		return NewContext()
-	}
-	if err := dec.Decode(&clone.knowledge); err != nil {
-		return NewContext()
-	}
-	if err := dec.Decode(&clone.history); err != nil {
-		return NewContext()
-	}
-	if err := dec.Decode(&clone.compressedHistory); err != nil {
-		return NewContext()
-	}
-	if err := dec.Decode(&clone.compressionLog); err != nil {
-		return NewContext()
-	}
-	if err := dec.Decode(&clone.interactionIDCtr); err != nil {
-		return NewContext()
-	}
+	// Fallback to a shallow copy so we do not silently drop state on gob failures.
+	clone.state = shallowCopyMap(c.state)
+	clone.variables = shallowCopyMap(c.variables)
+	clone.knowledge = shallowCopyMap(c.knowledge)
+	clone.history = append([]Interaction(nil), c.history...)
+	clone.compressedHistory = append([]CompressedContext(nil), c.compressedHistory...)
+	clone.compressionLog = append([]CompressionEvent(nil), c.compressionLog...)
+	clone.interactionIDCtr = c.interactionIDCtr
 	clone.phase = c.phase
+	clone.registry = c.registry
 	return clone
 }
 
@@ -236,18 +295,10 @@ func (c *Context) Snapshot() *ContextSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	cp := func(src map[string]interface{}) map[string]interface{} {
-		dst := make(map[string]interface{}, len(src))
-		for k, v := range src {
-			dst[k] = v
-		}
-		return dst
-	}
-
 	snapshot := &ContextSnapshot{
-		State:                cp(c.state),
-		Variables:            cp(c.variables),
-		Knowledge:            cp(c.knowledge),
+		State:                deepCopyMap(c.state),
+		Variables:            deepCopyMap(c.variables),
+		Knowledge:            deepCopyMap(c.knowledge),
 		History:              append([]Interaction(nil), c.history...),
 		CompressedHistory:    append([]CompressedContext(nil), c.compressedHistory...),
 		CompressionLog:       append([]CompressionEvent(nil), c.compressionLog...),
@@ -301,6 +352,173 @@ func (c *Context) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return c.Restore(&snapshot)
+}
+
+// Registry returns the shared object registry used for non-serializable data.
+func (c *Context) Registry() *ObjectRegistry {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.registry
+}
+
+// SetHandle stores a registry handle in the context state and returns it.
+func (c *Context) SetHandle(key string, value interface{}) string {
+	if c == nil {
+		return ""
+	}
+	handle := ""
+	if registry := c.Registry(); registry != nil {
+		handle = registry.Register(value)
+	}
+	c.Set(key, handle)
+	return handle
+}
+
+// SetHandleScoped stores a registry handle scoped for cleanup.
+func (c *Context) SetHandleScoped(key string, value interface{}, scope string) string {
+	if c == nil {
+		return ""
+	}
+	handle := ""
+	if registry := c.Registry(); registry != nil {
+		handle = registry.RegisterScoped(scope, value)
+	}
+	c.Set(key, handle)
+	return handle
+}
+
+// GetHandle resolves a registry handle stored in the context state.
+func (c *Context) GetHandle(key string) (interface{}, bool) {
+	if c == nil {
+		return nil, false
+	}
+	raw, _ := c.Get(key)
+	handle, ok := raw.(string)
+	if !ok || handle == "" {
+		return nil, false
+	}
+	if registry := c.Registry(); registry != nil {
+		return registry.Lookup(handle)
+	}
+	return nil, false
+}
+
+// ClearHandleScope removes all scoped handles from the registry.
+func (c *Context) ClearHandleScope(scope string) {
+	if c == nil || scope == "" {
+		return
+	}
+	if registry := c.Registry(); registry != nil {
+		registry.ClearScope(scope)
+	}
+}
+
+func shallowCopyMap(src map[string]interface{}) map[string]interface{} {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func deepCopyMap(src map[string]interface{}) map[string]interface{} {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		dst[k] = deepCopyValue(v)
+	}
+	return dst
+}
+
+func cloneFromGob(src *Context, dst *Context) error {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(src.state); err != nil {
+		return err
+	}
+	if err := enc.Encode(src.variables); err != nil {
+		return err
+	}
+	if err := enc.Encode(src.knowledge); err != nil {
+		return err
+	}
+	if err := enc.Encode(src.history); err != nil {
+		return err
+	}
+	if err := enc.Encode(src.compressedHistory); err != nil {
+		return err
+	}
+	if err := enc.Encode(src.compressionLog); err != nil {
+		return err
+	}
+	if err := enc.Encode(src.interactionIDCtr); err != nil {
+		return err
+	}
+
+	dec := gob.NewDecoder(bytes.NewBuffer(buf.Bytes()))
+	if err := dec.Decode(&dst.state); err != nil {
+		return err
+	}
+	if err := dec.Decode(&dst.variables); err != nil {
+		return err
+	}
+	if err := dec.Decode(&dst.knowledge); err != nil {
+		return err
+	}
+	if err := dec.Decode(&dst.history); err != nil {
+		return err
+	}
+	if err := dec.Decode(&dst.compressedHistory); err != nil {
+		return err
+	}
+	if err := dec.Decode(&dst.compressionLog); err != nil {
+		return err
+	}
+	if err := dec.Decode(&dst.interactionIDCtr); err != nil {
+		return err
+	}
+	return nil
+}
+
+func deepCopyValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return deepCopyMap(typed)
+	case []interface{}:
+		out := make([]interface{}, len(typed))
+		for i, item := range typed {
+			out[i] = deepCopyValue(item)
+		}
+		return out
+	case []string:
+		return append([]string(nil), typed...)
+	case []int:
+		return append([]int(nil), typed...)
+	case []float64:
+		return append([]float64(nil), typed...)
+	case map[string]string:
+		out := make(map[string]string, len(typed))
+		for k, v := range typed {
+			out[k] = v
+		}
+		return out
+	case map[string]int:
+		out := make(map[string]int, len(typed))
+		for k, v := range typed {
+			out[k] = v
+		}
+		return out
+	default:
+		return value
+	}
 }
 
 // AddInteraction appends to the conversation history.
