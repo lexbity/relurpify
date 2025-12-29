@@ -81,4 +81,19 @@ var (
 			Foreground(colorDim).
 			Italic(true).
 			Align(lipgloss.Center)
+
+	panelStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorDim).
+			Padding(0, 1)
+
+	panelHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(colorSecondary)
+
+	panelItemStyle = lipgloss.NewStyle()
+
+	panelItemActiveStyle = lipgloss.NewStyle().
+				Foreground(colorPrimary).
+				Bold(true)
 )
