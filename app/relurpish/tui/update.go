@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -68,6 +69,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleHITLResolved(msg)
 	case hitlEventMsg:
 		return m.handleHITLEvent(msg)
+	case fileIndexMsg:
+		return m.handleFileIndex(msg)
 	}
 	return m, nil
 }
@@ -79,7 +82,8 @@ func (m Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 
 	statusBarHeight := 1
 	promptBarHeight := 1
-	feedHeight := max(1, msg.Height-statusBarHeight-promptBarHeight)
+	panelHeight := m.panelHeight()
+	feedHeight := max(1, msg.Height-statusBarHeight-promptBarHeight-panelHeight)
 
 	if !m.ready || m.feed == nil {
 		v := viewport.New(msg.Width, feedHeight)
@@ -93,6 +97,17 @@ func (m Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) panelHeight() int {
+	switch m.mode {
+	case ModeCommand:
+		return commandPaletteMaxRows + 2
+	case ModeFilePicker:
+		return filePickerMaxRows + 2
+	default:
+		return 0
+	}
+}
+
 // handleNormalMode implements the default prompt behavior described in the spec.
 func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type == tea.KeyRunes {
@@ -101,12 +116,17 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = ModeCommand
 			m.input.SetValue("/")
 			m.input.CursorEnd()
-			return m, nil
+			m = m.updateCommandPalette(m.input.Value())
+			return m.adjustLayout(), nil
 		}
 		if value == "@" && strings.TrimSpace(m.input.Value()) == "" {
 			m.mode = ModeFilePicker
 			m.input.SetValue("")
-			return m, nil
+			m.input.CursorEnd()
+			var cmd tea.Cmd
+			m, cmd = m.initFilePicker()
+			m = m.adjustLayout()
+			return m, cmd
 		}
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
@@ -114,6 +134,12 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "ctrl+k":
+		m.mode = ModeCommand
+		m.input.SetValue("/")
+		m.input.CursorEnd()
+		m = m.updateCommandPalette(m.input.Value())
+		return m.adjustLayout(), nil
 	case "enter":
 		return m.submitPrompt()
 	case "up", "pgup", "home":
@@ -156,9 +182,13 @@ func (m Model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		raw := strings.TrimSpace(m.input.Value())
-		if raw == "" {
-			m.mode = ModeNormal
-			return m, nil
+		if raw == "" || raw == "/" {
+			if item, ok := m.commandPaletteSelection(); ok {
+				raw = "/" + item.Name
+			} else {
+				m.mode = ModeNormal
+				return m.adjustLayout(), nil
+			}
 		}
 		if !strings.HasPrefix(raw, "/") {
 			raw = "/" + raw
@@ -167,16 +197,31 @@ func (m Model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		m.mode = ModeNormal
 		if cmdName == "" {
-			return m, nil
+			return m.adjustLayout(), nil
 		}
 		return handleCommand(m, cmdName, args)
 	case "esc":
 		m.mode = ModeNormal
 		m.input.SetValue("")
+		return m.adjustLayout(), nil
+	case "up":
+		if m.commandPalette.selected > 0 {
+			m.commandPalette.selected--
+		}
+		return m, nil
+	case "down":
+		if m.commandPalette.selected+1 < len(m.commandPalette.items) {
+			m.commandPalette.selected++
+		}
+		return m, nil
+	case "tab":
+		m = m.applyCommandAutocomplete()
+		m = m.updateCommandPalette(m.input.Value())
 		return m, nil
 	default:
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
+		m = m.updateCommandPalette(m.input.Value())
 		return m, cmd
 	}
 }
@@ -185,24 +230,50 @@ func (m Model) handleCommandMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleFilePickerMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
+		entry, ok := m.filePickerSelection()
 		selection := strings.TrimSpace(m.input.Value())
+		if ok {
+			selection = entry.DisplayPath
+		}
 		if selection != "" {
 			if err := m.context.AddFile(selection); err != nil {
 				m = m.addSystemMessage(fmt.Sprintf("Context error: %v", err))
 			} else {
-				m = m.addSystemMessage(fmt.Sprintf("Added to context: %s", selection))
+				size := int64(0)
+				tokens := 0
+				if ok {
+					size = entry.SizeBytes
+					tokens = entry.TokenEstimate
+				} else if m.session != nil {
+					if info, err := fileEntryForSelection(m.session.Workspace, selection); err == nil {
+						size = info.SizeBytes
+						tokens = info.TokenEstimate
+					}
+				}
+				m = m.addSystemMessage(fmt.Sprintf("Added to context: %s (%s)", selection, formatSizeToken(size, tokens)))
 			}
 		}
 		m.input.SetValue("")
 		m.mode = ModeNormal
-		return m, nil
+		return m.adjustLayout(), nil
 	case "esc":
 		m.mode = ModeNormal
 		m.input.SetValue("")
+		return m.adjustLayout(), nil
+	case "up":
+		if m.filePicker.selected > 0 {
+			m.filePicker.selected--
+		}
+		return m, nil
+	case "down":
+		if m.filePicker.selected+1 < len(m.filePicker.filtered) {
+			m.filePicker.selected++
+		}
 		return m, nil
 	default:
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
+		m = m.updateFilePickerFilter(m.input.Value())
 		return m, cmd
 	}
 }
@@ -239,7 +310,24 @@ func (m Model) handleStreamComplete(msg StreamCompleteMsg) (tea.Model, tea.Cmd) 
 		}
 	}
 
+	if dropped := atomic.LoadInt64(&run.Dropped); dropped > 0 {
+		m = m.addSystemMessage(fmt.Sprintf("Stream backpressure: dropped %d update(s)", dropped))
+	}
+
 	delete(m.runStates, msg.RunID)
+	return m, nil
+}
+
+func (m Model) handleFileIndex(msg fileIndexMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.filePicker.loading = false
+		m.filePicker.err = msg.err
+		return m, nil
+	}
+	m.filePicker.loading = false
+	m.filePicker.err = nil
+	m.filePicker.all = msg.files
+	m = m.updateFilePickerFilter(m.input.Value())
 	return m, nil
 }
 
@@ -294,37 +382,43 @@ func (m Model) addSystemMessage(text string) Model {
 }
 
 func (m Model) approveCurrentChange() (tea.Model, tea.Cmd) {
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		msg := &m.messages[i]
-		if msg.Role != RoleAgent {
-			continue
-		}
-		for j := range msg.Content.Changes {
-			change := &msg.Content.Changes[j]
-			if change.Status == StatusPending {
-				change.Status = StatusApproved
-				return m.addSystemMessage(fmt.Sprintf("Approved %s", change.Path)), nil
-			}
-		}
+	var count int
+	m, count = m.applyPendingChanges(StatusApproved)
+	if count == 0 {
+		return m.addSystemMessage("No pending changes"), nil
 	}
-	return m, nil
+	return m.addSystemMessage(fmt.Sprintf("Approved %d change(s)", count)), nil
 }
 
 func (m Model) rejectCurrentChange() (tea.Model, tea.Cmd) {
+	var count int
+	m, count = m.applyPendingChanges(StatusRejected)
+	if count == 0 {
+		return m.addSystemMessage("No pending changes"), nil
+	}
+	return m.addSystemMessage(fmt.Sprintf("Rejected %d change(s)", count)), nil
+}
+
+func (m Model) applyPendingChanges(status ChangeStatus) (Model, int) {
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		msg := &m.messages[i]
-		if msg.Role != RoleAgent {
+		if msg.Role != RoleAgent || len(msg.Content.Changes) == 0 {
 			continue
 		}
+		count := 0
 		for j := range msg.Content.Changes {
 			change := &msg.Content.Changes[j]
-			if change.Status == StatusPending {
-				change.Status = StatusRejected
-				return m.addSystemMessage(fmt.Sprintf("Rejected %s", change.Path)), nil
+			if change.Status != StatusPending {
+				continue
 			}
+			change.Status = status
+			count++
+		}
+		if count > 0 {
+			return m, count
 		}
 	}
-	return m, nil
+	return m, 0
 }
 
 func (m Model) toggleExpandAtCursor() (tea.Model, tea.Cmd) {
