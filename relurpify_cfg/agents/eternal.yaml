@@ -1,0 +1,45 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+    name: eternal
+    version: 1.0.0
+    description: Eternal agent manifest
+spec:
+    image: ghcr.io/lexcodex/relurpify/runtime:latest
+    runtime: gvisor
+    defaults:
+        permissions:
+            filesystem:
+                - action: fs:read
+                  path: /home/lex/Public/Relurpify/**
+                  justification: Read workspace
+            network:
+                - direction: egress
+                  protocol: tcp
+                  host: localhost
+                  port: 11434
+                  description: Ollama
+        resources:
+            limits:
+                cpu: "1"
+                memory: 2Gi
+                disk_io: 100MBps
+    security:
+        run_as_user: 1000
+        read_only_root: false
+        no_new_privileges: true
+    audit:
+        level: verbose
+        retention_days: 7
+    agent:
+        implementation: eternal
+        mode: primary
+        version: 1.0.0
+        prompt: You are an eternal agent. Provide responses without tool use.
+        model:
+            provider: ollama
+            name: qwen2.5-coder:14b
+            temperature: 0.2
+            max_tokens: 2048
+        allowed_tools: []
+        ollama_tool_calling: true
