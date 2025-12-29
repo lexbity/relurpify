@@ -301,6 +301,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 		// before falling back to the decision parser.
 		detectedCalls := toolsys.ParseToolCallsFromText(resp.Text)
 		detectedCalls = filterToolCalls(detectedCalls)
+		detectedCalls = filterToolCalls(detectedCalls)
 		if len(detectedCalls) > 0 {
 			state.Set("react.tool_calls", detectedCalls)
 			decision = decisionPayload{
@@ -510,48 +511,54 @@ func (n *reactActNode) Type() graph.NodeType { return graph.NodeTypeTool }
 func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	state.SetExecutionPhase("executing")
 	if pending, ok := state.Get("react.tool_calls"); ok {
-		if n.agent.Config != nil && !n.agent.Config.OllamaToolCalling {
-			state.Set("react.tool_calls", []core.ToolCall{})
-		} else if calls, ok := pending.([]core.ToolCall); ok && len(calls) > 0 {
-			results := make(map[string]interface{})
-			toolErrors := make([]string, 0)
-			overallSuccess := true
-			for _, call := range calls {
-				tool, ok := n.agent.Tools.Get(call.Name)
-				if !ok {
-					return nil, fmt.Errorf("unknown tool %s", call.Name)
-				}
-				n.agent.debugf("%s executing tool=%s args=%v", n.id, call.Name, call.Args)
-				res, err := tool.Execute(ctx, state, call.Args)
-				if err != nil {
-					return nil, err
-				}
-				if res != nil {
-					results[call.Name] = map[string]interface{}{
-						"success": res.Success,
-						"data":    res.Data,
-						"error":   res.Error,
+		if calls, ok := pending.([]core.ToolCall); ok && len(calls) > 0 {
+			calls = filterToolCalls(calls)
+			if len(calls) == 0 {
+				state.Set("react.tool_calls", []core.ToolCall{})
+			} else {
+				results := make(map[string]interface{})
+				toolErrors := make([]string, 0)
+				overallSuccess := true
+				for _, call := range calls {
+					tool, ok := n.agent.Tools.Get(call.Name)
+					if !ok {
+						return nil, fmt.Errorf("unknown tool %s", call.Name)
 					}
-					appendToolMessage(state, call, res)
-					n.agent.debugf("%s tool=%s result=%v", n.id, call.Name, res.Data)
-					if !res.Success {
-						overallSuccess = false
-						if res.Error != "" {
-							toolErrors = append(toolErrors, fmt.Sprintf("%s: %s", call.Name, res.Error))
-						} else {
-							toolErrors = append(toolErrors, fmt.Sprintf("%s failed", call.Name))
+					n.agent.debugf("%s executing tool=%s args=%v", n.id, call.Name, call.Args)
+					res, err := tool.Execute(ctx, state, call.Args)
+					if err != nil {
+						return nil, err
+					}
+					if res != nil {
+						results[call.Name] = map[string]interface{}{
+							"success": res.Success,
+							"data":    res.Data,
+							"error":   res.Error,
+						}
+						appendToolMessage(state, call, res)
+						n.agent.debugf("%s tool=%s result=%v", n.id, call.Name, res.Data)
+						if !res.Success {
+							overallSuccess = false
+							if res.Error != "" {
+								toolErrors = append(toolErrors, fmt.Sprintf("%s: %s", call.Name, res.Error))
+							} else {
+								toolErrors = append(toolErrors, fmt.Sprintf("%s failed", call.Name))
+							}
 						}
 					}
 				}
+				state.Set("react.last_tool_result", results)
+				state.Set("react.tool_calls", []core.ToolCall{})
+				result := &core.Result{NodeID: n.id, Success: overallSuccess, Data: results}
+				if len(toolErrors) > 0 {
+					result.Error = fmt.Errorf("%s", strings.Join(toolErrors, "; "))
+				}
+				state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
+				return result, nil
 			}
-			state.Set("react.last_tool_result", results)
+		}
+		if n.agent.Config != nil && !n.agent.Config.OllamaToolCalling {
 			state.Set("react.tool_calls", []core.ToolCall{})
-			result := &core.Result{NodeID: n.id, Success: overallSuccess, Data: results}
-			if len(toolErrors) > 0 {
-				result.Error = fmt.Errorf("%s", strings.Join(toolErrors, "; "))
-			}
-			state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
-			return result, nil
 		}
 	}
 	val, ok := state.Get("react.decision")
