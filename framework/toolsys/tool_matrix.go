@@ -11,15 +11,31 @@ func RestrictToolRegistryByMatrix(registry *ToolRegistry, matrix AgentToolMatrix
 	registry.setToolMatrix(matrix)
 	allowed := make([]string, 0)
 	for _, tool := range registry.All() {
-		if toolAllowedByMatrix(tool, matrix) {
+		if toolVisibleByMatrixPolicy(tool, matrix, registry.toolPolicies) {
 			allowed = append(allowed, tool.Name())
 		}
 	}
 	registry.RestrictTo(allowed)
 }
 
+func toolVisibleByMatrixPolicy(tool Tool, matrix AgentToolMatrix, policies map[string]ToolPolicy) bool {
+	if tool == nil {
+		return false
+	}
+	if policies != nil {
+		if policy, ok := policies[tool.Name()]; ok && policy.Visible != nil {
+			return *policy.Visible
+		}
+	}
+	return toolAllowedByMatrix(tool, matrix)
+}
+
 func toolAllowedByMatrix(tool Tool, matrix AgentToolMatrix) bool {
+	if tool == nil {
+		return false
+	}
 	perms := tool.Permissions().Permissions
+	allowedByPerms := false
 	if perms != nil {
 		if permissionRequiresFileRead(perms) && !matrix.FileRead {
 			return false
@@ -33,6 +49,7 @@ func toolAllowedByMatrix(tool Tool, matrix AgentToolMatrix) bool {
 		if permissionRequiresNetwork(perms) && !matrix.WebSearch {
 			return false
 		}
+		allowedByPerms = true
 	}
 
 	switch tool.Category() {
@@ -43,7 +60,7 @@ func toolAllowedByMatrix(tool Tool, matrix AgentToolMatrix) bool {
 	case "git", "execution":
 		return matrix.BashExecute
 	default:
-		return true
+		return allowedByPerms
 	}
 }
 
