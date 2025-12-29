@@ -261,7 +261,15 @@ func (t *SearchInFilesTool) Parameters() []core.ToolParameter {
 	}
 }
 func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	dir := t.preparePath(fmt.Sprint(args["directory"]))
+	dirVal, ok := args["directory"]
+	if !ok || dirVal == nil {
+		dirVal = "."
+	}
+	dirText := strings.TrimSpace(fmt.Sprint(dirVal))
+	if dirText == "" || dirText == "<nil>" {
+		dirText = "."
+	}
+	dir := t.preparePath(dirText)
 
 	if t.manager != nil {
 		// Search implies reading files
