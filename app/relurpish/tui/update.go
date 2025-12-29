@@ -1,14 +1,17 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lexcodex/relurpify/framework/runtime"
-	"strings"
-	"time"
 )
 
 // Init fulfills the Bubble Tea Model interface.
@@ -26,10 +29,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global shortcuts
 		switch msg.String() {
 		case "ctrl+c", "ctrl+d":
-			return m, tea.Quit
+			return m, tea.Batch(m.cleanupCmd(), tea.Quit)
 		case "ctrl+l":
-			m.messages = nil
-			return m, nil
+			return m.setMessages(nil), nil
 		}
 		switch m.mode {
 		case ModeNormal:
@@ -207,58 +209,46 @@ func (m Model) handleFilePickerMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleStreamToken updates the live streaming message as new tokens arrive.
 func (m Model) handleStreamToken(msg StreamTokenMsg) (tea.Model, tea.Cmd) {
-	if !m.streaming || m.streamBuf == nil {
+	run, ok := m.runStates[msg.RunID]
+	if !ok || run.Builder == nil {
 		return m, nil
 	}
-	m.streamBuf.AddToken(msg)
-	partial := m.streamBuf.BuildPartial()
-
-	if len(m.messages) > 0 && m.messages[len(m.messages)-1].ID == "streaming" {
-		m.messages[len(m.messages)-1] = partial
-	} else {
-		m.messages = append(m.messages, partial)
-	}
-	m = m.refreshFeedContent()
-	if m.streamCh != nil {
-		return m, listenToStream(m.streamCh)
-	}
-	return m, nil
+	run.Builder.AddToken(msg)
+	partial := run.Builder.BuildPartial()
+	m = m.updateMessage(partial)
+	return m, listenToStream(run.Ch)
 }
 
 // handleStreamComplete finalizes the message once streaming stops.
 func (m Model) handleStreamComplete(msg StreamCompleteMsg) (tea.Model, tea.Cmd) {
-	if !m.streaming || m.streamBuf == nil {
+	run, ok := m.runStates[msg.RunID]
+	if !ok || run.Builder == nil {
 		return m, nil
 	}
-	final := m.streamBuf.Build(msg.Duration, msg.TokensUsed)
-	if len(m.messages) > 0 && m.messages[len(m.messages)-1].ID == "streaming" {
-		m.messages[len(m.messages)-1] = final
-	} else {
-		m.messages = append(m.messages, final)
-	}
-	m = m.refreshFeedContent()
+	final := run.Builder.Build(msg.Duration, msg.TokensUsed)
+	m = m.updateMessage(final)
 
-	m.session.TotalTokens += msg.TokensUsed
-	m.session.TotalDuration += msg.Duration
-
-	m.statusBar.tokens = m.session.TotalTokens
-	m.statusBar.duration = m.session.TotalDuration
-	m.statusBar.lastUpdate = time.Now()
-	if m.context != nil {
-		m.context.UsedTokens = m.session.TotalTokens
+	if m.session != nil {
+		m.session.TotalTokens += msg.TokensUsed
+		m.session.TotalDuration += msg.Duration
+		m.statusBar.tokens = m.session.TotalTokens
+		m.statusBar.duration = m.session.TotalDuration
+		m.statusBar.lastUpdate = time.Now()
+		if m.context != nil {
+			m.context.UsedTokens = m.session.TotalTokens
+		}
 	}
 
-	m.streaming = false
-	m.streamBuf = nil
-	m.streamCh = nil
+	delete(m.runStates, msg.RunID)
 	return m, nil
 }
 
 // handleStreamError writes system level errors whenever streaming fails.
 func (m Model) handleStreamError(msg StreamErrorMsg) (tea.Model, tea.Cmd) {
-	m.streaming = false
-	m.streamBuf = nil
-	m.streamCh = nil
+	delete(m.runStates, msg.RunID)
+	if msg.Error != nil && errors.Is(msg.Error, context.Canceled) {
+		return m.addSystemMessage(fmt.Sprintf("Run %s canceled", msg.RunID)), nil
+	}
 	return m.addSystemMessage(fmt.Sprintf("⚠️  agent error: %v", msg.Error)), nil
 }
 
@@ -448,6 +438,21 @@ func (m Model) handleHITLEvent(msg hitlEventMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, next
+}
+
+func (m Model) updateMessage(next Message) Model {
+	if next.ID == "" {
+		m.messages = append(m.messages, next)
+		return m.refreshFeedContent()
+	}
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].ID == next.ID {
+			m.messages[i] = next
+			return m.refreshFeedContent()
+		}
+	}
+	m.messages = append(m.messages, next)
+	return m.refreshFeedContent()
 }
 
 // listenToStream adapts Go channels to Bubble Tea commands for streaming.
