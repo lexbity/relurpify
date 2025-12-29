@@ -61,8 +61,9 @@ type Model struct {
 	streamBuf *MessageBuilder
 	streamCh  chan tea.Msg
 
-	focusIndex int
-	autoFollow bool
+	focusIndex   int
+	autoFollow   bool
+	expandTarget string
 
 	// HITL prompt state (temporarily replaces normal prompt)
 	hitlRequest        *runtime.PermissionRequest
@@ -309,20 +310,21 @@ func NewModel(rt *runtimesvc.Runtime) Model {
 	}
 
 	return Model{
-		runtime:    rt,
-		config:     cfg,
-		hitl:       hitlSvc,
-		hitlCh:     hitlCh,
-		hitlOff:    hitlOff,
-		feed:       vp,
-		input:      input,
-		spinner:    sp,
-		statusBar:  status,
-		messages:   []Message{},
-		context:    ctx,
-		session:    session,
-		mode:       ModeNormal,
-		autoFollow: true,
+		runtime:      rt,
+		config:       cfg,
+		hitl:         hitlSvc,
+		hitlCh:       hitlCh,
+		hitlOff:      hitlOff,
+		feed:         vp,
+		input:        input,
+		spinner:      sp,
+		statusBar:    status,
+		messages:     []Message{},
+		context:      ctx,
+		session:      session,
+		mode:         ModeNormal,
+		autoFollow:   true,
+		expandTarget: "thinking",
 	}
 }
 
