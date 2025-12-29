@@ -44,58 +44,64 @@ func SkillManifestPath(workspace, name string) string {
 func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames []string, skillOverlays map[string]core.AgentSpecOverlay, registry *toolsys.ToolRegistry, permissions *toolsys.PermissionManager, agentID string) (*core.AgentRuntimeSpec, []SkillResolution) {
 	spec := core.MergeAgentSpecs(baseSpec)
 	results := make([]SkillResolution, 0, len(skillNames))
-	toolOverlays := make([]toolsys.ToolPolicyOverlay, 0)
+	allowedTools := append([]string{}, spec.AllowedTools...)
+	toolPolicies := cloneToolPolicies(spec.ToolPolicies)
 
+	seenSkills := make(map[string]bool)
 	for _, name := range skillNames {
 		skillName := strings.TrimSpace(name)
 		if skillName == "" {
 			continue
 		}
-		manifestPath := SkillManifestPath(workspace, skillName)
-		skillManifest, err := manifest.LoadSkillManifest(manifestPath)
+		chain, err := manifest.ResolveSkillChain(workspace, skillName)
 		if err != nil {
 			results = append(results, logSkillError(workspace, skillName, "load_failed", err, SkillPaths{Root: SkillRoot(workspace, skillName)}))
 			continue
 		}
-		paths := resolveSkillPaths(skillManifest)
-		if err := validateSkillPaths(paths); err != nil {
-			results = append(results, logSkillError(workspace, skillName, "missing_resources", err, paths))
-			continue
-		}
-		if ok, err := skillToolsAvailable(skillManifest, registry, permissions, agentID); !ok {
-			if err == nil {
-				err = fmt.Errorf("required tools unavailable")
+		for _, skillManifest := range chain {
+			paths := resolveSkillPaths(skillManifest)
+			if err := validateSkillPaths(paths); err != nil {
+				results = append(results, logSkillError(workspace, skillName, "missing_resources", err, paths))
+				goto skipSkill
 			}
-			results = append(results, logSkillError(workspace, skillName, "missing_tool_access", err, paths))
-			continue
+			if ok, err := skillToolsAvailable(skillManifest, registry, permissions, agentID); !ok {
+				if err == nil {
+					err = fmt.Errorf("required tools unavailable")
+				}
+				results = append(results, logSkillError(workspace, skillName, "missing_tool_access", err, paths))
+				goto skipSkill
+			}
+			if len(skillManifest.Spec.AllowedTools) > 0 {
+				allowedTools = mergeStringList(allowedTools, skillManifest.Spec.AllowedTools)
+			}
+			if skillManifest.Spec.ToolPolicies != nil {
+				for name, policy := range skillManifest.Spec.ToolPolicies {
+					toolPolicies[name] = policy
+				}
+			}
+			if skillManifest.Spec.AgentOverlay != nil {
+				spec = core.MergeAgentSpecs(spec, *skillManifest.Spec.AgentOverlay)
+			}
+			if overlay, ok := skillOverlays[skillManifest.Metadata.Name]; ok {
+				spec = core.MergeAgentSpecs(spec, overlay)
+			}
+			if len(skillManifest.Spec.PromptSnippets) > 0 {
+				spec.Prompt = mergePromptSnippets(spec.Prompt, skillManifest.Spec.PromptSnippets)
+			}
+			if !seenSkills[skillManifest.Metadata.Name] {
+				results = append(results, SkillResolution{
+					Name:    skillManifest.Metadata.Name,
+					Applied: true,
+					Paths:   paths,
+				})
+				seenSkills[skillManifest.Metadata.Name] = true
+			}
 		}
-		if skillManifest.Spec.ToolMatrixOverride != nil || skillManifest.Spec.ToolPolicies != nil {
-			toolOverlays = append(toolOverlays, toolsys.ToolPolicyOverlay{
-				MatrixOverride: skillManifest.Spec.ToolMatrixOverride,
-				Policies:       skillManifest.Spec.ToolPolicies,
-			})
-		}
-		if skillManifest.Spec.AgentOverlay != nil {
-			spec = core.MergeAgentSpecs(spec, *skillManifest.Spec.AgentOverlay)
-		}
-		if overlay, ok := skillOverlays[skillName]; ok {
-			spec = core.MergeAgentSpecs(spec, overlay)
-		}
-		if len(skillManifest.Spec.PromptSnippets) > 0 {
-			spec.Prompt = mergePromptSnippets(spec.Prompt, skillManifest.Spec.PromptSnippets)
-		}
-		results = append(results, SkillResolution{
-			Name:    skillName,
-			Applied: true,
-			Paths:   paths,
-		})
+	skipSkill:
 	}
 
-	if len(toolOverlays) > 0 {
-		matrix, policies := toolsys.MergeToolConfig(spec.Tools, spec.ToolPolicies, toolOverlays...)
-		spec.Tools = matrix
-		spec.ToolPolicies = policies
-	}
+	spec.AllowedTools = allowedTools
+	spec.ToolPolicies = toolPolicies
 	return spec, results
 }
 
@@ -148,9 +154,9 @@ func resolveSkillPaths(skill *manifest.SkillManifest) SkillPaths {
 	if skill == nil {
 		return paths
 	}
-	paths.Scripts = resolveSkillList(root, skill.Spec.Resources.Scripts, filepath.Join(root, "scripts"))
-	paths.Resources = resolveSkillList(root, skill.Spec.Resources.Resources, filepath.Join(root, "resources"))
-	paths.Templates = resolveSkillList(root, skill.Spec.Resources.Templates, filepath.Join(root, "templates"))
+	paths.Scripts = resolveSkillList(root, skill.Spec.ResourcePaths.Scripts, filepath.Join(root, "scripts"))
+	paths.Resources = resolveSkillList(root, skill.Spec.ResourcePaths.Resources, filepath.Join(root, "resources"))
+	paths.Templates = resolveSkillList(root, skill.Spec.ResourcePaths.Templates, filepath.Join(root, "templates"))
 	return paths
 }
 
@@ -225,6 +231,37 @@ func logSkillError(workspace, name, reason string, err error, paths SkillPaths) 
 		Error:   err.Error(),
 		Paths:   paths,
 	}
+}
+
+func cloneToolPolicies(input map[string]core.ToolPolicy) map[string]core.ToolPolicy {
+	if input == nil {
+		return nil
+	}
+	clone := make(map[string]core.ToolPolicy, len(input))
+	for name, policy := range input {
+		clone[name] = policy
+	}
+	return clone
+}
+
+func mergeStringList(base, extra []string) []string {
+	if len(extra) == 0 {
+		return base
+	}
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]string, 0, len(base)+len(extra))
+	for _, entry := range append(base, extra...) {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, ok := seen[entry]; ok {
+			continue
+		}
+		seen[entry] = struct{}{}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func logSkillMessage(workspace, message string) {
