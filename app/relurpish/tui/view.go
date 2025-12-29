@@ -34,7 +34,7 @@ func (m Model) renderMessages() string {
 
 func (m Model) renderPromptBar() string {
 	prefix := "> "
-	hint := dimStyle.Render(" / for commands | @ for context | ctrl+l to clear")
+	hint := dimStyle.Render(" / for commands | @ for context | tab toggles " + m.expandTarget + " | shift+tab cycles | ctrl+l clears")
 	promptText := ""
 
 	switch m.mode {
@@ -52,6 +52,9 @@ func (m Model) renderPromptBar() string {
 		} else {
 			promptText = "Approve pending permission?"
 		}
+	}
+	if m.streaming && m.mode == ModeNormal {
+		hint = dimStyle.Render(" streaming... pgup/down to scroll | ctrl+c to quit")
 	}
 
 	content := prefix
