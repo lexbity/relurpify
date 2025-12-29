@@ -55,3 +55,20 @@ func TestSearchInFilesTool(t *testing.T) {
 	assert.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.NotEmpty(t, decoded)
 }
+
+func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "main.c")
+	assert.NoError(t, os.WriteFile(file, []byte("#include <stdio.h>\n"), 0o644))
+
+	tool := &SearchInFilesTool{BasePath: dir}
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"pattern": "#include",
+	})
+	assert.NoError(t, err)
+	bytes, err := json.Marshal(res.Data["matches"])
+	assert.NoError(t, err)
+	var decoded []map[string]interface{}
+	assert.NoError(t, json.Unmarshal(bytes, &decoded))
+	assert.NotEmpty(t, decoded)
+}
