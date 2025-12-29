@@ -235,5 +235,6 @@ func (as *AdaptiveStrategy) selectBalancedContext(task *core.Task, budget *core.
 		Mode:       search.SearchHybrid,
 		MaxResults: 10,
 	})
+	AppendContextFiles(request, task, DetailFull)
 	return request, nil
 }
