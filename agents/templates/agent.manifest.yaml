@@ -16,79 +16,93 @@ spec:
   image: "ghcr.io/lexcodex/relurpify/runtime:latest"
   runtime: "gvisor" # Currently only "gvisor" is supported for strict isolation
 
-  # Permission Configuration (Enforced by PermissionManager)
+  # Defaults (Fallbacks applied before skills/agent-specific overrides)
   # -----------------------------------------------------------------------------
-  permissions:
-    # Filesystem Access
-    filesystem:
-      - action: "fs:read"
-        path: "${workspace}/**"
-        justification: "Read access to the entire workspace"
+  defaults:
+    # Permission Configuration (Enforced by PermissionManager)
+    permissions:
+      # Filesystem Access
+      filesystem:
+        - action: "fs:read"
+          path: "${workspace}/**"
+          justification: "Read access to the entire workspace"
       - action: "fs:write"
         path: "${workspace}/src/**"
         justification: "Allow writing source code"
         hitl_required: false # Set to true to require Human-In-The-Loop approval for every write
       - action: "fs:execute"
+        path: "${workspace}/**"
+        justification: "Allow executing tools within the workspace"
+      - action: "fs:execute"
         path: "${workspace}/scripts/**"
         justification: "Allow executing scripts in the scripts directory"
-      - action: "fs:list"
-        path: "${workspace}/**"
-    
-    # Executable Allowlist (for CommandTool / ExecuteCodeTool)
-    executables:
-      - binary: "go"
-        args: ["test", "./..."]
-        env: ["CGO_ENABLED=1"]
-        hitl_required: false
-      - binary: "npm"
-        args: ["install", "*"]
-        hitl_required: true # Require approval for installing packages
-      - binary: "bash"
-        args: ["-c", "*"]
-      - binary: "touch"
-      - binary: "echo"
-    
-    # Network Access
-    network:
-      - direction: "egress"
-        protocol: "tcp"
-        host: "api.github.com"
-        port: 443
-        description: "GitHub API access"
-      - direction: "egress"
-        protocol: "tcp"
-        host: "proxy.golang.org"
-        port: 443
-        description: "Go module proxy"
-      - direction: "ingress" # Typically blocked, but can be defined
-        protocol: "tcp"
-        port: 8080
-    
-    # Linux Capabilities (Advanced Sandbox Configuration)
-    capabilities:
-      - capability: "CAP_NET_BIND_SERVICE"
-        justification: "Allow binding to privileged ports"
+        - action: "fs:list"
+          path: "${workspace}/**"
 
-    # IPC (Inter-Process Communication)
-    ipc:
-      - kind: "signal"
-        target: "pid:1"
-        description: "Allow sending signals to init process"
+      # Executable Allowlist (for CommandTool / ExecuteCodeTool)
+      executables:
+        - binary: "go"
+          args: ["test", "./..."]
+          env: ["CGO_ENABLED=1"]
+          hitl_required: false
+        - binary: "npm"
+          args: ["install", "*"]
+          hitl_required: true # Require approval for installing packages
+        - binary: "bash"
+          args: ["-c", "*"]
+        - binary: "touch"
+        - binary: "echo"
 
-    # Global HITL Requirements
-    # List of high-risk categories that always require approval regardless of specific rules
-    hitl_required: 
-      - "net:egress"
-      - "exec:*"
+      # Network Access
+      network:
+        - direction: "egress"
+          protocol: "tcp"
+          host: "api.github.com"
+          port: 443
+          description: "GitHub API access"
+        - direction: "egress"
+          protocol: "tcp"
+          host: "proxy.golang.org"
+          port: 443
+          description: "Go module proxy"
+        - direction: "ingress" # Typically blocked, but can be defined
+          protocol: "tcp"
+          port: 8080
 
-  # Resource Quotas (Enforced by Sandbox/Container Runtime)
-  # -----------------------------------------------------------------------------
-  resources:
-    limits:
-      cpu: "2"           # 2 vCPUs
-      memory: "4Gi"      # 4 Gigabytes RAM
-      disk_io: "100MBps" # Disk I/O throughput limit
-      network: "1Gbps"   # Network bandwidth limit
+      # Linux Capabilities (Advanced Sandbox Configuration)
+      capabilities:
+        - capability: "CAP_NET_BIND_SERVICE"
+          justification: "Allow binding to privileged ports"
+
+      # IPC (Inter-Process Communication)
+      ipc:
+        - kind: "signal"
+          target: "pid:1"
+          description: "Allow sending signals to init process"
+
+      # Global HITL Requirements
+      # List of high-risk categories that always require approval regardless of specific rules
+      hitl_required:
+        - "net:egress"
+        - "exec:*"
+
+    # Resource Quotas (Enforced by Sandbox/Container Runtime)
+    resources:
+      limits:
+        cpu: "2"           # 2 vCPUs
+        memory: "4Gi"      # 4 Gigabytes RAM
+        disk_io: "100MBps" # Disk I/O throughput limit
+        network: "1Gbps"   # Network bandwidth limit
+
+    # Agent Defaults (Overlayed before agent + skills)
+    agent:
+      context:
+        max_files: 50
+        max_tokens: 16000
+        include_git_history: true
+        include_dependencies: false
+        compression_strategy: "hybrid" # "summary", "truncate", "hybrid"
+        progressive_loading: true      # Load file details on-demand based on relevance
 
   # Security Context
   # -----------------------------------------------------------------------------
@@ -111,7 +125,7 @@ spec:
     # Agent Implementation
     # Options: "coding", "planner", "react", "reflection", "expert"
     implementation: "expert"
-    
+
     mode: "primary" # "primary", "subagent", "system"
     version: "v1"
     prompt: "You are a helpful coding assistant..." # System prompt override
@@ -123,21 +137,21 @@ spec:
       temperature: 0.2
       max_tokens: 4096
 
-    # Tool Capabilities (Toggle builtin tool categories)
-    tools:
-      file_read: true
-      file_write: true
-      file_edit: true
-      bash_execute: true
-      lsp_query: true
-      search_codebase: true
-      web_search: false
+    # Explicit tool allowlist (skills can add more).
+    allowed_tools:
+      - "file_read"
+      - "file_write"
+      - "file_edit"
+      - "file_list"
+      - "file_search"
+      - "search_grep"
+      - "search_find_similar"
+      - "search_semantic"
+      - "query_ast"
 
-    # Per-tool Policies (Visibility + Execution)
-    # These are evaluated in addition to the coarse tool matrix above.
+    # Per-tool Policies (Execution)
     tool_policies:
       exec_run_code:
-        visible: true
         execute: "ask" # "allow", "deny", "ask"
       exec_run_linter:
         execute: "allow"
@@ -169,15 +183,6 @@ spec:
       can_invoke_subagents: true
       allowed_subagents: ["reviewer", "architect"]
       max_depth: 3
-
-    # Context Management
-    context:
-      max_files: 50
-      max_tokens: 16000
-      include_git_history: true
-      include_dependencies: false
-      compression_strategy: "hybrid" # "summary", "truncate", "hybrid"
-      progressive_loading: true      # Load file details on-demand based on relevance
 
     # Language Server Protocol (LSP) Features
     lsp:
@@ -211,11 +216,12 @@ spec:
   # Skill Packages (optional)
   # -----------------------------------------------------------------------------
   skills:
-    - "example-skill"
+    - "system"
+    - "coding"
 
   # Per-skill overlays (optional)
   # -----------------------------------------------------------------------------
   skill_overlays:
-    example-skill:
+    coding:
       context:
         max_tokens: 20000
