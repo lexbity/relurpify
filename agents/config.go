@@ -86,7 +86,7 @@ func LoadGlobalConfig(path, workspace string) (*GlobalConfig, error) {
 			return &GlobalConfig{
 				Version:     "1.0.0",
 				AgentPaths:  DefaultAgentPaths(workspace),
-				Permissions: map[string]string{"file_write": "ask", "file_edit": "ask", "bash_execute": "ask", "file_delete": "deny"},
+				Permissions: map[string]string{"file_write": "ask", "file_edit": "ask", "file_delete": "deny"},
 			}, nil
 		}
 		return nil, err
