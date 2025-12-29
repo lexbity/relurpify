@@ -1,0 +1,14 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: sqlcoder
+  version: 1.0.0
+  description: SQLite tooling.
+spec:
+  inherits: [coding]
+  allowed_tools:
+    - cli_sqlite3
+  permissions:
+    executables:
+      - binary: sqlite3
+        args: ["*"]
