@@ -137,6 +137,73 @@ func ExtractFileReferences(text string) []string {
 	return refs
 }
 
+// ExtractContextFiles returns explicit file paths provided by the caller.
+func ExtractContextFiles(task *core.Task) []string {
+	if task == nil || task.Context == nil {
+		return nil
+	}
+	raw, ok := task.Context["context_files"]
+	if !ok || raw == nil {
+		return nil
+	}
+	paths := make([]string, 0)
+	switch v := raw.(type) {
+	case []string:
+		paths = append(paths, v...)
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				paths = append(paths, s)
+			}
+		}
+	case string:
+		paths = append(paths, v)
+	}
+	unique := make(map[string]struct{}, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		clean := filepath.Clean(strings.TrimSpace(path))
+		if clean == "" {
+			continue
+		}
+		if _, ok := unique[clean]; ok {
+			continue
+		}
+		unique[clean] = struct{}{}
+		out = append(out, clean)
+	}
+	return out
+}
+
+// AppendContextFiles injects explicit file requests into an existing request.
+func AppendContextFiles(request *ContextRequest, task *core.Task, level DetailLevel) {
+	if request == nil {
+		return
+	}
+	paths := ExtractContextFiles(task)
+	if len(paths) == 0 {
+		return
+	}
+	existing := make(map[string]struct{}, len(request.Files))
+	for _, req := range request.Files {
+		if req.Path == "" {
+			continue
+		}
+		existing[req.Path] = struct{}{}
+	}
+	for _, path := range paths {
+		if _, ok := existing[path]; ok {
+			continue
+		}
+		request.Files = append(request.Files, FileRequest{
+			Path:        path,
+			DetailLevel: level,
+			Priority:    -1,
+			Pinned:      true,
+		})
+	}
+}
+
 // ExtractSymbolReferences returns probable symbol names mentioned in the text.
 func ExtractSymbolReferences(text string) []string {
 	matches := symbolReferenceRegex.FindAllStringSubmatch(text, -1)
