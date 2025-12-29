@@ -35,11 +35,6 @@ func (a *CodingAgent) Initialize(cfg *core.Config) error {
 
 	// If the config carries a manifest spec, apply its constraints
 	if cfg != nil && cfg.AgentSpec != nil {
-		// Apply tool matrix filtering (disable tools not in the matrix)
-		// Note: PermissionManager handles security (file access),
-		// but this matrix handles logical capability (can I even see the tool?).
-		toolsys.RestrictToolRegistryByMatrix(a.Tools, cfg.AgentSpec.Tools)
-
 		// If mode profiles are not yet customized, we can inject the mode from spec
 		// The AgentRuntimeSpec defines one primary mode, but CodingAgent supports many.
 		// We can override the 'default' mode profile with spec data.
