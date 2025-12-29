@@ -1,19 +1,10 @@
 package toolsys
 
-// ToolMatrixOverride selectively overrides tool matrix booleans.
-type ToolMatrixOverride struct {
-	FileRead       *bool
-	FileWrite      *bool
-	FileEdit       *bool
-	BashExecute    *bool
-	LSPQuery       *bool
-	SearchCodebase *bool
-	WebSearch      *bool
-}
+import "github.com/lexcodex/relurpify/framework/core"
 
 // ToolPolicyOverlay describes a layer of tool matrix + policy changes.
 type ToolPolicyOverlay struct {
-	MatrixOverride *ToolMatrixOverride
+	MatrixOverride *core.ToolMatrixOverride
 	Policies       map[string]ToolPolicy
 }
 
@@ -26,7 +17,7 @@ func MergeToolConfig(baseMatrix AgentToolMatrix, basePolicies map[string]ToolPol
 	}
 	for _, overlay := range overlays {
 		if overlay.MatrixOverride != nil {
-			matrix = overlay.MatrixOverride.apply(matrix)
+			matrix = applyToolMatrixOverride(matrix, overlay.MatrixOverride)
 		}
 		for name, policy := range overlay.Policies {
 			policies[name] = policy
@@ -35,30 +26,30 @@ func MergeToolConfig(baseMatrix AgentToolMatrix, basePolicies map[string]ToolPol
 	return matrix, policies
 }
 
-func (o *ToolMatrixOverride) apply(base AgentToolMatrix) AgentToolMatrix {
-	if o == nil {
+func applyToolMatrixOverride(base AgentToolMatrix, override *core.ToolMatrixOverride) AgentToolMatrix {
+	if override == nil {
 		return base
 	}
-	if o.FileRead != nil {
-		base.FileRead = *o.FileRead
+	if override.FileRead != nil {
+		base.FileRead = *override.FileRead
 	}
-	if o.FileWrite != nil {
-		base.FileWrite = *o.FileWrite
+	if override.FileWrite != nil {
+		base.FileWrite = *override.FileWrite
 	}
-	if o.FileEdit != nil {
-		base.FileEdit = *o.FileEdit
+	if override.FileEdit != nil {
+		base.FileEdit = *override.FileEdit
 	}
-	if o.BashExecute != nil {
-		base.BashExecute = *o.BashExecute
+	if override.BashExecute != nil {
+		base.BashExecute = *override.BashExecute
 	}
-	if o.LSPQuery != nil {
-		base.LSPQuery = *o.LSPQuery
+	if override.LSPQuery != nil {
+		base.LSPQuery = *override.LSPQuery
 	}
-	if o.SearchCodebase != nil {
-		base.SearchCodebase = *o.SearchCodebase
+	if override.SearchCodebase != nil {
+		base.SearchCodebase = *override.SearchCodebase
 	}
-	if o.WebSearch != nil {
-		base.WebSearch = *o.WebSearch
+	if override.WebSearch != nil {
+		base.WebSearch = *override.WebSearch
 	}
 	return base
 }
@@ -70,6 +61,7 @@ func ApplyToolConfig(registry *ToolRegistry, baseMatrix AgentToolMatrix, basePol
 	}
 	matrix, policies := MergeToolConfig(baseMatrix, basePolicies, overlays...)
 
+	registry.setToolMatrix(matrix)
 	registry.mu.Lock()
 	registry.toolPolicies = make(map[string]ToolPolicy, len(policies))
 	for name, policy := range policies {
