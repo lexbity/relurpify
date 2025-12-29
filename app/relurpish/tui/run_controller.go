@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +19,7 @@ type RunState struct {
 	Builder *MessageBuilder
 	Ch      chan tea.Msg
 	Cancel  context.CancelFunc
+	Dropped int64
 }
 
 func (m Model) hasActiveRuns() bool {
@@ -36,7 +38,7 @@ func (m Model) startRun(prompt string) (Model, tea.Cmd) {
 	}
 
 	runID := generateID()
-	ch := make(chan tea.Msg)
+	ch := make(chan tea.Msg, 256)
 	builder := NewMessageBuilder(runID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	run := &RunState{
@@ -134,7 +136,7 @@ func (m Model) runAgentStream(ctx context.Context, run *RunState, metadata map[s
 		return
 	}
 	start := time.Now()
-	run.Ch <- StreamTokenMsg{
+	sendRunMsg(run, StreamTokenMsg{
 		RunID:     run.ID,
 		TokenType: TokenThinking,
 		Metadata: map[string]interface{}{
@@ -142,28 +144,28 @@ func (m Model) runAgentStream(ctx context.Context, run *RunState, metadata map[s
 			"stepType":    string(StepAnalyzing),
 			"description": "Analyzing request",
 		},
-	}
+	})
 
 	if run.Ch != nil {
 		metadata["stream_callback"] = func(token string) {
-			run.Ch <- StreamTokenMsg{RunID: run.ID, TokenType: TokenText, Token: token}
+			sendRunMsg(run, StreamTokenMsg{RunID: run.ID, TokenType: TokenText, Token: token})
 		}
 	}
 
 	result, err := m.runtime.ExecuteInstruction(ctx, run.Prompt, core.TaskTypeCodeGeneration, metadata)
 	if err != nil {
-		run.Ch <- StreamErrorMsg{RunID: run.ID, Error: err}
-		run.Ch <- StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: 0}
+		sendRunFinal(run, StreamErrorMsg{RunID: run.ID, Error: err})
+		sendRunFinal(run, StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: 0})
 		close(run.Ch)
 		return
 	}
 
 	summary := summarizeResult(result)
 	if summary != "" {
-		run.Ch <- StreamTokenMsg{RunID: run.ID, TokenType: TokenText, Token: summary}
+		sendRunMsg(run, StreamTokenMsg{RunID: run.ID, TokenType: TokenText, Token: summary})
 	}
 
-	run.Ch <- StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: estimateTokens(summary)}
+	sendRunFinal(run, StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: estimateTokens(summary)})
 	close(run.Ch)
 }
 
@@ -190,4 +192,28 @@ func summarizeResult(res *core.Result) string {
 		b.WriteString(res.Error.Error())
 	}
 	return b.String()
+}
+
+func sendRunMsg(run *RunState, msg tea.Msg) {
+	if run == nil || run.Ch == nil {
+		return
+	}
+	select {
+	case run.Ch <- msg:
+	default:
+		atomic.AddInt64(&run.Dropped, 1)
+	}
+}
+
+func sendRunFinal(run *RunState, msg tea.Msg) {
+	if run == nil || run.Ch == nil {
+		return
+	}
+	select {
+	case run.Ch <- msg:
+	default:
+		go func() {
+			run.Ch <- msg
+		}()
+	}
 }
