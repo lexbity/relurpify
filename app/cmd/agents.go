@@ -93,25 +93,28 @@ func newAgentsCreateCmd() *cobra.Command {
 				Spec: manifest.ManifestSpec{
 					Image:   "ghcr.io/relurpify/runtime:latest",
 					Runtime: "gvisor",
-					Permissions: core.PermissionSet{
-						FileSystem: []core.FileSystemPermission{
-							{Action: core.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
-							{Action: core.FileSystemList, Path: wsGlob, Justification: "List workspace"},
-							{Action: core.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
+					Defaults: &manifest.ManifestDefaults{
+						Permissions: &core.PermissionSet{
+							FileSystem: []core.FileSystemPermission{
+								{Action: core.FileSystemRead, Path: wsGlob, Justification: "Read workspace"},
+								{Action: core.FileSystemList, Path: wsGlob, Justification: "List workspace"},
+								{Action: core.FileSystemWrite, Path: wsGlob, Justification: "Modify workspace"},
+								{Action: core.FileSystemExecute, Path: wsGlob, Justification: "Execute tooling inside workspace"},
+							},
+							Executables: []core.ExecutablePermission{
+								{Binary: "bash", Args: []string{"-c", "*"}},
+								{Binary: "go", Args: []string{"*"}},
+							},
+							Network: []core.NetworkPermission{
+								{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434, Description: "Ollama"},
+							},
 						},
-						Executables: []core.ExecutablePermission{
-							{Binary: "bash", Args: []string{"-c"}},
-							{Binary: "go", Args: []string{"*"}},
-						},
-						Network: []core.NetworkPermission{
-							{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434, Description: "Ollama"},
-						},
-					},
-					Resources: manifest.ResourceSpec{
-						Limits: manifest.ResourceLimit{
-							CPU:    "2",
-							Memory: "4Gi",
-							DiskIO: "500MBps",
+						Resources: &manifest.ResourceSpec{
+							Limits: manifest.ResourceLimit{
+								CPU:    "2",
+								Memory: "4Gi",
+								DiskIO: "500MBps",
+							},
 						},
 					},
 					Security: manifest.SecuritySpec{
@@ -134,13 +137,17 @@ func newAgentsCreateCmd() *cobra.Command {
 							Temperature: 0.2,
 							MaxTokens:   4096,
 						},
-						Tools: core.AgentToolMatrix{
-							FileRead:       true,
-							FileWrite:      true,
-							FileEdit:       true,
-							BashExecute:    true,
-							LSPQuery:       true,
-							SearchCodebase: true,
+						AllowedTools: []string{
+							"file_read",
+							"file_write",
+							"file_edit",
+							"file_list",
+							"file_search",
+							"file_create",
+							"search_grep",
+							"search_find_similar",
+							"search_semantic",
+							"query_ast",
 						},
 						Bash: core.AgentBashPermissions{
 							Default:       core.AgentPermissionAsk,
