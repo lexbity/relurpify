@@ -74,3 +74,43 @@ func TestToolMatrixAppliedOnRegisterAfterRestrict(t *testing.T) {
 	_, ok := registry.Get("write_tool")
 	require.False(t, ok)
 }
+
+func TestToolMatrixDefaultDenyForUnclassifiedTool(t *testing.T) {
+	registry := NewToolRegistry()
+	RestrictToolRegistryByMatrix(registry, AgentToolMatrix{FileRead: true})
+
+	miscTool := stubTool{
+		name:     "misc_tool",
+		category: "misc",
+		perms:    core.ToolPermissions{},
+	}
+
+	require.NoError(t, registry.Register(miscTool))
+	_, ok := registry.Get("misc_tool")
+	require.False(t, ok)
+}
+
+func TestToolPolicyVisibleOverridesMatrix(t *testing.T) {
+	registry := NewToolRegistry()
+	visible := true
+	spec := &AgentRuntimeSpec{
+		Tools: AgentToolMatrix{
+			FileRead:  false,
+			FileWrite: false,
+		},
+		ToolPolicies: map[string]ToolPolicy{
+			"special_tool": {Visible: &visible},
+		},
+	}
+	registry.UseAgentSpec("agent", spec)
+
+	tool := stubTool{
+		name:     "special_tool",
+		category: "misc",
+		perms:    core.ToolPermissions{},
+	}
+
+	require.NoError(t, registry.Register(tool))
+	_, ok := registry.Get("special_tool")
+	require.True(t, ok)
+}
