@@ -46,13 +46,19 @@ func TestCycleExpandTarget(t *testing.T) {
 }
 
 func TestHandleStreamCompleteUpdatesContextTokens(t *testing.T) {
+	runID := "run-1"
 	m := Model{
-		streaming: true,
-		streamBuf: NewMessageBuilder(),
-		session:   &Session{},
-		context:   &AgentContext{},
+		runStates: map[string]*RunState{
+			runID: {
+				ID:      runID,
+				Builder: NewMessageBuilder(runID),
+			},
+		},
+		session: &Session{},
+		context: &AgentContext{},
 	}
 	updatedAny, _ := m.handleStreamComplete(StreamCompleteMsg{
+		RunID:      runID,
 		Duration:   2 * time.Second,
 		TokensUsed: 42,
 	})
