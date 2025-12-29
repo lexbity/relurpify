@@ -250,33 +250,9 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	spec := &core.AgentRuntimeSpec{}
 	manifest, err := manifest.LoadAgentManifest(manifestAbs)
 	if err == nil && manifest.Spec.Agent != nil {
-		spec = manifest.Spec.Agent
+		spec = agents.ApplyManifestDefaults(manifest.Spec.Agent, manifest.Spec.Defaults)
 	}
 	spec = effectiveAgentSpecForCase(spec, c)
-	// Apply any case tool matrix overrides (useful for prompt-only tests).
-	if len(c.Overrides.ToolMatrix) > 0 {
-		if spec.Tools == (core.AgentToolMatrix{}) {
-			spec.Tools = core.AgentToolMatrix{}
-		}
-		for k, v := range c.Overrides.ToolMatrix {
-			switch strings.ToLower(k) {
-			case "file_read":
-				spec.Tools.FileRead = v
-			case "file_write":
-				spec.Tools.FileWrite = v
-			case "file_edit":
-				spec.Tools.FileEdit = v
-			case "bash_execute":
-				spec.Tools.BashExecute = v
-			case "lsp_query":
-				spec.Tools.LSPQuery = v
-			case "search_codebase":
-				spec.Tools.SearchCodebase = v
-			case "web_search":
-				spec.Tools.WebSearch = v
-			}
-		}
-	}
 
 	env := make([]string, 0, len(c.Overrides.ExtraEnv))
 	for k, v := range c.Overrides.ExtraEnv {
@@ -539,14 +515,19 @@ func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.Ag
 }
 
 func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedTools []string) (graph.Agent, *core.Context, error) {
-	manifest, err := manifest.LoadAgentManifest(manifestPath)
+	agentManifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	audit := core.NewInMemoryAuditLogger(512)
 	hitl := fruntime.NewHITLBroker(30 * time.Second)
-	permMgr, err := fruntime.NewPermissionManager(workspace, &manifest.Spec.Permissions, audit, hitl)
+	effectivePerms, err := manifest.ResolveEffectivePermissions(workspace, agentManifest)
+	if err != nil {
+		return nil, nil, err
+	}
+	agentManifest.Spec.Permissions = effectivePerms
+	permMgr, err := fruntime.NewPermissionManager(workspace, &agentManifest.Spec.Permissions, audit, hitl)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -573,7 +554,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 	}
 
 	registry, err := appruntime.BuildToolRegistry(workspace, runner, appruntime.ToolRegistryOptions{
-		AgentID:           manifest.Metadata.Name,
+		AgentID:           agentManifest.Metadata.Name,
 		PermissionManager: permMgr,
 		AgentSpec:         agentSpec,
 	})
@@ -582,8 +563,8 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 	}
 	applyAgentTestToolDefaults(registry, allowedTools)
 	registry.UseTelemetry(telemetry)
-	registry.UsePermissionManager(manifest.Metadata.Name, permMgr)
-	registry.UseAgentSpec(manifest.Metadata.Name, agentSpec)
+	registry.UsePermissionManager(agentManifest.Metadata.Name, permMgr)
+	registry.UseAgentSpec(agentManifest.Metadata.Name, agentSpec)
 
 	memory, err := memory.NewHybridMemory(filepath.Join(workspace, "relurpify_cfg", "memory"))
 	if err != nil {
@@ -597,7 +578,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		maxIterations = 8
 	}
 	cfg := &core.Config{
-		Name:              manifest.Metadata.Name,
+		Name:              agentManifest.Metadata.Name,
 		Model:             firstNonEmpty(opts.ModelOverride, agentSpec.Model.Name),
 		OllamaEndpoint:    firstNonEmpty(opts.EndpointOverride, "http://localhost:11434"),
 		MaxIterations:     maxIterations,
