@@ -1,0 +1,37 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: system
+  version: 1.0.0
+  description: Base system access and foundational tools.
+spec:
+  prompt_snippets:
+    - "Use file and search tools before editing. Prefer explicit file paths."
+  allowed_tools:
+    - file_read
+    - file_write
+    - file_edit
+    - file_list
+    - file_search
+    - file_create
+    - search_grep
+    - search_find_similar
+    - search_semantic
+    - query_ast
+    - exec_run_code
+    - cli_rg
+    - cli_sed
+    - cli_find
+    - cli_mkdir
+  permissions:
+    executables:
+      - binary: bash
+        args: ["-c", "*"]
+      - binary: rg
+        args: ["*"]
+      - binary: sed
+        args: ["*"]
+      - binary: find
+        args: ["*"]
+      - binary: mkdir
+        args: ["*"]
