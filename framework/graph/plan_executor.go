@@ -91,8 +91,9 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 
 		var wg sync.WaitGroup
 		errChan := make(chan error, len(readySteps))
-		for _, step := range readySteps {
-			step := step
+		branchCtxs := make([]*core.Context, len(readySteps))
+		for idx, step := range readySteps {
+			idx, step := idx, step
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -101,7 +102,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 					errChan <- err
 					return
 				}
-				state.Merge(branchCtx)
+				branchCtxs[idx] = branchCtx
 			}()
 		}
 		wg.Wait()
@@ -109,6 +110,11 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 		for err := range errChan {
 			if err != nil {
 				return nil, err
+			}
+		}
+		for _, branchCtx := range branchCtxs {
+			if branchCtx != nil {
+				state.Merge(branchCtx)
 			}
 		}
 		for _, step := range readySteps {
