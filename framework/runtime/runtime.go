@@ -33,30 +33,40 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if cfg.ManifestPath == "" {
 		return nil, errors.New("manifest path required")
 	}
-	manifest, err := manifest.LoadAgentManifest(cfg.ManifestPath)
+	agentManifest, err := manifest.LoadAgentManifest(cfg.ManifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("load manifest: %w", err)
 	}
+	effectivePerms, err := manifest.ResolveEffectivePermissions(cfg.BaseFS, agentManifest)
+	if err != nil {
+		return nil, fmt.Errorf("resolve permissions: %w", err)
+	}
+	effectiveResources, err := manifest.ResolveEffectiveResources(cfg.BaseFS, agentManifest)
+	if err != nil {
+		return nil, fmt.Errorf("resolve resources: %w", err)
+	}
+	agentManifest.Spec.Permissions = effectivePerms
+	agentManifest.Spec.Resources = effectiveResources
 	runtime := NewGVisorRuntime(cfg.Sandbox)
 	if err := runtime.Verify(ctx); err != nil {
 		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
 	hitl := NewHITLBroker(cfg.HITLTimeout)
 	audit := NewInMemoryAuditLogger(cfg.AuditLimit)
-	permissions, err := NewPermissionManager(cfg.BaseFS, &manifest.Spec.Permissions, audit, hitl)
+	permissions, err := NewPermissionManager(cfg.BaseFS, &agentManifest.Spec.Permissions, audit, hitl)
 	if err != nil {
 		return nil, fmt.Errorf("permission manager init: %w", err)
 	}
 	permissions.AttachRuntime(runtime)
-	networkRules := buildNetworkPolicy(manifest.Spec.Permissions.Network)
+	networkRules := buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
 	policy := SandboxPolicy{
 		NetworkRules: networkRules,
-		ReadOnlyRoot: manifest.Spec.Security.ReadOnlyRoot,
+		ReadOnlyRoot: agentManifest.Spec.Security.ReadOnlyRoot,
 	}
 	_ = runtime.EnforcePolicy(policy)
 	return &AgentRegistration{
-		ID:          manifest.Metadata.Name,
-		Manifest:    manifest,
+		ID:          agentManifest.Metadata.Name,
+		Manifest:    agentManifest,
 		Runtime:     runtime,
 		Permissions: permissions,
 		Audit:       audit,
