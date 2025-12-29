@@ -1,0 +1,19 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: gocoder
+  version: 1.0.0
+  description: Go tooling for build/test/lint.
+spec:
+  inherits: [coding]
+  allowed_tools:
+    - cli_go
+    - exec_run_build
+    - exec_run_tests
+    - exec_run_linter
+  permissions:
+    executables:
+      - binary: go
+        args: ["*"]
+      - binary: golangci-lint
+        args: ["*"]
