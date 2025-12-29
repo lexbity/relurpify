@@ -179,6 +179,11 @@ func newSkillDoctorCmd() *cobra.Command {
 
 			var permissions *fruntime.PermissionManager
 			if agentManifest != nil {
+				effectivePerms, permErr := manifest.ResolveEffectivePermissions(ws, agentManifest)
+				if permErr != nil {
+					return permErr
+				}
+				agentManifest.Spec.Permissions = effectivePerms
 				permissions, err = fruntime.NewPermissionManager(ws, &agentManifest.Spec.Permissions, nil, nil)
 				if err != nil {
 					return err
@@ -273,20 +278,20 @@ func newSkillTestCmd() *cobra.Command {
 
 func createSkillResourceDirs(root string, skill manifest.SkillManifest) error {
 	entries := []string{}
-	if len(skill.Spec.Resources.Scripts) == 0 {
+	if len(skill.Spec.ResourcePaths.Scripts) == 0 {
 		entries = append(entries, "scripts")
 	} else {
-		entries = append(entries, skill.Spec.Resources.Scripts...)
+		entries = append(entries, skill.Spec.ResourcePaths.Scripts...)
 	}
-	if len(skill.Spec.Resources.Resources) == 0 {
+	if len(skill.Spec.ResourcePaths.Resources) == 0 {
 		entries = append(entries, "resources")
 	} else {
-		entries = append(entries, skill.Spec.Resources.Resources...)
+		entries = append(entries, skill.Spec.ResourcePaths.Resources...)
 	}
-	if len(skill.Spec.Resources.Templates) == 0 {
+	if len(skill.Spec.ResourcePaths.Templates) == 0 {
 		entries = append(entries, "templates")
 	} else {
-		entries = append(entries, skill.Spec.Resources.Templates...)
+		entries = append(entries, skill.Spec.ResourcePaths.Templates...)
 	}
 	for _, entry := range entries {
 		entry = strings.TrimSpace(entry)
