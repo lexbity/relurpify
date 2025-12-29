@@ -10,24 +10,43 @@ metadata:
   description: "Reusable guidance + tool policies for a focused workflow."
 
 spec:
+  # Inherit permissions/tools/overlays from other skills.
+  inherits: ["system"]
+
   # Prompt snippets appended to the agent prompt.
   prompt_snippets:
     - "Follow the project's review checklist and summarize any risks."
+
+  # Explicit tool allowlist provided by this skill.
+  allowed_tools:
+    - "file_read"
+    - "file_write"
 
   # Required tools (skill is skipped if any are blocked).
   required_tools:
     - "git_diff"
     - "file_read"
 
-  # Tool matrix overrides / policies.
-  tool_matrix_override:
-    lsp_query: false
+  # Per-tool execution policies.
   tool_policies:
     exec_run_linter:
       execute: "ask"
 
-  # Optional resource locations (defaults to skills/<name>/{scripts,resources,templates}).
+  # Optional permission overlays (unioned with defaults/agent permissions).
+  permissions:
+    executables:
+      - binary: "git"
+        args: ["*"]
+
+  # Optional resource limits.
   resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+      disk_io: "100MBps"
+
+  # Optional resource locations (defaults to skills/<name>/{scripts,resources,templates}).
+  resource_paths:
     scripts: ["scripts"]
     resources: ["resources"]
     templates: ["templates"]
