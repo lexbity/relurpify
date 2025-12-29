@@ -30,8 +30,7 @@ type ToolRegistry struct {
 	permissionManager *PermissionManager
 	registeredAgentID string
 	agentSpec         *AgentRuntimeSpec
-	toolMatrix        AgentToolMatrix
-	hasToolMatrix     bool
+	allowedTools      map[string]struct{}
 	toolPolicies      map[string]ToolPolicy
 	telemetry         Telemetry
 }
@@ -51,17 +50,8 @@ func (r *ToolRegistry) Register(tool Tool) error {
 	if _, exists := r.tools[tool.Name()]; exists {
 		return fmt.Errorf("tool %s already registered", tool.Name())
 	}
-	if policy, ok := r.toolPolicies[tool.Name()]; ok {
-		if policy.Visible != nil {
-			if !*policy.Visible {
-				return nil
-			}
-		}
-	}
-	if r.hasToolMatrix {
-		if policy, ok := r.toolPolicies[tool.Name()]; ok && policy.Visible != nil && *policy.Visible {
-			// Explicitly visible tool overrides matrix.
-		} else if !toolAllowedByMatrix(tool, r.toolMatrix) {
+	if r.allowedTools != nil {
+		if _, ok := r.allowedTools[tool.Name()]; !ok {
 			return nil
 		}
 	}
@@ -114,8 +104,7 @@ func (r *ToolRegistry) CloneFiltered(keep func(Tool) bool) *ToolRegistry {
 		permissionManager: r.permissionManager,
 		registeredAgentID: r.registeredAgentID,
 		agentSpec:         r.agentSpec,
-		toolMatrix:        r.toolMatrix,
-		hasToolMatrix:     r.hasToolMatrix,
+		allowedTools:      cloneAllowedTools(r.allowedTools),
 		telemetry:         r.telemetry,
 		toolPolicies:      make(map[string]ToolPolicy, len(r.toolPolicies)),
 	}
@@ -184,7 +173,10 @@ func (r *ToolRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec) {
 	r.agentSpec = spec
 	r.mu.Unlock()
 
-	ApplyToolConfig(r, spec.Tools, spec.ToolPolicies)
+	if spec.AllowedTools != nil {
+		r.setAllowedTools(spec.AllowedTools, true)
+	}
+	r.setToolPolicies(spec.ToolPolicies)
 
 	r.mu.Lock()
 	for name, tool := range r.tools {
@@ -200,14 +192,64 @@ func (r *ToolRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec) {
 	r.mu.Unlock()
 }
 
-func (r *ToolRegistry) setToolMatrix(matrix AgentToolMatrix) {
+func (r *ToolRegistry) setAllowedTools(allowed []string, configured bool) {
+	if r == nil {
+		return
+	}
+	if !configured {
+		return
+	}
+	if len(allowed) == 0 {
+		r.mu.Lock()
+		r.allowedTools = map[string]struct{}{}
+		r.tools = make(map[string]Tool)
+		r.mu.Unlock()
+		return
+	}
+	set := make(map[string]struct{}, len(allowed))
+	for _, name := range allowed {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		set[name] = struct{}{}
+	}
+	r.mu.Lock()
+	r.allowedTools = set
+	r.mu.Unlock()
+	r.RestrictTo(allowed)
+}
+
+func (r *ToolRegistry) setToolPolicies(policies map[string]ToolPolicy) {
 	if r == nil {
 		return
 	}
 	r.mu.Lock()
-	r.toolMatrix = matrix
-	r.hasToolMatrix = true
+	r.toolPolicies = make(map[string]ToolPolicy, len(policies))
+	for name, policy := range policies {
+		r.toolPolicies[name] = policy
+	}
+	for name, tool := range r.tools {
+		var inner Tool = tool
+		if instrumented, ok := tool.(*instrumentedTool); ok {
+			inner = instrumented.Tool
+			instrumented.policy = r.toolPolicies[inner.Name()]
+			instrumented.hasPolicy = r.agentSpec != nil
+		}
+		r.tools[name] = r.wrapTool(inner)
+	}
 	r.mu.Unlock()
+}
+
+func cloneAllowedTools(input map[string]struct{}) map[string]struct{} {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]struct{}, len(input))
+	for name := range input {
+		out[name] = struct{}{}
+	}
+	return out
 }
 
 // UseTelemetry wires a telemetry sink for all tool executions.
