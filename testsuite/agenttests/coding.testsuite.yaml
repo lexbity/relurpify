@@ -5,7 +5,7 @@ metadata:
   description: "Baseline prompt tests for the coding agent."
 spec:
   agent_name: coding
-  manifest: ../agents/coding.yaml
+  manifest: ../agent.manifest.yaml
   workspace:
     strategy: in_place
     exclude:
@@ -40,4 +40,3 @@ spec:
         must_succeed: true
         files_changed: ["testsuite/agenttest_fixtures/hello.txt"]
         tool_calls_must_include: ["file_write"]
-
