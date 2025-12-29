@@ -46,6 +46,7 @@ func (as *AggressiveStrategy) SelectContext(task *core.Task, budget *core.Contex
 			Priority:    1,
 		})
 	}
+	AppendContextFiles(request, task, DetailFull)
 	return request, nil
 }
 
