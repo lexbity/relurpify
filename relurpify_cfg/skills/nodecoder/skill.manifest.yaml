@@ -1,0 +1,17 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: nodecoder
+  version: 1.0.0
+  description: Node tooling for build/test workflows.
+spec:
+  inherits: [coding]
+  allowed_tools:
+    - cli_node
+    - cli_npm
+  permissions:
+    executables:
+      - binary: node
+        args: ["*"]
+      - binary: npm
+        args: ["*"]
