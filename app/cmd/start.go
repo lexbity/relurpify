@@ -48,6 +48,7 @@ func newStartCmd() *cobra.Command {
 			if spec == nil {
 				return fmt.Errorf("agent %s missing spec.agent section", manifest.Metadata.Name)
 			}
+			spec = agents.ApplyManifestDefaults(spec, manifest.Spec.Defaults)
 			spec = agents.ResolveAgentSpec(globalCfg, spec)
 			if mode == "" {
 				if spec.Mode != "" {
