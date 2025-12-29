@@ -43,6 +43,12 @@ func newAgentsListCmd() *cobra.Command {
 					fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", summary.Description)
 				}
 			}
+			if errs := reg.Errors(); len(errs) > 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "Manifest load errors:")
+				for _, err := range errs {
+					fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", err.Path, err.Error)
+				}
+			}
 			return nil
 		},
 	}
