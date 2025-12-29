@@ -22,6 +22,7 @@ type RuntimeAdapter interface {
 	SwitchAgent(name string) error
 	SessionInfo() SessionInfo
 	ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution
+	SessionArtifacts() SessionArtifacts
 }
 
 type runtimeAdapter struct {
@@ -146,6 +147,16 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		})
 	}
 	return res
+}
+
+func (r *runtimeAdapter) SessionArtifacts() SessionArtifacts {
+	if r == nil || r.rt == nil {
+		return SessionArtifacts{}
+	}
+	return SessionArtifacts{
+		TelemetryPath: r.rt.Config.TelemetryPath,
+		LogPath:       r.rt.Config.LogPath,
+	}
 }
 
 func (r *runtimeAdapter) PendingHITL() []*fruntime.PermissionRequest {
