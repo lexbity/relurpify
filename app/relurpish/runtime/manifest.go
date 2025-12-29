@@ -87,14 +87,17 @@ func SaveManifest(ctx context.Context, cfg Config, selection WizardSelection) (M
 			Description: buildManifestDescription(selection),
 		},
 		Spec: manifest.ManifestSpec{
-			Image:       "ghcr.io/relurpify/runtime:latest",
-			Runtime:     "gvisor",
-			Permissions: perms,
-			Resources: manifest.ResourceSpec{Limits: manifest.ResourceLimit{
-				CPU:    "2",
-				Memory: "4Gi",
-				DiskIO: "500MBps",
-			}},
+			Image:   "ghcr.io/relurpify/runtime:latest",
+			Runtime: "gvisor",
+			Defaults: &manifest.ManifestDefaults{
+				Permissions: &perms,
+				Resources: &manifest.ResourceSpec{Limits: manifest.ResourceLimit{
+					CPU:    "2",
+					Memory: "4Gi",
+					DiskIO: "500MBps",
+				}},
+				Agent: &core.AgentSpecOverlay{AllowedTools: selection.Tools},
+			},
 			Security: manifest.SecuritySpec{
 				RunAsUser:       1000,
 				ReadOnlyRoot:    false,
@@ -137,6 +140,7 @@ func buildPermissionSet(workspace string, profile PermissionProfile) core.Permis
 		FileSystem: []core.FileSystemPermission{
 			{Action: core.FileSystemRead, Path: glob, Justification: "Read workspace"},
 			{Action: core.FileSystemList, Path: glob, Justification: "List workspace"},
+			{Action: core.FileSystemExecute, Path: glob, Justification: "Execute tooling inside workspace"},
 		},
 		Executables: []core.ExecutablePermission{
 			{Binary: "go", Args: []string{"*"}},
@@ -200,7 +204,15 @@ func summarizeManifest(path string) ManifestSummary {
 	}
 	summary.AgentName = manifest.Metadata.Name
 	summary.Runtime = manifest.Spec.Runtime
-	summary.Permissions = len(manifest.Spec.Permissions.FileSystem) + len(manifest.Spec.Permissions.Executables)
-	summary.Network = len(manifest.Spec.Permissions.Network)
+	permFS := len(manifest.Spec.Permissions.FileSystem)
+	permExec := len(manifest.Spec.Permissions.Executables)
+	permNet := len(manifest.Spec.Permissions.Network)
+	if manifest.Spec.Defaults != nil && manifest.Spec.Defaults.Permissions != nil {
+		permFS += len(manifest.Spec.Defaults.Permissions.FileSystem)
+		permExec += len(manifest.Spec.Defaults.Permissions.Executables)
+		permNet += len(manifest.Spec.Defaults.Permissions.Network)
+	}
+	summary.Permissions = permFS + permExec
+	summary.Network = permNet
 	return summary
 }
