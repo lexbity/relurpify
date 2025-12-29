@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/testsuite/agenttest"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 	"net/url"
@@ -71,7 +71,7 @@ func newAgentTestInitCmd() *cobra.Command {
 					Port:        11434,
 					Description: "Ollama",
 				}}
-				setToolMatrixForAgent(&manifest, name)
+				setToolAllowlistForAgent(&manifest, name)
 				if err := manifest.Validate(); err != nil {
 					return fmt.Errorf("manifest %s invalid: %w", name, err)
 				}
@@ -830,20 +830,13 @@ func baseManifestTemplate(workspace, model, endpoint string) (manifest.AgentMani
 	return tmpl, nil
 }
 
-func setToolMatrixForAgent(m *manifest.AgentManifest, name string) {
+func setToolAllowlistForAgent(m *manifest.AgentManifest, name string) {
 	if m == nil || m.Spec.Agent == nil {
 		return
 	}
 	switch strings.ToLower(name) {
 	case "eternal":
-		m.Spec.Agent.Tools = core.AgentToolMatrix{
-			FileRead:       false,
-			FileWrite:      false,
-			FileEdit:       false,
-			BashExecute:    false,
-			LSPQuery:       false,
-			SearchCodebase: false,
-		}
+		m.Spec.Agent.AllowedTools = []string{}
 	default:
 	}
 }
