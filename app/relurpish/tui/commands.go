@@ -87,6 +87,13 @@ func init() {
 		Handler:     handleMode,
 	})
 	registerCommand(Command{
+		Name:        "agent",
+		Aliases:     []string{"ag"},
+		Description: "Switch agent type (coding, planner, react, reflection, expert)",
+		Usage:       "/agent <name>",
+		Handler:     handleAgent,
+	})
+	registerCommand(Command{
 		Name:        "strategy",
 		Aliases:     []string{"s", "strat"},
 		Description: "Set execution strategy (plan_execute, review_iterate, single_agent)",
@@ -190,7 +197,7 @@ func handleContext(m Model, args []string) (Model, tea.Cmd) {
 	for _, f := range files {
 		b.WriteString(fmt.Sprintf("  • %s\n", f))
 	}
-	b.WriteString(fmt.Sprintf("\nTokens: %d / %d", m.context.UsedTokens, m.context.MaxTokens))
+	b.WriteString(fmt.Sprintf("\nSession tokens: %d | Context budget: %d", m.context.UsedTokens, m.context.MaxTokens))
 	return m.addSystemMessage(b.String()), nil
 }
 
@@ -245,6 +252,33 @@ func handleMode(m Model, args []string) (Model, tea.Cmd) {
 	m.session.Mode = args[0]
 	m.statusBar.mode = args[0]
 	return m.addSystemMessage(fmt.Sprintf("Set mode to: %s", args[0])), nil
+}
+
+func handleAgent(m Model, args []string) (Model, tea.Cmd) {
+	if len(args) == 0 {
+		current := m.session.Agent
+		if current == "" {
+			current = "(default)"
+		}
+		available := ""
+		if m.runtime != nil {
+			list := m.runtime.AvailableAgents()
+			if len(list) > 0 {
+				available = fmt.Sprintf("\nAvailable: %s", strings.Join(list, ", "))
+			}
+		}
+		return m.addSystemMessage(fmt.Sprintf("Current agent: %s%s", current, available)), nil
+	}
+	if m.runtime == nil {
+		return m.addSystemMessage("Runtime unavailable: cannot switch agent"), nil
+	}
+	name := args[0]
+	if err := m.runtime.SwitchAgent(name); err != nil {
+		return m.addSystemMessage(fmt.Sprintf("Agent switch failed: %v", err)), nil
+	}
+	m.session.Agent = name
+	m.statusBar.agent = name
+	return m.addSystemMessage(fmt.Sprintf("Switched agent to: %s", name)), nil
 }
 
 func handleStrategy(m Model, args []string) (Model, tea.Cmd) {
