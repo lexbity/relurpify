@@ -1,0 +1,38 @@
+# Relurpify Skill Manifest Template
+# Copy into relurpify_cfg/skills/<skill-name>/skill.manifest.yaml
+
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+
+metadata:
+  name: "example-skill"
+  version: "1.0.0"
+  description: "Reusable guidance + tool policies for a focused workflow."
+
+spec:
+  # Prompt snippets appended to the agent prompt.
+  prompt_snippets:
+    - "Follow the project's review checklist and summarize any risks."
+
+  # Required tools (skill is skipped if any are blocked).
+  required_tools:
+    - "git_diff"
+    - "file_read"
+
+  # Tool matrix overrides / policies.
+  tool_matrix_override:
+    lsp_query: false
+  tool_policies:
+    exec_run_linter:
+      execute: "ask"
+
+  # Optional resource locations (defaults to skills/<name>/{scripts,resources,templates}).
+  resources:
+    scripts: ["scripts"]
+    resources: ["resources"]
+    templates: ["templates"]
+
+  # Optional agent spec overlay for this skill.
+  agent_overlay:
+    context:
+      max_files: 40
