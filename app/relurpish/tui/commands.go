@@ -100,6 +100,27 @@ func init() {
 		Usage:       "/strategy <strategy>",
 		Handler:     handleStrategy,
 	})
+	registerCommand(Command{
+		Name:        "parallel",
+		Aliases:     []string{"par"},
+		Description: "Toggle parallel runs (on/off)",
+		Usage:       "/parallel on|off",
+		Handler:     handleParallel,
+	})
+	registerCommand(Command{
+		Name:        "stop",
+		Aliases:     []string{"cancel"},
+		Description: "Stop the most recent run",
+		Usage:       "/stop",
+		Handler:     handleStop,
+	})
+	registerCommand(Command{
+		Name:        "retry",
+		Aliases:     []string{"re"},
+		Description: "Retry the last prompt",
+		Usage:       "/retry",
+		Handler:     handleRetry,
+	})
 }
 
 func registerCommand(cmd Command) {
@@ -291,4 +312,32 @@ func handleStrategy(m Model, args []string) (Model, tea.Cmd) {
 	m.session.Strategy = args[0]
 	m.statusBar.strategy = args[0]
 	return m.addSystemMessage(fmt.Sprintf("Set strategy to: %s", args[0])), nil
+}
+
+func handleStop(m Model, args []string) (Model, tea.Cmd) {
+	return m.stopLatestRun()
+}
+
+func handleRetry(m Model, args []string) (Model, tea.Cmd) {
+	return m.retryLastRun()
+}
+
+func handleParallel(m Model, args []string) (Model, tea.Cmd) {
+	if len(args) == 0 {
+		state := "off"
+		if m.allowParallel {
+			state = "on"
+		}
+		return m.addSystemMessage(fmt.Sprintf("Parallel runs: %s", state)), nil
+	}
+	switch strings.ToLower(args[0]) {
+	case "on", "true", "yes":
+		m.allowParallel = true
+		return m.addSystemMessage("Parallel runs enabled"), nil
+	case "off", "false", "no":
+		m.allowParallel = false
+		return m.addSystemMessage("Parallel runs disabled"), nil
+	default:
+		return m.addSystemMessage("Usage: /parallel on|off"), nil
+	}
 }
