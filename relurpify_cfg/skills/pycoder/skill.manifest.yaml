@@ -1,0 +1,14 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: pycoder
+  version: 1.0.0
+  description: Python tooling for script/test workflows.
+spec:
+  inherits: [coding]
+  allowed_tools:
+    - cli_python
+  permissions:
+    executables:
+      - binary: python
+        args: ["*"]
