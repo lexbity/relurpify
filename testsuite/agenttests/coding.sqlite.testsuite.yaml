@@ -5,7 +5,7 @@ metadata:
   description: "SQLite-focused prompts for the coding agent (easy→hard)."
 spec:
   agent_name: coding
-  manifest: ../agents/coding-sqlite.yaml
+  manifest: relurpify_cfg/agents/coding-sqlite.yaml
   workspace:
     strategy: in_place
     exclude:
