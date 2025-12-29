@@ -183,6 +183,54 @@ func TestReActAgentToolCallingDisabled(t *testing.T) {
 	assert.Equal(t, 1, llm.generateCalls)
 }
 
+// TestReActAgentToolCallingFallbackExecutesParsedToolCalls ensures that
+// tool calls parsed from plain text are still executed when tool calling is off.
+func TestReActAgentToolCallingFallbackExecutesParsedToolCalls(t *testing.T) {
+	llm := &stubLLM{
+		responses: []*core.LLMResponse{
+			{Text: `{"tool":"echo","arguments":{"value":"hi"}}`},
+		},
+	}
+	registry := toolsys.NewToolRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
+	agent := &ReActAgent{
+		Model: llm,
+		Tools: registry,
+	}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: false}
+	assert.NoError(t, agent.Initialize(cfg))
+
+	task := &core.Task{ID: "task-3", Instruction: "use tool via fallback"}
+	state := core.NewContext()
+	state.Set("task.id", task.ID)
+
+	think := &reactThinkNode{id: "think", agent: agent, task: task}
+	act := &reactActNode{id: "act", agent: agent}
+	observe := &reactObserveNode{id: "observe", agent: agent, task: task}
+	terminal := graph.NewTerminalNode("done")
+
+	graph := graph.NewGraph()
+	assert.NoError(t, graph.AddNode(think))
+	assert.NoError(t, graph.AddNode(act))
+	assert.NoError(t, graph.AddNode(observe))
+	assert.NoError(t, graph.AddNode(terminal))
+	assert.NoError(t, graph.SetStart("think"))
+	assert.NoError(t, graph.AddEdge("think", "act", nil, false))
+	assert.NoError(t, graph.AddEdge("act", "observe", nil, false))
+	assert.NoError(t, graph.AddEdge("observe", "done", nil, false))
+
+	result, err := graph.Execute(context.Background(), state)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "done", result.NodeID)
+	assert.Equal(t, 0, llm.withToolsCalls)
+	assert.Equal(t, 1, llm.generateCalls)
+
+	lastToolRes, ok := state.Get("react.last_tool_result")
+	assert.True(t, ok)
+	assert.Contains(t, fmt.Sprint(lastToolRes.(map[string]interface{})["echo"]), "hi")
+}
+
 // TestReActAgentToolCalling verifies tool call handling and transcript storage.
 func TestReActAgentToolCalling(t *testing.T) {
 	llm := &stubLLM{
