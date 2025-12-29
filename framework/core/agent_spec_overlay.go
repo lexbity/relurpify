@@ -1,5 +1,7 @@
 package core
 
+import "strings"
+
 // AgentSpecOverlay defines optional overrides for an agent spec.
 type AgentSpecOverlay struct {
 	Implementation    *string                  `yaml:"implementation,omitempty" json:"implementation,omitempty"`
@@ -7,7 +9,7 @@ type AgentSpecOverlay struct {
 	Version           *string                  `yaml:"version,omitempty" json:"version,omitempty"`
 	Prompt            *string                  `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	ModelOverlay      *AgentModelConfigOverlay `yaml:"model,omitempty" json:"model,omitempty"`
-	Tools             *AgentToolMatrix         `yaml:"tools,omitempty" json:"tools,omitempty"`
+	AllowedTools      []string                 `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
 	ToolPolicies      map[string]ToolPolicy    `yaml:"tool_policies,omitempty" json:"tool_policies,omitempty"`
 	Bash              *AgentBashPermissions    `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
 	Files             *AgentFileMatrix         `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
@@ -44,7 +46,10 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		Temperature: &spec.Model.Temperature,
 		MaxTokens:   &spec.Model.MaxTokens,
 	}
-	tools := spec.Tools
+	var allowedTools []string
+	if spec.AllowedTools != nil {
+		allowedTools = append([]string{}, spec.AllowedTools...)
+	}
 	bash := spec.Bash
 	files := spec.Files
 	invocation := spec.Invocation
@@ -80,7 +85,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		Version:           &version,
 		Prompt:            &prompt,
 		ModelOverlay:      &modelOverlay,
-		Tools:             &tools,
+		AllowedTools:      allowedTools,
 		ToolPolicies:      cloneToolPolicies(spec.ToolPolicies),
 		Bash:              &bash,
 		Files:             &files,
@@ -107,8 +112,12 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 	if overlay.Prompt != nil {
 		spec.Prompt = *overlay.Prompt
 	}
-	if overlay.Tools != nil {
-		spec.Tools = *overlay.Tools
+	if overlay.AllowedTools != nil {
+		if len(overlay.AllowedTools) == 0 {
+			spec.AllowedTools = []string{}
+		} else {
+			spec.AllowedTools = mergeStringList(spec.AllowedTools, overlay.AllowedTools)
+		}
 	}
 	if overlay.ToolPolicies != nil {
 		if spec.ToolPolicies == nil {
@@ -166,6 +175,9 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 	if spec.ToolPolicies != nil {
 		clone.ToolPolicies = cloneToolPolicies(spec.ToolPolicies)
 	}
+	if spec.AllowedTools != nil {
+		clone.AllowedTools = append([]string{}, spec.AllowedTools...)
+	}
 	clone.Bash.AllowPatterns = append([]string{}, spec.Bash.AllowPatterns...)
 	clone.Bash.DenyPatterns = append([]string{}, spec.Bash.DenyPatterns...)
 	clone.Files.Write.AllowPatterns = append([]string{}, spec.Files.Write.AllowPatterns...)
@@ -186,6 +198,26 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 		}
 	}
 	return &clone
+}
+
+func mergeStringList(base, extra []string) []string {
+	if len(extra) == 0 {
+		return base
+	}
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]string, 0, len(base)+len(extra))
+	for _, entry := range append(base, extra...) {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, ok := seen[entry]; ok {
+			continue
+		}
+		seen[entry] = struct{}{}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func cloneToolPolicies(policies map[string]ToolPolicy) map[string]ToolPolicy {
