@@ -99,7 +99,7 @@ func TestApplySkillsMissingResources(t *testing.T) {
 		Kind:       "SkillManifest",
 		Metadata:   manifest.ManifestMetadata{Name: skillName, Version: "1.0.0"},
 		Spec: manifest.SkillSpec{
-			Resources: manifest.SkillResourceSpec{
+			ResourcePaths: manifest.SkillResourceSpec{
 				Scripts: []string{"scripts"},
 			},
 		},
