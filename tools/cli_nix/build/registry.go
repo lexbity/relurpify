@@ -19,8 +19,6 @@ func Tools(basePath string) []core.Tool {
 		NewPkgConfigTool(basePath),
 		NewGDBTool(basePath),
 		NewValgrindTool(basePath),
-		NewPatchTool(basePath),
-		NewDiffTool(basePath),
 		NewLddTool(basePath),
 		NewObjdumpTool(basePath),
 		NewPerfTool(basePath),
