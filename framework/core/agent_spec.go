@@ -15,7 +15,7 @@ type AgentRuntimeSpec struct {
 	Version           string                `yaml:"version,omitempty" json:"version,omitempty"`
 	Prompt            string                `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	Model             AgentModelConfig      `yaml:"model" json:"model"`
-	Tools             AgentToolMatrix       `yaml:"tools" json:"tools"`
+	AllowedTools      []string              `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
 	ToolPolicies      map[string]ToolPolicy `yaml:"tool_policies,omitempty" json:"tool_policies,omitempty"`
 	Bash              AgentBashPermissions  `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
 	Files             AgentFileMatrix       `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
@@ -73,23 +73,9 @@ type AgentModelConfig struct {
 	MaxTokens   int     `yaml:"max_tokens" json:"max_tokens"`
 }
 
-// AgentToolMatrix encodes coarse permissions for builtin tools.
-type AgentToolMatrix struct {
-	FileRead       bool `yaml:"file_read" json:"file_read"`
-	FileWrite      bool `yaml:"file_write" json:"file_write"`
-	FileEdit       bool `yaml:"file_edit" json:"file_edit"`
-	BashExecute    bool `yaml:"bash_execute" json:"bash_execute"`
-	LSPQuery       bool `yaml:"lsp_query" json:"lsp_query"`
-	SearchCodebase bool `yaml:"search_codebase" json:"search_codebase"`
-	WebSearch      bool `yaml:"web_search" json:"web_search"`
-}
-
 // ToolPolicy configures visibility and execution gating for a single tool.
-// Visibility controls whether the tool is exposed to agents (and therefore
-// callable by name). Execution controls whether calls are allowed, denied, or
-// require HITL approval.
+// Execution controls whether calls are allowed, denied, or require HITL approval.
 type ToolPolicy struct {
-	Visible *bool                `yaml:"visible,omitempty" json:"visible,omitempty"`
 	Execute AgentPermissionLevel `yaml:"execute,omitempty" json:"execute,omitempty"` // allow/deny/ask
 }
 
@@ -164,9 +150,6 @@ func (a *AgentRuntimeSpec) Validate() error {
 	if err := a.Model.Validate(); err != nil {
 		return fmt.Errorf("model invalid: %w", err)
 	}
-	if err := a.Tools.Validate(); err != nil {
-		return err
-	}
 	for name, policy := range a.ToolPolicies {
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("tool policy contains empty tool name")
@@ -175,6 +158,11 @@ func (a *AgentRuntimeSpec) Validate() error {
 		case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny, "":
 		default:
 			return fmt.Errorf("tool policy %s execute=%s invalid", name, policy.Execute)
+		}
+	}
+	for _, tool := range a.AllowedTools {
+		if strings.TrimSpace(tool) == "" {
+			return fmt.Errorf("allowed_tools contains empty entry")
 		}
 	}
 	if err := a.Files.Validate(); err != nil {
@@ -191,13 +179,6 @@ func (m AgentModelConfig) Validate() error {
 	if m.Provider == "" {
 		return fmt.Errorf("model provider required")
 	}
-	return nil
-}
-
-// Validate ensures the tool matrix configuration is valid. An agent may disable
-// every builtin tool (for example, pure chat/streaming agents that never touch
-// the filesystem or shell), so an empty matrix is allowed.
-func (t AgentToolMatrix) Validate() error {
 	return nil
 }
 
