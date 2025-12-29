@@ -8,6 +8,7 @@ func RestrictToolRegistryByMatrix(registry *ToolRegistry, matrix AgentToolMatrix
 	if registry == nil {
 		return
 	}
+	registry.setToolMatrix(matrix)
 	allowed := make([]string, 0)
 	for _, tool := range registry.All() {
 		if toolAllowedByMatrix(tool, matrix) {
