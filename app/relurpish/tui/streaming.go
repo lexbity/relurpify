@@ -7,6 +7,7 @@ import (
 
 // StreamTokenMsg represents a streamed token from the agent pipeline.
 type StreamTokenMsg struct {
+	RunID     string
 	Token     string
 	TokenType TokenType
 	Metadata  map[string]interface{}
@@ -24,17 +25,20 @@ const (
 
 // StreamCompleteMsg signals that streaming has finished.
 type StreamCompleteMsg struct {
+	RunID      string
 	Duration   time.Duration
 	TokensUsed int
 }
 
 // StreamErrorMsg wraps runtime failures for display.
 type StreamErrorMsg struct {
+	RunID string
 	Error error
 }
 
 // MessageBuilder accumulates streaming state until completion.
 type MessageBuilder struct {
+	id            string
 	startTime     time.Time
 	text          strings.Builder
 	thinking      []ThinkingStep
@@ -45,8 +49,9 @@ type MessageBuilder struct {
 }
 
 // NewMessageBuilder constructs a builder with sane defaults.
-func NewMessageBuilder() *MessageBuilder {
+func NewMessageBuilder(id string) *MessageBuilder {
 	return &MessageBuilder{
+		id:        id,
 		startTime: time.Now(),
 		thinking:  []ThinkingStep{},
 		changes:   []FileChange{},
@@ -156,7 +161,7 @@ func (mb *MessageBuilder) Build(duration time.Duration, tokensUsed int) Message 
 		mb.currentChange = nil
 	}
 	return Message{
-		ID:        generateID(),
+		ID:        mb.id,
 		Timestamp: mb.startTime,
 		Role:      RoleAgent,
 		Content: MessageContent{
@@ -181,7 +186,7 @@ func (mb *MessageBuilder) BuildPartial() Message {
 		changes = append(changes, *mb.currentChange)
 	}
 	return Message{
-		ID:        "streaming",
+		ID:        mb.id,
 		Timestamp: mb.startTime,
 		Role:      RoleAgent,
 		Content: MessageContent{
