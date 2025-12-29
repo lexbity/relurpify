@@ -5,7 +5,7 @@ metadata:
   description: "Baseline prompt tests for the coding agent."
 spec:
   agent_name: coding
-  manifest: ../agent.manifest.yaml
+  manifest: relurpify_cfg/agent.manifest.yaml
   workspace:
     strategy: in_place
     exclude:
