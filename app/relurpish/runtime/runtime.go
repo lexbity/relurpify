@@ -19,6 +19,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -28,15 +29,17 @@ import (
 // agent fruntime. It centralizes tool registration, manifests, sandbox
 // registration, and log management.
 type Runtime struct {
-	Config       Config
-	Tools        *toolsys.ToolRegistry
-	Memory       memory.MemoryStore
-	Context      *core.Context
-	Agent        graph.Agent
-	Model        core.LanguageModel
-	Registration *fruntime.AgentRegistration
-	Logger       *log.Logger
-	Workspace    WorkspaceConfig
+	Config           Config
+	Tools            *toolsys.ToolRegistry
+	Memory           memory.MemoryStore
+	Context          *core.Context
+	Agent            graph.Agent
+	Model            core.LanguageModel
+	Registration     *fruntime.AgentRegistration
+	AgentDefinitions map[string]*core.AgentDefinition
+	Telemetry        core.Telemetry
+	Logger           *log.Logger
+	Workspace        WorkspaceConfig
 
 	logFile io.Closer
 
@@ -192,16 +195,18 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		registry.RestrictTo(allowedTools)
 	}
 	rt := &Runtime{
-		Config:       cfg,
-		Tools:        registry,
-		Memory:       memory,
-		Context:      core.NewContext(),
-		Agent:        agent,
-		Model:        model,
-		Logger:       logger,
-		logFile:      logFile,
-		Workspace:    workspaceCfg,
-		Registration: registration,
+		Config:           cfg,
+		Tools:            registry,
+		Memory:           memory,
+		Context:          core.NewContext(),
+		Agent:            agent,
+		Model:            model,
+		Logger:           logger,
+		logFile:          logFile,
+		Workspace:        workspaceCfg,
+		Registration:     registration,
+		AgentDefinitions: agentDefs,
+		Telemetry:        telemetry,
 	}
 	for _, skill := range skillResults {
 		if !skill.Applied || skill.Paths.Root == "" {
@@ -217,6 +222,77 @@ func (r *Runtime) Close() error {
 	if r.logFile != nil {
 		return r.logFile.Close()
 	}
+	return nil
+}
+
+// AvailableAgents lists known agent presets and definitions.
+func (r *Runtime) AvailableAgents() []string {
+	seen := map[string]struct{}{
+		"coding":     {},
+		"planner":    {},
+		"react":      {},
+		"reflection": {},
+		"expert":     {},
+	}
+	if r != nil {
+		for name := range r.AgentDefinitions {
+			if name == "" {
+				continue
+			}
+			seen[name] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// SwitchAgent reinitializes the runtime with a new agent preset.
+func (r *Runtime) SwitchAgent(name string) error {
+	if r == nil {
+		return errors.New("runtime unavailable")
+	}
+	if name == "" {
+		return errors.New("agent name required")
+	}
+	if r.Registration == nil || r.Registration.Manifest == nil || r.Registration.Manifest.Spec.Agent == nil {
+		return errors.New("agent manifest missing")
+	}
+	cfg := r.Config
+	cfg.AgentName = name
+	baseSpec := r.Registration.Manifest.Spec.Agent
+	agentCfg := &core.Config{
+		Name:              cfg.AgentLabel(),
+		Model:             cfg.OllamaModel,
+		OllamaEndpoint:    cfg.OllamaEndpoint,
+		MaxIterations:     8,
+		OllamaToolCalling: baseSpec.ToolCallingEnabled(),
+		AgentSpec:         baseSpec,
+		Telemetry:         r.Telemetry,
+	}
+	agent := instantiateAgent(cfg, r.Model, r.Tools, r.Memory, r.AgentDefinitions, agentCfg)
+	if agent == nil {
+		return fmt.Errorf("agent %s not available", name)
+	}
+	if agentCfg.Model != cfg.OllamaModel {
+		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, agentCfg.Model)
+	}
+	if agentCfg.AgentSpec != nil {
+		r.Tools.UseAgentSpec(r.Registration.ID, agentCfg.AgentSpec)
+	}
+	if err := agent.Initialize(agentCfg); err != nil {
+		return err
+	}
+	if reflection, ok := agent.(*agents.ReflectionAgent); ok {
+		if reflection.Delegate != nil {
+			_ = reflection.Delegate.Initialize(agentCfg)
+		}
+	}
+	r.Agent = agent
+	r.Config.AgentName = name
 	return nil
 }
 
