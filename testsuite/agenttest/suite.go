@@ -96,7 +96,6 @@ type CaseOverrideSpec struct {
 	Recording     *RecordingSpec    `yaml:"recording,omitempty"`
 	Workspace     *WorkspaceSpec    `yaml:"workspace,omitempty"`
 	ExtraEnv      map[string]string `yaml:"extra_env,omitempty"`
-	ToolMatrix    map[string]bool   `yaml:"tool_matrix,omitempty"`
 	AllowedTools  []string          `yaml:"allowed_tools,omitempty"`
 }
 
