@@ -2,10 +2,10 @@ package tui
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework/runtime"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/lexcodex/relurpify/framework/runtime"
 )
 
 type hitlService interface {
@@ -13,13 +13,6 @@ type hitlService interface {
 	ApproveHITL(requestID, approver string, scope runtime.GrantScope, duration time.Duration) error
 	DenyHITL(requestID, reason string) error
 	SubscribeHITL() (<-chan runtime.HITLEvent, func())
-}
-
-func hitlServiceFromRuntime(rt *runtimesvc.Runtime) hitlService {
-	if rt == nil {
-		return nil
-	}
-	return rt
 }
 
 type hitlEventMsg struct{ event runtime.HITLEvent }
