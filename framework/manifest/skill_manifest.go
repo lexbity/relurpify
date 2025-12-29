@@ -19,12 +19,15 @@ type SkillManifest struct {
 
 // SkillSpec defines prompt snippets, tool overlays, and resources.
 type SkillSpec struct {
-	PromptSnippets     []string                   `yaml:"prompt_snippets,omitempty" json:"prompt_snippets,omitempty"`
-	ToolMatrixOverride *core.ToolMatrixOverride   `yaml:"tool_matrix_override,omitempty" json:"tool_matrix_override,omitempty"`
-	ToolPolicies       map[string]core.ToolPolicy `yaml:"tool_policies,omitempty" json:"tool_policies,omitempty"`
-	RequiredTools      []string                   `yaml:"required_tools,omitempty" json:"required_tools,omitempty"`
-	Resources          SkillResourceSpec          `yaml:"resources,omitempty" json:"resources,omitempty"`
-	AgentOverlay       *core.AgentSpecOverlay     `yaml:"agent_overlay,omitempty" json:"agent_overlay,omitempty"`
+	Inherits       []string                   `yaml:"inherits,omitempty" json:"inherits,omitempty"`
+	PromptSnippets []string                   `yaml:"prompt_snippets,omitempty" json:"prompt_snippets,omitempty"`
+	AllowedTools   []string                   `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
+	ToolPolicies   map[string]core.ToolPolicy `yaml:"tool_policies,omitempty" json:"tool_policies,omitempty"`
+	RequiredTools  []string                   `yaml:"required_tools,omitempty" json:"required_tools,omitempty"`
+	Permissions    *core.PermissionSet        `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	Resources      *ResourceSpec              `yaml:"resources,omitempty" json:"resources,omitempty"`
+	ResourcePaths  SkillResourceSpec          `yaml:"resource_paths,omitempty" json:"resource_paths,omitempty"`
+	AgentOverlay   *core.AgentSpecOverlay     `yaml:"agent_overlay,omitempty" json:"agent_overlay,omitempty"`
 }
 
 // SkillResourceSpec declares resource paths.
@@ -68,6 +71,16 @@ func (m *SkillManifest) Validate() error {
 	for _, tool := range m.Spec.RequiredTools {
 		if strings.TrimSpace(tool) == "" {
 			return fmt.Errorf("required_tools contains empty entry")
+		}
+	}
+	for _, parent := range m.Spec.Inherits {
+		if strings.TrimSpace(parent) == "" {
+			return fmt.Errorf("inherits contains empty entry")
+		}
+	}
+	if m.Spec.Permissions != nil {
+		if err := m.Spec.Permissions.Validate(); err != nil {
+			return fmt.Errorf("skill permissions invalid: %w", err)
 		}
 	}
 	return nil
