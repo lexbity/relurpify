@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
+	"strings"
 	"sync"
 )
 
@@ -33,6 +34,9 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 				"steps_completed": 0,
 			},
 		}, nil
+	}
+	if err := validatePlanDependencies(plan); err != nil {
+		return nil, err
 	}
 	maxRecovery := p.Options.MaxRecoveryAttempts
 	if maxRecovery <= 0 {
@@ -170,4 +174,86 @@ func cloneTask(task *core.Task) *core.Task {
 		}
 	}
 	return &clone
+}
+
+func validatePlanDependencies(plan *core.Plan) error {
+	if plan == nil {
+		return nil
+	}
+	stepIDs := make(map[string]struct{}, len(plan.Steps))
+	for _, step := range plan.Steps {
+		if step.ID == "" {
+			return fmt.Errorf("plan step missing id")
+		}
+		if _, exists := stepIDs[step.ID]; exists {
+			return fmt.Errorf("plan contains duplicate step id %q", step.ID)
+		}
+		stepIDs[step.ID] = struct{}{}
+	}
+	for stepID, deps := range plan.Dependencies {
+		if stepID == "" {
+			return fmt.Errorf("plan dependency contains empty step id")
+		}
+		if _, ok := stepIDs[stepID]; !ok {
+			return fmt.Errorf("plan dependency references unknown step %q", stepID)
+		}
+		for _, depID := range deps {
+			if depID == "" {
+				return fmt.Errorf("plan dependency for %q contains empty dependency id", stepID)
+			}
+			if _, ok := stepIDs[depID]; !ok {
+				return fmt.Errorf("plan dependency for %q references missing step %q", stepID, depID)
+			}
+			if depID == stepID {
+				return fmt.Errorf("plan step %q depends on itself", stepID)
+			}
+		}
+	}
+
+	const (
+		unvisited = iota
+		visiting
+		visited
+	)
+	state := make(map[string]int, len(stepIDs))
+	stack := make([]string, 0, len(stepIDs))
+
+	var visit func(id string) error
+	visit = func(id string) error {
+		switch state[id] {
+		case visiting:
+			cycle := formatCycle(stack, id)
+			return fmt.Errorf("plan dependency cycle detected: %s", cycle)
+		case visited:
+			return nil
+		}
+		state[id] = visiting
+		stack = append(stack, id)
+		for _, dep := range plan.Dependencies[id] {
+			if err := visit(dep); err != nil {
+				return err
+			}
+		}
+		stack = stack[:len(stack)-1]
+		state[id] = visited
+		return nil
+	}
+
+	for _, step := range plan.Steps {
+		if err := visit(step.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func formatCycle(stack []string, start string) string {
+	for i := len(stack) - 1; i >= 0; i-- {
+		if stack[i] == start {
+			cycle := append([]string{}, stack[i:]...)
+			cycle = append(cycle, start)
+			return strings.Join(cycle, " -> ")
+		}
+	}
+	return start
 }
