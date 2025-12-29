@@ -31,6 +31,12 @@ type SessionInfo struct {
 	MaxTokens int
 }
 
+// SessionArtifacts provides file paths for logs/telemetry.
+type SessionArtifacts struct {
+	TelemetryPath string
+	LogPath       string
+}
+
 // AgentContext records the active context files and token budget.
 type AgentContext struct {
 	Files       []string
