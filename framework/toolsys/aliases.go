@@ -15,7 +15,6 @@ type Telemetry = core.Telemetry
 type AgentRuntimeSpec = core.AgentRuntimeSpec
 type ToolPolicy = core.ToolPolicy
 type PermissionManager = runtime.PermissionManager
-type AgentToolMatrix = core.AgentToolMatrix
 type PermissionSet = core.PermissionSet
 type AgentPermissionLevel = core.AgentPermissionLevel
 type ToolCall = core.ToolCall
