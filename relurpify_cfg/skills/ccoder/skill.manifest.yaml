@@ -1,0 +1,17 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: ccoder
+  version: 1.0.0
+  description: C/C++ tooling for builds.
+spec:
+  inherits: [coding]
+  allowed_tools:
+    - cli_cmake
+    - cli_make
+  permissions:
+    executables:
+      - binary: cmake
+        args: ["*"]
+      - binary: make
+        args: ["*"]
