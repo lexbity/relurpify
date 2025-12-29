@@ -111,12 +111,13 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	registry, err := BuildToolRegistry(cfg.Workspace, runner, ToolRegistryOptions{
 		AgentID:           registration.ID,
 		PermissionManager: registration.Permissions,
-		AgentSpec:         nil,
+		AgentSpec:         agentSpec,
 	})
 	if err != nil {
 		logFile.Close()
 		return nil, err
 	}
+	agentSpec, skillResults := agents.ApplySkills(cfg.Workspace, agentSpec, registration.Manifest.Spec.Skills, registration.Manifest.Spec.SkillOverlays, registry, registration.Permissions, registration.ID)
 	if cfg.AgentName == "" {
 		cfg.AgentName = registration.Manifest.Metadata.Name
 	}
@@ -175,7 +176,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 	// Enforce the effective (post-definition) tool policies before initializing.
 	if agentCfg.AgentSpec != nil {
-		toolsys.RestrictToolRegistryByMatrix(registry, agentCfg.AgentSpec.Tools)
 		registry.UseAgentSpec(registration.ID, agentCfg.AgentSpec)
 	}
 
@@ -202,6 +202,12 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile:      logFile,
 		Workspace:    workspaceCfg,
 		Registration: registration,
+	}
+	for _, skill := range skillResults {
+		if !skill.Applied || skill.Paths.Root == "" {
+			continue
+		}
+		rt.Context.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
 	}
 	return rt, nil
 }
@@ -396,6 +402,13 @@ func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, e
 	state.Set("task.id", task.ID)
 	state.Set("task.type", string(task.Type))
 	state.Set("task.instruction", task.Instruction)
+	scope := task.ID
+	if scope == "" {
+		scope = state.GetString("task.id")
+	}
+	if scope != "" {
+		defer state.ClearHandleScope(scope)
+	}
 	if task.Context != nil {
 		if source, ok := task.Context["source"]; ok {
 			state.Set("task.source", fmt.Sprint(source))
