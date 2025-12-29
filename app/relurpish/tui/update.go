@@ -41,6 +41,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ModeHITL:
 			return m.handleHITLMode(msg)
 		}
+	case tea.MouseMsg:
+		if m.feed == nil {
+			return m, nil
+		}
+		updated, cmd := m.feed.Update(msg)
+		m.feed = &updated
+		m.autoFollow = m.feed.AtBottom()
+		return m, cmd
 	case spinner.TickMsg:
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
@@ -128,6 +136,8 @@ func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case "tab":
 		return m.toggleExpandAtCursor()
+	case "shift+tab":
+		return m.cycleExpandTarget()
 	case "ctrl+a":
 		return m.approveCurrentChange()
 	case "ctrl+r":
@@ -234,6 +244,9 @@ func (m Model) handleStreamComplete(msg StreamCompleteMsg) (tea.Model, tea.Cmd) 
 	m.statusBar.tokens = m.session.TotalTokens
 	m.statusBar.duration = m.session.TotalDuration
 	m.statusBar.lastUpdate = time.Now()
+	if m.context != nil {
+		m.context.UsedTokens = m.session.TotalTokens
+	}
 
 	m.streaming = false
 	m.streamBuf = nil
@@ -333,12 +346,29 @@ func (m Model) toggleExpandAtCursor() (tea.Model, tea.Cmd) {
 		if msg.Content.Expanded == nil {
 			msg.Content.Expanded = map[string]bool{}
 		}
-		msg.Content.Expanded["thinking"] = !msg.Content.Expanded["thinking"]
-		msg.Content.Expanded["plan"] = !msg.Content.Expanded["plan"]
-		msg.Content.Expanded["changes"] = !msg.Content.Expanded["changes"]
+		section := m.expandTarget
+		if section == "" {
+			section = "thinking"
+		}
+		msg.Content.Expanded[section] = !msg.Content.Expanded[section]
 		break
 	}
 	return m.refreshFeedContent(), nil
+}
+
+func (m Model) cycleExpandTarget() (tea.Model, tea.Cmd) {
+	sections := []string{"thinking", "plan", "changes"}
+	if m.expandTarget == "" {
+		m.expandTarget = sections[0]
+		return m, nil
+	}
+	for i, section := range sections {
+		if section == m.expandTarget {
+			m.expandTarget = sections[(i+1)%len(sections)]
+			break
+		}
+	}
+	return m, nil
 }
 
 func (m Model) handleHITLResolved(msg hitlResolvedMsg) (tea.Model, tea.Cmd) {
@@ -380,8 +410,11 @@ func (m Model) handleHITLEvent(msg hitlEventMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.event.Type {
 	case runtime.HITLEventRequested:
-		if len(pending) > 0 && m.mode != ModeHITL {
-			req := pending[0]
+		req := msg.event.Request
+		if req == nil && len(pending) > 0 {
+			req = pending[0]
+		}
+		if req != nil && m.mode != ModeHITL {
 			m = m.enterHITL(req)
 			m = m.addSystemMessage(fmt.Sprintf("Permission requested: %s %s (%s)", req.ID, req.Permission.Action, req.Justification))
 		}
