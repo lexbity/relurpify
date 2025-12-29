@@ -1,0 +1,32 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+    name: eternal
+    description: Default tests for eternal
+spec:
+    agent_name: eternal
+    manifest: ../agents/eternal.yaml
+    workspace:
+        strategy: in_place
+        exclude:
+            - .git/**
+            - .gocache/**
+            - .gomodcache/**
+            - relurpify_cfg/test_runs/**
+    models:
+        - name: qwen2.5-coder:14b
+          endpoint: http://localhost:11434
+    recording:
+        mode: "off"
+    cases:
+        - name: one_cycle_ascii
+          task_type: code_generation
+          prompt: write a 3 line ascii cat then stop
+          context:
+            eternal.infinite: false
+            eternal.max_cycles: 1
+            eternal.sleep: 0s
+          expect:
+            must_succeed: true
+            output_regex:
+                - (?i)(cat|/\\_/\\|meow)
