@@ -443,7 +443,7 @@ func (g *Graph) executeBranch(ctx context.Context, start string, state *Context)
 	return subGraph.Execute(ctx, state)
 }
 
-// Validate ensures there are no cycles and all references exist.
+// Validate ensures the graph is well-formed (start node present, edges reference known nodes).
 func (g *Graph) Validate() error {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
