@@ -375,6 +375,92 @@ func filterToolCalls(calls []core.ToolCall) []core.ToolCall {
 	return out
 }
 
+type contextFilePayload struct {
+	Path      string
+	Content   string
+	Truncated bool
+}
+
+func renderContextFiles(task *core.Task, maxBytes int) string {
+	files := extractContextFiles(task)
+	if len(files) == 0 {
+		return ""
+	}
+	if maxBytes <= 0 {
+		maxBytes = 4000
+	}
+	var b strings.Builder
+	remaining := maxBytes
+	for _, file := range files {
+		if file.Path == "" || file.Content == "" {
+			continue
+		}
+		header := fmt.Sprintf("File: %s\n", file.Path)
+		if remaining <= len(header) {
+			break
+		}
+		b.WriteString(header)
+		remaining -= len(header)
+		content := file.Content
+		if len(content) > remaining {
+			content = content[:remaining]
+		}
+		b.WriteString("```")
+		b.WriteString("\n")
+		b.WriteString(content)
+		if !strings.HasSuffix(content, "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString("```\n")
+		remaining = maxBytes - b.Len()
+		if remaining <= 0 {
+			break
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func extractContextFiles(task *core.Task) []contextFilePayload {
+	if task == nil || task.Context == nil {
+		return nil
+	}
+	raw, ok := task.Context["context_file_contents"]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []core.ContextFileContent:
+		out := make([]contextFilePayload, 0, len(v))
+		for _, file := range v {
+			out = append(out, contextFilePayload{
+				Path:      file.Path,
+				Content:   file.Content,
+				Truncated: file.Truncated,
+			})
+		}
+		return out
+	case []interface{}:
+		out := make([]contextFilePayload, 0, len(v))
+		for _, item := range v {
+			m, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			path, _ := m["path"].(string)
+			content, _ := m["content"].(string)
+			truncated, _ := m["truncated"].(bool)
+			out = append(out, contextFilePayload{
+				Path:      path,
+				Content:   content,
+				Truncated: truncated,
+			})
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
 // buildPrompt returns a textual prompt when tool-calling chat APIs are not
 // available.
 func (n *reactThinkNode) buildPrompt(state *core.Context) string {
@@ -410,6 +496,11 @@ func (n *reactThinkNode) buildPrompt(state *core.Context) string {
 			guidance.Write(planJSON)
 			guidance.WriteRune('\n')
 		}
+	}
+	if contextFiles := renderContextFiles(n.task, 4000); contextFiles != "" {
+		guidance.WriteString("\nContext Files:\n")
+		guidance.WriteString(contextFiles)
+		guidance.WriteRune('\n')
 	}
 	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
 		prompt := strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
@@ -478,6 +569,11 @@ func (n *reactThinkNode) buildSystemPrompt(tools []core.Tool) string {
 			guidance.Write(planJSON)
 			guidance.WriteRune('\n')
 		}
+	}
+	if contextFiles := renderContextFiles(n.task, 4000); contextFiles != "" {
+		guidance.WriteString("\n\n### Context Files\n")
+		guidance.WriteString(contextFiles)
+		guidance.WriteRune('\n')
 	}
 	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
 		prompt := strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
