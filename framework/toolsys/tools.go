@@ -30,6 +30,8 @@ type ToolRegistry struct {
 	permissionManager *PermissionManager
 	registeredAgentID string
 	agentSpec         *AgentRuntimeSpec
+	toolMatrix        AgentToolMatrix
+	hasToolMatrix     bool
 	toolPolicies      map[string]ToolPolicy
 	telemetry         Telemetry
 }
@@ -53,6 +55,9 @@ func (r *ToolRegistry) Register(tool Tool) error {
 		if policy.Visible != nil && !*policy.Visible {
 			return nil
 		}
+	}
+	if r.hasToolMatrix && !toolAllowedByMatrix(tool, r.toolMatrix) {
+		return nil
 	}
 	// If we already have a manager, inject it immediately
 	if r.permissionManager != nil {
@@ -103,6 +108,8 @@ func (r *ToolRegistry) CloneFiltered(keep func(Tool) bool) *ToolRegistry {
 		permissionManager: r.permissionManager,
 		registeredAgentID: r.registeredAgentID,
 		agentSpec:         r.agentSpec,
+		toolMatrix:        r.toolMatrix,
+		hasToolMatrix:     r.hasToolMatrix,
 		telemetry:         r.telemetry,
 		toolPolicies:      make(map[string]ToolPolicy, len(r.toolPolicies)),
 	}
@@ -184,6 +191,16 @@ func (r *ToolRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec) {
 		}
 		r.tools[name] = r.wrapTool(inner)
 	}
+	r.mu.Unlock()
+}
+
+func (r *ToolRegistry) setToolMatrix(matrix AgentToolMatrix) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.toolMatrix = matrix
+	r.hasToolMatrix = true
 	r.mu.Unlock()
 }
 
