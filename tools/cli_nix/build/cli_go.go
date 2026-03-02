@@ -12,5 +12,6 @@ func NewGoTool(basePath string) core.Tool {
 		Description: "Executes Go commands (go test/build/etc) inside the workspace.",
 		Command:     "go",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
