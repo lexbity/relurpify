@@ -12,5 +12,6 @@ func NewTopTool(basePath string) core.Tool {
 		Description: "Monitors processes interactively with top.",
 		Command:     "top",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
