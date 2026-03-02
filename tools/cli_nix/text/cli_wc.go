@@ -12,5 +12,6 @@ func NewWCTool(basePath string) core.Tool {
 		Description: "Counts lines, words, and bytes via wc.",
 		Command:     "wc",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
