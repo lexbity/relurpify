@@ -12,5 +12,6 @@ func NewNodeTool(basePath string) core.Tool {
 		Description: "Executes Node.js commands inside the workspace.",
 		Command:     "node",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
