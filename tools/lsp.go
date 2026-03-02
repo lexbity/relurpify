@@ -224,6 +224,7 @@ func (t *DefinitionTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *DefinitionTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
+func (t *DefinitionTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // ReferencesTool implements GetReferences tool.
 type ReferencesTool struct {
@@ -290,6 +291,7 @@ func (t *ReferencesTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *ReferencesTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
+func (t *ReferencesTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // HoverTool implements GetHover.
 type HoverTool struct {
@@ -355,6 +357,7 @@ func (t *HoverTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 func (t *HoverTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
+func (t *HoverTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // DiagnosticsTool implements diagnostics retrieval.
 type DiagnosticsTool struct {
@@ -408,6 +411,7 @@ func (t *DiagnosticsTool) IsAvailable(ctx context.Context, state *core.Context) 
 func (t *DiagnosticsTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
+func (t *DiagnosticsTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // SearchSymbolsTool implements symbol lookup.
 type SearchSymbolsTool struct {
@@ -457,6 +461,7 @@ func (t *SearchSymbolsTool) IsAvailable(ctx context.Context, state *core.Context
 func (t *SearchSymbolsTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
+func (t *SearchSymbolsTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // DocumentSymbolsTool returns structure of a file.
 type DocumentSymbolsTool struct {
@@ -510,6 +515,7 @@ func (t *DocumentSymbolsTool) IsAvailable(ctx context.Context, state *core.Conte
 func (t *DocumentSymbolsTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList)}
 }
+func (t *DocumentSymbolsTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // FormatTool formats code through the LSP.
 type FormatTool struct {
@@ -564,6 +570,7 @@ func (t *FormatTool) IsAvailable(ctx context.Context, state *core.Context) bool 
 func (t *FormatTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemWrite)}
 }
+func (t *FormatTool) Tags() []string { return []string{core.TagDestructive} }
 
 func toInt(value interface{}) int {
 	switch v := value.(type) {
