@@ -12,5 +12,6 @@ func NewTreeTool(basePath string) core.Tool {
 		Description: "Displays directory trees using tree.",
 		Command:     "tree",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
