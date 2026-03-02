@@ -12,5 +12,6 @@ func NewAGTool(basePath string) core.Tool {
 		Description: "Searches codebases with the silver searcher (ag).",
 		Command:     "ag",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
