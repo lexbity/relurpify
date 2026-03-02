@@ -12,5 +12,6 @@ func NewEchoTool(basePath string) core.Tool {
 		Description: "Writes text to standard output using echo.",
 		Command:     "echo",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
