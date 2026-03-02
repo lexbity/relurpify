@@ -12,5 +12,6 @@ func NewStraceTool(basePath string) core.Tool {
 		Description: "Traces syscalls made by a process using strace.",
 		Command:     "strace",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
