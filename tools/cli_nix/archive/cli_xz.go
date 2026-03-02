@@ -12,5 +12,6 @@ func NewXzTool(basePath string) core.Tool {
 		Description: "Compresses data with xz.",
 		Command:     "xz",
 		Category:    "cli_archive",
+		Tags:        []string{"execute"},
 	})
 }
