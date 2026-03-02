@@ -2,6 +2,14 @@ package core
 
 import "context"
 
+// Tag constants classify tools for policy enforcement.
+const (
+	TagReadOnly    = "read-only"
+	TagExecute     = "execute"
+	TagDestructive = "destructive"
+	TagNetwork     = "network"
+)
+
 // Tool defines capabilities accessible to agents. Each implementation can wrap
 // anything from a filesystem helper to an LSP proxy. The metadata doubles as a
 // schema that LLMs can reason about when deciding which tool to call.
@@ -13,6 +21,7 @@ type Tool interface {
 	Execute(ctx context.Context, state *Context, args map[string]interface{}) (*ToolResult, error)
 	IsAvailable(ctx context.Context, state *Context) bool
 	Permissions() ToolPermissions
+	Tags() []string
 }
 
 // ToolParameter describes an argument the tool accepts.
