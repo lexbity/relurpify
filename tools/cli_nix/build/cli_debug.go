@@ -13,6 +13,7 @@ func NewGDBTool(basePath string) core.Tool {
 		Command:      "gdb",
 		Category:     "cli_debug",
 		HITLRequired: true,
+		Tags:         []string{"execute"},
 	})
 }
 
@@ -23,6 +24,7 @@ func NewValgrindTool(basePath string) core.Tool {
 		Description: "Valgrind instrumentation framework (memcheck, cachegrind, etc).",
 		Command:     "valgrind",
 		Category:    "cli_debug",
+		Tags:        []string{"execute"},
 	})
 }
 
@@ -33,6 +35,7 @@ func NewLddTool(basePath string) core.Tool {
 		Description: "Print shared object dependencies.",
 		Command:     "ldd",
 		Category:    "cli_debug",
+		Tags:        []string{"execute"},
 	})
 }
 
@@ -43,6 +46,7 @@ func NewObjdumpTool(basePath string) core.Tool {
 		Description: "Display information from object files.",
 		Command:     "objdump",
 		Category:    "cli_debug",
+		Tags:        []string{"execute"},
 	})
 }
 
@@ -54,6 +58,7 @@ func NewPerfTool(basePath string) core.Tool {
 		Command:      "perf",
 		Category:     "cli_debug",
 		HITLRequired: true,
+		Tags:         []string{"execute"},
 	})
 }
 
@@ -65,5 +70,6 @@ func NewStraceTool(basePath string) core.Tool {
 		Command:      "strace",
 		Category:     "cli_debug",
 		HITLRequired: true,
+		Tags:         []string{"execute"},
 	})
 }
