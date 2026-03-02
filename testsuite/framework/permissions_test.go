@@ -132,6 +132,9 @@ func (t stubTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: t.perms}
 }
 
+// Tags returns nil as the stub tool has no tags.
+func (t stubTool) Tags() []string { return nil }
+
 // newTestManager is a helper that fails tests immediately when the permission
 // manager cannot be constructed.
 func newTestManager(t *testing.T, base string, perms *core.PermissionSet) *runtime.PermissionManager {
