@@ -12,5 +12,6 @@ func NewMakeTool(basePath string) core.Tool {
 		Description: "Runs make targets for builds.",
 		Command:     "make",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
