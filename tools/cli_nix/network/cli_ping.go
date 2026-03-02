@@ -12,5 +12,6 @@ func NewPingTool(basePath string) core.Tool {
 		Description: "Checks host reachability with ping.",
 		Command:     "ping",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
