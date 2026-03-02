@@ -12,5 +12,6 @@ func NewXxdTool(basePath string) core.Tool {
 		Description: "Creates hex dumps with xxd.",
 		Command:     "xxd",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
