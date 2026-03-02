@@ -12,5 +12,6 @@ func NewHexdumpTool(basePath string) core.Tool {
 		Description: "Inspects binary data using hexdump.",
 		Command:     "hexdump",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
