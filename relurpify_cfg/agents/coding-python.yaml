@@ -50,9 +50,6 @@ spec:
             name: qwen2.5-coder:14b
             temperature: 0.2
             max_tokens: 4096
-        tool_policies:
-            file_delete:
-                execute: ask
         bash_permissions:
             default: ask
             allow_patterns: []
@@ -65,6 +62,8 @@ spec:
                 default: allow
                 allow_patterns: ["**"]
         ollama_tool_calling: true
+    policies:
+        destructive: ask
     skills:
         - system
         - coding
