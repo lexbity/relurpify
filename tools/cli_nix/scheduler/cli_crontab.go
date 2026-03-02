@@ -12,5 +12,6 @@ func NewCrontabTool(basePath string) core.Tool {
 		Description: "Edits or lists cron jobs via crontab.",
 		Command:     "crontab",
 		Category:    "cli_scheduler",
+		Tags:        []string{"execute"},
 	})
 }
