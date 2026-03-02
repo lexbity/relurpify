@@ -12,5 +12,6 @@ func NewEdTool(basePath string) core.Tool {
 		Description: "Runs the ed line editor for scripted edits.",
 		Command:     "ed",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
