@@ -12,5 +12,6 @@ func NewCommTool(basePath string) core.Tool {
 		Description: "Compares sorted files using comm.",
 		Command:     "comm",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
