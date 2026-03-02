@@ -12,5 +12,6 @@ func NewSedTool(basePath string) core.Tool {
 		Description: "Runs sed for stream editing tasks.",
 		Command:     "sed",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
