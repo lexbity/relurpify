@@ -5,13 +5,8 @@ metadata:
   version: 1.0.0
   description: C/C++ tooling for builds.
 spec:
-  inherits: [coding]
+  requires:
+    bins: [cmake]
   allowed_tools:
     - cli_cmake
     - cli_make
-  permissions:
-    executables:
-      - binary: cmake
-        args: ["*"]
-      - binary: make
-        args: ["*"]
