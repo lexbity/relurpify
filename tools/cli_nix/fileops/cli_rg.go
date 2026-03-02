@@ -12,5 +12,6 @@ func NewRGTool(basePath string) core.Tool {
 		Description: "Uses ripgrep (rg) for recursive code search.",
 		Command:     "rg",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
