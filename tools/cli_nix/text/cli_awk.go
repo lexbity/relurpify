@@ -12,5 +12,6 @@ func NewAwkTool(basePath string) core.Tool {
 		Description: "Runs awk for advanced text processing.",
 		Command:     "awk",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
