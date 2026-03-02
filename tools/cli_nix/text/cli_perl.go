@@ -12,5 +12,6 @@ func NewPerlTool(basePath string) core.Tool {
 		Description: "Executes Perl one-liners for transformations.",
 		Command:     "perl",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
