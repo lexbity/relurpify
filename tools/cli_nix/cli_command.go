@@ -20,6 +20,7 @@ type CommandToolConfig struct {
 	DefaultArgs  []string
 	Timeout      time.Duration
 	HITLRequired bool
+	Tags         []string
 }
 
 // CommandTool executes a configured CLI binary with user-provided arguments.
@@ -151,6 +152,8 @@ func (t *CommandTool) Permissions() core.ToolPermissions {
 	}
 	return core.ToolPermissions{Permissions: perms}
 }
+
+func (t *CommandTool) Tags() []string { return t.cfg.Tags }
 
 func toStringSlice(value interface{}) ([]string, error) {
 	if value == nil {
