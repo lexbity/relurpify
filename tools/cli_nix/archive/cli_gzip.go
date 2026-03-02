@@ -12,5 +12,6 @@ func NewGzipTool(basePath string) core.Tool {
 		Description: "Compresses data with gzip.",
 		Command:     "gzip",
 		Category:    "cli_archive",
+		Tags:        []string{"execute"},
 	})
 }
