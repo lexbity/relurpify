@@ -12,5 +12,6 @@ func NewColumnTool(basePath string) core.Tool {
 		Description: "Formats text into aligned columns.",
 		Command:     "column",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
