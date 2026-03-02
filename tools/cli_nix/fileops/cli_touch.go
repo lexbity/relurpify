@@ -12,5 +12,6 @@ func NewTouchTool(basePath string) core.Tool {
 		Description: "Creates empty files or updates timestamps via touch.",
 		Command:     "touch",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
