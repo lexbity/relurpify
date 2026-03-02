@@ -12,5 +12,6 @@ func NewPasteTool(basePath string) core.Tool {
 		Description: "Combines lines from files using paste.",
 		Command:     "paste",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
