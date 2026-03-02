@@ -1,15 +1,16 @@
 package agents
 
 import (
-	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 )
 
 const skillManifestName = "skill.manifest.yaml"
@@ -40,99 +41,93 @@ func SkillManifestPath(workspace, name string) string {
 	return filepath.Join(SkillRoot(workspace, name), skillManifestName)
 }
 
-// ApplySkills merges skill overlays and returns the updated spec and results.
-func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames []string, skillOverlays map[string]core.AgentSpecOverlay, registry *toolsys.ToolRegistry, permissions *toolsys.PermissionManager, agentID string) (*core.AgentRuntimeSpec, []SkillResolution) {
+// ApplySkills merges skill contributions (flat, no inheritance) into baseSpec
+// and returns the updated spec plus per-skill resolution results.
+func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames []string,
+	registry *toolsys.ToolRegistry, permissions *toolsys.PermissionManager, agentID string,
+) (*core.AgentRuntimeSpec, []SkillResolution) {
 	spec := core.MergeAgentSpecs(baseSpec)
 	results := make([]SkillResolution, 0, len(skillNames))
 	allowedTools := append([]string{}, spec.AllowedTools...)
-	toolPolicies := cloneToolPolicies(spec.ToolPolicies)
+	toolPolicies := cloneToolPolicies(spec.ToolExecutionPolicy)
 
-	seenSkills := make(map[string]bool)
 	for _, name := range skillNames {
 		skillName := strings.TrimSpace(name)
 		if skillName == "" {
 			continue
 		}
-		chain, err := manifest.ResolveSkillChain(workspace, skillName)
+		skillManifest, err := manifest.LoadSkill(workspace, skillName)
 		if err != nil {
-			results = append(results, logSkillError(workspace, skillName, "load_failed", err, SkillPaths{Root: SkillRoot(workspace, skillName)}))
+			results = append(results, logSkillError(workspace, skillName, "load_failed", err,
+				SkillPaths{Root: SkillRoot(workspace, skillName)}))
 			continue
 		}
-		for _, skillManifest := range chain {
+
+		// Check binary prerequisites.
+		if missingBin := findMissingBin(skillManifest.Spec.Requires.Bins); missingBin != "" {
+			binErr := fmt.Errorf("required binary %q not found in PATH", missingBin)
 			paths := resolveSkillPaths(skillManifest)
-			if err := validateSkillPaths(paths); err != nil {
-				results = append(results, logSkillError(workspace, skillName, "missing_resources", err, paths))
-				goto skipSkill
-			}
-			if ok, err := skillToolsAvailable(skillManifest, registry, permissions, agentID); !ok {
-				if err == nil {
-					err = fmt.Errorf("required tools unavailable")
-				}
-				results = append(results, logSkillError(workspace, skillName, "missing_tool_access", err, paths))
-				goto skipSkill
-			}
-			if len(skillManifest.Spec.AllowedTools) > 0 {
-				allowedTools = mergeStringList(allowedTools, skillManifest.Spec.AllowedTools)
-			}
-			if skillManifest.Spec.ToolPolicies != nil {
-				for name, policy := range skillManifest.Spec.ToolPolicies {
-					toolPolicies[name] = policy
-				}
-			}
-			if skillManifest.Spec.AgentOverlay != nil {
-				spec = core.MergeAgentSpecs(spec, *skillManifest.Spec.AgentOverlay)
-			}
-			if overlay, ok := skillOverlays[skillManifest.Metadata.Name]; ok {
-				spec = core.MergeAgentSpecs(spec, overlay)
-			}
-			if len(skillManifest.Spec.PromptSnippets) > 0 {
-				spec.Prompt = mergePromptSnippets(spec.Prompt, skillManifest.Spec.PromptSnippets)
-			}
-			if !seenSkills[skillManifest.Metadata.Name] {
-				results = append(results, SkillResolution{
-					Name:    skillManifest.Metadata.Name,
-					Applied: true,
-					Paths:   paths,
-				})
-				seenSkills[skillManifest.Metadata.Name] = true
-			}
+			results = append(results, logSkillError(workspace, skillName, "missing_binary", binErr, paths))
+			continue
 		}
-	skipSkill:
+
+		// Check resource paths.
+		paths := resolveSkillPaths(skillManifest)
+		if err := validateSkillPaths(paths); err != nil {
+			results = append(results, logSkillError(workspace, skillName, "missing_resources", err, paths))
+			continue
+		}
+
+		// Merge contributions.
+		if len(skillManifest.Spec.AllowedTools) > 0 {
+			allowedTools = mergeStringList(allowedTools, skillManifest.Spec.AllowedTools)
+		}
+		for toolName, policy := range skillManifest.Spec.ToolExecutionPolicy {
+			if toolPolicies == nil {
+				toolPolicies = make(map[string]core.ToolPolicy)
+			}
+			toolPolicies[toolName] = policy
+		}
+		if len(skillManifest.Spec.PromptSnippets) > 0 {
+			spec.Prompt = mergePromptSnippets(spec.Prompt, skillManifest.Spec.PromptSnippets)
+		}
+
+		results = append(results, SkillResolution{
+			Name:    skillManifest.Metadata.Name,
+			Applied: true,
+			Paths:   paths,
+		})
 	}
 
 	spec.AllowedTools = allowedTools
-	spec.ToolPolicies = toolPolicies
+	spec.ToolExecutionPolicy = toolPolicies
 	return spec, results
 }
 
-func skillToolsAvailable(skill *manifest.SkillManifest, registry *toolsys.ToolRegistry, permissions *toolsys.PermissionManager, agentID string) (bool, error) {
-	if skill == nil {
-		return false, fmt.Errorf("skill manifest missing")
-	}
+// DeriveGVisorAllowlist returns the binary allowlist for the gVisor sandbox
+// by walking the effective (allowed) tool set and collecting each tool's
+// declared executable permissions.
+func DeriveGVisorAllowlist(allowedToolNames []string, registry *toolsys.ToolRegistry) []core.ExecutablePermission {
 	if registry == nil {
-		return false, fmt.Errorf("tool registry not available")
+		return nil
 	}
-	for _, toolName := range skill.Spec.RequiredTools {
-		toolName = strings.TrimSpace(toolName)
-		if toolName == "" {
+	seen := make(map[string]bool)
+	var result []core.ExecutablePermission
+	for _, name := range allowedToolNames {
+		tool, ok := registry.Get(name)
+		if !ok {
 			continue
 		}
-		tool, ok := registry.Get(toolName)
-		if !ok {
-			return false, fmt.Errorf("required tool %s not available", toolName)
-		}
-		if permissions != nil {
-			if err := permissions.AuthorizeTool(context.Background(), agentID, tool, nil); err != nil {
-				return false, fmt.Errorf("tool %s blocked: %w", toolName, err)
+		perms := tool.Permissions()
+		for _, ep := range perms.Permissions.Executables {
+			if seen[ep.Binary] {
+				continue
 			}
+			seen[ep.Binary] = true
+			result = append(result, ep)
 		}
 	}
-	return true, nil
-}
-
-// CheckSkillToolsAvailable validates required tool availability and permissions.
-func CheckSkillToolsAvailable(skill *manifest.SkillManifest, registry *toolsys.ToolRegistry, permissions *toolsys.PermissionManager, agentID string) (bool, error) {
-	return skillToolsAvailable(skill, registry, permissions, agentID)
+	return result
 }
 
 // ResolveSkillPaths exposes the resolved resource paths for a skill.
@@ -203,6 +198,19 @@ func validateSkillPaths(paths SkillPaths) error {
 	return nil
 }
 
+func findMissingBin(bins []string) string {
+	for _, bin := range bins {
+		bin = strings.TrimSpace(bin)
+		if bin == "" {
+			continue
+		}
+		if _, err := exec.LookPath(bin); err != nil {
+			return bin
+		}
+	}
+	return ""
+}
+
 func mergePromptSnippets(base string, snippets []string) string {
 	builder := strings.Builder{}
 	base = strings.TrimSpace(base)
@@ -223,7 +231,7 @@ func mergePromptSnippets(base string, snippets []string) string {
 }
 
 func logSkillError(workspace, name, reason string, err error, paths SkillPaths) SkillResolution {
-	entry := fmt.Sprintf("%s skill %s (%s): %s", time.Now().UTC().Format(time.RFC3339), name, reason, err.Error())
+	entry := fmt.Sprintf("[WARNING] %s skill %s (%s): %s", time.Now().UTC().Format(time.RFC3339), name, reason, err.Error())
 	logSkillMessage(workspace, entry)
 	return SkillResolution{
 		Name:    name,
