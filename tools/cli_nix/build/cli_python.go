@@ -12,5 +12,6 @@ func NewPythonTool(basePath string) core.Tool {
 		Description: "Executes Python commands using python3 inside the workspace.",
 		Command:     "python3",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
