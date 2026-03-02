@@ -12,5 +12,6 @@ func NewPatchTool(basePath string) core.Tool {
 		Description: "Applies unified diffs using patch.",
 		Command:     "patch",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
