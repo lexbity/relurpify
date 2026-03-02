@@ -33,17 +33,11 @@ func ResolveAgentSpec(global *GlobalConfig, spec *core.AgentRuntimeSpec, overlay
 	return core.MergeAgentSpecs(base, ordered...)
 }
 
-// ApplyManifestDefaults overlays manifest defaults onto a spec before other overlays.
-func ApplyManifestDefaults(spec *core.AgentRuntimeSpec, defaults *manifest.ManifestDefaults) *core.AgentRuntimeSpec {
-	if defaults == nil || defaults.Agent == nil {
-		if spec == nil {
-			return &core.AgentRuntimeSpec{}
-		}
-		return spec
-	}
-	base := core.MergeAgentSpecs(&core.AgentRuntimeSpec{}, *defaults.Agent)
+// ApplyManifestDefaults returns the spec unchanged (manifest defaults no longer
+// carry an agent overlay — that layer was removed in the skills redesign).
+func ApplyManifestDefaults(spec *core.AgentRuntimeSpec, _ *manifest.ManifestDefaults) *core.AgentRuntimeSpec {
 	if spec == nil {
-		return base
+		return &core.AgentRuntimeSpec{}
 	}
-	return core.MergeAgentSpecs(base, core.AgentSpecOverlayFromSpec(spec))
+	return spec
 }
