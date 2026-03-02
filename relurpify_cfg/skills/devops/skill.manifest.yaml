@@ -5,7 +5,6 @@ metadata:
   version: 1.0.0
   description: DevOps-focused CLI tools.
 spec:
-  inherits: [system]
   allowed_tools:
     - cli_curl
     - cli_wget
@@ -13,17 +12,3 @@ spec:
     - cli_ss
     - cli_ip
     - cli_systemctl
-  permissions:
-    executables:
-      - binary: curl
-        args: ["*"]
-      - binary: wget
-        args: ["*"]
-      - binary: ping
-        args: ["*"]
-      - binary: ss
-        args: ["*"]
-      - binary: ip
-        args: ["*"]
-      - binary: systemctl
-        args: ["*"]
