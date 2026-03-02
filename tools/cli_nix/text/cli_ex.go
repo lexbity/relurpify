@@ -12,5 +12,6 @@ func NewExTool(basePath string) core.Tool {
 		Description: "Executes ex for vi-style batch editing.",
 		Command:     "ex",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
