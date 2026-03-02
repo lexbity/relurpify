@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,14 +30,12 @@ func TestApplySkillsMergesPromptSnippets(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(skillPath), 0o755))
 	require.NoError(t, createSkillDirs(SkillRoot(ws, skillName)))
 
-	overlayPrompt := "overlay prompt"
 	skill := manifest.SkillManifest{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "SkillManifest",
 		Metadata:   manifest.ManifestMetadata{Name: skillName, Version: "1.0.0"},
 		Spec: manifest.SkillSpec{
 			PromptSnippets: []string{"snippet one"},
-			AgentOverlay:   &core.AgentSpecOverlay{Prompt: &overlayPrompt},
 		},
 	}
 	data, err := yaml.Marshal(skill)
@@ -45,17 +44,16 @@ func TestApplySkillsMergesPromptSnippets(t *testing.T) {
 
 	registry := toolsys.NewToolRegistry()
 	base := &core.AgentRuntimeSpec{Prompt: "base prompt"}
-	updated, results := ApplySkills(ws, base, []string{skillName}, nil, registry, nil, "agent-1")
+	updated, results := ApplySkills(ws, base, []string{skillName}, registry, nil, "agent-1")
 	require.Len(t, results, 1)
 	require.True(t, results[0].Applied)
-	require.Contains(t, updated.Prompt, "overlay prompt")
+	require.Contains(t, updated.Prompt, "base prompt")
 	require.Contains(t, updated.Prompt, "snippet one")
-	require.NotContains(t, updated.Prompt, "base prompt")
 }
 
 func TestApplySkillsMissingTool(t *testing.T) {
 	ws := t.TempDir()
-	skillName := "missing-tool"
+	skillName := "missing-bin"
 	skillPath := SkillManifestPath(ws, skillName)
 	require.NoError(t, os.MkdirAll(filepath.Dir(skillPath), 0o755))
 	require.NoError(t, createSkillDirs(SkillRoot(ws, skillName)))
@@ -65,7 +63,9 @@ func TestApplySkillsMissingTool(t *testing.T) {
 		Kind:       "SkillManifest",
 		Metadata:   manifest.ManifestMetadata{Name: skillName, Version: "1.0.0"},
 		Spec: manifest.SkillSpec{
-			RequiredTools: []string{"missing_tool"},
+			Requires: manifest.SkillRequiresSpec{
+				Bins: []string{"__nonexistent_binary_xyzzy__"},
+			},
 		},
 	}
 	data, err := yaml.Marshal(skill)
@@ -73,10 +73,10 @@ func TestApplySkillsMissingTool(t *testing.T) {
 	require.NoError(t, os.WriteFile(skillPath, data, 0o644))
 
 	registry := toolsys.NewToolRegistry()
-	_, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{skillName}, nil, registry, nil, "agent-1")
+	_, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{skillName}, registry, nil, "agent-1")
 	require.Len(t, results, 1)
 	require.False(t, results[0].Applied)
-	require.Contains(t, results[0].Error, "missing_tool")
+	require.Contains(t, results[0].Error, "__nonexistent_binary_xyzzy__")
 }
 
 func createSkillDirs(root string) error {
@@ -109,8 +109,138 @@ func TestApplySkillsMissingResources(t *testing.T) {
 	require.NoError(t, os.WriteFile(skillPath, data, 0o644))
 
 	registry := toolsys.NewToolRegistry()
-	_, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{skillName}, nil, registry, nil, "agent-1")
+	_, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{skillName}, registry, nil, "agent-1")
 	require.Len(t, results, 1)
 	require.False(t, results[0].Applied)
 	require.Contains(t, results[0].Error, "missing skill resources")
+}
+
+// TestApplySkillsFlat verifies two flat skills are both applied without inheritance.
+func TestApplySkillsFlat(t *testing.T) {
+	ws := t.TempDir()
+
+	for _, name := range []string{"skill-a", "skill-b"} {
+		skillPath := SkillManifestPath(ws, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(skillPath), 0o755))
+		require.NoError(t, createSkillDirs(SkillRoot(ws, name)))
+		skill := manifest.SkillManifest{
+			APIVersion: "relurpify/v1alpha1",
+			Kind:       "SkillManifest",
+			Metadata:   manifest.ManifestMetadata{Name: name, Version: "1.0.0"},
+			Spec: manifest.SkillSpec{
+				AllowedTools: []string{"tool_" + name},
+			},
+		}
+		data, err := yaml.Marshal(skill)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(skillPath, data, 0o644))
+	}
+
+	registry := toolsys.NewToolRegistry()
+	spec, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{"skill-a", "skill-b"}, registry, nil, "agent-1")
+	require.Len(t, results, 2)
+	require.True(t, results[0].Applied)
+	require.True(t, results[1].Applied)
+	require.Contains(t, spec.AllowedTools, "tool_skill-a")
+	require.Contains(t, spec.AllowedTools, "tool_skill-b")
+}
+
+// TestApplySkillsMissingBinarySkipped verifies that a skill with a missing binary is skipped
+// while other skills continue to be applied.
+func TestApplySkillsMissingBinarySkipped(t *testing.T) {
+	ws := t.TempDir()
+
+	badSkill := "bad-skill"
+	badPath := SkillManifestPath(ws, badSkill)
+	require.NoError(t, os.MkdirAll(filepath.Dir(badPath), 0o755))
+	require.NoError(t, createSkillDirs(SkillRoot(ws, badSkill)))
+	bad := manifest.SkillManifest{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "SkillManifest",
+		Metadata:   manifest.ManifestMetadata{Name: badSkill, Version: "1.0.0"},
+		Spec:       manifest.SkillSpec{Requires: manifest.SkillRequiresSpec{Bins: []string{"__nonexistent__"}}},
+	}
+	data, _ := yaml.Marshal(bad)
+	require.NoError(t, os.WriteFile(badPath, data, 0o644))
+
+	goodSkill := "good-skill"
+	goodPath := SkillManifestPath(ws, goodSkill)
+	require.NoError(t, os.MkdirAll(filepath.Dir(goodPath), 0o755))
+	require.NoError(t, createSkillDirs(SkillRoot(ws, goodSkill)))
+	good := manifest.SkillManifest{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "SkillManifest",
+		Metadata:   manifest.ManifestMetadata{Name: goodSkill, Version: "1.0.0"},
+		Spec:       manifest.SkillSpec{AllowedTools: []string{"tool_good"}},
+	}
+	data, _ = yaml.Marshal(good)
+	require.NoError(t, os.WriteFile(goodPath, data, 0o644))
+
+	registry := toolsys.NewToolRegistry()
+	spec, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{badSkill, goodSkill}, registry, nil, "agent-1")
+	require.Len(t, results, 2)
+	require.False(t, results[0].Applied)
+	require.True(t, results[1].Applied)
+	require.Contains(t, spec.AllowedTools, "tool_good")
+}
+
+// TestApplySkillsToolExecutionPolicy verifies that skill tool_execution_policy is merged.
+func TestApplySkillsToolExecutionPolicy(t *testing.T) {
+	ws := t.TempDir()
+	skillName := "policy-skill"
+	skillPath := SkillManifestPath(ws, skillName)
+	require.NoError(t, os.MkdirAll(filepath.Dir(skillPath), 0o755))
+	require.NoError(t, createSkillDirs(SkillRoot(ws, skillName)))
+
+	skill := manifest.SkillManifest{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "SkillManifest",
+		Metadata:   manifest.ManifestMetadata{Name: skillName, Version: "1.0.0"},
+		Spec: manifest.SkillSpec{
+			ToolExecutionPolicy: map[string]core.ToolPolicy{
+				"git_commit": {Execute: core.AgentPermissionAsk},
+			},
+		},
+	}
+	data, err := yaml.Marshal(skill)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(skillPath, data, 0o644))
+
+	registry := toolsys.NewToolRegistry()
+	spec, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{skillName}, registry, nil, "agent-1")
+	require.Len(t, results, 1)
+	require.True(t, results[0].Applied)
+	require.NotNil(t, spec.ToolExecutionPolicy)
+	require.Equal(t, core.AgentPermissionAsk, spec.ToolExecutionPolicy["git_commit"].Execute)
+}
+
+// stubTagTool is a minimal Tool implementation for DeriveGVisorAllowlist tests.
+type stubTagTool struct {
+	name string
+	perms core.ToolPermissions
+}
+
+func (t stubTagTool) Name() string        { return t.name }
+func (t stubTagTool) Description() string { return "" }
+func (t stubTagTool) Category() string    { return "test" }
+func (t stubTagTool) Parameters() []core.ToolParameter { return nil }
+func (t stubTagTool) Execute(_ context.Context, _ *core.Context, _ map[string]interface{}) (*core.ToolResult, error) {
+	return nil, nil
+}
+func (t stubTagTool) IsAvailable(_ context.Context, _ *core.Context) bool { return true }
+func (t stubTagTool) Permissions() core.ToolPermissions             { return t.perms }
+func (t stubTagTool) Tags() []string                                { return nil }
+
+// TestDeriveGVisorAllowlist verifies that the allowlist is derived from tool permissions.
+func TestDeriveGVisorAllowlist(t *testing.T) {
+	registry := toolsys.NewToolRegistry()
+
+	goBinary := core.ExecutablePermission{Binary: "go", Args: []string{"*"}}
+	permSet := core.PermissionSet{Executables: []core.ExecutablePermission{goBinary}}
+	perms := core.ToolPermissions{Permissions: &permSet}
+	require.NoError(t, registry.Register(stubTagTool{name: "cli_go", perms: perms}))
+
+	allowlist := DeriveGVisorAllowlist([]string{"cli_go"}, registry)
+	require.Len(t, allowlist, 1)
+	require.Equal(t, "go", allowlist[0].Binary)
 }
