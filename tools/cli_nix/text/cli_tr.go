@@ -12,5 +12,6 @@ func NewTRTool(basePath string) core.Tool {
 		Description: "Translates or deletes characters with tr.",
 		Command:     "tr",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
