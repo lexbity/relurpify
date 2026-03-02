@@ -12,5 +12,6 @@ func NewSQLite3Tool(basePath string) core.Tool {
 		Description: "Executes SQLite commands using sqlite3 inside the workspace.",
 		Command:     "sqlite3",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
