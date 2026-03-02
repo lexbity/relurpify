@@ -12,5 +12,6 @@ func NewTimeTool(basePath string) core.Tool {
 		Description: "Times the execution of commands with /usr/bin/time.",
 		Command:     "time",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
