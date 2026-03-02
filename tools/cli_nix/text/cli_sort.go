@@ -12,5 +12,6 @@ func NewSortTool(basePath string) core.Tool {
 		Description: "Sorts lines of text with the sort utility.",
 		Command:     "sort",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
