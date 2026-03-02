@@ -12,5 +12,6 @@ func NewHtopTool(basePath string) core.Tool {
 		Description: "Runs htop for interactive process monitoring.",
 		Command:     "htop",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
