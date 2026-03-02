@@ -12,5 +12,6 @@ func NewCargoTool(basePath string) core.Tool {
 		Description: "Executes Rust cargo commands inside the workspace.",
 		Command:     "cargo",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
