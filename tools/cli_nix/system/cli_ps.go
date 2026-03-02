@@ -12,5 +12,6 @@ func NewPSTool(basePath string) core.Tool {
 		Description: "Inspects running processes via ps.",
 		Command:     "ps",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
