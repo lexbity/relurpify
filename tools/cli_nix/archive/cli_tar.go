@@ -12,5 +12,6 @@ func NewTarTool(basePath string) core.Tool {
 		Description: "Creates or extracts tar archives.",
 		Command:     "tar",
 		Category:    "cli_archive",
+		Tags:        []string{"execute"},
 	})
 }
