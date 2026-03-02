@@ -12,5 +12,6 @@ func NewFDTool(basePath string) core.Tool {
 		Description: "Performs fast file searches with fd.",
 		Command:     "fd",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
