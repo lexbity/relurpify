@@ -12,5 +12,6 @@ func NewPkgConfigTool(basePath string) core.Tool {
 		Description: "Queries compiler flags with pkg-config.",
 		Command:     "pkg-config",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
