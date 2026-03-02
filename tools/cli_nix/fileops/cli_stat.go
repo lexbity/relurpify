@@ -12,5 +12,6 @@ func NewStatTool(basePath string) core.Tool {
 		Description: "Shows file metadata with stat.",
 		Command:     "stat",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
