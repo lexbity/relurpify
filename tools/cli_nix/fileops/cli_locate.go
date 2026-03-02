@@ -12,5 +12,6 @@ func NewLocateTool(basePath string) core.Tool {
 		Description: "Queries the file database via locate.",
 		Command:     "locate",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
