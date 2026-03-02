@@ -13,5 +13,6 @@ func NewMkdirTool(basePath string) core.Tool {
 		Command:     "mkdir",
 		Category:    "cli_files",
 		DefaultArgs: []string{"-p"},
+		Tags:        []string{"execute", "read-only"},
 	})
 }
