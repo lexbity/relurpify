@@ -45,6 +45,7 @@ func (t stubTool) Permissions() core.ToolPermissions {
 		},
 	}}
 }
+func (t stubTool) Tags() []string { return nil }
 
 func TestClientGenerate(t *testing.T) {
 	client := NewClient("http://fake", "test")
