@@ -15,8 +15,9 @@ type AgentRuntimeSpec struct {
 	Version           string                `yaml:"version,omitempty" json:"version,omitempty"`
 	Prompt            string                `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	Model             AgentModelConfig      `yaml:"model" json:"model"`
-	AllowedTools      []string              `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
-	ToolPolicies      map[string]ToolPolicy `yaml:"tool_policies,omitempty" json:"tool_policies,omitempty"`
+	AllowedTools        []string                       `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
+	ToolExecutionPolicy map[string]ToolPolicy          `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
+	GlobalPolicies      map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
 	Bash              AgentBashPermissions  `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
 	Files             AgentFileMatrix       `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
 	Invocation        AgentInvocationSpec   `yaml:"invocation,omitempty" json:"invocation,omitempty"`
@@ -150,7 +151,7 @@ func (a *AgentRuntimeSpec) Validate() error {
 	if err := a.Model.Validate(); err != nil {
 		return fmt.Errorf("model invalid: %w", err)
 	}
-	for name, policy := range a.ToolPolicies {
+	for name, policy := range a.ToolExecutionPolicy {
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("tool policy contains empty tool name")
 		}
