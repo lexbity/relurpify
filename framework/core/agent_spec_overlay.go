@@ -10,7 +10,7 @@ type AgentSpecOverlay struct {
 	Prompt            *string                  `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	ModelOverlay      *AgentModelConfigOverlay `yaml:"model,omitempty" json:"model,omitempty"`
 	AllowedTools      []string                 `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
-	ToolPolicies      map[string]ToolPolicy    `yaml:"tool_policies,omitempty" json:"tool_policies,omitempty"`
+	ToolExecutionPolicy map[string]ToolPolicy    `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
 	Bash              *AgentBashPermissions    `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
 	Files             *AgentFileMatrix         `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
 	Invocation        *AgentInvocationSpec     `yaml:"invocation,omitempty" json:"invocation,omitempty"`
@@ -86,7 +86,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		Prompt:            &prompt,
 		ModelOverlay:      &modelOverlay,
 		AllowedTools:      allowedTools,
-		ToolPolicies:      cloneToolPolicies(spec.ToolPolicies),
+		ToolExecutionPolicy: cloneToolPolicies(spec.ToolExecutionPolicy),
 		Bash:              &bash,
 		Files:             &files,
 		Invocation:        &invocation,
@@ -119,12 +119,12 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 			spec.AllowedTools = mergeStringList(spec.AllowedTools, overlay.AllowedTools)
 		}
 	}
-	if overlay.ToolPolicies != nil {
-		if spec.ToolPolicies == nil {
-			spec.ToolPolicies = make(map[string]ToolPolicy, len(overlay.ToolPolicies))
+	if overlay.ToolExecutionPolicy != nil {
+		if spec.ToolExecutionPolicy == nil {
+			spec.ToolExecutionPolicy = make(map[string]ToolPolicy, len(overlay.ToolExecutionPolicy))
 		}
-		for name, policy := range overlay.ToolPolicies {
-			spec.ToolPolicies[name] = policy
+		for name, policy := range overlay.ToolExecutionPolicy {
+			spec.ToolExecutionPolicy[name] = policy
 		}
 	}
 	if overlay.Bash != nil {
@@ -172,8 +172,8 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 		return &AgentRuntimeSpec{}
 	}
 	clone := *spec
-	if spec.ToolPolicies != nil {
-		clone.ToolPolicies = cloneToolPolicies(spec.ToolPolicies)
+	if spec.ToolExecutionPolicy != nil {
+		clone.ToolExecutionPolicy = cloneToolPolicies(spec.ToolExecutionPolicy)
 	}
 	if spec.AllowedTools != nil {
 		clone.AllowedTools = append([]string{}, spec.AllowedTools...)
