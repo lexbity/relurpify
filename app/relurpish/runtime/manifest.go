@@ -96,7 +96,7 @@ func SaveManifest(ctx context.Context, cfg Config, selection WizardSelection) (M
 					Memory: "4Gi",
 					DiskIO: "500MBps",
 				}},
-				Agent: &core.AgentSpecOverlay{AllowedTools: selection.Tools},
+				// Agent overlay removed; tool selection is handled via spec.AllowedTools directly.
 			},
 			Security: manifest.SecuritySpec{
 				RunAsUser:       1000,
