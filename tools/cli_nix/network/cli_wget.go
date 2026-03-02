@@ -12,5 +12,6 @@ func NewWgetTool(basePath string) core.Tool {
 		Description: "Downloads resources with wget.",
 		Command:     "wget",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
