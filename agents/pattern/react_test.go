@@ -92,6 +92,9 @@ func (t stubTool) Permissions() core.ToolPermissions {
 	}}
 }
 
+// Tags returns nil as the stub tool has no tags.
+func (t stubTool) Tags() []string { return nil }
+
 // TestReActAgentExecute validates a minimal think-act-observe pass.
 func TestReActAgentExecute(t *testing.T) {
 	llm := &stubLLM{
