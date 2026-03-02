@@ -77,6 +77,7 @@ func (t *ReadFileTool) IsAvailable(ctx context.Context, state *core.Context) boo
 func (t *ReadFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
 }
+func (t *ReadFileTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // WriteFileTool writes content to disk.
 type WriteFileTool struct {
@@ -152,6 +153,7 @@ func (t *WriteFileTool) IsAvailable(ctx context.Context, state *core.Context) bo
 func (t *WriteFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
+func (t *WriteFileTool) Tags() []string { return []string{core.TagDestructive} }
 
 // ListFilesTool lists files filtered by pattern.
 type ListFilesTool struct {
@@ -232,6 +234,7 @@ func (t *ListFilesTool) IsAvailable(ctx context.Context, state *core.Context) bo
 func (t *ListFilesTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemList)}
 }
+func (t *ListFilesTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // SearchInFilesTool greps for a pattern.
 type SearchInFilesTool struct {
@@ -339,6 +342,7 @@ func (t *SearchInFilesTool) IsAvailable(ctx context.Context, state *core.Context
 func (t *SearchInFilesTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
+func (t *SearchInFilesTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // CreateFileTool creates a file from a template string.
 type CreateFileTool struct {
@@ -397,6 +401,7 @@ func (t *CreateFileTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *CreateFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
+func (t *CreateFileTool) Tags() []string { return []string{core.TagDestructive} }
 
 // DeleteFileTool moves a file to .trash folder instead of deleting permanently.
 type DeleteFileTool struct {
@@ -459,6 +464,7 @@ func (t *DeleteFileTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *DeleteFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
+func (t *DeleteFileTool) Tags() []string { return []string{core.TagDestructive} }
 
 func (t *ReadFileTool) preparePath(path string) string  { return preparePath(t.BasePath, path) }
 func (t *WriteFileTool) preparePath(path string) string { return preparePath(t.BasePath, path) }
