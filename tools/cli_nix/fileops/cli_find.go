@@ -12,5 +12,6 @@ func NewFindTool(basePath string) core.Tool {
 		Description: "Searches the filesystem using find.",
 		Command:     "find",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
