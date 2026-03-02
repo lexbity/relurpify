@@ -12,5 +12,6 @@ func NewNCTool(basePath string) core.Tool {
 		Description: "Creates TCP/UDP connections via netcat (nc).",
 		Command:     "nc",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
