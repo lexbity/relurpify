@@ -12,5 +12,6 @@ func NewJQTool(basePath string) core.Tool {
 		Description: "Queries or transforms JSON using jq.",
 		Command:     "jq",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
