@@ -12,5 +12,6 @@ func NewNPMTool(basePath string) core.Tool {
 		Description: "Executes npm commands inside the workspace.",
 		Command:     "npm",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
