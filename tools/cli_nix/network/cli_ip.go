@@ -12,5 +12,6 @@ func NewIPTool(basePath string) core.Tool {
 		Description: "Manages network interfaces with ip.",
 		Command:     "ip",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
