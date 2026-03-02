@@ -12,5 +12,6 @@ func NewDiffTool(basePath string) core.Tool {
 		Description: "Runs diff to compare files.",
 		Command:     "diff",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
