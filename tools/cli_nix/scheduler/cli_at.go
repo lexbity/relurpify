@@ -12,5 +12,6 @@ func NewAtTool(basePath string) core.Tool {
 		Description: "Schedules one-off jobs using at.",
 		Command:     "at",
 		Category:    "cli_scheduler",
+		Tags:        []string{"execute"},
 	})
 }
