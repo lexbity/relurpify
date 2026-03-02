@@ -12,5 +12,6 @@ func NewRustfmtTool(basePath string) core.Tool {
 		Description: "Formats Rust code using rustfmt.",
 		Command:     "rustfmt",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
