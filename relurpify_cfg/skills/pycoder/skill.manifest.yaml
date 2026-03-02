@@ -5,10 +5,7 @@ metadata:
   version: 1.0.0
   description: Python tooling for script/test workflows.
 spec:
-  inherits: [coding]
+  requires:
+    bins: [python]
   allowed_tools:
     - cli_python
-  permissions:
-    executables:
-      - binary: python
-        args: ["*"]
