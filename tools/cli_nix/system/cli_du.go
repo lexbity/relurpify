@@ -12,5 +12,6 @@ func NewDUTool(basePath string) core.Tool {
 		Description: "Summarizes directory usage with du.",
 		Command:     "du",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
