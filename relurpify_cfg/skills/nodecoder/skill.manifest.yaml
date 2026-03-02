@@ -5,13 +5,8 @@ metadata:
   version: 1.0.0
   description: Node tooling for build/test workflows.
 spec:
-  inherits: [coding]
+  requires:
+    bins: [node]
   allowed_tools:
     - cli_node
     - cli_npm
-  permissions:
-    executables:
-      - binary: node
-        args: ["*"]
-      - binary: npm
-        args: ["*"]
