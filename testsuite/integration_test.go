@@ -271,6 +271,7 @@ func (t *integrationFileTool) Permissions() core.ToolPermissions {
 		Permissions: core.NewFileSystemPermissionSet(t.base, core.FileSystemRead),
 	}
 }
+func (t *integrationFileTool) Tags() []string { return nil }
 
 type stubVectorStore struct {
 	results []search.VectorMatch
