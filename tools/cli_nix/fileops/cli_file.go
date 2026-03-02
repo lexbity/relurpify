@@ -12,5 +12,6 @@ func NewFileTool(basePath string) core.Tool {
 		Description: "Detects file types using the file command.",
 		Command:     "file",
 		Category:    "cli_files",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
