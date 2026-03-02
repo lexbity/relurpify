@@ -12,5 +12,6 @@ func NewSSTool(basePath string) core.Tool {
 		Description: "Inspects sockets using ss.",
 		Command:     "ss",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
