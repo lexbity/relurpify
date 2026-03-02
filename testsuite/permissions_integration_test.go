@@ -168,6 +168,7 @@ func (t *permissionedTool) IsAvailable(context.Context, *core.Context) bool { re
 func (t *permissionedTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: t.perms}
 }
+func (t *permissionedTool) Tags() []string { return nil }
 
 type stubHITL struct {
 	grants   []*runtime.PermissionGrant
