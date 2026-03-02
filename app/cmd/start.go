@@ -107,7 +107,7 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			spec, skillResults := agents.ApplySkills(ws, spec, manifest.Spec.Skills, manifest.Spec.SkillOverlays, tools, registration.Permissions, registration.ID)
+			spec, skillResults := agents.ApplySkills(ws, spec, manifest.Spec.Skills, tools, registration.Permissions, registration.ID)
 			if spec.Logging != nil {
 				if spec.Logging.LLM != nil {
 					logLLM = *spec.Logging.LLM
