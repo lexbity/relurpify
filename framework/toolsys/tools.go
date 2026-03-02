@@ -32,6 +32,7 @@ type ToolRegistry struct {
 	agentSpec         *AgentRuntimeSpec
 	allowedTools      map[string]struct{}
 	toolPolicies      map[string]ToolPolicy
+	globalPolicies    map[string]AgentPermissionLevel
 	telemetry         Telemetry
 }
 
@@ -107,6 +108,7 @@ func (r *ToolRegistry) CloneFiltered(keep func(Tool) bool) *ToolRegistry {
 		allowedTools:      cloneAllowedTools(r.allowedTools),
 		telemetry:         r.telemetry,
 		toolPolicies:      make(map[string]ToolPolicy, len(r.toolPolicies)),
+		globalPolicies:    cloneGlobalPolicies(r.globalPolicies),
 	}
 	for name, pol := range r.toolPolicies {
 		clone.toolPolicies[name] = pol
@@ -128,12 +130,13 @@ func cloneTool(tool Tool) Tool {
 		// Create a fresh wrapper so per-mode registries don't mutate each other's
 		// telemetry/permission pointers.
 		return &instrumentedTool{
-			Tool:      t.Tool,
-			manager:   t.manager,
-			agentID:   t.agentID,
-			telemetry: t.telemetry,
-			policy:    t.policy,
-			hasPolicy: t.hasPolicy,
+			Tool:           t.Tool,
+			manager:        t.manager,
+			agentID:        t.agentID,
+			telemetry:      t.telemetry,
+			policy:         t.policy,
+			hasPolicy:      t.hasPolicy,
+			globalPolicies: t.globalPolicies,
 		}
 	}
 	return tool
@@ -176,7 +179,8 @@ func (r *ToolRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec) {
 	if spec.AllowedTools != nil {
 		r.setAllowedTools(spec.AllowedTools, true)
 	}
-	r.setToolPolicies(spec.ToolPolicies)
+	r.setToolPolicies(spec.ToolExecutionPolicy)
+	r.setTagPolicies(spec.GlobalPolicies)
 
 	r.mu.Lock()
 	for name, tool := range r.tools {
@@ -252,6 +256,55 @@ func cloneAllowedTools(input map[string]struct{}) map[string]struct{} {
 	return out
 }
 
+func cloneGlobalPolicies(input map[string]AgentPermissionLevel) map[string]AgentPermissionLevel {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]AgentPermissionLevel, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+// setTagPolicies stores global tag-based policies and re-wraps all tools.
+func (r *ToolRegistry) setTagPolicies(policies map[string]AgentPermissionLevel) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.globalPolicies = cloneGlobalPolicies(policies)
+	for name, tool := range r.tools {
+		var inner Tool = tool
+		if instrumented, ok := tool.(*instrumentedTool); ok {
+			inner = instrumented.Tool
+		}
+		r.tools[name] = r.wrapTool(inner)
+	}
+	r.mu.Unlock()
+}
+
+// effectiveTagPolicy resolves the most restrictive permission level from
+// all matching tags. Order: deny > ask > allow > "".
+func effectiveTagPolicy(tags []string, policies map[string]AgentPermissionLevel) AgentPermissionLevel {
+	var result AgentPermissionLevel
+	for _, tag := range tags {
+		level, ok := policies[tag]
+		if !ok {
+			continue
+		}
+		switch {
+		case level == AgentPermissionDeny:
+			return AgentPermissionDeny
+		case level == AgentPermissionAsk && result != AgentPermissionDeny:
+			result = AgentPermissionAsk
+		case level == AgentPermissionAllow && result == "":
+			result = AgentPermissionAllow
+		}
+	}
+	return result
+}
+
 // UseTelemetry wires a telemetry sink for all tool executions.
 func (r *ToolRegistry) UseTelemetry(telemetry Telemetry) {
 	r.mu.Lock()
@@ -301,25 +354,28 @@ func (r *ToolRegistry) wrapTool(tool Tool) Tool {
 		existing.telemetry = r.telemetry
 		existing.policy = r.toolPolicies[existing.Tool.Name()]
 		existing.hasPolicy = r.agentSpec != nil
+		existing.globalPolicies = r.globalPolicies
 		return existing
 	}
 	return &instrumentedTool{
-		Tool:      tool,
-		manager:   r.permissionManager,
-		agentID:   r.registeredAgentID,
-		telemetry: r.telemetry,
-		policy:    r.toolPolicies[tool.Name()],
-		hasPolicy: r.agentSpec != nil,
+		Tool:           tool,
+		manager:        r.permissionManager,
+		agentID:        r.registeredAgentID,
+		telemetry:      r.telemetry,
+		policy:         r.toolPolicies[tool.Name()],
+		hasPolicy:      r.agentSpec != nil,
+		globalPolicies: r.globalPolicies,
 	}
 }
 
 type instrumentedTool struct {
 	Tool
-	manager   *PermissionManager
-	agentID   string
-	telemetry Telemetry
-	policy    ToolPolicy
-	hasPolicy bool
+	manager        *PermissionManager
+	agentID        string
+	telemetry      Telemetry
+	policy         ToolPolicy
+	hasPolicy      bool
+	globalPolicies map[string]AgentPermissionLevel
 }
 
 // Execute authorizes the wrapped tool before delegating to the original
@@ -339,6 +395,25 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 				Resource:     t.agentID,
 				RequiresHITL: true,
 			}, "tool execution approval", GrantScopeOneTime, RiskLevelMedium, 0); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(t.globalPolicies) > 0 {
+		effective := effectiveTagPolicy(t.Tool.Tags(), t.globalPolicies)
+		switch effective {
+		case AgentPermissionDeny:
+			return nil, fmt.Errorf("tool %s blocked: execution denied by tag policy", t.Tool.Name())
+		case AgentPermissionAsk:
+			if t.manager == nil {
+				return nil, fmt.Errorf("tool %s blocked: approval required but permission manager missing", t.Tool.Name())
+			}
+			if err := t.manager.RequireApproval(ctx, t.agentID, PermissionDescriptor{
+				Type:         PermissionTypeHITL,
+				Action:       fmt.Sprintf("tool_exec:%s", t.Tool.Name()),
+				Resource:     t.agentID,
+				RequiresHITL: true,
+			}, "tag policy approval", GrantScopeOneTime, RiskLevelMedium, 0); err != nil {
 				return nil, err
 			}
 		}
