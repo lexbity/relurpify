@@ -12,5 +12,6 @@ func NewYQTool(basePath string) core.Tool {
 		Description: "Processes YAML content using yq.",
 		Command:     "yq",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
