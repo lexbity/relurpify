@@ -12,5 +12,6 @@ func NewUniqTool(basePath string) core.Tool {
 		Description: "Filters or counts duplicate lines with uniq.",
 		Command:     "uniq",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
