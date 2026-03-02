@@ -12,5 +12,6 @@ func NewDigTool(basePath string) core.Tool {
 		Description: "Queries DNS records using dig.",
 		Command:     "dig",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
