@@ -177,6 +177,7 @@ func (t *ASTTool) Permissions() core.ToolPermissions {
 		Permissions: core.NewFileSystemPermissionSet("", core.FileSystemRead, core.FileSystemList),
 	}
 }
+func (t *ASTTool) Tags() []string { return []string{core.TagReadOnly} }
 
 func successResult(data map[string]interface{}) *core.ToolResult {
 	return &core.ToolResult{
