@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -198,8 +199,15 @@ func newSkillDoctorCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if ok, err := agents.CheckSkillToolsAvailable(skill, registry, permissions, "skill-doctor"); !ok {
-				return err
+			_ = registry // registry available for future checks
+			for _, bin := range skill.Spec.Requires.Bins {
+				bin = strings.TrimSpace(bin)
+				if bin == "" {
+					continue
+				}
+				if _, err := exec.LookPath(bin); err != nil {
+					return fmt.Errorf("skill %s requires binary %q which was not found in PATH", skill.Metadata.Name, bin)
+				}
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Skill %s compatible (manifest=%s)\n", skill.Metadata.Name, manifestPathOrDefault(manifestPath))
 			return nil
