@@ -5,10 +5,7 @@ metadata:
   version: 1.0.0
   description: SQLite tooling.
 spec:
-  inherits: [coding]
+  requires:
+    bins: [sqlite3]
   allowed_tools:
     - cli_sqlite3
-  permissions:
-    executables:
-      - binary: sqlite3
-        args: ["*"]
