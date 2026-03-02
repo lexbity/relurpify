@@ -5,13 +5,8 @@ metadata:
   version: 1.0.0
   description: Rust tooling for cargo workflows.
 spec:
-  inherits: [coding]
+  requires:
+    bins: [cargo]
   allowed_tools:
     - cli_cargo
     - cli_rustfmt
-  permissions:
-    executables:
-      - binary: cargo
-        args: ["*"]
-      - binary: rustfmt
-        args: ["*"]
