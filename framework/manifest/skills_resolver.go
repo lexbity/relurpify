@@ -3,68 +3,33 @@ package manifest
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 )
 
 const skillsDirName = "relurpify_cfg/skills"
 
-// ResolveSkillChain returns the inheritance-ordered chain for a skill name.
-func ResolveSkillChain(workspace, name string) ([]*SkillManifest, error) {
-	var ordered []*SkillManifest
-	visiting := make(map[string]bool)
-	visited := make(map[string]bool)
-
-	var visit func(string) error
-	visit = func(skill string) error {
-		skill = strings.TrimSpace(skill)
-		if skill == "" {
-			return nil
-		}
-		if visited[skill] {
-			return nil
-		}
-		if visiting[skill] {
-			return fmt.Errorf("skill inheritance cycle detected at %s", skill)
-		}
-		visiting[skill] = true
-		manifestPath := filepath.Join(workspace, skillsDirName, skill, "skill.manifest.yaml")
-		skillManifest, err := LoadSkillManifest(manifestPath)
-		if err != nil {
-			return err
-		}
-		for _, parent := range skillManifest.Spec.Inherits {
-			if err := visit(parent); err != nil {
-				return err
-			}
-		}
-		visiting[skill] = false
-		visited[skill] = true
-		ordered = append(ordered, skillManifest)
-		return nil
+// LoadSkill loads a single skill by name (flat, no inheritance chain).
+func LoadSkill(workspace, name string) (*SkillManifest, error) {
+	if name == "" {
+		return nil, fmt.Errorf("skill name required")
 	}
-
-	if err := visit(name); err != nil {
-		return nil, err
-	}
-	return ordered, nil
+	manifestPath := filepath.Join(workspace, skillsDirName, name, "skill.manifest.yaml")
+	return LoadSkillManifest(manifestPath)
 }
 
-// ResolveSkillList expands a list of skills into a de-duplicated, ordered list.
-func ResolveSkillList(workspace string, names []string) ([]*SkillManifest, error) {
-	var ordered []*SkillManifest
-	seen := make(map[string]bool)
+// LoadSkillList loads each named skill independently. Skills that fail to load
+// are skipped; the caller is responsible for logging warnings via the returned
+// error list.
+func LoadSkillList(workspace string, names []string) []*SkillManifest {
+	var loaded []*SkillManifest
 	for _, name := range names {
-		chain, err := ResolveSkillChain(workspace, name)
+		if name == "" {
+			continue
+		}
+		skill, err := LoadSkill(workspace, name)
 		if err != nil {
-			return nil, err
+			continue
 		}
-		for _, skill := range chain {
-			if skill == nil || seen[skill.Metadata.Name] {
-				continue
-			}
-			seen[skill.Metadata.Name] = true
-			ordered = append(ordered, skill)
-		}
+		loaded = append(loaded, skill)
 	}
-	return ordered, nil
+	return loaded
 }
