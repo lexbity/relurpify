@@ -25,6 +25,7 @@ func (s allowlistStubTool) Permissions() core.ToolPermissions {
 		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "/tmp/**"}},
 	}}
 }
+func (s allowlistStubTool) Tags() []string { return nil }
 
 func TestAllowedToolsAppliedOnRegister(t *testing.T) {
 	registry := NewToolRegistry()
