@@ -12,5 +12,6 @@ func NewDFTool(basePath string) core.Tool {
 		Description: "Reports disk usage statistics with df.",
 		Command:     "df",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
