@@ -664,6 +664,7 @@ func (t *aliasTool) IsAvailable(ctx context.Context, state *core.Context) bool {
 func (t *aliasTool) Permissions() core.ToolPermissions {
 	return t.target.Permissions()
 }
+func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
 func instantiateAgentByName(name string, model core.LanguageModel, tools *toolsys.ToolRegistry, memory memory.MemoryStore) graph.Agent {
 	switch strings.ToLower(name) {
