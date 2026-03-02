@@ -12,5 +12,6 @@ func NewBzip2Tool(basePath string) core.Tool {
 		Description: "Compresses data using bzip2.",
 		Command:     "bzip2",
 		Category:    "cli_archive",
+		Tags:        []string{"execute"},
 	})
 }
