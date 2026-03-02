@@ -12,5 +12,6 @@ func NewRevTool(basePath string) core.Tool {
 		Description: "Reverses lines character-wise using rev.",
 		Command:     "rev",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
