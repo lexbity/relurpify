@@ -96,6 +96,7 @@ func (t *GrepTool) IsAvailable(ctx context.Context, state *core.Context) bool { 
 func (t *GrepTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
+func (t *GrepTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // SimilarityTool finds similar snippets using a naive approach.
 type SimilarityTool struct {
@@ -170,6 +171,7 @@ func (t *SimilarityTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *SimilarityTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
+func (t *SimilarityTool) Tags() []string { return []string{core.TagReadOnly} }
 
 // SemanticSearchTool uses a vector-like heuristic (currently substring).
 type SemanticSearchTool struct {
@@ -245,6 +247,7 @@ func (t *SemanticSearchTool) IsAvailable(ctx context.Context, state *core.Contex
 func (t *SemanticSearchTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
+func (t *SemanticSearchTool) Tags() []string { return []string{core.TagReadOnly} }
 
 func sanitizeSnippet(snippet string) string {
 	return strings.ToLower(strings.ReplaceAll(snippet, " ", ""))
