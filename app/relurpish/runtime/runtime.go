@@ -120,7 +120,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, err
 	}
-	agentSpec, skillResults := agents.ApplySkills(cfg.Workspace, agentSpec, registration.Manifest.Spec.Skills, registration.Manifest.Spec.SkillOverlays, registry, registration.Permissions, registration.ID)
+	agentSpec, skillResults := agents.ApplySkills(cfg.Workspace, agentSpec, registration.Manifest.Spec.Skills, registry, registration.Permissions, registration.ID)
 	if cfg.AgentName == "" {
 		cfg.AgentName = registration.Manifest.Metadata.Name
 	}
