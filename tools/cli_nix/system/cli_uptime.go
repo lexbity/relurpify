@@ -12,5 +12,6 @@ func NewUptimeTool(basePath string) core.Tool {
 		Description: "Shows system uptime information.",
 		Command:     "uptime",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
