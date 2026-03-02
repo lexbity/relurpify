@@ -12,5 +12,6 @@ func NewNslookupTool(basePath string) core.Tool {
 		Description: "Performs DNS lookups via nslookup.",
 		Command:     "nslookup",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
