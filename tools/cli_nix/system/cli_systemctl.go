@@ -12,5 +12,6 @@ func NewSystemctlTool(basePath string) core.Tool {
 		Description: "Manages systemd services via systemctl.",
 		Command:     "systemctl",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "destructive"},
 	})
 }
