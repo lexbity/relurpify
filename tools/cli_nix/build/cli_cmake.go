@@ -12,5 +12,6 @@ func NewCMakeTool(basePath string) core.Tool {
 		Description: "Configures builds with cmake.",
 		Command:     "cmake",
 		Category:    "cli_build",
+		Tags:        []string{"execute"},
 	})
 }
