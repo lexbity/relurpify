@@ -12,5 +12,6 @@ func NewLsofTool(basePath string) core.Tool {
 		Description: "Lists open files and sockets via lsof.",
 		Command:     "lsof",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
