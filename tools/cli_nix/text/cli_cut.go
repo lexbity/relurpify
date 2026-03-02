@@ -12,5 +12,6 @@ func NewCutTool(basePath string) core.Tool {
 		Description: "Extracts fields or columns with cut.",
 		Command:     "cut",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
