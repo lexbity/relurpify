@@ -5,7 +5,8 @@ metadata:
   version: 1.0.0
   description: General coding tools (git + repo hygiene).
 spec:
-  inherits: [system]
+  requires:
+    bins: [git]
   prompt_snippets:
     - "Follow project conventions and summarize changes."
   allowed_tools:
@@ -14,10 +15,6 @@ spec:
     - git_blame
     - git_branch
     - git_commit
-  tool_policies:
+  tool_execution_policy:
     git_commit:
       execute: ask
-  permissions:
-    executables:
-      - binary: git
-        args: ["*"]
