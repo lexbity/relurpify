@@ -12,5 +12,6 @@ func NewCurlTool(basePath string) core.Tool {
 		Description: "Transfers data over HTTP(S) using curl.",
 		Command:     "curl",
 		Category:    "cli_network",
+		Tags:        []string{"execute", "network"},
 	})
 }
