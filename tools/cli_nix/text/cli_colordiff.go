@@ -12,5 +12,6 @@ func NewColordiffTool(basePath string) core.Tool {
 		Description: "Shows colorized diffs using colordiff.",
 		Command:     "colordiff",
 		Category:    "cli_text",
+		Tags:        []string{"execute"},
 	})
 }
