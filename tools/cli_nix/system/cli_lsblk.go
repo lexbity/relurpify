@@ -12,5 +12,6 @@ func NewLsblkTool(basePath string) core.Tool {
 		Description: "Lists block devices via lsblk.",
 		Command:     "lsblk",
 		Category:    "cli_system",
+		Tags:        []string{"execute", "read-only"},
 	})
 }
