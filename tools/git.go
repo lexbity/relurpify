@@ -183,3 +183,12 @@ func (t *GitCommandTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *GitCommandTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.RepoPath, "git", []string{"*"})}
 }
+
+func (t *GitCommandTool) Tags() []string {
+	switch t.Command {
+	case "diff", "history", "blame":
+		return []string{core.TagReadOnly}
+	default:
+		return []string{core.TagExecute, core.TagDestructive}
+	}
+}
