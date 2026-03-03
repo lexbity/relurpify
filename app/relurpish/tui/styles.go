@@ -13,8 +13,7 @@ var (
 	messageBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorDim).
-			Padding(1, 2).
-			MarginBottom(1)
+			Padding(0, 2)
 
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -96,4 +95,73 @@ var (
 	panelItemActiveStyle = lipgloss.NewStyle().
 				Foreground(colorPrimary).
 				Bold(true)
+)
+
+var (
+	// New styles for rewritten components
+
+	titleBarStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("236")).
+		Foreground(lipgloss.Color("255")).
+		Padding(0, 1)
+
+	tabBarStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("234")).
+		Padding(0, 1)
+
+	tabActiveStyle = lipgloss.NewStyle().
+		Foreground(colorPrimary).
+		Bold(true).
+		Background(lipgloss.Color("236")).
+		Padding(0, 1)
+
+	tabInactiveStyle = lipgloss.NewStyle().
+		Foreground(colorDim).
+		Padding(0, 1)
+
+	notifInfoStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("18")).
+		Foreground(lipgloss.Color("255")).
+		Padding(0, 1)
+
+	notifHITLStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("202")).
+		Foreground(lipgloss.Color("255")).
+		Bold(true).
+		Padding(0, 1)
+
+	notifSuccessStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("28")).
+		Foreground(lipgloss.Color("255")).
+		Padding(0, 1)
+
+	notifErrorStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("124")).
+		Foreground(lipgloss.Color("255")).
+		Padding(0, 1)
+
+	inputBarNewStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("236")).
+		Padding(0, 1)
+
+	inputPrefixStyle = lipgloss.NewStyle().
+		Foreground(colorPrimary).
+		Bold(true)
+
+	paneStyle = lipgloss.NewStyle()
+
+	taskDoneStyle = lipgloss.NewStyle().
+		Foreground(colorSuccess)
+
+	taskPendingStyle = lipgloss.NewStyle().
+		Foreground(colorDim)
+
+	taskRunningStyle = lipgloss.NewStyle().
+		Foreground(colorWarning)
+
+	helpOverlayStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1, 2).
+		Background(lipgloss.Color("236"))
 )

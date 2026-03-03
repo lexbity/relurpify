@@ -2,6 +2,87 @@ package tui
 
 import "time"
 
+// TabID identifies one of the four main TUI tabs.
+type TabID int
+
+const (
+	TabChat     TabID = 1
+	TabTasks    TabID = 2
+	TabSession  TabID = 3
+	TabSettings TabID = 4
+	TabTools    TabID = 5
+)
+
+// NotificationKind describes what kind of notification is being shown.
+type NotificationKind string
+
+const (
+	NotifKindInfo      NotificationKind = "info"
+	NotifKindHITL      NotificationKind = "hitl"
+	NotifKindTaskDone  NotificationKind = "task_done"
+	NotifKindRestore   NotificationKind = "restore"
+	NotifKindError     NotificationKind = "error"
+)
+
+// NotificationItem is a single item in the notification queue.
+type NotificationItem struct {
+	ID        string
+	Kind      NotificationKind
+	Msg       string
+	Extra     map[string]string
+	CreatedAt time.Time
+}
+
+// TaskItem describes a queued agent task.
+type TaskItem struct {
+	ID          string
+	Description string
+	Agent       string
+	Model       string
+	Status      TaskStatus
+	RunID       string
+}
+
+// InputHistory provides ↑/↓ recall of submitted values.
+type InputHistory struct {
+	entries []string
+	cursor  int
+}
+
+// Push adds an entry to the history (ignoring blanks or duplicates).
+func (h *InputHistory) Push(entry string) {
+	if entry == "" {
+		return
+	}
+	if len(h.entries) > 0 && h.entries[len(h.entries)-1] == entry {
+		h.cursor = len(h.entries)
+		return
+	}
+	h.entries = append(h.entries, entry)
+	h.cursor = len(h.entries)
+}
+
+// Prev moves back through history; returns empty string when exhausted.
+func (h *InputHistory) Prev() string {
+	if len(h.entries) == 0 {
+		return ""
+	}
+	if h.cursor > 0 {
+		h.cursor--
+	}
+	return h.entries[h.cursor]
+}
+
+// Next moves forward through history; returns empty string at the end.
+func (h *InputHistory) Next() string {
+	if h.cursor >= len(h.entries)-1 {
+		h.cursor = len(h.entries)
+		return ""
+	}
+	h.cursor++
+	return h.entries[h.cursor]
+}
+
 // InputMode tracks the role of the prompt bar.
 type InputMode int
 

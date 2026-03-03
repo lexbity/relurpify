@@ -36,12 +36,12 @@ type hitlResolvedMsg struct {
 	err       error
 }
 
-func approveHITLCmd(svc hitlService, requestID string) tea.Cmd {
+func approveHITLCmd(svc hitlService, requestID string, scope runtime.GrantScope) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}
 		}
-		err := svc.ApproveHITL(requestID, "tui", runtime.GrantScopeOneTime, 5*time.Minute)
+		err := svc.ApproveHITL(requestID, "tui", scope, 0)
 		return hitlResolvedMsg{requestID: requestID, approved: true, err: err}
 	}
 }

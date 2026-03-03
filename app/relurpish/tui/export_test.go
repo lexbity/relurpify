@@ -18,16 +18,16 @@ func TestWriteSessionExportJSON(t *testing.T) {
 	if err := writeTelemetryLine(telemetryPath, event); err != nil {
 		t.Fatalf("write telemetry: %v", err)
 	}
-	m := Model{
-		session: &Session{ID: "sess-1", StartTime: time.Now(), Workspace: dir},
-		context: &AgentContext{Files: []string{"README.md"}},
-		messages: []Message{{
-			Role:      RoleUser,
-			Timestamp: time.Now(),
-			Content:   MessageContent{Text: "hello"},
-		}},
-	}
-	out, err := WriteSessionExport(m, ExportOptions{
+
+	sess := &Session{ID: "sess-1", StartTime: time.Now(), Workspace: dir}
+	ctx := &AgentContext{Files: []string{"README.md"}}
+	msgs := []Message{{
+		Role:      RoleUser,
+		Timestamp: time.Now(),
+		Content:   MessageContent{Text: "hello"},
+	}}
+
+	out, err := WriteSessionExport(msgs, sess, ctx, ExportOptions{
 		Format:        "json",
 		Path:          filepath.Join(dir, "export.json"),
 		WorkspaceRoot: dir,
@@ -51,11 +51,11 @@ func TestWriteSessionExportJSON(t *testing.T) {
 
 func TestWriteSessionExportMarkdown(t *testing.T) {
 	dir := t.TempDir()
-	m := Model{
-		session: &Session{ID: "sess-2", StartTime: time.Now(), Workspace: dir, Model: "llama"},
-		context: &AgentContext{},
-	}
-	out, err := WriteSessionExport(m, ExportOptions{
+
+	sess := &Session{ID: "sess-2", StartTime: time.Now(), Workspace: dir, Model: "llama"}
+	ctx := &AgentContext{}
+
+	out, err := WriteSessionExport(nil, sess, ctx, ExportOptions{
 		Format:        "md",
 		Path:          filepath.Join(dir, "export.md"),
 		WorkspaceRoot: dir,

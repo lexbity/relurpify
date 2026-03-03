@@ -54,6 +54,21 @@ func formatSizeToken(size int64, tokens int) string {
 	return fmt.Sprintf("%s | ~%d tok", formatBytes(size), tokens)
 }
 
+// formatAge returns a human-readable duration since t (e.g. "2h ago").
+func formatAge(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+}
+
 func fuzzyMatchScore(query, target string) (bool, int) {
 	if query == "" {
 		return true, 0

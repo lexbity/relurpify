@@ -64,7 +64,9 @@ func parseExportArgs(args []string) (string, string) {
 	return "", ""
 }
 
-func WriteSessionExport(m Model, opts ExportOptions) (string, error) {
+// WriteSessionExport writes a session export to disk. The caller provides
+// messages, session, and context directly to avoid coupling to a specific model type.
+func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext, opts ExportOptions) (string, error) {
 	if opts.Format == "" {
 		return "", fmt.Errorf("export format required")
 	}
@@ -95,9 +97,9 @@ func WriteSessionExport(m Model, opts ExportOptions) (string, error) {
 
 	payload := SessionExport{
 		ExportedAt: time.Now(),
-		Session:    m.session,
-		Context:    m.context,
-		Messages:   append([]Message(nil), m.messages...),
+		Session:    session,
+		Context:    ctx,
+		Messages:   append([]Message(nil), messages...),
 		LogPath:    opts.LogPath,
 		Telemetry:  telemetry,
 	}

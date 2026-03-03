@@ -1,12 +1,12 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
+	"testing"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
-	"testing"
-	"time"
 )
 
 type fakeHITL struct {
@@ -71,7 +71,9 @@ func removeRequest(reqs []*runtime.PermissionRequest, id string) []*runtime.Perm
 	return reqs
 }
 
-func TestHITLPromptApproveFlow(t *testing.T) {
+// TestHITLEventPushesNotification verifies that a HITLEventRequested event
+// causes the notification queue to receive a HITL item.
+func TestHITLEventPushesNotification(t *testing.T) {
 	hitl := newFakeHITL()
 	req := &runtime.PermissionRequest{
 		ID:            "hitl-1",
@@ -80,83 +82,131 @@ func TestHITLPromptApproveFlow(t *testing.T) {
 	}
 	hitl.pending = []*runtime.PermissionRequest{req}
 
-	input := textinput.New()
-	input.Focus()
+	notifQ := &NotificationQueue{}
+	pane := NewChatPane(nil, &AgentContext{}, &Session{}, notifQ)
+	pane.hitlSvc = hitl
 
-	m := Model{
-		hitl:     hitl,
-		hitlCh:   hitl.ch,
-		input:    input,
-		mode:     ModeNormal,
-		messages: []Message{},
-	}
+	event := hitlEventMsg{event: runtime.HITLEvent{Type: runtime.HITLEventRequested, Request: req}}
+	_, _ = pane.Update(event)
 
-	updatedAny, _ := m.Update(hitlEventMsg{event: runtime.HITLEvent{Type: runtime.HITLEventRequested, Request: req}})
-	updated := updatedAny.(Model)
-	if updated.mode != ModeHITL {
-		t.Fatalf("expected ModeHITL, got %v", updated.mode)
+	if notifQ.Len() == 0 {
+		t.Fatalf("expected notification pushed, got 0")
 	}
-	if updated.hitlRequest == nil || updated.hitlRequest.ID != "hitl-1" {
-		t.Fatalf("expected hitlRequest hitl-1, got %+v", updated.hitlRequest)
+	n, ok := notifQ.Current()
+	if !ok {
+		t.Fatalf("expected current notification")
 	}
+	if n.Kind != NotifKindHITL {
+		t.Fatalf("expected HITL kind, got %s", n.Kind)
+	}
+	if n.ID != "hitl-1" {
+		t.Fatalf("expected notification ID hitl-1, got %s", n.ID)
+	}
+}
 
-	// Press "y" and execute returned command.
-	modelAny, cmd := updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
-	model := modelAny.(Model)
+// TestNotificationBarApproveKey verifies that pressing "y" on a HITL
+// notification emits NotifHITLApproveMsg.
+func TestNotificationBarApproveKey(t *testing.T) {
+	notifQ := &NotificationQueue{}
+	notifQ.Push(NotificationItem{
+		ID:   "hitl-2",
+		Kind: NotifKindHITL,
+		Msg:  "Approve hitl-2?",
+	})
+
+	nb := NewNotificationBar(notifQ)
+	_, cmd := nb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	if cmd == nil {
 		t.Fatalf("expected approve cmd")
 	}
 	msg := cmd()
-
-	modelAny2, _ := model.Update(msg)
-	model2 := modelAny2.(Model)
-	if model2.mode == ModeHITL {
-		t.Fatalf("expected HITL mode exited")
+	approveMsg, ok := msg.(NotifHITLApproveMsg)
+	if !ok {
+		t.Fatalf("expected NotifHITLApproveMsg, got %T", msg)
 	}
-	if len(hitl.approved) != 1 || hitl.approved[0] != "hitl-1" {
-		t.Fatalf("expected approved hitl-1, got %v", hitl.approved)
+	if approveMsg.ID != "hitl-2" {
+		t.Fatalf("expected ID hitl-2, got %s", approveMsg.ID)
 	}
 }
 
-func TestHITLPromptDenyFlow(t *testing.T) {
-	hitl := newFakeHITL()
-	req := &runtime.PermissionRequest{
-		ID:            "hitl-2",
-		Permission:    core.PermissionDescriptor{Action: "bash:exec", Resource: "cargo build"},
-		Justification: "bash permission policy",
-	}
-	hitl.pending = []*runtime.PermissionRequest{req}
+// TestNotificationBarDenyKey verifies that pressing "n" on a HITL
+// notification emits NotifHITLDenyMsg.
+func TestNotificationBarDenyKey(t *testing.T) {
+	notifQ := &NotificationQueue{}
+	notifQ.Push(NotificationItem{
+		ID:   "hitl-3",
+		Kind: NotifKindHITL,
+		Msg:  "Approve hitl-3?",
+	})
 
-	input := textinput.New()
-	input.Focus()
-
-	m := Model{
-		hitl:     hitl,
-		hitlCh:   hitl.ch,
-		input:    input,
-		mode:     ModeNormal,
-		messages: []Message{},
-	}
-
-	updatedAny, _ := m.Update(hitlEventMsg{event: runtime.HITLEvent{Type: runtime.HITLEventRequested, Request: req}})
-	updated := updatedAny.(Model)
-	if updated.mode != ModeHITL {
-		t.Fatalf("expected ModeHITL, got %v", updated.mode)
-	}
-
-	modelAny, cmd := updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	model := modelAny.(Model)
+	nb := NewNotificationBar(notifQ)
+	_, cmd := nb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
 	if cmd == nil {
 		t.Fatalf("expected deny cmd")
 	}
 	msg := cmd()
-
-	modelAny2, _ := model.Update(msg)
-	model2 := modelAny2.(Model)
-	if model2.mode == ModeHITL {
-		t.Fatalf("expected HITL mode exited")
+	denyMsg, ok := msg.(NotifHITLDenyMsg)
+	if !ok {
+		t.Fatalf("expected NotifHITLDenyMsg, got %T", msg)
 	}
-	if len(hitl.denied) != 1 || hitl.denied[0] != "hitl-2" {
-		t.Fatalf("expected denied hitl-2, got %v", hitl.denied)
+	if denyMsg.ID != "hitl-3" {
+		t.Fatalf("expected ID hitl-3, got %s", denyMsg.ID)
+	}
+}
+
+// TestApproveHITLRootCmd exercises the approve command reaching the fake HITL service.
+func TestApproveHITLRootCmd(t *testing.T) {
+	hitl := newFakeHITL()
+	req := &runtime.PermissionRequest{
+		ID:            "hitl-approve",
+		Permission:    core.PermissionDescriptor{Action: "bash:exec", Resource: "cargo build"},
+		Justification: "build test",
+	}
+	hitl.pending = []*runtime.PermissionRequest{req}
+
+	cmd := approveHITLRootCmd(hitl, req.ID, runtime.GrantScopeOneTime)
+	if cmd == nil {
+		t.Fatalf("expected command")
+	}
+	msg := cmd()
+	resolved, ok := msg.(hitlResolvedMsg)
+	if !ok {
+		t.Fatalf("expected hitlResolvedMsg, got %T", msg)
+	}
+	if !resolved.approved {
+		t.Fatalf("expected approved=true")
+	}
+	if resolved.err != nil {
+		t.Fatalf("expected no error, got %v", resolved.err)
+	}
+	if len(hitl.approved) != 1 || hitl.approved[0] != req.ID {
+		t.Fatalf("expected approved %s, got %v", req.ID, hitl.approved)
+	}
+}
+
+// TestDenyHITLRootCmd exercises the deny command reaching the fake HITL service.
+func TestDenyHITLRootCmd(t *testing.T) {
+	hitl := newFakeHITL()
+	req := &runtime.PermissionRequest{
+		ID:            "hitl-deny",
+		Permission:    core.PermissionDescriptor{Action: "file:write", Resource: "config.toml"},
+		Justification: "write test",
+	}
+	hitl.pending = []*runtime.PermissionRequest{req}
+
+	cmd := denyHITLRootCmd(hitl, req.ID)
+	if cmd == nil {
+		t.Fatalf("expected command")
+	}
+	msg := cmd()
+	resolved, ok := msg.(hitlResolvedMsg)
+	if !ok {
+		t.Fatalf("expected hitlResolvedMsg, got %T", msg)
+	}
+	if resolved.approved {
+		t.Fatalf("expected approved=false")
+	}
+	if len(hitl.denied) != 1 || hitl.denied[0] != req.ID {
+		t.Fatalf("expected denied %s, got %v", req.ID, hitl.denied)
 	}
 }
