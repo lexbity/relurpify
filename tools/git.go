@@ -152,7 +152,11 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*core.ToolR
 		Timeout: 30 * time.Second,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("git %s failed: %s", strings.Join(args, " "), stderr)
+		msg := stderr
+		if msg == "" {
+			msg = err.Error()
+		}
+		return &core.ToolResult{Success: false, Error: fmt.Sprintf("git %s failed: %s", strings.Join(args, " "), msg)}, nil
 	}
 	return &core.ToolResult{
 		Success: true,

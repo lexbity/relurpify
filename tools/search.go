@@ -72,10 +72,12 @@ func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[st
 		}
 		file, err := os.Open(path)
 		if err != nil {
-			return err
+			return nil // skip unreadable files
 		}
 		defer file.Close()
 		scanner := bufio.NewScanner(file)
+		scanner.Buffer(make([]byte, scanChunkSize), scanChunkSize)
+		scanner.Split(scanLinesOrChunks(scanChunkSize))
 		line := 1
 		for scanner.Scan() {
 			text := scanner.Text()
@@ -84,7 +86,8 @@ func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[st
 			}
 			line++
 		}
-		return scanner.Err()
+		// Skip files with I/O errors (e.g. permission denied mid-read).
+		return nil
 	})
 	if err != nil {
 		return nil, err

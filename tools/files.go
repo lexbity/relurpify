@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -50,14 +51,21 @@ func (t *ReadFileTool) Execute(ctx context.Context, state *core.Context, args ma
 		}
 	}
 
+	info, err := os.Stat(path)
+	if err != nil {
+		return &core.ToolResult{Success: false, Error: err.Error()}, nil
+	}
+	if info.IsDir() {
+		return &core.ToolResult{Success: false, Error: fmt.Sprintf("%s is a directory; use file_list to explore it", path)}, nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return &core.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	if !isText(data) {
 		return nil, errBinaryFile
 	}
-	info, err := os.Stat(path)
+	info, err = os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
@@ -313,10 +321,12 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 
 		file, err := os.Open(path)
 		if err != nil {
-			return err
+			return nil // skip unreadable files
 		}
 		defer file.Close()
 		scanner := bufio.NewScanner(file)
+		scanner.Buffer(make([]byte, scanChunkSize), scanChunkSize)
+		scanner.Split(scanLinesOrChunks(scanChunkSize))
 		line := 1
 		for scanner.Scan() {
 			if strings.Contains(scanner.Text(), pattern) {
@@ -328,7 +338,8 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 			}
 			line++
 		}
-		return scanner.Err()
+		// Skip files with I/O errors (e.g. permission denied mid-read).
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -574,6 +585,40 @@ func enforceFileMatrix(ctx context.Context, manager *runtime.PermissionManager, 
 		}, "file permission matrix", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0)
 	default:
 		return nil
+	}
+}
+
+// scanChunkSize is the maximum bytes returned per scanner token. Lines longer
+// than this are split into consecutive chunks rather than causing a buffer
+// overflow error.
+const scanChunkSize = 64 * 1024
+
+// scanLinesOrChunks returns a bufio.SplitFunc that behaves like
+// bufio.ScanLines but force-splits any line that exceeds maxChunk bytes.
+// This prevents bufio.Scanner from erroring on minified or generated files.
+func scanLinesOrChunks(maxChunk int) bufio.SplitFunc {
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		limit := len(data)
+		if limit > maxChunk {
+			limit = maxChunk
+		}
+		if i := bytes.IndexByte(data[:limit], '\n'); i >= 0 {
+			line := data[:i]
+			if len(line) > 0 && line[len(line)-1] == '\r' {
+				line = line[:len(line)-1]
+			}
+			return i + 1, line, nil
+		}
+		if len(data) >= maxChunk {
+			return maxChunk, data[:maxChunk], nil
+		}
+		if atEOF {
+			return len(data), data, nil
+		}
+		return 0, nil, nil
 	}
 }
 
