@@ -5,12 +5,13 @@ import "context"
 // LLMOptions configures language model calls. Keeping the options struct inside
 // the core package avoids hard-coding provider-specific fields in agent code.
 type LLMOptions struct {
-	Model       string
-	Temperature float64
-	MaxTokens   int
-	Stop        []string
-	TopP        float64
-	Stream      bool
+	Model          string
+	Temperature    float64
+	MaxTokens      int
+	Stop           []string
+	TopP           float64
+	Stream         bool
+	StreamCallback func(string) `json:"-"`
 }
 
 // ToolCall encodes a function invocation requested by the LLM.
