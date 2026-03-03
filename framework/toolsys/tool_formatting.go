@@ -56,17 +56,63 @@ func ParseToolCallsFromText(text string) []ToolCall {
 			}
 		}
 	}
+	if len(calls) > 0 {
+		return calls
+	}
 
-	// Also attempt to parse the entire text if it looks like JSON
-	// This covers cases where the model only outputs JSON without markdown code fences
-	trimmed := strings.TrimSpace(text)
-	if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
-		if call, ok := tryParseSingleToolCall(trimmed); ok {
+	// Scan for bare top-level JSON objects anywhere in the text. This handles
+	// models that output tool calls as inline JSON mixed with prose (e.g.
+	// {"name":"cli_go","arguments":{...}}\nSome explanation text).
+	for _, candidate := range extractTopLevelJSONObjects(text) {
+		if call, ok := tryParseSingleToolCall(candidate); ok {
 			calls = append(calls, call)
 		}
 	}
 
 	return calls
+}
+
+// extractTopLevelJSONObjects returns all balanced top-level {...} substrings
+// found anywhere in text.
+func extractTopLevelJSONObjects(text string) []string {
+	var out []string
+	depth := 0
+	start := -1
+	inString := false
+	escaped := false
+	for i, ch := range text {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if ch == '\\' && inString {
+			escaped = true
+			continue
+		}
+		if ch == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		switch ch {
+		case '{':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+				if depth == 0 && start >= 0 {
+					out = append(out, text[start:i+1])
+					start = -1
+				}
+			}
+		}
+	}
+	return out
 }
 
 func tryParseSingleToolCall(jsonText string) (ToolCall, bool) {

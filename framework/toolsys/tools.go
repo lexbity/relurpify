@@ -284,6 +284,62 @@ func (r *ToolRegistry) setTagPolicies(policies map[string]AgentPermissionLevel) 
 	r.mu.Unlock()
 }
 
+// GetToolPolicies returns a snapshot of per-tool execution policies.
+func (r *ToolRegistry) GetToolPolicies() map[string]ToolPolicy {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]ToolPolicy, len(r.toolPolicies))
+	for k, v := range r.toolPolicies {
+		out[k] = v
+	}
+	return out
+}
+
+// GetTagPolicies returns a snapshot of tag-based permission policies.
+func (r *ToolRegistry) GetTagPolicies() map[string]AgentPermissionLevel {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return cloneGlobalPolicies(r.globalPolicies)
+}
+
+// UpdateToolPolicy updates a single tool's execution policy in-memory and re-wraps it.
+func (r *ToolRegistry) UpdateToolPolicy(name string, policy ToolPolicy) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.toolPolicies == nil {
+		r.toolPolicies = make(map[string]ToolPolicy)
+	}
+	r.toolPolicies[name] = policy
+	if tool, ok := r.tools[name]; ok {
+		var inner Tool = tool
+		if instrumented, ok := tool.(*instrumentedTool); ok {
+			inner = instrumented.Tool
+		}
+		r.tools[name] = r.wrapTool(inner)
+	}
+}
+
+// UpdateTagPolicy updates a single tag policy in-memory and re-wraps all tools.
+func (r *ToolRegistry) UpdateTagPolicy(tag string, level AgentPermissionLevel) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.globalPolicies == nil {
+		r.globalPolicies = make(map[string]AgentPermissionLevel)
+	}
+	if level == "" {
+		delete(r.globalPolicies, tag)
+	} else {
+		r.globalPolicies[tag] = level
+	}
+	for name, tool := range r.tools {
+		var inner Tool = tool
+		if instrumented, ok := tool.(*instrumentedTool); ok {
+			inner = instrumented.Tool
+		}
+		r.tools[name] = r.wrapTool(inner)
+	}
+}
+
 // effectiveTagPolicy resolves the most restrictive permission level from
 // all matching tags. Order: deny > ask > allow > "".
 func effectiveTagPolicy(tags []string, policies map[string]AgentPermissionLevel) AgentPermissionLevel {
@@ -391,7 +447,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 			}
 			if err := t.manager.RequireApproval(ctx, t.agentID, PermissionDescriptor{
 				Type:         PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool_exec:%s", t.Tool.Name()),
+				Action:       fmt.Sprintf("tool:%s", t.Tool.Name()),
 				Resource:     t.agentID,
 				RequiresHITL: true,
 			}, "tool execution approval", GrantScopeOneTime, RiskLevelMedium, 0); err != nil {
@@ -410,7 +466,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 			}
 			if err := t.manager.RequireApproval(ctx, t.agentID, PermissionDescriptor{
 				Type:         PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool_exec:%s", t.Tool.Name()),
+				Action:       fmt.Sprintf("tool:%s", t.Tool.Name()),
 				Resource:     t.agentID,
 				RequiresHITL: true,
 			}, "tag policy approval", GrantScopeOneTime, RiskLevelMedium, 0); err != nil {
