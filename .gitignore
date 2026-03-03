@@ -6,9 +6,13 @@ testdata/
 docs/
 relurpify/
 .relurpish/
-relurpish
+/relurpish
 /relurpify_cfg/test_runs/
 /relurpify_cfg/memory/
 /relurpify_cfg/logs/
 /relurpify_cfg/telemetry.jsonl
 coding-agent
+# Build artifacts from test fixtures
+testsuite/agenttest_fixtures/**/target/
+testsuite/agenttest_fixtures/**/__pycache__/
+testsuite/agenttest_fixtures/**/*.pyc
