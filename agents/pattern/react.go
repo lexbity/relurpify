@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -33,10 +34,11 @@ type ContextPreferences struct {
 
 // ReActAgent implements the Reason+Act pattern.
 type ReActAgent struct {
-	Model         core.LanguageModel
-	Tools         *toolsys.ToolRegistry
-	Memory        memory.MemoryStore
-	Config        *core.Config
+	Model        core.LanguageModel
+	Tools        *toolsys.ToolRegistry
+	Memory       memory.MemoryStore
+	Config       *core.Config
+	IndexManager *ast.IndexManager
 	maxIterations int
 	contextPolicy *contextmgr.ContextPolicy
 
@@ -92,7 +94,8 @@ func (a *ReActAgent) Initialize(config *core.Config) error {
 	}
 	if a.contextPolicy == nil {
 		a.contextPolicy = contextmgr.NewContextPolicy(contextmgr.ContextPolicyConfig{
-			Strategy: strategy,
+			Strategy:     strategy,
+			IndexManager: a.IndexManager,
 			Preferences: contextmgr.ContextPolicyPreferences{
 				PreferredDetailLevel: a.ModeProfile.Context.PreferredDetailLevel,
 				MinHistorySize:       a.ModeProfile.Context.MinHistorySize,
@@ -258,12 +261,14 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 	var err error
 	tools := n.agent.Tools.All()
 	useToolCalling := len(tools) > 0 && (n.agent.Config == nil || n.agent.Config.OllamaToolCalling)
+	streamCB := n.streamCallback()
 	if useToolCalling {
 		messages := n.ensureMessages(state, tools)
 		resp, err = n.agent.Model.ChatWithTools(ctx, messages, tools, &core.LLMOptions{
-			Model:       n.agent.Config.Model,
-			Temperature: 0.1,
-			MaxTokens:   512,
+			Model:          n.agent.Config.Model,
+			Temperature:    0.1,
+			MaxTokens:      512,
+			StreamCallback: streamCB,
 		})
 		if err == nil {
 			messages = append(messages, core.Message{
@@ -276,9 +281,10 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 	} else {
 		prompt := n.buildPrompt(state)
 		resp, err = n.agent.Model.Generate(ctx, prompt, &core.LLMOptions{
-			Model:       n.agent.Config.Model,
-			Temperature: 0.1,
-			MaxTokens:   512,
+			Model:          n.agent.Config.Model,
+			Temperature:    0.1,
+			MaxTokens:      512,
+			StreamCallback: streamCB,
 		})
 	}
 	if err != nil {
@@ -300,7 +306,6 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 		// when the chat_with_tools API is used. Prefer extracting those calls
 		// before falling back to the decision parser.
 		detectedCalls := toolsys.ParseToolCallsFromText(resp.Text)
-		detectedCalls = filterToolCalls(detectedCalls)
 		detectedCalls = filterToolCalls(detectedCalls)
 		if len(detectedCalls) > 0 {
 			state.Set("react.tool_calls", detectedCalls)
@@ -459,6 +464,17 @@ func extractContextFiles(task *core.Task) []contextFilePayload {
 	default:
 		return nil
 	}
+}
+
+// streamCallback extracts a stream callback from the task context, if present.
+func (n *reactThinkNode) streamCallback() func(string) {
+	if n.task == nil || n.task.Context == nil {
+		return nil
+	}
+	if cb, ok := n.task.Context["stream_callback"].(func(string)); ok {
+		return cb
+	}
+	return nil
 }
 
 // buildPrompt returns a textual prompt when tool-calling chat APIs are not

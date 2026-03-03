@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -20,6 +21,7 @@ type CodingAgent struct {
 	Tools        *toolsys.ToolRegistry
 	Memory       memory.MemoryStore
 	Config       *core.Config
+	IndexManager *ast.IndexManager
 	modeProfiles map[Mode]ModeProfile
 
 	mu        sync.Mutex
@@ -31,21 +33,6 @@ func (a *CodingAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
 		a.Tools = toolsys.NewToolRegistry()
-	}
-
-	// If the config carries a manifest spec, apply its constraints
-	if cfg != nil && cfg.AgentSpec != nil {
-		// If mode profiles are not yet customized, we can inject the mode from spec
-		// The AgentRuntimeSpec defines one primary mode, but CodingAgent supports many.
-		// We can override the 'default' mode profile with spec data.
-		if a.modeProfiles == nil {
-			a.modeProfiles = defaultModeProfiles()
-		}
-		// Update default mode profile to match spec
-		defProfile := a.modeProfiles[defaultMode]
-		// Map spec.Files to capabilities/restrictions if needed
-		// For now, we trust the PermissionManager for file path enforcement.
-		a.modeProfiles[defaultMode] = defProfile
 	}
 
 	if a.modeProfiles == nil {
@@ -156,27 +143,30 @@ func (a *CodingAgent) delegateForMode(mode Mode) (graph.Agent, error) {
 		agent = &PlannerAgent{Model: a.Model, Tools: a.scopedTools(profile.ToolScope), Memory: a.Memory}
 	case ModeAsk:
 		agent = &ReActAgent{
-			Model:       a.Model,
-			Tools:       a.scopedTools(profile.ToolScope),
-			Memory:      a.Memory,
-			Mode:        string(profile.Name),
-			ModeProfile: convertModeRuntimeProfile(profile),
+			Model:        a.Model,
+			Tools:        a.scopedTools(profile.ToolScope),
+			Memory:       a.Memory,
+			IndexManager: a.IndexManager,
+			Mode:         string(profile.Name),
+			ModeProfile:  convertModeRuntimeProfile(profile),
 		}
 	case ModeDocument:
 		agent = &ReActAgent{
-			Model:       a.Model,
-			Tools:       a.scopedTools(profile.ToolScope),
-			Memory:      a.Memory,
-			Mode:        string(profile.Name),
-			ModeProfile: convertModeRuntimeProfile(profile),
+			Model:        a.Model,
+			Tools:        a.scopedTools(profile.ToolScope),
+			Memory:       a.Memory,
+			IndexManager: a.IndexManager,
+			Mode:         string(profile.Name),
+			ModeProfile:  convertModeRuntimeProfile(profile),
 		}
 	default:
 		agent = &ReActAgent{
-			Model:       a.Model,
-			Tools:       a.scopedTools(profile.ToolScope),
-			Memory:      a.Memory,
-			Mode:        string(profile.Name),
-			ModeProfile: convertModeRuntimeProfile(profile),
+			Model:        a.Model,
+			Tools:        a.scopedTools(profile.ToolScope),
+			Memory:       a.Memory,
+			IndexManager: a.IndexManager,
+			Mode:         string(profile.Name),
+			ModeProfile:  convertModeRuntimeProfile(profile),
 		}
 	}
 	if err := agent.Initialize(a.Config); err != nil {
