@@ -2,6 +2,7 @@ package contextmgr
 
 import (
 	"context"
+	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"strings"
 )
@@ -22,6 +23,7 @@ type ContextPolicyConfig struct {
 	CompressionStrategy core.CompressionStrategy
 	Summarizer          core.Summarizer
 	Preferences         ContextPolicyPreferences
+	IndexManager        *ast.IndexManager
 }
 
 // ContextPolicy centralizes strategy selection, progressive loading, and compression.
@@ -68,7 +70,7 @@ func NewContextPolicy(cfg ContextPolicyConfig, spec *core.AgentContextSpec) *Con
 		policy.Strategy = NewAdaptiveStrategy()
 	}
 	if policy.Progressive == nil {
-		policy.Progressive = NewProgressiveLoader(policy.ContextManager, nil, nil, policy.Budget, policy.Summarizer)
+		policy.Progressive = NewProgressiveLoader(policy.ContextManager, cfg.IndexManager, nil, policy.Budget, policy.Summarizer)
 	}
 	policy.ApplyAgentContextSpec(spec)
 	return policy
