@@ -141,7 +141,80 @@ func (c *Client) ChatWithTools(ctx context.Context, messages []core.Message, too
 		"messages": convertMessages(messages),
 	}
 	c.applyOptions(payload, options)
+	if options != nil && options.StreamCallback != nil {
+		return c.doRequestStream(ctx, "/api/chat", payload, options.StreamCallback)
+	}
 	return c.doRequest(ctx, "/api/chat", payload)
+}
+
+// doRequestStream POSTs with streaming enabled, calling callback on each token,
+// and returns a complete LLMResponse once done.
+func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]interface{}, callback func(string)) (*core.LLMResponse, error) {
+	payload["stream"] = true
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	c.logPayload(apiPath, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+apiPath, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.getHTTPClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(msg))
+		if detail != "" {
+			return nil, fmt.Errorf("ollama error: %s: %s", resp.Status, detail)
+		}
+		return nil, fmt.Errorf("ollama error: %s", resp.Status)
+	}
+
+	var fullText strings.Builder
+	var finalChunk ollamaResponse
+	scanner := bufio.NewScanner(resp.Body)
+	scanBuf := make([]byte, 0, 64*1024)
+	scanner.Buffer(scanBuf, 512*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var chunk ollamaResponse
+		if err := json.Unmarshal(line, &chunk); err != nil {
+			continue
+		}
+		token := ""
+		if chunk.Message != nil {
+			token = chunk.Message.Content
+		}
+		if token != "" {
+			fullText.WriteString(token)
+			if callback != nil {
+				callback(token)
+			}
+		}
+		finalChunk = chunk
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	result := &core.LLMResponse{
+		Text:         fullText.String(),
+		FinishReason: finalChunk.DoneReason,
+		Usage:        normalizeUsage(finalChunk),
+	}
+	if finalChunk.Message != nil {
+		result.ToolCalls = append(result.ToolCalls, parseToolCalls(finalChunk.Message.ToolCalls)...)
+	}
+	result.ToolCalls = append(result.ToolCalls, parseToolCalls(finalChunk.ToolCalls)...)
+	return result, nil
 }
 
 // SetDebugLogging enables or disables verbose logging for requests/responses.
