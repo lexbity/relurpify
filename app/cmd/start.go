@@ -99,7 +99,7 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			tools, err := appruntime.BuildToolRegistry(ws, runner, appruntime.ToolRegistryOptions{
+			tools, indexManager, err := appruntime.BuildToolRegistry(ws, runner, appruntime.ToolRegistryOptions{
 				AgentID:           registration.ID,
 				PermissionManager: registration.Permissions,
 				AgentSpec:         spec,
@@ -134,9 +134,10 @@ func newStartCmd() *cobra.Command {
 			client := llm.NewClient(defaultEndpoint(), modelName)
 			client.SetDebugLogging(logLLM)
 			agent := &agents.CodingAgent{
-				Model:  llm.NewInstrumentedModel(client, telemetry, logLLM),
-				Tools:  tools,
-				Memory: memory,
+				Model:        llm.NewInstrumentedModel(client, telemetry, logLLM),
+				Tools:        tools,
+				Memory:       memory,
+				IndexManager: indexManager,
 			}
 			cfg := &core.Config{
 				Name:              agentName,

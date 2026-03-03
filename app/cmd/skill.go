@@ -191,7 +191,7 @@ func newSkillDoctorCmd() *cobra.Command {
 				}
 			}
 			runner := fruntime.NewLocalCommandRunner(ws, nil)
-			registry, err := appruntime.BuildToolRegistry(ws, runner, appruntime.ToolRegistryOptions{
+			registry, _, err := appruntime.BuildToolRegistry(ws, runner, appruntime.ToolRegistryOptions{
 				AgentID:           "skill-doctor",
 				PermissionManager: permissions,
 				AgentSpec:         agentSpecOrNil(agentManifest),
