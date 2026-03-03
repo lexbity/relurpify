@@ -22,6 +22,15 @@ spec:
                 - action: fs:execute
                   path: /home/lex/Public/Relurpify/**
                   justification: Execute tooling inside workspace
+            executables:
+                - binary: cargo
+                  args: ["*"]
+                - binary: rustfmt
+                  args: ["*"]
+                - binary: git
+                  args: ["*"]
+                - binary: bash
+                  args: ["-c"]
             network:
                 - direction: egress
                   protocol: tcp
@@ -64,6 +73,7 @@ spec:
         ollama_tool_calling: true
     policies:
         destructive: ask
+        default_tool_policy: ask
     skills:
         - system
         - coding

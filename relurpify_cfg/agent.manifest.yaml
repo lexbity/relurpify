@@ -7,6 +7,55 @@ metadata:
 spec:
     image: ghcr.io/lexcodex/relurpify/runtime:latest
     runtime: gvisor
+    permissions: {}
+    resources:
+        limits:
+            cpu: ""
+            memory: ""
+            disk_io: ""
+    security:
+        run_as_user: 1000
+        read_only_root: false
+        no_new_privileges: true
+    audit:
+        level: verbose
+        retention_days: 7
+    agent:
+        implementation: coding
+        mode: primary
+        version: 1.0.0
+        prompt: You are coding. Follow project rules, ask before destructive actions, and summarize outcomes. Never call file_delete unless the user explicitly asks to delete something.
+        model:
+            provider: ollama
+            name: qwen2.5-coder:14b
+            temperature: 0.2
+            max_tokens: 4096
+        tool_execution_policy:
+            cli_mkdir:
+                execute: allow
+        bash_permissions:
+            allow_patterns: []
+            deny_patterns: []
+            default: ask
+        file_permissions:
+            write:
+                allow_patterns:
+                    - '**'
+                deny_patterns: []
+                default: allow
+                require_approval: false
+                documentation_only: false
+            edit:
+                allow_patterns:
+                    - '**'
+                deny_patterns: []
+                default: allow
+                require_approval: false
+                documentation_only: false
+        ollama_tool_calling: true
+    skills:
+        - system
+        - coding
     defaults:
         permissions:
             filesystem:
@@ -33,38 +82,3 @@ spec:
                 cpu: "2"
                 memory: 4Gi
                 disk_io: 200MBps
-    security:
-        run_as_user: 1000
-        read_only_root: false
-        no_new_privileges: true
-    audit:
-        level: verbose
-        retention_days: 7
-    agent:
-        implementation: coding
-        mode: primary
-        version: 1.0.0
-        prompt: You are coding. Follow project rules, ask before destructive actions, and summarize outcomes. Never call file_delete unless the user explicitly asks to delete something.
-        model:
-            provider: ollama
-            name: qwen2.5-coder:14b
-            temperature: 0.2
-            max_tokens: 4096
-        tool_policies:
-            file_delete:
-                execute: ask
-        bash_permissions:
-            default: ask
-            allow_patterns: []
-            deny_patterns: []
-        file_permissions:
-            write:
-                default: allow
-                allow_patterns: ["**"]
-            edit:
-                default: allow
-                allow_patterns: ["**"]
-        ollama_tool_calling: true
-    skills:
-        - system
-        - coding
