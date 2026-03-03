@@ -70,6 +70,16 @@ type AuditSpec struct {
 	RetentionDays int    `yaml:"retention_days" json:"retention_days"`
 }
 
+// SaveAgentManifest marshals m to YAML and overwrites path.
+// This preserves the manifest structure but will not retain hand-written comments.
+func SaveAgentManifest(path string, m *AgentManifest) error {
+	data, err := yaml.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("marshal manifest: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
 // LoadAgentManifest parses and validates a manifest file.
 func LoadAgentManifest(path string) (*AgentManifest, error) {
 	data, err := os.ReadFile(path)
