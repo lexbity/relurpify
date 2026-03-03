@@ -12,7 +12,7 @@ spec:
       - .git/**
       - relurpify_cfg/test_runs/**
   models:
-    - name: codellama:13b
+    - name: qwen2.5-coder:14b
       endpoint: http://localhost:11434
   cases:
     - name: easy_fix_query_and_run
