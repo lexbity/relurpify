@@ -4,6 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -15,14 +24,6 @@ import (
 	"github.com/lexcodex/relurpify/llm"
 	"github.com/lexcodex/relurpify/server"
 	"github.com/lexcodex/relurpify/tools"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 )
 
 // Runtime wires the relurpish CLI, Bubble Tea UI, and API server to the shared
@@ -35,6 +36,7 @@ type Runtime struct {
 	Context          *core.Context
 	Agent            graph.Agent
 	Model            core.LanguageModel
+	IndexManager     *ast.IndexManager
 	Registration     *fruntime.AgentRegistration
 	AgentDefinitions map[string]*core.AgentDefinition
 	Telemetry        core.Telemetry
@@ -111,7 +113,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, err
 	}
-	registry, err := BuildToolRegistry(cfg.Workspace, runner, ToolRegistryOptions{
+	registry, indexManager, err := BuildToolRegistry(cfg.Workspace, runner, ToolRegistryOptions{
 		AgentID:           registration.ID,
 		PermissionManager: registration.Permissions,
 		AgentSpec:         agentSpec,
@@ -175,7 +177,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		Telemetry:         telemetry,
 	}
 
-	agent := instantiateAgent(cfg, model, registry, memory, agentDefs, agentCfg)
+	agent := instantiateAgent(cfg, model, registry, memory, agentDefs, agentCfg, indexManager)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
 	if agentCfg.AgentSpec != nil {
@@ -201,6 +203,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		Context:          core.NewContext(),
 		Agent:            agent,
 		Model:            model,
+		IndexManager:     indexManager,
 		Logger:           logger,
 		logFile:          logFile,
 		Workspace:        workspaceCfg,
@@ -273,7 +276,7 @@ func (r *Runtime) SwitchAgent(name string) error {
 		AgentSpec:         baseSpec,
 		Telemetry:         r.Telemetry,
 	}
-	agent := instantiateAgent(cfg, r.Model, r.Tools, r.Memory, r.AgentDefinitions, agentCfg)
+	agent := instantiateAgent(cfg, r.Model, r.Tools, r.Memory, r.AgentDefinitions, agentCfg, r.IndexManager)
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)
 	}
@@ -304,12 +307,12 @@ type ToolRegistryOptions struct {
 }
 
 // BuildToolRegistry registers builtin tools scoped to the workspace.
-func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...ToolRegistryOptions) (*toolsys.ToolRegistry, error) {
+func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...ToolRegistryOptions) (*toolsys.ToolRegistry, *ast.IndexManager, error) {
 	if workspace == "" {
 		workspace = "."
 	}
 	if runner == nil {
-		return nil, fmt.Errorf("command runner required")
+		return nil, nil, fmt.Errorf("command runner required")
 	}
 	var cfg ToolRegistryOptions
 	if len(opts) > 0 {
@@ -330,7 +333,7 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 	}
 	for _, tool := range tools.FileOperations(workspace) {
 		if err := register(tool); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
@@ -339,7 +342,7 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 		&tools.SemanticSearchTool{BasePath: workspace},
 	} {
 		if err := register(tool); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
@@ -350,7 +353,7 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 		&tools.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: runner},
 	} {
 		if err := register(tool); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
@@ -360,21 +363,21 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 		&tools.ExecuteCodeTool{Command: []string{"bash", "-c"}, Workdir: workspace, Timeout: 1 * time.Minute, Runner: runner},
 	} {
 		if err := register(tool); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	for _, tool := range tools.CommandLineTools(workspace, runner) {
 		if err := register(tool); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	indexDir := filepath.Join(workspace, "relurpify_cfg", "memory", "ast_index")
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	store, err := ast.NewSQLiteStore(filepath.Join(indexDir, "index.db"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	manager := ast.NewIndexManager(store, ast.IndexConfig{
 		WorkspacePath:   workspace,
@@ -391,10 +394,10 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 	}
 	tools.AttachASTSymbolProvider(manager, registry)
 	if err := register(tools.NewASTTool(manager)); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	go manager.IndexWorkspace()
-	return registry, nil
+	return registry, manager, nil
 }
 
 // LoadAgentDefinitions scans the directory for YAML files and parses them.
@@ -425,7 +428,7 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.ToolRegistry, memory memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config) graph.Agent {
+func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.ToolRegistry, mem memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config, indexManager *ast.IndexManager) graph.Agent {
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
 		// Update config with the definition's spec
@@ -438,33 +441,31 @@ func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.To
 		// Use the Implementation field to pick struct
 		switch def.Spec.Implementation {
 		case "planner":
-			return &agents.PlannerAgent{Model: model, Tools: registry, Memory: memory}
+			return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
 		case "react":
-			return &agents.ReActAgent{Model: model, Tools: registry, Memory: memory}
+			return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager}
 		case "eternal":
 			return &agents.EternalAgent{Model: model}
 		// TODO: Add support for creating agents directly from 'def' struct fields (system prompt, etc)
 		// For now we map them to existing Go structs.
 		default:
 			// Fallback to ReAct if unspecified but defined
-			return &agents.ReActAgent{Model: model, Tools: registry, Memory: memory, Mode: string(def.Spec.Mode)}
+			return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, Mode: string(def.Spec.Mode)}
 		}
 	}
 
 	switch cfg.AgentLabel() {
 	case "planner":
-		return &agents.PlannerAgent{Model: model, Tools: registry, Memory: memory}
+		return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
 	case "react":
-		return &agents.ReActAgent{Model: model, Tools: registry, Memory: memory}
+		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager}
 	case "reflection":
 		return &agents.ReflectionAgent{
 			Reviewer: model,
-			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: memory},
+			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager},
 		}
-	case "expert":
-		return &agents.ExpertCoderAgent{Model: model, Tools: registry, Memory: memory}
 	default:
-		return &agents.CodingAgent{Model: model, Tools: registry, Memory: memory}
+		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager}
 	}
 }
 
@@ -520,6 +521,16 @@ func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, ta
 		Metadata:    metaStrings,
 	}
 	return r.RunTask(ctx, task)
+}
+
+// ExecuteInstructionStream is like ExecuteInstruction but wires a streaming
+// callback so the LLM emits tokens incrementally via callback as they arrive.
+func (r *Runtime) ExecuteInstructionStream(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any, callback func(string)) (*core.Result, error) {
+	if metadata == nil {
+		metadata = make(map[string]any)
+	}
+	metadata["stream_callback"] = callback
+	return r.ExecuteInstruction(ctx, instruction, taskType, metadata)
 }
 
 // StartServer launches the HTTP API server. The returned stop function shuts
@@ -596,12 +607,16 @@ func (r *Runtime) ApproveHITL(requestID, approver string, scope fruntime.GrantSc
 	if scope == "" {
 		scope = fruntime.GrantScopeOneTime
 	}
+	var expiresAt time.Time
+	if duration > 0 {
+		expiresAt = time.Now().Add(duration)
+	}
 	decision := fruntime.PermissionDecision{
 		RequestID:  requestID,
 		Approved:   true,
 		ApprovedBy: approver,
 		Scope:      scope,
-		ExpiresAt:  time.Now().Add(duration),
+		ExpiresAt:  expiresAt,
 	}
 	return r.Registration.HITL.Approve(decision)
 }

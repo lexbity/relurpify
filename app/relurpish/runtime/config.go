@@ -24,6 +24,7 @@ type Config struct {
 	OllamaModel    string
 	AgentName      string
 	ServerAddr     string
+	RecordingMode  string
 	Sandbox        fruntime.SandboxConfig
 	AuditLimit     int
 	HITLTimeout    time.Duration
