@@ -5,16 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/agents"
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/memory"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/framework/toolsys"
-	"github.com/lexcodex/relurpify/llm"
 	"log"
 	"os"
 	"os/exec"
@@ -23,6 +13,18 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/agents"
+	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/memory"
+	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/telemetry"
+	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/llm"
 )
 
 type RunOptions struct {
@@ -399,8 +401,6 @@ func extractToolRegistry(agent graph.Agent) *toolsys.ToolRegistry {
 	switch a := agent.(type) {
 	case *agents.CodingAgent:
 		return a.Tools
-	case *agents.ExpertCoderAgent:
-		return a.Tools
 	case *agents.PlannerAgent:
 		return a.Tools
 	case *agents.ReActAgent:
@@ -522,6 +522,21 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 
 	audit := core.NewInMemoryAuditLogger(512)
 	hitl := fruntime.NewHITLBroker(30 * time.Second)
+	// Auto-approve all HITL requests in test runs — there is no human operator.
+	hitlEvents, hitlCancel := hitl.Subscribe(32)
+	go func() {
+		defer hitlCancel()
+		for event := range hitlEvents {
+			if event.Type == fruntime.HITLEventRequested && event.Request != nil {
+				_ = hitl.Approve(fruntime.PermissionDecision{
+					RequestID:  event.Request.ID,
+					Approved:   true,
+					ApprovedBy: "agenttest-auto",
+					Scope:      fruntime.GrantScopeSession,
+				})
+			}
+		}
+	}()
 	effectivePerms, err := manifest.ResolveEffectivePermissions(workspace, agentManifest)
 	if err != nil {
 		return nil, nil, err
@@ -553,7 +568,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		runner = fruntime.NewLocalCommandRunner(workspace, extraEnv)
 	}
 
-	registry, err := appruntime.BuildToolRegistry(workspace, runner, appruntime.ToolRegistryOptions{
+	registry, indexManager, err := appruntime.BuildToolRegistry(workspace, runner, appruntime.ToolRegistryOptions{
 		AgentID:           agentManifest.Metadata.Name,
 		PermissionManager: permMgr,
 		AgentSpec:         agentSpec,
@@ -571,7 +586,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		return nil, nil, err
 	}
 
-	agent := instantiateAgentByName(agentName, model, registry, memory)
+	agent := instantiateAgentByName(agentName, model, registry, memory, indexManager)
 
 	maxIterations := opts.MaxIterations
 	if maxIterations <= 0 {
@@ -611,9 +626,6 @@ func defaultAgenttestAllowedTools() []string {
 		"git_diff",
 		"git_history",
 		"git_blame",
-		"exec_run_tests",
-		"exec_run_build",
-		"exec_run_linter",
 		"query_ast",
 	}
 }
@@ -666,23 +678,21 @@ func (t *aliasTool) Permissions() core.ToolPermissions {
 }
 func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
-func instantiateAgentByName(name string, model core.LanguageModel, tools *toolsys.ToolRegistry, memory memory.MemoryStore) graph.Agent {
+func instantiateAgentByName(name string, model core.LanguageModel, tools *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
 	switch strings.ToLower(name) {
 	case "planner":
-		return &agents.PlannerAgent{Model: model, Tools: tools, Memory: memory}
+		return &agents.PlannerAgent{Model: model, Tools: tools, Memory: mem}
 	case "react":
-		return &agents.ReActAgent{Model: model, Tools: tools, Memory: memory}
+		return &agents.ReActAgent{Model: model, Tools: tools, Memory: mem, IndexManager: indexManager}
 	case "reflection":
 		return &agents.ReflectionAgent{
 			Reviewer: model,
-			Delegate: &agents.CodingAgent{Model: model, Tools: tools, Memory: memory},
+			Delegate: &agents.CodingAgent{Model: model, Tools: tools, Memory: mem, IndexManager: indexManager},
 		}
-	case "expert":
-		return &agents.ExpertCoderAgent{Model: model, Tools: tools, Memory: memory}
 	case "eternal":
 		return &agents.EternalAgent{Model: model}
 	default:
-		return &agents.CodingAgent{Model: model, Tools: tools, Memory: memory}
+		return &agents.CodingAgent{Model: model, Tools: tools, Memory: mem, IndexManager: indexManager}
 	}
 }
 

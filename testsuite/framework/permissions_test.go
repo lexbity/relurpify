@@ -45,6 +45,8 @@ func TestPermissionManagerAuthorizeToolEnforcesSubset(t *testing.T) {
 			{Action: core.FileSystemList, Path: "/workspace/**"},
 		},
 	})
+	// Use explicit Deny so undeclared permissions are hard-blocked without HITL.
+	manager.SetDefaultPolicy(runtime.AgentPermissionDeny)
 
 	okTool := stubTool{
 		name: "list",
