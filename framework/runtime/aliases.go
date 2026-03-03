@@ -20,6 +20,7 @@ type ToolPermissions = core.ToolPermissions
 type AgentManifest = manifest.AgentManifest
 type Agent = graph.Agent
 type Context = core.Context
+type AgentPermissionLevel = core.AgentPermissionLevel
 type Result = core.Result
 type Task = core.Task
 type Config = core.Config
@@ -44,5 +45,12 @@ const (
 	FileSystemList    = core.FileSystemList
 )
 
+const (
+	AgentPermissionAllow = core.AgentPermissionAllow
+	AgentPermissionAsk   = core.AgentPermissionAsk
+	AgentPermissionDeny  = core.AgentPermissionDeny
+)
+
 var LoadAgentManifest = manifest.LoadAgentManifest
+var SaveAgentManifest = manifest.SaveAgentManifest
 var NewInMemoryAuditLogger = core.NewInMemoryAuditLogger

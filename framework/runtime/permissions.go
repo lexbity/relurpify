@@ -15,15 +15,16 @@ const permissionMatchAll = "**"
 
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
-	basePath   string
-	declared   *PermissionSet
-	audit      AuditLogger
-	hitl       HITLProvider
-	runtime    SandboxRuntime
-	grants     map[string]*PermissionGrant
-	mu         sync.RWMutex
-	grantClock func() time.Time
-	netPolicy  []NetworkRule
+	basePath      string
+	declared      *PermissionSet
+	audit         AuditLogger
+	hitl          HITLProvider
+	runtime       SandboxRuntime
+	grants        map[string]*PermissionGrant
+	mu            sync.RWMutex
+	grantClock    func() time.Time
+	netPolicy     []NetworkRule
+	defaultPolicy AgentPermissionLevel // governs undeclared tool permissions; default is Ask
 }
 
 // NewPermissionManager creates an enforcement instance.
@@ -54,6 +55,24 @@ func (m *PermissionManager) AttachRuntime(runtime SandboxRuntime) {
 	if len(m.netPolicy) > 0 {
 		_ = runtime.EnforcePolicy(SandboxPolicy{NetworkRules: m.netPolicy})
 	}
+}
+
+// SetDefaultPolicy configures how undeclared permissions are handled.
+// AgentPermissionAsk (default) routes to HITL; Allow bypasses; Deny hard-blocks.
+func (m *PermissionManager) SetDefaultPolicy(level AgentPermissionLevel) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.defaultPolicy = level
+}
+
+// effectiveDefaultPolicy returns the configured policy, falling back to Ask.
+func (m *PermissionManager) effectiveDefaultPolicy() AgentPermissionLevel {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.defaultPolicy == "" {
+		return AgentPermissionAsk
+	}
+	return m.defaultPolicy
 }
 
 // inflateScopes rewrites any workspace placeholders inside the declared
@@ -92,6 +111,8 @@ func expandWorkspacePlaceholder(workspace, pattern string) string {
 }
 
 // AuthorizeTool ensures the tool requirements fit the declared permissions.
+// Undeclared permissions are handled according to the configured defaultPolicy:
+// Ask (default) routes to HITL, Allow proceeds, Deny returns an error.
 func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool Tool, args map[string]interface{}) error {
 	if m == nil || tool == nil {
 		return errors.New("permission manager or tool missing")
@@ -100,8 +121,24 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 	if err := requirements.Validate(); err != nil {
 		return fmt.Errorf("tool %s permission invalid: %w", tool.Name(), err)
 	}
-	if err := m.ensureSubset(requirements.Permissions); err != nil {
-		return fmt.Errorf("tool %s exceeds agent permissions: %w", tool.Name(), err)
+	undeclared := m.collectUndeclared(requirements.Permissions)
+	if len(undeclared) > 0 {
+		switch m.effectiveDefaultPolicy() {
+		case AgentPermissionDeny:
+			return fmt.Errorf("tool %s exceeds agent permissions: %s", tool.Name(), strings.Join(undeclared, "; "))
+		case AgentPermissionAllow:
+			// undeclared permissions are explicitly allowed — proceed
+		default: // AgentPermissionAsk
+			if err := m.RequireApproval(ctx, agentID, PermissionDescriptor{
+				Type:         PermissionTypeHITL,
+				Action:       fmt.Sprintf("tool:%s", tool.Name()),
+				Resource:     agentID,
+				RequiresHITL: true,
+			}, fmt.Sprintf("tool %s requires: %s", tool.Name(), strings.Join(undeclared, ", ")),
+				GrantScopeSession, RiskLevelMedium, 0); err != nil {
+				return err
+			}
+		}
 	}
 	desc := PermissionDescriptor{
 		Type:     PermissionTypeHITL,
@@ -123,11 +160,21 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 	}
 	perm := m.findFilesystemPermission(action, clean)
 	if perm == nil {
-		return m.deny(ctx, agentID, PermissionDescriptor{
+		desc := PermissionDescriptor{
 			Type:     PermissionTypeFilesystem,
 			Action:   string(action),
 			Resource: clean,
-		}, "not declared")
+		}
+		switch m.effectiveDefaultPolicy() {
+		case AgentPermissionAllow:
+			m.log(ctx, agentID, desc, "granted (default allow)", nil)
+			return nil
+		case AgentPermissionDeny:
+			return m.deny(ctx, agentID, desc, "not declared")
+		default: // AgentPermissionAsk
+			desc.RequiresHITL = true
+			return m.ensureGrant(ctx, agentID, desc)
+		}
 	}
 	if perm.HITLRequired {
 		if err := m.ensureGrant(ctx, agentID, PermissionDescriptor{
@@ -153,11 +200,21 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary string, args []string, env []string) error {
 	perm := m.findExecutablePermission(binary)
 	if perm == nil {
-		return m.deny(ctx, agentID, PermissionDescriptor{
+		desc := PermissionDescriptor{
 			Type:     PermissionTypeExecutable,
 			Action:   fmt.Sprintf("exec:binary:%s", binary),
 			Resource: binary,
-		}, "binary not declared")
+		}
+		switch m.effectiveDefaultPolicy() {
+		case AgentPermissionAllow:
+			m.log(ctx, agentID, desc, "granted (default allow)", nil)
+			return nil
+		case AgentPermissionDeny:
+			return m.deny(ctx, agentID, desc, "binary not declared")
+		default: // AgentPermissionAsk
+			desc.RequiresHITL = true
+			return m.ensureGrant(ctx, agentID, desc)
+		}
 	}
 	if len(perm.Args) > 0 && !matchArgs(perm.Args, args) {
 		return m.deny(ctx, agentID, PermissionDescriptor{
@@ -198,11 +255,21 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, direction string, protocol string, host string, port int) error {
 	perm := m.findNetworkPermission(direction, protocol, host, port)
 	if perm == nil {
-		return m.deny(ctx, agentID, PermissionDescriptor{
+		desc := PermissionDescriptor{
 			Type:     PermissionTypeNetwork,
 			Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
 			Resource: host,
-		}, "network scope missing")
+		}
+		switch m.effectiveDefaultPolicy() {
+		case AgentPermissionAllow:
+			m.log(ctx, agentID, desc, "granted (default allow)", nil)
+			return nil
+		case AgentPermissionDeny:
+			return m.deny(ctx, agentID, desc, "network scope missing")
+		default: // AgentPermissionAsk
+			desc.RequiresHITL = true
+			return m.ensureGrant(ctx, agentID, desc)
+		}
 	}
 	if perm.HITLRequired {
 		if err := m.ensureGrant(ctx, agentID, PermissionDescriptor{
@@ -290,29 +357,26 @@ func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind s
 	return nil
 }
 
-// ensureSubset verifies a tool-declared permission set is a subset of the
-// manifest permissions before the tool is callable.
-func (m *PermissionManager) ensureSubset(requirements *PermissionSet) error {
-	// Default deny posture ensures every tool scope must be included.
-	check := func(action FileSystemAction, path string) bool {
-		return m.findFilesystemPermission(action, path) != nil
-	}
+// collectUndeclared returns human-readable descriptions of any permissions
+// required by the tool that are not covered by the agent manifest.
+func (m *PermissionManager) collectUndeclared(requirements *PermissionSet) []string {
+	var missing []string
 	for _, perm := range requirements.FileSystem {
-		if !check(perm.Action, perm.Path) {
-			return fmt.Errorf("fs permission %s %s missing", perm.Action, perm.Path)
+		if m.findFilesystemPermission(perm.Action, perm.Path) == nil {
+			missing = append(missing, fmt.Sprintf("fs %s %s", perm.Action, perm.Path))
 		}
 	}
 	for _, exec := range requirements.Executables {
 		if m.findExecutablePermission(exec.Binary) == nil {
-			return fmt.Errorf("exec %s not allowed", exec.Binary)
+			missing = append(missing, fmt.Sprintf("exec %s", exec.Binary))
 		}
 	}
 	for _, net := range requirements.Network {
 		if m.findNetworkPermission(net.Direction, net.Protocol, net.Host, net.Port) == nil {
-			return fmt.Errorf("network %s %s missing", net.Direction, net.Host)
+			missing = append(missing, fmt.Sprintf("net %s %s", net.Direction, net.Host))
 		}
 	}
-	return nil
+	return missing
 }
 
 // normalizePath sanitizes user input by resolving relative segments and

@@ -57,6 +57,11 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if err != nil {
 		return nil, fmt.Errorf("permission manager init: %w", err)
 	}
+	if agentManifest.Spec.Policies != nil {
+		if policy, ok := agentManifest.Spec.Policies["default_tool_policy"]; ok {
+			permissions.SetDefaultPolicy(policy)
+		}
+	}
 	permissions.AttachRuntime(runtime)
 	networkRules := buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
 	policy := SandboxPolicy{
