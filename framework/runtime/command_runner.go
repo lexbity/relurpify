@@ -29,11 +29,14 @@ type CommandRunner interface {
 
 // SandboxCommandRunner launches commands via the configured gVisor runtime.
 type SandboxCommandRunner struct {
-	config         SandboxConfig
-	image          string
-	workspace      string
-	workspaceSlash string
-	user           int
+	config          SandboxConfig
+	rt              SandboxRuntime
+	image           string
+	workspace       string
+	workspaceSlash  string
+	user            int
+	readOnlyRoot    bool
+	noNewPrivileges bool
 }
 
 // NewSandboxCommandRunner wires the manifest/runtime metadata into a runner.
@@ -53,11 +56,14 @@ func NewSandboxCommandRunner(manifest *manifest.AgentManifest, runtime SandboxRu
 	}
 	absWorkspace = filepath.Clean(absWorkspace)
 	return &SandboxCommandRunner{
-		config:         runtime.RunConfig(),
-		image:          manifest.Spec.Image,
-		workspace:      absWorkspace,
-		workspaceSlash: filepath.ToSlash(absWorkspace),
-		user:           manifest.Spec.Security.RunAsUser,
+		config:          runtime.RunConfig(),
+		rt:              runtime,
+		image:           manifest.Spec.Image,
+		workspace:       absWorkspace,
+		workspaceSlash:  filepath.ToSlash(absWorkspace),
+		user:            manifest.Spec.Security.RunAsUser,
+		readOnlyRoot:    manifest.Spec.Security.ReadOnlyRoot,
+		noNewPrivileges: manifest.Spec.Security.NoNewPrivileges,
 	}, nil
 }
 
@@ -84,6 +90,21 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 	args := []string{"run", "--rm", "--runtime", runtimeName, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir}
 	if r.user > 0 {
 		args = append(args, "-u", strconv.Itoa(r.user))
+	}
+	if r.readOnlyRoot {
+		args = append(args, "--read-only")
+	}
+	if r.noNewPrivileges {
+		args = append(args, "--security-opt", "no-new-privileges")
+	}
+	if r.config.SeccompProfile != "" {
+		args = append(args, "--security-opt", "seccomp="+r.config.SeccompProfile)
+	}
+	// Network isolation: use --network none when requested and no specific
+	// egress rules are declared (rules are enforced by PermissionManager instead).
+	policy := r.rt.Policy()
+	if r.config.NetworkIsolation && len(policy.NetworkRules) == 0 {
+		args = append(args, "--network", "none")
 	}
 	for _, env := range req.Env {
 		if env == "" {

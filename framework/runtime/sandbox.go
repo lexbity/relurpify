@@ -16,6 +16,8 @@ type SandboxRuntime interface {
 	Verify(ctx context.Context) error
 	RunConfig() SandboxConfig
 	EnforcePolicy(policy SandboxPolicy) error
+	// Policy returns the currently enforced sandbox policy.
+	Policy() SandboxPolicy
 }
 
 // SandboxConfig exposes runtime knobs.
@@ -103,6 +105,13 @@ func (g *GVisorRuntime) EnforcePolicy(policy SandboxPolicy) error {
 	defer g.mu.Unlock()
 	g.policy = policy
 	return nil
+}
+
+// Policy returns the currently enforced sandbox policy.
+func (g *GVisorRuntime) Policy() SandboxPolicy {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.policy
 }
 
 // checkRunsc validates the runsc binary exists and matches the expected

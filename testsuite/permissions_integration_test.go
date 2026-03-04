@@ -132,6 +132,12 @@ func (r *recordingRuntime) EnforcePolicy(policy runtime.SandboxPolicy) error {
 	r.policies = append(r.policies, policy)
 	return nil
 }
+func (r *recordingRuntime) Policy() runtime.SandboxPolicy {
+	if len(r.policies) == 0 {
+		return runtime.SandboxPolicy{}
+	}
+	return r.policies[len(r.policies)-1]
+}
 
 type permissionedTool struct {
 	toolName string
