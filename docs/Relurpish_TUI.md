@@ -38,10 +38,6 @@ Available subcommands:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  TitleBar  [ agent · model · workspace ]            │
-├─────────────────────────────────────────────────────┤
-│  TabBar  [ 1 Chat | 2 Tasks | 3 Session |           │
-│            4 Settings | 5 Tools ]                   │
 ├─────────────────────────────────────────────────────┤
 │                                                     │
 │              Active Pane                            │
@@ -49,7 +45,10 @@ Available subcommands:
 ├─────────────────────────────────────────────────────┤
 │  NotificationBar  (HITL prompts · toasts)           │
 ├─────────────────────────────────────────────────────┤
-│  InputBar  (prompt · /commands)                     │
+│  >>> InputBar  (prompt · /commands)                     │
+├─────────────────────────────────────────────────────┤
+|   TabBar  [ 1 Chat | 2 Tasks | 3 Session |          │
+│            4 Settings | 5 Tools ]                   |
 └─────────────────────────────────────────────────────┘
 ```
 

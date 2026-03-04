@@ -73,3 +73,32 @@ open docs/index.html   # or serve docs/ via any static file server
 # Further Details
 
 Checkout docs/
+
+
+# Roadmap
+
+- [x] core graph oriented library
+- [x] gVisor + permissions integration + HTIL
+- [x] AST and context manager (context compression)
+- [x] core framework unit tests
+- [x] planner agent
+- [x] react agent 
+- [x] Coder (modal) agent
+- [x] Ollama integration 
+- [x] Automated Agent testsuite 
+- [] Extend Agent testsuite with standardized agent benchmarks (improvement over trust-me-bro^tm benchmarks)
+- [] standard CLI-TUI interface for Agents
+    - [x] Coder Agent support
+    - [x] Chat
+    - [x] Tasks
+    - [x] Settings
+    - [x] Setup Wizard
+    - [x] Notifications with HTIL support 
+- [x] Documentation 
+- [] Node-based Workflow App (GUI) 
+    - [] Terminal integration 
+    - [] Relurpish TUI support 
+    - [] Basic Nodeset 
+    - [] Script Node 
+    - [] Skill Node(s)
+- [] (more experiments to come)
