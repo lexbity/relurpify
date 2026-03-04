@@ -1,3 +1,6 @@
+// Package ast provides code parsing and AST indexing across multiple languages.
+// IndexManager orchestrates incremental symbol detection, language detection, and
+// persistence of parsed symbols to an index store for use by search and context tools.
 package ast
 
 import (

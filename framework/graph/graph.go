@@ -1,3 +1,7 @@
+// Package graph provides a deterministic state-machine workflow runtime for agents.
+// It executes directed graphs of typed nodes (LLM, Tool, Conditional, Human, Terminal,
+// System, Observation) connected by conditional or unconditional edges, recording
+// telemetry at each step and enforcing cycle guards.
 package graph
 
 import (

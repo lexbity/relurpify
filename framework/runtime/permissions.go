@@ -1,3 +1,8 @@
+// Package runtime enforces agent permission contracts at execution time.
+// PermissionManager authorises tool calls, file access, executable invocations, and
+// network requests against permissions declared in the agent manifest, applying a
+// three-level policy (Allow / Ask / Deny) with Human-in-the-Loop approval flows
+// and configurable GrantScope (OneTime, Session, Persistent).
 package runtime
 
 import (

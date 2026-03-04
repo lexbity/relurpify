@@ -1,3 +1,7 @@
+// Package contextmgr manages context items within LLM token budgets.
+// It provides pluggable pruning strategies (Progressive, Conservative, Aggressive)
+// and a ProgressiveLoader for lazy file loading, ensuring agents stay within model
+// context limits while retaining the most relevant information.
 package contextmgr
 
 import (

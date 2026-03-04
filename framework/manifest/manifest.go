@@ -1,3 +1,7 @@
+// Package manifest parses and serialises agent security contracts expressed as
+// YAML manifests (apiVersion: relurpify/v1alpha1, kind: AgentManifest).
+// It defines the AgentManifest schema covering metadata, permissions, resources,
+// security policy, audit settings, and skill dependencies.
 package manifest
 
 import (

@@ -1,3 +1,6 @@
+// Package telemetry provides audit logging and execution tracing for agent runs.
+// It collects structured records of node executions, tool calls, and LLM interactions,
+// supporting retention-based audit policies defined in the agent manifest.
 package telemetry
 
 import (

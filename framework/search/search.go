@@ -1,3 +1,7 @@
+// Package search provides a context retrieval engine for agents.
+// It supports semantic (vector), keyword, hybrid, and symbol-only search modes,
+// abstracting over VectorStore backends and returning ranked SearchResults with
+// file path, snippet, and relevance score.
 package search
 
 import (

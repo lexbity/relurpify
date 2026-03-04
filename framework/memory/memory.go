@@ -1,3 +1,6 @@
+// Package memory provides a hybrid in-memory and disk-backed storage system for agents.
+// It supports session, project, and global scopes with Remember, Recall, Search, Forget,
+// and Summarise operations, persisting items as JSON files for durability across restarts.
 package memory
 
 import (

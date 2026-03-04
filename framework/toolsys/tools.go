@@ -1,3 +1,7 @@
+// Package toolsys implements the central tool registry for the agent framework.
+// ToolRegistry maintains the catalog of available tools, provides permission-aware
+// filtering so agents only see tools their manifest permits, and supports dynamic
+// per-tool and per-tag execution policy updates that can be persisted to the manifest.
 package toolsys
 
 import (
