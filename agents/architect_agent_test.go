@@ -141,7 +141,7 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 	if llm.generateCalls == 0 || llm.withToolsCalls == 0 {
 		t.Fatalf("expected planner and executor llm calls, got generate=%d withTools=%d", llm.generateCalls, llm.withToolsCalls)
 	}
-	completed := stringSliceFromState(state, "architect.completed_steps")
+	completed := core.StringSliceFromContext(state, "architect.completed_steps")
 	if len(completed) != 1 || completed[0] != "step-1" {
 		t.Fatalf("expected completed step tracking, got %v", completed)
 	}
@@ -274,7 +274,7 @@ func TestArchitectAgentResumesLatestWorkflow(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success result, got %+v", result)
 	}
-	completed := stringSliceFromState(resumeState, "architect.completed_steps")
+	completed := core.StringSliceFromContext(resumeState, "architect.completed_steps")
 	if len(completed) != 2 {
 		t.Fatalf("expected resumed execution to finish remaining step, got %v", completed)
 	}
@@ -424,7 +424,7 @@ func TestArchitectAgentResumesWorkflowAcrossNewTaskID(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success result, got %+v", result)
 	}
-	completed := stringSliceFromState(resumeState, "architect.completed_steps")
+	completed := core.StringSliceFromContext(resumeState, "architect.completed_steps")
 	if len(completed) != 2 {
 		t.Fatalf("expected resumed execution to finish remaining step, got %v", completed)
 	}

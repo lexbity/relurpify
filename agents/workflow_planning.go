@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/pattern"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/persistence"
@@ -47,7 +48,7 @@ func (s *WorkflowPlanningService) PlanAndPersist(ctx context.Context, task *core
 		return nil, err
 	}
 
-	plannerTask := cloneArchitectTask(task)
+	plannerTask := core.CloneTask(task)
 	if selectedCandidate != "" {
 		plannerTask.Instruction = fmt.Sprintf("%s\n\nPreferred approach:\n%s", task.Instruction, selectedCandidate)
 	}
@@ -238,7 +239,7 @@ Task: %s`, planningHints, task.Instruction)
 			Tradeoffs string `json:"tradeoffs"`
 		} `json:"candidates"`
 	}
-	if err := json.Unmarshal([]byte(extractArchitectJSON(resp.Text)), &generated); err != nil || len(generated.Candidates) == 0 {
+	if err := json.Unmarshal([]byte(pattern.ExtractJSON(resp.Text)), &generated); err != nil || len(generated.Candidates) == 0 {
 		return "", nil
 	}
 	if state != nil {
@@ -266,7 +267,7 @@ Candidates:
 		ID     string `json:"id"`
 		Reason string `json:"reason"`
 	}
-	if err := json.Unmarshal([]byte(extractArchitectJSON(selectionResp.Text)), &selection); err != nil || selection.ID == "" {
+	if err := json.Unmarshal([]byte(pattern.ExtractJSON(selectionResp.Text)), &selection); err != nil || selection.ID == "" {
 		return "", nil
 	}
 	for _, candidate := range generated.Candidates {

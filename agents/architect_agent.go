@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/pattern"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -128,7 +129,7 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 	if err != nil {
 		return nil, err
 	}
-	plannerTask := cloneArchitectTask(task)
+	plannerTask := core.CloneTask(task)
 	if selection != "" {
 		plannerTask.Instruction = fmt.Sprintf("%s\n\nPreferred approach:\n%s", task.Instruction, selection)
 	}
@@ -161,7 +162,7 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 				state.Set("architect.current_step_id", step.ID)
 			},
 			AfterStep: func(step core.PlanStep, state *core.Context, result *core.Result) {
-				completed := append([]string{}, stringSliceFromState(state, "architect.completed_steps")...)
+				completed := append([]string{}, core.StringSliceFromContext(state, "architect.completed_steps")...)
 				if !containsString(completed, step.ID) {
 					completed = append(completed, step.ID)
 				}
@@ -178,7 +179,7 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 	if err != nil {
 		return nil, err
 	}
-	verifySummary := fmt.Sprintf("Planned %d steps and executed %d steps.", len(plan.Steps), len(stringSliceFromState(state, "architect.completed_steps")))
+	verifySummary := fmt.Sprintf("Planned %d steps and executed %d steps.", len(plan.Steps), len(core.StringSliceFromContext(state, "architect.completed_steps")))
 	state.Set("architect.summary", verifySummary)
 	if execResult.Data == nil {
 		execResult.Data = map[string]any{}
@@ -336,7 +337,7 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 		lastResult = res
 	}
 
-	summary := fmt.Sprintf("Planned %d steps and executed %d steps.", len(planRecord.Plan.Steps), len(stringSliceFromState(state, "architect.completed_steps")))
+	summary := fmt.Sprintf("Planned %d steps and executed %d steps.", len(planRecord.Plan.Steps), len(core.StringSliceFromContext(state, "architect.completed_steps")))
 	state.Set("architect.summary", summary)
 	state.Set("architect.workflow_id", workflowID)
 	state.Set("architect.run_id", runID)
@@ -394,8 +395,8 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	stepState.Set("architect.run_id", runID)
 	stepState.Set("architect.plan", plan)
 	stepState.Set("planner.plan", plan)
-	stepState.Set("architect.completed_steps", stringSliceFromState(state, "architect.completed_steps"))
-	stepState.Set("plan.completed_steps", stringSliceFromState(state, "architect.completed_steps"))
+	stepState.Set("architect.completed_steps", core.StringSliceFromContext(state, "architect.completed_steps"))
+	stepState.Set("plan.completed_steps", core.StringSliceFromContext(state, "architect.completed_steps"))
 
 	previousSummary := dependencySummary(stepSlice.DependencyRuns)
 	if previousSummary != "" {
@@ -509,7 +510,7 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 		}
 		return nil, fmt.Errorf("step %s failed: %s", step.StepID, summary)
 	}
-	completed := append([]string{}, stringSliceFromState(state, "architect.completed_steps")...)
+	completed := append([]string{}, core.StringSliceFromContext(state, "architect.completed_steps")...)
 	if !containsString(completed, step.StepID) {
 		completed = append(completed, step.StepID)
 	}
@@ -574,7 +575,7 @@ func (a *ArchitectAgent) openWorkflowStateStore() (*persistence.SQLiteWorkflowSt
 
 func buildWorkflowStepTask(task *core.Task, plan core.Plan, slice *persistence.WorkflowStepSlice, previousSummary string) *core.Task {
 	step := slice.Step.Step
-	stepTask := cloneArchitectTask(task)
+	stepTask := core.CloneTask(task)
 	if stepTask == nil {
 		stepTask = &core.Task{}
 	}
@@ -879,26 +880,6 @@ func architectRecordID(prefix string) string {
 	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
 }
 
-func cloneArchitectTask(task *core.Task) *core.Task {
-	if task == nil {
-		return nil
-	}
-	clone := *task
-	if task.Context != nil {
-		clone.Context = make(map[string]any, len(task.Context))
-		for k, v := range task.Context {
-			clone.Context[k] = v
-		}
-	}
-	if task.Metadata != nil {
-		clone.Metadata = make(map[string]string, len(task.Metadata))
-		for k, v := range task.Metadata {
-			clone.Metadata[k] = v
-		}
-	}
-	return &clone
-}
-
 func (a *ArchitectAgent) diagnoseStepFailure(ctx context.Context, step core.PlanStep, err error) (string, error) {
 	if err == nil {
 		return "", nil
@@ -949,7 +930,7 @@ Last error: %v`, step.Description, step.Files, state.GetString("architect.last_s
 				Diagnosis string   `json:"diagnosis"`
 				Notes     []string `json:"notes"`
 			}
-			if jsonErr := json.Unmarshal([]byte(extractArchitectJSON(resp.Text)), &parsed); jsonErr == nil {
+			if jsonErr := json.Unmarshal([]byte(pattern.ExtractJSON(resp.Text)), &parsed); jsonErr == nil {
 				if strings.TrimSpace(parsed.Diagnosis) != "" {
 					recovery.Diagnosis = strings.TrimSpace(parsed.Diagnosis)
 				}
@@ -1054,31 +1035,6 @@ func (a *ArchitectAgent) executeRecoveryTool(ctx context.Context, registry *tool
 		return nil, nil
 	}
 	return tool.Execute(ctx, state, args)
-}
-
-func stringSliceFromState(state *core.Context, key string) []string {
-	if state == nil {
-		return nil
-	}
-	raw, ok := state.Get(key)
-	if !ok || raw == nil {
-		return nil
-	}
-	switch values := raw.(type) {
-	case []string:
-		return append([]string{}, values...)
-	case []any:
-		out := make([]string, 0, len(values))
-		for _, value := range values {
-			if value == nil {
-				continue
-			}
-			out = append(out, fmt.Sprint(value))
-		}
-		return out
-	default:
-		return nil
-	}
 }
 
 func summarizeStepResult(step core.PlanStep, result *core.Result) string {
@@ -1229,15 +1185,6 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func extractArchitectJSON(raw string) string {
-	start := strings.Index(raw, "{")
-	end := strings.LastIndex(raw, "}")
-	if start >= 0 && end >= start {
-		return raw[start : end+1]
-	}
-	return "{}"
 }
 
 func optionalContextString(values map[string]any, key string) string {

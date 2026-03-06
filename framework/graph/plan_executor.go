@@ -152,28 +152,7 @@ func ValidatePlan(plan *core.Plan) error {
 }
 
 func completedStepIDs(state *core.Context) []string {
-	if state == nil {
-		return nil
-	}
-	raw, ok := state.Get("plan.completed_steps")
-	if !ok || raw == nil {
-		return nil
-	}
-	switch values := raw.(type) {
-	case []string:
-		return append([]string{}, values...)
-	case []any:
-		out := make([]string, 0, len(values))
-		for _, value := range values {
-			if value == nil {
-				continue
-			}
-			out = append(out, fmt.Sprint(value))
-		}
-		return out
-	default:
-		return nil
-	}
+	return core.StringSliceFromContext(state, "plan.completed_steps")
 }
 
 func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context, maxRecovery int) error {
@@ -291,26 +270,6 @@ func applyStepRecovery(stepTask *core.Task, state *core.Context, step core.PlanS
 			state.Set(key+".context", recovery.Context)
 		}
 	}
-}
-
-func cloneTask(task *core.Task) *core.Task {
-	if task == nil {
-		return nil
-	}
-	clone := *task
-	if task.Context != nil {
-		clone.Context = make(map[string]any, len(task.Context))
-		for k, v := range task.Context {
-			clone.Context[k] = v
-		}
-	}
-	if task.Metadata != nil {
-		clone.Metadata = make(map[string]string, len(task.Metadata))
-		for k, v := range task.Metadata {
-			clone.Metadata[k] = v
-		}
-	}
-	return &clone
 }
 
 func validatePlanDependencies(plan *core.Plan) error {
