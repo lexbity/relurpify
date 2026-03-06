@@ -4,22 +4,23 @@ import "strings"
 
 // AgentSpecOverlay defines optional overrides for an agent spec.
 type AgentSpecOverlay struct {
-	Implementation    *string                  `yaml:"implementation,omitempty" json:"implementation,omitempty"`
-	Mode              *AgentMode               `yaml:"mode,omitempty" json:"mode,omitempty"`
-	Version           *string                  `yaml:"version,omitempty" json:"version,omitempty"`
-	Prompt            *string                  `yaml:"prompt,omitempty" json:"prompt,omitempty"`
-	ModelOverlay      *AgentModelConfigOverlay `yaml:"model,omitempty" json:"model,omitempty"`
-	AllowedTools      []string                 `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
+	Implementation      *string                  `yaml:"implementation,omitempty" json:"implementation,omitempty"`
+	Mode                *AgentMode               `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Version             *string                  `yaml:"version,omitempty" json:"version,omitempty"`
+	Prompt              *string                  `yaml:"prompt,omitempty" json:"prompt,omitempty"`
+	ModelOverlay        *AgentModelConfigOverlay `yaml:"model,omitempty" json:"model,omitempty"`
+	AllowedTools        []string                 `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
 	ToolExecutionPolicy map[string]ToolPolicy    `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
-	Bash              *AgentBashPermissions    `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
-	Files             *AgentFileMatrix         `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
-	Invocation        *AgentInvocationSpec     `yaml:"invocation,omitempty" json:"invocation,omitempty"`
-	ContextOverlay    *AgentContextSpecOverlay `yaml:"context,omitempty" json:"context,omitempty"`
-	LSPOverlay        *AgentLSPSpecOverlay     `yaml:"lsp,omitempty" json:"lsp,omitempty"`
-	SearchOverlay     *AgentSearchSpecOverlay  `yaml:"search,omitempty" json:"search,omitempty"`
-	Metadata          *AgentMetadata           `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	OllamaToolCalling *bool                    `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
-	Logging           *AgentLoggingSpec        `yaml:"logging,omitempty" json:"logging,omitempty"`
+	SkillConfig         *AgentSkillConfig        `yaml:"skill_config,omitempty" json:"skill_config,omitempty"`
+	Bash                *AgentBashPermissions    `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
+	Files               *AgentFileMatrix         `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
+	Invocation          *AgentInvocationSpec     `yaml:"invocation,omitempty" json:"invocation,omitempty"`
+	ContextOverlay      *AgentContextSpecOverlay `yaml:"context,omitempty" json:"context,omitempty"`
+	LSPOverlay          *AgentLSPSpecOverlay     `yaml:"lsp,omitempty" json:"lsp,omitempty"`
+	SearchOverlay       *AgentSearchSpecOverlay  `yaml:"search,omitempty" json:"search,omitempty"`
+	Metadata            *AgentMetadata           `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	OllamaToolCalling   *bool                    `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
+	Logging             *AgentLoggingSpec        `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
 
 // MergeAgentSpecs applies overlays to a base spec in order.
@@ -71,6 +72,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		VectorIndex:   &spec.Search.VectorIndex,
 		ASTIndex:      &spec.Search.ASTIndex,
 	}
+	skillConfig := cloneAgentSkillConfig(spec.SkillConfig)
 	metadata := spec.Metadata
 	toolCalling := spec.OllamaToolCalling
 	var logging *AgentLoggingSpec
@@ -80,22 +82,23 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		logging = &AgentLoggingSpec{LLM: llm, Agent: agent}
 	}
 	return AgentSpecOverlay{
-		Implementation:    &implementation,
-		Mode:              &mode,
-		Version:           &version,
-		Prompt:            &prompt,
-		ModelOverlay:      &modelOverlay,
-		AllowedTools:      allowedTools,
+		Implementation:      &implementation,
+		Mode:                &mode,
+		Version:             &version,
+		Prompt:              &prompt,
+		ModelOverlay:        &modelOverlay,
+		AllowedTools:        allowedTools,
 		ToolExecutionPolicy: cloneToolPolicies(spec.ToolExecutionPolicy),
-		Bash:              &bash,
-		Files:             &files,
-		Invocation:        &invocation,
-		ContextOverlay:    &contextOverlay,
-		LSPOverlay:        &lspOverlay,
-		SearchOverlay:     &searchOverlay,
-		Metadata:          &metadata,
-		OllamaToolCalling: toolCalling,
-		Logging:           logging,
+		SkillConfig:         &skillConfig,
+		Bash:                &bash,
+		Files:               &files,
+		Invocation:          &invocation,
+		ContextOverlay:      &contextOverlay,
+		LSPOverlay:          &lspOverlay,
+		SearchOverlay:       &searchOverlay,
+		Metadata:            &metadata,
+		OllamaToolCalling:   toolCalling,
+		Logging:             logging,
 	}
 }
 
@@ -126,6 +129,9 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 		for name, policy := range overlay.ToolExecutionPolicy {
 			spec.ToolExecutionPolicy[name] = policy
 		}
+	}
+	if overlay.SkillConfig != nil {
+		spec.SkillConfig = mergeAgentSkillConfig(spec.SkillConfig, *overlay.SkillConfig)
 	}
 	if overlay.Bash != nil {
 		spec.Bash = *overlay.Bash
@@ -175,6 +181,7 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 	if spec.ToolExecutionPolicy != nil {
 		clone.ToolExecutionPolicy = cloneToolPolicies(spec.ToolExecutionPolicy)
 	}
+	clone.SkillConfig = cloneAgentSkillConfig(spec.SkillConfig)
 	if spec.AllowedTools != nil {
 		clone.AllowedTools = append([]string{}, spec.AllowedTools...)
 	}
@@ -229,4 +236,128 @@ func cloneToolPolicies(policies map[string]ToolPolicy) map[string]ToolPolicy {
 		clone[name] = policy
 	}
 	return clone
+}
+
+func cloneAgentSkillConfig(input AgentSkillConfig) AgentSkillConfig {
+	out := AgentSkillConfig{
+		Verification: input.Verification,
+		Recovery:     input.Recovery,
+		Planning:     input.Planning,
+		Review:       input.Review,
+		ContextHints: input.ContextHints,
+	}
+	if input.PhaseTools != nil {
+		out.PhaseTools = make(map[string][]string, len(input.PhaseTools))
+		for phase, tools := range input.PhaseTools {
+			out.PhaseTools[phase] = append([]string{}, tools...)
+		}
+	}
+	if input.PhaseSelectors != nil {
+		out.PhaseSelectors = make(map[string][]SkillToolSelector, len(input.PhaseSelectors))
+		for phase, selectors := range input.PhaseSelectors {
+			out.PhaseSelectors[phase] = append([]SkillToolSelector{}, selectors...)
+		}
+	}
+	out.Verification.SuccessTools = append([]string{}, input.Verification.SuccessTools...)
+	out.Verification.SuccessSelectors = append([]SkillToolSelector{}, input.Verification.SuccessSelectors...)
+	out.Recovery.FailureProbeTools = append([]string{}, input.Recovery.FailureProbeTools...)
+	out.Recovery.FailureProbeSelectors = append([]SkillToolSelector{}, input.Recovery.FailureProbeSelectors...)
+	out.Planning.RequiredBeforeEdit = append([]SkillToolSelector{}, input.Planning.RequiredBeforeEdit...)
+	out.Planning.PreferredEditTools = append([]SkillToolSelector{}, input.Planning.PreferredEditTools...)
+	out.Planning.PreferredVerifyTools = append([]SkillToolSelector{}, input.Planning.PreferredVerifyTools...)
+	out.Planning.StepTemplates = append([]SkillStepTemplate{}, input.Planning.StepTemplates...)
+	out.Review.Criteria = append([]string{}, input.Review.Criteria...)
+	out.Review.FocusTags = append([]string{}, input.Review.FocusTags...)
+	if input.Review.SeverityWeights != nil {
+		out.Review.SeverityWeights = make(map[string]float64, len(input.Review.SeverityWeights))
+		for k, v := range input.Review.SeverityWeights {
+			out.Review.SeverityWeights[k] = v
+		}
+	}
+	out.ContextHints.ProtectPatterns = append([]string{}, input.ContextHints.ProtectPatterns...)
+	return out
+}
+
+func mergeAgentSkillConfig(base, overlay AgentSkillConfig) AgentSkillConfig {
+	merged := cloneAgentSkillConfig(base)
+	if overlay.PhaseTools != nil {
+		if merged.PhaseTools == nil {
+			merged.PhaseTools = make(map[string][]string, len(overlay.PhaseTools))
+		}
+		for phase, tools := range overlay.PhaseTools {
+			merged.PhaseTools[phase] = mergeStringList(merged.PhaseTools[phase], tools)
+		}
+	}
+	if overlay.PhaseSelectors != nil {
+		if merged.PhaseSelectors == nil {
+			merged.PhaseSelectors = make(map[string][]SkillToolSelector, len(overlay.PhaseSelectors))
+		}
+		for phase, selectors := range overlay.PhaseSelectors {
+			merged.PhaseSelectors[phase] = mergeSkillToolSelectors(merged.PhaseSelectors[phase], selectors)
+		}
+	}
+	merged.Verification.SuccessTools = mergeStringList(merged.Verification.SuccessTools, overlay.Verification.SuccessTools)
+	merged.Verification.SuccessSelectors = mergeSkillToolSelectors(merged.Verification.SuccessSelectors, overlay.Verification.SuccessSelectors)
+	merged.Verification.StopOnSuccess = merged.Verification.StopOnSuccess || overlay.Verification.StopOnSuccess
+	merged.Recovery.FailureProbeTools = mergeStringList(merged.Recovery.FailureProbeTools, overlay.Recovery.FailureProbeTools)
+	merged.Recovery.FailureProbeSelectors = mergeSkillToolSelectors(merged.Recovery.FailureProbeSelectors, overlay.Recovery.FailureProbeSelectors)
+	merged.Planning.RequiredBeforeEdit = mergeSkillToolSelectors(merged.Planning.RequiredBeforeEdit, overlay.Planning.RequiredBeforeEdit)
+	merged.Planning.PreferredEditTools = mergeSkillToolSelectors(merged.Planning.PreferredEditTools, overlay.Planning.PreferredEditTools)
+	merged.Planning.PreferredVerifyTools = mergeSkillToolSelectors(merged.Planning.PreferredVerifyTools, overlay.Planning.PreferredVerifyTools)
+	merged.Planning.StepTemplates = mergeStepTemplates(merged.Planning.StepTemplates, overlay.Planning.StepTemplates)
+	merged.Planning.RequireVerificationStep = merged.Planning.RequireVerificationStep || overlay.Planning.RequireVerificationStep
+	merged.Review.Criteria = mergeStringList(merged.Review.Criteria, overlay.Review.Criteria)
+	merged.Review.FocusTags = mergeStringList(merged.Review.FocusTags, overlay.Review.FocusTags)
+	merged.Review.ApprovalRules.RequireVerificationEvidence = merged.Review.ApprovalRules.RequireVerificationEvidence || overlay.Review.ApprovalRules.RequireVerificationEvidence
+	merged.Review.ApprovalRules.RejectOnUnresolvedErrors = merged.Review.ApprovalRules.RejectOnUnresolvedErrors || overlay.Review.ApprovalRules.RejectOnUnresolvedErrors
+	if overlay.Review.SeverityWeights != nil {
+		if merged.Review.SeverityWeights == nil {
+			merged.Review.SeverityWeights = make(map[string]float64, len(overlay.Review.SeverityWeights))
+		}
+		for k, v := range overlay.Review.SeverityWeights {
+			merged.Review.SeverityWeights[k] = v
+		}
+	}
+	if overlay.ContextHints.PreferredDetailLevel != "" {
+		merged.ContextHints.PreferredDetailLevel = overlay.ContextHints.PreferredDetailLevel
+	}
+	merged.ContextHints.ProtectPatterns = mergeStringList(merged.ContextHints.ProtectPatterns, overlay.ContextHints.ProtectPatterns)
+	return merged
+}
+
+func mergeStepTemplates(base, extra []SkillStepTemplate) []SkillStepTemplate {
+	if len(extra) == 0 {
+		return append([]SkillStepTemplate{}, base...)
+	}
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]SkillStepTemplate, 0, len(base)+len(extra))
+	for _, step := range append(append([]SkillStepTemplate{}, base...), extra...) {
+		key := strings.TrimSpace(step.Kind) + "|" + strings.TrimSpace(step.Description)
+		if key == "|" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, step)
+	}
+	return out
+}
+
+func mergeSkillToolSelectors(base, extra []SkillToolSelector) []SkillToolSelector {
+	if len(extra) == 0 {
+		return append([]SkillToolSelector{}, base...)
+	}
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]SkillToolSelector, 0, len(base)+len(extra))
+	for _, selector := range append(append([]SkillToolSelector{}, base...), extra...) {
+		key := selector.Tool + "|" + strings.Join(selector.Tags, ",") + "|" + strings.Join(selector.ExcludeTags, ",")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, selector)
+	}
+	return out
 }

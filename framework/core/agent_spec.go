@@ -10,23 +10,24 @@ import (
 // manifest. These fields are optional from the sandbox point of view but
 // provide the additional metadata needed by the orchestrator.
 type AgentRuntimeSpec struct {
-	Implementation    string                `yaml:"implementation" json:"implementation"` // e.g. "react", "planner", "coding"
-	Mode              AgentMode             `yaml:"mode" json:"mode"`
-	Version           string                `yaml:"version,omitempty" json:"version,omitempty"`
-	Prompt            string                `yaml:"prompt,omitempty" json:"prompt,omitempty"`
-	Model             AgentModelConfig      `yaml:"model" json:"model"`
-	AllowedTools        []string                       `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
-	ToolExecutionPolicy map[string]ToolPolicy          `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
+	Implementation      string                          `yaml:"implementation" json:"implementation"` // e.g. "react", "planner", "coding"
+	Mode                AgentMode                       `yaml:"mode" json:"mode"`
+	Version             string                          `yaml:"version,omitempty" json:"version,omitempty"`
+	Prompt              string                          `yaml:"prompt,omitempty" json:"prompt,omitempty"`
+	Model               AgentModelConfig                `yaml:"model" json:"model"`
+	AllowedTools        []string                        `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
+	ToolExecutionPolicy map[string]ToolPolicy           `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
 	GlobalPolicies      map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
-	Bash              AgentBashPermissions  `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
-	Files             AgentFileMatrix       `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
-	Invocation        AgentInvocationSpec   `yaml:"invocation,omitempty" json:"invocation,omitempty"`
-	Context           AgentContextSpec      `yaml:"context,omitempty" json:"context,omitempty"`
-	LSP               AgentLSPSpec          `yaml:"lsp,omitempty" json:"lsp,omitempty"`
-	Search            AgentSearchSpec       `yaml:"search,omitempty" json:"search,omitempty"`
-	Metadata          AgentMetadata         `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	OllamaToolCalling *bool                 `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
-	Logging           *AgentLoggingSpec     `yaml:"logging,omitempty" json:"logging,omitempty"`
+	SkillConfig         AgentSkillConfig                `yaml:"skill_config,omitempty" json:"skill_config,omitempty"`
+	Bash                AgentBashPermissions            `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
+	Files               AgentFileMatrix                 `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
+	Invocation          AgentInvocationSpec             `yaml:"invocation,omitempty" json:"invocation,omitempty"`
+	Context             AgentContextSpec                `yaml:"context,omitempty" json:"context,omitempty"`
+	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
+	Search              AgentSearchSpec                 `yaml:"search,omitempty" json:"search,omitempty"`
+	Metadata            AgentMetadata                   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	OllamaToolCalling   *bool                           `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
+	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
 
 // AgentLSPSpec configures Language Server Protocol features.
@@ -119,6 +120,65 @@ type AgentContextSpec struct {
 	ProgressiveLoading  bool   `yaml:"progressive_loading" json:"progressive_loading"`
 }
 
+// AgentSkillConfig carries skill-derived agent policy hints. These hints may
+// narrow behavior but must never bypass registry permissions or sandbox rules.
+type AgentSkillConfig struct {
+	PhaseTools     map[string][]string            `yaml:"phase_tools,omitempty" json:"phase_tools,omitempty"`
+	PhaseSelectors map[string][]SkillToolSelector `yaml:"phase_selectors,omitempty" json:"phase_selectors,omitempty"`
+	Verification   AgentVerificationPolicy        `yaml:"verification,omitempty" json:"verification,omitempty"`
+	Recovery       AgentRecoveryPolicy            `yaml:"recovery,omitempty" json:"recovery,omitempty"`
+	Planning       AgentPlanningPolicy            `yaml:"planning,omitempty" json:"planning,omitempty"`
+	Review         AgentReviewPolicy              `yaml:"review,omitempty" json:"review,omitempty"`
+	ContextHints   AgentSkillContextHints         `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
+}
+
+type AgentVerificationPolicy struct {
+	SuccessTools     []string            `yaml:"success_tools,omitempty" json:"success_tools,omitempty"`
+	SuccessSelectors []SkillToolSelector `yaml:"success_selectors,omitempty" json:"success_selectors,omitempty"`
+	StopOnSuccess    bool                `yaml:"stop_on_success,omitempty" json:"stop_on_success,omitempty"`
+}
+
+type AgentRecoveryPolicy struct {
+	FailureProbeTools     []string            `yaml:"failure_probe_tools,omitempty" json:"failure_probe_tools,omitempty"`
+	FailureProbeSelectors []SkillToolSelector `yaml:"failure_probe_selectors,omitempty" json:"failure_probe_selectors,omitempty"`
+}
+
+type AgentPlanningPolicy struct {
+	RequiredBeforeEdit      []SkillToolSelector `yaml:"required_before_edit,omitempty" json:"required_before_edit,omitempty"`
+	PreferredEditTools      []SkillToolSelector `yaml:"preferred_edit_tools,omitempty" json:"preferred_edit_tools,omitempty"`
+	PreferredVerifyTools    []SkillToolSelector `yaml:"preferred_verify_tools,omitempty" json:"preferred_verify_tools,omitempty"`
+	StepTemplates           []SkillStepTemplate `yaml:"step_templates,omitempty" json:"step_templates,omitempty"`
+	RequireVerificationStep bool                `yaml:"require_verification_step,omitempty" json:"require_verification_step,omitempty"`
+}
+
+type SkillStepTemplate struct {
+	Kind        string `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+}
+
+type AgentReviewPolicy struct {
+	Criteria        []string                 `yaml:"criteria,omitempty" json:"criteria,omitempty"`
+	FocusTags       []string                 `yaml:"focus_tags,omitempty" json:"focus_tags,omitempty"`
+	ApprovalRules   AgentReviewApprovalRules `yaml:"approval_rules,omitempty" json:"approval_rules,omitempty"`
+	SeverityWeights map[string]float64       `yaml:"severity_weights,omitempty" json:"severity_weights,omitempty"`
+}
+
+type AgentReviewApprovalRules struct {
+	RequireVerificationEvidence bool `yaml:"require_verification_evidence,omitempty" json:"require_verification_evidence,omitempty"`
+	RejectOnUnresolvedErrors    bool `yaml:"reject_on_unresolved_errors,omitempty" json:"reject_on_unresolved_errors,omitempty"`
+}
+
+type AgentSkillContextHints struct {
+	PreferredDetailLevel string   `yaml:"preferred_detail_level,omitempty" json:"preferred_detail_level,omitempty"`
+	ProtectPatterns      []string `yaml:"protect_patterns,omitempty" json:"protect_patterns,omitempty"`
+}
+
+type SkillToolSelector struct {
+	Tool        string   `yaml:"tool,omitempty" json:"tool,omitempty"`
+	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	ExcludeTags []string `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
+}
+
 // AgentMetadata captures auxiliary metadata for display.
 type AgentMetadata struct {
 	Author   string   `yaml:"author" json:"author"`
@@ -166,8 +226,109 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("allowed_tools contains empty entry")
 		}
 	}
+	for phase, tools := range a.SkillConfig.PhaseTools {
+		if strings.TrimSpace(phase) == "" {
+			return fmt.Errorf("skill_config.phase_tools contains empty phase")
+		}
+		for _, tool := range tools {
+			if strings.TrimSpace(tool) == "" {
+				return fmt.Errorf("skill_config.phase_tools[%s] contains empty tool", phase)
+			}
+		}
+	}
+	for phase, selectors := range a.SkillConfig.PhaseSelectors {
+		if strings.TrimSpace(phase) == "" {
+			return fmt.Errorf("skill_config.phase_selectors contains empty phase")
+		}
+		for _, selector := range selectors {
+			if err := ValidateSkillToolSelector(selector); err != nil {
+				return fmt.Errorf("skill_config.phase_selectors[%s] invalid: %w", phase, err)
+			}
+		}
+	}
+	for _, tool := range a.SkillConfig.Verification.SuccessTools {
+		if strings.TrimSpace(tool) == "" {
+			return fmt.Errorf("skill_config.verification.success_tools contains empty tool")
+		}
+	}
+	for _, selector := range a.SkillConfig.Verification.SuccessSelectors {
+		if err := ValidateSkillToolSelector(selector); err != nil {
+			return fmt.Errorf("skill_config.verification.success_selectors invalid: %w", err)
+		}
+	}
+	for _, tool := range a.SkillConfig.Recovery.FailureProbeTools {
+		if strings.TrimSpace(tool) == "" {
+			return fmt.Errorf("skill_config.recovery.failure_probe_tools contains empty tool")
+		}
+	}
+	for _, selector := range a.SkillConfig.Recovery.FailureProbeSelectors {
+		if err := ValidateSkillToolSelector(selector); err != nil {
+			return fmt.Errorf("skill_config.recovery.failure_probe_selectors invalid: %w", err)
+		}
+	}
+	for _, selector := range a.SkillConfig.Planning.RequiredBeforeEdit {
+		if err := ValidateSkillToolSelector(selector); err != nil {
+			return fmt.Errorf("skill_config.planning.required_before_edit invalid: %w", err)
+		}
+	}
+	for _, selector := range a.SkillConfig.Planning.PreferredEditTools {
+		if err := ValidateSkillToolSelector(selector); err != nil {
+			return fmt.Errorf("skill_config.planning.preferred_edit_tools invalid: %w", err)
+		}
+	}
+	for _, selector := range a.SkillConfig.Planning.PreferredVerifyTools {
+		if err := ValidateSkillToolSelector(selector); err != nil {
+			return fmt.Errorf("skill_config.planning.preferred_verify_tools invalid: %w", err)
+		}
+	}
+	for _, step := range a.SkillConfig.Planning.StepTemplates {
+		if strings.TrimSpace(step.Kind) == "" {
+			return fmt.Errorf("skill_config.planning.step_templates contains empty kind")
+		}
+		if strings.TrimSpace(step.Description) == "" {
+			return fmt.Errorf("skill_config.planning.step_templates[%s] contains empty description", step.Kind)
+		}
+	}
+	for _, criterion := range a.SkillConfig.Review.Criteria {
+		if strings.TrimSpace(criterion) == "" {
+			return fmt.Errorf("skill_config.review.criteria contains empty criterion")
+		}
+	}
+	for _, tag := range a.SkillConfig.Review.FocusTags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("skill_config.review.focus_tags contains empty tag")
+		}
+	}
+	for severity, weight := range a.SkillConfig.Review.SeverityWeights {
+		if strings.TrimSpace(severity) == "" {
+			return fmt.Errorf("skill_config.review.severity_weights contains empty severity")
+		}
+		if weight < 0 {
+			return fmt.Errorf("skill_config.review.severity_weights[%s] must be >= 0", severity)
+		}
+	}
 	if err := a.Files.Validate(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func ValidateSkillToolSelector(selector SkillToolSelector) error {
+	if strings.TrimSpace(selector.Tool) == "" && len(selector.Tags) == 0 {
+		return fmt.Errorf("selector requires tool or tags")
+	}
+	if strings.TrimSpace(selector.Tool) != "" && strings.Contains(selector.Tool, " ") {
+		return fmt.Errorf("selector tool %q invalid", selector.Tool)
+	}
+	for _, tag := range selector.Tags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("selector contains empty tag")
+		}
+	}
+	for _, tag := range selector.ExcludeTags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("selector contains empty exclude tag")
+		}
 	}
 	return nil
 }

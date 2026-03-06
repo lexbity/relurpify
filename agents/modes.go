@@ -8,6 +8,15 @@ import (
 // Mode enumerates the supported execution profiles for the coding agent.
 type Mode string
 
+// ControlFlow selects the execution runtime behind a mode profile.
+type ControlFlow string
+
+const (
+	ControlFlowReAct     ControlFlow = "react"
+	ControlFlowPipeline  ControlFlow = "pipeline"
+	ControlFlowArchitect ControlFlow = "architect"
+)
+
 const (
 	ModeCode      Mode = "code"
 	ModeArchitect Mode = "architect"
@@ -32,6 +41,7 @@ type ModeProfile struct {
 	Title        string
 	Description  string
 	Temperature  float64
+	ControlFlow  ControlFlow
 	Capabilities []core.Capability
 	ToolScope    ToolScope
 	Restrictions []string
@@ -76,6 +86,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Code Mode",
 		Description: "General-purpose development with read/write/execute access.",
 		Temperature: 0.3,
+		ControlFlow: ControlFlowReAct,
 		Capabilities: []core.Capability{
 			core.CapabilityPlan,
 			core.CapabilityCode,
@@ -112,6 +123,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Architect Mode",
 		Description: "High-level architecture planning with read-only tools.",
 		Temperature: 0.1,
+		ControlFlow: ControlFlowArchitect,
 		Capabilities: []core.Capability{
 			core.CapabilityPlan,
 			core.CapabilityExplain,
@@ -150,6 +162,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Ask Mode",
 		Description: "Information retrieval, explanation, and documentation lookup.",
 		Temperature: 0.2,
+		ControlFlow: ControlFlowReAct,
 		Capabilities: []core.Capability{
 			core.CapabilityExplain,
 		},
@@ -182,6 +195,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Debug Mode",
 		Description: "Focused on diagnostics, log analysis, and running tests.",
 		Temperature: 0.1,
+		ControlFlow: ControlFlowReAct,
 		Capabilities: []core.Capability{
 			core.CapabilityExplain,
 			core.CapabilityExecute,
@@ -215,6 +229,7 @@ var ModeProfiles = map[Mode]ModeProfile{
 		Title:       "Documentation Mode",
 		Description: "Produces README and API docs; writes limited to doc files.",
 		Temperature: 0.4,
+		ControlFlow: ControlFlowReAct,
 		Capabilities: []core.Capability{
 			core.CapabilityExplain,
 			core.CapabilityPlan,

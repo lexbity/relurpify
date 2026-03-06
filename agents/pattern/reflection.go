@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/toolsys"
+	"strings"
 )
 
 // ReflectionAgent reviews outputs and triggers revisions when needed.
@@ -133,9 +135,9 @@ func (n *reflectionReviewNode) Type() graph.NodeType {
 func (n *reflectionReviewNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
 	lastResult := resolveResultHandle(state, "reflection.last_result")
 	prompt := fmt.Sprintf(`Review the following result for task "%s".
-Consider correctness, completeness, quality, security, performance.
+%s
 Respond JSON {"issues":[{"severity":"high|medium|low","description":"...","suggestion":"..."}],"approve":bool}
-Result: %+v`, n.task.Instruction, lastResult)
+Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), lastResult)
 	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &core.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
@@ -174,9 +176,20 @@ func (n *reflectionDecisionNode) Execute(ctx context.Context, state *core.Contex
 	iter, _ := iterVal.(int)
 	iter++
 	state.Set("reflection.iteration", iter)
-	revise := !review.Approve && iter < n.agent.maxIterations
+	assessment := reflectionAssessmentForReview(n.agent, state, review)
+	state.Set("reflection.assessment", assessment)
+	approve := review.Approve && assessment.Allowed
+	revise := !approve && iter < n.agent.maxIterations
 	state.Set("reflection.revise", revise)
-	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{"revise": revise}}, nil
+	return &core.Result{NodeID: n.id, Success: true, Data: map[string]interface{}{
+		"revise":                 revise,
+		"issue_score":            assessment.IssueScore,
+		"approval_threshold":     assessment.ApprovalThreshold,
+		"missing_verification":   assessment.MissingVerification,
+		"blocking_reasons":       append([]string{}, assessment.BlockingReasons...),
+		"blocking_issue_count":   assessment.BlockingIssueCount,
+		"unresolved_issue_count": assessment.UnresolvedIssueCount,
+	}}, nil
 }
 
 type reviewPayload struct {
@@ -186,6 +199,16 @@ type reviewPayload struct {
 		Suggestion  string `json:"suggestion"`
 	} `json:"issues"`
 	Approve bool `json:"approve"`
+}
+
+type reflectionAssessment struct {
+	Allowed              bool
+	IssueScore           float64
+	ApprovalThreshold    float64
+	MissingVerification  bool
+	BlockingReasons      []string
+	BlockingIssueCount   int
+	UnresolvedIssueCount int
 }
 
 // parseReview decodes the reviewer JSON into a strongly typed payload.
@@ -222,4 +245,129 @@ func taskScope(task *core.Task, state *core.Context) string {
 		return state.GetString("task.id")
 	}
 	return ""
+}
+
+func reflectionReviewGuidance(agent *ReflectionAgent, task *core.Task) string {
+	var fallback *core.AgentRuntimeSpec
+	if agent != nil && agent.Config != nil {
+		fallback = agent.Config.AgentSpec
+	}
+	effective := toolsys.ResolveEffectiveSkillPolicy(task, fallback, nil)
+	if effective.Spec == nil {
+		return "Consider correctness, completeness, quality, security, performance."
+	}
+	return toolsys.RenderReviewPolicy(effective.Policy)
+}
+
+func reflectionApprovalPasses(agent *ReflectionAgent, state *core.Context, review reviewPayload) bool {
+	if agent == nil || agent.Config == nil || agent.Config.AgentSpec == nil {
+		return review.Approve
+	}
+	return reflectionAssessmentForReview(agent, state, review).Allowed && review.Approve
+}
+
+func reflectionAssessmentForReview(agent *ReflectionAgent, state *core.Context, review reviewPayload) reflectionAssessment {
+	var fallback *core.AgentRuntimeSpec
+	if agent != nil && agent.Config != nil {
+		fallback = agent.Config.AgentSpec
+	}
+	effective := toolsys.ResolveEffectiveSkillPolicy(nil, fallback, nil)
+	if effective.Spec == nil {
+		return reflectionAssessment{
+			Allowed:              review.Approve,
+			IssueScore:           0,
+			ApprovalThreshold:    0,
+			UnresolvedIssueCount: len(review.Issues),
+		}
+	}
+	policy := effective.Policy
+	weights := reflectionSeverityWeights(policy.Review.SeverityWeights)
+	threshold := reflectionApprovalThreshold(weights)
+	assessment := reflectionAssessment{
+		Allowed:              true,
+		IssueScore:           0,
+		ApprovalThreshold:    threshold,
+		UnresolvedIssueCount: len(review.Issues),
+	}
+	for _, issue := range review.Issues {
+		severity := strings.ToLower(strings.TrimSpace(issue.Severity))
+		assessment.IssueScore += reflectionSeverityWeight(weights, severity)
+		if policy.Review.ApprovalRules.RejectOnUnresolvedErrors && severity == "high" {
+			assessment.BlockingIssueCount++
+			assessment.BlockingReasons = append(assessment.BlockingReasons, "unresolved high-severity review issue")
+		}
+	}
+	if policy.Review.ApprovalRules.RequireVerificationEvidence && !hasVerificationEvidence(state) {
+		assessment.MissingVerification = true
+		assessment.BlockingReasons = append(assessment.BlockingReasons, "missing verification evidence")
+	}
+	if assessment.IssueScore > assessment.ApprovalThreshold {
+		assessment.BlockingReasons = append(assessment.BlockingReasons,
+			fmt.Sprintf("weighted issue score %.2f exceeds threshold %.2f", assessment.IssueScore, assessment.ApprovalThreshold))
+	}
+	assessment.BlockingReasons = uniqueStrings(assessment.BlockingReasons)
+	assessment.Allowed = !assessment.MissingVerification &&
+		assessment.BlockingIssueCount == 0 &&
+		assessment.IssueScore <= assessment.ApprovalThreshold
+	return assessment
+}
+
+func reflectionSeverityGuidance(weights map[string]float64) string {
+	return toolsys.RenderSeverityWeights(weights)
+}
+
+func reflectionSeverityWeights(input map[string]float64) map[string]float64 {
+	return toolsys.ResolveSeverityWeights(input)
+}
+
+func reflectionSeverityWeight(weights map[string]float64, severity string) float64 {
+	if value, ok := weights[severity]; ok {
+		return value
+	}
+	return weights["medium"]
+}
+
+func reflectionApprovalThreshold(weights map[string]float64) float64 {
+	if low, ok := weights["low"]; ok {
+		return low
+	}
+	return 0.2
+}
+
+func uniqueStrings(input []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, item := range input {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func hasVerificationEvidence(state *core.Context) bool {
+	if state == nil {
+		return false
+	}
+	if raw, ok := state.Get("react.tool_observations"); ok && raw != nil {
+		if observations, ok := raw.([]ToolObservation); ok {
+			for _, obs := range observations {
+				if obs.Success && (strings.Contains(strings.ToLower(obs.Tool), "test") || strings.Contains(strings.ToLower(obs.Tool), "build") || strings.Contains(strings.ToLower(obs.Tool), "check") || strings.Contains(strings.ToLower(obs.Tool), "query")) {
+					return true
+				}
+			}
+		}
+	}
+	if result := resolveResultHandle(state, "reflection.last_result"); result != nil && result.Success {
+		if text := fmt.Sprint(result.Data); strings.Contains(strings.ToLower(text), "summary") || strings.Contains(strings.ToLower(text), "passed") {
+			return true
+		}
+	}
+	return false
 }

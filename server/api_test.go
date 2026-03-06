@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/persistence"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 )
 
@@ -45,4 +47,35 @@ func TestAPIServerHandleTask(t *testing.T) {
 	var resp TaskResponse
 	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "stub", resp.Result.NodeID)
+}
+
+func TestAPIServerListsAndInspectsWorkflows(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "workflow_state.db")
+	store, err := persistence.NewSQLiteWorkflowStateStore(dbPath)
+	assert.NoError(t, err)
+	defer store.Close()
+	assert.NoError(t, store.CreateWorkflow(context.Background(), persistence.WorkflowRecord{
+		WorkflowID:  "wf-api",
+		TaskID:      "wf-api",
+		TaskType:    core.TaskTypeCodeModification,
+		Instruction: "Inspect workflow",
+		Status:      persistence.WorkflowRunStatusRunning,
+	}))
+
+	api := &APIServer{
+		Agent:             stubAgent{},
+		Context:           core.NewContext(),
+		Logger:            log.New(io.Discard, "", 0),
+		WorkflowStatePath: dbPath,
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/workflows", nil)
+	listRec := httptest.NewRecorder()
+	api.handleWorkflows(listRec, listReq)
+	assert.Equal(t, http.StatusOK, listRec.Code)
+
+	inspectReq := httptest.NewRequest(http.MethodGet, "/api/workflows/wf-api", nil)
+	inspectRec := httptest.NewRecorder()
+	api.handleWorkflowByID(inspectRec, inspectReq)
+	assert.Equal(t, http.StatusOK, inspectRec.Code)
 }

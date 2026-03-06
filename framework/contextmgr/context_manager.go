@@ -6,6 +6,7 @@ package contextmgr
 
 import (
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
 	"sync"
 )
 
@@ -45,6 +46,42 @@ func (cm *ContextManager) AddItem(item ContextItem) error {
 		}
 	}
 	cm.items = append(cm.items, item)
+	cm.updateBudgetLocked()
+	return nil
+}
+
+// UpsertFileItem inserts or replaces a file context entry keyed by path.
+func (cm *ContextManager) UpsertFileItem(item *core.FileContextItem) error {
+	if item == nil {
+		return fmt.Errorf("nil file context item")
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	index := -1
+	existingTokens := 0
+	for i, existing := range cm.items {
+		file, ok := existing.(*core.FileContextItem)
+		if !ok || file.Path != item.Path {
+			continue
+		}
+		index = i
+		existingTokens = file.TokenCount()
+		break
+	}
+
+	delta := item.TokenCount() - existingTokens
+	if delta > 0 && !cm.budget.CanAddTokens(delta) {
+		if err := cm.makeSpaceLocked(delta); err != nil {
+			return fmt.Errorf("cannot upsert file item: %w", err)
+		}
+	}
+
+	if index >= 0 {
+		cm.items[index] = item
+	} else {
+		cm.items = append(cm.items, item)
+	}
 	cm.updateBudgetLocked()
 	return nil
 }
@@ -143,6 +180,21 @@ func (cm *ContextManager) GetItemsByType(t ContextItemType) []ContextItem {
 		if item.Type() == t {
 			result = append(result, item)
 		}
+	}
+	return result
+}
+
+// FileItems returns the managed file context entries.
+func (cm *ContextManager) FileItems() []*core.FileContextItem {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	result := make([]*core.FileContextItem, 0)
+	for _, item := range cm.items {
+		file, ok := item.(*core.FileContextItem)
+		if !ok {
+			continue
+		}
+		result = append(result, file)
 	}
 	return result
 }

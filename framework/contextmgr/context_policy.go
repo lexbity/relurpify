@@ -2,6 +2,7 @@ package contextmgr
 
 import (
 	"context"
+	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"strings"
@@ -158,6 +159,17 @@ func (p *ContextPolicy) EnforceBudget(state *core.Context, shared *core.SharedCo
 			p.Budget.UpdateUsage(state, tools)
 		}
 	}
+	if budgetState >= core.BudgetNeedsCompression && p.Progressive != nil && p.ProgressiveEnabled {
+		targetTokens := p.demotionTarget(budgetState)
+		protected := protectedFileSet(state)
+		if freed, err := p.Progressive.DemoteToFree(targetTokens, protected); err != nil {
+			if debugf != nil {
+				debugf("context demotion skipped: %v", err)
+			}
+		} else if freed > 0 && debugf != nil {
+			debugf("demoted file context and freed %d tokens", freed)
+		}
+	}
 	if budgetState == core.BudgetCritical && p.ContextManager != nil {
 		targetTokens := p.Budget.AvailableForContext / 4
 		if targetTokens == 0 {
@@ -169,6 +181,80 @@ func (p *ContextPolicy) EnforceBudget(state *core.Context, shared *core.SharedCo
 			}
 		}
 	}
+}
+
+func (p *ContextPolicy) demotionTarget(state core.BudgetState) int {
+	if p == nil || p.Budget == nil {
+		return 0
+	}
+	switch state {
+	case core.BudgetCritical:
+		if p.Budget.AvailableForContext/4 > 0 {
+			return p.Budget.AvailableForContext / 4
+		}
+	case core.BudgetNeedsCompression:
+		if p.Budget.AvailableForContext/10 > 0 {
+			return p.Budget.AvailableForContext / 10
+		}
+	}
+	return 1
+}
+
+func protectedFileSet(state *core.Context) map[string]struct{} {
+	protected := make(map[string]struct{})
+	if state == nil {
+		return protected
+	}
+	addPath := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		protected[path] = struct{}{}
+	}
+	if raw, ok := state.Get("architect.current_step"); ok && raw != nil {
+		switch step := raw.(type) {
+		case core.PlanStep:
+			for _, path := range step.Files {
+				addPath(path)
+			}
+		case *core.PlanStep:
+			if step != nil {
+				for _, path := range step.Files {
+					addPath(path)
+				}
+			}
+		}
+	}
+	if raw, ok := state.Get("react.last_tool_result"); ok && raw != nil {
+		if values, ok := raw.(map[string]interface{}); ok {
+			if path := extractPathFromToolResult(values); path != "" {
+				addPath(path)
+			}
+		}
+	}
+	return protected
+}
+
+func extractPathFromToolResult(values map[string]interface{}) string {
+	if len(values) == 0 {
+		return ""
+	}
+	if path, ok := values["path"]; ok {
+		return strings.TrimSpace(fmt.Sprint(path))
+	}
+	for _, value := range values {
+		nested, ok := value.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if data, ok := nested["data"].(map[string]interface{}); ok {
+			if path, ok := data["path"]; ok {
+				return strings.TrimSpace(fmt.Sprint(path))
+			}
+		}
+	}
+	return ""
 }
 
 // RecordLatestInteraction adds the newest interaction to the context manager.

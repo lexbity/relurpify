@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/agents"
@@ -14,6 +15,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -23,6 +25,11 @@ func newStartCmd() *cobra.Command {
 	var agentName string
 	var instruction string
 	var dryRun bool
+	var autoApprove bool
+	var noSandbox bool
+	var resumeLatestWorkflow bool
+	var workflowID string
+	var rerunFromStepID string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -95,9 +102,50 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			runner, err := fruntime.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, runtimeCfg.Workspace)
-			if err != nil {
-				return err
+			// In CLI mode there is no TUI to handle HITL approval prompts.
+			if autoApprove {
+				// --yes: bypass HITL by setting the default policy to allow and
+				// overriding the bash_permissions default so cli_* tools don't ask.
+				registration.Permissions.SetDefaultPolicy(fruntime.AgentPermissionAllow)
+				spec.Bash.Default = core.AgentPermissionAllow
+			} else {
+				// Subscribe to the HITL broker and ask the user interactively on stdin.
+				hitlEvents, unsub := registration.HITL.Subscribe(4)
+				defer unsub()
+				go func() {
+					scanner := bufio.NewScanner(os.Stdin)
+					for event := range hitlEvents {
+						if event.Type != fruntime.HITLEventRequested || event.Request == nil {
+							continue
+						}
+						req := event.Request
+						fmt.Fprintf(os.Stderr, "\n[HITL] Permission request: %s\n  Action: %s\n  Allow? [y/N]: ",
+							req.Justification, req.Permission.Action)
+						var response string
+						if scanner.Scan() {
+							response = strings.TrimSpace(strings.ToLower(scanner.Text()))
+						}
+						if response == "y" || response == "yes" {
+							_ = registration.HITL.Approve(fruntime.PermissionDecision{
+								RequestID:  req.ID,
+								ApprovedBy: "cli-user",
+								Scope:      fruntime.GrantScopeSession,
+							})
+						} else {
+							_ = registration.HITL.Deny(req.ID, "denied by user")
+						}
+					}
+				}()
+			}
+			var runner fruntime.CommandRunner
+			if noSandbox {
+				runner = fruntime.NewLocalCommandRunner(runtimeCfg.Workspace, nil)
+			} else {
+				sandboxRunner, err := fruntime.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, runtimeCfg.Workspace)
+				if err != nil {
+					return err
+				}
+				runner = sandboxRunner
 			}
 			tools, indexManager, err := appruntime.BuildToolRegistry(ws, runner, appruntime.ToolRegistryOptions{
 				AgentID:           registration.ID,
@@ -117,6 +165,14 @@ func newStartCmd() *cobra.Command {
 				}
 			}
 			tools.UseAgentSpec(registration.ID, spec)
+			providerRuntime := &appruntime.Runtime{
+				Tools:        tools,
+				Context:      core.NewContext(),
+				Registration: registration,
+			}
+			if err := appruntime.RegisterSkillProviders(runCtx, providerRuntime, manifest.Spec.Skills); err != nil {
+				return err
+			}
 			telemetry := telemetry.LoggerTelemetry{Logger: log.Default()}
 			tools.UseTelemetry(telemetry)
 			if registration.Permissions != nil {
@@ -134,10 +190,12 @@ func newStartCmd() *cobra.Command {
 			client := llm.NewClient(defaultEndpoint(), modelName)
 			client.SetDebugLogging(logLLM)
 			agent := &agents.CodingAgent{
-				Model:        llm.NewInstrumentedModel(client, telemetry, logLLM),
-				Tools:        tools,
-				Memory:       memory,
-				IndexManager: indexManager,
+				Model:             llm.NewInstrumentedModel(client, telemetry, logLLM),
+				Tools:             tools,
+				Memory:            memory,
+				IndexManager:      indexManager,
+				CheckpointPath:    filepath.Join(ws, "relurpify_cfg", "sessions", "checkpoints"),
+				WorkflowStatePath: filepath.Join(ws, "relurpify_cfg", "sessions", "workflow_state.db"),
 			}
 			cfg := &core.Config{
 				Name:              agentName,
@@ -152,7 +210,7 @@ func newStartCmd() *cobra.Command {
 			if err := agent.Initialize(cfg); err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 			task := &core.Task{
 				ID:          fmt.Sprintf("cli-%d", time.Now().UnixNano()),
@@ -161,6 +219,15 @@ func newStartCmd() *cobra.Command {
 				Context: map[string]any{
 					"mode": mode,
 				},
+			}
+			if resumeLatestWorkflow {
+				task.Context["resume_latest_workflow"] = true
+			}
+			if workflowID != "" {
+				task.Context["workflow_id"] = workflowID
+			}
+			if rerunFromStepID != "" {
+				task.Context["rerun_from_step_id"] = rerunFromStepID
 			}
 			state := core.NewContext()
 			state.Set("task.id", task.ID)
@@ -187,6 +254,11 @@ func newStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&agentName, "agent", "", "Agent name from manifest registry")
 	cmd.Flags().StringVar(&instruction, "instruction", "", "Instruction to execute")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate configuration without executing")
+	cmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto-approve all HITL permission requests (skips interactive prompts)")
+	cmd.Flags().BoolVar(&noSandbox, "no-sandbox", false, "Run commands directly on the host instead of inside a gVisor/Docker sandbox")
+	cmd.Flags().BoolVar(&resumeLatestWorkflow, "resume-latest-workflow", false, "Resume the latest persisted architect workflow instead of starting from scratch")
+	cmd.Flags().StringVar(&workflowID, "workflow", "", "Resume or continue the specified workflow ID")
+	cmd.Flags().StringVar(&rerunFromStepID, "rerun-from-step", "", "Replay a workflow from the specified step ID")
 	return cmd
 }
 

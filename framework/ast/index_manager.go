@@ -6,6 +6,7 @@ package ast
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -220,6 +221,18 @@ func (im *IndexManager) indexFilesParallel(files []string) error {
 		return <-errCh
 	}
 	return nil
+}
+
+// Close releases any underlying resources owned by the store.
+func (im *IndexManager) Close() error {
+	if im == nil || im.store == nil {
+		return nil
+	}
+	closer, ok := im.store.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return closer.Close()
 }
 
 func (im *IndexManager) indexWithSymbols(path, content, language string, category Category, contentHash string) error {

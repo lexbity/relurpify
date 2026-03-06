@@ -105,10 +105,14 @@ func (fci *FileContextItem) Priority() int {
 }
 
 func (fci *FileContextItem) Compress() (ContextItem, error) {
+	summary := fci.Summary
+	if summary == "" {
+		summary = truncate(fci.Content, 200)
+	}
 	return &FileContextItem{
 		Path:         fci.Path,
 		Content:      "",
-		Summary:      fci.Summary,
+		Summary:      summary,
 		LastAccessed: fci.LastAccessed,
 		Relevance:    fci.Relevance * 0.9,
 		PriorityVal:  fci.PriorityVal + 1,

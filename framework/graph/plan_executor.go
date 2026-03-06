@@ -12,6 +12,16 @@ import (
 type PlanExecutionOptions struct {
 	MaxRecoveryAttempts int
 	Diagnose            func(ctx context.Context, step core.PlanStep, err error) (string, error)
+	Recover             func(ctx context.Context, step core.PlanStep, stepTask *core.Task, state *core.Context, err error) (*StepRecovery, error)
+	BeforeStep          func(step core.PlanStep, stepTask *core.Task, state *core.Context)
+	AfterStep           func(step core.PlanStep, state *core.Context, result *core.Result)
+}
+
+// StepRecovery captures structured retry guidance after a failed step attempt.
+type StepRecovery struct {
+	Diagnosis string
+	Notes     []string
+	Context   map[string]any
 }
 
 // PlanExecutor runs plan steps with dependency awareness.
@@ -44,6 +54,11 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 	}
 
 	completedSteps := make(map[string]bool)
+	for _, stepID := range completedStepIDs(state) {
+		if stepID != "" {
+			completedSteps[stepID] = true
+		}
+	}
 	steps := plan.Steps
 	maxLoops := len(steps) * 2
 	loops := 0
@@ -130,20 +145,53 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 	}, nil
 }
 
-func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context, maxRecovery int) error {
-	stepTask := cloneTask(task)
-	if stepTask.Context == nil {
-		stepTask.Context = make(map[string]any)
+// ValidatePlan checks step ids and dependency references before a plan is
+// persisted or executed.
+func ValidatePlan(plan *core.Plan) error {
+	return validatePlanDependencies(plan)
+}
+
+func completedStepIDs(state *core.Context) []string {
+	if state == nil {
+		return nil
 	}
-	stepTask.Instruction = fmt.Sprintf("Execute step %s: %s\nFiles: %v", step.ID, step.Description, step.Files)
-	stepTask.Context["plan"] = plan
-	stepTask.Context["current_step"] = step
+	raw, ok := state.Get("plan.completed_steps")
+	if !ok || raw == nil {
+		return nil
+	}
+	switch values := raw.(type) {
+	case []string:
+		return append([]string{}, values...)
+	case []any:
+		out := make([]string, 0, len(values))
+		for _, value := range values {
+			if value == nil {
+				continue
+			}
+			out = append(out, fmt.Sprint(value))
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context, maxRecovery int) error {
+	stepTask := buildStepTask(task, plan, step, state)
 	state.Set("plan", plan)
+	if p.Options.BeforeStep != nil {
+		p.Options.BeforeStep(step, stepTask, state)
+	}
 
 	var stepErr error
 	for attempt := 0; attempt <= maxRecovery; attempt++ {
 		if attempt > 0 {
 			stepTask.Instruction += fmt.Sprintf("\nRetry %d: Last error: %v", attempt, stepErr)
+			if p.Options.Recover != nil && stepErr != nil {
+				if recovery, err := p.Options.Recover(ctx, step, stepTask, state, stepErr); err == nil && recovery != nil {
+					applyStepRecovery(stepTask, state, step, recovery)
+				}
+			}
 			if p.Options.Diagnose != nil && stepErr != nil {
 				if diagnosis, err := p.Options.Diagnose(ctx, step, stepErr); err == nil && diagnosis != "" {
 					stepTask.Instruction += fmt.Sprintf("\nDiagnosis: %s", diagnosis)
@@ -152,6 +200,9 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *co
 		}
 		res, err := executor.Execute(ctx, stepTask, state)
 		if err == nil && res != nil && res.Success {
+			if p.Options.AfterStep != nil {
+				p.Options.AfterStep(step, state, res)
+			}
 			return nil
 		}
 		stepErr = err
@@ -160,6 +211,86 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *co
 		}
 	}
 	return fmt.Errorf("step %s failed: %w", step.ID, stepErr)
+}
+
+func buildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task {
+	var metadata map[string]string
+	var taskID string
+	var taskType core.TaskType
+	if task != nil && task.Metadata != nil {
+		metadata = make(map[string]string, len(task.Metadata))
+		for k, v := range task.Metadata {
+			metadata[k] = v
+		}
+	}
+	if task != nil {
+		taskID = task.ID
+		taskType = task.Type
+	}
+	stepTask := &core.Task{
+		ID:       taskID,
+		Type:     taskType,
+		Metadata: metadata,
+		Context:  map[string]any{},
+	}
+	if task != nil && task.Context != nil {
+		if mode, ok := task.Context["mode"]; ok {
+			stepTask.Context["mode"] = mode
+		}
+		if cb, ok := task.Context["stream_callback"]; ok {
+			stepTask.Context["stream_callback"] = cb
+		}
+	}
+	stepTask.Instruction = fmt.Sprintf("Execute step %s only: %s", step.ID, step.Description)
+	if len(step.Files) > 0 {
+		stepTask.Instruction += fmt.Sprintf("\nRelevant files: %v", step.Files)
+	}
+	if step.Expected != "" {
+		stepTask.Instruction += fmt.Sprintf("\nExpected outcome: %s", step.Expected)
+	}
+	if step.Verification != "" {
+		stepTask.Instruction += fmt.Sprintf("\nVerification: %s", step.Verification)
+	}
+	if state != nil {
+		if prev := state.GetString("architect.last_step_summary"); prev != "" {
+			stepTask.Context["previous_step_result"] = prev
+		}
+	}
+	if plan != nil && plan.Goal != "" {
+		stepTask.Context["plan_goal"] = plan.Goal
+	}
+	stepTask.Context["current_step"] = step
+	return stepTask
+}
+
+func applyStepRecovery(stepTask *core.Task, state *core.Context, step core.PlanStep, recovery *StepRecovery) {
+	if stepTask == nil || recovery == nil {
+		return
+	}
+	if stepTask.Context == nil {
+		stepTask.Context = map[string]any{}
+	}
+	if recovery.Diagnosis != "" {
+		stepTask.Context["recovery_diagnosis"] = recovery.Diagnosis
+		stepTask.Instruction += fmt.Sprintf("\nRecovery diagnosis: %s", recovery.Diagnosis)
+	}
+	if len(recovery.Notes) > 0 {
+		stepTask.Context["recovery_notes"] = append([]string{}, recovery.Notes...)
+		stepTask.Instruction += fmt.Sprintf("\nRecovery notes:\n- %s", strings.Join(recovery.Notes, "\n- "))
+	}
+	if len(recovery.Context) > 0 {
+		for k, v := range recovery.Context {
+			stepTask.Context[k] = v
+		}
+	}
+	if state != nil {
+		key := "plan.recovery." + step.ID
+		state.Set(key+".diagnosis", recovery.Diagnosis)
+		state.Set(key+".notes", append([]string{}, recovery.Notes...))
+		if len(recovery.Context) > 0 {
+			state.Set(key+".context", recovery.Context)
+		}
+	}
 }
 
 func cloneTask(task *core.Task) *core.Task {

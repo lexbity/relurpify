@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/search"
 	"github.com/lexcodex/relurpify/tools"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -103,10 +104,10 @@ func (pl *ProgressiveLoader) ExecuteContextRequest(request *ContextRequest, trig
 
 // ExpandContext increases the detail for a file.
 func (pl *ProgressiveLoader) ExpandContext(path string, level DetailLevel) error {
-	if level < DetailSignatureOnly {
+	if level > DetailSignatureOnly {
 		level = DetailSignatureOnly
 	}
-	if existing, ok := pl.loadedFiles[path]; ok && existing >= level {
+	if existing, ok := pl.loadedFiles[path]; ok && existing <= level {
 		return nil
 	}
 	return pl.loadFile(FileRequest{
@@ -162,20 +163,92 @@ func (pl *ProgressiveLoader) loadFile(req FileRequest) error {
 	if err != nil {
 		return err
 	}
-	processed := pl.applyDetailLevel(content, req.Path, req.DetailLevel)
-	item := &core.FileContextItem{
-		Path:         req.Path,
-		Content:      processed,
-		LastAccessed: time.Now(),
-		Relevance:    1.0,
-		PriorityVal:  req.Priority,
-		Pinned:       req.Pinned,
-	}
-	if err := pl.contextManager.AddItem(item); err != nil {
+	item := pl.buildFileContextItem(req, content)
+	if err := pl.contextManager.UpsertFileItem(item); err != nil {
 		return fmt.Errorf("add file to context: %w", err)
 	}
 	pl.loadedFiles[req.Path] = req.DetailLevel
 	return nil
+}
+
+// DemoteToFree progressively lowers detail on less-important files before pruning.
+func (pl *ProgressiveLoader) DemoteToFree(targetTokens int, protected map[string]struct{}) (int, error) {
+	if pl == nil || pl.contextManager == nil || targetTokens <= 0 {
+		return 0, nil
+	}
+	type candidate struct {
+		item  *core.FileContextItem
+		score float64
+	}
+	var candidates []candidate
+	for _, item := range pl.contextManager.FileItems() {
+		if item == nil || item.Pinned || item.Priority() == 0 {
+			continue
+		}
+		if _, ok := protected[item.Path]; ok {
+			continue
+		}
+		level, ok := pl.loadedFiles[item.Path]
+		if !ok {
+			level = inferredDetailLevel(item)
+		}
+		if _, ok := nextLessDetailedLevel(level); !ok {
+			continue
+		}
+		score := float64(item.TokenCount()) * (1.0 - item.RelevanceScore() + 0.2) * float64(item.Priority()+1)
+		score += item.Age().Minutes() / 10.0
+		candidates = append(candidates, candidate{item: item, score: score})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score == candidates[j].score {
+			return candidates[i].item.Path < candidates[j].item.Path
+		}
+		return candidates[i].score > candidates[j].score
+	})
+
+	freed := 0
+	for _, candidate := range candidates {
+		current := pl.loadedFiles[candidate.item.Path]
+		for {
+			next, ok := nextLessDetailedLevel(current)
+			if !ok {
+				break
+			}
+			before := 0
+			if existing := pl.fileItem(candidate.item.Path); existing != nil {
+				before = existing.TokenCount()
+			}
+			if err := pl.loadFile(FileRequest{
+				Path:        candidate.item.Path,
+				DetailLevel: next,
+				Priority:    candidate.item.PriorityVal,
+				Pinned:      candidate.item.Pinned,
+			}); err != nil {
+				break
+			}
+			after := 0
+			if updated := pl.fileItem(candidate.item.Path); updated != nil {
+				after = updated.TokenCount()
+			}
+			current = next
+			if before > after {
+				freed += before - after
+			}
+			if freed >= targetTokens {
+				break
+			}
+			if before != after {
+				break
+			}
+		}
+		if freed >= targetTokens {
+			break
+		}
+	}
+	if freed == 0 {
+		return 0, fmt.Errorf("no file context available for demotion")
+	}
+	return freed, nil
 }
 
 func (pl *ProgressiveLoader) applyDetailLevel(content, path string, level DetailLevel) string {
@@ -207,6 +280,79 @@ func (pl *ProgressiveLoader) applyDetailLevel(content, path string, level Detail
 		return filepath.Base(path)
 	default:
 		return content
+	}
+}
+
+func (pl *ProgressiveLoader) buildFileContextItem(req FileRequest, content string) *core.FileContextItem {
+	summary := pl.fileSummary(req.Path)
+	if summary == "" {
+		summary = pl.fileStats(req.Path)
+	}
+	processed := pl.applyDetailLevel(content, req.Path, req.DetailLevel)
+	if summary == "" && processed != content {
+		summary = processed
+	}
+	relevance := 1.0
+	if existing := pl.fileItem(req.Path); existing != nil {
+		relevance = existing.Relevance
+		if req.Priority == 0 && existing.PriorityVal != 0 {
+			req.Priority = existing.PriorityVal
+		}
+		if !req.Pinned {
+			req.Pinned = existing.Pinned
+		}
+	}
+	return &core.FileContextItem{
+		Path:         req.Path,
+		Content:      processed,
+		Summary:      summary,
+		LastAccessed: time.Now(),
+		Relevance:    relevance,
+		PriorityVal:  req.Priority,
+		Pinned:       req.Pinned,
+	}
+}
+
+func (pl *ProgressiveLoader) fileItem(path string) *core.FileContextItem {
+	if pl == nil || pl.contextManager == nil || path == "" {
+		return nil
+	}
+	for _, item := range pl.contextManager.FileItems() {
+		if item != nil && item.Path == path {
+			return item
+		}
+	}
+	return nil
+}
+
+func nextLessDetailedLevel(level DetailLevel) (DetailLevel, bool) {
+	switch level {
+	case DetailFull:
+		return DetailDetailed, true
+	case DetailDetailed:
+		return DetailConcise, true
+	case DetailConcise:
+		return DetailMinimal, true
+	case DetailMinimal:
+		return DetailSignatureOnly, true
+	default:
+		return DetailSignatureOnly, false
+	}
+}
+
+func inferredDetailLevel(item *core.FileContextItem) DetailLevel {
+	if item == nil {
+		return DetailMinimal
+	}
+	switch {
+	case item.Content != "" && item.Summary != "" && len(item.Content) <= len(item.Summary):
+		return DetailConcise
+	case item.Content != "" && len(item.Content) < 256:
+		return DetailMinimal
+	case item.Content == "" && item.Summary != "":
+		return DetailMinimal
+	default:
+		return DetailDetailed
 	}
 }
 

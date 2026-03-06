@@ -3,6 +3,7 @@ package core
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -13,6 +14,10 @@ type ObjectRegistry struct {
 	mu     sync.RWMutex
 	items  map[string]interface{}
 	scopes map[string]map[string]struct{}
+}
+
+type registryCloser interface {
+	Close() error
 }
 
 // NewObjectRegistry builds an empty registry.
@@ -69,7 +74,9 @@ func (r *ObjectRegistry) Remove(handle string) {
 	if r == nil || handle == "" {
 		return
 	}
+	var value interface{}
 	r.mu.Lock()
+	value = r.items[handle]
 	delete(r.items, handle)
 	for scope, handles := range r.scopes {
 		if _, ok := handles[handle]; ok {
@@ -81,6 +88,7 @@ func (r *ObjectRegistry) Remove(handle string) {
 		}
 	}
 	r.mu.Unlock()
+	_ = closeRegistryValue(value)
 }
 
 // ClearScope removes every object associated with the scope.
@@ -88,13 +96,52 @@ func (r *ObjectRegistry) ClearScope(scope string) {
 	if r == nil || scope == "" {
 		return
 	}
+	var values []interface{}
 	r.mu.Lock()
 	handles := r.scopes[scope]
 	delete(r.scopes, scope)
 	for handle := range handles {
+		values = append(values, r.items[handle])
 		delete(r.items, handle)
 	}
 	r.mu.Unlock()
+	for _, value := range values {
+		_ = closeRegistryValue(value)
+	}
+}
+
+// CloseAll removes and closes every registered object.
+func (r *ObjectRegistry) CloseAll() error {
+	if r == nil {
+		return nil
+	}
+	var values []interface{}
+	r.mu.Lock()
+	for _, value := range r.items {
+		values = append(values, value)
+	}
+	r.items = make(map[string]interface{})
+	r.scopes = make(map[string]map[string]struct{})
+	r.mu.Unlock()
+
+	var errs []error
+	for _, value := range values {
+		if err := closeRegistryValue(value); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func closeRegistryValue(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	closer, ok := value.(registryCloser)
+	if !ok {
+		return nil
+	}
+	return closer.Close()
 }
 
 func newRegistryHandle() string {

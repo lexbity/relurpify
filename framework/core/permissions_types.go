@@ -90,8 +90,12 @@ func (p *PermissionSet) Validate() error {
 	if p == nil {
 		return errors.New("permission set missing")
 	}
-	if len(p.FileSystem) == 0 && len(p.Executables) == 0 {
-		return errors.New("permission set must declare at least filesystem or executable scopes")
+	if len(p.FileSystem) == 0 &&
+		len(p.Executables) == 0 &&
+		len(p.Network) == 0 &&
+		len(p.Capabilities) == 0 &&
+		len(p.IPC) == 0 {
+		return errors.New("permission set must declare at least one permission scope")
 	}
 	for _, perm := range p.FileSystem {
 		if perm.Path == "" {

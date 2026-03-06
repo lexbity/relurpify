@@ -3,10 +3,12 @@ package agents
 import (
 	"context"
 	"fmt"
+	"github.com/lexcodex/relurpify/agents/stages"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/pipeline"
 	"github.com/lexcodex/relurpify/framework/toolsys"
 	"strings"
 	"sync"
@@ -17,12 +19,17 @@ import (
 // tool scopes and temperatures while keeping a consistent interface for the
 // runtime.
 type CodingAgent struct {
-	Model        core.LanguageModel
-	Tools        *toolsys.ToolRegistry
-	Memory       memory.MemoryStore
-	Config       *core.Config
-	IndexManager *ast.IndexManager
-	modeProfiles map[Mode]ModeProfile
+	Model                core.LanguageModel
+	Tools                *toolsys.ToolRegistry
+	Memory               memory.MemoryStore
+	Config               *core.Config
+	IndexManager         *ast.IndexManager
+	CheckpointPath       string
+	WorkflowStatePath    string
+	PipelineStages       []pipeline.Stage
+	PipelineStageBuilder func(task *core.Task) ([]pipeline.Stage, error)
+	PipelineStageFactory PipelineStageFactory
+	modeProfiles         map[Mode]ModeProfile
 
 	mu        sync.Mutex
 	delegates map[Mode]graph.Agent
@@ -44,6 +51,20 @@ func (a *CodingAgent) Initialize(cfg *core.Config) error {
 	return nil
 }
 
+// ModeProfiles returns a copy of the current mode profile map.
+func (a *CodingAgent) ModeProfiles() map[Mode]ModeProfile {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.modeProfiles == nil {
+		a.modeProfiles = defaultModeProfiles()
+	}
+	out := make(map[Mode]ModeProfile, len(a.modeProfiles))
+	for mode, profile := range a.modeProfiles {
+		out[mode] = profile
+	}
+	return out
+}
+
 // Capabilities aggregates capabilities from all modes.
 func (a *CodingAgent) Capabilities() []core.Capability {
 	seen := map[core.Capability]struct{}{}
@@ -60,9 +81,14 @@ func (a *CodingAgent) Capabilities() []core.Capability {
 	return caps
 }
 
-// BuildGraph delegates to the default mode graph.
+// BuildGraph delegates to the graph for the task's effective mode.
 func (a *CodingAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
-	delegate, err := a.delegateForMode(defaultMode)
+	mode := a.modeFromTask(task)
+	profile, ok := a.modeProfiles[mode]
+	if !ok {
+		profile = a.modeProfiles[defaultMode]
+	}
+	delegate, err := a.delegateForMode(profile.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +99,9 @@ func (a *CodingAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 // pattern agent. The context is augmented with the mode metadata so downstream
 // tooling can render diagnostics.
 func (a *CodingAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	if state == nil {
+		state = core.NewContext()
+	}
 	mode := a.modeFromTask(task)
 	profile, ok := a.modeProfiles[mode]
 	if !ok {
@@ -87,8 +116,12 @@ func (a *CodingAgent) Execute(ctx context.Context, task *core.Task, state *core.
 	}
 	enriched := *task
 	enriched.Context = cloneContext(task.Context)
+	enriched.Context["user_instruction"] = task.Instruction
 	enriched.Context["mode"] = string(profile.Name)
 	enriched.Context["restrictions"] = profile.Restrictions
+	if a.Config != nil && a.Config.AgentSpec != nil {
+		enriched.Context["agent_spec"] = a.Config.AgentSpec
+	}
 	enriched.Instruction = a.decorateInstruction(profile, task.Instruction)
 	state.Set("coding_agent.mode", profile.Name)
 	result, err := delegate.Execute(ctx, &enriched, state)
@@ -96,6 +129,12 @@ func (a *CodingAgent) Execute(ctx context.Context, task *core.Task, state *core.
 		return nil, err
 	}
 	if final, ok := state.Get("react.final_output"); ok {
+		if result.Data == nil {
+			result.Data = map[string]any{}
+		}
+		result.Data["final_output"] = final
+	}
+	if final, ok := state.Get("pipeline.final_output"); ok {
 		if result.Data == nil {
 			result.Data = map[string]any{}
 		}
@@ -138,35 +177,35 @@ func (a *CodingAgent) delegateForMode(mode Mode) (graph.Agent, error) {
 		return nil, fmt.Errorf("mode %s not configured", mode)
 	}
 	var agent graph.Agent
-	switch mode {
-	case ModeArchitect:
-		agent = &PlannerAgent{Model: a.Model, Tools: a.scopedTools(profile.ToolScope), Memory: a.Memory}
-	case ModeAsk:
-		agent = &ReActAgent{
-			Model:        a.Model,
-			Tools:        a.scopedTools(profile.ToolScope),
-			Memory:       a.Memory,
-			IndexManager: a.IndexManager,
-			Mode:         string(profile.Name),
-			ModeProfile:  convertModeRuntimeProfile(profile),
+	switch profile.ControlFlow {
+	case ControlFlowArchitect:
+		agent = &ArchitectAgent{
+			Model:             a.Model,
+			PlannerTools:      a.scopedTools(profile.ToolScope),
+			ExecutorTools:     a.scopedTools(ModeProfiles[ModeCode].ToolScope),
+			Memory:            a.Memory,
+			IndexManager:      a.IndexManager,
+			CheckpointPath:    a.CheckpointPath,
+			WorkflowStatePath: a.WorkflowStatePath,
 		}
-	case ModeDocument:
-		agent = &ReActAgent{
-			Model:        a.Model,
-			Tools:        a.scopedTools(profile.ToolScope),
-			Memory:       a.Memory,
-			IndexManager: a.IndexManager,
-			Mode:         string(profile.Name),
-			ModeProfile:  convertModeRuntimeProfile(profile),
+	case ControlFlowPipeline:
+		agent = &PipelineAgent{
+			Model:             a.Model,
+			Tools:             a.scopedTools(profile.ToolScope),
+			WorkflowStatePath: a.WorkflowStatePath,
+			Stages:            append([]pipeline.Stage{}, a.PipelineStages...),
+			StageBuilder:      a.PipelineStageBuilder,
+			StageFactory:      a.pipelineStageFactoryForMode(profile.Name),
 		}
 	default:
 		agent = &ReActAgent{
-			Model:        a.Model,
-			Tools:        a.scopedTools(profile.ToolScope),
-			Memory:       a.Memory,
-			IndexManager: a.IndexManager,
-			Mode:         string(profile.Name),
-			ModeProfile:  convertModeRuntimeProfile(profile),
+			Model:          a.Model,
+			Tools:          a.scopedTools(profile.ToolScope),
+			Memory:         a.Memory,
+			IndexManager:   a.IndexManager,
+			CheckpointPath: a.CheckpointPath,
+			Mode:           string(profile.Name),
+			ModeProfile:    convertModeRuntimeProfile(profile),
 		}
 	}
 	if err := agent.Initialize(a.Config); err != nil {
@@ -213,6 +252,41 @@ func toolAllowed(tool core.Tool, scope ToolScope) bool {
 		return false
 	}
 	return true
+}
+
+func (a *CodingAgent) pipelineStageFactoryForMode(mode Mode) PipelineStageFactory {
+	if a.PipelineStageBuilder != nil || len(a.PipelineStages) > 0 {
+		return nil
+	}
+	if a.PipelineStageFactory != nil {
+		return a.PipelineStageFactory
+	}
+	switch mode {
+	case ModeCode:
+		return stages.CodingStageFactory{}
+	default:
+		return nil
+	}
+}
+
+// OverrideControlFlow updates one mode profile at runtime and clears any cached
+// delegate for that mode so the next execution uses the new runtime.
+func (a *CodingAgent) OverrideControlFlow(mode Mode, flow ControlFlow) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.modeProfiles == nil {
+		a.modeProfiles = defaultModeProfiles()
+	}
+	profile, ok := a.modeProfiles[mode]
+	if !ok {
+		return fmt.Errorf("mode %s not configured", mode)
+	}
+	profile.ControlFlow = flow
+	a.modeProfiles[mode] = profile
+	if a.delegates != nil {
+		delete(a.delegates, mode)
+	}
+	return nil
 }
 
 // decorateInstruction wraps the user instruction with mode metadata so the LLM
