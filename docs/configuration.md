@@ -2,17 +2,17 @@
 
 ## Synopsis
 
-Relurpify has two configuration layers: a lightweight workspace config that sets runtime defaults, and agent manifests that declare the full security contract for each agent. Understanding the difference between them is important — the workspace config is about convenience, the manifest is about trust.
+Relurpify has two configuration layers: a workspace config that stores runtime defaults for the current repo, and agent manifests that define the security contract and runtime behavior for an agent. The workspace config is about convenience. The manifest is about trust.
 
 ---
 
 ## Why Two Layers
 
-**`config.yaml`** answers: *what should happen by default in this workspace?* It is minimal — a model name, an agent preference. It is also writable at runtime (the TUI Settings pane saves to it).
+`relurpify_cfg/config.yaml` answers: *which model and agent should this workspace prefer by default?* It is writable at runtime.
 
-**Agent manifests** answer: *what is this agent allowed to do?* They are the security contract. They declare every filesystem path, binary, and network endpoint an agent may touch, plus the default policy for anything not listed. They are validated at startup and cannot be loosened at runtime without a restart.
+Agent manifests answer: *what is this agent allowed to do, and how should it behave?* They declare filesystem, executable, and network permissions plus the runtime-level agent settings consumed by `relurpish` and `coding-agent`.
 
-This separation means you can change your preferred model on the fly, but you cannot silently expand an agent's permissions without editing its manifest.
+This split lets you change a preferred model or agent without silently widening the agent's security envelope.
 
 ---
 
@@ -20,33 +20,36 @@ This separation means you can change your preferred model on the fly, but you ca
 
 **Location:** `relurpify_cfg/config.yaml`
 
-```yaml
-default_model:
-    name: qwen2.5-coder:14b
-```
-
-That's the minimum. When the TUI Settings pane saves a model selection, it writes back to this file.
-
-**WorkspaceConfig** (extended, written by the runtime):
+The runtime persists workspace selections in this shape:
 
 ```yaml
 model: qwen2.5-coder:14b
 agents:
     - coding-go
 allowed_tools: []
-permission_profile: {}
+permission_profile: workspace_write
 last_updated: 1709500000
 ```
 
-The `agents` list determines which agent manifest is loaded by default when no `--agent` flag is passed.
+Field meanings:
+
+| Field | Purpose |
+|-------|---------|
+| `model` | Default Ollama model override for this workspace |
+| `agents` | Preferred agent presets or definitions |
+| `allowed_tools` | Optional temporary tool narrowing |
+| `permission_profile` | Last selected workspace permission profile |
+| `last_updated` | Unix timestamp of the last save |
+
+This file is optional. If it is absent, runtime defaults come from the manifest and CLI flags.
 
 ---
 
 ## Agent Manifests
 
-**Location:** `relurpify_cfg/agents/<name>.yaml`
+**Location:** `relurpify_cfg/agent.manifest.yaml` or `relurpify_cfg/agents/<name>.yaml`
 
-Manifests use `apiVersion: relurpify/v1alpha1`. Every field is validated at startup — a malformed or incomplete manifest prevents the agent from loading.
+Manifests use `apiVersion: relurpify/v1alpha1`. They are validated at startup, and invalid manifests are rejected before the runtime can execute.
 
 ### Annotated Example
 
@@ -56,48 +59,40 @@ kind: AgentManifest
 metadata:
     name: coding-go
     version: 1.0.0
-    description: Go-focused coding agent
+    description: Go-focused coding agent manifest
 
 spec:
-    # Container image used for sandboxed tool execution.
-    # All agent-executed commands run inside this image via gVisor.
     image: ghcr.io/lexcodex/relurpify/runtime:latest
-    runtime: gvisor   # Must be "gvisor". No other value is accepted.
+    runtime: gvisor
 
     defaults:
         permissions:
-            # Declare every filesystem scope the agent needs.
-            # Paths not listed here follow the default_tool_policy.
             filesystem:
                 - action: fs:read
-                  path: /path/to/project/**
-                  justification: Read workspace files
+                  path: ${workspace}/**
+                  justification: Read workspace
+                - action: fs:list
+                  path: ${workspace}/**
+                  justification: List workspace
                 - action: fs:write
-                  path: /path/to/project/**
-                  justification: Modify files
+                  path: ${workspace}/**
+                  justification: Modify workspace
                 - action: fs:execute
-                  path: /path/to/project/**
-                  justification: Run tooling in workspace
-
-            # Declare every binary the agent may invoke.
-            # arg patterns use * (any single arg) or ["*"] (any args).
+                  path: ${workspace}/**
+                  justification: Execute tooling inside workspace
             executables:
                 - binary: go
                   args: ["*"]
                 - binary: git
                   args: ["*"]
                 - binary: bash
-                  args: ["-c"]
-
-            # Declare egress network endpoints.
-            # localhost:11434 is needed for Ollama if tools make LLM sub-calls.
+                  args: ["-c", "*"]
             network:
                 - direction: egress
                   protocol: tcp
                   host: localhost
                   port: 11434
                   description: Ollama
-
         resources:
             limits:
                 cpu: "2"
@@ -105,49 +100,92 @@ spec:
                 disk_io: 200MBps
 
     security:
-        run_as_user: 1000       # UID inside the container
-        read_only_root: false   # Make container root filesystem read-only
-        no_new_privileges: true # Prevent privilege escalation inside container
+        run_as_user: 1000
+        read_only_root: false
+        no_new_privileges: true
 
     audit:
         level: verbose
         retention_days: 7
 
     agent:
-        implementation: coding  # coding | planner | react | reflection | eternal
-        mode: primary           # For CodingAgent: code | architect | ask | debug | docs
+        implementation: coding
+        mode: primary
         version: 1.0.0
         prompt: >
             You are coding. Follow project rules, ask before destructive
-            actions, and summarise outcomes.
+            actions, and summarize outcomes.
         model:
             provider: ollama
             name: qwen2.5-coder:14b
             temperature: 0.2
             max_tokens: 4096
+        allowed_tools:
+            - file_read
+            - file_write
+            - file_edit
+            - search_grep
+        bash_permissions:
+            default: ask
+            allow_patterns: ["git diff*", "git status"]
+            deny_patterns: ["rm -rf*", "sudo*"]
+        file_permissions:
+            write:
+                default: ask
+                allow_patterns: ["**/*.go", "docs/**/*.md"]
+            edit:
+                default: ask
+                require_approval: true
+        invocation:
+            can_invoke_subagents: true
+            max_depth: 2
+        context:
+            max_files: 20
+            max_tokens: 20000
+            include_dependencies: true
         ollama_tool_calling: true
 
     policies:
-        # What happens when the agent tries to use a tool not listed above.
-        # ask   → pause and prompt you via HITL
-        # allow → permit silently
-        # deny  → block and return an error to the agent
+        destructive: ask
         default_tool_policy: ask
 
-        # Extra gate for tools tagged as destructive (file_delete, etc.)
-        destructive: ask
-
     skills:
-        - system    # Core system instructions
-        - coding    # General coding guidance
-        - gocoder   # Go-specific rules
+        - system
+        - coding
+        - gocoder
 ```
+
+### `spec.agent` Semantics
+
+Two different "mode" concepts exist and should not be confused:
+
+| Field | Meaning |
+|-------|---------|
+| `spec.agent.implementation` | Which top-level agent implementation to instantiate |
+| `spec.agent.mode` | Manifest role: `primary`, `subagent`, or `system` |
+
+CodingAgent task modes such as `code`, `architect`, `ask`, `debug`, and `docs` are selected per task by the caller through task metadata or task context. They are not stored in `spec.agent.mode`.
+
+### Common `spec.agent` Fields
+
+| Field | Purpose |
+|-------|---------|
+| `allowed_tools` | Restrict tool visibility to an explicit allowlist |
+| `tool_execution_policy` | Per-tool allow/ask/deny overrides |
+| `bash_permissions` | Pattern-based shell command gating |
+| `file_permissions` | Separate write/edit policies and approval rules |
+| `invocation` | Subagent recursion limits |
+| `context` | Context window and dependency-loading limits |
+| `lsp` | Language-server feature toggles and server mapping |
+| `search` | Hybrid/vector/AST search preferences |
+| `logging` | Agent and LLM debug logging toggles |
+| `metadata` | Display and registry metadata |
 
 ---
 
 ## Skills
 
-Skills are composable prompt and tool packages. Each skill contributes a prompt fragment and optionally constrains the tool set. They are declared in `spec.skills` and loaded in order.
+Skills are composable prompt and policy packages declared in `spec.skills` and loaded in order.
 
 **Location:** `relurpify_cfg/skills/<name>/skill.manifest.yaml`
 
@@ -157,71 +195,70 @@ Skills are composable prompt and tool packages. Each skill contributes a prompt 
 | `coding` | General coding conventions and workflow |
 | `gocoder` | Go-specific idioms, test patterns, module conventions |
 | `rustcoder` | Rust-specific idioms and ownership patterns |
-| `pycoder` | Python conventions, virtual environments |
-| `nodecoder` | Node.js / TypeScript patterns |
+| `pycoder` | Python conventions and environment patterns |
+| `nodecoder` | Node.js and TypeScript conventions |
 | `sqlcoder` | SQL and SQLite conventions |
-| `devops` | CI/CD, shell scripting, infrastructure patterns |
+| `devops` | CI/CD and shell automation conventions |
 
-A Go coding agent typically loads `system + coding + gocoder`. The skills stack onto each other — each one narrows and focuses the agent's behaviour for the task at hand.
-
-Skills are loaded at agent startup. Changing the `spec.skills` list requires restarting the agent.
+Skills can narrow behavior, adjust prompts, and supply policy hints. They do not bypass manifest permissions or sandbox enforcement.
 
 ---
 
 ## Per-Tool Policy Overrides
 
-Individual tools can override the `default_tool_policy`. This is managed via the TUI Tools pane (press `5`) and saved back to the manifest:
+Individual tools can override the global tool policy. The TUI Tools pane writes these overrides back into the manifest:
 
 ```yaml
 spec:
     agent:
         tool_execution_policy:
-            file_delete: deny
-            bash_execute: ask
-            run_tests: allow
+            file_delete:
+                execute: deny
+            bash_execute:
+                execute: ask
 ```
 
-When you press `a` (always allow) in a HITL prompt, this is what gets written to the manifest.
+Use this for one-off policy exceptions without relaxing the entire manifest.
 
 ---
 
-## Filesystem Paths and Placeholders
+## Filesystem Paths And Placeholders
 
-Manifest paths support workspace placeholders so manifests are portable across machines:
+Manifest paths support workspace placeholders so manifests remain portable across machines:
 
 ```yaml
 - action: fs:read
   path: ${workspace}/**
 ```
 
-`${workspace}` and `{{workspace}}` are both expanded to the actual workspace path at runtime. Relative paths without a placeholder are joined to the workspace root automatically.
+`${workspace}` and `{{workspace}}` are expanded to the absolute workspace path at runtime. Relative paths without placeholders are joined to the workspace root automatically.
 
 ---
 
 ## What Gets Loaded When
 
-```
+```text
 relurpish starts
-    │
-    ▼
-DefaultConfig() — workspace = current directory
-    │
-    ▼
-Normalize() — resolve all paths relative to workspace
-    │
-    ▼
-LoadWorkspaceConfig(config.yaml) — apply model/agent defaults
-    │
-    ▼
-RegisterAgent(manifest) — validate manifest, build PermissionManager
-    │
-    ▼
-ApplySkills(spec.skills) — merge skill prompts and tool constraints
-    │
-    ▼
-BuildToolRegistry() — register tools, apply per-tool policies
-    │
-    ▼
+    |
+    v
+DefaultConfig() -> workspace = current directory
+    |
+    v
+Normalize() -> resolve all filesystem paths
+    |
+    v
+LoadWorkspaceConfig(config.yaml) -> apply workspace defaults
+    |
+    v
+RegisterAgent(manifest) -> validate manifest + build PermissionManager
+    |
+    v
+ApplySkills(spec.skills) -> merge prompts and policy hints
+    |
+    v
+BuildToolRegistry() -> register tools and apply effective policies
+    |
+    v
 Agent is ready
 ```
 
@@ -230,6 +267,6 @@ Agent is ready
 ## See Also
 
 - [Architecture](architecture.md) — how configuration flows into the runtime
-- [Permission Model](permission-model.md) — how the manifest's policy fields are enforced
-- [Agents](agents.md) — which `implementation` and `mode` values to use
-- [TUI](tui.md) — editing configuration at runtime via the Settings pane
+- [Permission Model](permission-model.md) — how manifest policy fields are enforced
+- [Agents](agents.md) — agent implementations and CodingAgent task modes
+- [TUI](Relurpish_TUI.md) — editing configuration at runtime via the Settings pane

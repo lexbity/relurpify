@@ -143,4 +143,4 @@ Everything Relurpify creates or modifies at runtime is scoped to the project dir
 - [Configuration](configuration.md) — manifests, workspace config, skills
 - [Agents](agents.md) — agent types and when to use each
 - [Permission Model](permission-model.md) — how the security contract works
-- [TUI](tui.md) — using the relurpish interface
+- [TUI](Relurpish_TUI.md) — using the relurpish interface

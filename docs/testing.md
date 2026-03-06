@@ -2,15 +2,15 @@
 
 ## Synopsis
 
-Relurpify has two testing layers. Unit tests cover framework internals deterministically and require no running services. Agent tests run real agent workflows and require Ollama, but can be made deterministic through recording and replay.
+Relurpify has two testing layers. Unit tests cover framework internals deterministically and require no running services. Agent tests run full workflows from committed YAML suites and usually require Ollama, but they can be replayed from tape for reproducibility.
 
 ---
 
 ## Why Two Layers
 
-Unit tests answer: *does the framework behave correctly?* They test the permission manager, graph runtime, manifest validation, tool logic — things that have deterministic correct answers independent of what a language model says.
+Unit tests answer: *does the framework behave correctly?* They exercise manifest validation, permissions, tool logic, persistence, and runtime plumbing.
 
-Agent tests answer: *does the agent actually solve the problem?* They test the full stack: instruction → agent reasoning → tool calls → result. Because LLM output is non-deterministic, agent tests use structured assertions (did it call the right tools? did it produce output containing the right content?) rather than exact string matching. Recording and replay makes them reproducible.
+Agent tests answer: *does the agent actually solve the problem?* They execute the full stack: prompt -> agent reasoning -> tool calls -> result. Because model output is non-deterministic, suites assert on structured outcomes such as changed files, required tool calls, and output snippets instead of exact strings.
 
 ---
 
@@ -22,7 +22,7 @@ Unit tests live alongside the packages they test and require no external depende
 go test ./...
 ```
 
-All unit tests pass without Ollama running. LLM-dependent paths use the `TapeModel` replay mechanism in test mode.
+Useful variants:
 
 ```bash
 # With coverage
@@ -32,20 +32,23 @@ go tool cover -func=coverage.out
 # Single package
 go test ./framework/runtime/...
 go test ./framework/graph/...
-
-# Browser stack only
-go test ./framework/browser/... ./app/relurpish/runtime
 ```
+
+LLM-dependent unit tests use tape-backed models where needed, so Ollama is not required for normal unit test runs.
 
 ---
 
 ## Agent Tests
 
-Agent tests are YAML-driven test suites that run full agent workflows. They live in `testsuite/agenttests/` and are executed with the `agenttest run` command.
+Agent tests are YAML-driven suites stored in `testsuite/agenttests/`. Run them with:
+
+```bash
+go run ./cmd/coding-agent agenttest run
+```
 
 ### Prerequisites
 
-Ollama must be running with the target model pulled:
+For live runs, Ollama must be available with the target model pulled:
 
 ```bash
 ollama pull qwen2.5-coder:14b
@@ -54,125 +57,175 @@ ollama pull qwen2.5-coder:14b
 ### Running
 
 ```bash
-# Run all test suites in testsuite/agenttests/
+# Run every discovered suite
 go run ./cmd/coding-agent agenttest run
 
-# Run a specific suite
+# Run one suite explicitly
 go run ./cmd/coding-agent agenttest run \
     --suite testsuite/agenttests/coding.go.testsuite.yaml
 
-# Run with a specific agent and timeout
+# Filter discovered suites by agent prefix and raise timeout
 go run ./cmd/coding-agent agenttest run \
-    --agent coding-go \
-    --suite testsuite/agenttests/coding.go.testsuite.yaml \
+    --agent coding \
     --timeout 120s
 ```
 
-Without `--suite`, the runner searches `testsuite/agenttests/` for all `*.testsuite.yaml` files.
+Without `--suite`, the runner searches `testsuite/agenttests/` for `*.testsuite.yaml`.
 
----
-
-## Test Suite Format
-
-Each suite is a committed YAML file defining a set of test cases:
-
-```yaml
-name: Go Coding Agent Tests
-agent: coding-go
-timeout: 90s
-
-tests:
-  - name: Read and summarise a file
-    instruction: "Summarise README.md in one paragraph"
-    assertions:
-      - type: output_contains
-        value: "Relurpify"
-      - type: no_error
-
-  - name: Run the test suite
-    instruction: "Run the Go test suite and report results"
-    assertions:
-      - type: tool_called
-        value: run_tests
-      - type: no_error
-
-  - name: File modification
-    instruction: "Add a comment to the top of tools/files.go"
-    setup:
-      - type: snapshot_file
-        path: tools/files.go
-    assertions:
-      - type: file_modified
-        path: tools/files.go
-    teardown:
-      - type: restore_snapshot
-        path: tools/files.go
-```
-
-### Assertions
-
-| Type | What it checks |
-|------|----------------|
-| `output_contains` | Final response includes the given string |
-| `output_matches` | Final response matches a regex |
-| `no_error` | Run completed without error |
-| `tool_called` | Named tool was invoked at least once |
-| `file_modified` | Named file was changed |
-| `file_unchanged` | Named file was not changed |
-
-### Setup and Teardown
-
-`setup` and `teardown` steps run before and after each test. The `snapshot_file` + `restore_snapshot` pattern is standard for tests that modify files — it ensures a clean slate between runs and prevents one test from poisoning the next.
-
----
-
-## Recording Mode
-
-Recording mode makes agent tests deterministic by recording all LLM interactions to a tape file and replaying them on subsequent runs.
-
-### How It Works
-
-```
-capture mode:
-  Real Ollama call → response → stored in tape file
-
-replay mode:
-  Tape file → response → no Ollama call needed
-```
-
-The tape is a structured log of requests and responses. Replay mode matches incoming requests to recorded entries and returns the stored response — the agent behaves identically every time.
-
-### Modes
-
-| Mode | Flag | Behaviour |
-|------|------|-----------|
-| `off` | `--recording-mode off` | Normal live calls |
-| `capture` | `--recording-mode capture` | Record interactions to tape |
-| `replay` | `--recording-mode replay` | Replay from tape; no Ollama needed |
-
-### Recommended Workflow
+Useful flags:
 
 ```bash
-# 1. Record with Ollama running
-go run ./cmd/coding-agent agenttest run \
-    --recording-mode capture \
-    --suite testsuite/agenttests/coding.go.testsuite.yaml
-
-# 2. Commit the tape file (stored in testsuite/agenttest_fixtures/)
-
-# 3. CI replays without Ollama
-go run ./cmd/coding-agent agenttest run \
-    --recording-mode replay \
-    --suite testsuite/agenttests/coding.go.testsuite.yaml
+--suite <path>                 Repeatable suite path
+--agent <name>                 Filter discovered suites by agent prefix
+--out <dir>                    Artifact output directory
+--sandbox                      Run tool execution via gVisor/docker
+--timeout 120s                 Per-case timeout
+--model <name>                 Override model for all cases
+--endpoint <url>               Override Ollama endpoint
+--max-iterations <n>           Override agent loop limit
+--debug-llm                    Enable verbose LLM telemetry
+--debug-agent                  Enable verbose agent logging
+--ollama-reset none|model|server
+--ollama-reset-between
+--ollama-reset-on <regex>      Repeatable reset trigger
 ```
-
-Recording mode can also be toggled from the TUI Settings pane (pane 4, Recording row).
 
 ---
 
-## Sandbox Mode
+## Suite Format
 
-Agent tests can run in an isolated copy of the workspace to prevent test pollution:
+Suites use the versioned `AgentTestSuite` schema:
+
+```yaml
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.go
+  description: Go-focused prompts for the coding agent
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agents/coding-go.yaml
+  workspace:
+    strategy: in_place
+    exclude:
+      - .git/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: easy_fix_bug_and_run_tests
+      task_type: code_modification
+      prompt: >
+        Fix the failing test in testsuite/agenttest_fixtures/gosuite/mathutil,
+        then run cli_go test and confirm it passes.
+      context:
+        mode: code
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+      overrides:
+        allowed_tools: ["cli_go"]
+        control_flow: pipeline
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        tool_calls_must_include:
+          - cli_go
+        tool_calls_must_exclude:
+          - exec_run_tests
+```
+
+### Top-Level Fields
+
+| Field | Purpose |
+|------|---------|
+| `spec.agent_name` | Agent preset used by the runner |
+| `spec.manifest` | Manifest path relative to the repo/workspace |
+| `spec.workspace.strategy` | `in_place` or `copy` |
+| `spec.workspace.exclude` | Globs omitted from copied workspaces |
+| `spec.workspace.ignore_changes` | Paths ignored in change assertions |
+| `spec.models` | One or more model/endpoint combinations |
+| `spec.recording` | Default tape mode/path for all cases |
+| `spec.cases` | Individual prompts plus setup and expectations |
+
+### Case Fields
+
+| Field | Purpose |
+|------|---------|
+| `name` | Stable case identifier used in artifact directories |
+| `description` | Optional human-readable note |
+| `task_type` | Task classification hint |
+| `prompt` | The user instruction sent to the agent |
+| `context` | Extra task context such as `mode: debug` |
+| `metadata` | Extra task metadata |
+| `setup.files` | Files materialized before the case runs |
+| `setup.git_init` | Initialize a git repository before execution |
+| `requires.executables` | Skip unless required binaries exist |
+| `requires.tools` | Skip unless required tools are registered |
+| `expect` | Structured expectations for output, files, and tool calls |
+| `overrides` | Per-case overrides for model, recording, env, allowed tools, or control flow |
+
+### Expectations
+
+| Field | What it checks |
+|------|----------------|
+| `must_succeed` | Case must complete without agent/runtime failure |
+| `output_contains` | Final response contains all listed substrings |
+| `output_regex` | Final response matches all listed regexes |
+| `no_file_changes` | No workspace files changed |
+| `files_changed` | Named files were modified |
+| `tool_calls_must_include` | Required tool names were called |
+| `tool_calls_must_exclude` | Forbidden tool names were not called |
+| `max_tool_calls` | Hard cap on total tool invocations |
+
+---
+
+## Recording
+
+Recording is configured in suite YAML, not through a dedicated CLI flag. The runner wraps the active model with a tape model when `spec.recording` or `case.overrides.recording` is set.
+
+How it works:
+
+```text
+record mode:
+  Real Ollama call -> response -> stored in tape file
+
+replay mode:
+  Tape file -> response -> no Ollama call needed
+```
+
+Modes:
+
+| Mode | Behaviour |
+|------|-----------|
+| `off` | Normal live Ollama calls |
+| `record` | Write responses to a tape file |
+| `replay` | Replay from tape; no Ollama needed |
+
+Example:
+
+```yaml
+spec:
+  recording:
+    mode: record
+    tape: testsuite/agenttest_fixtures/coding.go.tape.jsonl
+```
+
+Run once with `mode: record`, then switch the same suite to `mode: replay` for deterministic reruns.
+
+The TUI also exposes a recording mode toggle in Settings for interactive sessions.
+
+---
+
+## Sandbox And Workspace Isolation
+
+You can isolate command execution with:
 
 ```bash
 go run ./cmd/coding-agent agenttest run \
@@ -180,61 +233,33 @@ go run ./cmd/coding-agent agenttest run \
     --suite testsuite/agenttests/coding.go.testsuite.yaml
 ```
 
-Sandbox mode copies the workspace to a temporary directory before running and cleans up afterwards. File modifications made by the agent during the test do not affect your actual workspace.
+You can isolate filesystem state by setting:
 
-Note: `--sandbox` for agenttest uses `LocalCommandRunner` (host execution, no gVisor). gVisor-sandboxed execution is the production path via `relurpish`.
+```yaml
+spec:
+  workspace:
+    strategy: copy
+```
+
+Using both together gives the cleanest agenttest runs: copied workspace state plus sandboxed command execution.
 
 ---
 
-## CI Integration
+## CI
+
+Typical CI replay run:
 
 ```bash
-# Run all suites in CI
-RELURPIFY_AGENTTEST_SUITE=testsuite/agenttests/coding.go.testsuite.yaml \
-    ./scripts/ci.sh
+go run ./cmd/coding-agent agenttest run \
+    --suite testsuite/agenttests/coding.go.testsuite.yaml \
+    --timeout 120s
 ```
 
-In CI, use `--recording-mode replay` so Ollama is not required.
+For CI stability:
 
-### Browser CI
-
-Browser support now has its own CI entry point:
-
-```bash
-./scripts/browser-ci.sh
-```
-
-This runs:
-
-- browser package tests
-- runtime/provider tests that cover browser session wiring
-- optional repeated browser stress tests when `RELURPIFY_BROWSER_STRESS=1`
-
-Example:
-
-```bash
-# Standard browser gating
-./scripts/browser-ci.sh
-
-# Include repeated localhost stress runs
-RELURPIFY_BROWSER_STRESS=1 ./scripts/browser-ci.sh
-```
-
-If a CI environment intentionally does not validate browser support, set:
-
-```bash
-RELURPIFY_BROWSER_CI=0 ./scripts/ci.sh
-```
-
-### Browser Release Gate
-
-Browser support should not be considered releasable unless the following all pass:
-
-- `go test ./framework/browser/... ./app/relurpish/runtime`
-- real localhost integration tests for CDP, Classic WebDriver, and BiDi on a supported Chromium/ChromeDriver pair
-- repeated stress runs with `RELURPIFY_BROWSER_STRESS=1`
-- cleanup tests confirming browser processes and temporary profiles are removed on shutdown
-- parallel session isolation tests in the runtime provider layer
+- commit suites with `recording.mode: replay`
+- pin the model name in `spec.models`
+- use `--ollama-reset` and `--ollama-reset-between` only when live Ollama runs are unavoidable
 
 ---
 
@@ -242,4 +267,4 @@ Browser support should not be considered releasable unless the following all pas
 
 - [Architecture](architecture.md) — how agenttest fits into the overall system
 - [Agents](agents.md) — which agent manifests to test against
-- [TUI](tui.md) — recording mode toggle in Settings pane
+- [TUI](Relurpish_TUI.md) — recording mode toggle in Settings pane

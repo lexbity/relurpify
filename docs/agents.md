@@ -57,7 +57,12 @@ The primary agent for interactive development work. It delegates to specialised 
 | `debug` | ReAct | Diagnostic focus: runs tests, reads stack traces, searches code |
 | `docs` | ReAct (write-focused) | Writes or updates documentation files |
 
-The mode is set in the manifest under `spec.agent.mode`. In `architect` mode the caller can also request resume-from-checkpoint via task context so interrupted long plans continue from the latest saved step. Language-specific manifests are provided for Go, Rust, Python, Node.js, and SQLite in `relurpify_cfg/agents/`. These differ in their skill stacks, declared executables, and system prompts.
+Two different "mode" concepts exist:
+
+1. `spec.agent.implementation` selects the top-level agent implementation (`coding`, `planner`, `react`, `reflection`, `eternal`).
+2. `spec.agent.mode` is the manifest role (`primary`, `subagent`, `system`).
+
+CodingAgent execution mode (`code`, `architect`, `ask`, `debug`, `docs`) is selected per task through task metadata or task context. In `architect` mode the caller can also request resume-from-checkpoint via task context so interrupted long plans continue from the latest saved step. Language-specific manifests are provided for Go, Rust, Python, Node.js, and SQLite in `relurpify_cfg/agents/`. These differ in their skill stacks, declared executables, and system prompts.
 
 **Selecting a language-specific agent:**
 
@@ -130,7 +135,7 @@ A few rules of thumb:
 - **Refactoring with quality review**: `reflection`
 - **Autonomous background task**: `eternal`
 
-When in doubt, start with the language-specific coding agent. Its mode can be changed in the manifest or overridden in the Settings pane.
+When in doubt, start with the language-specific coding agent. The manifest controls the implementation, permissions, and defaults; the task decides which CodingAgent execution mode runs.
 
 ---
 
@@ -138,4 +143,4 @@ When in doubt, start with the language-specific coding agent. Its mode can be ch
 
 - [Configuration](configuration.md) — full manifest schema for agent settings
 - [Permission Model](permission-model.md) — how tool access is controlled per agent
-- [TUI](tui.md) — switching agents at runtime via the Settings pane
+- [TUI](Relurpish_TUI.md) — switching agents at runtime via the Settings pane

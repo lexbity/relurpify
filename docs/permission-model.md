@@ -158,5 +158,5 @@ spec:
 ## See Also
 
 - [Configuration](configuration.md) — full manifest schema
-- [TUI](tui.md) — the Tools pane for editing policies interactively
+- [TUI](Relurpish_TUI.md) — the Tools pane for editing policies interactively
 - [Architecture](architecture.md) — how the permission layer fits into the execution path

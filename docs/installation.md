@@ -2,42 +2,38 @@
 
 ## Synopsis
 
-Relurpify has a deliberately opinionated dependency stack. Every component exists for a specific reason, and the system will refuse to start if any mandatory dependency is missing. This document explains what you need, why you need it, and how to get it running.
+Relurpify expects an explicitly configured local environment: Go to build the binaries, Docker plus gVisor for sandboxed command execution, and Ollama for local model inference. This page documents the manual setup path.
 
 ---
 
-## Why This Stack
+## Dependencies
 
-| Dependency | Why it's required |
-|------------|------------------|
-| **Go 1.21+** | Relurpify is written in Go; binaries are compiled and installed via `go install` |
-| **Docker** (or containerd) | Container runtime used to launch gVisor-sandboxed tool execution |
-| **gVisor (`runsc`)** | Kernel-level sandbox for all agent-executed commands; non-negotiable |
-| **Ollama** | Local LLM inference; all reasoning happens on your machine |
+| Dependency | Why it is required |
+|------------|--------------------|
+| **Go 1.21+** | Builds `relurpish` and `coding-agent` |
+| **Docker** or **containerd** | Container runtime for sandboxed execution |
+| **gVisor (`runsc`)** | Mandatory sandbox runtime |
+| **Ollama** | Local LLM inference backend |
 
-gVisor is a hard requirement. An AI agent that can run arbitrary shell commands without kernel-level isolation is an unacceptable security risk on a real codebase. If you want an agent without this constraint, there are simpler tools available.
+Relurpify intentionally refuses to degrade into an unsandboxed "just run shell commands on the host" mode for normal runtime operation.
 
 ---
 
-## Dependency Installation
+## Install The Stack
 
 ### 1. Go
 
-Install Go 1.21 or later from [go.dev/dl](https://go.dev/dl). Verify:
+Install Go 1.21 or later from [go.dev/dl](https://go.dev/dl), then verify:
 
 ```bash
 go version
 ```
 
-Make sure `$GOPATH/bin` (typically `~/go/bin`) is in your `$PATH`. This is where `go install` places binaries.
+Make sure `$GOPATH/bin` is on your `$PATH`.
 
 ### 2. Docker
 
-Install Docker Engine from [docs.docker.com/engine/install](https://docs.docker.com/engine/install).
-
-> containerd is also supported as an alternative to Docker. The instructions below use Docker.
-
-Verify Docker is running:
+Install Docker Engine from [docs.docker.com/engine/install](https://docs.docker.com/engine/install), then verify:
 
 ```bash
 docker info
@@ -45,18 +41,17 @@ docker info
 
 ### 3. gVisor
 
-gVisor provides the `runsc` runtime. Install it and register it with Docker:
+Install `runsc` and register it with Docker:
 
 ```bash
-# Install runsc (replace with your platform's package method)
+# Install runsc using your platform's package method
 # See https://gvisor.dev/docs/user_guide/install/
 
-# Register runsc with Docker
 sudo runsc install
 sudo systemctl restart docker
 ```
 
-Verify Docker can see the `runsc` runtime:
+Verify Docker sees the runtime:
 
 ```bash
 docker info --format '{{json .Runtimes}}' | grep runsc
@@ -68,135 +63,124 @@ Install Ollama from [ollama.com](https://ollama.com) and pull a code-capable mod
 
 ```bash
 ollama pull qwen2.5-coder:14b
-```
-
-Any model available in Ollama works. `qwen2.5-coder:14b` is the default. Verify Ollama is running:
-
-```bash
 curl http://localhost:11434/api/tags
 ```
 
 ---
 
-## Installing Relurpify
+## Install The Binaries
 
-Relurpify is installed as a global Go binary. Run from anywhere:
+Install the primary TUI/runtime:
 
 ```bash
 go install github.com/lexcodex/relurpify/app/relurpish@latest
 ```
 
-This compiles and places the `relurpish` binary in `$GOPATH/bin`. You can then run `relurpish` from any project directory.
+Optional: install the CLI used for testsuites and utility commands:
+
+```bash
+go install github.com/lexcodex/relurpify/cmd/coding-agent@latest
+```
 
 ---
 
-## Workspace Setup
+## Workspace Layout
 
-Relurpify is workspace-aware. When you run `relurpish` it looks for a `relurpify_cfg/` directory in the current working directory. This directory is the configuration root for that project.
+Relurpify is workspace-aware. Run it from a project that contains `relurpify_cfg/`.
 
-**Create a workspace in your project:**
+Create the basic directory structure:
 
 ```bash
 cd /your/project
 mkdir -p relurpify_cfg/agents
 ```
 
-At minimum, you need:
+Useful files:
 
-- `relurpify_cfg/config.yaml` — sets the default model
-- `relurpify_cfg/agent.manifest.yaml` — the default agent security contract
-- `relurpify_cfg/agents/` — per-agent manifests
+- `relurpify_cfg/agent.manifest.yaml` — active manifest used by `relurpish`
+- `relurpify_cfg/config.yaml` — optional workspace defaults
+- `relurpify_cfg/agents/` — optional additional agent definitions or presets
 
-A minimal `config.yaml`:
-
-```yaml
-default_model:
-    name: qwen2.5-coder:14b
-```
-
-Copy a manifest from the Relurpify repository's `relurpify_cfg/agents/` directory as a starting point, then edit the `filesystem` paths to match your project.
-
----
-
-## Environment Check
-
-Before launching the TUI, run the environment probe to confirm every dependency is available:
+The fastest manual setup path is to copy a shipped manifest into the default location and then edit it for your project:
 
 ```bash
-relurpish wizard
+cp /path/to/relurpify/relurpify_cfg/agents/coding-go.yaml relurpify_cfg/agent.manifest.yaml
 ```
 
-This checks:
-- `runsc` binary presence and version
-- Docker / containerd presence and gVisor registration
-- Ollama endpoint health and available models
-- Workspace configuration
+Update at least:
 
-If anything is missing, the output will describe what needs to be fixed before the runtime can start.
+- filesystem paths under `spec.defaults.permissions.filesystem`
+- executable allowlists under `spec.defaults.permissions.executables`
+- the model name under `spec.agent.model.name`
+
+An optional `config.yaml` looks like:
+
+```yaml
+model: qwen2.5-coder:14b
+agents:
+    - coding-go
+allowed_tools: []
+permission_profile: workspace_write
+last_updated: 1709500000
+```
+
+If `config.yaml` is missing, runtime defaults come from the manifest and CLI flags.
 
 ---
 
 ## First Run
 
-Once the environment check passes:
+Once the manifest points at the correct workspace and model:
 
 ```bash
 cd /your/project
 relurpish chat
 ```
 
-The TUI opens with the Chat pane active. Type your first instruction and press `enter`.
+The TUI opens with the Chat pane active.
 
 ---
 
-## Overriding Defaults
+## Useful Flags
 
-All paths and settings can be overridden via flags:
+| Flag | Purpose |
+|------|---------|
+| `--workspace <path>` | Override the workspace root |
+| `--manifest <path>` | Override the active manifest path |
+| `--agent <name>` | Select an agent preset or definition |
+| `--ollama-endpoint <url>` | Override the Ollama endpoint |
+| `--ollama-model <name>` | Override the model name |
+| `--runsc <path>` | Override the `runsc` binary path |
+| `--container-runtime <name>` | Select `docker` or `containerd` |
+| `--sandbox-platform <name>` | Select `kvm` or `ptrace` |
+| `--serve` | Start the HTTP API alongside the TUI |
+| `--addr <addr>` | Override the HTTP listen address |
 
-| Flag | Default | Purpose |
-|------|---------|---------|
-| `--workspace <path>` | Current directory | Workspace root |
-| `--manifest <path>` | `relurpify_cfg/agent.manifest.yaml` | Agent manifest |
-| `--agent <name>` | `coding` | Agent preset |
-| `--ollama-endpoint <url>` | `http://localhost:11434` | Ollama URL |
-| `--ollama-model <name>` | From manifest | Model override |
-| `--runsc <path>` | `runsc` | Path to runsc binary |
-| `--container-runtime <name>` | `docker` | `docker` or `containerd` |
-| `--sandbox-platform <name>` | auto | `kvm` or `ptrace` |
-
-Example — running against a specific workspace and manifest:
+Example:
 
 ```bash
 relurpish chat \
   --workspace /my/project \
-  --manifest /my/project/relurpify_cfg/agents/coding-go.yaml
+  --manifest /my/project/relurpify_cfg/agent.manifest.yaml \
+  --ollama-model qwen2.5-coder:14b
 ```
 
 ---
 
-## For Developers / Framework Users
+## Framework Usage
 
-If you want to build on top of the Relurpify framework (custom agents, custom tools, embedded usage), add it as a Go module dependency:
+If you are embedding Relurpify as a Go dependency instead of running the binaries:
 
 ```bash
 go get github.com/lexcodex/relurpify@latest
 ```
 
-Then import the packages you need:
-
-```go
-import (
-    "github.com/lexcodex/relurpify/framework/core"
-    "github.com/lexcodex/relurpify/framework/graph"
-)
-```
-
-See [Developer: Custom Agents](dev/custom-agents.md) and [Developer: Custom Tools](dev/tools.md) for guides.
+Then import the packages you need from `framework/`, `agents/`, or `tools/`.
 
 ---
 
 ## See Also
 
-- [Architecture](architecture.md) — understand what you're setting up
+- [Architecture](architecture.md) — understand what you are setting up
 - [Configuration](configuration.md) — workspace config and manifest schema
 - [Permission Model](permission-model.md) — how the manifest controls agent behaviour
