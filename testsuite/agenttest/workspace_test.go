@@ -34,3 +34,17 @@ func TestSnapshotAndDiffWorkspace(t *testing.T) {
 		t.Fatalf("unexpected changed files: %v", changed)
 	}
 }
+
+func TestFilterChangedFilesIgnoresGeneratedArtifacts(t *testing.T) {
+	changed := []string{
+		"pkg/file.go",
+		"pkg/target/debug/app",
+		"pkg/__pycache__/mod.cpython-313.pyc",
+	}
+
+	filtered := FilterChangedFiles(changed, []string{"**/target/**", "**/__pycache__/**"})
+
+	if len(filtered) != 1 || filtered[0] != "pkg/file.go" {
+		t.Fatalf("unexpected filtered files: %v", filtered)
+	}
+}

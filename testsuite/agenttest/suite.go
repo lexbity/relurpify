@@ -32,8 +32,9 @@ type SuiteSpec struct {
 }
 
 type WorkspaceSpec struct {
-	Strategy string   `yaml:"strategy,omitempty"` // copy|in_place
-	Exclude  []string `yaml:"exclude,omitempty"`
+	Strategy      string   `yaml:"strategy,omitempty"` // copy|in_place
+	Exclude       []string `yaml:"exclude,omitempty"`
+	IgnoreChanges []string `yaml:"ignore_changes,omitempty"`
 }
 
 type ModelSpec struct {
@@ -97,6 +98,7 @@ type CaseOverrideSpec struct {
 	Workspace     *WorkspaceSpec    `yaml:"workspace,omitempty"`
 	ExtraEnv      map[string]string `yaml:"extra_env,omitempty"`
 	AllowedTools  []string          `yaml:"allowed_tools,omitempty"`
+	ControlFlow   string            `yaml:"control_flow,omitempty"`
 }
 
 func LoadSuite(path string) (*Suite, error) {

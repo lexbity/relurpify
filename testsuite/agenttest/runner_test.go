@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/framework/toolsys"
 )
 
 func TestFallbackManifestPath(t *testing.T) {
@@ -19,5 +22,26 @@ func TestFallbackManifestPath(t *testing.T) {
 	got := fallbackManifestPath(filepath.Join(workspace, "testsuite", "agent.manifest.yaml"), workspace)
 	if got != manifest {
 		t.Fatalf("expected %s, got %s", manifest, got)
+	}
+}
+
+func TestApplyCaseControlFlowOverrideSetsCodingMode(t *testing.T) {
+	agent := &agents.CodingAgent{Tools: toolsys.NewToolRegistry()}
+	if err := agent.Initialize(nil); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	err := applyCaseControlFlowOverride(agent, CaseSpec{
+		Context: map[string]any{"mode": "code"},
+		Overrides: CaseOverrideSpec{
+			ControlFlow: "pipeline",
+		},
+	})
+	if err != nil {
+		t.Fatalf("applyCaseControlFlowOverride: %v", err)
+	}
+
+	if got := agent.ModeProfiles()[agents.ModeCode].ControlFlow; got != agents.ControlFlowPipeline {
+		t.Fatalf("expected pipeline control flow, got %s", got)
 	}
 }

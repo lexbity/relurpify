@@ -1,0 +1,102 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.pipeline.go
+  description: "Pipeline control-flow coverage for Go coding tasks."
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agents/coding-go.yaml
+  workspace:
+    strategy: in_place
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: easy_fix_bug_and_run_tests
+      task_type: code_modification
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              // Add returns the sum of a and b.
+              func Add(a, b int) int {
+              	return a + b + 1
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              // Add returns the sum of a and b.
+              func Add(a, b int) int {
+              	return a + b + 1
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      overrides:
+        control_flow: pipeline
+        allowed_tools: ["cli_go"]
+      prompt: "Fix the failing test in testsuite/agenttest_fixtures/gosuite/mathutil without changing the test, then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"]."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+    - name: verify_already_correct_without_edits
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              func Add(a, b int) int {
+              	return a + b
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      overrides:
+        control_flow: pipeline
+        allowed_tools: ["cli_go"]
+      prompt: "Run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm whether the package is already correct. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        tool_calls_must_include:
+          - cli_go

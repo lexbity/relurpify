@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding.go
-  description: "Go-focused prompts for the coding agent (easy→hard)."
+  description: "Go-focused prompts for the coding agent across common workflows."
 spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-go.yaml
@@ -123,4 +123,66 @@ spec:
           - cli_go
         tool_calls_must_exclude:
           - exec_run_tests
+    - name: compile_error_fix_and_test
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
 
+              func Add(a, b int) int {
+              	return fmt.Sprintf("%d", a+b)
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      overrides:
+        allowed_tools: ["cli_go"]
+      prompt: "Fix the compile error in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go, then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        tool_calls_must_include:
+          - cli_go
+    - name: verify_already_correct_without_edits
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              func Add(a, b int) int {
+              	return a + b
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      overrides:
+        allowed_tools: ["cli_go"]
+      prompt: "Run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm whether the package is already correct. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - "(?i)(correct|passes|ok)"
+        tool_calls_must_include:
+          - cli_go

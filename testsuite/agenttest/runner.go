@@ -144,12 +144,16 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 
 	workspaceStrategy := suite.Spec.Workspace.Strategy
 	exclude := append([]string{}, suite.Spec.Workspace.Exclude...)
+	ignoreChanges := append([]string{}, suite.Spec.Workspace.IgnoreChanges...)
 	if c.Overrides.Workspace != nil {
 		if c.Overrides.Workspace.Strategy != "" {
 			workspaceStrategy = c.Overrides.Workspace.Strategy
 		}
 		if len(c.Overrides.Workspace.Exclude) > 0 {
 			exclude = append([]string{}, c.Overrides.Workspace.Exclude...)
+		}
+		if len(c.Overrides.Workspace.IgnoreChanges) > 0 {
+			ignoreChanges = append([]string{}, c.Overrides.Workspace.IgnoreChanges...)
 		}
 	}
 	if workspaceStrategy == "" {
@@ -163,6 +167,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			"relurpify_cfg/test_runs/**",
 		}
 	}
+	ignoreChanges = uniqueStrings(append(ignoreChanges, defaultIgnoredGeneratedChanges()...))
 
 	workspace := targetWorkspace
 	if strings.EqualFold(workspaceStrategy, "copy") {
@@ -263,7 +268,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	sort.Strings(env)
 
 	allowedTools := mergeStrings(defaultAgenttestAllowedTools(), c.Overrides.AllowedTools)
-	agent, state, err := buildAgent(workspace, manifestAbs, agentName, spec, instrumented, telemetry, opts, env, allowedTools)
+	agent, state, err := buildAgent(workspace, manifestAbs, agentName, spec, instrumented, telemetry, opts, env, allowedTools, c)
 	if err != nil {
 		return CaseReport{Name: c.Name, Model: modelName, Endpoint: endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
 	}
@@ -327,6 +332,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	var changed []string
 	if snapErr == nil {
 		changed = DiffSnapshots(before, after)
+		changed = FilterChangedFiles(changed, ignoreChanges)
 	}
 	if data, err := json.MarshalIndent(changed, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(caseDir, "changed_files.json"), data, 0o644)
@@ -514,7 +520,7 @@ func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.Ag
 	return &clone
 }
 
-func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedTools []string) (graph.Agent, *core.Context, error) {
+func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedTools []string, c CaseSpec) (graph.Agent, *core.Context, error) {
 	agentManifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil, nil, err
@@ -586,7 +592,17 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		return nil, nil, err
 	}
 
-	agent := instantiateAgentByName(agentName, model, registry, memory, indexManager)
+	agent := instantiateAgentByName(
+		workspace,
+		agentName,
+		model,
+		registry,
+		memory,
+		indexManager,
+	)
+	if err := applyCaseControlFlowOverride(agent, c); err != nil {
+		return nil, nil, err
+	}
 
 	maxIterations := opts.MaxIterations
 	if maxIterations <= 0 {
@@ -612,6 +628,35 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 	return agent, core.NewContext(), nil
 }
 
+func applyCaseControlFlowOverride(agent graph.Agent, c CaseSpec) error {
+	flow := strings.TrimSpace(c.Overrides.ControlFlow)
+	if flow == "" {
+		return nil
+	}
+	coding, ok := agent.(*agents.CodingAgent)
+	if !ok {
+		return nil
+	}
+	mode := agents.ModeCode
+	if c.Context != nil {
+		if raw, ok := c.Context["mode"]; ok {
+			if parsed := strings.TrimSpace(fmt.Sprint(raw)); parsed != "" {
+				mode = agents.Mode(strings.ToLower(parsed))
+			}
+		}
+	}
+	switch strings.ToLower(flow) {
+	case string(agents.ControlFlowPipeline):
+		return coding.OverrideControlFlow(mode, agents.ControlFlowPipeline)
+	case string(agents.ControlFlowArchitect):
+		return coding.OverrideControlFlow(mode, agents.ControlFlowArchitect)
+	case string(agents.ControlFlowReAct):
+		return coding.OverrideControlFlow(mode, agents.ControlFlowReAct)
+	default:
+		return fmt.Errorf("unsupported control_flow override %q", flow)
+	}
+}
+
 func defaultAgenttestAllowedTools() []string {
 	return []string{
 		"file_read",
@@ -627,6 +672,21 @@ func defaultAgenttestAllowedTools() []string {
 		"git_history",
 		"git_blame",
 		"query_ast",
+	}
+}
+
+func defaultIgnoredGeneratedChanges() []string {
+	return []string{
+		"relurpify_cfg/sessions/**",
+		"**/target/**",
+		"**/node_modules/**",
+		"**/__pycache__/**",
+		"**/.pytest_cache/**",
+		"**/*.pyc",
+		"**/*.pyo",
+		"**/.mypy_cache/**",
+		"**/coverage/**",
+		"**/.coverage",
 	}
 }
 
@@ -678,21 +738,43 @@ func (t *aliasTool) Permissions() core.ToolPermissions {
 }
 func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
-func instantiateAgentByName(name string, model core.LanguageModel, tools *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
+func instantiateAgentByName(workspace, name string, model core.LanguageModel, tools *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
+	checkpointPath := filepath.Join(workspace, "relurpify_cfg", "sessions", "checkpoints")
+	workflowStatePath := filepath.Join(workspace, "relurpify_cfg", "sessions", "workflow_state.db")
 	switch strings.ToLower(name) {
 	case "planner":
 		return &agents.PlannerAgent{Model: model, Tools: tools, Memory: mem}
 	case "react":
-		return &agents.ReActAgent{Model: model, Tools: tools, Memory: mem, IndexManager: indexManager}
+		return &agents.ReActAgent{
+			Model:          model,
+			Tools:          tools,
+			Memory:         mem,
+			IndexManager:   indexManager,
+			CheckpointPath: checkpointPath,
+		}
 	case "reflection":
 		return &agents.ReflectionAgent{
 			Reviewer: model,
-			Delegate: &agents.CodingAgent{Model: model, Tools: tools, Memory: mem, IndexManager: indexManager},
+			Delegate: &agents.CodingAgent{
+				Model:             model,
+				Tools:             tools,
+				Memory:            mem,
+				IndexManager:      indexManager,
+				CheckpointPath:    checkpointPath,
+				WorkflowStatePath: workflowStatePath,
+			},
 		}
 	case "eternal":
 		return &agents.EternalAgent{Model: model}
 	default:
-		return &agents.CodingAgent{Model: model, Tools: tools, Memory: mem, IndexManager: indexManager}
+		return &agents.CodingAgent{
+			Model:             model,
+			Tools:             tools,
+			Memory:            mem,
+			IndexManager:      indexManager,
+			CheckpointPath:    checkpointPath,
+			WorkflowStatePath: workflowStatePath,
+		}
 	}
 }
 

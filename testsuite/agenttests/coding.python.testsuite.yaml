@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding.python
-  description: "Python-focused prompts for the coding agent (easy→hard)."
+  description: "Python-focused prompts for the coding agent across common workflows."
 spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-python.yaml
@@ -100,4 +100,73 @@ spec:
         files_changed: ["testsuite/agenttest_fixtures/pysuite/calc.py"]
         tool_calls_must_include: ["cli_python"]
         tool_calls_must_exclude: ["exec_run_tests"]
+    - name: syntax_error_fix_and_run_tests
+      task_type: code_modification
+      requires:
+        executables: ["python3"]
+        tools: ["cli_python"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/pysuite/calc.py
+            content: |
+              def add(a: int, b: int) -> int:
+                  return a + b
 
+
+              def mul(a: int, b: int) -> int:
+                  return a * b
+          - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
+            content: |
+              import unittest
+
+              import calc
+
+
+              class TestCalc(unittest.TestCase):
+                  def test_add(self) -> None:
+                      self.assertEqual(calc.add(2, 2), 4)
+
+
+              if __name__ == "__main__":
+                  unittest.main(
+      overrides:
+        allowed_tools: ["cli_python"]
+      prompt: "Fix the syntax error in testsuite/agenttest_fixtures/pysuite/test_calc.py without changing the test intent, then run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\"."
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/agenttest_fixtures/pysuite/test_calc.py"]
+        tool_calls_must_include: ["cli_python"]
+    - name: verify_already_correct_without_edits
+      task_type: analysis
+      requires:
+        executables: ["python3"]
+        tools: ["cli_python"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/pysuite/calc.py
+            content: |
+              def add(a: int, b: int) -> int:
+                  return a + b
+          - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
+            content: |
+              import unittest
+
+              import calc
+
+
+              class TestCalc(unittest.TestCase):
+                  def test_add(self) -> None:
+                      self.assertEqual(calc.add(2, 2), 4)
+
+
+              if __name__ == "__main__":
+                  unittest.main()
+      overrides:
+        allowed_tools: ["cli_python"]
+      prompt: "Run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\" and confirm whether the module is already correct. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - "(?i)(correct|passes|ok)"
+        tool_calls_must_include: ["cli_python"]

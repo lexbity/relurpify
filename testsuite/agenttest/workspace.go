@@ -80,6 +80,27 @@ func DiffSnapshots(before, after *WorkspaceSnapshot) (changed []string) {
 	return changed
 }
 
+func FilterChangedFiles(changed []string, ignore []string) []string {
+	if len(changed) == 0 || len(ignore) == 0 {
+		return changed
+	}
+	filtered := make([]string, 0, len(changed))
+	for _, file := range changed {
+		skip := false
+		for _, pat := range ignore {
+			if matchGlob(pat, file) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			filtered = append(filtered, file)
+		}
+	}
+	sort.Strings(filtered)
+	return filtered
+}
+
 func CopyWorkspace(src, dst string, exclude []string) error {
 	src = filepath.Clean(src)
 	dst = filepath.Clean(dst)

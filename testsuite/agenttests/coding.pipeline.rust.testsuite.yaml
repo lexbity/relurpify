@@ -1,0 +1,97 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.pipeline.rust
+  description: "Pipeline control-flow coverage for Rust coding tasks."
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agents/coding-rust.yaml
+  workspace:
+    strategy: in_place
+    exclude:
+      - .git/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: easy_fix_bug_and_run_tests
+      task_type: code_modification
+      requires:
+        executables: ["cargo"]
+        tools: ["cli_cargo"]
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+            content: |
+              pub fn add(a: i32, b: i32) -> i32 {
+                  a + b + 1
+              }
+
+              #[cfg(test)]
+              mod tests {
+                  use super::*;
+
+                  #[test]
+                  fn test_add() {
+                      assert_eq!(add(2, 2), 4);
+                  }
+              }
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+            content: |
+              pub fn add(a: i32, b: i32) -> i32 {
+                  a + b + 1
+              }
+
+              #[cfg(test)]
+              mod tests {
+                  use super::*;
+
+                  #[test]
+                  fn test_add() {
+                      assert_eq!(add(2, 2), 4);
+                  }
+              }
+      overrides:
+        control_flow: pipeline
+        allowed_tools: ["cli_cargo"]
+      prompt: "Fix the failing tests in testsuite/agenttest_fixtures/rustsuite without changing the test expectations, then run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+        tool_calls_must_include:
+          - cli_cargo
+    - name: verify_already_correct_without_edits
+      task_type: analysis
+      requires:
+        executables: ["cargo"]
+        tools: ["cli_cargo"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+            content: |
+              pub fn add(a: i32, b: i32) -> i32 {
+                  a + b
+              }
+
+              #[cfg(test)]
+              mod tests {
+                  use super::*;
+
+                  #[test]
+                  fn test_add() {
+                      assert_eq!(add(2, 2), 4);
+                  }
+              }
+      overrides:
+        control_flow: pipeline
+        allowed_tools: ["cli_cargo"]
+      prompt: "Run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\" and confirm whether the crate is already correct. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        tool_calls_must_include:
+          - cli_cargo
