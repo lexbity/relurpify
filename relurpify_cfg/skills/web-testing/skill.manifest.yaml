@@ -1,0 +1,16 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: web-testing
+  version: 0.1.0
+  description: Browser-driven localhost testing for web applications.
+spec:
+  requires:
+    bins: [chromium]
+  prompt_snippets:
+    - "Use the browser tool for localhost app testing. Prefer deterministic selectors and wait conditions. Do not browse external domains unless the manifest explicitly permits them."
+  allowed_tools:
+    - browser
+  tool_execution_policy:
+    browser:
+      execute: allow

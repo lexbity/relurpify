@@ -72,3 +72,19 @@ func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
 	assert.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.NotEmpty(t, decoded)
 }
+
+func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "src", "nested", "lib.rs")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
+	assert.NoError(t, os.WriteFile(target, []byte("pub fn demo() {}\n"), 0o644))
+
+	tool := &ListFilesTool{BasePath: dir}
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"directory": ".",
+		"pattern":   "**/*.rs",
+	})
+	assert.NoError(t, err)
+	files := res.Data["files"].([]string)
+	assert.Contains(t, files, target)
+}

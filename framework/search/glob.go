@@ -44,8 +44,13 @@ func globToRegexPublic(pattern string) string {
 				peek = string(runes[i+1])
 			}
 			if peek == "*" {
-				b.WriteString(".*")
-				i++
+				if i+2 < len(runes) && runes[i+2] == '/' {
+					b.WriteString("(?:.*/)?")
+					i += 2
+				} else {
+					b.WriteString(".*")
+					i++
+				}
 			} else {
 				b.WriteString("[^/]*")
 			}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/search"
 	"github.com/lexcodex/relurpify/framework/toolsys"
 	"io/fs"
 	"os"
@@ -85,7 +86,9 @@ func (t *ReadFileTool) IsAvailable(ctx context.Context, state *core.Context) boo
 func (t *ReadFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
 }
-func (t *ReadFileTool) Tags() []string { return []string{core.TagReadOnly} }
+func (t *ReadFileTool) Tags() []string {
+	return []string{core.TagReadOnly, "file", "inspect", "recovery"}
+}
 
 // WriteFileTool writes content to disk.
 type WriteFileTool struct {
@@ -161,7 +164,7 @@ func (t *WriteFileTool) IsAvailable(ctx context.Context, state *core.Context) bo
 func (t *WriteFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
-func (t *WriteFileTool) Tags() []string { return []string{core.TagDestructive} }
+func (t *WriteFileTool) Tags() []string { return []string{core.TagDestructive, "file", "edit"} }
 
 // ListFilesTool lists files filtered by pattern.
 type ListFilesTool struct {
@@ -224,7 +227,15 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args m
 			}
 		}
 
-		match, _ := filepath.Match(pattern, filepath.Base(path))
+		relPath, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			relPath = filepath.Base(path)
+		}
+		relPath = filepath.ToSlash(relPath)
+		match := search.MatchGlob(pattern, relPath)
+		if !match {
+			match = search.MatchGlob(pattern, filepath.Base(path))
+		}
 		if match {
 			files = append(files, path)
 		}
@@ -242,7 +253,7 @@ func (t *ListFilesTool) IsAvailable(ctx context.Context, state *core.Context) bo
 func (t *ListFilesTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemList)}
 }
-func (t *ListFilesTool) Tags() []string { return []string{core.TagReadOnly} }
+func (t *ListFilesTool) Tags() []string { return []string{core.TagReadOnly, "file", "discover"} }
 
 // SearchInFilesTool greps for a pattern.
 type SearchInFilesTool struct {
@@ -353,7 +364,7 @@ func (t *SearchInFilesTool) IsAvailable(ctx context.Context, state *core.Context
 func (t *SearchInFilesTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
 }
-func (t *SearchInFilesTool) Tags() []string { return []string{core.TagReadOnly} }
+func (t *SearchInFilesTool) Tags() []string { return []string{core.TagReadOnly, "search", "recovery"} }
 
 // CreateFileTool creates a file from a template string.
 type CreateFileTool struct {
@@ -412,7 +423,7 @@ func (t *CreateFileTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *CreateFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
-func (t *CreateFileTool) Tags() []string { return []string{core.TagDestructive} }
+func (t *CreateFileTool) Tags() []string { return []string{core.TagDestructive, "file", "edit"} }
 
 // DeleteFileTool moves a file to .trash folder instead of deleting permanently.
 type DeleteFileTool struct {
@@ -475,7 +486,7 @@ func (t *DeleteFileTool) IsAvailable(ctx context.Context, state *core.Context) b
 func (t *DeleteFileTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
 }
-func (t *DeleteFileTool) Tags() []string { return []string{core.TagDestructive} }
+func (t *DeleteFileTool) Tags() []string { return []string{core.TagDestructive, "file", "edit"} }
 
 func (t *ReadFileTool) preparePath(path string) string  { return preparePath(t.BasePath, path) }
 func (t *WriteFileTool) preparePath(path string) string { return preparePath(t.BasePath, path) }

@@ -7,5 +7,95 @@ metadata:
 spec:
   requires:
     bins: [sqlite3]
+  prompt_snippets:
+    - "For SQLite work, detect the database file first instead of assuming the current directory contains the active database."
+    - "Use sqlite_schema_inspect before writing queries so table and index names come from the real schema."
+    - "Prefer sqlite_query for data validation and sqlite_integrity_check for low-level database verification."
+    - "When verification passes after the latest SQLite change, stop instead of rereading files."
   allowed_tools:
     - cli_sqlite3
+    - sqlite_database_detect
+    - sqlite_schema_inspect
+    - sqlite_query
+    - sqlite_integrity_check
+  phase_selectors:
+    explore:
+      - tool: file_read
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tags: ["lang:sqlite", "workspace-detect"]
+      - tags: ["lang:sqlite", "schema"]
+    edit:
+      - tool: file_read
+      - tool: file_write
+      - tool: file_create
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: cli_sqlite3
+      - tags: ["lang:sqlite", "workspace-detect"]
+      - tags: ["lang:sqlite", "schema"]
+      - tags: ["lang:sqlite", "query"]
+    verify:
+      - tags: ["lang:sqlite", "schema"]
+      - tags: ["lang:sqlite", "query"]
+      - tags: ["lang:sqlite", "integrity-check"]
+      - tool: cli_sqlite3
+      - tool: file_read
+  verification:
+    success_selectors:
+      - tags: ["lang:sqlite", "query"]
+      - tags: ["lang:sqlite", "integrity-check"]
+      - tool: cli_sqlite3
+    stop_on_success: true
+  recovery:
+    failure_probe_selectors:
+      - tags: ["lang:sqlite", "workspace-detect"]
+      - tags: ["lang:sqlite", "schema"]
+      - tags: ["lang:sqlite", "integrity-check"]
+      - tool: file_read
+      - tool: search_grep
+  planning:
+    required_before_edit:
+      - tags: ["lang:sqlite", "workspace-detect"]
+      - tags: ["lang:sqlite", "schema"]
+    preferred_edit_tools:
+      - tool: file_write
+      - tags: ["lang:sqlite", "query"]
+    preferred_verify_tools:
+      - tags: ["lang:sqlite", "query"]
+      - tags: ["lang:sqlite", "integrity-check"]
+    step_templates:
+      - kind: discover
+        description: Identify the active database file and inspect schema objects before editing queries or migrations.
+      - kind: edit
+        description: Make targeted SQL or migration changes after confirming real table and index names.
+      - kind: verify
+        description: Use sqlite_query for behavioral validation and sqlite_integrity_check for low-level database health.
+    require_verification_step: true
+  review:
+    criteria:
+      - correctness
+      - completeness
+      - verification evidence
+      - schema awareness
+      - data safety
+    focus_tags:
+      - lang:sqlite
+      - schema
+      - verification
+    approval_rules:
+      require_verification_evidence: true
+      reject_on_unresolved_errors: true
+    severity_weights:
+      high: 1.0
+      medium: 0.5
+      low: 0.2
+  context_hints:
+    preferred_detail_level: concise
+    protect_patterns:
+      - "**/*.db"
+      - "**/*.sqlite"
+      - "**/*.sqlite3"
+      - "**/*.sql"

@@ -50,6 +50,7 @@ func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames [
 	results := make([]SkillResolution, 0, len(skillNames))
 	allowedTools := append([]string{}, spec.AllowedTools...)
 	toolPolicies := cloneToolPolicies(spec.ToolExecutionPolicy)
+	skillConfig := core.AgentSkillConfig{}
 
 	for _, name := range skillNames {
 		skillName := strings.TrimSpace(name)
@@ -91,6 +92,7 @@ func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames [
 		if len(skillManifest.Spec.PromptSnippets) > 0 {
 			spec.Prompt = mergePromptSnippets(spec.Prompt, skillManifest.Spec.PromptSnippets)
 		}
+		skillConfig = mergeSkillConfig(skillConfig, skillManifest.Spec)
 
 		results = append(results, SkillResolution{
 			Name:    skillManifest.Metadata.Name,
@@ -101,6 +103,7 @@ func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames [
 
 	spec.AllowedTools = allowedTools
 	spec.ToolExecutionPolicy = toolPolicies
+	spec.SkillConfig = core.MergeAgentSpecs(&core.AgentRuntimeSpec{SkillConfig: spec.SkillConfig}, core.AgentSpecOverlay{SkillConfig: &skillConfig}).SkillConfig
 	return spec, results
 }
 
@@ -228,6 +231,55 @@ func mergePromptSnippets(base string, snippets []string) string {
 		builder.WriteString(snippet)
 	}
 	return builder.String()
+}
+
+func mergeSkillConfig(base core.AgentSkillConfig, skillSpec manifest.SkillSpec) core.AgentSkillConfig {
+	overlay := core.AgentSkillConfig{
+		Verification: core.AgentVerificationPolicy{
+			SuccessTools:     append([]string{}, skillSpec.Verification.SuccessTools...),
+			SuccessSelectors: append([]core.SkillToolSelector{}, skillSpec.Verification.SuccessSelectors...),
+			StopOnSuccess:    skillSpec.Verification.StopOnSuccess,
+		},
+		Recovery: core.AgentRecoveryPolicy{
+			FailureProbeTools:     append([]string{}, skillSpec.Recovery.FailureProbeTools...),
+			FailureProbeSelectors: append([]core.SkillToolSelector{}, skillSpec.Recovery.FailureProbeSelectors...),
+		},
+		Planning: core.AgentPlanningPolicy{
+			RequiredBeforeEdit:      append([]core.SkillToolSelector{}, skillSpec.Planning.RequiredBeforeEdit...),
+			PreferredEditTools:      append([]core.SkillToolSelector{}, skillSpec.Planning.PreferredEditTools...),
+			PreferredVerifyTools:    append([]core.SkillToolSelector{}, skillSpec.Planning.PreferredVerifyTools...),
+			StepTemplates:           append([]core.SkillStepTemplate{}, skillSpec.Planning.StepTemplates...),
+			RequireVerificationStep: skillSpec.Planning.RequireVerificationStep,
+		},
+		Review: core.AgentReviewPolicy{
+			Criteria:      append([]string{}, skillSpec.Review.Criteria...),
+			FocusTags:     append([]string{}, skillSpec.Review.FocusTags...),
+			ApprovalRules: skillSpec.Review.ApprovalRules,
+		},
+		ContextHints: core.AgentSkillContextHints{
+			PreferredDetailLevel: skillSpec.ContextHints.PreferredDetailLevel,
+			ProtectPatterns:      append([]string{}, skillSpec.ContextHints.ProtectPatterns...),
+		},
+	}
+	if skillSpec.Review.SeverityWeights != nil {
+		overlay.Review.SeverityWeights = make(map[string]float64, len(skillSpec.Review.SeverityWeights))
+		for k, v := range skillSpec.Review.SeverityWeights {
+			overlay.Review.SeverityWeights[k] = v
+		}
+	}
+	if skillSpec.PhaseTools != nil {
+		overlay.PhaseTools = make(map[string][]string, len(skillSpec.PhaseTools))
+		for phase, tools := range skillSpec.PhaseTools {
+			overlay.PhaseTools[phase] = append([]string{}, tools...)
+		}
+	}
+	if skillSpec.PhaseSelectors != nil {
+		overlay.PhaseSelectors = make(map[string][]core.SkillToolSelector, len(skillSpec.PhaseSelectors))
+		for phase, selectors := range skillSpec.PhaseSelectors {
+			overlay.PhaseSelectors[phase] = append([]core.SkillToolSelector{}, selectors...)
+		}
+	}
+	return core.MergeAgentSpecs(&core.AgentRuntimeSpec{SkillConfig: base}, core.AgentSpecOverlay{SkillConfig: &overlay}).SkillConfig
 }
 
 func logSkillError(workspace, name, reason string, err error, paths SkillPaths) SkillResolution {

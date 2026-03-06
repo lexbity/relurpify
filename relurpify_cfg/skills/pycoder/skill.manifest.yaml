@@ -6,6 +6,101 @@ metadata:
   description: Python tooling for script/test workflows.
 spec:
   requires:
-    bins: [python]
+    bins: [python3]
+  prompt_snippets:
+    - "For Python, detect the nearest project root from pyproject.toml, setup.py, setup.cfg, or requirements.txt before running verification."
+    - "Prefer python_project_metadata to determine whether pytest or unittest is the better verification path."
+    - "After Python edits, prefer python_compile_check before running test tools so syntax failures are caught early."
+    - "When verification passes after the latest Python change, stop instead of rereading files."
   allowed_tools:
     - cli_python
+    - python_workspace_detect
+    - python_project_metadata
+    - python_compile_check
+    - python_pytest
+    - python_unittest
+  phase_selectors:
+    explore:
+      - tool: file_read
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tags: ["lang:python", "workspace-detect"]
+      - tags: ["lang:python", "metadata"]
+    edit:
+      - tool: file_read
+      - tool: file_write
+      - tool: file_create
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tool: cli_python
+      - tags: ["lang:python", "workspace-detect"]
+      - tags: ["lang:python", "metadata"]
+      - tags: ["lang:python", "syntax-check"]
+    verify:
+      - tags: ["lang:python", "metadata"]
+      - tags: ["lang:python", "syntax-check"]
+      - tags: ["lang:python", "test"]
+      - tool: cli_python
+      - tool: file_read
+  verification:
+    success_selectors:
+      - tags: ["lang:python", "syntax-check"]
+      - tags: ["lang:python", "test"]
+      - tool: cli_python
+    stop_on_success: true
+  recovery:
+    failure_probe_selectors:
+      - tags: ["lang:python", "workspace-detect"]
+      - tags: ["lang:python", "metadata"]
+      - tags: ["lang:python", "syntax-check"]
+      - tool: file_read
+      - tool: search_grep
+      - tool: query_ast
+  planning:
+    required_before_edit:
+      - tags: ["lang:python", "workspace-detect"]
+      - tags: ["lang:python", "metadata"]
+    preferred_edit_tools:
+      - tool: file_write
+      - tags: ["lang:python", "syntax-check"]
+    preferred_verify_tools:
+      - tags: ["lang:python", "syntax-check"]
+      - tags: ["lang:python", "test"]
+    step_templates:
+      - kind: discover
+        description: Detect the Python project root and test framework before editing.
+      - kind: edit
+        description: Make targeted .py edits after identifying the active package or script entry point.
+      - kind: verify
+        description: Run python_compile_check first, then pytest or unittest based on project metadata.
+    require_verification_step: true
+  review:
+    criteria:
+      - correctness
+      - completeness
+      - verification evidence
+      - idiomatic Python usage
+      - import and package consistency
+    focus_tags:
+      - lang:python
+      - diagnostics
+      - verification
+    approval_rules:
+      require_verification_evidence: true
+      reject_on_unresolved_errors: true
+    severity_weights:
+      high: 1.0
+      medium: 0.5
+      low: 0.2
+  context_hints:
+    preferred_detail_level: concise
+    protect_patterns:
+      - "**/pyproject.toml"
+      - "**/setup.py"
+      - "**/setup.cfg"
+      - "**/requirements.txt"
+      - "**/*.py"

@@ -28,7 +28,7 @@ spec:
                 - binary: git
                   args: ["*"]
                 - binary: bash
-                  args: ["-c"]
+                  args: ["-c", "*"]
             network:
                 - direction: egress
                   protocol: tcp

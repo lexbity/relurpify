@@ -77,7 +77,7 @@ func (t *RunTestsTool) Permissions() core.ToolPermissions {
 	}
 	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
 }
-func (t *RunTestsTool) Tags() []string { return []string{core.TagExecute} }
+func (t *RunTestsTool) Tags() []string { return []string{core.TagExecute, "test", "verification"} }
 
 func (t *RunTestsTool) run(ctx context.Context, args []string, input string) (string, string, error) {
 	if t.Runner == nil {
@@ -163,7 +163,7 @@ func (t *ExecuteCodeTool) Permissions() core.ToolPermissions {
 	}
 	return core.ToolPermissions{Permissions: perms}
 }
-func (t *ExecuteCodeTool) Tags() []string { return []string{core.TagExecute} }
+func (t *ExecuteCodeTool) Tags() []string { return []string{core.TagExecute, "code"} }
 
 func (t *ExecuteCodeTool) run(ctx context.Context, args []string, input string) (string, string, error) {
 	if t.Runner == nil {
@@ -240,7 +240,7 @@ func (t *RunLinterTool) Permissions() core.ToolPermissions {
 	}
 	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
 }
-func (t *RunLinterTool) Tags() []string { return []string{core.TagExecute} }
+func (t *RunLinterTool) Tags() []string { return []string{core.TagExecute, "lint", "verification"} }
 
 func (t *RunLinterTool) run(ctx context.Context, args []string) (string, string, error) {
 	if t.Runner == nil {
@@ -310,7 +310,7 @@ func (t *RunBuildTool) Permissions() core.ToolPermissions {
 	}
 	return core.ToolPermissions{Permissions: core.NewExecutionPermissionSet(t.Workdir, t.Command[0], t.Command[1:])}
 }
-func (t *RunBuildTool) Tags() []string { return []string{core.TagExecute} }
+func (t *RunBuildTool) Tags() []string { return []string{core.TagExecute, "build", "verification"} }
 
 func (t *RunBuildTool) run(ctx context.Context) (string, string, error) {
 	if t.Runner == nil {

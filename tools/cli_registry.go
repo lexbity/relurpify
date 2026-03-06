@@ -35,6 +35,36 @@ func CommandLineTools(basePath string, runner runtime.CommandRunner) []core.Tool
 			res = append(res, tool)
 		}
 	}
+	for _, tool := range []core.Tool{
+		&RustWorkspaceDetectTool{BasePath: basePath},
+		NewRustCargoMetadataTool(basePath),
+		NewRustCargoCheckTool(basePath),
+		NewRustCargoTestTool(basePath),
+		&PythonWorkspaceDetectTool{BasePath: basePath},
+		&PythonProjectMetadataTool{BasePath: basePath},
+		NewPythonCompileCheckTool(basePath),
+		NewPythonPytestTool(basePath),
+		NewPythonUnittestTool(basePath),
+		&NodeWorkspaceDetectTool{BasePath: basePath},
+		&NodeProjectMetadataTool{BasePath: basePath},
+		NewNodeNPMTestTool(basePath),
+		NewNodeSyntaxCheckTool(basePath),
+		&GoWorkspaceDetectTool{BasePath: basePath},
+		NewGoModuleMetadataTool(basePath),
+		NewGoTestTool(basePath),
+		NewGoBuildTool(basePath),
+		&SQLiteDatabaseDetectTool{BasePath: basePath},
+		NewSQLiteSchemaInspectTool(basePath),
+		NewSQLiteQueryTool(basePath),
+		NewSQLiteIntegrityCheckTool(basePath),
+	} {
+		name := tool.Name()
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		res = append(res, tool)
+	}
 	for i, tool := range res {
 		if setter, ok := tool.(interface{ SetCommandRunner(runtime.CommandRunner) }); ok {
 			setter.SetCommandRunner(runner)

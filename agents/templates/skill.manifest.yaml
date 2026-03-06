@@ -10,9 +10,6 @@ metadata:
   description: "Reusable guidance + tool policies for a focused workflow."
 
 spec:
-  # Inherit permissions/tools/overlays from other skills.
-  inherits: ["system"]
-
   # Prompt snippets appended to the agent prompt.
   prompt_snippets:
     - "Follow the project's review checklist and summarize any risks."
@@ -22,36 +19,75 @@ spec:
     - "file_read"
     - "file_write"
 
-  # Required tools (skill is skipped if any are blocked).
-  required_tools:
-    - "git_diff"
-    - "file_read"
-
   # Per-tool execution policies.
-  tool_policies:
+  tool_execution_policy:
     exec_run_linter:
       execute: "ask"
 
-  # Optional permission overlays (unioned with defaults/agent permissions).
-  permissions:
-    executables:
-      - binary: "git"
-        args: ["*"]
+  # Optional legacy phase-specific preferred tools. These narrow agent choices
+  # but do not bypass allowed_tools, registry filtering, or sandbox checks.
+  phase_tools:
+    explore: ["file_read"]
+    verify: ["exec_run_linter"]
 
-  # Optional resource limits.
-  resources:
-    limits:
-      cpu: "1"
-      memory: "1Gi"
-      disk_io: "100MBps"
+  # SkillSpec v2 selectors can choose tools by exact name or richer tags.
+  phase_selectors:
+    explore:
+      - tool: "file_read"
+      - tags: ["search"]
+    verify:
+      - tags: ["verification"]
+
+  # Optional verification policy used by the coding/react agents.
+  verification:
+    success_tools: ["exec_run_linter"]
+    success_selectors:
+      - tags: ["test"]
+    stop_on_success: true
+
+  # Optional recovery hints used when execution fails.
+  recovery:
+    failure_probe_tools: ["file_read"]
+    failure_probe_selectors:
+      - tags: ["recovery"]
+
+  # Optional planning hints used by planner/architect agents.
+  planning:
+    required_before_edit:
+      - tags: ["workspace-detect"]
+    preferred_edit_tools:
+      - tags: ["build"]
+    preferred_verify_tools:
+      - tags: ["test"]
+    step_templates:
+      - kind: "discover"
+        description: "Identify the active project context before editing."
+      - kind: "verify"
+        description: "Run verification after changes."
+    require_verification_step: true
+
+  # Optional review hints used by reflection-style agents.
+  review:
+    criteria:
+      - "correctness"
+      - "completeness"
+    focus_tags:
+      - "verification"
+    approval_rules:
+      require_verification_evidence: true
+      reject_on_unresolved_errors: true
+    severity_weights:
+      high: 1.0
+      medium: 0.5
+      low: 0.2
+
+  # Optional context hints for language/domain-specific agents.
+  context_hints:
+    preferred_detail_level: "concise"
+    protect_patterns: ["**/*.md"]
 
   # Optional resource locations (defaults to skills/<name>/{scripts,resources,templates}).
   resource_paths:
     scripts: ["scripts"]
     resources: ["resources"]
     templates: ["templates"]
-
-  # Optional agent spec overlay for this skill.
-  agent_overlay:
-    context:
-      max_files: 40

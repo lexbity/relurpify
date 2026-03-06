@@ -7,6 +7,94 @@ metadata:
 spec:
   requires:
     bins: [cargo]
+  prompt_snippets:
+    - "For Rust, prefer the nearest Cargo.toml to the edited file or working directory; do not assume the repo root is the active crate."
+    - "Use rust_workspace_detect and rust_cargo_metadata to understand crate/workspace structure before running verification in mixed repositories."
+    - "After Rust edits, prefer cargo test for behavioral verification and cargo check for compile-only verification."
+    - "When verification passes after the latest Rust code change, stop instead of rereading files."
   allowed_tools:
     - cli_cargo
-    - cli_rustfmt
+    - rust_workspace_detect
+    - rust_cargo_metadata
+    - rust_cargo_check
+    - rust_cargo_test
+  phase_selectors:
+    explore:
+      - tool: file_read
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tags: ["lang:rust", "workspace-detect"]
+      - tags: ["lang:rust", "metadata"]
+    edit:
+      - tool: file_read
+      - tool: file_write
+      - tool: file_create
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tool: cli_cargo
+      - tags: ["lang:rust", "workspace-detect"]
+      - tags: ["lang:rust", "build"]
+    verify:
+      - tags: ["lang:rust", "metadata"]
+      - tags: ["lang:rust", "build"]
+      - tags: ["lang:rust", "test"]
+      - tool: cli_cargo
+      - tool: file_read
+  verification:
+    success_selectors:
+      - tags: ["lang:rust", "build"]
+      - tags: ["lang:rust", "test"]
+      - tool: cli_cargo
+    stop_on_success: true
+  recovery:
+    failure_probe_selectors:
+      - tags: ["lang:rust", "workspace-detect"]
+      - tags: ["lang:rust", "metadata"]
+      - tags: ["lang:rust", "build"]
+      - tool: file_read
+      - tool: search_grep
+      - tool: query_ast
+  planning:
+    required_before_edit:
+      - tags: ["lang:rust", "workspace-detect"]
+      - tags: ["lang:rust", "metadata"]
+    preferred_edit_tools:
+      - tool: file_write
+    preferred_verify_tools:
+      - tags: ["lang:rust", "test"]
+      - tags: ["lang:rust", "build"]
+    step_templates:
+      - kind: discover
+        description: Identify the active Cargo.toml and workspace layout before editing.
+      - kind: edit
+        description: Make focused Rust source or Cargo manifest edits only after crate context is known.
+      - kind: verify
+        description: Run cargo test or cargo check after edits to confirm the crate still builds and behaves correctly.
+    require_verification_step: true
+  review:
+    criteria:
+      - correctness
+      - completeness
+      - verification evidence
+      - idiomatic Rust usage
+      - workspace awareness
+    focus_tags:
+      - lang:rust
+      - diagnostics
+      - verification
+    approval_rules:
+      require_verification_evidence: true
+      reject_on_unresolved_errors: true
+    severity_weights:
+      high: 1.0
+      medium: 0.5
+      low: 0.2
+  context_hints:
+    preferred_detail_level: concise
+    protect_patterns:
+      - "**/Cargo.toml"
+      - "**/src/**/*.rs"

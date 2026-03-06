@@ -214,22 +214,94 @@ func TestApplySkillsToolExecutionPolicy(t *testing.T) {
 	require.Equal(t, core.AgentPermissionAsk, spec.ToolExecutionPolicy["git_commit"].Execute)
 }
 
+func TestApplySkillsMergesSkillConfig(t *testing.T) {
+	ws := t.TempDir()
+	skillName := "skill-config"
+	skillPath := SkillManifestPath(ws, skillName)
+	require.NoError(t, os.MkdirAll(filepath.Dir(skillPath), 0o755))
+	require.NoError(t, createSkillDirs(SkillRoot(ws, skillName)))
+
+	skill := manifest.SkillManifest{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "SkillManifest",
+		Metadata:   manifest.ManifestMetadata{Name: skillName, Version: "1.0.0"},
+		Spec: manifest.SkillSpec{
+			PhaseTools: map[string][]string{
+				"verify": {"cli_cargo"},
+			},
+			PhaseSelectors: map[string][]core.SkillToolSelector{
+				"verify": {
+					{Tags: []string{"lang:rust", "test"}},
+				},
+			},
+			Verification: manifest.SkillVerificationSpec{
+				SuccessTools:     []string{"cli_cargo"},
+				SuccessSelectors: []core.SkillToolSelector{{Tags: []string{"lang:rust", "build"}}},
+				StopOnSuccess:    true,
+			},
+			Recovery: manifest.SkillRecoverySpec{
+				FailureProbeTools:     []string{"file_read", "search_grep"},
+				FailureProbeSelectors: []core.SkillToolSelector{{Tags: []string{"recovery"}}},
+			},
+			Planning: manifest.SkillPlanningSpec{
+				RequiredBeforeEdit:      []core.SkillToolSelector{{Tags: []string{"workspace-detect"}}},
+				PreferredVerifyTools:    []core.SkillToolSelector{{Tags: []string{"test"}}},
+				StepTemplates:           []core.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
+				RequireVerificationStep: true,
+			},
+			Review: manifest.SkillReviewSpec{
+				Criteria:  []string{"correctness"},
+				FocusTags: []string{"verification"},
+				ApprovalRules: core.AgentReviewApprovalRules{
+					RequireVerificationEvidence: true,
+				},
+				SeverityWeights: map[string]float64{"high": 1},
+			},
+			ContextHints: manifest.SkillContextHintsSpec{
+				PreferredDetailLevel: "concise",
+				ProtectPatterns:      []string{"**/Cargo.toml"},
+			},
+		},
+	}
+	data, err := yaml.Marshal(skill)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(skillPath, data, 0o644))
+
+	registry := toolsys.NewToolRegistry()
+	spec, results := ApplySkills(ws, &core.AgentRuntimeSpec{}, []string{skillName}, registry, nil, "agent-1")
+	require.Len(t, results, 1)
+	require.True(t, results[0].Applied)
+	require.Equal(t, []string{"cli_cargo"}, spec.SkillConfig.PhaseTools["verify"])
+	require.Len(t, spec.SkillConfig.PhaseSelectors["verify"], 1)
+	require.True(t, spec.SkillConfig.Verification.StopOnSuccess)
+	require.Equal(t, []string{"cli_cargo"}, spec.SkillConfig.Verification.SuccessTools)
+	require.Len(t, spec.SkillConfig.Verification.SuccessSelectors, 1)
+	require.Equal(t, []string{"file_read", "search_grep"}, spec.SkillConfig.Recovery.FailureProbeTools)
+	require.Len(t, spec.SkillConfig.Recovery.FailureProbeSelectors, 1)
+	require.Len(t, spec.SkillConfig.Planning.RequiredBeforeEdit, 1)
+	require.True(t, spec.SkillConfig.Planning.RequireVerificationStep)
+	require.Equal(t, []string{"correctness"}, spec.SkillConfig.Review.Criteria)
+	require.True(t, spec.SkillConfig.Review.ApprovalRules.RequireVerificationEvidence)
+	require.Equal(t, "concise", spec.SkillConfig.ContextHints.PreferredDetailLevel)
+	require.Equal(t, []string{"**/Cargo.toml"}, spec.SkillConfig.ContextHints.ProtectPatterns)
+}
+
 // stubTagTool is a minimal Tool implementation for DeriveGVisorAllowlist tests.
 type stubTagTool struct {
-	name string
+	name  string
 	perms core.ToolPermissions
 }
 
-func (t stubTagTool) Name() string        { return t.name }
-func (t stubTagTool) Description() string { return "" }
-func (t stubTagTool) Category() string    { return "test" }
+func (t stubTagTool) Name() string                     { return t.name }
+func (t stubTagTool) Description() string              { return "" }
+func (t stubTagTool) Category() string                 { return "test" }
 func (t stubTagTool) Parameters() []core.ToolParameter { return nil }
 func (t stubTagTool) Execute(_ context.Context, _ *core.Context, _ map[string]interface{}) (*core.ToolResult, error) {
 	return nil, nil
 }
 func (t stubTagTool) IsAvailable(_ context.Context, _ *core.Context) bool { return true }
-func (t stubTagTool) Permissions() core.ToolPermissions             { return t.perms }
-func (t stubTagTool) Tags() []string                                { return nil }
+func (t stubTagTool) Permissions() core.ToolPermissions                   { return t.perms }
+func (t stubTagTool) Tags() []string                                      { return nil }
 
 // TestDeriveGVisorAllowlist verifies that the allowlist is derived from tool permissions.
 func TestDeriveGVisorAllowlist(t *testing.T) {

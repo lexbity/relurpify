@@ -6,7 +6,110 @@ metadata:
   description: Node tooling for build/test workflows.
 spec:
   requires:
-    bins: [node]
+    bins: [node, npm]
+  prompt_snippets:
+    - "For Node and JavaScript, detect the nearest package.json or lockfile before running verification."
+    - "Use node_project_metadata to inspect available scripts before choosing npm-based verification."
+    - "Prefer node_npm_test when a test script exists, and use node_syntax_check for focused JavaScript syntax validation."
+    - "When verification passes after the latest Node change, stop instead of rereading files."
   allowed_tools:
     - cli_node
     - cli_npm
+    - node_workspace_detect
+    - node_project_metadata
+    - node_npm_test
+    - node_syntax_check
+  phase_selectors:
+    explore:
+      - tool: file_read
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tags: ["lang:node", "workspace-detect"]
+      - tags: ["lang:node", "metadata"]
+    edit:
+      - tool: file_read
+      - tool: file_write
+      - tool: file_create
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tool: cli_node
+      - tool: cli_npm
+      - tags: ["lang:node", "workspace-detect"]
+      - tags: ["lang:node", "metadata"]
+      - tags: ["lang:node", "syntax-check"]
+    verify:
+      - tags: ["lang:node", "metadata"]
+      - tags: ["lang:node", "test"]
+      - tags: ["lang:node", "syntax-check"]
+      - tool: cli_npm
+      - tool: cli_node
+      - tool: file_read
+  verification:
+    success_selectors:
+      - tags: ["lang:node", "test"]
+      - tags: ["lang:node", "syntax-check"]
+      - tool: cli_npm
+      - tool: cli_node
+    stop_on_success: true
+  recovery:
+    failure_probe_selectors:
+      - tags: ["lang:node", "workspace-detect"]
+      - tags: ["lang:node", "metadata"]
+      - tags: ["lang:node", "syntax-check"]
+      - tool: file_read
+      - tool: search_grep
+      - tool: query_ast
+  planning:
+    required_before_edit:
+      - tags: ["lang:node", "workspace-detect"]
+      - tags: ["lang:node", "metadata"]
+    preferred_edit_tools:
+      - tool: file_write
+      - tags: ["lang:node", "syntax-check"]
+    preferred_verify_tools:
+      - tags: ["lang:node", "test"]
+      - tags: ["lang:node", "syntax-check"]
+    step_templates:
+      - kind: discover
+        description: Detect the nearest package.json and inspect available scripts before editing.
+      - kind: edit
+        description: Make focused JavaScript or TypeScript changes after identifying the active package.
+      - kind: verify
+        description: Use npm test when available, otherwise run focused syntax validation.
+    require_verification_step: true
+  review:
+    criteria:
+      - correctness
+      - completeness
+      - verification evidence
+      - idiomatic Node or JavaScript usage
+      - package script awareness
+    focus_tags:
+      - lang:node
+      - diagnostics
+      - verification
+    approval_rules:
+      require_verification_evidence: true
+      reject_on_unresolved_errors: true
+    severity_weights:
+      high: 1.0
+      medium: 0.5
+      low: 0.2
+  context_hints:
+    preferred_detail_level: concise
+    protect_patterns:
+      - "**/package.json"
+      - "**/package-lock.json"
+      - "**/pnpm-lock.yaml"
+      - "**/yarn.lock"
+      - "**/tsconfig.json"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.ts"
+      - "**/*.tsx"

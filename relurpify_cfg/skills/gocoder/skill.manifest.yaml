@@ -7,8 +7,100 @@ metadata:
 spec:
   requires:
     bins: [go]
+  prompt_snippets:
+    - "For Go, detect the nearest go.mod or go.work before running tests or builds."
+    - "Use go_module_metadata to confirm the active module when working in multi-module repositories."
+    - "After Go edits, prefer go test for behavioral verification and go build for compile-only verification."
+    - "When verification passes after the latest Go change, stop instead of rereading files."
   allowed_tools:
     - cli_go
+    - go_workspace_detect
+    - go_module_metadata
+    - go_test
+    - go_build
     - exec_run_build
     - exec_run_tests
     - exec_run_linter
+  phase_selectors:
+    explore:
+      - tool: file_read
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tags: ["lang:go", "workspace-detect"]
+      - tags: ["lang:go", "metadata"]
+    edit:
+      - tool: file_read
+      - tool: file_write
+      - tool: file_create
+      - tool: file_list
+      - tool: file_search
+      - tool: search_grep
+      - tool: query_ast
+      - tool: cli_go
+      - tags: ["lang:go", "workspace-detect"]
+      - tags: ["lang:go", "metadata"]
+      - tags: ["lang:go", "build"]
+    verify:
+      - tags: ["lang:go", "metadata"]
+      - tags: ["lang:go", "test"]
+      - tags: ["lang:go", "build"]
+      - tool: cli_go
+      - tool: file_read
+  verification:
+    success_selectors:
+      - tags: ["lang:go", "test"]
+      - tags: ["lang:go", "build"]
+      - tool: cli_go
+    stop_on_success: true
+  recovery:
+    failure_probe_selectors:
+      - tags: ["lang:go", "workspace-detect"]
+      - tags: ["lang:go", "metadata"]
+      - tags: ["lang:go", "build"]
+      - tool: file_read
+      - tool: search_grep
+      - tool: query_ast
+  planning:
+    required_before_edit:
+      - tags: ["lang:go", "workspace-detect"]
+      - tags: ["lang:go", "metadata"]
+    preferred_edit_tools:
+      - tool: file_write
+      - tags: ["lang:go", "build"]
+    preferred_verify_tools:
+      - tags: ["lang:go", "test"]
+      - tags: ["lang:go", "build"]
+    step_templates:
+      - kind: discover
+        description: Detect the active go.mod or go.work before editing or running verification.
+      - kind: edit
+        description: Make focused Go code changes after confirming the active module or workspace.
+      - kind: verify
+        description: Prefer go test after edits and go build for compile-only validation when tests are not appropriate.
+    require_verification_step: true
+  review:
+    criteria:
+      - correctness
+      - completeness
+      - verification evidence
+      - idiomatic Go usage
+      - module awareness
+    focus_tags:
+      - lang:go
+      - diagnostics
+      - verification
+    approval_rules:
+      require_verification_evidence: true
+      reject_on_unresolved_errors: true
+    severity_weights:
+      high: 1.0
+      medium: 0.5
+      low: 0.2
+  context_hints:
+    preferred_detail_level: concise
+    protect_patterns:
+      - "**/go.mod"
+      - "**/go.work"
+      - "**/*.go"

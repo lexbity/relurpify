@@ -1,0 +1,16 @@
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: web-research
+  version: 0.1.0
+  description: Browser-assisted research against manifest-approved domains.
+spec:
+  requires:
+    bins: [chromium]
+  prompt_snippets:
+    - "Use the browser tool to inspect and extract data from permitted websites. Respect manifest network scopes and rely on structured extraction over raw page dumps when possible."
+  allowed_tools:
+    - browser
+  tool_execution_policy:
+    browser:
+      execute: allow
