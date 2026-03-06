@@ -10,8 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/persistence"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 )
 
@@ -52,6 +55,9 @@ type RuntimeAdapter interface {
 	// SetTagPolicyLive updates a tag permission policy in-memory (current session only).
 	// Pass level="" to clear the tag policy.
 	SetTagPolicyLive(tag string, level fruntime.AgentPermissionLevel)
+	ListWorkflows(limit int) ([]WorkflowInfo, error)
+	GetWorkflow(workflowID string) (*WorkflowDetails, error)
+	CancelWorkflow(workflowID string) error
 }
 
 type runtimeAdapter struct {
@@ -91,7 +97,9 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 		Workspace: "",
 		Model:     "",
 		Agent:     "",
+		Role:      "",
 		Mode:      "",
+		Strategy:  "",
 		MaxTokens: 100000,
 	}
 	if r == nil || r.rt == nil {
@@ -101,7 +109,6 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info.Workspace = cfg.Workspace
 	info.Model = cfg.OllamaModel
 	info.Agent = cfg.AgentLabel()
-	info.Mode = string(core.AgentModePrimary)
 
 	if r.rt.Registration != nil && r.rt.Registration.Manifest != nil {
 		manifest := r.rt.Registration.Manifest
@@ -111,14 +118,46 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 				info.Model = manifest.Spec.Agent.Model.Name
 			}
 			if manifest.Spec.Agent.Mode != "" {
-				info.Mode = string(manifest.Spec.Agent.Mode)
+				info.Role = string(manifest.Spec.Agent.Mode)
 			}
 			if manifest.Spec.Agent.Context.MaxTokens > 0 {
 				info.MaxTokens = manifest.Spec.Agent.Context.MaxTokens
 			}
 		}
 	}
+	info.Mode, info.Strategy = describeAgentRuntime(r.rt.Agent)
 	return info
+}
+
+func describeAgentRuntime(agent graph.Agent) (string, string) {
+	switch typed := agent.(type) {
+	case *agents.CodingAgent:
+		return describeCodingMode(agents.ModeCode)
+	case *agents.ArchitectAgent:
+		return string(agents.ModeArchitect), "plan-execute"
+	case *agents.ReActAgent:
+		mode := agents.Mode(strings.TrimSpace(typed.Mode))
+		return describeCodingMode(mode)
+	case *agents.ReflectionAgent:
+		mode, _ := describeAgentRuntime(typed.Delegate)
+		if mode == "" {
+			mode = string(agents.ModeCode)
+		}
+		return mode, "reflection"
+	case *agents.PlannerAgent:
+		return "plan", "plan-execute-verify"
+	case *agents.EternalAgent:
+		return "loop", "eternal"
+	default:
+		return "", ""
+	}
+}
+
+func describeCodingMode(mode agents.Mode) (string, string) {
+	if profile, ok := agents.ModeProfiles[mode]; ok {
+		return string(profile.Name), profile.PreferredStrategy
+	}
+	return string(agents.ModeCode), agents.ModeProfiles[agents.ModeCode].PreferredStrategy
 }
 
 func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution {
@@ -251,6 +290,134 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	wsCfg.Model = model
 	wsCfg.LastUpdated = time.Now().Unix()
 	return runtimesvc.SaveWorkspaceConfig(cfgPath, wsCfg)
+}
+
+func (r *runtimeAdapter) ListWorkflows(limit int) ([]WorkflowInfo, error) {
+	store, err := r.openWorkflowStore()
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
+	workflows, err := store.ListWorkflows(context.Background(), limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]WorkflowInfo, 0, len(workflows))
+	for _, workflow := range workflows {
+		out = append(out, WorkflowInfo{
+			WorkflowID:   workflow.WorkflowID,
+			TaskID:       workflow.TaskID,
+			Status:       string(workflow.Status),
+			CursorStepID: workflow.CursorStepID,
+			Instruction:  workflow.Instruction,
+			UpdatedAt:    workflow.UpdatedAt,
+		})
+	}
+	return out, nil
+}
+
+func (r *runtimeAdapter) GetWorkflow(workflowID string) (*WorkflowDetails, error) {
+	store, err := r.openWorkflowStore()
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
+	workflow, ok, err := store.GetWorkflow(context.Background(), workflowID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("workflow %s not found", workflowID)
+	}
+	steps, err := store.ListSteps(context.Background(), workflowID)
+	if err != nil {
+		return nil, err
+	}
+	events, err := store.ListEvents(context.Background(), workflowID, 20)
+	if err != nil {
+		return nil, err
+	}
+	facts, err := store.ListKnowledge(context.Background(), workflowID, persistence.KnowledgeKindFact, false)
+	if err != nil {
+		return nil, err
+	}
+	issues, err := store.ListKnowledge(context.Background(), workflowID, persistence.KnowledgeKindIssue, false)
+	if err != nil {
+		return nil, err
+	}
+	decisions, err := store.ListKnowledge(context.Background(), workflowID, persistence.KnowledgeKindDecision, false)
+	if err != nil {
+		return nil, err
+	}
+	info := &WorkflowDetails{
+		Workflow: WorkflowInfo{
+			WorkflowID:   workflow.WorkflowID,
+			TaskID:       workflow.TaskID,
+			Status:       string(workflow.Status),
+			CursorStepID: workflow.CursorStepID,
+			Instruction:  workflow.Instruction,
+			UpdatedAt:    workflow.UpdatedAt,
+		},
+		Steps:     make([]WorkflowStepInfo, 0, len(steps)),
+		Events:    make([]WorkflowEventInfo, 0, len(events)),
+		Facts:     make([]WorkflowKnowledgeInfo, 0, len(facts)),
+		Issues:    make([]WorkflowKnowledgeInfo, 0, len(issues)),
+		Decisions: make([]WorkflowKnowledgeInfo, 0, len(decisions)),
+	}
+	for _, step := range steps {
+		info.Steps = append(info.Steps, WorkflowStepInfo{
+			StepID:       step.StepID,
+			Description:  step.Step.Description,
+			Status:       string(step.Status),
+			Summary:      step.Summary,
+			Dependencies: append([]string{}, step.Dependencies...),
+		})
+	}
+	for _, event := range events {
+		info.Events = append(info.Events, WorkflowEventInfo{
+			EventType: event.EventType,
+			StepID:    event.StepID,
+			Message:   event.Message,
+			CreatedAt: event.CreatedAt,
+		})
+	}
+	info.Facts = append(info.Facts, convertKnowledgeInfos(facts)...)
+	info.Issues = append(info.Issues, convertKnowledgeInfos(issues)...)
+	info.Decisions = append(info.Decisions, convertKnowledgeInfos(decisions)...)
+	return info, nil
+}
+
+func (r *runtimeAdapter) CancelWorkflow(workflowID string) error {
+	store, err := r.openWorkflowStore()
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	_, err = store.UpdateWorkflowStatus(context.Background(), workflowID, 0, persistence.WorkflowRunStatusCanceled, "")
+	return err
+}
+
+func (r *runtimeAdapter) openWorkflowStore() (*persistence.SQLiteWorkflowStateStore, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	path := filepath.Join(r.rt.Config.Workspace, "relurpify_cfg", "sessions", "workflow_state.db")
+	return persistence.NewSQLiteWorkflowStateStore(path)
+}
+
+func convertKnowledgeInfos(records []persistence.KnowledgeRecord) []WorkflowKnowledgeInfo {
+	out := make([]WorkflowKnowledgeInfo, 0, len(records))
+	for _, record := range records {
+		out = append(out, WorkflowKnowledgeInfo{
+			StepID:    record.StepID,
+			Kind:      string(record.Kind),
+			Title:     record.Title,
+			Content:   record.Content,
+			Status:    record.Status,
+			CreatedAt: record.CreatedAt,
+		})
+	}
+	return out
 }
 
 func (r *runtimeAdapter) SaveToolPolicy(toolName string, level fruntime.AgentPermissionLevel) error {

@@ -148,6 +148,11 @@ func (p *ChatPane) HandleInputSubmit(value string) tea.Cmd {
 // StartRun begins an agent run. Returns the Bubble Tea command and the run ID.
 // The run ID is empty when the run could not be started.
 func (p *ChatPane) StartRun(prompt string) (tea.Cmd, string) {
+	return p.StartRunWithMetadata(prompt, nil)
+}
+
+// StartRunWithMetadata begins an agent run with additional task metadata.
+func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (tea.Cmd, string) {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		return nil, ""
@@ -185,6 +190,9 @@ func (p *ChatPane) StartRun(prompt string) (tea.Cmd, string) {
 	p.lastPrompt = prompt
 
 	metadata := p.buildMetadata(ctx)
+	for k, v := range extra {
+		metadata[k] = v
+	}
 	go p.runStream(ctx, run, metadata)
 	return listenToStream(ch), runID
 }
@@ -299,7 +307,6 @@ func (p *ChatPane) addSystemMessage(text string) {
 	}
 	p.feed.AppendMessage(msg)
 }
-
 
 func (p *ChatPane) buildMetadata(ctx context.Context) map[string]any {
 	meta := map[string]any{"source": "relurpish"}

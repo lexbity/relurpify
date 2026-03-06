@@ -47,6 +47,8 @@ type Runtime struct {
 
 	serverMu     sync.Mutex
 	serverCancel context.CancelFunc
+	providersMu  sync.Mutex
+	providers    []RuntimeProvider
 }
 
 // New builds a fruntime. It always returns a usable Runtime instance even when
@@ -176,32 +178,13 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		AgentSpec:         agentSpec, // Default to manifest spec
 		Telemetry:         telemetry,
 	}
+	registry.UseAgentSpec(registration.ID, agentSpec)
 
-	agent := instantiateAgent(cfg, model, registry, memory, agentDefs, agentCfg, indexManager)
-
-	// Enforce the effective (post-definition) tool policies before initializing.
-	if agentCfg.AgentSpec != nil {
-		registry.UseAgentSpec(registration.ID, agentCfg.AgentSpec)
-	}
-
-	if err := agent.Initialize(agentCfg); err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("initialize agent: %w", err)
-	}
-	if reflection, ok := agent.(*agents.ReflectionAgent); ok {
-		if reflection.Delegate != nil {
-			_ = reflection.Delegate.Initialize(agentCfg)
-		}
-	}
-	if len(allowedTools) > 0 {
-		registry.RestrictTo(allowedTools)
-	}
 	rt := &Runtime{
 		Config:           cfg,
 		Tools:            registry,
 		Memory:           memory,
 		Context:          core.NewContext(),
-		Agent:            agent,
 		Model:            model,
 		IndexManager:     indexManager,
 		Logger:           logger,
@@ -217,15 +200,73 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		}
 		rt.Context.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
 	}
+	if err := RegisterSkillProviders(ctx, rt, registration.Manifest.Spec.Skills); err != nil {
+		logFile.Close()
+		return nil, fmt.Errorf("register skill providers: %w", err)
+	}
+
+	agent := instantiateAgent(cfg, model, registry, memory, agentDefs, agentCfg, indexManager)
+
+	// Enforce the effective (post-definition) tool policies before initializing.
+	if agentCfg.AgentSpec != nil {
+		registry.UseAgentSpec(registration.ID, agentCfg.AgentSpec)
+	}
+
+	if err := agent.Initialize(agentCfg); err != nil {
+		_ = rt.Close()
+		return nil, fmt.Errorf("initialize agent: %w", err)
+	}
+	if reflection, ok := agent.(*agents.ReflectionAgent); ok {
+		if reflection.Delegate != nil {
+			_ = reflection.Delegate.Initialize(agentCfg)
+		}
+	}
+	if len(allowedTools) > 0 {
+		registry.RestrictTo(allowedTools)
+	}
+	rt.Agent = agent
 	return rt, nil
 }
 
 // Close releases resources managed by fruntime.
 func (r *Runtime) Close() error {
-	if r.logFile != nil {
-		return r.logFile.Close()
+	if r == nil {
+		return nil
 	}
-	return nil
+	var errs []error
+
+	r.serverMu.Lock()
+	cancel := r.serverCancel
+	r.serverCancel = nil
+	r.serverMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+
+	providers := r.registeredProviders()
+	for i := len(providers) - 1; i >= 0; i-- {
+		if err := providers[i].Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if r.Context != nil && r.Context.Registry() != nil {
+		if err := r.Context.Registry().CloseAll(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if r.IndexManager != nil {
+		if err := r.IndexManager.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if r.logFile != nil {
+		if err := r.logFile.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.logFile = nil
+	}
+	return errors.Join(errs...)
 }
 
 // AvailableAgents lists known agent presets and definitions.
@@ -429,6 +470,7 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
 func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.ToolRegistry, mem memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config, indexManager *ast.IndexManager) graph.Agent {
+	workflowStatePath := filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "workflow_state.db")
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
 		// Update config with the definition's spec
@@ -438,34 +480,54 @@ func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.To
 			agentCfg.Model = def.Spec.Model.Name
 		}
 
-		// Use the Implementation field to pick struct
-		switch def.Spec.Implementation {
-		case "planner":
-			return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
-		case "react":
-			return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager}
-		case "eternal":
-			return &agents.EternalAgent{Model: model}
-		// TODO: Add support for creating agents directly from 'def' struct fields (system prompt, etc)
-		// For now we map them to existing Go structs.
-		default:
-			// Fallback to ReAct if unspecified but defined
-			return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, Mode: string(def.Spec.Mode)}
-		}
+		return instantiateDefinitionAgent(cfg, def, model, registry, mem, indexManager)
 	}
 
 	switch cfg.AgentLabel() {
 	case "planner":
 		return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
 	case "react":
-		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager}
+		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints")}
 	case "reflection":
 		return &agents.ReflectionAgent{
 			Reviewer: model,
-			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager},
+			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints"), WorkflowStatePath: workflowStatePath},
 		}
 	default:
-		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager}
+		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints"), WorkflowStatePath: workflowStatePath}
+	}
+}
+
+func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, model core.LanguageModel, registry *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
+	checkpointPath := filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints")
+	workflowStatePath := filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "workflow_state.db")
+	implementation := strings.ToLower(strings.TrimSpace(def.Spec.Implementation))
+	switch implementation {
+	case "planner":
+		return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
+	case "react":
+		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath}
+	case "reflection":
+		return &agents.ReflectionAgent{
+			Reviewer: model,
+			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath, WorkflowStatePath: workflowStatePath},
+		}
+	case "architect":
+		return &agents.ArchitectAgent{
+			Model:             model,
+			PlannerTools:      registry,
+			ExecutorTools:     registry,
+			Memory:            mem,
+			IndexManager:      indexManager,
+			CheckpointPath:    checkpointPath,
+			WorkflowStatePath: workflowStatePath,
+		}
+	case "eternal":
+		return &agents.EternalAgent{Model: model}
+	case "coding", "expert", "":
+		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath, WorkflowStatePath: workflowStatePath}
+	default:
+		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath, WorkflowStatePath: workflowStatePath}
 	}
 }
 
@@ -544,7 +606,12 @@ func (r *Runtime) StartServer(ctx context.Context, addr string) (func(context.Co
 	if addr == "" {
 		addr = r.Config.ServerAddr
 	}
-	api := &server.APIServer{Agent: r.Agent, Context: r.Context, Logger: r.Logger}
+	api := &server.APIServer{
+		Agent:             r.Agent,
+		Context:           r.Context,
+		Logger:            r.Logger,
+		WorkflowStatePath: filepath.Join(r.Config.Workspace, "relurpify_cfg", "sessions", "workflow_state.db"),
+	}
 	serverCtx, cancel := context.WithCancel(ctx)
 	errCh := make(chan error, 1)
 	go func() {

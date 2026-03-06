@@ -16,6 +16,7 @@ type Session struct {
 	Workspace     string
 	Model         string
 	Agent         string
+	Role          string
 	Mode          string
 	Strategy      string
 	TotalTokens   int
@@ -27,7 +28,9 @@ type SessionInfo struct {
 	Workspace string
 	Model     string
 	Agent     string
+	Role      string
 	Mode      string
+	Strategy  string
 	MaxTokens int
 }
 
@@ -35,6 +38,50 @@ type SessionInfo struct {
 type SessionArtifacts struct {
 	TelemetryPath string
 	LogPath       string
+}
+
+// WorkflowInfo is a compact workflow listing for inspect and resume flows.
+type WorkflowInfo struct {
+	WorkflowID   string
+	TaskID       string
+	Status       string
+	CursorStepID string
+	Instruction  string
+	UpdatedAt    time.Time
+}
+
+// WorkflowDetails is the expanded workflow record used by TUI actions.
+type WorkflowDetails struct {
+	Workflow  WorkflowInfo
+	Steps     []WorkflowStepInfo
+	Events    []WorkflowEventInfo
+	Facts     []WorkflowKnowledgeInfo
+	Issues    []WorkflowKnowledgeInfo
+	Decisions []WorkflowKnowledgeInfo
+}
+
+type WorkflowStepInfo struct {
+	StepID       string
+	Description  string
+	Status       string
+	Summary      string
+	Dependencies []string
+}
+
+type WorkflowEventInfo struct {
+	EventType string
+	StepID    string
+	Message   string
+	CreatedAt time.Time
+}
+
+type WorkflowKnowledgeInfo struct {
+	StepID    string
+	Kind      string
+	Title     string
+	Content   string
+	Status    string
+	CreatedAt time.Time
 }
 
 // AgentContext records the active context files and token budget.

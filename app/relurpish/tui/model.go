@@ -82,7 +82,9 @@ func newRootModel(rt RuntimeAdapter) RootModel {
 		Workspace: info.Workspace,
 		Model:     info.Model,
 		Agent:     info.Agent,
+		Role:      info.Role,
 		Mode:      info.Mode,
+		Strategy:  info.Strategy,
 	}
 
 	ctx := &AgentContext{

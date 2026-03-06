@@ -42,6 +42,11 @@ func init() {
 		{Name: "parallel", Aliases: []string{"par"}, Description: "Toggle parallel runs", Usage: "/parallel on|off", Handler: rootHandleParallel},
 		{Name: "stop", Aliases: []string{"cancel"}, Description: "Stop current run", Usage: "/stop", Handler: rootHandleStop},
 		{Name: "retry", Aliases: []string{"re"}, Description: "Retry last prompt", Usage: "/retry", Handler: rootHandleRetry},
+		{Name: "workflows", Aliases: []string{"wfs"}, Description: "List persisted workflows", Usage: "/workflows [limit]", Handler: rootHandleWorkflows},
+		{Name: "workflow", Aliases: []string{"wf"}, Description: "Inspect one workflow", Usage: "/workflow <workflow-id>", Handler: rootHandleWorkflow},
+		{Name: "rerun", Aliases: []string{"rr"}, Description: "Replay a workflow from a step", Usage: "/rerun <workflow-id> <step-id>", Handler: rootHandleRerun},
+		{Name: "cancelwf", Aliases: []string{"cwf"}, Description: "Mark a workflow canceled", Usage: "/cancelwf <workflow-id>", Handler: rootHandleCancelWorkflow},
+		{Name: "resume", Aliases: []string{"rs"}, Description: "Resume architect execution from a workflow", Usage: "/resume <workflow-id> | /resume latest", Handler: rootHandleResume},
 	} {
 		rootCommandRegistry[cmd.Name] = cmd
 	}
@@ -394,6 +399,160 @@ func rootHandleRetry(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 		return m, nil
 	}
 	return m, m.chat.RetryLastRun()
+}
+
+func rootHandleWorkflows(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.runtime == nil {
+		m.addSystemMessage("Runtime unavailable")
+		return m, nil
+	}
+	limit := 10
+	if len(args) > 0 {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(args[0])); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	workflows, err := m.runtime.ListWorkflows(limit)
+	if err != nil {
+		m.addSystemMessage(fmt.Sprintf("Workflow lookup failed: %v", err))
+		return m, nil
+	}
+	if len(workflows) == 0 {
+		m.addSystemMessage("No workflows found")
+		return m, nil
+	}
+	var b strings.Builder
+	b.WriteString("Persisted workflows:\n")
+	for _, workflow := range workflows {
+		b.WriteString(fmt.Sprintf(" - %s status=%s", workflow.WorkflowID, workflow.Status))
+		if workflow.CursorStepID != "" {
+			b.WriteString(fmt.Sprintf(" cursor=%s", workflow.CursorStepID))
+		}
+		if !workflow.UpdatedAt.IsZero() {
+			b.WriteString(fmt.Sprintf(" updated=%s", workflow.UpdatedAt.Format("2006-01-02 15:04:05")))
+		}
+		b.WriteByte('\n')
+	}
+	m.addSystemMessage(b.String())
+	return m, nil
+}
+
+func rootHandleWorkflow(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.runtime == nil {
+		m.addSystemMessage("Runtime unavailable")
+		return m, nil
+	}
+	if len(args) == 0 {
+		m.addSystemMessage("Usage: /workflow <workflow-id>")
+		return m, nil
+	}
+	details, err := m.runtime.GetWorkflow(strings.TrimSpace(args[0]))
+	if err != nil {
+		m.addSystemMessage(fmt.Sprintf("Workflow lookup failed: %v", err))
+		return m, nil
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Workflow %s\n", details.Workflow.WorkflowID))
+	b.WriteString(fmt.Sprintf("Status: %s\n", details.Workflow.Status))
+	if details.Workflow.CursorStepID != "" {
+		b.WriteString(fmt.Sprintf("Cursor: %s\n", details.Workflow.CursorStepID))
+	}
+	b.WriteString(fmt.Sprintf("Instruction: %s\n", details.Workflow.Instruction))
+	if len(details.Steps) > 0 {
+		b.WriteString("\nSteps:\n")
+		for _, step := range details.Steps {
+			b.WriteString(fmt.Sprintf(" - %s status=%s: %s\n", step.StepID, step.Status, step.Description))
+		}
+	}
+	if len(details.Events) > 0 {
+		b.WriteString("\nRecent events:\n")
+		for _, event := range details.Events {
+			b.WriteString(fmt.Sprintf(" - %s step=%s %s\n", event.EventType, event.StepID, event.Message))
+		}
+	}
+	m.addSystemMessage(b.String())
+	return m, nil
+}
+
+func rootHandleRerun(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.chat == nil || m.runtime == nil {
+		return m, nil
+	}
+	if len(args) < 2 {
+		m.addSystemMessage("Usage: /rerun <workflow-id> <step-id>")
+		return m, nil
+	}
+	details, err := m.runtime.GetWorkflow(strings.TrimSpace(args[0]))
+	if err != nil {
+		m.addSystemMessage(fmt.Sprintf("Workflow lookup failed: %v", err))
+		return m, nil
+	}
+	meta := map[string]any{
+		"workflow_id":        details.Workflow.WorkflowID,
+		"rerun_from_step_id": strings.TrimSpace(args[1]),
+	}
+	cmd, _ := m.chat.StartRunWithMetadata(details.Workflow.Instruction, meta)
+	return m, cmd
+}
+
+func rootHandleCancelWorkflow(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.runtime == nil {
+		m.addSystemMessage("Runtime unavailable")
+		return m, nil
+	}
+	if len(args) == 0 {
+		m.addSystemMessage("Usage: /cancelwf <workflow-id>")
+		return m, nil
+	}
+	workflowID := strings.TrimSpace(args[0])
+	if err := m.runtime.CancelWorkflow(workflowID); err != nil {
+		m.addSystemMessage(fmt.Sprintf("Workflow cancel failed: %v", err))
+		return m, nil
+	}
+	m.addSystemMessage(fmt.Sprintf("Workflow %s marked canceled", workflowID))
+	return m, nil
+}
+
+func rootHandleResume(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.chat == nil {
+		return m, nil
+	}
+	if len(args) == 0 {
+		m.addSystemMessage("Usage: /resume <workflow-id> | /resume latest")
+		return m, nil
+	}
+	mode := ""
+	if m.sharedSess != nil {
+		mode = strings.TrimSpace(m.sharedSess.Mode)
+	}
+	if mode != "" && mode != "architect" {
+		m.addSystemMessage("Resume is intended for architect mode. Set /mode architect first if needed.")
+		return m, nil
+	}
+	meta := map[string]any{}
+	prompt := strings.TrimSpace(m.chat.lastPrompt)
+	target := strings.TrimSpace(args[0])
+	if strings.EqualFold(target, "latest") {
+		workflows, err := m.runtime.ListWorkflows(1)
+		if err != nil || len(workflows) == 0 {
+			m.addSystemMessage("No workflows available to resume")
+			return m, nil
+		}
+		target = workflows[0].WorkflowID
+	} else {
+		target = strings.TrimSpace(args[0])
+	}
+	details, err := m.runtime.GetWorkflow(target)
+	if err != nil {
+		m.addSystemMessage(fmt.Sprintf("Workflow lookup failed: %v", err))
+		return m, nil
+	}
+	meta["workflow_id"] = details.Workflow.WorkflowID
+	if prompt == "" {
+		prompt = details.Workflow.Instruction
+	}
+	cmd, _ := m.chat.StartRunWithMetadata(prompt, meta)
+	return m, cmd
 }
 
 // pendingHITLSummaryCmd surfaces pending HITL via /hitl command.
