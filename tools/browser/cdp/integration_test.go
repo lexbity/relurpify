@@ -1,4 +1,4 @@
-package webdriver
+package cdp
 
 import (
 	"context"
@@ -9,16 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
+	"github.com/lexcodex/relurpify/tools/browser"
 	"github.com/stretchr/testify/require"
 )
 
-func TestChromeDriverBackendLocalhostFlow(t *testing.T) {
-	driverPath, err := exec.LookPath("chromedriver")
-	if err != nil {
-		t.Skip("chromedriver not installed")
-	}
-	browserPath, err := exec.LookPath("chromium")
+func TestChromiumBackendLocalhostFlow(t *testing.T) {
+	chromiumPath, err := exec.LookPath("chromium")
 	if err != nil {
 		t.Skip("chromium not installed")
 	}
@@ -37,15 +33,11 @@ func TestChromeDriverBackendLocalhostFlow(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	runLocalhostFlow(t, ctx, driverPath, browserPath)
+	runLocalhostFlow(t, ctx, chromiumPath)
 }
 
-func TestChromeDriverBackendCloseCleansUpProcessAndProfile(t *testing.T) {
-	driverPath, err := exec.LookPath("chromedriver")
-	if err != nil {
-		t.Skip("chromedriver not installed")
-	}
-	browserPath, err := exec.LookPath("chromium")
+func TestChromiumBackendCloseCleansUpProcessAndProfile(t *testing.T) {
+	chromiumPath, err := exec.LookPath("chromium")
 	if err != nil {
 		t.Skip("chromium not installed")
 	}
@@ -53,9 +45,8 @@ func TestChromeDriverBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	backend, err := New(ctx, Config{
-		DriverPath:    driverPath,
-		BrowserBinary: browserPath,
-		Headless:      true,
+		ExecutablePath: chromiumPath,
+		Headless:       true,
 	})
 	require.NoError(t, err)
 	cmd := backend.process
@@ -63,30 +54,27 @@ func TestChromeDriverBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 
 	require.NoError(t, backend.Close())
 	require.NotNil(t, cmd.ProcessState)
+	require.True(t, cmd.ProcessState.Exited())
 	_, err = os.Stat(userData)
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
-func TestChromeDriverBackendRepeatedLocalhostFlow(t *testing.T) {
+func TestChromiumBackendRepeatedLocalhostFlow(t *testing.T) {
 	if testing.Short() || os.Getenv("RELURPIFY_BROWSER_STRESS") == "" {
 		t.Skip("set RELURPIFY_BROWSER_STRESS=1 to run repeated browser stress tests")
 	}
-	driverPath, err := exec.LookPath("chromedriver")
-	if err != nil {
-		t.Skip("chromedriver not installed")
-	}
-	browserPath, err := exec.LookPath("chromium")
+	chromiumPath, err := exec.LookPath("chromium")
 	if err != nil {
 		t.Skip("chromium not installed")
 	}
 	for i := 0; i < 3; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		runLocalhostFlow(t, ctx, driverPath, browserPath)
+		runLocalhostFlow(t, ctx, chromiumPath)
 		cancel()
 	}
 }
 
-func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath string) {
+func runLocalhostFlow(t *testing.T, ctx context.Context, chromiumPath string) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`<!doctype html>
@@ -100,9 +88,8 @@ func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath
 	}))
 	defer server.Close()
 	backend, err := New(ctx, Config{
-		DriverPath:    driverPath,
-		BrowserBinary: browserPath,
-		Headless:      true,
+		ExecutablePath: chromiumPath,
+		Headless:       true,
 	})
 	require.NoError(t, err)
 	defer func() {
@@ -121,10 +108,6 @@ func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath
 	html, err := backend.GetHTML(ctx)
 	require.NoError(t, err)
 	require.Contains(t, html, "id=\"submit\"")
-
-	ax, err := backend.GetAccessibilityTree(ctx)
-	require.NoError(t, err)
-	require.Contains(t, ax, "document")
 
 	currentURL, err := backend.CurrentURL(ctx)
 	require.NoError(t, err)

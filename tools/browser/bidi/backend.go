@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
+	"github.com/lexcodex/relurpify/tools/browser"
 )
 
 const defaultStartupTimeout = 10 * time.Second
@@ -302,11 +302,15 @@ func (b *Backend) startSession(ctx context.Context, cfg Config) error {
 	if os.Geteuid() == 0 {
 		chromeArgs = append(chromeArgs, "--no-sandbox")
 	}
-	userDataDir, err := os.MkdirTemp("", "relurpify-bidi-*")
-	if err != nil {
-		return err
+	userDataDir := fmt.Sprintf("/tmp/relurpify-bidi-%d", time.Now().UnixNano())
+	if strings.TrimSpace(b.baseURL) == "" || b.process != nil {
+		var err error
+		userDataDir, err = os.MkdirTemp("", "relurpify-bidi-*")
+		if err != nil {
+			return err
+		}
+		b.userData = userDataDir
 	}
-	b.userData = userDataDir
 	chromeArgs = append(chromeArgs, "--user-data-dir="+userDataDir)
 	chromeArgs = append(chromeArgs, cfg.BrowserArgs...)
 	chromeOptions := map[string]any{"args": chromeArgs}

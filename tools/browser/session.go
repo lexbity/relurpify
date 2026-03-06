@@ -178,20 +178,25 @@ func (s *Session) ExtractAccessibilityTree(ctx context.Context) (*Extraction, er
 }
 
 func (s *Session) authorizeNavigation(ctx context.Context, rawURL string) error {
-	if s.permissionManager == nil {
-		return nil
-	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return &Error{Code: ErrInvalidURL, Backend: s.backendName, Operation: "navigate", Err: err}
 	}
+	protocol, port, needsNetworkCheck, allowed := navigationTarget(parsed)
+	if !allowed {
+		return &Error{
+			Code:      ErrNavigationBlocked,
+			Backend:   s.backendName,
+			Operation: "navigate",
+			Err:       fmt.Errorf("navigation scheme %q is blocked", parsed.Scheme),
+		}
+	}
+	if !needsNetworkCheck || s.permissionManager == nil {
+		return nil
+	}
 	host := parsed.Hostname()
 	if host == "" {
 		return &Error{Code: ErrInvalidURL, Backend: s.backendName, Operation: "navigate", Err: fmt.Errorf("host required")}
-	}
-	protocol, port, needsNetworkCheck := navigationTarget(parsed)
-	if !needsNetworkCheck {
-		return nil
 	}
 	if err := s.permissionManager.CheckNetwork(ctx, s.agentID, "egress", protocol, host, port); err != nil {
 		return &Error{Code: ErrNavigationBlocked, Backend: s.backendName, Operation: "navigate", Err: err}
@@ -199,7 +204,7 @@ func (s *Session) authorizeNavigation(ctx context.Context, rawURL string) error 
 	return nil
 }
 
-func navigationTarget(parsed *url.URL) (string, int, bool) {
+func navigationTarget(parsed *url.URL) (string, int, bool, bool) {
 	switch strings.ToLower(parsed.Scheme) {
 	case "http", "https", "ws", "wss":
 		port := defaultPort(parsed.Scheme)
@@ -208,9 +213,11 @@ func navigationTarget(parsed *url.URL) (string, int, bool) {
 				port = value
 			}
 		}
-		return "tcp", port, true
+		return "tcp", port, true, true
+	case "about":
+		return "", 0, false, strings.EqualFold(parsed.Opaque, "blank")
 	default:
-		return "", 0, false
+		return "", 0, false, false
 	}
 }
 

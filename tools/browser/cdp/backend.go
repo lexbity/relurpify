@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
+	"github.com/lexcodex/relurpify/tools/browser"
 )
 
 const defaultStartupTimeout = 10 * time.Second

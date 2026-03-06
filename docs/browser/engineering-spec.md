@@ -267,8 +267,8 @@ They validate:
 
 Recommended package layout:
 
-- `framework/browser/contract_test.go`
-- `framework/browser/session_test.go`
+- `tools/browser/contract_test.go`
+- `tools/browser/session_test.go`
 
 ### 2. Backend Adapter Unit Tests
 
@@ -287,8 +287,8 @@ Required coverage:
 
 Recommended package layout:
 
-- `framework/browser/cdp/backend_test.go`
-- `framework/browser/cdp/transport_test.go`
+- `tools/browser/cdp/backend_test.go`
+- `tools/browser/cdp/transport_test.go`
 
 #### WebDriver Classic Adapter Unit Tests
 
@@ -306,8 +306,8 @@ Required coverage:
 
 Recommended package layout:
 
-- `framework/browser/webdriver/backend_test.go`
-- `framework/browser/webdriver/http_client_test.go`
+- `tools/browser/webdriver/backend_test.go`
+- `tools/browser/webdriver/http_client_test.go`
 
 #### WebDriver BiDi Adapter Unit Tests
 
@@ -324,8 +324,8 @@ Required coverage:
 
 Recommended package layout:
 
-- `framework/browser/bidi/backend_test.go`
-- `framework/browser/bidi/transport_test.go`
+- `tools/browser/bidi/backend_test.go`
+- `tools/browser/bidi/transport_test.go`
 
 ### 3. Real Browser Integration Tests
 
@@ -359,8 +359,8 @@ Required scenarios:
 
 Recommended package layout:
 
-- `framework/browser/integration/fixtures/...`
-- `framework/browser/integration/contract_integration_test.go`
+- `tools/browser/integration/fixtures/...`
+- `tools/browser/integration/contract_integration_test.go`
 
 ### 4. Standards / Conformance Tests
 

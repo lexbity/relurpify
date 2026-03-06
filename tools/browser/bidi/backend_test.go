@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
+	"github.com/lexcodex/relurpify/tools/browser"
 	"github.com/stretchr/testify/require"
 )
 

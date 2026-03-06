@@ -32,7 +32,7 @@ Current implementation status as of Phase 6 hardening.
 
 The browser stack is release-gated by:
 
-- `go test ./framework/browser/... ./app/relurpish/runtime`
+- `go test ./tools/browser/... ./app/relurpish/runtime`
 - `./scripts/browser-ci.sh`
 - optional repeated stress runs with `RELURPIFY_BROWSER_STRESS=1`
 

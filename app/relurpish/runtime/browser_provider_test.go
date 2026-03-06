@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
 	"github.com/lexcodex/relurpify/framework/core"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/tools/browser"
 	"github.com/stretchr/testify/require"
 )
 

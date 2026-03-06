@@ -1,4 +1,4 @@
-package bidi
+package webdriver
 
 import (
 	"context"
@@ -6,15 +6,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
+	"github.com/lexcodex/relurpify/tools/browser"
 	"github.com/stretchr/testify/require"
 )
 
-func TestChromeDriverBiDiBackendLocalhostFlow(t *testing.T) {
+func TestChromeDriverBackendLocalhostFlow(t *testing.T) {
 	driverPath, err := exec.LookPath("chromedriver")
 	if err != nil {
 		t.Skip("chromedriver not installed")
@@ -41,7 +40,7 @@ func TestChromeDriverBiDiBackendLocalhostFlow(t *testing.T) {
 	runLocalhostFlow(t, ctx, driverPath, browserPath)
 }
 
-func TestChromeDriverBiDiBackendCloseCleansUpProcessAndProfile(t *testing.T) {
+func TestChromeDriverBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 	driverPath, err := exec.LookPath("chromedriver")
 	if err != nil {
 		t.Skip("chromedriver not installed")
@@ -58,9 +57,6 @@ func TestChromeDriverBiDiBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 		BrowserBinary: browserPath,
 		Headless:      true,
 	})
-	if err != nil && strings.Contains(strings.ToLower(err.Error()), "websocket url missing") {
-		t.Skip("driver does not expose BiDi websocket")
-	}
 	require.NoError(t, err)
 	cmd := backend.process
 	userData := backend.userData
@@ -71,7 +67,7 @@ func TestChromeDriverBiDiBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
-func TestChromeDriverBiDiBackendRepeatedLocalhostFlow(t *testing.T) {
+func TestChromeDriverBackendRepeatedLocalhostFlow(t *testing.T) {
 	if testing.Short() || os.Getenv("RELURPIFY_BROWSER_STRESS") == "" {
 		t.Skip("set RELURPIFY_BROWSER_STRESS=1 to run repeated browser stress tests")
 	}
@@ -108,9 +104,6 @@ func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath
 		BrowserBinary: browserPath,
 		Headless:      true,
 	})
-	if err != nil && strings.Contains(strings.ToLower(err.Error()), "websocket url missing") {
-		t.Skip("driver does not expose BiDi websocket")
-	}
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, backend.Close())
@@ -128,6 +121,10 @@ func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath
 	html, err := backend.GetHTML(ctx)
 	require.NoError(t, err)
 	require.Contains(t, html, "id=\"submit\"")
+
+	ax, err := backend.GetAccessibilityTree(ctx)
+	require.NoError(t, err)
+	require.Contains(t, ax, "document")
 
 	currentURL, err := backend.CurrentURL(ctx)
 	require.NoError(t, err)

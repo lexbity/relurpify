@@ -56,6 +56,19 @@ func TestSessionNavigateAllowsDeclaredDomain(t *testing.T) {
 	require.Equal(t, "https://allowed.example/path", backend.currentURL)
 }
 
+func TestSessionNavigateRejectsNonNetworkSchemes(t *testing.T) {
+	session, err := NewSession(SessionConfig{
+		Backend:     &fakeBackend{},
+		BackendName: "fake",
+	})
+	require.NoError(t, err)
+
+	err = session.Navigate(context.Background(), "file:///etc/passwd")
+
+	require.Error(t, err)
+	require.True(t, IsErrorCode(err, ErrNavigationBlocked))
+}
+
 func TestSessionExtractionRespectsBudgetAndMarksTruncation(t *testing.T) {
 	budget := core.NewContextBudgetWithPolicy(8, &core.AllocationPolicy{
 		SystemReserved:     0,

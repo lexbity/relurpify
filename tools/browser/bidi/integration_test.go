@@ -1,4 +1,4 @@
-package cdp
+package bidi
 
 import (
 	"context"
@@ -6,15 +6,20 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
+	"github.com/lexcodex/relurpify/tools/browser"
 	"github.com/stretchr/testify/require"
 )
 
-func TestChromiumBackendLocalhostFlow(t *testing.T) {
-	chromiumPath, err := exec.LookPath("chromium")
+func TestChromeDriverBiDiBackendLocalhostFlow(t *testing.T) {
+	driverPath, err := exec.LookPath("chromedriver")
+	if err != nil {
+		t.Skip("chromedriver not installed")
+	}
+	browserPath, err := exec.LookPath("chromium")
 	if err != nil {
 		t.Skip("chromium not installed")
 	}
@@ -33,11 +38,15 @@ func TestChromiumBackendLocalhostFlow(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	runLocalhostFlow(t, ctx, chromiumPath)
+	runLocalhostFlow(t, ctx, driverPath, browserPath)
 }
 
-func TestChromiumBackendCloseCleansUpProcessAndProfile(t *testing.T) {
-	chromiumPath, err := exec.LookPath("chromium")
+func TestChromeDriverBiDiBackendCloseCleansUpProcessAndProfile(t *testing.T) {
+	driverPath, err := exec.LookPath("chromedriver")
+	if err != nil {
+		t.Skip("chromedriver not installed")
+	}
+	browserPath, err := exec.LookPath("chromium")
 	if err != nil {
 		t.Skip("chromium not installed")
 	}
@@ -45,36 +54,43 @@ func TestChromiumBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	backend, err := New(ctx, Config{
-		ExecutablePath: chromiumPath,
-		Headless:       true,
+		DriverPath:    driverPath,
+		BrowserBinary: browserPath,
+		Headless:      true,
 	})
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "websocket url missing") {
+		t.Skip("driver does not expose BiDi websocket")
+	}
 	require.NoError(t, err)
 	cmd := backend.process
 	userData := backend.userData
 
 	require.NoError(t, backend.Close())
 	require.NotNil(t, cmd.ProcessState)
-	require.True(t, cmd.ProcessState.Exited())
 	_, err = os.Stat(userData)
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
-func TestChromiumBackendRepeatedLocalhostFlow(t *testing.T) {
+func TestChromeDriverBiDiBackendRepeatedLocalhostFlow(t *testing.T) {
 	if testing.Short() || os.Getenv("RELURPIFY_BROWSER_STRESS") == "" {
 		t.Skip("set RELURPIFY_BROWSER_STRESS=1 to run repeated browser stress tests")
 	}
-	chromiumPath, err := exec.LookPath("chromium")
+	driverPath, err := exec.LookPath("chromedriver")
+	if err != nil {
+		t.Skip("chromedriver not installed")
+	}
+	browserPath, err := exec.LookPath("chromium")
 	if err != nil {
 		t.Skip("chromium not installed")
 	}
 	for i := 0; i < 3; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		runLocalhostFlow(t, ctx, chromiumPath)
+		runLocalhostFlow(t, ctx, driverPath, browserPath)
 		cancel()
 	}
 }
 
-func runLocalhostFlow(t *testing.T, ctx context.Context, chromiumPath string) {
+func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath string) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`<!doctype html>
@@ -88,9 +104,13 @@ func runLocalhostFlow(t *testing.T, ctx context.Context, chromiumPath string) {
 	}))
 	defer server.Close()
 	backend, err := New(ctx, Config{
-		ExecutablePath: chromiumPath,
-		Headless:       true,
+		DriverPath:    driverPath,
+		BrowserBinary: browserPath,
+		Headless:      true,
 	})
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "websocket url missing") {
+		t.Skip("driver does not expose BiDi websocket")
+	}
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, backend.Close())

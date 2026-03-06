@@ -3,17 +3,18 @@ package runtime
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/browser"
-	"github.com/lexcodex/relurpify/framework/browser/bidi"
-	"github.com/lexcodex/relurpify/framework/browser/cdp"
-	"github.com/lexcodex/relurpify/framework/browser/webdriver"
 	"github.com/lexcodex/relurpify/framework/core"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/tools/browser"
+	"github.com/lexcodex/relurpify/tools/browser/bidi"
+	"github.com/lexcodex/relurpify/tools/browser/cdp"
+	"github.com/lexcodex/relurpify/tools/browser/webdriver"
 )
 
 const (
@@ -31,6 +32,7 @@ type browserSessionConfig struct {
 	manager     *fruntime.PermissionManager
 	agentID     string
 	maxTokens   int
+	runtime     *Runtime
 }
 
 func newBrowserProvider() *browserProvider {
@@ -62,10 +64,18 @@ func (p *browserProvider) Close() error {
 }
 
 func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error) {
+	sandboxed, err := newSandboxedBrowserBackend(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
 	switch strings.ToLower(strings.TrimSpace(cfg.backendName)) {
 	case "", defaultBrowserBackend:
-		backend, err := cdp.New(ctx, cdp.Config{Headless: true})
+		backend, err := cdp.New(ctx, cdp.Config{
+			Headless:     true,
+			WebSocketURL: sandboxed.cdpWebSocketURL,
+		})
 		if err != nil {
+			_ = sandboxed.close()
 			return nil, err
 		}
 		maxTokens := cfg.maxTokens
@@ -73,15 +83,20 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.
 			maxTokens = 8192
 		}
 		return browser.NewSession(browser.SessionConfig{
-			Backend:           backend,
+			Backend:           wrapManagedBrowserBackend(backend, sandboxed.close),
 			BackendName:       defaultBrowserBackend,
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
 			Budget:            core.NewContextBudget(maxTokens),
 		})
 	case "webdriver":
-		backend, err := webdriver.New(ctx, webdriver.Config{Headless: true})
+		backend, err := webdriver.New(ctx, webdriver.Config{
+			Headless:    true,
+			RemoteURL:   sandboxed.remoteURL,
+			BrowserArgs: []string{"--disable-dev-shm-usage"},
+		})
 		if err != nil {
+			_ = sandboxed.close()
 			return nil, err
 		}
 		maxTokens := cfg.maxTokens
@@ -89,15 +104,20 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.
 			maxTokens = 8192
 		}
 		return browser.NewSession(browser.SessionConfig{
-			Backend:           backend,
+			Backend:           wrapManagedBrowserBackend(backend, sandboxed.close),
 			BackendName:       "webdriver",
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
 			Budget:            core.NewContextBudget(maxTokens),
 		})
 	case "bidi":
-		backend, err := bidi.New(ctx, bidi.Config{Headless: true})
+		backend, err := bidi.New(ctx, bidi.Config{
+			Headless:    true,
+			RemoteURL:   sandboxed.remoteURL,
+			BrowserArgs: []string{"--disable-dev-shm-usage"},
+		})
 		if err != nil {
+			_ = sandboxed.close()
 			return nil, err
 		}
 		maxTokens := cfg.maxTokens
@@ -105,7 +125,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.
 			maxTokens = 8192
 		}
 		return browser.NewSession(browser.SessionConfig{
-			Backend:           backend,
+			Backend:           wrapManagedBrowserBackend(backend, sandboxed.close),
 			BackendName:       "bidi",
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
@@ -280,6 +300,7 @@ func (t *browserTool) open(ctx context.Context, state *core.Context, args map[st
 		manager:     t.runtime.Registration.Permissions,
 		agentID:     t.runtime.Registration.ID,
 		maxTokens:   t.maxTokens(),
+		runtime:     t.runtime,
 	})
 	if err != nil {
 		return nil, err
@@ -417,4 +438,64 @@ func shouldEnableBrowserProvider(skills []string) bool {
 		}
 	}
 	return false
+}
+
+type managedBrowserBackend struct {
+	backend browser.Backend
+	cleanup func() error
+}
+
+func wrapManagedBrowserBackend(backend browser.Backend, cleanup func() error) browser.Backend {
+	return &managedBrowserBackend{backend: backend, cleanup: cleanup}
+}
+
+func (m *managedBrowserBackend) Navigate(ctx context.Context, url string) error {
+	return m.backend.Navigate(ctx, url)
+}
+
+func (m *managedBrowserBackend) Click(ctx context.Context, selector string) error {
+	return m.backend.Click(ctx, selector)
+}
+
+func (m *managedBrowserBackend) Type(ctx context.Context, selector, text string) error {
+	return m.backend.Type(ctx, selector, text)
+}
+
+func (m *managedBrowserBackend) GetText(ctx context.Context, selector string) (string, error) {
+	return m.backend.GetText(ctx, selector)
+}
+
+func (m *managedBrowserBackend) GetAccessibilityTree(ctx context.Context) (string, error) {
+	return m.backend.GetAccessibilityTree(ctx)
+}
+
+func (m *managedBrowserBackend) GetHTML(ctx context.Context) (string, error) {
+	return m.backend.GetHTML(ctx)
+}
+
+func (m *managedBrowserBackend) ExecuteScript(ctx context.Context, script string) (any, error) {
+	return m.backend.ExecuteScript(ctx, script)
+}
+
+func (m *managedBrowserBackend) Screenshot(ctx context.Context) ([]byte, error) {
+	return m.backend.Screenshot(ctx)
+}
+
+func (m *managedBrowserBackend) WaitFor(ctx context.Context, condition browser.WaitCondition, timeout time.Duration) error {
+	return m.backend.WaitFor(ctx, condition, timeout)
+}
+
+func (m *managedBrowserBackend) CurrentURL(ctx context.Context) (string, error) {
+	return m.backend.CurrentURL(ctx)
+}
+
+func (m *managedBrowserBackend) Close() error {
+	var errs []error
+	if m.backend != nil {
+		errs = append(errs, m.backend.Close())
+	}
+	if m.cleanup != nil {
+		errs = append(errs, m.cleanup())
+	}
+	return errors.Join(errs...)
 }
