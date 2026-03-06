@@ -78,15 +78,29 @@ Checkout docs/
 # Roadmap
 
 - [x] core graph oriented library
-- [x] gVisor + permissions integration + HTIL
+- [x] gVisor Sandboxing + permissions integration 
+- [x] HTIL
 - [x] AST and context manager (context compression)
-- [x] core framework unit tests
 - [x] planner agent
 - [x] react agent 
 - [x] Coder (modal) agent
 - [x] Ollama integration 
-- [x] Automated Agent testsuite 
-- [] Extend Agent testsuite with standardized agent benchmarks (improvement over trust-me-bro^tm benchmarks)
+
+- [] Framework Tooling
+    - [x] Essential (Linux assumed) local toolset
+    - [x] Toolset: Git support 
+    - [x] Toolset: python
+    - [x] Toolset: golang 
+    - [x] Toolset: rust 
+    - [x] Toolset: Nodejs + Npm
+    - [x] 'Skills' Support 
+    
+- [] Test Coverage
+    - [x] core framework unit tests
+    - [x] Automated Agent testsuite 
+    - [] Agent Testsuite: Skills coverage (partially completed)
+    - [] Extend Agent testsuite with standardized agent benchmarks (improvement over trust-me-bro^tm benchmarks)
+    
 - [] standard CLI-TUI interface for Agents
     - [x] Coder Agent support
     - [x] Chat
@@ -94,11 +108,14 @@ Checkout docs/
     - [x] Settings
     - [x] Setup Wizard
     - [x] Notifications with HTIL support 
-- [x] Documentation 
+    
+- [x] Documentation (ongoing) 
+
 - [] Node-based Workflow App (GUI) 
     - [] Terminal integration 
     - [] Relurpish TUI support 
     - [] Basic Nodeset 
     - [] Script Node 
     - [] Skill Node(s)
+    
 - [] (more experiments to come)

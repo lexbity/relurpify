@@ -68,14 +68,14 @@ Local module/test caches are maintained via .gomodcache/.gocache when running th
 
 State & Storage
 
-Added durable workflow/message/vector stores under persistence/ (workflow_store.go (line 1), message_store.go (line 1), vector_store.go (line 1)) so executions can be snapshotted, conversations replayed, and semantic recall performed via the new in-memory vector index.
+Added durable workflow/message/vector stores under framework/persistence/ (workflow_store.go (line 1), message_store.go (line 1), vector_store.go (line 1)) so executions can be snapshotted, conversations replayed, and semantic recall performed via the new in-memory vector index.
 Documented how to wire these stores (and the helper script/tests) in README.md (line 3).
 Observability
 
 Introduced framework/telemetry.go (line 1) and instrumented the graph runner (framework/graph.go (line 1)) to emit start/finish/error events per graph/node. Plug in LoggerTelemetry (or a custom emitter) for tracing/monitoring.
 Testability & Debugging
 
-Added focused unit tests for context snapshots and graph execution flow (framework/context_test.go (line 1), framework/graph_test.go (line 1)) plus coverage for the vector store (persistence/vector_store_test.go (line 1)) to make regression checks easy.
+Added focused unit tests for context snapshots and graph execution flow (framework/context_test.go (line 1), framework/graph_test.go (line 1)) plus coverage for the vector store (framework/persistence/vector_store_test.go (line 1)) to make regression checks easy.
 go test ./... now exercises these suites (see below).
 Tests
 

@@ -104,7 +104,7 @@ The manifest is checked at startup. If it requires `runtime: gvisor` (mandatory)
 
 ### Token Budget Management
 
-Local models have finite context windows. The context manager tracks every item in the conversation (messages, file contents, tool results) against a token budget derived from the model's `max_tokens` setting. When the budget tightens, lower-priority items are pruned before the next LLM call. This happens transparently — the agent keeps working, just with a tighter context.
+Local models have finite context windows, so Relurpify treats context as a systems problem rather than a prompt-writing problem. The context manager tracks files, summaries, tool results, and conversation history against a token budget derived from the model's `max_tokens` setting. The live prompt is rebuilt from compact state each iteration instead of replaying the full transcript. When the budget tightens, file contents are downgraded to summaries, tool outputs are compressed, and only the most relevant working context is carried forward. Long-running plan execution can also persist checkpoints so interrupted work resumes without replaying the whole workflow.
 
 ---
 

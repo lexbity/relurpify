@@ -11,6 +11,7 @@
 | [Permission Model](permission-model.md) | How the security contract is enforced |
 | [TUI](tui.md) | relurpish interface — panes, keybindings, workflow |
 | [Testing](testing.md) | Unit tests, agenttest, recording and replay |
+| [External State Store Spec](external-state-store-spec.md) | Workflow persistence rework, step-scoped execution, replay/resume design |
 
 ## Developer Docs
 

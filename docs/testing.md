@@ -32,6 +32,9 @@ go tool cover -func=coverage.out
 # Single package
 go test ./framework/runtime/...
 go test ./framework/graph/...
+
+# Browser stack only
+go test ./framework/browser/... ./app/relurpish/runtime
 ```
 
 ---
@@ -192,6 +195,46 @@ RELURPIFY_AGENTTEST_SUITE=testsuite/agenttests/coding.go.testsuite.yaml \
 ```
 
 In CI, use `--recording-mode replay` so Ollama is not required.
+
+### Browser CI
+
+Browser support now has its own CI entry point:
+
+```bash
+./scripts/browser-ci.sh
+```
+
+This runs:
+
+- browser package tests
+- runtime/provider tests that cover browser session wiring
+- optional repeated browser stress tests when `RELURPIFY_BROWSER_STRESS=1`
+
+Example:
+
+```bash
+# Standard browser gating
+./scripts/browser-ci.sh
+
+# Include repeated localhost stress runs
+RELURPIFY_BROWSER_STRESS=1 ./scripts/browser-ci.sh
+```
+
+If a CI environment intentionally does not validate browser support, set:
+
+```bash
+RELURPIFY_BROWSER_CI=0 ./scripts/ci.sh
+```
+
+### Browser Release Gate
+
+Browser support should not be considered releasable unless the following all pass:
+
+- `go test ./framework/browser/... ./app/relurpish/runtime`
+- real localhost integration tests for CDP, Classic WebDriver, and BiDi on a supported Chromium/ChromeDriver pair
+- repeated stress runs with `RELURPIFY_BROWSER_STRESS=1`
+- cleanup tests confirming browser processes and temporary profiles are removed on shutdown
+- parallel session isolation tests in the runtime provider layer
 
 ---
 

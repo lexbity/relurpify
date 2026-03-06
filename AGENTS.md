@@ -29,7 +29,7 @@ agents/templates  Reference agent manifest templates for relurpify_cfg init
 tools/       File, git, search, execution, and LSP proxy implementations
 cmd/         CLI entry points (server, relurpify toolbox, coder helper)
 server/      HTTP + LSP servers and dependency wiring
-persistence/ Workflow + message stores for pause/resume and logging
+framework/persistence/ Workflow + message stores for pause/resume and logging
 llm/         Ollama HTTP client that satisfies core.LanguageModel
 scripts/     Helper scripts (documentation generation, etc.)
 relurpify_cfg/ Workspace configuration, manifests, memory, and telemetry outputs

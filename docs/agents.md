@@ -37,7 +37,7 @@ Tokens from the LLM are streamed to the TUI as they arrive — you see the agent
 
 ### How Context is Managed
 
-As the loop runs, the context grows: messages, tool results, file contents. The context manager tracks token usage against the model's budget and prunes lower-priority items when it runs tight. File contents are loaded on demand as tools reference them rather than upfront — this keeps the context lean.
+As the loop runs, the context grows: messages, tool results, file contents. Relurpify is tuned for small local models, so the agent does not depend on replaying a long raw transcript. Instead it rebuilds each iteration from compact state: the current step, compressed history, summarized tool outputs, and progressively loaded file or symbol context. The context manager tracks token usage against the model's budget and downgrades lower-priority items to summaries when it runs tight.
 
 ### How Tool Calls are Authorised
 
@@ -52,12 +52,12 @@ The primary agent for interactive development work. It delegates to specialised 
 | Mode | Strategy | What it focuses on |
 |------|----------|--------------------|
 | `code` | ReAct | Reading, editing, and creating files; running tests and builds |
-| `architect` | Plan → ReAct | Produces a written plan first, then executes it step by step |
+| `architect` | Candidate select → Plan → step-scoped ReAct | Chooses an approach for branchy tasks, then executes one step at a time with compact per-step context |
 | `ask` | ReAct (cautious) | Answers questions without modifying files |
 | `debug` | ReAct | Diagnostic focus: runs tests, reads stack traces, searches code |
 | `docs` | ReAct (write-focused) | Writes or updates documentation files |
 
-The mode is set in the manifest under `spec.agent.mode`. Language-specific manifests are provided for Go, Rust, Python, Node.js, and SQLite in `relurpify_cfg/agents/`. These differ in their skill stacks, declared executables, and system prompts.
+The mode is set in the manifest under `spec.agent.mode`. In `architect` mode the caller can also request resume-from-checkpoint via task context so interrupted long plans continue from the latest saved step. Language-specific manifests are provided for Go, Rust, Python, Node.js, and SQLite in `relurpify_cfg/agents/`. These differ in their skill stacks, declared executables, and system prompts.
 
 **Selecting a language-specific agent:**
 
@@ -82,7 +82,7 @@ relurpish chat --agent planner
 
 ## ReActAgent
 
-The direct ReAct implementation. Where CodingAgent wraps ReAct with mode-specific prompt decoration and tool scoping, ReActAgent is the undecorated version — full tool access, minimal prompt framing.
+The direct ReAct implementation. Where CodingAgent wraps ReAct with mode-specific prompt decoration and tool scoping, ReActAgent is the lower-level reason/act loop. It rebuilds a compact prompt per iteration, summarizes tool outputs immediately, and exposes only phase-appropriate tools so small models do not waste context on irrelevant state.
 
 Useful for exploratory tasks where you want the model to reason freely across the full tool set.
 
