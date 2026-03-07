@@ -19,6 +19,19 @@ import (
 
 var errBinaryFile = errors.New("binary file detected")
 
+func shouldSkipGeneratedDir(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	switch name {
+	case ".git", "target", "node_modules", "dist", "build":
+		return true
+	default:
+		return false
+	}
+}
+
 // ReadFileTool reads files from disk.
 type ReadFileTool struct {
 	BasePath string
@@ -209,7 +222,7 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args m
 			return err
 		}
 		if d.IsDir() {
-			if strings.HasPrefix(d.Name(), ".git") {
+			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
 			if t.manager != nil {
@@ -312,7 +325,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 			return err
 		}
 		if d.IsDir() {
-			if strings.HasPrefix(d.Name(), ".git") {
+			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
 			if t.manager != nil {

@@ -53,6 +53,7 @@ func (pl *ProgressiveLoader) InitialLoad(task *core.Task, strategy ContextStrate
 	if err != nil {
 		return fmt.Errorf("select context: %w", err)
 	}
+	ResolveContextRequestPaths(request, task)
 	return pl.ExecuteContextRequest(request, "initial")
 }
 

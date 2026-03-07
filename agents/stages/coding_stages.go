@@ -261,8 +261,12 @@ func (s *CodeStage) Validate(output any) error {
 }
 func (s *CodeStage) Apply(ctx *core.Context, output any) error {
 	plan := output.(EditPlan)
+	root := workspaceRoot(s.Task)
 	for _, edit := range plan.Edits {
 		path := filepath.Clean(edit.Path)
+		if root != "" && !filepath.IsAbs(path) {
+			path = filepath.Join(root, path)
+		}
 		switch strings.TrimSpace(edit.Action) {
 		case "create", "update":
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

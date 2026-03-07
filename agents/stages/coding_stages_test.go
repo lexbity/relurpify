@@ -30,6 +30,23 @@ func TestExploreStageDecodeValidateApply(t *testing.T) {
 	}
 }
 
+func TestExploreStageDecodeAcceptsStructuredToolSuggestions(t *testing.T) {
+	stage := &ExploreStage{Task: &core.Task{Instruction: "find files"}}
+	resp := &core.LLMResponse{Text: `{"relevant_files":[{"path":"main.rs","reason":"contains bug"}],"tool_suggestions":[{"name":"file_read","reason":"inspect file"},{"tool":"search_grep"}],"summary":"Focus on main.rs"}`}
+
+	out, err := pipeline.DecodeStageOutput(stage, resp)
+	if err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	selection, ok := out.(FileSelection)
+	if !ok {
+		t.Fatalf("expected FileSelection, got %T", out)
+	}
+	if len(selection.ToolSuggestions) != 2 || selection.ToolSuggestions[0] != "file_read" || selection.ToolSuggestions[1] != "search_grep" {
+		t.Fatalf("unexpected tool suggestions: %#v", selection.ToolSuggestions)
+	}
+}
+
 func TestAnalyzeStageAcceptsSummaryWithoutIssues(t *testing.T) {
 	stage := &AnalyzeStage{Task: &core.Task{Instruction: "analyze"}}
 	resp := &core.LLMResponse{Text: `{"issues":[],"summary":"nothing"}`}
@@ -138,6 +155,36 @@ func TestCodeStageApplyWritesEditsToDisk(t *testing.T) {
 	}
 	if string(data) != out.Edits[0].Content {
 		t.Fatalf("unexpected file content: %q", string(data))
+	}
+}
+
+func TestCodeStageApplyResolvesRelativePathsFromWorkspace(t *testing.T) {
+	workspace := t.TempDir()
+	stage := &CodeStage{Task: &core.Task{
+		Instruction: "apply edits",
+		Context: map[string]any{
+			"workspace": workspace,
+		},
+	}}
+	out := EditPlan{
+		Edits: []FileEdit{{
+			Path:    filepath.ToSlash(filepath.Join("nested", "main.rs")),
+			Action:  "update",
+			Content: "fn main() {}\n",
+			Summary: "write file",
+		}},
+		Summary: "ok",
+	}
+
+	if err := stage.Apply(core.NewContext(), out); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(workspace, "nested", "main.rs"))
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if string(data) != "fn main() {}\n" {
+		t.Fatalf("unexpected content: %q", string(data))
 	}
 }
 

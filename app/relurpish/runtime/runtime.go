@@ -21,6 +21,7 @@ import (
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/lexcodex/relurpify/llm"
 	"github.com/lexcodex/relurpify/server"
 	"github.com/lexcodex/relurpify/tools"
@@ -51,9 +52,7 @@ type Runtime struct {
 	providers    []RuntimeProvider
 }
 
-// New builds a fruntime. It always returns a usable Runtime instance even when
-// sandbox or manifest verification fails so that the wizard/status views can
-// surface actionable diagnostics.
+// New builds a fruntime for the TUI and status surfaces.
 func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if err := cfg.Normalize(); err != nil {
 		return nil, err
@@ -412,11 +411,12 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 			return nil, nil, err
 		}
 	}
-	indexDir := filepath.Join(workspace, "relurpify_cfg", "memory", "ast_index")
+	paths := workspacecfg.New(workspace)
+	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, nil, err
 	}
-	store, err := ast.NewSQLiteStore(filepath.Join(indexDir, "index.db"))
+	store, err := ast.NewSQLiteStore(paths.ASTIndexDB())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -470,7 +470,8 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
 func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.ToolRegistry, mem memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config, indexManager *ast.IndexManager) graph.Agent {
-	workflowStatePath := filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "workflow_state.db")
+	paths := workspacecfg.New(cfg.Workspace)
+	workflowStatePath := paths.WorkflowStateFile()
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
 		// Update config with the definition's spec
@@ -487,20 +488,21 @@ func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.To
 	case "planner":
 		return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
 	case "react":
-		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints")}
+		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: paths.CheckpointsDir()}
 	case "reflection":
 		return &agents.ReflectionAgent{
 			Reviewer: model,
-			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints"), WorkflowStatePath: workflowStatePath},
+			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: paths.CheckpointsDir(), WorkflowStatePath: workflowStatePath},
 		}
 	default:
-		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints"), WorkflowStatePath: workflowStatePath}
+		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: paths.CheckpointsDir(), WorkflowStatePath: workflowStatePath}
 	}
 }
 
 func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, model core.LanguageModel, registry *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
-	checkpointPath := filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "checkpoints")
-	workflowStatePath := filepath.Join(cfg.Workspace, "relurpify_cfg", "sessions", "workflow_state.db")
+	paths := workspacecfg.New(cfg.Workspace)
+	checkpointPath := paths.CheckpointsDir()
+	workflowStatePath := paths.WorkflowStateFile()
 	implementation := strings.ToLower(strings.TrimSpace(def.Spec.Implementation))
 	switch implementation {
 	case "planner":
@@ -582,6 +584,10 @@ func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, ta
 		Context:     metadata,
 		Metadata:    metaStrings,
 	}
+	if task.Context == nil {
+		task.Context = make(map[string]any)
+	}
+	task.Context["workspace"] = r.Config.Workspace
 	return r.RunTask(ctx, task)
 }
 
@@ -610,7 +616,7 @@ func (r *Runtime) StartServer(ctx context.Context, addr string) (func(context.Co
 		Agent:             r.Agent,
 		Context:           r.Context,
 		Logger:            r.Logger,
-		WorkflowStatePath: filepath.Join(r.Config.Workspace, "relurpify_cfg", "sessions", "workflow_state.db"),
+		WorkflowStatePath: workspacecfg.New(r.Config.Workspace).WorkflowStateFile(),
 	}
 	serverCtx, cancel := context.WithCancel(ctx)
 	errCh := make(chan error, 1)

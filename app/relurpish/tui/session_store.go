@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 // SessionMeta holds lightweight session metadata for listing.
@@ -33,7 +35,7 @@ type SessionStore struct {
 
 // NewSessionStore creates a store rooted at dir.
 func NewSessionStore(workspace string) *SessionStore {
-	root := filepath.Join(workspace, "relurpify_cfg", "sessions")
+	root := workspacecfg.New(workspace).SessionsDir()
 	return &SessionStore{root: root}
 }
 

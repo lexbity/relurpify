@@ -13,6 +13,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/persistence"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,7 +62,7 @@ func TestDescribeAgentRuntimeForReflectionUsesDelegateMode(t *testing.T) {
 
 func TestRuntimeAdapterListsWorkflows(t *testing.T) {
 	workspace := t.TempDir()
-	dbPath := filepath.Join(workspace, "relurpify_cfg", "sessions", "workflow_state.db")
+	dbPath := workspacecfg.New(workspace).WorkflowStateFile()
 	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
 	store, err := persistence.NewSQLiteWorkflowStateStore(dbPath)
 	require.NoError(t, err)

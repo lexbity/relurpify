@@ -1,5 +1,10 @@
 package stages
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // FileRef describes a file selected for deeper work.
 type FileRef struct {
 	Path   string `json:"path"`
@@ -11,6 +16,45 @@ type FileSelection struct {
 	RelevantFiles   []FileRef `json:"relevant_files"`
 	ToolSuggestions []string  `json:"tool_suggestions,omitempty"`
 	Summary         string    `json:"summary"`
+}
+
+func (f *FileSelection) UnmarshalJSON(data []byte) error {
+	type rawFileSelection struct {
+		RelevantFiles   []FileRef        `json:"relevant_files"`
+		ToolSuggestions []json.RawMessage `json:"tool_suggestions,omitempty"`
+		Summary         string           `json:"summary"`
+	}
+	var raw rawFileSelection
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	f.RelevantFiles = raw.RelevantFiles
+	f.Summary = raw.Summary
+	f.ToolSuggestions = f.ToolSuggestions[:0]
+	for _, item := range raw.ToolSuggestions {
+		var asString string
+		if err := json.Unmarshal(item, &asString); err == nil {
+			asString = strings.TrimSpace(asString)
+			if asString != "" {
+				f.ToolSuggestions = append(f.ToolSuggestions, asString)
+			}
+			continue
+		}
+		var asObject struct {
+			Name string `json:"name"`
+			Tool string `json:"tool"`
+		}
+		if err := json.Unmarshal(item, &asObject); err == nil {
+			name := strings.TrimSpace(asObject.Name)
+			if name == "" {
+				name = strings.TrimSpace(asObject.Tool)
+			}
+			if name != "" {
+				f.ToolSuggestions = append(f.ToolSuggestions, name)
+			}
+		}
+	}
+	return nil
 }
 
 // Issue describes one concrete problem discovered during analysis.

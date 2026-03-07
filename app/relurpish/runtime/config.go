@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -37,16 +38,15 @@ func DefaultConfig() Config {
 	if err != nil {
 		cwd = "."
 	}
-	cfgDir := filepath.Join(cwd, "relurpify_cfg")
-	logsDir := filepath.Join(cfgDir, "logs")
+	paths := workspacecfg.New(cwd)
 	return Config{
 		Workspace:     cwd,
-		ManifestPath:  filepath.Join(cfgDir, "agent.manifest.yaml"),
-		AgentsDir:     filepath.Join(cfgDir, "agents"),
-		MemoryPath:    filepath.Join(cfgDir, "memory"),
-		LogPath:       filepath.Join(logsDir, "relurpish.log"),
-		TelemetryPath: filepath.Join(cfgDir, "telemetry.jsonl"),
-		ConfigPath:    filepath.Join(cfgDir, "config.yaml"),
+		ManifestPath:  paths.ManifestFile(),
+		AgentsDir:     paths.AgentsDir(),
+		MemoryPath:    paths.MemoryDir(),
+		LogPath:       paths.LogFile("relurpish.log"),
+		TelemetryPath: paths.TelemetryFile(""),
+		ConfigPath:    paths.ConfigFile(),
 		ServerAddr:    ":8080",
 		AuditLimit:    512,
 		HITLTimeout:   45 * time.Second,
@@ -71,39 +71,39 @@ func (c *Config) Normalize() error {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
 	c.Workspace = absWorkspace
-	configDir := filepath.Join(c.Workspace, "relurpify_cfg")
+	paths := workspacecfg.New(c.Workspace)
 	if c.ManifestPath == "" {
-		c.ManifestPath = filepath.Join(configDir, "agent.manifest.yaml")
+		c.ManifestPath = paths.ManifestFile()
 	}
 	if !filepath.IsAbs(c.ManifestPath) {
 		c.ManifestPath = filepath.Join(c.Workspace, c.ManifestPath)
 	}
 	if c.AgentsDir == "" {
-		c.AgentsDir = filepath.Join(configDir, "agents")
+		c.AgentsDir = paths.AgentsDir()
 	}
 	if !filepath.IsAbs(c.AgentsDir) {
 		c.AgentsDir = filepath.Join(c.Workspace, c.AgentsDir)
 	}
 	if c.MemoryPath == "" {
-		c.MemoryPath = filepath.Join(configDir, "memory")
+		c.MemoryPath = paths.MemoryDir()
 	}
 	if !filepath.IsAbs(c.MemoryPath) {
 		c.MemoryPath = filepath.Join(c.Workspace, c.MemoryPath)
 	}
 	if c.LogPath == "" {
-		c.LogPath = filepath.Join(configDir, "logs", "relurpish.log")
+		c.LogPath = paths.LogFile("relurpish.log")
 	}
 	if !filepath.IsAbs(c.LogPath) {
 		c.LogPath = filepath.Join(c.Workspace, c.LogPath)
 	}
 	if c.TelemetryPath == "" {
-		c.TelemetryPath = filepath.Join(configDir, "telemetry.jsonl")
+		c.TelemetryPath = paths.TelemetryFile("")
 	}
 	if !filepath.IsAbs(c.TelemetryPath) {
 		c.TelemetryPath = filepath.Join(c.Workspace, c.TelemetryPath)
 	}
 	if c.ConfigPath == "" {
-		c.ConfigPath = filepath.Join(configDir, "config.yaml")
+		c.ConfigPath = paths.ConfigFile()
 	}
 	if !filepath.IsAbs(c.ConfigPath) {
 		c.ConfigPath = filepath.Join(c.Workspace, c.ConfigPath)
@@ -139,17 +139,15 @@ func (c Config) AgentLabel() string {
 	}
 }
 
-// WorkspaceConfig captures persisted wizard selections for reuse across runs.
+// WorkspaceConfig captures persisted workspace preferences under relurpify_cfg.
 type WorkspaceConfig struct {
-	Model             string            `yaml:"model"`
-	Agents            []string          `yaml:"agents"`
-	AllowedTools      []string          `yaml:"allowed_tools"`
-	PermissionProfile PermissionProfile `yaml:"permission_profile"`
-	LastUpdated       int64             `yaml:"last_updated"`
+	Model        string   `yaml:"model"`
+	Agents       []string `yaml:"agents"`
+	AllowedTools []string `yaml:"allowed_tools"`
+	LastUpdated  int64    `yaml:"last_updated"`
 }
 
-// LoadWorkspaceConfig loads the wizard configuration from disk. Missing files
-// are treated as empty selections.
+// LoadWorkspaceConfig loads workspace preferences from disk.
 func LoadWorkspaceConfig(path string) (WorkspaceConfig, error) {
 	if path == "" {
 		return WorkspaceConfig{}, fmt.Errorf("config path required")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/testsuite/agenttest"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
@@ -138,7 +139,7 @@ func discoverSuites(ws, agentName string) []string {
 		return matches
 	}
 	// Fallback: check relurpify_cfg/testsuites/ for locally-added suites.
-	cfgDir := filepath.Join(ws, "relurpify_cfg", "testsuites")
+	cfgDir := workspacecfg.New(ws).TestsuitesDir()
 	if _, err := os.Stat(cfgDir); err == nil {
 		matches, _ = filepath.Glob(filepath.Join(cfgDir, pattern))
 	}

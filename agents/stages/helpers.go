@@ -14,6 +14,17 @@ func taskInstruction(task *core.Task) string {
 	return strings.TrimSpace(task.Instruction)
 }
 
+func workspaceRoot(task *core.Task) string {
+	if task == nil || task.Context == nil {
+		return ""
+	}
+	root := strings.TrimSpace(fmt.Sprint(task.Context["workspace"]))
+	if root == "" {
+		return ""
+	}
+	return root
+}
+
 func renderContextFiles(task *core.Task, maxBytes int) string {
 	if task == nil || task.Context == nil {
 		return ""

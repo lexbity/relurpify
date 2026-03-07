@@ -22,7 +22,7 @@ type Ruleset struct {
 	BestPractices   []string `yaml:"best_practices"`
 }
 
-// LoadRuleset reads relurpify_cfg/rules.yaml when present.
+// LoadRuleset reads the workspace rules file when present.
 func LoadRuleset(path string) (*Ruleset, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

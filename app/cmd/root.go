@@ -28,8 +28,8 @@ func Execute() {
 // NewRootCmd wires the cobra tree.
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "coding-agent",
-		Short:         "Multi-mode coding agent orchestrator",
+		Use:           "dev-agent",
+		Short:         "Development and integration CLI for Relurpify",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -52,7 +52,7 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().StringVar(&workspace, "workspace", "", "Workspace directory")
-	root.PersistentFlags().StringVar(&cfgFile, "config", "", "Path to coding-agent config file")
+	root.PersistentFlags().StringVar(&cfgFile, "config", "", "Path to development CLI config file")
 
 	root.AddCommand(
 		newStartCmd(),

@@ -9,6 +9,28 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
+type stubContextStrategy struct {
+	request *ContextRequest
+}
+
+func (s stubContextStrategy) SelectContext(task *core.Task, budget *core.ContextBudget) (*ContextRequest, error) {
+	return s.request, nil
+}
+
+func (s stubContextStrategy) ShouldCompress(ctx *core.SharedContext) bool { return false }
+
+func (s stubContextStrategy) DetermineDetailLevel(file string, relevance float64) DetailLevel {
+	return DetailFull
+}
+
+func (s stubContextStrategy) ShouldExpandContext(ctx *core.SharedContext, lastResult *core.Result) bool {
+	return false
+}
+
+func (s stubContextStrategy) PrioritizeContext(items []core.ContextItem) []core.ContextItem {
+	return items
+}
+
 func TestProgressiveLoaderPromotesFileDetail(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
@@ -131,5 +153,89 @@ func TestProgressiveLoaderPreservesProtectedFilesDuringDemotion(t *testing.T) {
 	}
 	if afterOther >= beforeOther {
 		t.Fatalf("expected unprotected file to shrink, before=%d after=%d", beforeOther, afterOther)
+	}
+}
+
+func TestResolveContextRequestPathsUsesWorkspaceRoot(t *testing.T) {
+	request := &ContextRequest{
+		Files: []FileRequest{
+			{Path: "testsuite/fixture/a.go"},
+			{Path: "/tmp/already-absolute.go"},
+		},
+	}
+	task := &core.Task{
+		Context: map[string]any{
+			"workspace": "/tmp/workspace-root",
+		},
+	}
+
+	ResolveContextRequestPaths(request, task)
+
+	if got := request.Files[0].Path; got != filepath.Join("/tmp/workspace-root", "testsuite/fixture/a.go") {
+		t.Fatalf("expected workspace-relative path, got %q", got)
+	}
+	if got := request.Files[1].Path; got != "/tmp/already-absolute.go" {
+		t.Fatalf("expected absolute path unchanged, got %q", got)
+	}
+}
+
+func TestProgressiveLoaderInitialLoadResolvesRelativePathsFromWorkspace(t *testing.T) {
+	t.Helper()
+	liveRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(liveRoot, "testsuite/fixture"), 0o755); err != nil {
+		t.Fatalf("mkdir live fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(liveRoot, "testsuite/fixture/sample.txt"), []byte("live repo"), 0o644); err != nil {
+		t.Fatalf("write live fixture: %v", err)
+	}
+
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "testsuite/fixture"), 0o755); err != nil {
+		t.Fatalf("mkdir workspace fixture: %v", err)
+	}
+	want := "derived workspace"
+	if err := os.WriteFile(filepath.Join(workspace, "testsuite/fixture/sample.txt"), []byte(want), 0o644); err != nil {
+		t.Fatalf("write workspace fixture: %v", err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(cwd)
+	}()
+	if err := os.Chdir(liveRoot); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	budget := core.NewContextBudget(8000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, nil, nil, budget, &core.SimpleSummarizer{})
+	task := &core.Task{
+		Instruction: "Inspect testsuite/fixture/sample.txt",
+		Context: map[string]any{
+			"workspace": workspace,
+		},
+	}
+	request := &ContextRequest{
+		Files: []FileRequest{
+			{Path: "testsuite/fixture/sample.txt", DetailLevel: DetailFull},
+		},
+	}
+
+	if err := loader.InitialLoad(task, stubContextStrategy{request: request}); err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+
+	item := loader.fileItem(filepath.Join(workspace, "testsuite/fixture/sample.txt"))
+	if item == nil {
+		t.Fatal("expected workspace file item to be loaded")
+	}
+	if !strings.Contains(item.Content, want) {
+		t.Fatalf("expected workspace content %q, got %q", want, item.Content)
+	}
+	if strings.Contains(item.Content, "live repo") {
+		t.Fatalf("loaded content from cwd instead of workspace: %q", item.Content)
 	}
 }

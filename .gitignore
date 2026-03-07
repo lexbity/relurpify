@@ -11,7 +11,7 @@ relurpify/
 /relurpify_cfg/logs/
 /relurpify_cfg/sessions/
 /relurpify_cfg/telemetry.jsonl
-coding-agent
+dev-agent
 # Build artifacts from test fixtures
 testsuite/agenttest_fixtures/**/target/
 testsuite/agenttest_fixtures/**/__pycache__/

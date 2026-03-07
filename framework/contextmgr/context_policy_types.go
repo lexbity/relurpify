@@ -1,6 +1,7 @@
 package contextmgr
 
 import (
+	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -173,6 +174,36 @@ func ExtractContextFiles(task *core.Task) []string {
 		out = append(out, clean)
 	}
 	return out
+}
+
+// ResolveContextRequestPaths maps relative file requests into the active
+// workspace so initial context loads use the derived workspace, not process cwd.
+func ResolveContextRequestPaths(request *ContextRequest, task *core.Task) {
+	if request == nil || task == nil || task.Context == nil {
+		return
+	}
+	root := strings.TrimSpace(stringValue(task.Context["workspace"]))
+	if root == "" || root == "." {
+		return
+	}
+	root = filepath.Clean(root)
+	for i := range request.Files {
+		path := strings.TrimSpace(request.Files[i].Path)
+		if path == "" || filepath.IsAbs(path) {
+			continue
+		}
+		request.Files[i].Path = filepath.Join(root, filepath.FromSlash(path))
+	}
+}
+
+func stringValue(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return strings.TrimSpace(fmt.Sprint(v))
 }
 
 // AppendContextFiles injects explicit file requests into an existing request.

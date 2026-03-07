@@ -55,7 +55,7 @@ func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[st
 			return err
 		}
 		if info.IsDir() {
-			if strings.Contains(path, string(filepath.Separator)+".git") {
+			if shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
 			if t.manager != nil {
@@ -138,7 +138,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args 
 	var matches []match
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
-			if err == nil && info.IsDir() && strings.Contains(path, ".git") {
+			if err == nil && info.IsDir() && shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
 			if err == nil && info != nil && info.IsDir() && t.manager != nil {
@@ -209,7 +209,7 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, a
 			return err
 		}
 		if info.IsDir() {
-			if strings.Contains(path, ".git") {
+			if shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
 			if t.manager != nil {

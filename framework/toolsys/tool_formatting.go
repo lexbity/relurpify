@@ -124,7 +124,10 @@ func tryParseSingleToolCall(jsonText string) (ToolCall, bool) {
 	}
 
 	if err := json.Unmarshal([]byte(jsonText), &raw); err != nil {
-		return ToolCall{}, false
+		normalized := normalizeMultilineJSONStringLiterals(jsonText)
+		if normalized == jsonText || json.Unmarshal([]byte(normalized), &raw) != nil {
+			return ToolCall{}, false
+		}
 	}
 
 	name := raw.Tool
@@ -148,4 +151,50 @@ func tryParseSingleToolCall(jsonText string) (ToolCall, bool) {
 			Args: args,
 		},
 		true
+}
+
+func normalizeMultilineJSONStringLiterals(text string) string {
+	var b strings.Builder
+	b.Grow(len(text))
+	inString := false
+	escaped := false
+	changed := false
+	for _, ch := range text {
+		if escaped {
+			b.WriteRune(ch)
+			escaped = false
+			continue
+		}
+		if ch == '\\' && inString {
+			b.WriteRune(ch)
+			escaped = true
+			continue
+		}
+		if ch == '"' {
+			inString = !inString
+			b.WriteRune(ch)
+			continue
+		}
+		if inString {
+			switch ch {
+			case '\n':
+				b.WriteString(`\n`)
+				changed = true
+				continue
+			case '\r':
+				b.WriteString(`\r`)
+				changed = true
+				continue
+			case '\t':
+				b.WriteString(`\t`)
+				changed = true
+				continue
+			}
+		}
+		b.WriteRune(ch)
+	}
+	if !changed {
+		return text
+	}
+	return b.String()
 }

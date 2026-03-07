@@ -4,17 +4,22 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/runtime"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-// SandboxReport captures runtime detection results needed by the wizard/status
-// views.
+func execLookPathImpl(file string) (string, error) {
+	return exec.LookPath(file)
+}
+
 type SandboxBinary struct {
 	Name          string
 	Path          string
@@ -23,14 +28,24 @@ type SandboxBinary struct {
 	SupportsRunsc bool
 }
 
-// SandboxReport captures runtime detection results needed by the wizard/status
-// views.
 type SandboxReport struct {
 	Runsc      SandboxBinary
 	Docker     SandboxBinary
 	Containerd SandboxBinary
 	Errors     []string
 	Verified   bool
+}
+
+// ManifestSummary describes the manifest currently selected by relurpify_cfg.
+type ManifestSummary struct {
+	Path        string
+	Exists      bool
+	AgentName   string
+	Runtime     string
+	Permissions int
+	Network     int
+	Error       string
+	UpdatedAt   time.Time
 }
 
 // OllamaReport surfaces the health of the configured Ollama endpoint.
@@ -42,7 +57,7 @@ type OllamaReport struct {
 	Error         string
 }
 
-// EnvironmentReport aggregates the wizard probes.
+// EnvironmentReport aggregates the runtime environment checks.
 type EnvironmentReport struct {
 	Workspace string
 	Sandbox   SandboxReport
@@ -62,7 +77,7 @@ type StatusSnapshot struct {
 }
 
 // ProbeEnvironment inspects sandbox binaries, Ollama availability, and the
-// manifest so the wizard can display actionable suggestions.
+// active manifest for status/reporting surfaces.
 func ProbeEnvironment(ctx context.Context, cfg Config) EnvironmentReport {
 	sandbox := detectSandbox(ctx, cfg)
 	ollama := detectOllama(ctx, cfg)
@@ -245,6 +260,39 @@ func dockerSupportsRunsc(payload string) bool {
 		}
 	}
 	return false
+}
+
+func summarizeManifest(path string) ManifestSummary {
+	summary := ManifestSummary{Path: path}
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			summary.Error = ""
+		} else {
+			summary.Error = err.Error()
+		}
+		return summary
+	}
+	summary.Exists = true
+	summary.UpdatedAt = info.ModTime()
+	m, err := manifest.LoadAgentManifest(path)
+	if err != nil {
+		summary.Error = err.Error()
+		return summary
+	}
+	summary.AgentName = m.Metadata.Name
+	summary.Runtime = m.Spec.Runtime
+	permFS := len(m.Spec.Permissions.FileSystem)
+	permExec := len(m.Spec.Permissions.Executables)
+	permNet := len(m.Spec.Permissions.Network)
+	if m.Spec.Defaults != nil && m.Spec.Defaults.Permissions != nil {
+		permFS += len(m.Spec.Defaults.Permissions.FileSystem)
+		permExec += len(m.Spec.Defaults.Permissions.Executables)
+		permNet += len(m.Spec.Defaults.Permissions.Network)
+	}
+	summary.Permissions = permFS + permExec
+	summary.Network = permNet
+	return summary
 }
 
 // Status collects runtime + environment data for the status view.

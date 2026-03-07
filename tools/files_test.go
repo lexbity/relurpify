@@ -88,3 +88,46 @@ func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
 	files := res.Data["files"].([]string)
 	assert.Contains(t, files, target)
 }
+
+func TestListFilesToolSkipsGeneratedDirectories(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "src", "main.rs")
+	generated := filepath.Join(dir, "target", "debug", "build.rs")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(source), 0o755))
+	assert.NoError(t, os.MkdirAll(filepath.Dir(generated), 0o755))
+	assert.NoError(t, os.WriteFile(source, []byte("fn main() {}\n"), 0o644))
+	assert.NoError(t, os.WriteFile(generated, []byte("fn generated() {}\n"), 0o644))
+
+	tool := &ListFilesTool{BasePath: dir}
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"directory": ".",
+		"pattern":   "**/*.rs",
+	})
+	assert.NoError(t, err)
+	files := res.Data["files"].([]string)
+	assert.Contains(t, files, source)
+	assert.NotContains(t, files, generated)
+}
+
+func TestSearchInFilesToolSkipsGeneratedDirectories(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "src", "main.rs")
+	generated := filepath.Join(dir, "target", "debug", "build.rs")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(source), 0o755))
+	assert.NoError(t, os.MkdirAll(filepath.Dir(generated), 0o755))
+	assert.NoError(t, os.WriteFile(source, []byte("// TODO: source\n"), 0o644))
+	assert.NoError(t, os.WriteFile(generated, []byte("// TODO: generated\n"), 0o644))
+
+	tool := &SearchInFilesTool{BasePath: dir}
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"directory": ".",
+		"pattern":   "TODO",
+	})
+	assert.NoError(t, err)
+	bytes, err := json.Marshal(res.Data["matches"])
+	assert.NoError(t, err)
+	var decoded []map[string]interface{}
+	assert.NoError(t, json.Unmarshal(bytes, &decoded))
+	assert.Len(t, decoded, 1)
+	assert.Equal(t, source, decoded[0]["file"])
+}

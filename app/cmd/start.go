@@ -10,16 +10,16 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/telemetry"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/lexcodex/relurpify/llm"
 	"github.com/spf13/cobra"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
-// newStartCmd constructs the `relurpify start` CLI command that runs an agent.
+// newStartCmd constructs the development CLI command that runs an agent.
 func newStartCmd() *cobra.Command {
 	var mode string
 	var agentName string
@@ -33,7 +33,7 @@ func newStartCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: "Start a coding agent session",
+		Short: "Start a development agent session",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runCtx := cmd.Context()
 			if runCtx == nil {
@@ -178,7 +178,8 @@ func newStartCmd() *cobra.Command {
 			if registration.Permissions != nil {
 				tools.UsePermissionManager(registration.ID, registration.Permissions)
 			}
-			memoryPath := filepath.Join(ws, "relurpify_cfg", "memory")
+			paths := workspacecfg.New(ws)
+			memoryPath := paths.MemoryDir()
 			memory, err := memory.NewHybridMemory(memoryPath)
 			if err != nil {
 				return err
@@ -194,8 +195,8 @@ func newStartCmd() *cobra.Command {
 				Tools:             tools,
 				Memory:            memory,
 				IndexManager:      indexManager,
-				CheckpointPath:    filepath.Join(ws, "relurpify_cfg", "sessions", "checkpoints"),
-				WorkflowStatePath: filepath.Join(ws, "relurpify_cfg", "sessions", "workflow_state.db"),
+				CheckpointPath:    paths.CheckpointsDir(),
+				WorkflowStatePath: paths.WorkflowStateFile(),
 			}
 			cfg := &core.Config{
 				Name:              agentName,
@@ -217,7 +218,8 @@ func newStartCmd() *cobra.Command {
 				Instruction: instruction,
 				Type:        core.TaskTypeCodeGeneration,
 				Context: map[string]any{
-					"mode": mode,
+					"mode":      mode,
+					"workspace": ws,
 				},
 			}
 			if resumeLatestWorkflow {

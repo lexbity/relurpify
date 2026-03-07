@@ -16,6 +16,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/persistence"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 const contextFileMaxBytes = 8000
@@ -401,7 +402,7 @@ func (r *runtimeAdapter) openWorkflowStore() (*persistence.SQLiteWorkflowStateSt
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	path := filepath.Join(r.rt.Config.Workspace, "relurpify_cfg", "sessions", "workflow_state.db")
+	path := workspacecfg.New(r.rt.Config.Workspace).WorkflowStateFile()
 	return persistence.NewSQLiteWorkflowStateStore(path)
 }
 

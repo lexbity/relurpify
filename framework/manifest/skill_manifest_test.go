@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 func TestSkillSpecValidation_Valid(t *testing.T) {
@@ -154,7 +156,7 @@ spec:
 
 func TestLoadSkillFlat(t *testing.T) {
 	ws := t.TempDir()
-	skillDir := filepath.Join(ws, skillsDirName, "mypkg")
+	skillDir := filepath.Join(workspacecfg.New(ws).SkillsDir(), "mypkg")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -200,7 +202,7 @@ func TestLoadSkillFlat_Missing(t *testing.T) {
 
 func TestLoadSkillList_PartialLoad(t *testing.T) {
 	ws := t.TempDir()
-	skillDir := filepath.Join(ws, skillsDirName, "goodskill")
+	skillDir := filepath.Join(workspacecfg.New(ws).SkillsDir(), "goodskill")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -243,7 +245,7 @@ func TestRepositoryLanguageSkillsCarryPlanningAndReviewPolicy(t *testing.T) {
 	for _, skill := range skills {
 		skill := skill
 		t.Run(skill, func(t *testing.T) {
-			path := filepath.Join(root, "relurpify_cfg", "skills", skill, "skill.manifest.yaml")
+			path := filepath.Join(workspacecfg.New(root).SkillsDir(), skill, "skill.manifest.yaml")
 			m, err := LoadSkillManifest(path)
 			if err != nil {
 				t.Fatalf("load manifest: %v", err)

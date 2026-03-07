@@ -2,53 +2,14 @@ package runtime
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"os"
+	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
-
-// TestWorkspaceGlob ensures workspace paths convert into recursive globs.
-func TestWorkspaceGlob(t *testing.T) {
-	dir := filepath.Join("/tmp", "relurpish")
-	glob := workspaceGlob(dir)
-	require.Equal(t, filepath.ToSlash(dir)+"/**", glob)
-}
-
-// TestBuildPermissionSetProfiles validates the read-only vs write profiles.
-func TestBuildPermissionSetProfiles(t *testing.T) {
-	dir := t.TempDir()
-	readonly := buildPermissionSet(dir, PermissionProfileReadOnly)
-	require.Len(t, readonly.FileSystem, 3)
-
-	write := buildPermissionSet(dir, PermissionProfileWorkspaceWrite)
-	require.Greater(t, len(write.FileSystem), len(readonly.FileSystem))
-}
-
-// TestSaveManifestCreatesFile confirms the wizard saves manifests + config.
-func TestSaveManifestCreatesFile(t *testing.T) {
-	dir := t.TempDir()
-	cfg := DefaultConfig()
-	cfg.Workspace = dir
-	cfg.ManifestPath = filepath.Join(dir, "agent.manifest.yaml")
-	cfg.ConfigPath = filepath.Join(dir, "relurpify_cfg", "config.yaml")
-	selection := WizardSelection{
-		Model:   "deepseek-r1:7b",
-		Agents:  []string{"coding"},
-		Profile: PermissionProfileWorkspaceWrite,
-		Tools:   []string{"file_read", "file_write"},
-	}
-	summary, err := SaveManifest(context.Background(), cfg, selection)
-	require.NoError(t, err)
-	require.True(t, summary.Exists)
-	_, err = os.Stat(cfg.ManifestPath)
-	require.NoError(t, err)
-	wcfg, err := LoadWorkspaceConfig(cfg.ConfigPath)
-	require.NoError(t, err)
-	require.Equal(t, selection.Model, wcfg.Model)
-	require.ElementsMatch(t, selection.Agents, wcfg.Agents)
-}
 
 // TestProbeEnvironmentHandlesMissingRunsc surfaces a helpful error message.
 func TestProbeEnvironmentHandlesMissingRunsc(t *testing.T) {
@@ -56,8 +17,91 @@ func TestProbeEnvironmentHandlesMissingRunsc(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Workspace = dir
 	cfg.ManifestPath = filepath.Join(dir, "agent.manifest.yaml")
-	cfg.ConfigPath = filepath.Join(dir, "relurpify_cfg", "config.yaml")
+	cfg.ConfigPath = workspacecfg.New(dir).ConfigFile()
 	cfg.Sandbox.RunscPath = "runsc-missing"
 	report := ProbeEnvironment(context.Background(), cfg)
 	require.Contains(t, strings.Join(report.Sandbox.Errors, " "), "runsc not found")
+}
+
+func TestSummarizeManifestMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.manifest.yaml")
+	summary := summarizeManifest(path)
+	require.Equal(t, path, summary.Path)
+	require.False(t, summary.Exists)
+	require.Empty(t, summary.Error)
+}
+
+func TestInitializeWorkspaceFromTemplatesCreatesWorkspaceFiles(t *testing.T) {
+	shared := t.TempDir()
+	t.Setenv("RELURPIFY_SHARED_DIR", shared)
+	configTemplate := filepath.Join(shared, "templates", "workspace", "config.yaml")
+	manifestTemplate := filepath.Join(shared, "templates", "workspace", "agent.manifest.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(configTemplate), 0o755))
+	require.NoError(t, os.WriteFile(configTemplate, []byte("model: test-model\n"), 0o644))
+	require.NoError(t, os.WriteFile(manifestTemplate, []byte("path: ${workspace}\n"), 0o644))
+
+	dir := t.TempDir()
+	cfg := Config{Workspace: dir}
+	require.NoError(t, cfg.Normalize())
+
+	require.NoError(t, InitializeWorkspaceFromTemplates(cfg, false))
+	data, err := os.ReadFile(cfg.ConfigPath)
+	require.NoError(t, err)
+	require.Contains(t, string(data), "test-model")
+	manifestData, err := os.ReadFile(cfg.ManifestPath)
+	require.NoError(t, err)
+	require.Contains(t, string(manifestData), filepath.ToSlash(dir))
+	for _, path := range []string{
+		workspacecfg.New(dir).AgentsDir(),
+		workspacecfg.New(dir).SkillsDir(),
+		workspacecfg.New(dir).LogsDir(),
+		workspacecfg.New(dir).TelemetryDir(),
+		workspacecfg.New(dir).MemoryDir(),
+		workspacecfg.New(dir).SessionsDir(),
+		workspacecfg.New(dir).TestRunsDir(),
+	} {
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		require.True(t, info.IsDir())
+	}
+}
+
+func TestInitializeWorkspaceFromTemplatesDoesNotOverwriteWithoutFix(t *testing.T) {
+	shared := t.TempDir()
+	t.Setenv("RELURPIFY_SHARED_DIR", shared)
+	configTemplate := filepath.Join(shared, "templates", "workspace", "config.yaml")
+	manifestTemplate := filepath.Join(shared, "templates", "workspace", "agent.manifest.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(configTemplate), 0o755))
+	require.NoError(t, os.WriteFile(configTemplate, []byte("model: replacement\n"), 0o644))
+	require.NoError(t, os.WriteFile(manifestTemplate, []byte("name: replacement\n"), 0o644))
+
+	dir := t.TempDir()
+	cfg := Config{Workspace: dir}
+	require.NoError(t, cfg.Normalize())
+	require.NoError(t, os.MkdirAll(filepath.Dir(cfg.ConfigPath), 0o755))
+	require.NoError(t, os.WriteFile(cfg.ConfigPath, []byte("model: keep\n"), 0o644))
+	require.NoError(t, os.WriteFile(cfg.ManifestPath, []byte("name: keep\n"), 0o644))
+
+	require.NoError(t, InitializeWorkspaceFromTemplates(cfg, false))
+	configData, err := os.ReadFile(cfg.ConfigPath)
+	require.NoError(t, err)
+	require.Contains(t, string(configData), "keep")
+	manifestData, err := os.ReadFile(cfg.ManifestPath)
+	require.NoError(t, err)
+	require.Contains(t, string(manifestData), "keep")
+}
+
+func TestDetectChromiumStatusMissingIsWarningOnly(t *testing.T) {
+	orig := execLookPath
+	execLookPath = func(file string) (string, error) {
+		return "", os.ErrNotExist
+	}
+	defer func() { execLookPath = orig }()
+
+	status := detectChromiumStatus(context.Background())
+	require.Equal(t, "chromium", status.Name)
+	require.False(t, status.Required)
+	require.False(t, status.Available)
+	require.False(t, status.Blocking)
+	require.Equal(t, "not found", status.Details)
 }

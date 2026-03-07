@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 type ExportOptions struct {
@@ -78,7 +79,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 			root = "."
 		}
 		base := "session-" + time.Now().Format("20060102-150405")
-		outPath = filepath.Join(root, "relurpify_cfg", "exports", base+"."+format)
+		outPath = filepath.Join(workspacecfg.New(root).ExportsDir(), base+"."+format)
 	}
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return "", err

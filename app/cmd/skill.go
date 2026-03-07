@@ -17,6 +17,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/templates"
 	"github.com/lexcodex/relurpify/testsuite/agenttest"
 )
 
@@ -59,7 +60,10 @@ func newSkillInitCmd() *cobra.Command {
 				return err
 			}
 
-			templatePath := filepath.Join(ws, "agents", "templates", "skill.manifest.yaml")
+			templatePath, err := templates.NewResolver().ResolveSkillManifestTemplate()
+			if err != nil {
+				return fmt.Errorf("resolve skill template: %w", err)
+			}
 			data, err := os.ReadFile(templatePath)
 			if err != nil {
 				return err
@@ -333,7 +337,8 @@ func writeSkillTestSuite(root, name, agentName string, force bool) error {
 			AgentName: agentName,
 			Manifest:  filepath.ToSlash(filepath.Join("..", "..", "agent.manifest.yaml")),
 			Workspace: agenttest.WorkspaceSpec{
-				Strategy: "copy",
+				Strategy:        "derived",
+				TemplateProfile: "default",
 			},
 			Cases: []agenttest.CaseSpec{
 				{

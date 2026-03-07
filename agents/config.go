@@ -6,17 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"gopkg.in/yaml.v3"
 )
 
-const configDirName = "relurpify_cfg"
-
 // ConfigDir returns the workspace-local configuration directory.
 func ConfigDir(workspace string) string {
-	if workspace == "" {
-		workspace = "."
-	}
-	return filepath.Join(workspace, configDirName)
+	return workspacecfg.New(workspace).ConfigRoot()
 }
 
 // GlobalConfig matches relurpify_cfg/config.yaml inside the workspace.
