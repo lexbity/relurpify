@@ -154,10 +154,15 @@ func makeRunnerStage(name, inputKey, outputKey string, output any) *runnerStage 
 type toolStage struct {
 	*runnerStage
 	allowedTools []string
+	requireTool  bool
 }
 
 func (s *toolStage) AllowedToolNames() []string {
 	return append([]string{}, s.allowedTools...)
+}
+
+func (s *toolStage) RequiresToolExecution(task *core.Task, state *core.Context, tools []core.Tool) bool {
+	return s.requireTool
 }
 
 type stubTool struct {
@@ -482,6 +487,51 @@ func TestRunnerExecuteParsesToolCallsFromTextResponse(t *testing.T) {
 	}
 	if len(model.prompts) == 0 || !strings.Contains(model.prompts[len(model.prompts)-1], "Tool results:") {
 		t.Fatalf("expected parsed text tool call to trigger final prompt")
+	}
+}
+
+func TestRunnerExecuteRepromptsWhenRequiredToolCallIsMissing(t *testing.T) {
+	model := &stubModel{
+		toolResponses: []*core.LLMResponse{
+			{Text: `{"status":"pass"}`},
+			{ToolCalls: []core.ToolCall{{
+				Name: "cli_cargo",
+				Args: map[string]any{"args": []any{"test"}},
+			}}},
+		},
+		responses: []*core.LLMResponse{{Text: `{"status":"pass"}`}},
+	}
+	stage := &toolStage{
+		runnerStage: makeRunnerStage("verify", "in", "out", map[string]any{"status": "pass"}),
+		allowedTools: []string{
+			"cli_cargo",
+		},
+		requireTool: true,
+	}
+	stage.contract.Metadata.AllowTools = true
+	tool := &stubTool{
+		name:      "cli_cargo",
+		available: true,
+		result: &core.ToolResult{
+			Success: true,
+			Data:    map[string]interface{}{"stdout": "test result: ok"},
+		},
+	}
+
+	runner := &Runner{Options: RunnerOptions{
+		Model:             model,
+		Tools:             []core.Tool{tool},
+		EnableToolCalling: true,
+	}}
+	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-required", Instruction: "Run cli_cargo args [\"test\"]"}, core.NewContext(), []Stage{stage})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if model.toolCalls != 2 {
+		t.Fatalf("expected second tool prompt after missing required tool call, got %d", model.toolCalls)
+	}
+	if len(model.prompts) == 0 || !strings.Contains(model.prompts[len(model.prompts)-1], "Tool results:") {
+		t.Fatalf("expected final prompt with tool results after reprompt")
 	}
 }
 

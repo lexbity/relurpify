@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -35,6 +36,18 @@ type Extraction struct {
 	OriginalTokens int
 	FinalTokens    int
 	Truncated      bool
+}
+
+// PageState is a compact orientation snapshot for the active page.
+type PageState struct {
+	URL         string
+	Title       string
+	Preview     string
+	LinkCount   int
+	FormCount   int
+	InputCount  int
+	ButtonCount int
+	ObservedAt  time.Time
 }
 
 // Session adds Relurpify policy and budgeting around a browser backend.
@@ -136,6 +149,115 @@ func (s *Session) CurrentURL(ctx context.Context) (string, error) {
 		return "", wrapError(s.backendName, "current_url", err)
 	}
 	return url, nil
+}
+
+// Capabilities returns the advertised backend feature set when available.
+func (s *Session) Capabilities() Capabilities {
+	if s == nil || s.backend == nil {
+		return Capabilities{}
+	}
+	if reporter, ok := s.backend.(CapabilityReporter); ok {
+		return reporter.Capabilities()
+	}
+	return Capabilities{ArbitraryEval: true}
+}
+
+// CapturePageState returns a compact summary of the active page using trusted
+// backend-owned extraction rather than model-supplied script input.
+func (s *Session) CapturePageState(ctx context.Context) (*PageState, error) {
+	urlValue, err := s.CurrentURL(ctx)
+	if err != nil {
+		return nil, err
+	}
+	titleValue, err := s.backend.ExecuteScript(ctx, "document.title || ''")
+	if err != nil {
+		return nil, wrapError(s.backendName, "page_state", err)
+	}
+	countValue, err := s.backend.ExecuteScript(ctx, `(() => ({
+		links: document.links.length,
+		forms: document.forms.length,
+		inputs: document.querySelectorAll("input, textarea, select").length,
+		buttons: document.querySelectorAll("button, input[type='button'], input[type='submit']").length
+	}))()`)
+	if err != nil {
+		return nil, wrapError(s.backendName, "page_state", err)
+	}
+	previewExtraction, err := s.ExtractText(ctx, "body")
+	if err != nil && !IsErrorCode(err, ErrNoSuchElement) {
+		return nil, err
+	}
+	state := &PageState{
+		URL:        urlValue,
+		Title:      strings.TrimSpace(fmt.Sprint(titleValue)),
+		ObservedAt: time.Now().UTC(),
+	}
+	if previewExtraction != nil {
+		state.Preview = compactPreview(previewExtraction.Content)
+	}
+	if counts, ok := countValue.(map[string]any); ok {
+		state.LinkCount = intFromAny(counts["links"])
+		state.FormCount = intFromAny(counts["forms"])
+		state.InputCount = intFromAny(counts["inputs"])
+		state.ButtonCount = intFromAny(counts["buttons"])
+	}
+	return state, nil
+}
+
+// ExtractStructured returns compact page-oriented structured data using
+// backend-owned evaluation rather than model-supplied JavaScript.
+func (s *Session) ExtractStructured(ctx context.Context) (*StructuredPageData, *Extraction, error) {
+	value, err := s.backend.ExecuteScript(ctx, `(() => ({
+		url: window.location.href,
+		title: document.title || "",
+		headings: Array.from(document.querySelectorAll("h1,h2,h3"))
+			.map(el => (el.innerText || el.textContent || "").trim())
+			.filter(Boolean)
+			.slice(0, 20),
+		links: Array.from(document.querySelectorAll("a[href]"))
+			.map(el => ({
+				text: (el.innerText || el.textContent || "").trim(),
+				href: el.href || ""
+			}))
+			.filter(item => item.text || item.href)
+			.slice(0, 50),
+		inputs: Array.from(document.querySelectorAll("input, textarea, select"))
+			.map(el => ({
+				name: el.getAttribute("name") || "",
+				type: el.getAttribute("type") || el.tagName.toLowerCase(),
+				placeholder: el.getAttribute("placeholder") || ""
+			}))
+			.slice(0, 50),
+		buttons: Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit']"))
+			.map(el => (el.innerText || el.getAttribute("value") || "").trim())
+			.filter(Boolean)
+			.slice(0, 30),
+		code: Array.from(document.querySelectorAll("code"))
+			.map(el => (el.innerText || el.textContent || "").trim())
+			.filter(Boolean)
+			.slice(0, 20)
+	}))()`)
+	if err != nil {
+		return nil, nil, wrapError(s.backendName, "extract_structured", err)
+	}
+	data, err := normalizeStructuredPageData(value)
+	if err != nil {
+		return nil, nil, wrapError(s.backendName, "extract_structured", err)
+	}
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return nil, nil, wrapError(s.backendName, "extract_structured", err)
+	}
+	extraction, err := s.allocateExtraction("structured", string(encoded))
+	if err != nil {
+		return nil, nil, err
+	}
+	if extraction.Truncated {
+		truncatedData, decodeErr := decodeStructuredPageData(extraction.Content)
+		if decodeErr == nil {
+			data = truncatedData
+		}
+	}
+	return data, extraction, nil
 }
 
 func (s *Session) Close() error {
@@ -288,6 +410,50 @@ func truncateToTokens(content string, maxTokens int) string {
 		return content
 	}
 	return content[:maxChars-3] + "..."
+}
+
+func compactPreview(content string) string {
+	content = strings.Join(strings.Fields(content), " ")
+	if len(content) > 240 {
+		return content[:240] + "..."
+	}
+	return content
+}
+
+func intFromAny(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case float32:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+func normalizeStructuredPageData(value any) (*StructuredPageData, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return decodeStructuredPageData(string(raw))
+}
+
+func decodeStructuredPageData(payload string) (*StructuredPageData, error) {
+	if strings.TrimSpace(payload) == "" {
+		return &StructuredPageData{}, nil
+	}
+	var data StructuredPageData
+	if err := json.Unmarshal([]byte(payload), &data); err != nil {
+		return nil, err
+	}
+	return &data, nil
 }
 
 type extractionBudgetItem struct {

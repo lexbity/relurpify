@@ -48,17 +48,27 @@ type RecordingSpec struct {
 }
 
 type CaseSpec struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description,omitempty"`
-	TaskType    string            `yaml:"task_type,omitempty"`
-	Prompt      string            `yaml:"prompt"`
-	Context     map[string]any    `yaml:"context,omitempty"`
-	Metadata    map[string]string `yaml:"metadata,omitempty"`
-	Setup       SetupSpec         `yaml:"setup,omitempty"`
-	Requires    RequiresSpec      `yaml:"requires,omitempty"`
-	Expect      ExpectSpec        `yaml:"expect,omitempty"`
-	Overrides   CaseOverrideSpec  `yaml:"overrides,omitempty"`
-	Tags        []string          `yaml:"tags,omitempty"`
+	Name            string                        `yaml:"name"`
+	Description     string                        `yaml:"description,omitempty"`
+	TaskType        string                        `yaml:"task_type,omitempty"`
+	Prompt          string                        `yaml:"prompt"`
+	Context         map[string]any                `yaml:"context,omitempty"`
+	Metadata        map[string]string             `yaml:"metadata,omitempty"`
+	BrowserFixtures map[string]BrowserFixtureSpec `yaml:"browser_fixtures,omitempty"`
+	Setup           SetupSpec                     `yaml:"setup,omitempty"`
+	Requires        RequiresSpec                  `yaml:"requires,omitempty"`
+	Expect          ExpectSpec                    `yaml:"expect,omitempty"`
+	Overrides       CaseOverrideSpec              `yaml:"overrides,omitempty"`
+	Tags            []string                      `yaml:"tags,omitempty"`
+}
+
+type BrowserFixtureSpec struct {
+	Path        string            `yaml:"path,omitempty"`
+	File        string            `yaml:"file,omitempty"`
+	Content     string            `yaml:"content,omitempty"`
+	ContentType string            `yaml:"content_type,omitempty"`
+	Status      int               `yaml:"status,omitempty"`
+	Headers     map[string]string `yaml:"headers,omitempty"`
 }
 
 type RequiresSpec struct {
@@ -139,6 +149,14 @@ func (s *Suite) Validate() error {
 		}
 		if c.Prompt == "" {
 			return fmt.Errorf("suite case[%s] missing prompt", c.Name)
+		}
+		for fixtureName, fixture := range c.BrowserFixtures {
+			if fixtureName == "" {
+				return fmt.Errorf("suite case[%s] has browser fixture with empty name", c.Name)
+			}
+			if fixture.File == "" && fixture.Content == "" {
+				return fmt.Errorf("suite case[%s] browser fixture[%s] missing file or content", c.Name, fixtureName)
+			}
 		}
 	}
 	return nil

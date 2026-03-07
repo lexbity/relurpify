@@ -205,6 +205,14 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
 	}
 
+	browserFixtures, err := startBrowserFixtureServer(suite, targetWorkspace, workspace, c)
+	if err != nil {
+		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
+	}
+	if browserFixtures != nil {
+		defer browserFixtures.Close()
+	}
+
 	timeout := opts.Timeout
 	if timeout <= 0 {
 		timeout = 45 * time.Second
@@ -294,8 +302,11 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		ID:          fmt.Sprintf("agenttest-%d", time.Now().UnixNano()),
 		Instruction: c.Prompt,
 		Type:        taskType,
-		Context:     c.Context,
-		Metadata:    c.Metadata,
+		Context:     cloneContextMap(c.Context),
+		Metadata:    cloneStringMap(c.Metadata),
+	}
+	if browserFixtures != nil {
+		browserFixtures.InjectTask(task)
 	}
 	state.Set("task.id", task.ID)
 	state.Set("task.type", string(task.Type))
@@ -333,6 +344,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if snapErr == nil {
 		changed = DiffSnapshots(before, after)
 		changed = FilterChangedFiles(changed, ignoreChanges)
+		changed = includeExpectedChangedFiles(changed, before, after, c.Expect.FilesChanged)
 	}
 	if data, err := json.MarshalIndent(changed, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(caseDir, "changed_files.json"), data, 0o644)
@@ -659,6 +671,7 @@ func applyCaseControlFlowOverride(agent graph.Agent, c CaseSpec) error {
 
 func defaultAgenttestAllowedTools() []string {
 	return []string{
+		"browser",
 		"file_read",
 		"file_list",
 		"file_search",
@@ -956,4 +969,66 @@ func sanitizeName(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "_")
+}
+
+func cloneContextMap(input map[string]any) map[string]any {
+	if input == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(input))
+	for key, value := range input {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	if input == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(input))
+	for key, value := range input {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func includeExpectedChangedFiles(filtered []string, before, after *WorkspaceSnapshot, expected []string) []string {
+	if len(expected) == 0 || before == nil || after == nil {
+		return filtered
+	}
+	seen := make(map[string]struct{}, len(filtered))
+	for _, file := range filtered {
+		seen[file] = struct{}{}
+	}
+	for file := range before.Files {
+		if before.Files[file] == after.Files[file] {
+			continue
+		}
+		for _, pattern := range expected {
+			if matchGlob(pattern, file) {
+				if _, ok := seen[file]; !ok {
+					filtered = append(filtered, file)
+					seen[file] = struct{}{}
+				}
+				break
+			}
+		}
+	}
+	for file := range after.Files {
+		if before.Files[file] == after.Files[file] {
+			continue
+		}
+		for _, pattern := range expected {
+			if matchGlob(pattern, file) {
+				if _, ok := seen[file]; !ok {
+					filtered = append(filtered, file)
+					seen[file] = struct{}{}
+				}
+				break
+			}
+		}
+	}
+	sort.Strings(filtered)
+	return filtered
 }

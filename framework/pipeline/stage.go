@@ -23,6 +23,12 @@ type ToolScopedStage interface {
 	AllowedToolNames() []string
 }
 
+// ToolRequiredStage marks stages that require at least one allowed tool to run
+// before the stage output is accepted.
+type ToolRequiredStage interface {
+	RequiresToolExecution(task *core.Task, state *core.Context, tools []core.Tool) bool
+}
+
 // ValidateStage checks stage identity and its declared contract metadata.
 func ValidateStage(stage Stage) error {
 	if stage == nil {

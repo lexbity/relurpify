@@ -54,7 +54,7 @@ func (r *Runner) Execute(ctx context.Context, task *core.Task, state *core.Conte
 			return results, err
 		}
 
-		stageResult, err := r.executeStage(ctx, taskID, state, stage, idx)
+		stageResult, err := r.executeStage(ctx, task, taskID, state, stage, idx)
 		results = append(results, stageResult)
 		if r.Options.CheckpointStore != nil && r.Options.CheckpointAfterStage {
 			cp := &Checkpoint{
@@ -97,7 +97,7 @@ func (r *Runner) resume(taskID string, state *core.Context) (int, *core.Context,
 	return cp.StageIndex + 1, cp.Context.Clone(), []StageResult{cp.Result}, nil
 }
 
-func (r *Runner) executeStage(ctx context.Context, taskID string, state *core.Context, stage Stage, index int) (StageResult, error) {
+func (r *Runner) executeStage(ctx context.Context, task *core.Task, taskID string, state *core.Context, stage Stage, index int) (StageResult, error) {
 	contract := stage.Contract()
 	result := StageResult{
 		StageName:       stage.Name(),
@@ -127,13 +127,28 @@ func (r *Runner) executeStage(ctx context.Context, taskID string, state *core.Co
 		}
 		result.Prompt = prompt
 
-		resp, err := r.generateStageResponse(ctx, state, stage, prompt, stageTools)
+		resp, usedTools, err := r.generateStageResponse(ctx, task, state, stage, prompt, stageTools)
 		if err != nil {
 			result.ErrorText = err.Error()
 			result.FinishedAt = time.Now().UTC()
 			return result, err
 		}
 		result.Response = resp
+		if requiresToolExecution(stage, task, state, stageTools) && !usedTools {
+			err := fmt.Errorf("pipeline stage %s requires a tool call before returning output", stage.Name())
+			result.ErrorText = err.Error()
+			result.FinishedAt = time.Now().UTC()
+			emitStageEvent(r.Options.Telemetry, pipelineEventStageValidError, taskID, stage.Name(), err.Error(), map[string]any{
+				"stage_index":   index,
+				"retry_attempt": attempt,
+			})
+			if attempt < maxRetries {
+				result.Transition = StageTransition{Kind: TransitionRetry, Reason: err.Error()}
+				continue
+			}
+			result.Transition = StageTransition{Kind: TransitionStop, Reason: err.Error()}
+			return result, err
+		}
 
 		output, err := DecodeStageOutput(stage, resp)
 		if err != nil {
@@ -188,11 +203,12 @@ func (r *Runner) executeStage(ctx context.Context, taskID string, state *core.Co
 	return result, nil
 }
 
-func (r *Runner) generateStageResponse(ctx context.Context, state *core.Context, stage Stage, prompt string, stageTools []core.Tool) (*core.LLMResponse, error) {
+func (r *Runner) generateStageResponse(ctx context.Context, task *core.Task, state *core.Context, stage Stage, prompt string, stageTools []core.Tool) (*core.LLMResponse, bool, error) {
 	if len(stageTools) == 0 || !r.Options.EnableToolCalling || !stage.Contract().Metadata.AllowTools {
-		return r.Options.Model.Generate(ctx, prompt, &core.LLMOptions{
+		resp, err := r.Options.Model.Generate(ctx, prompt, &core.LLMOptions{
 			Model: r.Options.ModelName,
 		})
+		return resp, false, err
 	}
 	resp, err := r.Options.Model.ChatWithTools(ctx, []core.Message{
 		{
@@ -203,21 +219,48 @@ func (r *Runner) generateStageResponse(ctx context.Context, state *core.Context,
 		Model: r.Options.ModelName,
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	calls := resp.ToolCalls
 	if len(calls) == 0 {
 		calls = toolsys.ParseToolCallsFromText(resp.Text)
 	}
+	if len(calls) == 0 && requiresToolExecution(stage, task, state, stageTools) {
+		retryPrompt := prompt + "\n\nYou must call at least one allowed tool that verifies the task before you return the final JSON."
+		resp, err = r.Options.Model.ChatWithTools(ctx, []core.Message{
+			{
+				Role:    "user",
+				Content: retryPrompt,
+			},
+		}, stageTools, &core.LLMOptions{
+			Model: r.Options.ModelName,
+		})
+		if err != nil {
+			return nil, false, err
+		}
+		calls = resp.ToolCalls
+		if len(calls) == 0 {
+			calls = toolsys.ParseToolCallsFromText(resp.Text)
+		}
+	}
 	if len(calls) == 0 {
-		return resp, nil
+		return resp, false, nil
 	}
 	observations, err := executeToolCalls(ctx, state, calls, stageTools)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	finalPrompt := prompt + "\n\nTool results:\n" + formatToolObservations(observations) + "\n\nUse the tool results above and return ONLY the final JSON for this stage."
-	return r.Options.Model.Generate(ctx, finalPrompt, &core.LLMOptions{
+	resp, err = r.Options.Model.Generate(ctx, finalPrompt, &core.LLMOptions{
 		Model: r.Options.ModelName,
 	})
+	return resp, true, err
+}
+
+func requiresToolExecution(stage Stage, task *core.Task, state *core.Context, tools []core.Tool) bool {
+	required, ok := stage.(ToolRequiredStage)
+	if !ok {
+		return false
+	}
+	return required.RequiresToolExecution(task, state, tools)
 }

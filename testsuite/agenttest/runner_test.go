@@ -45,3 +45,22 @@ func TestApplyCaseControlFlowOverrideSetsCodingMode(t *testing.T) {
 		t.Fatalf("expected pipeline control flow, got %s", got)
 	}
 }
+
+func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
+	before := &WorkspaceSnapshot{
+		Files: map[string]string{
+			"relurpify_cfg/sessions/workflow_state.db": "before",
+		},
+	}
+	after := &WorkspaceSnapshot{
+		Files: map[string]string{
+			"relurpify_cfg/sessions/workflow_state.db": "after",
+		},
+	}
+
+	changed := includeExpectedChangedFiles(nil, before, after, []string{"relurpify_cfg/sessions/workflow_state.db"})
+
+	if len(changed) != 1 || changed[0] != "relurpify_cfg/sessions/workflow_state.db" {
+		t.Fatalf("expected workflow_state.db to be restored, got %#v", changed)
+	}
+}

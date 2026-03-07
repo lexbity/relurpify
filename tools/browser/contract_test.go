@@ -14,6 +14,7 @@ type fakeBackend struct {
 	html           string
 	accessibility  string
 	scriptResult   any
+	scriptFunc     func(string) (any, error)
 	screenshotData []byte
 	clicks         []string
 	types          []struct {
@@ -48,6 +49,9 @@ func (f *fakeBackend) GetAccessibilityTree(context.Context) (string, error) {
 }
 func (f *fakeBackend) GetHTML(context.Context) (string, error) { return f.html, nil }
 func (f *fakeBackend) ExecuteScript(context.Context, string) (any, error) {
+	if f.scriptFunc != nil {
+		return f.scriptFunc("")
+	}
 	return f.scriptResult, nil
 }
 func (f *fakeBackend) Screenshot(context.Context) ([]byte, error) { return f.screenshotData, nil }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -19,12 +20,18 @@ import (
 
 const (
 	browserDefaultSessionKey = "browser.default_session"
+	browserLastPageStateKey  = "browser.last_page_state"
+	browserPageStateListKey  = "browser.page_states"
 	defaultBrowserScope      = "browser.default"
 	defaultBrowserBackend    = "cdp"
 )
 
 type browserProvider struct {
 	sessionFactory func(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error)
+	telemetry      core.Telemetry
+
+	mu       sync.Mutex
+	sessions map[string]*browserSessionHandle
 }
 
 type browserSessionConfig struct {
@@ -38,6 +45,7 @@ type browserSessionConfig struct {
 func newBrowserProvider() *browserProvider {
 	return &browserProvider{
 		sessionFactory: newBrowserSession,
+		sessions:       make(map[string]*browserSessionHandle),
 	}
 }
 
@@ -53,6 +61,7 @@ func (p *browserProvider) Initialize(_ context.Context, rt *Runtime) error {
 	if rt == nil || rt.Tools == nil {
 		return fmt.Errorf("runtime tools unavailable")
 	}
+	p.telemetry = rt.Telemetry
 	return rt.Tools.Register(&browserTool{
 		provider: p,
 		runtime:  rt,
@@ -60,7 +69,21 @@ func (p *browserProvider) Initialize(_ context.Context, rt *Runtime) error {
 }
 
 func (p *browserProvider) Close() error {
-	return nil
+	p.mu.Lock()
+	handles := make([]*browserSessionHandle, 0, len(p.sessions))
+	for _, handle := range p.sessions {
+		handles = append(handles, handle)
+	}
+	p.sessions = make(map[string]*browserSessionHandle)
+	p.mu.Unlock()
+
+	var errs []error
+	for _, handle := range handles {
+		if err := handle.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error) {
@@ -147,6 +170,20 @@ type browserTool struct {
 	spec     *core.AgentRuntimeSpec
 }
 
+type browserSessionHandle struct {
+	mu          sync.Mutex
+	session     *browser.Session
+	cfg         browserSessionConfig
+	factory     func(context.Context, browserSessionConfig) (*browser.Session, error)
+	telemetry   core.Telemetry
+	taskID      string
+	agentID     string
+	sessionID   string
+	backendName string
+	recoveries  int
+	closed      bool
+}
+
 func (t *browserTool) Name() string { return "browser" }
 func (t *browserTool) Description() string {
 	return "Controls a browser session via a single action-dispatch tool."
@@ -173,6 +210,9 @@ func (t *browserTool) SetAgentSpec(spec *core.AgentRuntimeSpec, _ string) {
 
 func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	action := strings.ToLower(strings.TrimSpace(fmt.Sprint(args["action"])))
+	if err := t.authorizeAction(ctx, action, state, args); err != nil {
+		return nil, err
+	}
 	switch action {
 	case "open":
 		return t.open(ctx, state, args)
@@ -184,7 +224,7 @@ func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map
 		if err := session.Navigate(ctx, fmt.Sprint(args["url"])); err != nil {
 			return nil, err
 		}
-		return success(map[string]interface{}{"session_id": sessionID}), nil
+		return t.successWithSnapshot(ctx, state, session, sessionID, nil)
 	case "click":
 		session, sessionID, err := t.lookupSession(state, args)
 		if err != nil {
@@ -193,7 +233,7 @@ func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map
 		if err := session.Click(ctx, fmt.Sprint(args["selector"])); err != nil {
 			return nil, err
 		}
-		return success(map[string]interface{}{"session_id": sessionID}), nil
+		return t.successWithSnapshot(ctx, state, session, sessionID, nil)
 	case "type":
 		session, sessionID, err := t.lookupSession(state, args)
 		if err != nil {
@@ -202,7 +242,7 @@ func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map
 		if err := session.Type(ctx, fmt.Sprint(args["selector"]), fmt.Sprint(args["text"])); err != nil {
 			return nil, err
 		}
-		return success(map[string]interface{}{"session_id": sessionID}), nil
+		return t.successWithSnapshot(ctx, state, session, sessionID, nil)
 	case "get_text":
 		session, sessionID, err := t.lookupSession(state, args)
 		if err != nil {
@@ -213,6 +253,32 @@ func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map
 			return nil, err
 		}
 		return success(withExtraction(sessionID, extraction, "text")), nil
+	case "extract":
+		session, sessionID, err := t.lookupSession(state, args)
+		if err != nil {
+			return nil, err
+		}
+		pageState, err := session.CapturePageState(ctx)
+		if err != nil {
+			return nil, err
+		}
+		structured, structuredExtraction, err := session.ExtractStructured(ctx)
+		if err != nil {
+			return nil, err
+		}
+		axTree, err := session.ExtractAccessibilityTree(ctx)
+		if err != nil {
+			return nil, err
+		}
+		result := withExtraction(sessionID, axTree, "accessibility_tree")
+		result["page_state"] = pageState
+		result["structured"] = structured
+		result["structured_truncated"] = structuredExtraction.Truncated
+		result["structured_original_tokens"] = structuredExtraction.OriginalTokens
+		result["structured_final_tokens"] = structuredExtraction.FinalTokens
+		result["capabilities"] = session.Capabilities()
+		recordBrowserObservation(state, pageState)
+		return success(result), nil
 	case "get_html":
 		session, sessionID, err := t.lookupSession(state, args)
 		if err != nil {
@@ -265,7 +331,7 @@ func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map
 		if err := session.WaitFor(ctx, waitConditionFromArgs(args), timeoutFromArgs(args)); err != nil {
 			return nil, err
 		}
-		return success(map[string]interface{}{"session_id": sessionID}), nil
+		return t.successWithSnapshot(ctx, state, session, sessionID, nil)
 	case "current_url":
 		session, sessionID, err := t.lookupSession(state, args)
 		if err != nil {
@@ -284,6 +350,9 @@ func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map
 }
 
 func (t *browserTool) IsAvailable(context.Context, *core.Context) bool {
+	if t.spec != nil && t.spec.Browser != nil {
+		return t.spec.Browser.Enabled
+	}
 	return true
 }
 
@@ -295,20 +364,45 @@ func (t *browserTool) open(ctx context.Context, state *core.Context, args map[st
 	if state == nil || state.Registry() == nil {
 		return nil, fmt.Errorf("context registry unavailable")
 	}
-	session, err := t.provider.sessionFactory(ctx, browserSessionConfig{
-		backendName: fmt.Sprint(args["backend"]),
+	backendName := t.resolveBackend(args)
+	cfg := browserSessionConfig{
+		backendName: backendName,
 		manager:     t.runtime.Registration.Permissions,
 		agentID:     t.runtime.Registration.ID,
 		maxTokens:   t.maxTokens(),
 		runtime:     t.runtime,
+	}
+	session, err := t.provider.sessionFactory(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	handle := &browserSessionHandle{
+		session:     session,
+		cfg:         cfg,
+		factory:     t.provider.sessionFactory,
+		telemetry:   t.runtime.Telemetry,
+		taskID:      browserTaskScope(state),
+		agentID:     t.runtime.Registration.ID,
+		backendName: backendName,
+	}
+	scope := browserTaskScope(state)
+	sessionID := state.Registry().RegisterScoped(scope, handle)
+	handle.sessionID = sessionID
+	t.provider.trackSession(sessionID, handle)
+	state.Set(browserDefaultSessionKey, sessionID)
+	emitBrowserTelemetry(t.runtime.Telemetry, core.EventStateChange, t.runtime.Registration.ID, scope, "browser session opened", map[string]interface{}{
+		"browser_event": "session_opened",
+		"session_id":    sessionID,
+		"backend":       backendName,
+	})
+	result, err := t.successWithSnapshot(ctx, state, handle, sessionID, map[string]interface{}{
+		"backend":      backendName,
+		"capabilities": handle.Capabilities(),
 	})
 	if err != nil {
 		return nil, err
 	}
-	scope := browserTaskScope(state)
-	sessionID := state.Registry().RegisterScoped(scope, session)
-	state.Set(browserDefaultSessionKey, sessionID)
-	return success(map[string]interface{}{"session_id": sessionID, "backend": defaultIfEmpty(fmt.Sprint(args["backend"]), defaultBrowserBackend)}), nil
+	return result, nil
 }
 
 func (t *browserTool) close(state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
@@ -320,13 +414,18 @@ func (t *browserTool) close(state *core.Context, args map[string]interface{}) (*
 		return nil, fmt.Errorf("context registry unavailable")
 	}
 	state.Registry().Remove(sessionID)
+	t.provider.untrackSession(sessionID)
 	if state.GetString(browserDefaultSessionKey) == sessionID {
 		state.Set(browserDefaultSessionKey, "")
 	}
+	emitBrowserTelemetry(t.runtime.Telemetry, core.EventStateChange, t.runtime.Registration.ID, browserTaskScope(state), "browser session closed", map[string]interface{}{
+		"browser_event": "session_closed",
+		"session_id":    sessionID,
+	})
 	return success(map[string]interface{}{"session_id": sessionID, "closed": true}), nil
 }
 
-func (t *browserTool) lookupSession(state *core.Context, args map[string]interface{}) (*browser.Session, string, error) {
+func (t *browserTool) lookupSession(state *core.Context, args map[string]interface{}) (*browserSessionHandle, string, error) {
 	sessionID := defaultSessionID(state, args)
 	if sessionID == "" {
 		return nil, "", fmt.Errorf("browser session not found")
@@ -338,7 +437,7 @@ func (t *browserTool) lookupSession(state *core.Context, args map[string]interfa
 	if !ok {
 		return nil, "", fmt.Errorf("browser session %s not found", sessionID)
 	}
-	session, ok := raw.(*browser.Session)
+	session, ok := raw.(*browserSessionHandle)
 	if !ok {
 		return nil, "", fmt.Errorf("browser session %s has invalid type", sessionID)
 	}
@@ -350,6 +449,124 @@ func (t *browserTool) maxTokens() int {
 		return 8192
 	}
 	return t.spec.Context.MaxTokens
+}
+
+func (t *browserTool) resolveBackend(args map[string]interface{}) string {
+	backend := defaultIfEmpty(fmt.Sprint(args["backend"]), "")
+	if backend == "" && t.spec != nil && t.spec.Browser != nil {
+		backend = defaultIfEmpty(t.spec.Browser.DefaultBackend, "")
+	}
+	return defaultIfEmpty(backend, defaultBrowserBackend)
+}
+
+func (t *browserTool) authorizeAction(ctx context.Context, action string, state *core.Context, args map[string]interface{}) error {
+	if action == "" {
+		return fmt.Errorf("browser action required")
+	}
+	if t.spec == nil || t.spec.Browser == nil {
+		return nil
+	}
+	if !t.spec.Browser.Enabled {
+		return fmt.Errorf("browser tool disabled by agent spec")
+	}
+	if action == "open" {
+		backend := strings.ToLower(strings.TrimSpace(t.resolveBackend(args)))
+		if len(t.spec.Browser.AllowedBackends) > 0 {
+			allowed := false
+			for _, candidate := range t.spec.Browser.AllowedBackends {
+				if strings.EqualFold(strings.TrimSpace(candidate), backend) {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return fmt.Errorf("browser backend %s blocked by agent spec", backend)
+			}
+		}
+	}
+	level := t.spec.Browser.Actions[action]
+	switch level {
+	case "", core.AgentPermissionAllow:
+		return nil
+	case core.AgentPermissionDeny:
+		return fmt.Errorf("browser action %s denied by agent spec", action)
+	case core.AgentPermissionAsk:
+		if t.runtime == nil || t.runtime.Registration == nil || t.runtime.Registration.Permissions == nil {
+			return fmt.Errorf("browser action %s requires approval but permission manager missing", action)
+		}
+		resource := t.runtime.Registration.ID
+		if state != nil {
+			if sessionID := defaultSessionID(state, args); sessionID != "" {
+				resource = sessionID
+			}
+		}
+		return t.runtime.Registration.Permissions.RequireApproval(ctx, t.runtime.Registration.ID, fruntime.PermissionDescriptor{
+			Type:         core.PermissionTypeHITL,
+			Action:       fmt.Sprintf("browser:%s", action),
+			Resource:     resource,
+			RequiresHITL: true,
+		}, "browser action approval", fruntime.GrantScopeOneTime, fruntime.RiskLevelMedium, 0)
+	default:
+		return fmt.Errorf("browser action %s has invalid policy %s", action, level)
+	}
+}
+
+func (t *browserTool) successWithSnapshot(ctx context.Context, state *core.Context, session *browserSessionHandle, sessionID string, data map[string]interface{}) (*core.ToolResult, error) {
+	if data == nil {
+		data = make(map[string]interface{})
+	}
+	data["session_id"] = sessionID
+	if state == nil || session == nil {
+		return success(data), nil
+	}
+	pageState, err := session.CapturePageState(ctx)
+	if err == nil && pageState != nil {
+		data["page_state"] = pageState
+		recordBrowserObservation(state, pageState)
+		emitBrowserTelemetry(t.runtime.Telemetry, core.EventStateChange, t.runtime.Registration.ID, browserTaskScope(state), "browser page snapshot captured", map[string]interface{}{
+			"browser_event": "page_snapshot",
+			"session_id":    sessionID,
+			"url":           pageState.URL,
+			"title":         pageState.Title,
+			"backend":       session.backendName,
+			"recoveries":    session.recoveries,
+		})
+	}
+	return success(data), nil
+}
+
+func recordBrowserObservation(state *core.Context, pageState *browser.PageState) {
+	if state == nil || pageState == nil {
+		return
+	}
+	state.Set(browserLastPageStateKey, pageState)
+	var snapshots []*browser.PageState
+	if existing, ok := state.Get(browserPageStateListKey); ok {
+		if typed, ok := existing.([]*browser.PageState); ok {
+			snapshots = append(snapshots, typed...)
+		}
+	}
+	snapshots = append(snapshots, pageState)
+	state.Set(browserPageStateListKey, snapshots)
+	state.AddInteraction("observation", formatBrowserObservation(pageState), map[string]interface{}{
+		"kind": "browser_page_state",
+		"url":  pageState.URL,
+	})
+}
+
+func formatBrowserObservation(pageState *browser.PageState) string {
+	if pageState == nil {
+		return "[Browser] unavailable"
+	}
+	return fmt.Sprintf("[Browser]\nURL: %s\nTitle: %s\nInteractive: %d links, %d forms, %d inputs, %d buttons\nPreview: %q",
+		pageState.URL,
+		pageState.Title,
+		pageState.LinkCount,
+		pageState.FormCount,
+		pageState.InputCount,
+		pageState.ButtonCount,
+		pageState.Preview,
+	)
 }
 
 func withExtraction(sessionID string, extraction *browser.Extraction, key string) map[string]interface{} {
@@ -440,6 +657,246 @@ func shouldEnableBrowserProvider(skills []string) bool {
 	return false
 }
 
+func (p *browserProvider) trackSession(sessionID string, handle *browserSessionHandle) {
+	if p == nil || sessionID == "" || handle == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.sessions[sessionID] = handle
+}
+
+func (p *browserProvider) untrackSession(sessionID string) {
+	if p == nil || sessionID == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.sessions, sessionID)
+}
+
+func emitBrowserTelemetry(telemetry core.Telemetry, eventType core.EventType, agentID, taskID, message string, metadata map[string]interface{}) {
+	if telemetry == nil {
+		return
+	}
+	if metadata == nil {
+		metadata = make(map[string]interface{})
+	}
+	if agentID != "" {
+		metadata["agent_id"] = agentID
+	}
+	telemetry.Emit(core.Event{
+		Type:      eventType,
+		TaskID:    taskID,
+		Message:   message,
+		Timestamp: time.Now().UTC(),
+		Metadata:  metadata,
+	})
+}
+
+func (h *browserSessionHandle) Close() error {
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		return nil
+	}
+	h.closed = true
+	session := h.session
+	h.session = nil
+	h.mu.Unlock()
+	if session == nil {
+		return nil
+	}
+	return session.Close()
+}
+
+func (h *browserSessionHandle) Navigate(ctx context.Context, url string) error {
+	_, err := browserRun(h, ctx, "navigate", func(session *browser.Session) (struct{}, error) {
+		return struct{}{}, session.Navigate(ctx, url)
+	})
+	return err
+}
+
+func (h *browserSessionHandle) Click(ctx context.Context, selector string) error {
+	_, err := browserRun(h, ctx, "click", func(session *browser.Session) (struct{}, error) {
+		return struct{}{}, session.Click(ctx, selector)
+	})
+	return err
+}
+
+func (h *browserSessionHandle) Type(ctx context.Context, selector, text string) error {
+	_, err := browserRun(h, ctx, "type", func(session *browser.Session) (struct{}, error) {
+		return struct{}{}, session.Type(ctx, selector, text)
+	})
+	return err
+}
+
+func (h *browserSessionHandle) ExtractText(ctx context.Context, selector string) (*browser.Extraction, error) {
+	return browserRun(h, ctx, "get_text", func(session *browser.Session) (*browser.Extraction, error) {
+		return session.ExtractText(ctx, selector)
+	})
+}
+
+func (h *browserSessionHandle) ExtractHTML(ctx context.Context) (*browser.Extraction, error) {
+	return browserRun(h, ctx, "get_html", func(session *browser.Session) (*browser.Extraction, error) {
+		return session.ExtractHTML(ctx)
+	})
+}
+
+func (h *browserSessionHandle) ExtractAccessibilityTree(ctx context.Context) (*browser.Extraction, error) {
+	return browserRun(h, ctx, "get_accessibility_tree", func(session *browser.Session) (*browser.Extraction, error) {
+		return session.ExtractAccessibilityTree(ctx)
+	})
+}
+
+func (h *browserSessionHandle) ExecuteScript(ctx context.Context, script string) (any, error) {
+	return browserRun(h, ctx, "execute_js", func(session *browser.Session) (any, error) {
+		return session.ExecuteScript(ctx, script)
+	})
+}
+
+func (h *browserSessionHandle) Screenshot(ctx context.Context) ([]byte, error) {
+	return browserRun(h, ctx, "screenshot", func(session *browser.Session) ([]byte, error) {
+		return session.Screenshot(ctx)
+	})
+}
+
+func (h *browserSessionHandle) WaitFor(ctx context.Context, condition browser.WaitCondition, timeout time.Duration) error {
+	_, err := browserRun(h, ctx, "wait", func(session *browser.Session) (struct{}, error) {
+		return struct{}{}, session.WaitFor(ctx, condition, timeout)
+	})
+	return err
+}
+
+func (h *browserSessionHandle) CurrentURL(ctx context.Context) (string, error) {
+	return browserRun(h, ctx, "current_url", func(session *browser.Session) (string, error) {
+		return session.CurrentURL(ctx)
+	})
+}
+
+func (h *browserSessionHandle) CapturePageState(ctx context.Context) (*browser.PageState, error) {
+	return browserRun(h, ctx, "page_state", func(session *browser.Session) (*browser.PageState, error) {
+		return session.CapturePageState(ctx)
+	})
+}
+
+func (h *browserSessionHandle) ExtractStructured(ctx context.Context) (*browser.StructuredPageData, *browser.Extraction, error) {
+	return browserRun2(h, ctx, "extract_structured", func(session *browser.Session) (*browser.StructuredPageData, *browser.Extraction, error) {
+		return session.ExtractStructured(ctx)
+	})
+}
+
+func (h *browserSessionHandle) Capabilities() browser.Capabilities {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.session == nil {
+		return browser.Capabilities{}
+	}
+	return h.session.Capabilities()
+}
+
+func browserRun[T any](h *browserSessionHandle, ctx context.Context, operation string, fn func(*browser.Session) (T, error)) (T, error) {
+	var zero T
+	if h == nil {
+		return zero, fmt.Errorf("browser session unavailable")
+	}
+	session, err := h.currentSession()
+	if err != nil {
+		return zero, err
+	}
+	result, err := fn(session)
+	if err == nil || !browser.IsErrorCode(err, browser.ErrBackendDisconnected) {
+		return result, err
+	}
+	if recoverErr := h.recover(ctx, operation, err); recoverErr != nil {
+		return zero, recoverErr
+	}
+	session, err = h.currentSession()
+	if err != nil {
+		return zero, err
+	}
+	return fn(session)
+}
+
+func browserRun2[A any, B any](h *browserSessionHandle, ctx context.Context, operation string, fn func(*browser.Session) (A, B, error)) (A, B, error) {
+	var zeroA A
+	var zeroB B
+	if h == nil {
+		return zeroA, zeroB, fmt.Errorf("browser session unavailable")
+	}
+	session, err := h.currentSession()
+	if err != nil {
+		return zeroA, zeroB, err
+	}
+	first, second, err := fn(session)
+	if err == nil || !browser.IsErrorCode(err, browser.ErrBackendDisconnected) {
+		return first, second, err
+	}
+	if recoverErr := h.recover(ctx, operation, err); recoverErr != nil {
+		return zeroA, zeroB, recoverErr
+	}
+	session, err = h.currentSession()
+	if err != nil {
+		return zeroA, zeroB, err
+	}
+	return fn(session)
+}
+
+func (h *browserSessionHandle) currentSession() (*browser.Session, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return nil, fmt.Errorf("browser session closed")
+	}
+	if h.session == nil {
+		return nil, fmt.Errorf("browser session unavailable")
+	}
+	return h.session, nil
+}
+
+func (h *browserSessionHandle) recover(ctx context.Context, operation string, cause error) error {
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		return fmt.Errorf("browser session closed")
+	}
+	old := h.session
+	h.session = nil
+	h.mu.Unlock()
+
+	if old != nil {
+		_ = old.Close()
+	}
+	newSession, err := h.factory(ctx, h.cfg)
+	if err != nil {
+		emitBrowserTelemetry(h.telemetry, core.EventStateChange, h.agentID, h.taskID, "browser session recovery failed", map[string]interface{}{
+			"browser_event": "session_recovery_failed",
+			"session_id":    h.sessionID,
+			"backend":       h.backendName,
+			"operation":     operation,
+			"cause":         cause.Error(),
+			"error":         err.Error(),
+		})
+		return err
+	}
+
+	h.mu.Lock()
+	h.session = newSession
+	h.recoveries++
+	recoveries := h.recoveries
+	h.mu.Unlock()
+
+	emitBrowserTelemetry(h.telemetry, core.EventStateChange, h.agentID, h.taskID, "browser session recovered", map[string]interface{}{
+		"browser_event": "session_recovered",
+		"session_id":    h.sessionID,
+		"backend":       h.backendName,
+		"operation":     operation,
+		"recoveries":    recoveries,
+		"cause":         cause.Error(),
+	})
+	return nil
+}
+
 type managedBrowserBackend struct {
 	backend browser.Backend
 	cleanup func() error
@@ -487,6 +944,13 @@ func (m *managedBrowserBackend) WaitFor(ctx context.Context, condition browser.W
 
 func (m *managedBrowserBackend) CurrentURL(ctx context.Context) (string, error) {
 	return m.backend.CurrentURL(ctx)
+}
+
+func (m *managedBrowserBackend) Capabilities() browser.Capabilities {
+	if reporter, ok := m.backend.(browser.CapabilityReporter); ok {
+		return reporter.Capabilities()
+	}
+	return browser.Capabilities{ArbitraryEval: true}
 }
 
 func (m *managedBrowserBackend) Close() error {

@@ -310,6 +310,23 @@ func (s *VerifyStage) AllowedToolNames() []string {
 		"python_compile_check",
 	}
 }
+
+func (s *VerifyStage) RequiresToolExecution(task *core.Task, state *core.Context, tools []core.Tool) bool {
+	if task == nil || len(tools) == 0 {
+		return false
+	}
+	instruction := strings.ToLower(task.Instruction)
+	for _, tool := range tools {
+		if tool == nil {
+			continue
+		}
+		if strings.Contains(instruction, strings.ToLower(tool.Name())) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *VerifyStage) Contract() pipeline.ContractDescriptor {
 	return pipeline.ContractDescriptor{
 		Name: "verification-report",

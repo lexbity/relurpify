@@ -37,6 +37,16 @@ type Backend struct {
 	httpBase  string
 }
 
+func (b *Backend) Capabilities() browser.Capabilities {
+	return browser.Capabilities{
+		AccessibilityTree: true,
+		NetworkIntercept:  true,
+		DownloadEvents:    false,
+		PopupTracking:     false,
+		ArbitraryEval:     true,
+	}
+}
+
 type listTarget struct {
 	ID                   string `json:"id"`
 	Type                 string `json:"type"`

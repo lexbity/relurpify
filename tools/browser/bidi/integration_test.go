@@ -90,6 +90,68 @@ func TestChromeDriverBiDiBackendRepeatedLocalhostFlow(t *testing.T) {
 	}
 }
 
+func TestChromeDriverBiDiBackendFollowsLocalRedirects(t *testing.T) {
+	driverPath, err := exec.LookPath("chromedriver")
+	if err != nil {
+		t.Skip("chromedriver not installed")
+	}
+	browserPath, err := exec.LookPath("chromium")
+	if err != nil {
+		t.Skip("chromium not installed")
+	}
+
+	finalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/landing":
+			_, _ = w.Write([]byte(`<!doctype html><html><body>cross-origin-final</body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer finalServer.Close()
+
+	redirectServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/same-origin":
+			http.Redirect(w, r, "/final", http.StatusFound)
+		case "/final":
+			_, _ = w.Write([]byte(`<!doctype html><html><body>same-origin-final</body></html>`))
+		case "/cross-origin":
+			http.Redirect(w, r, finalServer.URL+"/landing", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer redirectServer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	backend, err := New(ctx, Config{
+		DriverPath:    driverPath,
+		BrowserBinary: browserPath,
+		Headless:      true,
+	})
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "websocket url missing") {
+		t.Skip("driver does not expose BiDi websocket")
+	}
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, backend.Close())
+	}()
+
+	require.NoError(t, backend.Navigate(ctx, redirectServer.URL+"/same-origin"))
+	require.NoError(t, backend.WaitFor(ctx, browser.WaitCondition{Type: browser.WaitForText, Selector: "body", Text: "same-origin-final"}, 5*time.Second))
+	currentURL, err := backend.CurrentURL(ctx)
+	require.NoError(t, err)
+	require.Contains(t, currentURL, redirectServer.URL+"/final")
+
+	require.NoError(t, backend.Navigate(ctx, redirectServer.URL+"/cross-origin"))
+	require.NoError(t, backend.WaitFor(ctx, browser.WaitCondition{Type: browser.WaitForText, Selector: "body", Text: "cross-origin-final"}, 5*time.Second))
+	currentURL, err = backend.CurrentURL(ctx)
+	require.NoError(t, err)
+	require.Contains(t, currentURL, finalServer.URL+"/landing")
+}
+
 func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath string) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

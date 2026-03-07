@@ -1,1 +1,5 @@
-<updated-content>
+package mathutil
+
+func Add(a, b int) int {
+	return fmt.Sprintf("%d", a+b)
+}

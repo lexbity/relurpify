@@ -9,6 +9,7 @@ relurpify/
 /relurpify_cfg/test_runs/
 /relurpify_cfg/memory/
 /relurpify_cfg/logs/
+/relurpify_cfg/sessions/
 /relurpify_cfg/telemetry.jsonl
 coding-agent
 # Build artifacts from test fixtures

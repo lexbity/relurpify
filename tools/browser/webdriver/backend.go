@@ -41,6 +41,16 @@ type Backend struct {
 	userData  string
 }
 
+func (b *Backend) Capabilities() browser.Capabilities {
+	return browser.Capabilities{
+		AccessibilityTree: false,
+		NetworkIntercept:  false,
+		DownloadEvents:    false,
+		PopupTracking:     false,
+		ArbitraryEval:     true,
+	}
+}
+
 type wireResponse struct {
 	Value json.RawMessage `json:"value"`
 }

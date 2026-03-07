@@ -1,0 +1,18 @@
+mod math;
+
+pub use math::add;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add() {
+        assert_eq!(add(2, 2), 4);
+    }
+
+    #[test]
+    fn test_mul() {
+        assert_eq!(mul(3, 4), 12);
+    }
+}

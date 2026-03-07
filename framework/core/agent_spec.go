@@ -23,6 +23,7 @@ type AgentRuntimeSpec struct {
 	Files               AgentFileMatrix                 `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
 	Invocation          AgentInvocationSpec             `yaml:"invocation,omitempty" json:"invocation,omitempty"`
 	Context             AgentContextSpec                `yaml:"context,omitempty" json:"context,omitempty"`
+	Browser             *AgentBrowserSpec               `yaml:"browser,omitempty" json:"browser,omitempty"`
 	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	Search              AgentSearchSpec                 `yaml:"search,omitempty" json:"search,omitempty"`
 	Metadata            AgentMetadata                   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
@@ -118,6 +119,33 @@ type AgentContextSpec struct {
 	IncludeDependencies bool   `yaml:"include_dependencies" json:"include_dependencies"`
 	CompressionStrategy string `yaml:"compression_strategy" json:"compression_strategy"` // "summary", "truncate", "hybrid"
 	ProgressiveLoading  bool   `yaml:"progressive_loading" json:"progressive_loading"`
+}
+
+// AgentBrowserSpec configures the model-facing browser tool and its action
+// policies without bypassing manifest network/filesystem enforcement.
+type AgentBrowserSpec struct {
+	Enabled         bool                            `yaml:"enabled" json:"enabled"`
+	DefaultBackend  string                          `yaml:"default_backend,omitempty" json:"default_backend,omitempty"`
+	AllowedBackends []string                        `yaml:"allowed_backends,omitempty" json:"allowed_backends,omitempty"`
+	Actions         map[string]AgentPermissionLevel `yaml:"actions,omitempty" json:"actions,omitempty"`
+	Extraction      AgentBrowserExtractionSpec      `yaml:"extraction,omitempty" json:"extraction,omitempty"`
+	Downloads       AgentBrowserDownloadSpec        `yaml:"downloads,omitempty" json:"downloads,omitempty"`
+	Credentials     AgentBrowserCredentialsSpec     `yaml:"credentials,omitempty" json:"credentials,omitempty"`
+}
+
+type AgentBrowserExtractionSpec struct {
+	DefaultMode       string `yaml:"default_mode,omitempty" json:"default_mode,omitempty"`
+	MaxHTMLTokens     int    `yaml:"max_html_tokens,omitempty" json:"max_html_tokens,omitempty"`
+	MaxSnapshotTokens int    `yaml:"max_snapshot_tokens,omitempty" json:"max_snapshot_tokens,omitempty"`
+}
+
+type AgentBrowserDownloadSpec struct {
+	Enabled   bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Directory string `yaml:"directory,omitempty" json:"directory,omitempty"`
+}
+
+type AgentBrowserCredentialsSpec struct {
+	RequireHITL bool `yaml:"require_hitl,omitempty" json:"require_hitl,omitempty"`
 }
 
 // AgentSkillConfig carries skill-derived agent policy hints. These hints may
@@ -307,10 +335,92 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("skill_config.review.severity_weights[%s] must be >= 0", severity)
 		}
 	}
+	if a.Browser != nil {
+		if err := a.Browser.Validate(); err != nil {
+			return fmt.Errorf("browser config invalid: %w", err)
+		}
+	}
 	if err := a.Files.Validate(); err != nil {
 		return err
 	}
 	return nil
+}
+
+var validBrowserActions = map[string]struct{}{
+	"open":                   {},
+	"navigate":               {},
+	"click":                  {},
+	"type":                   {},
+	"wait":                   {},
+	"extract":                {},
+	"get_text":               {},
+	"get_accessibility_tree": {},
+	"get_html":               {},
+	"current_url":            {},
+	"screenshot":             {},
+	"execute_js":             {},
+	"close":                  {},
+	"list_tabs":              {},
+	"switch_tab":             {},
+	"wait_for_download":      {},
+	"download_status":        {},
+	"download":               {},
+	"new_tab":                {},
+	"fill_credentials":       {},
+}
+
+var validBrowserBackends = map[string]struct{}{
+	"cdp":       {},
+	"webdriver": {},
+	"bidi":      {},
+}
+
+// Validate ensures the browser section contains only supported action and
+// backend names.
+func (b *AgentBrowserSpec) Validate() error {
+	if b == nil {
+		return nil
+	}
+	if err := validateBrowserBackendName(b.DefaultBackend, "default_backend"); err != nil {
+		return err
+	}
+	for _, backend := range b.AllowedBackends {
+		if err := validateBrowserBackendName(backend, "allowed_backends"); err != nil {
+			return err
+		}
+	}
+	for action, policy := range b.Actions {
+		action = strings.TrimSpace(action)
+		if action == "" {
+			return fmt.Errorf("actions contains empty key")
+		}
+		if _, ok := validBrowserActions[action]; !ok {
+			return fmt.Errorf("actions[%s] invalid", action)
+		}
+		switch policy {
+		case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny, "":
+		default:
+			return fmt.Errorf("actions[%s] policy=%s invalid", action, policy)
+		}
+	}
+	if b.Extraction.MaxHTMLTokens < 0 {
+		return fmt.Errorf("extraction.max_html_tokens must be >= 0")
+	}
+	if b.Extraction.MaxSnapshotTokens < 0 {
+		return fmt.Errorf("extraction.max_snapshot_tokens must be >= 0")
+	}
+	return nil
+}
+
+func validateBrowserBackendName(value string, field string) error {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return nil
+	}
+	if _, ok := validBrowserBackends[value]; ok {
+		return nil
+	}
+	return fmt.Errorf("%s %q invalid", field, value)
 }
 
 func ValidateSkillToolSelector(selector SkillToolSelector) error {

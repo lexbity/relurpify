@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -22,6 +23,50 @@ type Backend interface {
 
 // BrowserBackend preserves the more explicit external name used by design docs.
 type BrowserBackend = Backend
+
+// Capabilities describe which higher-level browser features a backend can
+// reliably support.
+type Capabilities struct {
+	AccessibilityTree bool `json:"accessibility_tree"`
+	NetworkIntercept  bool `json:"network_intercept"`
+	DownloadEvents    bool `json:"download_events"`
+	PopupTracking     bool `json:"popup_tracking"`
+	ArbitraryEval     bool `json:"arbitrary_eval"`
+}
+
+// CapabilityReporter allows a backend to advertise transport-specific support.
+type CapabilityReporter interface {
+	Capabilities() Capabilities
+}
+
+// StructuredPageData captures compact semantically useful page information.
+type StructuredPageData struct {
+	URL      string            `json:"url"`
+	Title    string            `json:"title"`
+	Headings []string          `json:"headings,omitempty"`
+	Links    []StructuredLink  `json:"links,omitempty"`
+	Inputs   []StructuredInput `json:"inputs,omitempty"`
+	Buttons  []string          `json:"buttons,omitempty"`
+	Code     []string          `json:"code,omitempty"`
+}
+
+type StructuredLink struct {
+	Text string `json:"text"`
+	Href string `json:"href"`
+}
+
+type StructuredInput struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Placeholder string `json:"placeholder"`
+}
+
+// MarshalJSON is a small helper so callers can use the same deterministic
+// representation for context budgeting and tool results.
+func (s StructuredPageData) MarshalJSON() ([]byte, error) {
+	type alias StructuredPageData
+	return json.Marshal(alias(s))
+}
 
 // WaitConditionType identifies the event or state the backend should wait for.
 type WaitConditionType string
