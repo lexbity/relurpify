@@ -49,16 +49,16 @@ go build ./app/relurpish
 
 ```bash
 # Scaffold a new skill
-go run ./cmd/coding-agent skill init my-skill --description "My focused workflow" --with-tests
+go run ./cmd/dev-agent skill init my-skill --description "My focused workflow" --with-tests
 
 # Validate skill manifest + resources
-go run ./cmd/coding-agent skill validate my-skill
+go run ./cmd/dev-agent skill validate my-skill
 
 # Diagnose tool/permission compatibility (optional agent manifest)
-go run ./cmd/coding-agent skill doctor my-skill --manifest relurpify_cfg/agent.manifest.yaml
+go run ./cmd/dev-agent skill doctor my-skill --manifest relurpify_cfg/agent.manifest.yaml
 
 # Run the skill testsuite.yaml
-go run ./cmd/coding-agent skill test my-skill
+go run ./cmd/dev-agent skill test my-skill
 ```
 
 ### Generate Code documentation
@@ -106,7 +106,7 @@ Checkout docs/
     - [x] Chat
     - [x] Tasks
     - [x] Settings
-    - [x] Setup Wizard
+    - [x] Workspace doctor flow
     - [x] Notifications with HTIL support 
     
 - [x] Documentation (ongoing) 

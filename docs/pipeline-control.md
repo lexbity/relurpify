@@ -217,7 +217,7 @@ prompt context inclusion/exclusion
 correct tool scope by stage
 Phase 8: Testsuite Coverage
 
-Add pipeline-specific suites and extend coding-agent suites.
+Add pipeline-specific suites and extend dev-agent agenttest coverage.
 
 New testsuite targets
 

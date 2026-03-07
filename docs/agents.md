@@ -62,7 +62,7 @@ Two different "mode" concepts exist:
 1. `spec.agent.implementation` selects the top-level agent implementation (`coding`, `planner`, `react`, `reflection`, `eternal`).
 2. `spec.agent.mode` is the manifest role (`primary`, `subagent`, `system`).
 
-CodingAgent execution mode (`code`, `architect`, `ask`, `debug`, `docs`) is selected per task through task metadata or task context. In `architect` mode the caller can also request resume-from-checkpoint via task context so interrupted long plans continue from the latest saved step. Language-specific manifests are provided for Go, Rust, Python, Node.js, and SQLite in `relurpify_cfg/agents/`. These differ in their skill stacks, declared executables, and system prompts.
+CodingAgent execution mode (`code`, `architect`, `ask`, `debug`, `docs`) is selected per task through task metadata or task context. In `architect` mode the caller can also request resume-from-checkpoint via task context so interrupted long plans continue from the latest saved step. Language-specific manifests are typically copied into `relurpify_cfg/agents/` from shared or repo-local templates. Once copied, those workspace manifests are authoritative. These differ in their skill stacks, declared executables, and system prompts.
 
 **Selecting a language-specific agent:**
 
@@ -115,12 +115,12 @@ Intended for background work: continuous refactoring, watching a test suite, mai
 
 ## Agent Registry
 
-At startup, the agent registry scans `relurpify_cfg/agents/` for manifest YAML files, validates them, and makes them available by name. The TUI Settings pane (press `4`) lists all discovered agents and lets you switch between them.
+At startup, the agent registry scans `relurpify_cfg/agents/` for workspace-owned manifest YAML files, validates them, and makes them available by name. The TUI Settings pane (press `4`) lists all discovered agents and lets you switch between them.
 
 To see all available agents:
 
 ```bash
-go run ./cmd/coding-agent agents list
+go run ./cmd/dev-agent agents list
 ```
 
 ---

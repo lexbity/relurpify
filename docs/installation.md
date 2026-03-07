@@ -2,7 +2,7 @@
 
 ## Synopsis
 
-Relurpify expects an explicitly configured local environment: Go to build the binaries, Docker plus gVisor for sandboxed command execution, and Ollama for local model inference. This page documents the manual setup path.
+Relurpify expects an explicitly configured local environment: Go to build the binaries, Docker plus gVisor for sandboxed command execution, and Ollama for local model inference. `relurpish doctor` is the supported setup and validation entrypoint for workspace initialization and local dependency checks.
 
 ---
 
@@ -10,10 +10,11 @@ Relurpify expects an explicitly configured local environment: Go to build the bi
 
 | Dependency | Why it is required |
 |------------|--------------------|
-| **Go 1.21+** | Builds `relurpish` and `coding-agent` |
+| **Go 1.21+** | Builds `relurpish` and `dev-agent` |
 | **Docker** or **containerd** | Container runtime for sandboxed execution |
 | **gVisor (`runsc`)** | Mandatory sandbox runtime |
 | **Ollama** | Local LLM inference backend |
+| **Chromium** | Optional browser runtime checked by `doctor`; warning-only unless browser tooling is used |
 
 Relurpify intentionally refuses to degrade into an unsandboxed "just run shell commands on the host" mode for normal runtime operation.
 
@@ -79,21 +80,37 @@ go install github.com/lexcodex/relurpify/app/relurpish@latest
 Optional: install the CLI used for testsuites and utility commands:
 
 ```bash
-go install github.com/lexcodex/relurpify/cmd/coding-agent@latest
+go install github.com/lexcodex/relurpify/cmd/dev-agent@latest
 ```
 
 ---
 
+## Doctor First
+
+From your project directory, run:
+
+```bash
+relurpish doctor
+```
+
+`doctor` will:
+
+- check Docker, `runsc`, Ollama, and Chromium
+- report blocking runtime issues vs warnings
+- initialize `relurpify_cfg/` from starter templates if it is missing
+- support `--fix` to overwrite starter config/manifests from templates
+
+Use `--yes` to skip prompts:
+
+```bash
+relurpish doctor --fix --yes
+```
+
+Docker, `runsc`, and Ollama are blocking runtime dependencies. Chromium is checked but does not block startup by default.
+
 ## Workspace Layout
 
 Relurpify is workspace-aware. Run it from a project that contains `relurpify_cfg/`.
-
-Create the basic directory structure:
-
-```bash
-cd /your/project
-mkdir -p relurpify_cfg/agents
-```
 
 Useful files:
 
@@ -101,11 +118,15 @@ Useful files:
 - `relurpify_cfg/config.yaml` — optional workspace defaults
 - `relurpify_cfg/agents/` — optional additional agent definitions or presets
 
-The fastest manual setup path is to copy a shipped manifest into the default location and then edit it for your project:
+If you prefer a manual path instead of `doctor`, copy starter templates into the workspace and then edit them for your project:
 
 ```bash
-cp /path/to/relurpify/relurpify_cfg/agents/coding-go.yaml relurpify_cfg/agent.manifest.yaml
+mkdir -p relurpify_cfg
+cp /path/to/relurpify/templates/workspace/config.yaml relurpify_cfg/config.yaml
+cp /path/to/relurpify/templates/workspace/agent.manifest.yaml relurpify_cfg/agent.manifest.yaml
 ```
+
+After copying, those workspace files are the source of truth. Updating the shared template files later does not change the live workspace unless you run `relurpish doctor --fix` or replace the files manually.
 
 Update at least:
 
@@ -120,7 +141,6 @@ model: qwen2.5-coder:14b
 agents:
     - coding-go
 allowed_tools: []
-permission_profile: workspace_write
 last_updated: 1709500000
 ```
 
@@ -134,6 +154,7 @@ Once the manifest points at the correct workspace and model:
 
 ```bash
 cd /your/project
+relurpish doctor
 relurpish chat
 ```
 

@@ -10,9 +10,23 @@ Relurpify has two configuration layers: a workspace config that stores runtime d
 
 `relurpify_cfg/config.yaml` answers: *which model and agent should this workspace prefer by default?* It is writable at runtime.
 
-Agent manifests answer: *what is this agent allowed to do, and how should it behave?* They declare filesystem, executable, and network permissions plus the runtime-level agent settings consumed by `relurpish` and `coding-agent`.
+Agent manifests answer: *what is this agent allowed to do, and how should it behave?* They declare filesystem, executable, and network permissions plus the runtime-level agent settings consumed by `relurpish` and `dev-agent`.
 
 This split lets you change a preferred model or agent without silently widening the agent's security envelope.
+
+---
+
+## Source Of Truth
+
+Relurpify now has a strict ownership model:
+
+- shared templates are starter assets only
+- repo-local templates are development fallbacks only
+- files copied into `relurpify_cfg/` are the live workspace source of truth
+
+This matters most for `relurpify_cfg/agents/` and `relurpify_cfg/skills/`. They are no longer treated as builtin inventory. If a manifest or skill exists there, it is a workspace-owned copy and runtime code should prefer it over any shared template.
+
+See [Workspace Layout](workspace-layout.md) for the full directory contract.
 
 ---
 
@@ -50,6 +64,8 @@ This file is optional. If it is absent, runtime defaults come from the manifest 
 **Location:** `relurpify_cfg/agent.manifest.yaml` or `relurpify_cfg/agents/<name>.yaml`
 
 Manifests use `apiVersion: relurpify/v1alpha1`. They are validated at startup, and invalid manifests are rejected before the runtime can execute.
+
+Starter manifests may be copied into the workspace by `relurpish doctor` or from shared templates manually. After that copy happens, the workspace copy is authoritative.
 
 ### Annotated Example
 
@@ -201,6 +217,8 @@ Skills are composable prompt and policy packages declared in `spec.skills` and l
 | `devops` | CI/CD and shell automation conventions |
 
 Skills can narrow behavior, adjust prompts, and supply policy hints. They do not bypass manifest permissions or sandbox enforcement.
+
+Like manifests, skill packages under `relurpify_cfg/skills/` are workspace-owned copies after initialization or manual copying. Shared skill templates are not used as runtime state directly.
 
 ---
 

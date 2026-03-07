@@ -97,7 +97,7 @@ If an agent seems to "forget" earlier context, or if tool results are being trun
 
 1. Check `max_tokens` in the manifest — increase it if the model supports a larger context window
 2. Switch pruning strategy to `Conservative`
-3. Check telemetry output (`relurpify_cfg/telemetry.jsonl`) for context snapshot sizes at each LLM node
+3. Check telemetry output (`relurpify_cfg/telemetry/telemetry.jsonl`) for context snapshot sizes at each LLM node
 
 ---
 

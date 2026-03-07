@@ -26,7 +26,7 @@ Think of Relurpify in four layers, each building on the one below:
 ```
 ┌──────────────────────────────────────────┐
 │  Interface Layer                         │
-│  relurpish TUI · HTTP API · coding-agent │
+│  relurpish TUI · HTTP API · dev-agent   │
 └────────────────┬─────────────────────────┘
                  │
 ┌────────────────▼─────────────────────────┐
@@ -48,7 +48,7 @@ Think of Relurpify in four layers, each building on the one below:
 └──────────────────────────────────────────┘
 ```
 
-**Interface layer** — how you talk to the system. The `relurpish` TUI is the primary end-user interface. The `coding-agent` CLI is for development and scripted use. The HTTP API (`relurpish serve`) exposes the same runtime for editor integrations.
+**Interface layer** — how you talk to the system. The `relurpish` TUI is the primary end-user interface. `relurpish doctor` handles workspace initialization and local dependency checks. The `dev-agent` CLI is for development and scripted use. The HTTP API (`relurpish serve`) exposes the same runtime for editor integrations.
 
 **Agent layer** — the reasoning layer. An agent receives an instruction, builds a plan or enters a reasoning loop, decides which tools to call, and produces a result. Different agent types implement different reasoning patterns (see [agents.md](agents.md)).
 
@@ -114,14 +114,18 @@ Local models have finite context windows, so Relurpify treats context as a syste
 relurpify_cfg/
 ├── config.yaml          # Default model and workspace settings
 ├── agent.manifest.yaml  # Default agent manifest
-├── agents/              # Per-language/role agent manifests
-├── skills/              # Skill packages (prompt fragments + tool subsets)
+├── agents/              # Workspace-owned copied agent manifests
+├── skills/              # Workspace-owned copied skill packages
+├── telemetry/           # Structured telemetry output
 ├── sessions/            # Persisted TUI sessions (auto-created)
 ├── memory/              # Agent memory store (auto-created)
-└── logs/                # Runtime logs (auto-created)
+├── logs/                # Runtime logs (auto-created)
+└── test_runs/           # Isolated testsuite runs and artifacts
 ```
 
 Everything Relurpify creates or modifies at runtime is scoped to the project directory — either inside `relurpify_cfg/` or inside the workspace paths declared in the manifest.
+
+Shared templates are not runtime state. They are copied into `relurpify_cfg/` and become workspace-owned from that point forward.
 
 ---
 
@@ -130,16 +134,17 @@ Everything Relurpify creates or modifies at runtime is scoped to the project dir
 | Binary | Purpose |
 |--------|---------|
 | `relurpish` | Primary TUI — what end-users run |
-| `relurpish wizard` | Environment probe — checks gVisor, Docker, Ollama |
+| `relurpish doctor` | Workspace initialization and local dependency checks |
 | `relurpish status` | Runtime diagnostics |
 | `relurpish serve` | HTTP API only (no TUI) |
-| `coding-agent` | CLI for scripted / development use |
+| `dev-agent` | CLI for scripted / development use |
 
 ---
 
 ## Further Reading
 
 - [Installation](installation.md) — prerequisites and setup
+- [Workspace Layout](workspace-layout.md) — canonical `relurpify_cfg/` contract and ownership rules
 - [Configuration](configuration.md) — manifests, workspace config, skills
 - [Agents](agents.md) — agent types and when to use each
 - [Permission Model](permission-model.md) — how the security contract works

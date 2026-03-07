@@ -13,7 +13,7 @@ Relurpify ships five agent types, each suited to different tasks.
 CodingAgent supports five modes via `spec.agent.mode` in the manifest:
 `code` · `architect` · `ask` · `debug` · `docs`
 
-Language-specific coding agent manifests are provided for Go, Rust, Python, Node.js, and SQLite in `relurpify_cfg/agents/`.
+Language-specific coding agent manifests are typically copied into `relurpify_cfg/agents/` from shared templates. Once copied, the workspace versions are authoritative.
 
 For full details see [docs/agents.md](docs/agents.md).
 
@@ -25,9 +25,9 @@ For full details see [docs/agents.md](docs/agents.md).
 ```
 framework/   Graph runtime, shared context, memory, telemetry, tool registry
 agents/      Planner, coder, reflection, and ReAct-inspired orchestrators
-agents/templates  Reference agent manifest templates for relurpify_cfg init
+templates/   Workspace, agent, skill, and testsuite starter assets
 tools/       File, git, search, execution, and LSP proxy implementations
-cmd/         CLI entry points (server, relurpify toolbox, coder helper)
+cmd/         CLI entry points (`relurpish`, `dev-agent`)
 server/      HTTP + LSP servers and dependency wiring
 framework/persistence/ Workflow + message stores for pause/resume and logging
 llm/         Ollama HTTP client that satisfies core.LanguageModel

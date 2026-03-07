@@ -20,17 +20,18 @@ Run `relurpish` from your project directory:
 
 ```bash
 cd /your/project
+relurpish doctor
 relurpish chat
 ```
 
-Relurpish discovers `relurpify_cfg/` in the current directory. All state (sessions, logs, memory) is scoped to that workspace.
+Relurpish discovers `relurpify_cfg/` in the current directory. All state (sessions, logs, telemetry, memory) is scoped to that workspace.
 
 Available subcommands:
 
 | Command | Purpose |
 |---------|---------|
 | `relurpish chat` | Start the chat TUI (default) |
-| `relurpish wizard` | Probe environment (checks gVisor, Docker, Ollama) |
+| `relurpish doctor` | Initialize or repair `relurpify_cfg/`, and check Docker/runsc/Ollama/Chromium |
 | `relurpish status` | Show runtime diagnostics |
 | `relurpish serve` | Run the HTTP API without the TUI |
 

@@ -12,6 +12,8 @@ Unit tests answer: *does the framework behave correctly?* They exercise manifest
 
 Agent tests answer: *does the agent actually solve the problem?* They execute the full stack: prompt -> agent reasoning -> tool calls -> result. Because model output is non-deterministic, suites assert on structured outcomes such as changed files, required tool calls, and output snippets instead of exact strings.
 
+Testsuites run against derived temporary workspaces so they do not reuse the live workspace's `relurpify_cfg/` state directly.
+
 ---
 
 ## Unit Tests
@@ -43,7 +45,7 @@ LLM-dependent unit tests use tape-backed models where needed, so Ollama is not r
 Agent tests are YAML-driven suites stored in `testsuite/agenttests/`. Run them with:
 
 ```bash
-go run ./cmd/coding-agent agenttest run
+go run ./cmd/dev-agent agenttest run
 ```
 
 ### Prerequisites
@@ -58,14 +60,14 @@ ollama pull qwen2.5-coder:14b
 
 ```bash
 # Run every discovered suite
-go run ./cmd/coding-agent agenttest run
+go run ./cmd/dev-agent agenttest run
 
 # Run one suite explicitly
-go run ./cmd/coding-agent agenttest run \
+go run ./cmd/dev-agent agenttest run \
     --suite testsuite/agenttests/coding.go.testsuite.yaml
 
 # Filter discovered suites by agent prefix and raise timeout
-go run ./cmd/coding-agent agenttest run \
+go run ./cmd/dev-agent agenttest run \
     --agent coding \
     --timeout 120s
 ```
@@ -106,7 +108,8 @@ spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-go.yaml
   workspace:
-    strategy: in_place
+    strategy: derived
+    template_profile: default
     exclude:
       - .git/**
       - relurpify_cfg/test_runs/**
@@ -147,9 +150,11 @@ spec:
 |------|---------|
 | `spec.agent_name` | Agent preset used by the runner |
 | `spec.manifest` | Manifest path relative to the repo/workspace |
-| `spec.workspace.strategy` | `in_place` or `copy` |
-| `spec.workspace.exclude` | Globs omitted from copied workspaces |
+| `spec.workspace.strategy` | Must be `derived` |
+| `spec.workspace.template_profile` | Testsuite template profile copied into the temp `relurpify_cfg/` |
+| `spec.workspace.exclude` | Globs omitted from the derived temp workspace |
 | `spec.workspace.ignore_changes` | Paths ignored in change assertions |
+| `spec.workspace.files` | Additional files layered onto the derived workspace before execution |
 | `spec.models` | One or more model/endpoint combinations |
 | `spec.recording` | Default tape mode/path for all cases |
 | `spec.cases` | Individual prompts plus setup and expectations |
@@ -170,6 +175,8 @@ spec:
 | `requires.tools` | Skip unless required tools are registered |
 | `expect` | Structured expectations for output, files, and tool calls |
 | `overrides` | Per-case overrides for model, recording, env, allowed tools, or control flow |
+
+`derived` is the required strategy. It copies the worktree into a temp run workspace, materializes a fresh `relurpify_cfg/` from a testsuite template profile, and then layers suite/case overrides on top.
 
 ### Expectations
 
@@ -228,20 +235,12 @@ The TUI also exposes a recording mode toggle in Settings for interactive session
 You can isolate command execution with:
 
 ```bash
-go run ./cmd/coding-agent agenttest run \
+go run ./cmd/dev-agent agenttest run \
     --sandbox \
     --suite testsuite/agenttests/coding.go.testsuite.yaml
 ```
 
-You can isolate filesystem state by setting:
-
-```yaml
-spec:
-  workspace:
-    strategy: copy
-```
-
-Using both together gives the cleanest agenttest runs: copied workspace state plus sandboxed command execution.
+Tests already derive an isolated temp workspace by default. `strategy: derived` is the supported workspace mode.
 
 ---
 
@@ -250,7 +249,7 @@ Using both together gives the cleanest agenttest runs: copied workspace state pl
 Typical CI replay run:
 
 ```bash
-go run ./cmd/coding-agent agenttest run \
+go run ./cmd/dev-agent agenttest run \
     --suite testsuite/agenttests/coding.go.testsuite.yaml \
     --timeout 120s
 ```
