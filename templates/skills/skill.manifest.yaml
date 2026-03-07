@@ -1,0 +1,93 @@
+# Relurpify Skill Manifest Template
+# Copy into relurpify_cfg/skills/<skill-name>/skill.manifest.yaml
+
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+
+metadata:
+  name: "example-skill"
+  version: "1.0.0"
+  description: "Reusable guidance + tool policies for a focused workflow."
+
+spec:
+  # Prompt snippets appended to the agent prompt.
+  prompt_snippets:
+    - "Follow the project's review checklist and summarize any risks."
+
+  # Explicit tool allowlist provided by this skill.
+  allowed_tools:
+    - "file_read"
+    - "file_write"
+
+  # Per-tool execution policies.
+  tool_execution_policy:
+    exec_run_linter:
+      execute: "ask"
+
+  # Optional legacy phase-specific preferred tools. These narrow agent choices
+  # but do not bypass allowed_tools, registry filtering, or sandbox checks.
+  phase_tools:
+    explore: ["file_read"]
+    verify: ["exec_run_linter"]
+
+  # SkillSpec v2 selectors can choose tools by exact name or richer tags.
+  phase_selectors:
+    explore:
+      - tool: "file_read"
+      - tags: ["search"]
+    verify:
+      - tags: ["verification"]
+
+  # Optional verification policy used by the coding/react agents.
+  verification:
+    success_tools: ["exec_run_linter"]
+    success_selectors:
+      - tags: ["test"]
+    stop_on_success: true
+
+  # Optional recovery hints used when execution fails.
+  recovery:
+    failure_probe_tools: ["file_read"]
+    failure_probe_selectors:
+      - tags: ["recovery"]
+
+  # Optional planning hints used by planner/architect agents.
+  planning:
+    required_before_edit:
+      - tags: ["workspace-detect"]
+    preferred_edit_tools:
+      - tags: ["build"]
+    preferred_verify_tools:
+      - tags: ["test"]
+    step_templates:
+      - kind: "discover"
+        description: "Identify the active project context before editing."
+      - kind: "verify"
+        description: "Run verification after changes."
+    require_verification_step: true
+
+  # Optional review hints used by reflection-style agents.
+  review:
+    criteria:
+      - "correctness"
+      - "completeness"
+    focus_tags:
+      - "verification"
+    approval_rules:
+      require_verification_evidence: true
+      reject_on_unresolved_errors: true
+    severity_weights:
+      high: 1.0
+      medium: 0.5
+      low: 0.2
+
+  # Optional context hints for language/domain-specific agents.
+  context_hints:
+    preferred_detail_level: "concise"
+    protect_patterns: ["**/*.md"]
+
+  # Optional resource locations (defaults to skills/<name>/{scripts,resources,templates}).
+  resource_paths:
+    scripts: ["scripts"]
+    resources: ["resources"]
+    templates: ["templates"]

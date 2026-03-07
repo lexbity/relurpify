@@ -1,0 +1,5 @@
+model: qwen2.5-coder:14b
+agents:
+  - coding
+allowed_tools: []
+last_updated: 0

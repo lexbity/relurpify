@@ -1,0 +1,56 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+    name: expert
+    version: 1.0.0
+    description: Expert coding agent manifest
+spec:
+    image: ghcr.io/lexcodex/relurpify/runtime:latest
+    runtime: gvisor
+    defaults:
+        permissions:
+            filesystem:
+                - action: fs:read
+                  path: ${workspace}/**
+                  justification: Read workspace
+                - action: fs:list
+                  path: ${workspace}/**
+                  justification: List workspace
+                - action: fs:write
+                  path: ${workspace}/**
+                  justification: Modify workspace
+                - action: fs:execute
+                  path: ${workspace}/**
+                  justification: Execute tooling inside workspace
+            network:
+                - direction: egress
+                  protocol: tcp
+                  host: localhost
+                  port: 11434
+                  description: Ollama
+        resources:
+            limits:
+                cpu: "2"
+                memory: 4Gi
+                disk_io: 200MBps
+    security:
+        run_as_user: 1000
+        read_only_root: false
+        no_new_privileges: true
+    audit:
+        level: verbose
+        retention_days: 7
+    agent:
+        implementation: expert
+        mode: primary
+        version: 1.0.0
+        prompt: You are an expert coding agent. Follow project rules, ask before destructive actions, and summarize outcomes.
+        model:
+            provider: ollama
+            name: qwen2.5-coder:14b
+            temperature: 0.2
+            max_tokens: 4096
+        ollama_tool_calling: true
+    skills:
+        - system
+        - coding
