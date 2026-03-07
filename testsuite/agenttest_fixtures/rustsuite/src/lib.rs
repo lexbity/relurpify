@@ -11,4 +11,3 @@ mod tests {
         assert_eq!(add(2, 2), 4);
     }
 }
-

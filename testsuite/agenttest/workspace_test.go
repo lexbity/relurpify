@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 func TestSnapshotAndDiffWorkspace(t *testing.T) {
@@ -46,5 +48,74 @@ func TestFilterChangedFilesIgnoresGeneratedArtifacts(t *testing.T) {
 
 	if len(filtered) != 1 || filtered[0] != "pkg/file.go" {
 		t.Fatalf("unexpected filtered files: %v", filtered)
+	}
+}
+
+func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing.T) {
+	shared := t.TempDir()
+	t.Setenv("RELURPIFY_SHARED_DIR", shared)
+
+	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", workspacecfg.DirName)
+	agentTemplate := filepath.Join(shared, "templates", "agents", "coding-go.yaml")
+	for _, dir := range []string{profileRoot, filepath.Dir(agentTemplate)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(profileRoot, "config.yaml"), []byte("model: derived\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profileRoot, "agent.manifest.yaml"), []byte("path: ${workspace}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agentTemplate, []byte("path: ${workspace}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	target := t.TempDir()
+	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("workspace"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(target, workspacecfg.DirName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, workspacecfg.DirName, "config.yaml"), []byte("model: live\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	derived := filepath.Join(t.TempDir(), "run", "workspace")
+	err := MaterializeDerivedWorkspace(
+		target,
+		derived,
+		"default",
+		filepath.ToSlash(filepath.Join(workspacecfg.DirName, "agents", "coding-go.yaml")),
+		nil,
+		[]SetupFileSpec{{Path: filepath.ToSlash(filepath.Join(workspacecfg.DirName, "config.yaml")), Content: "model: override\n"}},
+	)
+	if err != nil {
+		t.Fatalf("MaterializeDerivedWorkspace() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(derived, "README.md")); err != nil {
+		t.Fatalf("expected copied workspace file: %v", err)
+	}
+	configPath := filepath.Join(derived, workspacecfg.DirName, "config.yaml")
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read derived config: %v", err)
+	}
+	if string(configData) != "model: override\n" {
+		t.Fatalf("derived config = %q", string(configData))
+	}
+	agentPath := filepath.Join(derived, workspacecfg.DirName, "agents", "coding-go.yaml")
+	agentData, err := os.ReadFile(agentPath)
+	if err != nil {
+		t.Fatalf("read derived agent: %v", err)
+	}
+	if string(agentData) != "path: "+filepath.ToSlash(derived)+"\n" {
+		t.Fatalf("derived agent = %q", string(agentData))
+	}
+	if _, err := os.Stat(filepath.Join(derived, workspacecfg.DirName, "logs")); err != nil {
+		t.Fatalf("expected derived logs dir: %v", err)
 	}
 }

@@ -32,9 +32,11 @@ type SuiteSpec struct {
 }
 
 type WorkspaceSpec struct {
-	Strategy      string   `yaml:"strategy,omitempty"` // copy|in_place
-	Exclude       []string `yaml:"exclude,omitempty"`
-	IgnoreChanges []string `yaml:"ignore_changes,omitempty"`
+	Strategy        string          `yaml:"strategy,omitempty"` // derived
+	TemplateProfile string          `yaml:"template_profile,omitempty"`
+	Exclude         []string        `yaml:"exclude,omitempty"`
+	IgnoreChanges   []string        `yaml:"ignore_changes,omitempty"`
+	Files           []SetupFileSpec `yaml:"files,omitempty"`
 }
 
 type ModelSpec struct {
@@ -139,6 +141,15 @@ func (s *Suite) Validate() error {
 	}
 	if s.Spec.Manifest == "" {
 		return fmt.Errorf("suite missing spec.manifest")
+	}
+	strategy := s.Spec.Workspace.Strategy
+	if strategy == "" {
+		s.Spec.Workspace.Strategy = "derived"
+	} else if strategy != "derived" {
+		return fmt.Errorf("suite workspace.strategy %q unsupported; use derived", strategy)
+	}
+	if s.Spec.Workspace.TemplateProfile == "" {
+		s.Spec.Workspace.TemplateProfile = "default"
 	}
 	if len(s.Spec.Cases) == 0 {
 		return fmt.Errorf("suite missing spec.cases")

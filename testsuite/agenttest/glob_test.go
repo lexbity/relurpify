@@ -1,9 +1,16 @@
 package agenttest
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
+)
 
 func TestMatchGlob(t *testing.T) {
 	t.Helper()
+	testRunsGlob := filepath.ToSlash(filepath.Join(workspacecfg.DirName, "test_runs", "**"))
+	testRunReport := filepath.ToSlash(filepath.Join(workspacecfg.DirName, "test_runs", "x", "report.json"))
 	cases := []struct {
 		pattern string
 		path    string
@@ -15,7 +22,7 @@ func TestMatchGlob(t *testing.T) {
 		{"**/*.md", "docs/README.md", true},
 		{"docs/**", "docs/index.html", true},
 		{"docs/**", "src/docs/index.html", false},
-		{"relurpify_cfg/test_runs/**", "relurpify_cfg/test_runs/x/report.json", true},
+		{testRunsGlob, testRunReport, true},
 	}
 	for _, tc := range cases {
 		if got := matchGlob(tc.pattern, tc.path); got != tc.want {

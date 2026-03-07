@@ -7,7 +7,7 @@ spec:
   agent_name: coding
   manifest: relurpify_cfg/agent.manifest.yaml
   workspace:
-    strategy: in_place
+    strategy: derived
     exclude:
       - .git/**
       - .gocache/**

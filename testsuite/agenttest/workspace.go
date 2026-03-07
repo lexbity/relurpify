@@ -8,6 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+
+	"github.com/lexcodex/relurpify/framework/templates"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 type WorkspaceSnapshot struct {
@@ -152,6 +156,142 @@ func CopyWorkspace(src, dst string, exclude []string) error {
 		}
 		return out.Close()
 	})
+}
+
+func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProfile, manifestRef string, exclude []string, overlayFiles []SetupFileSpec) error {
+	targetWorkspace = filepath.Clean(targetWorkspace)
+	derivedWorkspace = filepath.Clean(derivedWorkspace)
+	if err := os.RemoveAll(derivedWorkspace); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(derivedWorkspace, 0o755); err != nil {
+		return err
+	}
+
+	copyExclude := append([]string{}, exclude...)
+	copyExclude = append(copyExclude, workspacecfg.DirName, filepath.ToSlash(filepath.Join(workspacecfg.DirName, "**")))
+	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, uniqueStrings(copyExclude)); err != nil {
+		return err
+	}
+
+	paths := workspacecfg.New(derivedWorkspace)
+	resolver := templates.NewResolver()
+	profileRoot, err := resolver.ResolveTestsuiteTemplateProfile(templateProfile)
+	if err != nil {
+		return fmt.Errorf("resolve testsuite template profile %q: %w", firstNonEmpty(templateProfile, "default"), err)
+	}
+	if err := copyRenderedTree(profileRoot, paths.ConfigRoot(), derivedWorkspace, ""); err != nil {
+		return err
+	}
+	if err := ensureDerivedManifest(resolver, targetWorkspace, derivedWorkspace, manifestRef); err != nil {
+		return err
+	}
+	if err := applyWorkspaceFiles(derivedWorkspace, overlayFiles); err != nil {
+		return err
+	}
+
+	for _, dir := range []string{
+		paths.AgentsDir(),
+		paths.SkillsDir(),
+		paths.LogsDir(),
+		paths.TelemetryDir(),
+		paths.MemoryDir(),
+		paths.SessionsDir(),
+		paths.TestRunsDir(),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derivedWorkspace, manifestRef string) error {
+	manifestRef = filepath.ToSlash(strings.TrimSpace(manifestRef))
+	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, workspacecfg.DirName+"/") {
+		return nil
+	}
+	dst := filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
+	if _, err := os.Stat(dst); err == nil {
+		return nil
+	}
+
+	var src string
+	if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(workspacecfg.DirName, "agents"))+"/") {
+		name := strings.TrimSuffix(filepath.Base(manifestRef), filepath.Ext(manifestRef))
+		src, _ = resolver.ResolveStarterAgent(name)
+	}
+	if src == "" {
+		candidate := filepath.Join(targetWorkspace, filepath.FromSlash(manifestRef))
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			src = candidate
+		}
+	}
+	if src == "" {
+		return nil
+	}
+	return copyRenderedFile(src, dst, derivedWorkspace, targetWorkspace)
+}
+
+func copyRenderedTree(srcRoot, dstRoot, workspace, sourceWorkspace string) error {
+	return filepath.WalkDir(srcRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(srcRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return os.MkdirAll(dstRoot, 0o755)
+		}
+		target := filepath.Join(dstRoot, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		return copyRenderedFile(path, target, workspace, sourceWorkspace)
+	})
+}
+
+func copyRenderedFile(src, dst, workspace, sourceWorkspace string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	rendered := renderWorkspaceContent(data, workspace, sourceWorkspace)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	info, err := os.Stat(src)
+	mode := fs.FileMode(0o644)
+	if err == nil {
+		mode = info.Mode().Perm()
+	}
+	return os.WriteFile(dst, rendered, mode)
+}
+
+func renderWorkspaceContent(data []byte, workspace, sourceWorkspace string) []byte {
+	rendered := strings.ReplaceAll(string(data), "${workspace}", filepath.ToSlash(workspace))
+	if sourceWorkspace != "" {
+		rendered = strings.ReplaceAll(rendered, filepath.ToSlash(sourceWorkspace), filepath.ToSlash(workspace))
+	}
+	return []byte(rendered)
+}
+
+func applyWorkspaceFiles(workspace string, files []SetupFileSpec) error {
+	for _, f := range files {
+		if f.Path == "" {
+			continue
+		}
+		target := filepath.Join(workspace, filepath.FromSlash(f.Path))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, []byte(f.Content), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func hashFile(path string) (string, error) {

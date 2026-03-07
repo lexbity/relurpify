@@ -7,7 +7,7 @@ spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-rust.yaml
   workspace:
-    strategy: in_place
+    strategy: derived
     exclude:
       - .git/**
       - relurpify_cfg/test_runs/**

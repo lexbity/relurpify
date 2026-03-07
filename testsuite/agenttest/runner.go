@@ -24,6 +24,7 @@ import (
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/lexcodex/relurpify/llm"
 )
 
@@ -76,6 +77,15 @@ type Runner struct {
 	Logger *log.Logger
 }
 
+type runCaseLayout struct {
+	ArtifactsDir  string
+	TmpDir        string
+	TelemetryPath string
+	LogPath       string
+	TapePath      string
+	WorkspaceDir  string
+}
+
 func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*SuiteReport, error) {
 	if suite == nil {
 		return nil, errors.New("suite required")
@@ -87,10 +97,11 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if err != nil {
 		return nil, err
 	}
+	workspacePaths := workspacecfg.New(targetWorkspace)
 	runID := time.Now().UTC().Format("20060102-150405")
 	outDir := opts.OutputDir
 	if outDir == "" {
-		outDir = filepath.Join(targetWorkspace, "relurpify_cfg", "test_runs", suite.Spec.AgentName, runID)
+		outDir = workspacePaths.TestRunDir(suite.Spec.AgentName, runID)
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return nil, err
@@ -125,15 +136,31 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	return report, nil
 }
 
+func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {
+	caseKey := fmt.Sprintf("%s__%s", sanitizeName(caseName), sanitizeName(modelName))
+	artifactsDir := filepath.Join(outDir, "artifacts", caseKey)
+	tmpDir := filepath.Join(outDir, "tmp", caseKey)
+	return runCaseLayout{
+		ArtifactsDir:  artifactsDir,
+		TmpDir:        tmpDir,
+		TelemetryPath: filepath.Join(outDir, "telemetry", caseKey+".jsonl"),
+		LogPath:       filepath.Join(outDir, "logs", caseKey+".log"),
+		TapePath:      filepath.Join(artifactsDir, "tape.jsonl"),
+		WorkspaceDir:  filepath.Join(tmpDir, "workspace"),
+	}
+}
+
 func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir string) CaseReport {
-	caseDir := filepath.Join(outDir, fmt.Sprintf("%s__%s", sanitizeName(c.Name), sanitizeName(model.Name)))
-	_ = os.MkdirAll(caseDir, 0o755)
-	telemetryPath := filepath.Join(caseDir, "telemetry.jsonl")
-	logPath := filepath.Join(caseDir, "agenttest.log")
+	layout := newRunCaseLayout(outDir, c.Name, model.Name)
+	for _, dir := range []string{layout.ArtifactsDir, layout.TmpDir, filepath.Dir(layout.TelemetryPath), filepath.Dir(layout.LogPath)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
+		}
+	}
 
 	logger := r.Logger
 	if logger == nil {
-		logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		logFile, err := os.OpenFile(layout.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 		if err == nil {
 			defer logFile.Close()
 			logger = log.New(logFile, "agenttest ", log.LstdFlags|log.Lmicroseconds)
@@ -142,12 +169,13 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 	}
 
-	workspaceStrategy := suite.Spec.Workspace.Strategy
+	templateProfile := suite.Spec.Workspace.TemplateProfile
 	exclude := append([]string{}, suite.Spec.Workspace.Exclude...)
 	ignoreChanges := append([]string{}, suite.Spec.Workspace.IgnoreChanges...)
+	templateFiles := append([]SetupFileSpec{}, suite.Spec.Workspace.Files...)
 	if c.Overrides.Workspace != nil {
-		if c.Overrides.Workspace.Strategy != "" {
-			workspaceStrategy = c.Overrides.Workspace.Strategy
+		if c.Overrides.Workspace.TemplateProfile != "" {
+			templateProfile = c.Overrides.Workspace.TemplateProfile
 		}
 		if len(c.Overrides.Workspace.Exclude) > 0 {
 			exclude = append([]string{}, c.Overrides.Workspace.Exclude...)
@@ -155,9 +183,12 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		if len(c.Overrides.Workspace.IgnoreChanges) > 0 {
 			ignoreChanges = append([]string{}, c.Overrides.Workspace.IgnoreChanges...)
 		}
+		if len(c.Overrides.Workspace.Files) > 0 {
+			templateFiles = append(templateFiles, c.Overrides.Workspace.Files...)
+		}
 	}
-	if workspaceStrategy == "" {
-		workspaceStrategy = "copy"
+	if templateProfile == "" {
+		templateProfile = "default"
 	}
 	if len(exclude) == 0 {
 		exclude = []string{
@@ -169,45 +200,33 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	ignoreChanges = uniqueStrings(append(ignoreChanges, defaultIgnoredGeneratedChanges()...))
 
-	workspace := targetWorkspace
-	if strings.EqualFold(workspaceStrategy, "copy") {
-		workspace = filepath.Join(caseDir, "workspace")
-		_ = os.RemoveAll(workspace)
-		if err := os.MkdirAll(workspace, 0o755); err == nil {
-			if err := CopyWorkspace(targetWorkspace, workspace, exclude); err != nil {
-				return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
-			}
-		}
+	workspace := layout.WorkspaceDir
+	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, templateProfile, suite.Spec.Manifest, exclude, templateFiles); err != nil {
+		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
 	}
 
 	suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
 	suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
-	manifestAbs := suiteManifestAbs
-	if strings.EqualFold(workspaceStrategy, "copy") {
-		manifestAbs = mapTargetPathToWorkspace(suiteManifestAbs, targetWorkspace, workspace)
-	}
+	manifestAbs := mapTargetPathToWorkspace(suiteManifestAbs, targetWorkspace, workspace)
 	manifestAbs = fallbackManifestPath(manifestAbs, workspace)
-	// In in-place mode we keep the manifest as-is (tool authorization depends on
-	// broad tool-level permissions), and enforce safety via the agent file matrix
-	// instead (default-deny with allowlisted paths).
 
 	// Apply fixtures before taking the baseline snapshot so setup changes don't
 	// count as agent-driven modifications.
 	cleanup, err := applySetup(workspace, c.Setup, opts.Sandbox, logger)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
+		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
 	}
 	if cleanup != nil {
 		defer cleanup()
 	}
 	before, err := SnapshotWorkspace(workspace, exclude)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
+		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
 	}
 
 	browserFixtures, err := startBrowserFixtureServer(suite, targetWorkspace, workspace, c)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
+		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
 	}
 	if browserFixtures != nil {
 		defer browserFixtures.Close()
@@ -219,9 +238,9 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 
 	agentName := suite.Spec.AgentName
-	telemetrySink, err := telemetry.NewJSONFileTelemetry(telemetryPath)
+	telemetrySink, err := telemetry.NewJSONFileTelemetry(layout.TelemetryPath)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
+		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
 	}
 	defer telemetrySink.Close()
 	telemetry := telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{telemetrySink}}
@@ -247,13 +266,11 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if recording.Mode != "" && recording.Mode != "off" {
 		tapePath := recording.Tape
 		if tapePath == "" {
-			tapePath = filepath.Join(caseDir, "tape.jsonl")
+			tapePath = layout.TapePath
 		} else {
 			resolved := suite.ResolvePath(tapePath)
 			tapePath = resolveAgainstWorkspace(targetWorkspace, resolved, tapePath)
-			if strings.EqualFold(workspaceStrategy, "copy") {
-				tapePath = mapTargetPathToWorkspace(tapePath, targetWorkspace, workspace)
-			}
+			tapePath = mapTargetPathToWorkspace(tapePath, targetWorkspace, workspace)
 		}
 		wrapped, err := llm.NewTapeModel(lm, tapePath, recording.Mode)
 		if err == nil {
@@ -278,7 +295,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	allowedTools := mergeStrings(defaultAgenttestAllowedTools(), c.Overrides.AllowedTools)
 	agent, state, err := buildAgent(workspace, manifestAbs, agentName, spec, instrumented, telemetry, opts, env, allowedTools, c)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: modelName, Endpoint: endpoint, Workspace: workspace, ArtifactsDir: caseDir, Success: false, Error: err.Error()}
+		return CaseReport{Name: c.Name, Model: modelName, Endpoint: endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
 	}
 	if reason, ok := shouldSkipCase(c.Requires, agent); ok {
 		logger.Printf("case=%s model=%s skipped=true reason=%s", c.Name, modelName, reason)
@@ -287,7 +304,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			Model:        modelName,
 			Endpoint:     endpoint,
 			Workspace:    workspace,
-			ArtifactsDir: caseDir,
+			ArtifactsDir: layout.ArtifactsDir,
 			Skipped:      true,
 			SkipReason:   reason,
 			Success:      true,
@@ -305,6 +322,10 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		Context:     cloneContextMap(c.Context),
 		Metadata:    cloneStringMap(c.Metadata),
 	}
+	if task.Context == nil {
+		task.Context = make(map[string]any)
+	}
+	task.Context["workspace"] = workspace
 	if browserFixtures != nil {
 		browserFixtures.InjectTask(task)
 	}
@@ -334,9 +355,9 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	output := extractOutput(state, res)
 	if data, err := json.MarshalIndent(state.Snapshot(), "", "  "); err == nil {
-		_ = os.WriteFile(filepath.Join(caseDir, "context.snapshot.json"), data, 0o644)
+		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "context.snapshot.json"), data, 0o644)
 	}
-	events, _ := ReadTelemetryJSONL(telemetryPath)
+	events, _ := ReadTelemetryJSONL(layout.TelemetryPath)
 	_, toolCounts := CountToolCalls(events)
 
 	after, snapErr := SnapshotWorkspace(workspace, exclude)
@@ -347,7 +368,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		changed = includeExpectedChangedFiles(changed, before, after, c.Expect.FilesChanged)
 	}
 	if data, err := json.MarshalIndent(changed, "", "  "); err == nil {
-		_ = os.WriteFile(filepath.Join(caseDir, "changed_files.json"), data, 0o644)
+		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "changed_files.json"), data, 0o644)
 	}
 
 	success := execErr == nil && (res == nil || res.Success)
@@ -376,7 +397,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		Model:        modelName,
 		Endpoint:     endpoint,
 		Workspace:    workspace,
-		ArtifactsDir: caseDir,
+		ArtifactsDir: layout.ArtifactsDir,
 		Skipped:      false,
 		SkipReason:   "",
 		Success:      success,
@@ -429,10 +450,8 @@ func extractToolRegistry(agent graph.Agent) *toolsys.ToolRegistry {
 }
 
 func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string {
-	// Many suites will use workspace-relative paths (e.g. relurpify_cfg/agent.manifest.yaml
-	// or relurpify_cfg/agents/x.yaml) even though the suite file lives under
-	// relurpify_cfg/testsuites/. If the
-	// suite-relative resolution doesn't exist, fall back to workspace-relative.
+	// Suites often use workspace-relative manifest and tape paths even though the
+	// suite file itself may live elsewhere under the repository tree.
 	if resolvedBySuite != "" {
 		if _, err := os.Stat(resolvedBySuite); err == nil {
 			return resolvedBySuite
@@ -457,10 +476,9 @@ func fallbackManifestPath(manifestPath, workspace string) string {
 	if workspace == "" {
 		return manifestPath
 	}
+	paths := workspacecfg.New(workspace)
 	candidates := []string{
-		filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml"),
-		filepath.Join(workspace, "relurpify_cfg", "testsuites", "agent.manifest.yaml"),
-		filepath.Join(workspace, "relurpify_cfg", "testsuite", "agent.manifest.yaml"),
+		paths.ManifestFile(),
 	}
 	for _, candidate := range candidates {
 		if _, err := os.Stat(candidate); err == nil {
@@ -599,7 +617,8 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 	registry.UsePermissionManager(agentManifest.Metadata.Name, permMgr)
 	registry.UseAgentSpec(agentManifest.Metadata.Name, agentSpec)
 
-	memory, err := memory.NewHybridMemory(filepath.Join(workspace, "relurpify_cfg", "memory"))
+	paths := workspacecfg.New(workspace)
+	memory, err := memory.NewHybridMemory(paths.MemoryDir())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -691,6 +710,7 @@ func defaultAgenttestAllowedTools() []string {
 func defaultIgnoredGeneratedChanges() []string {
 	return []string{
 		"relurpify_cfg/sessions/**",
+		"relurpify_cfg/memory/ast_index/**",
 		"**/target/**",
 		"**/node_modules/**",
 		"**/__pycache__/**",
@@ -752,8 +772,9 @@ func (t *aliasTool) Permissions() core.ToolPermissions {
 func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
 func instantiateAgentByName(workspace, name string, model core.LanguageModel, tools *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
-	checkpointPath := filepath.Join(workspace, "relurpify_cfg", "sessions", "checkpoints")
-	workflowStatePath := filepath.Join(workspace, "relurpify_cfg", "sessions", "workflow_state.db")
+	paths := workspacecfg.New(workspace)
+	checkpointPath := paths.CheckpointsDir()
+	workflowStatePath := paths.WorkflowStateFile()
 	switch strings.ToLower(name) {
 	case "planner":
 		return &agents.PlannerAgent{Model: model, Tools: tools, Memory: mem}

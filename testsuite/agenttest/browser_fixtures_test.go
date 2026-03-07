@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +19,7 @@ func TestSuiteValidateRejectsEmptyBrowserFixture(t *testing.T) {
 		Metadata:   SuiteMeta{Name: "browser"},
 		Spec: SuiteSpec{
 			AgentName: "coding",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Manifest:  filepath.ToSlash(filepath.Join(workspacecfg.DirName, "agent.manifest.yaml")),
 			Cases: []CaseSpec{{
 				Name:   "browser-case",
 				Prompt: "open the fixture",
