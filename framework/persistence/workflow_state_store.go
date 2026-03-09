@@ -199,6 +199,62 @@ type WorkflowEventRecord struct {
 	CreatedAt  time.Time
 }
 
+// WorkflowProviderSnapshotRecord stores provider-level runtime state captured for a workflow/run.
+type WorkflowProviderSnapshotRecord struct {
+	SnapshotID     string
+	WorkflowID     string
+	RunID          string
+	ProviderID     string
+	Recoverability core.RecoverabilityMode
+	Descriptor     core.ProviderDescriptor
+	Health         core.ProviderHealthSnapshot
+	CapabilityIDs  []string
+	TaskID         string
+	Metadata       map[string]any
+	State          any
+	CapturedAt     time.Time
+}
+
+// WorkflowProviderSessionSnapshotRecord stores session-level runtime state captured for a workflow/run.
+type WorkflowProviderSessionSnapshotRecord struct {
+	SnapshotID string
+	WorkflowID string
+	RunID      string
+	Session    core.ProviderSession
+	Metadata   map[string]any
+	State      any
+	CapturedAt time.Time
+}
+
+// WorkflowDelegationRecord stores the durable state for one delegation.
+type WorkflowDelegationRecord struct {
+	DelegationID   string
+	WorkflowID     string
+	RunID          string
+	TaskID         string
+	State          core.DelegationState
+	TrustClass     core.TrustClass
+	Recoverability core.RecoverabilityMode
+	Background     bool
+	Request        core.DelegationRequest
+	Result         *core.DelegationResult
+	Metadata       map[string]any
+	StartedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// WorkflowDelegationTransitionRecord stores append-only lifecycle changes for a delegation.
+type WorkflowDelegationTransitionRecord struct {
+	TransitionID string
+	DelegationID string
+	WorkflowID   string
+	RunID        string
+	FromState    core.DelegationState
+	ToState      core.DelegationState
+	Metadata     map[string]any
+	CreatedAt    time.Time
+}
+
 // InvalidationRecord captures downstream invalidation caused by reruns.
 type InvalidationRecord struct {
 	InvalidationID    string
@@ -259,6 +315,15 @@ type WorkflowStateStore interface {
 
 	AppendEvent(ctx context.Context, event WorkflowEventRecord) error
 	ListEvents(ctx context.Context, workflowID string, limit int) ([]WorkflowEventRecord, error)
+
+	ReplaceProviderSnapshots(ctx context.Context, workflowID, runID string, snapshots []WorkflowProviderSnapshotRecord) error
+	ListProviderSnapshots(ctx context.Context, workflowID, runID string) ([]WorkflowProviderSnapshotRecord, error)
+	ReplaceProviderSessionSnapshots(ctx context.Context, workflowID, runID string, snapshots []WorkflowProviderSessionSnapshotRecord) error
+	ListProviderSessionSnapshots(ctx context.Context, workflowID, runID string) ([]WorkflowProviderSessionSnapshotRecord, error)
+	UpsertDelegation(ctx context.Context, record WorkflowDelegationRecord) error
+	ListDelegations(ctx context.Context, workflowID, runID string) ([]WorkflowDelegationRecord, error)
+	AppendDelegationTransition(ctx context.Context, record WorkflowDelegationTransitionRecord) error
+	ListDelegationTransitions(ctx context.Context, delegationID string) ([]WorkflowDelegationTransitionRecord, error)
 
 	LoadStepSlice(ctx context.Context, workflowID, stepID string, eventLimit int) (*WorkflowStepSlice, bool, error)
 }

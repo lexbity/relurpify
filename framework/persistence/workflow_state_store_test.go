@@ -43,6 +43,27 @@ func TestSQLiteWorkflowStateStoreCreateAndListWorkflow(t *testing.T) {
 	require.Equal(t, "wf-1", workflows[0].WorkflowID)
 }
 
+func TestSQLiteWorkflowStateStoreRedactsSensitiveMetadata(t *testing.T) {
+	store := newTestWorkflowStateStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	require.NoError(t, store.CreateWorkflow(ctx, WorkflowRecord{
+		WorkflowID:  "wf-redact",
+		TaskID:      "task-redact",
+		TaskType:    core.TaskTypeCodeModification,
+		Instruction: "Implement change",
+		Metadata: map[string]any{
+			"token": "super-secret",
+		},
+	}))
+
+	workflow, ok, err := store.GetWorkflow(ctx, "wf-redact")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "[REDACTED]", workflow.Metadata["token"])
+}
+
 func TestSQLiteWorkflowStateStorePersistsPlanAndSelectsReadySteps(t *testing.T) {
 	store := newTestWorkflowStateStore(t)
 	defer store.Close()
@@ -481,6 +502,160 @@ func TestSQLiteWorkflowStateStoreWorkflowVersionAndRunStatus(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, WorkflowRunStatusCompleted, run.Status)
 	require.NotNil(t, run.FinishedAt)
+}
+
+func TestSQLiteWorkflowStateStoreStoresProviderSnapshots(t *testing.T) {
+	store := newTestWorkflowStateStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	require.NoError(t, store.CreateWorkflow(ctx, WorkflowRecord{
+		WorkflowID:  "wf-provider",
+		TaskID:      "task-provider",
+		TaskType:    core.TaskTypeCodeModification,
+		Instruction: "persist provider state",
+	}))
+	require.NoError(t, store.CreateRun(ctx, WorkflowRunRecord{
+		RunID:      "run-provider",
+		WorkflowID: "wf-provider",
+		Status:     WorkflowRunStatusRunning,
+	}))
+
+	capturedAt := time.Now().UTC()
+	require.NoError(t, store.ReplaceProviderSnapshots(ctx, "wf-provider", "run-provider", []WorkflowProviderSnapshotRecord{
+		{
+			SnapshotID:     "browser@1",
+			WorkflowID:     "wf-provider",
+			RunID:          "run-provider",
+			ProviderID:     "browser",
+			Recoverability: core.RecoverabilityInProcess,
+			Descriptor: core.ProviderDescriptor{
+				ID:                 "browser",
+				Kind:               core.ProviderKindAgentRuntime,
+				TrustBaseline:      core.TrustClassProviderLocalUntrusted,
+				RecoverabilityMode: core.RecoverabilityInProcess,
+				Security:           core.ProviderSecurityProfile{Origin: core.ProviderOriginLocal},
+			},
+			Health:        core.ProviderHealthSnapshot{Status: "ok"},
+			CapabilityIDs: []string{"tool:browser"},
+			Metadata:      map[string]any{"token": "secret"},
+			State:         map[string]any{"backend": "cdp"},
+			CapturedAt:    capturedAt,
+		},
+	}))
+	require.NoError(t, store.ReplaceProviderSessionSnapshots(ctx, "wf-provider", "run-provider", []WorkflowProviderSessionSnapshotRecord{
+		{
+			SnapshotID: "browser:session-1",
+			WorkflowID: "wf-provider",
+			RunID:      "run-provider",
+			Session: core.ProviderSession{
+				ID:             "session-1",
+				ProviderID:     "browser",
+				Recoverability: core.RecoverabilityInProcess,
+				WorkflowID:     "wf-provider",
+				TaskID:         "task-provider",
+			},
+			Metadata:   map[string]any{"api_key": "secret"},
+			State:      map[string]any{"url": "https://example.com"},
+			CapturedAt: capturedAt,
+		},
+	}))
+
+	providers, err := store.ListProviderSnapshots(ctx, "wf-provider", "run-provider")
+	require.NoError(t, err)
+	require.Len(t, providers, 1)
+	require.Equal(t, "browser", providers[0].ProviderID)
+	require.Equal(t, "[REDACTED]", providers[0].Metadata["token"])
+	require.Equal(t, "cdp", providers[0].State.(map[string]any)["backend"])
+
+	sessions, err := store.ListProviderSessionSnapshots(ctx, "wf-provider", "run-provider")
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	require.Equal(t, "session-1", sessions[0].Session.ID)
+	require.Equal(t, "[REDACTED]", sessions[0].Metadata["api_key"])
+	require.Equal(t, "https://example.com", sessions[0].State.(map[string]any)["url"])
+}
+
+func TestSQLiteWorkflowStateStoreStoresDelegationsAndTransitions(t *testing.T) {
+	store := newTestWorkflowStateStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateWorkflow(ctx, WorkflowRecord{
+		WorkflowID:  "wf-delegation",
+		TaskID:      "task-delegation",
+		TaskType:    core.TaskTypeCodeModification,
+		Instruction: "persist delegation state",
+	}))
+	require.NoError(t, store.CreateRun(ctx, WorkflowRunRecord{
+		RunID:      "run-delegation",
+		WorkflowID: "wf-delegation",
+		Status:     WorkflowRunStatusRunning,
+	}))
+
+	result := &core.DelegationResult{
+		DelegationID: "delegation-1",
+		State:        core.DelegationStateSucceeded,
+		Success:      true,
+		Data:         map[string]any{"summary": "done"},
+	}
+	require.NoError(t, store.UpsertDelegation(ctx, WorkflowDelegationRecord{
+		DelegationID:   "delegation-1",
+		WorkflowID:     "wf-delegation",
+		RunID:          "run-delegation",
+		TaskID:         "task-delegation",
+		State:          core.DelegationStateSucceeded,
+		TrustClass:     core.TrustClassRemoteApproved,
+		Recoverability: core.RecoverabilityPersistedRestore,
+		Background:     true,
+		Request: core.DelegationRequest{
+			ID:                 "delegation-1",
+			WorkflowID:         "wf-delegation",
+			TaskID:             "task-delegation",
+			TargetCapabilityID: "agent:reviewer",
+			TaskType:           "review",
+			Instruction:        "Review changes",
+		},
+		Result:    result,
+		Metadata:  map[string]any{"token": "secret"},
+		StartedAt: now.Add(-time.Minute),
+		UpdatedAt: now,
+	}))
+	require.NoError(t, store.AppendDelegationTransition(ctx, WorkflowDelegationTransitionRecord{
+		TransitionID: "delegation-1:running",
+		DelegationID: "delegation-1",
+		WorkflowID:   "wf-delegation",
+		RunID:        "run-delegation",
+		FromState:    core.DelegationStatePending,
+		ToState:      core.DelegationStateRunning,
+		CreatedAt:    now.Add(-time.Minute),
+	}))
+	require.NoError(t, store.AppendDelegationTransition(ctx, WorkflowDelegationTransitionRecord{
+		TransitionID: "delegation-1:succeeded",
+		DelegationID: "delegation-1",
+		WorkflowID:   "wf-delegation",
+		RunID:        "run-delegation",
+		FromState:    core.DelegationStateRunning,
+		ToState:      core.DelegationStateSucceeded,
+		Metadata:     map[string]any{"summary": "done"},
+		CreatedAt:    now,
+	}))
+
+	records, err := store.ListDelegations(ctx, "wf-delegation", "run-delegation")
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, "delegation-1", records[0].DelegationID)
+	require.True(t, records[0].Background)
+	require.Equal(t, "[REDACTED]", records[0].Metadata["token"])
+	require.NotNil(t, records[0].Result)
+	require.Equal(t, "done", records[0].Result.Data["summary"])
+
+	transitions, err := store.ListDelegationTransitions(ctx, "delegation-1")
+	require.NoError(t, err)
+	require.Len(t, transitions, 2)
+	require.Equal(t, core.DelegationStateRunning, transitions[0].ToState)
+	require.Equal(t, core.DelegationStateSucceeded, transitions[1].ToState)
 }
 
 func newTestWorkflowStateStore(t *testing.T) *SQLiteWorkflowStateStore {

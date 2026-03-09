@@ -17,7 +17,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const workflowStateSchemaVersion = 3
+const workflowStateSchemaVersion = 5
 
 // SQLiteWorkflowStateStore persists workflow state in SQLite.
 type SQLiteWorkflowStateStore struct {
@@ -210,6 +210,61 @@ func (s *SQLiteWorkflowStateStore) init() error {
 			created_at TEXT NOT NULL,
 			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
 		);`,
+		`CREATE TABLE IF NOT EXISTS workflow_provider_snapshots (
+			snapshot_id TEXT PRIMARY KEY,
+			workflow_id TEXT NOT NULL,
+			run_id TEXT NOT NULL DEFAULT '',
+			provider_id TEXT NOT NULL,
+			recoverability TEXT NOT NULL DEFAULT '',
+			descriptor_json TEXT NOT NULL DEFAULT '{}',
+			health_json TEXT NOT NULL DEFAULT '{}',
+			capability_ids_json TEXT NOT NULL DEFAULT '[]',
+			task_id TEXT NOT NULL DEFAULT '',
+			metadata_json TEXT NOT NULL DEFAULT '{}',
+			state_json TEXT NOT NULL DEFAULT 'null',
+			captured_at TEXT NOT NULL,
+			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS workflow_provider_session_snapshots (
+			snapshot_id TEXT PRIMARY KEY,
+			workflow_id TEXT NOT NULL,
+			run_id TEXT NOT NULL DEFAULT '',
+			session_id TEXT NOT NULL,
+			provider_id TEXT NOT NULL,
+			session_json TEXT NOT NULL DEFAULT '{}',
+			metadata_json TEXT NOT NULL DEFAULT '{}',
+			state_json TEXT NOT NULL DEFAULT 'null',
+			captured_at TEXT NOT NULL,
+			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS workflow_delegations (
+			delegation_id TEXT PRIMARY KEY,
+			workflow_id TEXT NOT NULL,
+			run_id TEXT NOT NULL DEFAULT '',
+			task_id TEXT NOT NULL DEFAULT '',
+			state TEXT NOT NULL,
+			trust_class TEXT NOT NULL DEFAULT '',
+			recoverability TEXT NOT NULL DEFAULT '',
+			background INTEGER NOT NULL DEFAULT 0,
+			request_json TEXT NOT NULL DEFAULT '{}',
+			result_json TEXT NOT NULL DEFAULT 'null',
+			metadata_json TEXT NOT NULL DEFAULT '{}',
+			started_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS workflow_delegation_transitions (
+			transition_id TEXT PRIMARY KEY,
+			delegation_id TEXT NOT NULL,
+			workflow_id TEXT NOT NULL,
+			run_id TEXT NOT NULL DEFAULT '',
+			from_state TEXT NOT NULL DEFAULT '',
+			to_state TEXT NOT NULL,
+			metadata_json TEXT NOT NULL DEFAULT '{}',
+			created_at TEXT NOT NULL,
+			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE,
+			FOREIGN KEY(delegation_id) REFERENCES workflow_delegations(delegation_id) ON DELETE CASCADE
+		);`,
 		`CREATE TABLE IF NOT EXISTS workflow_invalidation (
 			invalidation_id TEXT PRIMARY KEY,
 			workflow_id TEXT NOT NULL,
@@ -226,6 +281,10 @@ func (s *SQLiteWorkflowStateStore) init() error {
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_scope ON workflow_stage_results(workflow_id, run_id, stage_index ASC, retry_attempt ASC, finished_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_valid ON workflow_stage_results(workflow_id, run_id, stage_name, validation_ok, retry_attempt DESC, finished_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_events_workflow_created ON workflow_events(workflow_id, created_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_provider_snapshots_scope ON workflow_provider_snapshots(workflow_id, run_id, captured_at ASC);`,
+		`CREATE INDEX IF NOT EXISTS idx_provider_session_snapshots_scope ON workflow_provider_session_snapshots(workflow_id, run_id, captured_at ASC);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_delegations_scope ON workflow_delegations(workflow_id, run_id, updated_at ASC);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_delegation_transitions_scope ON workflow_delegation_transitions(delegation_id, created_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_knowledge_workflow_kind ON workflow_knowledge(workflow_id, kind, created_at DESC);`,
 	}
 	for _, stmt := range stmts {
@@ -969,6 +1028,224 @@ func (s *SQLiteWorkflowStateStore) ListEvents(ctx context.Context, workflowID st
 	return out, rows.Err()
 }
 
+func (s *SQLiteWorkflowStateStore) ReplaceProviderSnapshots(ctx context.Context, workflowID, runID string, snapshots []WorkflowProviderSnapshotRecord) error {
+	if strings.TrimSpace(workflowID) == "" {
+		return errors.New("workflow id required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM workflow_provider_snapshots WHERE workflow_id = ? AND run_id = ?`, workflowID, runID); err != nil {
+		return err
+	}
+	for _, snapshot := range snapshots {
+		if strings.TrimSpace(snapshot.SnapshotID) == "" || strings.TrimSpace(snapshot.ProviderID) == "" {
+			return errors.New("provider snapshot requires ids")
+		}
+		snapshot.CapturedAt = ensureTime(snapshot.CapturedAt)
+		if snapshot.Descriptor.ID == "" {
+			snapshot.Descriptor.ID = snapshot.ProviderID
+		}
+		if snapshot.Descriptor.RecoverabilityMode == "" {
+			snapshot.Descriptor.RecoverabilityMode = snapshot.Recoverability
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO workflow_provider_snapshots (snapshot_id, workflow_id, run_id, provider_id, recoverability, descriptor_json, health_json, capability_ids_json, task_id, metadata_json, state_json, captured_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			snapshot.SnapshotID,
+			workflowID,
+			runID,
+			snapshot.ProviderID,
+			string(snapshot.Recoverability),
+			mustJSON(snapshot.Descriptor),
+			mustJSON(snapshot.Health),
+			mustJSON(snapshot.CapabilityIDs),
+			snapshot.TaskID,
+			mustJSON(snapshot.Metadata),
+			mustJSONAny(snapshot.State),
+			timeString(snapshot.CapturedAt),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *SQLiteWorkflowStateStore) ListProviderSnapshots(ctx context.Context, workflowID, runID string) ([]WorkflowProviderSnapshotRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT snapshot_id, workflow_id, run_id, provider_id, recoverability, descriptor_json, health_json, capability_ids_json, task_id, metadata_json, state_json, captured_at
+		FROM workflow_provider_snapshots WHERE workflow_id = ? AND run_id = ? ORDER BY captured_at ASC, snapshot_id ASC`, workflowID, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []WorkflowProviderSnapshotRecord
+	for rows.Next() {
+		record, err := scanProviderSnapshotRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) ReplaceProviderSessionSnapshots(ctx context.Context, workflowID, runID string, snapshots []WorkflowProviderSessionSnapshotRecord) error {
+	if strings.TrimSpace(workflowID) == "" {
+		return errors.New("workflow id required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM workflow_provider_session_snapshots WHERE workflow_id = ? AND run_id = ?`, workflowID, runID); err != nil {
+		return err
+	}
+	for _, snapshot := range snapshots {
+		if strings.TrimSpace(snapshot.SnapshotID) == "" || strings.TrimSpace(snapshot.Session.ID) == "" || strings.TrimSpace(snapshot.Session.ProviderID) == "" {
+			return errors.New("provider session snapshot requires ids")
+		}
+		snapshot.CapturedAt = ensureTime(snapshot.CapturedAt)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO workflow_provider_session_snapshots (snapshot_id, workflow_id, run_id, session_id, provider_id, session_json, metadata_json, state_json, captured_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			snapshot.SnapshotID,
+			workflowID,
+			runID,
+			snapshot.Session.ID,
+			snapshot.Session.ProviderID,
+			mustJSON(snapshot.Session),
+			mustJSON(snapshot.Metadata),
+			mustJSONAny(snapshot.State),
+			timeString(snapshot.CapturedAt),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *SQLiteWorkflowStateStore) ListProviderSessionSnapshots(ctx context.Context, workflowID, runID string) ([]WorkflowProviderSessionSnapshotRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT snapshot_id, workflow_id, run_id, session_json, metadata_json, state_json, captured_at
+		FROM workflow_provider_session_snapshots WHERE workflow_id = ? AND run_id = ? ORDER BY captured_at ASC, snapshot_id ASC`, workflowID, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []WorkflowProviderSessionSnapshotRecord
+	for rows.Next() {
+		record, err := scanProviderSessionSnapshotRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) UpsertDelegation(ctx context.Context, record WorkflowDelegationRecord) error {
+	if strings.TrimSpace(record.DelegationID) == "" || strings.TrimSpace(record.WorkflowID) == "" {
+		return errors.New("delegation record requires ids")
+	}
+	record.StartedAt = ensureTime(record.StartedAt)
+	record.UpdatedAt = ensureTime(record.UpdatedAt)
+	if strings.TrimSpace(record.TaskID) == "" {
+		record.TaskID = strings.TrimSpace(record.Request.TaskID)
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO workflow_delegations (delegation_id, workflow_id, run_id, task_id, state, trust_class, recoverability, background, request_json, result_json, metadata_json, started_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(delegation_id) DO UPDATE SET
+			workflow_id = excluded.workflow_id,
+			run_id = excluded.run_id,
+			task_id = excluded.task_id,
+			state = excluded.state,
+			trust_class = excluded.trust_class,
+			recoverability = excluded.recoverability,
+			background = excluded.background,
+			request_json = excluded.request_json,
+			result_json = excluded.result_json,
+			metadata_json = excluded.metadata_json,
+			started_at = excluded.started_at,
+			updated_at = excluded.updated_at`,
+		record.DelegationID,
+		record.WorkflowID,
+		record.RunID,
+		record.TaskID,
+		string(record.State),
+		string(record.TrustClass),
+		string(record.Recoverability),
+		boolInt(record.Background),
+		mustJSONAny(record.Request),
+		mustJSONAny(record.Result),
+		mustJSON(record.Metadata),
+		timeString(record.StartedAt),
+		timeString(record.UpdatedAt),
+	)
+	return err
+}
+
+func (s *SQLiteWorkflowStateStore) ListDelegations(ctx context.Context, workflowID, runID string) ([]WorkflowDelegationRecord, error) {
+	query := `SELECT delegation_id, workflow_id, run_id, task_id, state, trust_class, recoverability, background, request_json, result_json, metadata_json, started_at, updated_at
+		FROM workflow_delegations WHERE workflow_id = ?`
+	args := []any{workflowID}
+	if strings.TrimSpace(runID) != "" {
+		query += ` AND run_id = ?`
+		args = append(args, runID)
+	}
+	query += ` ORDER BY updated_at ASC, delegation_id ASC`
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []WorkflowDelegationRecord
+	for rows.Next() {
+		record, err := scanDelegationRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) AppendDelegationTransition(ctx context.Context, record WorkflowDelegationTransitionRecord) error {
+	if strings.TrimSpace(record.TransitionID) == "" || strings.TrimSpace(record.DelegationID) == "" || strings.TrimSpace(record.WorkflowID) == "" {
+		return errors.New("delegation transition requires ids")
+	}
+	record.CreatedAt = ensureTime(record.CreatedAt)
+	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO workflow_delegation_transitions (transition_id, delegation_id, workflow_id, run_id, from_state, to_state, metadata_json, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		record.TransitionID,
+		record.DelegationID,
+		record.WorkflowID,
+		record.RunID,
+		string(record.FromState),
+		string(record.ToState),
+		mustJSON(record.Metadata),
+		timeString(record.CreatedAt),
+	)
+	return err
+}
+
+func (s *SQLiteWorkflowStateStore) ListDelegationTransitions(ctx context.Context, delegationID string) ([]WorkflowDelegationTransitionRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT transition_id, delegation_id, workflow_id, run_id, from_state, to_state, metadata_json, created_at
+		FROM workflow_delegation_transitions WHERE delegation_id = ? ORDER BY created_at ASC, transition_id ASC`, delegationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []WorkflowDelegationTransitionRecord
+	for rows.Next() {
+		record, err := scanDelegationTransitionRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
 func (s *SQLiteWorkflowStateStore) LoadStepSlice(ctx context.Context, workflowID, stepID string, eventLimit int) (*WorkflowStepSlice, bool, error) {
 	workflow, ok, err := s.GetWorkflow(ctx, workflowID)
 	if err != nil || !ok {
@@ -1245,11 +1522,132 @@ func scanEventRows(rows *sql.Rows) (*WorkflowEventRecord, error) {
 	return &record, nil
 }
 
+func scanProviderSnapshotRows(rows *sql.Rows) (*WorkflowProviderSnapshotRecord, error) {
+	var record WorkflowProviderSnapshotRecord
+	var descriptorJSON string
+	var healthJSON string
+	var capabilityIDsJSON string
+	var metadataJSON string
+	var stateJSON string
+	var capturedAt string
+	err := rows.Scan(
+		&record.SnapshotID,
+		&record.WorkflowID,
+		&record.RunID,
+		&record.ProviderID,
+		&record.Recoverability,
+		&descriptorJSON,
+		&healthJSON,
+		&capabilityIDsJSON,
+		&record.TaskID,
+		&metadataJSON,
+		&stateJSON,
+		&capturedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal([]byte(descriptorJSON), &record.Descriptor)
+	_ = json.Unmarshal([]byte(healthJSON), &record.Health)
+	record.CapabilityIDs = decodeJSONStringSlice(capabilityIDsJSON)
+	record.Metadata = decodeJSONMap(metadataJSON)
+	record.State = decodeJSONAny(stateJSON)
+	record.CapturedAt = parseTime(capturedAt)
+	return &record, nil
+}
+
+func scanProviderSessionSnapshotRows(rows *sql.Rows) (*WorkflowProviderSessionSnapshotRecord, error) {
+	var record WorkflowProviderSessionSnapshotRecord
+	var sessionJSON string
+	var metadataJSON string
+	var stateJSON string
+	var capturedAt string
+	err := rows.Scan(
+		&record.SnapshotID,
+		&record.WorkflowID,
+		&record.RunID,
+		&sessionJSON,
+		&metadataJSON,
+		&stateJSON,
+		&capturedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal([]byte(sessionJSON), &record.Session)
+	record.Metadata = decodeJSONMap(metadataJSON)
+	record.State = decodeJSONAny(stateJSON)
+	record.CapturedAt = parseTime(capturedAt)
+	return &record, nil
+}
+
+func scanDelegationRows(rows *sql.Rows) (*WorkflowDelegationRecord, error) {
+	var record WorkflowDelegationRecord
+	var background int
+	var requestJSON string
+	var resultJSON string
+	var metadataJSON string
+	var startedAt string
+	var updatedAt string
+	err := rows.Scan(
+		&record.DelegationID,
+		&record.WorkflowID,
+		&record.RunID,
+		&record.TaskID,
+		&record.State,
+		&record.TrustClass,
+		&record.Recoverability,
+		&background,
+		&requestJSON,
+		&resultJSON,
+		&metadataJSON,
+		&startedAt,
+		&updatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	record.Background = background == 1
+	_ = json.Unmarshal([]byte(requestJSON), &record.Request)
+	if strings.TrimSpace(resultJSON) != "" && strings.TrimSpace(resultJSON) != "null" {
+		var result core.DelegationResult
+		if err := json.Unmarshal([]byte(resultJSON), &result); err == nil {
+			record.Result = &result
+		}
+	}
+	record.Metadata = decodeJSONMap(metadataJSON)
+	record.StartedAt = parseTime(startedAt)
+	record.UpdatedAt = parseTime(updatedAt)
+	return &record, nil
+}
+
+func scanDelegationTransitionRows(rows *sql.Rows) (*WorkflowDelegationTransitionRecord, error) {
+	var record WorkflowDelegationTransitionRecord
+	var metadataJSON string
+	var createdAt string
+	err := rows.Scan(
+		&record.TransitionID,
+		&record.DelegationID,
+		&record.WorkflowID,
+		&record.RunID,
+		&record.FromState,
+		&record.ToState,
+		&metadataJSON,
+		&createdAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	record.Metadata = decodeJSONMap(metadataJSON)
+	record.CreatedAt = parseTime(createdAt)
+	return &record, nil
+}
+
 func mustJSON(value any) string {
 	if value == nil {
 		return "{}"
 	}
-	data, err := json.Marshal(value)
+	data, err := json.Marshal(core.RedactAny(value))
 	if err != nil {
 		return "{}"
 	}
@@ -1260,7 +1658,7 @@ func mustJSONAny(value any) string {
 	if value == nil {
 		return "null"
 	}
-	data, err := json.Marshal(value)
+	data, err := json.Marshal(core.RedactAny(value))
 	if err != nil {
 		return "null"
 	}
@@ -1289,6 +1687,17 @@ func decodeJSONAny(value string) any {
 	return out
 }
 
+func decodeJSONStringSlice(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(value), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
 func ensureTime(value time.Time) time.Time {
 	if value.IsZero() {
 		return time.Now().UTC()
@@ -1300,6 +1709,13 @@ func timeString(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
 }
 
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
 func parseTime(value string) time.Time {
 	if value == "" {
 		return time.Time{}
@@ -1309,13 +1725,6 @@ func parseTime(value string) time.Time {
 		return time.Time{}
 	}
 	return t
-}
-
-func boolInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }
 
 func planHash(plan core.Plan) string {

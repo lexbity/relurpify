@@ -58,7 +58,7 @@ func (s *FileMessageStore) Append(ctx context.Context, workflowID string, intera
 	if err != nil {
 		return err
 	}
-	existing = append(existing, interactions...)
+	existing = append(existing, sanitizeInteractionsForPersistence(interactions)...)
 	data, err := json.MarshalIndent(existing, "", "  ")
 	if err != nil {
 		return err
@@ -106,4 +106,17 @@ func (s *FileMessageStore) read(workflowID string) ([]core.Interaction, error) {
 		return nil, err
 	}
 	return interactions, nil
+}
+
+func sanitizeInteractionsForPersistence(interactions []core.Interaction) []core.Interaction {
+	if len(interactions) == 0 {
+		return nil
+	}
+	out := make([]core.Interaction, 0, len(interactions))
+	for _, interaction := range interactions {
+		clone := interaction
+		clone.Metadata = core.RedactMetadataMap(clone.Metadata)
+		out = append(out, clone)
+	}
+	return out
 }

@@ -111,7 +111,14 @@ func (s *FileWorkflowStore) Save(ctx context.Context, snapshot *WorkflowSnapshot
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snapshot.UpdatedAt = time.Now().UTC()
-	s.cache[snapshot.ID] = *snapshot
+	clone := *snapshot
+	clone.Metadata = core.RedactMetadataMap(clone.Metadata)
+	if clone.Task != nil {
+		taskClone := *clone.Task
+		taskClone.Context = decodeRedactedMap(core.RedactAny(taskClone.Context))
+		clone.Task = &taskClone
+	}
+	s.cache[snapshot.ID] = clone
 	return s.persist()
 }
 
@@ -158,4 +165,11 @@ func (s *FileWorkflowStore) Delete(ctx context.Context, id string) error {
 	defer s.mu.Unlock()
 	delete(s.cache, id)
 	return s.persist()
+}
+
+func decodeRedactedMap(value any) map[string]any {
+	if typed, ok := value.(map[string]interface{}); ok {
+		return typed
+	}
+	return nil
 }
