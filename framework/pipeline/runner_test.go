@@ -453,6 +453,41 @@ func TestRunnerExecuteUsesToolResultsForFinalResponse(t *testing.T) {
 	}
 }
 
+func TestRunnerExecuteRetriesToolRequiredStageWithForcedToolPrompt(t *testing.T) {
+	model := &stubModel{
+		toolResponses: []*core.LLMResponse{
+			{Text: `{"status":"pass","checks":[{"name":"cli_cargo","status":"pass"}]}`},
+			{ToolCalls: []core.ToolCall{{Name: "cli_cargo"}}},
+		},
+		responses: []*core.LLMResponse{{Text: `{"status":"pass","summary":"verified"}`}},
+	}
+	stage := &toolStage{
+		runnerStage: makeRunnerStage("verify", "in", "out", map[string]any{"status": "pass"}),
+		allowedTools: []string{
+			"cli_cargo",
+		},
+		requireTool: true,
+	}
+	stage.contract.Metadata.AllowTools = true
+	tool := &stubTool{name: "cli_cargo", available: true}
+
+	runner := &Runner{Options: RunnerOptions{
+		Model:             model,
+		Tools:             []core.Tool{tool},
+		EnableToolCalling: true,
+	}}
+	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-tool-retry"}, core.NewContext(), []Stage{stage})
+	if err != nil {
+		t.Fatalf("expected success after forced tool prompt, got %v", err)
+	}
+	if len(model.toolPrompts) < 2 {
+		t.Fatalf("expected retry tool prompt, got %d prompts", len(model.toolPrompts))
+	}
+	if !strings.Contains(model.toolPrompts[1], "Return a tool call now, not the final report.") {
+		t.Fatalf("expected forced tool-call retry prompt, got %q", model.toolPrompts[1])
+	}
+}
+
 func TestRunnerExecuteParsesToolCallsFromTextResponse(t *testing.T) {
 	model := &stubModel{
 		toolResponses: []*core.LLMResponse{{

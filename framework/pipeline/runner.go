@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	frameworktools "github.com/lexcodex/relurpify/framework/tools"
 )
 
 // RunnerOptions configures how a pipeline executes stages.
@@ -223,10 +223,10 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *core.Task, sta
 	}
 	calls := resp.ToolCalls
 	if len(calls) == 0 {
-		calls = toolsys.ParseToolCallsFromText(resp.Text)
+		calls = frameworktools.ParseToolCallsFromText(resp.Text)
 	}
 	if len(calls) == 0 && requiresToolExecution(stage, task, state, stageTools) {
-		retryPrompt := prompt + "\n\nYou must call at least one allowed tool that verifies the task before you return the final JSON."
+		retryPrompt := prompt + "\n\nYou must call at least one allowed verification tool before returning the final JSON. Do not summarize hypothetical results. Return a tool call now, not the final report."
 		resp, err = r.Options.Model.ChatWithTools(ctx, []core.Message{
 			{
 				Role:    "user",
@@ -240,7 +240,7 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *core.Task, sta
 		}
 		calls = resp.ToolCalls
 		if len(calls) == 0 {
-			calls = toolsys.ParseToolCallsFromText(resp.Text)
+			calls = frameworktools.ParseToolCallsFromText(resp.Text)
 		}
 	}
 	if len(calls) == 0 {
