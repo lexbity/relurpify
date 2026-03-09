@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,12 +22,34 @@ import (
 
 const contextFileMaxBytes = 8000
 
-// ToolInfo describes a registered tool and its current policy for the Tools pane.
+// ToolInfo describes a registered local tool and its current policy for the Tools pane.
 type ToolInfo struct {
-	Name      string
-	Tags      []string
-	Policy    fruntime.AgentPermissionLevel // per-tool override; "" means no override
-	HasPolicy bool
+	Name          string
+	RuntimeFamily string
+	Scope         string
+	Tags          []string
+	Labels        []string
+	RiskClasses   []string
+	EffectClasses []string
+	TrustClass    string
+	Exposure      string
+	Policy        fruntime.AgentPermissionLevel // per-tool override; "" means no override
+	HasPolicy     bool
+}
+
+// CapabilityInfo exposes non-tool capability metadata to inspectable UI surfaces.
+type CapabilityInfo struct {
+	ID            string
+	Kind          string
+	Name          string
+	Description   string
+	Category      string
+	RuntimeFamily string
+	TrustClass    string
+	ProviderID    string
+	Scope         string
+	Exposure      string
+	Callable      bool
 }
 
 // RuntimeAdapter decouples the TUI from the concrete runtime implementation.
@@ -46,16 +69,32 @@ type RuntimeAdapter interface {
 	// SaveToolPolicy persists a per-tool execution policy to the agent manifest.
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
 	SaveToolPolicy(toolName string, level fruntime.AgentPermissionLevel) error
-	// ListToolsInfo returns the current tool list with per-tool policy overrides.
+	// ListToolsInfo returns the current local-tool list with per-tool policy overrides.
 	ListToolsInfo() []ToolInfo
-	// GetTagPolicies returns the current tag-based permission policies.
-	GetTagPolicies() map[string]fruntime.AgentPermissionLevel
+	// ListCapabilities returns all registered capabilities with runtime-family metadata.
+	ListCapabilities() []CapabilityInfo
+	ListPrompts() []PromptInfo
+	ListResources(workflowRefs []string) []ResourceInfo
+	// ListLiveProviders returns current runtime provider snapshots.
+	ListLiveProviders() []LiveProviderInfo
+	// ListLiveSessions returns current runtime provider-session snapshots.
+	ListLiveSessions() []LiveProviderSessionInfo
+	// ListApprovals returns current pending HITL approvals using the unified approval model.
+	ListApprovals() []ApprovalInfo
+	GetCapabilityDetail(id string) (*CapabilityDetail, error)
+	GetPromptDetail(id string) (*PromptDetail, error)
+	GetResourceDetail(idOrURI string) (*ResourceDetail, error)
+	GetLiveProviderDetail(providerID string) (*LiveProviderDetail, error)
+	GetLiveSessionDetail(sessionID string) (*LiveProviderSessionDetail, error)
+	GetApprovalDetail(id string) (*ApprovalDetail, error)
+	// GetClassPolicies returns the current capability-class permission policies.
+	GetClassPolicies() map[string]fruntime.AgentPermissionLevel
 	// SetToolPolicyLive updates a per-tool execution policy in-memory (current session only).
 	// Pass level="" to clear the override.
 	SetToolPolicyLive(name string, level fruntime.AgentPermissionLevel)
-	// SetTagPolicyLive updates a tag permission policy in-memory (current session only).
-	// Pass level="" to clear the tag policy.
-	SetTagPolicyLive(tag string, level fruntime.AgentPermissionLevel)
+	// SetClassPolicyLive updates a class permission policy in-memory (current session only).
+	// Pass level="" to clear the class policy.
+	SetClassPolicyLive(class string, level fruntime.AgentPermissionLevel)
 	ListWorkflows(limit int) ([]WorkflowInfo, error)
 	GetWorkflow(workflowID string) (*WorkflowDetails, error)
 	CancelWorkflow(workflowID string) error
@@ -350,6 +389,14 @@ func (r *runtimeAdapter) GetWorkflow(workflowID string) (*WorkflowDetails, error
 	if err != nil {
 		return nil, err
 	}
+	delegations, err := store.ListDelegations(context.Background(), workflowID, "")
+	if err != nil {
+		return nil, err
+	}
+	workflowArtifacts, err := store.ListWorkflowArtifacts(context.Background(), workflowID, "")
+	if err != nil {
+		return nil, err
+	}
 	info := &WorkflowDetails{
 		Workflow: WorkflowInfo{
 			WorkflowID:   workflow.WorkflowID,
@@ -359,11 +406,14 @@ func (r *runtimeAdapter) GetWorkflow(workflowID string) (*WorkflowDetails, error
 			Instruction:  workflow.Instruction,
 			UpdatedAt:    workflow.UpdatedAt,
 		},
-		Steps:     make([]WorkflowStepInfo, 0, len(steps)),
-		Events:    make([]WorkflowEventInfo, 0, len(events)),
-		Facts:     make([]WorkflowKnowledgeInfo, 0, len(facts)),
-		Issues:    make([]WorkflowKnowledgeInfo, 0, len(issues)),
-		Decisions: make([]WorkflowKnowledgeInfo, 0, len(decisions)),
+		Steps:             make([]WorkflowStepInfo, 0, len(steps)),
+		Events:            make([]WorkflowEventInfo, 0, len(events)),
+		Facts:             make([]WorkflowKnowledgeInfo, 0, len(facts)),
+		Issues:            make([]WorkflowKnowledgeInfo, 0, len(issues)),
+		Decisions:         make([]WorkflowKnowledgeInfo, 0, len(decisions)),
+		Delegations:       make([]WorkflowDelegationInfo, 0, len(delegations)),
+		WorkflowArtifacts: make([]WorkflowArtifactInfo, 0, len(workflowArtifacts)),
+		ResourceDetails:   []WorkflowLinkedResourceInfo{},
 	}
 	for _, step := range steps {
 		info.Steps = append(info.Steps, WorkflowStepInfo{
@@ -385,6 +435,104 @@ func (r *runtimeAdapter) GetWorkflow(workflowID string) (*WorkflowDetails, error
 	info.Facts = append(info.Facts, convertKnowledgeInfos(facts)...)
 	info.Issues = append(info.Issues, convertKnowledgeInfos(issues)...)
 	info.Decisions = append(info.Decisions, convertKnowledgeInfos(decisions)...)
+	resourceRefs := map[string]struct{}{}
+	runIDs := map[string]struct{}{}
+	for _, delegation := range delegations {
+		if strings.TrimSpace(delegation.RunID) != "" {
+			runIDs[delegation.RunID] = struct{}{}
+		}
+		insertionAction := ""
+		if delegation.Result != nil {
+			insertionAction = string(delegation.Result.Insertion.Action)
+			for _, ref := range delegation.Result.ResourceRefs {
+				if strings.TrimSpace(ref) != "" {
+					resourceRefs[ref] = struct{}{}
+				}
+			}
+		}
+		for _, ref := range delegation.Request.ResourceRefs {
+			if strings.TrimSpace(ref) != "" {
+				resourceRefs[ref] = struct{}{}
+			}
+		}
+		info.Delegations = append(info.Delegations, WorkflowDelegationInfo{
+			DelegationID:       delegation.DelegationID,
+			RunID:              delegation.RunID,
+			TaskID:             delegation.TaskID,
+			State:              string(delegation.State),
+			TargetCapabilityID: delegation.Request.TargetCapabilityID,
+			TargetProviderID:   delegation.Request.TargetProviderID,
+			TargetSessionID:    delegation.Request.TargetSessionID,
+			TrustClass:         string(delegation.TrustClass),
+			Recoverability:     string(delegation.Recoverability),
+			Background:         delegation.Background,
+			StartedAt:          delegation.StartedAt,
+			UpdatedAt:          delegation.UpdatedAt,
+			InsertionAction:    insertionAction,
+			ResourceRefs:       append([]string(nil), delegation.Request.ResourceRefs...),
+		})
+		transitions, err := store.ListDelegationTransitions(context.Background(), delegation.DelegationID)
+		if err != nil {
+			return nil, err
+		}
+		for _, transition := range transitions {
+			info.Transitions = append(info.Transitions, WorkflowDelegationTransitionInfo{
+				DelegationID: transition.DelegationID,
+				TransitionID: transition.TransitionID,
+				RunID:        transition.RunID,
+				FromState:    string(transition.FromState),
+				ToState:      string(transition.ToState),
+				CreatedAt:    transition.CreatedAt,
+			})
+		}
+	}
+	for _, artifact := range workflowArtifacts {
+		if strings.TrimSpace(artifact.RunID) != "" {
+			runIDs[artifact.RunID] = struct{}{}
+		}
+		info.WorkflowArtifacts = append(info.WorkflowArtifacts, WorkflowArtifactInfo{
+			ArtifactID:  artifact.ArtifactID,
+			RunID:       artifact.RunID,
+			Kind:        artifact.Kind,
+			ContentType: artifact.ContentType,
+			SummaryText: artifact.SummaryText,
+			CreatedAt:   artifact.CreatedAt,
+		})
+	}
+	for _, runID := range sortedStringKeys(runIDs) {
+		providers, err := store.ListProviderSnapshots(context.Background(), workflowID, runID)
+		if err != nil {
+			return nil, err
+		}
+		for _, provider := range providers {
+			info.Providers = append(info.Providers, WorkflowProviderInfo{
+				SnapshotID:     provider.SnapshotID,
+				RunID:          provider.RunID,
+				ProviderID:     provider.ProviderID,
+				Kind:           string(provider.Descriptor.Kind),
+				Recoverability: string(provider.Recoverability),
+				Health:         provider.Health.Status,
+				CapturedAt:     provider.CapturedAt,
+			})
+		}
+		sessions, err := store.ListProviderSessionSnapshots(context.Background(), workflowID, runID)
+		if err != nil {
+			return nil, err
+		}
+		for _, session := range sessions {
+			info.ProviderSessions = append(info.ProviderSessions, WorkflowProviderSessionInfo{
+				SnapshotID:     session.SnapshotID,
+				RunID:          session.RunID,
+				SessionID:      session.Session.ID,
+				ProviderID:     session.Session.ProviderID,
+				Health:         session.Session.Health,
+				Recoverability: string(session.Session.Recoverability),
+				CapturedAt:     session.CapturedAt,
+			})
+		}
+	}
+	info.LinkedResources = sortedStringKeys(resourceRefs)
+	info.ResourceDetails = describeWorkflowLinkedResources(info.LinkedResources)
 	return info, nil
 }
 
@@ -418,6 +566,21 @@ func convertKnowledgeInfos(records []persistence.KnowledgeRecord) []WorkflowKnow
 			CreatedAt: record.CreatedAt,
 		})
 	}
+	return out
+}
+
+func sortedStringKeys(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	sort.Strings(out)
 	return out
 }
 
@@ -455,29 +618,582 @@ func (r *runtimeAdapter) ListToolsInfo() []ToolInfo {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return nil
 	}
-	tools := r.rt.Tools.All()
+	tools := r.rt.Tools.InspectableTools()
+	capabilities := r.rt.Tools.AllCapabilities()
+	capsByName := make(map[string]core.CapabilityDescriptor, len(capabilities))
+	for _, capability := range capabilities {
+		capsByName[capability.Name] = capability
+	}
 	policies := r.rt.Tools.GetToolPolicies()
 	infos := make([]ToolInfo, 0, len(tools))
 	for _, t := range tools {
 		name := t.Name()
 		tags := t.Tags()
+		labels := append([]string{}, tags...)
+		var riskClasses []string
+		var effectClasses []string
+		var trustClass string
+		runtimeFamily := string(core.CapabilityRuntimeFamilyLocalTool)
+		scope := string(core.CapabilityScopeBuiltin)
+		exposure := core.CapabilityExposureCallable
+		if capability, ok := capsByName[name]; ok {
+			runtimeFamily = string(capability.RuntimeFamily)
+			scope = string(capability.Source.Scope)
+			for _, risk := range capability.RiskClasses {
+				riskClasses = append(riskClasses, string(risk))
+				labels = append(labels, string(risk))
+			}
+			for _, effect := range capability.EffectClasses {
+				effectClasses = append(effectClasses, string(effect))
+				labels = append(labels, string(effect))
+			}
+			trustClass = string(capability.TrustClass)
+			if trustClass != "" {
+				labels = append(labels, trustClass)
+			}
+			exposure = r.rt.Tools.EffectiveExposure(capability)
+		}
 		pol := policies[name]
 		level := fruntime.AgentPermissionLevel(pol.Execute)
 		infos = append(infos, ToolInfo{
-			Name:      name,
-			Tags:      tags,
-			Policy:    level,
-			HasPolicy: level != "",
+			Name:          name,
+			RuntimeFamily: runtimeFamily,
+			Scope:         scope,
+			Tags:          tags,
+			Labels:        dedupeLowerPreserveOrder(labels),
+			RiskClasses:   dedupeLowerPreserveOrder(riskClasses),
+			EffectClasses: dedupeLowerPreserveOrder(effectClasses),
+			TrustClass:    strings.ToLower(strings.TrimSpace(trustClass)),
+			Exposure:      string(exposure),
+			Policy:        level,
+			HasPolicy:     level != "",
 		})
 	}
 	return infos
 }
 
-func (r *runtimeAdapter) GetTagPolicies() map[string]fruntime.AgentPermissionLevel {
+func (r *runtimeAdapter) ListCapabilities() []CapabilityInfo {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return nil
 	}
-	return r.rt.Tools.GetTagPolicies()
+	capabilities := r.rt.Tools.AllCapabilities()
+	infos := make([]CapabilityInfo, 0, len(capabilities))
+	for _, capability := range capabilities {
+		infos = append(infos, CapabilityInfo{
+			ID:            capability.ID,
+			Kind:          string(capability.Kind),
+			Name:          capability.Name,
+			Description:   capability.Description,
+			Category:      capability.Category,
+			RuntimeFamily: string(capability.RuntimeFamily),
+			TrustClass:    string(capability.TrustClass),
+			ProviderID:    capability.Source.ProviderID,
+			Scope:         string(capability.Source.Scope),
+			Exposure:      string(r.rt.Tools.EffectiveExposure(capability)),
+			Callable:      r.rt.Tools.EffectiveExposure(capability) == core.CapabilityExposureCallable,
+		})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].Kind == infos[j].Kind {
+			return infos[i].Name < infos[j].Name
+		}
+		return infos[i].Kind < infos[j].Kind
+	})
+	return infos
+}
+
+func (r *runtimeAdapter) ListPrompts() []PromptInfo {
+	if r == nil || r.rt == nil || r.rt.Tools == nil {
+		return nil
+	}
+	prompts := make([]PromptInfo, 0)
+	for _, capability := range r.rt.Tools.AllCapabilities() {
+		if capability.Kind != core.CapabilityKindPrompt {
+			continue
+		}
+		exposure := r.rt.Tools.EffectiveExposure(capability)
+		prompts = append(prompts, PromptInfo{
+			Meta: InspectableMeta{
+				ID:            capability.ID,
+				Kind:          string(capability.Kind),
+				Title:         capability.Name,
+				RuntimeFamily: string(capability.RuntimeFamily),
+				TrustClass:    string(capability.TrustClass),
+				Scope:         string(capability.Source.Scope),
+				Source:        fallbackSource(capability.Source.ProviderID, string(capability.Source.Scope)),
+				State:         string(exposure),
+			},
+			PromptID:   capability.ID,
+			ProviderID: capability.Source.ProviderID,
+		})
+	}
+	sort.Slice(prompts, func(i, j int) bool { return prompts[i].Meta.Title < prompts[j].Meta.Title })
+	return prompts
+}
+
+func (r *runtimeAdapter) ListResources(workflowRefs []string) []ResourceInfo {
+	resources := make([]ResourceInfo, 0)
+	if r != nil && r.rt != nil && r.rt.Tools != nil {
+		for _, capability := range r.rt.Tools.AllCapabilities() {
+			if capability.Kind != core.CapabilityKindResource {
+				continue
+			}
+			exposure := r.rt.Tools.EffectiveExposure(capability)
+			resources = append(resources, ResourceInfo{
+				Meta: InspectableMeta{
+					ID:            capability.ID,
+					Kind:          string(capability.Kind),
+					Title:         capability.Name,
+					RuntimeFamily: string(capability.RuntimeFamily),
+					TrustClass:    string(capability.TrustClass),
+					Scope:         string(capability.Source.Scope),
+					Source:        fallbackSource(capability.Source.ProviderID, string(capability.Source.Scope)),
+					State:         string(exposure),
+				},
+				ResourceID: capability.ID,
+				ProviderID: capability.Source.ProviderID,
+			})
+		}
+	}
+	seen := map[string]struct{}{}
+	for i := range resources {
+		seen[resources[i].ResourceID] = struct{}{}
+	}
+	for _, raw := range workflowRefs {
+		ref, err := persistence.ParseWorkflowResourceURI(raw)
+		if err != nil {
+			continue
+		}
+		if _, ok := seen[raw]; ok {
+			continue
+		}
+		resources = append(resources, ResourceInfo{
+			Meta: InspectableMeta{
+				ID:         raw,
+				Kind:       "workflow-resource",
+				Title:      describeWorkflowResourceRef(ref),
+				TrustClass: string(core.TrustClassWorkspaceTrusted),
+				Scope:      ref.WorkflowID,
+				Source:     "workflow",
+				State:      string(ref.Tier),
+			},
+			ResourceID:       raw,
+			WorkflowResource: true,
+			WorkflowURI:      raw,
+		})
+	}
+	sort.Slice(resources, func(i, j int) bool { return resources[i].Meta.Title < resources[j].Meta.Title })
+	return resources
+}
+
+func (r *runtimeAdapter) GetCapabilityDetail(id string) (*CapabilityDetail, error) {
+	if r == nil || r.rt == nil || r.rt.Tools == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("capability id required")
+	}
+	for _, capability := range r.rt.Tools.AllCapabilities() {
+		if capability.ID != id {
+			continue
+		}
+		exposure := r.rt.Tools.EffectiveExposure(capability)
+		detail := &CapabilityDetail{
+			Meta: InspectableMeta{
+				ID:            capability.ID,
+				Kind:          string(capability.Kind),
+				Title:         capability.Name,
+				RuntimeFamily: string(capability.RuntimeFamily),
+				TrustClass:    string(capability.TrustClass),
+				Scope:         string(capability.Source.Scope),
+				Source:        fallbackSource(capability.Source.ProviderID, string(capability.Source.Scope)),
+				State:         string(exposure),
+			},
+			Description:     capability.Description,
+			Category:        capability.Category,
+			Exposure:        string(exposure),
+			Callable:        exposure == core.CapabilityExposureCallable,
+			ProviderID:      capability.Source.ProviderID,
+			SessionAffinity: capability.SessionAffinity,
+			Availability:    capabilityAvailabilityLabel(capability.Availability),
+			RiskClasses:     riskClassStrings(capability.RiskClasses),
+			EffectClasses:   effectClassStrings(capability.EffectClasses),
+			Tags:            append([]string(nil), capability.Tags...),
+		}
+		if capability.Coordination != nil {
+			detail.CoordinationRole = string(capability.Coordination.Role)
+			detail.CoordinationTaskTypes = append([]string(nil), capability.Coordination.TaskTypes...)
+		}
+		return detail, nil
+	}
+	return nil, fmt.Errorf("capability %s not found", id)
+}
+
+func (r *runtimeAdapter) GetPromptDetail(id string) (*PromptDetail, error) {
+	if r == nil || r.rt == nil || r.rt.Tools == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("prompt id required")
+	}
+	for _, capability := range r.rt.Tools.AllCapabilities() {
+		if capability.ID != id || capability.Kind != core.CapabilityKindPrompt {
+			continue
+		}
+		rendered, err := r.rt.Tools.RenderPrompt(context.Background(), core.NewContext(), capability.ID, nil)
+		if err != nil {
+			return nil, err
+		}
+		exposure := r.rt.Tools.EffectiveExposure(capability)
+		detail := &PromptDetail{
+			Meta: InspectableMeta{
+				ID:            capability.ID,
+				Kind:          string(capability.Kind),
+				Title:         capability.Name,
+				RuntimeFamily: string(capability.RuntimeFamily),
+				TrustClass:    string(capability.TrustClass),
+				Scope:         string(capability.Source.Scope),
+				Source:        fallbackSource(capability.Source.ProviderID, string(capability.Source.Scope)),
+				State:         string(exposure),
+			},
+			PromptID:    capability.ID,
+			ProviderID:  capability.Source.ProviderID,
+			Description: capability.Description,
+			Messages:    make([]StructuredPromptMessage, 0, len(rendered.Messages)),
+			Metadata:    summarizeAnyMetadata(rendered.Metadata),
+		}
+		for _, message := range rendered.Messages {
+			converted := StructuredPromptMessage{Role: message.Role}
+			for _, block := range message.Content {
+				converted.Content = append(converted.Content, structuredBlockFromCore(block))
+			}
+			detail.Messages = append(detail.Messages, converted)
+		}
+		return detail, nil
+	}
+	return nil, fmt.Errorf("prompt %s not found", id)
+}
+
+func (r *runtimeAdapter) GetResourceDetail(idOrURI string) (*ResourceDetail, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	idOrURI = strings.TrimSpace(idOrURI)
+	if idOrURI == "" {
+		return nil, fmt.Errorf("resource id required")
+	}
+	if strings.HasPrefix(idOrURI, "workflow://") {
+		return r.getWorkflowResourceDetail(idOrURI)
+	}
+	if r.rt.Tools == nil {
+		return nil, fmt.Errorf("registry unavailable")
+	}
+	for _, capability := range r.rt.Tools.AllCapabilities() {
+		if capability.ID != idOrURI || capability.Kind != core.CapabilityKindResource {
+			continue
+		}
+		read, err := r.rt.Tools.ReadResource(context.Background(), core.NewContext(), capability.ID)
+		if err != nil {
+			return nil, err
+		}
+		exposure := r.rt.Tools.EffectiveExposure(capability)
+		detail := &ResourceDetail{
+			Meta: InspectableMeta{
+				ID:            capability.ID,
+				Kind:          string(capability.Kind),
+				Title:         capability.Name,
+				RuntimeFamily: string(capability.RuntimeFamily),
+				TrustClass:    string(capability.TrustClass),
+				Scope:         string(capability.Source.Scope),
+				Source:        fallbackSource(capability.Source.ProviderID, string(capability.Source.Scope)),
+				State:         string(exposure),
+			},
+			ResourceID:  capability.ID,
+			ProviderID:  capability.Source.ProviderID,
+			Description: capability.Description,
+			Metadata:    summarizeAnyMetadata(read.Metadata),
+		}
+		for _, block := range read.Contents {
+			detail.Contents = append(detail.Contents, structuredBlockFromCore(block))
+		}
+		return detail, nil
+	}
+	return nil, fmt.Errorf("resource %s not found", idOrURI)
+}
+
+func (r *runtimeAdapter) ListLiveProviders() []LiveProviderInfo {
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	providers, _, err := r.rt.CaptureProviderSnapshots(context.Background())
+	if err != nil {
+		return nil
+	}
+	infos := make([]LiveProviderInfo, 0, len(providers))
+	for _, provider := range providers {
+		infos = append(infos, LiveProviderInfo{
+			Meta: InspectableMeta{
+				ID:         provider.ProviderID,
+				Kind:       string(provider.Descriptor.Kind),
+				Title:      provider.ProviderID,
+				TrustClass: string(provider.Descriptor.TrustBaseline),
+				Source:     provider.Descriptor.ConfiguredSource,
+				State:      provider.Health.Status,
+				CapturedAt: provider.CapturedAt,
+			},
+			ProviderID:     provider.ProviderID,
+			Kind:           string(provider.Descriptor.Kind),
+			TrustBaseline:  string(provider.Descriptor.TrustBaseline),
+			Recoverability: string(provider.Recoverability),
+			ConfiguredFrom: provider.Descriptor.ConfiguredSource,
+			CapabilityIDs:  append([]string(nil), provider.CapabilityIDs...),
+		})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].ProviderID < infos[j].ProviderID
+	})
+	return infos
+}
+
+func (r *runtimeAdapter) GetLiveProviderDetail(providerID string) (*LiveProviderDetail, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	providerID = strings.TrimSpace(providerID)
+	if providerID == "" {
+		return nil, fmt.Errorf("provider id required")
+	}
+	providers, _, err := r.rt.CaptureProviderSnapshots(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	for _, provider := range providers {
+		if provider.ProviderID != providerID {
+			continue
+		}
+		return &LiveProviderDetail{
+			Meta: InspectableMeta{
+				ID:         provider.ProviderID,
+				Kind:       string(provider.Descriptor.Kind),
+				Title:      provider.ProviderID,
+				TrustClass: string(provider.Descriptor.TrustBaseline),
+				Source:     provider.Descriptor.ConfiguredSource,
+				State:      provider.Health.Status,
+				CapturedAt: provider.CapturedAt,
+			},
+			ProviderID:     provider.ProviderID,
+			Kind:           string(provider.Descriptor.Kind),
+			TrustBaseline:  string(provider.Descriptor.TrustBaseline),
+			Recoverability: string(provider.Recoverability),
+			ConfiguredFrom: provider.Descriptor.ConfiguredSource,
+			CapabilityIDs:  append([]string(nil), provider.CapabilityIDs...),
+			Metadata:       summarizeAnyMetadata(provider.Metadata),
+		}, nil
+	}
+	return nil, fmt.Errorf("provider %s not found", providerID)
+}
+
+func (r *runtimeAdapter) ListLiveSessions() []LiveProviderSessionInfo {
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	_, sessions, err := r.rt.CaptureProviderSnapshots(context.Background())
+	if err != nil {
+		return nil
+	}
+	infos := make([]LiveProviderSessionInfo, 0, len(sessions))
+	for _, session := range sessions {
+		infos = append(infos, LiveProviderSessionInfo{
+			Meta: InspectableMeta{
+				ID:         session.Session.ID,
+				Kind:       "session",
+				Title:      session.Session.ID,
+				TrustClass: string(session.Session.TrustClass),
+				Scope:      session.Session.WorkflowID,
+				Source:     session.Session.ProviderID,
+				State:      session.Session.Health,
+				CapturedAt: session.CapturedAt,
+			},
+			SessionID:       session.Session.ID,
+			ProviderID:      session.Session.ProviderID,
+			WorkflowID:      session.Session.WorkflowID,
+			TaskID:          session.Session.TaskID,
+			TrustClass:      string(session.Session.TrustClass),
+			Recoverability:  string(session.Session.Recoverability),
+			CapabilityIDs:   append([]string(nil), session.Session.CapabilityIDs...),
+			LastActivityAt:  session.Session.LastActivityAt,
+			MetadataSummary: summarizeMetadata(session.Session.Metadata),
+		})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].ProviderID == infos[j].ProviderID {
+			return infos[i].SessionID < infos[j].SessionID
+		}
+		return infos[i].ProviderID < infos[j].ProviderID
+	})
+	return infos
+}
+
+func (r *runtimeAdapter) GetLiveSessionDetail(sessionID string) (*LiveProviderSessionDetail, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, fmt.Errorf("session id required")
+	}
+	_, sessions, err := r.rt.CaptureProviderSnapshots(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	for _, session := range sessions {
+		if session.Session.ID != sessionID {
+			continue
+		}
+		return &LiveProviderSessionDetail{
+			Meta: InspectableMeta{
+				ID:         session.Session.ID,
+				Kind:       "session",
+				Title:      session.Session.ID,
+				TrustClass: string(session.Session.TrustClass),
+				Scope:      session.Session.WorkflowID,
+				Source:     session.Session.ProviderID,
+				State:      session.Session.Health,
+				CapturedAt: session.CapturedAt,
+			},
+			SessionID:       session.Session.ID,
+			ProviderID:      session.Session.ProviderID,
+			WorkflowID:      session.Session.WorkflowID,
+			TaskID:          session.Session.TaskID,
+			Recoverability:  string(session.Session.Recoverability),
+			CapabilityIDs:   append([]string(nil), session.Session.CapabilityIDs...),
+			LastActivityAt:  session.Session.LastActivityAt,
+			MetadataSummary: summarizeMetadata(session.Session.Metadata),
+		}, nil
+	}
+	return nil, fmt.Errorf("session %s not found", sessionID)
+}
+
+func (r *runtimeAdapter) getWorkflowResourceDetail(uri string) (*ResourceDetail, error) {
+	store, err := r.openWorkflowStore()
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
+	ref, err := persistence.ParseWorkflowResourceURI(uri)
+	if err != nil {
+		return nil, err
+	}
+	service := persistence.WorkflowProjectionService{Store: store}
+	read, err := service.Project(context.Background(), ref)
+	if err != nil {
+		return nil, err
+	}
+	detail := &ResourceDetail{
+		Meta: InspectableMeta{
+			ID:         uri,
+			Kind:       "workflow-resource",
+			Title:      describeWorkflowResourceRef(ref),
+			TrustClass: string(core.TrustClassWorkspaceTrusted),
+			Scope:      ref.WorkflowID,
+			Source:     "workflow",
+			State:      string(ref.Tier),
+		},
+		ResourceID:       uri,
+		WorkflowResource: true,
+		WorkflowURI:      uri,
+		Description:      fmt.Sprintf("%s workflow projection resource", ref.Tier),
+		Metadata:         summarizeAnyMetadata(read.Metadata),
+	}
+	for _, block := range read.Contents {
+		detail.Contents = append(detail.Contents, structuredBlockFromCore(block))
+	}
+	return detail, nil
+}
+
+func (r *runtimeAdapter) ListApprovals() []ApprovalInfo {
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	requests := r.rt.PendingHITL()
+	infos := make([]ApprovalInfo, 0, len(requests))
+	for _, request := range requests {
+		if request == nil {
+			continue
+		}
+		infos = append(infos, ApprovalInfo{
+			Meta: InspectableMeta{
+				ID:         request.ID,
+				Kind:       inferApprovalKind(*request),
+				Title:      request.Permission.Action,
+				Source:     request.Permission.Resource,
+				State:      request.State,
+				CapturedAt: request.RequestedAt.Format(time.RFC3339),
+			},
+			ID:             request.ID,
+			Kind:           inferApprovalKind(*request),
+			PermissionType: string(request.Permission.Type),
+			Action:         request.Permission.Action,
+			Resource:       request.Permission.Resource,
+			Risk:           string(request.Risk),
+			Scope:          string(request.Scope),
+			Justification:  request.Justification,
+			RequestedAt:    request.RequestedAt,
+			Metadata:       cloneStringMap(request.Permission.Metadata),
+		})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		if infos[i].RequestedAt.Equal(infos[j].RequestedAt) {
+			return infos[i].ID < infos[j].ID
+		}
+		return infos[i].RequestedAt.Before(infos[j].RequestedAt)
+	})
+	return infos
+}
+
+func (r *runtimeAdapter) GetApprovalDetail(id string) (*ApprovalDetail, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("approval id required")
+	}
+	for _, request := range r.rt.PendingHITL() {
+		if request == nil || request.ID != id {
+			continue
+		}
+		return &ApprovalDetail{
+			Meta: InspectableMeta{
+				ID:         request.ID,
+				Kind:       inferApprovalKind(*request),
+				Title:      request.Permission.Action,
+				Source:     request.Permission.Resource,
+				State:      request.State,
+				CapturedAt: request.RequestedAt.Format(time.RFC3339),
+			},
+			ID:             request.ID,
+			Kind:           inferApprovalKind(*request),
+			PermissionType: string(request.Permission.Type),
+			Action:         request.Permission.Action,
+			Resource:       request.Permission.Resource,
+			Risk:           string(request.Risk),
+			Scope:          string(request.Scope),
+			Justification:  request.Justification,
+			RequestedAt:    request.RequestedAt,
+			Metadata:       cloneStringMap(request.Permission.Metadata),
+		}, nil
+	}
+	return nil, fmt.Errorf("approval %s not found", id)
+}
+
+func (r *runtimeAdapter) GetClassPolicies() map[string]fruntime.AgentPermissionLevel {
+	if r == nil || r.rt == nil || r.rt.Tools == nil {
+		return nil
+	}
+	return r.rt.Tools.GetClassPolicies()
 }
 
 func (r *runtimeAdapter) SetToolPolicyLive(name string, level fruntime.AgentPermissionLevel) {
@@ -487,11 +1203,155 @@ func (r *runtimeAdapter) SetToolPolicyLive(name string, level fruntime.AgentPerm
 	r.rt.Tools.UpdateToolPolicy(name, core.ToolPolicy{Execute: core.AgentPermissionLevel(level)})
 }
 
-func (r *runtimeAdapter) SetTagPolicyLive(tag string, level fruntime.AgentPermissionLevel) {
+func (r *runtimeAdapter) SetClassPolicyLive(class string, level fruntime.AgentPermissionLevel) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return
 	}
-	r.rt.Tools.UpdateTagPolicy(tag, level)
+	r.rt.Tools.UpdateClassPolicy(class, core.AgentPermissionLevel(level))
+}
+
+func dedupeLowerPreserveOrder(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func summarizeMetadata(metadata map[string]interface{}) []string {
+	if len(metadata) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(metadata))
+	for key := range metadata {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, fmt.Sprintf("%s=%v", key, metadata[key]))
+	}
+	return out
+}
+
+func summarizeAnyMetadata(metadata map[string]any) []string {
+	if len(metadata) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(metadata))
+	for key := range metadata {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, fmt.Sprintf("%s=%v", key, metadata[key]))
+	}
+	return out
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func inferApprovalKind(request fruntime.PermissionRequest) string {
+	action := strings.TrimSpace(request.Permission.Action)
+	switch {
+	case strings.HasPrefix(action, "provider:"):
+		return "provider_operation"
+	case strings.Contains(action, "insert"):
+		return "insertion"
+	case strings.Contains(action, "activate"), strings.Contains(action, "admission"):
+		return "admission"
+	default:
+		return "execution"
+	}
+}
+
+func capabilityAvailabilityLabel(spec core.AvailabilitySpec) string {
+	if spec.Available {
+		return "available"
+	}
+	if strings.TrimSpace(spec.Reason) != "" {
+		return "unavailable: " + strings.TrimSpace(spec.Reason)
+	}
+	return "unavailable"
+}
+
+func riskClassStrings(values []core.RiskClass) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
+}
+
+func effectClassStrings(values []core.EffectClass) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
+}
+
+func describeWorkflowLinkedResources(refs []string) []WorkflowLinkedResourceInfo {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]WorkflowLinkedResourceInfo, 0, len(refs))
+	for _, raw := range refs {
+		ref, err := persistence.ParseWorkflowResourceURI(raw)
+		if err != nil {
+			out = append(out, WorkflowLinkedResourceInfo{URI: raw, Summary: raw})
+			continue
+		}
+		out = append(out, WorkflowLinkedResourceInfo{
+			URI:     raw,
+			Tier:    string(ref.Tier),
+			Role:    string(ref.Role),
+			RunID:   ref.RunID,
+			StepID:  ref.StepID,
+			Summary: describeWorkflowResourceRef(ref),
+		})
+	}
+	return out
+}
+
+func describeWorkflowResourceRef(ref persistence.WorkflowResourceRef) string {
+	parts := []string{ref.WorkflowID, string(ref.Tier)}
+	if ref.Role != "" {
+		parts = append(parts, string(ref.Role))
+	}
+	if ref.StepID != "" {
+		parts = append(parts, ref.StepID)
+	}
+	if ref.RunID != "" {
+		parts = append(parts, ref.RunID)
+	}
+	return strings.Join(parts, " / ")
+}
+
+func fallbackSource(primary, fallback string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return strings.TrimSpace(fallback)
 }
 
 func (r *runtimeAdapter) SessionArtifacts() SessionArtifacts {

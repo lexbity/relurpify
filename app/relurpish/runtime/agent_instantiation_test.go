@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +21,7 @@ func TestInstantiateAgentUsesCodingAgentForDefinitionBackedCodingManifest(t *tes
 		},
 	}
 
-	agent := instantiateAgent(cfg, nil, toolsys.NewToolRegistry(), nil, defs, &core.Config{}, nil)
+	agent := instantiateAgent(cfg, nil, capability.NewRegistry(), nil, defs, &core.Config{}, nil)
 
 	_, ok := agent.(*agents.CodingAgent)
 	require.True(t, ok, "expected CodingAgent for implementation=coding")
@@ -39,7 +39,7 @@ func TestInstantiateAgentUsesReflectionAgentForDefinitionBackedReflectionManifes
 		},
 	}
 
-	agent := instantiateAgent(cfg, nil, toolsys.NewToolRegistry(), nil, defs, &core.Config{}, nil)
+	agent := instantiateAgent(cfg, nil, capability.NewRegistry(), nil, defs, &core.Config{}, nil)
 
 	reflection, ok := agent.(*agents.ReflectionAgent)
 	require.True(t, ok, "expected ReflectionAgent for implementation=reflection")
@@ -59,7 +59,7 @@ func TestInstantiateAgentTreatsExpertDefinitionAsCodingAgent(t *testing.T) {
 		},
 	}
 
-	agent := instantiateAgent(cfg, nil, toolsys.NewToolRegistry(), nil, defs, &core.Config{}, nil)
+	agent := instantiateAgent(cfg, nil, capability.NewRegistry(), nil, defs, &core.Config{}, nil)
 
 	_, ok := agent.(*agents.CodingAgent)
 	require.True(t, ok, "expected CodingAgent fallback for implementation=expert")

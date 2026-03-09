@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,13 +46,23 @@ func (q *NotificationQueue) PushHITL(req *fruntime.PermissionRequest) {
 	if req == nil {
 		return
 	}
+	kind := approvalKindFromRequest(req)
+	msg := fmt.Sprintf("%s approval: %s", kind, req.Permission.Action)
+	if target := hitlTarget(req); target != "" {
+		msg += " -> " + target
+	}
 	q.Push(NotificationItem{
 		ID:   req.ID,
 		Kind: NotifKindHITL,
-		Msg:  fmt.Sprintf("Approve %s: %s (%s)?", req.ID, req.Permission.Action, req.Justification),
+		Msg:  msg,
 		Extra: map[string]string{
 			"request_id": req.ID,
 			"action":     req.Permission.Action,
+			"kind":       kind,
+			"resource":   req.Permission.Resource,
+			"risk":       string(req.Risk),
+			"target":     hitlTarget(req),
+			"reason":     req.Justification,
 		},
 	})
 }
@@ -187,6 +198,9 @@ func (nb *NotificationBar) View() string {
 		more = dimStyle.Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
 	}
 	label := "● " + current.Msg
+	if current.Kind == NotifKindHITL {
+		label = "● " + renderApprovalNotification(current)
+	}
 	var rendered string
 	switch current.Kind {
 	case NotifKindHITL:
@@ -199,4 +213,55 @@ func (nb *NotificationBar) View() string {
 		rendered = notifInfoStyle.Render(label)
 	}
 	return rendered + hint + more
+}
+
+func renderApprovalNotification(item NotificationItem) string {
+	parts := []string{item.Msg}
+	if kind := item.Extra["kind"]; kind != "" {
+		parts = append(parts, "kind="+kind)
+	}
+	if risk := item.Extra["risk"]; risk != "" {
+		parts = append(parts, "risk="+risk)
+	}
+	if target := item.Extra["target"]; target != "" {
+		parts = append(parts, "target="+target)
+	}
+	if reason := item.Extra["reason"]; reason != "" {
+		parts = append(parts, "why="+reason)
+	}
+	return strings.Join(parts, " | ")
+}
+
+func approvalKindFromRequest(req *fruntime.PermissionRequest) string {
+	if req == nil {
+		return "execution"
+	}
+	for _, key := range []string{"approval_kind", "kind", "operation_kind"} {
+		if value := req.Permission.Metadata[key]; value != "" {
+			return value
+		}
+	}
+	action := req.Permission.Action
+	switch {
+	case strings.Contains(action, "insert"):
+		return "insertion"
+	case strings.Contains(action, "admission"):
+		return "admission"
+	case strings.Contains(action, "provider"), strings.Contains(action, "session"):
+		return "provider_operation"
+	default:
+		return "execution"
+	}
+}
+
+func hitlTarget(req *fruntime.PermissionRequest) string {
+	if req == nil {
+		return ""
+	}
+	for _, key := range []string{"target_resource", "capability_id", "provider_id", "session_id"} {
+		if value := req.Permission.Metadata[key]; value != "" {
+			return value
+		}
+	}
+	return req.Permission.Resource
 }

@@ -17,11 +17,11 @@ const (
 type NotificationKind string
 
 const (
-	NotifKindInfo      NotificationKind = "info"
-	NotifKindHITL      NotificationKind = "hitl"
-	NotifKindTaskDone  NotificationKind = "task_done"
-	NotifKindRestore   NotificationKind = "restore"
-	NotifKindError     NotificationKind = "error"
+	NotifKindInfo     NotificationKind = "info"
+	NotifKindHITL     NotificationKind = "hitl"
+	NotifKindTaskDone NotificationKind = "task_done"
+	NotifKindRestore  NotificationKind = "restore"
+	NotifKindError    NotificationKind = "error"
 )
 
 // NotificationItem is a single item in the notification queue.
@@ -117,7 +117,54 @@ type MessageContent struct {
 	Thinking []ThinkingStep
 	Changes  []FileChange
 	Plan     *TaskPlan
+	Result   *StructuredResult
 	Expanded map[string]bool
+}
+
+// StructuredResult captures capability-aware output for richer rendering.
+type StructuredResult struct {
+	NodeID    string
+	Success   bool
+	Envelope  *StructuredResultEnvelope
+	ErrorText string
+}
+
+// StructuredResultEnvelope stores the TUI-safe subset of a capability result envelope.
+type StructuredResultEnvelope struct {
+	CapabilityID   string
+	CapabilityName string
+	TrustClass     string
+	Disposition    string
+	Insertion      StructuredInsertion
+	Approval       *StructuredApprovalBinding
+	Blocks         []StructuredContentBlock
+}
+
+// StructuredInsertion summarizes insertion policy for display.
+type StructuredInsertion struct {
+	Action       string
+	Reason       string
+	RequiresHITL bool
+}
+
+// StructuredApprovalBinding summarizes approval linkage for display.
+type StructuredApprovalBinding struct {
+	CapabilityID   string
+	CapabilityName string
+	ProviderID     string
+	SessionID      string
+	TargetResource string
+	TaskID         string
+	WorkflowID     string
+	EffectClasses  []string
+}
+
+// StructuredContentBlock is a TUI-friendly rendering block.
+type StructuredContentBlock struct {
+	Type       string
+	Summary    string
+	Body       string
+	Provenance map[string]string
 }
 
 // ThinkingStep captures an individual reasoning step emitted by the agent.

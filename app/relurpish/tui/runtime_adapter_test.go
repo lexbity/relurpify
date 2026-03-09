@@ -9,6 +9,7 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/persistence"
@@ -75,6 +76,77 @@ func TestRuntimeAdapterListsWorkflows(t *testing.T) {
 		Status:      persistence.WorkflowRunStatusRunning,
 		UpdatedAt:   time.Now().UTC(),
 	}))
+	require.NoError(t, store.CreateRun(context.Background(), persistence.WorkflowRunRecord{
+		RunID:      "run-1",
+		WorkflowID: "wf-1",
+		Status:     persistence.WorkflowRunStatusRunning,
+	}))
+	require.NoError(t, store.UpsertDelegation(context.Background(), persistence.WorkflowDelegationRecord{
+		DelegationID:   "delegation-1",
+		WorkflowID:     "wf-1",
+		RunID:          "run-1",
+		TaskID:         "wf-1",
+		State:          core.DelegationStateSucceeded,
+		TrustClass:     core.TrustClassBuiltinTrusted,
+		Recoverability: core.RecoverabilityInProcess,
+		Request: core.DelegationRequest{
+			ID:                 "delegation-1",
+			WorkflowID:         "wf-1",
+			TaskID:             "wf-1",
+			TargetCapabilityID: "relurpic:planner.plan",
+			TaskType:           "plan",
+			Instruction:        "Inspect me",
+			ResourceRefs:       []string{"workflow://wf-1/warm?run=run-1&role=planner"},
+		},
+		Result: &core.DelegationResult{
+			DelegationID: "delegation-1",
+			State:        core.DelegationStateSucceeded,
+			Success:      true,
+			Insertion:    core.InsertionDecision{Action: core.InsertionActionSummarized},
+		},
+		StartedAt: time.Now().UTC().Add(-time.Minute),
+		UpdatedAt: time.Now().UTC(),
+	}))
+	require.NoError(t, store.AppendDelegationTransition(context.Background(), persistence.WorkflowDelegationTransitionRecord{
+		TransitionID: "delegation-1:succeeded",
+		DelegationID: "delegation-1",
+		WorkflowID:   "wf-1",
+		RunID:        "run-1",
+		ToState:      core.DelegationStateSucceeded,
+		CreatedAt:    time.Now().UTC(),
+	}))
+	require.NoError(t, store.UpsertWorkflowArtifact(context.Background(), persistence.WorkflowArtifactRecord{
+		ArtifactID:    "artifact-1",
+		WorkflowID:    "wf-1",
+		RunID:         "run-1",
+		Kind:          "delegation_result",
+		ContentType:   "application/json",
+		StorageKind:   persistence.ArtifactStorageInline,
+		SummaryText:   "delegation summary",
+		InlineRawText: `{"summary":"delegated"}`,
+		RawSizeBytes:  int64(len(`{"summary":"delegated"}`)),
+	}))
+	require.NoError(t, store.ReplaceProviderSnapshots(context.Background(), "wf-1", "run-1", []persistence.WorkflowProviderSnapshotRecord{{
+		SnapshotID:     "provider-1",
+		WorkflowID:     "wf-1",
+		RunID:          "run-1",
+		ProviderID:     "delegation-runtime",
+		Recoverability: core.RecoverabilityInProcess,
+		Descriptor:     core.ProviderDescriptor{ID: "delegation-runtime", Kind: core.ProviderKindAgentRuntime},
+		Health:         core.ProviderHealthSnapshot{Status: "ok"},
+	}}))
+	require.NoError(t, store.ReplaceProviderSessionSnapshots(context.Background(), "wf-1", "run-1", []persistence.WorkflowProviderSessionSnapshotRecord{{
+		SnapshotID: "session-1",
+		WorkflowID: "wf-1",
+		RunID:      "run-1",
+		Session: core.ProviderSession{
+			ID:             "session-1",
+			ProviderID:     "delegation-runtime",
+			Recoverability: core.RecoverabilityInProcess,
+			Health:         "running",
+		},
+		CapturedAt: time.Now().UTC(),
+	}}))
 
 	rt := &runtimesvc.Runtime{
 		Config: runtimesvc.Config{
@@ -91,4 +163,194 @@ func TestRuntimeAdapterListsWorkflows(t *testing.T) {
 	details, err := adapter.GetWorkflow("wf-1")
 	require.NoError(t, err)
 	require.Equal(t, "wf-1", details.Workflow.WorkflowID)
+	require.Len(t, details.Delegations, 1)
+	require.Equal(t, "delegation-1", details.Delegations[0].DelegationID)
+	require.Len(t, details.Transitions, 1)
+	require.Len(t, details.WorkflowArtifacts, 1)
+	require.Len(t, details.Providers, 1)
+	require.Len(t, details.ProviderSessions, 1)
+	require.Equal(t, []string{"workflow://wf-1/warm?run=run-1&role=planner"}, details.LinkedResources)
 }
+
+func TestRuntimeAdapterListCapabilitiesIncludesRuntimeFamily(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.RegisterInvocableCapability(relurpicCapabilityStub{
+		desc: core.CapabilityDescriptor{
+			ID:            "relurpic:planner.plan",
+			Name:          "planner.plan",
+			Kind:          core.CapabilityKindPrompt,
+			RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+			TrustClass:    core.TrustClassBuiltinTrusted,
+			Availability:  core.AvailabilitySpec{Available: true},
+		},
+	}))
+	require.NoError(t, registry.RegisterInvocableCapability(relurpicCapabilityStub{
+		desc: core.CapabilityDescriptor{
+			ID:            "provider:browser",
+			Name:          "browser",
+			Kind:          core.CapabilityKindTool,
+			RuntimeFamily: core.CapabilityRuntimeFamilyProvider,
+			Source: core.CapabilitySource{
+				Scope:      core.CapabilityScopeProvider,
+				ProviderID: "browser",
+			},
+			TrustClass:   core.TrustClassProviderLocalUntrusted,
+			Availability: core.AvailabilitySpec{Available: true},
+		},
+	}))
+	registry.UseAgentSpec("agent", &core.AgentRuntimeSpec{
+		Mode:  core.AgentModePrimary,
+		Model: core.AgentModelConfig{Provider: "test", Name: "test"},
+		ExposurePolicies: []core.CapabilityExposurePolicy{{
+			Selector: core.CapabilitySelector{Name: "browser", RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider}},
+			Access:   core.CapabilityExposureCallable,
+		}},
+	})
+
+	adapter := &runtimeAdapter{rt: &runtimesvc.Runtime{Tools: registry}}
+	capabilities := adapter.ListCapabilities()
+	require.Len(t, capabilities, 2)
+	byName := make(map[string]CapabilityInfo, len(capabilities))
+	for _, capability := range capabilities {
+		byName[capability.Name] = capability
+	}
+	require.Equal(t, "provider", byName["browser"].RuntimeFamily)
+	require.True(t, byName["browser"].Callable)
+	require.Equal(t, "relurpic", byName["planner.plan"].RuntimeFamily)
+	require.True(t, byName["planner.plan"].Callable)
+}
+
+func TestRuntimeAdapterListToolsInfoReportsLocalToolRuntimeFamily(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(localToolStub{name: "file_read"}))
+
+	adapter := &runtimeAdapter{rt: &runtimesvc.Runtime{Tools: registry}}
+	tools := adapter.ListToolsInfo()
+	require.Len(t, tools, 1)
+	require.Equal(t, "local-tool", tools[0].RuntimeFamily)
+	require.Equal(t, "builtin", tools[0].Scope)
+}
+
+type relurpicCapabilityStub struct {
+	desc core.CapabilityDescriptor
+}
+
+type adapterLiveProvider struct {
+	desc     core.ProviderDescriptor
+	sessions []core.ProviderSession
+}
+
+func (p *adapterLiveProvider) Initialize(context.Context, *runtimesvc.Runtime) error { return nil }
+func (p *adapterLiveProvider) Close() error                                          { return nil }
+func (p *adapterLiveProvider) Descriptor() core.ProviderDescriptor                   { return p.desc }
+func (p *adapterLiveProvider) ListSessions(context.Context) ([]core.ProviderSession, error) {
+	return append([]core.ProviderSession(nil), p.sessions...), nil
+}
+func (p *adapterLiveProvider) HealthSnapshot(context.Context) (core.ProviderHealthSnapshot, error) {
+	return core.ProviderHealthSnapshot{Status: "ok"}, nil
+}
+
+func (c relurpicCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+	return c.desc
+}
+
+func TestRuntimeAdapterListsLiveProvidersSessionsAndApprovals(t *testing.T) {
+	rt := &runtimesvc.Runtime{
+		AgentSpec: &core.AgentRuntimeSpec{
+			ProviderPolicies: map[string]core.ProviderPolicy{
+				"remote-mcp": {Activate: core.AgentPermissionAllow},
+			},
+		},
+		Registration: &fruntime.AgentRegistration{
+			HITL: fruntime.NewHITLBroker(time.Minute),
+		},
+	}
+	provider := &adapterLiveProvider{
+		desc: core.ProviderDescriptor{
+			ID:                 "remote-mcp",
+			Kind:               core.ProviderKindMCPClient,
+			ConfiguredSource:   "stdio://fixture",
+			TrustBaseline:      core.TrustClassRemoteDeclared,
+			RecoverabilityMode: core.RecoverabilityPersistedRestore,
+			Security: core.ProviderSecurityProfile{
+				Origin: core.ProviderOriginRemote,
+			},
+		},
+		sessions: []core.ProviderSession{{
+			ID:             "remote-mcp:primary",
+			ProviderID:     "remote-mcp",
+			TrustClass:     core.TrustClassRemoteDeclared,
+			Recoverability: core.RecoverabilityPersistedRestore,
+			Health:         "running",
+			Metadata: map[string]interface{}{
+				"protocol_version": "2025-06-18",
+			},
+		}},
+	}
+	require.NoError(t, rt.RegisterProvider(context.Background(), provider))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = rt.Registration.HITL.RequestPermission(ctx, fruntime.PermissionRequest{
+			Permission: core.PermissionDescriptor{
+				Type:         core.PermissionTypeCapability,
+				Action:       "provider:remote-mcp:activate",
+				Resource:     "remote-mcp",
+				Metadata:     map[string]string{"provider_id": "remote-mcp"},
+				RequiresHITL: true,
+			},
+			Justification: "activate provider remote-mcp",
+			Scope:         fruntime.GrantScopeSession,
+			Risk:          fruntime.RiskLevelMedium,
+		})
+	}()
+	require.Eventually(t, func() bool {
+		return len(rt.Registration.HITL.PendingRequests()) == 1
+	}, time.Second, 10*time.Millisecond)
+
+	adapter := &runtimeAdapter{rt: rt}
+	providers := adapter.ListLiveProviders()
+	require.Len(t, providers, 1)
+	require.Equal(t, "remote-mcp", providers[0].ProviderID)
+	require.Equal(t, "mcp-client", providers[0].Kind)
+
+	sessions := adapter.ListLiveSessions()
+	require.Len(t, sessions, 1)
+	require.Equal(t, "remote-mcp:primary", sessions[0].SessionID)
+	require.Contains(t, sessions[0].MetadataSummary, "protocol_version=2025-06-18")
+
+	approvals := adapter.ListApprovals()
+	require.Len(t, approvals, 1)
+	require.Equal(t, "provider_operation", approvals[0].Kind)
+	require.Equal(t, "provider:remote-mcp:activate", approvals[0].Action)
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for approval request goroutine to exit")
+	}
+}
+
+func (c relurpicCapabilityStub) Invoke(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true}, nil
+}
+
+type localToolStub struct {
+	name string
+}
+
+func (t localToolStub) Name() string        { return t.name }
+func (t localToolStub) Description() string { return t.name }
+func (t localToolStub) Category() string    { return "test" }
+func (t localToolStub) Parameters() []core.ToolParameter {
+	return nil
+}
+func (t localToolStub) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true}, nil
+}
+func (t localToolStub) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t localToolStub) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
+func (t localToolStub) Tags() []string                                  { return []string{core.TagReadOnly} }

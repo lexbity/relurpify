@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -357,11 +358,11 @@ func (p *ChatPane) runStream(ctx context.Context, run *RunState, metadata map[st
 		return
 	}
 
-	summary := summarizeResult(result)
-	if summary != "" {
-		sendRunMsg(run, StreamTokenMsg{RunID: run.ID, TokenType: TokenText, Token: summary})
+	tokenCount := 0
+	if summary := summarizeResult(result); summary != "" {
+		tokenCount = estimateTokens(summary)
 	}
-	sendRunFinal(run, StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: estimateTokens(summary)})
+	sendRunFinal(run, StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: tokenCount, Result: result})
 	close(run.Ch)
 }
 
@@ -381,6 +382,7 @@ func (p *ChatPane) handleStreamComplete(msg StreamCompleteMsg) (*ChatPane, tea.C
 	if !ok || run.Builder == nil {
 		return p, nil
 	}
+	run.Builder.SetResult(structuredResultFromCore(msg.Result))
 	final := run.Builder.Build(msg.Duration, msg.TokensUsed)
 	p.feed.UpdateMessage(final)
 	if p.session != nil {
@@ -501,4 +503,228 @@ func summarizeResult(res *core.Result) string {
 		b.WriteString(res.Error.Error())
 	}
 	return b.String()
+}
+
+func structuredResultFromCore(res *core.Result) *StructuredResult {
+	if res == nil {
+		return nil
+	}
+	rendered := &StructuredResult{
+		NodeID:  strings.TrimSpace(res.NodeID),
+		Success: res.Success,
+	}
+	if res.Error != nil {
+		rendered.ErrorText = res.Error.Error()
+	}
+	if envelope := extractResultEnvelope(res); envelope != nil {
+		rendered.Envelope = structuredEnvelopeFromCore(envelope)
+	}
+	if rendered.NodeID == "" && rendered.Envelope == nil && rendered.ErrorText == "" {
+		return nil
+	}
+	return rendered
+}
+
+func extractResultEnvelope(res *core.Result) *core.CapabilityResultEnvelope {
+	if res == nil || len(res.Data) == 0 {
+		return nil
+	}
+	for _, key := range []string{"result", "tool_result", "capability_result"} {
+		raw, ok := res.Data[key]
+		if !ok || raw == nil {
+			continue
+		}
+		switch typed := raw.(type) {
+		case *core.ToolResult:
+			if envelope, ok := core.ToolResultEnvelope(typed); ok {
+				return envelope
+			}
+		case core.ToolResult:
+			copy := typed
+			if envelope, ok := core.ToolResultEnvelope(&copy); ok {
+				return envelope
+			}
+		case *core.CapabilityResultEnvelope:
+			return typed
+		case core.CapabilityResultEnvelope:
+			copy := typed
+			return &copy
+		}
+	}
+	return nil
+}
+
+func structuredEnvelopeFromCore(envelope *core.CapabilityResultEnvelope) *StructuredResultEnvelope {
+	if envelope == nil {
+		return nil
+	}
+	rendered := &StructuredResultEnvelope{
+		CapabilityID:   envelope.Descriptor.ID,
+		CapabilityName: envelope.Descriptor.Name,
+		TrustClass:     string(envelope.Descriptor.TrustClass),
+		Disposition:    string(envelope.Disposition),
+		Insertion: StructuredInsertion{
+			Action:       string(envelope.Insertion.Action),
+			Reason:       envelope.Insertion.Reason,
+			RequiresHITL: envelope.Insertion.RequiresHITL,
+		},
+		Blocks: make([]StructuredContentBlock, 0, len(envelope.ContentBlocks)),
+	}
+	if envelope.Approval != nil {
+		rendered.Approval = &StructuredApprovalBinding{
+			CapabilityID:   envelope.Approval.CapabilityID,
+			CapabilityName: envelope.Approval.CapabilityName,
+			ProviderID:     envelope.Approval.ProviderID,
+			SessionID:      envelope.Approval.SessionID,
+			TargetResource: envelope.Approval.TargetResource,
+			TaskID:         envelope.Approval.TaskID,
+			WorkflowID:     envelope.Approval.WorkflowID,
+			EffectClasses:  effectClassLabels(envelope.Approval.EffectClasses),
+		}
+	}
+	insertionsByType := map[string]StructuredInsertion{}
+	for _, insertion := range envelope.BlockInsertions {
+		insertionsByType[insertion.ContentType] = StructuredInsertion{
+			Action:       string(insertion.Decision.Action),
+			Reason:       insertion.Decision.Reason,
+			RequiresHITL: insertion.Decision.RequiresHITL,
+		}
+	}
+	for _, block := range envelope.ContentBlocks {
+		if block == nil {
+			continue
+		}
+		renderedBlock := structuredBlockFromCore(block)
+		if insertion, ok := insertionsByType[block.ContentType()]; ok {
+			renderedBlock.Summary = strings.TrimSpace(strings.Join([]string{renderedBlock.Summary, insertionBadge(insertion)}, " "))
+		}
+		rendered.Blocks = append(rendered.Blocks, renderedBlock)
+	}
+	return rendered
+}
+
+func structuredBlockFromCore(block core.ContentBlock) StructuredContentBlock {
+	switch typed := block.(type) {
+	case core.TextContentBlock:
+		return StructuredContentBlock{
+			Type:       typed.ContentType(),
+			Summary:    "text output",
+			Body:       strings.TrimSpace(typed.Text),
+			Provenance: provenanceMap(typed.Provenance),
+		}
+	case core.StructuredContentBlock:
+		return StructuredContentBlock{
+			Type:       typed.ContentType(),
+			Summary:    "structured output",
+			Body:       formatStructuredData(typed.Data),
+			Provenance: provenanceMap(typed.Provenance),
+		}
+	case core.ResourceLinkContentBlock:
+		summary := "linked resource"
+		if typed.Name != "" {
+			summary = typed.Name
+		}
+		body := typed.URI
+		if typed.MIMEType != "" {
+			body += "\nMIME: " + typed.MIMEType
+		}
+		return StructuredContentBlock{
+			Type:       typed.ContentType(),
+			Summary:    summary,
+			Body:       body,
+			Provenance: provenanceMap(typed.Provenance),
+		}
+	case core.EmbeddedResourceContentBlock:
+		return StructuredContentBlock{
+			Type:       typed.ContentType(),
+			Summary:    "embedded resource",
+			Body:       formatStructuredData(typed.Resource),
+			Provenance: provenanceMap(typed.Provenance),
+		}
+	case core.BinaryReferenceContentBlock:
+		body := typed.Ref
+		if typed.MIMEType != "" {
+			body += "\nMIME: " + typed.MIMEType
+		}
+		return StructuredContentBlock{
+			Type:       typed.ContentType(),
+			Summary:    "binary reference",
+			Body:       body,
+			Provenance: provenanceMap(typed.Provenance),
+		}
+	case core.ErrorContentBlock:
+		body := strings.TrimSpace(typed.Message)
+		if typed.Code != "" {
+			body = typed.Code + ": " + body
+		}
+		return StructuredContentBlock{
+			Type:       typed.ContentType(),
+			Summary:    "error output",
+			Body:       body,
+			Provenance: provenanceMap(typed.Provenance),
+		}
+	default:
+		return StructuredContentBlock{
+			Type:    "unknown",
+			Summary: "unknown output",
+			Body:    fmt.Sprintf("%v", block),
+		}
+	}
+}
+
+func provenanceMap(provenance core.ContentProvenance) map[string]string {
+	out := map[string]string{}
+	if provenance.CapabilityID != "" {
+		out["capability"] = provenance.CapabilityID
+	}
+	if provenance.ProviderID != "" {
+		out["provider"] = provenance.ProviderID
+	}
+	if provenance.TrustClass != "" {
+		out["trust"] = string(provenance.TrustClass)
+	}
+	if provenance.Disposition != "" {
+		out["disposition"] = string(provenance.Disposition)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func effectClassLabels(classes []core.EffectClass) []string {
+	if len(classes) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(classes))
+	for _, class := range classes {
+		if class == "" {
+			continue
+		}
+		out = append(out, string(class))
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func insertionBadge(insertion StructuredInsertion) string {
+	if insertion.Action == "" {
+		return ""
+	}
+	if insertion.RequiresHITL {
+		return "(" + insertion.Action + ", hitl)"
+	}
+	return "(" + insertion.Action + ")"
+}
+
+func formatStructuredData(value any) string {
+	if value == nil {
+		return ""
+	}
+	if data, err := json.MarshalIndent(value, "", "  "); err == nil && len(data) > 0 {
+		return string(data)
+	}
+	return fmt.Sprintf("%v", value)
 }

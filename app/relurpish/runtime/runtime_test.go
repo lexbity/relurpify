@@ -3,12 +3,13 @@ package runtime
 import (
 	"context"
 	"os"
-	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/stretchr/testify/require"
 )
 
 // TestProbeEnvironmentHandlesMissingRunsc surfaces a helpful error message.
@@ -104,4 +105,30 @@ func TestDetectChromiumStatusMissingIsWarningOnly(t *testing.T) {
 	require.False(t, status.Available)
 	require.False(t, status.Blocking)
 	require.Equal(t, "not found", status.Details)
+}
+
+func TestBuildCapabilityRegistryDoesNotRegisterGenericExecutionToolsByDefault(t *testing.T) {
+	dir := t.TempDir()
+	runner := fruntime.NewLocalCommandRunner(dir, nil)
+
+	registry, indexManager, err := BuildCapabilityRegistry(dir, runner)
+	require.NoError(t, err)
+	require.NotNil(t, registry)
+	require.NotNil(t, indexManager)
+
+	_, ok := registry.Get("exec_run_tests")
+	require.False(t, ok)
+	_, ok = registry.Get("exec_run_linter")
+	require.False(t, ok)
+	_, ok = registry.Get("exec_run_build")
+	require.False(t, ok)
+	_, ok = registry.Get("exec_run_code")
+	require.False(t, ok)
+	_, ok = registry.Get("search_grep")
+	require.False(t, ok)
+
+	_, ok = registry.Get("go_test")
+	require.True(t, ok)
+	_, ok = registry.Get("file_search")
+	require.True(t, ok)
 }

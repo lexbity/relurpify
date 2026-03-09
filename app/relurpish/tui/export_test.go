@@ -75,6 +75,44 @@ func TestWriteSessionExportMarkdown(t *testing.T) {
 	}
 }
 
+func TestWriteSessionExportRedactsSensitiveTelemetryAndMessageContent(t *testing.T) {
+	dir := t.TempDir()
+	telemetryPath := filepath.Join(dir, "telemetry.jsonl")
+	event := core.Event{
+		Type:      core.EventToolCall,
+		TaskID:    "task-1",
+		Timestamp: time.Now(),
+		Metadata: map[string]interface{}{
+			"token": "super-secret",
+		},
+	}
+	if err := writeTelemetryLine(telemetryPath, event); err != nil {
+		t.Fatalf("write telemetry: %v", err)
+	}
+
+	out, err := WriteSessionExport([]Message{{
+		Role:      RoleAgent,
+		Timestamp: time.Now(),
+		Content:   MessageContent{Text: "Bearer secret"},
+	}}, &Session{ID: "sess-3", StartTime: time.Now(), Workspace: dir}, &AgentContext{}, ExportOptions{
+		Format:        "json",
+		Path:          filepath.Join(dir, "export-redacted.json"),
+		WorkspaceRoot: dir,
+		TelemetryPath: telemetryPath,
+		Limit:         10,
+	})
+	if err != nil {
+		t.Fatalf("WriteSessionExport: %v", err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read export: %v", err)
+	}
+	if !strings.Contains(string(data), "[REDACTED]") {
+		t.Fatalf("expected redacted marker in export")
+	}
+}
+
 func writeTelemetryLine(path string, event core.Event) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {

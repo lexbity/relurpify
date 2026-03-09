@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/lexcodex/relurpify/tools/browser"
 	"github.com/stretchr/testify/require"
 )
@@ -126,7 +126,7 @@ func (r *recordingTelemetry) Emit(event core.Event) {
 }
 
 func TestBrowserProviderRegistersBrowserTool(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools: registry,
 	}
@@ -134,13 +134,13 @@ func TestBrowserProviderRegistersBrowserTool(t *testing.T) {
 	err := newBrowserProvider().Initialize(context.Background(), rt)
 
 	require.NoError(t, err)
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	require.Equal(t, "browser", tool.Name())
 }
 
 func TestBrowserToolOpenUsesScopedDefaultSession(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -156,7 +156,7 @@ func TestBrowserToolOpenUsesScopedDefaultSession(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	state := core.NewContext()
 	state.Set("task.id", "task-123")
@@ -187,7 +187,7 @@ func TestBrowserToolOpenUsesScopedDefaultSession(t *testing.T) {
 }
 
 func TestBrowserToolUsesAgentBrowserDefaultBackend(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -204,7 +204,7 @@ func TestBrowserToolUsesAgentBrowserDefaultBackend(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	registry.UseAgentSpec("agent-browser", &core.AgentRuntimeSpec{
 		Mode: core.AgentModePrimary,
@@ -217,7 +217,7 @@ func TestBrowserToolUsesAgentBrowserDefaultBackend(t *testing.T) {
 			DefaultBackend: "bidi",
 		},
 	})
-	tool, ok = registry.Get("browser")
+	tool, ok = registry.GetModelTool("browser")
 	require.True(t, ok)
 
 	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"action": "open"})
@@ -227,7 +227,7 @@ func TestBrowserToolUsesAgentBrowserDefaultBackend(t *testing.T) {
 }
 
 func TestBrowserToolRejectsDisallowedBackend(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -242,7 +242,7 @@ func TestBrowserToolRejectsDisallowedBackend(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	registry.UseAgentSpec("agent-browser", &core.AgentRuntimeSpec{
 		Mode: core.AgentModePrimary,
@@ -255,7 +255,7 @@ func TestBrowserToolRejectsDisallowedBackend(t *testing.T) {
 			AllowedBackends: []string{"cdp"},
 		},
 	})
-	tool, ok = registry.Get("browser")
+	tool, ok = registry.GetModelTool("browser")
 	require.True(t, ok)
 
 	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
@@ -268,7 +268,7 @@ func TestBrowserToolRejectsDisallowedBackend(t *testing.T) {
 }
 
 func TestBrowserToolRejectsDeniedExecuteJS(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -283,7 +283,7 @@ func TestBrowserToolRejectsDeniedExecuteJS(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	registry.UseAgentSpec("agent-browser", &core.AgentRuntimeSpec{
 		Mode: core.AgentModePrimary,
@@ -298,7 +298,7 @@ func TestBrowserToolRejectsDeniedExecuteJS(t *testing.T) {
 			},
 		},
 	})
-	tool, ok = registry.Get("browser")
+	tool, ok = registry.GetModelTool("browser")
 	require.True(t, ok)
 
 	state := core.NewContext()
@@ -316,7 +316,7 @@ func TestBrowserToolRejectsDeniedExecuteJS(t *testing.T) {
 }
 
 func TestBrowserToolNavigateRecordsPageObservation(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -332,7 +332,7 @@ func TestBrowserToolNavigateRecordsPageObservation(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	state := core.NewContext()
 
@@ -359,7 +359,7 @@ func TestBrowserToolNavigateRecordsPageObservation(t *testing.T) {
 }
 
 func TestBrowserToolExtractReturnsStructuredPageData(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -379,7 +379,7 @@ func TestBrowserToolExtractReturnsStructuredPageData(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	state := core.NewContext()
 	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
@@ -403,13 +403,28 @@ func TestBrowserToolExtractReturnsStructuredPageData(t *testing.T) {
 }
 
 func TestShouldEnableBrowserProvider(t *testing.T) {
-	require.True(t, shouldEnableBrowserProvider([]string{"coding", "web-testing"}))
-	require.True(t, shouldEnableBrowserProvider([]string{"web-research"}))
-	require.False(t, shouldEnableBrowserProvider([]string{"coding", "system"}))
+	require.True(t, shouldEnableBrowserProvider(&core.AgentRuntimeSpec{
+		Browser: &core.AgentBrowserSpec{Enabled: true},
+	}))
+	require.False(t, shouldEnableBrowserProvider(&core.AgentRuntimeSpec{
+		Browser: &core.AgentBrowserSpec{Enabled: false},
+	}))
+	require.False(t, shouldEnableBrowserProvider(nil))
+}
+
+func TestRegisterBuiltinProvidersUsesExplicitBrowserSpec(t *testing.T) {
+	rt := &Runtime{
+		Tools: capability.NewRegistry(),
+		AgentSpec: &core.AgentRuntimeSpec{
+			Browser: &core.AgentBrowserSpec{Enabled: true},
+		},
+	}
+	require.NoError(t, RegisterBuiltinProviders(context.Background(), rt))
+	require.Len(t, rt.registeredProviders(), 1)
 }
 
 func TestBrowserToolOpenPassesBackendSelection(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -426,7 +441,7 @@ func TestBrowserToolOpenPassesBackendSelection(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 
 	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
@@ -439,7 +454,7 @@ func TestBrowserToolOpenPassesBackendSelection(t *testing.T) {
 }
 
 func TestBrowserToolOpenSupportsBiDiSelection(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -456,7 +471,7 @@ func TestBrowserToolOpenSupportsBiDiSelection(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 
 	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
@@ -469,7 +484,7 @@ func TestBrowserToolOpenSupportsBiDiSelection(t *testing.T) {
 }
 
 func TestBrowserToolParallelSessionsStayIsolatedAndScopeCleanupClosesThem(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -491,7 +506,7 @@ func TestBrowserToolParallelSessionsStayIsolatedAndScopeCleanupClosesThem(t *tes
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	state := core.NewContext()
 	state.Set("task.id", "task-parallel")
@@ -528,7 +543,7 @@ func TestBrowserToolParallelSessionsStayIsolatedAndScopeCleanupClosesThem(t *tes
 }
 
 func TestBrowserToolRecoversAfterBackendDisconnect(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	telemetry := &recordingTelemetry{}
 	rt := &Runtime{
 		Tools:        registry,
@@ -554,7 +569,7 @@ func TestBrowserToolRecoversAfterBackendDisconnect(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	state := core.NewContext()
 	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
@@ -576,10 +591,19 @@ func TestBrowserToolRecoversAfterBackendDisconnect(t *testing.T) {
 		}
 	}
 	require.True(t, foundRecovery)
+
+	snapshots, err := provider.SnapshotSessions(context.Background())
+	require.NoError(t, err)
+	require.Len(t, snapshots, 1)
+	require.Equal(t, "browser", snapshots[0].Session.ProviderID)
+	require.Equal(t, 1, snapshots[0].Session.Metadata["recoveries"])
+	stateData, ok := snapshots[0].State.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, 1, stateData["recoveries"])
 }
 
 func TestBrowserProviderCloseClosesTrackedSessions(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
@@ -595,7 +619,7 @@ func TestBrowserProviderCloseClosesTrackedSessions(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.Get("browser")
+	tool, ok := registry.GetModelTool("browser")
 	require.True(t, ok)
 	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
@@ -604,4 +628,76 @@ func TestBrowserProviderCloseClosesTrackedSessions(t *testing.T) {
 	require.NoError(t, provider.Close())
 	require.Equal(t, 1, backend.closed)
 	require.Empty(t, provider.sessions)
+}
+
+func TestBrowserProviderCloseSessionClosesTrackedSession(t *testing.T) {
+	registry := capability.NewRegistry()
+	rt := &Runtime{
+		Tools:        registry,
+		Context:      core.NewContext(),
+		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+	}
+	provider := newBrowserProvider()
+	backend := &stubBrowserBackend{text: "ready", title: "Ready"}
+	provider.sessionFactory = func(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error) {
+		return browser.NewSession(browser.SessionConfig{
+			Backend:     backend,
+			BackendName: cfg.backendName,
+		})
+	}
+	require.NoError(t, provider.Initialize(context.Background(), rt))
+
+	tool, ok := registry.GetModelTool("browser")
+	require.True(t, ok)
+	openResult, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"action": "open"})
+	require.NoError(t, err)
+
+	require.NoError(t, provider.CloseSession(context.Background(), openResult.Data["session_id"].(string)))
+	require.Equal(t, 1, backend.closed)
+	require.Empty(t, provider.sessions)
+}
+
+func TestBrowserToolOpenHonorsSessionSafetyBudgets(t *testing.T) {
+	registry := capability.NewRegistry()
+	registry.UseAgentSpec("agent-browser", &core.AgentRuntimeSpec{
+		RuntimeSafety: &core.RuntimeSafetySpec{
+			MaxSubprocessesPerSession: 1,
+			MaxNetworkRequestsSession: 1,
+		},
+	})
+	rt := &Runtime{
+		Tools:        registry,
+		Context:      core.NewContext(),
+		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+	}
+	provider := newBrowserProvider()
+	backends := []*stubBrowserBackend{
+		{text: "ready", title: "Ready 1"},
+		{text: "ready", title: "Ready 2"},
+	}
+	index := 0
+	provider.sessionFactory = func(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error) {
+		session, err := browser.NewSession(browser.SessionConfig{
+			Backend:     backends[index],
+			BackendName: cfg.backendName,
+		})
+		index++
+		return session, err
+	}
+	require.NoError(t, provider.Initialize(context.Background(), rt))
+
+	tool, ok := registry.GetModelTool("browser")
+	require.True(t, ok)
+	state := core.NewContext()
+
+	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	require.NoError(t, err)
+	require.NotEmpty(t, openResult.Data["session_id"])
+
+	_, err = tool.Execute(context.Background(), state, map[string]interface{}{
+		"action":     "navigate",
+		"session_id": openResult.Data["session_id"],
+		"url":        "https://example.com",
+	})
+	require.ErrorContains(t, err, "network request budget exceeded")
 }

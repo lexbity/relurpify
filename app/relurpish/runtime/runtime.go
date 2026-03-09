@@ -15,12 +15,13 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/mcp/protocol"
 	"github.com/lexcodex/relurpify/framework/memory"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/lexcodex/relurpify/llm"
 	"github.com/lexcodex/relurpify/server"
@@ -32,13 +33,15 @@ import (
 // registration, and log management.
 type Runtime struct {
 	Config           Config
-	Tools            *toolsys.ToolRegistry
+	Tools            *capability.Registry
 	Memory           memory.MemoryStore
 	Context          *core.Context
 	Agent            graph.Agent
 	Model            core.LanguageModel
 	IndexManager     *ast.IndexManager
 	Registration     *fruntime.AgentRegistration
+	Delegations      *fruntime.DelegationManager
+	AgentSpec        *core.AgentRuntimeSpec
 	AgentDefinitions map[string]*core.AgentDefinition
 	Telemetry        core.Telemetry
 	Logger           *log.Logger
@@ -49,7 +52,15 @@ type Runtime struct {
 	serverMu     sync.Mutex
 	serverCancel context.CancelFunc
 	providersMu  sync.Mutex
-	providers    []RuntimeProvider
+	providers    []runtimeProviderRecord
+	delegationMu sync.Mutex
+	delegationBG *backgroundDelegationProvider
+	mcpMu        sync.Mutex
+	mcpElicit    MCPElicitationHandler
+}
+
+type MCPElicitationHandler interface {
+	HandleMCPElicitation(ctx context.Context, params protocol.ElicitationParams) (*protocol.ElicitationResult, error)
 }
 
 // New builds a fruntime for the TUI and status surfaces.
@@ -73,7 +84,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 
 	var workspaceCfg WorkspaceConfig
-	var allowedTools []string
+	var allowedCapabilities []core.CapabilitySelector
 	if cfg.ConfigPath != "" {
 		if loaded, err := LoadWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
@@ -83,7 +94,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 			if len(workspaceCfg.Agents) > 0 {
 				cfg.AgentName = workspaceCfg.Agents[0]
 			}
-			allowedTools = append(allowedTools, workspaceCfg.AllowedTools...)
+			allowedCapabilities = append(allowedCapabilities, workspaceCfg.AllowedCapabilities...)
 		} else if !errors.Is(err, os.ErrNotExist) {
 			logger.Printf("workspace config load failed: %v", err)
 		}
@@ -114,7 +125,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, err
 	}
-	registry, indexManager, err := BuildToolRegistry(cfg.Workspace, runner, ToolRegistryOptions{
+	registry, indexManager, err := BuildCapabilityRegistry(cfg.Workspace, runner, CapabilityRegistryOptions{
 		AgentID:           registration.ID,
 		PermissionManager: registration.Permissions,
 		AgentSpec:         agentSpec,
@@ -178,6 +189,10 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		Telemetry:         telemetry,
 	}
 	registry.UseAgentSpec(registration.ID, agentSpec)
+	if err := agents.RegisterBuiltinRelurpicCapabilities(registry, model, agentCfg); err != nil {
+		logFile.Close()
+		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
+	}
 
 	rt := &Runtime{
 		Config:           cfg,
@@ -190,18 +205,21 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile:          logFile,
 		Workspace:        workspaceCfg,
 		Registration:     registration,
+		Delegations:      fruntime.NewDelegationManager(),
+		AgentSpec:        agentSpec,
 		AgentDefinitions: agentDefs,
 		Telemetry:        telemetry,
 	}
+	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
 	for _, skill := range skillResults {
 		if !skill.Applied || skill.Paths.Root == "" {
 			continue
 		}
 		rt.Context.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
 	}
-	if err := RegisterSkillProviders(ctx, rt, registration.Manifest.Spec.Skills); err != nil {
+	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
 		logFile.Close()
-		return nil, fmt.Errorf("register skill providers: %w", err)
+		return nil, fmt.Errorf("register builtin providers: %w", err)
 	}
 
 	agent := instantiateAgent(cfg, model, registry, memory, agentDefs, agentCfg, indexManager)
@@ -220,8 +238,8 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 			_ = reflection.Delegate.Initialize(agentCfg)
 		}
 	}
-	if len(allowedTools) > 0 {
-		registry.RestrictTo(allowedTools)
+	if len(allowedCapabilities) > 0 {
+		registry.RestrictToCapabilities(allowedCapabilities)
 	}
 	rt.Agent = agent
 	return rt, nil
@@ -339,26 +357,26 @@ func (r *Runtime) SwitchAgent(name string) error {
 	return nil
 }
 
-// ToolRegistryOptions carries optional manifest/runtime policies into tool construction.
-type ToolRegistryOptions struct {
+// CapabilityRegistryOptions carries optional manifest/runtime policies into capability construction.
+type CapabilityRegistryOptions struct {
 	AgentID           string
 	PermissionManager *fruntime.PermissionManager
 	AgentSpec         *core.AgentRuntimeSpec
 }
 
-// BuildToolRegistry registers builtin tools scoped to the workspace.
-func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...ToolRegistryOptions) (*toolsys.ToolRegistry, *ast.IndexManager, error) {
+// BuildCapabilityRegistry registers builtin tool capabilities scoped to the workspace.
+func BuildCapabilityRegistry(workspace string, runner fruntime.CommandRunner, opts ...CapabilityRegistryOptions) (*capability.Registry, *ast.IndexManager, error) {
 	if workspace == "" {
 		workspace = "."
 	}
 	if runner == nil {
 		return nil, nil, fmt.Errorf("command runner required")
 	}
-	var cfg ToolRegistryOptions
+	var cfg CapabilityRegistryOptions
 	if len(opts) > 0 {
 		cfg = opts[0]
 	}
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	if cfg.PermissionManager != nil {
 		registry.UsePermissionManager(cfg.AgentID, cfg.PermissionManager)
 	}
@@ -377,7 +395,6 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 		}
 	}
 	for _, tool := range []core.Tool{
-		&tools.GrepTool{BasePath: workspace},
 		&tools.SimilarityTool{BasePath: workspace},
 		&tools.SemanticSearchTool{BasePath: workspace},
 	} {
@@ -391,16 +408,6 @@ func BuildToolRegistry(workspace string, runner fruntime.CommandRunner, opts ...
 		&tools.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: runner},
 		&tools.GitCommandTool{RepoPath: workspace, Command: "commit", Runner: runner},
 		&tools.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: runner},
-	} {
-		if err := register(tool); err != nil {
-			return nil, nil, err
-		}
-	}
-	for _, tool := range []core.Tool{
-		&tools.RunTestsTool{Command: []string{"go", "test", "./..."}, Workdir: workspace, Timeout: 10 * time.Minute, Runner: runner},
-		&tools.RunLinterTool{Command: []string{"golangci-lint", "run"}, Workdir: workspace, Timeout: 5 * time.Minute, Runner: runner},
-		&tools.RunBuildTool{Command: []string{"go", "build", "./..."}, Workdir: workspace, Timeout: 10 * time.Minute, Runner: runner},
-		&tools.ExecuteCodeTool{Command: []string{"bash", "-c"}, Workdir: workspace, Timeout: 1 * time.Minute, Runner: runner},
 	} {
 		if err := register(tool); err != nil {
 			return nil, nil, err
@@ -469,7 +476,7 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.ToolRegistry, mem memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config, indexManager *ast.IndexManager) graph.Agent {
+func instantiateAgent(cfg Config, model core.LanguageModel, registry *capability.Registry, mem memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config, indexManager *ast.IndexManager) graph.Agent {
 	paths := workspacecfg.New(cfg.Workspace)
 	workflowStatePath := paths.WorkflowStateFile()
 	// Check file-based definitions first
@@ -499,7 +506,7 @@ func instantiateAgent(cfg Config, model core.LanguageModel, registry *toolsys.To
 	}
 }
 
-func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, model core.LanguageModel, registry *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
+func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, model core.LanguageModel, registry *capability.Registry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
 	paths := workspacecfg.New(cfg.Workspace)
 	checkpointPath := paths.CheckpointsDir()
 	workflowStatePath := paths.WorkflowStateFile()
@@ -615,6 +622,7 @@ func (r *Runtime) StartServer(ctx context.Context, addr string) (func(context.Co
 	api := &server.APIServer{
 		Agent:             r.Agent,
 		Context:           r.Context,
+		Inspector:         r,
 		Logger:            r.Logger,
 		WorkflowStatePath: workspacecfg.New(r.Config.Workspace).WorkflowStateFile(),
 	}
@@ -700,4 +708,26 @@ func (r *Runtime) DenyHITL(requestID, reason string) error {
 		return errors.New("hitl broker unavailable")
 	}
 	return r.Registration.HITL.Deny(requestID, reason)
+}
+
+func (r *Runtime) SetMCPElicitationHandler(handler MCPElicitationHandler) {
+	if r == nil {
+		return
+	}
+	r.mcpMu.Lock()
+	defer r.mcpMu.Unlock()
+	r.mcpElicit = handler
+}
+
+func (r *Runtime) handleMCPElicitation(ctx context.Context, params protocol.ElicitationParams) (*protocol.ElicitationResult, error) {
+	if r == nil {
+		return &protocol.ElicitationResult{Action: "decline"}, nil
+	}
+	r.mcpMu.Lock()
+	handler := r.mcpElicit
+	r.mcpMu.Unlock()
+	if handler == nil {
+		return &protocol.ElicitationResult{Action: "decline"}, nil
+	}
+	return handler.HandleMCPElicitation(ctx, params)
 }

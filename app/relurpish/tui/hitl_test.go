@@ -159,7 +159,7 @@ func TestApproveHITLRootCmd(t *testing.T) {
 	hitl := newFakeHITL()
 	req := &runtime.PermissionRequest{
 		ID:            "hitl-approve",
-		Permission:    core.PermissionDescriptor{Action: "bash:exec", Resource: "cargo build"},
+		Permission:    core.PermissionDescriptor{Action: "command:exec", Resource: "cargo build"},
 		Justification: "build test",
 	}
 	hitl.pending = []*runtime.PermissionRequest{req}

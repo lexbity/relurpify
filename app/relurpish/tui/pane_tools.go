@@ -10,8 +10,8 @@ import (
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 )
 
-// knownTagOrder defines the display order for tool tag groups.
-var knownTagOrder = []string{"read-only", "execute", "destructive", "network"}
+// knownClassOrder defines the display order for capability risk groups.
+var knownClassOrder = []string{"read-only", "execute", "destructive", "network"}
 
 type toolsRowKind int
 
@@ -22,11 +22,11 @@ const (
 
 type toolsRow struct {
 	kind toolsRowKind
-	tag  string // section tag (both header and tool rows)
+	tag  string // section class label (both header and tool rows)
 	name string // tool name (tool rows only)
 }
 
-// ToolsPane shows registered tools grouped by tag with live policy editing.
+// ToolsPane shows registered local tools grouped by capability class with live policy editing.
 type ToolsPane struct {
 	tools       []ToolInfo
 	tagPolicies map[string]fruntime.AgentPermissionLevel
@@ -51,21 +51,21 @@ func (p *ToolsPane) load() {
 		return
 	}
 	p.tools = p.runtime.ListToolsInfo()
-	if tp := p.runtime.GetTagPolicies(); tp != nil {
+	if tp := p.runtime.GetClassPolicies(); tp != nil {
 		p.tagPolicies = tp
 	}
 	p.buildRows()
 }
 
 func (p *ToolsPane) buildRows() {
-	groups := make(map[string][]ToolInfo, len(knownTagOrder))
+	groups := make(map[string][]ToolInfo, len(knownClassOrder))
 	var other []ToolInfo
 
 	for _, t := range p.tools {
 		placed := false
-		for _, kt := range knownTagOrder {
-			for _, tag := range t.Tags {
-				if tag == kt {
+		for _, kt := range knownClassOrder {
+			for _, label := range t.Labels {
+				if label == kt {
 					groups[kt] = append(groups[kt], t)
 					placed = true
 					break
@@ -81,7 +81,7 @@ func (p *ToolsPane) buildRows() {
 	}
 
 	p.rows = nil
-	for _, kt := range knownTagOrder {
+	for _, kt := range knownClassOrder {
 		tools := groups[kt]
 		if len(tools) == 0 {
 			continue
@@ -169,7 +169,7 @@ func (p *ToolsPane) cycleSelected() {
 			p.tagPolicies[row.tag] = next
 		}
 		if p.runtime != nil {
-			p.runtime.SetTagPolicyLive(row.tag, next)
+			p.runtime.SetClassPolicyLive(row.tag, next)
 		}
 	case toolsRowKindTool:
 		t, ok := p.toolByName(row.name)
@@ -196,7 +196,7 @@ func (p *ToolsPane) resetSelected() {
 	case toolsRowKindHeader:
 		delete(p.tagPolicies, row.tag)
 		if p.runtime != nil {
-			p.runtime.SetTagPolicyLive(row.tag, "")
+			p.runtime.SetClassPolicyLive(row.tag, "")
 		}
 	case toolsRowKindTool:
 		for i := range p.tools {
@@ -239,8 +239,8 @@ func (p *ToolsPane) effectivePolicy(t ToolInfo) (level fruntime.AgentPermissionL
 		return t.Policy, true
 	}
 	best := fruntime.AgentPermissionLevel("")
-	for _, tag := range t.Tags {
-		pol, ok := p.tagPolicies[tag]
+	for _, label := range t.Labels {
+		pol, ok := p.tagPolicies[label]
 		if !ok {
 			continue
 		}
@@ -272,11 +272,11 @@ func toolsPolicyStyle(level fruntime.AgentPermissionLevel) lipgloss.Style {
 // View renders the tools pane.
 func (p *ToolsPane) View() string {
 	var b strings.Builder
-	b.WriteString(sectionHeaderStyle.Render("Tools & Permissions"))
+	b.WriteString(sectionHeaderStyle.Render("Local Tools & Permissions"))
 	b.WriteString("\n\n")
 
 	if len(p.rows) == 0 {
-		b.WriteString(dimStyle.Render("No tools registered."))
+		b.WriteString(dimStyle.Render("No local tools registered."))
 		return b.String()
 	}
 
@@ -338,7 +338,8 @@ func (p *ToolsPane) View() string {
 			} else if eff != "" {
 				label = " " + dimStyle.Render("(tag)")
 			}
-			line = prefix + nameW + " " + polW + label
+			runtimeLabel := dimStyle.Render(fmt.Sprintf("[%s]", toolRuntimeLabel(t)))
+			line = prefix + nameW + " " + polW + " " + runtimeLabel + label
 		}
 
 		b.WriteString(line + "\n")
@@ -352,4 +353,16 @@ func (p *ToolsPane) View() string {
 	}
 	b.WriteString("\n" + dimStyle.Render(hint))
 	return b.String()
+}
+
+func toolRuntimeLabel(t ToolInfo) string {
+	family := strings.TrimSpace(t.RuntimeFamily)
+	if family == "" {
+		family = "local-tool"
+	}
+	scope := strings.TrimSpace(t.Scope)
+	if scope == "" {
+		return family
+	}
+	return family + "/" + scope
 }

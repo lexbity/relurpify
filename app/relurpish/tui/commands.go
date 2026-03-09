@@ -470,6 +470,29 @@ func rootHandleWorkflow(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			b.WriteString(fmt.Sprintf(" - %s step=%s %s\n", event.EventType, event.StepID, event.Message))
 		}
 	}
+	if len(details.Delegations) > 0 {
+		b.WriteString("\nDelegations:\n")
+		for _, delegation := range details.Delegations {
+			target := delegation.TargetCapabilityID
+			if target == "" {
+				target = delegation.TargetProviderID
+			}
+			b.WriteString(fmt.Sprintf(" - %s state=%s target=%s", delegation.DelegationID, delegation.State, target))
+			if delegation.TargetSessionID != "" {
+				b.WriteString(fmt.Sprintf(" session=%s", delegation.TargetSessionID))
+			}
+			if delegation.InsertionAction != "" {
+				b.WriteString(fmt.Sprintf(" insertion=%s", delegation.InsertionAction))
+			}
+			b.WriteByte('\n')
+		}
+	}
+	if len(details.LinkedResources) > 0 {
+		b.WriteString("\nLinked resources:\n")
+		for _, ref := range details.LinkedResources {
+			b.WriteString(fmt.Sprintf(" - %s\n", ref))
+		}
+	}
 	m.addSystemMessage(b.String())
 	return m, nil
 }

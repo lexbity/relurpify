@@ -34,6 +34,22 @@ type browserProvider struct {
 	sessions map[string]*browserSessionHandle
 }
 
+func (p *browserProvider) Descriptor() core.ProviderDescriptor {
+	return core.ProviderDescriptor{
+		ID:                 "browser",
+		Kind:               core.ProviderKindAgentRuntime,
+		ActivationScope:    defaultBrowserScope,
+		TrustBaseline:      core.TrustClassProviderLocalUntrusted,
+		RecoverabilityMode: core.RecoverabilityInProcess,
+		SupportsHealth:     false,
+		Security: core.ProviderSecurityProfile{
+			Origin:                     core.ProviderOriginLocal,
+			SafeForDirectInsertion:     false,
+			RequiresFrameworkMediation: true,
+		},
+	}
+}
+
 type browserSessionConfig struct {
 	backendName string
 	manager     *fruntime.PermissionManager
@@ -49,12 +65,28 @@ func newBrowserProvider() *browserProvider {
 	}
 }
 
-// RegisterSkillProviders installs runtime-managed providers required by the active skills.
-func RegisterSkillProviders(ctx context.Context, rt *Runtime, skills []string) error {
-	if !shouldEnableBrowserProvider(skills) {
-		return nil
+// RegisterBuiltinProviders installs builtin runtime-managed providers declared by the agent spec.
+func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
+	if !shouldEnableBrowserProvider(rt.AgentSpec) {
+		goto configured
 	}
-	return rt.RegisterProvider(ctx, newBrowserProvider())
+	if err := rt.RegisterProvider(ctx, newBrowserProvider()); err != nil {
+		return err
+	}
+configured:
+	for _, providerCfg := range mergeConfiguredProviders(rt.AgentSpec) {
+		provider, err := providerFromConfig(providerCfg)
+		if err != nil {
+			return err
+		}
+		if provider == nil {
+			continue
+		}
+		if err := rt.RegisterProvider(ctx, provider); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *browserProvider) Initialize(_ context.Context, rt *Runtime) error {
@@ -62,7 +94,14 @@ func (p *browserProvider) Initialize(_ context.Context, rt *Runtime) error {
 		return fmt.Errorf("runtime tools unavailable")
 	}
 	p.telemetry = rt.Telemetry
-	return rt.Tools.Register(&browserTool{
+	rt.Tools.AddExposurePolicies([]core.CapabilityExposurePolicy{{
+		Selector: core.CapabilitySelector{
+			Name:            "browser",
+			RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
+		},
+		Access: core.CapabilityExposureCallable,
+	}})
+	return rt.Tools.RegisterInvocableCapability(&browserTool{
 		provider: p,
 		runtime:  rt,
 	})
@@ -84,6 +123,22 @@ func (p *browserProvider) Close() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (p *browserProvider) CloseSession(_ context.Context, sessionID string) error {
+	if p == nil {
+		return ErrSessionNotManaged
+	}
+	p.mu.Lock()
+	handle, ok := p.sessions[sessionID]
+	if ok {
+		delete(p.sessions, sessionID)
+	}
+	p.mu.Unlock()
+	if !ok {
+		return ErrSessionNotManaged
+	}
+	return handle.Close()
 }
 
 func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error) {
@@ -177,10 +232,15 @@ type browserSessionHandle struct {
 	factory     func(context.Context, browserSessionConfig) (*browser.Session, error)
 	telemetry   core.Telemetry
 	taskID      string
+	workflowID  string
 	agentID     string
 	sessionID   string
 	backendName string
 	recoveries  int
+	createdAt   time.Time
+	lastSeenAt  time.Time
+	lastPage    *browser.PageState
+	lastErr     string
 	closed      bool
 }
 
@@ -206,6 +266,39 @@ func (t *browserTool) Parameters() []core.ToolParameter {
 
 func (t *browserTool) SetAgentSpec(spec *core.AgentRuntimeSpec, _ string) {
 	t.spec = spec
+}
+
+func (t *browserTool) CapabilityDescriptor() core.CapabilityDescriptor {
+	return core.CapabilityDescriptor{
+		ID:          "tool:browser",
+		Kind:        core.CapabilityKindTool,
+		Name:        "browser",
+		Version:     "v1",
+		Description: t.Description(),
+		Category:    t.Category(),
+		Source: core.CapabilitySource{
+			ProviderID: "browser",
+			Scope:      core.CapabilityScopeProvider,
+		},
+		TrustClass:    core.TrustClassProviderLocalUntrusted,
+		RiskClasses:   []core.RiskClass{core.RiskClassNetwork, core.RiskClassSessioned, core.RiskClassExfiltration},
+		EffectClasses: []core.EffectClass{core.EffectClassNetworkEgress, core.EffectClassContextInsertion, core.EffectClassSessionCreation},
+		InputSchema:   core.ToolInputSchema(t),
+		Availability: core.AvailabilitySpec{
+			Available: true,
+		},
+		Annotations: map[string]any{
+			"provider_id": "browser",
+		},
+	}
+}
+
+func (t *browserTool) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+	return core.NormalizeCapabilityDescriptor(t.CapabilityDescriptor())
+}
+
+func (t *browserTool) Invoke(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+	return t.Execute(ctx, state, args)
 }
 
 func (t *browserTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
@@ -382,13 +475,23 @@ func (t *browserTool) open(ctx context.Context, state *core.Context, args map[st
 		factory:     t.provider.sessionFactory,
 		telemetry:   t.runtime.Telemetry,
 		taskID:      browserTaskScope(state),
+		workflowID:  strings.TrimSpace(state.GetString("workflow.id")),
 		agentID:     t.runtime.Registration.ID,
 		backendName: backendName,
+		createdAt:   time.Now().UTC(),
+		lastSeenAt:  time.Now().UTC(),
 	}
 	scope := browserTaskScope(state)
 	sessionID := state.Registry().RegisterScoped(scope, handle)
 	handle.sessionID = sessionID
 	t.provider.trackSession(sessionID, handle)
+	if err := t.recordSessionActivity(sessionID, "open"); err != nil {
+		t.provider.untrackSession(sessionID)
+		state.Registry().Remove(sessionID)
+		_ = handle.Close()
+		return nil, err
+	}
+	handle.noteActivity()
 	state.Set(browserDefaultSessionKey, sessionID)
 	emitBrowserTelemetry(t.runtime.Telemetry, core.EventStateChange, t.runtime.Registration.ID, scope, "browser session opened", map[string]interface{}{
 		"browser_event": "session_opened",
@@ -441,6 +544,10 @@ func (t *browserTool) lookupSession(state *core.Context, args map[string]interfa
 	if !ok {
 		return nil, "", fmt.Errorf("browser session %s has invalid type", sessionID)
 	}
+	if err := t.recordSessionActivity(sessionID, strings.ToLower(strings.TrimSpace(fmt.Sprint(args["action"])))); err != nil {
+		return nil, "", err
+	}
+	session.noteActivity()
 	return session, sessionID, nil
 }
 
@@ -522,6 +629,7 @@ func (t *browserTool) successWithSnapshot(ctx context.Context, state *core.Conte
 	pageState, err := session.CapturePageState(ctx)
 	if err == nil && pageState != nil {
 		data["page_state"] = pageState
+		session.notePageState(pageState)
 		recordBrowserObservation(state, pageState)
 		emitBrowserTelemetry(t.runtime.Telemetry, core.EventStateChange, t.runtime.Registration.ID, browserTaskScope(state), "browser page snapshot captured", map[string]interface{}{
 			"browser_event": "page_snapshot",
@@ -647,14 +755,25 @@ func defaultIfEmpty(value, fallback string) string {
 	return value
 }
 
-func shouldEnableBrowserProvider(skills []string) bool {
-	for _, skill := range skills {
-		skill = strings.TrimSpace(strings.ToLower(skill))
-		if strings.HasPrefix(skill, "web-") {
-			return true
-		}
+func (t *browserTool) recordSessionActivity(sessionID, action string) error {
+	if t == nil || t.runtime == nil || t.runtime.Tools == nil || sessionID == "" {
+		return nil
 	}
-	return false
+	switch action {
+	case "", "close":
+		return nil
+	case "open":
+		if err := t.runtime.Tools.RecordSessionSubprocess(sessionID, 1); err != nil {
+			return err
+		}
+		return t.runtime.Tools.RecordSessionNetworkRequest(sessionID, 1)
+	default:
+		return t.runtime.Tools.RecordSessionNetworkRequest(sessionID, 1)
+	}
+}
+
+func shouldEnableBrowserProvider(spec *core.AgentRuntimeSpec) bool {
+	return spec != nil && spec.Browser != nil && spec.Browser.Enabled
 }
 
 func (p *browserProvider) trackSession(sessionID string, handle *browserSessionHandle) {
@@ -673,6 +792,75 @@ func (p *browserProvider) untrackSession(sessionID string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.sessions, sessionID)
+}
+
+func (p *browserProvider) ListSessions(context.Context) ([]core.ProviderSession, error) {
+	if p == nil {
+		return nil, nil
+	}
+	p.mu.Lock()
+	handles := make([]*browserSessionHandle, 0, len(p.sessions))
+	for _, handle := range p.sessions {
+		handles = append(handles, handle)
+	}
+	p.mu.Unlock()
+	out := make([]core.ProviderSession, 0, len(handles))
+	for _, handle := range handles {
+		out = append(out, handle.providerSession())
+	}
+	return out, nil
+}
+
+func (p *browserProvider) HealthSnapshot(context.Context) (core.ProviderHealthSnapshot, error) {
+	p.mu.Lock()
+	count := len(p.sessions)
+	p.mu.Unlock()
+	return core.ProviderHealthSnapshot{
+		Status:  "healthy",
+		Message: "browser provider active",
+		Metadata: map[string]interface{}{
+			"active_sessions": count,
+		},
+	}, nil
+}
+
+func (p *browserProvider) SnapshotProvider(ctx context.Context) (*core.ProviderSnapshot, error) {
+	sessions, err := p.ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	health, err := p.HealthSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &core.ProviderSnapshot{
+		ProviderID:     "browser",
+		Recoverability: core.RecoverabilityInProcess,
+		Descriptor:     p.Descriptor(),
+		Health:         health,
+		CapabilityIDs:  []string{"tool:browser"},
+		Metadata: map[string]any{
+			"active_sessions": len(sessions),
+		},
+		CapturedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}, nil
+}
+
+func (p *browserProvider) SnapshotSessions(context.Context) ([]core.ProviderSessionSnapshot, error) {
+	if p == nil {
+		return nil, nil
+	}
+	p.mu.Lock()
+	handles := make([]*browserSessionHandle, 0, len(p.sessions))
+	for _, handle := range p.sessions {
+		handles = append(handles, handle)
+	}
+	p.mu.Unlock()
+	out := make([]core.ProviderSessionSnapshot, 0, len(handles))
+	for _, handle := range handles {
+		out = append(out, handle.snapshot())
+	}
+	return out, nil
 }
 
 func emitBrowserTelemetry(telemetry core.Telemetry, eventType core.EventType, agentID, taskID, message string, metadata map[string]interface{}) {
@@ -854,6 +1042,78 @@ func (h *browserSessionHandle) currentSession() (*browser.Session, error) {
 	return h.session, nil
 }
 
+func (h *browserSessionHandle) noteActivity() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.lastSeenAt = time.Now().UTC()
+}
+
+func (h *browserSessionHandle) notePageState(page *browser.PageState) {
+	if h == nil || page == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.lastPage = page
+	h.lastSeenAt = time.Now().UTC()
+}
+
+func (h *browserSessionHandle) providerSession() core.ProviderSession {
+	if h == nil {
+		return core.ProviderSession{}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	session := core.ProviderSession{
+		ID:             h.sessionID,
+		ProviderID:     "browser",
+		CapabilityIDs:  []string{"tool:browser"},
+		WorkflowID:     h.workflowID,
+		TaskID:         h.taskID,
+		TrustClass:     core.TrustClassProviderLocalUntrusted,
+		Recoverability: core.RecoverabilityInProcess,
+		CreatedAt:      h.createdAt.UTC().Format(time.RFC3339Nano),
+		LastActivityAt: h.lastSeenAt.UTC().Format(time.RFC3339Nano),
+		Health:         "active",
+		Metadata: map[string]interface{}{
+			"backend":    h.backendName,
+			"recoveries": h.recoveries,
+		},
+	}
+	if h.lastPage != nil {
+		session.Metadata["last_url"] = h.lastPage.URL
+		session.Metadata["last_title"] = h.lastPage.Title
+	}
+	if h.lastErr != "" {
+		session.Metadata["last_recovery_error"] = h.lastErr
+	}
+	return session
+}
+
+func (h *browserSessionHandle) snapshot() core.ProviderSessionSnapshot {
+	session := h.providerSession()
+	var state any
+	h.mu.Lock()
+	if h.lastPage != nil {
+		state = map[string]any{
+			"page_state": h.lastPage,
+			"backend":    h.backendName,
+			"recoveries": h.recoveries,
+		}
+	}
+	lastErr := h.lastErr
+	h.mu.Unlock()
+	return core.ProviderSessionSnapshot{
+		Session:         session,
+		State:           state,
+		CapturedAt:      time.Now().UTC().Format(time.RFC3339Nano),
+		LastRecoveryErr: lastErr,
+	}
+}
+
 func (h *browserSessionHandle) recover(ctx context.Context, operation string, cause error) error {
 	h.mu.Lock()
 	if h.closed {
@@ -869,6 +1129,9 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	}
 	newSession, err := h.factory(ctx, h.cfg)
 	if err != nil {
+		h.mu.Lock()
+		h.lastErr = err.Error()
+		h.mu.Unlock()
 		emitBrowserTelemetry(h.telemetry, core.EventStateChange, h.agentID, h.taskID, "browser session recovery failed", map[string]interface{}{
 			"browser_event": "session_recovery_failed",
 			"session_id":    h.sessionID,
@@ -883,6 +1146,8 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	h.mu.Lock()
 	h.session = newSession
 	h.recoveries++
+	h.lastErr = ""
+	h.lastSeenAt = time.Now().UTC()
 	recoveries := h.recoveries
 	h.mu.Unlock()
 

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/core"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"gopkg.in/yaml.v3"
@@ -141,10 +142,10 @@ func (c Config) AgentLabel() string {
 
 // WorkspaceConfig captures persisted workspace preferences under relurpify_cfg.
 type WorkspaceConfig struct {
-	Model        string   `yaml:"model"`
-	Agents       []string `yaml:"agents"`
-	AllowedTools []string `yaml:"allowed_tools"`
-	LastUpdated  int64    `yaml:"last_updated"`
+	Model               string                    `yaml:"model"`
+	Agents              []string                  `yaml:"agents"`
+	AllowedCapabilities []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
+	LastUpdated         int64                     `yaml:"last_updated"`
 }
 
 // LoadWorkspaceConfig loads workspace preferences from disk.

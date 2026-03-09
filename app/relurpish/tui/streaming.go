@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // StreamTokenMsg represents a streamed token from the agent pipeline.
@@ -28,6 +30,7 @@ type StreamCompleteMsg struct {
 	RunID      string
 	Duration   time.Duration
 	TokensUsed int
+	Result     *core.Result
 }
 
 // StreamErrorMsg wraps runtime failures for display.
@@ -46,6 +49,7 @@ type MessageBuilder struct {
 	plan          *TaskPlan
 	changes       []FileChange
 	currentChange *FileChange
+	result        *StructuredResult
 }
 
 // NewMessageBuilder constructs a builder with sane defaults.
@@ -169,6 +173,7 @@ func (mb *MessageBuilder) Build(duration time.Duration, tokensUsed int) Message 
 			Thinking: append([]ThinkingStep(nil), mb.thinking...),
 			Plan:     clonePlan(mb.plan),
 			Changes:  cloneChanges(mb.changes),
+			Result:   cloneStructuredResult(mb.result),
 			Expanded: map[string]bool{"thinking": true, "plan": true, "changes": false},
 		},
 		Metadata: MessageMetadata{Duration: duration, TokensUsed: tokensUsed},
@@ -194,9 +199,15 @@ func (mb *MessageBuilder) BuildPartial() Message {
 			Thinking: thinking,
 			Plan:     clonePlan(mb.plan),
 			Changes:  changes,
+			Result:   cloneStructuredResult(mb.result),
 			Expanded: map[string]bool{"thinking": true, "plan": true, "changes": false},
 		},
 	}
+}
+
+// SetResult attaches a final structured result to the message being built.
+func (mb *MessageBuilder) SetResult(result *StructuredResult) {
+	mb.result = cloneStructuredResult(result)
 }
 
 func clonePlan(plan *TaskPlan) *TaskPlan {
@@ -215,4 +226,22 @@ func cloneChanges(changes []FileChange) []FileChange {
 	out := make([]FileChange, len(changes))
 	copy(out, changes)
 	return out
+}
+
+func cloneStructuredResult(result *StructuredResult) *StructuredResult {
+	if result == nil {
+		return nil
+	}
+	cp := *result
+	if result.Envelope != nil {
+		envelope := *result.Envelope
+		envelope.Blocks = append([]StructuredContentBlock(nil), result.Envelope.Blocks...)
+		if result.Envelope.Approval != nil {
+			approval := *result.Envelope.Approval
+			approval.EffectClasses = append([]string(nil), result.Envelope.Approval.EffectClasses...)
+			envelope.Approval = &approval
+		}
+		cp.Envelope = &envelope
+	}
+	return &cp
 }

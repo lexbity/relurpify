@@ -100,9 +100,9 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 		ExportedAt: time.Now(),
 		Session:    session,
 		Context:    ctx,
-		Messages:   append([]Message(nil), messages...),
+		Messages:   sanitizeMessagesForExport(messages),
 		LogPath:    opts.LogPath,
-		Telemetry:  telemetry,
+		Telemetry:  sanitizeTelemetryExport(telemetry),
 	}
 
 	switch format {
@@ -116,7 +116,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 }
 
 func writeJSONExport(path string, payload SessionExport) error {
-	data, err := json.MarshalIndent(payload, "", "  ")
+	data, err := json.MarshalIndent(core.RedactAny(payload), "", "  ")
 	if err != nil {
 		return err
 	}
@@ -236,4 +236,48 @@ func loadTelemetryEvents(path string, limit int) ([]core.Event, bool, error) {
 	}
 	truncated := total > limit
 	return events, truncated, nil
+}
+
+func sanitizeTelemetryExport(in TelemetryExport) TelemetryExport {
+	out := in
+	if len(in.Events) == 0 {
+		return out
+	}
+	out.Events = make([]core.Event, 0, len(in.Events))
+	for _, event := range in.Events {
+		clone := event
+		clone.Metadata = core.RedactMetadataMap(clone.Metadata)
+		out.Events = append(out.Events, clone)
+	}
+	return out
+}
+
+func sanitizeMessagesForExport(messages []Message) []Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	out := make([]Message, 0, len(messages))
+	for _, message := range messages {
+		clone := message
+		clone.Content.Text = redactExportString(clone.Content.Text)
+		for i := range clone.Content.Thinking {
+			clone.Content.Thinking[i].Description = redactExportString(clone.Content.Thinking[i].Description)
+			for j := range clone.Content.Thinking[i].Details {
+				clone.Content.Thinking[i].Details[j] = redactExportString(clone.Content.Thinking[i].Details[j])
+			}
+		}
+		for i := range clone.Content.Changes {
+			clone.Content.Changes[i].Diff = redactExportString(clone.Content.Changes[i].Diff)
+		}
+		out = append(out, clone)
+	}
+	return out
+}
+
+func redactExportString(value string) string {
+	redacted, ok := core.RedactAny(value).(string)
+	if !ok {
+		return value
+	}
+	return redacted
 }

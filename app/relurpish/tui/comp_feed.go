@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -204,7 +205,157 @@ func renderAgentContent(msg Message, width int, spinnerView string) string {
 	if msg.Content.Text != "" {
 		b.WriteString(textStyle.Render(msg.Content.Text))
 	}
+	if msg.Content.Result != nil {
+		if msg.Content.Text != "" {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(renderStructuredResultBlock(msg.Content.Result, width))
+	}
 	return b.String()
+}
+
+func renderStructuredResultBlock(result *StructuredResult, width int) string {
+	if result == nil {
+		return ""
+	}
+	var b strings.Builder
+	status := "failed"
+	if result.Success {
+		status = "ok"
+	}
+	nodeID := result.NodeID
+	if nodeID == "" {
+		nodeID = "unknown"
+	}
+	headerBits := []string{"node=" + nodeID, "status=" + status}
+	if result.Envelope != nil && result.Envelope.CapabilityName != "" {
+		headerBits = append(headerBits, "capability="+result.Envelope.CapabilityName)
+	}
+	b.WriteString(sectionHeaderStyle.Render("🧾 Result"))
+	b.WriteString("\n")
+	b.WriteString(detailStyle.Render(strings.Join(headerBits, " | ")))
+	if result.Envelope != nil {
+		b.WriteString("\n")
+		b.WriteString(renderResultEnvelope(result.Envelope, width))
+	}
+	if result.ErrorText != "" {
+		b.WriteString("\n")
+		b.WriteString(diffRemoveStyle.Render("error: " + result.ErrorText))
+	}
+	return b.String()
+}
+
+func renderResultEnvelope(envelope *StructuredResultEnvelope, width int) string {
+	if envelope == nil {
+		return ""
+	}
+	var parts []string
+	if envelope.CapabilityID != "" {
+		parts = append(parts, "id="+envelope.CapabilityID)
+	}
+	if envelope.TrustClass != "" {
+		parts = append(parts, "trust="+envelope.TrustClass)
+	}
+	if envelope.Disposition != "" {
+		parts = append(parts, "disposition="+envelope.Disposition)
+	}
+	if envelope.Insertion.Action != "" {
+		parts = append(parts, "insertion="+envelope.Insertion.Action)
+	}
+	var b strings.Builder
+	if len(parts) > 0 {
+		b.WriteString(dimStyle.Render(strings.Join(parts, " | ")))
+	}
+	if envelope.Insertion.Reason != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(detailStyle.Render("reason: " + envelope.Insertion.Reason))
+	}
+	if envelope.Approval != nil {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(renderApprovalBinding(envelope.Approval))
+	}
+	if len(envelope.Blocks) > 0 {
+		for _, block := range envelope.Blocks {
+			if b.Len() > 0 {
+				b.WriteString("\n")
+			}
+			b.WriteString(renderStructuredContentBlock(block, width))
+		}
+	}
+	return b.String()
+}
+
+func renderApprovalBinding(approval *StructuredApprovalBinding) string {
+	if approval == nil {
+		return ""
+	}
+	fields := make([]string, 0, 6)
+	if approval.ProviderID != "" {
+		fields = append(fields, "provider="+approval.ProviderID)
+	}
+	if approval.SessionID != "" {
+		fields = append(fields, "session="+approval.SessionID)
+	}
+	if approval.TargetResource != "" {
+		fields = append(fields, "target="+approval.TargetResource)
+	}
+	if approval.WorkflowID != "" {
+		fields = append(fields, "workflow="+approval.WorkflowID)
+	}
+	if approval.TaskID != "" {
+		fields = append(fields, "task="+approval.TaskID)
+	}
+	if len(approval.EffectClasses) > 0 {
+		fields = append(fields, "effects="+strings.Join(approval.EffectClasses, ","))
+	}
+	return detailStyle.Render("approval: " + strings.Join(fields, " | "))
+}
+
+func renderStructuredContentBlock(block StructuredContentBlock, width int) string {
+	var b strings.Builder
+	title := block.Type
+	if block.Summary != "" {
+		title = block.Summary
+	}
+	b.WriteString(detailStyle.Render("[" + block.Type + "] " + title))
+	if block.Body != "" {
+		body := strings.TrimSpace(block.Body)
+		if block.Type == "structured" || block.Type == "embedded-resource" {
+			body = indentStructuredBody(body, max(20, width-10))
+		}
+		b.WriteString("\n")
+		b.WriteString(textStyle.Render(body))
+	}
+	if len(block.Provenance) > 0 {
+		pairs := make([]string, 0, len(block.Provenance))
+		for _, key := range []string{"capability", "provider", "trust", "disposition"} {
+			if value := block.Provenance[key]; value != "" {
+				pairs = append(pairs, key+"="+value)
+			}
+		}
+		if len(pairs) > 0 {
+			b.WriteString("\n")
+			b.WriteString(dimStyle.Render(strings.Join(pairs, " | ")))
+		}
+	}
+	return b.String()
+}
+
+func indentStructuredBody(body string, _ int) string {
+	if strings.TrimSpace(body) == "" {
+		return body
+	}
+	var pretty any
+	if err := json.Unmarshal([]byte(body), &pretty); err == nil {
+		if data, err := json.MarshalIndent(pretty, "", "  "); err == nil {
+			return string(data)
+		}
+	}
+	return body
 }
 
 func renderThinkingBlock(steps []ThinkingStep, expanded bool, spinnerView string) string {
