@@ -21,7 +21,8 @@ type ContextItemType string
 const (
 	ContextTypeInteraction ContextItemType = "interaction"
 	ContextTypeFile        ContextItemType = "file"
-	ContextTypeToolResult  ContextItemType = "tool_result"
+	ContextTypeCapabilityResult ContextItemType = "capability_result"
+	ContextTypeToolResult  ContextItemType = ContextTypeCapabilityResult
 	ContextTypeMemory      ContextItemType = "memory"
 	ContextTypeObservation ContextItemType = "observation"
 )
@@ -128,16 +129,25 @@ func (fci *FileContextItem) Age() time.Duration {
 	return time.Since(fci.LastAccessed)
 }
 
-// ToolResultContextItem represents structured tool outputs inside context.
-type ToolResultContextItem struct {
+// CapabilityResultContextItem represents structured capability outputs inside context.
+type CapabilityResultContextItem struct {
 	ToolName     string
 	Result       *ToolResult
+	Envelope     *CapabilityResultEnvelope
 	LastAccessed time.Time
 	Relevance    float64
 	PriorityVal  int
 }
 
-func (tr *ToolResultContextItem) tokenPayload() string {
+func (tr *CapabilityResultContextItem) tokenPayload() string {
+	if tr != nil && tr.Envelope != nil && tr.Envelope.Result != nil {
+		if data := tr.Envelope.Result.Data; len(data) > 0 {
+			return fmt.Sprintf("%v", data)
+		}
+		if msg := tr.Envelope.Result.Error; msg != "" {
+			return msg
+		}
+	}
 	if tr == nil || tr.Result == nil {
 		return ""
 	}
@@ -147,11 +157,11 @@ func (tr *ToolResultContextItem) tokenPayload() string {
 	return fmt.Sprintf("%v", tr.Result.Data)
 }
 
-func (tr *ToolResultContextItem) TokenCount() int {
+func (tr *CapabilityResultContextItem) TokenCount() int {
 	return estimateTokens(tr.tokenPayload())
 }
 
-func (tr *ToolResultContextItem) RelevanceScore() float64 {
+func (tr *CapabilityResultContextItem) RelevanceScore() float64 {
 	if tr.Relevance == 0 {
 		tr.Relevance = 0.8
 	}
@@ -160,28 +170,33 @@ func (tr *ToolResultContextItem) RelevanceScore() float64 {
 	return tr.Relevance * decay
 }
 
-func (tr *ToolResultContextItem) Priority() int {
+func (tr *CapabilityResultContextItem) Priority() int {
 	return tr.PriorityVal
 }
 
-func (tr *ToolResultContextItem) Compress() (ContextItem, error) {
+func (tr *CapabilityResultContextItem) Compress() (ContextItem, error) {
 	payload := tr.tokenPayload()
 	if len(payload) > 250 {
 		payload = payload[:250] + "..."
 	}
-	return &ToolResultContextItem{
+	return &CapabilityResultContextItem{
 		ToolName:     tr.ToolName,
 		Result:       &ToolResult{Success: tr.Result.Success, Data: map[string]interface{}{"summary": payload}},
+		Envelope:     SummarizeCapabilityResultEnvelope(tr.Envelope, payload),
 		LastAccessed: tr.LastAccessed,
 		Relevance:    tr.Relevance * 0.9,
 		PriorityVal:  tr.PriorityVal + 1,
 	}, nil
 }
 
-func (tr *ToolResultContextItem) Type() ContextItemType {
-	return ContextTypeToolResult
+func (tr *CapabilityResultContextItem) Type() ContextItemType {
+	return ContextTypeCapabilityResult
 }
 
-func (tr *ToolResultContextItem) Age() time.Duration {
+func (tr *CapabilityResultContextItem) Age() time.Duration {
 	return time.Since(tr.LastAccessed)
 }
+
+// ToolResultContextItem is a compatibility alias retained while tool-specific
+// execution paths migrate to capability-native terminology.
+type ToolResultContextItem = CapabilityResultContextItem

@@ -46,8 +46,8 @@ type Plan struct {
 }
 
 // PlanStep describes a single actionable step. The Tool/Params fields point to
-// entries in the ToolRegistry so the planner can decide between filesystem,
-// git, execution, and LSP-powered capabilities at runtime.
+// entries in the CapabilityRegistry so the planner can decide between
+// filesystem, git, execution, and LSP-powered capabilities at runtime.
 type PlanStep struct {
 	ID              string
 	Description     string
@@ -82,8 +82,9 @@ type Config struct {
 // struct keeps telemetry, persistence, and tool adapters consistent because
 // they can always expect a NodeID/Success/Data triple.
 type Result struct {
-	NodeID  string
-	Success bool
-	Data    map[string]any
-	Error   error
+	NodeID   string
+	Success  bool
+	Data     map[string]any
+	Metadata map[string]any
+	Error    error
 }

@@ -15,13 +15,20 @@ type AgentRuntimeSpec struct {
 	Version             string                          `yaml:"version,omitempty" json:"version,omitempty"`
 	Prompt              string                          `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	Model               AgentModelConfig                `yaml:"model" json:"model"`
-	AllowedTools        []string                        `yaml:"allowed_tools,omitempty" json:"allowed_tools,omitempty"`
+	AllowedCapabilities []CapabilitySelector            `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
 	ToolExecutionPolicy map[string]ToolPolicy           `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
+	CapabilityPolicies  []CapabilityPolicy              `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
+	ExposurePolicies    []CapabilityExposurePolicy      `yaml:"exposure_policies,omitempty" json:"exposure_policies,omitempty"`
+	InsertionPolicies   []CapabilityInsertionPolicy     `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
 	GlobalPolicies      map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
+	ProviderPolicies    map[string]ProviderPolicy       `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
+	Providers           []ProviderConfig                `yaml:"providers,omitempty" json:"providers,omitempty"`
+	RuntimeSafety       *RuntimeSafetySpec              `yaml:"runtime_safety,omitempty" json:"runtime_safety,omitempty"`
 	SkillConfig         AgentSkillConfig                `yaml:"skill_config,omitempty" json:"skill_config,omitempty"`
 	Bash                AgentBashPermissions            `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
 	Files               AgentFileMatrix                 `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
 	Invocation          AgentInvocationSpec             `yaml:"invocation,omitempty" json:"invocation,omitempty"`
+	Coordination        AgentCoordinationSpec           `yaml:"coordination,omitempty" json:"coordination,omitempty"`
 	Context             AgentContextSpec                `yaml:"context,omitempty" json:"context,omitempty"`
 	Browser             *AgentBrowserSpec               `yaml:"browser,omitempty" json:"browser,omitempty"`
 	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
@@ -82,6 +89,58 @@ type ToolPolicy struct {
 	Execute AgentPermissionLevel `yaml:"execute,omitempty" json:"execute,omitempty"` // allow/deny/ask
 }
 
+// CapabilityPolicy configures execution gating for capabilities selected by framework-owned metadata.
+type CapabilityPolicy struct {
+	Selector CapabilitySelector   `yaml:"selector" json:"selector"`
+	Execute  AgentPermissionLevel `yaml:"execute,omitempty" json:"execute,omitempty"`
+}
+
+// CapabilityInsertionPolicy configures how matching capability output may be inserted into model-visible context.
+type CapabilityInsertionPolicy struct {
+	Selector CapabilitySelector `yaml:"selector" json:"selector"`
+	Action   InsertionAction    `yaml:"action" json:"action"`
+}
+
+type CapabilityExposure string
+
+const (
+	CapabilityExposureHidden      CapabilityExposure = "hidden"
+	CapabilityExposureInspectable CapabilityExposure = "inspectable"
+	CapabilityExposureCallable    CapabilityExposure = "callable"
+)
+
+// CapabilityExposurePolicy configures visibility of admitted capabilities.
+type CapabilityExposurePolicy struct {
+	Selector CapabilitySelector `yaml:"selector" json:"selector"`
+	Access   CapabilityExposure `yaml:"access" json:"access"`
+}
+
+// CapabilitySelector matches capabilities by identity and explicit metadata instead of raw tool tags.
+type CapabilitySelector struct {
+	ID                          string                      `yaml:"id,omitempty" json:"id,omitempty"`
+	Name                        string                      `yaml:"name,omitempty" json:"name,omitempty"`
+	Kind                        CapabilityKind              `yaml:"kind,omitempty" json:"kind,omitempty"`
+	RuntimeFamilies             []CapabilityRuntimeFamily   `yaml:"runtime_families,omitempty" json:"runtime_families,omitempty"`
+	Tags                        []string                    `yaml:"tags,omitempty" json:"tags,omitempty"`
+	ExcludeTags                 []string                    `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
+	SourceScopes                []CapabilityScope           `yaml:"source_scopes,omitempty" json:"source_scopes,omitempty"`
+	TrustClasses                []TrustClass                `yaml:"trust_classes,omitempty" json:"trust_classes,omitempty"`
+	RiskClasses                 []RiskClass                 `yaml:"risk_classes,omitempty" json:"risk_classes,omitempty"`
+	EffectClasses               []EffectClass               `yaml:"effect_classes,omitempty" json:"effect_classes,omitempty"`
+	CoordinationRoles           []CoordinationRole          `yaml:"coordination_roles,omitempty" json:"coordination_roles,omitempty"`
+	CoordinationTaskTypes       []string                    `yaml:"coordination_task_types,omitempty" json:"coordination_task_types,omitempty"`
+	CoordinationExecutionModes  []CoordinationExecutionMode `yaml:"coordination_execution_modes,omitempty" json:"coordination_execution_modes,omitempty"`
+	CoordinationLongRunning     *bool                       `yaml:"coordination_long_running,omitempty" json:"coordination_long_running,omitempty"`
+	CoordinationDirectInsertion *bool                       `yaml:"coordination_direct_insertion,omitempty" json:"coordination_direct_insertion,omitempty"`
+}
+
+// ProviderPolicy configures activation defaults and trust metadata for provider-backed capabilities.
+type ProviderPolicy struct {
+	Activate               AgentPermissionLevel `yaml:"activate,omitempty" json:"activate,omitempty"`
+	DefaultTrust           TrustClass           `yaml:"default_trust,omitempty" json:"default_trust,omitempty"`
+	AllowCredentialSharing bool                 `yaml:"allow_credential_sharing,omitempty" json:"allow_credential_sharing,omitempty"`
+}
+
 // AgentBashPermissions constrains shell commands.
 type AgentBashPermissions struct {
 	AllowPatterns []string             `yaml:"allow_patterns" json:"allow_patterns"`
@@ -109,6 +168,43 @@ type AgentInvocationSpec struct {
 	CanInvokeSubagents bool     `yaml:"can_invoke_subagents" json:"can_invoke_subagents"`
 	AllowedSubagents   []string `yaml:"allowed_subagents" json:"allowed_subagents"`
 	MaxDepth           int      `yaml:"max_depth" json:"max_depth"`
+}
+
+// AgentCoordinationSpec is the canonical configuration surface for delegation,
+// handoff, and tiered projection policy. Invocation remains as a compatibility
+// input for older manifests.
+type AgentCoordinationSpec struct {
+	Enabled                   bool                  `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	DelegationTargetSelectors []CapabilitySelector  `yaml:"delegation_target_selectors,omitempty" json:"delegation_target_selectors,omitempty"`
+	ResourceHandoffSelectors  []CapabilitySelector  `yaml:"resource_handoff_selectors,omitempty" json:"resource_handoff_selectors,omitempty"`
+	MaxDelegationDepth        int                   `yaml:"max_delegation_depth,omitempty" json:"max_delegation_depth,omitempty"`
+	AllowRemoteDelegation     bool                  `yaml:"allow_remote_delegation,omitempty" json:"allow_remote_delegation,omitempty"`
+	AllowBackgroundDelegation bool                  `yaml:"allow_background_delegation,omitempty" json:"allow_background_delegation,omitempty"`
+	RequireApprovalCrossTrust bool                  `yaml:"require_approval_cross_trust,omitempty" json:"require_approval_cross_trust,omitempty"`
+	Projection                AgentProjectionPolicy `yaml:"projection,omitempty" json:"projection,omitempty"`
+	ScaleOut                  AgentScaleOutPolicy   `yaml:"scale_out,omitempty" json:"scale_out,omitempty"`
+}
+
+type AgentProjectionPolicy struct {
+	Hot      AgentProjectionTier `yaml:"hot,omitempty" json:"hot,omitempty"`
+	Warm     AgentProjectionTier `yaml:"warm,omitempty" json:"warm,omitempty"`
+	Cold     AgentProjectionTier `yaml:"cold,omitempty" json:"cold,omitempty"`
+	Strategy string              `yaml:"strategy,omitempty" json:"strategy,omitempty"`
+}
+
+type AgentProjectionTier struct {
+	MaxItems       int      `yaml:"max_items,omitempty" json:"max_items,omitempty"`
+	MaxTokens      int      `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
+	MaxBytes       int64    `yaml:"max_bytes,omitempty" json:"max_bytes,omitempty"`
+	Persist        bool     `yaml:"persist,omitempty" json:"persist,omitempty"`
+	ResourceScopes []string `yaml:"resource_scopes,omitempty" json:"resource_scopes,omitempty"`
+}
+
+type AgentScaleOutPolicy struct {
+	Mode                string            `yaml:"mode,omitempty" json:"mode,omitempty"`
+	PreferredModelClass string            `yaml:"preferred_model_class,omitempty" json:"preferred_model_class,omitempty"`
+	PreferredProviders  []string          `yaml:"preferred_providers,omitempty" json:"preferred_providers,omitempty"`
+	Metadata            map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
 // AgentContextSpec limits context window.
@@ -151,32 +247,32 @@ type AgentBrowserCredentialsSpec struct {
 // AgentSkillConfig carries skill-derived agent policy hints. These hints may
 // narrow behavior but must never bypass registry permissions or sandbox rules.
 type AgentSkillConfig struct {
-	PhaseTools     map[string][]string            `yaml:"phase_tools,omitempty" json:"phase_tools,omitempty"`
-	PhaseSelectors map[string][]SkillToolSelector `yaml:"phase_selectors,omitempty" json:"phase_selectors,omitempty"`
-	Verification   AgentVerificationPolicy        `yaml:"verification,omitempty" json:"verification,omitempty"`
-	Recovery       AgentRecoveryPolicy            `yaml:"recovery,omitempty" json:"recovery,omitempty"`
-	Planning       AgentPlanningPolicy            `yaml:"planning,omitempty" json:"planning,omitempty"`
-	Review         AgentReviewPolicy              `yaml:"review,omitempty" json:"review,omitempty"`
-	ContextHints   AgentSkillContextHints         `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
+	PhaseCapabilities        map[string][]string                  `yaml:"phase_capabilities,omitempty" json:"phase_capabilities,omitempty"`
+	PhaseCapabilitySelectors map[string][]SkillCapabilitySelector `yaml:"phase_capability_selectors,omitempty" json:"phase_capability_selectors,omitempty"`
+	Verification             AgentVerificationPolicy              `yaml:"verification,omitempty" json:"verification,omitempty"`
+	Recovery                 AgentRecoveryPolicy                  `yaml:"recovery,omitempty" json:"recovery,omitempty"`
+	Planning                 AgentPlanningPolicy                  `yaml:"planning,omitempty" json:"planning,omitempty"`
+	Review                   AgentReviewPolicy                    `yaml:"review,omitempty" json:"review,omitempty"`
+	ContextHints             AgentSkillContextHints               `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
 }
 
 type AgentVerificationPolicy struct {
-	SuccessTools     []string            `yaml:"success_tools,omitempty" json:"success_tools,omitempty"`
-	SuccessSelectors []SkillToolSelector `yaml:"success_selectors,omitempty" json:"success_selectors,omitempty"`
-	StopOnSuccess    bool                `yaml:"stop_on_success,omitempty" json:"stop_on_success,omitempty"`
+	SuccessTools               []string                  `yaml:"success_tools,omitempty" json:"success_tools,omitempty"`
+	SuccessCapabilitySelectors []SkillCapabilitySelector `yaml:"success_capability_selectors,omitempty" json:"success_capability_selectors,omitempty"`
+	StopOnSuccess              bool                      `yaml:"stop_on_success,omitempty" json:"stop_on_success,omitempty"`
 }
 
 type AgentRecoveryPolicy struct {
-	FailureProbeTools     []string            `yaml:"failure_probe_tools,omitempty" json:"failure_probe_tools,omitempty"`
-	FailureProbeSelectors []SkillToolSelector `yaml:"failure_probe_selectors,omitempty" json:"failure_probe_selectors,omitempty"`
+	FailureProbeTools               []string                  `yaml:"failure_probe_tools,omitempty" json:"failure_probe_tools,omitempty"`
+	FailureProbeCapabilitySelectors []SkillCapabilitySelector `yaml:"failure_probe_capability_selectors,omitempty" json:"failure_probe_capability_selectors,omitempty"`
 }
 
 type AgentPlanningPolicy struct {
-	RequiredBeforeEdit      []SkillToolSelector `yaml:"required_before_edit,omitempty" json:"required_before_edit,omitempty"`
-	PreferredEditTools      []SkillToolSelector `yaml:"preferred_edit_tools,omitempty" json:"preferred_edit_tools,omitempty"`
-	PreferredVerifyTools    []SkillToolSelector `yaml:"preferred_verify_tools,omitempty" json:"preferred_verify_tools,omitempty"`
-	StepTemplates           []SkillStepTemplate `yaml:"step_templates,omitempty" json:"step_templates,omitempty"`
-	RequireVerificationStep bool                `yaml:"require_verification_step,omitempty" json:"require_verification_step,omitempty"`
+	RequiredBeforeEdit          []SkillCapabilitySelector `yaml:"required_before_edit,omitempty" json:"required_before_edit,omitempty"`
+	PreferredEditCapabilities   []SkillCapabilitySelector `yaml:"preferred_edit_capabilities,omitempty" json:"preferred_edit_capabilities,omitempty"`
+	PreferredVerifyCapabilities []SkillCapabilitySelector `yaml:"preferred_verify_capabilities,omitempty" json:"preferred_verify_capabilities,omitempty"`
+	StepTemplates               []SkillStepTemplate       `yaml:"step_templates,omitempty" json:"step_templates,omitempty"`
+	RequireVerificationStep     bool                      `yaml:"require_verification_step,omitempty" json:"require_verification_step,omitempty"`
 }
 
 type SkillStepTemplate struct {
@@ -201,10 +297,11 @@ type AgentSkillContextHints struct {
 	ProtectPatterns      []string `yaml:"protect_patterns,omitempty" json:"protect_patterns,omitempty"`
 }
 
-type SkillToolSelector struct {
-	Tool        string   `yaml:"tool,omitempty" json:"tool,omitempty"`
-	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
-	ExcludeTags []string `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
+type SkillCapabilitySelector struct {
+	Capability      string                    `yaml:"capability,omitempty" json:"capability,omitempty"`
+	RuntimeFamilies []CapabilityRuntimeFamily `yaml:"runtime_families,omitempty" json:"runtime_families,omitempty"`
+	Tags            []string                  `yaml:"tags,omitempty" json:"tags,omitempty"`
+	ExcludeTags     []string                  `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
 }
 
 // AgentMetadata captures auxiliary metadata for display.
@@ -249,28 +346,77 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("tool policy %s execute=%s invalid", name, policy.Execute)
 		}
 	}
-	for _, tool := range a.AllowedTools {
-		if strings.TrimSpace(tool) == "" {
-			return fmt.Errorf("allowed_tools contains empty entry")
+	for i, policy := range a.CapabilityPolicies {
+		if err := ValidateCapabilityPolicy(policy); err != nil {
+			return fmt.Errorf("capability_policies[%d] invalid: %w", i, err)
 		}
 	}
-	for phase, tools := range a.SkillConfig.PhaseTools {
+	for i, policy := range a.ExposurePolicies {
+		if err := ValidateCapabilityExposurePolicy(policy); err != nil {
+			return fmt.Errorf("exposure_policies[%d] invalid: %w", i, err)
+		}
+	}
+	for i, policy := range a.InsertionPolicies {
+		if err := ValidateCapabilityInsertionPolicy(policy); err != nil {
+			return fmt.Errorf("insertion_policies[%d] invalid: %w", i, err)
+		}
+	}
+	for key, level := range a.GlobalPolicies {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("policies contains empty key")
+		}
+		if err := ValidatePolicyClassKey(key); err != nil {
+			return fmt.Errorf("policies[%s] invalid: %w", key, err)
+		}
+		switch level {
+		case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny, "":
+		default:
+			return fmt.Errorf("policies[%s]=%s invalid", key, level)
+		}
+	}
+	for providerID, policy := range a.ProviderPolicies {
+		if strings.TrimSpace(providerID) == "" {
+			return fmt.Errorf("provider_policies contains empty provider ID")
+		}
+		if err := ValidateProviderPolicy(policy); err != nil {
+			return fmt.Errorf("provider_policies[%s] invalid: %w", providerID, err)
+		}
+	}
+	for idx, provider := range a.Providers {
+		if err := provider.Validate(); err != nil {
+			return fmt.Errorf("providers[%d] invalid: %w", idx, err)
+		}
+	}
+	if a.RuntimeSafety != nil {
+		if err := a.RuntimeSafety.Validate(); err != nil {
+			return fmt.Errorf("runtime_safety invalid: %w", err)
+		}
+	}
+	if err := a.Coordination.Validate(a.Invocation); err != nil {
+		return fmt.Errorf("coordination invalid: %w", err)
+	}
+	for _, selector := range a.AllowedCapabilities {
+		if err := ValidateCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("allowed_capabilities invalid: %w", err)
+		}
+	}
+	for phase, tools := range a.SkillConfig.PhaseCapabilities {
 		if strings.TrimSpace(phase) == "" {
-			return fmt.Errorf("skill_config.phase_tools contains empty phase")
+			return fmt.Errorf("skill_config.phase_capabilities contains empty phase")
 		}
 		for _, tool := range tools {
 			if strings.TrimSpace(tool) == "" {
-				return fmt.Errorf("skill_config.phase_tools[%s] contains empty tool", phase)
+				return fmt.Errorf("skill_config.phase_capabilities[%s] contains empty capability", phase)
 			}
 		}
 	}
-	for phase, selectors := range a.SkillConfig.PhaseSelectors {
+	for phase, selectors := range a.SkillConfig.PhaseCapabilitySelectors {
 		if strings.TrimSpace(phase) == "" {
-			return fmt.Errorf("skill_config.phase_selectors contains empty phase")
+			return fmt.Errorf("skill_config.phase_capability_selectors contains empty phase")
 		}
 		for _, selector := range selectors {
-			if err := ValidateSkillToolSelector(selector); err != nil {
-				return fmt.Errorf("skill_config.phase_selectors[%s] invalid: %w", phase, err)
+			if err := ValidateSkillCapabilitySelector(selector); err != nil {
+				return fmt.Errorf("skill_config.phase_capability_selectors[%s] invalid: %w", phase, err)
 			}
 		}
 	}
@@ -279,9 +425,9 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("skill_config.verification.success_tools contains empty tool")
 		}
 	}
-	for _, selector := range a.SkillConfig.Verification.SuccessSelectors {
-		if err := ValidateSkillToolSelector(selector); err != nil {
-			return fmt.Errorf("skill_config.verification.success_selectors invalid: %w", err)
+	for _, selector := range a.SkillConfig.Verification.SuccessCapabilitySelectors {
+		if err := ValidateSkillCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("skill_config.verification.success_capability_selectors invalid: %w", err)
 		}
 	}
 	for _, tool := range a.SkillConfig.Recovery.FailureProbeTools {
@@ -289,24 +435,24 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("skill_config.recovery.failure_probe_tools contains empty tool")
 		}
 	}
-	for _, selector := range a.SkillConfig.Recovery.FailureProbeSelectors {
-		if err := ValidateSkillToolSelector(selector); err != nil {
-			return fmt.Errorf("skill_config.recovery.failure_probe_selectors invalid: %w", err)
+	for _, selector := range a.SkillConfig.Recovery.FailureProbeCapabilitySelectors {
+		if err := ValidateSkillCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("skill_config.recovery.failure_probe_capability_selectors invalid: %w", err)
 		}
 	}
 	for _, selector := range a.SkillConfig.Planning.RequiredBeforeEdit {
-		if err := ValidateSkillToolSelector(selector); err != nil {
+		if err := ValidateSkillCapabilitySelector(selector); err != nil {
 			return fmt.Errorf("skill_config.planning.required_before_edit invalid: %w", err)
 		}
 	}
-	for _, selector := range a.SkillConfig.Planning.PreferredEditTools {
-		if err := ValidateSkillToolSelector(selector); err != nil {
-			return fmt.Errorf("skill_config.planning.preferred_edit_tools invalid: %w", err)
+	for _, selector := range a.SkillConfig.Planning.PreferredEditCapabilities {
+		if err := ValidateSkillCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("skill_config.planning.preferred_edit_capabilities invalid: %w", err)
 		}
 	}
-	for _, selector := range a.SkillConfig.Planning.PreferredVerifyTools {
-		if err := ValidateSkillToolSelector(selector); err != nil {
-			return fmt.Errorf("skill_config.planning.preferred_verify_tools invalid: %w", err)
+	for _, selector := range a.SkillConfig.Planning.PreferredVerifyCapabilities {
+		if err := ValidateSkillCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("skill_config.planning.preferred_verify_capabilities invalid: %w", err)
 		}
 	}
 	for _, step := range a.SkillConfig.Planning.StepTemplates {
@@ -344,6 +490,348 @@ func (a *AgentRuntimeSpec) Validate() error {
 		return err
 	}
 	return nil
+}
+
+func ValidateCapabilityPolicy(policy CapabilityPolicy) error {
+	if err := ValidateCapabilitySelector(policy.Selector); err != nil {
+		return err
+	}
+	switch policy.Execute {
+	case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny, "":
+		return nil
+	default:
+		return fmt.Errorf("execute=%s invalid", policy.Execute)
+	}
+}
+
+func ValidateCapabilityExposurePolicy(policy CapabilityExposurePolicy) error {
+	if err := ValidateCapabilitySelector(policy.Selector); err != nil {
+		return err
+	}
+	switch policy.Access {
+	case CapabilityExposureHidden, CapabilityExposureInspectable, CapabilityExposureCallable:
+		return nil
+	default:
+		return fmt.Errorf("access=%s invalid", policy.Access)
+	}
+}
+
+func ValidateCapabilitySelector(selector CapabilitySelector) error {
+	if strings.TrimSpace(selector.ID) == "" &&
+		strings.TrimSpace(selector.Name) == "" &&
+		selector.Kind == "" &&
+		len(selector.RuntimeFamilies) == 0 &&
+		len(selector.Tags) == 0 &&
+		len(selector.ExcludeTags) == 0 &&
+		len(selector.SourceScopes) == 0 &&
+		len(selector.TrustClasses) == 0 &&
+		len(selector.RiskClasses) == 0 &&
+		len(selector.EffectClasses) == 0 &&
+		len(selector.CoordinationRoles) == 0 &&
+		len(selector.CoordinationTaskTypes) == 0 &&
+		len(selector.CoordinationExecutionModes) == 0 &&
+		selector.CoordinationLongRunning == nil &&
+		selector.CoordinationDirectInsertion == nil {
+		return fmt.Errorf("selector must declare at least one match field")
+	}
+	for _, tag := range append([]string{}, selector.Tags...) {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("selector contains empty tag")
+		}
+	}
+	for _, tag := range selector.ExcludeTags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("selector contains empty tag")
+		}
+	}
+	for _, taskType := range selector.CoordinationTaskTypes {
+		if strings.TrimSpace(taskType) == "" {
+			return fmt.Errorf("selector contains empty coordination task type")
+		}
+	}
+	for _, scope := range selector.SourceScopes {
+		switch scope {
+		case CapabilityScopeBuiltin, CapabilityScopeWorkspace, CapabilityScopeProvider, CapabilityScopeRemote:
+		default:
+			return fmt.Errorf("source scope %s invalid", scope)
+		}
+	}
+	for _, family := range selector.RuntimeFamilies {
+		switch family {
+		case CapabilityRuntimeFamilyLocalTool, CapabilityRuntimeFamilyProvider, CapabilityRuntimeFamilyRelurpic:
+		default:
+			return fmt.Errorf("runtime family %s invalid", family)
+		}
+	}
+	for _, trust := range selector.TrustClasses {
+		switch trust {
+		case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+		default:
+			return fmt.Errorf("trust class %s invalid", trust)
+		}
+	}
+	for _, risk := range selector.RiskClasses {
+		switch risk {
+		case RiskClassReadOnly, RiskClassDestructive, RiskClassExecute, RiskClassNetwork, RiskClassCredentialed, RiskClassExfiltration, RiskClassSessioned:
+		default:
+			return fmt.Errorf("risk class %s invalid", risk)
+		}
+	}
+	for _, effect := range selector.EffectClasses {
+		switch effect {
+		case EffectClassFilesystemMutation, EffectClassProcessSpawn, EffectClassNetworkEgress, EffectClassCredentialUse, EffectClassExternalState, EffectClassSessionCreation, EffectClassContextInsertion:
+		default:
+			return fmt.Errorf("effect class %s invalid", effect)
+		}
+	}
+	for _, role := range selector.CoordinationRoles {
+		switch role {
+		case CoordinationRolePlanner,
+			CoordinationRoleArchitect,
+			CoordinationRoleReviewer,
+			CoordinationRoleVerifier,
+			CoordinationRoleExecutor,
+			CoordinationRoleDomainPack,
+			CoordinationRoleBackgroundAgent:
+		default:
+			return fmt.Errorf("coordination role %s invalid", role)
+		}
+	}
+	for _, mode := range selector.CoordinationExecutionModes {
+		switch mode {
+		case CoordinationExecutionModeSync, CoordinationExecutionModeSessionBacked, CoordinationExecutionModeBackgroundAgent:
+		default:
+			return fmt.Errorf("coordination execution mode %s invalid", mode)
+		}
+	}
+	return nil
+}
+
+func EffectiveAllowedCapabilitySelectors(spec *AgentRuntimeSpec) []CapabilitySelector {
+	if spec == nil {
+		return nil
+	}
+	out := make([]CapabilitySelector, len(spec.AllowedCapabilities))
+	for i, selector := range spec.AllowedCapabilities {
+		out[i] = selector
+		out[i].RuntimeFamilies = append([]CapabilityRuntimeFamily{}, selector.RuntimeFamilies...)
+		out[i].Tags = append([]string{}, selector.Tags...)
+		out[i].ExcludeTags = append([]string{}, selector.ExcludeTags...)
+		out[i].SourceScopes = append([]CapabilityScope{}, selector.SourceScopes...)
+		out[i].TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
+		out[i].RiskClasses = append([]RiskClass{}, selector.RiskClasses...)
+		out[i].EffectClasses = append([]EffectClass{}, selector.EffectClasses...)
+		out[i].CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
+		out[i].CoordinationTaskTypes = append([]string{}, selector.CoordinationTaskTypes...)
+		out[i].CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
+		if selector.CoordinationLongRunning != nil {
+			value := *selector.CoordinationLongRunning
+			out[i].CoordinationLongRunning = &value
+		}
+		if selector.CoordinationDirectInsertion != nil {
+			value := *selector.CoordinationDirectInsertion
+			out[i].CoordinationDirectInsertion = &value
+		}
+	}
+	return out
+}
+
+func EffectiveDelegationTargetSelectors(spec *AgentRuntimeSpec) []CapabilitySelector {
+	if spec == nil {
+		return nil
+	}
+	selectors := cloneCapabilitySelectors(spec.Coordination.DelegationTargetSelectors)
+	if spec.Invocation.CanInvokeSubagents {
+		for _, name := range spec.Invocation.AllowedSubagents {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			selectors = append(selectors, CapabilitySelector{
+				Name:              name,
+				CoordinationRoles: []CoordinationRole{CoordinationRolePlanner, CoordinationRoleArchitect, CoordinationRoleReviewer, CoordinationRoleVerifier, CoordinationRoleExecutor, CoordinationRoleDomainPack, CoordinationRoleBackgroundAgent},
+			})
+		}
+	}
+	return dedupeCapabilitySelectors(selectors)
+}
+
+func EffectiveCoordination(spec *AgentRuntimeSpec) AgentCoordinationSpec {
+	if spec == nil {
+		return AgentCoordinationSpec{}
+	}
+	coordination := cloneAgentCoordinationSpec(spec.Coordination)
+	coordination.DelegationTargetSelectors = EffectiveDelegationTargetSelectors(spec)
+	if coordination.MaxDelegationDepth == 0 && spec.Invocation.MaxDepth > 0 {
+		coordination.MaxDelegationDepth = spec.Invocation.MaxDepth
+	}
+	if !coordination.Enabled && (len(coordination.DelegationTargetSelectors) > 0 || spec.Invocation.CanInvokeSubagents) {
+		coordination.Enabled = true
+	}
+	return coordination
+}
+
+func dedupeCapabilitySelectors(input []CapabilitySelector) []CapabilitySelector {
+	if len(input) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(input))
+	out := make([]CapabilitySelector, 0, len(input))
+	for _, selector := range input {
+		key := selector.ID + "|" + selector.Name + "|" + string(selector.Kind) + "|" +
+			strings.Join(selector.Tags, ",") + "|" + strings.Join(selector.ExcludeTags, ",") + "|" +
+			joinCapabilityScopes(selector.SourceScopes) + "|" + joinTrustClasses(selector.TrustClasses) + "|" +
+			joinRiskClasses(selector.RiskClasses) + "|" + joinEffectClasses(selector.EffectClasses) + "|" +
+			joinCoordinationRoles(selector.CoordinationRoles) + "|" + strings.Join(selector.CoordinationTaskTypes, ",") + "|" +
+			joinCoordinationExecutionModes(selector.CoordinationExecutionModes) + "|" + boolPointerKey(selector.CoordinationLongRunning) + "|" +
+			boolPointerKey(selector.CoordinationDirectInsertion)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, cloneCapabilitySelector(selector))
+	}
+	return out
+}
+
+func (c AgentCoordinationSpec) Validate(invocation AgentInvocationSpec) error {
+	for i, selector := range c.DelegationTargetSelectors {
+		if err := ValidateCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("delegation_target_selectors[%d] invalid: %w", i, err)
+		}
+	}
+	for i, selector := range c.ResourceHandoffSelectors {
+		if err := ValidateCapabilitySelector(selector); err != nil {
+			return fmt.Errorf("resource_handoff_selectors[%d] invalid: %w", i, err)
+		}
+	}
+	if c.MaxDelegationDepth < 0 {
+		return fmt.Errorf("max_delegation_depth must be >= 0")
+	}
+	if invocation.MaxDepth < 0 {
+		return fmt.Errorf("invocation.max_depth must be >= 0")
+	}
+	if err := c.Projection.Validate(); err != nil {
+		return fmt.Errorf("projection invalid: %w", err)
+	}
+	if err := c.ScaleOut.Validate(); err != nil {
+		return fmt.Errorf("scale_out invalid: %w", err)
+	}
+	return nil
+}
+
+func (p AgentProjectionPolicy) Validate() error {
+	switch strings.TrimSpace(strings.ToLower(p.Strategy)) {
+	case "", "balanced", "memory-first", "latency-first", "persistence-first":
+	default:
+		return fmt.Errorf("strategy %q invalid", p.Strategy)
+	}
+	if err := p.Hot.validate("hot"); err != nil {
+		return err
+	}
+	if err := p.Warm.validate("warm"); err != nil {
+		return err
+	}
+	if err := p.Cold.validate("cold"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t AgentProjectionTier) validate(name string) error {
+	if t.MaxItems < 0 {
+		return fmt.Errorf("%s.max_items must be >= 0", name)
+	}
+	if t.MaxTokens < 0 {
+		return fmt.Errorf("%s.max_tokens must be >= 0", name)
+	}
+	if t.MaxBytes < 0 {
+		return fmt.Errorf("%s.max_bytes must be >= 0", name)
+	}
+	for _, scope := range t.ResourceScopes {
+		if strings.TrimSpace(scope) == "" {
+			return fmt.Errorf("%s.resource_scopes contains empty scope", name)
+		}
+	}
+	return nil
+}
+
+func (s AgentScaleOutPolicy) Validate() error {
+	switch strings.TrimSpace(strings.ToLower(s.Mode)) {
+	case "", "local-only", "prefer-local", "prefer-remote", "scale-out-when-available":
+	default:
+		return fmt.Errorf("mode %q invalid", s.Mode)
+	}
+	for _, provider := range s.PreferredProviders {
+		if strings.TrimSpace(provider) == "" {
+			return fmt.Errorf("preferred_providers contains empty provider")
+		}
+	}
+	for key := range s.Metadata {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("metadata contains empty key")
+		}
+	}
+	return nil
+}
+
+func ValidateProviderPolicy(policy ProviderPolicy) error {
+	switch policy.Activate {
+	case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny, "":
+	default:
+		return fmt.Errorf("activate=%s invalid", policy.Activate)
+	}
+	switch policy.DefaultTrust {
+	case "", TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+		return nil
+	default:
+		return fmt.Errorf("default_trust=%s invalid", policy.DefaultTrust)
+	}
+}
+
+func ValidatePolicyClassKey(key string) error {
+	key = strings.ToLower(strings.TrimSpace(key))
+	switch key {
+	case "":
+		return fmt.Errorf("class key required")
+	case string(TrustClassBuiltinTrusted),
+		string(TrustClassWorkspaceTrusted),
+		string(TrustClassProviderLocalUntrusted),
+		string(TrustClassRemoteDeclared),
+		string(TrustClassRemoteApproved),
+		string(CapabilityRuntimeFamilyLocalTool),
+		string(CapabilityRuntimeFamilyProvider),
+		string(CapabilityRuntimeFamilyRelurpic),
+		string(RiskClassReadOnly),
+		string(RiskClassDestructive),
+		string(RiskClassExecute),
+		string(RiskClassNetwork),
+		string(RiskClassCredentialed),
+		string(RiskClassExfiltration),
+		string(RiskClassSessioned),
+		string(EffectClassFilesystemMutation),
+		string(EffectClassProcessSpawn),
+		string(EffectClassNetworkEgress),
+		string(EffectClassCredentialUse),
+		string(EffectClassExternalState),
+		string(EffectClassSessionCreation),
+		string(EffectClassContextInsertion):
+		return nil
+	default:
+		return fmt.Errorf("unknown capability class")
+	}
+}
+
+func ValidateCapabilityInsertionPolicy(policy CapabilityInsertionPolicy) error {
+	if err := ValidateCapabilitySelector(policy.Selector); err != nil {
+		return err
+	}
+	switch policy.Action {
+	case InsertionActionDirect, InsertionActionSummarized, InsertionActionMetadataOnly, InsertionActionHITLRequired, InsertionActionDenied:
+		return nil
+	default:
+		return fmt.Errorf("action=%s invalid", policy.Action)
+	}
 }
 
 var validBrowserActions = map[string]struct{}{
@@ -423,12 +911,20 @@ func validateBrowserBackendName(value string, field string) error {
 	return fmt.Errorf("%s %q invalid", field, value)
 }
 
-func ValidateSkillToolSelector(selector SkillToolSelector) error {
-	if strings.TrimSpace(selector.Tool) == "" && len(selector.Tags) == 0 {
-		return fmt.Errorf("selector requires tool or tags")
+func ValidateSkillCapabilitySelector(selector SkillCapabilitySelector) error {
+	name := selector.CapabilityName()
+	if name == "" && len(selector.RuntimeFamilies) == 0 && len(selector.Tags) == 0 {
+		return fmt.Errorf("selector requires capability, runtime families, or tags")
 	}
-	if strings.TrimSpace(selector.Tool) != "" && strings.Contains(selector.Tool, " ") {
-		return fmt.Errorf("selector tool %q invalid", selector.Tool)
+	if name != "" && strings.Contains(name, " ") {
+		return fmt.Errorf("selector capability %q invalid", name)
+	}
+	for _, family := range selector.RuntimeFamilies {
+		switch family {
+		case CapabilityRuntimeFamilyLocalTool, CapabilityRuntimeFamilyProvider, CapabilityRuntimeFamilyRelurpic:
+		default:
+			return fmt.Errorf("selector runtime family %s invalid", family)
+		}
 	}
 	for _, tag := range selector.Tags {
 		if strings.TrimSpace(tag) == "" {
@@ -441,6 +937,10 @@ func ValidateSkillToolSelector(selector SkillToolSelector) error {
 		}
 	}
 	return nil
+}
+
+func (s SkillCapabilitySelector) CapabilityName() string {
+	return strings.TrimSpace(s.Capability)
 }
 
 // Validate ensures model configuration is provided.
