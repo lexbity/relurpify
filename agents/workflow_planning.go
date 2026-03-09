@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/pattern"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/persistence"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 // WorkflowPlanningResult captures the durable outputs of the planning phase so
@@ -28,7 +29,7 @@ type WorkflowPlanningResult struct {
 type WorkflowPlanningService struct {
 	Model        core.LanguageModel
 	Planner      *PlannerAgent
-	PlannerTools *toolsys.ToolRegistry
+	PlannerTools *capability.Registry
 	Config       *core.Config
 }
 
@@ -282,12 +283,12 @@ Candidates:
 	return "", nil
 }
 
-func planningHintsForConfig(cfg *core.Config, tools *toolsys.ToolRegistry) string {
+func planningHintsForConfig(cfg *core.Config, tools *capability.Registry) string {
 	if cfg == nil || cfg.AgentSpec == nil {
 		return ""
 	}
-	policy := toolsys.ResolveEffectiveSkillPolicy(nil, cfg.AgentSpec, tools).Policy
-	return toolsys.RenderPlanningPolicy(policy, toolsys.PlanningRenderOptions{
+	policy := frameworkskills.ResolveEffectiveSkillPolicy(nil, cfg.AgentSpec, tools).Policy
+	return frameworkskills.RenderPlanningPolicy(policy, frameworkskills.PlanningRenderOptions{
 		VerificationRequirement: "Include verification in the chosen approach.",
 	})
 }

@@ -3,15 +3,16 @@ package agents
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+
 	"github.com/lexcodex/relurpify/agents/stages"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/pipeline"
-	"github.com/lexcodex/relurpify/framework/toolsys"
-	"strings"
-	"sync"
 )
 
 // CodingAgent orchestrates multiple specialized modes inspired by the
@@ -20,7 +21,7 @@ import (
 // runtime.
 type CodingAgent struct {
 	Model                core.LanguageModel
-	Tools                *toolsys.ToolRegistry
+	Tools                *capability.Registry
 	Memory               memory.MemoryStore
 	Config               *core.Config
 	IndexManager         *ast.IndexManager
@@ -39,7 +40,7 @@ type CodingAgent struct {
 func (a *CodingAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
-		a.Tools = toolsys.NewToolRegistry()
+		a.Tools = capability.NewRegistry()
 	}
 
 	if a.modeProfiles == nil {
@@ -217,9 +218,9 @@ func (a *CodingAgent) delegateForMode(mode Mode) (graph.Agent, error) {
 
 // scopedTools clones the global registry but drops tools outside the mode's
 // permission envelope.
-func (a *CodingAgent) scopedTools(scope ToolScope) *toolsys.ToolRegistry {
+func (a *CodingAgent) scopedTools(scope ToolScope) *capability.Registry {
 	if a.Tools == nil {
-		return toolsys.NewToolRegistry()
+		return capability.NewRegistry()
 	}
 	return a.Tools.CloneFiltered(func(tool core.Tool) bool {
 		return toolAllowed(tool, scope)

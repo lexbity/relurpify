@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/toolsys"
-	"path/filepath"
-	"strings"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 // PlannerAgent builds a plan before executing. It is intentionally explicit:
@@ -19,7 +21,7 @@ import (
 // new multi-step agents.
 type PlannerAgent struct {
 	Model  core.LanguageModel
-	Tools  *toolsys.ToolRegistry
+	Tools  *capability.Registry
 	Memory memory.MemoryStore
 	Config *core.Config
 }
@@ -28,7 +30,7 @@ type PlannerAgent struct {
 func (a *PlannerAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
-		a.Tools = toolsys.NewToolRegistry()
+		a.Tools = capability.NewRegistry()
 	}
 	return nil
 }
@@ -158,16 +160,24 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, state *core.Context) (
 		if step.Tool == "" {
 			continue
 		}
-		tool, ok := n.agent.Tools.Get(step.Tool)
-		if !ok {
+		if !n.agent.Tools.HasCapability(step.Tool) {
 			skippedTools = append(skippedTools, map[string]string{
 				"id":     step.ID,
 				"tool":   step.Tool,
-				"reason": "tool not registered",
+				"reason": "capability not registered",
 			})
 			continue
 		}
-		result, err := tool.Execute(ctx, state, step.Params)
+		if !n.agent.Tools.CapabilityAvailable(ctx, state, step.Tool) {
+			skippedTools = append(skippedTools, map[string]string{
+				"id":     step.ID,
+				"tool":   step.Tool,
+				"reason": "capability unavailable",
+			})
+			continue
+		}
+		params := normalizePlannerStepParams(n.agent.Tools, step.Tool, step.Params)
+		result, err := n.agent.Tools.InvokeCapability(ctx, state, step.Tool, params)
 		if err != nil {
 			return nil, err
 		}
@@ -185,6 +195,47 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, state *core.Context) (
 		"results":       stepResults,
 		"skipped_tools": skippedTools,
 	}}, nil
+}
+
+func normalizePlannerStepParams(registry *capability.Registry, toolName string, params map[string]interface{}) map[string]interface{} {
+	if len(params) == 0 {
+		return params
+	}
+	tool, ok := registry.Get(toolName)
+	if !ok || tool == nil {
+		return params
+	}
+	normalized := make(map[string]interface{}, len(params))
+	for key, value := range params {
+		normalized[key] = value
+	}
+	for _, param := range tool.Parameters() {
+		name := strings.TrimSpace(param.Name)
+		if name == "" {
+			continue
+		}
+		if _, ok := normalized[name]; ok {
+			continue
+		}
+		for _, alias := range plannerParamAliases(name) {
+			if value, ok := normalized[alias]; ok {
+				normalized[name] = value
+				break
+			}
+		}
+	}
+	return normalized
+}
+
+func plannerParamAliases(name string) []string {
+	switch name {
+	case "path":
+		return []string{"file", "file_path", "target_path", "manifest_path", "database_path"}
+	case "working_directory":
+		return []string{"workdir", "directory", "cwd"}
+	default:
+		return nil
+	}
 }
 
 type plannerVerifyNode struct {
@@ -245,9 +296,9 @@ func plannerSkillHints(agent *PlannerAgent) string {
 	if agent == nil || agent.Config == nil || agent.Config.AgentSpec == nil {
 		return ""
 	}
-	policy := toolsys.ResolveEffectiveSkillPolicy(nil, agent.Config.AgentSpec, agent.Tools).Policy
-	return toolsys.RenderPlanningPolicy(policy, toolsys.PlanningRenderOptions{
-		IncludePhaseTools:          true,
+	policy := frameworkskills.ResolveEffectiveSkillPolicy(nil, agent.Config.AgentSpec, agent.Tools).Policy
+	return frameworkskills.RenderPlanningPolicy(policy, frameworkskills.PlanningRenderOptions{
+		IncludePhaseCapabilities:   true,
 		IncludeVerificationSuccess: true,
 	})
 }
@@ -260,7 +311,7 @@ func normalizePlannerPlan(agent *PlannerAgent, task *core.Task, plan core.Plan) 
 	if agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
-	effective := toolsys.ResolveEffectiveSkillPolicy(task, fallback, agent.Tools)
+	effective := frameworkskills.ResolveEffectiveSkillPolicy(task, fallback, agent.Tools)
 	if effective.Spec == nil {
 		return ensurePlannerPlanDefaults(plan), nil
 	}
@@ -340,7 +391,7 @@ func assignMissingPlanStepIDs(plan *core.Plan) int {
 	return added
 }
 
-func firstPlannerEditStepIndex(steps []core.PlanStep, policy toolsys.ResolvedSkillPolicy) int {
+func firstPlannerEditStepIndex(steps []core.PlanStep, policy frameworkskills.ResolvedSkillPolicy) int {
 	for i, step := range steps {
 		if plannerStepLooksLikeEdit(step, policy) {
 			return i
@@ -349,8 +400,8 @@ func firstPlannerEditStepIndex(steps []core.PlanStep, policy toolsys.ResolvedSki
 	return len(steps)
 }
 
-func plannerStepLooksLikeEdit(step core.PlanStep, policy toolsys.ResolvedSkillPolicy) bool {
-	if toolInSet(step.Tool, policy.Planning.PreferredEditTools) {
+func plannerStepLooksLikeEdit(step core.PlanStep, policy frameworkskills.ResolvedSkillPolicy) bool {
+	if toolInSet(step.Tool, policy.Planning.PreferredEditCapabilities) {
 		return true
 	}
 	name := strings.ToLower(strings.TrimSpace(step.Tool))
@@ -373,10 +424,10 @@ func planHasToolBefore(steps []core.PlanStep, limit int, toolName string) bool {
 	return false
 }
 
-func planHasVerificationStep(plan core.Plan, policy toolsys.ResolvedSkillPolicy) bool {
-	verifyTools := make([]string, 0, len(policy.Planning.PreferredVerifyTools)+len(policy.VerificationSuccessTools))
-	verifyTools = append(verifyTools, policy.Planning.PreferredVerifyTools...)
-	verifyTools = append(verifyTools, policy.VerificationSuccessTools...)
+func planHasVerificationStep(plan core.Plan, policy frameworkskills.ResolvedSkillPolicy) bool {
+	verifyTools := make([]string, 0, len(policy.Planning.PreferredVerifyCapabilities)+len(policy.VerificationSuccessCapabilities))
+	verifyTools = append(verifyTools, policy.Planning.PreferredVerifyCapabilities...)
+	verifyTools = append(verifyTools, policy.VerificationSuccessCapabilities...)
 	for _, step := range plan.Steps {
 		if toolInSet(step.Tool, verifyTools) {
 			return true
@@ -392,18 +443,18 @@ func planHasVerificationStep(plan core.Plan, policy toolsys.ResolvedSkillPolicy)
 	return false
 }
 
-func plannerVerificationTool(policy toolsys.ResolvedSkillPolicy) string {
-	for _, toolName := range policy.Planning.PreferredVerifyTools {
+func plannerVerificationTool(policy frameworkskills.ResolvedSkillPolicy) string {
+	for _, toolName := range policy.Planning.PreferredVerifyCapabilities {
 		if strings.TrimSpace(toolName) != "" {
 			return toolName
 		}
 	}
-	for _, toolName := range policy.VerificationSuccessTools {
+	for _, toolName := range policy.VerificationSuccessCapabilities {
 		if strings.TrimSpace(toolName) != "" {
 			return toolName
 		}
 	}
-	for _, toolName := range policy.PhaseTools["verify"] {
+	for _, toolName := range policy.PhaseCapabilities["verify"] {
 		if strings.TrimSpace(toolName) != "" {
 			return toolName
 		}

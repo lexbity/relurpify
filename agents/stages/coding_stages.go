@@ -349,7 +349,7 @@ func (s *VerifyStage) BuildPrompt(ctx *core.Context) (string, error) {
 	}
 	return buildStagePrompt("verify", s.Task, ctx, "Verification target", map[string]any{
 		"target":       raw,
-		"instructions": "If the task asks you to run a command or verify with a specific tool, you MUST call that verification tool before returning JSON.",
+		"instructions": "If the task asks you to run a command or verify with a specific tool, you MUST call that verification tool before returning JSON. Do not report a passing check unless you actually invoked the tool in this stage.",
 	}, s.AllowedToolNames(), `{
   "status":"pass|fail|needs_manual_verification",
   "summary":"...",

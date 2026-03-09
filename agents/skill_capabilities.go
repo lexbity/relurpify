@@ -1,0 +1,204 @@
+package agents
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
+)
+
+func registerSkillCapabilities(registry capabilityRegistrar, skill *manifest.SkillManifest, paths SkillPaths) error {
+	if registry == nil || skill == nil {
+		return nil
+	}
+	for _, descriptor := range skillCapabilityDescriptors(skill, paths) {
+		if err := registry.RegisterCapability(descriptor); err != nil {
+			return err
+		}
+	}
+	for _, prompt := range skillPromptCapabilities(skill) {
+		if err := registry.RegisterPromptCapability(prompt); err != nil {
+			return err
+		}
+	}
+	for _, resource := range skillResourceCapabilities(skill, paths) {
+		if err := registry.RegisterResourceCapability(resource); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type capabilityRegistrar interface {
+	RegisterCapability(descriptor core.CapabilityDescriptor) error
+	RegisterPromptCapability(handler core.PromptCapabilityHandler) error
+	RegisterResourceCapability(handler core.ResourceCapabilityHandler) error
+}
+
+func skillCapabilityDescriptors(skill *manifest.SkillManifest, paths SkillPaths) []core.CapabilityDescriptor {
+	if skill == nil {
+		return nil
+	}
+	var descriptors []core.CapabilityDescriptor
+	return descriptors
+}
+
+func skillPromptCapabilities(skill *manifest.SkillManifest) []skillPromptCapability {
+	if skill == nil {
+		return nil
+	}
+	out := make([]skillPromptCapability, 0, len(skill.Spec.PromptSnippets))
+	for i, snippet := range skill.Spec.PromptSnippets {
+		snippet = strings.TrimSpace(snippet)
+		if snippet == "" {
+			continue
+		}
+		out = append(out, skillPromptCapability{
+			skillName: skill.Metadata.Name,
+			version:   skill.Metadata.Version,
+			index:     i + 1,
+			snippet:   snippet,
+		})
+	}
+	return out
+}
+
+func skillResourceCapabilities(skill *manifest.SkillManifest, paths SkillPaths) []skillResourceCapability {
+	if skill == nil {
+		return nil
+	}
+	out := make([]skillResourceCapability, 0, len(paths.Resources))
+	for _, resourcePath := range paths.Resources {
+		clean := strings.TrimSpace(resourcePath)
+		if clean == "" {
+			continue
+		}
+		out = append(out, skillResourceCapability{
+			skillName: skill.Metadata.Name,
+			version:   skill.Metadata.Version,
+			path:      clean,
+			base:      filepath.Base(clean),
+		})
+	}
+	return out
+}
+
+type skillPromptCapability struct {
+	skillName string
+	version   string
+	index     int
+	snippet   string
+}
+
+func (c skillPromptCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+	name := fmt.Sprintf("%s.prompt.%d", c.skillName, c.index)
+	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
+		ID:          fmt.Sprintf("prompt:%s:%d", c.skillName, c.index),
+		Kind:        core.CapabilityKindPrompt,
+		Name:        name,
+		Version:     c.version,
+		Description: truncateSkillCapabilityDescription(c.snippet),
+		Category:    "skill-prompt",
+		Source: core.CapabilitySource{
+			Scope: core.CapabilityScopeWorkspace,
+		},
+		TrustClass: core.TrustClassWorkspaceTrusted,
+		RiskClasses: []core.RiskClass{
+			core.RiskClassReadOnly,
+		},
+		EffectClasses: []core.EffectClass{
+			core.EffectClassContextInsertion,
+		},
+		Availability: core.AvailabilitySpec{Available: true},
+		Annotations: map[string]any{
+			"skill":       c.skillName,
+			"index":       c.index,
+			"prompt_text": c.snippet,
+		},
+	})
+}
+
+func (c skillPromptCapability) RenderPrompt(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.PromptRenderResult, error) {
+	content := c.snippet
+	for key, value := range args {
+		content = strings.ReplaceAll(content, "{"+key+"}", fmt.Sprint(value))
+	}
+	return &core.PromptRenderResult{
+		Description: truncateSkillCapabilityDescription(c.snippet),
+		Messages: []core.PromptMessage{{
+			Content: []core.ContentBlock{core.TextContentBlock{Text: content}},
+		}},
+	}, nil
+}
+
+type skillResourceCapability struct {
+	skillName string
+	version   string
+	path      string
+	base      string
+}
+
+func (c skillResourceCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
+		ID:          fmt.Sprintf("resource:%s:%s", c.skillName, filepath.ToSlash(c.base)),
+		Kind:        core.CapabilityKindResource,
+		Name:        fmt.Sprintf("%s.resource.%s", c.skillName, c.base),
+		Version:     c.version,
+		Description: fmt.Sprintf("Skill resource %s", c.base),
+		Category:    "skill-resource",
+		Source: core.CapabilitySource{
+			Scope: core.CapabilityScopeWorkspace,
+		},
+		TrustClass: core.TrustClassWorkspaceTrusted,
+		RiskClasses: []core.RiskClass{
+			core.RiskClassReadOnly,
+		},
+		Availability: core.AvailabilitySpec{Available: true},
+		Annotations: map[string]any{
+			"skill":     c.skillName,
+			"path":      c.path,
+			"kind":      "resource-file",
+			"mime_type": inferSkillResourceMIMEType(c.base),
+		},
+	})
+}
+
+func (c skillResourceCapability) ReadResource(_ context.Context, _ *core.Context) (*core.ResourceReadResult, error) {
+	data, err := os.ReadFile(c.path)
+	if err != nil {
+		return nil, err
+	}
+	return &core.ResourceReadResult{
+		Contents: []core.ContentBlock{core.TextContentBlock{Text: string(data)}},
+		Metadata: map[string]any{
+			"path": c.path,
+		},
+	}, nil
+}
+
+func inferSkillResourceMIMEType(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".md":
+		return "text/markdown"
+	case ".json":
+		return "application/json"
+	case ".yaml", ".yml":
+		return "application/yaml"
+	case ".txt":
+		return "text/plain"
+	default:
+		return "text/plain"
+	}
+}
+
+func truncateSkillCapabilityDescription(input string) string {
+	input = strings.TrimSpace(input)
+	if len(input) <= 120 {
+		return input
+	}
+	return input[:120] + "..."
+}

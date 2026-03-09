@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	frameworktools "github.com/lexcodex/relurpify/framework/tools"
 )
 
 const skillManifestName = "skill.manifest.yaml"
@@ -44,12 +46,17 @@ func SkillManifestPath(workspace, name string) string {
 // ApplySkills merges skill contributions (flat, no inheritance) into baseSpec
 // and returns the updated spec plus per-skill resolution results.
 func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames []string,
-	registry *toolsys.ToolRegistry, permissions *toolsys.PermissionManager, agentID string,
+	registry *capability.Registry, permissions *frameworktools.PermissionManager, agentID string,
 ) (*core.AgentRuntimeSpec, []SkillResolution) {
 	spec := core.MergeAgentSpecs(baseSpec)
 	results := make([]SkillResolution, 0, len(skillNames))
-	allowedTools := append([]string{}, spec.AllowedTools...)
+	allowedCapabilities := core.EffectiveAllowedCapabilitySelectors(spec)
 	toolPolicies := cloneToolPolicies(spec.ToolExecutionPolicy)
+	capabilityPolicies := append([]core.CapabilityPolicy{}, spec.CapabilityPolicies...)
+	insertionPolicies := append([]core.CapabilityInsertionPolicy{}, spec.InsertionPolicies...)
+	globalPolicies := cloneGlobalPolicies(spec.GlobalPolicies)
+	providerPolicies := cloneProviderPolicies(spec.ProviderPolicies)
+	providers := cloneProviderConfigs(spec.Providers)
 	skillConfig := core.AgentSkillConfig{}
 
 	for _, name := range skillNames {
@@ -78,16 +85,43 @@ func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames [
 			results = append(results, logSkillError(workspace, skillName, "missing_resources", err, paths))
 			continue
 		}
+		if err := registerSkillCapabilities(registry, skillManifest, paths); err != nil {
+			results = append(results, logSkillError(workspace, skillName, "capability_registration_failed", err, paths))
+			continue
+		}
 
 		// Merge contributions.
-		if len(skillManifest.Spec.AllowedTools) > 0 {
-			allowedTools = mergeStringList(allowedTools, skillManifest.Spec.AllowedTools)
-		}
+		allowedCapabilities = mergeCapabilitySelectors(allowedCapabilities, skillAllowedCapabilities(skillManifest.Spec))
 		for toolName, policy := range skillManifest.Spec.ToolExecutionPolicy {
 			if toolPolicies == nil {
 				toolPolicies = make(map[string]core.ToolPolicy)
 			}
 			toolPolicies[toolName] = policy
+		}
+		if len(skillManifest.Spec.CapabilityPolicies) > 0 {
+			capabilityPolicies = append(capabilityPolicies, cloneCapabilityPolicies(skillManifest.Spec.CapabilityPolicies)...)
+		}
+		if len(skillManifest.Spec.InsertionPolicies) > 0 {
+			insertionPolicies = append(insertionPolicies, cloneInsertionPolicies(skillManifest.Spec.InsertionPolicies)...)
+		}
+		if len(skillManifest.Spec.GlobalPolicies) > 0 {
+			if globalPolicies == nil {
+				globalPolicies = make(map[string]core.AgentPermissionLevel)
+			}
+			for key, value := range skillManifest.Spec.GlobalPolicies {
+				globalPolicies[key] = value
+			}
+		}
+		if len(skillManifest.Spec.ProviderPolicies) > 0 {
+			if providerPolicies == nil {
+				providerPolicies = make(map[string]core.ProviderPolicy)
+			}
+			for key, value := range skillManifest.Spec.ProviderPolicies {
+				providerPolicies[key] = value
+			}
+		}
+		if len(skillManifest.Spec.Providers) > 0 {
+			providers = mergeProviderConfigs(providers, skillManifest.Spec.Providers)
 		}
 		if len(skillManifest.Spec.PromptSnippets) > 0 {
 			spec.Prompt = mergePromptSnippets(spec.Prompt, skillManifest.Spec.PromptSnippets)
@@ -101,8 +135,13 @@ func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames [
 		})
 	}
 
-	spec.AllowedTools = allowedTools
+	spec.AllowedCapabilities = allowedCapabilities
 	spec.ToolExecutionPolicy = toolPolicies
+	spec.CapabilityPolicies = capabilityPolicies
+	spec.InsertionPolicies = insertionPolicies
+	spec.GlobalPolicies = globalPolicies
+	spec.ProviderPolicies = providerPolicies
+	spec.Providers = providers
 	spec.SkillConfig = core.MergeAgentSpecs(&core.AgentRuntimeSpec{SkillConfig: spec.SkillConfig}, core.AgentSpecOverlay{SkillConfig: &skillConfig}).SkillConfig
 	return spec, results
 }
@@ -110,15 +149,15 @@ func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames [
 // DeriveGVisorAllowlist returns the binary allowlist for the gVisor sandbox
 // by walking the effective (allowed) tool set and collecting each tool's
 // declared executable permissions.
-func DeriveGVisorAllowlist(allowedToolNames []string, registry *toolsys.ToolRegistry) []core.ExecutablePermission {
+func DeriveGVisorAllowlist(allowed []core.CapabilitySelector, registry *capability.Registry) []core.ExecutablePermission {
 	if registry == nil {
 		return nil
 	}
 	seen := make(map[string]bool)
 	var result []core.ExecutablePermission
-	for _, name := range allowedToolNames {
-		tool, ok := registry.Get(name)
-		if !ok {
+	for _, tool := range registry.CallableTools() {
+		desc := core.ToolDescriptor(context.Background(), nil, tool)
+		if len(allowed) > 0 && !matchesAnyCapabilitySelector(allowed, desc) {
 			continue
 		}
 		perms := tool.Permissions()
@@ -131,6 +170,85 @@ func DeriveGVisorAllowlist(allowedToolNames []string, registry *toolsys.ToolRegi
 		}
 	}
 	return result
+}
+
+func skillAllowedCapabilities(skillSpec manifest.SkillSpec) []core.CapabilitySelector {
+	return append([]core.CapabilitySelector{}, skillSpec.AllowedCapabilities...)
+}
+
+func mergeCapabilitySelectors(base, extra []core.CapabilitySelector) []core.CapabilitySelector {
+	if len(extra) == 0 {
+		return append([]core.CapabilitySelector{}, base...)
+	}
+	seen := make(map[string]struct{}, len(base)+len(extra))
+	out := make([]core.CapabilitySelector, 0, len(base)+len(extra))
+	for _, selector := range append(append([]core.CapabilitySelector{}, base...), extra...) {
+		key := selector.ID + "|" + selector.Name + "|" + string(selector.Kind) + "|" +
+			strings.Join(capabilityRuntimeFamiliesToStrings(selector.RuntimeFamilies), ",") + "|" +
+			strings.Join(selector.Tags, ",") + "|" + strings.Join(selector.ExcludeTags, ",") + "|" +
+			strings.Join(capabilityScopesToStrings(selector.SourceScopes), ",") + "|" +
+			strings.Join(trustClassesToStrings(selector.TrustClasses), ",") + "|" +
+			strings.Join(riskClassesToStrings(selector.RiskClasses), ",") + "|" +
+			strings.Join(effectClassesToStrings(selector.EffectClasses), ",")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, selector)
+	}
+	return out
+}
+
+func matchesAnyCapabilitySelector(selectors []core.CapabilitySelector, desc core.CapabilityDescriptor) bool {
+	if len(selectors) == 0 {
+		return true
+	}
+	for _, selector := range selectors {
+		if core.SelectorMatchesDescriptor(selector, desc) {
+			return true
+		}
+	}
+	return false
+}
+
+func capabilityScopesToStrings(values []core.CapabilityScope) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
+}
+
+func capabilityRuntimeFamiliesToStrings(values []core.CapabilityRuntimeFamily) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
+}
+
+func trustClassesToStrings(values []core.TrustClass) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
+}
+
+func riskClassesToStrings(values []core.RiskClass) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
+}
+
+func effectClassesToStrings(values []core.EffectClass) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
 }
 
 // ResolveSkillPaths exposes the resolved resource paths for a skill.
@@ -236,20 +354,20 @@ func mergePromptSnippets(base string, snippets []string) string {
 func mergeSkillConfig(base core.AgentSkillConfig, skillSpec manifest.SkillSpec) core.AgentSkillConfig {
 	overlay := core.AgentSkillConfig{
 		Verification: core.AgentVerificationPolicy{
-			SuccessTools:     append([]string{}, skillSpec.Verification.SuccessTools...),
-			SuccessSelectors: append([]core.SkillToolSelector{}, skillSpec.Verification.SuccessSelectors...),
-			StopOnSuccess:    skillSpec.Verification.StopOnSuccess,
+			SuccessTools:               append([]string{}, skillSpec.Verification.SuccessTools...),
+			SuccessCapabilitySelectors: append([]core.SkillCapabilitySelector{}, skillSpec.Verification.SuccessCapabilitySelectors...),
+			StopOnSuccess:              skillSpec.Verification.StopOnSuccess,
 		},
 		Recovery: core.AgentRecoveryPolicy{
-			FailureProbeTools:     append([]string{}, skillSpec.Recovery.FailureProbeTools...),
-			FailureProbeSelectors: append([]core.SkillToolSelector{}, skillSpec.Recovery.FailureProbeSelectors...),
+			FailureProbeTools:               append([]string{}, skillSpec.Recovery.FailureProbeTools...),
+			FailureProbeCapabilitySelectors: append([]core.SkillCapabilitySelector{}, skillSpec.Recovery.FailureProbeCapabilitySelectors...),
 		},
 		Planning: core.AgentPlanningPolicy{
-			RequiredBeforeEdit:      append([]core.SkillToolSelector{}, skillSpec.Planning.RequiredBeforeEdit...),
-			PreferredEditTools:      append([]core.SkillToolSelector{}, skillSpec.Planning.PreferredEditTools...),
-			PreferredVerifyTools:    append([]core.SkillToolSelector{}, skillSpec.Planning.PreferredVerifyTools...),
-			StepTemplates:           append([]core.SkillStepTemplate{}, skillSpec.Planning.StepTemplates...),
-			RequireVerificationStep: skillSpec.Planning.RequireVerificationStep,
+			RequiredBeforeEdit:          append([]core.SkillCapabilitySelector{}, skillSpec.Planning.RequiredBeforeEdit...),
+			PreferredEditCapabilities:   append([]core.SkillCapabilitySelector{}, skillSpec.Planning.PreferredEditCapabilities...),
+			PreferredVerifyCapabilities: append([]core.SkillCapabilitySelector{}, skillSpec.Planning.PreferredVerifyCapabilities...),
+			StepTemplates:               append([]core.SkillStepTemplate{}, skillSpec.Planning.StepTemplates...),
+			RequireVerificationStep:     skillSpec.Planning.RequireVerificationStep,
 		},
 		Review: core.AgentReviewPolicy{
 			Criteria:      append([]string{}, skillSpec.Review.Criteria...),
@@ -267,16 +385,16 @@ func mergeSkillConfig(base core.AgentSkillConfig, skillSpec manifest.SkillSpec) 
 			overlay.Review.SeverityWeights[k] = v
 		}
 	}
-	if skillSpec.PhaseTools != nil {
-		overlay.PhaseTools = make(map[string][]string, len(skillSpec.PhaseTools))
-		for phase, tools := range skillSpec.PhaseTools {
-			overlay.PhaseTools[phase] = append([]string{}, tools...)
+	if len(skillSpec.PhaseCapabilities) > 0 {
+		overlay.PhaseCapabilities = make(map[string][]string, len(skillSpec.PhaseCapabilities))
+		for phase, tools := range skillSpec.PhaseCapabilities {
+			overlay.PhaseCapabilities[phase] = append([]string{}, tools...)
 		}
 	}
-	if skillSpec.PhaseSelectors != nil {
-		overlay.PhaseSelectors = make(map[string][]core.SkillToolSelector, len(skillSpec.PhaseSelectors))
-		for phase, selectors := range skillSpec.PhaseSelectors {
-			overlay.PhaseSelectors[phase] = append([]core.SkillToolSelector{}, selectors...)
+	if len(skillSpec.PhaseCapabilitySelectors) > 0 {
+		overlay.PhaseCapabilitySelectors = make(map[string][]core.SkillCapabilitySelector, len(skillSpec.PhaseCapabilitySelectors))
+		for phase, selectors := range skillSpec.PhaseCapabilitySelectors {
+			overlay.PhaseCapabilitySelectors[phase] = append([]core.SkillCapabilitySelector{}, selectors...)
 		}
 	}
 	return core.MergeAgentSpecs(&core.AgentRuntimeSpec{SkillConfig: base}, core.AgentSpecOverlay{SkillConfig: &overlay}).SkillConfig
@@ -320,6 +438,96 @@ func mergeStringList(base, extra []string) []string {
 		}
 		seen[entry] = struct{}{}
 		out = append(out, entry)
+	}
+	return out
+}
+
+func cloneGlobalPolicies(policies map[string]core.AgentPermissionLevel) map[string]core.AgentPermissionLevel {
+	if policies == nil {
+		return nil
+	}
+	out := make(map[string]core.AgentPermissionLevel, len(policies))
+	for key, value := range policies {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneProviderPolicies(policies map[string]core.ProviderPolicy) map[string]core.ProviderPolicy {
+	if policies == nil {
+		return nil
+	}
+	out := make(map[string]core.ProviderPolicy, len(policies))
+	for key, value := range policies {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneProviderConfigs(values []core.ProviderConfig) []core.ProviderConfig {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]core.ProviderConfig, len(values))
+	copy(out, values)
+	for idx := range out {
+		if len(values[idx].Config) == 0 {
+			continue
+		}
+		out[idx].Config = make(map[string]any, len(values[idx].Config))
+		for key, value := range values[idx].Config {
+			out[idx].Config[key] = value
+		}
+	}
+	return out
+}
+
+func mergeProviderConfigs(base, extra []core.ProviderConfig) []core.ProviderConfig {
+	if len(extra) == 0 {
+		return cloneProviderConfigs(base)
+	}
+	merged := cloneProviderConfigs(base)
+	index := make(map[string]int, len(merged))
+	for idx, provider := range merged {
+		index[provider.ID] = idx
+	}
+	for _, provider := range extra {
+		if idx, ok := index[provider.ID]; ok {
+			merged[idx] = provider
+			continue
+		}
+		index[provider.ID] = len(merged)
+		merged = append(merged, provider)
+	}
+	return merged
+}
+
+func cloneCapabilityPolicies(policies []core.CapabilityPolicy) []core.CapabilityPolicy {
+	if policies == nil {
+		return nil
+	}
+	out := make([]core.CapabilityPolicy, len(policies))
+	for i, policy := range policies {
+		out[i] = policy
+		out[i].Selector.SourceScopes = append([]core.CapabilityScope{}, policy.Selector.SourceScopes...)
+		out[i].Selector.TrustClasses = append([]core.TrustClass{}, policy.Selector.TrustClasses...)
+		out[i].Selector.RiskClasses = append([]core.RiskClass{}, policy.Selector.RiskClasses...)
+		out[i].Selector.EffectClasses = append([]core.EffectClass{}, policy.Selector.EffectClasses...)
+	}
+	return out
+}
+
+func cloneInsertionPolicies(policies []core.CapabilityInsertionPolicy) []core.CapabilityInsertionPolicy {
+	if policies == nil {
+		return nil
+	}
+	out := make([]core.CapabilityInsertionPolicy, len(policies))
+	for i, policy := range policies {
+		out[i] = policy
+		out[i].Selector.SourceScopes = append([]core.CapabilityScope{}, policy.Selector.SourceScopes...)
+		out[i].Selector.TrustClasses = append([]core.TrustClass{}, policy.Selector.TrustClasses...)
+		out[i].Selector.RiskClasses = append([]core.RiskClass{}, policy.Selector.RiskClasses...)
+		out[i].Selector.EffectClasses = append([]core.EffectClass{}, policy.Selector.EffectClasses...)
 	}
 	return out
 }

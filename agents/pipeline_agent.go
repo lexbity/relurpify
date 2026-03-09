@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/persistence"
 	"github.com/lexcodex/relurpify/framework/pipeline"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 )
 
 // PipelineStageFactory resolves pipeline stages for a task.
@@ -25,7 +25,7 @@ type PipelineStageFactory interface {
 type PipelineAgent struct {
 	Model             core.LanguageModel
 	Config            *core.Config
-	Tools             *toolsys.ToolRegistry
+	Tools             *capability.Registry
 	WorkflowStatePath string
 
 	Stages       []pipeline.Stage
@@ -173,7 +173,7 @@ func (a *PipelineAgent) availableTools() []core.Tool {
 	if a == nil || a.Tools == nil {
 		return nil
 	}
-	return a.Tools.All()
+	return a.Tools.ModelCallableTools()
 }
 
 func (a *PipelineAgent) modelName() string {

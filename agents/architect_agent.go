@@ -13,12 +13,12 @@ import (
 
 	"github.com/lexcodex/relurpify/agents/pattern"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/persistence"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 )
 
 // ArchitectAgent uses a small-model-friendly workflow:
@@ -27,8 +27,8 @@ import (
 // 3. Persist workflow state after planning and each completed step.
 type ArchitectAgent struct {
 	Model             core.LanguageModel
-	PlannerTools      *toolsys.ToolRegistry
-	ExecutorTools     *toolsys.ToolRegistry
+	PlannerTools      *capability.Registry
+	ExecutorTools     *capability.Registry
 	Memory            memory.MemoryStore
 	Config            *core.Config
 	IndexManager      *ast.IndexManager
@@ -45,10 +45,10 @@ var errArchitectNeedsReplan = errors.New("architect workflow requires replanning
 func (a *ArchitectAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.PlannerTools == nil {
-		a.PlannerTools = toolsys.NewToolRegistry()
+		a.PlannerTools = capability.NewRegistry()
 	}
 	if a.ExecutorTools == nil {
-		a.ExecutorTools = toolsys.NewToolRegistry()
+		a.ExecutorTools = capability.NewRegistry()
 	}
 	a.planner = &PlannerAgent{
 		Model:  a.Model,
@@ -478,6 +478,7 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 		CompressionMethod: "none",
 		CreatedAt:         finishedAt,
 	})
+	a.persistStepSecurityEvents(ctx, store, workflowID, runID, step.StepID, stepState, result, finishedAt)
 	a.persistStepKnowledge(ctx, store, workflowID, stepRunID, step.StepID, summary, status, stepTask, result, errorText, finishedAt)
 	if status != persistence.StepStatusCompleted {
 		if nextStepAttempt(ctx, store, workflowID, step.StepID)-1 >= a.stepNeedsReplanThreshold() {
@@ -1013,7 +1014,7 @@ func (a *ArchitectAgent) runRecoveryMiniLoop(ctx context.Context, step core.Plan
 	return uniqueStrings(notes), evidence
 }
 
-func (a *ArchitectAgent) recoveryRegistry() *toolsys.ToolRegistry {
+func (a *ArchitectAgent) recoveryRegistry() *capability.Registry {
 	if a == nil {
 		return nil
 	}
@@ -1023,18 +1024,17 @@ func (a *ArchitectAgent) recoveryRegistry() *toolsys.ToolRegistry {
 	return a.PlannerTools
 }
 
-func (a *ArchitectAgent) executeRecoveryTool(ctx context.Context, registry *toolsys.ToolRegistry, state *core.Context, name string, args map[string]any) (*core.ToolResult, error) {
+func (a *ArchitectAgent) executeRecoveryTool(ctx context.Context, registry *capability.Registry, state *core.Context, name string, args map[string]any) (*core.ToolResult, error) {
 	if registry == nil {
 		return nil, nil
 	}
-	tool, ok := registry.Get(name)
-	if !ok || tool == nil {
+	if !registry.HasCapability(name) {
 		return nil, nil
 	}
-	if !tool.IsAvailable(ctx, state) {
+	if !registry.CapabilityAvailable(ctx, state, name) {
 		return nil, nil
 	}
-	return tool.Execute(ctx, state, args)
+	return registry.InvokeCapability(ctx, state, name, args)
 }
 
 func summarizeStepResult(step core.PlanStep, result *core.Result) string {
@@ -1109,6 +1109,93 @@ func countRecoveryMatches(raw any) int {
 	default:
 		return 0
 	}
+}
+
+func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, runID, stepID string, stepState *core.Context, result *core.Result, createdAt time.Time) {
+	if store == nil {
+		return
+	}
+	var rawEnvelope any
+	var ok bool
+	if stepState != nil {
+		rawEnvelope, ok = stepState.Get("react.last_tool_result_envelope")
+	}
+	if (!ok || rawEnvelope == nil) && stepState != nil {
+		if rawLast, found := stepState.Get("react.last_result"); found && rawLast != nil {
+			if lastResult, typed := rawLast.(*core.Result); typed && lastResult != nil && lastResult.Metadata != nil {
+				rawEnvelope, ok = lastResult.Metadata["capability_result"]
+			}
+		}
+	}
+	if (!ok || rawEnvelope == nil) && result != nil && result.Metadata != nil {
+		rawEnvelope, ok = result.Metadata["capability_result"]
+	}
+	if !ok || rawEnvelope == nil {
+		if stepState == nil {
+			return
+		}
+		rawObs, found := stepState.Get("react.tool_observations")
+		if !found || rawObs == nil {
+			return
+		}
+		observations, typed := rawObs.([]pattern.ToolObservation)
+		if !typed || len(observations) == 0 {
+			return
+		}
+		last := observations[len(observations)-1]
+		if strings.TrimSpace(last.Tool) == "" {
+			return
+		}
+		_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+			EventID:    architectRecordID("security_event"),
+			WorkflowID: workflowID,
+			RunID:      runID,
+			StepID:     stepID,
+			EventType:  "security.capability_invoked",
+			Message:    fmt.Sprintf("Capability %s invoked during workflow step execution.", last.Tool),
+			Metadata: map[string]any{
+				"capability_id": "tool:" + last.Tool,
+				"capability":    last.Tool,
+				"phase":         last.Phase,
+				"success":       last.Success,
+			},
+			CreatedAt: createdAt,
+		})
+		return
+	}
+	envelope, ok := rawEnvelope.(*core.CapabilityResultEnvelope)
+	if !ok || envelope == nil {
+		return
+	}
+	metadata := map[string]any{
+		"capability_id": envelope.Descriptor.ID,
+		"capability":    envelope.Descriptor.Name,
+		"kind":          string(envelope.Descriptor.Kind),
+		"trust_class":   string(envelope.Descriptor.TrustClass),
+		"insertion":     string(envelope.Insertion.Action),
+	}
+	if envelope.Policy != nil {
+		metadata["policy_snapshot_id"] = envelope.Policy.ID
+	}
+	if envelope.Descriptor.Source.ProviderID != "" {
+		metadata["provider_id"] = envelope.Descriptor.Source.ProviderID
+	}
+	if envelope.Descriptor.Source.SessionID != "" {
+		metadata["session_id"] = envelope.Descriptor.Source.SessionID
+	}
+	if envelope.Approval != nil && envelope.Approval.TargetResource != "" {
+		metadata["target_resource"] = envelope.Approval.TargetResource
+	}
+	_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+		EventID:    architectRecordID("security_event"),
+		WorkflowID: workflowID,
+		RunID:      runID,
+		StepID:     stepID,
+		EventType:  "security.insertion_decision",
+		Message:    fmt.Sprintf("Capability %s insertion resolved as %s.", envelope.Descriptor.Name, envelope.Insertion.Action),
+		Metadata:   metadata,
+		CreatedAt:  createdAt,
+	})
 }
 
 func appendRecoveryEvidence(evidence map[string]any, key string, value any) {

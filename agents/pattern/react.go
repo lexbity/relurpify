@@ -5,12 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,7 +13,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/contextmgr"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/persistence"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	frameworktools "github.com/lexcodex/relurpify/framework/tools"
 )
 
 // ReActAgent implements the Reason+Act pattern.
@@ -41,7 +43,7 @@ type ContextPreferences struct {
 // ReActAgent implements the Reason+Act pattern.
 type ReActAgent struct {
 	Model          core.LanguageModel
-	Tools          *toolsys.ToolRegistry
+	Tools          *capability.Registry
 	Memory         memory.MemoryStore
 	Config         *core.Config
 	IndexManager   *ast.IndexManager
@@ -80,7 +82,7 @@ func (a *ReActAgent) Initialize(config *core.Config) error {
 		a.maxIterations = config.MaxIterations
 	}
 	if a.Tools == nil {
-		a.Tools = toolsys.NewToolRegistry()
+		a.Tools = capability.NewRegistry()
 	}
 	if a.Mode == "" {
 		a.Mode = "code"
@@ -268,7 +270,7 @@ func (a *ReActAgent) enforceBudget(state *core.Context) {
 	}
 	var tools []core.Tool
 	if a.Tools != nil {
-		tools = a.Tools.All()
+		tools = a.Tools.ModelCallableTools()
 	}
 	a.contextPolicy.EnforceBudget(state, a.sharedContext, a.Model, tools, a.debugf)
 }
@@ -327,7 +329,7 @@ func (a *ReActAgent) availableToolsForPhase(state *core.Context, task *core.Task
 		}
 	}
 	var filtered []core.Tool
-	for _, tool := range a.Tools.All() {
+	for _, tool := range a.Tools.ModelCallableTools() {
 		if toolAllowedForPhase(tool, phase, task) || a.recoveryToolAllowed(state, task, tool.Name()) {
 			if !a.toolAllowedBySkillConfig(task, phase, tool.Name()) {
 				continue
@@ -384,10 +386,10 @@ func (a *ReActAgent) recoveryToolAllowed(state *core.Context, task *core.Task, t
 
 func (a *ReActAgent) toolAllowedBySkillConfig(task *core.Task, phase, toolName string) bool {
 	resolved := a.resolvedSkillPolicy(task)
-	if len(resolved.PhaseTools) == 0 {
+	if len(resolved.PhaseCapabilities) == 0 {
 		return true
 	}
-	allowed, ok := resolved.PhaseTools[phase]
+	allowed, ok := resolved.PhaseCapabilities[phase]
 	if !ok || len(allowed) == 0 {
 		return true
 	}
@@ -399,25 +401,25 @@ func (a *ReActAgent) toolAllowedBySkillConfig(task *core.Task, phase, toolName s
 	return false
 }
 
-func (a *ReActAgent) resolvedSkillPolicy(task *core.Task) toolsys.ResolvedSkillPolicy {
-	return toolsys.ResolveEffectiveSkillPolicy(task, a.effectiveAgentSpec(task), a.Tools).Policy
+func (a *ReActAgent) resolvedSkillPolicy(task *core.Task) frameworkskills.ResolvedSkillPolicy {
+	return frameworkskills.ResolveEffectiveSkillPolicy(task, a.effectiveAgentSpec(task), a.Tools).Policy
 }
 
 func (a *ReActAgent) recoveryProbeTools(task *core.Task) []string {
 	resolved := a.resolvedSkillPolicy(task)
-	return append([]string{}, resolved.RecoveryProbeTools...)
+	return append([]string{}, resolved.RecoveryProbeCapabilities...)
 }
 
 func (a *ReActAgent) verificationSuccessTools(task *core.Task) []string {
 	resolved := a.resolvedSkillPolicy(task)
-	return append([]string{}, resolved.VerificationSuccessTools...)
+	return append([]string{}, resolved.VerificationSuccessCapabilities...)
 }
 
 func (a *ReActAgent) effectiveAgentSpec(task *core.Task) *core.AgentRuntimeSpec {
 	if a == nil || a.Config == nil {
-		return toolsys.EffectiveAgentSpec(task, nil)
+		return frameworkskills.EffectiveAgentSpec(task, nil)
 	}
-	return toolsys.EffectiveAgentSpec(task, a.Config.AgentSpec)
+	return frameworkskills.EffectiveAgentSpec(task, a.Config.AgentSpec)
 }
 
 func toolAllowedForPhase(tool core.Tool, phase string, task *core.Task) bool {
@@ -645,7 +647,7 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, state *core.Cont
 			Timestamp: time.Now().UTC(),
 		}, filterToolCalls(resp.ToolCalls), nil
 	}
-	detectedCalls := filterToolCalls(toolsys.ParseToolCallsFromText(resp.Text))
+	detectedCalls := filterToolCalls(frameworktools.ParseToolCallsFromText(resp.Text))
 	if len(detectedCalls) > 0 {
 		return decisionPayload{
 			Thought:   truncateForPrompt(resp.Text, 220),
@@ -804,7 +806,7 @@ func (n *reactThinkNode) streamCallback() func(string) {
 // available.
 func (n *reactThinkNode) buildPrompt(state *core.Context) string {
 	tools := n.agent.availableToolsForPhase(state, n.task)
-	toolSection := toolsys.RenderToolsToPrompt(tools)
+	toolSection := frameworktools.RenderToolsToPrompt(tools)
 	assembler := newPromptContextAssembler(n.agent, n.task)
 	promptBody := assembler.buildPrompt(state, tools, true)
 	return fmt.Sprintf(`You are a ReAct agent optimized for a small-context local model.
@@ -912,27 +914,43 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 				state.Set("react.tool_calls", []core.ToolCall{})
 			} else {
 				results := make(map[string]interface{})
+				envelopes := make(map[string]*core.CapabilityResultEnvelope)
 				toolErrors := make([]string, 0)
 				overallSuccess := true
 				for _, call := range calls {
-					tool, ok := n.lookupTool(call.Name, activeTools)
-					if !ok {
+					if !n.capabilityAllowed(call.Name, activeTools) || !n.agent.Tools.HasCapability(call.Name) {
 						errResult := &core.ToolResult{
 							Success: false,
 							Error:   fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", call.Name),
 						}
-						n.recordObservation(state, call, errResult)
+						envelope := n.capabilityEnvelope(ctx, state, nil, call, errResult)
+						n.recordObservation(state, call, errResult, envelope)
+						envelopes[call.Name] = envelope
 						overallSuccess = false
 						toolErrors = append(toolErrors, fmt.Sprintf("unknown tool %s", call.Name))
 						continue
 					}
+					if !n.agent.Tools.CapabilityAvailable(ctx, state, call.Name) {
+						errResult := &core.ToolResult{
+							Success: false,
+							Error:   fmt.Sprintf("tool %q is unavailable right now.", call.Name),
+						}
+						envelope := n.capabilityEnvelope(ctx, state, nil, call, errResult)
+						n.recordObservation(state, call, errResult, envelope)
+						envelopes[call.Name] = envelope
+						overallSuccess = false
+						toolErrors = append(toolErrors, fmt.Sprintf("unavailable tool %s", call.Name))
+						continue
+					}
 					n.agent.debugf("%s executing tool=%s args=%v", n.id, call.Name, call.Args)
-					res, err := tool.Execute(ctx, state, call.Args)
+					res, err := n.agent.Tools.InvokeCapability(ctx, state, call.Name, call.Args)
 					if err != nil {
 						return nil, err
 					}
 					if res != nil {
-						n.recordObservation(state, call, res)
+						envelope := n.capabilityEnvelope(ctx, state, nil, call, res)
+						envelopes[call.Name] = envelope
+						n.recordObservation(state, call, res, envelope)
 						n.latchVerificationSuccess(state, call.Name, res)
 						results[call.Name] = map[string]interface{}{
 							"success": res.Success,
@@ -951,8 +969,16 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 					}
 				}
 				state.Set("react.last_tool_result", results)
+				state.Set("react.last_tool_result_envelopes", envelopes)
 				state.Set("react.tool_calls", []core.ToolCall{})
-				result := &core.Result{NodeID: n.id, Success: overallSuccess, Data: results}
+				result := &core.Result{
+					NodeID:  n.id,
+					Success: overallSuccess,
+					Data:    results,
+					Metadata: map[string]any{
+						"capability_results": envelopes,
+					},
+				}
 				if len(toolErrors) > 0 {
 					result.Error = fmt.Errorf("%s", strings.Join(toolErrors, "; "))
 				}
@@ -976,8 +1002,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 		return result, nil
 	}
-	tool, ok := n.lookupTool(toolName, activeTools)
-	if !ok {
+	if !n.capabilityAllowed(toolName, activeTools) || !n.agent.Tools.HasCapability(toolName) {
 		lower := strings.ToLower(toolName)
 		if lower == "" || strings.Contains(lower, "none") {
 			state.Set("react.last_tool_result", map[string]interface{}{})
@@ -992,7 +1017,14 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 		return result, nil
 	}
-	res, err := tool.Execute(ctx, state, decision.Arguments)
+	if !n.agent.Tools.CapabilityAvailable(ctx, state, toolName) {
+		errMsg := fmt.Sprintf("tool %q is unavailable right now.", toolName)
+		state.Set("react.last_tool_result", map[string]interface{}{"error": errMsg})
+		result := &core.Result{NodeID: n.id, Success: false, Error: fmt.Errorf("%s", errMsg)}
+		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
+		return result, nil
+	}
+	res, err := n.agent.Tools.InvokeCapability(ctx, state, toolName, decision.Arguments)
 	if err != nil {
 		return nil, err
 	}
@@ -1001,15 +1033,20 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 		Name: decision.Tool,
 		Args: decision.Arguments,
 	}
-	n.recordObservation(state, call, res)
+	envelope := n.capabilityEnvelope(ctx, state, nil, call, res)
+	n.recordObservation(state, call, res, envelope)
 	n.latchVerificationSuccess(state, call.Name, res)
 	state.Set("react.last_tool_result", res.Data)
+	state.Set("react.last_tool_result_envelope", envelope)
 	n.agent.debugf("%s tool=%s result=%v", n.id, decision.Tool, res.Data)
 	result := &core.Result{
 		NodeID:  n.id,
 		Success: res.Success,
 		Data:    res.Data,
-		Error:   parseError(res.Error),
+		Metadata: map[string]any{
+			"capability_result": envelope,
+		},
+		Error: parseError(res.Error),
 	}
 	state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 	return result, nil
@@ -1031,29 +1068,117 @@ func (n *reactActNode) latchVerificationSuccess(state *core.Context, toolName st
 	state.Set("react.incomplete_reason", "")
 }
 
-func (n *reactActNode) lookupTool(name string, active map[string]struct{}) (core.Tool, bool) {
+func (n *reactActNode) capabilityAllowed(name string, active map[string]struct{}) bool {
 	if len(active) > 0 {
 		if _, ok := active[name]; !ok {
-			return nil, false
+			return false
 		}
 	}
-	return n.agent.Tools.Get(name)
+	return true
 }
 
-func (n *reactActNode) recordObservation(state *core.Context, call core.ToolCall, res *core.ToolResult) {
-	appendToolMessage(state, call, res)
+func (n *reactActNode) capabilityEnvelope(ctx context.Context, state *core.Context, tool core.Tool, call core.ToolCall, res *core.ToolResult) *core.CapabilityResultEnvelope {
+	var desc core.CapabilityDescriptor
+	if res != nil && res.Metadata != nil {
+		if raw, ok := res.Metadata["capability_descriptor"]; ok {
+			if typed, ok := raw.(core.CapabilityDescriptor); ok {
+				desc = typed
+			}
+		}
+	}
+	if desc.ID == "" {
+		if tool != nil {
+			desc = core.ToolDescriptor(ctx, state, tool)
+		} else {
+			desc = core.CapabilityDescriptor{
+				ID:          "tool:" + call.Name,
+				Kind:        core.CapabilityKindTool,
+				Name:        call.Name,
+				Description: call.Name,
+				TrustClass:  core.TrustClassWorkspaceTrusted,
+				Source: core.CapabilitySource{
+					Scope: core.CapabilityScopeWorkspace,
+				},
+			}
+		}
+	}
+	var approval *core.ApprovalBinding
+	if res != nil && res.Metadata != nil {
+		if raw, ok := res.Metadata["approval_binding"]; ok {
+			if typed, ok := raw.(*core.ApprovalBinding); ok {
+				approval = typed
+			}
+		}
+	}
+	if approval == nil {
+		approval = core.ApprovalBindingFromCapability(desc, state, call.Args)
+	}
+	var snapshot *core.PolicySnapshot
+	if n != nil && n.agent != nil && n.agent.Tools != nil {
+		snapshot = n.agent.Tools.CapturePolicySnapshot()
+	}
+	envelope := core.NewCapabilityResultEnvelope(desc, res, core.ContentDispositionRaw, snapshot, approval)
+	envelope = core.ApplyInsertionDecision(envelope, resolveInsertionDecision(n.agent, n.task, envelope))
+	if n != nil && n.agent != nil && n.agent.Config != nil && n.agent.Config.Telemetry != nil {
+		metadata := map[string]interface{}{
+			"security_event": "insertion_decision",
+			"capability_id":  envelope.Descriptor.ID,
+			"capability":     envelope.Descriptor.Name,
+			"insertion":      string(envelope.Insertion.Action),
+		}
+		if envelope.Policy != nil {
+			metadata["policy_snapshot_id"] = envelope.Policy.ID
+		}
+		if envelope.Descriptor.Source.ProviderID != "" {
+			metadata["provider_id"] = envelope.Descriptor.Source.ProviderID
+		}
+		if envelope.Descriptor.Source.SessionID != "" {
+			metadata["session_id"] = envelope.Descriptor.Source.SessionID
+		}
+		n.agent.Config.Telemetry.Emit(core.Event{
+			Type:      core.EventStateChange,
+			TaskID:    strings.TrimSpace(state.GetString("task.id")),
+			Message:   "insertion decision recorded",
+			Timestamp: time.Now().UTC(),
+			Metadata:  core.RedactMetadataMap(metadata),
+		})
+	}
+	if res != nil {
+		if res.Metadata == nil {
+			res.Metadata = map[string]interface{}{}
+		}
+		res.Metadata["insertion_decision"] = envelope.Insertion
+		res.Metadata["capability_result_envelope"] = envelope
+	}
+	return envelope
+}
+
+func (n *reactActNode) recordObservation(state *core.Context, call core.ToolCall, res *core.ToolResult, envelope *core.CapabilityResultEnvelope) {
+	appendToolMessage(n.agent, n.task, state, call, res, envelope)
 	observation := summarizeToolResult(state, call, res)
+	displaySummary, visible := renderInsertionFilteredSummary(n.agent, n.task, call.Name, res, envelope)
+	if visible {
+		observation.Summary = displaySummary
+		switch resolveInsertionDecision(n.agent, n.task, envelope).Action {
+		case core.InsertionActionMetadataOnly, core.InsertionActionHITLRequired:
+			observation.Data = nil
+		}
+	}
 	history := getToolObservations(state)
-	history = append(history, observation)
-	limit := toolSummaryBudgetForPhase(state.GetString("react.phase"))
-	if len(history) > limit {
-		history = history[len(history)-limit:]
+	if visible {
+		history = append(history, observation)
+		limit := toolSummaryBudgetForPhase(state.GetString("react.phase"))
+		if len(history) > limit {
+			history = history[len(history)-limit:]
+		}
 	}
 	state.Set("react.tool_observations", history)
-	if n.agent.contextPolicy != nil && n.agent.contextPolicy.ContextManager != nil {
+	if visible && n.agent.contextPolicy != nil && n.agent.contextPolicy.ContextManager != nil {
+		summaryEnvelope := core.SummarizeCapabilityResultEnvelope(envelope, observation.Summary)
 		item := &core.ToolResultContextItem{
 			ToolName:     call.Name,
 			Result:       &core.ToolResult{Success: res.Success, Data: map[string]interface{}{"summary": observation.Summary}, Error: res.Error},
+			Envelope:     summaryEnvelope,
 			LastAccessed: time.Now().UTC(),
 			Relevance:    0.9,
 			PriorityVal:  1,
@@ -1375,7 +1500,11 @@ func shouldEnterEditPhase(task *core.Task, observations []ToolObservation, lastT
 	if strings.Contains(lastTool, "test") || strings.Contains(lastTool, "build") || strings.Contains(lastTool, "lint") {
 		return hasFailure(lastMap)
 	}
-	if len(observations) < 2 {
+	if len(observations) == 0 {
+		return false
+	}
+	lastObservation := observations[len(observations)-1]
+	if !lastObservation.Success {
 		return false
 	}
 	return strings.HasPrefix(lastTool, "file_") ||
@@ -2317,7 +2446,7 @@ func inferFailureSymbol(lastMap map[string]interface{}) string {
 }
 
 func agentSpecFromTask(task *core.Task) *core.AgentRuntimeSpec {
-	return toolsys.EffectiveAgentSpec(task, nil)
+	return frameworkskills.EffectiveAgentSpec(task, nil)
 }
 
 // decisionPayload models the JSON output of the think step.
@@ -2375,11 +2504,18 @@ func parseDecision(raw string) (decisionPayload, error) {
 	if summary, ok := generic["summary"].(string); ok {
 		payload.Summary = summary
 	}
-	if payload.Action == "complete" {
+	action := strings.ToLower(strings.TrimSpace(payload.Action))
+	switch {
+	case action == "complete":
 		payload.Complete = true
-	}
-	if payload.Action == "tool" && payload.Tool != "" {
+	case action == "tool" && payload.Tool != "":
 		payload.Complete = false
+	case strings.Contains(action, "tool") && payload.Tool != "":
+		payload.Action = "tool"
+		payload.Complete = false
+	case strings.Contains(action, "complete") && payload.Tool == "":
+		payload.Action = "complete"
+		payload.Complete = true
 	}
 	payload.Timestamp = time.Now().UTC()
 	return payload, nil
@@ -2456,16 +2592,19 @@ func appendAssistantMessage(state *core.Context, resp *core.LLMResponse) {
 
 // appendToolMessage records tool responses in the transcript so the LLM can
 // observe prior results when tool calling is used.
-func appendToolMessage(state *core.Context, call core.ToolCall, res *core.ToolResult) {
+func appendToolMessage(agent *ReActAgent, task *core.Task, state *core.Context, call core.ToolCall, res *core.ToolResult, envelope *core.CapabilityResultEnvelope) {
 	messages := getReactMessages(state)
 	if len(messages) == 0 || res == nil {
 		return
 	}
-	observation := summarizeToolResult(state, call, res)
+	content, ok := renderInsertionFilteredSummary(agent, task, call.Name, res, envelope)
+	if !ok {
+		return
+	}
 	messages = append(messages, core.Message{
 		Role:       "tool",
 		Name:       call.Name,
-		Content:    fmt.Sprintf("success=%t %s", res.Success, observation.Summary),
+		Content:    fmt.Sprintf("success=%t %s", res.Success, content),
 		ToolCallID: call.ID,
 	})
 	saveReactMessages(state, messages)

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
+
+	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 type stubLLM struct {
@@ -17,6 +19,14 @@ type stubLLM struct {
 	generateCalls  int
 	withToolsCalls int
 	toolMessages   [][]core.Message
+}
+
+type recordingTelemetry struct {
+	events []core.Event
+}
+
+func (r *recordingTelemetry) Emit(event core.Event) {
+	r.events = append(r.events, event)
 }
 
 // Generate returns the next queued LLM response for deterministic tests.
@@ -104,9 +114,9 @@ func (t stubTool) Permissions() core.ToolPermissions {
 // Tags returns nil as the stub tool has no tags.
 func (t stubTool) Tags() []string { return t.tags }
 
-func makeRecoveryRegistry(t *testing.T, tools ...stubTool) *toolsys.ToolRegistry {
+func makeRecoveryRegistry(t *testing.T, tools ...stubTool) *capability.Registry {
 	t.Helper()
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	for _, tool := range tools {
 		assert.NoError(t, registry.Register(tool))
 	}
@@ -120,7 +130,7 @@ func TestReActAgentExecute(t *testing.T) {
 			{Text: `{"thought":"finished","tool":"none","arguments":{},"complete":true}`},
 		},
 	}
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
@@ -168,7 +178,7 @@ func TestReActAgentToolCallingDisabled(t *testing.T) {
 			{Text: `{"thought":"finished","tool":"none","arguments":{},"complete":true}`},
 		},
 	}
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
@@ -212,7 +222,7 @@ func TestReActAgentToolCallingFallbackExecutesParsedToolCalls(t *testing.T) {
 			{Text: `{"tool":"echo","arguments":{"value":"hi"}}`},
 		},
 	}
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
@@ -252,6 +262,319 @@ func TestReActAgentToolCallingFallbackExecutesParsedToolCalls(t *testing.T) {
 	assert.Contains(t, fmt.Sprint(lastToolRes.(map[string]interface{})["echo"]), "hi")
 }
 
+func TestParseDecisionNormalizesMalformedToolAction(t *testing.T) {
+	parsed, err := parseDecision(`{"thought":"write file","action":"tool|complete","tool":"file_write","arguments":{"path":"hello.txt"},"complete":true}`)
+	assert.NoError(t, err)
+	assert.Equal(t, "tool", parsed.Action)
+	assert.Equal(t, "file_write", parsed.Tool)
+	assert.False(t, parsed.Complete)
+	assert.Equal(t, "hello.txt", parsed.Arguments["path"])
+}
+
+func TestReactActNodeStoresCapabilityEnvelope(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
+
+	agent := &ReActAgent{
+		Tools: registry,
+		contextPolicy: contextmgr.NewContextPolicy(contextmgr.ContextPolicyConfig{
+			Strategy: contextmgr.NewAdaptiveStrategy(),
+		}, nil),
+	}
+
+	node := &reactActNode{id: "act", agent: agent}
+	state := core.NewContext()
+	state.Set("task.id", "task-1")
+	state.Set("react.decision", decisionPayload{
+		Tool:      "echo",
+		Arguments: map[string]interface{}{"value": "hi"},
+	})
+
+	result, err := node.Execute(context.Background(), state)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	rawEnvelope, ok := state.Get("react.last_tool_result_envelope")
+	assert.True(t, ok)
+	envelope, ok := rawEnvelope.(*core.CapabilityResultEnvelope)
+	assert.True(t, ok)
+	assert.Equal(t, "tool:echo", envelope.Descriptor.ID)
+	assert.Equal(t, "task-1", envelope.Approval.TaskID)
+	assert.NotNil(t, envelope.Policy)
+	assert.Equal(t, envelope.Policy.ID, envelope.Insertion.PolicySnapshotID)
+
+	capabilityEnvelope, ok := result.Metadata["capability_result"].(*core.CapabilityResultEnvelope)
+	assert.True(t, ok)
+	assert.Equal(t, envelope.Descriptor.ID, capabilityEnvelope.Descriptor.ID)
+
+	items := agent.contextPolicy.ContextManager.GetItemsByType(core.ContextTypeToolResult)
+	if assert.Len(t, items, 1) {
+		item, ok := items[0].(*core.ToolResultContextItem)
+		assert.True(t, ok)
+		assert.NotNil(t, item.Envelope)
+		assert.Equal(t, core.ContentDispositionSummarized, item.Envelope.Disposition)
+		assert.Equal(t, core.InsertionActionSummarized, item.Envelope.Insertion.Action)
+	}
+}
+
+func TestReactCapabilityEnvelopeEmitsInsertionTelemetry(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
+	telemetry := &recordingTelemetry{}
+
+	agent := &ReActAgent{
+		Tools: registry,
+		Config: &core.Config{
+			Telemetry: telemetry,
+		},
+	}
+
+	node := &reactActNode{id: "act", agent: agent}
+	state := core.NewContext()
+	state.Set("task.id", "task-telemetry")
+	res := &core.ToolResult{Success: true, Data: map[string]interface{}{"echo": "hi"}}
+	_ = node.capabilityEnvelope(context.Background(), state, stubTool{name: "echo"}, core.ToolCall{Name: "echo"}, res)
+
+	found := false
+	for _, event := range telemetry.events {
+		if event.Metadata["security_event"] == "insertion_decision" {
+			found = true
+			assert.Equal(t, "tool:echo", event.Metadata["capability_id"])
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestRenderInsertionFilteredSummaryMetadataOnly(t *testing.T) {
+	agent := &ReActAgent{
+		Config: &core.Config{
+			AgentSpec: &core.AgentRuntimeSpec{
+				InsertionPolicies: []core.CapabilityInsertionPolicy{
+					{
+						Selector: core.CapabilitySelector{
+							Name: "echo",
+						},
+						Action: core.InsertionActionMetadataOnly,
+					},
+				},
+			},
+		},
+	}
+	payload := &core.ToolResult{
+		Success: true,
+		Data:    map[string]interface{}{"echo": "secret"},
+	}
+	envelope := core.NewCapabilityResultEnvelope(
+		core.CapabilityDescriptor{
+			ID:         "tool:echo",
+			Kind:       core.CapabilityKindTool,
+			Name:       "echo",
+			TrustClass: core.TrustClassBuiltinTrusted,
+		},
+		payload,
+		core.ContentDispositionRaw,
+		nil,
+		nil,
+	)
+
+	text, ok := renderInsertionFilteredSummary(agent, nil, "echo", payload, envelope)
+	assert.True(t, ok)
+	assert.Contains(t, text, "metadata-only")
+	assert.NotContains(t, text, "secret")
+}
+
+func TestReactCapabilityEnvelopePersistsEffectiveInsertionDecision(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
+	registry.UseAgentSpec("agent-1", &core.AgentRuntimeSpec{
+		InsertionPolicies: []core.CapabilityInsertionPolicy{
+			{
+				Selector: core.CapabilitySelector{Name: "echo"},
+				Action:   core.InsertionActionMetadataOnly,
+			},
+		},
+	})
+
+	agent := &ReActAgent{
+		Tools: registry,
+		Config: &core.Config{
+			AgentSpec: &core.AgentRuntimeSpec{
+				InsertionPolicies: []core.CapabilityInsertionPolicy{
+					{
+						Selector: core.CapabilitySelector{Name: "echo"},
+						Action:   core.InsertionActionMetadataOnly,
+					},
+				},
+			},
+		},
+	}
+
+	node := &reactActNode{id: "act", agent: agent}
+	res := &core.ToolResult{Success: true, Data: map[string]interface{}{"echo": "secret"}}
+	envelope := node.capabilityEnvelope(context.Background(), core.NewContext(), stubTool{name: "echo"}, core.ToolCall{Name: "echo"}, res)
+
+	assert.Equal(t, core.InsertionActionMetadataOnly, envelope.Insertion.Action)
+	assert.NotEmpty(t, envelope.BlockInsertions)
+	assert.Equal(t, core.InsertionActionMetadataOnly, envelope.BlockInsertions[0].Decision.Action)
+
+	rawDecision, ok := res.Metadata["insertion_decision"].(core.InsertionDecision)
+	assert.True(t, ok)
+	assert.Equal(t, core.InsertionActionMetadataOnly, rawDecision.Action)
+}
+
+func TestRenderInsertionFilteredSummaryUsesVisibleBlocksOnly(t *testing.T) {
+	payload := &core.ToolResult{
+		Success: true,
+		Data:    map[string]interface{}{"summary": "visible secret"},
+	}
+	envelope := &core.CapabilityResultEnvelope{
+		Descriptor: core.CapabilityDescriptor{
+			ID:         "tool:echo",
+			Kind:       core.CapabilityKindTool,
+			Name:       "echo",
+			TrustClass: core.TrustClassBuiltinTrusted,
+		},
+		ContentBlocks: []core.ContentBlock{
+			core.TextContentBlock{Text: "visible"},
+			core.ResourceLinkContentBlock{URI: "file:///tmp/secret"},
+		},
+		BlockInsertions: []core.ContentBlockInsertion{
+			{ContentType: "text", Decision: core.InsertionDecision{Action: core.InsertionActionDirect}},
+			{ContentType: "resource-link", Decision: core.InsertionDecision{Action: core.InsertionActionMetadataOnly}},
+		},
+		Insertion: core.InsertionDecision{Action: core.InsertionActionDirect},
+	}
+
+	text, ok := renderInsertionFilteredSummary(nil, nil, "echo", payload, envelope)
+	assert.True(t, ok)
+	assert.Contains(t, text, "visible")
+	assert.NotContains(t, text, "/tmp/secret")
+}
+
+func TestReactObservationHistoryRespectsDeniedInsertionPolicy(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
+
+	agent := &ReActAgent{
+		Tools: registry,
+		Config: &core.Config{
+			AgentSpec: &core.AgentRuntimeSpec{
+				InsertionPolicies: []core.CapabilityInsertionPolicy{
+					{
+						Selector: core.CapabilitySelector{Name: "echo"},
+						Action:   core.InsertionActionDenied,
+					},
+				},
+			},
+		},
+		contextPolicy: contextmgr.NewContextPolicy(contextmgr.ContextPolicyConfig{
+			Strategy: contextmgr.NewAdaptiveStrategy(),
+		}, nil),
+	}
+
+	node := &reactActNode{id: "act", agent: agent}
+	state := core.NewContext()
+	state.Set("task.id", "task-1")
+	state.Set("react.messages", []core.Message{{Role: "assistant", Content: "use tool"}})
+	state.Set("react.decision", decisionPayload{
+		Tool:      "echo",
+		Arguments: map[string]interface{}{"value": "secret"},
+	})
+
+	_, err := node.Execute(context.Background(), state)
+	assert.NoError(t, err)
+
+	rawObs, ok := state.Get("react.tool_observations")
+	assert.True(t, ok)
+	assert.Empty(t, rawObs.([]ToolObservation))
+
+	messages := getReactMessages(state)
+	assert.Len(t, messages, 1)
+
+	assembler := newPromptContextAssembler(agent, &core.Task{Instruction: "test"})
+	assert.Empty(t, assembler.recentToolObservations(state))
+	assert.Empty(t, assembler.contextFiles(state))
+}
+
+func TestReactObservationHistoryMetadataOnlyRedactsSummary(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
+
+	agent := &ReActAgent{
+		Tools: registry,
+		Config: &core.Config{
+			AgentSpec: &core.AgentRuntimeSpec{
+				InsertionPolicies: []core.CapabilityInsertionPolicy{
+					{
+						Selector: core.CapabilitySelector{Name: "echo"},
+						Action:   core.InsertionActionMetadataOnly,
+					},
+				},
+			},
+		},
+	}
+
+	node := &reactActNode{id: "act", agent: agent}
+	state := core.NewContext()
+	state.Set("task.id", "task-1")
+	state.Set("react.messages", []core.Message{{Role: "assistant", Content: "use tool"}})
+	state.Set("react.decision", decisionPayload{
+		Tool:      "echo",
+		Arguments: map[string]interface{}{"value": "secret"},
+	})
+
+	_, err := node.Execute(context.Background(), state)
+	assert.NoError(t, err)
+
+	rawObs, ok := state.Get("react.tool_observations")
+	assert.True(t, ok)
+	observations := rawObs.([]ToolObservation)
+	if assert.Len(t, observations, 1) {
+		assert.Contains(t, observations[0].Summary, "metadata-only")
+		assert.NotContains(t, observations[0].Summary, "secret")
+		assert.Nil(t, observations[0].Data)
+	}
+
+	assembler := newPromptContextAssembler(agent, &core.Task{Instruction: "test"})
+	obsText := assembler.recentToolObservations(state)
+	assert.Contains(t, obsText, "metadata-only")
+	assert.NotContains(t, obsText, "secret")
+}
+
+func TestPromptBuilderIncludesNonToolCapabilityCatalog(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
+	assert.NoError(t, registry.RegisterCapability(core.CapabilityDescriptor{
+		ID:          "prompt:catalog:1",
+		Kind:        core.CapabilityKindPrompt,
+		Name:        "catalog.prompt.1",
+		Description: "Use the catalog prompt",
+		Source: core.CapabilitySource{
+			Scope: core.CapabilityScopeWorkspace,
+		},
+		TrustClass: core.TrustClassWorkspaceTrusted,
+	}))
+	assert.NoError(t, registry.RegisterCapability(core.CapabilityDescriptor{
+		ID:          "resource:catalog:guide",
+		Kind:        core.CapabilityKindResource,
+		Name:        "catalog.resource.guide",
+		Description: "Guide resource",
+		Source: core.CapabilitySource{
+			Scope: core.CapabilityScopeWorkspace,
+		},
+		TrustClass: core.TrustClassWorkspaceTrusted,
+	}))
+
+	agent := &ReActAgent{Tools: registry}
+	assembler := newPromptContextAssembler(agent, &core.Task{Instruction: "test"})
+
+	prompt := assembler.buildPrompt(core.NewContext(), []core.Tool{stubTool{name: "echo"}}, true)
+
+	assert.Contains(t, prompt, "Capability Catalog:")
+	assert.Contains(t, prompt, "catalog.prompt.1 [prompt]")
+	assert.Contains(t, prompt, "catalog.resource.guide [resource]")
+}
+
 // TestReActAgentToolCalling verifies tool call handling and transcript storage.
 func TestReActAgentToolCalling(t *testing.T) {
 	llm := &stubLLM{
@@ -260,7 +583,7 @@ func TestReActAgentToolCalling(t *testing.T) {
 			{Text: "all done"},
 		},
 	}
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
@@ -320,7 +643,7 @@ func TestReActAgentToolCallingPreservesTranscriptAcrossTurns(t *testing.T) {
 			{Text: `{"thought":"finished","tool":"","arguments":{},"complete":true,"summary":"done"}`},
 		},
 	}
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
@@ -413,7 +736,7 @@ func TestToolAllowedForPhasePermitsRustExecutionInEdit(t *testing.T) {
 	assert.True(t, toolAllowedForPhase(tool, contextmgrPhaseEdit, task))
 }
 
-func TestObserveKeepsExplorePhaseAfterSingleRead(t *testing.T) {
+func TestObserveEntersEditPhaseAfterSingleRead(t *testing.T) {
 	agent := &ReActAgent{}
 	state := core.NewContext()
 	state.Set("react.phase", contextmgrPhaseExplore)
@@ -424,6 +747,20 @@ func TestObserveKeepsExplorePhaseAfterSingleRead(t *testing.T) {
 	node := &reactObserveNode{id: "observe", agent: agent, task: task}
 
 	node.advancePhase(state, decisionPayload{}, map[string]interface{}{"content": "fn add() {}"})
+	assert.Equal(t, contextmgrPhaseEdit, state.GetString("react.phase"))
+}
+
+func TestObserveKeepsExplorePhaseAfterFailedSingleRead(t *testing.T) {
+	agent := &ReActAgent{}
+	state := core.NewContext()
+	state.Set("react.phase", contextmgrPhaseExplore)
+	state.Set("react.tool_observations", []ToolObservation{
+		{Tool: "file_read", Args: map[string]interface{}{"path": "src/lib.rs"}, Data: map[string]interface{}{"error": "permission denied"}, Success: false},
+	})
+	task := &core.Task{Instruction: "Fix the bug in src/lib.rs"}
+	node := &reactObserveNode{id: "observe", agent: agent, task: task}
+
+	node.advancePhase(state, decisionPayload{}, map[string]interface{}{"error": "permission denied"})
 	assert.Equal(t, contextmgrPhaseExplore, state.GetString("react.phase"))
 }
 
@@ -435,7 +772,7 @@ func TestReActAgentFailsWhenIterationBudgetIsExhaustedWithoutEdits(t *testing.T)
 			{Text: `{"tool":"echo","arguments":{"value":"same"}}`},
 		},
 	}
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "echo"}))
 	agent := &ReActAgent{
 		Model: llm,
@@ -498,8 +835,8 @@ func TestVerificationSummaryFromSuccessCompletesAfterPassingCargo(t *testing.T) 
 	assert.Contains(t, summary, "cli_cargo succeeded")
 }
 
-func TestAvailableToolsForPhaseRespectsSkillPhaseTools(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+func TestAvailableToolsForPhaseRespectsSkillPhaseCapabilities(t *testing.T) {
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "cli_cargo", tags: []string{core.TagExecute}}))
 	assert.NoError(t, registry.Register(stubTool{name: "cli_rustfmt", tags: []string{core.TagExecute}}))
 
@@ -508,7 +845,7 @@ func TestAvailableToolsForPhaseRespectsSkillPhaseTools(t *testing.T) {
 		Config: &core.Config{
 			AgentSpec: &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
-					PhaseTools: map[string][]string{
+					PhaseCapabilities: map[string][]string{
 						contextmgrPhaseVerify: {"cli_cargo"},
 					},
 				},
@@ -524,8 +861,8 @@ func TestAvailableToolsForPhaseRespectsSkillPhaseTools(t *testing.T) {
 	assert.Equal(t, "cli_cargo", tools[0].Name())
 }
 
-func TestAvailableToolsForPhaseRespectsSkillPhaseSelectors(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+func TestAvailableToolsForPhaseRespectsSkillPhaseCapabilitySelectors(t *testing.T) {
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "go_test", tags: []string{core.TagExecute, "lang:go", "test"}}))
 	assert.NoError(t, registry.Register(stubTool{name: "go_build", tags: []string{core.TagExecute, "lang:go", "build"}}))
 
@@ -534,7 +871,7 @@ func TestAvailableToolsForPhaseRespectsSkillPhaseSelectors(t *testing.T) {
 		Config: &core.Config{
 			AgentSpec: &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
-					PhaseSelectors: map[string][]core.SkillToolSelector{
+					PhaseCapabilitySelectors: map[string][]core.SkillCapabilitySelector{
 						contextmgrPhaseVerify: {{Tags: []string{"lang:go", "test"}}},
 					},
 				},
@@ -551,7 +888,7 @@ func TestAvailableToolsForPhaseRespectsSkillPhaseSelectors(t *testing.T) {
 }
 
 func TestAvailableToolsForPhaseIncludesConfiguredRecoveryToolsOnFailure(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "cli_cargo", tags: []string{core.TagExecute}}))
 	assert.NoError(t, registry.Register(stubTool{name: "search_grep", tags: []string{core.TagReadOnly}}))
 
@@ -560,7 +897,7 @@ func TestAvailableToolsForPhaseIncludesConfiguredRecoveryToolsOnFailure(t *testi
 		Config: &core.Config{
 			AgentSpec: &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
-					PhaseTools: map[string][]string{
+					PhaseCapabilities: map[string][]string{
 						contextmgrPhaseVerify: {"cli_cargo", "search_grep"},
 					},
 					Recovery: core.AgentRecoveryPolicy{
@@ -577,6 +914,27 @@ func TestAvailableToolsForPhaseIncludesConfiguredRecoveryToolsOnFailure(t *testi
 
 	tools := agent.availableToolsForPhase(state, task)
 	assert.Len(t, tools, 2)
+}
+
+func TestAvailableToolsForPhaseExcludesInspectableOnlyTools(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "cli_cargo", tags: []string{core.TagExecute}}))
+	registry.UseAgentSpec("agent", &core.AgentRuntimeSpec{
+		ExposurePolicies: []core.CapabilityExposurePolicy{
+			{
+				Selector: core.CapabilitySelector{Name: "cli_cargo"},
+				Access:   core.CapabilityExposureInspectable,
+			},
+		},
+	})
+
+	agent := &ReActAgent{Tools: registry}
+	state := core.NewContext()
+	state.Set("react.phase", contextmgrPhaseVerify)
+	task := &core.Task{Instruction: "Run cargo test", Context: map[string]any{"mode": "debug"}}
+
+	tools := agent.availableToolsForPhase(state, task)
+	assert.Empty(t, tools)
 }
 
 func TestScheduleRecoveryProbeUsesSkillOrder(t *testing.T) {
@@ -821,15 +1179,15 @@ func TestScheduleRecoveryProbeUsesSQLiteSkillOrder(t *testing.T) {
 
 func TestPlannerSkillHintsIncludePlanningPolicy(t *testing.T) {
 	agent := &PlannerAgent{
-		Tools: toolsys.NewToolRegistry(),
+		Tools: capability.NewRegistry(),
 		Config: &core.Config{
 			AgentSpec: &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
 					Planning: core.AgentPlanningPolicy{
-						RequiredBeforeEdit:      []core.SkillToolSelector{{Tool: "file_read"}},
-						PreferredVerifyTools:    []core.SkillToolSelector{{Tool: "cli_go"}},
-						StepTemplates:           []core.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
-						RequireVerificationStep: true,
+						RequiredBeforeEdit:          []core.SkillCapabilitySelector{{Capability: "file_read"}},
+						PreferredVerifyCapabilities: []core.SkillCapabilitySelector{{Capability: "cli_go"}},
+						StepTemplates:               []core.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
+						RequireVerificationStep:     true,
 					},
 				},
 			},
@@ -840,12 +1198,12 @@ func TestPlannerSkillHintsIncludePlanningPolicy(t *testing.T) {
 
 	hints := plannerSkillHints(agent)
 	assert.Contains(t, hints, "Required before edit: file_read")
-	assert.Contains(t, hints, "Preferred verify tools: cli_go")
+	assert.Contains(t, hints, "Preferred verify capabilities: cli_go")
 	assert.Contains(t, hints, "Plans must include an explicit verification step.")
 }
 
 func TestReActResolvedSkillPolicyUsesTaskAgentSpecOverride(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "cli_go"}))
 	assert.NoError(t, registry.Register(stubTool{name: "go_test", tags: []string{"lang:go", "test"}}))
 	agent := &ReActAgent{
@@ -865,7 +1223,7 @@ func TestReActResolvedSkillPolicyUsesTaskAgentSpecOverride(t *testing.T) {
 			"agent_spec": &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
 					Verification: core.AgentVerificationPolicy{
-						SuccessSelectors: []core.SkillToolSelector{{Tags: []string{"lang:go", "test"}}},
+						SuccessCapabilitySelectors: []core.SkillCapabilitySelector{{Tags: []string{"lang:go", "test"}}},
 					},
 				},
 			},
@@ -874,7 +1232,7 @@ func TestReActResolvedSkillPolicyUsesTaskAgentSpecOverride(t *testing.T) {
 
 	policy := agent.resolvedSkillPolicy(task)
 
-	assert.Equal(t, []string{"go_test"}, policy.VerificationSuccessTools)
+	assert.Equal(t, []string{"go_test"}, policy.VerificationSuccessCapabilities)
 }
 
 func TestReactObserveCompletesWhenVerificationLatchIsSet(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/persistence"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 )
 
 type architectStubLLM struct {
@@ -104,8 +104,8 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"finished"}`},
 		},
 	}
-	plannerTools := toolsys.NewToolRegistry()
-	executorTools := toolsys.NewToolRegistry()
+	plannerTools := capability.NewRegistry()
+	executorTools := capability.NewRegistry()
 	if err := plannerTools.Register(architectStubTool{}); err != nil {
 		t.Fatalf("register planner tool: %v", err)
 	}
@@ -178,6 +178,23 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 	if len(stepArtifacts) != 1 || stepArtifacts[0].Kind != "step_result" {
 		t.Fatalf("expected step_result artifact, got %+v", stepArtifacts)
 	}
+	events, err := store.ListEvents(context.Background(), task.ID, 20)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	foundSecurityEvent := false
+	for _, event := range events {
+		if event.EventType != "security.insertion_decision" && event.EventType != "security.capability_invoked" {
+			continue
+		}
+		foundSecurityEvent = true
+		if event.Metadata["capability_id"] != "tool:echo" {
+			t.Fatalf("expected tool:echo security event, got %+v", event.Metadata)
+		}
+	}
+	if !foundSecurityEvent {
+		t.Fatal("expected persisted security insertion event")
+	}
 }
 
 func TestShouldRunCandidateSelection(t *testing.T) {
@@ -198,8 +215,8 @@ func TestArchitectAgentResumesLatestWorkflow(t *testing.T) {
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"finished"}`},
 		},
 	}
-	plannerTools := toolsys.NewToolRegistry()
-	executorTools := toolsys.NewToolRegistry()
+	plannerTools := capability.NewRegistry()
+	executorTools := capability.NewRegistry()
 	_ = plannerTools.Register(architectStubTool{})
 	_ = executorTools.Register(architectStubTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
@@ -289,12 +306,12 @@ func TestWorkflowPlanningServiceRejectsInvalidPlanBeforePersistence(t *testing.T
 			{Text: `{"goal":"bad","steps":[{"id":"step-1","description":"broken"}],"dependencies":{"step-1":["missing-step"]},"files":[]}`},
 		},
 	}
-	plannerTools := toolsys.NewToolRegistry()
+	plannerTools := capability.NewRegistry()
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
 	agent := &ArchitectAgent{
 		Model:             llm,
 		PlannerTools:      plannerTools,
-		ExecutorTools:     toolsys.NewToolRegistry(),
+		ExecutorTools:     capability.NewRegistry(),
 		WorkflowStatePath: workflowStatePath,
 	}
 	cfg := &core.Config{Model: "test-model", MaxIterations: 3}
@@ -348,8 +365,8 @@ func TestArchitectAgentResumesWorkflowAcrossNewTaskID(t *testing.T) {
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"finished"}`},
 		},
 	}
-	plannerTools := toolsys.NewToolRegistry()
-	executorTools := toolsys.NewToolRegistry()
+	plannerTools := capability.NewRegistry()
+	executorTools := capability.NewRegistry()
 	_ = plannerTools.Register(architectStubTool{})
 	_ = executorTools.Register(architectStubTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
@@ -458,7 +475,7 @@ func TestArchitectAgentRecoverStepFailureReturnsStructuredNotes(t *testing.T) {
 			{Text: `{"diagnosis":"inspect the failing file","notes":["read README.md","retry after narrowing the change"]}`},
 		},
 	}
-	executorTools := toolsys.NewToolRegistry()
+	executorTools := capability.NewRegistry()
 	_ = executorTools.Register(architectRecoveryTool{
 		name: "file_read",
 		execute: func(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
@@ -517,8 +534,8 @@ func TestArchitectAgentRerunFromStepInvalidatesDependentsAndReplays(t *testing.T
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"step two replayed"}`},
 		},
 	}
-	plannerTools := toolsys.NewToolRegistry()
-	executorTools := toolsys.NewToolRegistry()
+	plannerTools := capability.NewRegistry()
+	executorTools := capability.NewRegistry()
 	_ = plannerTools.Register(architectStubTool{})
 	_ = executorTools.Register(architectStubTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
@@ -625,8 +642,8 @@ func TestArchitectAgentMarksWorkflowNeedsReplanAfterRepeatedFailures(t *testing.
 			{ToolCalls: []core.ToolCall{{Name: "failtool", Args: map[string]interface{}{"value": "boom"}}}},
 		},
 	}
-	plannerTools := toolsys.NewToolRegistry()
-	executorTools := toolsys.NewToolRegistry()
+	plannerTools := capability.NewRegistry()
+	executorTools := capability.NewRegistry()
 	_ = plannerTools.Register(architectStubTool{})
 	_ = executorTools.Register(architectFailTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")

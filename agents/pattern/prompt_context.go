@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 type promptContextAssembler struct {
@@ -43,6 +43,9 @@ func (a *promptContextAssembler) buildPrompt(state *core.Context, tools []core.T
 	if hints := a.skillHints(); hints != "" {
 		sections = append(sections, "Skill Policy:\n"+hints)
 	}
+	if catalog := a.capabilityCatalog(); catalog != "" {
+		sections = append(sections, "Capability Catalog:\n"+catalog)
+	}
 	if files := a.contextFiles(state); files != "" {
 		sections = append(sections, "Working Context:\n"+files)
 	}
@@ -60,12 +63,12 @@ func (a *promptContextAssembler) skillHints() string {
 	if a == nil || a.task == nil {
 		return ""
 	}
-	effective := toolsys.ResolveEffectiveSkillPolicy(a.task, a.agent.effectiveAgentSpec(a.task), a.agent.Tools)
+	effective := frameworkskills.ResolveEffectiveSkillPolicy(a.task, a.agent.effectiveAgentSpec(a.task), a.agent.Tools)
 	spec := effective.Spec
 	if spec == nil {
 		return ""
 	}
-	return toolsys.RenderExecutionPolicy(&effective.Policy, spec.SkillConfig.Verification.StopOnSuccess)
+	return frameworkskills.RenderExecutionPolicy(&effective.Policy, spec.SkillConfig.Verification.StopOnSuccess)
 }
 
 func (a *promptContextAssembler) planGoal(state *core.Context) string {
@@ -148,6 +151,39 @@ func (a *promptContextAssembler) currentPhase(state *core.Context) string {
 	return strings.TrimSpace(state.GetString("react.phase"))
 }
 
+func (a *promptContextAssembler) capabilityCatalog() string {
+	if a == nil || a.agent == nil || a.agent.Tools == nil {
+		return ""
+	}
+	capabilities := a.agent.Tools.AllCapabilities()
+	if len(capabilities) == 0 {
+		return ""
+	}
+	var lines []string
+	for _, capability := range capabilities {
+		if capability.Kind == core.CapabilityKindTool {
+			continue
+		}
+		label := strings.TrimSpace(capability.Name)
+		if label == "" {
+			label = capability.ID
+		}
+		desc := strings.TrimSpace(capability.Description)
+		if desc == "" {
+			desc = string(capability.Kind)
+		}
+		lines = append(lines, fmt.Sprintf("- %s [%s]: %s", label, capability.Kind, truncateForPrompt(desc, 120)))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	sort.Strings(lines)
+	if len(lines) > 6 {
+		lines = lines[:6]
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (a *promptContextAssembler) compactHistory(state *core.Context, compact bool) string {
 	if state == nil {
 		return ""
@@ -209,9 +245,13 @@ func (a *promptContextAssembler) contextFiles(state *core.Context) string {
 			if payload == nil {
 				continue
 			}
+			text, ok := renderInsertionFilteredSummary(a.agent, a.task, typed.ToolName, payload, typed.Envelope)
+			if !ok || strings.TrimSpace(text) == "" {
+				continue
+			}
 			scored = append(scored, scoredItem{
 				score: typed.RelevanceScore(),
-				text:  fmt.Sprintf("Tool %s: %s", typed.ToolName, summarizeToolPayload(payload)),
+				text:  fmt.Sprintf("Tool %s: %s", typed.ToolName, text),
 			})
 		}
 	}

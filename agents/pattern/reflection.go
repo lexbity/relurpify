@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/toolsys"
-	"strings"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 // ReflectionAgent reviews outputs and triggers revisions when needed.
@@ -252,11 +253,11 @@ func reflectionReviewGuidance(agent *ReflectionAgent, task *core.Task) string {
 	if agent != nil && agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
-	effective := toolsys.ResolveEffectiveSkillPolicy(task, fallback, nil)
+	effective := frameworkskills.ResolveEffectiveSkillPolicy(task, fallback, nil)
 	if effective.Spec == nil {
 		return "Consider correctness, completeness, quality, security, performance."
 	}
-	return toolsys.RenderReviewPolicy(effective.Policy)
+	return frameworkskills.RenderReviewPolicy(effective.Policy)
 }
 
 func reflectionApprovalPasses(agent *ReflectionAgent, state *core.Context, review reviewPayload) bool {
@@ -271,7 +272,7 @@ func reflectionAssessmentForReview(agent *ReflectionAgent, state *core.Context, 
 	if agent != nil && agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
-	effective := toolsys.ResolveEffectiveSkillPolicy(nil, fallback, nil)
+	effective := frameworkskills.ResolveEffectiveSkillPolicy(nil, fallback, nil)
 	if effective.Spec == nil {
 		return reflectionAssessment{
 			Allowed:              review.Approve,
@@ -313,11 +314,11 @@ func reflectionAssessmentForReview(agent *ReflectionAgent, state *core.Context, 
 }
 
 func reflectionSeverityGuidance(weights map[string]float64) string {
-	return toolsys.RenderSeverityWeights(weights)
+	return frameworkskills.RenderSeverityWeights(weights)
 }
 
 func reflectionSeverityWeights(input map[string]float64) map[string]float64 {
-	return toolsys.ResolveSeverityWeights(input)
+	return frameworkskills.ResolveSeverityWeights(input)
 }
 
 func reflectionSeverityWeight(weights map[string]float64, severity string) float64 {

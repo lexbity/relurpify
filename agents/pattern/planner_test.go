@@ -1,15 +1,31 @@
 package pattern
 
 import (
+	"context"
 	"testing"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/stretchr/testify/assert"
 )
 
+type plannerPathEchoTool struct{}
+
+func (plannerPathEchoTool) Name() string        { return "file_read" }
+func (plannerPathEchoTool) Description() string { return "echo path" }
+func (plannerPathEchoTool) Category() string    { return "test" }
+func (plannerPathEchoTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "path", Type: "string", Required: true}}
+}
+func (plannerPathEchoTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true, Data: map[string]any{"path": args["path"]}}, nil
+}
+func (plannerPathEchoTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (plannerPathEchoTool) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
+func (plannerPathEchoTool) Tags() []string                                  { return nil }
+
 func TestNormalizePlannerPlanInsertsRequiredDiscoveryBeforeEdit(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{
 		name:   "rust_workspace_detect",
 		params: []core.ToolParameter{{Name: "path", Type: "string", Required: false}},
@@ -21,8 +37,8 @@ func TestNormalizePlannerPlanInsertsRequiredDiscoveryBeforeEdit(t *testing.T) {
 			AgentSpec: &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
 					Planning: core.AgentPlanningPolicy{
-						RequiredBeforeEdit: []core.SkillToolSelector{{Tool: "rust_workspace_detect"}},
-						PreferredEditTools: []core.SkillToolSelector{{Tool: "file_write"}},
+						RequiredBeforeEdit:        []core.SkillCapabilitySelector{{Capability: "rust_workspace_detect"}},
+						PreferredEditCapabilities: []core.SkillCapabilitySelector{{Capability: "file_write"}},
 					},
 				},
 			},
@@ -47,7 +63,7 @@ func TestNormalizePlannerPlanInsertsRequiredDiscoveryBeforeEdit(t *testing.T) {
 }
 
 func TestNormalizePlannerPlanAppendsVerificationWhenRequired(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{name: "file_write"}))
 	assert.NoError(t, registry.Register(stubTool{
 		name:   "go_test",
@@ -59,9 +75,9 @@ func TestNormalizePlannerPlanAppendsVerificationWhenRequired(t *testing.T) {
 			AgentSpec: &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
 					Planning: core.AgentPlanningPolicy{
-						PreferredEditTools:      []core.SkillToolSelector{{Tool: "file_write"}},
-						PreferredVerifyTools:    []core.SkillToolSelector{{Tool: "go_test"}},
-						RequireVerificationStep: true,
+						PreferredEditCapabilities:   []core.SkillCapabilitySelector{{Capability: "file_write"}},
+						PreferredVerifyCapabilities: []core.SkillCapabilitySelector{{Capability: "go_test"}},
+						RequireVerificationStep:     true,
 					},
 				},
 			},
@@ -86,7 +102,7 @@ func TestNormalizePlannerPlanAppendsVerificationWhenRequired(t *testing.T) {
 }
 
 func TestNormalizePlannerPlanLeavesCompliantPlanUnchanged(t *testing.T) {
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	assert.NoError(t, registry.Register(stubTool{
 		name:   "python_workspace_detect",
 		params: []core.ToolParameter{{Name: "path", Type: "string", Required: false}},
@@ -102,10 +118,10 @@ func TestNormalizePlannerPlanLeavesCompliantPlanUnchanged(t *testing.T) {
 			AgentSpec: &core.AgentRuntimeSpec{
 				SkillConfig: core.AgentSkillConfig{
 					Planning: core.AgentPlanningPolicy{
-						RequiredBeforeEdit:      []core.SkillToolSelector{{Tool: "python_workspace_detect"}},
-						PreferredEditTools:      []core.SkillToolSelector{{Tool: "file_write"}},
-						PreferredVerifyTools:    []core.SkillToolSelector{{Tool: "python_compile_check"}},
-						RequireVerificationStep: true,
+						RequiredBeforeEdit:          []core.SkillCapabilitySelector{{Capability: "python_workspace_detect"}},
+						PreferredEditCapabilities:   []core.SkillCapabilitySelector{{Capability: "file_write"}},
+						PreferredVerifyCapabilities: []core.SkillCapabilitySelector{{Capability: "python_compile_check"}},
+						RequireVerificationStep:     true,
 					},
 				},
 			},
@@ -123,4 +139,29 @@ func TestNormalizePlannerPlanLeavesCompliantPlanUnchanged(t *testing.T) {
 
 	assert.Equal(t, plan.Steps, normalized.Steps)
 	assert.Empty(t, adjustments)
+}
+
+func TestPlannerExecuteNormalizesPathAliases(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(plannerPathEchoTool{}))
+	agent := &PlannerAgent{Tools: registry}
+	node := &plannerExecuteNode{id: "planner_execute", agent: agent}
+	state := core.NewContext()
+	state.Set("planner.plan", core.Plan{
+		Steps: []core.PlanStep{{
+			ID:     "read",
+			Tool:   "file_read",
+			Params: map[string]any{"file_path": "README.md"},
+		}},
+	})
+
+	result, err := node.Execute(context.Background(), state)
+	assert.NoError(t, err)
+	assert.True(t, result.Success)
+
+	value, ok := state.Get("planner.step.read")
+	if assert.True(t, ok) {
+		output, _ := value.(map[string]any)
+		assert.Equal(t, "README.md", output["path"])
+	}
 }
