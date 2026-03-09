@@ -40,7 +40,7 @@ The runtime persists workspace selections in this shape:
 model: qwen2.5-coder:14b
 agents:
     - coding-go
-allowed_tools: []
+allowed_capabilities: []
 permission_profile: workspace_write
 last_updated: 1709500000
 ```
@@ -51,7 +51,7 @@ Field meanings:
 |-------|---------|
 | `model` | Default Ollama model override for this workspace |
 | `agents` | Preferred agent presets or definitions |
-| `allowed_tools` | Optional temporary tool narrowing |
+| `allowed_capabilities` | Restrict capability visibility with selector-based bundles |
 | `permission_profile` | Last selected workspace permission profile |
 | `last_updated` | Unix timestamp of the last save |
 
@@ -136,11 +136,15 @@ spec:
             name: qwen2.5-coder:14b
             temperature: 0.2
             max_tokens: 4096
-        allowed_tools:
-            - file_read
-            - file_write
-            - file_edit
-            - search_grep
+        allowed_capabilities:
+            - name: file_read
+              kind: tool
+            - name: file_write
+              kind: tool
+            - name: file_edit
+              kind: tool
+            - name: file_search
+              kind: tool
         bash_permissions:
             default: ask
             allow_patterns: ["git diff*", "git status"]
@@ -161,9 +165,18 @@ spec:
             include_dependencies: true
         ollama_tool_calling: true
 
-    policies:
-        destructive: ask
-        default_tool_policy: ask
+        capability_policies:
+            - selector:
+                kind: tool
+                risk_classes: ["destructive"]
+              execute: ask
+        policies:
+            destructive: ask
+            network: ask
+        provider_policies:
+            remote-mcp:
+                activate: ask
+                default_trust: remote-declared-untrusted
 
     skills:
         - system
@@ -186,8 +199,11 @@ CodingAgent task modes such as `code`, `architect`, `ask`, `debug`, and `docs` a
 
 | Field | Purpose |
 |-------|---------|
-| `allowed_tools` | Restrict tool visibility to an explicit allowlist |
+| `allowed_capabilities` | Restrict capability visibility to explicit selectors |
 | `tool_execution_policy` | Per-tool allow/ask/deny overrides |
+| `capability_policies` | Selector-based capability execution rules keyed by kind, trust, risk, and effect |
+| `policies` | Capability class policy keyed by trust/risk/effect labels |
+| `provider_policies` | Provider activation and trust defaults |
 | `bash_permissions` | Pattern-based shell command gating |
 | `file_permissions` | Separate write/edit policies and approval rules |
 | `invocation` | Subagent recursion limits |
@@ -224,7 +240,7 @@ Like manifests, skill packages under `relurpify_cfg/skills/` are workspace-owned
 
 ## Per-Tool Policy Overrides
 
-Individual tools can override the global tool policy. The TUI Tools pane writes these overrides back into the manifest:
+Individual local tools can override the global tool policy. The TUI Tools pane writes these overrides back into the manifest:
 
 ```yaml
 spec:
@@ -232,7 +248,7 @@ spec:
         tool_execution_policy:
             file_delete:
                 execute: deny
-            bash_execute:
+            git_commit:
                 execute: ask
 ```
 
@@ -274,7 +290,7 @@ RegisterAgent(manifest) -> validate manifest + build PermissionManager
 ApplySkills(spec.skills) -> merge prompts and policy hints
     |
     v
-BuildToolRegistry() -> register tools and apply effective policies
+BuildCapabilityRegistry() -> register capabilities and apply effective policies
     |
     v
 Agent is ready

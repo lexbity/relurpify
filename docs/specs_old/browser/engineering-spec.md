@@ -670,7 +670,7 @@ Support deterministic browser-session replay for:
 
 The browser subsystem is ready for v1 when:
 
-- agents can use a single `browser` tool through the normal tool registry
+- agents can use a single `browser` tool through the normal capability registry
 - browser launch is managed through the current gVisor runtime infrastructure
 - undeclared hosts are blocked for explicit navigation and page-initiated requests on the secure backend path
 - arbitrary page-context JS is independently gated

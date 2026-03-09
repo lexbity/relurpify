@@ -38,7 +38,7 @@ Think of Relurpify in four layers, each building on the one below:
 ┌────────────────▼─────────────────────────┐
 │  Framework Layer                         │
 │  Graph runtime · PermissionManager       │
-│  ContextManager · ToolRegistry           │
+│  ContextManager · CapabilityRegistry     │
 │  Memory · Search · local logging         │
 └────────────────┬─────────────────────────┘
                  │
@@ -52,9 +52,9 @@ Think of Relurpify in four layers, each building on the one below:
 
 **Agent layer** — the reasoning layer. An agent receives an instruction, builds a plan or enters a reasoning loop, decides which tools to call, and produces a result. Different agent types implement different reasoning patterns (see [agents.md](agents.md)).
 
-**Framework layer** — the infrastructure agents sit on top of. The graph runtime executes the agent's workflow as a deterministic state machine. The permission manager enforces the file scopes, tooling execution rules, and other aspects of the security contract. The context manager compresses token usage extending the limits of local models. These components are invisible to end-users but define the system's behaviour.
+**Framework layer** — the infrastructure agents sit on top of. The graph runtime executes the agent's workflow as a deterministic state machine. The capability registry owns framework-visible tools, prompts, resources, and provider-backed capabilities. The permission manager enforces file scopes, tooling execution rules, and other aspects of the security contract. The context manager compresses token usage extending the limits of local models. These components are invisible to end-users but define the system's behaviour.
 
-**Execution layer** — where work actually happens. LLM reasoning happens via Ollama on the host. Tool execution (running tests, editing files, calling git) happens inside a gVisor-sandboxed container, isolated from the rest of your system.
+**Execution layer** — where work actually happens. LLM reasoning happens via Ollama on the host. Tool execution (running tests, editing files, calling git) happens inside a gVisor-sandboxed container, isolated from the rest of your system. In the default coding runtime, language-aware tools such as `go_test`, `python_pytest`, and `rust_cargo_test` are the primary verification surface; generic execution helpers are not registered by default.
 
 ---
 

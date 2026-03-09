@@ -140,7 +140,7 @@ An optional `config.yaml` looks like:
 model: qwen2.5-coder:14b
 agents:
     - coding-go
-allowed_tools: []
+allowed_capabilities: []
 last_updated: 1709500000
 ```
 

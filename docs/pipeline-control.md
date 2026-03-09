@@ -5,7 +5,7 @@ Add a typed pipeline control flow to the framework without making it a one-off s
 Design Principles
 
 Keep framework multi-paradigm: ReAct and Pipeline are both control-flow runtimes.
-Share common concerns: telemetry, persistence, context, tool policy, manifests.
+Share common concerns: telemetry, persistence, context, capability policy, manifests.
 Make pipeline stage boundaries typed and validated.
 Keep migration incremental: add pipeline cleanly first, then move selected coding modes/workflows onto it.
 Phase 1: Framework Contract Layer
@@ -200,7 +200,7 @@ missing required fields rejection
 valid outputs applied to context correctly
 Phase 7: Tooling and Prompt Assembly
 
-Reuse existing tool policy/context loading logic rather than rewriting it.
+Reuse existing capability-policy and context-loading logic rather than rewriting it.
 Add prompt helpers for stage-specific prompts.
 Keep tool availability explicit per stage.
 explore: read/search/ast/lsp

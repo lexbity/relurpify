@@ -8,7 +8,7 @@ Tools are the actions an agent can take on the world. Every file read, git call,
 
 ## Why Tools Are Separate From Agents
 
-Separating tools from agents means the same tool can be used by multiple agent types, and each agent's permission scope determines which tools it can see. The tool registry is the single source of truth for what actions exist; the manifest determines which subset any given agent can use.
+Separating tools from agents means the same tool capability can be used by multiple agent types, and each agent's permission scope determines which capabilities it can see. The framework now treats tools as the local-only runtime family within the broader capability registry.
 
 ---
 
@@ -35,7 +35,7 @@ type Tool interface {
 
 `Permissions()` declares what the tool needs — the permission manager compares this against the manifest's declared permissions before `Execute` is called.
 
-`Tags()` groups tools for policy management (e.g. `["read-only"]`, `["execute"]`, `["destructive"]`).
+`Tags()` is still supported as a migration fallback, but explicit capability risk/effect/trust metadata is now preferred for policy and UI surfaces.
 
 ### Permission-Aware Tools
 
@@ -47,7 +47,7 @@ type PermissionAware interface {
 }
 ```
 
-The tool registry injects the permission manager at startup via `registry.UsePermissionManager(agentID, manager)`. Inside `Execute`, the tool calls `manager.CheckFileAccess(...)` or `manager.CheckExecutable(...)` before acting.
+The capability registry injects the permission manager at startup via `registry.UsePermissionManager(agentID, manager)`. Inside `Execute`, the tool calls `manager.CheckFileAccess(...)` or the shared command-authorization layer before acting.
 
 ### Manifest-Aware Tools
 
@@ -61,15 +61,15 @@ type AgentSpecAware interface {
 
 The registry injects the spec alongside the permission manager.
 
-### The Tool Registry
+### The Capability Registry Surface
 
-`framework/toolsys.ToolRegistry` is the central catalog:
+`framework/capability.Registry` is the central catalog:
 
 - **Registration** — `registry.Register(tool)` adds a tool at startup
 - **Retrieval** — `registry.Get(name)` returns a tool by name
-- **Filtering** — `registry.FilterForAgent(spec)` returns only tools permitted by the manifest
-- **Policy queries** — `GetToolPolicies()`, `GetTagPolicies()` expose current per-tool and per-tag policies
-- **Live updates** — `UpdateToolPolicy()`, `UpdateTagPolicy()` apply policy changes without restart
+- **Capability descriptors** — `AllCapabilities()` and `GetCapability()` expose normalized capability metadata
+- **Policy queries** — `GetToolPolicies()` and `GetClassPolicies()` expose per-tool and class-based policies
+- **Live updates** — `UpdateToolPolicy()` and `UpdateClassPolicy()` apply policy changes without restart
 
 ---
 
@@ -96,21 +96,20 @@ The registry injects the spec alongside the permission manager.
 
 | Name | Tags | Description |
 |------|------|-------------|
-| `grep` | read-only | Pattern search across files |
-| `similarity_search` | network | Vector similarity search |
-| `semantic_search` | network | Hybrid semantic + keyword search |
+| `search_grep` | read-only | Legacy recursive substring search implementation |
+| `search_find_similar` | read-only | Heuristic structural similarity search |
+| `search_semantic` | read-only | Heuristic semantic-style substring search |
 
 ### Execution Tools (`tools/execution.go`)
 
 | Name | Tags | Description |
 |------|------|-------------|
-| `run_tests` | execute | Run project tests |
-| `run_build` | execute | Build the project |
-| `run_linter` | execute | Run the configured linter |
-| `execute_code` | execute | Execute a code snippet |
-| `bash_execute` | execute | Run a shell command |
+| `exec_run_tests` | execute | Run project tests |
+| `exec_run_build` | execute | Build the project |
+| `exec_run_linter` | execute | Run the configured linter |
+| `exec_run_code` | execute | Execute a code snippet |
 
-All execution tools route through `CommandRunner`. In production this is `SandboxCommandRunner` — commands run inside a gVisor container via `docker run --runtime=runsc`.
+These generic execution tools still exist in code, but the default coding runtime now prefers language-aware tools such as `go_test`, `go_build`, `python_pytest`, `rust_cargo_test`, and `npm_test`. All command-bearing tools route through the shared command-authorization layer before dispatch. In production the actual command execution path uses `CommandRunner`; the default is `SandboxCommandRunner`, which runs commands inside a gVisor container via `docker run --runtime=runsc`.
 
 ### LSP Tools
 
@@ -210,13 +209,13 @@ func (t *MyFileTool) Execute(ctx context.Context, state *core.Context, args map[
 }
 ```
 
-### 3. Register in BuildToolRegistry
+### 3. Register in BuildCapabilityRegistry
 
-Add your tool to the registry wiring in `app/relurpish/runtime/runtime.go`:
+Add your tool to the capability-registry wiring in `app/relurpish/runtime/runtime.go`:
 
 ```go
-func BuildToolRegistry(workspace string, runner CommandRunner, opts ToolRegistryOptions) (*toolsys.ToolRegistry, *ast.IndexManager, error) {
-    registry := toolsys.NewToolRegistry()
+func BuildCapabilityRegistry(workspace string, runner CommandRunner, opts CapabilityRegistryOptions) (*capability.Registry, *ast.IndexManager, error) {
+    registry := capability.NewRegistry()
     // ... existing tools ...
     if err := registry.Register(&tools.EchoTool{}); err != nil {
         return nil, nil, err
@@ -225,9 +224,11 @@ func BuildToolRegistry(workspace string, runner CommandRunner, opts ToolRegistry
 }
 ```
 
+The registry remains capability-native even here: local tools are one runtime family inside the capability model, not a separate generic execution architecture.
+
 ### 4. Declare in Manifest
 
-Add the tool to the agent's manifest if it needs explicit permissions, or rely on `default_tool_policy: ask` to prompt on first use.
+Add the tool to the agent's manifest if it needs explicit permissions, and prefer capability policy such as `risk_classes: ["execute"]` or `risk_classes: ["destructive"]` with `execute: ask` for first-use review.
 
 ---
 

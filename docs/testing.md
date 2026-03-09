@@ -132,7 +132,9 @@ spec:
             content: |
               package mathutil
       overrides:
-        allowed_tools: ["cli_go"]
+        allowed_capabilities:
+          - name: cli_go
+            kind: tool
         control_flow: pipeline
       expect:
         must_succeed: true
@@ -140,8 +142,6 @@ spec:
           - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
         tool_calls_must_include:
           - cli_go
-        tool_calls_must_exclude:
-          - exec_run_tests
 ```
 
 ### Top-Level Fields

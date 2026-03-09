@@ -23,7 +23,7 @@ This is the extension point for teams embedding Relurpify into a larger workflow
 type Agent interface {
     Name() string
     Capabilities() []Capability
-    Initialize(ctx context.Context, cfg *Config, tools *ToolRegistry) error
+    Initialize(ctx context.Context, cfg *Config, capabilities *capability.Registry) error
     Execute(ctx context.Context, task Task, shared *SharedContext) (Result, error)
     Reset() error
 }
@@ -33,7 +33,7 @@ type Agent interface {
 
 **`Capabilities()`** — declares what this agent can do (e.g. `CapabilityCode`, `CapabilityPlan`, `CapabilityExplain`). Used by the registry to match agent to task when no explicit agent is named.
 
-**`Initialize()`** — called once after the agent is created. Build your graph, set up sub-agents, configure tools. Keep this idempotent — it may be called again on reset.
+**`Initialize()`** — called once after the agent is created. Build your graph, set up sub-agents, and configure the capability set the agent will use. Keep this idempotent — it may be called again on reset.
 
 **`Execute()`** — called for each instruction. Receives the task and a shared context, returns a result. This is where your graph runs.
 
@@ -56,7 +56,7 @@ import (
     "context"
     "github.com/lexcodex/relurpify/framework/core"
     "github.com/lexcodex/relurpify/framework/graph"
-    "github.com/lexcodex/relurpify/framework/toolsys"
+    "github.com/lexcodex/relurpify/framework/capability"
 )
 
 type SummaryAgent struct {
@@ -73,7 +73,7 @@ func (a *SummaryAgent) Capabilities() []core.Capability {
 func (a *SummaryAgent) Initialize(
     ctx context.Context,
     cfg *core.Config,
-    tools *toolsys.ToolRegistry,
+    capabilities *capability.Registry,
 ) error {
     a.model = cfg.Model // injected by the runtime
 
@@ -114,13 +114,13 @@ func (a *SummaryAgent) Reset() error {
 For multi-stage pipelines, build scoped sub-agents inside `Initialize`:
 
 ```go
-func (a *MyAgent) Initialize(ctx context.Context, cfg *core.Config, tools *toolsys.ToolRegistry) error {
+func (a *MyAgent) Initialize(ctx context.Context, cfg *core.Config, capabilities *capability.Registry) error {
     // Planner with read-only tool scope
-    plannerTools := tools.FilterByTags([]string{"read-only"})
+    plannerTools := capabilities.FilterByTags([]string{"read-only"})
     a.planner = planner.New(cfg, plannerTools)
 
     // Executor with full scope
-    a.executor = react.New(cfg, tools)
+    a.executor = react.New(cfg, capabilities)
 
     return nil
 }
@@ -145,7 +145,7 @@ This is essentially how `CodingAgent` in `architect` mode works.
 Add your agent to the registry in `agents/registry.go`:
 
 ```go
-func (r *Registry) RegisterBuiltins(cfg *core.Config, tools *toolsys.ToolRegistry) {
+func (r *Registry) RegisterBuiltins(cfg *core.Config, capabilities *capability.Registry) {
     // ... existing agents ...
     r.Register("summary", func() core.Agent {
         return &myagent.SummaryAgent{}
@@ -172,7 +172,7 @@ import (
     "github.com/lexcodex/relurpify/framework/core"
     "github.com/lexcodex/relurpify/framework/graph"
     "github.com/lexcodex/relurpify/framework/runtime"
-    "github.com/lexcodex/relurpify/framework/toolsys"
+    "github.com/lexcodex/relurpify/framework/capability"
     "github.com/lexcodex/relurpify/llm"
 )
 ```
@@ -187,8 +187,8 @@ registration, err := runtime.RegisterAgent(ctx, runtime.RuntimeConfig{
     BaseFS:       workspaceDir,
 })
 
-// 2. Build tool registry
-registry := toolsys.NewToolRegistry()
+// 2. Build capability registry
+registry := capability.NewRegistry()
 registry.UsePermissionManager(registration.ID, registration.Permissions)
 
 // 3. Create LLM client

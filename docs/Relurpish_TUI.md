@@ -72,7 +72,7 @@ Submit a prompt by typing in the InputBar and pressing `enter`. While a run is a
 **HITL prompts** appear in the NotificationBar when the agent requests permission for an undeclared action:
 
 ```
-[HITL] bash_execute: go test ./...
+[HITL] command:exec: go test ./...
  [y] once  [s] session  [a] always  [n] deny  [d] dismiss
 ```
 

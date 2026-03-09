@@ -1,31 +1,31 @@
 ## SkillSpec v2
 
-`SkillSpec v2` extends skills from prompt snippets plus fixed tool lists into a
+`SkillSpec v2` extends skills from prompt snippets plus fixed capability lists into a
 shared policy layer that can guide multiple agent implementations without
 bypassing registry permissions, agent allowlists, or gVisor sandboxing.
 
 ### Key additions
 
-- `phase_selectors`
-  - ordered tool selectors per phase
-  - supports exact tool names and tag-based selection
-- `verification.success_selectors`
-  - resolves success tools from exact names or capability tags
-- `recovery.failure_probe_selectors`
+- `phase_capability_selectors`
+  - ordered capability selectors per phase
+  - supports exact capability names and tag-based selection
+- `verification.success_capability_selectors`
+  - resolves success capabilities from exact names or capability tags
+- `recovery.failure_probe_capability_selectors`
   - resolves ordered recovery probes from exact names or capability tags
 - `planning`
   - required discovery/probe steps before editing
-  - preferred edit and verify tool families
+  - preferred edit and verify capability families
   - reusable step templates
 - `review`
   - review criteria
   - approval rules
   - severity weighting hints
 
-### Tool selector shape
+### Capability Selector Shape
 
 ```yaml
-tool: "go_test"
+capability: "go_test"
 tags: ["lang:go", "test"]
 exclude_tags: ["destructive"]
 ```
@@ -33,14 +33,14 @@ exclude_tags: ["destructive"]
 Resolution rules:
 
 1. selectors never grant access
-2. resolution only considers tools already registered and allowed
-3. explicit tool names win over tag matches
+2. resolution only considers capabilities already registered and allowed
+3. explicit capability names win over tag matches
 4. tag selectors require all listed tags and reject excluded tags
 
 ### Runtime flow
 
 1. `ApplySkills` merges raw `SkillSpec v2` data into `AgentSkillConfig`
-2. `toolsys.ResolveSkillPolicy` resolves selectors against the current tool registry
+2. `skills.ResolveSkillPolicy` resolves selectors against the current capability registry
 3. agents consume the resolved policy for:
    - phase disclosure
    - verification success matching
@@ -52,8 +52,8 @@ Resolution rules:
 
 Skills remain policy hints only. They cannot:
 
-- register tools
-- widen `allowed_tools`
+- register capabilities
+- widen `allowed_capabilities`
 - bypass permission manager checks
 - bypass gVisor executable or filesystem restrictions
 

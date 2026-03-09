@@ -19,9 +19,9 @@ Agent wants to run: git commit -m "msg"
 PermissionManager: is "git" declared in spec.defaults.executables?
         │
         ├─ Yes, with matching args → permitted
-        ├─ No, default_tool_policy = ask → pause, ask you (HITL)
-        ├─ No, default_tool_policy = deny → blocked, error returned
-        └─ No, default_tool_policy = allow → permitted
+        ├─ No, capability/class policy = ask → pause, ask you (HITL)
+        ├─ No, capability/class policy = deny → blocked, error returned
+        └─ No explicit override → runtime default policy applies
         │
         ▼
 If permitted: docker run --runtime=runsc (gVisor)
@@ -48,7 +48,7 @@ Every permission check resolves to one of three outcomes:
 
 The permission manager checks four categories:
 
-**Tool calls** — before any tool executes, its declared permission requirements are compared against the manifest's `spec.defaults.permissions`. If the tool's requirements are a subset of what the manifest declares, it passes. If not, the `default_tool_policy` determines the outcome.
+**Capability calls** — before any tool capability executes, its declared permission requirements are compared against the manifest's `spec.defaults.permissions`. Capability trust/risk/effect policy is evaluated first, then the runtime permission manager checks whether the required low-level permissions are actually declared.
 
 **File access** — `fs:read`, `fs:write`, `fs:execute`, and `fs:list` actions are checked against the filesystem permission entries in the manifest. Paths use glob matching with `**` for recursive subtrees.
 
@@ -56,17 +56,24 @@ The permission manager checks four categories:
 
 **Network calls** — outgoing connections are checked against `spec.defaults.permissions.network` entries (direction, protocol, host, port).
 
-### The Default Policy
+### Default Posture
 
-The `default_tool_policy` field in the manifest governs anything not explicitly declared:
+Start with explicit capability policy and class policy set to `ask` for risky actions. In the current phase-1 model, the most useful defaults are:
 
 ```yaml
 spec:
-    policies:
-        default_tool_policy: ask  # ask | allow | deny
+    agent:
+        capability_policies:
+            - selector:
+                kind: tool
+                risk_classes: ["destructive"]
+              execute: ask
+        policies:
+            network: ask
+            remote-declared-untrusted: ask
 ```
 
-Start with `ask`. This means undeclared actions surface for review rather than silently failing or running unchecked. As you understand what the agent needs, you can promote individual actions to `allow` (which writes them to the manifest permanently).
+This keeps risky or untrusted capabilities reviewable without depending on a legacy catch-all tool policy.
 
 ---
 
@@ -75,7 +82,7 @@ Start with `ask`. This means undeclared actions surface for review rather than s
 When the policy resolves to `Ask`, execution pauses and a notification bar appears at the bottom of the TUI:
 
 ```
-[HITL] bash_execute: go build ./...
+[HITL] command:exec: go build ./...
  [y] once  [s] session  [a] always  [n] deny  [d] dismiss
 ```
 
@@ -99,12 +106,14 @@ If you do not respond within the HITL timeout (default 45 seconds), the request 
 
 ## Policy Resolution Order
 
-For a given tool call, the permission manager resolves in this order:
+For a given tool call, the runtime resolves in this order:
 
 1. **Per-tool policy** — `spec.agent.tool_execution_policy.<tool_name>` in the manifest
-2. **Per-tag policy** — set via the TUI Tools pane (groups tools by tag: read-only / execute / destructive / network)
-3. **`default_tool_policy`** — the manifest-level catch-all
-4. **Fallback** — `Ask` if nothing else matches
+2. **Trust policy** — `spec.agent.policies.<trust_class>`
+3. **Capability selector policy** — `spec.agent.capability_policies[]`
+4. **Class policy** — `spec.agent.policies.<risk_or_effect_class>`
+5. **Runtime permission checks** — filesystem/executable/network declarations under `spec.defaults.permissions`
+6. **Fallback** — `Ask` if nothing else matches
 
 ---
 
@@ -124,14 +133,22 @@ This means the manifest always reflects the actual permission state. There are n
 
 ```yaml
 spec:
-    policies:
-        default_tool_policy: ask    # catch-all for undeclared tools
-
     agent:
-        tool_execution_policy:      # per-tool overrides
-            file_delete: deny
-            bash_execute: ask
-            run_tests: allow
+        tool_execution_policy:
+            file_delete:
+                execute: deny
+        capability_policies:
+            - selector:
+                kind: tool
+                risk_classes: ["destructive"]
+              execute: ask
+        policies:
+            network: ask
+            remote-declared-untrusted: ask
+        provider_policies:
+            remote-mcp:
+                activate: ask
+                default_trust: remote-declared-untrusted
 
     defaults:
         permissions:
