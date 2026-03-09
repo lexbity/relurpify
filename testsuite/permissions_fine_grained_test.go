@@ -2,9 +2,9 @@ package testsuite
 
 import (
 	"context"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/lexcodex/relurpify/tools"
 	"os"
 	"path/filepath"
@@ -29,7 +29,7 @@ func TestFileToolGranularPermissionEnforcement(t *testing.T) {
 		t.Fatalf("manager init failed: %v", err)
 	}
 
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	readTool := &tools.ReadFileTool{BasePath: base}
 	if err := registry.Register(readTool); err != nil {
 		t.Fatalf("register tool: %v", err)
@@ -72,7 +72,7 @@ func TestWriteToolBackupPermissionEnforcement(t *testing.T) {
 		t.Fatalf("manager init failed: %v", err)
 	}
 
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	writeTool := &tools.WriteFileTool{BasePath: base, Backup: true}
 	registry.Register(writeTool)
 	registry.UsePermissionManager("test-agent", manager)

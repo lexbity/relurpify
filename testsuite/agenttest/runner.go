@@ -17,13 +17,13 @@ import (
 	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/lexcodex/relurpify/framework/workspacecfg"
 	"github.com/lexcodex/relurpify/llm"
 )
@@ -292,8 +292,8 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	sort.Strings(env)
 
-	allowedTools := mergeStrings(defaultAgenttestAllowedTools(), c.Overrides.AllowedTools)
-	agent, state, err := buildAgent(workspace, manifestAbs, agentName, spec, instrumented, telemetry, opts, env, allowedTools, c)
+	allowedCapabilities := mergeCapabilitySelectors(defaultAgenttestAllowedCapabilities(), c.Overrides.AllowedCapabilities)
+	agent, state, err := buildAgent(workspace, manifestAbs, agentName, spec, instrumented, telemetry, opts, env, allowedCapabilities, c)
 	if err != nil {
 		return CaseReport{Name: c.Name, Model: modelName, Endpoint: endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
 	}
@@ -419,9 +419,9 @@ func shouldSkipCase(req RequiresSpec, agent graph.Agent) (reason string, ok bool
 		}
 	}
 	if len(req.Tools) > 0 {
-		reg := extractToolRegistry(agent)
+		reg := extractCapabilityRegistry(agent)
 		if reg == nil {
-			return "agent has no tool registry", true
+			return "agent has no capability registry", true
 		}
 		for _, name := range req.Tools {
 			name = strings.TrimSpace(name)
@@ -436,7 +436,7 @@ func shouldSkipCase(req RequiresSpec, agent graph.Agent) (reason string, ok bool
 	return "", false
 }
 
-func extractToolRegistry(agent graph.Agent) *toolsys.ToolRegistry {
+func extractCapabilityRegistry(agent graph.Agent) *capability.Registry {
 	switch a := agent.(type) {
 	case *agents.CodingAgent:
 		return a.Tools
@@ -550,7 +550,7 @@ func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.Ag
 	return &clone
 }
 
-func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedTools []string, c CaseSpec) (graph.Agent, *core.Context, error) {
+func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec) (graph.Agent, *core.Context, error) {
 	agentManifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil, nil, err
@@ -604,7 +604,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		runner = fruntime.NewLocalCommandRunner(workspace, extraEnv)
 	}
 
-	registry, indexManager, err := appruntime.BuildToolRegistry(workspace, runner, appruntime.ToolRegistryOptions{
+	registry, indexManager, err := appruntime.BuildCapabilityRegistry(workspace, runner, appruntime.CapabilityRegistryOptions{
 		AgentID:           agentManifest.Metadata.Name,
 		PermissionManager: permMgr,
 		AgentSpec:         agentSpec,
@@ -612,7 +612,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 	if err != nil {
 		return nil, nil, err
 	}
-	applyAgentTestToolDefaults(registry, allowedTools)
+	applyAgentTestCapabilityDefaults(registry, allowedCapabilities)
 	registry.UseTelemetry(telemetry)
 	registry.UsePermissionManager(agentManifest.Metadata.Name, permMgr)
 	registry.UseAgentSpec(agentManifest.Metadata.Name, agentSpec)
@@ -688,22 +688,21 @@ func applyCaseControlFlowOverride(agent graph.Agent, c CaseSpec) error {
 	}
 }
 
-func defaultAgenttestAllowedTools() []string {
-	return []string{
-		"browser",
-		"file_read",
-		"file_list",
-		"file_search",
-		"file_create",
-		"file_delete",
-		"file_write",
-		"search_grep",
-		"search_find_similar",
-		"search_semantic",
-		"git_diff",
-		"git_history",
-		"git_blame",
-		"query_ast",
+func defaultAgenttestAllowedCapabilities() []core.CapabilitySelector {
+	return []core.CapabilitySelector{
+		{Name: "browser", Kind: core.CapabilityKindTool},
+		{Name: "file_read", Kind: core.CapabilityKindTool},
+		{Name: "file_list", Kind: core.CapabilityKindTool},
+		{Name: "file_search", Kind: core.CapabilityKindTool},
+		{Name: "file_create", Kind: core.CapabilityKindTool},
+		{Name: "file_delete", Kind: core.CapabilityKindTool},
+		{Name: "file_write", Kind: core.CapabilityKindTool},
+		{Name: "search_find_similar", Kind: core.CapabilityKindTool},
+		{Name: "search_semantic", Kind: core.CapabilityKindTool},
+		{Name: "git_diff", Kind: core.CapabilityKindTool},
+		{Name: "git_history", Kind: core.CapabilityKindTool},
+		{Name: "git_blame", Kind: core.CapabilityKindTool},
+		{Name: "query_ast", Kind: core.CapabilityKindTool},
 	}
 }
 
@@ -723,16 +722,41 @@ func defaultIgnoredGeneratedChanges() []string {
 	}
 }
 
-func applyAgentTestToolDefaults(registry *toolsys.ToolRegistry, allowedTools []string) {
+func applyAgentTestCapabilityDefaults(registry *capability.Registry, allowedCapabilities []core.CapabilitySelector) {
 	if registry == nil {
 		return
 	}
-	_ = registerToolAlias(registry, "read_file", "file_read")
-	_ = registerToolAlias(registry, "write_file", "file_write")
-	registry.RestrictTo(uniqueStrings(allowedTools))
+	_ = registerCapabilityAlias(registry, "read_file", "file_read")
+	_ = registerCapabilityAlias(registry, "write_file", "file_write")
+	registry.RestrictToCapabilities(uniqueCapabilitySelectors(allowedCapabilities))
 }
 
-func registerToolAlias(registry *toolsys.ToolRegistry, alias, target string) error {
+func mergeCapabilitySelectors(base, extra []core.CapabilitySelector) []core.CapabilitySelector {
+	if len(extra) == 0 {
+		return append([]core.CapabilitySelector{}, base...)
+	}
+	return uniqueCapabilitySelectors(append(append([]core.CapabilitySelector{}, base...), extra...))
+}
+
+func uniqueCapabilitySelectors(input []core.CapabilitySelector) []core.CapabilitySelector {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]core.CapabilitySelector, 0, len(input))
+	seen := make(map[string]struct{}, len(input))
+	for _, selector := range input {
+		key := selector.ID + "|" + selector.Name + "|" + string(selector.Kind) + "|" +
+			strings.Join(selector.Tags, ",") + "|" + strings.Join(selector.ExcludeTags, ",")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, selector)
+	}
+	return out
+}
+
+func registerCapabilityAlias(registry *capability.Registry, alias, target string) error {
 	if registry == nil || alias == "" || target == "" {
 		return nil
 	}
@@ -771,7 +795,7 @@ func (t *aliasTool) Permissions() core.ToolPermissions {
 }
 func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
-func instantiateAgentByName(workspace, name string, model core.LanguageModel, tools *toolsys.ToolRegistry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
+func instantiateAgentByName(workspace, name string, model core.LanguageModel, tools *capability.Registry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
 	paths := workspacecfg.New(workspace)
 	checkpointPath := paths.CheckpointsDir()
 	workflowStatePath := paths.WorkflowStateFile()

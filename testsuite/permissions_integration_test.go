@@ -2,9 +2,9 @@ package testsuite
 
 import (
 	"context"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"path/filepath"
 	"testing"
 )
@@ -39,7 +39,7 @@ func TestToolRegistryPermissionEnforcement(t *testing.T) {
 		path:     "/etc/passwd",
 	}
 
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	if err := registry.Register(allowedTool); err != nil {
 		t.Fatalf("register allowed tool: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestToolRegistryNetworkHITLApproval(t *testing.T) {
 		host:     "api.service.local",
 	}
 
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	if err := registry.Register(netTool); err != nil {
 		t.Fatalf("register net tool: %v", err)
 	}

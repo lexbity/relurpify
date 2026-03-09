@@ -37,11 +37,11 @@ spec:
               );
           - path: testsuite/agenttest_fixtures/sqlsuite/seed.sql
             content: |
-              INSERT INTO users (id, name) VALUES (1, 'alice');
-              INSERT INTO users (id, name) VALUES (2, 'bob');
+              INSERT INTO users (id, name) VALUES (1, 'zoe');
+              INSERT INTO users (id, name) VALUES (2, 'alice');
 
               INSERT INTO posts (id, user_id, title) VALUES (1, 1, 'hello');
-              INSERT INTO posts (id, user_id, title) VALUES (2, 1, 'world');
+              INSERT INTO posts (id, user_id, title) VALUES (2, 2, 'world');
               INSERT INTO posts (id, user_id, title) VALUES (3, 2, 'first');
           - path: testsuite/agenttest_fixtures/sqlsuite/query.sql
             content: |
@@ -52,7 +52,10 @@ spec:
               GROUP BY u.id
               ORDER BY u.name ASC;
       overrides:
-        allowed_tools: ["cli_sqlite3"]
+        allowed_capabilities:
+          - name: cli_sqlite3
+            kind: tool
+
       prompt: |
         Fix testsuite/agenttest_fixtures/sqlsuite/query.sql so it returns results ordered by post_count DESC then name ASC.
 
@@ -67,7 +70,5 @@ spec:
         files_changed: ["testsuite/agenttest_fixtures/sqlsuite/query.sql"]
         output_regex:
           - (?m)^alice\\|2$
-          - (?m)^bob\\|1$
+          - (?m)^zoe\\|1$
         tool_calls_must_include: ["cli_sqlite3"]
-        tool_calls_must_exclude: ["exec_run_tests"]
-

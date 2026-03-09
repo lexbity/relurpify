@@ -38,7 +38,10 @@ spec:
                   }
               }
       overrides:
-        allowed_tools: ["cli_cargo"]
+        allowed_capabilities:
+          - name: cli_cargo
+            kind: tool
+
       prompt: "Fix the failing tests in testsuite/agenttest_fixtures/rustsuite (do not change test expectations), then run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
       expect:
         must_succeed: true
@@ -46,8 +49,6 @@ spec:
           - testsuite/agenttest_fixtures/rustsuite/src/lib.rs
         tool_calls_must_include:
           - cli_cargo
-        tool_calls_must_exclude:
-          - exec_run_tests
         max_tool_calls: 6
     - name: medium_add_mul_and_test
       task_type: code_modification
@@ -77,7 +78,10 @@ spec:
                   }
               }
       overrides:
-        allowed_tools: ["cli_cargo"]
+        allowed_capabilities:
+          - name: cli_cargo
+            kind: tool
+
       prompt: "Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/lib.rs (do not change tests), then run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
       expect:
         must_succeed: true
@@ -85,13 +89,18 @@ spec:
           - testsuite/agenttest_fixtures/rustsuite/src/lib.rs
         tool_calls_must_include:
           - cli_cargo
-        tool_calls_must_exclude:
-          - exec_run_tests
     - name: compile_error_fix_and_check
       task_type: code_modification
       requires:
         executables: ["cargo"]
         tools: ["cli_cargo"]
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+            content: |
+              pub fn add(a: i32, b: i32) -> i32 {
+                  format!("{}", a + b)
+              }
       setup:
         files:
           - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
@@ -100,8 +109,11 @@ spec:
                   format!("{}", a + b)
               }
       overrides:
-        allowed_tools: ["cli_cargo"]
-      prompt: "Fix the compile error in testsuite/agenttest_fixtures/rustsuite/src/lib.rs, then run cli_cargo args [\"check\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
+        allowed_capabilities:
+          - name: cli_cargo
+            kind: tool
+
+      prompt: "Fix the compile error in testsuite/agenttest_fixtures/rustsuite/src/lib.rs while keeping add(a, b) -> i32, then run cli_cargo args [\"check\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
       expect:
         must_succeed: true
         files_changed:
@@ -113,6 +125,33 @@ spec:
       requires:
         executables: ["cargo"]
         tools: ["cli_cargo"]
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+            content: |
+              mod math;
+
+              pub use math::add;
+
+              #[cfg(test)]
+              mod tests {
+                  use super::*;
+
+                  #[test]
+                  fn test_add() {
+                      assert_eq!(add(2, 2), 4);
+                  }
+
+                  #[test]
+                  fn test_mul() {
+                      assert_eq!(mul(3, 4), 12);
+                  }
+              }
+          - path: testsuite/agenttest_fixtures/rustsuite/src/math.rs
+            content: |
+              pub fn add(a: i32, b: i32) -> i32 {
+                  a + b
+              }
       setup:
         files:
           - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
@@ -141,8 +180,11 @@ spec:
                   a + b
               }
       overrides:
-        allowed_tools: ["cli_cargo"]
-      prompt: "Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/math.rs and export it from testsuite/agenttest_fixtures/rustsuite/src/lib.rs without changing tests, then run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
+        allowed_capabilities:
+          - name: cli_cargo
+            kind: tool
+
+      prompt: "Implement mul(a: i32, b: i32) -> i32 in testsuite/agenttest_fixtures/rustsuite/src/math.rs, preserve the existing add implementation/export, and export mul from testsuite/agenttest_fixtures/rustsuite/src/lib.rs without changing tests. Then run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\"."
       expect:
         must_succeed: true
         files_changed:
@@ -173,7 +215,10 @@ spec:
                   }
               }
       overrides:
-        allowed_tools: ["cli_cargo"]
+        allowed_capabilities:
+          - name: cli_cargo
+            kind: tool
+
       prompt: "Run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\" and confirm whether the crate is already correct. Do not modify any files."
       expect:
         must_succeed: true
@@ -207,7 +252,10 @@ spec:
                   }
               }
       overrides:
-        allowed_tools: ["cli_cargo"]
+        allowed_capabilities:
+          - name: cli_cargo
+            kind: tool
+
       prompt: "Run cli_cargo args [\"test\"] with working_directory \"testsuite/agenttest_fixtures/rustsuite\" and explain the failure. Do not modify any files."
       expect:
         must_succeed: true

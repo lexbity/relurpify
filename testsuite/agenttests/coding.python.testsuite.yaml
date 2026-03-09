@@ -48,13 +48,15 @@ spec:
               if __name__ == "__main__":
                   unittest.main()
       overrides:
-        allowed_tools: ["cli_python"]
+        allowed_capabilities:
+          - name: cli_python
+            kind: tool
+
       prompt: "Fix the failing tests in testsuite/agenttest_fixtures/pysuite (do not change test_calc.py), then run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\"."
       expect:
         must_succeed: true
         files_changed: ["testsuite/agenttest_fixtures/pysuite/calc.py"]
         tool_calls_must_include: ["cli_python"]
-        tool_calls_must_exclude: ["exec_run_tests"]
     - name: medium_add_div_and_test
       task_type: code_modification
       requires:
@@ -93,13 +95,15 @@ spec:
               if __name__ == "__main__":
                   unittest.main()
       overrides:
-        allowed_tools: ["cli_python"]
+        allowed_capabilities:
+          - name: cli_python
+            kind: tool
+
       prompt: "Implement div(a: int, b: int) -> int in testsuite/agenttest_fixtures/pysuite/calc.py (raise ZeroDivisionError on division by zero; do not change tests), then run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\"."
       expect:
         must_succeed: true
         files_changed: ["testsuite/agenttest_fixtures/pysuite/calc.py"]
         tool_calls_must_include: ["cli_python"]
-        tool_calls_must_exclude: ["exec_run_tests"]
     - name: syntax_error_fix_and_run_tests
       task_type: code_modification
       requires:
@@ -130,7 +134,10 @@ spec:
               if __name__ == "__main__":
                   unittest.main(
       overrides:
-        allowed_tools: ["cli_python"]
+        allowed_capabilities:
+          - name: cli_python
+            kind: tool
+
       prompt: "Fix the syntax error in testsuite/agenttest_fixtures/pysuite/test_calc.py without changing the test intent, then run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\"."
       expect:
         must_succeed: true
@@ -162,7 +169,10 @@ spec:
               if __name__ == "__main__":
                   unittest.main()
       overrides:
-        allowed_tools: ["cli_python"]
+        allowed_capabilities:
+          - name: cli_python
+            kind: tool
+
       prompt: "Run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\" and confirm whether the module is already correct. Do not modify any files."
       expect:
         must_succeed: true

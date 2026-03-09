@@ -25,7 +25,14 @@ spec:
       context:
         mode: architect
       overrides:
-        allowed_tools: ["file_read", "file_list", "search_grep"]
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+          - name: file_list
+            kind: tool
+          - name: file_search
+            kind: tool
+
       prompt: "Use only the registered file_read tool to inspect README.md, then summarize the project in 3 bullets. Do not modify any source files."
       expect:
         must_succeed: true

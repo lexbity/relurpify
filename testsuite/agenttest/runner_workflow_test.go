@@ -4,13 +4,13 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/framework/capability"
 )
 
 func TestInstantiateAgentByNameConfiguresWorkflowPaths(t *testing.T) {
 	workspace := t.TempDir()
 
-	agent := instantiateAgentByName(workspace, "coding", nil, toolsys.NewToolRegistry(), nil, nil)
+	agent := instantiateAgentByName(workspace, "coding", nil, capability.NewRegistry(), nil, nil)
 	coding, ok := agent.(*agents.CodingAgent)
 	if !ok {
 		t.Fatalf("expected coding agent, got %T", agent)

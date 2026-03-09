@@ -63,7 +63,10 @@ spec:
               }
       overrides:
         control_flow: pipeline
-        allowed_tools: ["cli_go"]
+        allowed_capabilities:
+          - name: cli_go
+            kind: tool
+
       prompt: "Fix the failing test in testsuite/agenttest_fixtures/gosuite/mathutil without changing the test, then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"]."
       expect:
         must_succeed: true
@@ -93,7 +96,10 @@ spec:
               }
       overrides:
         control_flow: pipeline
-        allowed_tools: ["cli_go"]
+        allowed_capabilities:
+          - name: cli_go
+            kind: tool
+
       prompt: "Run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm whether the package is already correct. Do not modify any files."
       expect:
         must_succeed: true

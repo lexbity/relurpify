@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/lexcodex/relurpify/framework/core"
 	"gopkg.in/yaml.v3"
 )
 
@@ -104,13 +105,13 @@ type ExpectSpec struct {
 }
 
 type CaseOverrideSpec struct {
-	MaxIterations int               `yaml:"max_iterations,omitempty"`
-	Model         *ModelSpec        `yaml:"model,omitempty"`
-	Recording     *RecordingSpec    `yaml:"recording,omitempty"`
-	Workspace     *WorkspaceSpec    `yaml:"workspace,omitempty"`
-	ExtraEnv      map[string]string `yaml:"extra_env,omitempty"`
-	AllowedTools  []string          `yaml:"allowed_tools,omitempty"`
-	ControlFlow   string            `yaml:"control_flow,omitempty"`
+	MaxIterations       int                       `yaml:"max_iterations,omitempty"`
+	Model               *ModelSpec                `yaml:"model,omitempty"`
+	Recording           *RecordingSpec            `yaml:"recording,omitempty"`
+	Workspace           *WorkspaceSpec            `yaml:"workspace,omitempty"`
+	ExtraEnv            map[string]string         `yaml:"extra_env,omitempty"`
+	AllowedCapabilities []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
+	ControlFlow         string                    `yaml:"control_flow,omitempty"`
 }
 
 func LoadSuite(path string) (*Suite, error) {

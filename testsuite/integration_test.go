@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/search"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +31,7 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 		t.Fatalf("permission manager: %v", err)
 	}
 
-	registry := toolsys.NewToolRegistry()
+	registry := capability.NewRegistry()
 	fileTool := &integrationFileTool{
 		name: "read_note",
 		base: base,

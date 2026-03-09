@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
@@ -27,7 +27,7 @@ func TestFallbackManifestPath(t *testing.T) {
 }
 
 func TestApplyCaseControlFlowOverrideSetsCodingMode(t *testing.T) {
-	agent := &agents.CodingAgent{Tools: toolsys.NewToolRegistry()}
+	agent := &agents.CodingAgent{Tools: capability.NewRegistry()}
 	if err := agent.Initialize(nil); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
