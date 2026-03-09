@@ -10,9 +10,11 @@ const (
 	TagNetwork     = "network"
 )
 
-// Tool defines capabilities accessible to agents. Each implementation can wrap
-// anything from a filesystem helper to an LSP proxy. The metadata doubles as a
-// schema that LLMs can reason about when deciding which tool to call.
+// Tool defines local-native capabilities accessible to agents. Tool is no
+// longer the umbrella term for every callable capability; provider-backed and
+// Relurpic capabilities may also be callable without being tools. The gVisor
+// sandbox and executable allowlist assumptions attach to this local-native
+// runtime family, not to every callable capability in the framework.
 type Tool interface {
 	Name() string
 	Description() string
@@ -40,3 +42,8 @@ type ToolResult struct {
 	Error    string
 	Metadata map[string]interface{}
 }
+
+// CapabilityExecutionResult is the capability-native name for execution
+// results. ToolResult remains during the migration because local tools are one
+// callable capability family.
+type CapabilityExecutionResult = ToolResult

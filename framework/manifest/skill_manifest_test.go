@@ -21,31 +21,52 @@ spec:
     bins: [go]
   prompt_snippets:
     - "Use file tools before editing."
-  allowed_tools:
-    - file_read
-    - cli_go
+  allowed_capabilities:
+    - name: file_read
+      kind: tool
+    - tags: [lang:go, verification]
   tool_execution_policy:
     cli_go:
       execute: ask
-  phase_tools:
+  capability_policies:
+    - selector:
+        kind: tool
+        risk_classes: [execute]
+      execute: deny
+  insertion_policies:
+    - selector:
+        trust_classes: [remote-declared-untrusted]
+      action: metadata-only
+  policies:
+    remote-declared-untrusted: ask
+  provider_policies:
+    remote-mcp:
+      activate: ask
+      default_trust: remote-declared-untrusted
+  providers:
+    - id: remote-mcp
+      kind: mcp-client
+      enabled: true
+      target: https://mcp.example.test
+  phase_capabilities:
     verify: [cli_go]
-  phase_selectors:
+  phase_capability_selectors:
     explore:
       - tags: [search]
-      - tool: file_read
+      - capability: file_read
   verification:
     success_tools: [cli_go]
-    success_selectors:
+    success_capability_selectors:
       - tags: [test]
     stop_on_success: true
   recovery:
     failure_probe_tools: [file_read]
-    failure_probe_selectors:
+    failure_probe_capability_selectors:
       - tags: [recovery]
   planning:
     required_before_edit:
       - tags: [workspace-detect]
-    preferred_verify_tools:
+    preferred_verify_capabilities:
       - tags: [test]
     step_templates:
       - kind: discover
@@ -71,29 +92,64 @@ spec:
 	if len(m.Spec.Requires.Bins) != 1 || m.Spec.Requires.Bins[0] != "go" {
 		t.Errorf("expected bins=[go], got %v", m.Spec.Requires.Bins)
 	}
-	if len(m.Spec.AllowedTools) != 2 {
-		t.Errorf("expected 2 allowed_tools, got %d", len(m.Spec.AllowedTools))
+	if len(m.Spec.AllowedCapabilities) != 2 {
+		t.Errorf("expected 2 allowed_capabilities, got %d", len(m.Spec.AllowedCapabilities))
 	}
 	if len(m.Spec.ToolExecutionPolicy) != 1 {
 		t.Errorf("expected 1 tool_execution_policy entry, got %d", len(m.Spec.ToolExecutionPolicy))
 	}
-	if len(m.Spec.PhaseTools["verify"]) != 1 {
-		t.Errorf("expected verify phase tool config, got %v", m.Spec.PhaseTools)
+	if len(m.Spec.CapabilityPolicies) != 1 {
+		t.Errorf("expected 1 capability_policies entry, got %d", len(m.Spec.CapabilityPolicies))
 	}
-	if len(m.Spec.PhaseSelectors["explore"]) != 2 {
-		t.Errorf("expected explore phase selectors, got %v", m.Spec.PhaseSelectors)
+	if len(m.Spec.InsertionPolicies) != 1 {
+		t.Errorf("expected 1 insertion_policies entry, got %d", len(m.Spec.InsertionPolicies))
+	}
+	if len(m.Spec.GlobalPolicies) != 1 {
+		t.Errorf("expected 1 policies entry, got %d", len(m.Spec.GlobalPolicies))
+	}
+	if len(m.Spec.ProviderPolicies) != 1 {
+		t.Errorf("expected 1 provider_policies entry, got %d", len(m.Spec.ProviderPolicies))
+	}
+	if len(m.Spec.Providers) != 1 {
+		t.Errorf("expected 1 providers entry, got %d", len(m.Spec.Providers))
+	}
+	if len(m.Spec.PhaseCapabilities["verify"]) != 1 {
+		t.Errorf("expected verify phase capability config, got %v", m.Spec.PhaseCapabilities)
+	}
+	if len(m.Spec.PhaseCapabilitySelectors["explore"]) != 2 {
+		t.Errorf("expected explore phase selectors, got %v", m.Spec.PhaseCapabilitySelectors)
 	}
 	if !m.Spec.Verification.StopOnSuccess {
 		t.Errorf("expected verification.stop_on_success=true")
 	}
-	if len(m.Spec.Verification.SuccessSelectors) != 1 {
-		t.Errorf("expected verification.success_selectors, got %v", m.Spec.Verification.SuccessSelectors)
+	if len(m.Spec.Verification.SuccessCapabilitySelectors) != 1 {
+		t.Errorf("expected verification.success_capability_selectors, got %v", m.Spec.Verification.SuccessCapabilitySelectors)
 	}
 	if len(m.Spec.Planning.RequiredBeforeEdit) != 1 || !m.Spec.Planning.RequireVerificationStep {
 		t.Errorf("expected planning config, got %+v", m.Spec.Planning)
 	}
 	if len(m.Spec.Review.Criteria) != 2 || !m.Spec.Review.ApprovalRules.RequireVerificationEvidence {
 		t.Errorf("expected review config, got %+v", m.Spec.Review)
+	}
+}
+
+func TestSkillSpecValidation_InvalidInsertionPolicy(t *testing.T) {
+	yaml := `
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: badinsertion
+  version: 1.0.0
+spec:
+  insertion_policies:
+    - selector:
+        kind: tool
+      action: maybe
+`
+	f := writeTempSkillFile(t, yaml)
+	_, err := LoadSkillManifest(f)
+	if err == nil {
+		t.Fatal("expected error for invalid insertion policy action, got nil")
 	}
 }
 
@@ -105,8 +161,9 @@ metadata:
   name: nobins
   version: 1.0.0
 spec:
-  allowed_tools:
-    - file_read
+  allowed_capabilities:
+    - name: file_read
+      kind: tool
 `
 	f := writeTempSkillFile(t, yaml)
 	m, err := LoadSkillManifest(f)
@@ -169,8 +226,9 @@ metadata:
 spec:
   requires:
     bins: [python]
-  allowed_tools:
-    - cli_python
+  allowed_capabilities:
+    - name: cli_python
+      kind: tool
 `
 	manifestPath := filepath.Join(skillDir, "skill.manifest.yaml")
 	if err := os.WriteFile(manifestPath, []byte(content), 0644); err != nil {
@@ -213,8 +271,9 @@ metadata:
   name: goodskill
   version: 1.0.0
 spec:
-  allowed_tools:
-    - file_read
+  allowed_capabilities:
+    - name: file_read
+      kind: tool
 `
 	if err := os.WriteFile(filepath.Join(skillDir, "skill.manifest.yaml"), []byte(content), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
