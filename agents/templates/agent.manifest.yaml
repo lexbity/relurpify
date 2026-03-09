@@ -138,7 +138,7 @@ spec:
       max_tokens: 4096
 
     # Explicit tool allowlist (skills can add more).
-    allowed_tools:
+    allowed_capabilities:
       - "file_read"
       - "file_write"
       - "file_edit"
@@ -155,6 +155,27 @@ spec:
         execute: "ask" # "allow", "deny", "ask"
       exec_run_linter:
         execute: "allow"
+
+    # Capability-native policies. Prefer these over tag-only rules for new configs.
+    capability_policies:
+      - selector:
+          kind: "tool"
+          risk_classes: ["execute"]
+        execute: "ask"
+      - selector:
+          trust_classes: ["remote-declared-untrusted"]
+        execute: "ask"
+
+    # Capability class policies. Keys may be trust/risk/effect classes.
+    policies:
+      network: "ask"
+      remote-declared-untrusted: "ask"
+
+    # Provider activation/trust defaults for runtime-managed services.
+    provider_policies:
+      remote-mcp:
+        activate: "ask"
+        default_trust: "remote-declared-untrusted"
 
     # Bash Execution Constraints
     bash_permissions:

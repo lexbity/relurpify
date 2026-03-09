@@ -41,5 +41,5 @@ spec:
             name: qwen2.5-coder:14b
             temperature: 0.2
             max_tokens: 2048
-        allowed_tools: []
+        allowed_capabilities: []
         ollama_tool_calling: true

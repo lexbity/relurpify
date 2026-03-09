@@ -147,7 +147,7 @@ func newStartCmd() *cobra.Command {
 				}
 				runner = sandboxRunner
 			}
-			tools, indexManager, err := appruntime.BuildToolRegistry(ws, runner, appruntime.ToolRegistryOptions{
+			tools, indexManager, err := appruntime.BuildCapabilityRegistry(ws, runner, appruntime.CapabilityRegistryOptions{
 				AgentID:           registration.ID,
 				PermissionManager: registration.Permissions,
 				AgentSpec:         spec,
@@ -169,8 +169,9 @@ func newStartCmd() *cobra.Command {
 				Tools:        tools,
 				Context:      core.NewContext(),
 				Registration: registration,
+				AgentSpec:    spec,
 			}
-			if err := appruntime.RegisterSkillProviders(runCtx, providerRuntime, manifest.Spec.Skills); err != nil {
+			if err := appruntime.RegisterBuiltinProviders(runCtx, providerRuntime); err != nil {
 				return err
 			}
 			telemetry := telemetry.LoggerTelemetry{Logger: log.Default()}

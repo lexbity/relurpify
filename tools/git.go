@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	frameworktools "github.com/lexcodex/relurpify/framework/tools"
 	"strings"
 	"time"
 )
@@ -95,9 +95,12 @@ func (t *GitCommandTool) Execute(ctx context.Context, state *core.Context, args 
 		return t.runGit(ctx, []string{"checkout", "-b", name})
 	case "commit":
 		message := fmt.Sprint(args["message"])
-		filesAny, ok := args["files"].([]string)
-		if ok && len(filesAny) > 0 {
-			if _, err := t.runGit(ctx, append([]string{"add"}, filesAny...)); err != nil {
+		files, err := frameworktools.NormalizeStringSlice(args["files"])
+		if err != nil {
+			return nil, err
+		}
+		if len(files) > 0 {
+			if _, err := t.runGit(ctx, append([]string{"add"}, files...)); err != nil {
 				return nil, err
 			}
 		} else {
@@ -121,30 +124,11 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*core.ToolR
 	if t.Runner == nil {
 		return nil, fmt.Errorf("command runner missing for git tool")
 	}
-	if t.manager != nil {
-		if err := t.manager.CheckExecutable(ctx, t.agentID, "git", args, nil); err != nil {
-			return nil, err
-		}
-	}
-	if t.spec != nil {
-		cmdline := strings.TrimSpace("git " + strings.Join(args, " "))
-		decision, _ := toolsys.DecideByPatterns(cmdline, t.spec.Bash.AllowPatterns, t.spec.Bash.DenyPatterns, t.spec.Bash.Default)
-		switch decision {
-		case core.AgentPermissionDeny:
-			return nil, fmt.Errorf("git blocked: denied by bash_permissions")
-		case core.AgentPermissionAsk:
-			if t.manager == nil {
-				return nil, fmt.Errorf("git blocked: approval required but permission manager missing")
-			}
-			if err := t.manager.RequireApproval(ctx, t.agentID, core.PermissionDescriptor{
-				Type:         core.PermissionTypeHITL,
-				Action:       "bash:git",
-				Resource:     cmdline,
-				RequiresHITL: true,
-			}, "bash permission policy", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0); err != nil {
-				return nil, err
-			}
-		}
+	if err := runtime.AuthorizeCommand(ctx, t.manager, t.agentID, t.spec, runtime.CommandAuthorizationRequest{
+		Command: append([]string{"git"}, args...),
+		Source:  "git",
+	}); err != nil {
+		return nil, err
 	}
 	stdout, stderr, err := t.Runner.Run(ctx, runtime.CommandRequest{
 		Workdir: t.RepoPath,

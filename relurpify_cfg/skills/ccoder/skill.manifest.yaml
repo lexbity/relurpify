@@ -9,49 +9,49 @@ spec:
     bins: [cmake]
   prompt_snippets:
     - "For C and C++, identify the active build system files before editing and verify changes with the narrowest available build command."
-  allowed_tools:
-    - cli_cmake
-    - cli_make
-  phase_selectors:
+  allowed_capabilities:
+    - name: cli_cmake
+      kind: tool
+    - name: cli_make
+      kind: tool
+  phase_capability_selectors:
     explore:
-      - tool: file_read
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
     edit:
-      - tool: file_read
-      - tool: file_write
-      - tool: file_create
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
-      - tool: cli_cmake
-      - tool: cli_make
+      - capability: file_read
+      - capability: file_write
+      - capability: file_create
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
+      - capability: cli_cmake
+      - capability: cli_make
     verify:
-      - tool: cli_cmake
-      - tool: cli_make
-      - tool: file_read
+      - capability: cli_cmake
+      - capability: cli_make
+      - capability: file_read
   verification:
-    success_selectors:
-      - tool: cli_make
-      - tool: cli_cmake
+    success_capability_selectors:
+      - capability: cli_make
+      - capability: cli_cmake
     stop_on_success: true
   recovery:
-    failure_probe_selectors:
-      - tool: file_read
-      - tool: search_grep
-      - tool: query_ast
+    failure_probe_capability_selectors:
+      - capability: file_read
+      - capability: file_search
+      - capability: query_ast
   planning:
     required_before_edit:
-      - tool: file_read
-      - tool: file_search
-    preferred_edit_tools:
-      - tool: file_write
-    preferred_verify_tools:
-      - tool: cli_make
-      - tool: cli_cmake
+      - capability: file_read
+      - capability: file_search
+    preferred_edit_capabilities:
+      - capability: file_write
+    preferred_verify_capabilities:
+      - capability: cli_make
+      - capability: cli_cmake
     step_templates:
       - kind: discover
         description: Inspect CMakeLists.txt, Makefile, and affected source or header files before editing.

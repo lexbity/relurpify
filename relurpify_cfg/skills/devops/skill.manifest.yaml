@@ -5,10 +5,16 @@ metadata:
   version: 1.0.0
   description: DevOps-focused CLI tools.
 spec:
-  allowed_tools:
-    - cli_curl
-    - cli_wget
-    - cli_ping
-    - cli_ss
-    - cli_ip
-    - cli_systemctl
+  allowed_capabilities:
+    - name: cli_curl
+      kind: tool
+    - name: cli_wget
+      kind: tool
+    - name: cli_ping
+      kind: tool
+    - name: cli_ss
+      kind: tool
+    - name: cli_ip
+      kind: tool
+    - name: cli_systemctl
+      kind: tool

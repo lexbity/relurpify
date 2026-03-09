@@ -12,33 +12,33 @@ spec:
     - "Use go_module_metadata to confirm the active module when working in multi-module repositories."
     - "After Go edits, prefer go test for behavioral verification and go build for compile-only verification."
     - "When verification passes after the latest Go change, stop instead of rereading files."
-  allowed_tools:
-    - cli_go
-    - go_workspace_detect
-    - go_module_metadata
-    - go_test
-    - go_build
-    - exec_run_build
-    - exec_run_tests
-    - exec_run_linter
-  phase_selectors:
+  allowed_capabilities:
+    - name: cli_go
+      kind: tool
+    - name: go_workspace_detect
+      kind: tool
+    - name: go_module_metadata
+      kind: tool
+    - name: go_test
+      kind: tool
+    - name: go_build
+      kind: tool
+  phase_capability_selectors:
     explore:
-      - tool: file_read
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
       - tags: ["lang:go", "workspace-detect"]
       - tags: ["lang:go", "metadata"]
     edit:
-      - tool: file_read
-      - tool: file_write
-      - tool: file_create
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
-      - tool: cli_go
+      - capability: file_read
+      - capability: file_write
+      - capability: file_create
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
+      - capability: cli_go
       - tags: ["lang:go", "workspace-detect"]
       - tags: ["lang:go", "metadata"]
       - tags: ["lang:go", "build"]
@@ -46,30 +46,30 @@ spec:
       - tags: ["lang:go", "metadata"]
       - tags: ["lang:go", "test"]
       - tags: ["lang:go", "build"]
-      - tool: cli_go
-      - tool: file_read
+      - capability: cli_go
+      - capability: file_read
   verification:
-    success_selectors:
+    success_capability_selectors:
       - tags: ["lang:go", "test"]
       - tags: ["lang:go", "build"]
-      - tool: cli_go
+      - capability: cli_go
     stop_on_success: true
   recovery:
-    failure_probe_selectors:
+    failure_probe_capability_selectors:
       - tags: ["lang:go", "workspace-detect"]
       - tags: ["lang:go", "metadata"]
       - tags: ["lang:go", "build"]
-      - tool: file_read
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_search
+      - capability: query_ast
   planning:
     required_before_edit:
       - tags: ["lang:go", "workspace-detect"]
       - tags: ["lang:go", "metadata"]
-    preferred_edit_tools:
-      - tool: file_write
+    preferred_edit_capabilities:
+      - capability: file_write
       - tags: ["lang:go", "build"]
-    preferred_verify_tools:
+    preferred_verify_capabilities:
       - tags: ["lang:go", "test"]
       - tags: ["lang:go", "build"]
     step_templates:

@@ -38,8 +38,9 @@ func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[st
 		root = "."
 	}
 	root = preparePath(t.BasePath, root)
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, root); err != nil {
+	permissions := newTraversalPermissionCache(t.manager, t.agentID)
+	if permissions != nil {
+		if err := permissions.Check(ctx, core.FileSystemList, root); err != nil {
 			return nil, err
 		}
 	}
@@ -58,15 +59,15 @@ func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[st
 			if shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
-			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
+			if permissions != nil {
+				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
 					return filepath.SkipDir
 				}
 			}
 			return nil
 		}
-		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
+		if permissions != nil {
+			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
 				return nil
 			}
 		}
@@ -124,8 +125,9 @@ func (t *SimilarityTool) Parameters() []core.ToolParameter {
 }
 func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	root := preparePath(t.BasePath, fmt.Sprint(args["directory"]))
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, root); err != nil {
+	permissions := newTraversalPermissionCache(t.manager, t.agentID)
+	if permissions != nil {
+		if err := permissions.Check(ctx, core.FileSystemList, root); err != nil {
 			return nil, err
 		}
 	}
@@ -141,15 +143,15 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args 
 			if err == nil && info.IsDir() && shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
-			if err == nil && info != nil && info.IsDir() && t.manager != nil {
-				if perr := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); perr != nil {
+			if err == nil && info != nil && info.IsDir() && permissions != nil {
+				if perr := permissions.Check(ctx, core.FileSystemList, path); perr != nil {
 					return filepath.SkipDir
 				}
 			}
 			return err
 		}
-		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
+		if permissions != nil {
+			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
 				return nil
 			}
 		}
@@ -199,8 +201,9 @@ func (t *SemanticSearchTool) Parameters() []core.ToolParameter {
 func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	query := strings.ToLower(fmt.Sprint(args["query"]))
 	var hits []map[string]interface{}
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, t.BasePath); err != nil {
+	permissions := newTraversalPermissionCache(t.manager, t.agentID)
+	if permissions != nil {
+		if err := permissions.Check(ctx, core.FileSystemList, t.BasePath); err != nil {
 			return nil, err
 		}
 	}
@@ -212,15 +215,15 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, a
 			if shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
-			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
+			if permissions != nil {
+				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
 					return filepath.SkipDir
 				}
 			}
 			return nil
 		}
-		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
+		if permissions != nil {
+			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
 				return nil
 			}
 		}

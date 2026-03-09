@@ -9,12 +9,11 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/search"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	frameworktools "github.com/lexcodex/relurpify/framework/tools"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 var errBinaryFile = errors.New("binary file detected")
@@ -37,16 +36,10 @@ type ReadFileTool struct {
 	BasePath string
 	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *core.AgentRuntimeSpec
 }
 
 func (t *ReadFileTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
-	t.agentID = agentID
-}
-
-func (t *ReadFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.spec = spec
 	t.agentID = agentID
 }
 
@@ -184,16 +177,10 @@ type ListFilesTool struct {
 	BasePath string
 	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *core.AgentRuntimeSpec
 }
 
 func (t *ListFilesTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
-	t.agentID = agentID
-}
-
-func (t *ListFilesTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.spec = spec
 	t.agentID = agentID
 }
 
@@ -208,9 +195,10 @@ func (t *ListFilesTool) Parameters() []core.ToolParameter {
 }
 func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	dir := t.preparePath(fmt.Sprint(args["directory"]))
+	permissions := newTraversalPermissionCache(t.manager, t.agentID)
 
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, dir); err != nil {
+	if permissions != nil {
+		if err := permissions.Check(ctx, core.FileSystemList, dir); err != nil {
 			return nil, err
 		}
 	}
@@ -225,16 +213,16 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args m
 			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
-			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
+			if permissions != nil {
+				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
 					return fs.SkipDir
 				}
 			}
 			return nil
 		}
 
-		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
+		if permissions != nil {
+			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
 				// Skip files we lack explicit read rights for rather than failing the request.
 				return nil
 			}
@@ -273,16 +261,10 @@ type SearchInFilesTool struct {
 	BasePath string
 	manager  *runtime.PermissionManager
 	agentID  string
-	spec     *core.AgentRuntimeSpec
 }
 
 func (t *SearchInFilesTool) SetPermissionManager(manager *runtime.PermissionManager, agentID string) {
 	t.manager = manager
-	t.agentID = agentID
-}
-
-func (t *SearchInFilesTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.spec = spec
 	t.agentID = agentID
 }
 
@@ -293,6 +275,7 @@ func (t *SearchInFilesTool) Parameters() []core.ToolParameter {
 	return []core.ToolParameter{
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 		{Name: "pattern", Type: "string", Required: true},
+		{Name: "case_sensitive", Type: "bool", Required: false, Default: false},
 	}
 }
 func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
@@ -305,15 +288,20 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 		dirText = "."
 	}
 	dir := t.preparePath(dirText)
+	permissions := newTraversalPermissionCache(t.manager, t.agentID)
 
-	if t.manager != nil {
+	if permissions != nil {
 		// Search implies reading files
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, dir); err != nil {
+		if err := permissions.Check(ctx, core.FileSystemRead, dir); err != nil {
 			return nil, err
 		}
 	}
 
 	pattern := fmt.Sprint(args["pattern"])
+	caseSensitive := toBool(args["case_sensitive"])
+	if !caseSensitive {
+		pattern = strings.ToLower(pattern)
+	}
 	type match struct {
 		File    string `json:"file"`
 		Line    int    `json:"line"`
@@ -328,8 +316,8 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
-			if t.manager != nil {
-				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemList, path); err != nil {
+			if permissions != nil {
+				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
 					return fs.SkipDir
 				}
 			}
@@ -337,8 +325,8 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 		}
 
 		// Verify read access for each file while walking.
-		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
+		if permissions != nil {
+			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
 				return nil // Skip unreadable
 			}
 		}
@@ -353,11 +341,16 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 		scanner.Split(scanLinesOrChunks(scanChunkSize))
 		line := 1
 		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), pattern) {
+			text := scanner.Text()
+			compare := text
+			if !caseSensitive {
+				compare = strings.ToLower(text)
+			}
+			if strings.Contains(compare, pattern) {
 				matches = append(matches, match{
 					File:    path,
 					Line:    line,
-					Content: scanner.Text(),
+					Content: text,
 				})
 			}
 			line++
@@ -541,6 +534,19 @@ func preparePath(base, path string) string {
 	return filepath.Join(base, path)
 }
 
+func toBool(value interface{}) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "1", "true", "yes", "on":
+			return true
+		}
+	}
+	return false
+}
+
 func isText(data []byte) bool {
 	if len(data) == 0 {
 		return true
@@ -588,7 +594,7 @@ func enforceFileMatrix(ctx context.Context, manager *runtime.PermissionManager, 
 	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
 		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
 	}
-	decision, _ := toolsys.DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
+	decision, _ := frameworktools.DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
 	if perm.RequireApproval {
 		decision = core.AgentPermissionAsk
 	}
@@ -656,15 +662,4 @@ func FileOperations(basePath string) []core.Tool {
 		&CreateFileTool{BasePath: basePath},
 		&DeleteFileTool{BasePath: basePath},
 	}
-}
-
-// FileLock protects operations that cannot race (write/delete).
-type FileLock struct {
-	mu sync.Mutex
-}
-
-func (l *FileLock) Run(fn func() error) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return fn()
 }

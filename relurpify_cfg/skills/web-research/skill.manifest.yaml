@@ -9,8 +9,9 @@ spec:
     bins: [chromium]
   prompt_snippets:
     - "Use the browser tool to inspect and extract data from permitted websites. Respect manifest network scopes and rely on structured extraction over raw page dumps when possible."
-  allowed_tools:
-    - browser
+  allowed_capabilities:
+    - name: browser
+      kind: tool
   tool_execution_policy:
     browser:
       execute: allow

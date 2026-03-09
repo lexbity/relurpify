@@ -131,3 +131,41 @@ func TestSearchInFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	assert.Len(t, decoded, 1)
 	assert.Equal(t, source, decoded[0]["file"])
 }
+
+func TestSearchInFilesToolDefaultsToCaseInsensitiveMatching(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "main.go")
+	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
+
+	tool := &SearchInFilesTool{BasePath: dir}
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"directory": ".",
+		"pattern":   "todo",
+	})
+	assert.NoError(t, err)
+	bytes, err := json.Marshal(res.Data["matches"])
+	assert.NoError(t, err)
+	var decoded []map[string]interface{}
+	assert.NoError(t, json.Unmarshal(bytes, &decoded))
+	assert.Len(t, decoded, 1)
+	assert.Equal(t, file, decoded[0]["file"])
+}
+
+func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "main.go")
+	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
+
+	tool := &SearchInFilesTool{BasePath: dir}
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"directory":      ".",
+		"pattern":        "todo",
+		"case_sensitive": true,
+	})
+	assert.NoError(t, err)
+	bytes, err := json.Marshal(res.Data["matches"])
+	assert.NoError(t, err)
+	var decoded []map[string]interface{}
+	assert.NoError(t, json.Unmarshal(bytes, &decoded))
+	assert.Len(t, decoded, 0)
+}

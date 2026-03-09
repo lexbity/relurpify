@@ -590,7 +590,7 @@ func (m *PermissionManager) log(ctx context.Context, agentID string, desc Permis
 		Type:        string(desc.Type),
 		Permission:  desc.Resource,
 		Result:      result,
-		Metadata:    fields,
+		Metadata:    RedactMetadataMap(fields),
 		Correlation: agentID,
 	}
 	_ = m.audit.Log(ctx, record)

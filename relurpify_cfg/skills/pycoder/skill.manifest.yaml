@@ -12,31 +12,35 @@ spec:
     - "Prefer python_project_metadata to determine whether pytest or unittest is the better verification path."
     - "After Python edits, prefer python_compile_check before running test tools so syntax failures are caught early."
     - "When verification passes after the latest Python change, stop instead of rereading files."
-  allowed_tools:
-    - cli_python
-    - python_workspace_detect
-    - python_project_metadata
-    - python_compile_check
-    - python_pytest
-    - python_unittest
-  phase_selectors:
+  allowed_capabilities:
+    - name: cli_python
+      kind: tool
+    - name: python_workspace_detect
+      kind: tool
+    - name: python_project_metadata
+      kind: tool
+    - name: python_compile_check
+      kind: tool
+    - name: python_pytest
+      kind: tool
+    - name: python_unittest
+      kind: tool
+  phase_capability_selectors:
     explore:
-      - tool: file_read
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
       - tags: ["lang:python", "workspace-detect"]
       - tags: ["lang:python", "metadata"]
     edit:
-      - tool: file_read
-      - tool: file_write
-      - tool: file_create
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
-      - tool: cli_python
+      - capability: file_read
+      - capability: file_write
+      - capability: file_create
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
+      - capability: cli_python
       - tags: ["lang:python", "workspace-detect"]
       - tags: ["lang:python", "metadata"]
       - tags: ["lang:python", "syntax-check"]
@@ -44,30 +48,30 @@ spec:
       - tags: ["lang:python", "metadata"]
       - tags: ["lang:python", "syntax-check"]
       - tags: ["lang:python", "test"]
-      - tool: cli_python
-      - tool: file_read
+      - capability: cli_python
+      - capability: file_read
   verification:
-    success_selectors:
+    success_capability_selectors:
       - tags: ["lang:python", "syntax-check"]
       - tags: ["lang:python", "test"]
-      - tool: cli_python
+      - capability: cli_python
     stop_on_success: true
   recovery:
-    failure_probe_selectors:
+    failure_probe_capability_selectors:
       - tags: ["lang:python", "workspace-detect"]
       - tags: ["lang:python", "metadata"]
       - tags: ["lang:python", "syntax-check"]
-      - tool: file_read
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_search
+      - capability: query_ast
   planning:
     required_before_edit:
       - tags: ["lang:python", "workspace-detect"]
       - tags: ["lang:python", "metadata"]
-    preferred_edit_tools:
-      - tool: file_write
+    preferred_edit_capabilities:
+      - capability: file_write
       - tags: ["lang:python", "syntax-check"]
-    preferred_verify_tools:
+    preferred_verify_capabilities:
       - tags: ["lang:python", "syntax-check"]
       - tags: ["lang:python", "test"]
     step_templates:

@@ -7,19 +7,30 @@ metadata:
 spec:
   prompt_snippets:
     - "Use file and search tools before editing. Prefer explicit file paths."
-  allowed_tools:
-    - file_read
-    - file_write
-    - file_edit
-    - file_list
-    - file_search
-    - file_create
-    - search_grep
-    - search_find_similar
-    - search_semantic
-    - query_ast
-    - exec_run_code
-    - cli_rg
-    - cli_sed
-    - cli_find
-    - cli_mkdir
+  allowed_capabilities:
+    - name: file_read
+      kind: tool
+    - name: file_write
+      kind: tool
+    - name: file_edit
+      kind: tool
+    - name: file_list
+      kind: tool
+    - name: file_search
+      kind: tool
+    - name: file_create
+      kind: tool
+    - name: search_find_similar
+      kind: tool
+    - name: search_semantic
+      kind: tool
+    - name: query_ast
+      kind: tool
+    - name: cli_rg
+      kind: tool
+    - name: cli_sed
+      kind: tool
+    - name: cli_find
+      kind: tool
+    - name: cli_mkdir
+      kind: tool

@@ -20,6 +20,7 @@ type ToolPermissions = core.ToolPermissions
 type AgentManifest = manifest.AgentManifest
 type Agent = graph.Agent
 type Context = core.Context
+type AgentRuntimeSpec = core.AgentRuntimeSpec
 type AgentPermissionLevel = core.AgentPermissionLevel
 type Result = core.Result
 type Task = core.Task
@@ -54,3 +55,4 @@ const (
 var LoadAgentManifest = manifest.LoadAgentManifest
 var SaveAgentManifest = manifest.SaveAgentManifest
 var NewInMemoryAuditLogger = core.NewInMemoryAuditLogger
+var RedactMetadataMap = core.RedactMetadataMap

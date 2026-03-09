@@ -9,8 +9,9 @@ spec:
     bins: [chromium]
   prompt_snippets:
     - "Use the browser tool for localhost app testing. Prefer deterministic selectors and wait conditions. Do not browse external domains unless the manifest explicitly permits them."
-  allowed_tools:
-    - browser
+  allowed_capabilities:
+    - name: browser
+      kind: tool
   tool_execution_policy:
     browser:
       execute: allow

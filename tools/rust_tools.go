@@ -11,6 +11,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
+	frameworktools "github.com/lexcodex/relurpify/framework/tools"
 	clinix "github.com/lexcodex/relurpify/tools/cli_nix"
 )
 
@@ -509,18 +510,5 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	switch typed := value.(type) {
-	case nil:
-		return nil, nil
-	case []string:
-		return typed, nil
-	case []interface{}:
-		out := make([]string, 0, len(typed))
-		for _, entry := range typed {
-			out = append(out, fmt.Sprint(entry))
-		}
-		return out, nil
-	default:
-		return nil, fmt.Errorf("expected array, got %T", value)
-	}
+	return frameworktools.NormalizeStringSlice(value)
 }

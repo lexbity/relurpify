@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/toolsys"
+	frameworktools "github.com/lexcodex/relurpify/framework/tools"
 	"io"
 	"os"
 	"path/filepath"
@@ -81,30 +81,11 @@ func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map
 	}
 	finalArgs := append([]string{}, t.cfg.DefaultArgs...)
 	finalArgs = append(finalArgs, userArgs...)
-	if t.manager != nil {
-		if err := t.manager.CheckExecutable(ctx, t.agentID, t.cfg.Command, finalArgs, nil); err != nil {
-			return nil, err
-		}
-	}
-	if t.spec != nil {
-		cmdline := strings.TrimSpace(t.cfg.Command + " " + strings.Join(finalArgs, " "))
-		decision, _ := toolsys.DecideByPatterns(cmdline, t.spec.Bash.AllowPatterns, t.spec.Bash.DenyPatterns, t.spec.Bash.Default)
-		switch decision {
-		case core.AgentPermissionDeny:
-			return nil, fmt.Errorf("command blocked: denied by bash_permissions")
-		case core.AgentPermissionAsk:
-			if t.manager == nil {
-				return nil, fmt.Errorf("command blocked: approval required but permission manager missing")
-			}
-			if err := t.manager.RequireApproval(ctx, t.agentID, core.PermissionDescriptor{
-				Type:         core.PermissionTypeHITL,
-				Action:       "bash:cli",
-				Resource:     cmdline,
-				RequiresHITL: true,
-			}, "bash permission policy", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0); err != nil {
-				return nil, err
-			}
-		}
+	if err := runtime.AuthorizeCommand(ctx, t.manager, t.agentID, t.spec, runtime.CommandAuthorizationRequest{
+		Command: append([]string{t.cfg.Command}, finalArgs...),
+		Source:  "cli",
+	}); err != nil {
+		return nil, err
 	}
 	workdir := t.basePath
 	if raw, ok := args["working_directory"]; ok && raw != nil {
@@ -165,21 +146,7 @@ func (t *CommandTool) Permissions() core.ToolPermissions {
 func (t *CommandTool) Tags() []string { return t.cfg.Tags }
 
 func toStringSlice(value interface{}) ([]string, error) {
-	if value == nil {
-		return nil, nil
-	}
-	switch v := value.(type) {
-	case []string:
-		return v, nil
-	case []interface{}:
-		res := make([]string, 0, len(v))
-		for _, item := range v {
-			res = append(res, fmt.Sprint(item))
-		}
-		return res, nil
-	default:
-		return nil, fmt.Errorf("expected array for args, got %T", value)
-	}
+	return frameworktools.NormalizeStringSlice(value)
 }
 
 func resolvePath(base, path string) string {

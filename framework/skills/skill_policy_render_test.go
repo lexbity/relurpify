@@ -1,4 +1,4 @@
-package toolsys
+package skills
 
 import (
 	"testing"
@@ -9,29 +9,29 @@ import (
 
 func TestRenderPlanningPolicyIncludesSharedFields(t *testing.T) {
 	policy := ResolvedSkillPolicy{
-		PhaseTools: map[string][]string{
+		PhaseCapabilities: map[string][]string{
 			"explore": {"file_read"},
 			"verify":  {"go_test"},
 		},
-		VerificationSuccessTools: []string{"go_test"},
+		VerificationSuccessCapabilities: []string{"go_test"},
 		Planning: ResolvedPlanningPolicy{
-			RequiredBeforeEdit:      []string{"go_workspace_detect"},
-			PreferredEditTools:      []string{"file_write"},
-			PreferredVerifyTools:    []string{"go_test"},
-			StepTemplates:           []core.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
-			RequireVerificationStep: true,
+			RequiredBeforeEdit:          []string{"go_workspace_detect"},
+			PreferredEditCapabilities:   []string{"file_write"},
+			PreferredVerifyCapabilities: []string{"go_test"},
+			StepTemplates:               []core.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
+			RequireVerificationStep:     true,
 		},
 	}
 
 	rendered := RenderPlanningPolicy(policy, PlanningRenderOptions{
-		IncludePhaseTools:          true,
+		IncludePhaseCapabilities:   true,
 		IncludeVerificationSuccess: true,
 	})
 
-	require.Contains(t, rendered, "Explore tools: file_read")
-	require.Contains(t, rendered, "Verification success tools: go_test")
+	require.Contains(t, rendered, "Explore capabilities: file_read")
+	require.Contains(t, rendered, "Verification success capabilities: go_test")
 	require.Contains(t, rendered, "Required before edit: go_workspace_detect")
-	require.Contains(t, rendered, "Preferred verify tools: go_test")
+	require.Contains(t, rendered, "Preferred verify capabilities: go_test")
 	require.Contains(t, rendered, "Preferred step templates: verify: Run tests")
 	require.Contains(t, rendered, "Plans must include an explicit verification step.")
 }
@@ -60,13 +60,13 @@ func TestRenderReviewPolicyIncludesSeveritySummary(t *testing.T) {
 
 func TestRenderExecutionPolicyIncludesRecoveryAndStopOnSuccess(t *testing.T) {
 	policy := ResolvedSkillPolicy{
-		VerificationSuccessTools: []string{"rust_cargo_test"},
-		RecoveryProbeTools:       []string{"rust_workspace_detect", "rust_cargo_metadata"},
+		VerificationSuccessCapabilities: []string{"rust_cargo_test"},
+		RecoveryProbeCapabilities:       []string{"rust_workspace_detect", "rust_cargo_metadata"},
 	}
 
 	rendered := RenderExecutionPolicy(&policy, true)
 
-	require.Contains(t, rendered, "Verification success tools: rust_cargo_test")
-	require.Contains(t, rendered, "Stop immediately after a successful verification tool runs after the latest edit.")
+	require.Contains(t, rendered, "Verification success capabilities: rust_cargo_test")
+	require.Contains(t, rendered, "Stop immediately after a successful verification capability runs after the latest edit.")
 	require.Contains(t, rendered, "Preferred recovery probes on failures: rust_workspace_detect, rust_cargo_metadata")
 }

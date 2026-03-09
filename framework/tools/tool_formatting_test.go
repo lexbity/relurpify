@@ -1,4 +1,4 @@
-package toolsys
+package tools
 
 import "testing"
 

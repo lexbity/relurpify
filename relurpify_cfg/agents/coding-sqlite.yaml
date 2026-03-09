@@ -68,10 +68,19 @@ spec:
             edit:
                 default: allow
                 allow_patterns: ["**"]
+        capability_policies:
+            - selector:
+                kind: tool
+                risk_classes: ["destructive"]
+              execute: ask
+        policies:
+            destructive: ask
+            network: ask
+        provider_policies:
+            remote-mcp:
+                activate: ask
+                default_trust: remote-declared-untrusted
         ollama_tool_calling: true
-    policies:
-        destructive: ask
-        default_tool_policy: ask
     skills:
         - system
         - coding

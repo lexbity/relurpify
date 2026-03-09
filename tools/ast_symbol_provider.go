@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"strconv"
 	"strings"
 )
@@ -18,8 +18,8 @@ type DocumentSymbolToolProvider struct {
 }
 
 // NewDocumentSymbolToolProvider builds a provider that executes the wrapped
-// tool directly. The supplied tool should be fetched from a ToolRegistry so it
-// carries the permission manager wrapper.
+// tool directly. The supplied tool should be fetched from a CapabilityRegistry
+// so it carries the permission manager wrapper.
 func NewDocumentSymbolToolProvider(tool core.Tool) *DocumentSymbolToolProvider {
 	if tool == nil {
 		return nil
@@ -50,7 +50,7 @@ func (p *DocumentSymbolToolProvider) DocumentSymbols(ctx context.Context, path s
 
 // AttachASTSymbolProvider inspects the registry for the LSP document symbols
 // tool and wires it into the AST indexer when present.
-func AttachASTSymbolProvider(manager *ast.IndexManager, registry *toolsys.ToolRegistry) {
+func AttachASTSymbolProvider(manager *ast.IndexManager, registry *capability.Registry) {
 	if manager == nil || registry == nil {
 		return
 	}

@@ -1,4 +1,4 @@
-package toolsys
+package skills
 
 import (
 	"fmt"
@@ -6,37 +6,37 @@ import (
 )
 
 type PlanningRenderOptions struct {
-	IncludePhaseTools          bool
+	IncludePhaseCapabilities   bool
 	IncludeVerificationSuccess bool
 	VerificationRequirement    string
 }
 
 func RenderPlanningPolicy(policy ResolvedSkillPolicy, options PlanningRenderOptions) string {
 	var lines []string
-	if options.IncludePhaseTools {
-		if tools := policy.PhaseTools["explore"]; len(tools) > 0 {
-			lines = append(lines, "Explore tools: "+strings.Join(tools, ", "))
+	if options.IncludePhaseCapabilities {
+		if capabilities := policy.PhaseCapabilities["explore"]; len(capabilities) > 0 {
+			lines = append(lines, "Explore capabilities: "+strings.Join(capabilities, ", "))
 		}
-		if tools := policy.PhaseTools["edit"]; len(tools) > 0 {
-			lines = append(lines, "Edit tools: "+strings.Join(tools, ", "))
+		if capabilities := policy.PhaseCapabilities["edit"]; len(capabilities) > 0 {
+			lines = append(lines, "Edit capabilities: "+strings.Join(capabilities, ", "))
 		}
-		if tools := policy.PhaseTools["verify"]; len(tools) > 0 {
-			lines = append(lines, "Verify tools: "+strings.Join(tools, ", "))
+		if capabilities := policy.PhaseCapabilities["verify"]; len(capabilities) > 0 {
+			lines = append(lines, "Verify capabilities: "+strings.Join(capabilities, ", "))
 		}
 	}
 	if options.IncludeVerificationSuccess {
-		if tools := policy.VerificationSuccessTools; len(tools) > 0 {
-			lines = append(lines, "Verification success tools: "+strings.Join(tools, ", "))
+		if capabilities := policy.VerificationSuccessCapabilities; len(capabilities) > 0 {
+			lines = append(lines, "Verification success capabilities: "+strings.Join(capabilities, ", "))
 		}
 	}
-	if tools := policy.Planning.RequiredBeforeEdit; len(tools) > 0 {
-		lines = append(lines, "Required before edit: "+strings.Join(tools, ", "))
+	if capabilities := policy.Planning.RequiredBeforeEdit; len(capabilities) > 0 {
+		lines = append(lines, "Required before edit: "+strings.Join(capabilities, ", "))
 	}
-	if tools := policy.Planning.PreferredEditTools; len(tools) > 0 {
-		lines = append(lines, "Preferred edit tools: "+strings.Join(tools, ", "))
+	if capabilities := policy.Planning.PreferredEditCapabilities; len(capabilities) > 0 {
+		lines = append(lines, "Preferred edit capabilities: "+strings.Join(capabilities, ", "))
 	}
-	if tools := policy.Planning.PreferredVerifyTools; len(tools) > 0 {
-		lines = append(lines, "Preferred verify tools: "+strings.Join(tools, ", "))
+	if capabilities := policy.Planning.PreferredVerifyCapabilities; len(capabilities) > 0 {
+		lines = append(lines, "Preferred verify capabilities: "+strings.Join(capabilities, ", "))
 	}
 	if steps := policy.Planning.StepTemplates; len(steps) > 0 {
 		var rendered []string
@@ -60,13 +60,13 @@ func RenderExecutionPolicy(spec *ResolvedSkillPolicy, stopOnSuccess bool) string
 		return ""
 	}
 	var lines []string
-	if successTools := spec.VerificationSuccessTools; len(successTools) > 0 {
-		lines = append(lines, "Verification success tools: "+strings.Join(successTools, ", "))
+	if successCapabilities := spec.VerificationSuccessCapabilities; len(successCapabilities) > 0 {
+		lines = append(lines, "Verification success capabilities: "+strings.Join(successCapabilities, ", "))
 	}
 	if stopOnSuccess {
-		lines = append(lines, "Stop immediately after a successful verification tool runs after the latest edit.")
+		lines = append(lines, "Stop immediately after a successful verification capability runs after the latest edit.")
 	}
-	if probes := spec.RecoveryProbeTools; len(probes) > 0 {
+	if probes := spec.RecoveryProbeCapabilities; len(probes) > 0 {
 		lines = append(lines, "Preferred recovery probes on failures: "+strings.Join(probes, ", "))
 	}
 	return strings.Join(lines, "\n")

@@ -12,59 +12,62 @@ spec:
     - "Use rust_workspace_detect and rust_cargo_metadata to understand crate/workspace structure before running verification in mixed repositories."
     - "After Rust edits, prefer cargo test for behavioral verification and cargo check for compile-only verification."
     - "When verification passes after the latest Rust code change, stop instead of rereading files."
-  allowed_tools:
-    - cli_cargo
-    - rust_workspace_detect
-    - rust_cargo_metadata
-    - rust_cargo_check
-    - rust_cargo_test
-  phase_selectors:
+  allowed_capabilities:
+    - name: cli_cargo
+      kind: tool
+    - name: rust_workspace_detect
+      kind: tool
+    - name: rust_cargo_metadata
+      kind: tool
+    - name: rust_cargo_check
+      kind: tool
+    - name: rust_cargo_test
+      kind: tool
+  phase_capability_selectors:
     explore:
-      - tool: file_read
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
       - tags: ["lang:rust", "workspace-detect"]
       - tags: ["lang:rust", "metadata"]
     edit:
-      - tool: file_read
-      - tool: file_write
-      - tool: file_create
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
-      - tool: cli_cargo
+      - capability: file_read
+      - capability: file_write
+      - capability: file_create
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
+      - capability: cli_cargo
       - tags: ["lang:rust", "workspace-detect"]
       - tags: ["lang:rust", "build"]
     verify:
       - tags: ["lang:rust", "metadata"]
       - tags: ["lang:rust", "build"]
       - tags: ["lang:rust", "test"]
-      - tool: cli_cargo
-      - tool: file_read
+      - capability: cli_cargo
+      - capability: file_read
   verification:
-    success_selectors:
+    success_capability_selectors:
       - tags: ["lang:rust", "build"]
       - tags: ["lang:rust", "test"]
-      - tool: cli_cargo
+      - capability: cli_cargo
     stop_on_success: true
   recovery:
-    failure_probe_selectors:
+    failure_probe_capability_selectors:
       - tags: ["lang:rust", "workspace-detect"]
       - tags: ["lang:rust", "metadata"]
       - tags: ["lang:rust", "build"]
-      - tool: file_read
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_search
+      - capability: query_ast
   planning:
     required_before_edit:
       - tags: ["lang:rust", "workspace-detect"]
       - tags: ["lang:rust", "metadata"]
-    preferred_edit_tools:
-      - tool: file_write
-    preferred_verify_tools:
+    preferred_edit_capabilities:
+      - capability: file_write
+    preferred_verify_capabilities:
       - tags: ["lang:rust", "test"]
       - tags: ["lang:rust", "build"]
     step_templates:

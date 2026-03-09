@@ -9,12 +9,17 @@ spec:
     bins: [git]
   prompt_snippets:
     - "Follow project conventions and summarize changes."
-  allowed_tools:
-    - git_diff
-    - git_history
-    - git_blame
-    - git_branch
-    - git_commit
+  allowed_capabilities:
+    - name: git_diff
+      kind: tool
+    - name: git_history
+      kind: tool
+    - name: git_blame
+      kind: tool
+    - name: git_branch
+      kind: tool
+    - name: git_commit
+      kind: tool
   tool_execution_policy:
     git_commit:
       execute: ask

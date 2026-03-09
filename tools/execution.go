@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/toolsys"
-	"strings"
 	"time"
 )
 
@@ -341,36 +339,8 @@ func (t *RunBuildTool) authorizeCommand(ctx context.Context, cmdline []string) e
 }
 
 func authorizeCommand(ctx context.Context, manager *runtime.PermissionManager, agentID string, spec *core.AgentRuntimeSpec, cmdline []string) error {
-	if len(cmdline) == 0 {
-		return fmt.Errorf("command empty")
-	}
-	binary := cmdline[0]
-	args := []string{}
-	if len(cmdline) > 1 {
-		args = cmdline[1:]
-	}
-	if manager != nil {
-		if err := manager.CheckExecutable(ctx, agentID, binary, args, nil); err != nil {
-			return err
-		}
-	}
-	if spec != nil {
-		commandString := strings.TrimSpace(binary + " " + strings.Join(args, " "))
-		decision, _ := toolsys.DecideByPatterns(commandString, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
-		switch decision {
-		case core.AgentPermissionDeny:
-			return fmt.Errorf("command blocked: denied by bash_permissions")
-		case core.AgentPermissionAsk:
-			if manager == nil {
-				return fmt.Errorf("command blocked: approval required but permission manager missing")
-			}
-			return manager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
-				Type:         core.PermissionTypeHITL,
-				Action:       "bash:exec",
-				Resource:     commandString,
-				RequiresHITL: true,
-			}, "bash permission policy", runtime.GrantScopeOneTime, runtime.RiskLevelMedium, 0)
-		}
-	}
-	return nil
+	return runtime.AuthorizeCommand(ctx, manager, agentID, spec, runtime.CommandAuthorizationRequest{
+		Command: cmdline,
+		Source:  "exec-tool",
+	})
 }

@@ -45,15 +45,30 @@ func (a *autoApproveHITL) RequestPermission(_ context.Context, req PermissionReq
 	}, nil
 }
 
+type recordingApproveHITL struct {
+	calls    int
+	requests []PermissionRequest
+}
+
+func (r *recordingApproveHITL) RequestPermission(_ context.Context, req PermissionRequest) (*PermissionGrant, error) {
+	r.calls++
+	r.requests = append(r.requests, req)
+	return &PermissionGrant{
+		ID:         "recording-grant",
+		Permission: req.Permission,
+		Scope:      GrantScopeSession,
+	}, nil
+}
+
 // stubPermTool satisfies core.Tool for permission authorization tests.
 type stubPermTool struct {
 	name  string
 	perms *core.PermissionSet
 }
 
-func (s stubPermTool) Name() string        { return s.name }
-func (s stubPermTool) Description() string { return "stub" }
-func (s stubPermTool) Category() string    { return "test" }
+func (s stubPermTool) Name() string                     { return s.name }
+func (s stubPermTool) Description() string              { return "stub" }
+func (s stubPermTool) Category() string                 { return "test" }
 func (s stubPermTool) Parameters() []core.ToolParameter { return nil }
 func (s stubPermTool) Execute(_ context.Context, _ *core.Context, _ map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
@@ -238,6 +253,29 @@ func TestExpandWorkspacePlaceholder(t *testing.T) {
 			assert.Equal(t, tc.want, expandWorkspacePlaceholder(tc.workspace, tc.pattern))
 		})
 	}
+}
+
+func TestPermissionManagerLogRedactsSensitiveMetadata(t *testing.T) {
+	audit := NewInMemoryAuditLogger(8)
+	pm, err := NewPermissionManager(t.TempDir(), basePermSet(""), audit, nil)
+	require.NoError(t, err)
+
+	pm.log(context.Background(), "agent-1", PermissionDescriptor{
+		Type:     PermissionTypeCapability,
+		Action:   "tool:test",
+		Resource: "agent-1",
+	}, "allowed", map[string]interface{}{
+		"token":         "secret-token",
+		"authorization": "Bearer abc",
+		"plain":         "ok",
+	})
+
+	records, err := audit.Query(context.Background(), AuditQuery{AgentID: "agent-1"})
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, "[REDACTED]", records[0].Metadata["token"])
+	require.Equal(t, "[REDACTED]", records[0].Metadata["authorization"])
+	require.Equal(t, "ok", records[0].Metadata["plain"])
 }
 
 // ---- normalizePath ----
@@ -594,6 +632,97 @@ func TestCheckExecutableEnvMatching(t *testing.T) {
 		err := m.CheckExecutable(ctx, "agent", "python3", nil, env)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "environment rejected")
+	})
+}
+
+func TestAuthorizeCommand(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("empty command rejected", func(t *testing.T) {
+		err := AuthorizeCommand(ctx, nil, "agent", nil, CommandAuthorizationRequest{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "command empty")
+	})
+
+	t.Run("declared executable with allow bash policy passes", func(t *testing.T) {
+		perms := &core.PermissionSet{
+			Executables: []core.ExecutablePermission{
+				{Binary: "go", Args: []string{"test", "*"}},
+			},
+		}
+		m := newTestPM(t, "/ws", perms)
+		spec := &core.AgentRuntimeSpec{
+			Bash: core.AgentBashPermissions{
+				AllowPatterns: []string{"go test **"},
+				Default:       core.AgentPermissionDeny,
+			},
+		}
+		err := AuthorizeCommand(ctx, m, "agent", spec, CommandAuthorizationRequest{
+			Command: []string{"go", "test", "./..."},
+			Source:  "unit-test",
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("bash deny pattern blocks declared executable", func(t *testing.T) {
+		perms := &core.PermissionSet{
+			Executables: []core.ExecutablePermission{
+				{Binary: "git"},
+			},
+		}
+		m := newTestPM(t, "/ws", perms)
+		spec := &core.AgentRuntimeSpec{
+			Bash: core.AgentBashPermissions{
+				DenyPatterns: []string{"git commit *"},
+				Default:      core.AgentPermissionAllow,
+			},
+		}
+		err := AuthorizeCommand(ctx, m, "agent", spec, CommandAuthorizationRequest{
+			Command: []string{"git", "commit", "-m", "msg"},
+			Source:  "git",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "denied by bash_permissions")
+	})
+
+	t.Run("bash ask requests unified approval action", func(t *testing.T) {
+		hitl := &recordingApproveHITL{}
+		perms := &core.PermissionSet{
+			Executables: []core.ExecutablePermission{
+				{Binary: "cargo"},
+			},
+		}
+		m, err := NewPermissionManager("/ws", perms, nil, hitl)
+		require.NoError(t, err)
+		spec := &core.AgentRuntimeSpec{
+			Bash: core.AgentBashPermissions{
+				Default: core.AgentPermissionAsk,
+			},
+		}
+		err = AuthorizeCommand(ctx, m, "agent", spec, CommandAuthorizationRequest{
+			Command: []string{"cargo", "check"},
+			Source:  "cli",
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, hitl.calls)
+		require.Len(t, hitl.requests, 1)
+		assert.Equal(t, commandApprovalAction, hitl.requests[0].Permission.Action)
+		assert.Equal(t, "cargo check", hitl.requests[0].Permission.Resource)
+		assert.Equal(t, "cli", hitl.requests[0].Permission.Metadata["source"])
+	})
+
+	t.Run("bash ask without permission manager is rejected", func(t *testing.T) {
+		spec := &core.AgentRuntimeSpec{
+			Bash: core.AgentBashPermissions{
+				Default: core.AgentPermissionAsk,
+			},
+		}
+		err := AuthorizeCommand(ctx, nil, "agent", spec, CommandAuthorizationRequest{
+			Command: []string{"cargo", "check"},
+			Source:  "cli",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "approval required but permission manager missing")
 	})
 }
 

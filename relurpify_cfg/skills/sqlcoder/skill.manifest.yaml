@@ -12,28 +12,31 @@ spec:
     - "Use sqlite_schema_inspect before writing queries so table and index names come from the real schema."
     - "Prefer sqlite_query for data validation and sqlite_integrity_check for low-level database verification."
     - "When verification passes after the latest SQLite change, stop instead of rereading files."
-  allowed_tools:
-    - cli_sqlite3
-    - sqlite_database_detect
-    - sqlite_schema_inspect
-    - sqlite_query
-    - sqlite_integrity_check
-  phase_selectors:
+  allowed_capabilities:
+    - name: cli_sqlite3
+      kind: tool
+    - name: sqlite_database_detect
+      kind: tool
+    - name: sqlite_schema_inspect
+      kind: tool
+    - name: sqlite_query
+      kind: tool
+    - name: sqlite_integrity_check
+      kind: tool
+  phase_capability_selectors:
     explore:
-      - tool: file_read
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
+      - capability: file_read
+      - capability: file_list
+      - capability: file_search
       - tags: ["lang:sqlite", "workspace-detect"]
       - tags: ["lang:sqlite", "schema"]
     edit:
-      - tool: file_read
-      - tool: file_write
-      - tool: file_create
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: cli_sqlite3
+      - capability: file_read
+      - capability: file_write
+      - capability: file_create
+      - capability: file_list
+      - capability: file_search
+      - capability: cli_sqlite3
       - tags: ["lang:sqlite", "workspace-detect"]
       - tags: ["lang:sqlite", "schema"]
       - tags: ["lang:sqlite", "query"]
@@ -41,29 +44,29 @@ spec:
       - tags: ["lang:sqlite", "schema"]
       - tags: ["lang:sqlite", "query"]
       - tags: ["lang:sqlite", "integrity-check"]
-      - tool: cli_sqlite3
-      - tool: file_read
+      - capability: cli_sqlite3
+      - capability: file_read
   verification:
-    success_selectors:
+    success_capability_selectors:
       - tags: ["lang:sqlite", "query"]
       - tags: ["lang:sqlite", "integrity-check"]
-      - tool: cli_sqlite3
+      - capability: cli_sqlite3
     stop_on_success: true
   recovery:
-    failure_probe_selectors:
+    failure_probe_capability_selectors:
       - tags: ["lang:sqlite", "workspace-detect"]
       - tags: ["lang:sqlite", "schema"]
       - tags: ["lang:sqlite", "integrity-check"]
-      - tool: file_read
-      - tool: search_grep
+      - capability: file_read
+      - capability: file_search
   planning:
     required_before_edit:
       - tags: ["lang:sqlite", "workspace-detect"]
       - tags: ["lang:sqlite", "schema"]
-    preferred_edit_tools:
-      - tool: file_write
+    preferred_edit_capabilities:
+      - capability: file_write
       - tags: ["lang:sqlite", "query"]
-    preferred_verify_tools:
+    preferred_verify_capabilities:
       - tags: ["lang:sqlite", "query"]
       - tags: ["lang:sqlite", "integrity-check"]
     step_templates:

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
 	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/toolsys"
 	"github.com/sourcegraph/jsonrpc2"
 	"go.lsp.dev/protocol"
 	"io"
@@ -68,34 +67,12 @@ func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fruntime.
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	if manager != nil {
-		if err := manager.CheckExecutable(ctx, agentID, cfg.Command, cfg.Args, nil); err != nil {
-			cancel()
-			return nil, err
-		}
-	}
-	if spec != nil {
-		cmdline := strings.TrimSpace(cfg.Command + " " + strings.Join(cfg.Args, " "))
-		decision, _ := toolsys.DecideByPatterns(cmdline, spec.Bash.AllowPatterns, spec.Bash.DenyPatterns, spec.Bash.Default)
-		switch decision {
-		case core.AgentPermissionDeny:
-			cancel()
-			return nil, fmt.Errorf("lsp %s blocked: denied by bash_permissions", cfg.Command)
-		case core.AgentPermissionAsk:
-			if manager == nil {
-				cancel()
-				return nil, fmt.Errorf("lsp %s blocked: approval required but permission manager missing", cfg.Command)
-			}
-			if err := manager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
-				Type:         core.PermissionTypeHITL,
-				Action:       "bash:lsp",
-				Resource:     cmdline,
-				RequiresHITL: true,
-			}, "bash permission policy", fruntime.GrantScopeOneTime, fruntime.RiskLevelMedium, 0); err != nil {
-				cancel()
-				return nil, err
-			}
-		}
+	if err := fruntime.AuthorizeCommand(ctx, manager, agentID, spec, fruntime.CommandAuthorizationRequest{
+		Command: append([]string{cfg.Command}, cfg.Args...),
+		Source:  "lsp",
+	}); err != nil {
+		cancel()
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
 	cmd.Dir = absRoot

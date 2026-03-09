@@ -12,32 +12,36 @@ spec:
     - "Use node_project_metadata to inspect available scripts before choosing npm-based verification."
     - "Prefer node_npm_test when a test script exists, and use node_syntax_check for focused JavaScript syntax validation."
     - "When verification passes after the latest Node change, stop instead of rereading files."
-  allowed_tools:
-    - cli_node
-    - cli_npm
-    - node_workspace_detect
-    - node_project_metadata
-    - node_npm_test
-    - node_syntax_check
-  phase_selectors:
+  allowed_capabilities:
+    - name: cli_node
+      kind: tool
+    - name: cli_npm
+      kind: tool
+    - name: node_workspace_detect
+      kind: tool
+    - name: node_project_metadata
+      kind: tool
+    - name: node_npm_test
+      kind: tool
+    - name: node_syntax_check
+      kind: tool
+  phase_capability_selectors:
     explore:
-      - tool: file_read
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
       - tags: ["lang:node", "workspace-detect"]
       - tags: ["lang:node", "metadata"]
     edit:
-      - tool: file_read
-      - tool: file_write
-      - tool: file_create
-      - tool: file_list
-      - tool: file_search
-      - tool: search_grep
-      - tool: query_ast
-      - tool: cli_node
-      - tool: cli_npm
+      - capability: file_read
+      - capability: file_write
+      - capability: file_create
+      - capability: file_list
+      - capability: file_search
+      - capability: query_ast
+      - capability: cli_node
+      - capability: cli_npm
       - tags: ["lang:node", "workspace-detect"]
       - tags: ["lang:node", "metadata"]
       - tags: ["lang:node", "syntax-check"]
@@ -45,32 +49,32 @@ spec:
       - tags: ["lang:node", "metadata"]
       - tags: ["lang:node", "test"]
       - tags: ["lang:node", "syntax-check"]
-      - tool: cli_npm
-      - tool: cli_node
-      - tool: file_read
+      - capability: cli_npm
+      - capability: cli_node
+      - capability: file_read
   verification:
-    success_selectors:
+    success_capability_selectors:
       - tags: ["lang:node", "test"]
       - tags: ["lang:node", "syntax-check"]
-      - tool: cli_npm
-      - tool: cli_node
+      - capability: cli_npm
+      - capability: cli_node
     stop_on_success: true
   recovery:
-    failure_probe_selectors:
+    failure_probe_capability_selectors:
       - tags: ["lang:node", "workspace-detect"]
       - tags: ["lang:node", "metadata"]
       - tags: ["lang:node", "syntax-check"]
-      - tool: file_read
-      - tool: search_grep
-      - tool: query_ast
+      - capability: file_read
+      - capability: file_search
+      - capability: query_ast
   planning:
     required_before_edit:
       - tags: ["lang:node", "workspace-detect"]
       - tags: ["lang:node", "metadata"]
-    preferred_edit_tools:
-      - tool: file_write
+    preferred_edit_capabilities:
+      - capability: file_write
       - tags: ["lang:node", "syntax-check"]
-    preferred_verify_tools:
+    preferred_verify_capabilities:
       - tags: ["lang:node", "test"]
       - tags: ["lang:node", "syntax-check"]
     step_templates:

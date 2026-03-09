@@ -19,6 +19,7 @@ import (
 type APIServer struct {
 	Agent             graph.Agent
 	Context           *core.Context
+	Inspector         Inspector
 	Logger            *log.Logger
 	WorkflowStatePath string
 }
@@ -74,12 +75,257 @@ func (s *APIServer) newHTTPServer(addr string) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/task", s.handleTask)
 	mux.HandleFunc("/api/context", s.handleContext)
+	mux.HandleFunc("/api/capabilities", s.handleCapabilities)
+	mux.HandleFunc("/api/capabilities/", s.handleCapabilityByID)
+	mux.HandleFunc("/api/prompts", s.handlePrompts)
+	mux.HandleFunc("/api/prompts/", s.handlePromptByID)
+	mux.HandleFunc("/api/providers", s.handleProviders)
+	mux.HandleFunc("/api/providers/", s.handleProviderByID)
+	mux.HandleFunc("/api/resources", s.handleResources)
+	mux.HandleFunc("/api/resources/", s.handleResourceByID)
+	mux.HandleFunc("/api/workflow-resources/read", s.handleWorkflowResourceRead)
+	mux.HandleFunc("/api/sessions", s.handleSessions)
+	mux.HandleFunc("/api/sessions/", s.handleSessionByID)
+	mux.HandleFunc("/api/approvals", s.handleApprovals)
+	mux.HandleFunc("/api/approvals/", s.handleApprovalByID)
 	mux.HandleFunc("/api/workflows", s.handleWorkflows)
 	mux.HandleFunc("/api/workflows/", s.handleWorkflowByID)
 	return &http.Server{
 		Addr:    addr,
 		Handler: mux,
 	}
+}
+
+func (s *APIServer) handlePrompts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "prompt inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	prompts, err := s.Inspector.ListPrompts(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, prompts)
+}
+
+func (s *APIServer) handlePromptByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "prompt inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/prompts/"), "/")
+	resource, err := s.Inspector.GetPrompt(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, resource)
+}
+
+func (s *APIServer) handleCapabilities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "capability inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	capabilities, err := s.Inspector.ListCapabilities(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, capabilities)
+}
+
+func (s *APIServer) handleCapabilityByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "capability inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/capabilities/"), "/")
+	resource, err := s.Inspector.GetCapability(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, resource)
+}
+
+func (s *APIServer) handleProviders(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "provider inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	providers, err := s.Inspector.ListProviders(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, providers)
+}
+
+func (s *APIServer) handleProviderByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "provider inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/providers/"), "/")
+	resource, err := s.Inspector.GetProvider(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, resource)
+}
+
+func (s *APIServer) handleResources(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "resource inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	resources, err := s.Inspector.ListResources(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, resources)
+}
+
+func (s *APIServer) handleResourceByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "resource inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/resources/"), "/")
+	resource, err := s.Inspector.GetResource(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, resource)
+}
+
+func (s *APIServer) handleWorkflowResourceRead(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "workflow resource inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	uri := strings.TrimSpace(r.URL.Query().Get("uri"))
+	if uri == "" {
+		http.Error(w, "uri query parameter required", http.StatusBadRequest)
+		return
+	}
+	resource, err := s.Inspector.GetWorkflowResource(r.Context(), uri)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, resource)
+}
+
+func (s *APIServer) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "session inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	sessions, err := s.Inspector.ListSessions(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, sessions)
+}
+
+func (s *APIServer) handleSessionByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "session inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/sessions/"), "/")
+	resource, err := s.Inspector.GetSession(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, resource)
+}
+
+func (s *APIServer) handleApprovals(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "approval inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	approvals, err := s.Inspector.ListApprovals(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, approvals)
+}
+
+func (s *APIServer) handleApprovalByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.Inspector == nil {
+		http.Error(w, "approval inspection unavailable", http.StatusNotImplemented)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/approvals/"), "/")
+	resource, err := s.Inspector.GetApproval(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, resource)
 }
 
 func (s *APIServer) handleTask(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +425,14 @@ func (s *APIServer) handleWorkflowByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, events)
+	case action == "delegations" && r.Method == http.MethodGet:
+		s.handleWorkflowDelegations(w, r, store, workflowID)
+	case action == "artifacts" && r.Method == http.MethodGet:
+		s.handleWorkflowArtifacts(w, r, store, workflowID)
+	case action == "providers" && r.Method == http.MethodGet:
+		s.handleWorkflowProviders(w, r, store, workflowID)
+	case action == "sessions" && r.Method == http.MethodGet:
+		s.handleWorkflowSessions(w, r, store, workflowID)
 	case action == "facts" && r.Method == http.MethodGet:
 		s.handleWorkflowKnowledge(w, r, store, workflowID, persistence.KnowledgeKindFact)
 	case action == "issues" && r.Method == http.MethodGet:
@@ -254,6 +508,156 @@ func (s *APIServer) handleWorkflowKnowledge(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, records)
 }
 
+func (s *APIServer) handleWorkflowDelegations(w http.ResponseWriter, r *http.Request, store *persistence.SQLiteWorkflowStateStore, workflowID string) {
+	records, err := store.ListDelegations(r.Context(), workflowID, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out := make([]DelegationResource, 0, len(records))
+	for _, record := range records {
+		insertionAction := ""
+		if record.Result != nil {
+			insertionAction = string(record.Result.Insertion.Action)
+		}
+		targetTitle := record.Request.TargetCapabilityID
+		if targetTitle == "" {
+			targetTitle = record.Request.TargetProviderID
+		}
+		out = append(out, DelegationResource{
+			Meta: InspectableMeta{
+				ID:         record.DelegationID,
+				Kind:       "delegation",
+				Title:      targetTitle,
+				TrustClass: string(record.TrustClass),
+				Source:     record.Request.TargetProviderID,
+				State:      string(record.State),
+				CapturedAt: record.UpdatedAt.Format(time.RFC3339),
+			},
+			Delegation: DelegationPayload{
+				DelegationID:       record.DelegationID,
+				RunID:              record.RunID,
+				TaskID:             record.TaskID,
+				State:              string(record.State),
+				TargetCapabilityID: record.Request.TargetCapabilityID,
+				TargetProviderID:   record.Request.TargetProviderID,
+				TargetSessionID:    record.Request.TargetSessionID,
+				Recoverability:     string(record.Recoverability),
+				InsertionAction:    insertionAction,
+				ResourceRefs:       append([]string(nil), record.Request.ResourceRefs...),
+			},
+		})
+	}
+	writeJSON(w, out)
+}
+
+func (s *APIServer) handleWorkflowArtifacts(w http.ResponseWriter, r *http.Request, store *persistence.SQLiteWorkflowStateStore, workflowID string) {
+	records, err := store.ListWorkflowArtifacts(r.Context(), workflowID, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out := make([]ArtifactResource, 0, len(records))
+	for _, record := range records {
+		out = append(out, ArtifactResource{
+			Meta: InspectableMeta{
+				ID:         record.ArtifactID,
+				Kind:       "artifact",
+				Title:      record.Kind,
+				State:      record.ContentType,
+				CapturedAt: record.CreatedAt.Format(time.RFC3339),
+			},
+			Artifact: ArtifactPayload{
+				ArtifactID:  record.ArtifactID,
+				RunID:       record.RunID,
+				Kind:        record.Kind,
+				ContentType: record.ContentType,
+				SummaryText: record.SummaryText,
+			},
+		})
+	}
+	writeJSON(w, out)
+}
+
+func (s *APIServer) handleWorkflowProviders(w http.ResponseWriter, r *http.Request, store *persistence.SQLiteWorkflowStateStore, workflowID string) {
+	runIDs, err := workflowRunIDs(r.Context(), store, workflowID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out := []ProviderResource{}
+	for _, runID := range runIDs {
+		records, err := store.ListProviderSnapshots(r.Context(), workflowID, runID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, record := range records {
+			out = append(out, ProviderResource{
+				Meta: InspectableMeta{
+					ID:         record.ProviderID,
+					Kind:       string(record.Descriptor.Kind),
+					Title:      record.ProviderID,
+					TrustClass: string(record.Descriptor.TrustBaseline),
+					Source:     record.Descriptor.ConfiguredSource,
+					State:      record.Health.Status,
+					CapturedAt: record.CapturedAt.Format(time.RFC3339),
+				},
+				Provider: ProviderPayload{
+					ProviderID:     record.ProviderID,
+					ProviderKind:   string(record.Descriptor.Kind),
+					TrustBaseline:  string(record.Descriptor.TrustBaseline),
+					Recoverability: string(record.Recoverability),
+					ConfiguredFrom: record.Descriptor.ConfiguredSource,
+					CapabilityIDs:  append([]string(nil), record.CapabilityIDs...),
+					Metadata:       summarizeAnyMap(record.Metadata),
+				},
+			})
+		}
+	}
+	writeJSON(w, out)
+}
+
+func (s *APIServer) handleWorkflowSessions(w http.ResponseWriter, r *http.Request, store *persistence.SQLiteWorkflowStateStore, workflowID string) {
+	runIDs, err := workflowRunIDs(r.Context(), store, workflowID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out := []SessionResource{}
+	for _, runID := range runIDs {
+		records, err := store.ListProviderSessionSnapshots(r.Context(), workflowID, runID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, record := range records {
+			out = append(out, SessionResource{
+				Meta: InspectableMeta{
+					ID:         record.Session.ID,
+					Kind:       "workflow-session-snapshot",
+					Title:      record.Session.ID,
+					TrustClass: string(record.Session.TrustClass),
+					Source:     record.Session.ProviderID,
+					State:      record.Session.Health,
+					CapturedAt: record.CapturedAt.Format(time.RFC3339),
+				},
+				Session: SessionPayload{
+					SessionID:       record.Session.ID,
+					ProviderID:      record.Session.ProviderID,
+					WorkflowID:      record.Session.WorkflowID,
+					TaskID:          record.Session.TaskID,
+					Recoverability:  string(record.Session.Recoverability),
+					CapabilityIDs:   append([]string(nil), record.Session.CapabilityIDs...),
+					LastActivityAt:  record.Session.LastActivityAt,
+					MetadataSummary: summarizeInterfaceMap(record.Session.Metadata),
+				},
+			})
+		}
+	}
+	writeJSON(w, out)
+}
+
 func (s *APIServer) handleWorkflowAction(w http.ResponseWriter, r *http.Request, store *persistence.SQLiteWorkflowStateStore, workflowID string, metadata map[string]any) {
 	workflow, ok, err := store.GetWorkflow(r.Context(), workflowID)
 	if err != nil {
@@ -280,6 +684,55 @@ func (s *APIServer) handleWorkflowAction(w http.ResponseWriter, r *http.Request,
 		resp.Error = err.Error()
 	}
 	writeJSON(w, resp)
+}
+
+func workflowRunIDs(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID string) ([]string, error) {
+	runIDs := map[string]struct{}{}
+	delegations, err := store.ListDelegations(ctx, workflowID, "")
+	if err != nil {
+		return nil, err
+	}
+	for _, delegation := range delegations {
+		if strings.TrimSpace(delegation.RunID) != "" {
+			runIDs[delegation.RunID] = struct{}{}
+		}
+	}
+	artifacts, err := store.ListWorkflowArtifacts(ctx, workflowID, "")
+	if err != nil {
+		return nil, err
+	}
+	for _, artifact := range artifacts {
+		if strings.TrimSpace(artifact.RunID) != "" {
+			runIDs[artifact.RunID] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(runIDs))
+	for runID := range runIDs {
+		out = append(out, runID)
+	}
+	return out, nil
+}
+
+func summarizeAnyMap(values map[string]any) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for key, value := range values {
+		out = append(out, fmt.Sprintf("%s=%v", key, value))
+	}
+	return out
+}
+
+func summarizeInterfaceMap(values map[string]interface{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for key, value := range values {
+		out = append(out, fmt.Sprintf("%s=%v", key, value))
+	}
+	return out
 }
 
 func (s *APIServer) openWorkflowStore() (*persistence.SQLiteWorkflowStateStore, error) {

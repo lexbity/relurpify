@@ -14,26 +14,47 @@ spec:
   prompt_snippets:
     - "Follow the project's review checklist and summarize any risks."
 
-  # Explicit tool allowlist provided by this skill.
-  allowed_tools:
-    - "file_read"
-    - "file_write"
+  # Explicit capability selectors provided by this skill.
+  allowed_capabilities:
+    - name: "file_read"
+      kind: "tool"
+    - name: "file_write"
+      kind: "tool"
 
   # Per-tool execution policies.
   tool_execution_policy:
     exec_run_linter:
       execute: "ask"
 
-  # Optional legacy phase-specific preferred tools. These narrow agent choices
-  # but do not bypass allowed_tools, registry filtering, or sandbox checks.
-  phase_tools:
+  # Capability-native policy keyed by framework-owned metadata.
+  capability_policies:
+    - selector:
+        kind: "tool"
+        risk_classes: ["execute"]
+      execute: "ask"
+
+  # Capability class policies. Legacy tag keys still work during migration,
+  # but trust/risk/effect class keys are preferred.
+  policies:
+    remote-declared-untrusted: "ask"
+    network: "ask"
+
+  # Provider defaults for imported/runtime-managed capability sources.
+  provider_policies:
+    remote-mcp:
+      activate: "ask"
+      default_trust: "remote-declared-untrusted"
+
+  # Optional phase-specific preferred capabilities. These narrow agent choices
+  # but do not bypass allowed_capabilities, registry filtering, or sandbox checks.
+  phase_capabilities:
     explore: ["file_read"]
     verify: ["exec_run_linter"]
 
-  # SkillSpec v2 selectors can choose tools by exact name or richer tags.
-  phase_selectors:
+  # SkillSpec v2 selectors can choose capabilities by exact name or richer tags.
+  phase_capability_selectors:
     explore:
-      - tool: "file_read"
+      - capability: "file_read"
       - tags: ["search"]
     verify:
       - tags: ["verification"]
@@ -41,23 +62,23 @@ spec:
   # Optional verification policy used by the coding/react agents.
   verification:
     success_tools: ["exec_run_linter"]
-    success_selectors:
+    success_capability_selectors:
       - tags: ["test"]
     stop_on_success: true
 
   # Optional recovery hints used when execution fails.
   recovery:
     failure_probe_tools: ["file_read"]
-    failure_probe_selectors:
+    failure_probe_capability_selectors:
       - tags: ["recovery"]
 
   # Optional planning hints used by planner/architect agents.
   planning:
     required_before_edit:
       - tags: ["workspace-detect"]
-    preferred_edit_tools:
+    preferred_edit_capabilities:
       - tags: ["build"]
-    preferred_verify_tools:
+    preferred_verify_capabilities:
       - tags: ["test"]
     step_templates:
       - kind: "discover"
