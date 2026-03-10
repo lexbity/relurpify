@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/config"
 )
 
 func TestSkillSpecValidation_Valid(t *testing.T) {
@@ -37,6 +37,14 @@ spec:
     - selector:
         trust_classes: [remote-declared-untrusted]
       action: metadata-only
+  session_policies:
+    - id: owner-send
+      name: Owner Send
+      enabled: true
+      selector:
+        operations: [send]
+        scopes: [per-channel-peer]
+      effect: allow
   policies:
     remote-declared-untrusted: ask
   provider_policies:
@@ -104,6 +112,9 @@ spec:
 	if len(m.Spec.InsertionPolicies) != 1 {
 		t.Errorf("expected 1 insertion_policies entry, got %d", len(m.Spec.InsertionPolicies))
 	}
+	if len(m.Spec.SessionPolicies) != 1 {
+		t.Errorf("expected 1 session_policies entry, got %d", len(m.Spec.SessionPolicies))
+	}
 	if len(m.Spec.GlobalPolicies) != 1 {
 		t.Errorf("expected 1 policies entry, got %d", len(m.Spec.GlobalPolicies))
 	}
@@ -150,6 +161,29 @@ spec:
 	_, err := LoadSkillManifest(f)
 	if err == nil {
 		t.Fatal("expected error for invalid insertion policy action, got nil")
+	}
+}
+
+func TestSkillSpecValidation_InvalidSessionPolicy(t *testing.T) {
+	yaml := `
+apiVersion: relurpify/v1alpha1
+kind: SkillManifest
+metadata:
+  name: badsession
+  version: 1.0.0
+spec:
+  session_policies:
+    - id: bad
+      name: Bad
+      enabled: true
+      selector:
+        operations: [warp]
+      effect: allow
+`
+	f := writeTempSkillFile(t, yaml)
+	_, err := LoadSkillManifest(f)
+	if err == nil {
+		t.Fatal("expected error for invalid session policy, got nil")
 	}
 }
 
@@ -213,7 +247,7 @@ spec:
 
 func TestLoadSkillFlat(t *testing.T) {
 	ws := t.TempDir()
-	skillDir := filepath.Join(workspacecfg.New(ws).SkillsDir(), "mypkg")
+	skillDir := filepath.Join(config.New(ws).SkillsDir(), "mypkg")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -260,7 +294,7 @@ func TestLoadSkillFlat_Missing(t *testing.T) {
 
 func TestLoadSkillList_PartialLoad(t *testing.T) {
 	ws := t.TempDir()
-	skillDir := filepath.Join(workspacecfg.New(ws).SkillsDir(), "goodskill")
+	skillDir := filepath.Join(config.New(ws).SkillsDir(), "goodskill")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -304,7 +338,7 @@ func TestRepositoryLanguageSkillsCarryPlanningAndReviewPolicy(t *testing.T) {
 	for _, skill := range skills {
 		skill := skill
 		t.Run(skill, func(t *testing.T) {
-			path := filepath.Join(workspacecfg.New(root).SkillsDir(), skill, "skill.manifest.yaml")
+			path := filepath.Join(config.New(root).SkillsDir(), skill, "skill.manifest.yaml")
 			m, err := LoadSkillManifest(path)
 			if err != nil {
 				t.Fatalf("load manifest: %v", err)

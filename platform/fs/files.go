@@ -1,0 +1,664 @@
+package fs
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/search"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+var errBinaryFile = errors.New("binary file detected")
+
+func shouldSkipGeneratedDir(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	switch name {
+	case ".git", "target", "node_modules", "dist", "build":
+		return true
+	default:
+		return false
+	}
+}
+
+// ReadFileTool reads files from disk.
+type ReadFileTool struct {
+	BasePath string
+	manager  *authorization.PermissionManager
+	agentID  string
+}
+
+func (t *ReadFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
+	t.manager = manager
+	t.agentID = agentID
+}
+
+func (t *ReadFileTool) Name() string        { return "file_read" }
+func (t *ReadFileTool) Description() string { return "Reads a UTF-8 file from disk." }
+func (t *ReadFileTool) Category() string    { return "file" }
+func (t *ReadFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "path", Type: "string", Required: true}}
+}
+func (t *ReadFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	path := t.preparePath(fmt.Sprint(args["path"]))
+
+	if t.manager != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
+			return nil, err
+		}
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return &core.ToolResult{Success: false, Error: err.Error()}, nil
+	}
+	if info.IsDir() {
+		return &core.ToolResult{Success: false, Error: fmt.Sprintf("%s is a directory; use file_list to explore it", path)}, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return &core.ToolResult{Success: false, Error: err.Error()}, nil
+	}
+	if !isText(data) {
+		return nil, errBinaryFile
+	}
+	info, err = os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	return &core.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"content": string(data),
+			"size":    info.Size(),
+			"mode":    info.Mode().String(),
+		},
+	}, nil
+}
+func (t *ReadFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+	return true
+}
+
+func (t *ReadFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
+}
+func (t *ReadFileTool) Tags() []string {
+	return []string{core.TagReadOnly, "file", "inspect", "recovery"}
+}
+
+// WriteFileTool writes content to disk.
+type WriteFileTool struct {
+	BasePath string
+	Backup   bool
+	manager  *authorization.PermissionManager
+	agentID  string
+	spec     *core.AgentRuntimeSpec
+}
+
+func (t *WriteFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
+	t.manager = manager
+	t.agentID = agentID
+}
+
+func (t *WriteFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
+	t.spec = spec
+	t.agentID = agentID
+}
+
+func (t *WriteFileTool) Name() string        { return "file_write" }
+func (t *WriteFileTool) Description() string { return "Writes content to a file with backup." }
+func (t *WriteFileTool) Category() string    { return "file" }
+func (t *WriteFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
+		{Name: "path", Type: "string", Required: true},
+		{Name: "content", Type: "string", Required: true},
+	}
+}
+func (t *WriteFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	path := t.preparePath(fmt.Sprint(args["path"]))
+
+	if t.manager != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
+			return nil, err
+		}
+	}
+	if err := t.enforceFileMatrix(ctx, "write", path); err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+
+	content := []byte(fmt.Sprint(args["content"]))
+	if t.Backup {
+		if _, err := os.Stat(path); err == nil {
+			backup := path + ".bak"
+			if t.manager != nil {
+				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, backup); err != nil {
+					return nil, fmt.Errorf("backup blocked: %w", err)
+				}
+			}
+			// Apply file matrix rules based on the original path (not the ".bak" suffix).
+			if err := t.enforceFileMatrix(ctx, "write", path); err != nil {
+				return nil, fmt.Errorf("backup blocked: %w", err)
+			}
+			if err := copyFile(path, backup); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		return nil, err
+	}
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
+}
+func (t *WriteFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+	return true
+}
+
+func (t *WriteFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
+}
+func (t *WriteFileTool) Tags() []string { return []string{core.TagDestructive, "file", "edit"} }
+
+// ListFilesTool lists files filtered by pattern.
+type ListFilesTool struct {
+	BasePath string
+	manager  *authorization.PermissionManager
+	agentID  string
+}
+
+func (t *ListFilesTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
+	t.manager = manager
+	t.agentID = agentID
+}
+
+func (t *ListFilesTool) Name() string        { return "file_list" }
+func (t *ListFilesTool) Description() string { return "Lists files recursively using glob filtering." }
+func (t *ListFilesTool) Category() string    { return "file" }
+func (t *ListFilesTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
+		{Name: "directory", Type: "string", Required: false, Default: "."},
+		{Name: "pattern", Type: "string", Required: false, Default: "*"},
+	}
+}
+func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	dir := t.preparePath(fmt.Sprint(args["directory"]))
+	permissions := newTraversalPermissionCache(t.manager, t.agentID)
+
+	if permissions != nil {
+		if err := permissions.Check(ctx, core.FileSystemList, dir); err != nil {
+			return nil, err
+		}
+	}
+
+	pattern := fmt.Sprint(args["pattern"])
+	var files []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if shouldSkipGeneratedDir(d.Name()) {
+				return fs.SkipDir
+			}
+			if permissions != nil {
+				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
+					return fs.SkipDir
+				}
+			}
+			return nil
+		}
+
+		if permissions != nil {
+			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
+				// Skip files we lack explicit read rights for rather than failing the request.
+				return nil
+			}
+		}
+
+		relPath, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			relPath = filepath.Base(path)
+		}
+		relPath = filepath.ToSlash(relPath)
+		match := search.MatchGlob(pattern, relPath)
+		if !match {
+			match = search.MatchGlob(pattern, filepath.Base(path))
+		}
+		if match {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"files": files}}, nil
+}
+func (t *ListFilesTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+	return true
+}
+
+func (t *ListFilesTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemList)}
+}
+func (t *ListFilesTool) Tags() []string { return []string{core.TagReadOnly, "file", "discover"} }
+
+// SearchInFilesTool greps for a pattern.
+type SearchInFilesTool struct {
+	BasePath string
+	manager  *authorization.PermissionManager
+	agentID  string
+}
+
+func (t *SearchInFilesTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
+	t.manager = manager
+	t.agentID = agentID
+}
+
+func (t *SearchInFilesTool) Name() string        { return "file_search" }
+func (t *SearchInFilesTool) Description() string { return "Searches text inside files." }
+func (t *SearchInFilesTool) Category() string    { return "file" }
+func (t *SearchInFilesTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
+		{Name: "directory", Type: "string", Required: false, Default: "."},
+		{Name: "pattern", Type: "string", Required: true},
+		{Name: "case_sensitive", Type: "bool", Required: false, Default: false},
+	}
+}
+func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	dirVal, ok := args["directory"]
+	if !ok || dirVal == nil {
+		dirVal = "."
+	}
+	dirText := strings.TrimSpace(fmt.Sprint(dirVal))
+	if dirText == "" || dirText == "<nil>" {
+		dirText = "."
+	}
+	dir := t.preparePath(dirText)
+	permissions := newTraversalPermissionCache(t.manager, t.agentID)
+
+	if permissions != nil {
+		// Search implies reading files
+		if err := permissions.Check(ctx, core.FileSystemRead, dir); err != nil {
+			return nil, err
+		}
+	}
+
+	pattern := fmt.Sprint(args["pattern"])
+	caseSensitive := toBool(args["case_sensitive"])
+	if !caseSensitive {
+		pattern = strings.ToLower(pattern)
+	}
+	type match struct {
+		File    string `json:"file"`
+		Line    int    `json:"line"`
+		Content string `json:"content"`
+	}
+	var matches []match
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if shouldSkipGeneratedDir(d.Name()) {
+				return fs.SkipDir
+			}
+			if permissions != nil {
+				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
+					return fs.SkipDir
+				}
+			}
+			return nil
+		}
+
+		// Verify read access for each file while walking.
+		if permissions != nil {
+			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
+				return nil // Skip unreadable
+			}
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return nil // skip unreadable files
+		}
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		scanner.Buffer(make([]byte, scanChunkSize), scanChunkSize)
+		scanner.Split(scanLinesOrChunks(scanChunkSize))
+		line := 1
+		for scanner.Scan() {
+			text := scanner.Text()
+			compare := text
+			if !caseSensitive {
+				compare = strings.ToLower(text)
+			}
+			if strings.Contains(compare, pattern) {
+				matches = append(matches, match{
+					File:    path,
+					Line:    line,
+					Content: text,
+				})
+			}
+			line++
+		}
+		// Skip files with I/O errors (e.g. permission denied mid-read).
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+}
+func (t *SearchInFilesTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+	return true
+}
+
+func (t *SearchInFilesTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
+}
+func (t *SearchInFilesTool) Tags() []string { return []string{core.TagReadOnly, "search", "recovery"} }
+
+// CreateFileTool creates a file from a template string.
+type CreateFileTool struct {
+	BasePath string
+	manager  *authorization.PermissionManager
+	agentID  string
+	spec     *core.AgentRuntimeSpec
+}
+
+func (t *CreateFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
+	t.manager = manager
+	t.agentID = agentID
+}
+
+func (t *CreateFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
+	t.spec = spec
+	t.agentID = agentID
+}
+
+func (t *CreateFileTool) Name() string        { return "file_create" }
+func (t *CreateFileTool) Description() string { return "Creates a new file if it does not exist." }
+func (t *CreateFileTool) Category() string    { return "file" }
+func (t *CreateFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{
+		{Name: "path", Type: "string", Required: true},
+		{Name: "content", Type: "string", Required: false},
+	}
+}
+func (t *CreateFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	path := t.preparePath(fmt.Sprint(args["path"]))
+
+	if t.manager != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
+			return nil, err
+		}
+	}
+	if err := t.enforceFileMatrix(ctx, "write", path); err != nil {
+		return nil, err
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		return nil, fmt.Errorf("file %s already exists", path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(path, []byte(fmt.Sprint(args["content"])), 0o644); err != nil {
+		return nil, err
+	}
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"path": path}}, nil
+}
+func (t *CreateFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+	return true
+}
+
+func (t *CreateFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
+}
+func (t *CreateFileTool) Tags() []string { return []string{core.TagDestructive, "file", "edit"} }
+
+// DeleteFileTool moves a file to .trash folder instead of deleting permanently.
+type DeleteFileTool struct {
+	BasePath string
+	TrashDir string
+	manager  *authorization.PermissionManager
+	agentID  string
+	spec     *core.AgentRuntimeSpec
+}
+
+func (t *DeleteFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
+	t.manager = manager
+	t.agentID = agentID
+}
+
+func (t *DeleteFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
+	t.spec = spec
+	t.agentID = agentID
+}
+
+func (t *DeleteFileTool) Name() string        { return "file_delete" }
+func (t *DeleteFileTool) Description() string { return "Deletes a file after confirmation." }
+func (t *DeleteFileTool) Category() string    { return "file" }
+func (t *DeleteFileTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "path", Type: "string", Required: true}}
+}
+func (t *DeleteFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	path := t.preparePath(fmt.Sprint(args["path"]))
+
+	if t.manager != nil {
+		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
+			return nil, err
+		}
+	}
+	if err := t.enforceFileMatrix(ctx, "write", path); err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	trash := t.TrashDir
+	if trash == "" {
+		trash = filepath.Join(t.BasePath, ".trash")
+	}
+	if err := os.MkdirAll(trash, 0o755); err != nil {
+		return nil, err
+	}
+	dest := filepath.Join(trash, info.Name())
+	if err := os.Rename(path, dest); err != nil {
+		return nil, err
+	}
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{"path": dest}}, nil
+}
+func (t *DeleteFileTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+	return true
+}
+
+func (t *DeleteFileTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemWrite)}
+}
+func (t *DeleteFileTool) Tags() []string { return []string{core.TagDestructive, "file", "edit"} }
+
+func (t *ReadFileTool) preparePath(path string) string  { return preparePath(t.BasePath, path) }
+func (t *WriteFileTool) preparePath(path string) string { return preparePath(t.BasePath, path) }
+func (t *ListFilesTool) preparePath(path string) string { return preparePath(t.BasePath, path) }
+func (t *SearchInFilesTool) preparePath(path string) string {
+	return preparePath(t.BasePath, path)
+}
+func (t *CreateFileTool) preparePath(path string) string { return preparePath(t.BasePath, path) }
+func (t *DeleteFileTool) preparePath(path string) string { return preparePath(t.BasePath, path) }
+
+func (t *WriteFileTool) enforceFileMatrix(ctx context.Context, action string, absPath string) error {
+	if t == nil || t.spec == nil {
+		return nil
+	}
+	return enforceFileMatrix(ctx, t.manager, t.agentID, t.BasePath, action, absPath, t.spec.Files)
+}
+
+func (t *CreateFileTool) enforceFileMatrix(ctx context.Context, action string, absPath string) error {
+	if t == nil || t.spec == nil {
+		return nil
+	}
+	return enforceFileMatrix(ctx, t.manager, t.agentID, t.BasePath, action, absPath, t.spec.Files)
+}
+
+func (t *DeleteFileTool) enforceFileMatrix(ctx context.Context, action string, absPath string) error {
+	if t == nil || t.spec == nil {
+		return nil
+	}
+	return enforceFileMatrix(ctx, t.manager, t.agentID, t.BasePath, action, absPath, t.spec.Files)
+}
+
+func preparePath(base, path string) string {
+	if base == "" {
+		return filepath.Clean(path)
+	}
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(base, path)
+}
+
+func toBool(value interface{}) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "1", "true", "yes", "on":
+			return true
+		}
+	}
+	return false
+}
+
+func isText(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+	for _, b := range data {
+		if b == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := out.ReadFrom(in); err != nil {
+		return err
+	}
+	return nil
+}
+
+func enforceFileMatrix(ctx context.Context, manager *authorization.PermissionManager, agentID, basePath, action, absPath string, matrix core.AgentFileMatrix) error {
+	rel := absPath
+	if basePath != "" {
+		if r, err := filepath.Rel(basePath, absPath); err == nil {
+			rel = r
+		}
+	}
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	if strings.HasPrefix(rel, "./") {
+		rel = strings.TrimPrefix(rel, "./")
+	}
+	perm := matrix.Write
+	if action == "edit" {
+		perm = matrix.Edit
+	}
+	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
+		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
+	}
+	decision, _ := authorization.DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
+	if perm.RequireApproval {
+		decision = core.AgentPermissionAsk
+	}
+	switch decision {
+	case core.AgentPermissionAllow:
+		return nil
+	case core.AgentPermissionDeny:
+		return fmt.Errorf("file %s blocked: denied by file_permissions", rel)
+	case core.AgentPermissionAsk:
+		if manager == nil {
+			return fmt.Errorf("file %s blocked: approval required but permission manager missing", rel)
+		}
+		return manager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
+			Type:         core.PermissionTypeHITL,
+			Action:       fmt.Sprintf("file_matrix:%s", action),
+			Resource:     rel,
+			RequiresHITL: true,
+		}, "file permission matrix", authorization.GrantScopeOneTime, authorization.RiskLevelMedium, 0)
+	default:
+		return nil
+	}
+}
+
+// scanChunkSize is the maximum bytes returned per scanner token. Lines longer
+// than this are split into consecutive chunks rather than causing a buffer
+// overflow error.
+const scanChunkSize = 64 * 1024
+
+// scanLinesOrChunks returns a bufio.SplitFunc that behaves like
+// bufio.ScanLines but force-splits any line that exceeds maxChunk bytes.
+// This prevents bufio.Scanner from erroring on minified or generated files.
+func scanLinesOrChunks(maxChunk int) bufio.SplitFunc {
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		limit := len(data)
+		if limit > maxChunk {
+			limit = maxChunk
+		}
+		if i := bytes.IndexByte(data[:limit], '\n'); i >= 0 {
+			line := data[:i]
+			if len(line) > 0 && line[len(line)-1] == '\r' {
+				line = line[:len(line)-1]
+			}
+			return i + 1, line, nil
+		}
+		if len(data) >= maxChunk {
+			return maxChunk, data[:maxChunk], nil
+		}
+		if atEOF {
+			return len(data), data, nil
+		}
+		return 0, nil, nil
+	}
+}
+
+// FileOperations registers default file tools into a registry.
+func FileOperations(basePath string) []core.Tool {
+	return []core.Tool{
+		&ReadFileTool{BasePath: basePath},
+		&WriteFileTool{BasePath: basePath, Backup: true},
+		&ListFilesTool{BasePath: basePath},
+		&SearchInFilesTool{BasePath: basePath},
+		&CreateFileTool{BasePath: basePath},
+		&DeleteFileTool{BasePath: basePath},
+	}
+}

@@ -1,0 +1,17 @@
+package build
+
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+	clinix "github.com/lexcodex/relurpify/platform/shell/command"
+)
+
+// NewGoTool exposes the go CLI for running builds/tests inside the workspace.
+func NewGoTool(basePath string) core.Tool {
+	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
+		Name:        "cli_go",
+		Description: "Executes Go commands (go test/build/etc) inside the workspace.",
+		Command:     "go",
+		Category:    "cli_build",
+		Tags:        []string{"execute"},
+	})
+}

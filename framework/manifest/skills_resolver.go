@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/config"
 )
 
 // LoadSkill loads a single skill by name (flat, no inheritance chain).
@@ -12,7 +12,7 @@ func LoadSkill(workspace, name string) (*SkillManifest, error) {
 	if name == "" {
 		return nil, fmt.Errorf("skill name required")
 	}
-	manifestPath := filepath.Join(workspacecfg.New(workspace).SkillsDir(), name, "skill.manifest.yaml")
+	manifestPath := filepath.Join(config.New(workspace).SkillsDir(), name, "skill.manifest.yaml")
 	return LoadSkillManifest(manifestPath)
 }
 

@@ -25,6 +25,7 @@ type SkillSpec struct {
 	ToolExecutionPolicy      map[string]core.ToolPolicy                `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
 	CapabilityPolicies       []core.CapabilityPolicy                   `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
 	InsertionPolicies        []core.CapabilityInsertionPolicy          `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
+	SessionPolicies          []core.SessionPolicy                      `yaml:"session_policies,omitempty" json:"session_policies,omitempty"`
 	GlobalPolicies           map[string]core.AgentPermissionLevel      `yaml:"policies,omitempty" json:"policies,omitempty"`
 	ProviderPolicies         map[string]core.ProviderPolicy            `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
 	Providers                []core.ProviderConfig                     `yaml:"providers,omitempty" json:"providers,omitempty"`
@@ -129,6 +130,16 @@ func (m *SkillManifest) Validate() error {
 		if err := core.ValidateCapabilityInsertionPolicy(policy); err != nil {
 			return fmt.Errorf("insertion_policies[%d] invalid: %w", i, err)
 		}
+	}
+	seenSessionPolicyIDs := make(map[string]struct{}, len(m.Spec.SessionPolicies))
+	for i, policy := range m.Spec.SessionPolicies {
+		if err := core.ValidateSessionPolicy(policy); err != nil {
+			return fmt.Errorf("session_policies[%d] invalid: %w", i, err)
+		}
+		if _, exists := seenSessionPolicyIDs[policy.ID]; exists {
+			return fmt.Errorf("session_policies[%d] duplicates id %q", i, policy.ID)
+		}
+		seenSessionPolicyIDs[policy.ID] = struct{}{}
 	}
 	for i, selector := range m.Spec.AllowedCapabilities {
 		if err := core.ValidateCapabilitySelector(selector); err != nil {

@@ -1,0 +1,17 @@
+package text
+
+import (
+	"github.com/lexcodex/relurpify/framework/core"
+	clinix "github.com/lexcodex/relurpify/platform/shell/command"
+)
+
+// NewPatchTool exposes the patch CLI.
+func NewPatchTool(basePath string) core.Tool {
+	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
+		Name:        "cli_patch",
+		Description: "Applies unified diffs using patch.",
+		Command:     "patch",
+		Category:    "cli_text",
+		Tags:        []string{"execute"},
+	})
+}

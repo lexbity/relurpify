@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,40 +15,52 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/app/nexus/api_server_old"
 	"github.com/lexcodex/relurpify/framework/ast"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/mcp/protocol"
 	"github.com/lexcodex/relurpify/framework/memory"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
-	"github.com/lexcodex/relurpify/llm"
-	"github.com/lexcodex/relurpify/server"
-	"github.com/lexcodex/relurpify/tools"
+	platformast "github.com/lexcodex/relurpify/platform/ast"
+	platformfs "github.com/lexcodex/relurpify/platform/fs"
+	platformgit "github.com/lexcodex/relurpify/platform/git"
+	"github.com/lexcodex/relurpify/platform/llm"
+	platformsearch "github.com/lexcodex/relurpify/platform/search"
+	platformshell "github.com/lexcodex/relurpify/platform/shell"
 )
 
 // Runtime wires the relurpish CLI, Bubble Tea UI, and API server to the shared
 // agent fruntime. It centralizes tool registration, manifests, sandbox
 // registration, and log management.
 type Runtime struct {
-	Config           Config
-	Tools            *capability.Registry
-	Memory           memory.MemoryStore
-	Context          *core.Context
-	Agent            graph.Agent
-	Model            core.LanguageModel
-	IndexManager     *ast.IndexManager
-	Registration     *fruntime.AgentRegistration
-	Delegations      *fruntime.DelegationManager
-	AgentSpec        *core.AgentRuntimeSpec
-	AgentDefinitions map[string]*core.AgentDefinition
-	Telemetry        core.Telemetry
-	Logger           *log.Logger
-	Workspace        WorkspaceConfig
+	Config            Config
+	Tools             *capability.Registry
+	Memory            memory.MemoryStore
+	Context           *core.Context
+	Agent             graph.Agent
+	Model             core.LanguageModel
+	IndexManager      *ast.IndexManager
+	Registration      *fauthorization.AgentRegistration
+	Delegations       *fauthorization.DelegationManager
+	AgentSpec         *core.AgentRuntimeSpec
+	AgentDefinitions  map[string]*core.AgentDefinition
+	Telemetry         core.Telemetry
+	Logger            *log.Logger
+	Workspace         WorkspaceConfig
+	NexusNodeProvider core.NodeProvider
+	NexusClient       *NexusClient
 
-	logFile io.Closer
+	logFile  io.Closer
+	eventLog io.Closer
+
+	hitlCancel  func()
+	nexusCancel func()
 
 	serverMu     sync.Mutex
 	serverCancel context.CancelFunc
@@ -100,8 +113,9 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		}
 	}
 
-	registration, err := fruntime.RegisterAgent(ctx, fruntime.RuntimeConfig{
+	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath: cfg.ManifestPath,
+		ConfigPath:   cfg.ConfigPath,
 		Sandbox:      cfg.Sandbox,
 		AuditLimit:   cfg.AuditLimit,
 		BaseFS:       cfg.Workspace,
@@ -120,7 +134,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent.model.name")
 	}
-	runner, err := fruntime.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
+	runner, err := fsandbox.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
 	if err != nil {
 		logFile.Close()
 		return nil, err
@@ -133,6 +147,9 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if err != nil {
 		logFile.Close()
 		return nil, err
+	}
+	if registration.Policy != nil {
+		registry.SetPolicyEngine(registration.Policy)
 	}
 	agentSpec, skillResults := agents.ApplySkills(cfg.Workspace, agentSpec, registration.Manifest.Spec.Skills, registry, registration.Permissions, registration.ID)
 	if cfg.AgentName == "" {
@@ -164,6 +181,42 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 				sinks = append(sinks, fileSink)
 			} else {
 				logger.Printf("warning: failed to init json telemetry: %v", err)
+			}
+		}
+	}
+	var eventTelemetry telemetry.EventTelemetry
+	if cfg.EventsPath != "" {
+		if err := os.MkdirAll(filepath.Dir(cfg.EventsPath), 0o755); err == nil {
+			if eventLog, err := db.NewSQLiteEventLog(cfg.EventsPath); err == nil {
+				eventTelemetry = telemetry.EventTelemetry{
+					Log:       eventLog,
+					Partition: "local",
+					Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+				}
+				sinks = append(sinks, eventTelemetry)
+				if registration.Permissions != nil {
+					registration.Permissions.SetEventLogger(func(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+						payload := map[string]interface{}{
+							"permission_type": desc.Type,
+							"action":          desc.Action,
+							"resource":        desc.Resource,
+							"effect":          effect,
+							"reason":          reason,
+							"metadata":        fields,
+						}
+						if data, err := json.Marshal(payload); err == nil {
+							_, _ = eventLog.Append(ctx, "local", []core.FrameworkEvent{{
+								Timestamp: time.Now().UTC(),
+								Type:      core.FrameworkEventPolicyEvaluated,
+								Payload:   data,
+								Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+								Partition: "local",
+							}})
+						}
+					})
+				}
+			} else {
+				logger.Printf("warning: failed to init event log: %v", err)
 			}
 		}
 	}
@@ -203,12 +256,27 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		IndexManager:     indexManager,
 		Logger:           logger,
 		logFile:          logFile,
+		eventLog:         io.Closer(nil),
 		Workspace:        workspaceCfg,
 		Registration:     registration,
-		Delegations:      fruntime.NewDelegationManager(),
+		Delegations:      fauthorization.NewDelegationManager(),
 		AgentSpec:        agentSpec,
 		AgentDefinitions: agentDefs,
 		Telemetry:        telemetry,
+	}
+	if eventTelemetry.Log != nil {
+		if closer, ok := eventTelemetry.Log.(io.Closer); ok {
+			rt.eventLog = closer
+		}
+		if registration.HITL != nil {
+			ch, cancel := registration.HITL.Subscribe(32)
+			rt.hitlCancel = cancel
+			go func() {
+				for ev := range ch {
+					eventTelemetry.EmitHITLEvent(ev)
+				}
+			}()
+		}
 	}
 	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
 	for _, skill := range skillResults {
@@ -220,6 +288,14 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("register builtin providers: %w", err)
+	}
+	if err := registerNexusGatewayProvider(ctx, rt); err != nil {
+		_ = rt.Close()
+		return nil, fmt.Errorf("register nexus gateway provider: %w", err)
+	}
+	if err := registerLocalNexusNodeProvider(ctx, rt); err != nil {
+		_ = rt.Close()
+		return nil, fmt.Errorf("register local nexus node: %w", err)
 	}
 
 	agent := instantiateAgent(cfg, model, registry, memory, agentDefs, agentCfg, indexManager)
@@ -282,6 +358,20 @@ func (r *Runtime) Close() error {
 			errs = append(errs, err)
 		}
 		r.logFile = nil
+	}
+	if r.hitlCancel != nil {
+		r.hitlCancel()
+		r.hitlCancel = nil
+	}
+	if r.nexusCancel != nil {
+		r.nexusCancel()
+		r.nexusCancel = nil
+	}
+	if r.eventLog != nil {
+		if err := r.eventLog.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.eventLog = nil
 	}
 	return errors.Join(errs...)
 }
@@ -360,12 +450,12 @@ func (r *Runtime) SwitchAgent(name string) error {
 // CapabilityRegistryOptions carries optional manifest/runtime policies into capability construction.
 type CapabilityRegistryOptions struct {
 	AgentID           string
-	PermissionManager *fruntime.PermissionManager
+	PermissionManager *fauthorization.PermissionManager
 	AgentSpec         *core.AgentRuntimeSpec
 }
 
 // BuildCapabilityRegistry registers builtin tool capabilities scoped to the workspace.
-func BuildCapabilityRegistry(workspace string, runner fruntime.CommandRunner, opts ...CapabilityRegistryOptions) (*capability.Registry, *ast.IndexManager, error) {
+func BuildCapabilityRegistry(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (*capability.Registry, *ast.IndexManager, error) {
 	if workspace == "" {
 		workspace = "."
 	}
@@ -389,36 +479,36 @@ func BuildCapabilityRegistry(workspace string, runner fruntime.CommandRunner, op
 		}
 		return nil
 	}
-	for _, tool := range tools.FileOperations(workspace) {
+	for _, tool := range platformfs.FileOperations(workspace) {
 		if err := register(tool); err != nil {
 			return nil, nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
-		&tools.SimilarityTool{BasePath: workspace},
-		&tools.SemanticSearchTool{BasePath: workspace},
+		&platformsearch.SimilarityTool{BasePath: workspace},
+		&platformsearch.SemanticSearchTool{BasePath: workspace},
 	} {
 		if err := register(tool); err != nil {
 			return nil, nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
-		&tools.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: runner},
-		&tools.GitCommandTool{RepoPath: workspace, Command: "history", Runner: runner},
-		&tools.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: runner},
-		&tools.GitCommandTool{RepoPath: workspace, Command: "commit", Runner: runner},
-		&tools.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: runner},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: runner},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "history", Runner: runner},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: runner},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "commit", Runner: runner},
+		&platformgit.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: runner},
 	} {
 		if err := register(tool); err != nil {
 			return nil, nil, err
 		}
 	}
-	for _, tool := range tools.CommandLineTools(workspace, runner) {
+	for _, tool := range platformshell.CommandLineTools(workspace, runner) {
 		if err := register(tool); err != nil {
 			return nil, nil, err
 		}
 	}
-	paths := workspacecfg.New(workspace)
+	paths := config.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, nil, err
@@ -440,8 +530,8 @@ func BuildCapabilityRegistry(workspace string, runner fruntime.CommandRunner, op
 			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
 		})
 	}
-	tools.AttachASTSymbolProvider(manager, registry)
-	if err := register(tools.NewASTTool(manager)); err != nil {
+	platformast.AttachASTSymbolProvider(manager, registry)
+	if err := register(platformast.NewASTTool(manager)); err != nil {
 		return nil, nil, err
 	}
 	go manager.IndexWorkspace()
@@ -477,7 +567,7 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
 func instantiateAgent(cfg Config, model core.LanguageModel, registry *capability.Registry, mem memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config, indexManager *ast.IndexManager) graph.Agent {
-	paths := workspacecfg.New(cfg.Workspace)
+	paths := config.New(cfg.Workspace)
 	workflowStatePath := paths.WorkflowStateFile()
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
@@ -507,7 +597,7 @@ func instantiateAgent(cfg Config, model core.LanguageModel, registry *capability
 }
 
 func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, model core.LanguageModel, registry *capability.Registry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
-	paths := workspacecfg.New(cfg.Workspace)
+	paths := config.New(cfg.Workspace)
 	checkpointPath := paths.CheckpointsDir()
 	workflowStatePath := paths.WorkflowStateFile()
 	implementation := strings.ToLower(strings.TrimSpace(def.Spec.Implementation))
@@ -560,6 +650,11 @@ func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, e
 	if task.Context != nil {
 		if source, ok := task.Context["source"]; ok {
 			state.Set("task.source", fmt.Sprint(source))
+		}
+		if sessionKey, ok := task.Context["session_key"]; ok && strings.TrimSpace(fmt.Sprint(sessionKey)) != "" {
+			normalized := strings.TrimSpace(fmt.Sprint(sessionKey))
+			state.Set("session_key", normalized)
+			state.Set("nexus.session_key", normalized)
 		}
 	}
 	res, err := r.Agent.Execute(ctx, task, state)
@@ -624,7 +719,7 @@ func (r *Runtime) StartServer(ctx context.Context, addr string) (func(context.Co
 		Context:           r.Context,
 		Inspector:         r,
 		Logger:            r.Logger,
-		WorkflowStatePath: workspacecfg.New(r.Config.Workspace).WorkflowStateFile(),
+		WorkflowStatePath: config.New(r.Config.Workspace).WorkflowStateFile(),
 	}
 	serverCtx, cancel := context.WithCancel(ctx)
 	errCh := make(chan error, 1)
@@ -662,7 +757,7 @@ func (r *Runtime) ServerRunning() bool {
 }
 
 // PendingHITL exposes outstanding permission requests.
-func (r *Runtime) PendingHITL() []*fruntime.PermissionRequest {
+func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
 	if r.Registration == nil || r.Registration.HITL == nil {
 		return nil
 	}
@@ -671,9 +766,9 @@ func (r *Runtime) PendingHITL() []*fruntime.PermissionRequest {
 
 // SubscribeHITL streams HITL lifecycle events (requested/resolved/expired).
 // The returned cancel function can be called to unsubscribe.
-func (r *Runtime) SubscribeHITL() (<-chan fruntime.HITLEvent, func()) {
+func (r *Runtime) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 	if r == nil || r.Registration == nil || r.Registration.HITL == nil {
-		ch := make(chan fruntime.HITLEvent)
+		ch := make(chan fauthorization.HITLEvent)
 		close(ch)
 		return ch, func() {}
 	}
@@ -681,18 +776,18 @@ func (r *Runtime) SubscribeHITL() (<-chan fruntime.HITLEvent, func()) {
 }
 
 // ApproveHITL approves a pending request with the supplied scope.
-func (r *Runtime) ApproveHITL(requestID, approver string, scope fruntime.GrantScope, duration time.Duration) error {
+func (r *Runtime) ApproveHITL(requestID, approver string, scope fauthorization.GrantScope, duration time.Duration) error {
 	if r.Registration == nil || r.Registration.HITL == nil {
 		return errors.New("hitl broker unavailable")
 	}
 	if scope == "" {
-		scope = fruntime.GrantScopeOneTime
+		scope = fauthorization.GrantScopeOneTime
 	}
 	var expiresAt time.Time
 	if duration > 0 {
 		expiresAt = time.Now().Add(duration)
 	}
-	decision := fruntime.PermissionDecision{
+	decision := fauthorization.PermissionDecision{
 		RequestID:  requestID,
 		Approved:   true,
 		ApprovedBy: approver,

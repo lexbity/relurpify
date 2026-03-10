@@ -30,16 +30,16 @@ type ManifestMetadata struct {
 
 // ManifestSpec encodes runtime, permission, resource, and security sections.
 type ManifestSpec struct {
-	Image       string                           `yaml:"image" json:"image"`
-	Runtime     string                           `yaml:"runtime" json:"runtime"`
-	Permissions core.PermissionSet               `yaml:"permissions" json:"permissions"`
-	Resources   ResourceSpec                     `yaml:"resources" json:"resources"`
-	Security    SecuritySpec                     `yaml:"security" json:"security"`
-	Audit       AuditSpec                        `yaml:"audit" json:"audit"`
-	Agent       *core.AgentRuntimeSpec           `yaml:"agent,omitempty" json:"agent,omitempty"`
-	Skills      []string                         `yaml:"skills,omitempty" json:"skills,omitempty"`
+	Image       string                               `yaml:"image" json:"image"`
+	Runtime     string                               `yaml:"runtime" json:"runtime"`
+	Permissions core.PermissionSet                   `yaml:"permissions" json:"permissions"`
+	Resources   ResourceSpec                         `yaml:"resources" json:"resources"`
+	Security    SecuritySpec                         `yaml:"security" json:"security"`
+	Audit       AuditSpec                            `yaml:"audit" json:"audit"`
+	Agent       *core.AgentRuntimeSpec               `yaml:"agent,omitempty" json:"agent,omitempty"`
+	Skills      []string                             `yaml:"skills,omitempty" json:"skills,omitempty"`
 	Policies    map[string]core.AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
-	Defaults    *ManifestDefaults                `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	Defaults    *ManifestDefaults                    `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 }
 
 // ManifestDefaults defines global defaults applied before skills.

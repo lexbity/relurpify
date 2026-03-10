@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/app/nexus/api_server_old"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/persistence"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
-	"github.com/lexcodex/relurpify/server"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 func (r *Runtime) ListCapabilities(context.Context) ([]server.CapabilityResource, error) {
@@ -216,11 +217,11 @@ func (r *Runtime) GetWorkflowResource(_ context.Context, uri string) (*server.Re
 		return nil, err
 	}
 	defer store.Close()
-	ref, err := persistence.ParseWorkflowResourceURI(strings.TrimSpace(uri))
+	ref, err := memory.ParseWorkflowResourceURI(strings.TrimSpace(uri))
 	if err != nil {
 		return nil, err
 	}
-	read, err := (persistence.WorkflowProjectionService{Store: store}).Project(context.Background(), ref)
+	read, err := (memory.WorkflowProjectionService{Store: store}).Project(context.Background(), ref)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +476,7 @@ func summarizeServerInterface(values map[string]interface{}) []string {
 	return out
 }
 
-func serverApprovalKind(request fruntime.PermissionRequest) string {
+func serverApprovalKind(request fauthorization.PermissionRequest) string {
 	action := strings.TrimSpace(request.Permission.Action)
 	switch {
 	case strings.HasPrefix(action, "provider:"):
@@ -507,10 +508,10 @@ func fallbackServerSource(primary, fallback string) string {
 	return strings.TrimSpace(fallback)
 }
 
-func (r *Runtime) openWorkflowStore() (*persistence.SQLiteWorkflowStateStore, error) {
+func (r *Runtime) openWorkflowStore() (*db.SQLiteWorkflowStateStore, error) {
 	if r == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	path := workspacecfg.New(r.Config.Workspace).WorkflowStateFile()
-	return persistence.NewSQLiteWorkflowStateStore(path)
+	path := config.New(r.Config.Workspace).WorkflowStateFile()
+	return db.NewSQLiteWorkflowStateStore(path)
 }
