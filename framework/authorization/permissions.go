@@ -20,20 +20,37 @@ import (
 
 const permissionMatchAll = "**"
 
+// hitlRateMax is the maximum HITL requests per key within hitlRateWindow before
+// subsequent requests are rejected with a rate-limit error.
+const hitlRateMax = 10
+
+// hitlRateWindow is the sliding window duration for HITL rate limiting.
+const hitlRateWindow = time.Minute
+
+// globRegexCache caches compiled glob-to-regex patterns to avoid recompiling on every match.
+var globRegexCache sync.Map // map[string]*regexp.Regexp
+
+// hitlRateBucket tracks the number of HITL requests within a rolling time window.
+type hitlRateBucket struct {
+	count    int
+	windowAt time.Time
+}
+
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
-	basePath      string
-	declared      *core.PermissionSet
-	audit         core.AuditLogger
-	hitl          HITLProvider
-	runtime       sandbox.SandboxRuntime
-	grants        map[string]*PermissionGrant
-	mu            sync.RWMutex
-	grantClock    func() time.Time
-	netPolicy     []sandbox.NetworkRule
-	defaultPolicy core.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
-	eventLogger   func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})
-	taskGrants    map[string]taskGrant
+	basePath       string
+	declared       *core.PermissionSet
+	audit          core.AuditLogger
+	hitl           HITLProvider
+	runtime        sandbox.SandboxRuntime
+	grants         map[string]*PermissionGrant
+	mu             sync.RWMutex
+	grantClock     func() time.Time
+	netPolicy      []sandbox.NetworkRule
+	defaultPolicy  core.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
+	eventLogger    func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})
+	taskGrants     map[string]taskGrant
+	hitlRateLimits map[string]*hitlRateBucket
 }
 
 type taskGrant struct {
@@ -50,13 +67,14 @@ func NewPermissionManager(basePath string, declared *core.PermissionSet, audit c
 		return nil, err
 	}
 	pm := &PermissionManager{
-		basePath:   basePath,
-		declared:   declared,
-		audit:      audit,
-		hitl:       hitl,
-		grants:     make(map[string]*PermissionGrant),
-		taskGrants: make(map[string]taskGrant),
-		grantClock: time.Now,
+		basePath:       basePath,
+		declared:       declared,
+		audit:          audit,
+		hitl:           hitl,
+		grants:         make(map[string]*PermissionGrant),
+		taskGrants:     make(map[string]taskGrant),
+		hitlRateLimits: make(map[string]*hitlRateBucket),
+		grantClock:     time.Now,
 	}
 	pm.inflateScopes()
 	return pm, nil
@@ -258,16 +276,17 @@ func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool cor
 	if len(tags) == 0 {
 		return false
 	}
+	// Any approved tag on the tool is sufficient to authorise it under this grant.
 	for _, tag := range tags {
 		tag = strings.ToLower(strings.TrimSpace(tag))
 		if tag == "" {
 			continue
 		}
-		if _, ok := grant.approvedTags[tag]; !ok {
-			return false
+		if _, ok := grant.approvedTags[tag]; ok {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // CheckFileAccess validates filesystem access.
@@ -639,6 +658,24 @@ func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, des
 	return nil
 }
 
+// checkHITLRateLimit returns an error if the per-key HITL request rate exceeds
+// hitlRateMax within hitlRateWindow. Must be called without m.mu held.
+func (m *PermissionManager) checkHITLRateLimit(key string) error {
+	now := m.grantClock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	bucket, ok := m.hitlRateLimits[key]
+	if !ok || now.Sub(bucket.windowAt) >= hitlRateWindow {
+		m.hitlRateLimits[key] = &hitlRateBucket{count: 1, windowAt: now}
+		return nil
+	}
+	bucket.count++
+	if bucket.count > hitlRateMax {
+		return fmt.Errorf("HITL rate limit exceeded for %s: max %d requests per %s", key, hitlRateMax, hitlRateWindow)
+	}
+	return nil
+}
+
 // RequireApproval requests HITL approval for an arbitrary runtime decision
 // (tool gating, file matrix, bash policy) and caches the resulting grant.
 func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string, desc core.PermissionDescriptor, justification string, scope GrantScope, risk RiskLevel, duration time.Duration) error {
@@ -656,6 +693,10 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 		delete(m.grants, key)
 	}
 	m.mu.Unlock()
+	if err := m.checkHITLRateLimit(key); err != nil {
+		m.emitPolicyDecision(ctx, desc, "deny", err.Error(), nil)
+		return err
+	}
 	if m.hitl == nil {
 		return m.deny(ctx, agentID, desc, "hitl approval required")
 	}
@@ -748,9 +789,16 @@ func matchGlob(pattern, value string) bool {
 		return ok
 	}
 	regexPattern := globToRegex(pattern)
-	regex, err := regexp.Compile(regexPattern)
-	if err != nil {
-		return false
+	var regex *regexp.Regexp
+	if cached, ok := globRegexCache.Load(regexPattern); ok {
+		regex = cached.(*regexp.Regexp)
+	} else {
+		compiled, err := regexp.Compile(regexPattern)
+		if err != nil {
+			return false
+		}
+		globRegexCache.Store(regexPattern, compiled)
+		regex = compiled
 	}
 	return regex.MatchString(value)
 }

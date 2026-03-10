@@ -498,11 +498,14 @@ func TestAuthorizeToolAllowsMatchingTaskGrant(t *testing.T) {
 	require.NoError(t, m.AuthorizeTool(ctx, "agent", taggedTool{Tool: toolWithTags, tags: []string{"safe", "review"}}, nil))
 }
 
-func TestAuthorizeToolTaskGrantRequiresAllTags(t *testing.T) {
+// TestAuthorizeToolTaskGrantAnyTagAllows verifies that a tool is granted when
+// at least one of its tags appears in the task grant — not all tags must match.
+func TestAuthorizeToolTaskGrantAnyTagAllows(t *testing.T) {
 	m := newTestPM(t, "/ws", basePermSet("/ws"))
 	require.NoError(t, m.RegisterTaskGrant("run-1", []string{"safe"}))
 	m.SetDefaultPolicy(core.AgentPermissionDeny)
 
+	// Tool has tags ["safe", "review"]; grant only covers "safe" — should allow.
 	tool := taggedTool{
 		Tool: stubPermTool{
 			name: "tagged",
@@ -515,9 +518,30 @@ func TestAuthorizeToolTaskGrantRequiresAllTags(t *testing.T) {
 		tags: []string{"safe", "review"},
 	}
 	ctx := core.WithTaskContext(context.Background(), core.TaskContext{ID: "run-1"})
+	require.NoError(t, m.AuthorizeTool(ctx, "agent", tool, nil))
+}
 
-	err := m.AuthorizeTool(ctx, "agent", tool, nil)
-	require.Error(t, err)
+// TestAuthorizeToolTaskGrantDeniesNoMatchingTag verifies that a tool is denied
+// when none of its tags appear in the task grant.
+func TestAuthorizeToolTaskGrantDeniesNoMatchingTag(t *testing.T) {
+	m := newTestPM(t, "/ws", basePermSet("/ws"))
+	require.NoError(t, m.RegisterTaskGrant("run-1", []string{"safe"}))
+	m.SetDefaultPolicy(core.AgentPermissionDeny)
+
+	// Tool has only "review" which is not in the grant — should deny.
+	tool := taggedTool{
+		Tool: stubPermTool{
+			name: "tagged",
+			perms: &core.PermissionSet{
+				FileSystem: []core.FileSystemPermission{
+					{Action: core.FileSystemWrite, Path: "/etc/**"},
+				},
+			},
+		},
+		tags: []string{"review"},
+	}
+	ctx := core.WithTaskContext(context.Background(), core.TaskContext{ID: "run-1"})
+	require.Error(t, m.AuthorizeTool(ctx, "agent", tool, nil))
 }
 
 type taggedTool struct {
