@@ -50,8 +50,32 @@ func (s *SQLiteAdminTokenStore) init() error {
 	return err
 }
 
+// listTokensMaxDefault is the upper bound applied by ListTokens when no explicit
+// limit is provided, preventing unbounded result sets.
+const listTokensMaxDefault = 200
+
+// ListTokens returns up to listTokensMaxDefault tokens ordered by issued_at DESC.
+// Use ListTokensPaged for explicit pagination control.
 func (s *SQLiteAdminTokenStore) ListTokens(ctx context.Context) ([]core.AdminTokenRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at FROM admin_tokens ORDER BY issued_at DESC, id ASC`)
+	return s.ListTokensPaged(ctx, listTokensMaxDefault, 0)
+}
+
+// ListTokensPaged returns a page of admin token records. limit must be positive
+// and is capped at 1000; offset is the zero-based row offset.
+func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offset int) ([]core.AdminTokenRecord, error) {
+	if limit <= 0 {
+		limit = listTokensMaxDefault
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, name, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at
+		 FROM admin_tokens ORDER BY issued_at DESC, id ASC LIMIT ? OFFSET ?`,
+		limit, offset)
 	if err != nil {
 		return nil, err
 	}
