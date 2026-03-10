@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/config"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +18,7 @@ func TestProbeEnvironmentHandlesMissingRunsc(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Workspace = dir
 	cfg.ManifestPath = filepath.Join(dir, "agent.manifest.yaml")
-	cfg.ConfigPath = workspacecfg.New(dir).ConfigFile()
+	cfg.ConfigPath = config.New(dir).ConfigFile()
 	cfg.Sandbox.RunscPath = "runsc-missing"
 	report := ProbeEnvironment(context.Background(), cfg)
 	require.Contains(t, strings.Join(report.Sandbox.Errors, " "), "runsc not found")
@@ -53,13 +53,13 @@ func TestInitializeWorkspaceFromTemplatesCreatesWorkspaceFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(manifestData), filepath.ToSlash(dir))
 	for _, path := range []string{
-		workspacecfg.New(dir).AgentsDir(),
-		workspacecfg.New(dir).SkillsDir(),
-		workspacecfg.New(dir).LogsDir(),
-		workspacecfg.New(dir).TelemetryDir(),
-		workspacecfg.New(dir).MemoryDir(),
-		workspacecfg.New(dir).SessionsDir(),
-		workspacecfg.New(dir).TestRunsDir(),
+		config.New(dir).AgentsDir(),
+		config.New(dir).SkillsDir(),
+		config.New(dir).LogsDir(),
+		config.New(dir).TelemetryDir(),
+		config.New(dir).MemoryDir(),
+		config.New(dir).SessionsDir(),
+		config.New(dir).TestRunsDir(),
 	} {
 		info, err := os.Stat(path)
 		require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestDetectChromiumStatusMissingIsWarningOnly(t *testing.T) {
 
 func TestBuildCapabilityRegistryDoesNotRegisterGenericExecutionToolsByDefault(t *testing.T) {
 	dir := t.TempDir()
-	runner := fruntime.NewLocalCommandRunner(dir, nil)
+	runner := fsandbox.NewLocalCommandRunner(dir, nil)
 
 	registry, indexManager, err := BuildCapabilityRegistry(dir, runner)
 	require.NoError(t, err)

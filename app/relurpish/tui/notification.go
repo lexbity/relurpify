@@ -7,14 +7,14 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 )
 
 // Notification tea messages emitted by NotificationBar.
 type NotifHITLApproveMsg struct {
 	ID     string
-	Scope  fruntime.GrantScope // OneTime, Session, or Persistent (always)
-	Action string              // raw HITL action, e.g. "tool:cli_mkdir"
+	Scope  fauthorization.GrantScope // OneTime, Session, or Persistent (always)
+	Action string                    // raw HITL action, e.g. "tool:cli_mkdir"
 }
 type NotifHITLDenyMsg struct{ ID string }
 type NotifDismissMsg struct{ ID string }
@@ -42,7 +42,7 @@ func (q *NotificationQueue) Push(n NotificationItem) {
 }
 
 // PushHITL is a convenience helper to push a HITL notification.
-func (q *NotificationQueue) PushHITL(req *fruntime.PermissionRequest) {
+func (q *NotificationQueue) PushHITL(req *fauthorization.PermissionRequest) {
 	if req == nil {
 		return
 	}
@@ -136,21 +136,21 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 		if current.Kind == NotifKindHITL {
 			id, action := current.ID, current.Extra["action"]
 			return nb, func() tea.Msg {
-				return NotifHITLApproveMsg{ID: id, Scope: fruntime.GrantScopeOneTime, Action: action}
+				return NotifHITLApproveMsg{ID: id, Scope: fauthorization.GrantScopeOneTime, Action: action}
 			}
 		}
 	case "s", "S":
 		if current.Kind == NotifKindHITL {
 			id, action := current.ID, current.Extra["action"]
 			return nb, func() tea.Msg {
-				return NotifHITLApproveMsg{ID: id, Scope: fruntime.GrantScopeSession, Action: action}
+				return NotifHITLApproveMsg{ID: id, Scope: fauthorization.GrantScopeSession, Action: action}
 			}
 		}
 	case "a", "A":
 		if current.Kind == NotifKindHITL {
 			id, action := current.ID, current.Extra["action"]
 			return nb, func() tea.Msg {
-				return NotifHITLApproveMsg{ID: id, Scope: fruntime.GrantScopePersistent, Action: action}
+				return NotifHITLApproveMsg{ID: id, Scope: fauthorization.GrantScopePersistent, Action: action}
 			}
 		}
 	case "n", "N":
@@ -232,7 +232,7 @@ func renderApprovalNotification(item NotificationItem) string {
 	return strings.Join(parts, " | ")
 }
 
-func approvalKindFromRequest(req *fruntime.PermissionRequest) string {
+func approvalKindFromRequest(req *fauthorization.PermissionRequest) string {
 	if req == nil {
 		return "execution"
 	}
@@ -254,7 +254,7 @@ func approvalKindFromRequest(req *fruntime.PermissionRequest) string {
 	}
 }
 
-func hitlTarget(req *fruntime.PermissionRequest) string {
+func hitlTarget(req *fauthorization.PermissionRequest) string {
 	if req == nil {
 		return ""
 	}

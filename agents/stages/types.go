@@ -20,9 +20,9 @@ type FileSelection struct {
 
 func (f *FileSelection) UnmarshalJSON(data []byte) error {
 	type rawFileSelection struct {
-		RelevantFiles   []FileRef        `json:"relevant_files"`
+		RelevantFiles   []FileRef         `json:"relevant_files"`
 		ToolSuggestions []json.RawMessage `json:"tool_suggestions,omitempty"`
-		Summary         string           `json:"summary"`
+		Summary         string            `json:"summary"`
 	}
 	var raw rawFileSelection
 	if err := json.Unmarshal(data, &raw); err != nil {

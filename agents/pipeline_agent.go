@@ -12,7 +12,8 @@ import (
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/persistence"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/pipeline"
 )
 
@@ -56,7 +57,7 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *cor
 		return nil, fmt.Errorf("pipeline agent has no stages for task")
 	}
 
-	var store *persistence.SQLiteWorkflowStateStore
+	var store *db.SQLiteWorkflowStateStore
 	var workflowID, runID string
 	if strings.TrimSpace(a.WorkflowStatePath) != "" {
 		store, workflowID, runID, err = a.openWorkflowStore(ctx, task, state)
@@ -190,8 +191,8 @@ func (a *PipelineAgent) toolCallingEnabled() bool {
 	return a.Config.OllamaToolCalling
 }
 
-func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, state *core.Context) (*persistence.SQLiteWorkflowStateStore, string, string, error) {
-	store, err := persistence.NewSQLiteWorkflowStateStore(filepath.Clean(a.WorkflowStatePath))
+func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, state *core.Context) (*db.SQLiteWorkflowStateStore, string, string, error) {
+	store, err := db.NewSQLiteWorkflowStateStore(filepath.Clean(a.WorkflowStatePath))
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -214,12 +215,12 @@ func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, 
 		_ = store.Close()
 		return nil, "", "", err
 	} else if !ok {
-		if err := store.CreateWorkflow(ctx, persistence.WorkflowRecord{
+		if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 			WorkflowID:  workflowID,
 			TaskID:      fallbackTaskID(task),
 			TaskType:    taskType(task),
 			Instruction: taskInstruction(task),
-			Status:      persistence.WorkflowRunStatusRunning,
+			Status:      memory.WorkflowRunStatusRunning,
 			Metadata:    map[string]any{"agent": "pipeline"},
 		}); err != nil {
 			_ = store.Close()
@@ -230,10 +231,10 @@ func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, 
 		_ = store.Close()
 		return nil, "", "", err
 	} else if !ok {
-		if err := store.CreateRun(ctx, persistence.WorkflowRunRecord{
+		if err := store.CreateRun(ctx, memory.WorkflowRunRecord{
 			RunID:      runID,
 			WorkflowID: workflowID,
-			Status:     persistence.WorkflowRunStatusRunning,
+			Status:     memory.WorkflowRunStatusRunning,
 			AgentName:  "pipeline",
 			StartedAt:  time.Now().UTC(),
 		}); err != nil {
@@ -246,7 +247,7 @@ func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, 
 	return store, workflowID, runID, nil
 }
 
-func (a *PipelineAgent) persistStageResults(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, runID string, results []pipeline.StageResult) error {
+func (a *PipelineAgent) persistStageResults(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID string, results []pipeline.StageResult) error {
 	for idx, result := range results {
 		responseJSON := ""
 		if result.Response != nil {
@@ -256,7 +257,7 @@ func (a *PipelineAgent) persistStageResults(ctx context.Context, store *persiste
 			}
 			responseJSON = string(data)
 		}
-		record := persistence.WorkflowStageResultRecord{
+		record := memory.WorkflowStageResultRecord{
 			ResultID:         fmt.Sprintf("%s-stage-%02d-attempt-%02d", runID, idx+1, result.RetryAttempt),
 			WorkflowID:       workflowID,
 			RunID:            runID,
@@ -280,7 +281,7 @@ func (a *PipelineAgent) persistStageResults(ctx context.Context, store *persiste
 			return err
 		}
 	}
-	return store.UpdateRunStatus(ctx, runID, persistence.WorkflowRunStatusCompleted, nil)
+	return store.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, nil)
 }
 
 type pipelineStageNode struct {

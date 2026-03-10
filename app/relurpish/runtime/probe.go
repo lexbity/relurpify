@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/runtime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -71,7 +71,7 @@ type EnvironmentReport struct {
 // StatusSnapshot enriches the environment report with live runtime details.
 type StatusSnapshot struct {
 	Environment  EnvironmentReport
-	PendingHITL  []*runtime.PermissionRequest
+	PendingHITL  []*authorization.PermissionRequest
 	ServerActive bool
 	Context      *core.ContextSnapshot
 }

@@ -13,11 +13,13 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/persistence"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 const contextFileMaxBytes = 8000
@@ -33,7 +35,7 @@ type ToolInfo struct {
 	EffectClasses []string
 	TrustClass    string
 	Exposure      string
-	Policy        fruntime.AgentPermissionLevel // per-tool override; "" means no override
+	Policy        core.AgentPermissionLevel // per-tool override; "" means no override
 	HasPolicy     bool
 }
 
@@ -68,7 +70,7 @@ type RuntimeAdapter interface {
 	SaveModel(model string) error
 	// SaveToolPolicy persists a per-tool execution policy to the agent manifest.
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
-	SaveToolPolicy(toolName string, level fruntime.AgentPermissionLevel) error
+	SaveToolPolicy(toolName string, level core.AgentPermissionLevel) error
 	// ListToolsInfo returns the current local-tool list with per-tool policy overrides.
 	ListToolsInfo() []ToolInfo
 	// ListCapabilities returns all registered capabilities with runtime-family metadata.
@@ -88,13 +90,13 @@ type RuntimeAdapter interface {
 	GetLiveSessionDetail(sessionID string) (*LiveProviderSessionDetail, error)
 	GetApprovalDetail(id string) (*ApprovalDetail, error)
 	// GetClassPolicies returns the current capability-class permission policies.
-	GetClassPolicies() map[string]fruntime.AgentPermissionLevel
+	GetClassPolicies() map[string]core.AgentPermissionLevel
 	// SetToolPolicyLive updates a per-tool execution policy in-memory (current session only).
 	// Pass level="" to clear the override.
-	SetToolPolicyLive(name string, level fruntime.AgentPermissionLevel)
+	SetToolPolicyLive(name string, level core.AgentPermissionLevel)
 	// SetClassPolicyLive updates a class permission policy in-memory (current session only).
 	// Pass level="" to clear the class policy.
-	SetClassPolicyLive(class string, level fruntime.AgentPermissionLevel)
+	SetClassPolicyLive(class string, level core.AgentPermissionLevel)
 	ListWorkflows(limit int) ([]WorkflowInfo, error)
 	GetWorkflow(workflowID string) (*WorkflowDetails, error)
 	CancelWorkflow(workflowID string) error
@@ -377,15 +379,15 @@ func (r *runtimeAdapter) GetWorkflow(workflowID string) (*WorkflowDetails, error
 	if err != nil {
 		return nil, err
 	}
-	facts, err := store.ListKnowledge(context.Background(), workflowID, persistence.KnowledgeKindFact, false)
+	facts, err := store.ListKnowledge(context.Background(), workflowID, memory.KnowledgeKindFact, false)
 	if err != nil {
 		return nil, err
 	}
-	issues, err := store.ListKnowledge(context.Background(), workflowID, persistence.KnowledgeKindIssue, false)
+	issues, err := store.ListKnowledge(context.Background(), workflowID, memory.KnowledgeKindIssue, false)
 	if err != nil {
 		return nil, err
 	}
-	decisions, err := store.ListKnowledge(context.Background(), workflowID, persistence.KnowledgeKindDecision, false)
+	decisions, err := store.ListKnowledge(context.Background(), workflowID, memory.KnowledgeKindDecision, false)
 	if err != nil {
 		return nil, err
 	}
@@ -542,19 +544,19 @@ func (r *runtimeAdapter) CancelWorkflow(workflowID string) error {
 		return err
 	}
 	defer store.Close()
-	_, err = store.UpdateWorkflowStatus(context.Background(), workflowID, 0, persistence.WorkflowRunStatusCanceled, "")
+	_, err = store.UpdateWorkflowStatus(context.Background(), workflowID, 0, memory.WorkflowRunStatusCanceled, "")
 	return err
 }
 
-func (r *runtimeAdapter) openWorkflowStore() (*persistence.SQLiteWorkflowStateStore, error) {
+func (r *runtimeAdapter) openWorkflowStore() (*db.SQLiteWorkflowStateStore, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	path := workspacecfg.New(r.rt.Config.Workspace).WorkflowStateFile()
-	return persistence.NewSQLiteWorkflowStateStore(path)
+	path := config.New(r.rt.Config.Workspace).WorkflowStateFile()
+	return db.NewSQLiteWorkflowStateStore(path)
 }
 
-func convertKnowledgeInfos(records []persistence.KnowledgeRecord) []WorkflowKnowledgeInfo {
+func convertKnowledgeInfos(records []memory.KnowledgeRecord) []WorkflowKnowledgeInfo {
 	out := make([]WorkflowKnowledgeInfo, 0, len(records))
 	for _, record := range records {
 		out = append(out, WorkflowKnowledgeInfo{
@@ -584,7 +586,7 @@ func sortedStringKeys(values map[string]struct{}) []string {
 	return out
 }
 
-func (r *runtimeAdapter) SaveToolPolicy(toolName string, level fruntime.AgentPermissionLevel) error {
+func (r *runtimeAdapter) SaveToolPolicy(toolName string, level core.AgentPermissionLevel) error {
 	if r == nil || r.rt == nil || r.rt.Registration == nil || r.rt.Registration.Manifest == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
@@ -593,7 +595,7 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level fruntime.AgentPer
 		return fmt.Errorf("manifest source path not set")
 	}
 	// Reload from disk to avoid saving already-resolved permissions.
-	m, err := fruntime.LoadAgentManifest(sourcePath)
+	m, err := manifest.LoadAgentManifest(sourcePath)
 	if err != nil {
 		return fmt.Errorf("load manifest: %w", err)
 	}
@@ -611,7 +613,7 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level fruntime.AgentPer
 		}
 		r.rt.Registration.Manifest.Spec.Agent.ToolExecutionPolicy[toolName] = core.ToolPolicy{Execute: core.AgentPermissionLevel(level)}
 	}
-	return fruntime.SaveAgentManifest(sourcePath, m)
+	return manifest.SaveAgentManifest(sourcePath, m)
 }
 
 func (r *runtimeAdapter) ListToolsInfo() []ToolInfo {
@@ -654,7 +656,7 @@ func (r *runtimeAdapter) ListToolsInfo() []ToolInfo {
 			exposure = r.rt.Tools.EffectiveExposure(capability)
 		}
 		pol := policies[name]
-		level := fruntime.AgentPermissionLevel(pol.Execute)
+		level := core.AgentPermissionLevel(pol.Execute)
 		infos = append(infos, ToolInfo{
 			Name:          name,
 			RuntimeFamily: runtimeFamily,
@@ -760,7 +762,7 @@ func (r *runtimeAdapter) ListResources(workflowRefs []string) []ResourceInfo {
 		seen[resources[i].ResourceID] = struct{}{}
 	}
 	for _, raw := range workflowRefs {
-		ref, err := persistence.ParseWorkflowResourceURI(raw)
+		ref, err := memory.ParseWorkflowResourceURI(raw)
 		if err != nil {
 			continue
 		}
@@ -1082,11 +1084,11 @@ func (r *runtimeAdapter) getWorkflowResourceDetail(uri string) (*ResourceDetail,
 		return nil, err
 	}
 	defer store.Close()
-	ref, err := persistence.ParseWorkflowResourceURI(uri)
+	ref, err := memory.ParseWorkflowResourceURI(uri)
 	if err != nil {
 		return nil, err
 	}
-	service := persistence.WorkflowProjectionService{Store: store}
+	service := memory.WorkflowProjectionService{Store: store}
 	read, err := service.Project(context.Background(), ref)
 	if err != nil {
 		return nil, err
@@ -1189,21 +1191,21 @@ func (r *runtimeAdapter) GetApprovalDetail(id string) (*ApprovalDetail, error) {
 	return nil, fmt.Errorf("approval %s not found", id)
 }
 
-func (r *runtimeAdapter) GetClassPolicies() map[string]fruntime.AgentPermissionLevel {
+func (r *runtimeAdapter) GetClassPolicies() map[string]core.AgentPermissionLevel {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return nil
 	}
 	return r.rt.Tools.GetClassPolicies()
 }
 
-func (r *runtimeAdapter) SetToolPolicyLive(name string, level fruntime.AgentPermissionLevel) {
+func (r *runtimeAdapter) SetToolPolicyLive(name string, level core.AgentPermissionLevel) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return
 	}
 	r.rt.Tools.UpdateToolPolicy(name, core.ToolPolicy{Execute: core.AgentPermissionLevel(level)})
 }
 
-func (r *runtimeAdapter) SetClassPolicyLive(class string, level fruntime.AgentPermissionLevel) {
+func (r *runtimeAdapter) SetClassPolicyLive(class string, level core.AgentPermissionLevel) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return
 	}
@@ -1270,7 +1272,7 @@ func cloneStringMap(values map[string]string) map[string]string {
 	return cloned
 }
 
-func inferApprovalKind(request fruntime.PermissionRequest) string {
+func inferApprovalKind(request fauthorization.PermissionRequest) string {
 	action := strings.TrimSpace(request.Permission.Action)
 	switch {
 	case strings.HasPrefix(action, "provider:"):
@@ -1316,7 +1318,7 @@ func describeWorkflowLinkedResources(refs []string) []WorkflowLinkedResourceInfo
 	}
 	out := make([]WorkflowLinkedResourceInfo, 0, len(refs))
 	for _, raw := range refs {
-		ref, err := persistence.ParseWorkflowResourceURI(raw)
+		ref, err := memory.ParseWorkflowResourceURI(raw)
 		if err != nil {
 			out = append(out, WorkflowLinkedResourceInfo{URI: raw, Summary: raw})
 			continue
@@ -1333,7 +1335,7 @@ func describeWorkflowLinkedResources(refs []string) []WorkflowLinkedResourceInfo
 	return out
 }
 
-func describeWorkflowResourceRef(ref persistence.WorkflowResourceRef) string {
+func describeWorkflowResourceRef(ref memory.WorkflowResourceRef) string {
 	parts := []string{ref.WorkflowID, string(ref.Tier)}
 	if ref.Role != "" {
 		parts = append(parts, string(ref.Role))
@@ -1364,14 +1366,14 @@ func (r *runtimeAdapter) SessionArtifacts() SessionArtifacts {
 	}
 }
 
-func (r *runtimeAdapter) PendingHITL() []*fruntime.PermissionRequest {
+func (r *runtimeAdapter) PendingHITL() []*fauthorization.PermissionRequest {
 	if r == nil || r.rt == nil {
 		return nil
 	}
 	return r.rt.PendingHITL()
 }
 
-func (r *runtimeAdapter) ApproveHITL(requestID, approver string, scope fruntime.GrantScope, duration time.Duration) error {
+func (r *runtimeAdapter) ApproveHITL(requestID, approver string, scope fauthorization.GrantScope, duration time.Duration) error {
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
@@ -1385,7 +1387,7 @@ func (r *runtimeAdapter) DenyHITL(requestID, reason string) error {
 	return r.rt.DenyHITL(requestID, reason)
 }
 
-func (r *runtimeAdapter) SubscribeHITL() (<-chan fruntime.HITLEvent, func()) {
+func (r *runtimeAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 	if r == nil || r.rt == nil {
 		return nil, func() {}
 	}

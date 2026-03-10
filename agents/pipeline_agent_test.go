@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/persistence"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/pipeline"
 )
 
@@ -185,7 +185,7 @@ func TestPipelineAgentPersistsStageResults(t *testing.T) {
 	_, err := agent.Execute(context.Background(), &core.Task{ID: "task-3", Instruction: "persist pipeline"}, state)
 	requireNoError(t, err)
 
-	store, err := persistence.NewSQLiteWorkflowStateStore(dbPath)
+	store, err := db.NewSQLiteWorkflowStateStore(dbPath)
 	requireNoError(t, err)
 	defer store.Close()
 

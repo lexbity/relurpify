@@ -16,12 +16,14 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/ast"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/mcp/protocol"
-	mstdio "github.com/lexcodex/relurpify/framework/mcp/transport/stdio"
-	"github.com/lexcodex/relurpify/framework/persistence"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	mstdio "github.com/lexcodex/relurpify/framework/middleware/mcp/transport/stdio"
 	"github.com/stretchr/testify/require"
 )
 
@@ -490,10 +492,10 @@ func TestRuntimeCloseJoinsErrors(t *testing.T) {
 }
 
 func TestRuntimeRegisterProviderHonorsProviderActivationPolicy(t *testing.T) {
-	hitl := fruntime.NewHITLBroker(time.Second)
-	perms, err := fruntime.NewPermissionManager(t.TempDir(), &fruntime.PermissionSet{
+	hitl := fauthorization.NewHITLBroker(time.Second)
+	perms, err := fauthorization.NewPermissionManager(t.TempDir(), &core.PermissionSet{
 		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "**"}},
-	}, fruntime.NewInMemoryAuditLogger(10), hitl)
+	}, core.NewInMemoryAuditLogger(10), hitl)
 	require.NoError(t, err)
 
 	rt := &Runtime{
@@ -502,7 +504,7 @@ func TestRuntimeRegisterProviderHonorsProviderActivationPolicy(t *testing.T) {
 				"remote-mcp": {Activate: core.AgentPermissionDeny},
 			},
 		},
-		Registration: &fruntime.AgentRegistration{
+		Registration: &fauthorization.AgentRegistration{
 			ID:          "agent-1",
 			Permissions: perms,
 			HITL:        hitl,
@@ -527,14 +529,14 @@ func TestRuntimeRegisterProviderHonorsProviderActivationPolicy(t *testing.T) {
 }
 
 func TestRuntimeRegisterProviderCanBeApprovedThroughHITL(t *testing.T) {
-	hitl := fruntime.NewHITLBroker(2 * time.Second)
-	perms, err := fruntime.NewPermissionManager(t.TempDir(), &fruntime.PermissionSet{
+	hitl := fauthorization.NewHITLBroker(2 * time.Second)
+	perms, err := fauthorization.NewPermissionManager(t.TempDir(), &core.PermissionSet{
 		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "**"}},
-	}, fruntime.NewInMemoryAuditLogger(10), hitl)
+	}, core.NewInMemoryAuditLogger(10), hitl)
 	require.NoError(t, err)
 
 	rt := &Runtime{
-		Registration: &fruntime.AgentRegistration{
+		Registration: &fauthorization.AgentRegistration{
 			ID:          "agent-1",
 			Permissions: perms,
 			HITL:        hitl,
@@ -559,11 +561,74 @@ func TestRuntimeRegisterProviderCanBeApprovedThroughHITL(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 				continue
 			}
-			_ = hitl.Approve(fruntime.PermissionDecision{
+			_ = hitl.Approve(fauthorization.PermissionDecision{
 				RequestID:  pending[0].ID,
 				Approved:   true,
 				ApprovedBy: "tester",
-				Scope:      fruntime.GrantScopeSession,
+				Scope:      fauthorization.GrantScopeSession,
+			})
+			return
+		}
+	}()
+
+	err = rt.RegisterProvider(context.Background(), provider)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, provider.initCalls)
+}
+
+func TestRuntimeRegisterProviderPolicyEnginePreservesRemoteApprovalFallback(t *testing.T) {
+	hitl := fauthorization.NewHITLBroker(2 * time.Second)
+	perms, err := fauthorization.NewPermissionManager(t.TempDir(), &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "**"}},
+	}, core.NewInMemoryAuditLogger(10), hitl)
+	require.NoError(t, err)
+	engine, err := fauthorization.FromManifestWithConfig(&manifest.AgentManifest{
+		Metadata: manifest.ManifestMetadata{Name: "agent-1"},
+		Spec: manifest.ManifestSpec{
+			Agent: &core.AgentRuntimeSpec{
+				Mode: core.AgentModePrimary,
+				Model: core.AgentModelConfig{
+					Provider: "ollama",
+					Name:     "test",
+				},
+			},
+		},
+	}, "agent-1", perms)
+	require.NoError(t, err)
+
+	rt := &Runtime{
+		Registration: &fauthorization.AgentRegistration{
+			ID:          "agent-1",
+			Permissions: perms,
+			Policy:      engine,
+			HITL:        hitl,
+		},
+	}
+	provider := &testProvider{
+		desc: core.ProviderDescriptor{
+			ID:            "remote-mcp",
+			Kind:          core.ProviderKindMCPClient,
+			TrustBaseline: core.TrustClassRemoteDeclared,
+			Security: core.ProviderSecurityProfile{
+				Origin:                     core.ProviderOriginRemote,
+				RequiresFrameworkMediation: true,
+			},
+		},
+	}
+
+	go func() {
+		for {
+			pending := hitl.PendingRequests()
+			if len(pending) == 0 {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			_ = hitl.Approve(fauthorization.PermissionDecision{
+				RequestID:  pending[0].ID,
+				Approved:   true,
+				ApprovedBy: "tester",
+				Scope:      fauthorization.GrantScopeSession,
 			})
 			return
 		}
@@ -622,20 +687,20 @@ func TestRuntimeCaptureAndPersistProviderSnapshots(t *testing.T) {
 	require.Equal(t, "browser", providers[0].ProviderID)
 	require.Equal(t, "session-1", sessions[0].Session.ID)
 
-	store, err := persistence.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
 	require.NoError(t, err)
 	defer store.Close()
 	ctx := context.Background()
-	require.NoError(t, store.CreateWorkflow(ctx, persistence.WorkflowRecord{
+	require.NoError(t, store.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		TaskID:      "task-1",
 		TaskType:    core.TaskTypeCodeModification,
 		Instruction: "persist provider snapshots",
 	}))
-	require.NoError(t, store.CreateRun(ctx, persistence.WorkflowRunRecord{
+	require.NoError(t, store.CreateRun(ctx, memory.WorkflowRunRecord{
 		RunID:      "run-1",
 		WorkflowID: "wf-1",
-		Status:     persistence.WorkflowRunStatusRunning,
+		Status:     memory.WorkflowRunStatusRunning,
 	}))
 
 	require.NoError(t, rt.PersistProviderSnapshots(ctx, store, "wf-1", "run-1"))

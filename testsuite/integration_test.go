@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/lexcodex/relurpify/framework/search"
 	"os"
 	"path/filepath"
@@ -26,7 +26,7 @@ func TestGraphToolExecutionIntegration(t *testing.T) {
 	}
 
 	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead, core.FileSystemList)
-	manager, err := runtime.NewPermissionManager(base, perms, nil, nil)
+	manager, err := authorization.NewPermissionManager(base, perms, nil, nil)
 	if err != nil {
 		t.Fatalf("permission manager: %v", err)
 	}

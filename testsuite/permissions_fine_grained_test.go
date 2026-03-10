@@ -2,10 +2,10 @@ package testsuite
 
 import (
 	"context"
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/tools"
+	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,13 +24,13 @@ func TestFileToolGranularPermissionEnforcement(t *testing.T) {
 		perms.FileSystem[i].HITLRequired = true
 	}
 
-	manager, err := runtime.NewPermissionManager(base, perms, nil, nil) // No HITL provider -> Fail
+	manager, err := authorization.NewPermissionManager(base, perms, nil, nil) // No HITL provider -> Fail
 	if err != nil {
 		t.Fatalf("manager init failed: %v", err)
 	}
 
 	registry := capability.NewRegistry()
-	readTool := &tools.ReadFileTool{BasePath: base}
+	readTool := &platformfs.ReadFileTool{BasePath: base}
 	if err := registry.Register(readTool); err != nil {
 		t.Fatalf("register tool: %v", err)
 	}
@@ -67,13 +67,13 @@ func TestWriteToolBackupPermissionEnforcement(t *testing.T) {
 		perms.FileSystem[i].HITLRequired = true
 	}
 
-	manager, err := runtime.NewPermissionManager(base, perms, nil, nil) // No HITL provider -> Fail
+	manager, err := authorization.NewPermissionManager(base, perms, nil, nil) // No HITL provider -> Fail
 	if err != nil {
 		t.Fatalf("manager init failed: %v", err)
 	}
 
 	registry := capability.NewRegistry()
-	writeTool := &tools.WriteFileTool{BasePath: base, Backup: true}
+	writeTool := &platformfs.WriteFileTool{BasePath: base, Backup: true}
 	registry.Register(writeTool)
 	registry.UsePermissionManager("test-agent", manager)
 

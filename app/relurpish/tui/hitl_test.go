@@ -5,13 +5,13 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/runtime"
 )
 
 type fakeHITL struct {
-	pending []*runtime.PermissionRequest
-	ch      chan runtime.HITLEvent
+	pending []*authorization.PermissionRequest
+	ch      chan authorization.HITLEvent
 
 	approved []string
 	denied   []string
@@ -19,23 +19,23 @@ type fakeHITL struct {
 
 func newFakeHITL() *fakeHITL {
 	return &fakeHITL{
-		ch: make(chan runtime.HITLEvent, 16),
+		ch: make(chan authorization.HITLEvent, 16),
 	}
 }
 
-func (f *fakeHITL) PendingHITL() []*runtime.PermissionRequest {
-	out := make([]*runtime.PermissionRequest, len(f.pending))
+func (f *fakeHITL) PendingHITL() []*authorization.PermissionRequest {
+	out := make([]*authorization.PermissionRequest, len(f.pending))
 	copy(out, f.pending)
 	return out
 }
 
-func (f *fakeHITL) ApproveHITL(requestID, _ string, _ runtime.GrantScope, _ time.Duration) error {
+func (f *fakeHITL) ApproveHITL(requestID, _ string, _ authorization.GrantScope, _ time.Duration) error {
 	f.approved = append(f.approved, requestID)
 	f.pending = removeRequest(f.pending, requestID)
-	f.ch <- runtime.HITLEvent{
-		Type:    runtime.HITLEventResolved,
-		Request: &runtime.PermissionRequest{ID: requestID},
-		Decision: &runtime.PermissionDecision{
+	f.ch <- authorization.HITLEvent{
+		Type:    authorization.HITLEventResolved,
+		Request: &authorization.PermissionRequest{ID: requestID},
+		Decision: &authorization.PermissionDecision{
 			RequestID: requestID,
 			Approved:  true,
 		},
@@ -46,10 +46,10 @@ func (f *fakeHITL) ApproveHITL(requestID, _ string, _ runtime.GrantScope, _ time
 func (f *fakeHITL) DenyHITL(requestID, _ string) error {
 	f.denied = append(f.denied, requestID)
 	f.pending = removeRequest(f.pending, requestID)
-	f.ch <- runtime.HITLEvent{
-		Type:    runtime.HITLEventResolved,
-		Request: &runtime.PermissionRequest{ID: requestID},
-		Decision: &runtime.PermissionDecision{
+	f.ch <- authorization.HITLEvent{
+		Type:    authorization.HITLEventResolved,
+		Request: &authorization.PermissionRequest{ID: requestID},
+		Decision: &authorization.PermissionDecision{
 			RequestID: requestID,
 			Approved:  false,
 			Reason:    "denied",
@@ -58,11 +58,11 @@ func (f *fakeHITL) DenyHITL(requestID, _ string) error {
 	return nil
 }
 
-func (f *fakeHITL) SubscribeHITL() (<-chan runtime.HITLEvent, func()) {
+func (f *fakeHITL) SubscribeHITL() (<-chan authorization.HITLEvent, func()) {
 	return f.ch, func() {}
 }
 
-func removeRequest(reqs []*runtime.PermissionRequest, id string) []*runtime.PermissionRequest {
+func removeRequest(reqs []*authorization.PermissionRequest, id string) []*authorization.PermissionRequest {
 	for i, r := range reqs {
 		if r != nil && r.ID == id {
 			return append(reqs[:i], reqs[i+1:]...)
@@ -75,18 +75,18 @@ func removeRequest(reqs []*runtime.PermissionRequest, id string) []*runtime.Perm
 // causes the notification queue to receive a HITL item.
 func TestHITLEventPushesNotification(t *testing.T) {
 	hitl := newFakeHITL()
-	req := &runtime.PermissionRequest{
+	req := &authorization.PermissionRequest{
 		ID:            "hitl-1",
 		Permission:    core.PermissionDescriptor{Action: "file_matrix:write", Resource: "src/main.rs"},
 		Justification: "file permission matrix",
 	}
-	hitl.pending = []*runtime.PermissionRequest{req}
+	hitl.pending = []*authorization.PermissionRequest{req}
 
 	notifQ := &NotificationQueue{}
 	pane := NewChatPane(nil, &AgentContext{}, &Session{}, notifQ)
 	pane.hitlSvc = hitl
 
-	event := hitlEventMsg{event: runtime.HITLEvent{Type: runtime.HITLEventRequested, Request: req}}
+	event := hitlEventMsg{event: authorization.HITLEvent{Type: authorization.HITLEventRequested, Request: req}}
 	_, _ = pane.Update(event)
 
 	if notifQ.Len() == 0 {
@@ -157,14 +157,14 @@ func TestNotificationBarDenyKey(t *testing.T) {
 // TestApproveHITLRootCmd exercises the approve command reaching the fake HITL service.
 func TestApproveHITLRootCmd(t *testing.T) {
 	hitl := newFakeHITL()
-	req := &runtime.PermissionRequest{
+	req := &authorization.PermissionRequest{
 		ID:            "hitl-approve",
 		Permission:    core.PermissionDescriptor{Action: "command:exec", Resource: "cargo build"},
 		Justification: "build test",
 	}
-	hitl.pending = []*runtime.PermissionRequest{req}
+	hitl.pending = []*authorization.PermissionRequest{req}
 
-	cmd := approveHITLRootCmd(hitl, req.ID, runtime.GrantScopeOneTime)
+	cmd := approveHITLRootCmd(hitl, req.ID, authorization.GrantScopeOneTime)
 	if cmd == nil {
 		t.Fatalf("expected command")
 	}
@@ -187,12 +187,12 @@ func TestApproveHITLRootCmd(t *testing.T) {
 // TestDenyHITLRootCmd exercises the deny command reaching the fake HITL service.
 func TestDenyHITLRootCmd(t *testing.T) {
 	hitl := newFakeHITL()
-	req := &runtime.PermissionRequest{
+	req := &authorization.PermissionRequest{
 		ID:            "hitl-deny",
 		Permission:    core.PermissionDescriptor{Action: "file:write", Resource: "config.toml"},
 		Justification: "write test",
 	}
-	hitl.pending = []*runtime.PermissionRequest{req}
+	hitl.pending = []*authorization.PermissionRequest{req}
 
 	cmd := denyHITLRootCmd(hitl, req.ID)
 	if cmd == nil {

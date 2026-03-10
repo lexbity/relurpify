@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/templates"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 type WorkspaceSnapshot struct {
@@ -169,12 +169,12 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProf
 	}
 
 	copyExclude := append([]string{}, exclude...)
-	copyExclude = append(copyExclude, workspacecfg.DirName, filepath.ToSlash(filepath.Join(workspacecfg.DirName, "**")))
+	copyExclude = append(copyExclude, config.DirName, filepath.ToSlash(filepath.Join(config.DirName, "**")))
 	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, uniqueStrings(copyExclude)); err != nil {
 		return err
 	}
 
-	paths := workspacecfg.New(derivedWorkspace)
+	paths := config.New(derivedWorkspace)
 	resolver := templates.NewResolver()
 	profileRoot, err := resolver.ResolveTestsuiteTemplateProfile(templateProfile)
 	if err != nil {
@@ -208,7 +208,7 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, templateProf
 
 func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derivedWorkspace, manifestRef string) error {
 	manifestRef = filepath.ToSlash(strings.TrimSpace(manifestRef))
-	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, workspacecfg.DirName+"/") {
+	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, config.DirName+"/") {
 		return nil
 	}
 	dst := filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
@@ -217,7 +217,7 @@ func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derived
 	}
 
 	var src string
-	if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(workspacecfg.DirName, "agents"))+"/") {
+	if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(config.DirName, "agents"))+"/") {
 		name := strings.TrimSuffix(filepath.Base(manifestRef), filepath.Ext(manifestRef))
 		src, _ = resolver.ResolveStarterAgent(name)
 	}

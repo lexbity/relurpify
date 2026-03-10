@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/tools/browser"
+	"github.com/lexcodex/relurpify/platform/browser"
 	"github.com/stretchr/testify/require"
 )
 
@@ -144,7 +144,7 @@ func TestBrowserToolOpenUsesScopedDefaultSession(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	backend := &stubBrowserBackend{text: "ready", title: "Ready"}
@@ -191,7 +191,7 @@ func TestBrowserToolUsesAgentBrowserDefaultBackend(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	var seenBackend string
@@ -231,7 +231,7 @@ func TestBrowserToolRejectsDisallowedBackend(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	provider.sessionFactory = func(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error) {
@@ -272,7 +272,7 @@ func TestBrowserToolRejectsDeniedExecuteJS(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	provider.sessionFactory = func(ctx context.Context, cfg browserSessionConfig) (*browser.Session, error) {
@@ -320,7 +320,7 @@ func TestBrowserToolNavigateRecordsPageObservation(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	backend := &stubBrowserBackend{text: "ready", title: "Example"}
@@ -363,7 +363,7 @@ func TestBrowserToolExtractReturnsStructuredPageData(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	backend := &stubBrowserBackend{
@@ -428,7 +428,7 @@ func TestBrowserToolOpenPassesBackendSelection(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	var seenBackend string
@@ -458,7 +458,7 @@ func TestBrowserToolOpenSupportsBiDiSelection(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	var seenBackend string
@@ -488,7 +488,7 @@ func TestBrowserToolParallelSessionsStayIsolatedAndScopeCleanupClosesThem(t *tes
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	backends := []*stubBrowserBackend{
@@ -548,7 +548,7 @@ func TestBrowserToolRecoversAfterBackendDisconnect(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 		Telemetry:    telemetry,
 	}
 	provider := newBrowserProvider()
@@ -607,7 +607,7 @@ func TestBrowserProviderCloseClosesTrackedSessions(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	backend := &stubBrowserBackend{text: "ready", title: "Ready"}
@@ -635,7 +635,7 @@ func TestBrowserProviderCloseSessionClosesTrackedSession(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	backend := &stubBrowserBackend{text: "ready", title: "Ready"}
@@ -668,7 +668,7 @@ func TestBrowserToolOpenHonorsSessionSafetyBudgets(t *testing.T) {
 	rt := &Runtime{
 		Tools:        registry,
 		Context:      core.NewContext(),
-		Registration: &fruntime.AgentRegistration{ID: "agent-browser"},
+		Registration: &fauthorization.AgentRegistration{ID: "agent-browser"},
 	}
 	provider := newBrowserProvider()
 	backends := []*stubBrowserBackend{

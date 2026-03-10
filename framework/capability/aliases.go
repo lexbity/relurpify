@@ -1,8 +1,8 @@
 package capability
 
 import (
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/runtime"
 )
 
 type Context = core.Context
@@ -21,7 +21,7 @@ type CapabilityExecutionResult = core.CapabilityExecutionResult
 type Telemetry = core.Telemetry
 type AgentRuntimeSpec = core.AgentRuntimeSpec
 type ToolPolicy = core.ToolPolicy
-type PermissionManager = runtime.PermissionManager
+type PermissionManager = authorization.PermissionManager
 type PermissionSet = core.PermissionSet
 type AgentPermissionLevel = core.AgentPermissionLevel
 type ToolCall = core.ToolCall
@@ -95,6 +95,6 @@ const (
 )
 
 const (
-	GrantScopeOneTime = runtime.GrantScopeOneTime
-	RiskLevelMedium   = runtime.RiskLevelMedium
+	GrantScopeOneTime = authorization.GrantScopeOneTime
+	RiskLevelMedium   = authorization.RiskLevelMedium
 )

@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 )
 
 const backgroundDelegationProviderID = "delegation-runtime"
@@ -21,7 +21,7 @@ type backgroundDelegationProvider struct {
 type backgroundDelegationSession struct {
 	snapshot core.ProviderSessionSnapshot
 	cancel   context.CancelFunc
-	results  chan fruntime.BackgroundDelegationOutcome
+	results  chan fauthorization.BackgroundDelegationOutcome
 }
 
 func newBackgroundDelegationProvider() *backgroundDelegationProvider {
@@ -115,7 +115,7 @@ func (p *backgroundDelegationProvider) SnapshotSessions(context.Context) ([]core
 	return out, nil
 }
 
-func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts fruntime.DelegationExecutionOptions) (*fruntime.BackgroundDelegationHandle, error) {
+func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts fauthorization.DelegationExecutionOptions) (*fauthorization.BackgroundDelegationHandle, error) {
 	if p == nil || p.runtime == nil || p.runtime.Tools == nil {
 		return nil, fmt.Errorf("background delegation provider unavailable")
 	}
@@ -131,7 +131,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	sessionID := fmt.Sprintf("%s:%s", p.Descriptor().ID, request.ID)
-	results := make(chan fruntime.BackgroundDelegationOutcome, 1)
+	results := make(chan fauthorization.BackgroundDelegationOutcome, 1)
 	session := &backgroundDelegationSession{
 		snapshot: core.ProviderSessionSnapshot{
 			Session: core.ProviderSession{
@@ -165,7 +165,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 	p.mu.Unlock()
 
 	go p.runDelegationSession(sessionCtx, sessionID, request, target, args, opts, session)
-	return &fruntime.BackgroundDelegationHandle{
+	return &fauthorization.BackgroundDelegationHandle{
 		ProviderID:     p.Descriptor().ID,
 		SessionID:      sessionID,
 		Recoverability: p.Descriptor().RecoverabilityMode,
@@ -177,7 +177,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 	}, nil
 }
 
-func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context, sessionID string, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts fruntime.DelegationExecutionOptions, session *backgroundDelegationSession) {
+func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context, sessionID string, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts fauthorization.DelegationExecutionOptions, session *backgroundDelegationSession) {
 	defer close(session.results)
 	state := opts.State
 	if state == nil {
@@ -194,7 +194,7 @@ func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context,
 	p.markSession(sessionID, status, map[string]any{
 		"updated_at": time.Now().UTC().Format(time.RFC3339Nano),
 	})
-	session.results <- fruntime.BackgroundDelegationOutcome{Result: result, Error: err}
+	session.results <- fauthorization.BackgroundDelegationOutcome{Result: result, Error: err}
 	if status != "running" {
 		p.removeSessionLater(sessionID)
 	}
@@ -251,4 +251,4 @@ var _ RuntimeProvider = (*backgroundDelegationProvider)(nil)
 var _ DescribedRuntimeProvider = (*backgroundDelegationProvider)(nil)
 var _ SessionManagedProvider = (*backgroundDelegationProvider)(nil)
 var _ core.ProviderSessionSnapshotter = (*backgroundDelegationProvider)(nil)
-var _ fruntime.DelegationBackgroundRunner = (*backgroundDelegationProvider)(nil)
+var _ fauthorization.DelegationBackgroundRunner = (*backgroundDelegationProvider)(nil)

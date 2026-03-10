@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/tools/browser"
-	"github.com/lexcodex/relurpify/tools/browser/bidi"
-	"github.com/lexcodex/relurpify/tools/browser/cdp"
-	"github.com/lexcodex/relurpify/tools/browser/webdriver"
+	"github.com/lexcodex/relurpify/platform/browser"
+	"github.com/lexcodex/relurpify/platform/browser/bidi"
+	"github.com/lexcodex/relurpify/platform/browser/cdp"
+	"github.com/lexcodex/relurpify/platform/browser/webdriver"
 )
 
 const (
@@ -52,7 +52,7 @@ func (p *browserProvider) Descriptor() core.ProviderDescriptor {
 
 type browserSessionConfig struct {
 	backendName string
-	manager     *fruntime.PermissionManager
+	manager     *fauthorization.PermissionManager
 	agentID     string
 	maxTokens   int
 	runtime     *Runtime
@@ -607,12 +607,12 @@ func (t *browserTool) authorizeAction(ctx context.Context, action string, state 
 				resource = sessionID
 			}
 		}
-		return t.runtime.Registration.Permissions.RequireApproval(ctx, t.runtime.Registration.ID, fruntime.PermissionDescriptor{
+		return t.runtime.Registration.Permissions.RequireApproval(ctx, t.runtime.Registration.ID, core.PermissionDescriptor{
 			Type:         core.PermissionTypeHITL,
 			Action:       fmt.Sprintf("browser:%s", action),
 			Resource:     resource,
 			RequiresHITL: true,
-		}, "browser action approval", fruntime.GrantScopeOneTime, fruntime.RiskLevelMedium, 0)
+		}, "browser action approval", fauthorization.GrantScopeOneTime, fauthorization.RiskLevelMedium, 0)
 	default:
 		return fmt.Errorf("browser action %s has invalid policy %s", action, level)
 	}

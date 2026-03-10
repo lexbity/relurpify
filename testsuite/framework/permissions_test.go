@@ -2,8 +2,8 @@ package framework_test
 
 import (
 	"context"
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -46,7 +46,7 @@ func TestPermissionManagerAuthorizeToolEnforcesSubset(t *testing.T) {
 		},
 	})
 	// Use explicit Deny so undeclared permissions are hard-blocked without HITL.
-	manager.SetDefaultPolicy(runtime.AgentPermissionDeny)
+	manager.SetDefaultPolicy(core.AgentPermissionDeny)
 
 	okTool := stubTool{
 		name: "list",
@@ -139,9 +139,9 @@ func (t stubTool) Tags() []string { return nil }
 
 // newTestManager is a helper that fails tests immediately when the permission
 // manager cannot be constructed.
-func newTestManager(t *testing.T, base string, perms *core.PermissionSet) *runtime.PermissionManager {
+func newTestManager(t *testing.T, base string, perms *core.PermissionSet) *authorization.PermissionManager {
 	t.Helper()
-	manager, err := runtime.NewPermissionManager(base, perms, nil, nil)
+	manager, err := authorization.NewPermissionManager(base, perms, nil, nil)
 	require.NoError(t, err)
 	return manager
 }
@@ -149,14 +149,14 @@ func newTestManager(t *testing.T, base string, perms *core.PermissionSet) *runti
 func TestPermissionManagerHITLFlow(t *testing.T) {
 	ctx := context.Background()
 	hitl := &stubHITLProvider{
-		grants: []*runtime.PermissionGrant{{
+		grants: []*authorization.PermissionGrant{{
 			ID: "grant-1",
 			Permission: core.PermissionDescriptor{
 				Type:     core.PermissionTypeFilesystem,
 				Action:   string(core.FileSystemRead),
 				Resource: "/workspace/file.txt",
 			},
-			Scope: runtime.GrantScopeSession,
+			Scope: authorization.GrantScopeSession,
 		}},
 	}
 	perms := &core.PermissionSet{
@@ -166,7 +166,7 @@ func TestPermissionManagerHITLFlow(t *testing.T) {
 			HITLRequired: true,
 		}},
 	}
-	manager, err := runtime.NewPermissionManager("/workspace", perms, nil, hitl)
+	manager, err := authorization.NewPermissionManager("/workspace", perms, nil, hitl)
 	require.NoError(t, err)
 
 	require.NoError(t, manager.CheckFileAccess(ctx, "agent-hitl", core.FileSystemRead, "file.txt"))
@@ -192,18 +192,18 @@ func TestPermissionManagerCapabilityCheck(t *testing.T) {
 }
 
 type stubHITLProvider struct {
-	grants   []*runtime.PermissionGrant
-	requests []runtime.PermissionRequest
+	grants   []*authorization.PermissionGrant
+	requests []authorization.PermissionRequest
 }
 
-func (s *stubHITLProvider) RequestPermission(ctx context.Context, req runtime.PermissionRequest) (*runtime.PermissionGrant, error) {
+func (s *stubHITLProvider) RequestPermission(ctx context.Context, req authorization.PermissionRequest) (*authorization.PermissionGrant, error) {
 	s.requests = append(s.requests, req)
-	var grant *runtime.PermissionGrant
+	var grant *authorization.PermissionGrant
 	if len(s.grants) > 0 {
 		grant = s.grants[0]
 		s.grants = s.grants[1:]
 	} else {
-		grant = &runtime.PermissionGrant{}
+		grant = &authorization.PermissionGrant{}
 	}
 	if grant.Permission.Action == "" {
 		grant.Permission = req.Permission

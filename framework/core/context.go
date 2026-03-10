@@ -1,7 +1,3 @@
-// Package framework hosts the foundational data structures that every agent,
-// tool, and orchestration primitive depends on. The comments in this file are
-// intentionally verbose so that new contributors can treat it as a guided tour
-// when they first inspect the runtime context mechanics.
 package core
 
 import (

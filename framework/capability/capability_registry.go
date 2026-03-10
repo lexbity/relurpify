@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
@@ -40,6 +41,8 @@ type CapabilityRegistry struct {
 	globalPolicies      map[string]AgentPermissionLevel
 	telemetry           Telemetry
 	safety              *runtimeSafetyController
+	policyEngine        authorization.PolicyEngine
+	nodeProviders       map[string]core.NodeProvider
 }
 
 // NewCapabilityRegistry builds a capability registry instance.
@@ -602,6 +605,43 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *Contex
 			return nil, fmt.Errorf("capability %s blocked: %s", entry.descriptor.ID, reason)
 		}
 	}
+	r.mu.RLock()
+	policyEngine := r.policyEngine
+	agentID := r.registeredAgentID
+	r.mu.RUnlock()
+	if policyEngine != nil {
+		decision, err := policyEngine.Evaluate(ctx, core.PolicyRequest{
+			Target:         core.PolicyTargetCapability,
+			Actor:          core.EventActor{Kind: "agent", ID: agentID},
+			CapabilityID:   entry.descriptor.ID,
+			CapabilityName: entry.descriptor.Name,
+			CapabilityKind: entry.descriptor.Kind,
+			RuntimeFamily:  entry.descriptor.RuntimeFamily,
+			ProviderKind:   providerKindForDescriptor(entry.descriptor),
+			TrustClass:     entry.descriptor.TrustClass,
+			RiskClasses:    append([]core.RiskClass{}, entry.descriptor.RiskClasses...),
+			EffectClasses:  append([]core.EffectClass{}, entry.descriptor.EffectClasses...),
+		})
+		if err != nil {
+			return nil, err
+		}
+		switch decision.Effect {
+		case "deny":
+			return nil, fmt.Errorf("capability %s blocked: %s", entry.descriptor.ID, decision.Reason)
+		case "require_approval":
+			if r.permissionManager == nil {
+				return nil, fmt.Errorf("capability %s blocked: approval required but permission manager unavailable", entry.descriptor.ID)
+			}
+			if err := r.permissionManager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
+				Type:         core.PermissionTypeCapability,
+				Action:       "capability:" + entry.descriptor.Name,
+				Resource:     entry.descriptor.ID,
+				RequiresHITL: true,
+			}, "capability policy approval", authorization.GrantScopeSession, authorization.RiskLevelMedium, 0); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return invocable.Invoke(ctx, state, args)
 }
 
@@ -713,4 +753,13 @@ func validateCoordinationDescriptor(desc core.CapabilityDescriptor) error {
 		return fmt.Errorf("coordination metadata invalid for %s: %w", desc.ID, err)
 	}
 	return nil
+}
+
+func providerKindForDescriptor(desc core.CapabilityDescriptor) core.ProviderKind {
+	switch desc.Source.Scope {
+	case core.CapabilityScopeProvider, core.CapabilityScopeRemote:
+		return core.ProviderKindNodeDevice
+	default:
+		return core.ProviderKindBuiltin
+	}
 }

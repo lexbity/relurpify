@@ -4,13 +4,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/config"
 )
 
 func TestMatchGlob(t *testing.T) {
 	t.Helper()
-	testRunsGlob := filepath.ToSlash(filepath.Join(workspacecfg.DirName, "test_runs", "**"))
-	testRunReport := filepath.ToSlash(filepath.Join(workspacecfg.DirName, "test_runs", "x", "report.json"))
+	testRunsGlob := filepath.ToSlash(filepath.Join(config.DirName, "test_runs", "**"))
+	testRunReport := filepath.ToSlash(filepath.Join(config.DirName, "test_runs", "x", "report.json"))
 	cases := []struct {
 		pattern string
 		path    string

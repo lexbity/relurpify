@@ -14,6 +14,7 @@ type AgentSpecOverlay struct {
 	CapabilityPolicies  []CapabilityPolicy              `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
 	ExposurePolicies    []CapabilityExposurePolicy      `yaml:"exposure_policies,omitempty" json:"exposure_policies,omitempty"`
 	InsertionPolicies   []CapabilityInsertionPolicy     `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
+	SessionPolicies     []SessionPolicy                 `yaml:"session_policies,omitempty" json:"session_policies,omitempty"`
 	GlobalPolicies      map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
 	ProviderPolicies    map[string]ProviderPolicy       `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
 	Providers           []ProviderConfig                `yaml:"providers,omitempty" json:"providers,omitempty"`
@@ -97,6 +98,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		CapabilityPolicies:  cloneCapabilityPolicies(spec.CapabilityPolicies),
 		ExposurePolicies:    cloneExposurePolicies(spec.ExposurePolicies),
 		InsertionPolicies:   cloneInsertionPolicies(spec.InsertionPolicies),
+		SessionPolicies:     cloneSessionPolicies(spec.SessionPolicies),
 		GlobalPolicies:      cloneGlobalPolicies(spec.GlobalPolicies),
 		ProviderPolicies:    cloneProviderPolicies(spec.ProviderPolicies),
 		Providers:           cloneProviderConfigs(spec.Providers),
@@ -147,6 +149,9 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 	}
 	if overlay.InsertionPolicies != nil {
 		spec.InsertionPolicies = append(spec.InsertionPolicies, cloneInsertionPolicies(overlay.InsertionPolicies)...)
+	}
+	if overlay.SessionPolicies != nil {
+		spec.SessionPolicies = append(spec.SessionPolicies, cloneSessionPolicies(overlay.SessionPolicies)...)
 	}
 	if overlay.GlobalPolicies != nil {
 		if spec.GlobalPolicies == nil {
@@ -226,6 +231,7 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 	clone.CapabilityPolicies = cloneCapabilityPolicies(spec.CapabilityPolicies)
 	clone.ExposurePolicies = cloneExposurePolicies(spec.ExposurePolicies)
 	clone.InsertionPolicies = cloneInsertionPolicies(spec.InsertionPolicies)
+	clone.SessionPolicies = cloneSessionPolicies(spec.SessionPolicies)
 	clone.GlobalPolicies = cloneGlobalPolicies(spec.GlobalPolicies)
 	clone.ProviderPolicies = cloneProviderPolicies(spec.ProviderPolicies)
 	clone.Providers = cloneProviderConfigs(spec.Providers)
@@ -521,6 +527,25 @@ func cloneExposurePolicies(policies []CapabilityExposurePolicy) []CapabilityExpo
 	for i, policy := range policies {
 		out[i] = policy
 		out[i].Selector = cloneCapabilitySelector(policy.Selector)
+	}
+	return out
+}
+
+func cloneSessionPolicies(policies []SessionPolicy) []SessionPolicy {
+	if len(policies) == 0 {
+		return nil
+	}
+	out := make([]SessionPolicy, len(policies))
+	for i, policy := range policies {
+		out[i] = policy
+		out[i].Selector.Partitions = append([]string{}, policy.Selector.Partitions...)
+		out[i].Selector.ChannelIDs = append([]string{}, policy.Selector.ChannelIDs...)
+		out[i].Selector.Scopes = append([]SessionScope{}, policy.Selector.Scopes...)
+		out[i].Selector.TrustClasses = append([]TrustClass{}, policy.Selector.TrustClasses...)
+		out[i].Selector.Operations = append([]SessionOperation{}, policy.Selector.Operations...)
+		out[i].Selector.ActorKinds = append([]string{}, policy.Selector.ActorKinds...)
+		out[i].Selector.ActorIDs = append([]string{}, policy.Selector.ActorIDs...)
+		out[i].Approvers = append([]string{}, policy.Approvers...)
 	}
 	return out
 }

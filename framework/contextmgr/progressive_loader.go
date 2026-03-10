@@ -6,7 +6,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/search"
-	"github.com/lexcodex/relurpify/tools"
+	platformast "github.com/lexcodex/relurpify/platform/ast"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -452,7 +452,7 @@ func (pl *ProgressiveLoader) executeASTQuery(query ASTQuery) error {
 	if pl.indexManager == nil {
 		return fmt.Errorf("ast index unavailable")
 	}
-	tool := tools.NewASTTool(pl.indexManager)
+	tool := platformast.NewASTTool(pl.indexManager)
 	if tool == nil {
 		return fmt.Errorf("cannot create ast tool")
 	}

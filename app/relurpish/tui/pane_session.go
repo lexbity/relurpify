@@ -15,7 +15,7 @@ import (
 type SessionSection int
 
 const (
-	SectionFiles   SessionSection = iota
+	SectionFiles SessionSection = iota
 	SectionChanges
 )
 
@@ -35,11 +35,11 @@ type SessionPane struct {
 	changes   []FileChange
 	changeSel int
 
-	context  *AgentContext
-	session  *Session
-	runtime  RuntimeAdapter
-	width    int
-	height   int
+	context *AgentContext
+	session *Session
+	runtime RuntimeAdapter
+	width   int
+	height  int
 }
 
 // NewSessionPane creates a SessionPane.

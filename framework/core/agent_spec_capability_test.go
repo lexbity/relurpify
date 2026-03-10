@@ -266,6 +266,71 @@ func TestMergeAgentSpecsPreservesInsertionPolicies(t *testing.T) {
 	require.Equal(t, InsertionActionMetadataOnly, merged.InsertionPolicies[1].Action)
 }
 
+func TestMergeAgentSpecsPreservesSessionPolicies(t *testing.T) {
+	base := &AgentRuntimeSpec{
+		SessionPolicies: []SessionPolicy{{
+			ID:      "owner-send",
+			Name:    "Owner Send",
+			Enabled: true,
+			Selector: SessionSelector{
+				Operations: []SessionOperation{SessionOperationSend},
+			},
+			Effect: AgentPermissionAllow,
+		}},
+	}
+	overlay := AgentSpecOverlay{
+		SessionPolicies: []SessionPolicy{{
+			ID:      "inspect-ask",
+			Name:    "Inspect Ask",
+			Enabled: true,
+			Selector: SessionSelector{
+				Operations: []SessionOperation{SessionOperationInspect},
+			},
+			Effect: AgentPermissionAsk,
+		}},
+	}
+
+	merged := MergeAgentSpecs(base, overlay)
+
+	require.Len(t, merged.SessionPolicies, 2)
+	require.Equal(t, "owner-send", merged.SessionPolicies[0].ID)
+	require.Equal(t, "inspect-ask", merged.SessionPolicies[1].ID)
+}
+
+func TestAgentRuntimeSpecValidateRejectsDuplicateSessionPolicyIDs(t *testing.T) {
+	spec := &AgentRuntimeSpec{
+		Mode: AgentModePrimary,
+		Model: AgentModelConfig{
+			Provider: "ollama",
+			Name:     "test",
+		},
+		SessionPolicies: []SessionPolicy{
+			{
+				ID:      "duplicate",
+				Name:    "First",
+				Enabled: true,
+				Selector: SessionSelector{
+					Operations: []SessionOperation{SessionOperationSend},
+				},
+				Effect: AgentPermissionAllow,
+			},
+			{
+				ID:      "duplicate",
+				Name:    "Second",
+				Enabled: true,
+				Selector: SessionSelector{
+					Operations: []SessionOperation{SessionOperationInspect},
+				},
+				Effect: AgentPermissionAsk,
+			},
+		},
+	}
+
+	err := spec.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicates id")
+}
+
 func TestMergeAgentSpecsMergesProvidersByID(t *testing.T) {
 	base := &AgentRuntimeSpec{
 		Providers: []ProviderConfig{

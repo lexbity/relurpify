@@ -20,6 +20,7 @@ type AgentRuntimeSpec struct {
 	CapabilityPolicies  []CapabilityPolicy              `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
 	ExposurePolicies    []CapabilityExposurePolicy      `yaml:"exposure_policies,omitempty" json:"exposure_policies,omitempty"`
 	InsertionPolicies   []CapabilityInsertionPolicy     `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
+	SessionPolicies     []SessionPolicy                 `yaml:"session_policies,omitempty" json:"session_policies,omitempty"`
 	GlobalPolicies      map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
 	ProviderPolicies    map[string]ProviderPolicy       `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
 	Providers           []ProviderConfig                `yaml:"providers,omitempty" json:"providers,omitempty"`
@@ -360,6 +361,16 @@ func (a *AgentRuntimeSpec) Validate() error {
 		if err := ValidateCapabilityInsertionPolicy(policy); err != nil {
 			return fmt.Errorf("insertion_policies[%d] invalid: %w", i, err)
 		}
+	}
+	seenSessionPolicyIDs := make(map[string]struct{}, len(a.SessionPolicies))
+	for i, policy := range a.SessionPolicies {
+		if err := ValidateSessionPolicy(policy); err != nil {
+			return fmt.Errorf("session_policies[%d] invalid: %w", i, err)
+		}
+		if _, exists := seenSessionPolicyIDs[policy.ID]; exists {
+			return fmt.Errorf("session_policies[%d] duplicates id %q", i, policy.ID)
+		}
+		seenSessionPolicyIDs[policy.ID] = struct{}{}
 	}
 	for key, level := range a.GlobalPolicies {
 		if strings.TrimSpace(key) == "" {

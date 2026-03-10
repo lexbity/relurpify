@@ -2,9 +2,10 @@ package testsuite
 
 import (
 	"context"
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"path/filepath"
 	"testing"
 )
@@ -13,7 +14,7 @@ func TestToolRegistryPermissionEnforcement(t *testing.T) {
 	base := t.TempDir()
 	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead, core.FileSystemList)
 	perms.Network = []core.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}
-	manager, err := runtime.NewPermissionManager(base, perms, nil, nil)
+	manager, err := authorization.NewPermissionManager(base, perms, nil, nil)
 	if err != nil {
 		t.Fatalf("manager init failed: %v", err)
 	}
@@ -69,21 +70,21 @@ func TestToolRegistryPermissionEnforcement(t *testing.T) {
 func TestToolRegistryNetworkHITLApproval(t *testing.T) {
 	base := t.TempDir()
 	hitl := &stubHITL{
-		grants: []*runtime.PermissionGrant{{
+		grants: []*authorization.PermissionGrant{{
 			ID: "grant-1",
 			Permission: core.PermissionDescriptor{
 				Type:     core.PermissionTypeNetwork,
 				Action:   "net:egress",
 				Resource: "api.service.local:443",
 			},
-			Scope: runtime.GrantScopeSession,
+			Scope: authorization.GrantScopeSession,
 		}},
 	}
 	perms := core.NewFileSystemPermissionSet(base, core.FileSystemRead)
 	perms.Network = []core.NetworkPermission{
 		{Direction: "egress", Protocol: "tcp", Host: "api.service.local", Port: 443, HITLRequired: true},
 	}
-	manager, err := runtime.NewPermissionManager(base, perms, nil, hitl)
+	manager, err := authorization.NewPermissionManager(base, perms, nil, hitl)
 	if err != nil {
 		t.Fatalf("manager init failed: %v", err)
 	}
@@ -122,19 +123,19 @@ func TestToolRegistryNetworkHITLApproval(t *testing.T) {
 }
 
 type recordingRuntime struct {
-	policies []runtime.SandboxPolicy
+	policies []sandbox.SandboxPolicy
 }
 
 func (r *recordingRuntime) Name() string                     { return "recording" }
 func (r *recordingRuntime) Verify(context.Context) error     { return nil }
-func (r *recordingRuntime) RunConfig() runtime.SandboxConfig { return runtime.SandboxConfig{} }
-func (r *recordingRuntime) EnforcePolicy(policy runtime.SandboxPolicy) error {
+func (r *recordingRuntime) RunConfig() sandbox.SandboxConfig { return sandbox.SandboxConfig{} }
+func (r *recordingRuntime) EnforcePolicy(policy sandbox.SandboxPolicy) error {
 	r.policies = append(r.policies, policy)
 	return nil
 }
-func (r *recordingRuntime) Policy() runtime.SandboxPolicy {
+func (r *recordingRuntime) Policy() sandbox.SandboxPolicy {
 	if len(r.policies) == 0 {
-		return runtime.SandboxPolicy{}
+		return sandbox.SandboxPolicy{}
 	}
 	return r.policies[len(r.policies)-1]
 }
@@ -142,7 +143,7 @@ func (r *recordingRuntime) Policy() runtime.SandboxPolicy {
 type permissionedTool struct {
 	toolName string
 	perms    *core.PermissionSet
-	manager  *runtime.PermissionManager
+	manager  *authorization.PermissionManager
 	agent    string
 	path     string
 	host     string
@@ -177,14 +178,14 @@ func (t *permissionedTool) Permissions() core.ToolPermissions {
 func (t *permissionedTool) Tags() []string { return nil }
 
 type stubHITL struct {
-	grants   []*runtime.PermissionGrant
-	requests []runtime.PermissionRequest
+	grants   []*authorization.PermissionGrant
+	requests []authorization.PermissionRequest
 }
 
-func (s *stubHITL) RequestPermission(ctx context.Context, req runtime.PermissionRequest) (*runtime.PermissionGrant, error) {
+func (s *stubHITL) RequestPermission(ctx context.Context, req authorization.PermissionRequest) (*authorization.PermissionGrant, error) {
 	s.requests = append(s.requests, req)
 	if len(s.grants) == 0 {
-		return &runtime.PermissionGrant{Permission: req.Permission, Scope: runtime.GrantScopeSession}, nil
+		return &authorization.PermissionGrant{Permission: req.Permission, Scope: authorization.GrantScopeSession}, nil
 	}
 	grant := s.grants[0]
 	s.grants = s.grants[1:]

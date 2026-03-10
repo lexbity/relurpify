@@ -14,12 +14,12 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	mclient "github.com/lexcodex/relurpify/framework/mcp/client"
-	"github.com/lexcodex/relurpify/framework/mcp/mapping"
-	"github.com/lexcodex/relurpify/framework/mcp/protocol"
-	mserver "github.com/lexcodex/relurpify/framework/mcp/server"
-	msession "github.com/lexcodex/relurpify/framework/mcp/session"
-	mstdio "github.com/lexcodex/relurpify/framework/mcp/transport/stdio"
+	mclient "github.com/lexcodex/relurpify/framework/middleware/mcp/client"
+	"github.com/lexcodex/relurpify/framework/middleware/mcp/mapping"
+	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	mserver "github.com/lexcodex/relurpify/framework/middleware/mcp/server"
+	msession "github.com/lexcodex/relurpify/framework/middleware/mcp/session"
+	mstdio "github.com/lexcodex/relurpify/framework/middleware/mcp/transport/stdio"
 )
 
 type mcpClientProvider struct {

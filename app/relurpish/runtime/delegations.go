@@ -6,20 +6,21 @@ import (
 	"strings"
 	"time"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/persistence"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
-func (r *Runtime) StartDelegation(ctx context.Context, request core.DelegationRequest, opts fruntime.DelegationStartOptions) (*core.DelegationSnapshot, error) {
+func (r *Runtime) StartDelegation(ctx context.Context, request core.DelegationRequest, opts fauthorization.DelegationStartOptions) (*core.DelegationSnapshot, error) {
 	if r == nil || r.Delegations == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
 	return r.Delegations.StartDelegation(ctx, request, opts)
 }
 
-func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.DelegationRequest, opts fruntime.DelegationExecutionOptions) (*core.DelegationSnapshot, error) {
+func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.DelegationRequest, opts fauthorization.DelegationExecutionOptions) (*core.DelegationSnapshot, error) {
 	if r == nil || r.Delegations == nil || r.Tools == nil {
 		return nil, fmt.Errorf("runtime delegations unavailable")
 	}
@@ -35,7 +36,7 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.Delegation
 		opts.BackgroundRunner = runner
 	}
 	if opts.WorkflowStore == nil && strings.TrimSpace(request.WorkflowID) != "" {
-		store, err := persistence.NewSQLiteWorkflowStateStore(workspacecfg.New(r.Config.Workspace).WorkflowStateFile())
+		store, err := db.NewSQLiteWorkflowStateStore(config.New(r.Config.Workspace).WorkflowStateFile())
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +75,7 @@ func (r *Runtime) SnapshotDelegations() []core.DelegationSnapshot {
 	return r.Delegations.SnapshotDelegations()
 }
 
-func (r *Runtime) PersistDelegations(ctx context.Context, store persistence.WorkflowStateStore, workflowID, runID string) error {
+func (r *Runtime) PersistDelegations(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
 	if r == nil || r.Delegations == nil {
 		return fmt.Errorf("runtime delegations unavailable")
 	}

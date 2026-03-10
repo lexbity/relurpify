@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 )
 
 // Run bootstraps the TUI. This is the public entrypoint called by cmd/start.go.
@@ -37,11 +37,11 @@ func Run(ctx context.Context, rt *runtimesvc.Runtime) error {
 // the value-semantics copy that Bubble Tea makes on every Update call.
 type RootModel struct {
 	// Components (value types — cheap to copy)
-	titleBar     TitleBar
-	tabBar       TabBar
-	notifBar     *NotificationBar
-	inputBar     *InputBar
-	notifQ       *NotificationQueue
+	titleBar TitleBar
+	tabBar   TabBar
+	notifBar *NotificationBar
+	inputBar *InputBar
+	notifQ   *NotificationQueue
 
 	// Panes (pointer types — mutations survive tea.Model value copies)
 	chat     *ChatPane
@@ -189,7 +189,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Notification responses
 	case NotifHITLApproveMsg:
 		cmds := []tea.Cmd{approveHITLRootCmd(m.chat.hitlSvc, msg.ID, msg.Scope)}
-		if msg.Scope == fruntime.GrantScopePersistent {
+		if msg.Scope == fauthorization.GrantScopePersistent {
 			cmds = append(cmds, savePolicyCmd(m.runtime, msg.Action))
 		}
 		return m, tea.Batch(cmds...)

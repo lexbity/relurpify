@@ -2,7 +2,7 @@ package framework_test
 
 import (
 	"context"
-	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,8 +11,8 @@ import (
 func TestLocalCommandRunnerRejectsOutsideWorkspace(t *testing.T) {
 	t.Helper()
 	ws := t.TempDir()
-	runner := runtime.NewLocalCommandRunner(ws, nil)
-	_, _, err := runner.Run(context.Background(), runtime.CommandRequest{
+	runner := sandbox.NewLocalCommandRunner(ws, nil)
+	_, _, err := runner.Run(context.Background(), sandbox.CommandRequest{
 		Workdir: filepath.Join(ws, ".."),
 		Args:    []string{"sh", "-c", "echo hi"},
 	})
@@ -24,8 +24,8 @@ func TestLocalCommandRunnerRejectsOutsideWorkspace(t *testing.T) {
 func TestLocalCommandRunnerRunsCommand(t *testing.T) {
 	t.Helper()
 	ws := t.TempDir()
-	runner := runtime.NewLocalCommandRunner(ws, nil)
-	stdout, _, err := runner.Run(context.Background(), runtime.CommandRequest{
+	runner := sandbox.NewLocalCommandRunner(ws, nil)
+	stdout, _, err := runner.Run(context.Background(), sandbox.CommandRequest{
 		Workdir: ws,
 		Args:    []string{"sh", "-c", "echo hello"},
 	})

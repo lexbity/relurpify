@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/persistence"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/memory"
 )
 
 var ErrSessionNotManaged = errors.New("provider session not managed")
@@ -91,6 +91,44 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 	if r == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
+	if r.Registration != nil && r.Registration.Policy != nil {
+		decision, err := r.Registration.Policy.Evaluate(ctx, core.PolicyRequest{
+			Target:         core.PolicyTargetProvider,
+			Actor:          core.EventActor{Kind: "agent", ID: r.Registration.ID},
+			CapabilityID:   "provider:" + desc.ID + ":activate",
+			CapabilityName: "provider:" + desc.ID + ":activate",
+			ProviderKind:   desc.Kind,
+			ProviderOrigin: desc.Security.Origin,
+			TrustClass:     desc.TrustBaseline,
+		})
+		if err != nil {
+			return err
+		}
+		switch decision.Effect {
+		case "allow":
+			return nil
+		case "deny":
+			return fmt.Errorf("provider %s activation denied by policy", desc.ID)
+		case "require_approval":
+			if r.Registration.Permissions == nil {
+				return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
+			}
+			metadata := map[string]string{
+				"provider_id":   desc.ID,
+				"provider_kind": string(desc.Kind),
+			}
+			if desc.Security.Origin != "" {
+				metadata["provider_origin"] = string(desc.Security.Origin)
+			}
+			return r.Registration.Permissions.RequireApproval(ctx, r.Registration.ID, core.PermissionDescriptor{
+				Type:         core.PermissionTypeCapability,
+				Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
+				Resource:     desc.ID,
+				Metadata:     metadata,
+				RequiresHITL: true,
+			}, fmt.Sprintf("activate provider %s", desc.ID), fauthorization.GrantScopeSession, fauthorization.RiskLevelMedium, 0)
+		}
+	}
 	level := core.AgentPermissionAllow
 	if desc.Security.Origin == core.ProviderOriginRemote || desc.Kind == core.ProviderKindMCPClient || desc.Kind == core.ProviderKindMCPServer {
 		level = core.AgentPermissionAsk
@@ -125,7 +163,7 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 			Resource:     desc.ID,
 			Metadata:     metadata,
 			RequiresHITL: true,
-		}, fmt.Sprintf("activate provider %s", desc.ID), fruntime.GrantScopeSession, fruntime.RiskLevelMedium, 0)
+		}, fmt.Sprintf("activate provider %s", desc.ID), fauthorization.GrantScopeSession, fauthorization.RiskLevelMedium, 0)
 	default:
 		return fmt.Errorf("provider %s activation policy %s invalid", desc.ID, level)
 	}
@@ -275,7 +313,7 @@ func (r *Runtime) CaptureProviderSnapshots(ctx context.Context) ([]core.Provider
 	return providerSnapshots, sessionSnapshots, nil
 }
 
-func (r *Runtime) PersistProviderSnapshots(ctx context.Context, store persistence.WorkflowStateStore, workflowID, runID string) error {
+func (r *Runtime) PersistProviderSnapshots(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
 	if r == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
@@ -286,9 +324,9 @@ func (r *Runtime) PersistProviderSnapshots(ctx context.Context, store persistenc
 	if err != nil {
 		return err
 	}
-	providerRecords := make([]persistence.WorkflowProviderSnapshotRecord, 0, len(providers))
+	providerRecords := make([]memory.WorkflowProviderSnapshotRecord, 0, len(providers))
 	for _, snapshot := range providers {
-		providerRecords = append(providerRecords, persistence.WorkflowProviderSnapshotRecord{
+		providerRecords = append(providerRecords, memory.WorkflowProviderSnapshotRecord{
 			SnapshotID:     providerSnapshotRecordID(snapshot),
 			WorkflowID:     workflowID,
 			RunID:          runID,
@@ -303,9 +341,9 @@ func (r *Runtime) PersistProviderSnapshots(ctx context.Context, store persistenc
 			CapturedAt:     parseProviderSnapshotTime(snapshot.CapturedAt),
 		})
 	}
-	sessionRecords := make([]persistence.WorkflowProviderSessionSnapshotRecord, 0, len(sessions))
+	sessionRecords := make([]memory.WorkflowProviderSessionSnapshotRecord, 0, len(sessions))
 	for _, snapshot := range sessions {
-		sessionRecords = append(sessionRecords, persistence.WorkflowProviderSessionSnapshotRecord{
+		sessionRecords = append(sessionRecords, memory.WorkflowProviderSessionSnapshotRecord{
 			SnapshotID: snapshot.Session.ProviderID + ":" + snapshot.Session.ID,
 			WorkflowID: workflowID,
 			RunID:      runID,

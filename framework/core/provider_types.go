@@ -15,6 +15,7 @@ const (
 	ProviderKindMCPServer    ProviderKind = "mcp-server"
 	ProviderKindAgentRuntime ProviderKind = "agent-runtime"
 	ProviderKindLSP          ProviderKind = "lsp"
+	ProviderKindNodeDevice   ProviderKind = "node-device"
 )
 
 type RecoverabilityMode string
@@ -142,7 +143,7 @@ func (d ProviderDescriptor) Validate() error {
 		return fmt.Errorf("provider id required")
 	}
 	switch d.Kind {
-	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindMCPClient, ProviderKindMCPServer, ProviderKindAgentRuntime, ProviderKindLSP:
+	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindMCPClient, ProviderKindMCPServer, ProviderKindAgentRuntime, ProviderKindLSP, ProviderKindNodeDevice:
 	default:
 		return fmt.Errorf("provider kind %s invalid", d.Kind)
 	}
@@ -167,7 +168,7 @@ func (c ProviderConfig) Validate() error {
 		return fmt.Errorf("provider id required")
 	}
 	switch c.Kind {
-	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindMCPClient, ProviderKindMCPServer, ProviderKindAgentRuntime, ProviderKindLSP:
+	case ProviderKindBuiltin, ProviderKindPlugin, ProviderKindMCPClient, ProviderKindMCPServer, ProviderKindAgentRuntime, ProviderKindLSP, ProviderKindNodeDevice:
 	default:
 		return fmt.Errorf("provider kind %s invalid", c.Kind)
 	}

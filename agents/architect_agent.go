@@ -18,7 +18,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/persistence"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 // ArchitectAgent uses a small-model-friendly workflow:
@@ -226,7 +226,7 @@ func architectPlanningHints(agent *ArchitectAgent) string {
 	return planningHintsForConfig(agent.Config, agent.PlannerTools)
 }
 
-func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *core.Task, state *core.Context, store *persistence.SQLiteWorkflowStateStore) (*core.Result, error) {
+func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *core.Task, state *core.Context, store *db.SQLiteWorkflowStateStore) (*core.Result, error) {
 	workflowID, resumeRequested, err := a.resolveWorkflowIdentity(ctx, task, store)
 	if err != nil {
 		return nil, err
@@ -246,12 +246,12 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 		if resumeRequested {
 			return nil, fmt.Errorf("workflow %s not found for resume", workflowID)
 		}
-		workflow = &persistence.WorkflowRecord{
+		workflow = &memory.WorkflowRecord{
 			WorkflowID:  workflowID,
 			TaskID:      workflowID,
 			TaskType:    task.Type,
 			Instruction: task.Instruction,
-			Status:      persistence.WorkflowRunStatusPending,
+			Status:      memory.WorkflowRunStatusPending,
 			Metadata: map[string]any{
 				"mode": "architect",
 			},
@@ -264,10 +264,10 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 			return nil, err
 		}
 	}
-	if err := store.CreateRun(ctx, persistence.WorkflowRunRecord{
+	if err := store.CreateRun(ctx, memory.WorkflowRunRecord{
 		RunID:          runID,
 		WorkflowID:     workflowID,
-		Status:         persistence.WorkflowRunStatusRunning,
+		Status:         memory.WorkflowRunStatusRunning,
 		AgentName:      "architect",
 		AgentMode:      string(ModeArchitect),
 		RuntimeVersion: "external-state-store-v1",
@@ -294,7 +294,7 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 	state.Set("architect.plan", planRecord.Plan)
 	state.Set("planner.plan", planRecord.Plan)
 
-	if _, err := store.UpdateWorkflowStatus(ctx, workflowID, workflow.Version, persistence.WorkflowRunStatusRunning, workflow.CursorStepID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if _, err := store.UpdateWorkflowStatus(ctx, workflowID, workflow.Version, memory.WorkflowRunStatusRunning, workflow.CursorStepID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 	if err := a.applyReplayDirectives(ctx, task, store, workflowID); err != nil {
@@ -322,7 +322,7 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 			return nil, fmt.Errorf("no ready steps available for workflow %s", workflowID)
 		}
 		step := ready[0]
-		if _, err := store.UpdateWorkflowStatus(ctx, workflowID, 0, persistence.WorkflowRunStatusRunning, step.StepID); err != nil {
+		if _, err := store.UpdateWorkflowStatus(ctx, workflowID, 0, memory.WorkflowRunStatusRunning, step.StepID); err != nil {
 			return nil, err
 		}
 		res, err := a.executeWorkflowStep(ctx, task, state, store, workflowID, runID, planRecord.Plan, step)
@@ -330,8 +330,8 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 			if errors.Is(err, errArchitectNeedsReplan) {
 				return nil, err
 			}
-			_ = store.UpdateRunStatus(ctx, runID, persistence.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
-			_, _ = store.UpdateWorkflowStatus(ctx, workflowID, 0, persistence.WorkflowRunStatusFailed, step.StepID)
+			_ = store.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
+			_, _ = store.UpdateWorkflowStatus(ctx, workflowID, 0, memory.WorkflowRunStatusFailed, step.StepID)
 			return nil, err
 		}
 		lastResult = res
@@ -341,7 +341,7 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 	state.Set("architect.summary", summary)
 	state.Set("architect.workflow_id", workflowID)
 	state.Set("architect.run_id", runID)
-	_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+	_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
 		EventID:    architectRecordID("workflow_done"),
 		WorkflowID: workflowID,
 		RunID:      runID,
@@ -349,8 +349,8 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 		Message:    summary,
 		CreatedAt:  time.Now().UTC(),
 	})
-	_ = store.UpdateRunStatus(ctx, runID, persistence.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))
-	_, _ = store.UpdateWorkflowStatus(ctx, workflowID, 0, persistence.WorkflowRunStatusCompleted, "")
+	_ = store.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))
+	_, _ = store.UpdateWorkflowStatus(ctx, workflowID, 0, memory.WorkflowRunStatusCompleted, "")
 	if lastResult == nil {
 		lastResult = &core.Result{Success: true, Data: map[string]any{}}
 	}
@@ -362,7 +362,7 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 	return lastResult, nil
 }
 
-func (a *ArchitectAgent) planIntoWorkflowStore(ctx context.Context, task *core.Task, state *core.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, runID string) (*persistence.WorkflowPlanRecord, error) {
+func (a *ArchitectAgent) planIntoWorkflowStore(ctx context.Context, task *core.Task, state *core.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID string) (*memory.WorkflowPlanRecord, error) {
 	service := a.planning
 	if service == nil {
 		service = &WorkflowPlanningService{
@@ -379,7 +379,7 @@ func (a *ArchitectAgent) planIntoWorkflowStore(ctx context.Context, task *core.T
 	return &result.PlanRecord, nil
 }
 
-func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Task, state *core.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, runID string, plan core.Plan, step persistence.WorkflowStepRecord) (*core.Result, error) {
+func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Task, state *core.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID string, plan core.Plan, step memory.WorkflowStepRecord) (*core.Result, error) {
 	stepSlice, ok, err := store.LoadStepSlice(ctx, workflowID, step.StepID, 20)
 	if err != nil {
 		return nil, err
@@ -405,10 +405,10 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	state.Set("architect.current_step_id", step.StepID)
 	state.Set("architect.current_step", step.Step)
 	state.Set("architect.last_step_summary", previousSummary)
-	if err := store.UpdateStepStatus(ctx, workflowID, step.StepID, persistence.StepStatusRunning, previousSummary); err != nil {
+	if err := store.UpdateStepStatus(ctx, workflowID, step.StepID, memory.StepStatusRunning, previousSummary); err != nil {
 		return nil, err
 	}
-	_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+	_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
 		EventID:    architectRecordID("step_started"),
 		WorkflowID: workflowID,
 		RunID:      runID,
@@ -422,11 +422,11 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	stepTask := buildWorkflowStepTask(task, plan, stepSlice, previousSummary)
 	result, execErr := a.executor.Execute(ctx, stepTask, stepState)
 	finishedAt := time.Now().UTC()
-	status := persistence.StepStatusCompleted
+	status := memory.StepStatusCompleted
 	summary := summarizeStepResult(step.Step, result)
 	errorText := ""
 	if execErr != nil || result == nil || !result.Success {
-		status = persistence.StepStatusFailed
+		status = memory.StepStatusFailed
 		if execErr != nil {
 			errorText = execErr.Error()
 			summary = execErr.Error()
@@ -435,7 +435,7 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 			summary = "step failed"
 		}
 	}
-	if err := store.CreateStepRun(ctx, persistence.StepRunRecord{
+	if err := store.CreateStepRun(ctx, memory.StepRunRecord{
 		StepRunID:      architectRecordID("step_run"),
 		WorkflowID:     workflowID,
 		RunID:          runID,
@@ -444,7 +444,7 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 		Status:         status,
 		Summary:        summary,
 		ResultData:     resultData(result, errorText),
-		VerificationOK: status == persistence.StepStatusCompleted,
+		VerificationOK: status == memory.StepStatusCompleted,
 		ErrorText:      errorText,
 		StartedAt:      startedAt,
 		FinishedAt:     &finishedAt,
@@ -455,7 +455,7 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	if err := store.UpdateStepStatus(ctx, workflowID, step.StepID, status, summary); err != nil {
 		return nil, err
 	}
-	_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+	_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
 		EventID:    architectRecordID("step_finished"),
 		WorkflowID: workflowID,
 		RunID:      runID,
@@ -465,13 +465,13 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 		CreatedAt:  finishedAt,
 	})
 	artifactPayload := mustJSONForArchitect(resultData(result, errorText))
-	_ = store.UpsertArtifact(ctx, persistence.StepArtifactRecord{
+	_ = store.UpsertArtifact(ctx, memory.StepArtifactRecord{
 		ArtifactID:        architectRecordID("step_artifact"),
 		WorkflowID:        workflowID,
 		StepRunID:         stepRunID,
 		Kind:              "step_result",
 		ContentType:       "application/json",
-		StorageKind:       persistence.ArtifactStorageInline,
+		StorageKind:       memory.ArtifactStorageInline,
 		SummaryText:       summary,
 		InlineRawText:     artifactPayload,
 		RawSizeBytes:      int64(len(artifactPayload)),
@@ -480,24 +480,24 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	})
 	a.persistStepSecurityEvents(ctx, store, workflowID, runID, step.StepID, stepState, result, finishedAt)
 	a.persistStepKnowledge(ctx, store, workflowID, stepRunID, step.StepID, summary, status, stepTask, result, errorText, finishedAt)
-	if status != persistence.StepStatusCompleted {
+	if status != memory.StepStatusCompleted {
 		if nextStepAttempt(ctx, store, workflowID, step.StepID)-1 >= a.stepNeedsReplanThreshold() {
-			if err := store.UpdateStepStatus(ctx, workflowID, step.StepID, persistence.StepStatusNeedsReplan, summary); err == nil {
-				_, _ = store.UpdateWorkflowStatus(ctx, workflowID, 0, persistence.WorkflowRunStatusNeedsReplan, step.StepID)
-				_ = store.UpdateRunStatus(ctx, runID, persistence.WorkflowRunStatusNeedsReplan, timePtr(finishedAt))
-				_ = store.PutKnowledge(ctx, persistence.KnowledgeRecord{
+			if err := store.UpdateStepStatus(ctx, workflowID, step.StepID, memory.StepStatusNeedsReplan, summary); err == nil {
+				_, _ = store.UpdateWorkflowStatus(ctx, workflowID, 0, memory.WorkflowRunStatusNeedsReplan, step.StepID)
+				_ = store.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusNeedsReplan, timePtr(finishedAt))
+				_ = store.PutKnowledge(ctx, memory.KnowledgeRecord{
 					RecordID:   architectRecordID("issue"),
 					WorkflowID: workflowID,
 					StepRunID:  stepRunID,
 					StepID:     step.StepID,
-					Kind:       persistence.KnowledgeKindIssue,
+					Kind:       memory.KnowledgeKindIssue,
 					Title:      "Workflow requires replanning",
 					Content:    summary,
 					Status:     "open",
 					Metadata:   map[string]any{"requires_replan": true},
 					CreatedAt:  finishedAt,
 				})
-				_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+				_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
 					EventID:    architectRecordID("needs_replan"),
 					WorkflowID: workflowID,
 					RunID:      runID,
@@ -530,7 +530,7 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	return result, nil
 }
 
-func (a *ArchitectAgent) resolveWorkflowIdentity(ctx context.Context, task *core.Task, store *persistence.SQLiteWorkflowStateStore) (string, bool, error) {
+func (a *ArchitectAgent) resolveWorkflowIdentity(ctx context.Context, task *core.Task, store *db.SQLiteWorkflowStateStore) (string, bool, error) {
 	if task == nil {
 		return "", false, fmt.Errorf("task required")
 	}
@@ -563,7 +563,7 @@ func (a *ArchitectAgent) workflowStateDBPath() string {
 	return ""
 }
 
-func (a *ArchitectAgent) openWorkflowStateStore() (*persistence.SQLiteWorkflowStateStore, error) {
+func (a *ArchitectAgent) openWorkflowStateStore() (*db.SQLiteWorkflowStateStore, error) {
 	path := a.workflowStateDBPath()
 	if path == "" {
 		return nil, nil
@@ -571,10 +571,10 @@ func (a *ArchitectAgent) openWorkflowStateStore() (*persistence.SQLiteWorkflowSt
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	return persistence.NewSQLiteWorkflowStateStore(path)
+	return db.NewSQLiteWorkflowStateStore(path)
 }
 
-func buildWorkflowStepTask(task *core.Task, plan core.Plan, slice *persistence.WorkflowStepSlice, previousSummary string) *core.Task {
+func buildWorkflowStepTask(task *core.Task, plan core.Plan, slice *memory.WorkflowStepSlice, previousSummary string) *core.Task {
 	step := slice.Step.Step
 	stepTask := core.CloneTask(task)
 	if stepTask == nil {
@@ -602,7 +602,7 @@ func buildWorkflowStepTask(task *core.Task, plan core.Plan, slice *persistence.W
 	return stepTask
 }
 
-func renderExternalStateSlice(slice *persistence.WorkflowStepSlice) string {
+func renderExternalStateSlice(slice *memory.WorkflowStepSlice) string {
 	if slice == nil {
 		return ""
 	}
@@ -649,7 +649,7 @@ func renderExternalStateSlice(slice *persistence.WorkflowStepSlice) string {
 	return mustJSONForArchitect(payload)
 }
 
-func (a *ArchitectAgent) applyReplayDirectives(ctx context.Context, task *core.Task, store *persistence.SQLiteWorkflowStateStore, workflowID string) error {
+func (a *ArchitectAgent) applyReplayDirectives(ctx context.Context, task *core.Task, store *db.SQLiteWorkflowStateStore, workflowID string) error {
 	if task == nil || task.Context == nil {
 		return nil
 	}
@@ -669,8 +669,8 @@ func (a *ArchitectAgent) applyReplayDirectives(ctx context.Context, task *core.T
 	}
 }
 
-func (a *ArchitectAgent) resetReplayFromStep(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, stepID string, includeDependents bool) error {
-	if err := store.UpdateStepStatus(ctx, workflowID, stepID, persistence.StepStatusPending, "queued for replay"); err != nil {
+func (a *ArchitectAgent) resetReplayFromStep(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, stepID string, includeDependents bool) error {
+	if err := store.UpdateStepStatus(ctx, workflowID, stepID, memory.StepStatusPending, "queued for replay"); err != nil {
 		return err
 	}
 	if includeDependents {
@@ -679,12 +679,12 @@ func (a *ArchitectAgent) resetReplayFromStep(ctx context.Context, store *persist
 			return err
 		}
 		for _, record := range invalidations {
-			if err := store.UpdateStepStatus(ctx, workflowID, record.InvalidatedStepID, persistence.StepStatusPending, "queued for replay"); err != nil {
+			if err := store.UpdateStepStatus(ctx, workflowID, record.InvalidatedStepID, memory.StepStatusPending, "queued for replay"); err != nil {
 				return err
 			}
 		}
 	}
-	_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+	_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
 		EventID:    architectRecordID("rerun_requested"),
 		WorkflowID: workflowID,
 		StepID:     stepID,
@@ -695,30 +695,30 @@ func (a *ArchitectAgent) resetReplayFromStep(ctx context.Context, store *persist
 	return nil
 }
 
-func (a *ArchitectAgent) resetInvalidatedSteps(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID string) error {
+func (a *ArchitectAgent) resetInvalidatedSteps(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID string) error {
 	steps, err := store.ListSteps(ctx, workflowID)
 	if err != nil {
 		return err
 	}
 	for _, step := range steps {
-		if step.Status != persistence.StepStatusInvalidated {
+		if step.Status != memory.StepStatusInvalidated {
 			continue
 		}
-		if err := store.UpdateStepStatus(ctx, workflowID, step.StepID, persistence.StepStatusPending, "queued for replay"); err != nil {
+		if err := store.UpdateStepStatus(ctx, workflowID, step.StepID, memory.StepStatusPending, "queued for replay"); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (a *ArchitectAgent) persistStepKnowledge(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, stepRunID, stepID, summary string, status persistence.StepStatus, stepTask *core.Task, result *core.Result, errorText string, createdAt time.Time) {
-	if status == persistence.StepStatusCompleted {
-		_ = store.PutKnowledge(ctx, persistence.KnowledgeRecord{
+func (a *ArchitectAgent) persistStepKnowledge(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, stepRunID, stepID, summary string, status memory.StepStatus, stepTask *core.Task, result *core.Result, errorText string, createdAt time.Time) {
+	if status == memory.StepStatusCompleted {
+		_ = store.PutKnowledge(ctx, memory.KnowledgeRecord{
 			RecordID:   architectRecordID("fact"),
 			WorkflowID: workflowID,
 			StepRunID:  stepRunID,
 			StepID:     stepID,
-			Kind:       persistence.KnowledgeKindFact,
+			Kind:       memory.KnowledgeKindFact,
 			Title:      "Completed step result",
 			Content:    summary,
 			Status:     "accepted",
@@ -726,12 +726,12 @@ func (a *ArchitectAgent) persistStepKnowledge(ctx context.Context, store *persis
 		})
 		if stepTask != nil && stepTask.Context != nil {
 			if previous := strings.TrimSpace(fmt.Sprint(stepTask.Context["previous_step_result"])); previous != "" {
-				_ = store.PutKnowledge(ctx, persistence.KnowledgeRecord{
+				_ = store.PutKnowledge(ctx, memory.KnowledgeRecord{
 					RecordID:   architectRecordID("decision"),
 					WorkflowID: workflowID,
 					StepRunID:  stepRunID,
 					StepID:     stepID,
-					Kind:       persistence.KnowledgeKindDecision,
+					Kind:       memory.KnowledgeKindDecision,
 					Title:      "Step constraint",
 					Content:    previous,
 					Status:     "accepted",
@@ -742,12 +742,12 @@ func (a *ArchitectAgent) persistStepKnowledge(ctx context.Context, store *persis
 		}
 		if result != nil && result.Data != nil {
 			if text := strings.TrimSpace(fmt.Sprint(result.Data["text"])); text != "" && text != "<nil>" {
-				_ = store.PutKnowledge(ctx, persistence.KnowledgeRecord{
+				_ = store.PutKnowledge(ctx, memory.KnowledgeRecord{
 					RecordID:   architectRecordID("fact"),
 					WorkflowID: workflowID,
 					StepRunID:  stepRunID,
 					StepID:     stepID,
-					Kind:       persistence.KnowledgeKindFact,
+					Kind:       memory.KnowledgeKindFact,
 					Title:      "Execution text",
 					Content:    text,
 					Status:     "accepted",
@@ -761,12 +761,12 @@ func (a *ArchitectAgent) persistStepKnowledge(ctx context.Context, store *persis
 	if strings.TrimSpace(errorText) != "" {
 		content = errorText
 	}
-	_ = store.PutKnowledge(ctx, persistence.KnowledgeRecord{
+	_ = store.PutKnowledge(ctx, memory.KnowledgeRecord{
 		RecordID:   architectRecordID("issue"),
 		WorkflowID: workflowID,
 		StepRunID:  stepRunID,
 		StepID:     stepID,
-		Kind:       persistence.KnowledgeKindIssue,
+		Kind:       memory.KnowledgeKindIssue,
 		Title:      "Step failure",
 		Content:    content,
 		Status:     "open",
@@ -781,7 +781,7 @@ func (a *ArchitectAgent) stepNeedsReplanThreshold() int {
 	return 3
 }
 
-func knowledgeContents(records []persistence.KnowledgeRecord) []string {
+func knowledgeContents(records []memory.KnowledgeRecord) []string {
 	out := make([]string, 0, len(records))
 	for _, record := range records {
 		text := strings.TrimSpace(record.Content)
@@ -793,29 +793,29 @@ func knowledgeContents(records []persistence.KnowledgeRecord) []string {
 	return out
 }
 
-func completedStepsFromRecords(steps []persistence.WorkflowStepRecord) []string {
+func completedStepsFromRecords(steps []memory.WorkflowStepRecord) []string {
 	out := make([]string, 0, len(steps))
 	for _, step := range steps {
-		if step.Status == persistence.StepStatusCompleted {
+		if step.Status == memory.StepStatusCompleted {
 			out = append(out, step.StepID)
 		}
 	}
 	return out
 }
 
-func allStepsTerminal(steps []persistence.WorkflowStepRecord) bool {
+func allStepsTerminal(steps []memory.WorkflowStepRecord) bool {
 	if len(steps) == 0 {
 		return true
 	}
 	for _, step := range steps {
-		if step.Status == persistence.StepStatusPending || step.Status == persistence.StepStatusRunning {
+		if step.Status == memory.StepStatusPending || step.Status == memory.StepStatusRunning {
 			return false
 		}
 	}
 	return true
 }
 
-func dependencySummary(runs []persistence.StepRunRecord) string {
+func dependencySummary(runs []memory.StepRunRecord) string {
 	if len(runs) == 0 {
 		return ""
 	}
@@ -829,7 +829,7 @@ func dependencySummary(runs []persistence.StepRunRecord) string {
 	return strings.Join(parts, "\n")
 }
 
-func nextStepAttempt(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, stepID string) int {
+func nextStepAttempt(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, stepID string) int {
 	runs, err := store.ListStepRuns(ctx, workflowID, stepID)
 	if err != nil || len(runs) == 0 {
 		return 1
@@ -837,7 +837,7 @@ func nextStepAttempt(ctx context.Context, store *persistence.SQLiteWorkflowState
 	return runs[len(runs)-1].Attempt + 1
 }
 
-func latestStepRunID(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, stepID string) string {
+func latestStepRunID(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, stepID string) string {
 	runs, err := store.ListStepRuns(ctx, workflowID, stepID)
 	if err != nil || len(runs) == 0 {
 		return ""
@@ -1111,7 +1111,7 @@ func countRecoveryMatches(raw any) int {
 	}
 }
 
-func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, runID, stepID string, stepState *core.Context, result *core.Result, createdAt time.Time) {
+func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID, stepID string, stepState *core.Context, result *core.Result, createdAt time.Time) {
 	if store == nil {
 		return
 	}
@@ -1146,7 +1146,7 @@ func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *p
 		if strings.TrimSpace(last.Tool) == "" {
 			return
 		}
-		_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+		_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
 			EventID:    architectRecordID("security_event"),
 			WorkflowID: workflowID,
 			RunID:      runID,
@@ -1186,7 +1186,7 @@ func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *p
 	if envelope.Approval != nil && envelope.Approval.TargetResource != "" {
 		metadata["target_resource"] = envelope.Approval.TargetResource
 	}
-	_ = store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+	_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
 		EventID:    architectRecordID("security_event"),
 		WorkflowID: workflowID,
 		RunID:      runID,

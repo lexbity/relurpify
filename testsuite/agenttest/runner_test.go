@@ -7,12 +7,12 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/config"
 )
 
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
-	manifest := workspacecfg.New(workspace).ManifestFile()
+	manifest := config.New(workspace).ManifestFile()
 	if err := os.MkdirAll(filepath.Dir(manifest), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestApplyCaseControlFlowOverrideSetsCodingMode(t *testing.T) {
 }
 
 func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
-	workflowStateRel := filepath.ToSlash(filepath.Join(workspacecfg.DirName, "sessions", "workflow_state.db"))
+	workflowStateRel := filepath.ToSlash(filepath.Join(config.DirName, "sessions", "workflow_state.db"))
 	before := &WorkspaceSnapshot{
 		Files: map[string]string{
 			workflowStateRel: "before",

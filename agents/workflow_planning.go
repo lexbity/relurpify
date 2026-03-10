@@ -11,14 +11,15 @@ import (
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/persistence"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 // WorkflowPlanningResult captures the durable outputs of the planning phase so
 // architect execution can reuse them without rebuilding ad hoc state.
 type WorkflowPlanningResult struct {
-	PlanRecord        persistence.WorkflowPlanRecord
+	PlanRecord        memory.WorkflowPlanRecord
 	PlannerOutput     map[string]any
 	PlanAdjustments   []string
 	SelectedCandidate string
@@ -33,7 +34,7 @@ type WorkflowPlanningService struct {
 	Config       *core.Config
 }
 
-func (s *WorkflowPlanningService) PlanAndPersist(ctx context.Context, task *core.Task, state *core.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, runID string) (*WorkflowPlanningResult, error) {
+func (s *WorkflowPlanningService) PlanAndPersist(ctx context.Context, task *core.Task, state *core.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID string) (*WorkflowPlanningResult, error) {
 	if task == nil {
 		return nil, fmt.Errorf("task required")
 	}
@@ -75,7 +76,7 @@ func (s *WorkflowPlanningService) PlanAndPersist(ctx context.Context, task *core
 		return nil, err
 	}
 
-	record := persistence.WorkflowPlanRecord{
+	record := memory.WorkflowPlanRecord{
 		PlanID:     architectRecordID("plan"),
 		WorkflowID: workflowID,
 		RunID:      runID,
@@ -136,20 +137,20 @@ func (s *WorkflowPlanningService) applyPlanningState(state *core.Context, result
 	}
 }
 
-func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID, runID string, result *WorkflowPlanningResult) error {
+func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID string, result *WorkflowPlanningResult) error {
 	now := time.Now().UTC()
 	if result == nil {
 		return nil
 	}
 	if result.PlannerOutput != nil {
 		payload := mustJSONForArchitect(result.PlannerOutput)
-		if err := store.UpsertWorkflowArtifact(ctx, persistence.WorkflowArtifactRecord{
+		if err := store.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
 			ArtifactID:        architectRecordID("planner_artifact"),
 			WorkflowID:        workflowID,
 			RunID:             runID,
 			Kind:              "planner_output",
 			ContentType:       "application/json",
-			StorageKind:       persistence.ArtifactStorageInline,
+			StorageKind:       memory.ArtifactStorageInline,
 			SummaryText:       fmt.Sprintf("Planned %d steps.", len(result.PlanRecord.Plan.Steps)),
 			SummaryMetadata:   map[string]any{"plan_id": result.PlanRecord.PlanID},
 			InlineRawText:     payload,
@@ -164,13 +165,13 @@ func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, 
 		payload := mustJSONForArchitect(map[string]any{
 			"selected_candidate": result.SelectedCandidate,
 		})
-		if err := store.UpsertWorkflowArtifact(ctx, persistence.WorkflowArtifactRecord{
+		if err := store.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
 			ArtifactID:        architectRecordID("candidate_artifact"),
 			WorkflowID:        workflowID,
 			RunID:             runID,
 			Kind:              "candidate_selection",
 			ContentType:       "application/json",
-			StorageKind:       persistence.ArtifactStorageInline,
+			StorageKind:       memory.ArtifactStorageInline,
 			SummaryText:       "Selected candidate approach for workflow planning.",
 			InlineRawText:     payload,
 			RawSizeBytes:      int64(len(payload)),
@@ -180,7 +181,7 @@ func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, 
 			return err
 		}
 	}
-	return store.AppendEvent(ctx, persistence.WorkflowEventRecord{
+	return store.AppendEvent(ctx, memory.WorkflowEventRecord{
 		EventID:    architectRecordID("plan_created"),
 		WorkflowID: workflowID,
 		RunID:      runID,
@@ -195,14 +196,14 @@ func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, 
 	})
 }
 
-func (s *WorkflowPlanningService) persistPlanningKnowledge(ctx context.Context, store *persistence.SQLiteWorkflowStateStore, workflowID string, result *WorkflowPlanningResult) error {
+func (s *WorkflowPlanningService) persistPlanningKnowledge(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID string, result *WorkflowPlanningResult) error {
 	if result == nil || strings.TrimSpace(result.SelectedCandidate) == "" {
 		return nil
 	}
-	return store.PutKnowledge(ctx, persistence.KnowledgeRecord{
+	return store.PutKnowledge(ctx, memory.KnowledgeRecord{
 		RecordID:   architectRecordID("decision"),
 		WorkflowID: workflowID,
-		Kind:       persistence.KnowledgeKindDecision,
+		Kind:       memory.KnowledgeKindDecision,
 		Title:      "Selected candidate approach",
 		Content:    result.SelectedCandidate,
 		Status:     "accepted",

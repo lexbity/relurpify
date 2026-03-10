@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
-	mstdio "github.com/lexcodex/relurpify/framework/mcp/transport/stdio"
-	"github.com/lexcodex/relurpify/framework/persistence"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
+	mstdio "github.com/lexcodex/relurpify/framework/middleware/mcp/transport/stdio"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,7 @@ func (t *delegationRecordingTelemetry) Emit(event core.Event) {
 
 func TestRuntimeDelegationWrappers(t *testing.T) {
 	rt := &Runtime{
-		Delegations: fruntime.NewDelegationManager(),
+		Delegations: fauthorization.NewDelegationManager(),
 	}
 
 	started, err := rt.StartDelegation(context.Background(), core.DelegationRequest{
@@ -34,7 +35,7 @@ func TestRuntimeDelegationWrappers(t *testing.T) {
 		TargetCapabilityID: "agent:planner",
 		TaskType:           "plan",
 		Instruction:        "Create a plan",
-	}, fruntime.DelegationStartOptions{})
+	}, fauthorization.DelegationStartOptions{})
 	require.NoError(t, err)
 	require.Equal(t, core.DelegationStateRunning, started.State)
 
@@ -52,23 +53,23 @@ func TestRuntimeDelegationWrappers(t *testing.T) {
 
 func TestRuntimePersistDelegations(t *testing.T) {
 	rt := &Runtime{
-		Delegations: fruntime.NewDelegationManager(),
+		Delegations: fauthorization.NewDelegationManager(),
 	}
-	store, err := persistence.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow_state.db"))
+	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow_state.db"))
 	require.NoError(t, err)
 	defer store.Close()
 
 	ctx := context.Background()
-	require.NoError(t, store.CreateWorkflow(ctx, persistence.WorkflowRecord{
+	require.NoError(t, store.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "workflow-1",
 		TaskID:      "task-1",
 		TaskType:    core.TaskTypeCodeModification,
 		Instruction: "persist runtime delegations",
 	}))
-	require.NoError(t, store.CreateRun(ctx, persistence.WorkflowRunRecord{
+	require.NoError(t, store.CreateRun(ctx, memory.WorkflowRunRecord{
 		RunID:      "run-1",
 		WorkflowID: "workflow-1",
-		Status:     persistence.WorkflowRunStatusRunning,
+		Status:     memory.WorkflowRunStatusRunning,
 	}))
 	_, err = rt.StartDelegation(ctx, core.DelegationRequest{
 		ID:                 "delegation-1",
@@ -77,7 +78,7 @@ func TestRuntimePersistDelegations(t *testing.T) {
 		TargetCapabilityID: "agent:planner",
 		TaskType:           "plan",
 		Instruction:        "Create a plan",
-	}, fruntime.DelegationStartOptions{})
+	}, fauthorization.DelegationStartOptions{})
 	require.NoError(t, err)
 
 	require.NoError(t, rt.PersistDelegations(ctx, store, "workflow-1", "run-1"))
@@ -123,7 +124,7 @@ func TestRuntimeExecuteDelegationUsesRuntimeRegistryAndContext(t *testing.T) {
 		Config:      Config{Workspace: t.TempDir()},
 		Tools:       registry,
 		Context:     core.NewContext(),
-		Delegations: fruntime.NewDelegationManager(),
+		Delegations: fauthorization.NewDelegationManager(),
 		AgentSpec: &core.AgentRuntimeSpec{
 			Mode:  core.AgentModePrimary,
 			Model: core.AgentModelConfig{Name: "stub", Provider: "test"},
@@ -142,7 +143,7 @@ func TestRuntimeExecuteDelegationUsesRuntimeRegistryAndContext(t *testing.T) {
 		ID:          "delegation-rt-1",
 		TaskType:    "plan",
 		Instruction: "Plan runtime work",
-	}, fruntime.DelegationExecutionOptions{})
+	}, fauthorization.DelegationExecutionOptions{})
 	require.NoError(t, err)
 	require.Equal(t, core.DelegationStateSucceeded, snapshot.State)
 	require.Equal(t, "relurpic:planner.plan", snapshot.Request.TargetCapabilityID)
@@ -188,7 +189,7 @@ func TestRuntimeExecuteDelegationBackgroundUsesProviderBackedSession(t *testing.
 		Config:      Config{Workspace: t.TempDir()},
 		Tools:       registry,
 		Context:     core.NewContext(),
-		Delegations: fruntime.NewDelegationManager(),
+		Delegations: fauthorization.NewDelegationManager(),
 		AgentSpec: &core.AgentRuntimeSpec{
 			Mode:  core.AgentModePrimary,
 			Model: core.AgentModelConfig{Name: "stub", Provider: "test"},
@@ -213,7 +214,7 @@ func TestRuntimeExecuteDelegationBackgroundUsesProviderBackedSession(t *testing.
 		Metadata: map[string]any{
 			"background": true,
 		},
-	}, fruntime.DelegationExecutionOptions{})
+	}, fauthorization.DelegationExecutionOptions{})
 	require.NoError(t, err)
 	require.Equal(t, core.DelegationStateRunning, snapshot.State)
 	require.Equal(t, backgroundDelegationProviderID, snapshot.Request.TargetProviderID)
@@ -243,7 +244,7 @@ func TestRuntimeExecuteDelegationUsesImportedMCPRemoteCoordinationService(t *tes
 		Config:      Config{Workspace: t.TempDir()},
 		Tools:       registry,
 		Context:     core.NewContext(),
-		Delegations: fruntime.NewDelegationManager(),
+		Delegations: fauthorization.NewDelegationManager(),
 		AgentSpec: &core.AgentRuntimeSpec{
 			Mode:  core.AgentModePrimary,
 			Model: core.AgentModelConfig{Name: "stub", Provider: "test"},
@@ -283,7 +284,7 @@ func TestRuntimeExecuteDelegationUsesImportedMCPRemoteCoordinationService(t *tes
 		TaskType:           "review",
 		Instruction:        "Review via MCP",
 		TargetCapabilityID: "mcp:remote-mcp:tool:remote.echo",
-	}, fruntime.DelegationExecutionOptions{})
+	}, fauthorization.DelegationExecutionOptions{})
 	require.NoError(t, err)
 	require.Equal(t, core.DelegationStateSucceeded, snapshot.State)
 	require.Equal(t, "remote-mcp", snapshot.Request.TargetProviderID)
@@ -326,14 +327,14 @@ func TestRuntimeDelegationObserverEmitsTelemetryAndAudit(t *testing.T) {
 		}),
 	}))
 	telemetry := &delegationRecordingTelemetry{}
-	audit := fruntime.NewInMemoryAuditLogger(10)
-	manager := fruntime.NewDelegationManager()
+	audit := core.NewInMemoryAuditLogger(10)
+	manager := fauthorization.NewDelegationManager()
 	rt := &Runtime{
 		Tools:       registry,
 		Context:     core.NewContext(),
 		Delegations: manager,
 		Telemetry:   telemetry,
-		Registration: &fruntime.AgentRegistration{
+		Registration: &fauthorization.AgentRegistration{
 			ID:       "coding",
 			Audit:    audit,
 			Manifest: &manifest.AgentManifest{},
@@ -357,7 +358,7 @@ func TestRuntimeDelegationObserverEmitsTelemetryAndAudit(t *testing.T) {
 		TaskID:      "task-1",
 		TaskType:    "plan",
 		Instruction: "Plan with telemetry",
-	}, fruntime.DelegationExecutionOptions{})
+	}, fauthorization.DelegationExecutionOptions{})
 	require.NoError(t, err)
 
 	require.Len(t, telemetry.events, 2)

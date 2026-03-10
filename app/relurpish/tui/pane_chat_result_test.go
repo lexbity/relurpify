@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 )
 
 func TestStructuredResultFromCoreUsesCapabilityEnvelope(t *testing.T) {
@@ -116,11 +116,11 @@ func TestRenderMessageIncludesStructuredResultDetails(t *testing.T) {
 }
 
 func TestNotificationBarViewIncludesApprovalDetails(t *testing.T) {
-	req := &fruntime.PermissionRequest{
+	req := &fauthorization.PermissionRequest{
 		ID:            "hitl-structured",
 		Permission:    core.PermissionDescriptor{Action: "provider:connect", Resource: "mcp://peer", Metadata: map[string]string{"approval_kind": "provider_operation", "provider_id": "mcp-client"}},
 		Justification: "connect remote peer",
-		Risk:          fruntime.RiskLevelHigh,
+		Risk:          fauthorization.RiskLevelHigh,
 	}
 
 	queue := &NotificationQueue{}

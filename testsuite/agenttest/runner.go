@@ -17,15 +17,16 @@ import (
 	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/framework/ast"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
-	"github.com/lexcodex/relurpify/llm"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 type RunOptions struct {
@@ -97,7 +98,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if err != nil {
 		return nil, err
 	}
-	workspacePaths := workspacecfg.New(targetWorkspace)
+	workspacePaths := config.New(targetWorkspace)
 	runID := time.Now().UTC().Format("20060102-150405")
 	outDir := opts.OutputDir
 	if outDir == "" {
@@ -476,7 +477,7 @@ func fallbackManifestPath(manifestPath, workspace string) string {
 	if workspace == "" {
 		return manifestPath
 	}
-	paths := workspacecfg.New(workspace)
+	paths := config.New(workspace)
 	candidates := []string{
 		paths.ManifestFile(),
 	}
@@ -557,18 +558,18 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 	}
 
 	audit := core.NewInMemoryAuditLogger(512)
-	hitl := fruntime.NewHITLBroker(30 * time.Second)
+	hitl := fauthorization.NewHITLBroker(30 * time.Second)
 	// Auto-approve all HITL requests in test runs — there is no human operator.
 	hitlEvents, hitlCancel := hitl.Subscribe(32)
 	go func() {
 		defer hitlCancel()
 		for event := range hitlEvents {
-			if event.Type == fruntime.HITLEventRequested && event.Request != nil {
-				_ = hitl.Approve(fruntime.PermissionDecision{
+			if event.Type == fauthorization.HITLEventRequested && event.Request != nil {
+				_ = hitl.Approve(fauthorization.PermissionDecision{
 					RequestID:  event.Request.ID,
 					Approved:   true,
 					ApprovedBy: "agenttest-auto",
-					Scope:      fruntime.GrantScopeSession,
+					Scope:      fauthorization.GrantScopeSession,
 				})
 			}
 		}
@@ -578,14 +579,14 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		return nil, nil, err
 	}
 	agentManifest.Spec.Permissions = effectivePerms
-	permMgr, err := fruntime.NewPermissionManager(workspace, &agentManifest.Spec.Permissions, audit, hitl)
+	permMgr, err := fauthorization.NewPermissionManager(workspace, &agentManifest.Spec.Permissions, audit, hitl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var runner fruntime.CommandRunner
+	var runner fsandbox.CommandRunner
 	if opts.Sandbox {
-		reg, err := fruntime.RegisterAgent(context.Background(), fruntime.RuntimeConfig{
+		reg, err := fauthorization.RegisterAgent(context.Background(), fauthorization.RuntimeConfig{
 			ManifestPath: manifestPath,
 			Sandbox:      appruntime.DefaultConfig().Sandbox,
 			AuditLimit:   512,
@@ -595,13 +596,13 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		if err != nil {
 			return nil, nil, err
 		}
-		runner, err = fruntime.NewSandboxCommandRunner(reg.Manifest, reg.Runtime, workspace)
+		runner, err = fsandbox.NewSandboxCommandRunner(reg.Manifest, reg.Runtime, workspace)
 		if err != nil {
 			return nil, nil, err
 		}
 		permMgr = reg.Permissions
 	} else {
-		runner = fruntime.NewLocalCommandRunner(workspace, extraEnv)
+		runner = fsandbox.NewLocalCommandRunner(workspace, extraEnv)
 	}
 
 	registry, indexManager, err := appruntime.BuildCapabilityRegistry(workspace, runner, appruntime.CapabilityRegistryOptions{
@@ -617,7 +618,7 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 	registry.UsePermissionManager(agentManifest.Metadata.Name, permMgr)
 	registry.UseAgentSpec(agentManifest.Metadata.Name, agentSpec)
 
-	paths := workspacecfg.New(workspace)
+	paths := config.New(workspace)
 	memory, err := memory.NewHybridMemory(paths.MemoryDir())
 	if err != nil {
 		return nil, nil, err
@@ -796,7 +797,7 @@ func (t *aliasTool) Permissions() core.ToolPermissions {
 func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
 func instantiateAgentByName(workspace, name string, model core.LanguageModel, tools *capability.Registry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
-	paths := workspacecfg.New(workspace)
+	paths := config.New(workspace)
 	checkpointPath := paths.CheckpointsDir()
 	workflowStatePath := paths.WorkflowStateFile()
 	switch strings.ToLower(name) {

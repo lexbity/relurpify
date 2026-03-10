@@ -11,8 +11,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 )
 
 // chatSystemMsg is an internal message to add a system line to the chat feed.
@@ -28,7 +28,7 @@ type ChatPane struct {
 	context    *AgentContext
 	session    *Session
 	notifQ     *NotificationQueue
-	hitlCh     <-chan fruntime.HITLEvent
+	hitlCh     <-chan fauthorization.HITLEvent
 	hitlOff    func()
 	hitlSvc    hitlService
 	runtime    RuntimeAdapter
@@ -45,7 +45,7 @@ func NewChatPane(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *No
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
-	var hitlCh <-chan fruntime.HITLEvent
+	var hitlCh <-chan fauthorization.HITLEvent
 	var hitlOff func()
 	if rt != nil {
 		hitlCh, hitlOff = rt.SubscribeHITL()
@@ -431,12 +431,12 @@ func (p *ChatPane) handleUpdateTask(msg UpdateTaskMsg) (*ChatPane, tea.Cmd) {
 
 func (p *ChatPane) handleHITLEvent(msg hitlEventMsg) (*ChatPane, tea.Cmd) {
 	next := listenHITLEvents(p.hitlCh)
-	var pending []*fruntime.PermissionRequest
+	var pending []*fauthorization.PermissionRequest
 	if p.hitlSvc != nil {
 		pending = p.hitlSvc.PendingHITL()
 	}
 	switch msg.event.Type {
-	case fruntime.HITLEventRequested:
+	case fauthorization.HITLEventRequested:
 		req := msg.event.Request
 		if req == nil && len(pending) > 0 {
 			req = pending[0]
@@ -444,11 +444,11 @@ func (p *ChatPane) handleHITLEvent(msg hitlEventMsg) (*ChatPane, tea.Cmd) {
 		if req != nil && p.notifQ != nil {
 			p.notifQ.PushHITL(req)
 		}
-	case fruntime.HITLEventResolved, fruntime.HITLEventExpired:
+	case fauthorization.HITLEventResolved, fauthorization.HITLEventExpired:
 		if msg.event.Request != nil && p.notifQ != nil {
 			p.notifQ.Resolve(msg.event.Request.ID)
 		}
-		if msg.event.Type == fruntime.HITLEventExpired && msg.event.Request != nil {
+		if msg.event.Type == fauthorization.HITLEventExpired && msg.event.Request != nil {
 			reason := msg.event.Error
 			if reason == "" {
 				reason = "expired"

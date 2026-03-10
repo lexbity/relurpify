@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/config"
 )
 
 func TestSnapshotAndDiffWorkspace(t *testing.T) {
@@ -55,7 +55,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	shared := t.TempDir()
 	t.Setenv("RELURPIFY_SHARED_DIR", shared)
 
-	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", workspacecfg.DirName)
+	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", config.DirName)
 	agentTemplate := filepath.Join(shared, "templates", "agents", "coding-go.yaml")
 	for _, dir := range []string{profileRoot, filepath.Dir(agentTemplate)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -76,10 +76,10 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("workspace"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(target, workspacecfg.DirName), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(target, config.DirName), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, workspacecfg.DirName, "config.yaml"), []byte("model: live\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, config.DirName, "config.yaml"), []byte("model: live\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,9 +88,9 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 		target,
 		derived,
 		"default",
-		filepath.ToSlash(filepath.Join(workspacecfg.DirName, "agents", "coding-go.yaml")),
+		filepath.ToSlash(filepath.Join(config.DirName, "agents", "coding-go.yaml")),
 		nil,
-		[]SetupFileSpec{{Path: filepath.ToSlash(filepath.Join(workspacecfg.DirName, "config.yaml")), Content: "model: override\n"}},
+		[]SetupFileSpec{{Path: filepath.ToSlash(filepath.Join(config.DirName, "config.yaml")), Content: "model: override\n"}},
 	)
 	if err != nil {
 		t.Fatalf("MaterializeDerivedWorkspace() error = %v", err)
@@ -99,7 +99,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if _, err := os.Stat(filepath.Join(derived, "README.md")); err != nil {
 		t.Fatalf("expected copied workspace file: %v", err)
 	}
-	configPath := filepath.Join(derived, workspacecfg.DirName, "config.yaml")
+	configPath := filepath.Join(derived, config.DirName, "config.yaml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read derived config: %v", err)
@@ -107,7 +107,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if string(configData) != "model: override\n" {
 		t.Fatalf("derived config = %q", string(configData))
 	}
-	agentPath := filepath.Join(derived, workspacecfg.DirName, "agents", "coding-go.yaml")
+	agentPath := filepath.Join(derived, config.DirName, "agents", "coding-go.yaml")
 	agentData, err := os.ReadFile(agentPath)
 	if err != nil {
 		t.Fatalf("read derived agent: %v", err)
@@ -115,7 +115,7 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	if string(agentData) != "path: "+filepath.ToSlash(derived)+"\n" {
 		t.Fatalf("derived agent = %q", string(agentData))
 	}
-	if _, err := os.Stat(filepath.Join(derived, workspacecfg.DirName, "logs")); err != nil {
+	if _, err := os.Stat(filepath.Join(derived, config.DirName, "logs")); err != nil {
 		t.Fatalf("expected derived logs dir: %v", err)
 	}
 }

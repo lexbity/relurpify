@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/lexcodex/relurpify/agents/stages"
 	"github.com/lexcodex/relurpify/framework/ast"
@@ -115,6 +116,7 @@ func (a *CodingAgent) Execute(ctx context.Context, task *core.Task, state *core.
 	if task == nil {
 		return nil, fmt.Errorf("task required")
 	}
+	a.emitRunEvent(core.EventAgentStart, task, profile.Name, "coding agent run started", nil)
 	enriched := *task
 	enriched.Context = cloneContext(task.Context)
 	enriched.Context["user_instruction"] = task.Instruction
@@ -127,6 +129,10 @@ func (a *CodingAgent) Execute(ctx context.Context, task *core.Task, state *core.
 	state.Set("coding_agent.mode", profile.Name)
 	result, err := delegate.Execute(ctx, &enriched, state)
 	if err != nil {
+		a.emitRunEvent(core.EventAgentFinish, task, profile.Name, "coding agent run failed", map[string]any{
+			"status": "failed",
+			"error":  err.Error(),
+		})
 		return nil, err
 	}
 	if final, ok := state.Get("react.final_output"); ok {
@@ -141,7 +147,38 @@ func (a *CodingAgent) Execute(ctx context.Context, task *core.Task, state *core.
 		}
 		result.Data["final_output"] = final
 	}
+	a.emitRunEvent(core.EventAgentFinish, task, profile.Name, "coding agent run completed", map[string]any{
+		"status":  "completed",
+		"success": result.Success,
+	})
 	return result, nil
+}
+
+func (a *CodingAgent) emitRunEvent(eventType core.EventType, task *core.Task, mode Mode, message string, metadata map[string]any) {
+	if a == nil || a.Config == nil || a.Config.Telemetry == nil {
+		return
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadata["mode"] = string(mode)
+	if task != nil {
+		metadata["task_type"] = task.Type
+	}
+	a.Config.Telemetry.Emit(core.Event{
+		Type:      eventType,
+		TaskID:    taskID(task),
+		Message:   message,
+		Timestamp: time.Now().UTC(),
+		Metadata:  metadata,
+	})
+}
+
+func taskID(task *core.Task) string {
+	if task == nil {
+		return ""
+	}
+	return task.ID
 }
 
 // modeFromTask inspects task metadata/context to decide which mode should own

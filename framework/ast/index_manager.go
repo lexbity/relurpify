@@ -24,7 +24,7 @@ type IndexConfig struct {
 	IgnorePatterns    []string
 }
 
-// IndexManager orchestrates parsing and persistence.
+// IndexManager orchestrates parsing and memory.
 type IndexManager struct {
 	store            IndexStore
 	parserRegistry   *ParserRegistry

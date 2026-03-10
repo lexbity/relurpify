@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/templates"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
 )
 
 // DependencyStatus captures one local dependency check.
@@ -57,7 +57,7 @@ func (r DoctorReport) NeedsInitialization() bool {
 // BuildDoctorReport checks workspace state and local runtime dependencies
 // without requiring the runtime to start successfully.
 func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
-	paths := workspacecfg.New(cfg.Workspace)
+	paths := config.New(cfg.Workspace)
 	report := DoctorReport{
 		Workspace:  cfg.Workspace,
 		ConfigRoot: paths.ConfigRoot(),
@@ -113,7 +113,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if cfg.Workspace == "" {
 		return fmt.Errorf("workspace path required")
 	}
-	paths := workspacecfg.New(cfg.Workspace)
+	paths := config.New(cfg.Workspace)
 	if err := os.MkdirAll(paths.ConfigRoot(), 0o755); err != nil {
 		return err
 	}

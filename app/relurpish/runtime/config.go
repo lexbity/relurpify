@@ -2,9 +2,9 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -21,13 +21,14 @@ type Config struct {
 	MemoryPath     string
 	LogPath        string
 	TelemetryPath  string
+	EventsPath     string
 	ConfigPath     string
 	OllamaEndpoint string
 	OllamaModel    string
 	AgentName      string
 	ServerAddr     string
 	RecordingMode  string
-	Sandbox        fruntime.SandboxConfig
+	Sandbox        fsandbox.SandboxConfig
 	AuditLimit     int
 	HITLTimeout    time.Duration
 }
@@ -39,7 +40,7 @@ func DefaultConfig() Config {
 	if err != nil {
 		cwd = "."
 	}
-	paths := workspacecfg.New(cwd)
+	paths := config.New(cwd)
 	return Config{
 		Workspace:     cwd,
 		ManifestPath:  paths.ManifestFile(),
@@ -47,11 +48,12 @@ func DefaultConfig() Config {
 		MemoryPath:    paths.MemoryDir(),
 		LogPath:       paths.LogFile("relurpish.log"),
 		TelemetryPath: paths.TelemetryFile(""),
+		EventsPath:    paths.EventsFile(),
 		ConfigPath:    paths.ConfigFile(),
 		ServerAddr:    ":8080",
 		AuditLimit:    512,
 		HITLTimeout:   45 * time.Second,
-		Sandbox: fruntime.SandboxConfig{
+		Sandbox: fsandbox.SandboxConfig{
 			RunscPath:        "runsc",
 			ContainerRuntime: "docker",
 			Platform:         "",
@@ -72,7 +74,7 @@ func (c *Config) Normalize() error {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
 	c.Workspace = absWorkspace
-	paths := workspacecfg.New(c.Workspace)
+	paths := config.New(c.Workspace)
 	if c.ManifestPath == "" {
 		c.ManifestPath = paths.ManifestFile()
 	}
@@ -102,6 +104,12 @@ func (c *Config) Normalize() error {
 	}
 	if !filepath.IsAbs(c.TelemetryPath) {
 		c.TelemetryPath = filepath.Join(c.Workspace, c.TelemetryPath)
+	}
+	if c.EventsPath == "" {
+		c.EventsPath = paths.EventsFile()
+	}
+	if !filepath.IsAbs(c.EventsPath) {
+		c.EventsPath = filepath.Join(c.Workspace, c.EventsPath)
 	}
 	if c.ConfigPath == "" {
 		c.ConfigPath = paths.ConfigFile()
@@ -145,7 +153,25 @@ type WorkspaceConfig struct {
 	Model               string                    `yaml:"model"`
 	Agents              []string                  `yaml:"agents"`
 	AllowedCapabilities []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
+	Nexus               NexusConfig               `yaml:"nexus,omitempty"`
+	NodeRegistration    NodeRegistrationConfig    `yaml:"node_registration,omitempty"`
 	LastUpdated         int64                     `yaml:"last_updated"`
+}
+
+type NexusConfig struct {
+	Enabled       bool   `yaml:"enabled,omitempty"`
+	Address       string `yaml:"address,omitempty"`
+	Token         string `yaml:"token,omitempty"`
+	AutoReconnect bool   `yaml:"auto_reconnect,omitempty"`
+}
+
+type NodeRegistrationConfig struct {
+	Enabled   bool              `yaml:"enabled,omitempty"`
+	NodeID    string            `yaml:"node_id,omitempty"`
+	Name      string            `yaml:"name,omitempty"`
+	Platform  core.NodePlatform `yaml:"platform,omitempty"`
+	Tags      map[string]string `yaml:"tags,omitempty"`
+	LocalOnly bool              `yaml:"local_only,omitempty"`
 }
 
 // LoadWorkspaceConfig loads workspace preferences from disk.

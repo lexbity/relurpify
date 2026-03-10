@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // CommandHandler is a function that handles a slash command and returns the updated model.
@@ -598,7 +599,7 @@ func pendingHITLSummaryCmd(svc hitlService) tea.Cmd {
 }
 
 // approveHITLRootCmd approves a HITL request with the given scope.
-func approveHITLRootCmd(svc hitlService, requestID string, scope fruntime.GrantScope) tea.Cmd {
+func approveHITLRootCmd(svc hitlService, requestID string, scope fauthorization.GrantScope) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}
@@ -619,7 +620,7 @@ func savePolicyCmd(rt RuntimeAdapter, action string) tea.Cmd {
 		return nil // not a tool action
 	}
 	return func() tea.Msg {
-		if err := rt.SaveToolPolicy(toolName, fruntime.AgentPermissionAllow); err != nil {
+		if err := rt.SaveToolPolicy(toolName, core.AgentPermissionAllow); err != nil {
 			return chatSystemMsg{text: fmt.Sprintf("Failed to save policy for %s: %v", toolName, err)}
 		}
 		return chatSystemMsg{text: fmt.Sprintf("Policy for '%s' saved to manifest (always allow)", toolName)}

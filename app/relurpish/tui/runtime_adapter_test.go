@@ -9,12 +9,13 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/persistence"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
-	"github.com/lexcodex/relurpify/framework/workspacecfg"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +27,7 @@ func TestRuntimeAdapterSessionInfoUsesLiveAgentModeAndStrategy(t *testing.T) {
 			AgentName:   "coding-go",
 		},
 		Agent: &agents.CodingAgent{},
-		Registration: &fruntime.AgentRegistration{
+		Registration: &fauthorization.AgentRegistration{
 			Manifest: &manifest.AgentManifest{
 				Metadata: manifest.ManifestMetadata{Name: "coding-go"},
 				Spec: manifest.ManifestSpec{
@@ -63,25 +64,25 @@ func TestDescribeAgentRuntimeForReflectionUsesDelegateMode(t *testing.T) {
 
 func TestRuntimeAdapterListsWorkflows(t *testing.T) {
 	workspace := t.TempDir()
-	dbPath := workspacecfg.New(workspace).WorkflowStateFile()
+	dbPath := config.New(workspace).WorkflowStateFile()
 	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
-	store, err := persistence.NewSQLiteWorkflowStateStore(dbPath)
+	store, err := db.NewSQLiteWorkflowStateStore(dbPath)
 	require.NoError(t, err)
 	defer store.Close()
-	require.NoError(t, store.CreateWorkflow(context.Background(), persistence.WorkflowRecord{
+	require.NoError(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		TaskID:      "wf-1",
 		TaskType:    core.TaskTypeCodeModification,
 		Instruction: "Inspect me",
-		Status:      persistence.WorkflowRunStatusRunning,
+		Status:      memory.WorkflowRunStatusRunning,
 		UpdatedAt:   time.Now().UTC(),
 	}))
-	require.NoError(t, store.CreateRun(context.Background(), persistence.WorkflowRunRecord{
+	require.NoError(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
 		RunID:      "run-1",
 		WorkflowID: "wf-1",
-		Status:     persistence.WorkflowRunStatusRunning,
+		Status:     memory.WorkflowRunStatusRunning,
 	}))
-	require.NoError(t, store.UpsertDelegation(context.Background(), persistence.WorkflowDelegationRecord{
+	require.NoError(t, store.UpsertDelegation(context.Background(), memory.WorkflowDelegationRecord{
 		DelegationID:   "delegation-1",
 		WorkflowID:     "wf-1",
 		RunID:          "run-1",
@@ -107,7 +108,7 @@ func TestRuntimeAdapterListsWorkflows(t *testing.T) {
 		StartedAt: time.Now().UTC().Add(-time.Minute),
 		UpdatedAt: time.Now().UTC(),
 	}))
-	require.NoError(t, store.AppendDelegationTransition(context.Background(), persistence.WorkflowDelegationTransitionRecord{
+	require.NoError(t, store.AppendDelegationTransition(context.Background(), memory.WorkflowDelegationTransitionRecord{
 		TransitionID: "delegation-1:succeeded",
 		DelegationID: "delegation-1",
 		WorkflowID:   "wf-1",
@@ -115,18 +116,18 @@ func TestRuntimeAdapterListsWorkflows(t *testing.T) {
 		ToState:      core.DelegationStateSucceeded,
 		CreatedAt:    time.Now().UTC(),
 	}))
-	require.NoError(t, store.UpsertWorkflowArtifact(context.Background(), persistence.WorkflowArtifactRecord{
+	require.NoError(t, store.UpsertWorkflowArtifact(context.Background(), memory.WorkflowArtifactRecord{
 		ArtifactID:    "artifact-1",
 		WorkflowID:    "wf-1",
 		RunID:         "run-1",
 		Kind:          "delegation_result",
 		ContentType:   "application/json",
-		StorageKind:   persistence.ArtifactStorageInline,
+		StorageKind:   memory.ArtifactStorageInline,
 		SummaryText:   "delegation summary",
 		InlineRawText: `{"summary":"delegated"}`,
 		RawSizeBytes:  int64(len(`{"summary":"delegated"}`)),
 	}))
-	require.NoError(t, store.ReplaceProviderSnapshots(context.Background(), "wf-1", "run-1", []persistence.WorkflowProviderSnapshotRecord{{
+	require.NoError(t, store.ReplaceProviderSnapshots(context.Background(), "wf-1", "run-1", []memory.WorkflowProviderSnapshotRecord{{
 		SnapshotID:     "provider-1",
 		WorkflowID:     "wf-1",
 		RunID:          "run-1",
@@ -135,7 +136,7 @@ func TestRuntimeAdapterListsWorkflows(t *testing.T) {
 		Descriptor:     core.ProviderDescriptor{ID: "delegation-runtime", Kind: core.ProviderKindAgentRuntime},
 		Health:         core.ProviderHealthSnapshot{Status: "ok"},
 	}}))
-	require.NoError(t, store.ReplaceProviderSessionSnapshots(context.Background(), "wf-1", "run-1", []persistence.WorkflowProviderSessionSnapshotRecord{{
+	require.NoError(t, store.ReplaceProviderSessionSnapshots(context.Background(), "wf-1", "run-1", []memory.WorkflowProviderSessionSnapshotRecord{{
 		SnapshotID: "session-1",
 		WorkflowID: "wf-1",
 		RunID:      "run-1",
@@ -261,8 +262,8 @@ func TestRuntimeAdapterListsLiveProvidersSessionsAndApprovals(t *testing.T) {
 				"remote-mcp": {Activate: core.AgentPermissionAllow},
 			},
 		},
-		Registration: &fruntime.AgentRegistration{
-			HITL: fruntime.NewHITLBroker(time.Minute),
+		Registration: &fauthorization.AgentRegistration{
+			HITL: fauthorization.NewHITLBroker(time.Minute),
 		},
 	}
 	provider := &adapterLiveProvider{
@@ -293,7 +294,7 @@ func TestRuntimeAdapterListsLiveProvidersSessionsAndApprovals(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_, _ = rt.Registration.HITL.RequestPermission(ctx, fruntime.PermissionRequest{
+		_, _ = rt.Registration.HITL.RequestPermission(ctx, fauthorization.PermissionRequest{
 			Permission: core.PermissionDescriptor{
 				Type:         core.PermissionTypeCapability,
 				Action:       "provider:remote-mcp:activate",
@@ -302,8 +303,8 @@ func TestRuntimeAdapterListsLiveProvidersSessionsAndApprovals(t *testing.T) {
 				RequiresHITL: true,
 			},
 			Justification: "activate provider remote-mcp",
-			Scope:         fruntime.GrantScopeSession,
-			Risk:          fruntime.RiskLevelMedium,
+			Scope:         fauthorization.GrantScopeSession,
+			Risk:          fauthorization.RiskLevelMedium,
 		})
 	}()
 	require.Eventually(t, func() bool {

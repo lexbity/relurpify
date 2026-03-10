@@ -6,8 +6,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +39,7 @@ func (f *fakeTasksRuntimeAdapter) OllamaModels(context.Context) ([]string, error
 func (f *fakeTasksRuntimeAdapter) RecordingMode() string                          { return "off" }
 func (f *fakeTasksRuntimeAdapter) SetRecordingMode(string) error                  { return nil }
 func (f *fakeTasksRuntimeAdapter) SaveModel(string) error                         { return nil }
-func (f *fakeTasksRuntimeAdapter) SaveToolPolicy(string, fruntime.AgentPermissionLevel) error {
+func (f *fakeTasksRuntimeAdapter) SaveToolPolicy(string, core.AgentPermissionLevel) error {
 	return nil
 }
 func (f *fakeTasksRuntimeAdapter) ListToolsInfo() []ToolInfo { return nil }
@@ -191,11 +191,11 @@ func (f *fakeTasksRuntimeAdapter) GetApprovalDetail(id string) (*ApprovalDetail,
 	}
 	return nil, nil
 }
-func (f *fakeTasksRuntimeAdapter) GetClassPolicies() map[string]fruntime.AgentPermissionLevel {
+func (f *fakeTasksRuntimeAdapter) GetClassPolicies() map[string]core.AgentPermissionLevel {
 	return nil
 }
-func (f *fakeTasksRuntimeAdapter) SetToolPolicyLive(string, fruntime.AgentPermissionLevel)  {}
-func (f *fakeTasksRuntimeAdapter) SetClassPolicyLive(string, fruntime.AgentPermissionLevel) {}
+func (f *fakeTasksRuntimeAdapter) SetToolPolicyLive(string, core.AgentPermissionLevel)  {}
+func (f *fakeTasksRuntimeAdapter) SetClassPolicyLive(string, core.AgentPermissionLevel) {}
 func (f *fakeTasksRuntimeAdapter) ListWorkflows(int) ([]WorkflowInfo, error) {
 	return append([]WorkflowInfo(nil), f.workflows...), nil
 }
@@ -205,13 +205,13 @@ func (f *fakeTasksRuntimeAdapter) GetWorkflow(workflowID string) (*WorkflowDetai
 	}
 	return f.workflowByID[workflowID], nil
 }
-func (f *fakeTasksRuntimeAdapter) CancelWorkflow(string) error                { return nil }
-func (f *fakeTasksRuntimeAdapter) PendingHITL() []*fruntime.PermissionRequest { return nil }
-func (f *fakeTasksRuntimeAdapter) ApproveHITL(string, string, fruntime.GrantScope, time.Duration) error {
+func (f *fakeTasksRuntimeAdapter) CancelWorkflow(string) error                      { return nil }
+func (f *fakeTasksRuntimeAdapter) PendingHITL() []*fauthorization.PermissionRequest { return nil }
+func (f *fakeTasksRuntimeAdapter) ApproveHITL(string, string, fauthorization.GrantScope, time.Duration) error {
 	return nil
 }
 func (f *fakeTasksRuntimeAdapter) DenyHITL(string, string) error { return nil }
-func (f *fakeTasksRuntimeAdapter) SubscribeHITL() (<-chan fruntime.HITLEvent, func()) {
+func (f *fakeTasksRuntimeAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 	return nil, func() {}
 }
 

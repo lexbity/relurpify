@@ -9,7 +9,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/persistence"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 type architectStubLLM struct {
@@ -151,7 +152,7 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("expected persisted workflow, ok=%v err=%v", ok, err)
 	}
-	if workflow.Status != persistence.WorkflowRunStatusCompleted {
+	if workflow.Status != memory.WorkflowRunStatusCompleted {
 		t.Fatalf("expected completed workflow status, got %s", workflow.Status)
 	}
 	workflowArtifacts, err := store.ListWorkflowArtifacts(context.Background(), task.ID, task.ID)
@@ -240,33 +241,33 @@ func TestArchitectAgentResumesLatestWorkflow(t *testing.T) {
 			{ID: "step-2", Description: "call echo"},
 		},
 	}
-	requireNoErr(t, store.CreateWorkflow(context.Background(), persistence.WorkflowRecord{
+	requireNoErr(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
 		WorkflowID:  "architect-2",
 		TaskID:      "architect-2",
 		TaskType:    core.TaskTypeCodeModification,
 		Instruction: "Resume the architectural task",
-		Status:      persistence.WorkflowRunStatusRunning,
+		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.CreateRun(context.Background(), persistence.WorkflowRunRecord{
+	requireNoErr(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
 		RunID:      "seed-run",
 		WorkflowID: "architect-2",
-		Status:     persistence.WorkflowRunStatusRunning,
+		Status:     memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.SavePlan(context.Background(), persistence.WorkflowPlanRecord{
+	requireNoErr(t, store.SavePlan(context.Background(), memory.WorkflowPlanRecord{
 		PlanID:     "plan-seed",
 		WorkflowID: "architect-2",
 		RunID:      "seed-run",
 		Plan:       plan,
 		IsActive:   true,
 	}))
-	requireNoErr(t, store.UpdateStepStatus(context.Background(), "architect-2", "step-1", persistence.StepStatusCompleted, "Step step-1 completed"))
-	requireNoErr(t, store.CreateStepRun(context.Background(), persistence.StepRunRecord{
+	requireNoErr(t, store.UpdateStepStatus(context.Background(), "architect-2", "step-1", memory.StepStatusCompleted, "Step step-1 completed"))
+	requireNoErr(t, store.CreateStepRun(context.Background(), memory.StepRunRecord{
 		StepRunID:      "seed-step-run-1",
 		WorkflowID:     "architect-2",
 		RunID:          "seed-run",
 		StepID:         "step-1",
 		Attempt:        1,
-		Status:         persistence.StepStatusCompleted,
+		Status:         memory.StepStatusCompleted,
 		Summary:        "Step step-1 completed",
 		ResultData:     map[string]any{"summary": "Step step-1 completed"},
 		VerificationOK: true,
@@ -319,17 +320,17 @@ func TestWorkflowPlanningServiceRejectsInvalidPlanBeforePersistence(t *testing.T
 
 	store := newArchitectWorkflowStore(t, workflowStatePath)
 	defer store.Close()
-	requireNoErr(t, store.CreateWorkflow(context.Background(), persistence.WorkflowRecord{
+	requireNoErr(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
 		WorkflowID:  "wf-invalid-plan",
 		TaskID:      "wf-invalid-plan",
 		TaskType:    core.TaskTypePlanning,
 		Instruction: "Generate a plan",
-		Status:      persistence.WorkflowRunStatusRunning,
+		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.CreateRun(context.Background(), persistence.WorkflowRunRecord{
+	requireNoErr(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
 		RunID:      "run-invalid-plan",
 		WorkflowID: "wf-invalid-plan",
-		Status:     persistence.WorkflowRunStatusRunning,
+		Status:     memory.WorkflowRunStatusRunning,
 	}))
 
 	service := &WorkflowPlanningService{
@@ -390,33 +391,33 @@ func TestArchitectAgentResumesWorkflowAcrossNewTaskID(t *testing.T) {
 			{ID: "step-2", Description: "call echo"},
 		},
 	}
-	requireNoErr(t, store.CreateWorkflow(context.Background(), persistence.WorkflowRecord{
+	requireNoErr(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
 		WorkflowID:  "architect-original",
 		TaskID:      "architect-original",
 		TaskType:    core.TaskTypeCodeModification,
 		Instruction: "Resume the architectural task",
-		Status:      persistence.WorkflowRunStatusRunning,
+		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.CreateRun(context.Background(), persistence.WorkflowRunRecord{
+	requireNoErr(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
 		RunID:      "seed-run",
 		WorkflowID: "architect-original",
-		Status:     persistence.WorkflowRunStatusRunning,
+		Status:     memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.SavePlan(context.Background(), persistence.WorkflowPlanRecord{
+	requireNoErr(t, store.SavePlan(context.Background(), memory.WorkflowPlanRecord{
 		PlanID:     "plan-seed",
 		WorkflowID: "architect-original",
 		RunID:      "seed-run",
 		Plan:       plan,
 		IsActive:   true,
 	}))
-	requireNoErr(t, store.UpdateStepStatus(context.Background(), "architect-original", "step-1", persistence.StepStatusCompleted, "Step step-1 completed"))
-	requireNoErr(t, store.CreateStepRun(context.Background(), persistence.StepRunRecord{
+	requireNoErr(t, store.UpdateStepStatus(context.Background(), "architect-original", "step-1", memory.StepStatusCompleted, "Step step-1 completed"))
+	requireNoErr(t, store.CreateStepRun(context.Background(), memory.StepRunRecord{
 		StepRunID:      "seed-step-run-1",
 		WorkflowID:     "architect-original",
 		RunID:          "seed-run",
 		StepID:         "step-1",
 		Attempt:        1,
-		Status:         persistence.StepStatusCompleted,
+		Status:         memory.StepStatusCompleted,
 		Summary:        "Step step-1 completed",
 		ResultData:     map[string]any{"summary": "Step step-1 completed"},
 		VerificationOK: true,
@@ -453,9 +454,9 @@ func TestArchitectAgentResumesWorkflowAcrossNewTaskID(t *testing.T) {
 	}
 }
 
-func newArchitectWorkflowStore(t *testing.T, path string) *persistence.SQLiteWorkflowStateStore {
+func newArchitectWorkflowStore(t *testing.T, path string) *db.SQLiteWorkflowStateStore {
 	t.Helper()
-	store, err := persistence.NewSQLiteWorkflowStateStore(path)
+	store, err := db.NewSQLiteWorkflowStateStore(path)
 	if err != nil {
 		t.Fatalf("new workflow store: %v", err)
 	}
@@ -560,45 +561,45 @@ func TestArchitectAgentRerunFromStepInvalidatesDependentsAndReplays(t *testing.T
 			"step-2": {"step-1"},
 		},
 	}
-	requireNoErr(t, store.CreateWorkflow(context.Background(), persistence.WorkflowRecord{
+	requireNoErr(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
 		WorkflowID:  "wf-replay",
 		TaskID:      "wf-replay",
 		TaskType:    core.TaskTypeCodeModification,
 		Instruction: "Replay workflow",
-		Status:      persistence.WorkflowRunStatusRunning,
+		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.CreateRun(context.Background(), persistence.WorkflowRunRecord{
+	requireNoErr(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
 		RunID:      "seed-run",
 		WorkflowID: "wf-replay",
-		Status:     persistence.WorkflowRunStatusCompleted,
+		Status:     memory.WorkflowRunStatusCompleted,
 	}))
-	requireNoErr(t, store.SavePlan(context.Background(), persistence.WorkflowPlanRecord{
+	requireNoErr(t, store.SavePlan(context.Background(), memory.WorkflowPlanRecord{
 		PlanID:     "plan-replay",
 		WorkflowID: "wf-replay",
 		RunID:      "seed-run",
 		Plan:       plan,
 		IsActive:   true,
 	}))
-	requireNoErr(t, store.UpdateStepStatus(context.Background(), "wf-replay", "step-1", persistence.StepStatusCompleted, "done step 1"))
-	requireNoErr(t, store.UpdateStepStatus(context.Background(), "wf-replay", "step-2", persistence.StepStatusCompleted, "done step 2"))
-	requireNoErr(t, store.CreateStepRun(context.Background(), persistence.StepRunRecord{
+	requireNoErr(t, store.UpdateStepStatus(context.Background(), "wf-replay", "step-1", memory.StepStatusCompleted, "done step 1"))
+	requireNoErr(t, store.UpdateStepStatus(context.Background(), "wf-replay", "step-2", memory.StepStatusCompleted, "done step 2"))
+	requireNoErr(t, store.CreateStepRun(context.Background(), memory.StepRunRecord{
 		StepRunID:      "seed-run-1",
 		WorkflowID:     "wf-replay",
 		RunID:          "seed-run",
 		StepID:         "step-1",
 		Attempt:        1,
-		Status:         persistence.StepStatusCompleted,
+		Status:         memory.StepStatusCompleted,
 		Summary:        "done step 1",
 		ResultData:     map[string]any{"summary": "done step 1"},
 		VerificationOK: true,
 	}))
-	requireNoErr(t, store.CreateStepRun(context.Background(), persistence.StepRunRecord{
+	requireNoErr(t, store.CreateStepRun(context.Background(), memory.StepRunRecord{
 		StepRunID:      "seed-run-2",
 		WorkflowID:     "wf-replay",
 		RunID:          "seed-run",
 		StepID:         "step-2",
 		Attempt:        1,
-		Status:         persistence.StepStatusCompleted,
+		Status:         memory.StepStatusCompleted,
 		Summary:        "done step 2",
 		ResultData:     map[string]any{"summary": "done step 2"},
 		VerificationOK: true,
@@ -664,19 +665,19 @@ func TestArchitectAgentMarksWorkflowNeedsReplanAfterRepeatedFailures(t *testing.
 			{ID: "step-fail", Description: "failing step"},
 		},
 	}
-	requireNoErr(t, store.CreateWorkflow(context.Background(), persistence.WorkflowRecord{
+	requireNoErr(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
 		WorkflowID:  "wf-replan",
 		TaskID:      "wf-replan",
 		TaskType:    core.TaskTypeCodeModification,
 		Instruction: "Fail repeatedly",
-		Status:      persistence.WorkflowRunStatusRunning,
+		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.CreateRun(context.Background(), persistence.WorkflowRunRecord{
+	requireNoErr(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
 		RunID:      "seed-run",
 		WorkflowID: "wf-replan",
-		Status:     persistence.WorkflowRunStatusRunning,
+		Status:     memory.WorkflowRunStatusRunning,
 	}))
-	requireNoErr(t, store.SavePlan(context.Background(), persistence.WorkflowPlanRecord{
+	requireNoErr(t, store.SavePlan(context.Background(), memory.WorkflowPlanRecord{
 		PlanID:     "plan-replan",
 		WorkflowID: "wf-replan",
 		RunID:      "seed-run",
@@ -684,13 +685,13 @@ func TestArchitectAgentMarksWorkflowNeedsReplanAfterRepeatedFailures(t *testing.
 		IsActive:   true,
 	}))
 	for attempt := 1; attempt <= 2; attempt++ {
-		requireNoErr(t, store.CreateStepRun(context.Background(), persistence.StepRunRecord{
+		requireNoErr(t, store.CreateStepRun(context.Background(), memory.StepRunRecord{
 			StepRunID:  fmt.Sprintf("seed-fail-%d", attempt),
 			WorkflowID: "wf-replan",
 			RunID:      "seed-run",
 			StepID:     "step-fail",
 			Attempt:    attempt,
-			Status:     persistence.StepStatusFailed,
+			Status:     memory.StepStatusFailed,
 			Summary:    "simulated failure",
 			ResultData: map[string]any{"error": "simulated failure"},
 			ErrorText:  "simulated failure",
@@ -718,15 +719,15 @@ func TestArchitectAgentMarksWorkflowNeedsReplanAfterRepeatedFailures(t *testing.
 	if !ok {
 		t.Fatal("expected persisted workflow")
 	}
-	if workflow.Status != persistence.WorkflowRunStatusNeedsReplan {
+	if workflow.Status != memory.WorkflowRunStatusNeedsReplan {
 		t.Fatalf("expected workflow status needs_replan, got %s", workflow.Status)
 	}
 	steps, err := store.ListSteps(context.Background(), "wf-replan")
 	requireNoErr(t, err)
-	if len(steps) != 1 || steps[0].Status != persistence.StepStatusNeedsReplan {
+	if len(steps) != 1 || steps[0].Status != memory.StepStatusNeedsReplan {
 		t.Fatalf("expected step status needs_replan, got %+v", steps)
 	}
-	issues, err := store.ListKnowledge(context.Background(), "wf-replan", persistence.KnowledgeKindIssue, false)
+	issues, err := store.ListKnowledge(context.Background(), "wf-replan", memory.KnowledgeKindIssue, false)
 	requireNoErr(t, err)
 	if len(issues) == 0 {
 		t.Fatal("expected persisted issue records")

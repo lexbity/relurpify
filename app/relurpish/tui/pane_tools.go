@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	fruntime "github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // knownClassOrder defines the display order for capability risk groups.
@@ -29,7 +29,7 @@ type toolsRow struct {
 // ToolsPane shows registered local tools grouped by capability class with live policy editing.
 type ToolsPane struct {
 	tools       []ToolInfo
-	tagPolicies map[string]fruntime.AgentPermissionLevel
+	tagPolicies map[string]core.AgentPermissionLevel
 	rows        []toolsRow
 	sel         int
 	runtime     RuntimeAdapter
@@ -45,7 +45,7 @@ func NewToolsPane(rt RuntimeAdapter) *ToolsPane {
 }
 
 func (p *ToolsPane) load() {
-	p.tagPolicies = make(map[string]fruntime.AgentPermissionLevel)
+	p.tagPolicies = make(map[string]core.AgentPermissionLevel)
 	if p.runtime == nil {
 		p.rows = nil
 		return
@@ -113,14 +113,14 @@ func (p *ToolsPane) toolByName(name string) (ToolInfo, bool) {
 	return ToolInfo{}, false
 }
 
-func cyclePermissionLevel(level fruntime.AgentPermissionLevel) fruntime.AgentPermissionLevel {
+func cyclePermissionLevel(level core.AgentPermissionLevel) core.AgentPermissionLevel {
 	switch level {
 	case "":
-		return fruntime.AgentPermissionAllow
-	case fruntime.AgentPermissionAllow:
-		return fruntime.AgentPermissionAsk
-	case fruntime.AgentPermissionAsk:
-		return fruntime.AgentPermissionDeny
+		return core.AgentPermissionAllow
+	case core.AgentPermissionAllow:
+		return core.AgentPermissionAsk
+	case core.AgentPermissionAsk:
+		return core.AgentPermissionDeny
 	default: // deny → reset to inherited
 		return ""
 	}
@@ -234,35 +234,35 @@ func (p *ToolsPane) saveSelected() tea.Cmd {
 }
 
 // effectivePolicy returns the tool's effective permission and whether it's a per-tool override.
-func (p *ToolsPane) effectivePolicy(t ToolInfo) (level fruntime.AgentPermissionLevel, isOverride bool) {
+func (p *ToolsPane) effectivePolicy(t ToolInfo) (level core.AgentPermissionLevel, isOverride bool) {
 	if t.HasPolicy && t.Policy != "" {
 		return t.Policy, true
 	}
-	best := fruntime.AgentPermissionLevel("")
+	best := core.AgentPermissionLevel("")
 	for _, label := range t.Labels {
 		pol, ok := p.tagPolicies[label]
 		if !ok {
 			continue
 		}
 		switch {
-		case pol == fruntime.AgentPermissionDeny:
+		case pol == core.AgentPermissionDeny:
 			return pol, false
-		case pol == fruntime.AgentPermissionAsk && best != fruntime.AgentPermissionDeny:
+		case pol == core.AgentPermissionAsk && best != core.AgentPermissionDeny:
 			best = pol
-		case pol == fruntime.AgentPermissionAllow && best == "":
+		case pol == core.AgentPermissionAllow && best == "":
 			best = pol
 		}
 	}
 	return best, false
 }
 
-func toolsPolicyStyle(level fruntime.AgentPermissionLevel) lipgloss.Style {
+func toolsPolicyStyle(level core.AgentPermissionLevel) lipgloss.Style {
 	switch level {
-	case fruntime.AgentPermissionAllow:
+	case core.AgentPermissionAllow:
 		return completedStyle
-	case fruntime.AgentPermissionAsk:
+	case core.AgentPermissionAsk:
 		return inProgressStyle
-	case fruntime.AgentPermissionDeny:
+	case core.AgentPermissionDeny:
 		return lipgloss.NewStyle().Foreground(colorError)
 	default:
 		return dimStyle

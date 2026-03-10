@@ -19,12 +19,12 @@ type ContextItem interface {
 type ContextItemType string
 
 const (
-	ContextTypeInteraction ContextItemType = "interaction"
-	ContextTypeFile        ContextItemType = "file"
+	ContextTypeInteraction      ContextItemType = "interaction"
+	ContextTypeFile             ContextItemType = "file"
 	ContextTypeCapabilityResult ContextItemType = "capability_result"
-	ContextTypeToolResult  ContextItemType = ContextTypeCapabilityResult
-	ContextTypeMemory      ContextItemType = "memory"
-	ContextTypeObservation ContextItemType = "observation"
+	ContextTypeToolResult       ContextItemType = ContextTypeCapabilityResult
+	ContextTypeMemory           ContextItemType = "memory"
+	ContextTypeObservation      ContextItemType = "observation"
 )
 
 // InteractionContextItem wraps an Interaction as a context item.

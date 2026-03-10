@@ -5,19 +5,19 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/framework/runtime"
+	"github.com/lexcodex/relurpify/framework/authorization"
 )
 
 type hitlService interface {
-	PendingHITL() []*runtime.PermissionRequest
-	ApproveHITL(requestID, approver string, scope runtime.GrantScope, duration time.Duration) error
+	PendingHITL() []*authorization.PermissionRequest
+	ApproveHITL(requestID, approver string, scope authorization.GrantScope, duration time.Duration) error
 	DenyHITL(requestID, reason string) error
-	SubscribeHITL() (<-chan runtime.HITLEvent, func())
+	SubscribeHITL() (<-chan authorization.HITLEvent, func())
 }
 
-type hitlEventMsg struct{ event runtime.HITLEvent }
+type hitlEventMsg struct{ event authorization.HITLEvent }
 
-func listenHITLEvents(ch <-chan runtime.HITLEvent) tea.Cmd {
+func listenHITLEvents(ch <-chan authorization.HITLEvent) tea.Cmd {
 	if ch == nil {
 		return nil
 	}
@@ -36,7 +36,7 @@ type hitlResolvedMsg struct {
 	err       error
 }
 
-func approveHITLCmd(svc hitlService, requestID string, scope runtime.GrantScope) tea.Cmd {
+func approveHITLCmd(svc hitlService, requestID string, scope authorization.GrantScope) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}
