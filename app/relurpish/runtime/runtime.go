@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/app/nexus/api_server_old"
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -703,48 +702,22 @@ func (r *Runtime) ExecuteInstructionStream(ctx context.Context, instruction stri
 	return r.ExecuteInstruction(ctx, instruction, taskType, metadata)
 }
 
-// StartServer launches the HTTP API server. The returned stop function shuts
-// the server down using the provided context.
-func (r *Runtime) StartServer(ctx context.Context, addr string) (func(context.Context) error, error) {
+// StartServer is a no-op stub. The inline HTTP API server was removed as part
+// of the nexus gateway migration; API access now goes through the nexus server.
+// The returned stop function is a no-op.
+func (r *Runtime) StartServer(_ context.Context, _ string) (func(context.Context) error, error) {
 	r.serverMu.Lock()
 	defer r.serverMu.Unlock()
 	if r.serverCancel != nil {
 		return nil, errors.New("server already running")
 	}
-	if addr == "" {
-		addr = r.Config.ServerAddr
-	}
-	api := &server.APIServer{
-		Agent:             r.Agent,
-		Context:           r.Context,
-		Inspector:         r,
-		Logger:            r.Logger,
-		WorkflowStatePath: config.New(r.Config.Workspace).WorkflowStateFile(),
-	}
-	serverCtx, cancel := context.WithCancel(ctx)
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- api.ServeContext(serverCtx, addr)
-	}()
-	r.serverCancel = cancel
-	stopFn := func(shutdownCtx context.Context) error {
+	noop := context.CancelFunc(func() {})
+	r.serverCancel = noop
+	stopFn := func(_ context.Context) error {
 		r.serverMu.Lock()
-		if r.serverCancel == nil {
-			r.serverMu.Unlock()
-			return nil
-		}
-		r.serverCancel()
 		r.serverCancel = nil
 		r.serverMu.Unlock()
-		select {
-		case err := <-errCh:
-			if err == nil || errors.Is(err, context.Canceled) {
-				return nil
-			}
-			return err
-		case <-shutdownCtx.Done():
-			return shutdownCtx.Err()
-		}
+		return nil
 	}
 	return stopFn, nil
 }
