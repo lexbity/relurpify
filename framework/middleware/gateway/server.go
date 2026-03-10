@@ -23,6 +23,10 @@ const (
 	broadcastQueueDepth = 64
 	// broadcastWriteTimeout is the per-write deadline applied to each client.
 	broadcastWriteTimeout = 10 * time.Second
+	// maxInboundMessageSize caps inbound WebSocket frame size to prevent
+	// memory exhaustion from oversized payloads. 4 MiB is generous for any
+	// legitimate capability invocation or outbound message.
+	maxInboundMessageSize = 4 * 1024 * 1024 // 4 MiB
 )
 
 // broadcastClient couples a WebSocket connection with a bounded send queue and
@@ -183,6 +187,7 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) handleConnection(ctx context.Context, conn *websocket.Conn, resolvedPrincipal ConnectionPrincipal) error {
+	conn.SetReadLimit(maxInboundMessageSize)
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		return err
