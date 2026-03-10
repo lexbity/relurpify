@@ -26,6 +26,9 @@ func VerifyChallenge(cred core.NodeCredential, challenge []byte, sig []byte) err
 	if err := cred.Validate(); err != nil {
 		return err
 	}
+	if !cred.ExpiresAt.IsZero() && time.Now().UTC().After(cred.ExpiresAt) {
+		return errors.New("credential expired")
+	}
 	if len(challenge) == 0 {
 		return errors.New("challenge required")
 	}
