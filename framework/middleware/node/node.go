@@ -39,6 +39,13 @@ type Connection interface {
 	Close(ctx context.Context) error
 }
 
+// maxPairingFailures is the number of failed pairing-code lookups allowed within
+// pairingFailureWindow before the manager stops accepting approve/reject requests.
+const maxPairingFailures = 10
+
+// pairingFailureWindow is the rolling window for counting failed pairing attempts.
+const pairingFailureWindow = 5 * time.Minute
+
 type PairingConfig struct {
 	AutoApproveLocal bool
 	PairingCodeTTL   time.Duration
@@ -48,6 +55,13 @@ type PairingConfig struct {
 type pairingRequest struct {
 	cred      core.NodeCredential
 	expiresAt time.Time
+}
+
+// pairingFailureBucket tracks consecutive failed pairing-code lookups within a
+// rolling time window to defend against brute-force enumeration of pairing codes.
+type pairingFailureBucket struct {
+	count    int
+	windowAt time.Time
 }
 
 type PendingPairing struct {
@@ -62,9 +76,10 @@ type Manager struct {
 	Log     event.Log
 	Pairing PairingConfig
 
-	mu          sync.RWMutex
-	connections map[string]Connection
-	pending     map[string]pairingRequest
+	mu              sync.RWMutex
+	connections     map[string]Connection
+	pending         map[string]pairingRequest
+	pairingFailures pairingFailureBucket
 }
 
 func (m *Manager) HandleConnect(ctx context.Context, conn Connection) error {
@@ -144,9 +159,47 @@ func (m *Manager) RequestPairing(ctx context.Context, cred core.NodeCredential) 
 	return code, nil
 }
 
+// checkPairingRateLimit records a failed lookup and returns an error if the
+// failure rate exceeds maxPairingFailures within pairingFailureWindow. Must be
+// called while holding m.mu.
+func (m *Manager) recordPairingFailureLocked() error {
+	now := time.Now().UTC()
+	if now.Sub(m.pairingFailures.windowAt) >= pairingFailureWindow {
+		m.pairingFailures = pairingFailureBucket{count: 1, windowAt: now}
+		return nil
+	}
+	m.pairingFailures.count++
+	if m.pairingFailures.count > maxPairingFailures {
+		return fmt.Errorf("pairing rate limit exceeded: too many failed attempts, try again in %s", pairingFailureWindow)
+	}
+	return nil
+}
+
+// checkPairingRateLimit returns an error when the failure window is saturated,
+// without incrementing the counter (used for pre-check before lookup).
+func (m *Manager) checkPairingRateLimitLocked() error {
+	now := time.Now().UTC()
+	if now.Sub(m.pairingFailures.windowAt) >= pairingFailureWindow {
+		return nil
+	}
+	if m.pairingFailures.count > maxPairingFailures {
+		return fmt.Errorf("pairing rate limit exceeded: too many failed attempts, try again in %s", pairingFailureWindow)
+	}
+	return nil
+}
+
 func (m *Manager) ApprovePairing(ctx context.Context, pairingCode string) error {
+	m.mu.Lock()
+	if err := m.checkPairingRateLimitLocked(); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	m.mu.Unlock()
 	req, ok := m.pendingRequest(ctx, pairingCode)
 	if !ok {
+		m.mu.Lock()
+		_ = m.recordPairingFailureLocked()
+		m.mu.Unlock()
 		return errors.New("pairing request not found")
 	}
 	if m.Store != nil {
@@ -167,8 +220,17 @@ func (m *Manager) ApprovePairing(ctx context.Context, pairingCode string) error 
 }
 
 func (m *Manager) RejectPairing(ctx context.Context, pairingCode string) error {
+	m.mu.Lock()
+	if err := m.checkPairingRateLimitLocked(); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	m.mu.Unlock()
 	req, ok := m.pendingRequest(ctx, pairingCode)
 	if !ok {
+		m.mu.Lock()
+		_ = m.recordPairingFailureLocked()
+		m.mu.Unlock()
 		return errors.New("pairing request not found")
 	}
 	m.mu.Lock()
