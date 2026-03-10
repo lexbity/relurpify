@@ -1,0 +1,591 @@
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/gorilla/websocket"
+	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
+	nexusbootstrap "github.com/lexcodex/relurpify/app/nexus/bootstrap"
+	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	"github.com/lexcodex/relurpify/app/nexus/gateway"
+	nexusserver "github.com/lexcodex/relurpify/app/nexus/server"
+	nexusstatus "github.com/lexcodex/relurpify/app/nexus/status"
+	"github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/event"
+	"github.com/lexcodex/relurpify/framework/identity"
+	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
+	mcpprotocol "github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	mcpserver "github.com/lexcodex/relurpify/framework/middleware/mcp/server"
+	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
+	"github.com/spf13/cobra"
+)
+
+const gatewayLogCompactionInterval = time.Hour
+const nexusEventPartition = "local"
+
+type compactingEventLog interface {
+	CompactBefore(ctx context.Context, cutoff time.Time) (int64, error)
+}
+
+func main() {
+	if err := newRootCmd().Execute(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func newRootCmd() *cobra.Command {
+	var workspace string
+	var configPath string
+	root := &cobra.Command{
+		Use:   "nexus",
+		Short: "Nexus gateway entrypoint",
+	}
+	root.PersistentFlags().StringVar(&workspace, "workspace", ".", "workspace directory")
+	root.PersistentFlags().StringVar(&configPath, "config", "", "path to nexus config")
+	root.AddCommand(
+		newStartCmd(&workspace, &configPath),
+		newStatusCmd(&workspace, &configPath),
+		newNodeCmd(&workspace, &configPath),
+		newAdminCmd(&workspace, &configPath),
+	)
+	return root
+}
+
+func newStartCmd(workspace, configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "start",
+		Short: "Start the Nexus gateway",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer cancel()
+			return runStart(ctx, *workspace, *configPath)
+		},
+	}
+}
+
+func newStatusCmd(workspace, configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show Nexus gateway status from local state",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStatus(cmd.Context(), cmd.OutOrStdout(), *workspace, *configPath)
+		},
+	}
+}
+
+func resolveConfig(workspace, configPath string) (config.Paths, nexuscfg.Config, error) {
+	return nexusbootstrap.ResolveConfig(workspace, configPath)
+}
+
+func runStart(ctx context.Context, workspace, configPath string) error {
+	paths, cfg, err := resolveConfig(workspace, configPath)
+	if err != nil {
+		return err
+	}
+	eventLog, err := db.NewSQLiteEventLog(paths.EventsFile())
+	if err != nil {
+		return err
+	}
+	defer eventLog.Close()
+	if err := startEventLogCompactor(ctx, eventLog, cfg.Gateway.Log.RetentionDays, gatewayLogCompactionInterval, time.Now); err != nil {
+		return err
+	}
+	stateMaterializer := gateway.NewStateMaterializer()
+	materializerRunner := &event.Runner{
+		Log:              eventLog,
+		Materializers:    []event.Materializer{stateMaterializer},
+		Partition:        nexusEventPartition,
+		SnapshotInterval: cfg.Gateway.Log.SnapshotInterval,
+	}
+	if err := materializerRunner.RestoreAndRunOnce(ctx); err != nil {
+		return err
+	}
+
+	sessionStore, err := db.NewSQLiteSessionStore(paths.SessionStoreFile())
+	if err != nil {
+		return err
+	}
+	defer sessionStore.Close()
+	identityStore, err := db.NewSQLiteIdentityStore(paths.IdentityStoreFile())
+	if err != nil {
+		return err
+	}
+	defer identityStore.Close()
+	nodeStore, err := db.NewSQLiteNodeStore(paths.NodesFile())
+	if err != nil {
+		return err
+	}
+	defer nodeStore.Close()
+	tokenStore, err := db.NewSQLiteAdminTokenStore(paths.AdminTokenStoreFile())
+	if err != nil {
+		return err
+	}
+	defer tokenStore.Close()
+	policyStore, err := db.NewFilePolicyRuleStore(paths.PolicyRulesFile())
+	if err != nil {
+		return err
+	}
+	handler, err := (&nexusserver.NexusApp{
+		EventLog:          eventLog,
+		SessionStore:      sessionStore,
+		IdentityStore:     identityStore,
+		NodeStore:         nodeStore,
+		TokenStore:        tokenStore,
+		PolicyStore:       policyStore,
+		Config:            cfg,
+		Partition:         nexusEventPartition,
+		StateMaterializer: stateMaterializer,
+		StartedAt:         time.Now().UTC(),
+		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore),
+		VerifyNodeConnection: func(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
+			return verifyGatewayNodeChallenge(ctx, store, principal, info, conn)
+		},
+	}).Handler(ctx)
+	if err != nil {
+		return err
+	}
+
+	httpServer := &http.Server{Addr: cfg.Gateway.Bind, Handler: handler}
+	go func() {
+		<-ctx.Done()
+		_ = httpServer.Shutdown(context.Background())
+	}()
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
+}
+
+func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
+	if !cfg.Enabled {
+		return nil
+	}
+	type staticTokenPrincipal struct {
+		token     string
+		principal fwgateway.ConnectionPrincipal
+	}
+	tokens := make([]staticTokenPrincipal, 0, len(cfg.Tokens))
+	for _, entry := range cfg.Tokens {
+		if entry.Token == "" || entry.SubjectID == "" || entry.Role == "" {
+			continue
+		}
+		tenantID := nexusserver.NormalizeTenantID(entry.TenantID)
+		subjectKind := core.SubjectKind(entry.SubjectKind)
+		if subjectKind == "" {
+			switch strings.ToLower(strings.TrimSpace(entry.Role)) {
+			case "node":
+				subjectKind = core.SubjectKindNode
+			case "agent", "operator", "admin":
+				subjectKind = core.SubjectKindServiceAccount
+			default:
+				subjectKind = core.SubjectKindUser
+			}
+		}
+		principal := core.AuthenticatedPrincipal{
+			TenantID:      tenantID,
+			AuthMethod:    core.AuthMethodBearerToken,
+			Authenticated: true,
+			Scopes:        append([]string(nil), entry.Scopes...),
+			Subject: core.SubjectRef{
+				TenantID: tenantID,
+				Kind:     subjectKind,
+				ID:       entry.SubjectID,
+			},
+		}
+		tokens = append(tokens, staticTokenPrincipal{
+			token: entry.Token,
+			principal: fwgateway.ConnectionPrincipal{
+				Role:          entry.Role,
+				Authenticated: true,
+				Principal:     &principal,
+				Actor: core.EventActor{
+					Kind:        entry.Role,
+					ID:          entry.SubjectID,
+					TenantID:    tenantID,
+					SubjectKind: subjectKind,
+				},
+			},
+		})
+	}
+	return func(ctx context.Context, token string) (fwgateway.ConnectionPrincipal, error) {
+		if token == "" {
+			return fwgateway.ConnectionPrincipal{}, fmt.Errorf("bearer token required")
+		}
+		for _, candidate := range tokens {
+			if len(candidate.token) != len(token) {
+				continue
+			}
+			if subtle.ConstantTimeCompare([]byte(candidate.token), []byte(token)) == 1 {
+				return candidate.principal, nil
+			}
+		}
+		if tokenStore != nil {
+			records, err := tokenStore.ListTokens(ctx)
+			if err != nil {
+				return fwgateway.ConnectionPrincipal{}, fmt.Errorf("lookup bearer token: %w", err)
+			}
+			hashed := hashBearerToken(token)
+			for _, record := range records {
+				if len(record.TokenHash) != len(hashed) {
+					continue
+				}
+				if record.RevokedAt != nil {
+					continue
+				}
+				if record.ExpiresAt != nil && record.ExpiresAt.Before(time.Now().UTC()) {
+					continue
+				}
+				if subtle.ConstantTimeCompare([]byte(record.TokenHash), []byte(hashed)) != 1 {
+					continue
+				}
+				principal := dynamicTokenPrincipal(record)
+				return fwgateway.ConnectionPrincipal{
+					Role:          principalRole(principal.Scopes),
+					Authenticated: true,
+					Principal:     &principal,
+					Actor: core.EventActor{
+						Kind:        principalRole(principal.Scopes),
+						ID:          principal.Subject.ID,
+						TenantID:    principal.TenantID,
+						SubjectKind: principal.Subject.Kind,
+					},
+				}, nil
+			}
+		}
+		return fwgateway.ConnectionPrincipal{}, fmt.Errorf("unknown bearer token")
+	}
+}
+
+func staticGatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
+	return gatewayPrincipalResolver(cfg, nil)
+}
+
+func dynamicTokenPrincipal(record core.AdminTokenRecord) core.AuthenticatedPrincipal {
+	tenantID := nexusserver.NormalizeTenantID("")
+	return core.AuthenticatedPrincipal{
+		TenantID:      tenantID,
+		AuthMethod:    core.AuthMethodBearerToken,
+		Authenticated: true,
+		Scopes:        append([]string(nil), record.Scopes...),
+		Subject: core.SubjectRef{
+			TenantID: tenantID,
+			Kind:     core.SubjectKindServiceAccount,
+			ID:       record.SubjectID,
+		},
+	}
+}
+
+func principalRole(scopes []string) string {
+	role := "agent"
+	for _, scope := range scopes {
+		switch strings.ToLower(strings.TrimSpace(scope)) {
+		case "gateway:admin", "nexus:admin", "admin":
+			return "admin"
+		case "nexus:operator", "operator":
+			role = "operator"
+		case "node":
+			if role == "agent" {
+				role = "node"
+			}
+		}
+	}
+	return role
+}
+
+func hashBearerToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func runStatus(ctx context.Context, out interface{ Write([]byte) (int, error) }, workspace, configPath string) error {
+	snapshot, err := nexusstatus.Load(ctx, workspace, configPath)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprint(out, snapshot.Summary())
+	return err
+}
+
+func startEventLogCompactor(ctx context.Context, logStore compactingEventLog, retentionDays int, interval time.Duration, now func() time.Time) error {
+	if logStore == nil || retentionDays <= 0 {
+		return nil
+	}
+	if interval <= 0 {
+		interval = gatewayLogCompactionInterval
+	}
+	if now == nil {
+		now = time.Now
+	}
+	if _, err := compactEventLog(ctx, logStore, retentionDays, now); err != nil {
+		return err
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if _, err := compactEventLog(ctx, logStore, retentionDays, now); err != nil && ctx.Err() == nil {
+					log.Printf("nexus: event log compaction failed: %v", err)
+				}
+			}
+		}
+	}()
+	return nil
+}
+
+func compactEventLog(ctx context.Context, logStore compactingEventLog, retentionDays int, now func() time.Time) (int64, error) {
+	if logStore == nil || retentionDays <= 0 {
+		return 0, nil
+	}
+	if now == nil {
+		now = time.Now
+	}
+	cutoff := now().UTC().AddDate(0, 0, -retentionDays)
+	return logStore.CompactBefore(ctx, cutoff)
+}
+
+func newNodeCmd(workspace, configPath *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "node",
+		Short: "Manage Nexus node pairing",
+	}
+	cmd.AddCommand(newNodePairCmd(workspace, configPath), newNodeApproveCmd(workspace, configPath), newNodeRejectCmd(workspace, configPath))
+	return cmd
+}
+
+func newAdminCmd(workspace, configPath *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "admin",
+		Short: "Serve Nexus admin APIs",
+	}
+	cmd.AddCommand(newAdminMCPCmd(workspace, configPath))
+	return cmd
+}
+
+func newAdminMCPCmd(workspace, configPath *string) *cobra.Command {
+	var token string
+	cmd := &cobra.Command{
+		Use:   "mcp",
+		Short: "Serve admin MCP over stdio",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			paths, cfg, err := resolveConfig(*workspace, *configPath)
+			if err != nil {
+				return err
+			}
+			eventLog, err := db.NewSQLiteEventLog(paths.EventsFile())
+			if err != nil {
+				return err
+			}
+			defer eventLog.Close()
+			sessionStore, err := db.NewSQLiteSessionStore(paths.SessionStoreFile())
+			if err != nil {
+				return err
+			}
+			defer sessionStore.Close()
+			identityStore, err := db.NewSQLiteIdentityStore(paths.IdentityStoreFile())
+			if err != nil {
+				return err
+			}
+			defer identityStore.Close()
+			nodeStore, err := db.NewSQLiteNodeStore(paths.NodesFile())
+			if err != nil {
+				return err
+			}
+			defer nodeStore.Close()
+			tokenStore, err := db.NewSQLiteAdminTokenStore(paths.AdminTokenStoreFile())
+			if err != nil {
+				return err
+			}
+			defer tokenStore.Close()
+			policyStore, err := db.NewFilePolicyRuleStore(paths.PolicyRulesFile())
+			if err != nil {
+				return err
+			}
+			nodeManager := &fwnode.Manager{
+				Store: nodeStore,
+				Log:   eventLog,
+				Pairing: fwnode.PairingConfig{
+					AutoApproveLocal: cfg.Nodes.AutoApproveLocal,
+					PairingCodeTTL:   cfg.Nodes.PairingCodeTTL,
+				},
+			}
+			stateMaterializer := gateway.NewStateMaterializer()
+			runner := &event.Runner{
+				Log:           eventLog,
+				Materializers: []event.Materializer{stateMaterializer},
+				Partition:     nexusEventPartition,
+			}
+			if err := runner.RestoreAndRunOnce(cmd.Context()); err != nil {
+				return err
+			}
+			adminSvc := nexusadmin.NewService(nexusadmin.ServiceConfig{
+				Nodes:        nodeStore,
+				NodeManager:  nodeManager,
+				Sessions:     sessionStore,
+				Identities:   identityStore,
+				Tokens:       tokenStore,
+				Policies:     policyStore,
+				Events:       eventLog,
+				Materializer: stateMaterializer,
+				Channels:     channel.NewManager(eventLog, nil),
+				Partition:    nexusEventPartition,
+				Config:       cfg,
+				StartedAt:    time.Now().UTC(),
+			})
+			adminMCPSvc := mcpserver.New(
+				mcpprotocol.PeerInfo{Name: "nexus-admin", Version: nexusadmin.APIVersionV1Alpha1},
+				nexusadmin.NewMCPExporter(adminSvc),
+				mcpserver.Hooks{},
+			)
+			principal, err := stdioAdminPrincipal(cfg, tokenStore, token)
+			if err != nil {
+				return err
+			}
+			return adminMCPSvc.ServeConn(
+				nexusadmin.WithPrincipal(cmd.Context(), principal),
+				"stdio",
+				stdioReadWriteCloser{Reader: os.Stdin, Writer: os.Stdout},
+			)
+		},
+	}
+	cmd.Flags().StringVar(&token, "token", "", "admin or operator bearer token for the stdio session")
+	return cmd
+}
+
+type stdioReadWriteCloser struct {
+	io.Reader
+	io.Writer
+}
+
+func (stdioReadWriteCloser) Close() error { return nil }
+
+func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, token string) (core.AuthenticatedPrincipal, error) {
+	if strings.TrimSpace(token) != "" {
+		resolver := gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore)
+		if resolver == nil {
+			return core.AuthenticatedPrincipal{}, fmt.Errorf("gateway auth disabled")
+		}
+		principal, err := resolver(context.Background(), token)
+		if err != nil || principal.Principal == nil {
+			return core.AuthenticatedPrincipal{}, fmt.Errorf("resolve admin principal: %w", err)
+		}
+		return *principal.Principal, nil
+	}
+	for _, entry := range cfg.Gateway.Auth.Tokens {
+		role := strings.ToLower(strings.TrimSpace(entry.Role))
+		if role != "admin" && role != "operator" {
+			continue
+		}
+		principal, err := stdioAdminPrincipal(cfg, tokenStore, entry.Token)
+		if err == nil {
+			return principal, nil
+		}
+	}
+	return core.AuthenticatedPrincipal{
+		TenantID:      "default",
+		AuthMethod:    core.AuthMethodBootstrapAdmin,
+		Authenticated: true,
+		Scopes:        []string{"nexus:admin"},
+		Subject: core.SubjectRef{
+			TenantID: "default",
+			Kind:     core.SubjectKindServiceAccount,
+			ID:       "local-admin",
+		},
+	}, nil
+}
+
+func newNodePairCmd(workspace, configPath *string) *cobra.Command {
+	var deviceID string
+	var approveNow bool
+	cmd := &cobra.Command{
+		Use:   "pair",
+		Short: "Create a node pairing request",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			paths, cfg, err := resolveConfig(*workspace, *configPath)
+			if err != nil {
+				return err
+			}
+			manager, store, logStore, err := nexusbootstrap.OpenNodeManager(paths, cfg)
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			defer logStore.Close()
+			if deviceID == "" {
+				deviceID = fmt.Sprintf("node-%d", time.Now().UTC().Unix())
+			}
+			cred, _, err := fwnode.GenerateCredential(deviceID)
+			if err != nil {
+				return err
+			}
+			code, err := manager.RequestPairing(ctx, cred)
+			if err != nil {
+				return err
+			}
+			if approveNow || cfg.Nodes.AutoApproveLocal {
+				if err := manager.ApprovePairing(ctx, code); err != nil {
+					return err
+				}
+				if err := store.UpsertNode(ctx, nexusbootstrap.DefaultNodeDescriptor(deviceID)); err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Pairing approved for %s with code %s\n", deviceID, code)
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Pairing requested for %s with code %s\n", deviceID, code)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&deviceID, "device-id", "", "device id for the node")
+	cmd.Flags().BoolVar(&approveNow, "approve-now", false, "approve the request immediately")
+	return cmd
+}
+
+func newNodeApproveCmd(workspace, configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "approve <pairing-code>",
+		Short: "Approve a pending node pairing request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := nexusadmin.ApprovePairing(cmd.Context(), *workspace, *configPath, args[0]); err != nil {
+				return err
+			}
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), "Pairing %s approved\n", args[0])
+			return err
+		},
+	}
+}
+
+func newNodeRejectCmd(workspace, configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "reject <pairing-code>",
+		Short: "Reject a pending node pairing request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := nexusadmin.RejectPairing(cmd.Context(), *workspace, *configPath, args[0]); err != nil {
+				return err
+			}
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), "Pairing %s rejected\n", args[0])
+			return err
+		},
+	}
+}
