@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -125,6 +126,59 @@ func TestNexusClientInvokeCapability(t *testing.T) {
 	request := conn.writes[1].(map[string]any)
 	require.Equal(t, "sess-1", request["session_key"])
 	<-done
+}
+
+func TestNexusClientCorrelationIDsAreUnique(t *testing.T) {
+	seen := make(map[string]bool, 1000)
+	for i := 0; i < 1000; i++ {
+		id := randomCorrelationID()
+		require.NotEmpty(t, id)
+		require.False(t, seen[id], "duplicate correlation ID: %s", id)
+		seen[id] = true
+	}
+}
+
+func TestNexusClientReconnectsAfterTransientFailures(t *testing.T) {
+	// First connection succeeds so Start returns nil and starts the reconnect loop.
+	first := &fakeNexusConn{
+		reads: []map[string]json.RawMessage{
+			nexusFrame(t, map[string]any{
+				"type":       "connected",
+				"session_id": "agent-session-1",
+				"server_seq": 1,
+			}),
+			// No more frames — ReadJSON returns an error → connection drops → reconnect.
+		},
+	}
+	second := &fakeNexusConn{
+		reads: []map[string]json.RawMessage{
+			nexusFrame(t, map[string]any{
+				"type":       "connected",
+				"session_id": "agent-session-2",
+				"server_seq": 2,
+			}),
+		},
+	}
+	dialCount := 0
+	client := NewNexusClient(NexusConfig{Enabled: true, Address: "ws://nexus", AutoReconnect: true})
+	client.Dial = func(ctx context.Context, address, token string) (nexusConn, error) {
+		dialCount++
+		switch dialCount {
+		case 1:
+			return first, nil
+		case 2:
+			// Simulate one transient failure after the first connection drops.
+			return nil, fmt.Errorf("transient error")
+		default:
+			return second, nil
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, client.Start(ctx))
+	// Eventually the client reconnects and establishes the second session.
+	require.Eventually(t, func() bool { return client.SessionID() == "agent-session-2" }, 5*time.Second, 10*time.Millisecond)
+	require.GreaterOrEqual(t, dialCount, 3)
 }
 
 func TestNexusClientReconnects(t *testing.T) {

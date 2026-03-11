@@ -454,6 +454,52 @@ func TestGatewayHandleClientFrameSessionCloseReturnsEOF(t *testing.T) {
 	require.Equal(t, "gw-1", frame["session_id"])
 }
 
+func TestBroadcastEventEvictsFullQueueClient(t *testing.T) {
+	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
+	require.NoError(t, err)
+	defer log.Close()
+
+	server := &Server{Log: log}
+
+	// Build a client whose queue is already full.
+	bc := &broadcastClient{
+		queue: make(chan any, broadcastQueueDepth),
+		principal: ConnectionPrincipal{
+			Authenticated: true,
+			Actor:         core.EventActor{Kind: "agent", ID: "svc-1", TenantID: "tenant-1"},
+			Principal:     &core.AuthenticatedPrincipal{Authenticated: true, Scopes: []string{"admin"}},
+		},
+	}
+	for i := 0; i < broadcastQueueDepth; i++ {
+		bc.queue <- map[string]any{"type": "dummy"}
+	}
+
+	server.mu.Lock()
+	server.clients = map[*websocket.Conn]*broadcastClient{nil: bc}
+	server.mu.Unlock()
+
+	ev := core.FrameworkEvent{
+		Seq:  1,
+		Type: core.FrameworkEventSessionCreated,
+	}
+	server.broadcastEvent(context.Background(), ev)
+
+	// The full client should have been evicted.
+	server.mu.RLock()
+	_, stillRegistered := server.clients[nil]
+	server.mu.RUnlock()
+	require.False(t, stillRegistered, "slow client should be evicted when its queue is full")
+}
+
+func TestBroadcastClientSendDropsWhenQueueFull(t *testing.T) {
+	bc := &broadcastClient{queue: make(chan any, 1)}
+	require.True(t, bc.send(map[string]any{"type": "first"}))
+	// Second send should fail since queue is full (depth=1).
+	require.False(t, bc.send(map[string]any{"type": "second"}))
+	// Queue should now be closed (done=true).
+	require.True(t, bc.done)
+}
+
 func TestBroadcastClientConcurrentCloseAndSendDoesNotPanic(t *testing.T) {
 	for i := 0; i < 64; i++ {
 		bc := &broadcastClient{queue: make(chan any, 1)}
