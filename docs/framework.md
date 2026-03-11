@@ -51,6 +51,22 @@ framework/
 
 **Context** — `Context` is the mutable state bag threaded through every graph node and tool call. It holds messages, tool observations, budget signals, and per-scope key/value pairs. `SharedContext` merges results from parallel graph branches.
 
+**Memory classes and state data classes** — graph state is typed to control what each node may read and write.
+
+`MemoryClass` categorises data by lifecycle:
+
+| Class | Meaning |
+|-------|---------|
+| `working` | Transient per-run coordination state — cleared at graph completion |
+| `declarative` | Durable facts, decisions, constraints, summaries — persisted across runs |
+| `procedural` | Reusable routines and capability compositions — persisted and versioned |
+
+`StateDataClass` categorises individual state entries by semantic role: `task-metadata`, `step-metadata`, `routing-flag`, `artifact-ref`, `memory-ref`, `structured-state`, `transcript`, `raw-payload`, `retrieval-dump`, `subagent-history`.
+
+`StateBoundaryPolicy` declares what a node may read and write: allowed key patterns, allowed memory and data classes, inline size limits, and a `PreferArtifactReferences` flag that lint-flags raw payload stored inline instead of by reference. `LintStateMap` runs lint checks against a live state snapshot without blocking execution.
+
+`ArtifactReference` is the preferred graph-state shape for any large output. State carries the reference; the payload lives in the workflow store. `MemoryReference` is the analogous pointer for declarative and procedural memory records.
+
 **Capabilities** — `CapabilityDescriptor`, `CapabilityKind` (Tool/Prompt/Resource), `TrustClass`, `EffectClass`, `RiskClass`, and `InsertionAction` model where a capability came from and how its output may be used. `CapabilityResultEnvelope` wraps every result with provenance and an `InsertionDecision`.
 
 **Providers** — `Provider` is the common interface for all capability sources: builtin, plugin, MCP client/server, agent-runtime, LSP, node-device. `ProviderPolicy`, `CapabilityPolicy`, and `GlobalPolicy` form the declarative authorization layer.
@@ -96,32 +112,120 @@ Dispatch is gated by `CapabilityPolicy` and `ProviderPolicy`. Every result is wr
 
 ## graph
 
-`framework/graph` provides a deterministic state-machine workflow runtime with contract-aware preflight, explicit recovery boundaries, and structured runtime system nodes.
+`framework/graph` provides a deterministic state-machine workflow runtime with contract-aware preflight, safe checkpoint resumption, explicit system nodes, and pattern builder helpers.
 
-**Node types:**
+### Node types
 
 | Node | Responsibility |
 |------|---------------|
 | `LLMNode` | Calls the language model and routes its response |
-| `ToolNode` | Invokes a capability and captures the observation |
+| `ToolNode` | Invokes a capability through `CapabilityInvoker` and captures the observation |
 | `ConditionalNode` | Branches on a predicate over the current context |
 | `HumanNode` | Pauses for HITL input |
-| `SystemNode` | Checkpoint, retrieval, summary, hydration, and persistence helpers |
-| `ObservationNode` | Records an observation |
 | `TerminalNode` | Signals completion or failure |
+| `ObservationNode` | Records a tool observation into context |
+| `CheckpointNode` | Persists a resumable checkpoint explicitly as a graph step |
+| `SummarizeContextNode` | Summarises selected state keys and history into a durable artifact |
+| `RetrieveDeclarativeMemoryNode` | Fetches bounded declarative memory records into state |
+| `RetrieveProceduralMemoryNode` | Fetches bounded procedural routines into state |
+| `HydrateContextNode` | Restores artifact or memory references into active working state |
+| `PersistenceWriterNode` | Writes declarative records, procedural routines, and artifacts with an audit trail |
 
-**Contracts & preflight** — every node may declare a `NodeContract` describing required capabilities, trust/risk bounds, placement preference, recovery expectations, checkpoint policy, and state-boundary rules. `preflight.go` validates those contracts before execution and produces an inspectable placement/report surface.
+### Node contracts
 
-**Checkpointing** — `graph_checkpoint.go` captures transition-boundary execution state (completed node, next-node cursor, context snapshot) for pause-and-resume without replaying completed work.
+Every node may implement `ContractNode` to declare a `NodeContract`:
 
-**System nodes** — `system_nodes.go` and `persistence_node.go` provide first-class:
-- declarative/procedural retrieval
-- context summarization
-- explicit checkpoint persistence
-- context hydration
-- structured declarative/procedural persistence with audit records
+| Field | Meaning |
+|-------|---------|
+| `RequiredCapabilities` | Capability selectors the node needs to function |
+| `SideEffectClass` | None / Context / Local / External / Human |
+| `Idempotency` | Unknown / ReplaySafe / SingleShot |
+| `Placement` | Any / Local / Remote / StickySession |
+| `CheckpointPolicy` | None / Preferred / Required |
+| `Recoverability` | None / InProcess / Persisted |
+| `ContextPolicy` | `StateBoundaryPolicy` — allowed keys, classes, size limits |
 
-**Plan executor** — `plan_executor.go` compiles a `Plan` into a linear graph, enabling structured plans to execute through the graph runtime without manual wiring.
+`validateNodeContract` enforces that active fields are coherent (e.g. a node that declares `CheckpointRequired` without `Persisted` recoverability is invalid). `ResolveNodeContract` returns default contracts for built-in node types when the node does not implement `ContractNode` itself.
+
+### Capability routing at ToolNode
+
+`ToolNode` holds a `Registry CapabilityInvoker` field. When the registry is set, every tool call is routed through `InvokeCapability`, which applies `CapabilityPolicy` evaluation, `EffectClass` checks, trust-class enforcement, and wraps the result in a `CapabilityResultEnvelope`. This is the primary path. Direct `tool.Execute()` is not called at the graph level.
+
+```go
+type CapabilityInvoker interface {
+    InvokeCapability(ctx, state, idOrName string, args map[string]any) (*core.ToolResult, error)
+}
+```
+
+### Preflight and placement
+
+Before execution begins, `Graph.Preflight(catalog)` validates all nodes against the available capability catalog:
+
+1. For each node with a `NodeContract`, required capabilities are resolved against the catalog.
+2. Missing required capabilities produce blocking `PreflightIssue` entries.
+3. `PlacementDecision` records are produced for capabilities with a placement preference, scored by trust rank and risk rank.
+4. `PreflightReport.HasBlockingIssues()` determines whether it is safe to execute.
+
+Agents set a catalog via `g.SetCapabilityCatalog(registry)` before calling `Execute`.
+
+### Checkpoint semantics
+
+`GraphCheckpoint` captures execution state at a transition boundary — not at a node entry point:
+
+```
+CompletedNodeID   the node that just finished
+NextNodeID        the node that should run next on resume
+LastTransition    NodeTransitionRecord — includes transition reason and timestamp
+Context           snapshot of the full context at that boundary
+```
+
+`ResumeFromCheckpoint` starts execution from `NextNodeID`, not from `CompletedNodeID`. This means a completed `SingleShot` node (e.g. a tool with an external side effect) is never replayed. The graph skips directly to whatever follows it.
+
+`CreateCheckpoint` and `CreateCompressedCheckpoint` both accept a `NodeTransitionRecord` so the caller controls what reason is recorded.
+
+The callback-based `WithCheckpointing(every N, saveFn)` is available for incremental checkpointing during execution without inserting explicit `CheckpointNode` steps.
+
+### System node interfaces
+
+The system nodes in `system_nodes.go` and `persistence_node.go` depend on narrow interfaces, not concrete store types:
+
+| Interface | Role |
+|-----------|------|
+| `ArtifactSink` | Receives artifact records for durable storage |
+| `CheckpointPersister` | Persists `GraphCheckpoint` values |
+| `MemoryRetriever` | Returns bounded `[]MemoryRecordEnvelope` for a query |
+| `StateHydrator` | Restores references into active state |
+| `RuntimePersistenceStore` | `PutDeclarative / SearchDeclarative / PutProcedural / SearchProcedural` |
+| `PersistenceAuditSink` | Receives `PersistenceAuditRecord` entries |
+
+`framework/memory` provides bridge functions (`AdaptWorkflowStateStoreArtifactSink`, `AdaptWorkflowStateStoreAuditSink`, `AdaptRuntimeStoreForGraph`) to wire concrete stores to these interfaces without the graph importing memory directly.
+
+### Pattern builder helpers
+
+`patterns.go` provides composable graph constructors and wrappers:
+
+| Function | Topology produced |
+|----------|------------------|
+| `BuildPlanExecuteVerifyGraph` | plan → execute → verify → done |
+| `BuildPlanExecuteSummarizeVerifyGraph` | plan → execute → summarize → verify → done |
+| `BuildThinkActObserveGraph` | think → act → observe ⟲ (loop until done condition) |
+| `BuildReviewIterateGraph` | execute → review ⟲ (loop until done condition) |
+| `WrapWithCheckpointing` | inserts a `CheckpointNode` before the terminal node of an existing graph |
+| `WrapWithPeriodicSummaries` | inserts a `SummarizeContextNode` before the terminal node |
+| `WrapWithDeclarativeRetrieval` | prepends a `RetrieveDeclarativeMemoryNode` before the start node |
+| `WrapWithProceduralRetrieval` | prepends a `RetrieveProceduralMemoryNode` before the start node |
+
+### Agent feature flags
+
+Agents that use system nodes expose opt-in `*bool` fields on `core.Config`:
+
+| Flag | Effect |
+|------|--------|
+| `UseExplicitCheckpointNodes` | Inserts `CheckpointNode` steps into the graph; disables callback-based checkpointing |
+| `UseDeclarativeRetrieval` | Prepends `RetrieveDeclarativeMemoryNode` before the agent's first node |
+| `UseStructuredPersistence` | Includes `PersistenceWriterNode` at graph completion |
+
+All flags default to false. Agents remain backward-compatible when flags are unset.
 
 ---
 
@@ -135,7 +239,20 @@ Each **Stage** implements four methods:
 - `Validate` — checks the result against a schema contract.
 - `Apply` — writes the result into the shared context map.
 
-**ContractDescriptor** declares a stage's input key, output key, schema version, and retry policy. The **Runner** enforces contracts, persists stage results to `SQLiteWorkflowStateStore`, and resumes interrupted pipelines from the last completed stage.
+**ContractDescriptor** declares a stage's input key, output key, schema version, and retry policy (`RetryOnDecodeError`, `RetryOnValidationError`, `MaxAttempts`).
+
+**Runner** executes stages sequentially. Key `RunnerOptions` fields:
+
+| Field | Purpose |
+|-------|---------|
+| `CapabilityInvoker` | Routes tool calls through the capability registry; falls back to direct `tool.Execute()` with a deprecation warning when nil |
+| `CheckpointStore` | Persists a `Checkpoint` after each stage when `CheckpointAfterStage` is true |
+| `ResumeCheckpoint` | If set, skips all stages up to and including the checkpointed stage on the next run |
+| `EnableToolCalling` | Enables `ChatWithTools` and tool-execution paths per stage |
+
+**CheckpointStore** is the pipeline-level checkpoint interface (`Save / Load`). It is separate from the graph-level `CheckpointSnapshotStore` — pipeline checkpoints capture stage-level snapshots, not graph-node transitions.
+
+**`BuildGraph`** on `PipelineAgent` returns a visualization graph of the stage sequence for inspection. The nodes are stubs — the graph is not executable. Stage execution always goes through the `Runner` directly.
 
 ---
 
@@ -153,24 +270,64 @@ Each **Stage** implements four methods:
 
 ## memory
 
-`framework/memory` owns durable runtime persistence. The package now separates transient scratch memory from authoritative durable workflow, checkpoint, and structured runtime records.
+`framework/memory` owns durable runtime persistence. The package separates transient scratch memory from authoritative durable workflow, checkpoint, and structured runtime records.
+
+### Stores
 
 | Store | Purpose |
 |-------|---------|
 | `MemoryStore` | Generic compatibility surface for scratch and legacy memory callers |
-| `RuntimeMemoryStore` | Structured declarative/procedural runtime memory |
-| `CheckpointStore` | Resumable graph execution checkpoints |
+| `RuntimeMemoryStore` | Structured declarative/procedural runtime memory (`DeclarativeMemoryStore` + `ProceduralMemoryStore`) |
+| `CheckpointSnapshotStore` | Resumable graph execution checkpoints (`Save / Load / List`) |
+| `WorkflowStateStore` | Authoritative durable workflow records: runs, steps, artifacts, events, provider snapshots, delegations |
+| `CompositeRuntimeStore` | Unified runtime surface: `WorkflowStateStore` + `RuntimeMemoryStore` + `CheckpointSnapshotStore` |
 | `MessageStore` | Conversation history |
 | `VectorStore` | Embeddings for semantic recall |
-| `WorkflowStateStore` | Authoritative durable workflow records, artifacts, events, and snapshots |
-| `CompositeRuntimeStore` | Unified runtime-facing surface over workflow state, runtime memory, and checkpoints |
-| `WorkflowStore` | Legacy top-level workflow compatibility layer |
+| `WorkflowStore` | Legacy top-level workflow compatibility layer (file-backed JSON) |
 | `CodeIndexStore` | Workspace symbol index |
 
-**Structured runtime memory** distinguishes:
-- working memory for short-lived coordination state
-- declarative memory for durable facts, decisions, and summaries
-- procedural memory for reusable routines and capability compositions
+### Structured runtime memory
+
+`RuntimeMemoryStore` distinguishes two lanes:
+
+**Declarative** (`DeclarativeMemoryRecord`) — facts, decisions, constraints, preferences, and project knowledge. Fields include `Kind`, `Title`, `Content`, `Summary`, `ArtifactRef`, `Tags`, `Verified`, and scope/workflow/task identifiers. Searchable by query, scope, kind, tags, and workflow.
+
+**Procedural** (`ProceduralMemoryRecord`) — reusable routines and capability compositions. Fields include `Kind`, `Name`, `Description`, `InlineBody` or `BodyRef`, `CapabilityDependencies`, `VerifiedField`, and `Version`. Procedural records require `Verified: true` before they are persisted by `PersistenceWriterNode`.
+
+`SQLiteRuntimeMemoryStore` implements both lanes in a single SQLite file with separate tables. It also satisfies the legacy `MemoryStore` interface by routing `Remember` / `Recall` through the declarative lane.
+
+### Checkpoints
+
+`SQLiteCheckpointStore` persists `GraphCheckpoint` values to a `graph_checkpoints` table keyed by checkpoint ID, task ID, workflow ID, and run ID. It implements `CheckpointSnapshotStore` and optionally emits events to a `WorkflowStateStore` for cross-store audit visibility.
+
+The file-backed `CheckpointStore` (`memory.NewCheckpointStore`) remains available as a lightweight fallback for agent configurations that do not configure a workflow database.
+
+### Adapter layer
+
+Three bridge functions connect stores to the graph's narrow interfaces without creating import cycles:
+
+| Function | Bridges |
+|----------|---------|
+| `AdaptWorkflowStateStoreArtifactSink` | `WorkflowStateStore` → `graph.ArtifactSink` |
+| `AdaptWorkflowStateStoreAuditSink` | `WorkflowStateStore` → `graph.PersistenceAuditSink` |
+| `AdaptRuntimeStoreForGraph` | `RuntimeMemoryStore` → `graph.RuntimePersistenceStore` |
+
+### Database layout
+
+All stores open their own SQLite files. Path constants live in `framework/config/paths.go`:
+
+| File | Owner |
+|------|-------|
+| `workflow_state.db` | Framework/agents — workflow state, runtime memory, checkpoints |
+| `index.db` | Framework/agents — code symbol index |
+| `checkpoints/` | Framework/agents — file-backed checkpoint fallback |
+| `nodes.db` | Nexus only — registered agent nodes |
+| `sessions.db` | Nexus only — session boundaries and delegations |
+| `identities.db` | Nexus only — tenants, subjects, external identities |
+| `admin_tokens.db` | Nexus only — admin API tokens |
+| `events.db` | Nexus only — gateway event log |
+
+Nexus-specific stores (`sqlite_identity_store`, `sqlite_session_store`, `sqlite_node_store`, `sqlite_admin_token_store`, `sqlite_event_log`) live in `app/nexus/db/`. Framework/agent stores (`sqlite_workflow_state_store`, `sqlite_runtime_memory_store`, `sqlite_checkpoint_store`) live in `framework/memory/db/`. The two packages do not share code.
 
 ---
 

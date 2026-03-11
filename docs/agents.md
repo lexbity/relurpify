@@ -247,6 +247,10 @@ Produces a structured plan — a list of steps with descriptions and expected ou
 
 The planner has a read-only tool scope: it can read files and search code but cannot write, execute, or call git. Its output is a `Plan` object stored in the shared context.
 
+PlannerAgent supports explicit graph-level system nodes via `core.Config` flags:
+- `UseExplicitCheckpointNodes` — inserts `CheckpointNode` steps after plan, execute, verify, and summarize phases instead of using callback-based checkpointing.
+- `UseStructuredPersistence` — includes a `PersistenceWriterNode` at completion that writes the plan summary to declarative memory.
+
 ```bash
 relurpish chat --agent planner
 ```
@@ -256,6 +260,11 @@ relurpish chat --agent planner
 ## ReActAgent
 
 The direct ReAct implementation. Where CodingAgent wraps ReAct with mode-specific prompt decoration and tool scoping, ReActAgent is the lower-level reason/act loop. It rebuilds a compact prompt per iteration, summarizes tool outputs immediately, and exposes only phase-appropriate tools so small models do not waste context on irrelevant state.
+
+ReActAgent supports the same system node flags as PlannerAgent:
+- `UseExplicitCheckpointNodes` — inserts a `CheckpointNode` before completion.
+- `UseDeclarativeRetrieval` — prepends a `RetrieveDeclarativeMemoryNode` that hydrates relevant project knowledge before the first think step.
+- `UseStructuredPersistence` — includes a `PersistenceWriterNode` that persists the final output summary to declarative memory.
 
 Useful for exploratory tasks where you want the model to reason freely across the full tool set.
 
