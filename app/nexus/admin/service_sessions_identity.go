@@ -283,8 +283,34 @@ func (s *service) ListExternalIdentities(ctx context.Context, req ListExternalId
 	if err != nil {
 		return ListExternalIdentitiesResult{}, internalError("list external identities failed", err, map[string]any{"tenant_id": tenantID})
 	}
+	if req.SubjectKind != "" || strings.TrimSpace(req.SubjectID) != "" {
+		filtered := identities[:0]
+		for _, id := range identities {
+			if req.SubjectKind != "" && id.Subject.Kind != req.SubjectKind {
+				continue
+			}
+			if strings.TrimSpace(req.SubjectID) != "" && !strings.EqualFold(id.Subject.ID, strings.TrimSpace(req.SubjectID)) {
+				continue
+			}
+			filtered = append(filtered, id)
+		}
+		identities = filtered
+	}
 	identities = applyPage(identities, req.Page)
 	return ListExternalIdentitiesResult{AdminResult: resultEnvelope(req.AdminRequest), PageResult: pageResult(len(identities)), Identities: identities}, nil
+}
+
+func (s *service) ListSessionDelegations(ctx context.Context, req ListSessionDelegationsRequest) (ListSessionDelegationsResult, error) {
+	tenantID, err := authorizeTenant(req.Principal, req.TenantID)
+	if err != nil {
+		return ListSessionDelegationsResult{}, err
+	}
+	records, err := s.cfg.Sessions.ListDelegationsByTenantID(ctx, tenantID)
+	if err != nil {
+		return ListSessionDelegationsResult{}, internalError("list session delegations failed", err, map[string]any{"tenant_id": tenantID})
+	}
+	records = applyPage(records, req.Page)
+	return ListSessionDelegationsResult{AdminResult: resultEnvelope(req.AdminRequest), PageResult: pageResult(len(records)), Delegations: records}, nil
 }
 
 func (s *service) ListTokens(ctx context.Context, req ListTokensRequest) (ListTokensResult, error) {
@@ -362,6 +388,9 @@ func (s *service) IssueToken(ctx context.Context, req IssueTokenRequest) (IssueT
 		}
 		if tenant == nil {
 			return IssueTokenResult{}, invalidArgument("subject tenant not found", map[string]any{"tenant_id": tenantID})
+		}
+		if tenant.DisabledAt != nil {
+			return IssueTokenResult{}, invalidArgument("tenant disabled", map[string]any{"tenant_id": tenantID})
 		}
 		subject, err := s.cfg.Identities.GetSubject(ctx, tenantID, subjectKind, subjectID)
 		if err != nil {

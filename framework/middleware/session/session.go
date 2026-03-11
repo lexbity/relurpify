@@ -45,6 +45,7 @@ type Store interface {
 	ListBoundaries(ctx context.Context, partition string) ([]core.SessionBoundary, error)
 	UpsertDelegation(ctx context.Context, record core.SessionDelegationRecord) error
 	ListDelegationsBySessionID(ctx context.Context, sessionID string) ([]core.SessionDelegationRecord, error)
+	ListDelegationsByTenantID(ctx context.Context, tenantID string) ([]core.SessionDelegationRecord, error)
 	DeleteBoundary(ctx context.Context, key string) error
 	DeleteExpiredBoundaries(ctx context.Context, before time.Time) (int, error)
 }

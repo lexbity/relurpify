@@ -225,27 +225,28 @@ func (s *service) ListTenants(ctx context.Context, req ListTenantsRequest) (List
 	if err != nil {
 		return ListTenantsResult{}, err
 	}
-	set := map[string]struct{}{}
+	byID := map[string]TenantInfo{}
 	if !hasGlobalTenantScope(req.Principal) {
 		if tenantID != "" {
-			set[tenantID] = struct{}{}
+			byID[tenantID] = TenantInfo{ID: tenantID}
 		}
-		tenants := make([]string, 0, len(set))
-		for tenantID := range set {
-			tenants = append(tenants, tenantID)
-		}
-		sort.Strings(tenants)
+		tenants := tenantInfoSlice(byID)
 		tenants = applyPage(tenants, req.Page)
 		return ListTenantsResult{AdminResult: resultEnvelope(req.AdminRequest), PageResult: pageResult(len(tenants)), Tenants: tenants}, nil
 	}
 	if s.cfg.Identities != nil {
-		tenants, err := s.cfg.Identities.ListTenants(ctx)
+		records, err := s.cfg.Identities.ListTenants(ctx)
 		if err != nil {
 			return ListTenantsResult{}, internalError("list tenants failed", err, nil)
 		}
-		for _, tenant := range tenants {
-			if strings.TrimSpace(tenant.ID) != "" {
-				set[tenant.ID] = struct{}{}
+		for _, record := range records {
+			if strings.TrimSpace(record.ID) != "" {
+				byID[record.ID] = TenantInfo{
+					ID:          record.ID,
+					DisplayName: record.DisplayName,
+					CreatedAt:   record.CreatedAt,
+					DisabledAt:  record.DisabledAt,
+				}
 			}
 		}
 	}
@@ -255,16 +256,76 @@ func (s *service) ListTenants(ctx context.Context, req ListTenantsRequest) (List
 			return ListTenantsResult{}, internalError("list tenants failed", err, nil)
 		}
 		for _, node := range nodes {
-			if strings.TrimSpace(node.TenantID) != "" {
-				set[node.TenantID] = struct{}{}
+			if id := strings.TrimSpace(node.TenantID); id != "" {
+				if _, ok := byID[id]; !ok {
+					byID[id] = TenantInfo{ID: id}
+				}
 			}
 		}
 	}
-	tenants := make([]string, 0, len(set))
-	for tenantID := range set {
-		tenants = append(tenants, tenantID)
-	}
-	sort.Strings(tenants)
+	tenants := tenantInfoSlice(byID)
 	tenants = applyPage(tenants, req.Page)
 	return ListTenantsResult{AdminResult: resultEnvelope(req.AdminRequest), PageResult: pageResult(len(tenants)), Tenants: tenants}, nil
+}
+
+func tenantInfoSlice(byID map[string]TenantInfo) []TenantInfo {
+	out := make([]TenantInfo, 0, len(byID))
+	for _, info := range byID {
+		out = append(out, info)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+func (s *service) ListNodeEnrollments(ctx context.Context, req ListNodeEnrollmentsRequest) (ListNodeEnrollmentsResult, error) {
+	tenantID, err := authorizeTenant(req.Principal, req.TenantID)
+	if err != nil {
+		return ListNodeEnrollmentsResult{}, err
+	}
+	if s.cfg.Identities == nil {
+		return ListNodeEnrollmentsResult{AdminResult: resultEnvelope(req.AdminRequest)}, nil
+	}
+	enrollments, err := s.cfg.Identities.ListNodeEnrollments(ctx, tenantID)
+	if err != nil {
+		return ListNodeEnrollmentsResult{}, internalError("list node enrollments failed", err, map[string]any{"tenant_id": tenantID})
+	}
+	infos := make([]NodeEnrollmentInfo, 0, len(enrollments))
+	for _, e := range enrollments {
+		infos = append(infos, NodeEnrollmentInfo{
+			TenantID:       e.TenantID,
+			NodeID:         e.NodeID,
+			Owner:          e.Owner,
+			TrustClass:     e.TrustClass,
+			KeyID:          e.KeyID,
+			PairedAt:       e.PairedAt,
+			LastVerifiedAt: e.LastVerifiedAt,
+			AuthMethod:     e.AuthMethod,
+		})
+	}
+	infos = applyPage(infos, req.Page)
+	return ListNodeEnrollmentsResult{AdminResult: resultEnvelope(req.AdminRequest), PageResult: pageResult(len(infos)), Enrollments: infos}, nil
+}
+
+func (s *service) RevokeNodeEnrollment(ctx context.Context, req RevokeNodeEnrollmentRequest) (RevokeNodeEnrollmentResult, error) {
+	if strings.TrimSpace(req.NodeID) == "" {
+		return RevokeNodeEnrollmentResult{}, invalidArgument("node_id required", map[string]any{"field": "node_id"})
+	}
+	tenantID, err := authorizeTenant(req.Principal, req.TenantID)
+	if err != nil {
+		return RevokeNodeEnrollmentResult{}, err
+	}
+	if s.cfg.Identities == nil {
+		return RevokeNodeEnrollmentResult{}, notImplemented("revoke node enrollment not implemented", nil)
+	}
+	enrollment, err := s.cfg.Identities.GetNodeEnrollment(ctx, tenantID, req.NodeID)
+	if err != nil {
+		return RevokeNodeEnrollmentResult{}, internalError("get node enrollment failed", err, map[string]any{"node_id": req.NodeID})
+	}
+	if enrollment == nil {
+		return RevokeNodeEnrollmentResult{}, notFound("node enrollment not found", map[string]any{"node_id": req.NodeID})
+	}
+	if err := s.cfg.Identities.DeleteNodeEnrollment(ctx, tenantID, req.NodeID); err != nil {
+		return RevokeNodeEnrollmentResult{}, internalError("revoke node enrollment failed", err, map[string]any{"node_id": req.NodeID})
+	}
+	return RevokeNodeEnrollmentResult{AdminResult: resultEnvelope(req.AdminRequest), NodeID: req.NodeID}, nil
 }

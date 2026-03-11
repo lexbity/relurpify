@@ -417,6 +417,43 @@ func (s *SQLiteSessionStore) ListDelegationsBySessionID(ctx context.Context, ses
 	return out, rows.Err()
 }
 
+func (s *SQLiteSessionStore) ListDelegationsByTenantID(ctx context.Context, tenantID string) ([]core.SessionDelegationRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT session_id, tenant_id, grantee_kind, grantee_id, operations_json, created_at, expires_at FROM session_delegations WHERE tenant_id = ? ORDER BY session_id ASC, grantee_kind ASC, grantee_id ASC`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.SessionDelegationRecord
+	for rows.Next() {
+		var record core.SessionDelegationRecord
+		var granteeKind, operationsJSON, createdAt, expiresAt string
+		if err := rows.Scan(&record.SessionID, &record.TenantID, &granteeKind, &record.Grantee.ID, &operationsJSON, &createdAt, &expiresAt); err != nil {
+			return nil, err
+		}
+		record.Grantee = core.SubjectRef{
+			TenantID: record.TenantID,
+			Kind:     core.SubjectKind(granteeKind),
+			ID:       record.Grantee.ID,
+		}
+		_ = json.Unmarshal([]byte(operationsJSON), &record.Operations)
+		record.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(expiresAt) != "" {
+			record.ExpiresAt, err = time.Parse(time.RFC3339Nano, expiresAt)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !record.ExpiresAt.IsZero() && s.nowUTC().After(record.ExpiresAt) {
+			continue
+		}
+		out = append(out, record)
+	}
+	return out, rows.Err()
+}
+
 func (s *SQLiteSessionStore) DeleteBoundary(ctx context.Context, key string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM session_boundaries WHERE key = ?`, key)
 	return err

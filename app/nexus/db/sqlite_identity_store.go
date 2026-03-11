@@ -313,6 +313,11 @@ func (s *SQLiteIdentityStore) ListNodeEnrollments(ctx context.Context, tenantID 
 	return out, rows.Err()
 }
 
+func (s *SQLiteIdentityStore) DeleteNodeEnrollment(ctx context.Context, tenantID, nodeID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM node_enrollments WHERE tenant_id = ? AND node_id = ?`, tenantID, nodeID)
+	return err
+}
+
 func (s *SQLiteIdentityStore) Close() error {
 	if s == nil || s.db == nil {
 		return nil

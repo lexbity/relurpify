@@ -103,7 +103,19 @@ type ListEventsResult = adminapi.ListEventsResult
 type ReadEventStreamRequest = adminapi.ReadEventStreamRequest
 type ReadEventStreamResult = adminapi.ReadEventStreamResult
 type ListTenantsRequest = adminapi.ListTenantsRequest
+type TenantInfo = adminapi.TenantInfo
 type ListTenantsResult = adminapi.ListTenantsResult
+type GetTenantRequest = adminapi.GetTenantRequest
+type GetTenantResult = adminapi.GetTenantResult
+type SetTenantEnabledRequest = adminapi.SetTenantEnabledRequest
+type SetTenantEnabledResult = adminapi.SetTenantEnabledResult
+type NodeEnrollmentInfo = adminapi.NodeEnrollmentInfo
+type ListNodeEnrollmentsRequest = adminapi.ListNodeEnrollmentsRequest
+type ListNodeEnrollmentsResult = adminapi.ListNodeEnrollmentsResult
+type RevokeNodeEnrollmentRequest = adminapi.RevokeNodeEnrollmentRequest
+type RevokeNodeEnrollmentResult = adminapi.RevokeNodeEnrollmentResult
+type ListSessionDelegationsRequest = adminapi.ListSessionDelegationsRequest
+type ListSessionDelegationsResult = adminapi.ListSessionDelegationsResult
 type PendingPairingInfo = adminapi.PendingPairingInfo
 type SessionInfo = adminapi.SessionInfo
 
@@ -140,6 +152,13 @@ type AdminService interface {
 	ReadEventStream(ctx context.Context, req ReadEventStreamRequest) (ReadEventStreamResult, error)
 
 	ListTenants(ctx context.Context, req ListTenantsRequest) (ListTenantsResult, error)
+	GetTenant(ctx context.Context, req GetTenantRequest) (GetTenantResult, error)
+	SetTenantEnabled(ctx context.Context, req SetTenantEnabledRequest) (SetTenantEnabledResult, error)
+
+	ListNodeEnrollments(ctx context.Context, req ListNodeEnrollmentsRequest) (ListNodeEnrollmentsResult, error)
+	RevokeNodeEnrollment(ctx context.Context, req RevokeNodeEnrollmentRequest) (RevokeNodeEnrollmentResult, error)
+
+	ListSessionDelegations(ctx context.Context, req ListSessionDelegationsRequest) (ListSessionDelegationsResult, error)
 }
 
 type ServiceConfig struct {

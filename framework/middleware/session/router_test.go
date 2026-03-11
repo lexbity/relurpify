@@ -70,6 +70,17 @@ func (m *memoryStore) ListDelegationsBySessionID(_ context.Context, sessionID st
 	}
 	return append([]core.SessionDelegationRecord(nil), m.delegations[sessionID]...), nil
 }
+func (m *memoryStore) ListDelegationsByTenantID(_ context.Context, tenantID string) ([]core.SessionDelegationRecord, error) {
+	var out []core.SessionDelegationRecord
+	for _, records := range m.delegations {
+		for _, record := range records {
+			if record.TenantID == tenantID {
+				out = append(out, record)
+			}
+		}
+	}
+	return out, nil
+}
 func (m *memoryStore) DeleteBoundary(_ context.Context, key string) error {
 	delete(m.values, key)
 	return nil

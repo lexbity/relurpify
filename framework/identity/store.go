@@ -23,4 +23,5 @@ type Store interface {
 	UpsertNodeEnrollment(ctx context.Context, enrollment core.NodeEnrollment) error
 	GetNodeEnrollment(ctx context.Context, tenantID, nodeID string) (*core.NodeEnrollment, error)
 	ListNodeEnrollments(ctx context.Context, tenantID string) ([]core.NodeEnrollment, error)
+	DeleteNodeEnrollment(ctx context.Context, tenantID, nodeID string) error
 }

@@ -178,3 +178,36 @@ func TestSQLiteSessionStorePersistsSessionDelegations(t *testing.T) {
 	require.Equal(t, "operator-1", records[0].Grantee.ID)
 	require.Len(t, records[0].Operations, 2)
 }
+
+func TestSQLiteSessionStoreListDelegationsByTenantIDFiltersTenants(t *testing.T) {
+	store, err := NewSQLiteSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, store.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
+		TenantID:   "tenant-1",
+		SessionID:  "sess-t1-a",
+		Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "op-1"},
+		Operations: []core.SessionOperation{core.SessionOperationSend},
+		CreatedAt:  now,
+	}))
+	require.NoError(t, store.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
+		TenantID:   "tenant-2",
+		SessionID:  "sess-t2-b",
+		Grantee:    core.SubjectRef{TenantID: "tenant-2", Kind: core.SubjectKindServiceAccount, ID: "op-2"},
+		Operations: []core.SessionOperation{core.SessionOperationResume},
+		CreatedAt:  now,
+	}))
+
+	records, err := store.ListDelegationsByTenantID(context.Background(), "tenant-1")
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, "sess-t1-a", records[0].SessionID)
+	require.Equal(t, "op-1", records[0].Grantee.ID)
+
+	records2, err := store.ListDelegationsByTenantID(context.Background(), "tenant-2")
+	require.NoError(t, err)
+	require.Len(t, records2, 1)
+	require.Equal(t, "sess-t2-b", records2[0].SessionID)
+}

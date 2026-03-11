@@ -64,6 +64,9 @@ func (s runtimeSessionStore) UpsertDelegation(context.Context, core.SessionDeleg
 func (s runtimeSessionStore) ListDelegationsBySessionID(context.Context, string) ([]core.SessionDelegationRecord, error) {
 	return nil, nil
 }
+func (s runtimeSessionStore) ListDelegationsByTenantID(context.Context, string) ([]core.SessionDelegationRecord, error) {
+	return nil, nil
+}
 func (s runtimeSessionStore) ListBoundaries(context.Context, string) ([]core.SessionBoundary, error) {
 	return nil, nil
 }

@@ -259,7 +259,9 @@ type BindExternalIdentityResult struct {
 
 type ListExternalIdentitiesRequest struct {
 	AdminRequest
-	Page PageRequest `json:"page,omitempty"`
+	Page        PageRequest      `json:"page,omitempty"`
+	SubjectKind core.SubjectKind `json:"subject_kind,omitempty"`
+	SubjectID   string           `json:"subject_id,omitempty"`
 }
 
 type ListExternalIdentitiesResult struct {
@@ -376,8 +378,80 @@ type ListTenantsRequest struct {
 	Page PageRequest `json:"page,omitempty"`
 }
 
+type TenantInfo struct {
+	ID          string     `json:"id"`
+	DisplayName string     `json:"display_name,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	DisabledAt  *time.Time `json:"disabled_at,omitempty"`
+}
+
 type ListTenantsResult struct {
 	AdminResult
 	PageResult
-	Tenants []string `json:"tenants"`
+	Tenants []TenantInfo `json:"tenants"`
+}
+
+type GetTenantRequest struct {
+	AdminRequest
+	TenantLookupID string `json:"tenant_lookup_id"`
+}
+
+type GetTenantResult struct {
+	AdminResult
+	Tenant *TenantInfo `json:"tenant,omitempty"`
+}
+
+type SetTenantEnabledRequest struct {
+	AdminRequest
+	TenantLookupID string `json:"tenant_lookup_id"`
+	Enabled        bool   `json:"enabled"`
+}
+
+type SetTenantEnabledResult struct {
+	AdminResult
+	TenantLookupID string `json:"tenant_lookup_id"`
+	Enabled        bool   `json:"enabled"`
+}
+
+type NodeEnrollmentInfo struct {
+	TenantID       string           `json:"tenant_id"`
+	NodeID         string           `json:"node_id"`
+	Owner          core.SubjectRef  `json:"owner"`
+	TrustClass     core.TrustClass  `json:"trust_class"`
+	KeyID          string           `json:"key_id,omitempty"`
+	PairedAt       time.Time        `json:"paired_at"`
+	LastVerifiedAt time.Time        `json:"last_verified_at,omitempty"`
+	AuthMethod     core.AuthMethod  `json:"auth_method,omitempty"`
+}
+
+type ListNodeEnrollmentsRequest struct {
+	AdminRequest
+	Page PageRequest `json:"page,omitempty"`
+}
+
+type ListNodeEnrollmentsResult struct {
+	AdminResult
+	PageResult
+	Enrollments []NodeEnrollmentInfo `json:"enrollments"`
+}
+
+type RevokeNodeEnrollmentRequest struct {
+	AdminRequest
+	NodeID string `json:"node_id"`
+}
+
+type RevokeNodeEnrollmentResult struct {
+	AdminResult
+	NodeID string `json:"node_id"`
+}
+
+type ListSessionDelegationsRequest struct {
+	AdminRequest
+	Page PageRequest `json:"page,omitempty"`
+}
+
+type ListSessionDelegationsResult struct {
+	AdminResult
+	PageResult
+	Delegations []core.SessionDelegationRecord `json:"delegations"`
 }

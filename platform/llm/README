@@ -1,3 +1,6 @@
-# Ollama Integration 
+# LLM Framework Integrations
 
-- Ollama client with tooling integration 
+
+/Ollama
+/OpenaiAPI
+/nativellama
