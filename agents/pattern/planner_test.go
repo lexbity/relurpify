@@ -2,11 +2,16 @@ package pattern
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type plannerPathEchoTool struct{}
@@ -164,4 +169,107 @@ func TestPlannerExecuteNormalizesPathAliases(t *testing.T) {
 		output, _ := value.(map[string]any)
 		assert.Equal(t, "README.md", output["path"])
 	}
+}
+
+func TestPlannerExecuteUsesExplicitSummarizeCheckpointAndPersistenceNodes(t *testing.T) {
+	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
+	require.NoError(t, err)
+	defer runtimeStore.Close()
+	checkpointDir := t.TempDir()
+	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, memory.NewCheckpointStore(checkpointDir))
+
+	task := &core.Task{ID: "planner-phase8", Instruction: "Read README.md and summarize the result."}
+	now := time.Date(2026, 3, 11, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, workflowStore.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  task.ID,
+		TaskID:      task.ID,
+		TaskType:    core.TaskTypeCodeModification,
+		Instruction: task.Instruction,
+		Status:      memory.WorkflowRunStatusRunning,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}))
+
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(plannerPathEchoTool{}))
+	agent := &PlannerAgent{
+		Model: &stubLLM{responses: []*core.LLMResponse{{
+			Text: `{"goal":"Read README","steps":[{"id":"read","description":"Read the file","tool":"file_read","params":{"file_path":"README.md"},"expected":"contents loaded","verification":"path captured","files":["README.md"]}],"dependencies":{},"files":["README.md"]}`,
+		}}},
+		Tools:          registry,
+		Memory:         composite,
+		CheckpointPath: checkpointDir,
+	}
+	require.NoError(t, agent.Initialize(&core.Config{Name: "planner-phase8", Model: "test-model"}))
+
+	state := core.NewContext()
+	state.Set("task.id", task.ID)
+	state.Set("task.instruction", task.Instruction)
+	state.Set("workflow.id", task.ID)
+
+	result, err := agent.Execute(context.Background(), task, state)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+
+	_, ok := state.Get("graph.summary")
+	require.True(t, ok)
+	_, ok = state.Get("graph.persistence")
+	require.True(t, ok)
+	_, ok = state.Get("graph.checkpoint")
+	require.True(t, ok)
+
+	artifacts, err := workflowStore.ListWorkflowArtifacts(context.Background(), task.ID, "")
+	require.NoError(t, err)
+	require.NotEmpty(t, artifacts)
+
+	events, err := workflowStore.ListEvents(context.Background(), task.ID, 20)
+	require.NoError(t, err)
+	require.NotEmpty(t, events)
+
+	decl, err := runtimeStore.SearchDeclarative(context.Background(), memory.DeclarativeMemoryQuery{
+		TaskID: task.ID,
+		Scope:  memory.MemoryScopeProject,
+		Limit:  10,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, decl)
+
+	checkpoints, err := composite.List(task.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, checkpoints)
+}
+
+func TestPlannerExecuteCanDisableStructuredPersistence(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(plannerPathEchoTool{}))
+	agent := &PlannerAgent{
+		Model: &stubLLM{responses: []*core.LLMResponse{{
+			Text: `{"goal":"Read README","steps":[{"id":"read","description":"Read the file","tool":"file_read","params":{"file_path":"README.md"},"expected":"contents loaded","verification":"path captured","files":["README.md"]}],"dependencies":{},"files":["README.md"]}`,
+		}}},
+		Tools: registry,
+	}
+	require.NoError(t, agent.Initialize(&core.Config{
+		Name:                     "planner-no-persist",
+		Model:                    "test-model",
+		UseStructuredPersistence: boolPtr(false),
+	}))
+
+	task := &core.Task{ID: "planner-no-persist", Instruction: "Read README.md and summarize the result."}
+	state := core.NewContext()
+	state.Set("task.id", task.ID)
+	state.Set("task.instruction", task.Instruction)
+
+	result, err := agent.Execute(context.Background(), task, state)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+
+	_, ok := state.Get("graph.summary")
+	require.True(t, ok)
+	_, ok = state.Get("graph.persistence")
+	require.False(t, ok)
 }

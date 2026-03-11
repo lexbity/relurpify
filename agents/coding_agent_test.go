@@ -95,7 +95,7 @@ func (m *stubCodingPipelineModel) Chat(ctx context.Context, messages []core.Mess
 	return nil, errors.New("not implemented")
 }
 
-func (m *stubCodingPipelineModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *stubCodingPipelineModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, errors.New("not implemented")
 }
 

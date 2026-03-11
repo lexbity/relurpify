@@ -24,10 +24,11 @@ type PipelineStageFactory interface {
 
 // PipelineAgent executes a deterministic sequence of typed pipeline stages.
 type PipelineAgent struct {
-	Model             core.LanguageModel
-	Config            *core.Config
-	Tools             *capability.Registry
-	WorkflowStatePath string
+	Model              core.LanguageModel
+	Config             *core.Config
+	Tools              *capability.Registry
+	WorkflowStatePath  string
+	ResumeCheckpointID string
 
 	Stages       []pipeline.Stage
 	StageBuilder func(task *core.Task) ([]pipeline.Stage, error)
@@ -75,7 +76,19 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *cor
 		Tools:             a.availableTools(),
 		EnableToolCalling: a.toolCallingEnabled(),
 		Telemetry:         a.telemetry(),
+		CapabilityInvoker: a.Tools,
 	}}
+	if store != nil {
+		runner.Options.CheckpointStore = NewSQLitePipelineCheckpointStore(store, workflowID, runID)
+		runner.Options.CheckpointAfterStage = true
+	}
+	if strings.TrimSpace(a.ResumeCheckpointID) != "" && store != nil {
+		cp, err := NewSQLitePipelineCheckpointStore(store, workflowID, runID).Load(task.ID, a.ResumeCheckpointID)
+		if err != nil {
+			return nil, fmt.Errorf("pipeline resume: %w", err)
+		}
+		runner.Options.ResumeCheckpoint = cp
+	}
 	results, err := runner.Execute(ctx, task, state, stages)
 	if store != nil {
 		if persistErr := a.persistStageResults(ctx, store, workflowID, runID, results); persistErr != nil && err == nil {
@@ -116,6 +129,10 @@ func (a *PipelineAgent) Capabilities() []core.Capability {
 	}
 }
 
+// BuildGraph returns a visualization graph of the pipeline stage sequence.
+// The returned graph is not executable; stage nodes are stubs that record
+// inspection metadata but do not invoke stage logic. Use Execute for actual
+// pipeline execution. A fully executable graph integration is planned for Phase 8.
 func (a *PipelineAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	stages, err := a.stagesForTask(task)
 	if err != nil {
@@ -289,6 +306,7 @@ type pipelineStageNode struct {
 	stage pipeline.Stage
 }
 
+// pipelineStageNode is a visualization-only stub used by BuildGraph().
 func (n *pipelineStageNode) ID() string { return n.id }
 
 func (n *pipelineStageNode) Type() graph.NodeType { return graph.NodeTypeSystem }

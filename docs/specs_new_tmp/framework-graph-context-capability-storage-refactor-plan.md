@@ -54,6 +54,18 @@ Today a graph node exposes only identity, type, and `Execute`. That keeps the ru
 
 As a result, capability metadata exists in the registry and policy layers, but not in the workflow structure itself.
 
+**Confirmed implementation drift (active bypass, not just a design gap):**
+
+The current `ToolNode` calls `tool.Execute()` directly. It does not go through `capability.Registry`. This means every tool invocation from a graph node bypasses:
+
+- capability descriptor lookup
+- `CapabilityPolicy` and `PolicyEngine` evaluation
+- `runtimeSafetyController` call and output budget checks
+- `CapabilityResultEnvelope` wrapping and provenance recording
+- `InsertionDecision` computation
+
+`ReActAgent` (in `agents/pattern/`) correctly routes all tool calls through the `CapabilityRegistry`. Graph nodes do not. This drift must be closed before node contracts are added, because contracts placed on a node that still calls `tool.Execute()` directly would give false confidence about policy enforcement. The fix is to wire `ToolNode` to accept a `capability.Registry` reference (or a scoped invocation function) and dispatch through `InvokeCapability` instead of calling the `Tool` interface directly.
+
 ### 2. Checkpointing resumes from the wrong semantic boundary
 
 The current graph creates checkpoints after a node has executed, but stores the current node ID as the resume cursor. On restore, the runtime resumes by running that same node again. This is unsafe for:
@@ -384,6 +396,39 @@ That makes the graph not just an execution graph, but the operating system for m
 
 ## Core Design Changes
 
+## Phase 0: Wire ToolNode Through the Capability Registry
+
+Target:
+
+- close the confirmed bypass where graph `ToolNode` calls `tool.Execute()` directly instead of routing through `capability.Registry`
+
+This phase is a prerequisite for all later phases. Adding node contracts on top of a `ToolNode` that bypasses the registry would give false confidence: contracts would declare capability requirements that are never actually enforced at execution time.
+
+Deliverables:
+
+- `ToolNode` dispatches through `capability.Registry.InvokeCapability()` instead of `tool.Execute()`
+- graph-level tool invocations produce `CapabilityResultEnvelope` outputs
+- `InsertionDecision` and provenance metadata flow from graph tool invocations the same way they do from `ReActAgent`
+
+Implementation steps:
+
+1. Add a `Registry capability.Registry` field (or a narrower `InvokeCapability` function field) to `ToolNode`.
+2. Replace the `tool.Execute()` call in `ToolNode.Execute()` with a `registry.InvokeCapability()` call.
+3. Propagate the resulting `CapabilityResultEnvelope` through the graph result path.
+4. Update graph builders that construct `ToolNode` to pass a registry reference.
+5. Add a compatibility fallback: if no registry is set, fall back to `tool.Execute()` with a deprecation log, so old graph builders do not break immediately.
+
+Notes:
+
+- `ReActAgent` is the reference implementation — its act node already correctly routes through the registry
+- this phase should be small: the existing registry infrastructure is complete, the gap is only in `ToolNode`'s dispatch path
+
+Acceptance criteria:
+
+- a graph `ToolNode` invocation triggers policy evaluation, safety checks, and envelope wrapping from the registry
+- existing graph builders still function via the fallback path
+- no direct `tool.Execute()` calls remain in the primary `ToolNode.Execute()` path
+
 ## Phase 1: Introduce Node Contracts
 
 Target:
@@ -398,23 +443,27 @@ Deliverables:
 
 Implementation steps:
 
-1. Add a `NodeContract` type with fields for:
-   - `RequiredCapabilities []core.CapabilitySelector` or a stronger selector type
-   - `PreferredPlacement` with node/provider hints
-   - `MaxRiskClass core.RiskClass`
-   - `RequiredTrustClass core.TrustClass`
-   - `Recoverability core.RecoverabilityMode`
-   - `CheckpointPolicy`
-   - `ContextPolicy`
-   - `SideEffectClass`
-   - `Idempotency`
+1. Add a `NodeContract` type. **First-pass active fields only** — do not activate fields that are not validated or enforced yet:
+   - `RequiredCapabilities []core.CapabilitySelector` — the primary dependency declaration; active from day one
+   - `SideEffectClass SideEffectClass` — needed immediately by Phase 2 checkpoint/resume logic
+   - `Idempotency IdempotencyClass` — needed immediately by Phase 2 checkpoint/resume logic
+
+   Defer these fields to later phases (declare in the struct as zero-value safe, but do not add validation or enforcement yet):
+   - `PreferredPlacement` — Phase 7 (placement resolution)
+   - `MaxRiskClass` / `RequiredTrustClass` — Phase 7 (preflight validator)
+   - `Recoverability` — Phase 7 (recovery model)
+   - `CheckpointPolicy` — Phase 4 (explicit checkpoint nodes)
+   - `ContextPolicy` — Phase 3 (memory class boundaries)
+
+   Adding all fields to the struct upfront is acceptable for schema stability, but validation and enforcement should only be added when the corresponding phase is implemented. A contract field with no enforcement path gives false confidence.
+
 2. Add a new optional interface in `framework/graph`, for example:
    - `type ContractNode interface { Node; Contract() NodeContract }`
 3. Keep the existing `Node` interface unchanged for compatibility.
 4. Add helper functions so the graph can fetch a node contract with sane defaults when a node does not implement `ContractNode`.
-5. Extend graph validation to inspect node contracts before execution.
+5. Extend graph validation to inspect the active contract fields (`RequiredCapabilities`, `SideEffectClass`, `Idempotency`) before execution.
 6. Add initial contract implementations for:
-   - `ToolNode` as the tool-specific capability execution case
+   - `ToolNode` as the tool-specific capability execution case (after Phase 0 wires it through the registry)
    - `LLMNode`
    - `HumanNode`
    - any planner or ReAct-specific system nodes that have known semantics
@@ -423,6 +472,7 @@ Notes:
 
 - this phase should be additive only
 - existing graph builders must continue to work
+- resist the temptation to activate all contract fields immediately; each deferred field adds a validation surface that must be kept correct as the graph evolves
 
 Acceptance criteria:
 
@@ -796,14 +846,15 @@ Acceptance criteria:
 
 Recommended order:
 
-1. Phase 2 first, to fix checkpoint correctness
-2. Phase 1 next, to add node contracts without breaking callers
-3. Phase 3, to establish memory classes and state boundaries
-4. Phase 4, to introduce explicit checkpoint, retrieval, and summary nodes
-5. Phase 5, to add declarative and procedural stores
-6. Phase 6, to add runtime persistence rules before broad persistence
-7. Phase 7, to connect preflight, placement, and unified storage
-8. Phase 8 throughout, with new tests added incrementally per phase
+1. **Phase 0 first**, to close the confirmed `ToolNode` registry bypass before anything else. Contracts and checkpoints placed on a node that skips policy enforcement give false confidence. This phase is small — the registry infrastructure already exists.
+2. **Phase 2 next**, to fix checkpoint resume cursor correctness. This is the most concrete correctness bug and is independent of contracts.
+3. **Phase 1** next, to add node contracts. Only activate `RequiredCapabilities`, `SideEffectClass`, and `Idempotency` in the first pass — defer the remaining contract fields until their corresponding phases are ready.
+4. **Phase 3**, to establish memory classes and state boundaries.
+5. **Phase 4**, to introduce explicit checkpoint, retrieval, and summary nodes.
+6. **Phase 5**, to add declarative and procedural stores.
+7. **Phase 6**, to add runtime persistence rules before broad persistence.
+8. **Phase 7**, to connect preflight, placement, and unified storage. The deferred contract fields (`PreferredPlacement`, `MaxRiskClass`, `RequiredTrustClass`, `Recoverability`) become active here.
+9. **Phase 8** throughout, with new tests added incrementally per phase.
 
 ## Suggested File Ownership
 
@@ -1116,6 +1167,7 @@ Design notes:
 - tool nodes should typically map to `NodeContractKindCapability`
 - `ContextBoundaryPolicy` is important for preventing the “every node sees everything” failure mode
 - `Idempotency` and `SideEffectClass` should be used by checkpoint planning and resume rules
+- **First-pass scope**: only `RequiredCapabilities`, `SideEffectClass`, and `Idempotency` should have active validation in the first implementation pass; all other fields should be declared but left at zero-value defaults until their corresponding phase is implemented. A contract field with no enforcement path is misleading and should not be activated prematurely.
 
 ## 2. CheckpointArtifact
 
@@ -1314,10 +1366,11 @@ Suggested first-pass mapping of these schemas onto the existing memory layer:
 
 The smallest useful implementation slice for these schemas is:
 
-1. Add `NodeContract` and `ContractNode`
-2. Change graph checkpoints to persist `NextNodeID`
-3. Introduce `CheckpointArtifact` in the workflow storage layer
-4. Introduce `SummaryArtifact` for rolling thread summaries
-5. Add a minimal retrieval node that returns `MemoryRetrievalNodeResult`
+1. Wire `ToolNode` through `capability.Registry` (Phase 0 — prerequisite, closes active bypass)
+2. Change graph checkpoints to persist `NextNodeID` as the resume cursor (Phase 2)
+3. Add `NodeContract` and `ContractNode` with only `RequiredCapabilities`, `SideEffectClass`, and `Idempotency` active (Phase 1 minimal)
+4. Introduce `CheckpointArtifact` in the workflow storage layer
+5. Introduce `SummaryArtifact` for rolling thread summaries
+6. Add a minimal retrieval node that returns `MemoryRetrievalNodeResult`
 
-That is enough to prove the architecture without fully replacing every existing context and memory helper.
+That is enough to prove the architecture without fully replacing every existing context and memory helper. Steps 1 and 2 fix correctness issues; steps 3–6 introduce the new model incrementally.

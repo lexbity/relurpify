@@ -36,7 +36,11 @@ func TestGraphCreateCheckpoint(t *testing.T) {
 	}
 	state := core.NewContext()
 	state.Set("task.id", "task-ckpt")
-	checkpoint, err := g.CreateCheckpoint("task-ckpt", end.ID(), state)
+	checkpoint, err := g.CreateCheckpoint("task-ckpt", node.ID(), end.ID(), &core.Result{NodeID: node.ID(), Success: true}, &graph.NodeTransitionRecord{
+		CompletedNodeID:  node.ID(),
+		NextNodeID:       end.ID(),
+		TransitionReason: "serial",
+	}, state)
 	if err != nil {
 		t.Fatalf("CreateCheckpoint error: %v", err)
 	}
@@ -45,6 +49,9 @@ func TestGraphCreateCheckpoint(t *testing.T) {
 	}
 	if checkpoint.GraphHash == "" {
 		t.Fatal("expected graph hash to be populated")
+	}
+	if checkpoint.CompletedNodeID != node.ID() || checkpoint.NextNodeID != end.ID() {
+		t.Fatalf("unexpected checkpoint cursor: %+v", checkpoint)
 	}
 }
 
@@ -66,7 +73,11 @@ func TestGraphResumeFromCheckpoint(t *testing.T) {
 	}
 	state := core.NewContext()
 	state.Set("task.id", "resume-task")
-	checkpoint, err := g.CreateCheckpoint("resume-task", node.ID(), state)
+	checkpoint, err := g.CreateCheckpoint("resume-task", node.ID(), done.ID(), &core.Result{NodeID: node.ID(), Success: true}, &graph.NodeTransitionRecord{
+		CompletedNodeID:  node.ID(),
+		NextNodeID:       done.ID(),
+		TransitionReason: "serial",
+	}, state)
 	if err != nil {
 		t.Fatalf("CreateCheckpoint error: %v", err)
 	}
@@ -95,7 +106,11 @@ func TestGraphCreateCompressedCheckpoint(t *testing.T) {
 		should: true,
 	}
 	llm := &stubLLM{text: "Summary: s\nKey Facts: []"}
-	checkpoint, err := g.CreateCompressedCheckpoint("task", "node", ctx, llm, comp)
+	checkpoint, err := g.CreateCompressedCheckpoint("task", "node", "done", &core.Result{NodeID: "node", Success: true}, &graph.NodeTransitionRecord{
+		CompletedNodeID:  "node",
+		NextNodeID:       "done",
+		TransitionReason: "serial",
+	}, ctx, llm, comp)
 	if err != nil {
 		t.Fatalf("CreateCompressedCheckpoint error: %v", err)
 	}

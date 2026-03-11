@@ -33,7 +33,7 @@ func (m *relurpicCapabilityQueueModel) Chat(context.Context, []core.Message, *co
 	return &core.LLMResponse{}, nil
 }
 
-func (m *relurpicCapabilityQueueModel) ChatWithTools(context.Context, []core.Message, []core.Tool, *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *relurpicCapabilityQueueModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
 	return m.Generate(context.Background(), "", nil)
 }
 

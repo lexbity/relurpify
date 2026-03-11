@@ -134,9 +134,9 @@ func TestBrowserProviderRegistersBrowserTool(t *testing.T) {
 	err := newBrowserProvider().Initialize(context.Background(), rt)
 
 	require.NoError(t, err)
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
-	require.Equal(t, "browser", tool.Name())
+	specs := registry.ModelCallableLLMToolSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "browser", specs[0].Name)
 }
 
 func TestBrowserToolOpenUsesScopedDefaultSession(t *testing.T) {
@@ -156,28 +156,27 @@ func TestBrowserToolOpenUsesScopedDefaultSession(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	state := core.NewContext()
 	state.Set("task.id", "task-123")
 
-	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	openResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 	sessionID := openResult.Data["session_id"].(string)
 	require.NotEmpty(t, sessionID)
 	require.Equal(t, sessionID, state.GetString(browserDefaultSessionKey))
 	require.NotNil(t, openResult.Data["page_state"])
-	_, ok = openResult.Data["capabilities"].(browser.Capabilities)
+	_, ok := openResult.Data["capabilities"].(browser.Capabilities)
 	require.True(t, ok)
 
-	textResult, err := tool.Execute(context.Background(), state, map[string]interface{}{
+	textResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":   "get_text",
 		"selector": "#result",
 	})
 	require.NoError(t, err)
 	require.Equal(t, "ready", textResult.Data["text"])
 
-	closeResult, err := tool.Execute(context.Background(), state, map[string]interface{}{
+	closeResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action": "close",
 	})
 	require.NoError(t, err)
@@ -204,8 +203,7 @@ func TestBrowserToolUsesAgentBrowserDefaultBackend(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	registry.UseAgentSpec("agent-browser", &core.AgentRuntimeSpec{
 		Mode: core.AgentModePrimary,
 		Model: core.AgentModelConfig{
@@ -217,10 +215,8 @@ func TestBrowserToolUsesAgentBrowserDefaultBackend(t *testing.T) {
 			DefaultBackend: "bidi",
 		},
 	})
-	tool, ok = registry.GetModelTool("browser")
-	require.True(t, ok)
 
-	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"action": "open"})
+	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", map[string]interface{}{"action": "open"})
 
 	require.NoError(t, err)
 	require.Equal(t, "bidi", seenBackend)
@@ -242,8 +238,7 @@ func TestBrowserToolRejectsDisallowedBackend(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	registry.UseAgentSpec("agent-browser", &core.AgentRuntimeSpec{
 		Mode: core.AgentModePrimary,
 		Model: core.AgentModelConfig{
@@ -255,10 +250,8 @@ func TestBrowserToolRejectsDisallowedBackend(t *testing.T) {
 			AllowedBackends: []string{"cdp"},
 		},
 	})
-	tool, ok = registry.GetModelTool("browser")
-	require.True(t, ok)
 
-	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", map[string]interface{}{
 		"action":  "open",
 		"backend": "webdriver",
 	})
@@ -283,8 +276,7 @@ func TestBrowserToolRejectsDeniedExecuteJS(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	registry.UseAgentSpec("agent-browser", &core.AgentRuntimeSpec{
 		Mode: core.AgentModePrimary,
 		Model: core.AgentModelConfig{
@@ -298,14 +290,12 @@ func TestBrowserToolRejectsDeniedExecuteJS(t *testing.T) {
 			},
 		},
 	})
-	tool, ok = registry.GetModelTool("browser")
-	require.True(t, ok)
 
 	state := core.NewContext()
-	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	openResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 
-	_, err = tool.Execute(context.Background(), state, map[string]interface{}{
+	_, err = registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":     "execute_js",
 		"session_id": openResult.Data["session_id"],
 		"script":     "return 1",
@@ -332,14 +322,13 @@ func TestBrowserToolNavigateRecordsPageObservation(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	state := core.NewContext()
 
-	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	openResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 
-	result, err := tool.Execute(context.Background(), state, map[string]interface{}{
+	result, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":     "navigate",
 		"session_id": openResult.Data["session_id"],
 		"url":        "https://example.com/docs",
@@ -379,13 +368,12 @@ func TestBrowserToolExtractReturnsStructuredPageData(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	state := core.NewContext()
-	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	openResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 
-	result, err := tool.Execute(context.Background(), state, map[string]interface{}{
+	result, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":     "extract",
 		"session_id": openResult.Data["session_id"],
 	})
@@ -441,10 +429,9 @@ func TestBrowserToolOpenPassesBackendSelection(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 
-	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", map[string]interface{}{
 		"action":  "open",
 		"backend": "webdriver",
 	})
@@ -471,10 +458,9 @@ func TestBrowserToolOpenSupportsBiDiSelection(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 
-	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", map[string]interface{}{
 		"action":  "open",
 		"backend": "bidi",
 	})
@@ -506,22 +492,21 @@ func TestBrowserToolParallelSessionsStayIsolatedAndScopeCleanupClosesThem(t *tes
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	state := core.NewContext()
 	state.Set("task.id", "task-parallel")
 
-	firstOpen, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	firstOpen, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 	firstSessionID := firstOpen.Data["session_id"].(string)
 
-	secondOpen, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	secondOpen, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 	secondSessionID := secondOpen.Data["session_id"].(string)
 
 	require.NotEqual(t, firstSessionID, secondSessionID)
 
-	firstText, err := tool.Execute(context.Background(), state, map[string]interface{}{
+	firstText, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":     "get_text",
 		"session_id": firstSessionID,
 		"selector":   "#result",
@@ -529,7 +514,7 @@ func TestBrowserToolParallelSessionsStayIsolatedAndScopeCleanupClosesThem(t *tes
 	require.NoError(t, err)
 	require.Equal(t, "first", firstText.Data["text"])
 
-	secondText, err := tool.Execute(context.Background(), state, map[string]interface{}{
+	secondText, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":     "get_text",
 		"session_id": secondSessionID,
 		"selector":   "#result",
@@ -569,13 +554,12 @@ func TestBrowserToolRecoversAfterBackendDisconnect(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	state := core.NewContext()
-	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	openResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 
-	_, err = tool.Execute(context.Background(), state, map[string]interface{}{
+	_, err = registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":     "navigate",
 		"session_id": openResult.Data["session_id"],
 		"url":        "https://example.com/recovered",
@@ -619,9 +603,8 @@ func TestBrowserProviderCloseClosesTrackedSessions(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
-	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"action": "open"})
+	require.True(t, registry.HasCapability("browser"))
+	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 	require.Len(t, provider.sessions, 1)
 
@@ -647,9 +630,8 @@ func TestBrowserProviderCloseSessionClosesTrackedSession(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
-	openResult, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"action": "open"})
+	require.True(t, registry.HasCapability("browser"))
+	openResult, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 
 	require.NoError(t, provider.CloseSession(context.Background(), openResult.Data["session_id"].(string)))
@@ -686,15 +668,14 @@ func TestBrowserToolOpenHonorsSessionSafetyBudgets(t *testing.T) {
 	}
 	require.NoError(t, provider.Initialize(context.Background(), rt))
 
-	tool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("browser"))
 	state := core.NewContext()
 
-	openResult, err := tool.Execute(context.Background(), state, map[string]interface{}{"action": "open"})
+	openResult, err := registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{"action": "open"})
 	require.NoError(t, err)
 	require.NotEmpty(t, openResult.Data["session_id"])
 
-	_, err = tool.Execute(context.Background(), state, map[string]interface{}{
+	_, err = registry.InvokeCapability(context.Background(), state, "browser", map[string]interface{}{
 		"action":     "navigate",
 		"session_id": openResult.Data["session_id"],
 		"url":        "https://example.com",

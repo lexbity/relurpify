@@ -54,7 +54,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 	streamCB := n.streamCallback()
 	if useToolCalling {
 		messages := n.ensureMessages(state, tools)
-		resp, err = n.agent.Model.ChatWithTools(ctx, messages, tools, &core.LLMOptions{
+		resp, err = n.agent.Model.ChatWithTools(ctx, messages, core.LLMToolSpecsFromTools(tools), &core.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
 			MaxTokens:      512,

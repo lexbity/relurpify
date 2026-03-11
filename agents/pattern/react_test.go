@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,6 +27,8 @@ type stubLLM struct {
 type recordingTelemetry struct {
 	events []core.Event
 }
+
+func boolPtr(value bool) *bool { return &value }
 
 func (r *recordingTelemetry) Emit(event core.Event) {
 	r.events = append(r.events, event)
@@ -46,7 +51,7 @@ func (s *stubLLM) Chat(ctx context.Context, messages []core.Message, options *co
 }
 
 // ChatWithTools returns the next queued response and increments instrumentation.
-func (s *stubLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (s *stubLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	s.withToolsCalls++
 	copyMessages := make([]core.Message, len(messages))
 	copy(copyMessages, messages)
@@ -121,6 +126,132 @@ func makeRecoveryRegistry(t *testing.T, tools ...stubTool) *capability.Registry 
 		assert.NoError(t, registry.Register(tool))
 	}
 	return registry
+}
+
+func TestReactExecuteUsesExplicitRetrievalSummarizeAndCheckpointNodes(t *testing.T) {
+	mem, err := memory.NewHybridMemory(t.TempDir())
+	assert.NoError(t, err)
+	assert.NoError(t, mem.Remember(context.Background(), "fact-1", map[string]interface{}{
+		"memory_class": string(core.MemoryClassDeclarative),
+		"summary":      "project fact",
+	}, memory.MemoryScopeProject))
+
+	agent := &ReActAgent{
+		Model: &stubLLM{responses: []*core.LLMResponse{
+			{Text: `{"thought":"done","action":"complete","tool":"","arguments":{},"complete":true,"summary":"finished"}`},
+		}},
+		Tools:          capability.NewRegistry(),
+		Memory:         mem,
+		CheckpointPath: t.TempDir(),
+	}
+	err = agent.Initialize(&core.Config{Name: "react-test"})
+	assert.NoError(t, err)
+
+	task := &core.Task{ID: "react-phase4", Instruction: "Summarize the current state."}
+	state := core.NewContext()
+	state.Set("task.id", task.ID)
+	state.Set("task.instruction", task.Instruction)
+
+	result, err := agent.Execute(context.Background(), task, state)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Success)
+
+	_, ok := state.Get("graph.declarative_memory")
+	assert.True(t, ok)
+	_, ok = state.Get("graph.summary")
+	assert.True(t, ok)
+	_, ok = state.Get("graph.checkpoint")
+	assert.True(t, ok)
+
+	store := memory.NewCheckpointStore(agent.CheckpointPath)
+	ids, err := store.List(task.ID)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, ids)
+}
+
+func TestReactExecutePersistsCompletionSummaryThroughRuntimeWriter(t *testing.T) {
+	mem, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime_memory.db"))
+	assert.NoError(t, err)
+	defer mem.Close()
+	assert.NoError(t, mem.PutDeclarative(context.Background(), memory.DeclarativeMemoryRecord{
+		RecordID: "fact-1",
+		Scope:    memory.MemoryScopeProject,
+		Kind:     memory.DeclarativeMemoryKindFact,
+		Summary:  "project fact",
+		Title:    "fact",
+	}))
+
+	agent := &ReActAgent{
+		Model: &stubLLM{responses: []*core.LLMResponse{
+			{Text: `{"thought":"done","action":"complete","tool":"","arguments":{},"complete":true,"summary":"finished"}`},
+		}},
+		Tools:  capability.NewRegistry(),
+		Memory: mem,
+	}
+	err = agent.Initialize(&core.Config{Name: "react-phase6"})
+	assert.NoError(t, err)
+
+	task := &core.Task{ID: "react-phase6", Instruction: "Summarize the current state."}
+	state := core.NewContext()
+	state.Set("task.id", task.ID)
+	state.Set("task.instruction", task.Instruction)
+
+	result, err := agent.Execute(context.Background(), task, state)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Success)
+
+	records, err := mem.SearchDeclarative(context.Background(), memory.DeclarativeMemoryQuery{
+		TaskID: task.ID,
+		Scope:  memory.MemoryScopeProject,
+		Limit:  10,
+	})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, records)
+
+	raw, ok := state.Get("graph.persistence")
+	assert.True(t, ok)
+	payload, ok := raw.(map[string]any)
+	assert.True(t, ok)
+	audits, ok := payload["records"].([]graph.PersistenceAuditRecord)
+	assert.True(t, ok)
+	assert.NotEmpty(t, audits)
+	assert.Equal(t, graph.PersistenceActionCreated, audits[0].Action)
+}
+
+func TestReactExecuteCanUseLegacyCheckpointCallbackWhenExplicitNodesDisabled(t *testing.T) {
+	agent := &ReActAgent{
+		Model: &stubLLM{responses: []*core.LLMResponse{
+			{Text: `{"thought":"done","action":"complete","tool":"","arguments":{},"complete":true,"summary":"finished"}`},
+		}},
+		Tools:          capability.NewRegistry(),
+		CheckpointPath: t.TempDir(),
+	}
+	err := agent.Initialize(&core.Config{
+		Name:                       "react-legacy-checkpoint",
+		UseExplicitCheckpointNodes: boolPtr(false),
+		UseDeclarativeRetrieval:    boolPtr(false),
+		UseStructuredPersistence:   boolPtr(false),
+	})
+	assert.NoError(t, err)
+
+	task := &core.Task{ID: "react-legacy", Instruction: "Finish quickly."}
+	state := core.NewContext()
+	state.Set("task.id", task.ID)
+
+	result, err := agent.Execute(context.Background(), task, state)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Success)
+
+	_, ok := state.Get("graph.checkpoint")
+	assert.False(t, ok)
+
+	store := memory.NewCheckpointStore(agent.CheckpointPath)
+	ids, err := store.List(task.ID)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, ids)
 }
 
 // TestReActAgentExecute validates a minimal think-act-observe pass.

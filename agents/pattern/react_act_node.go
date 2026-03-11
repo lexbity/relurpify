@@ -22,6 +22,27 @@ func (n *reactActNode) ID() string { return n.id }
 // Type labels the node as a tool execution step.
 func (n *reactActNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
+// Contract marks the ReAct act step as a capability-consuming execution node.
+func (n *reactActNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		RequiredCapabilities: []core.CapabilitySelector{{
+			Kind: core.CapabilityKindTool,
+		}},
+		SideEffectClass: graph.SideEffectExternal,
+		Idempotency:     graph.IdempotencyUnknown,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:                 []string{"task.*", "react.decision", "react.tool_calls", "react.*"},
+			WriteKeys:                []string{"react.last_tool_result", "react.last_tool_result_*", "react.tool_observations", "react.*"},
+			AllowHistoryAccess:       true,
+			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking, core.MemoryClassDeclarative},
+			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassArtifactRef, core.StateDataClassMemoryRef, core.StateDataClassStructuredState},
+			MaxStateEntryBytes:       4096,
+			MaxInlineCollectionItems: 16,
+			PreferArtifactReferences: true,
+		},
+	}
+}
+
 // Execute runs any pending tool calls or directly invokes the requested tool
 // referenced in the latest decision payload.
 func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {

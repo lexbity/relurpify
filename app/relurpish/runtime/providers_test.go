@@ -338,7 +338,7 @@ func (mcpSamplingStubModel) Chat(context.Context, []core.Message, *core.LLMOptio
 	return &core.LLMResponse{Text: "sampled-response", FinishReason: "stop"}, nil
 }
 
-func (mcpSamplingStubModel) ChatWithTools(context.Context, []core.Message, []core.Tool, *core.LLMOptions) (*core.LLMResponse, error) {
+func (mcpSamplingStubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
 	return &core.LLMResponse{Text: "sampled-response", FinishReason: "stop"}, nil
 }
 
@@ -763,10 +763,6 @@ func TestRegisterBuiltinProvidersRegistersConfiguredMCPProviders(t *testing.T) {
 	require.True(t, registry.HasCapability("mcp:remote-mcp:prompt:draft.summary"))
 	require.True(t, registry.HasCapability("mcp:remote-mcp:resource:file____tmp_catalog_json"))
 
-	tool, ok := registry.GetModelTool("remote.echo")
-	require.False(t, ok)
-	require.Nil(t, tool)
-
 	_ = server
 }
 
@@ -857,10 +853,9 @@ func TestMCPClientProviderCallableExposureAndInvocation(t *testing.T) {
 	}
 
 	require.NoError(t, rt.RegisterProvider(context.Background(), provider))
-	modelTool, ok := registry.GetModelTool("remote.echo")
-	require.True(t, ok)
+	require.True(t, registry.HasCapability("mcp:remote-mcp:tool:remote.echo"))
 
-	result, err := modelTool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"message": "hello"})
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "mcp:remote-mcp:tool:remote.echo", map[string]interface{}{"message": "hello"})
 	require.NoError(t, err)
 	require.Equal(t, "hello", result.Data["echo"])
 	_ = server

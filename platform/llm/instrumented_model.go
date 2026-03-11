@@ -55,7 +55,7 @@ func (m *InstrumentedModel) Chat(ctx context.Context, messages []core.Message, o
 	return resp, err
 }
 
-func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	meta := chatMeta(messages, tools, options)
 	m.emitPrompt(ctx, "chat_with_tools", meta.base, m.Debug, meta.debug)
 	resp, err := m.Inner.ChatWithTools(ctx, messages, tools, options)
@@ -68,7 +68,7 @@ type chatMetaPayload struct {
 	debug map[string]interface{}
 }
 
-func chatMeta(messages []core.Message, tools []core.Tool, options *core.LLMOptions) chatMetaPayload {
+func chatMeta(messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) chatMetaPayload {
 	var roles []string
 	preview := make([]map[string]interface{}, 0, min(len(messages), 20))
 	for i, msg := range messages {
@@ -84,7 +84,7 @@ func chatMeta(messages []core.Message, tools []core.Tool, options *core.LLMOptio
 	}
 	toolNames := make([]string, 0, len(tools))
 	for _, t := range tools {
-		toolNames = append(toolNames, t.Name())
+		toolNames = append(toolNames, t.Name)
 	}
 	base := map[string]interface{}{
 		"model":            modelFromOptions(options),

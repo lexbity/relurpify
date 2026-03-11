@@ -34,7 +34,7 @@ func (m *stubPipelineModel) Chat(ctx context.Context, messages []core.Message, o
 	return nil, errors.New("not implemented")
 }
 
-func (m *stubPipelineModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *stubPipelineModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -114,8 +114,13 @@ func TestPipelineAgentExecuteRunsStages(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected successful result, got %+v", result)
 	}
-	if got := state.GetString("stage2.out"); got == "" {
+	raw, ok := state.Get("stage2.out")
+	if !ok {
 		t.Fatalf("expected stage2 output in state")
+	}
+	output, ok := raw.(map[string]any)
+	if !ok || output["issues"] != 2 {
+		t.Fatalf("expected stage2 output map, got %#v", raw)
 	}
 	if _, ok := result.Data["stage_results"]; !ok {
 		t.Fatalf("expected stage results in response data")
@@ -213,6 +218,34 @@ func TestPipelineAgentExecutePropagatesStageFailure(t *testing.T) {
 	_, err := agent.Execute(context.Background(), &core.Task{ID: "task-4", Instruction: "fail pipeline"}, core.NewContext())
 	if err == nil {
 		t.Fatal("expected validation failure")
+	}
+}
+
+func TestPipelineAgentPrefersStageBuilderOverFactoryAndStages(t *testing.T) {
+	agent := &PipelineAgent{
+		Model:        &stubPipelineModel{responses: []*core.LLMResponse{{Text: "{}"}}},
+		Stages:       []pipeline.Stage{makePipelineStage("static", "in", "out", map[string]any{"mode": "static"})},
+		StageFactory: taskTypeStageFactory{},
+		StageBuilder: func(task *core.Task) ([]pipeline.Stage, error) {
+			return []pipeline.Stage{makePipelineStage("builder", "in", "out", map[string]any{"mode": "builder"})}, nil
+		},
+	}
+	requireNoError(t, agent.Initialize(&core.Config{Model: "test-model"}))
+
+	state := core.NewContext()
+	_, err := agent.Execute(context.Background(), &core.Task{ID: "task-builder", Context: map[string]any{"mode": "debug"}}, state)
+	requireNoError(t, err)
+
+	resultsRaw, ok := state.Get("pipeline.results")
+	if !ok {
+		t.Fatalf("expected pipeline results in state")
+	}
+	results, ok := resultsRaw.([]pipeline.StageResult)
+	if !ok || len(results) != 1 {
+		t.Fatalf("expected one stage result, got %#v", resultsRaw)
+	}
+	if results[0].StageName != "builder" {
+		t.Fatalf("expected builder stage, got %s", results[0].StageName)
 	}
 }
 

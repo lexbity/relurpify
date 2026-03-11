@@ -165,13 +165,10 @@ func (t *TapeModel) Chat(ctx context.Context, messages []core.Message, options *
 	})
 }
 
-func (t *TapeModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (t *TapeModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
-		if tool == nil {
-			continue
-		}
-		names = append(names, tool.Name())
+		names = append(names, tool.Name)
 	}
 	req := tapeRequest{Messages: messages, ToolNames: names, Options: options}
 	return t.roundTrip(ctx, "chat_with_tools", req, func() (*core.LLMResponse, error) {

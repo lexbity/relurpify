@@ -22,7 +22,7 @@ func (s *stubLLM) Chat(ctx context.Context, messages []core.Message, options *co
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (s *stubLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (s *stubLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

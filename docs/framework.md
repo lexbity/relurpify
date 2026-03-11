@@ -96,7 +96,7 @@ Dispatch is gated by `CapabilityPolicy` and `ProviderPolicy`. Every result is wr
 
 ## graph
 
-`framework/graph` provides a deterministic state-machine workflow runtime.
+`framework/graph` provides a deterministic state-machine workflow runtime with contract-aware preflight, explicit recovery boundaries, and structured runtime system nodes.
 
 **Node types:**
 
@@ -106,11 +106,20 @@ Dispatch is gated by `CapabilityPolicy` and `ProviderPolicy`. Every result is wr
 | `ToolNode` | Invokes a capability and captures the observation |
 | `ConditionalNode` | Branches on a predicate over the current context |
 | `HumanNode` | Pauses for HITL input |
-| `SystemNode` | Injects a system message or state transformation |
+| `SystemNode` | Checkpoint, retrieval, summary, hydration, and persistence helpers |
 | `ObservationNode` | Records an observation |
 | `TerminalNode` | Signals completion or failure |
 
-**Checkpointing** — `graph_checkpoint.go` captures full execution state (completed nodes, pending branches, context snapshot) for pause-and-resume without replaying from the start.
+**Contracts & preflight** — every node may declare a `NodeContract` describing required capabilities, trust/risk bounds, placement preference, recovery expectations, checkpoint policy, and state-boundary rules. `preflight.go` validates those contracts before execution and produces an inspectable placement/report surface.
+
+**Checkpointing** — `graph_checkpoint.go` captures transition-boundary execution state (completed node, next-node cursor, context snapshot) for pause-and-resume without replaying completed work.
+
+**System nodes** — `system_nodes.go` and `persistence_node.go` provide first-class:
+- declarative/procedural retrieval
+- context summarization
+- explicit checkpoint persistence
+- context hydration
+- structured declarative/procedural persistence with audit records
 
 **Plan executor** — `plan_executor.go` compiles a `Plan` into a linear graph, enabling structured plans to execute through the graph runtime without manual wiring.
 
@@ -144,17 +153,24 @@ Each **Stage** implements four methods:
 
 ## memory
 
-`framework/memory` provides hybrid in-memory and disk-backed storage, scoped to session, project, or global level.
+`framework/memory` owns durable runtime persistence. The package now separates transient scratch memory from authoritative durable workflow, checkpoint, and structured runtime records.
 
 | Store | Purpose |
 |-------|---------|
-| `MemoryStore` | Primary interface: Remember/Recall/Search/Forget/Summarise |
-| `CheckpointStore` | Graph execution checkpoints |
+| `MemoryStore` | Generic compatibility surface for scratch and legacy memory callers |
+| `RuntimeMemoryStore` | Structured declarative/procedural runtime memory |
+| `CheckpointStore` | Resumable graph execution checkpoints |
 | `MessageStore` | Conversation history |
 | `VectorStore` | Embeddings for semantic recall |
-| `WorkflowStateStore` | Pipeline stage results by workflow ID |
-| `WorkflowStore` | Top-level workflow metadata and status |
+| `WorkflowStateStore` | Authoritative durable workflow records, artifacts, events, and snapshots |
+| `CompositeRuntimeStore` | Unified runtime-facing surface over workflow state, runtime memory, and checkpoints |
+| `WorkflowStore` | Legacy top-level workflow compatibility layer |
 | `CodeIndexStore` | Workspace symbol index |
+
+**Structured runtime memory** distinguishes:
+- working memory for short-lived coordination state
+- declarative memory for durable facts, decisions, and summaries
+- procedural memory for reusable routines and capability compositions
 
 ---
 

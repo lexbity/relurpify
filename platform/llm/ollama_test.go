@@ -156,7 +156,7 @@ func TestClientChatWithToolsParsesToolCalls(t *testing.T) {
 		}),
 	}
 
-	tools := []core.Tool{stubTool{name: "echo"}}
+	tools := []core.LLMToolSpec{{Name: "echo", Description: "echoes input"}}
 	messages := []core.Message{
 		{Role: "user", Content: "say hi"},
 	}

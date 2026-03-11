@@ -133,10 +133,10 @@ func (c *Client) Chat(ctx context.Context, messages []core.Message, options *cor
 }
 
 // ChatWithTools handles tool calling metadata.
-func (c *Client) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (c *Client) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	payload := map[string]interface{}{
 		"model":    c.model(options),
-		"tools":    convertTools(tools),
+		"tools":    convertLLMToolSpecs(tools),
 		"stream":   false,
 		"messages": convertMessages(messages),
 	}
@@ -362,41 +362,52 @@ func convertMessages(messages []core.Message) []map[string]interface{} {
 	return out
 }
 
-func convertTools(tools []core.Tool) []toolDef {
-	res := make([]toolDef, 0, len(tools))
-	for _, tool := range tools {
-		props := make(map[string]interface{})
-		var required []string
-		for _, param := range tool.Parameters() {
-			prop := map[string]interface{}{
-				"type":        param.Type,
-				"description": param.Description,
-			}
-			if param.Default != nil {
-				prop["default"] = param.Default
-			}
-			props[param.Name] = prop
-			if param.Required {
-				required = append(required, param.Name)
-			}
-		}
-		parameters := map[string]interface{}{
-			"type":       "object",
-			"properties": props,
-		}
-		if len(required) > 0 {
-			parameters["required"] = required
-		}
+// convertLLMToolSpecs converts provider-agnostic LLMToolSpec values to the
+// Ollama wire format. All Ollama-specific JSON shaping is contained here.
+func convertLLMToolSpecs(specs []core.LLMToolSpec) []toolDef {
+	res := make([]toolDef, 0, len(specs))
+	for _, spec := range specs {
 		res = append(res, toolDef{
 			Type: "function",
 			Function: toolFunction{
-				Name:        tool.Name(),
-				Description: tool.Description(),
-				Parameters:  parameters,
+				Name:        spec.Name,
+				Description: spec.Description,
+				Parameters:  schemaToOllamaParameters(spec.InputSchema),
 			},
 		})
 	}
 	return res
+}
+
+// schemaToOllamaParameters converts a core.Schema to Ollama's parameters
+// map format: {"type":"object","properties":{...},"required":[...]}.
+func schemaToOllamaParameters(schema *core.Schema) map[string]interface{} {
+	props := make(map[string]interface{})
+	var required []string
+	if schema != nil && schema.Type == "object" {
+		for name, prop := range schema.Properties {
+			if prop == nil {
+				continue
+			}
+			p := map[string]interface{}{
+				"type":        prop.Type,
+				"description": prop.Description,
+			}
+			if prop.Default != nil {
+				p["default"] = prop.Default
+			}
+			props[name] = p
+		}
+		required = append(required, schema.Required...)
+	}
+	parameters := map[string]interface{}{
+		"type":       "object",
+		"properties": props,
+	}
+	if len(required) > 0 {
+		parameters["required"] = required
+	}
+	return parameters
 }
 
 func decodeLLMResponse(body io.Reader) (*core.LLMResponse, error) {

@@ -4,10 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
 )
+
+// CapabilityInvoker routes tool calls through the registered capability path
+// with policy evaluation, safety checks, and provenance recording.
+type CapabilityInvoker interface {
+	InvokeCapability(ctx context.Context, state *core.Context, idOrName string, args map[string]any) (*core.ToolResult, error)
+}
 
 type toolObservation struct {
 	Name    string         `json:"name"`
@@ -48,7 +55,7 @@ func resolveStageTools(ctx context.Context, state *core.Context, stage Stage, av
 	return tools
 }
 
-func executeToolCalls(ctx context.Context, state *core.Context, calls []core.ToolCall, tools []core.Tool) ([]toolObservation, error) {
+func executeToolCalls(ctx context.Context, state *core.Context, calls []core.ToolCall, tools []core.Tool, invoker CapabilityInvoker) ([]toolObservation, error) {
 	if len(calls) == 0 || len(tools) == 0 {
 		return nil, nil
 	}
@@ -65,7 +72,16 @@ func executeToolCalls(ctx context.Context, state *core.Context, calls []core.Too
 		if !ok {
 			return observations, fmt.Errorf("pipeline tool %s not allowed for stage", call.Name)
 		}
-		result, err := tool.Execute(ctx, state, call.Args)
+		var (
+			result *core.ToolResult
+			err    error
+		)
+		if invoker != nil {
+			result, err = invoker.InvokeCapability(ctx, state, call.Name, call.Args)
+		} else {
+			log.Printf("deprecated: pipeline tool call %q executed without capability invoker", call.Name)
+			result, err = tool.Execute(ctx, state, call.Args)
+		}
 		if err != nil {
 			return observations, err
 		}

@@ -20,10 +20,11 @@ import (
 // tackle unfamiliar tasks and serves as reference implementation for creating
 // new multi-step agents.
 type PlannerAgent struct {
-	Model  core.LanguageModel
-	Tools  *capability.Registry
-	Memory memory.MemoryStore
-	Config *core.Config
+	Model          core.LanguageModel
+	Tools          *capability.Registry
+	Memory         memory.MemoryStore
+	Config         *core.Config
+	CheckpointPath string
 }
 
 // Initialize configures the agent.
@@ -43,6 +44,10 @@ func (a *PlannerAgent) Execute(ctx context.Context, task *core.Task, state *core
 	}
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
 		graph.SetTelemetry(cfg.Telemetry)
+	}
+	if !plannerUsesExplicitCheckpointNodes(a.Config) && a.CheckpointPath != "" && task != nil && task.ID != "" {
+		store := memory.NewCheckpointStore(filepath.Clean(a.CheckpointPath))
+		graph.WithCheckpointing(1, store.Save)
 	}
 	return graph.Execute(ctx, state)
 }
@@ -65,7 +70,130 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	planNode := &plannerPlanNode{id: "planner_plan", agent: a, task: task}
 	execNode := &plannerExecuteNode{id: "planner_execute", agent: a}
 	verifyNode := &plannerVerifyNode{id: "planner_verify", agent: a, task: task}
-	return graph.BuildPlanExecuteVerifyGraph(planNode, execNode, verifyNode, "planner_done")
+	summarizeNode := graph.NewSummarizeContextNode("planner_summarize", plannerContextSummarizer(a))
+	summarizeNode.StateKeys = []string{"planner.plan", "planner.results", "planner.summary", "planner.skipped_tools"}
+	summarizeNode.IncludeHistory = false
+	summarizeNode.Telemetry = telemetryForConfig(a.Config)
+	done := graph.NewTerminalNode("planner_done")
+	g := graph.NewGraph()
+	if a.Tools != nil && len(a.Tools.InspectableCapabilities()) > 0 {
+		g.SetCapabilityCatalog(a.Tools)
+	}
+	workflowStore := plannerWorkflowStateStore(a.Memory)
+	workflowID := plannerWorkflowID(task)
+	runID := plannerRunID(task)
+	if workflowStore != nil {
+		summarizeNode.ArtifactSink = memory.AdaptWorkflowStateStoreArtifactSink(workflowStore, workflowID, runID)
+	}
+	var persistNode *graph.PersistenceWriterNode
+	if plannerUsesStructuredPersistence(a.Config) {
+		if runtimeStore := plannerRuntimeStore(a.Memory); runtimeStore != nil {
+			persistNode = graph.NewPersistenceWriterNode("planner_persist", runtimeStore)
+			persistNode.TaskID = taskID(task)
+			persistNode.WorkflowID = workflowID
+			persistNode.Telemetry = telemetryForConfig(a.Config)
+			persistNode.Declarative = []graph.DeclarativePersistenceRequest{{
+				StateKey:            "planner.summary",
+				Scope:               string(memory.MemoryScopeProject),
+				Kind:                graph.DeclarativeKindDecision,
+				Title:               taskInstructionText(task),
+				ArtifactRefStateKey: "graph.summary_ref",
+				Tags:                []string{"planner", "summary"},
+				Reason:              "planner-summary",
+			}}
+			persistNode.Artifacts = []graph.ArtifactPersistenceRequest{{
+				ArtifactRefStateKey: "graph.summary_ref",
+				SummaryStateKey:     "graph.summary",
+				Reason:              "planner-summary-artifact",
+			}}
+			if workflowStore != nil {
+				persistNode.ArtifactSink = memory.AdaptWorkflowStateStoreArtifactSink(workflowStore, workflowID, runID)
+				persistNode.AuditSink = memory.AdaptWorkflowStateStoreAuditSink(workflowStore, workflowID, runID)
+			}
+		}
+	}
+	for _, node := range []graph.Node{planNode, execNode, verifyNode, summarizeNode, done} {
+		if err := g.AddNode(node); err != nil {
+			return nil, err
+		}
+	}
+	if persistNode != nil {
+		if err := g.AddNode(persistNode); err != nil {
+			return nil, err
+		}
+	}
+	if err := g.SetStart(planNode.ID()); err != nil {
+		return nil, err
+	}
+	nextAfterPlan := execNode.ID()
+	nextAfterExecute := verifyNode.ID()
+	nextAfterVerify := summarizeNode.ID()
+	nextAfterSummarize := done.ID()
+	if persistNode != nil {
+		nextAfterSummarize = persistNode.ID()
+	}
+	var checkpointNodes []*graph.CheckpointNode
+	if plannerUsesExplicitCheckpointNodes(a.Config) && a.CheckpointPath != "" && task != nil && task.ID != "" {
+		checkpointNodes = []*graph.CheckpointNode{
+			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_plan", nextAfterPlan),
+			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_execute", nextAfterExecute),
+			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_verify", nextAfterVerify),
+			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_summarize", nextAfterSummarize),
+		}
+		for _, checkpoint := range checkpointNodes {
+			if err := g.AddNode(checkpoint); err != nil {
+				return nil, err
+			}
+		}
+		nextAfterPlan = checkpointNodes[0].ID()
+		nextAfterExecute = checkpointNodes[1].ID()
+		nextAfterVerify = checkpointNodes[2].ID()
+		nextAfterSummarize = checkpointNodes[3].ID()
+	}
+	if err := g.AddEdge(planNode.ID(), nextAfterPlan, nil, false); err != nil {
+		return nil, err
+	}
+	if len(checkpointNodes) > 0 {
+		if err := g.AddEdge(checkpointNodes[0].ID(), execNode.ID(), nil, false); err != nil {
+			return nil, err
+		}
+	}
+	if err := g.AddEdge(execNode.ID(), nextAfterExecute, nil, false); err != nil {
+		return nil, err
+	}
+	if len(checkpointNodes) > 0 {
+		if err := g.AddEdge(checkpointNodes[1].ID(), verifyNode.ID(), nil, false); err != nil {
+			return nil, err
+		}
+	}
+	if err := g.AddEdge(verifyNode.ID(), nextAfterVerify, nil, false); err != nil {
+		return nil, err
+	}
+	if len(checkpointNodes) > 0 {
+		if err := g.AddEdge(checkpointNodes[2].ID(), summarizeNode.ID(), nil, false); err != nil {
+			return nil, err
+		}
+	}
+	if err := g.AddEdge(summarizeNode.ID(), nextAfterSummarize, nil, false); err != nil {
+		return nil, err
+	}
+	if len(checkpointNodes) > 0 {
+		if persistNode != nil {
+			if err := g.AddEdge(checkpointNodes[3].ID(), persistNode.ID(), nil, false); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := g.AddEdge(checkpointNodes[3].ID(), done.ID(), nil, false); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if persistNode != nil {
+		if err := g.AddEdge(persistNode.ID(), done.ID(), nil, false); err != nil {
+			return nil, err
+		}
+	}
+	return g, nil
 }
 
 type plannerPlanNode struct {
@@ -142,6 +270,26 @@ func (n *plannerExecuteNode) ID() string { return n.id }
 
 // Type signals to the graph visualizer that this step consumes tools.
 func (n *plannerExecuteNode) Type() graph.NodeType { return graph.NodeTypeTool }
+
+// Contract marks the planner executor as a capability-consuming tool stage.
+func (n *plannerExecuteNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		RequiredCapabilities: []core.CapabilitySelector{{
+			Kind: core.CapabilityKindTool,
+		}},
+		SideEffectClass: graph.SideEffectExternal,
+		Idempotency:     graph.IdempotencyUnknown,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:                 []string{"task.*", "planner.plan", "planner.*"},
+			WriteKeys:                []string{"planner.results", "planner.step.*", "planner.skipped_tools"},
+			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking, core.MemoryClassDeclarative},
+			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassArtifactRef, core.StateDataClassMemoryRef, core.StateDataClassStructuredState},
+			MaxStateEntryBytes:       4096,
+			MaxInlineCollectionItems: 16,
+			PreferArtifactReferences: true,
+		},
+	}
+}
 
 // Execute iterates the generated plan and calls the requested tool for each
 // actionable step. Empty or unregistered tool names are skipped, which keeps
@@ -301,6 +449,59 @@ func plannerSkillHints(agent *PlannerAgent) string {
 		IncludePhaseCapabilities:   true,
 		IncludeVerificationSuccess: true,
 	})
+}
+
+func plannerContextSummarizer(agent *PlannerAgent) core.Summarizer {
+	if agent != nil && agent.Config != nil && agent.Config.Telemetry != nil {
+		return &core.SimpleSummarizer{}
+	}
+	return &core.SimpleSummarizer{}
+}
+
+func plannerRuntimeStore(store memory.MemoryStore) graph.RuntimePersistenceStore {
+	if runtimeStore, ok := store.(memory.RuntimeMemoryStore); ok {
+		return memory.AdaptRuntimeStoreForGraph(runtimeStore)
+	}
+	return nil
+}
+
+func plannerWorkflowStateStore(store memory.MemoryStore) memory.WorkflowStateStore {
+	if workflowStore, ok := store.(memory.WorkflowStateStore); ok {
+		return workflowStore
+	}
+	return nil
+}
+
+func plannerWorkflowID(task *core.Task) string {
+	if task == nil {
+		return ""
+	}
+	return strings.TrimSpace(task.ID)
+}
+
+func plannerRunID(task *core.Task) string {
+	return ""
+}
+
+func newPlannerCheckpointNode(agent *PlannerAgent, task *core.Task, id, nextNodeID string) *graph.CheckpointNode {
+	node := graph.NewCheckpointNode(id, nextNodeID, memory.NewCheckpointStore(filepath.Clean(agent.CheckpointPath)))
+	node.TaskID = taskID(task)
+	node.Telemetry = telemetryForConfig(agent.Config)
+	return node
+}
+
+func plannerUsesExplicitCheckpointNodes(cfg *core.Config) bool {
+	if cfg == nil || cfg.UseExplicitCheckpointNodes == nil {
+		return true
+	}
+	return *cfg.UseExplicitCheckpointNodes
+}
+
+func plannerUsesStructuredPersistence(cfg *core.Config) bool {
+	if cfg == nil || cfg.UseStructuredPersistence == nil {
+		return true
+	}
+	return *cfg.UseStructuredPersistence
 }
 
 func normalizePlannerPlan(agent *PlannerAgent, task *core.Task, plan core.Plan) (core.Plan, []string) {

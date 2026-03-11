@@ -24,7 +24,7 @@ func (s stubModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-
 func (s stubModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
 	return &core.LLMResponse{Text: "chat", FinishReason: "stop"}, nil
 }
-func (s stubModel) ChatWithTools(context.Context, []core.Message, []core.Tool, *core.LLMOptions) (*core.LLMResponse, error) {
+func (s stubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
 	return &core.LLMResponse{Text: "tools", FinishReason: "stop", ToolCalls: []core.ToolCall{{Name: "file_read", Args: map[string]any{"path": "x"}}}}, nil
 }
 

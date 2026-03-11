@@ -33,7 +33,7 @@ func (s *architectStubLLM) Chat(ctx context.Context, messages []core.Message, op
 	return nil, errors.New("not implemented")
 }
 
-func (s *architectStubLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (s *architectStubLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	s.withToolsCalls++
 	return s.nextResponse()
 }

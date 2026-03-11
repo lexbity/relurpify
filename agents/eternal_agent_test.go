@@ -28,7 +28,7 @@ func (m *fixedStreamModel) Chat(context.Context, []core.Message, *core.LLMOption
 	return &core.LLMResponse{Text: "unused"}, nil
 }
 
-func (m *fixedStreamModel) ChatWithTools(context.Context, []core.Message, []core.Tool, *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *fixedStreamModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
 	return &core.LLMResponse{Text: "unused"}, nil
 }
 

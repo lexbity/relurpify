@@ -53,7 +53,12 @@ func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {
 		t.Fatalf("set start: %v", err)
 	}
 
-	checkpoint, err := g.CreateCompressedCheckpoint("graph-integration", worker.ID(), shared.Context, llm, strategy)
+	shared.Context.Set("resume.history", strategy.KeepRecent())
+	checkpoint, err := g.CreateCompressedCheckpoint("graph-integration", worker.ID(), done.ID(), &core.Result{NodeID: worker.ID(), Success: true}, &graph.NodeTransitionRecord{
+		CompletedNodeID:  worker.ID(),
+		NextNodeID:       done.ID(),
+		TransitionReason: "serial",
+	}, shared.Context, llm, strategy)
 	if err != nil {
 		t.Fatalf("CreateCompressedCheckpoint error: %v", err)
 	}
@@ -219,6 +224,6 @@ func (f *fakeLLM) GenerateStream(ctx context.Context, prompt string, options *co
 func (f *fakeLLM) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (f *fakeLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }

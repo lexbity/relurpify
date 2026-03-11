@@ -42,14 +42,14 @@ func (m *stubModel) Chat(ctx context.Context, messages []core.Message, options *
 	return nil, errors.New("not implemented")
 }
 
-func (m *stubModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.Tool, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *stubModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	m.toolCalls++
 	if len(messages) > 0 {
 		m.toolPrompts = append(m.toolPrompts, messages[0].Content)
 	}
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
-		names = append(names, tool.Name())
+		names = append(names, tool.Name)
 	}
 	m.toolNamesSeen = append(m.toolNamesSeen, names)
 	idx := m.toolCalls - 1
@@ -169,6 +169,7 @@ type stubTool struct {
 	name      string
 	available bool
 	result    *core.ToolResult
+	calls     int
 }
 
 func (t *stubTool) Name() string        { return t.name }
@@ -178,6 +179,7 @@ func (t *stubTool) Parameters() []core.ToolParameter {
 	return nil
 }
 func (t *stubTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	t.calls++
 	if t.result != nil {
 		return t.result, nil
 	}
@@ -522,6 +524,55 @@ func TestRunnerExecuteParsesToolCallsFromTextResponse(t *testing.T) {
 	}
 	if len(model.prompts) == 0 || !strings.Contains(model.prompts[len(model.prompts)-1], "Tool results:") {
 		t.Fatalf("expected parsed text tool call to trigger final prompt")
+	}
+}
+
+type recordingCapabilityInvoker struct {
+	names []string
+	args  []map[string]any
+}
+
+func (r *recordingCapabilityInvoker) InvokeCapability(ctx context.Context, state *core.Context, idOrName string, args map[string]any) (*core.ToolResult, error) {
+	r.names = append(r.names, idOrName)
+	r.args = append(r.args, args)
+	return &core.ToolResult{Success: true, Data: map[string]any{"invoked": idOrName}}, nil
+}
+
+func TestRunnerExecuteRoutesToolCallsThroughCapabilityInvoker(t *testing.T) {
+	model := &stubModel{
+		toolResponses: []*core.LLMResponse{{
+			ToolCalls: []core.ToolCall{{
+				Name: "file_read",
+				Args: map[string]any{"path": "main.rs"},
+			}},
+		}},
+		responses: []*core.LLMResponse{{Text: `{}`}},
+	}
+	stage := &toolStage{
+		runnerStage: makeRunnerStage("verify", "in", "out", map[string]any{"status": "pass"}),
+		allowedTools: []string{
+			"file_read",
+		},
+	}
+	stage.contract.Metadata.AllowTools = true
+	tool := &stubTool{name: "file_read", available: true}
+	invoker := &recordingCapabilityInvoker{}
+
+	runner := &Runner{Options: RunnerOptions{
+		Model:             model,
+		Tools:             []core.Tool{tool},
+		EnableToolCalling: true,
+		CapabilityInvoker: invoker,
+	}}
+	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-tool-invoker"}, core.NewContext(), []Stage{stage})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if tool.calls != 0 {
+		t.Fatalf("expected direct tool execution to be bypassed, got calls=%d", tool.calls)
+	}
+	if len(invoker.names) != 1 || invoker.names[0] != "file_read" {
+		t.Fatalf("unexpected invoker calls: %#v", invoker.names)
 	}
 }
 

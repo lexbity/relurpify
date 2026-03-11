@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -22,7 +23,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/telemetry"

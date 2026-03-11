@@ -17,6 +17,7 @@ type RunnerOptions struct {
 	Tools                []core.Tool
 	EnableToolCalling    bool
 	Telemetry            core.Telemetry
+	CapabilityInvoker    CapabilityInvoker
 	CheckpointStore      CheckpointStore
 	CheckpointAfterStage bool
 	ResumeCheckpoint     *Checkpoint
@@ -94,7 +95,12 @@ func (r *Runner) resume(taskID string, state *core.Context) (int, *core.Context,
 	if taskID != "" && cp.TaskID != "" && cp.TaskID != taskID {
 		return 0, state, nil, fmt.Errorf("pipeline checkpoint task mismatch: checkpoint=%s task=%s", cp.TaskID, taskID)
 	}
-	return cp.StageIndex + 1, cp.Context.Clone(), []StageResult{cp.Result}, nil
+	resumed := cp.Context.Clone()
+	if state == nil {
+		state = core.NewContext()
+	}
+	state.Merge(resumed)
+	return cp.StageIndex + 1, state, []StageResult{cp.Result}, nil
 }
 
 func (r *Runner) executeStage(ctx context.Context, task *core.Task, taskID string, state *core.Context, stage Stage, index int) (StageResult, error) {
@@ -210,12 +216,13 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *core.Task, sta
 		})
 		return resp, false, err
 	}
+	toolSpecs := core.LLMToolSpecsFromTools(stageTools)
 	resp, err := r.Options.Model.ChatWithTools(ctx, []core.Message{
 		{
 			Role:    "user",
 			Content: prompt,
 		},
-	}, stageTools, &core.LLMOptions{
+	}, toolSpecs, &core.LLMOptions{
 		Model: r.Options.ModelName,
 	})
 	if err != nil {
@@ -232,7 +239,7 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *core.Task, sta
 				Role:    "user",
 				Content: retryPrompt,
 			},
-		}, stageTools, &core.LLMOptions{
+		}, toolSpecs, &core.LLMOptions{
 			Model: r.Options.ModelName,
 		})
 		if err != nil {
@@ -246,7 +253,7 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *core.Task, sta
 	if len(calls) == 0 {
 		return resp, false, nil
 	}
-	observations, err := executeToolCalls(ctx, state, calls, stageTools)
+	observations, err := executeToolCalls(ctx, state, calls, stageTools, r.Options.CapabilityInvoker)
 	if err != nil {
 		return nil, false, err
 	}
