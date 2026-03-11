@@ -2,9 +2,10 @@ package runtime
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
@@ -106,7 +107,7 @@ func (c *NexusClient) InvokeCapability(ctx context.Context, sessionKey, capabili
 	if conn == nil {
 		return nil, fmt.Errorf("nexus client not connected")
 	}
-	correlationID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	correlationID := randomCorrelationID()
 	ch := make(chan core.CapabilityExecutionResult, 1)
 	c.mu.Lock()
 	c.pending[correlationID] = ch
@@ -257,7 +258,7 @@ func (c *NexusClient) reconnectLoop(ctx context.Context) {
 			// Exponential backoff capped at max, plus up to 25% jitter to
 			// avoid thundering-herd when multiple clients reconnect together.
 			delay = min(delay*2, reconnectMaxDelay)
-			delay += time.Duration(rand.Int63n(int64(delay / 4)))
+			delay += time.Duration(rand.Int64N(int64(delay / 4)))
 		} else {
 			delay = reconnectMinDelay
 		}
@@ -321,6 +322,16 @@ func remarshalNexusFrame(input any, out any) error {
 		return err
 	}
 	return json.Unmarshal(data, out)
+}
+
+func randomCorrelationID() string {
+	buf := make([]byte, 12)
+	if _, err := cryptorand.Read(buf); err != nil {
+		// Fallback: the collision probability over 12 random bytes is negligible;
+		// a zero-entropy fallback is only reachable if the OS RNG is broken.
+		panic("nexus: crypto/rand unavailable: " + err.Error())
+	}
+	return fmt.Sprintf("%x", buf)
 }
 
 func dialNexusWebsocket(ctx context.Context, address, token string) (nexusConn, error) {
