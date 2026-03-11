@@ -60,12 +60,23 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *cor
 
 	var store *db.SQLiteWorkflowStateStore
 	var workflowID, runID string
+	executionTask := task
 	if strings.TrimSpace(a.WorkflowStatePath) != "" {
 		store, workflowID, runID, err = a.openWorkflowStore(ctx, task, state)
 		if err != nil {
 			return nil, err
 		}
 		if store != nil {
+			if retrievalPayload, retrievalErr := hydrateWorkflowRetrieval(ctx, store, workflowID, workflowRetrievalQuery{
+				Primary:  task.Instruction,
+				TaskText: task.Instruction,
+			}, 4, 500); retrievalErr != nil {
+				_ = store.Close()
+				return nil, retrievalErr
+			} else if len(retrievalPayload) > 0 {
+				applyWorkflowRetrievalState(state, "pipeline.workflow_retrieval", retrievalPayload)
+				executionTask = applyWorkflowRetrievalTask(task, retrievalPayload)
+			}
 			defer store.Close()
 		}
 	}
@@ -89,7 +100,7 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *cor
 		}
 		runner.Options.ResumeCheckpoint = cp
 	}
-	results, err := runner.Execute(ctx, task, state, stages)
+	results, err := runner.Execute(ctx, executionTask, state, stages)
 	if store != nil {
 		if persistErr := a.persistStageResults(ctx, store, workflowID, runID, results); persistErr != nil && err == nil {
 			err = persistErr

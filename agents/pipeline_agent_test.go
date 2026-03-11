@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/pipeline"
 )
@@ -201,6 +203,60 @@ func TestPipelineAgentPersistsStageResults(t *testing.T) {
 	}
 	if results[0].StageName != "explore" {
 		t.Fatalf("expected explore stage, got %s", results[0].StageName)
+	}
+}
+
+func TestPipelineAgentHydratesWorkflowRetrievalIntoState(t *testing.T) {
+	model := &stubPipelineModel{responses: []*core.LLMResponse{{Text: "{}"}}}
+	stage := makePipelineStage("explore", "in", "out", map[string]any{"files": 1})
+	dbPath := filepath.Join(t.TempDir(), "workflow_retrieval.db")
+
+	store, err := db.NewSQLiteWorkflowStateStore(dbPath)
+	requireNoError(t, err)
+	requireNoError(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "pipeline-task-rt",
+		TaskID:      "task-rt",
+		TaskType:    core.TaskTypeCodeModification,
+		Instruction: "workflow history should be searchable through retrieval",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	requireNoError(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
+		RunID:      "seed-run",
+		WorkflowID: "pipeline-task-rt",
+		Status:     memory.WorkflowRunStatusRunning,
+	}))
+	requireNoError(t, store.PutKnowledge(context.Background(), memory.KnowledgeRecord{
+		RecordID:   "pipeline-knowledge-1",
+		WorkflowID: "pipeline-task-rt",
+		Kind:       memory.KnowledgeKindFact,
+		Title:      "Prior workflow fact",
+		Content:    "Workflow history should be searchable through retrieval.",
+		Status:     "accepted",
+	}))
+	requireNoError(t, store.Close())
+
+	agent := &PipelineAgent{
+		Model:             model,
+		Stages:            []pipeline.Stage{stage},
+		WorkflowStatePath: dbPath,
+	}
+	requireNoError(t, agent.Initialize(&core.Config{Model: "test-model"}))
+
+	state := core.NewContext()
+	_, err = agent.Execute(context.Background(), &core.Task{ID: "task-rt", Instruction: "workflow history should be searchable through retrieval"}, state)
+	requireNoError(t, err)
+
+	raw, ok := state.Get("pipeline.workflow_retrieval")
+	if !ok {
+		t.Fatal("expected pipeline workflow retrieval state")
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected workflow retrieval payload, got %#v", raw)
+	}
+	summary, _ := payload["summary"].(string)
+	if summary == "" || !strings.Contains(summary, "searchable through retrieval") {
+		t.Fatalf("expected workflow retrieval summary, got %#v", payload)
 	}
 }
 

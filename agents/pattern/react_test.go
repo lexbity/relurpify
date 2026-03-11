@@ -13,6 +13,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -252,6 +253,34 @@ func TestReactExecuteCanUseLegacyCheckpointCallbackWhenExplicitNodesDisabled(t *
 	ids, err := store.List(task.ID)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, ids)
+}
+
+func TestPromptAssemblerFormatsWorkflowRetrievalEvidence(t *testing.T) {
+	task := &core.Task{
+		Instruction: "Use workflow retrieval evidence",
+		Context: map[string]any{
+			"workflow_retrieval": map[string]any{
+				"query":      "find evidence",
+				"scope":      "workflow:wf-1",
+				"cache_tier": "l3_main",
+				"results": []map[string]any{
+					{
+						"text": "retrieved workflow evidence",
+						"citations": []retrieval.PackedCitation{{
+							ChunkID:      "chunk:1",
+							CanonicalURI: "memory://workflow/1",
+						}},
+					},
+				},
+			},
+		},
+	}
+	assembler := newPromptContextAssembler(&ReActAgent{}, task)
+	prompt := assembler.buildPrompt(core.NewContext(), []core.Tool{stubTool{name: "echo"}}, true)
+
+	assert.Contains(t, prompt, "Workflow Retrieval:")
+	assert.Contains(t, prompt, "Query: find evidence")
+	assert.Contains(t, prompt, "Sources: memory://workflow/1")
 }
 
 // TestReActAgentExecute validates a minimal think-act-observe pass.

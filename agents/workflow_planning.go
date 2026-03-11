@@ -59,6 +59,17 @@ func (s *WorkflowPlanningService) PlanAndPersist(ctx context.Context, task *core
 	planState.Set("task.id", task.ID)
 	planState.Set("task.type", string(task.Type))
 	planState.Set("task.instruction", task.Instruction)
+	if retrievalPayload, err := hydrateWorkflowRetrieval(ctx, store, workflowID, workflowRetrievalQuery{
+		Primary:   task.Instruction,
+		TaskText:  task.Instruction,
+		StepFiles: taskRetrievalPaths(task),
+	}, 4, 500); err != nil {
+		return nil, err
+	} else if len(retrievalPayload) > 0 {
+		applyWorkflowRetrievalState(planState, "planner.workflow_retrieval", retrievalPayload)
+		applyWorkflowRetrievalState(state, "planner.workflow_retrieval", retrievalPayload)
+		plannerTask = applyWorkflowRetrievalTask(plannerTask, retrievalPayload)
+	}
 
 	planResult, err := s.Planner.Execute(ctx, plannerTask, planState)
 	if err != nil {

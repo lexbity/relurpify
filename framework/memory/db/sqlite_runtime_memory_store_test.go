@@ -7,8 +7,22 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
 )
+
+type retrievalTestEmbedder struct{}
+
+func (retrievalTestEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, 0, len(texts))
+	for _, text := range texts {
+		out = append(out, []float32{float32(len(text)), 1})
+	}
+	return out, nil
+}
+
+func (retrievalTestEmbedder) ModelID() string { return "runtime-test-v1" }
+func (retrievalTestEmbedder) Dims() int       { return 2 }
 
 func TestSQLiteRuntimeMemoryStoreStoresDeclarativeAndProceduralSeparately(t *testing.T) {
 	store, err := NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime_memory.db"))
@@ -111,4 +125,82 @@ func TestSQLiteRuntimeMemoryStoreImplementsGenericMemoryCompatibility(t *testing
 	_, ok, err = generic.Recall(ctx, "mem-1", memory.MemoryScopeProject)
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+func TestSQLiteRuntimeMemoryStoreIndexesDeclarativeRecordsForRetrieval(t *testing.T) {
+	store, err := NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime_memory.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+	require.NoError(t, store.PutDeclarative(ctx, memory.DeclarativeMemoryRecord{
+		RecordID: "fact-rt-1",
+		Scope:    memory.MemoryScopeProject,
+		Kind:     memory.DeclarativeMemoryKindProjectKnowledge,
+		Title:    "Retrieval mirror",
+		Summary:  "Declarative memory should be searchable through retrieval.",
+		Content:  "The runtime store mirrors declarative records into retrieval tables.",
+		Tags:     []string{"retrieval", "runtime"},
+	}))
+
+	service := store.RetrievalService()
+	blocks, event, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
+		Text:      "mirrors declarative records",
+		Scope:     string(memory.MemoryScopeProject),
+		MaxTokens: 200,
+		Limit:     3,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, blocks)
+	require.Equal(t, "l3_main", event.CacheTier)
+
+	var rows int
+	err = store.DB().QueryRow(`SELECT COUNT(*) FROM retrieval_documents`).Scan(&rows)
+	require.NoError(t, err)
+	require.Equal(t, 1, rows)
+
+	require.NoError(t, store.Forget(ctx, "fact-rt-1", memory.MemoryScopeProject))
+	err = store.DB().QueryRow(`SELECT COUNT(*) FROM retrieval_chunks WHERE tombstoned = 0`).Scan(&rows)
+	require.NoError(t, err)
+	require.Equal(t, 0, rows)
+}
+
+func TestSQLiteRuntimeMemoryStoreCanConfigureDenseRetrieval(t *testing.T) {
+	store, err := NewSQLiteRuntimeMemoryStoreWithRetrieval(
+		filepath.Join(t.TempDir(), "runtime_memory.db"),
+		SQLiteRuntimeRetrievalOptions{Embedder: retrievalTestEmbedder{}},
+	)
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+	require.NoError(t, store.PutDeclarative(ctx, memory.DeclarativeMemoryRecord{
+		RecordID: "fact-dense-1",
+		Scope:    memory.MemoryScopeProject,
+		Kind:     memory.DeclarativeMemoryKindProjectKnowledge,
+		Title:    "Dense retrieval mirror",
+		Summary:  "Dense retrieval should work for runtime memory.",
+		Content:  "zz",
+	}))
+	require.NoError(t, store.PutDeclarative(ctx, memory.DeclarativeMemoryRecord{
+		RecordID: "fact-dense-2",
+		Scope:    memory.MemoryScopeProject,
+		Kind:     memory.DeclarativeMemoryKindProjectKnowledge,
+		Title:    "Distractor",
+		Summary:  "Unrelated runtime memory.",
+		Content:  "yyyy",
+	}))
+
+	blocks, _, err := store.RetrievalService().Retrieve(ctx, retrieval.RetrievalQuery{
+		Text:      "qq",
+		Scope:     string(memory.MemoryScopeProject),
+		MaxTokens: 100,
+		Limit:     3,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, blocks)
+
+	block := blocks[0].(core.StructuredContentBlock)
+	payload := block.Data.(map[string]any)
+	require.Contains(t, payload["text"].(string), "zz")
 }

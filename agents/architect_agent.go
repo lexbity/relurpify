@@ -397,6 +397,25 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	stepState.Set("planner.plan", plan)
 	stepState.Set("architect.completed_steps", core.StringSliceFromContext(state, "architect.completed_steps"))
 	stepState.Set("plan.completed_steps", core.StringSliceFromContext(state, "architect.completed_steps"))
+	if retrievalPayload, err := hydrateWorkflowRetrieval(ctx, store, workflowID, workflowRetrievalQuery{
+		Primary:      step.Step.Description,
+		TaskText:     task.Instruction,
+		StepID:       step.StepID,
+		StepFiles:    append([]string{}, step.Step.Files...),
+		Expected:     step.Step.Expected,
+		Verification: step.Step.Verification,
+		PreviousNotes: compactStrings(
+			dependencySummary(stepSlice.DependencyRuns),
+			knowledgeSummary(stepSlice.Facts),
+			knowledgeSummary(stepSlice.Decisions),
+			knowledgeSummary(stepSlice.Issues),
+		),
+	}, 4, 500); err != nil {
+		return nil, err
+	} else if len(retrievalPayload) > 0 {
+		applyWorkflowRetrievalState(stepState, "architect.workflow_retrieval", retrievalPayload)
+		applyWorkflowRetrievalState(state, "architect.workflow_retrieval", retrievalPayload)
+	}
 
 	previousSummary := dependencySummary(stepSlice.DependencyRuns)
 	if previousSummary != "" {
@@ -420,6 +439,11 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 	startedAt := time.Now().UTC()
 	attempt := nextStepAttempt(ctx, store, workflowID, step.StepID)
 	stepTask := buildWorkflowStepTask(task, plan, stepSlice, previousSummary)
+	if raw, ok := stepState.Get("architect.workflow_retrieval"); ok {
+		if payload, ok := raw.(map[string]any); ok {
+			stepTask = applyWorkflowRetrievalTask(stepTask, payload)
+		}
+	}
 	result, execErr := a.executor.Execute(ctx, stepTask, stepState)
 	finishedAt := time.Now().UTC()
 	status := memory.StepStatusCompleted
@@ -789,6 +813,22 @@ func knowledgeContents(records []memory.KnowledgeRecord) []string {
 			continue
 		}
 		out = append(out, text)
+	}
+	return out
+}
+
+func knowledgeSummary(records []memory.KnowledgeRecord) string {
+	return strings.Join(knowledgeContents(records), "\n")
+}
+
+func compactStrings(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
 	}
 	return out
 }

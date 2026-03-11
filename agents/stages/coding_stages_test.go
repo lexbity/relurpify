@@ -8,6 +8,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/pipeline"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
 func TestExploreStageDecodeValidateApply(t *testing.T) {
@@ -229,6 +230,35 @@ func TestExploreStageBuildPromptIncludesContextAndTools(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "file_read") || !strings.Contains(prompt, "query_ast") {
 		t.Fatalf("expected prompt to include explicit tool names, got %q", prompt)
+	}
+}
+
+func TestWorkflowRetrievalContextFormatsEvidenceAndCitations(t *testing.T) {
+	state := core.NewContext()
+	state.Set("pipeline.workflow_retrieval", map[string]any{
+		"query":      "find workflow evidence",
+		"scope":      "workflow:wf-1",
+		"cache_tier": "l2_hot",
+		"results": []map[string]any{
+			{
+				"text": "retrieved workflow evidence that matters",
+				"citations": []retrieval.PackedCitation{{
+					ChunkID:      "chunk:1",
+					CanonicalURI: "memory://workflow/1",
+				}},
+			},
+		},
+	})
+
+	rendered := workflowRetrievalContext(state)
+	if !strings.Contains(rendered, "Query: find workflow evidence") {
+		t.Fatalf("expected query in workflow retrieval context, got %q", rendered)
+	}
+	if !strings.Contains(rendered, "Evidence:") {
+		t.Fatalf("expected evidence section, got %q", rendered)
+	}
+	if !strings.Contains(rendered, "Sources: memory://workflow/1") {
+		t.Fatalf("expected citation source, got %q", rendered)
 	}
 }
 

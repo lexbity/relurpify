@@ -11,16 +11,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 // SQLiteRuntimeMemoryStore persists declarative and procedural memory in separate tables.
 type SQLiteRuntimeMemoryStore struct {
-	db *sql.DB
+	db                *sql.DB
+	retrieve          retrieval.RetrieverService
+	retrievalEmbedder retrieval.Embedder
 }
 
 func NewSQLiteRuntimeMemoryStore(path string) (*SQLiteRuntimeMemoryStore, error) {
+	return NewSQLiteRuntimeMemoryStoreWithRetrieval(path, SQLiteRuntimeRetrievalOptions{})
+}
+
+// SQLiteRuntimeRetrievalOptions controls retrieval-service wiring for the runtime store.
+type SQLiteRuntimeRetrievalOptions struct {
+	Embedder retrieval.Embedder
+	Telemetry core.Telemetry
+	ServiceOptions retrieval.ServiceOptions
+}
+
+// NewSQLiteRuntimeMemoryStoreWithRetrieval opens or creates the runtime memory database
+// and configures retrieval with the supplied runtime dependencies.
+func NewSQLiteRuntimeMemoryStoreWithRetrieval(path string, opts SQLiteRuntimeRetrievalOptions) (*SQLiteRuntimeMemoryStore, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("runtime memory db path required")
 	}
@@ -29,7 +46,11 @@ func NewSQLiteRuntimeMemoryStore(path string) (*SQLiteRuntimeMemoryStore, error)
 	if err != nil {
 		return nil, err
 	}
-	store := &SQLiteRuntimeMemoryStore{db: db}
+	store := &SQLiteRuntimeMemoryStore{
+		db:                db,
+		retrieve:          retrieval.NewServiceWithOptions(db, opts.Embedder, opts.Telemetry, opts.ServiceOptions),
+		retrievalEmbedder: opts.Embedder,
+	}
 	if err := store.init(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -42,6 +63,22 @@ func (s *SQLiteRuntimeMemoryStore) Close() error {
 		return nil
 	}
 	return s.db.Close()
+}
+
+// DB exposes the underlying SQLite handle for advanced integrations.
+func (s *SQLiteRuntimeMemoryStore) DB() *sql.DB {
+	if s == nil {
+		return nil
+	}
+	return s.db
+}
+
+// RetrievalService exposes the retrieval-backed runtime integration over the same database.
+func (s *SQLiteRuntimeMemoryStore) RetrievalService() retrieval.RetrieverService {
+	if s == nil {
+		return nil
+	}
+	return s.retrieve
 }
 
 // Remember stores generic memory through the declarative lane so existing
@@ -216,7 +253,7 @@ func (s *SQLiteRuntimeMemoryStore) init() error {
 			return err
 		}
 	}
-	return nil
+	return retrieval.EnsureSchema(context.Background(), s.db)
 }
 
 func (s *SQLiteRuntimeMemoryStore) PutDeclarative(ctx context.Context, record memory.DeclarativeMemoryRecord) error {
@@ -261,7 +298,10 @@ func (s *SQLiteRuntimeMemoryStore) PutDeclarative(ctx context.Context, record me
 		runtimeTimeString(record.CreatedAt),
 		runtimeTimeString(record.UpdatedAt),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.indexDeclarativeRecord(ctx, record)
 }
 
 func (s *SQLiteRuntimeMemoryStore) GetDeclarative(ctx context.Context, recordID string) (*memory.DeclarativeMemoryRecord, bool, error) {
@@ -462,7 +502,13 @@ func (s *SQLiteRuntimeMemoryStore) deleteDeclarative(ctx context.Context, key st
 		args = append(args, string(scope))
 	}
 	_, err := s.db.ExecContext(ctx, stmt, args...)
-	return err
+	if err != nil {
+		return err
+	}
+	if err := retrieval.NewIngestionPipeline(s.db, nil).TombstoneDocument(ctx, declarativeRetrievalURI(key, scope)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *SQLiteRuntimeMemoryStore) deleteProcedural(ctx context.Context, key string, scope memory.MemoryScope) error {
@@ -518,6 +564,46 @@ func mustJSONString(value any) string {
 		return "{}"
 	}
 	return string(data)
+}
+
+func (s *SQLiteRuntimeMemoryStore) indexDeclarativeRecord(ctx context.Context, record memory.DeclarativeMemoryRecord) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	content := retrievalContentForDeclarative(record)
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	_, err := retrieval.NewIngestionPipeline(s.db, s.retrievalEmbedder).Ingest(ctx, retrieval.IngestRequest{
+		CanonicalURI: declarativeRetrievalURI(record.RecordID, record.Scope),
+		Content:      []byte(content),
+		SourceType:   "text",
+		CorpusScope:  string(record.Scope),
+		PolicyTags:   append([]string{}, record.Tags...),
+	})
+	return err
+}
+
+func declarativeRetrievalURI(recordID string, scope memory.MemoryScope) string {
+	scopeValue := strings.TrimSpace(string(scope))
+	if scopeValue == "" {
+		scopeValue = string(memory.MemoryScopeProject)
+	}
+	return fmt.Sprintf("memory://declarative/%s/%s", scopeValue, strings.TrimSpace(recordID))
+}
+
+func retrievalContentForDeclarative(record memory.DeclarativeMemoryRecord) string {
+	parts := make([]string, 0, 3)
+	if title := strings.TrimSpace(record.Title); title != "" {
+		parts = append(parts, title)
+	}
+	if summary := strings.TrimSpace(record.Summary); summary != "" {
+		parts = append(parts, summary)
+	}
+	if content := strings.TrimSpace(record.Content); content != "" {
+		parts = append(parts, content)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func boolToInt(value bool) int {

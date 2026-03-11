@@ -3,9 +3,11 @@ package pattern
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
 )
 
@@ -145,4 +147,58 @@ func TestScopedMemoryRetrieverFallsBackToGenericMemoryStore(t *testing.T) {
 	require.Equal(t, "generic-1", results[0].Key)
 	require.Equal(t, core.MemoryClassDeclarative, results[0].MemoryClass)
 	require.Equal(t, 1, store.searchCalls)
+}
+
+type retrievalBackedMemoryStub struct{}
+
+func (retrievalBackedMemoryStub) Remember(context.Context, string, map[string]interface{}, memory.MemoryScope) error {
+	return nil
+}
+
+func (retrievalBackedMemoryStub) Recall(context.Context, string, memory.MemoryScope) (*memory.MemoryRecord, bool, error) {
+	return nil, false, nil
+}
+
+func (retrievalBackedMemoryStub) Search(context.Context, string, memory.MemoryScope) ([]memory.MemoryRecord, error) {
+	return nil, nil
+}
+
+func (retrievalBackedMemoryStub) Forget(context.Context, string, memory.MemoryScope) error {
+	return nil
+}
+func (retrievalBackedMemoryStub) Summarize(context.Context, memory.MemoryScope) (string, error) {
+	return "", nil
+}
+
+func (retrievalBackedMemoryStub) RetrievalService() retrieval.RetrieverService {
+	return retrievalServiceStub{}
+}
+
+type retrievalServiceStub struct{}
+
+func (retrievalServiceStub) Retrieve(context.Context, retrieval.RetrievalQuery) ([]core.ContentBlock, retrieval.RetrievalEvent, error) {
+	return []core.ContentBlock{
+		core.StructuredContentBlock{
+			Data: map[string]any{
+				"type": "retrieval_evidence",
+				"text": "retrieval backed declarative memory",
+				"citations": []retrieval.PackedCitation{{
+					DocID: "doc:1",
+				}},
+			},
+		},
+	}, retrieval.RetrievalEvent{QueryID: "rq:1", Timestamp: time.Now().UTC()}, nil
+}
+
+func TestScopedMemoryRetrieverPrefersRetrievalServiceForDeclarativeQueries(t *testing.T) {
+	results, err := (scopedMemoryRetriever{
+		store:       retrievalBackedMemoryStub{},
+		scope:       memory.MemoryScopeProject,
+		memoryClass: core.MemoryClassDeclarative,
+	}).Retrieve(context.Background(), "retrieval", 3)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "doc:1", results[0].Key)
+	require.Equal(t, core.MemoryClassDeclarative, results[0].MemoryClass)
+	require.Contains(t, results[0].Summary, "retrieval backed declarative memory")
 }

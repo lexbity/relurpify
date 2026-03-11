@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -356,6 +357,74 @@ func TestWorkflowPlanningServiceRejectsInvalidPlanBeforePersistence(t *testing.T
 	requireNoErr(t, err)
 	if len(workflowArtifacts) != 0 {
 		t.Fatalf("expected no workflow artifacts for invalid plan, got %+v", workflowArtifacts)
+	}
+}
+
+func TestWorkflowPlanningServiceHydratesWorkflowRetrievalIntoPlanningState(t *testing.T) {
+	llm := &architectStubLLM{
+		responses: []*core.LLMResponse{
+			{Text: `{"goal":"good","steps":[{"id":"step-1","description":"inspect retrieval"}],"dependencies":{},"files":[]}`},
+		},
+	}
+	plannerTools := capability.NewRegistry()
+	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
+	agent := &ArchitectAgent{
+		Model:             llm,
+		PlannerTools:      plannerTools,
+		ExecutorTools:     capability.NewRegistry(),
+		WorkflowStatePath: workflowStatePath,
+	}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3}
+	requireNoErr(t, agent.Initialize(cfg))
+
+	store := newArchitectWorkflowStore(t, workflowStatePath)
+	defer store.Close()
+	requireNoErr(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf-plan-retrieval",
+		TaskID:      "wf-plan-retrieval",
+		TaskType:    core.TaskTypePlanning,
+		Instruction: "Use retrieval-backed planning context",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	requireNoErr(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
+		RunID:      "run-plan-retrieval",
+		WorkflowID: "wf-plan-retrieval",
+		Status:     memory.WorkflowRunStatusRunning,
+	}))
+	requireNoErr(t, store.PutKnowledge(context.Background(), memory.KnowledgeRecord{
+		RecordID:   "knowledge-1",
+		WorkflowID: "wf-plan-retrieval",
+		Kind:       memory.KnowledgeKindDecision,
+		Title:      "Prior decision",
+		Content:    "Use retrieval-backed planning context.",
+		Status:     "accepted",
+	}))
+
+	service := &WorkflowPlanningService{
+		Model:        llm,
+		Planner:      agent.planner,
+		PlannerTools: plannerTools,
+		Config:       cfg,
+	}
+	state := core.NewContext()
+	_, err := service.PlanAndPersist(context.Background(), &core.Task{
+		ID:          "run-plan-retrieval",
+		Instruction: "Use retrieval-backed planning context",
+		Type:        core.TaskTypePlanning,
+	}, state, store, "wf-plan-retrieval", "run-plan-retrieval")
+	requireNoErr(t, err)
+
+	raw, ok := state.Get("planner.workflow_retrieval")
+	if !ok {
+		t.Fatal("expected planner workflow retrieval in state")
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected workflow retrieval payload, got %#v", raw)
+	}
+	summary := strings.TrimSpace(fmt.Sprint(payload["summary"]))
+	if !strings.Contains(summary, "retrieval-backed planning context") {
+		t.Fatalf("expected retrieval summary to contain mirrored knowledge, got %q", summary)
 	}
 }
 

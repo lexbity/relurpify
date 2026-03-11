@@ -12,8 +12,22 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
 )
+
+type workflowRetrievalTestEmbedder struct{}
+
+func (workflowRetrievalTestEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, 0, len(texts))
+	for _, text := range texts {
+		out = append(out, []float32{float32(len(text)), 1})
+	}
+	return out, nil
+}
+
+func (workflowRetrievalTestEmbedder) ModelID() string { return "workflow-test-v1" }
+func (workflowRetrievalTestEmbedder) Dims() int       { return 2 }
 
 func TestSQLiteWorkflowStateStoreCreateAndListWorkflow(t *testing.T) {
 	store := newTestWorkflowStateStore(t)
@@ -274,6 +288,111 @@ func TestSQLiteWorkflowStateStoreStoresWorkflowArtifacts(t *testing.T) {
 	require.Equal(t, "planner_output", artifacts[0].Kind)
 	require.Equal(t, `{"goal":"ship"}`, artifacts[0].InlineRawText)
 	require.Equal(t, "planning", artifacts[0].SummaryMetadata["phase"])
+}
+
+func TestSQLiteWorkflowStateStoreMirrorsArtifactsAndKnowledgeIntoRetrieval(t *testing.T) {
+	store := newTestWorkflowStateStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	require.NoError(t, store.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-retrieval",
+		TaskID:      "task-retrieval",
+		TaskType:    core.TaskTypePlanning,
+		Instruction: "mirror workflow records into retrieval",
+	}))
+	require.NoError(t, store.CreateRun(ctx, memory.WorkflowRunRecord{
+		RunID:      "run-retrieval",
+		WorkflowID: "wf-retrieval",
+		Status:     memory.WorkflowRunStatusRunning,
+	}))
+	require.NoError(t, store.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
+		ArtifactID:      "workflow-artifact-r1",
+		WorkflowID:      "wf-retrieval",
+		RunID:           "run-retrieval",
+		Kind:            "planner_output",
+		ContentType:     "application/json",
+		StorageKind:     memory.ArtifactStorageInline,
+		SummaryText:     "Architecture summary",
+		SummaryMetadata: map[string]any{"topic": "retrieval"},
+		InlineRawText:   `{"decision":"use retrieval service"}`,
+	}))
+	require.NoError(t, store.PutKnowledge(ctx, memory.KnowledgeRecord{
+		RecordID:   "knowledge-r1",
+		WorkflowID: "wf-retrieval",
+		Kind:       memory.KnowledgeKindDecision,
+		Title:      "Use retrieval service",
+		Content:    "Workflow history should be searchable through retrieval.",
+		Status:     "open",
+		Metadata:   map[string]any{"source": "workflow"},
+	}))
+
+	service := store.RetrievalService()
+	blocks, event, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
+		Text:      "searchable through retrieval",
+		Scope:     "workflow:wf-retrieval",
+		MaxTokens: 200,
+		Limit:     4,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, blocks)
+	require.Equal(t, "l3_main", event.CacheTier)
+
+	var docs int
+	err = store.DB().QueryRow(`SELECT COUNT(*) FROM retrieval_documents WHERE corpus_scope = ?`, "workflow:wf-retrieval").Scan(&docs)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, docs, 2)
+}
+
+func TestSQLiteWorkflowStateStoreCanConfigureDenseRetrieval(t *testing.T) {
+	store, err := db.NewSQLiteWorkflowStateStoreWithRetrieval(
+		filepath.Join(t.TempDir(), "workflow_state.db"),
+		db.SQLiteWorkflowRetrievalOptions{Embedder: workflowRetrievalTestEmbedder{}},
+	)
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+	require.NoError(t, store.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-dense",
+		TaskID:      "task-dense",
+		TaskType:    core.TaskTypePlanning,
+		Instruction: "dense retrieval workflow mirror",
+	}))
+	require.NoError(t, store.CreateRun(ctx, memory.WorkflowRunRecord{
+		RunID:      "run-dense",
+		WorkflowID: "wf-dense",
+		Status:     memory.WorkflowRunStatusRunning,
+	}))
+	require.NoError(t, store.PutKnowledge(ctx, memory.KnowledgeRecord{
+		RecordID:   "knowledge-dense-1",
+		WorkflowID: "wf-dense",
+		Kind:       memory.KnowledgeKindDecision,
+		Title:      "Dense retrieval",
+		Content:    "zz",
+		Status:     "open",
+	}))
+	require.NoError(t, store.PutKnowledge(ctx, memory.KnowledgeRecord{
+		RecordID:   "knowledge-dense-2",
+		WorkflowID: "wf-dense",
+		Kind:       memory.KnowledgeKindDecision,
+		Title:      "Distractor",
+		Content:    "yyyy",
+		Status:     "open",
+	}))
+
+	blocks, _, err := store.RetrievalService().Retrieve(ctx, retrieval.RetrievalQuery{
+		Text:      "qq",
+		Scope:     "workflow:wf-dense",
+		MaxTokens: 100,
+		Limit:     3,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, blocks)
+
+	block := blocks[0].(core.StructuredContentBlock)
+	payload := block.Data.(map[string]any)
+	require.Contains(t, payload["text"].(string), "zz")
 }
 
 func TestSQLiteWorkflowStateStoreStoresStageResultsAndFindsLatestValid(t *testing.T) {

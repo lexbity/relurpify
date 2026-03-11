@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
 func buildStagePrompt(stageName string, task *core.Task, state *core.Context, primaryLabel string, primaryValue any, toolNames []string, schema string) string {
@@ -20,6 +21,9 @@ func buildStagePrompt(stageName string, task *core.Task, state *core.Context, pr
 	}
 	if files := renderContextFiles(task, 2500); files != "" {
 		sections = append(sections, "Context files:\n"+files)
+	}
+	if workflow := workflowRetrievalContext(state); workflow != "" {
+		sections = append(sections, "Workflow Retrieval:\n"+workflow)
 	}
 	if prior := recentPipelineOutputs(state); prior != "" {
 		sections = append(sections, "Prior stage outputs:\n"+prior)
@@ -65,6 +69,86 @@ func recentPipelineOutputs(state *core.Context) string {
 		sections = append(sections, fmt.Sprintf("%s:\n%s", key, formatPromptValue(raw)))
 	}
 	return strings.Join(sections, "\n\n")
+}
+
+func workflowRetrievalContext(state *core.Context) string {
+	if state == nil {
+		return ""
+	}
+	raw, ok := state.Get("pipeline.workflow_retrieval")
+	if !ok || raw == nil {
+		return ""
+	}
+	if payload, ok := raw.(map[string]any); ok {
+		if formatted := formatWorkflowRetrievalPromptValue(payload); formatted != "" {
+			return formatted
+		}
+	}
+	return formatPromptValue(raw)
+}
+
+func formatWorkflowRetrievalPromptValue(payload map[string]any) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	var sections []string
+	if query := strings.TrimSpace(fmt.Sprint(payload["query"])); query != "" && query != "<nil>" {
+		sections = append(sections, "Query: "+query)
+	}
+	if scope := strings.TrimSpace(fmt.Sprint(payload["scope"])); scope != "" && scope != "<nil>" {
+		sections = append(sections, "Scope: "+scope)
+	}
+	if cacheTier := strings.TrimSpace(fmt.Sprint(payload["cache_tier"])); cacheTier != "" && cacheTier != "<nil>" {
+		sections = append(sections, "Cache tier: "+cacheTier)
+	}
+	results, ok := payload["results"].([]map[string]any)
+	if !ok || len(results) == 0 {
+		return strings.Join(sections, "\n")
+	}
+	lines := make([]string, 0, len(results))
+	for i, result := range results {
+		text := strings.TrimSpace(fmt.Sprint(result["text"]))
+		if text == "" || text == "<nil>" {
+			continue
+		}
+		line := fmt.Sprintf("%d. %s", i+1, truncatePromptText(text, 240))
+		if citations, ok := result["citations"].([]retrieval.PackedCitation); ok && len(citations) > 0 {
+			refs := make([]string, 0, len(citations))
+			for _, citation := range citations {
+				ref := firstPromptValue(citation.CanonicalURI, citation.ChunkID, citation.DocID)
+				if ref == "" {
+					continue
+				}
+				refs = append(refs, ref)
+			}
+			if len(refs) > 0 {
+				line += "\n   Sources: " + strings.Join(refs, ", ")
+			}
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) > 0 {
+		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
+	}
+	return strings.Join(sections, "\n")
+}
+
+func truncatePromptText(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+	return strings.TrimSpace(value[:limit]) + "..."
+}
+
+func firstPromptValue(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func renderToolNames(toolNames []string) string {

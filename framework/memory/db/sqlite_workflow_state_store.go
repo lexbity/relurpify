@@ -15,6 +15,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,11 +25,26 @@ const workflowStateSchemaVersion = WorkflowStateSchemaVersion
 
 // SQLiteWorkflowStateStore persists workflow state in SQLite.
 type SQLiteWorkflowStateStore struct {
-	db *sql.DB
+	db                *sql.DB
+	retrieve          retrieval.RetrieverService
+	retrievalEmbedder retrieval.Embedder
 }
 
 // NewSQLiteWorkflowStateStore opens or creates the workflow state database.
 func NewSQLiteWorkflowStateStore(dbPath string) (*SQLiteWorkflowStateStore, error) {
+	return NewSQLiteWorkflowStateStoreWithRetrieval(dbPath, SQLiteWorkflowRetrievalOptions{})
+}
+
+// SQLiteWorkflowRetrievalOptions controls retrieval-service wiring for the workflow store.
+type SQLiteWorkflowRetrievalOptions struct {
+	Embedder retrieval.Embedder
+	Telemetry core.Telemetry
+	ServiceOptions retrieval.ServiceOptions
+}
+
+// NewSQLiteWorkflowStateStoreWithRetrieval opens or creates the workflow state database
+// and configures retrieval with the supplied runtime dependencies.
+func NewSQLiteWorkflowStateStoreWithRetrieval(dbPath string, opts SQLiteWorkflowRetrievalOptions) (*SQLiteWorkflowStateStore, error) {
 	if strings.TrimSpace(dbPath) == "" {
 		return nil, errors.New("workflow state db path required")
 	}
@@ -37,7 +53,11 @@ func NewSQLiteWorkflowStateStore(dbPath string) (*SQLiteWorkflowStateStore, erro
 	if err != nil {
 		return nil, err
 	}
-	store := &SQLiteWorkflowStateStore{db: db}
+	store := &SQLiteWorkflowStateStore{
+		db:                db,
+		retrieve:          retrieval.NewServiceWithOptions(db, opts.Embedder, opts.Telemetry, opts.ServiceOptions),
+		retrievalEmbedder: opts.Embedder,
+	}
 	if err := store.init(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -59,6 +79,23 @@ func (s *SQLiteWorkflowStateStore) DB() *sql.DB {
 		return nil
 	}
 	return s.db
+}
+
+// EnsureRetrievalSchema provisions retrieval tables in the same SQLite database
+// used for workflow state.
+func (s *SQLiteWorkflowStateStore) EnsureRetrievalSchema(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return errors.New("workflow state db required")
+	}
+	return retrieval.EnsureSchema(ctx, s.db)
+}
+
+// RetrievalService exposes retrieval over the same workflow SQLite database.
+func (s *SQLiteWorkflowStateStore) RetrievalService() retrieval.RetrieverService {
+	if s == nil {
+		return nil
+	}
+	return s.retrieve
 }
 
 func (s *SQLiteWorkflowStateStore) init() error {
@@ -806,7 +843,10 @@ func (s *SQLiteWorkflowStateStore) UpsertArtifact(ctx context.Context, artifact 
 		artifact.CompressionMethod,
 		timeString(artifact.CreatedAt),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.indexStepArtifact(ctx, artifact)
 }
 
 func (s *SQLiteWorkflowStateStore) ListArtifacts(ctx context.Context, workflowID, stepRunID string) ([]memory.StepArtifactRecord, error) {
@@ -865,7 +905,10 @@ func (s *SQLiteWorkflowStateStore) UpsertWorkflowArtifact(ctx context.Context, a
 		artifact.CompressionMethod,
 		timeString(artifact.CreatedAt),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.indexWorkflowArtifact(ctx, artifact)
 }
 
 func (s *SQLiteWorkflowStateStore) ListWorkflowArtifacts(ctx context.Context, workflowID, runID string) ([]memory.WorkflowArtifactRecord, error) {
@@ -1062,7 +1105,10 @@ func (s *SQLiteWorkflowStateStore) PutKnowledge(ctx context.Context, record memo
 		mustJSON(record.Metadata),
 		timeString(record.CreatedAt),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.indexKnowledgeRecord(ctx, record)
 }
 
 func (s *SQLiteWorkflowStateStore) ListKnowledge(ctx context.Context, workflowID string, kind memory.KnowledgeKind, unresolvedOnly bool) ([]memory.KnowledgeRecord, error) {
@@ -1747,6 +1793,96 @@ func scanDelegationTransitionRows(rows *sql.Rows) (*memory.WorkflowDelegationTra
 	record.Metadata = decodeJSONMap(metadataJSON)
 	record.CreatedAt = parseTime(createdAt)
 	return &record, nil
+}
+
+func (s *SQLiteWorkflowStateStore) indexWorkflowArtifact(ctx context.Context, artifact memory.WorkflowArtifactRecord) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	content := strings.Join(compactNonEmpty(
+		artifact.SummaryText,
+		artifact.InlineRawText,
+		mustJSON(artifact.SummaryMetadata),
+	), "\n\n")
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	_, err := retrieval.NewIngestionPipeline(s.db, s.retrievalEmbedder).Ingest(ctx, retrieval.IngestRequest{
+		CanonicalURI: workflowArtifactRetrievalURI(artifact.WorkflowID, artifact.RunID, artifact.ArtifactID),
+		Content:      []byte(content),
+		SourceType:   "text",
+		CorpusScope:  workflowRetrievalScope(artifact.WorkflowID),
+		PolicyTags:   compactNonEmpty("workflow-artifact", artifact.Kind, artifact.ContentType),
+	})
+	return err
+}
+
+func (s *SQLiteWorkflowStateStore) indexStepArtifact(ctx context.Context, artifact memory.StepArtifactRecord) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	content := strings.Join(compactNonEmpty(
+		artifact.SummaryText,
+		artifact.InlineRawText,
+		mustJSON(artifact.SummaryMetadata),
+	), "\n\n")
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	_, err := retrieval.NewIngestionPipeline(s.db, s.retrievalEmbedder).Ingest(ctx, retrieval.IngestRequest{
+		CanonicalURI: stepArtifactRetrievalURI(artifact.WorkflowID, artifact.StepRunID, artifact.ArtifactID),
+		Content:      []byte(content),
+		SourceType:   "text",
+		CorpusScope:  workflowRetrievalScope(artifact.WorkflowID),
+		PolicyTags:   compactNonEmpty("step-artifact", artifact.Kind, artifact.ContentType),
+	})
+	return err
+}
+
+func (s *SQLiteWorkflowStateStore) indexKnowledgeRecord(ctx context.Context, record memory.KnowledgeRecord) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	content := strings.Join(compactNonEmpty(record.Title, record.Content, mustJSON(record.Metadata)), "\n\n")
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+	_, err := retrieval.NewIngestionPipeline(s.db, s.retrievalEmbedder).Ingest(ctx, retrieval.IngestRequest{
+		CanonicalURI: workflowKnowledgeRetrievalURI(record.WorkflowID, record.RecordID),
+		Content:      []byte(content),
+		SourceType:   "text",
+		CorpusScope:  workflowRetrievalScope(record.WorkflowID),
+		PolicyTags:   compactNonEmpty("workflow-knowledge", string(record.Kind), record.Status),
+	})
+	return err
+}
+
+func workflowRetrievalScope(workflowID string) string {
+	return "workflow:" + strings.TrimSpace(workflowID)
+}
+
+func workflowArtifactRetrievalURI(workflowID, runID, artifactID string) string {
+	return fmt.Sprintf("workflow://artifact/%s/%s/%s", strings.TrimSpace(workflowID), strings.TrimSpace(runID), strings.TrimSpace(artifactID))
+}
+
+func stepArtifactRetrievalURI(workflowID, stepRunID, artifactID string) string {
+	return fmt.Sprintf("workflow://step-artifact/%s/%s/%s", strings.TrimSpace(workflowID), strings.TrimSpace(stepRunID), strings.TrimSpace(artifactID))
+}
+
+func workflowKnowledgeRetrievalURI(workflowID, recordID string) string {
+	return fmt.Sprintf("workflow://knowledge/%s/%s", strings.TrimSpace(workflowID), strings.TrimSpace(recordID))
+}
+
+func compactNonEmpty(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || value == "{}" || value == "null" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }
 
 func mustJSON(value any) string {

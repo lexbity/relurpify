@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
@@ -36,6 +37,9 @@ func (a *promptContextAssembler) buildPrompt(state *core.Context, tools []core.T
 	}
 	if external := a.externalStateSlice(); external != "" {
 		sections = append(sections, "External State Slice:\n"+external)
+	}
+	if workflow := a.workflowRetrieval(); workflow != "" {
+		sections = append(sections, "Workflow Retrieval:\n"+workflow)
 	}
 	if phase := a.currentPhase(state); phase != "" {
 		sections = append(sections, "Execution Phase:\n"+phase)
@@ -142,6 +146,90 @@ func (a *promptContextAssembler) externalStateSlice() string {
 		}
 		return string(encoded)
 	}
+}
+
+func (a *promptContextAssembler) workflowRetrieval() string {
+	if a == nil || a.task == nil || a.task.Context == nil {
+		return ""
+	}
+	raw, ok := a.task.Context["workflow_retrieval"]
+	if !ok || raw == nil {
+		return ""
+	}
+	if payload, ok := raw.(map[string]any); ok {
+		if formatted := formatWorkflowRetrievalPayload(payload); formatted != "" {
+			return formatted
+		}
+	}
+	encoded, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return strings.TrimSpace(fmt.Sprint(raw))
+	}
+	return string(encoded)
+}
+
+func formatWorkflowRetrievalPayload(payload map[string]any) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	var sections []string
+	if query := strings.TrimSpace(fmt.Sprint(payload["query"])); query != "" && query != "<nil>" {
+		sections = append(sections, "Query: "+query)
+	}
+	if scope := strings.TrimSpace(fmt.Sprint(payload["scope"])); scope != "" && scope != "<nil>" {
+		sections = append(sections, "Scope: "+scope)
+	}
+	if cacheTier := strings.TrimSpace(fmt.Sprint(payload["cache_tier"])); cacheTier != "" && cacheTier != "<nil>" {
+		sections = append(sections, "Cache tier: "+cacheTier)
+	}
+	results, ok := payload["results"].([]map[string]any)
+	if !ok || len(results) == 0 {
+		return strings.Join(sections, "\n")
+	}
+	lines := make([]string, 0, len(results))
+	for i, result := range results {
+		text := strings.TrimSpace(fmt.Sprint(result["text"]))
+		if text == "" || text == "<nil>" {
+			continue
+		}
+		line := fmt.Sprintf("%d. %s", i+1, truncateWorkflowEvidence(text, 240))
+		if citations, ok := result["citations"].([]retrieval.PackedCitation); ok && len(citations) > 0 {
+			sources := make([]string, 0, len(citations))
+			for _, citation := range citations {
+				source := firstWorkflowSource(citation.CanonicalURI, citation.ChunkID, citation.DocID)
+				if source == "" {
+					continue
+				}
+				sources = append(sources, source)
+			}
+			if len(sources) > 0 {
+				line += "\n   Sources: " + strings.Join(sources, ", ")
+			}
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) > 0 {
+		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
+	}
+	return strings.Join(sections, "\n")
+}
+
+func truncateWorkflowEvidence(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+	return strings.TrimSpace(value[:limit]) + "..."
+}
+
+func firstWorkflowSource(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (a *promptContextAssembler) currentPhase(state *core.Context) string {

@@ -222,6 +222,14 @@ func (n *plannerPlanNode) Execute(ctx context.Context, state *core.Context) (*co
 	if policy := plannerSkillHints(n.agent); policy != "" {
 		extraPrompt += "Skill Policy:\n" + policy + "\n\n"
 	}
+	if n.task != nil && n.task.Context != nil {
+		if raw, ok := n.task.Context["workflow_retrieval"]; ok && raw != nil {
+			encoded, err := json.MarshalIndent(raw, "", "  ")
+			if err == nil {
+				extraPrompt += "Workflow Retrieval:\n" + string(encoded) + "\n\n"
+			}
+		}
+	}
 	prompt := fmt.Sprintf(`You are a planning agent. Break this task into steps with dependencies.
 %sTask: %s
 Return valid JSON Plan struct with fields goal, steps (array of {id, description, tool, params, expected, verification, files}), dependencies (map of step id -> [step id]), files.
