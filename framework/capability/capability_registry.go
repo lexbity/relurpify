@@ -28,7 +28,6 @@ type AgentSpecAware interface {
 // migration away from generic tool-shaped invocation.
 type CapabilityRegistry struct {
 	mu                  sync.RWMutex
-	tools               map[string]Tool
 	capabilities        map[string]core.CapabilityDescriptor
 	entries             map[string]*capabilityEntry
 	permissionManager   *PermissionManager
@@ -48,12 +47,53 @@ type CapabilityRegistry struct {
 // NewCapabilityRegistry builds a capability registry instance.
 func NewCapabilityRegistry() *CapabilityRegistry {
 	return &CapabilityRegistry{
-		tools:        make(map[string]Tool),
 		capabilities: make(map[string]core.CapabilityDescriptor),
 		entries:      make(map[string]*capabilityEntry),
 		toolPolicies: make(map[string]ToolPolicy),
 		safety:       newRuntimeSafetyController(),
 	}
+}
+
+func (r *CapabilityRegistry) localToolEntryByNameLocked(name string) (*capabilityEntry, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, false
+	}
+	for _, entry := range r.entries {
+		if entry == nil || entry.legacyTool == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(entry.legacyTool.Name()), name) {
+			return entry, true
+		}
+	}
+	return nil, false
+}
+
+func (r *CapabilityRegistry) localToolEntriesLocked() []*capabilityEntry {
+	if r == nil {
+		return nil
+	}
+	out := make([]*capabilityEntry, 0, len(r.entries))
+	for _, entry := range r.entries {
+		if entry == nil || entry.legacyTool == nil {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func (r *CapabilityRegistry) rewrapLegacyEntryLocked(entry *capabilityEntry) {
+	if r == nil || entry == nil || entry.legacyTool == nil {
+		return
+	}
+	var inner Tool = entry.legacyTool
+	if instrumented, ok := entry.legacyTool.(*instrumentedTool); ok {
+		inner = instrumented.Tool
+	}
+	entry.legacyTool = r.wrapTool(inner)
+	entry.handler = legacyToolHandler{tool: entry.legacyTool}
 }
 
 type capabilityEntry struct {
@@ -259,7 +299,7 @@ func (r *CapabilityRegistry) RegisterLegacyTool(tool Tool) error {
 		return fmt.Errorf("legacy tool registration only supports local-tool runtime family; %s is %s", desc.ID, desc.RuntimeFamily)
 	}
 	r.mu.Lock()
-	if _, exists := r.tools[tool.Name()]; exists {
+	if _, exists := r.localToolEntryByNameLocked(tool.Name()); exists {
 		r.mu.Unlock()
 		return fmt.Errorf("tool %s already registered", tool.Name())
 	}
@@ -284,7 +324,6 @@ func (r *CapabilityRegistry) RegisterLegacyTool(tool Tool) error {
 	wrapped := r.wrapTool(tool)
 	adapter := legacyToolHandler{tool: wrapped}
 	desc = core.NormalizeCapabilityDescriptor(adapter.Descriptor(context.Background(), nil))
-	r.tools[tool.Name()] = wrapped
 	r.capabilities[desc.ID] = desc
 	r.entries[desc.ID] = &capabilityEntry{
 		descriptor: desc,
@@ -304,8 +343,11 @@ func (r *CapabilityRegistry) RegisterLegacyTool(tool Tool) error {
 func (r *CapabilityRegistry) Get(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	tool, ok := r.tools[name]
-	return tool, ok
+	entry, ok := r.localToolEntryByNameLocked(name)
+	if !ok || entry == nil || entry.legacyTool == nil {
+		return nil, false
+	}
+	return entry.legacyTool, true
 }
 
 // HasCapability reports whether a capability is registered by ID or public name.
@@ -323,16 +365,13 @@ func (r *CapabilityRegistry) All() []Tool {
 func (r *CapabilityRegistry) CallableTools() []Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res := make([]Tool, 0, len(r.tools))
-	for _, t := range r.tools {
-		desc := core.ToolDescriptor(context.Background(), nil, unwrapTool(t))
-		if desc.RuntimeFamily != core.CapabilityRuntimeFamilyLocalTool {
+	entries := r.localToolEntriesLocked()
+	res := make([]Tool, 0, len(entries))
+	for _, entry := range entries {
+		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
 			continue
 		}
-		if r.effectiveExposureLocked(desc) != core.CapabilityExposureCallable {
-			continue
-		}
-		res = append(res, t)
+		res = append(res, entry.legacyTool)
 	}
 	return res
 }
@@ -341,67 +380,77 @@ func (r *CapabilityRegistry) CallableTools() []Tool {
 func (r *CapabilityRegistry) InspectableTools() []Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res := make([]Tool, 0, len(r.tools))
-	for _, t := range r.tools {
-		desc := core.ToolDescriptor(context.Background(), nil, unwrapTool(t))
-		if desc.RuntimeFamily != core.CapabilityRuntimeFamilyLocalTool {
+	entries := r.localToolEntriesLocked()
+	res := make([]Tool, 0, len(entries))
+	for _, entry := range entries {
+		if r.effectiveExposureLocked(entry.descriptor) == core.CapabilityExposureHidden {
 			continue
 		}
-		if r.effectiveExposureLocked(desc) == core.CapabilityExposureHidden {
-			continue
-		}
-		res = append(res, t)
+		res = append(res, entry.legacyTool)
 	}
 	return res
 }
 
-// ModelCallableTools returns LLM-facing callable tools. Local tools are
-// returned directly, while callable provider/Relurpic capabilities are exposed
-// through compatibility shims until the model interface becomes capability-native.
+// ModelCallableTools returns callable local tools for agent-internal use such
+// as phase filtering and budget enforcement. Only local Tool implementations
+// are included; non-local capabilities appear in ModelCallableLLMToolSpecs.
 func (r *CapabilityRegistry) ModelCallableTools() []Tool {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res := make([]Tool, 0, len(r.entries))
-	for _, t := range r.tools {
-		desc := core.ToolDescriptor(context.Background(), nil, unwrapTool(t))
-		if desc.RuntimeFamily != core.CapabilityRuntimeFamilyLocalTool {
+	entries := r.localToolEntriesLocked()
+	res := make([]Tool, 0, len(entries))
+	for _, entry := range entries {
+		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
 			continue
 		}
-		if r.effectiveExposureLocked(desc) != core.CapabilityExposureCallable {
-			continue
-		}
-		res = append(res, t)
+		res = append(res, entry.legacyTool)
 	}
+	return res
+}
+
+// ModelCallableLLMToolSpecs returns the provider-agnostic tool specs for all
+// callable capabilities: local tools and non-local invocable capabilities
+// (provider-backed, Relurpic). This is what callers should pass to
+// LanguageModel.ChatWithTools — Ollama-specific formatting is handled in
+// platform/llm, not here.
+func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []core.LLMToolSpec {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	res := make([]core.LLMToolSpec, 0, len(r.entries))
 	for _, entry := range r.entries {
-		if entry == nil || entry.handler == nil {
-			continue
-		}
-		if entry.descriptor.RuntimeFamily == core.CapabilityRuntimeFamilyLocalTool {
-			continue
-		}
-		if _, ok := entry.handler.(core.InvocableCapabilityHandler); !ok {
+		if entry == nil {
 			continue
 		}
 		if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
 			continue
 		}
-		res = append(res, capabilityToolShim{registry: r, descriptor: entry.descriptor})
+		if entry.legacyTool != nil {
+			res = append(res, core.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
+		} else if _, ok := entry.handler.(core.InvocableCapabilityHandler); ok {
+			res = append(res, core.LLMToolSpecFromDescriptor(entry.descriptor))
+		}
 	}
 	return res
 }
 
-// GetModelTool resolves an LLM-facing callable tool by name. This includes
-// compatibility shims for non-local callable capabilities.
+// GetModelTool resolves a callable local tool by name for post-LLM dispatch.
 func (r *CapabilityRegistry) GetModelTool(name string) (Tool, bool) {
-	for _, tool := range r.ModelCallableTools() {
-		if strings.EqualFold(strings.TrimSpace(tool.Name()), strings.TrimSpace(name)) {
-			return tool, true
-		}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entry, ok := r.localToolEntryByNameLocked(name)
+	if !ok || entry == nil || entry.legacyTool == nil {
+		return nil, false
 	}
-	return nil, false
+	if r.effectiveExposureLocked(entry.descriptor) != core.CapabilityExposureCallable {
+		return nil, false
+	}
+	return entry.legacyTool, true
 }
 
 // GetCapability resolves a tool by either capability ID or public name.
@@ -507,7 +556,6 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	clone := &CapabilityRegistry{
-		tools:               make(map[string]Tool),
 		capabilities:        make(map[string]core.CapabilityDescriptor),
 		entries:             make(map[string]*capabilityEntry),
 		permissionManager:   r.permissionManager,
@@ -534,31 +582,21 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 			clone.entries[id] = &clonedEntry
 		}
 	}
-	for name, tool := range r.tools {
-		if keep != nil && !keep(tool) {
+	for _, entry := range r.entries {
+		if entry == nil || entry.legacyTool == nil {
 			continue
 		}
-		clonedTool := cloneTool(tool)
-		clone.tools[name] = clonedTool
+		if keep != nil && !keep(entry.legacyTool) {
+			continue
+		}
+		clonedTool := cloneTool(entry.legacyTool)
 		desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), nil, unwrapTool(clonedTool)))
 		clone.capabilities[desc.ID] = desc
-		if entry, ok := r.entries[desc.ID]; ok {
-			clonedEntry := *entry
-			clonedEntry.descriptor = desc
-			clonedEntry.legacyTool = clonedTool
-			if clonedEntry.handler == nil {
-				clonedEntry.handler = legacyToolHandler{tool: clonedTool}
-			}
-			clone.entries[desc.ID] = &clonedEntry
-			continue
-		}
-		clone.entries[desc.ID] = &capabilityEntry{
-			descriptor: desc,
-			handler:    legacyToolHandler{tool: clonedTool},
-			legacyTool: clonedTool,
-			providerID: desc.Source.ProviderID,
-			sessionID:  desc.Source.SessionID,
-		}
+		clonedEntry := *entry
+		clonedEntry.descriptor = desc
+		clonedEntry.legacyTool = clonedTool
+		clonedEntry.handler = legacyToolHandler{tool: clonedTool}
+		clone.entries[desc.ID] = &clonedEntry
 	}
 	return clone
 }

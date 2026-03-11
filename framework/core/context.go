@@ -105,6 +105,16 @@ func (c *Context) GetString(key string) string {
 	return fmt.Sprint(value)
 }
 
+// StateSnapshot returns a deep copy of graph-visible state for validation or debugging.
+func (c *Context) StateSnapshot() map[string]interface{} {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return deepCopyMap(c.state)
+}
+
 // Set stores a value in the shared state.
 func (c *Context) Set(key string, value interface{}) {
 	c.mu.Lock()

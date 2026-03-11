@@ -719,7 +719,7 @@ func TestRegisterLegacyToolRejectsNonLocalRuntimeFamily(t *testing.T) {
 	require.Contains(t, err.Error(), "local-tool runtime family")
 }
 
-func TestModelCallableToolsIncludesProviderCapabilityShim(t *testing.T) {
+func TestModelCallableLLMToolSpecsIncludesProviderCapability(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.RegisterInvocableCapability(providerInvocableCapability("remote_echo", "remote-mcp", "session-1", "adapted")))
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
@@ -731,15 +731,22 @@ func TestModelCallableToolsIncludesProviderCapabilityShim(t *testing.T) {
 		}},
 	})
 
+	// Local tool list excludes non-local capabilities.
 	require.Empty(t, registry.CallableTools())
-	modelTool, ok := registry.GetModelTool("remote_echo")
-	require.True(t, ok)
-	result, err := modelTool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"token": "secret"})
+	// GetModelTool only resolves local tools; non-local capabilities are not returned.
+	_, ok := registry.GetModelTool("remote_echo")
+	require.False(t, ok)
+	// Non-local invocable capabilities appear in the LLM tool spec list.
+	specs := registry.ModelCallableLLMToolSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "remote_echo", specs[0].Name)
+	// Invocation goes through InvokeCapability, not through a Tool shim.
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "remote_echo", map[string]interface{}{"token": "secret"})
 	require.NoError(t, err)
 	require.Equal(t, "adapted", result.Data["message"])
 }
 
-func TestModelCallableToolsIncludesRelurpicCapabilityShim(t *testing.T) {
+func TestModelCallableLLMToolSpecsIncludesRelurpicCapability(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.RegisterInvocableCapability(invocableCapabilityStub{
 		desc: core.CapabilityDescriptor{
@@ -754,9 +761,12 @@ func TestModelCallableToolsIncludesRelurpicCapabilityShim(t *testing.T) {
 	}))
 
 	require.Empty(t, registry.CallableTools())
-	modelTool, ok := registry.GetModelTool("planner.plan")
-	require.True(t, ok)
-	result, err := modelTool.Execute(context.Background(), core.NewContext(), nil)
+	_, ok := registry.GetModelTool("planner.plan")
+	require.False(t, ok)
+	specs := registry.ModelCallableLLMToolSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "planner.plan", specs[0].Name)
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "planner.plan", nil)
 	require.NoError(t, err)
 	require.Equal(t, "planned", result.Data["message"])
 }
@@ -780,8 +790,9 @@ func TestExposurePolicyCanElevateProviderCapabilityToCallable(t *testing.T) {
 
 	require.Equal(t, core.CapabilityExposureCallable, registry.EffectiveExposure(capability))
 	require.Len(t, registry.CallableCapabilities(), 1)
-	_, ok = registry.GetModelTool("catalog")
-	require.True(t, ok)
+	specs := registry.ModelCallableLLMToolSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "catalog", specs[0].Name)
 }
 
 func TestLaterExposurePolicyOverridesEarlierExposurePolicy(t *testing.T) {
@@ -810,9 +821,9 @@ func TestLaterExposurePolicyOverridesEarlierExposurePolicy(t *testing.T) {
 	capability, ok := registry.GetCapability("provider:catalog")
 	require.True(t, ok)
 	require.Equal(t, core.CapabilityExposureCallable, registry.EffectiveExposure(capability))
-	modelTool, ok := registry.GetModelTool("catalog")
-	require.True(t, ok)
-	require.NotNil(t, modelTool)
+	specs := registry.ModelCallableLLMToolSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "catalog", specs[0].Name)
 }
 
 func TestUseAgentSpecBrowserEnabledMakesProviderBrowserCallable(t *testing.T) {
@@ -843,9 +854,10 @@ func TestUseAgentSpecBrowserEnabledMakesProviderBrowserCallable(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, core.CapabilityExposureCallable, registry.EffectiveExposure(capability))
 	require.Empty(t, registry.CallableTools())
-	modelTool, ok := registry.GetModelTool("browser")
-	require.True(t, ok)
-	result, err := modelTool.Execute(context.Background(), core.NewContext(), nil)
+	specs := registry.ModelCallableLLMToolSpecs()
+	require.Len(t, specs, 1)
+	require.Equal(t, "browser", specs[0].Name)
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", nil)
 	require.NoError(t, err)
 	require.Equal(t, "browser ok", result.Data["message"])
 }

@@ -80,43 +80,6 @@ type instrumentedTool struct {
 	safety             *runtimeSafetyController
 }
 
-type capabilityToolShim struct {
-	registry   *CapabilityRegistry
-	descriptor core.CapabilityDescriptor
-}
-
-func (t capabilityToolShim) Name() string {
-	if name := strings.TrimSpace(t.descriptor.Name); name != "" {
-		return name
-	}
-	return strings.TrimSpace(t.descriptor.ID)
-}
-
-func (t capabilityToolShim) Description() string { return t.descriptor.Description }
-func (t capabilityToolShim) Category() string    { return t.descriptor.Category }
-func (t capabilityToolShim) Tags() []string      { return append([]string{}, t.descriptor.Tags...) }
-
-func (t capabilityToolShim) Parameters() []core.ToolParameter {
-	return toolParametersFromSchema(t.descriptor.InputSchema)
-}
-
-func (t capabilityToolShim) Execute(ctx context.Context, state *Context, args map[string]interface{}) (*core.ToolResult, error) {
-	if t.registry == nil {
-		return nil, fmt.Errorf("registry unavailable")
-	}
-	return t.registry.InvokeCapability(ctx, state, t.Name(), args)
-}
-
-func (t capabilityToolShim) IsAvailable(ctx context.Context, state *Context) bool {
-	if t.registry == nil {
-		return false
-	}
-	return t.registry.CapabilityAvailable(ctx, state, t.Name())
-}
-
-func (t capabilityToolShim) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
-}
 
 type instrumentCapabilityHandler struct {
 	handler            core.CapabilityHandler

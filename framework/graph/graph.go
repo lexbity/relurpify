@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // NodeType enumerates supported node categories.
@@ -60,6 +62,8 @@ type Graph struct {
 	checkpointInterval int
 	checkpointCallback CheckpointCallback
 	lastCheckpointNode string
+	capabilityCatalog  CapabilityCatalog
+	lastPreflight      *PreflightReport
 }
 
 // CheckpointCallback receives checkpoints generated during execution.
@@ -167,18 +171,16 @@ func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool)
 
 // GraphSnapshot stores enough state to resume an execution.
 type GraphSnapshot struct {
-	NodeID string
-	State  *ContextSnapshot
+	NextNodeID string
+	State      *ContextSnapshot
 }
 
 // Execute runs the graph from its start node.
 func (g *Graph) Execute(ctx context.Context, state *Context) (*Result, error) {
-	return g.ExecuteFromSnapshot(ctx, state, nil)
-}
-
-// ExecuteFromSnapshot resumes execution from a snapshot.
-func (g *Graph) ExecuteFromSnapshot(ctx context.Context, state *Context, snapshot *GraphSnapshot) (*Result, error) {
 	if err := g.Validate(); err != nil {
+		return nil, err
+	}
+	if _, err := g.Preflight(); err != nil {
 		return nil, err
 	}
 
@@ -206,20 +208,12 @@ func (g *Graph) ExecuteFromSnapshot(ctx context.Context, state *Context, snapsho
 		})
 	}()
 
-	current := g.startNodeID
-	if snapshot != nil {
-		current = snapshot.NodeID
-		if err := state.Restore(snapshot.State); err != nil {
-			execErr = fmt.Errorf("restore snapshot: %w", err)
-			return nil, execErr
-		}
-	}
-	if current == "" {
+	if g.startNodeID == "" {
 		execErr = errors.New("graph has no start node")
 		return nil, execErr
 	}
 
-	lastResult, err := g.run(ctx, state, current, true, taskID)
+	lastResult, err := g.run(ctx, state, g.startNodeID, true, taskID)
 	execErr = err
 	return lastResult, err
 }
@@ -289,11 +283,11 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 				"success": result.Success,
 			},
 		})
-		g.maybeCheckpoint(taskID, current, state)
-		next, err := g.nextNodes(ctx, state, node, result)
+		next, reason, err := g.nextNodes(ctx, state, node, result)
 		if err != nil {
 			return nil, err
 		}
+		g.maybeCheckpoint(taskID, current, next, reason, result, state)
 		current = next
 	}
 	return lastResult, nil
@@ -326,18 +320,24 @@ func (g *Graph) extractTaskMeta(state *Context) map[string]interface{} {
 	return meta
 }
 
-func (g *Graph) maybeCheckpoint(taskID, currentNode string, state *Context) {
+func (g *Graph) maybeCheckpoint(taskID, completedNode, nextNode, transitionReason string, result *Result, state *Context) {
 	if g.checkpointInterval == 0 || g.checkpointCallback == nil {
 		return
 	}
 	if !g.shouldCheckpoint() {
 		return
 	}
-	checkpoint, err := g.CreateCheckpoint(taskID, currentNode, state)
+	checkpoint, err := g.CreateCheckpoint(taskID, completedNode, nextNode, result, &NodeTransitionRecord{
+		FromNodeID:       g.previousNodeID(),
+		CompletedNodeID:  completedNode,
+		NextNodeID:       nextNode,
+		TransitionReason: transitionReason,
+		CompletedAt:      time.Now().UTC(),
+	}, state)
 	if err != nil {
 		g.emit(Event{
 			Type:      EventNodeError,
-			NodeID:    currentNode,
+			NodeID:    completedNode,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("checkpoint creation failed: %v", err),
@@ -347,14 +347,14 @@ func (g *Graph) maybeCheckpoint(taskID, currentNode string, state *Context) {
 	if err := g.checkpointCallback(checkpoint); err != nil {
 		g.emit(Event{
 			Type:      EventNodeError,
-			NodeID:    currentNode,
+			NodeID:    completedNode,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("checkpoint callback failed: %v", err),
 		})
 		return
 	}
-	g.lastCheckpointNode = currentNode
+	g.lastCheckpointNode = completedNode
 }
 
 func (g *Graph) shouldCheckpoint() bool {
@@ -375,14 +375,21 @@ func (g *Graph) shouldCheckpoint() bool {
 	return nodesSinceCheckpoint >= g.checkpointInterval
 }
 
+func (g *Graph) previousNodeID() string {
+	if len(g.executionPath) < 2 {
+		return ""
+	}
+	return g.executionPath[len(g.executionPath)-2]
+}
+
 // nextNodes evaluates the outgoing edges for a node. Parallel edges are
 // executed optimistically on cloned contexts while serial edges behave like a
 // traditional state machine transition. Returning a single node ID keeps the
 // main Execute loop simple and debuggable.
-func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result *Result) (string, error) {
+func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result *Result) (string, string, error) {
 	outEdges := g.edges[node.ID()]
 	if len(outEdges) == 0 || node.Type() == NodeTypeTerminal {
-		return "", nil
+		return "", "terminal", nil
 	}
 	var serialEdges []Edge
 	var parallelEdges []Edge
@@ -418,17 +425,26 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 		close(errChan)
 		for err := range errChan {
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
 		}
 	}
 	if len(serialEdges) == 0 {
-		return "", nil
+		if len(parallelEdges) > 0 {
+			return "", "parallel-complete", nil
+		}
+		return "", "no-transition", nil
 	}
 	if len(serialEdges) > 1 {
-		return "", fmt.Errorf("ambiguous transitions from %s", node.ID())
+		return "", "", fmt.Errorf("ambiguous transitions from %s", node.ID())
 	}
-	return serialEdges[0].To, nil
+	reason := "serial"
+	if node.Type() == NodeTypeConditional {
+		reason = "conditional"
+	} else if len(parallelEdges) > 0 {
+		reason = "parallel-serial"
+	}
+	return serialEdges[0].To, reason, nil
 }
 
 // executeBranch runs a detached sub-graph that starts at the provided node.
@@ -467,14 +483,19 @@ func (g *Graph) Validate() error {
 			}
 		}
 	}
+	for _, node := range g.nodes {
+		if err := validateNodeContract(node, ResolveNodeContract(node)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // Pause builds a snapshot at the given node.
 func (g *Graph) Pause(currentNode string, state *Context) *GraphSnapshot {
 	return &GraphSnapshot{
-		NodeID: currentNode,
-		State:  state.Snapshot(),
+		NextNodeID: currentNode,
+		State:      state.Snapshot(),
 	}
 }
 
@@ -493,6 +514,22 @@ func (n *LLMNode) ID() string { return n.id }
 
 // Type implements Node.
 func (n *LLMNode) Type() NodeType { return NodeTypeLLM }
+
+// Contract describes the execution semantics for LLM inference nodes.
+func (n *LLMNode) Contract() NodeContract {
+	return NodeContract{
+		SideEffectClass: SideEffectNone,
+		Idempotency:     IdempotencyReplaySafe,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:                 []string{"task.*", "llm.*"},
+			WriteKeys:                []string{"llm.*"},
+			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
+			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+			MaxStateEntryBytes:       4096,
+			MaxInlineCollectionItems: 16,
+		},
+	}
+}
 
 // Execute runs the prompt against the language model.
 func (n *LLMNode) Execute(ctx context.Context, state *Context) (*Result, error) {
@@ -515,9 +552,31 @@ func (n *LLMNode) Execute(ctx context.Context, state *Context) (*Result, error) 
 
 // ToolNode executes a tool by name.
 type ToolNode struct {
-	id   string
-	Tool Tool
-	Args map[string]interface{}
+	id       string
+	Tool     Tool
+	Args     map[string]interface{}
+	Registry CapabilityInvoker
+}
+
+// CapabilityInvoker is the narrow registry contract ToolNode needs for
+// capability-routed execution without importing the concrete registry package.
+type CapabilityInvoker interface {
+	InvokeCapability(ctx context.Context, state *Context, idOrName string, args map[string]interface{}) (*core.ToolResult, error)
+	CapturePolicySnapshot() *core.PolicySnapshot
+	GetCapability(idOrName string) (core.CapabilityDescriptor, bool)
+}
+
+// NewToolNode constructs a tool node with a required capability invoker.
+func NewToolNode(id string, tool Tool, args map[string]interface{}, registry CapabilityInvoker) *ToolNode {
+	if registry == nil {
+		panic("graph.NewToolNode requires a capability registry")
+	}
+	return &ToolNode{
+		id:       id,
+		Tool:     tool,
+		Args:     args,
+		Registry: registry,
+	}
 }
 
 // ID implements Node.
@@ -526,24 +585,26 @@ func (n *ToolNode) ID() string { return n.id }
 // Type implements Node.
 func (n *ToolNode) Type() NodeType { return NodeTypeTool }
 
-// Execute calls the underlying tool.
+// Contract describes the capability requirement and replay characteristics for
+// tool-backed nodes.
+func (n *ToolNode) Contract() NodeContract {
+	return toolNodeContract(n.Tool)
+}
+
+// Execute calls the tool through the capability registry.
 func (n *ToolNode) Execute(ctx context.Context, state *Context) (*Result, error) {
 	if n.Tool == nil {
 		return nil, errors.New("tool node missing tool")
 	}
-	if !n.Tool.IsAvailable(ctx, state) {
-		return nil, fmt.Errorf("tool %s unavailable", n.Tool.Name())
+	if n.Registry == nil {
+		return nil, fmt.Errorf("tool node %q missing capability registry", n.id)
 	}
-	res, err := n.Tool.Execute(ctx, state, n.Args)
+	res, err := n.Registry.InvokeCapability(ctx, state, n.Tool.Name(), n.Args)
 	if err != nil {
 		return nil, err
 	}
-	return &Result{
-		NodeID:  n.id,
-		Success: res.Success,
-		Data:    res.Data,
-		Error:   errorFromString(res.Error),
-	}, nil
+	attachCapabilityEnvelope(n.Registry, n.Tool, state, res, n.Args)
+	return resultFromToolExecution(n.id, res), nil
 }
 
 // ConditionalNode computes the next branch dynamically.
@@ -586,6 +647,23 @@ func (n *HumanNode) ID() string { return n.id }
 // Type implements Node.
 func (n *HumanNode) Type() NodeType { return NodeTypeHuman }
 
+// Contract describes human-gated execution semantics.
+func (n *HumanNode) Contract() NodeContract {
+	return NodeContract{
+		SideEffectClass: SideEffectHuman,
+		Idempotency:     IdempotencySingleShot,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:                 []string{"task.*", "approval.*"},
+			WriteKeys:                []string{"approval.*"},
+			AllowHistoryAccess:       true,
+			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
+			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+			MaxStateEntryBytes:       4096,
+			MaxInlineCollectionItems: 16,
+		},
+	}
+}
+
 // Execute pauses execution until callback completes.
 func (n *HumanNode) Execute(ctx context.Context, state *Context) (*Result, error) {
 	if n.Callback != nil {
@@ -612,6 +690,22 @@ func (n *TerminalNode) ID() string { return n.id }
 // Type implements Node.
 func (n *TerminalNode) Type() NodeType { return NodeTypeTerminal }
 
+// Contract describes terminal nodes as replay-safe control flow only.
+func (n *TerminalNode) Contract() NodeContract {
+	return NodeContract{
+		SideEffectClass: SideEffectNone,
+		Idempotency:     IdempotencyReplaySafe,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:                 []string{"task.*", "plan.*", "react.*", "architect.*"},
+			WriteKeys:                []string{},
+			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
+			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassRoutingFlag, core.StateDataClassStructuredState},
+			MaxStateEntryBytes:       4096,
+			MaxInlineCollectionItems: 32,
+		},
+	}
+}
+
 // Execute completes immediately.
 func (n *TerminalNode) Execute(ctx context.Context, state *Context) (*Result, error) {
 	return &Result{NodeID: n.id, Success: true}, nil
@@ -624,4 +718,58 @@ func errorFromString(err string) error {
 		return nil
 	}
 	return errors.New(err)
+}
+
+func resultFromToolExecution(nodeID string, res *core.ToolResult) *Result {
+	if res == nil {
+		return &Result{NodeID: nodeID, Success: true, Data: map[string]interface{}{}}
+	}
+	data := res.Data
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+	return &Result{
+		NodeID:   nodeID,
+		Success:  res.Success,
+		Data:     data,
+		Metadata: res.Metadata,
+		Error:    errorFromString(res.Error),
+	}
+}
+
+func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, state *Context, res *core.ToolResult, args map[string]interface{}) {
+	if registry == nil || tool == nil || res == nil {
+		return
+	}
+	if res.Metadata == nil {
+		res.Metadata = map[string]interface{}{}
+	}
+	if envelope, ok := core.ToolResultEnvelope(res); ok && envelope != nil {
+		return
+	}
+
+	desc, ok := res.Metadata["capability_descriptor"].(core.CapabilityDescriptor)
+	if !ok || desc.ID == "" {
+		desc, ok = registry.GetCapability(tool.Name())
+		if !ok || desc.ID == "" {
+			desc = core.ToolDescriptor(context.Background(), state, tool)
+		}
+	}
+
+	var approval *core.ApprovalBinding
+	if raw := res.Metadata["approval_binding"]; raw != nil {
+		if typed, ok := raw.(*core.ApprovalBinding); ok {
+			approval = typed
+		}
+	}
+	if approval == nil {
+		approval = core.ApprovalBindingFromCapability(desc, state, args)
+	}
+
+	envelope := core.NewCapabilityResultEnvelope(desc, res, core.ContentDispositionRaw, registry.CapturePolicySnapshot(), approval)
+	if decision, ok := res.Metadata["insertion_decision"].(core.InsertionDecision); ok {
+		envelope = core.ApplyInsertionDecision(envelope, decision)
+	}
+	res.Metadata["insertion_decision"] = envelope.Insertion
+	res.Metadata["capability_result_envelope"] = envelope
 }

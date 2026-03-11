@@ -15,20 +15,15 @@ func (r *CapabilityRegistry) UsePermissionManager(agentID string, manager *Permi
 	defer r.mu.Unlock()
 	r.permissionManager = manager
 	r.registeredAgentID = agentID
-	for name, tool := range r.tools {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-			instrumented.manager = manager
-			instrumented.agentID = agentID
-		}
+	for _, entry := range r.localToolEntriesLocked() {
+		inner := unwrapTool(entry.legacyTool)
 		if aware, ok := inner.(PermissionAware); ok {
 			aware.SetPermissionManager(manager, agentID)
 		}
 		if aware, ok := inner.(AgentSpecAware); ok && r.agentSpec != nil {
 			aware.SetAgentSpec(r.agentSpec, agentID)
 		}
-		r.tools[name] = r.wrapTool(inner)
+		r.rewrapLegacyEntryLocked(entry)
 	}
 }
 
@@ -52,15 +47,12 @@ func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec
 	r.configureRuntimeSafety(spec.RuntimeSafety)
 
 	r.mu.Lock()
-	for name, tool := range r.tools {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-		}
+	for _, entry := range r.localToolEntriesLocked() {
+		inner := unwrapTool(entry.legacyTool)
 		if aware, ok := inner.(AgentSpecAware); ok {
 			aware.SetAgentSpec(spec, agentID)
 		}
-		r.tools[name] = r.wrapTool(inner)
+		r.rewrapLegacyEntryLocked(entry)
 	}
 	for _, entry := range r.entries {
 		if entry == nil || entry.legacyTool != nil || entry.handler == nil {
@@ -78,7 +70,6 @@ func (r *CapabilityRegistry) setAllowedCapabilities(allowed []core.CapabilitySel
 	if len(allowed) == 0 {
 		r.mu.Lock()
 		r.allowedCapabilities = []core.CapabilitySelector{}
-		r.tools = make(map[string]Tool)
 		r.capabilities = make(map[string]core.CapabilityDescriptor)
 		r.entries = make(map[string]*capabilityEntry)
 		r.mu.Unlock()
@@ -99,14 +90,8 @@ func (r *CapabilityRegistry) setToolPolicies(policies map[string]ToolPolicy) {
 	for name, policy := range policies {
 		r.toolPolicies[name] = policy
 	}
-	for name, tool := range r.tools {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-			instrumented.policy = r.toolPolicies[inner.Name()]
-			instrumented.hasPolicy = r.agentSpec != nil
-		}
-		r.tools[name] = r.wrapTool(inner)
+	for _, entry := range r.localToolEntriesLocked() {
+		r.rewrapLegacyEntryLocked(entry)
 	}
 	r.mu.Unlock()
 }
@@ -117,12 +102,8 @@ func (r *CapabilityRegistry) setCapabilityPolicies(policies []core.CapabilityPol
 	}
 	r.mu.Lock()
 	r.capabilityPolicies = append([]core.CapabilityPolicy{}, policies...)
-	for name, tool := range r.tools {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-		}
-		r.tools[name] = r.wrapTool(inner)
+	for _, entry := range r.localToolEntriesLocked() {
+		r.rewrapLegacyEntryLocked(entry)
 	}
 	for _, entry := range r.entries {
 		if entry == nil || entry.legacyTool != nil || entry.handler == nil {
@@ -329,12 +310,8 @@ func (r *CapabilityRegistry) setClassPolicies(policies map[string]AgentPermissio
 	}
 	r.mu.Lock()
 	r.globalPolicies = cloneGlobalPolicies(policies)
-	for name, tool := range r.tools {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-		}
-		r.tools[name] = r.wrapTool(inner)
+	for _, entry := range r.localToolEntriesLocked() {
+		r.rewrapLegacyEntryLocked(entry)
 	}
 	for _, entry := range r.entries {
 		if entry == nil || entry.legacyTool != nil || entry.handler == nil {
@@ -467,12 +444,8 @@ func (r *CapabilityRegistry) UpdateToolPolicy(name string, policy ToolPolicy) {
 		r.toolPolicies = make(map[string]ToolPolicy)
 	}
 	r.toolPolicies[name] = policy
-	if tool, ok := r.tools[name]; ok {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-		}
-		r.tools[name] = r.wrapTool(inner)
+	if entry, ok := r.localToolEntryByNameLocked(name); ok {
+		r.rewrapLegacyEntryLocked(entry)
 	}
 }
 
@@ -488,12 +461,8 @@ func (r *CapabilityRegistry) UpdateClassPolicy(class string, level AgentPermissi
 	} else {
 		r.globalPolicies[class] = level
 	}
-	for name, tool := range r.tools {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-		}
-		r.tools[name] = r.wrapTool(inner)
+	for _, entry := range r.localToolEntriesLocked() {
+		r.rewrapLegacyEntryLocked(entry)
 	}
 }
 
@@ -521,13 +490,8 @@ func (r *CapabilityRegistry) UseTelemetry(telemetry Telemetry) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.telemetry = telemetry
-	for name, tool := range r.tools {
-		var inner Tool = tool
-		if instrumented, ok := tool.(*instrumentedTool); ok {
-			inner = instrumented.Tool
-			instrumented.telemetry = telemetry
-		}
-		r.tools[name] = r.wrapTool(inner)
+	for _, entry := range r.localToolEntriesLocked() {
+		r.rewrapLegacyEntryLocked(entry)
 	}
 	for _, entry := range r.entries {
 		if entry == nil || entry.legacyTool != nil || entry.handler == nil {
@@ -560,14 +524,6 @@ func (r *CapabilityRegistry) RestrictToCapabilities(allowed []core.CapabilitySel
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for name, tool := range r.tools {
-		desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), nil, unwrapTool(tool)))
-		if !matchesAnyCapabilitySelector(allowed, desc) {
-			delete(r.tools, name)
-			delete(r.capabilities, desc.ID)
-			delete(r.entries, desc.ID)
-		}
-	}
 	for id, capability := range r.capabilities {
 		if !matchesAnyCapabilitySelector(allowed, capability) {
 			delete(r.capabilities, id)

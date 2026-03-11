@@ -10,46 +10,79 @@ import (
 	"time"
 )
 
-// GraphCheckpoint captures graph execution state for resumable workflows.
-type GraphCheckpoint struct {
-	CheckpointID      string                 `json:"checkpoint_id"`
-	TaskID            string                 `json:"task_id"`
-	CreatedAt         time.Time              `json:"created_at"`
-	CurrentNodeID     string                 `json:"current_node_id"`
-	VisitCounts       map[string]int         `json:"visit_counts"`
-	ExecutionPath     []string               `json:"execution_path"`
-	Context           *Context               `json:"context"`
-	CompressedContext *CompressedContext     `json:"compressed_context,omitempty"`
-	GraphHash         string                 `json:"graph_hash"`
-	Metadata          map[string]interface{} `json:"metadata"`
+// NodeTransitionRecord captures a completed node and the next resume boundary.
+type NodeTransitionRecord struct {
+	FromNodeID       string    `json:"from_node_id,omitempty"`
+	CompletedNodeID  string    `json:"completed_node_id,omitempty"`
+	NextNodeID       string    `json:"next_node_id,omitempty"`
+	TransitionReason string    `json:"transition_reason,omitempty"`
+	CompletedAt      time.Time `json:"completed_at"`
 }
 
-// CreateCheckpoint captures the current execution state for later resumption.
-func (g *Graph) CreateCheckpoint(taskID, currentNodeID string, ctx *Context) (*GraphCheckpoint, error) {
+// CheckpointResultSummary stores lightweight result metadata for safe terminal
+// resume without re-running completed work.
+type CheckpointResultSummary struct {
+	NodeID   string   `json:"node_id,omitempty"`
+	Success  bool     `json:"success"`
+	Error    string   `json:"error,omitempty"`
+	DataKeys []string `json:"data_keys,omitempty"`
+}
+
+// GraphCheckpoint captures graph execution state for resumable workflows.
+type GraphCheckpoint struct {
+	CheckpointID      string                   `json:"checkpoint_id"`
+	TaskID            string                   `json:"task_id"`
+	CreatedAt         time.Time                `json:"created_at"`
+	CurrentNodeID     string                   `json:"current_node_id,omitempty"`
+	CompletedNodeID   string                   `json:"completed_node_id,omitempty"`
+	NextNodeID        string                   `json:"next_node_id,omitempty"`
+	LastTransition    *NodeTransitionRecord    `json:"last_transition,omitempty"`
+	LastResultSummary *CheckpointResultSummary `json:"last_result_summary,omitempty"`
+	VisitCounts       map[string]int           `json:"visit_counts"`
+	ExecutionPath     []string                 `json:"execution_path"`
+	Context           *Context                 `json:"context"`
+	CompressedContext *CompressedContext       `json:"compressed_context,omitempty"`
+	GraphHash         string                   `json:"graph_hash"`
+	Metadata          map[string]interface{}   `json:"metadata"`
+}
+
+// CreateCheckpoint captures a transition-boundary execution state for later resumption.
+func (g *Graph) CreateCheckpoint(taskID, completedNodeID, nextNodeID string, result *Result, transition *NodeTransitionRecord, ctx *Context) (*GraphCheckpoint, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("nil context")
 	}
 	ctxClone := ctx.Clone()
+	if transition == nil {
+		transition = &NodeTransitionRecord{
+			CompletedNodeID: completedNodeID,
+			NextNodeID:      nextNodeID,
+			CompletedAt:     time.Now().UTC(),
+		}
+	}
 	checkpoint := &GraphCheckpoint{
-		CheckpointID:  generateCheckpointID(),
-		TaskID:        taskID,
-		CreatedAt:     time.Now().UTC(),
-		CurrentNodeID: currentNodeID,
-		VisitCounts:   g.copyVisitCounts(),
-		ExecutionPath: g.copyExecutionPath(),
-		Context:       ctxClone,
-		GraphHash:     g.computeHash(),
-		Metadata:      make(map[string]interface{}),
+		CheckpointID:      generateCheckpointID(),
+		TaskID:            taskID,
+		CreatedAt:         time.Now().UTC(),
+		CurrentNodeID:     completedNodeID,
+		CompletedNodeID:   completedNodeID,
+		NextNodeID:        nextNodeID,
+		LastTransition:    cloneTransitionRecord(transition),
+		LastResultSummary: summarizeCheckpointResult(result, completedNodeID),
+		VisitCounts:       g.copyVisitCounts(),
+		ExecutionPath:     g.copyExecutionPath(),
+		Context:           ctxClone,
+		GraphHash:         g.computeHash(),
+		Metadata:          make(map[string]interface{}),
 	}
 	if telemetry, ok := g.telemetry.(CheckpointTelemetry); ok {
-		telemetry.OnCheckpointCreated(taskID, checkpoint.CheckpointID, currentNodeID)
+		telemetry.OnCheckpointCreated(taskID, checkpoint.CheckpointID, checkpoint.resumeNodeID())
 	}
 	return checkpoint, nil
 }
 
 // CreateCompressedCheckpoint captures a checkpoint while compressing history.
-func (g *Graph) CreateCompressedCheckpoint(taskID, currentNodeID string, ctx *Context, llm LanguageModel, strategy CompressionStrategy) (*GraphCheckpoint, error) {
-	checkpoint, err := g.CreateCheckpoint(taskID, currentNodeID, ctx)
+func (g *Graph) CreateCompressedCheckpoint(taskID, completedNodeID, nextNodeID string, result *Result, transition *NodeTransitionRecord, ctx *Context, llm LanguageModel, strategy CompressionStrategy) (*GraphCheckpoint, error) {
+	checkpoint, err := g.CreateCheckpoint(taskID, completedNodeID, nextNodeID, result, transition, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -93,13 +126,19 @@ func (g *Graph) ResumeFromCheckpoint(ctx context.Context, checkpoint *GraphCheck
 		g.visitCounts[node] = count
 	}
 	g.executionPath = append([]string(nil), checkpoint.ExecutionPath...)
-	g.lastCheckpointNode = checkpoint.CurrentNodeID
+	g.lastCheckpointNode = checkpoint.CompletedNodeID
 	g.execMu.Unlock()
 	if telemetry, ok := g.telemetry.(CheckpointTelemetry); ok {
 		telemetry.OnCheckpointRestored(checkpoint.TaskID, checkpoint.CheckpointID)
-		telemetry.OnGraphResume(checkpoint.TaskID, checkpoint.CheckpointID, checkpoint.CurrentNodeID)
+		telemetry.OnGraphResume(checkpoint.TaskID, checkpoint.CheckpointID, checkpoint.resumeNodeID())
 	}
-	return g.run(ctx, state, checkpoint.CurrentNodeID, false, checkpoint.TaskID)
+	if checkpoint.CompletedNodeID == "" && checkpoint.NextNodeID == "" {
+		return nil, fmt.Errorf("checkpoint missing resume boundary")
+	}
+	if checkpoint.NextNodeID == "" {
+		return checkpoint.resultFromSummary(), nil
+	}
+	return g.run(ctx, state, checkpoint.NextNodeID, false, checkpoint.TaskID)
 }
 
 func generateCheckpointID() string {
@@ -116,6 +155,69 @@ func (g *Graph) copyVisitCounts() map[string]int {
 
 func (g *Graph) copyExecutionPath() []string {
 	return append([]string(nil), g.executionPath...)
+}
+
+func summarizeCheckpointResult(result *Result, completedNodeID string) *CheckpointResultSummary {
+	if result == nil {
+		if completedNodeID == "" {
+			return nil
+		}
+		return &CheckpointResultSummary{NodeID: completedNodeID, Success: true}
+	}
+	keys := make([]string, 0, len(result.Data))
+	for key := range result.Data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return &CheckpointResultSummary{
+		NodeID:   result.NodeID,
+		Success:  result.Success,
+		Error:    errorString(result.Error),
+		DataKeys: keys,
+	}
+}
+
+func cloneTransitionRecord(record *NodeTransitionRecord) *NodeTransitionRecord {
+	if record == nil {
+		return nil
+	}
+	copy := *record
+	return &copy
+}
+
+func (c *GraphCheckpoint) resumeNodeID() string {
+	if c == nil {
+		return ""
+	}
+	if c.NextNodeID != "" {
+		return c.NextNodeID
+	}
+	if c.CompletedNodeID != "" {
+		return c.CompletedNodeID
+	}
+	return c.CurrentNodeID
+}
+
+func (c *GraphCheckpoint) resultFromSummary() *Result {
+	if c == nil {
+		return &Result{Success: true, Data: map[string]interface{}{}}
+	}
+	if c.LastResultSummary == nil {
+		return &Result{NodeID: c.CompletedNodeID, Success: true, Data: map[string]interface{}{}}
+	}
+	return &Result{
+		NodeID:  c.LastResultSummary.NodeID,
+		Success: c.LastResultSummary.Success,
+		Data:    map[string]interface{}{},
+		Error:   errorFromString(c.LastResultSummary.Error),
+	}
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func (g *Graph) computeHash() string {

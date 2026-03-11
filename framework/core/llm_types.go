@@ -38,10 +38,81 @@ type Message struct {
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 }
 
+// LLMToolSpec is the provider-agnostic tool definition passed to LLM backends.
+// It carries only the fields needed to describe a callable tool to a language
+// model: name, description, and input schema. Provider-specific wire formats
+// (e.g. Ollama's {"type":"function","function":{...}}) are handled entirely
+// inside the platform/llm layer and do not leak into the capability model.
+type LLMToolSpec struct {
+	Name        string  `json:"name"`
+	Description string  `json:"description,omitempty"`
+	InputSchema *Schema `json:"input_schema,omitempty"`
+}
+
+// LLMToolSpecFromTool builds an LLMToolSpec from a local Tool implementation.
+func LLMToolSpecFromTool(t Tool) LLMToolSpec {
+	spec := LLMToolSpec{
+		Name:        t.Name(),
+		Description: t.Description(),
+	}
+	params := t.Parameters()
+	if len(params) > 0 {
+		props := make(map[string]*Schema, len(params))
+		var required []string
+		for _, p := range params {
+			prop := &Schema{
+				Type:        p.Type,
+				Description: p.Description,
+			}
+			if p.Default != nil {
+				prop.Default = p.Default
+			}
+			props[p.Name] = prop
+			if p.Required {
+				required = append(required, p.Name)
+			}
+		}
+		spec.InputSchema = &Schema{
+			Type:       "object",
+			Properties: props,
+			Required:   required,
+		}
+	}
+	return spec
+}
+
+// LLMToolSpecFromDescriptor builds an LLMToolSpec from a CapabilityDescriptor.
+// Used for non-local capabilities (provider-backed, Relurpic) that are callable
+// by the LLM but are not local Tool implementations.
+func LLMToolSpecFromDescriptor(d CapabilityDescriptor) LLMToolSpec {
+	name := d.Name
+	if name == "" {
+		name = d.ID
+	}
+	return LLMToolSpec{
+		Name:        name,
+		Description: d.Description,
+		InputSchema: d.InputSchema,
+	}
+}
+
+// LLMToolSpecsFromTools converts a slice of local Tool implementations to
+// LLMToolSpec values for passing to ChatWithTools.
+func LLMToolSpecsFromTools(tools []Tool) []LLMToolSpec {
+	if len(tools) == 0 {
+		return nil
+	}
+	specs := make([]LLMToolSpec, len(tools))
+	for i, t := range tools {
+		specs[i] = LLMToolSpecFromTool(t)
+	}
+	return specs
+}
+
 // LanguageModel provides the required LLM capabilities.
 type LanguageModel interface {
 	Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error)
 	GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error)
 	Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error)
-	ChatWithTools(ctx context.Context, messages []Message, tools []Tool, options *LLMOptions) (*LLMResponse, error)
+	ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error)
 }
