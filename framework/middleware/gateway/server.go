@@ -89,6 +89,10 @@ type Server struct {
 	// SessionTenantResolver resolves opaque session IDs to their owning tenant so
 	// scoped event delivery can filter session-derived events.
 	SessionTenantResolver func(ctx context.Context, sessionID string) (string, error)
+	// SessionEventAuthorizer decides whether a principal may observe events
+	// associated with a specific session. Tenant-wide admins may bypass this via
+	// canDeliverEvent, but runtime principals are gated through it.
+	SessionEventAuthorizer func(ctx context.Context, principal ConnectionPrincipal, sessionID string) (bool, error)
 
 	mu      sync.RWMutex
 	clients map[*websocket.Conn]*broadcastClient
@@ -99,6 +103,7 @@ type connectFrame struct {
 	Type         string                      `json:"type"`
 	Version      string                      `json:"version"`
 	Role         string                      `json:"role"`
+	FeedScope    string                      `json:"feed_scope,omitempty"`
 	ActorID      string                      `json:"actor_id,omitempty"`
 	LastSeenSeq  uint64                      `json:"last_seen_seq"`
 	NodeID       string                      `json:"node_id,omitempty"`
@@ -110,6 +115,7 @@ type connectFrame struct {
 type connectedFrame struct {
 	Type         string                      `json:"type"`
 	SessionID    string                      `json:"session_id"`
+	FeedScope    connectionFeedScope         `json:"feed_scope,omitempty"`
 	ServerSeq    uint64                      `json:"server_seq"`
 	ReplayFrom   uint64                      `json:"replay_from"`
 	Capabilities []core.CapabilityDescriptor `json:"capabilities,omitempty"`
@@ -128,7 +134,16 @@ type ConnectionPrincipal struct {
 	Actor         core.EventActor
 	Authenticated bool
 	Principal     *core.AuthenticatedPrincipal
+	FeedScope     connectionFeedScope
 }
+
+type connectionFeedScope string
+
+const (
+	feedScopeRuntime     connectionFeedScope = "runtime"
+	feedScopeTenantAdmin connectionFeedScope = "tenant_admin"
+	feedScopeGlobalAdmin connectionFeedScope = "global_admin"
+)
 
 func (s *Server) Handler() http.Handler {
 	upgrader := s.Upgrader
@@ -291,6 +306,7 @@ func (s *Server) connectedResponse(ctx context.Context, frame connectFrame, prin
 	return connectedFrame{
 		Type:         "connected",
 		SessionID:    connectionSessionID(principal),
+		FeedScope:    connectionFeed(principal),
 		ServerSeq:    lastSeq,
 		ReplayFrom:   frame.LastSeenSeq,
 		Capabilities: capabilities,
@@ -465,7 +481,35 @@ func validateAndBindPrincipal(frame connectFrame, resolved ConnectionPrincipal) 
 	if role == "node" && principal.Actor.SubjectKind != "" && principal.Actor.SubjectKind != core.SubjectKindNode {
 		return ConnectionPrincipal{}, fmt.Errorf("node connections require node subject")
 	}
+	feedScope, err := requestedFeedScope(frame, principal)
+	if err != nil {
+		return ConnectionPrincipal{}, err
+	}
+	principal.FeedScope = feedScope
 	return principal, nil
+}
+
+func requestedFeedScope(frame connectFrame, principal ConnectionPrincipal) (connectionFeedScope, error) {
+	requested := connectionFeedScope(strings.ToLower(strings.TrimSpace(frame.FeedScope)))
+	if requested == "" {
+		return connectionFeed(principal), nil
+	}
+	switch requested {
+	case feedScopeRuntime:
+		return requested, nil
+	case feedScopeTenantAdmin:
+		if !isAdminPrincipal(principal) {
+			return "", fmt.Errorf("feed_scope %s requires admin scope", requested)
+		}
+		return requested, nil
+	case feedScopeGlobalAdmin:
+		if !hasGlobalAdminScope(principal) {
+			return "", fmt.Errorf("feed_scope %s requires global admin scope", requested)
+		}
+		return requested, nil
+	default:
+		return "", fmt.Errorf("feed_scope %s invalid", requested)
+	}
 }
 
 func bindConnectionSessionID(principal ConnectionPrincipal) (ConnectionPrincipal, error) {
@@ -641,9 +685,17 @@ func (s *Server) broadcastEvent(ctx context.Context, ev core.FrameworkEvent) {
 }
 
 func (s *Server) canDeliverEvent(ctx context.Context, principal ConnectionPrincipal, ev core.FrameworkEvent) (bool, error) {
-	if isAdminPrincipal(principal) {
+	switch connectionFeed(principal) {
+	case feedScopeGlobalAdmin:
 		return true, nil
+	case feedScopeTenantAdmin:
+		return s.canDeliverTenantAdminEvent(ctx, principal, ev)
+	default:
+		return s.canDeliverRuntimeEvent(ctx, principal, ev)
 	}
+}
+
+func (s *Server) canDeliverTenantAdminEvent(ctx context.Context, principal ConnectionPrincipal, ev core.FrameworkEvent) (bool, error) {
 	tenantID, err := s.eventTenantID(ctx, ev)
 	if err != nil {
 		return false, err
@@ -652,6 +704,21 @@ func (s *Server) canDeliverEvent(ctx context.Context, principal ConnectionPrinci
 		return false, nil
 	}
 	return strings.EqualFold(tenantID, principal.Actor.TenantID), nil
+}
+
+func (s *Server) canDeliverRuntimeEvent(ctx context.Context, principal ConnectionPrincipal, ev core.FrameworkEvent) (bool, error) {
+	tenantID, err := s.eventTenantID(ctx, ev)
+	if err != nil {
+		return false, err
+	}
+	if tenantID == "" || !strings.EqualFold(tenantID, principal.Actor.TenantID) {
+		return false, nil
+	}
+	sessionID, ok := s.eventSessionID(ev)
+	if !ok || s.SessionEventAuthorizer == nil {
+		return false, nil
+	}
+	return s.SessionEventAuthorizer(ctx, principal, sessionID)
 }
 
 func (s *Server) eventTenantID(ctx context.Context, ev core.FrameworkEvent) (string, error) {
@@ -668,12 +735,33 @@ func (s *Server) eventTenantID(ctx context.Context, ev core.FrameworkEvent) (str
 	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
 		return "", nil
 	}
-	for _, key := range []string{"session_key", "session_id"} {
-		if sessionID, ok := payload[key].(string); ok && strings.TrimSpace(sessionID) != "" {
-			return s.SessionTenantResolver(ctx, sessionID)
-		}
+	if sessionID, ok := eventSessionIDFromPayload(payload); ok {
+		return s.SessionTenantResolver(ctx, sessionID)
 	}
 	return "", nil
+}
+
+func (s *Server) eventSessionID(ev core.FrameworkEvent) (string, bool) {
+	if strings.EqualFold(ev.Type, core.FrameworkEventSessionMessage) && strings.TrimSpace(ev.Actor.ID) != "" {
+		return strings.TrimSpace(ev.Actor.ID), true
+	}
+	if len(ev.Payload) == 0 {
+		return "", false
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
+		return "", false
+	}
+	return eventSessionIDFromPayload(payload)
+}
+
+func eventSessionIDFromPayload(payload map[string]any) (string, bool) {
+	for _, key := range []string{"session_key", "session_id"} {
+		if sessionID, ok := payload[key].(string); ok && strings.TrimSpace(sessionID) != "" {
+			return strings.TrimSpace(sessionID), true
+		}
+	}
+	return "", false
 }
 
 func isAdminPrincipal(principal ConnectionPrincipal) bool {
@@ -687,4 +775,30 @@ func isAdminPrincipal(principal ConnectionPrincipal) bool {
 		}
 	}
 	return false
+}
+
+func hasGlobalAdminScope(principal ConnectionPrincipal) bool {
+	if !isAdminPrincipal(principal) || principal.Principal == nil {
+		return false
+	}
+	for _, scope := range principal.Principal.Scopes {
+		switch strings.ToLower(strings.TrimSpace(scope)) {
+		case "nexus:admin:global", "gateway:admin:global", "admin:global":
+			return true
+		}
+	}
+	return false
+}
+
+func connectionFeed(principal ConnectionPrincipal) connectionFeedScope {
+	if principal.FeedScope != "" {
+		return principal.FeedScope
+	}
+	if hasGlobalAdminScope(principal) {
+		return feedScopeGlobalAdmin
+	}
+	if isAdminPrincipal(principal) {
+		return feedScopeTenantAdmin
+	}
+	return feedScopeRuntime
 }

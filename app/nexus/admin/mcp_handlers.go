@@ -29,10 +29,21 @@ type listNodesArgs struct {
 	Limit      int    `json:"limit,omitempty"`
 }
 
+type getNodeArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	NodeID     string `json:"node_id"`
+}
+
 type listEventsArgs struct {
 	APIVersion string `json:"api_version,omitempty"`
 	Cursor     string `json:"cursor,omitempty"`
 	Limit      int    `json:"limit,omitempty"`
+}
+
+type updateNodeCapabilitiesArgs struct {
+	APIVersion   string                      `json:"api_version,omitempty"`
+	NodeID       string                      `json:"node_id"`
+	Capabilities []core.CapabilityDescriptor `json:"capabilities,omitempty"`
 }
 
 type revokeNodeArgs struct {
@@ -45,15 +56,47 @@ type closeSessionArgs struct {
 	SessionID  string `json:"session_id"`
 }
 
+type grantSessionDelegationArgs struct {
+	APIVersion  string   `json:"api_version,omitempty"`
+	SessionID   string   `json:"session_id"`
+	SubjectKind string   `json:"subject_kind"`
+	SubjectID   string   `json:"subject_id"`
+	Operations  []string `json:"operations,omitempty"`
+	ExpiresAt   string   `json:"expires_at,omitempty"`
+}
+
 type restartChannelArgs struct {
 	APIVersion string `json:"api_version,omitempty"`
 	Channel    string `json:"channel"`
 }
 
 type issueTokenArgs struct {
-	APIVersion string   `json:"api_version,omitempty"`
-	SubjectID  string   `json:"subject_id"`
-	Scopes     []string `json:"scopes,omitempty"`
+	APIVersion      string   `json:"api_version,omitempty"`
+	SubjectTenantID string   `json:"subject_tenant_id,omitempty"`
+	SubjectKind     string   `json:"subject_kind,omitempty"`
+	SubjectID       string   `json:"subject_id"`
+	Scopes          []string `json:"scopes,omitempty"`
+}
+
+type createSubjectArgs struct {
+	APIVersion      string   `json:"api_version,omitempty"`
+	SubjectTenantID string   `json:"subject_tenant_id,omitempty"`
+	SubjectKind     string   `json:"subject_kind"`
+	SubjectID       string   `json:"subject_id"`
+	DisplayName     string   `json:"display_name,omitempty"`
+	Roles           []string `json:"roles,omitempty"`
+}
+
+type bindExternalIdentityArgs struct {
+	APIVersion      string `json:"api_version,omitempty"`
+	SubjectTenantID string `json:"subject_tenant_id,omitempty"`
+	Provider        string `json:"provider"`
+	AccountID       string `json:"account_id,omitempty"`
+	ExternalID      string `json:"external_id"`
+	SubjectKind     string `json:"subject_kind"`
+	SubjectID       string `json:"subject_id"`
+	DisplayName     string `json:"display_name,omitempty"`
+	ProviderLabel   string `json:"provider_label,omitempty"`
 }
 
 type revokeTokenArgs struct {
@@ -120,6 +163,36 @@ func handleListNodes(ctx context.Context, svc AdminService, principal core.Authe
 	}
 }
 
+func handleGetNode(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.GetNode(ctx, GetNodeRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), NodeID: stringArg(args, "node_id", "")})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleUpdateNodeCapabilities(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.UpdateNodeCapabilities(ctx, UpdateNodeCapabilitiesRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			NodeID:       stringArg(args, "node_id", ""),
+			Capabilities: capabilityDescriptorsArg(args, "capabilities"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
 func handleListEvents(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
@@ -159,6 +232,30 @@ func handleCloseSession(ctx context.Context, svc AdminService, principal core.Au
 	}
 }
 
+func handleGrantSessionDelegation(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		expiresAt, err := timeArg(args, "expires_at")
+		if err != nil {
+			return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "expires_at invalid", Detail: map[string]any{"field": "expires_at", "cause": err.Error()}}
+		}
+		result, err := svc.GrantSessionDelegation(ctx, GrantSessionDelegationRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			SessionID:    stringArg(args, "session_id", ""),
+			SubjectKind:  core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectID:    stringArg(args, "subject_id", ""),
+			Operations:   sessionOperationsArg(args, "operations"),
+			ExpiresAt:    expiresAt,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
 func handleRestartChannel(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
@@ -175,7 +272,56 @@ func handleRestartChannel(ctx context.Context, svc AdminService, principal core.
 func handleIssueToken(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
-		result, err := svc.IssueToken(ctx, IssueTokenRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), SubjectID: stringArg(args, "subject_id", ""), Scopes: stringListArg(args, "scopes")})
+		result, err := svc.IssueToken(ctx, IssueTokenRequest{
+			AdminRequest:    requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			SubjectTenantID: stringArg(args, "subject_tenant_id", ""),
+			SubjectKind:     core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectID:       stringArg(args, "subject_id", ""),
+			Scopes:          stringListArg(args, "scopes"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleCreateSubject(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.CreateSubject(ctx, CreateSubjectRequest{
+			AdminRequest:    requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			SubjectTenantID: stringArg(args, "subject_tenant_id", ""),
+			SubjectKind:     core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectID:       stringArg(args, "subject_id", ""),
+			DisplayName:     stringArg(args, "display_name", ""),
+			Roles:           stringListArg(args, "roles"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleBindExternalIdentity(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.BindExternalIdentity(ctx, BindExternalIdentityRequest{
+			AdminRequest:    requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			SubjectTenantID: stringArg(args, "subject_tenant_id", ""),
+			Provider:        core.ExternalProvider(stringArg(args, "provider", "")),
+			AccountID:       stringArg(args, "account_id", ""),
+			ExternalID:      stringArg(args, "external_id", ""),
+			SubjectKind:     core.SubjectKind(stringArg(args, "subject_kind", "")),
+			SubjectID:       stringArg(args, "subject_id", ""),
+			DisplayName:     stringArg(args, "display_name", ""),
+			ProviderLabel:   stringArg(args, "provider_label", ""),
+		})
 		if err != nil {
 			return nil, err
 		}

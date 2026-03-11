@@ -21,14 +21,15 @@ const (
 
 // NodeDescriptor is the stable identity of a device node.
 type NodeDescriptor struct {
-	ID         string            `json:"id" yaml:"id"`
-	TenantID   string            `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
-	Name       string            `json:"name" yaml:"name"`
-	Platform   NodePlatform      `json:"platform" yaml:"platform"`
-	TrustClass TrustClass        `json:"trust_class" yaml:"trust_class"`
-	PairedAt   time.Time         `json:"paired_at,omitempty" yaml:"paired_at,omitempty"`
-	Owner      SubjectRef        `json:"owner,omitempty" yaml:"owner,omitempty"`
-	Tags       map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ID                   string                 `json:"id" yaml:"id"`
+	TenantID             string                 `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
+	Name                 string                 `json:"name" yaml:"name"`
+	Platform             NodePlatform           `json:"platform" yaml:"platform"`
+	TrustClass           TrustClass             `json:"trust_class" yaml:"trust_class"`
+	PairedAt             time.Time              `json:"paired_at,omitempty" yaml:"paired_at,omitempty"`
+	Owner                SubjectRef             `json:"owner,omitempty" yaml:"owner,omitempty"`
+	Tags                 map[string]string      `json:"tags,omitempty" yaml:"tags,omitempty"`
+	ApprovedCapabilities []CapabilityDescriptor `json:"approved_capabilities,omitempty" yaml:"approved_capabilities,omitempty"`
 }
 
 // NodeHealth describes the current state of a connected node.

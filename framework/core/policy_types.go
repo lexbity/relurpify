@@ -18,20 +18,25 @@ type PolicyRule struct {
 }
 
 type PolicyConditions struct {
-	Actors            []ActorMatch              `json:"actors,omitempty" yaml:"actors,omitempty"`
-	Capabilities      []string                  `json:"capabilities,omitempty" yaml:"capabilities,omitempty"`
-	ProviderKinds     []ProviderKind            `json:"provider_kinds,omitempty" yaml:"provider_kinds,omitempty"`
-	MinRiskClasses    []RiskClass               `json:"min_risk_classes,omitempty" yaml:"min_risk_classes,omitempty"`
-	TrustClasses      []TrustClass              `json:"trust_classes,omitempty" yaml:"trust_classes,omitempty"`
-	CapabilityKinds   []CapabilityKind          `json:"capability_kinds,omitempty" yaml:"capability_kinds,omitempty"`
-	RuntimeFamilies   []CapabilityRuntimeFamily `json:"runtime_families,omitempty" yaml:"runtime_families,omitempty"`
-	EffectClasses     []EffectClass             `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
-	Partitions        []string                  `json:"partitions,omitempty" yaml:"partitions,omitempty"`
-	ChannelIDs        []string                  `json:"channel_ids,omitempty" yaml:"channel_ids,omitempty"`
-	SessionScopes     []SessionScope            `json:"session_scopes,omitempty" yaml:"session_scopes,omitempty"`
-	SessionOperations []SessionOperation        `json:"session_operations,omitempty" yaml:"session_operations,omitempty"`
-	RequireOwnership  *bool                     `json:"require_ownership,omitempty" yaml:"require_ownership,omitempty"`
-	TimeWindow        *TimeWindow               `json:"time_window,omitempty" yaml:"time_window,omitempty"`
+	Actors                    []ActorMatch              `json:"actors,omitempty" yaml:"actors,omitempty"`
+	Capabilities              []string                  `json:"capabilities,omitempty" yaml:"capabilities,omitempty"`
+	ProviderKinds             []ProviderKind            `json:"provider_kinds,omitempty" yaml:"provider_kinds,omitempty"`
+	ExternalProviders         []ExternalProvider        `json:"external_providers,omitempty" yaml:"external_providers,omitempty"`
+	MinRiskClasses            []RiskClass               `json:"min_risk_classes,omitempty" yaml:"min_risk_classes,omitempty"`
+	TrustClasses              []TrustClass              `json:"trust_classes,omitempty" yaml:"trust_classes,omitempty"`
+	CapabilityKinds           []CapabilityKind          `json:"capability_kinds,omitempty" yaml:"capability_kinds,omitempty"`
+	RuntimeFamilies           []CapabilityRuntimeFamily `json:"runtime_families,omitempty" yaml:"runtime_families,omitempty"`
+	EffectClasses             []EffectClass             `json:"effect_classes,omitempty" yaml:"effect_classes,omitempty"`
+	Partitions                []string                  `json:"partitions,omitempty" yaml:"partitions,omitempty"`
+	ChannelIDs                []string                  `json:"channel_ids,omitempty" yaml:"channel_ids,omitempty"`
+	SessionScopes             []SessionScope            `json:"session_scopes,omitempty" yaml:"session_scopes,omitempty"`
+	SessionOperations         []SessionOperation        `json:"session_operations,omitempty" yaml:"session_operations,omitempty"`
+	RequireOwnership          *bool                     `json:"require_ownership,omitempty" yaml:"require_ownership,omitempty"`
+	RequireDelegation         *bool                     `json:"require_delegation,omitempty" yaml:"require_delegation,omitempty"`
+	RequireExternalBinding    *bool                     `json:"require_external_binding,omitempty" yaml:"require_external_binding,omitempty"`
+	RequireResolvedExternal   *bool                     `json:"require_resolved_external,omitempty" yaml:"require_resolved_external,omitempty"`
+	RequireRestrictedExternal *bool                     `json:"require_restricted_external,omitempty" yaml:"require_restricted_external,omitempty"`
+	TimeWindow                *TimeWindow               `json:"time_window,omitempty" yaml:"time_window,omitempty"`
 }
 
 type ActorMatch struct {
@@ -62,28 +67,38 @@ type RateLimit struct {
 }
 
 type PolicyRequest struct {
-	Target           PolicyTarget
-	Actor            EventActor
-	Authenticated    bool
-	ActorTenantID    string
-	ResourceTenantID string
-	CapabilityID     string
-	CapabilityName   string
-	CapabilityKind   CapabilityKind
-	RuntimeFamily    CapabilityRuntimeFamily
-	ProviderKind     ProviderKind
-	ProviderOrigin   ProviderOriginKind
-	TrustClass       TrustClass
-	RiskClasses      []RiskClass
-	EffectClasses    []EffectClass
-	Partition        string
-	ChannelID        string
-	SessionID        string
-	SessionScope     SessionScope
-	SessionOperation SessionOperation
-	SessionOwnerID   string
-	IsOwner          bool
-	Timestamp        time.Time
+	Target                 PolicyTarget
+	Actor                  EventActor
+	Authenticated          bool
+	ActorTenantID          string
+	ResourceTenantID       string
+	CapabilityID           string
+	CapabilityName         string
+	CapabilityKind         CapabilityKind
+	RuntimeFamily          CapabilityRuntimeFamily
+	ProviderKind           ProviderKind
+	ProviderOrigin         ProviderOriginKind
+	TrustClass             TrustClass
+	RiskClasses            []RiskClass
+	EffectClasses          []EffectClass
+	Partition              string
+	ChannelID              string
+	SessionID              string
+	SessionScope           SessionScope
+	SessionOperation       SessionOperation
+	SessionOwnerID         string
+	IsOwner                bool
+	IsDelegated            bool
+	ExternalProvider       ExternalProvider
+	ExternalAccountID      string
+	ExternalChannelID      string
+	ExternalConversationID string
+	ExternalThreadID       string
+	ExternalUserID         string
+	HasExternalBinding     bool
+	ResolvedExternal       bool
+	RestrictedExternal     bool
+	Timestamp              time.Time
 }
 
 type PolicyTarget string

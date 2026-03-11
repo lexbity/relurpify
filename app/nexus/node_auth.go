@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/identity"
@@ -84,6 +85,10 @@ func verifyGatewayNodeChallenge(ctx context.Context, store identity.Store, princ
 		IssuedAt:  enrollment.PairedAt,
 	}
 	if err := fwnode.VerifyChallenge(cred, nonce, signature); err != nil {
+		return err
+	}
+	enrollment.LastVerifiedAt = time.Now().UTC()
+	if err := store.UpsertNodeEnrollment(ctx, *enrollment); err != nil {
 		return err
 	}
 	return nil

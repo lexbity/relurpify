@@ -33,14 +33,47 @@ func mustSchema(sample any) map[string]any {
 	switch sample.(type) {
 	case approvePairingArgs, rejectPairingArgs:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "code": map[string]any{"type": "string"}}, "required": []string{"code"}}
-	case revokeNodeArgs:
+	case getNodeArgs, revokeNodeArgs:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "node_id": map[string]any{"type": "string"}}, "required": []string{"node_id"}}
+	case updateNodeCapabilitiesArgs:
+		return map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"api_version": map[string]any{"type": "string"},
+				"node_id":     map[string]any{"type": "string"},
+				"capabilities": map[string]any{
+					"type":  "array",
+					"items": map[string]any{"type": "object"},
+				},
+			},
+			"required": []string{"node_id"},
+		}
 	case closeSessionArgs:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "session_id": map[string]any{"type": "string"}}, "required": []string{"session_id"}}
+	case grantSessionDelegationArgs:
+		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "session_id": map[string]any{"type": "string"}, "subject_kind": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}, "operations": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "expires_at": map[string]any{"type": "string"}}, "required": []string{"session_id", "subject_kind", "subject_id"}}
 	case restartChannelArgs:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "channel": map[string]any{"type": "string"}}, "required": []string{"channel"}}
 	case issueTokenArgs:
-		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}, "scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"subject_id"}}
+		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "subject_tenant_id": map[string]any{"type": "string"}, "subject_kind": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}, "scopes": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"subject_id"}}
+	case createSubjectArgs:
+		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "subject_tenant_id": map[string]any{"type": "string"}, "subject_kind": map[string]any{"type": "string"}, "subject_id": map[string]any{"type": "string"}, "display_name": map[string]any{"type": "string"}, "roles": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}, "required": []string{"subject_kind", "subject_id"}}
+	case bindExternalIdentityArgs:
+		return map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"api_version":       map[string]any{"type": "string"},
+				"subject_tenant_id": map[string]any{"type": "string"},
+				"provider":          map[string]any{"type": "string"},
+				"account_id":        map[string]any{"type": "string"},
+				"external_id":       map[string]any{"type": "string"},
+				"subject_kind":      map[string]any{"type": "string"},
+				"subject_id":        map[string]any{"type": "string"},
+				"display_name":      map[string]any{"type": "string"},
+				"provider_label":    map[string]any{"type": "string"},
+			},
+			"required": []string{"provider", "external_id", "subject_kind", "subject_id"},
+		}
 	case revokeTokenArgs:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "token_id": map[string]any{"type": "string"}}, "required": []string{"token_id"}}
 	case setPolicyRuleEnabledArgs:
@@ -236,6 +269,50 @@ func stringListArg(args map[string]any, key string) []string {
 		}
 	}
 	return out
+}
+
+func capabilityDescriptorsArg(args map[string]any, key string) []core.CapabilityDescriptor {
+	if args == nil {
+		return nil
+	}
+	raw, ok := args[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var out []core.CapabilityDescriptor
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func sessionOperationsArg(args map[string]any, key string) []core.SessionOperation {
+	values := stringListArg(args, key)
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]core.SessionOperation, 0, len(values))
+	for _, value := range values {
+		out = append(out, core.SessionOperation(value))
+	}
+	return out
+}
+
+func timeArg(args map[string]any, key string) (*time.Time, error) {
+	value := stringArg(args, key, "")
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, err
+	}
+	parsed = parsed.UTC()
+	return &parsed, nil
 }
 
 func DecodeStructuredContent[T any](result *protocol.CallToolResult, target *T) error {

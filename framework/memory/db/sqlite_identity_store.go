@@ -39,6 +39,22 @@ func NewSQLiteIdentityStore(path string) (*SQLiteIdentityStore, error) {
 
 func (s *SQLiteIdentityStore) init() error {
 	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS tenants (
+			tenant_id TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT '',
+			disabled_at TEXT NOT NULL DEFAULT ''
+		);`,
+		`CREATE TABLE IF NOT EXISTS subjects (
+			tenant_id TEXT NOT NULL,
+			subject_kind TEXT NOT NULL,
+			subject_id TEXT NOT NULL,
+			display_name TEXT NOT NULL DEFAULT '',
+			roles_json TEXT NOT NULL DEFAULT '[]',
+			created_at TEXT NOT NULL DEFAULT '',
+			disabled_at TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY (tenant_id, subject_kind, subject_id)
+		);`,
 		`CREATE TABLE IF NOT EXISTS external_identities (
 			tenant_id TEXT NOT NULL,
 			provider TEXT NOT NULL,
@@ -72,6 +88,108 @@ func (s *SQLiteIdentityStore) init() error {
 		}
 	}
 	return nil
+}
+
+func (s *SQLiteIdentityStore) UpsertTenant(ctx context.Context, tenant core.TenantRecord) error {
+	if err := tenant.Validate(); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO tenants
+		(tenant_id, display_name, created_at, disabled_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(tenant_id) DO UPDATE SET
+			display_name = excluded.display_name,
+			created_at = excluded.created_at,
+			disabled_at = excluded.disabled_at`,
+		tenant.ID,
+		tenant.DisplayName,
+		formatOptionalTime(tenant.CreatedAt),
+		formatOptionalTimePtr(tenant.DisabledAt),
+	)
+	return err
+}
+
+func (s *SQLiteIdentityStore) GetTenant(ctx context.Context, tenantID string) (*core.TenantRecord, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, display_name, created_at, disabled_at FROM tenants WHERE tenant_id = ?`, tenantID)
+	tenant, err := scanTenantRecord(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return tenant, nil
+}
+
+func (s *SQLiteIdentityStore) ListTenants(ctx context.Context) ([]core.TenantRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT tenant_id, display_name, created_at, disabled_at FROM tenants ORDER BY tenant_id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.TenantRecord
+	for rows.Next() {
+		tenant, err := scanTenantRecord(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *tenant)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteIdentityStore) UpsertSubject(ctx context.Context, subject core.SubjectRecord) error {
+	if err := subject.Validate(); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO subjects
+		(tenant_id, subject_kind, subject_id, display_name, roles_json, created_at, disabled_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(tenant_id, subject_kind, subject_id) DO UPDATE SET
+			display_name = excluded.display_name,
+			roles_json = excluded.roles_json,
+			created_at = excluded.created_at,
+			disabled_at = excluded.disabled_at`,
+		subject.TenantID,
+		string(subject.Kind),
+		subject.ID,
+		subject.DisplayName,
+		marshalStringSlice(subject.Roles),
+		formatOptionalTime(subject.CreatedAt),
+		formatOptionalTimePtr(subject.DisabledAt),
+	)
+	return err
+}
+
+func (s *SQLiteIdentityStore) GetSubject(ctx context.Context, tenantID string, kind core.SubjectKind, subjectID string) (*core.SubjectRecord, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, subject_kind, subject_id, display_name, roles_json, created_at, disabled_at
+		FROM subjects WHERE tenant_id = ? AND subject_kind = ? AND subject_id = ?`, tenantID, string(kind), subjectID)
+	subject, err := scanSubjectRecord(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return subject, nil
+}
+
+func (s *SQLiteIdentityStore) ListSubjects(ctx context.Context, tenantID string) ([]core.SubjectRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT tenant_id, subject_kind, subject_id, display_name, roles_json, created_at, disabled_at
+		FROM subjects WHERE tenant_id = ? ORDER BY subject_kind ASC, subject_id ASC`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.SubjectRecord
+	for rows.Next() {
+		subject, err := scanSubjectRecord(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *subject)
+	}
+	return out, rows.Err()
 }
 
 func (s *SQLiteIdentityStore) UpsertExternalIdentity(ctx context.Context, identity core.ExternalIdentity) error {
@@ -206,6 +324,48 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
+func scanTenantRecord(row scanner) (*core.TenantRecord, error) {
+	var (
+		record     core.TenantRecord
+		createdAt  string
+		disabledAt string
+		err        error
+	)
+	if err := row.Scan(&record.ID, &record.DisplayName, &createdAt, &disabledAt); err != nil {
+		return nil, err
+	}
+	if record.CreatedAt, err = parseOptionalTime(createdAt); err != nil {
+		return nil, err
+	}
+	if record.DisabledAt, err = parseOptionalTimePtr(disabledAt); err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+func scanSubjectRecord(row scanner) (*core.SubjectRecord, error) {
+	var (
+		record      core.SubjectRecord
+		subjectKind string
+		rolesJSON   string
+		createdAt   string
+		disabledAt  string
+		err         error
+	)
+	if err := row.Scan(&record.TenantID, &subjectKind, &record.ID, &record.DisplayName, &rolesJSON, &createdAt, &disabledAt); err != nil {
+		return nil, err
+	}
+	record.Kind = core.SubjectKind(subjectKind)
+	record.Roles = unmarshalStringSlice(rolesJSON)
+	if record.CreatedAt, err = parseOptionalTime(createdAt); err != nil {
+		return nil, err
+	}
+	if record.DisabledAt, err = parseOptionalTimePtr(disabledAt); err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
 func scanExternalIdentity(row scanner) (*core.ExternalIdentity, error) {
 	var (
 		identity    core.ExternalIdentity
@@ -260,6 +420,24 @@ func scanNodeEnrollment(row scanner) (*core.NodeEnrollment, error) {
 		return nil, err
 	}
 	return &enrollment, nil
+}
+
+func formatOptionalTimePtr(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return formatOptionalTime(*value)
+}
+
+func parseOptionalTimePtr(raw string) (*time.Time, error) {
+	value, err := parseOptionalTime(raw)
+	if err != nil {
+		return nil, err
+	}
+	if value.IsZero() {
+		return nil, nil
+	}
+	return &value, nil
 }
 
 func formatOptionalTime(ts time.Time) string {

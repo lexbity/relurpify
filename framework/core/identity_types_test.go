@@ -99,3 +99,55 @@ func TestSessionBoundaryOwnerMatchesOwnerRef(t *testing.T) {
 
 	require.True(t, boundary.OwnerMatches(actor))
 }
+
+func TestSessionBoundaryOwnerMatchesRejectsLegacyActorFallbackForNormalSession(t *testing.T) {
+	boundary := SessionBoundary{
+		TenantID: "tenant-1",
+		ActorID:  "user-1",
+	}
+	actor := EventActor{
+		ID:       "user-1",
+		TenantID: "tenant-1",
+	}
+
+	require.False(t, boundary.OwnerMatches(actor))
+}
+
+func TestSessionBoundaryOwnerMatchesAllowsLegacyActorFallbackForRestrictedExternalSession(t *testing.T) {
+	boundary := SessionBoundary{
+		TenantID: RestrictedExternalTenantID,
+		ActorID:  "external-user-1",
+		Binding: &ExternalSessionBinding{
+			Provider:       ExternalProviderWebchat,
+			ConversationID: "conv-1",
+			ExternalUserID: "external-user-1",
+		},
+	}
+	actor := EventActor{
+		ID:       "external-user-1",
+		TenantID: RestrictedExternalTenantID,
+	}
+
+	require.True(t, boundary.OwnerMatches(actor))
+}
+
+func TestTenantRecordValidate(t *testing.T) {
+	record := TenantRecord{
+		ID:        "tenant-1",
+		CreatedAt: time.Now().UTC(),
+	}
+
+	require.NoError(t, record.Validate())
+}
+
+func TestSubjectRecordValidate(t *testing.T) {
+	record := SubjectRecord{
+		TenantID:  "tenant-1",
+		Kind:      SubjectKindServiceAccount,
+		ID:        "svc-1",
+		Roles:     []string{"operator"},
+		CreatedAt: time.Now().UTC(),
+	}
+
+	require.NoError(t, record.Validate())
+}

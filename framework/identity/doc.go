@@ -3,6 +3,7 @@
 //
 // IdentityResolver maps an identity (user, node, or agent) to the set of
 // policies and capabilities it is permitted to exercise. IdentityStore
-// provides durable persistence of identity records across restarts, supporting
-// the Nexus gateway's node pairing and authentication flow.
+// provides durable persistence of tenant, subject, external identity, and
+// node enrollment records across restarts, supporting the Nexus gateway's
+// authentication and authorization flow.
 package identity

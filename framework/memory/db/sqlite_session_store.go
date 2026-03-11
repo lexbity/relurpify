@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -64,6 +65,19 @@ func (s *SQLiteSessionStore) init() error {
 		trust_class TEXT NOT NULL DEFAULT '',
 		created_at TEXT NOT NULL,
 		last_activity_at TEXT NOT NULL DEFAULT ''
+	);`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`CREATE TABLE IF NOT EXISTS session_delegations (
+		session_id TEXT NOT NULL,
+		tenant_id TEXT NOT NULL DEFAULT '',
+		grantee_kind TEXT NOT NULL,
+		grantee_id TEXT NOT NULL,
+		operations_json TEXT NOT NULL DEFAULT '[]',
+		created_at TEXT NOT NULL,
+		expires_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (session_id, grantee_kind, grantee_id)
 	);`)
 	if err != nil {
 		return err
@@ -222,6 +236,9 @@ func (s *SQLiteSessionStore) UpsertBoundary(ctx context.Context, key string, bou
 	if err := s.deleteExpiredBoundaries(ctx); err != nil {
 		return err
 	}
+	if boundary.HasCanonicalOwner() && !boundary.AllowsLegacyActorOwnership() {
+		boundary.ActorID = ""
+	}
 	if boundary.CreatedAt.IsZero() {
 		boundary.CreatedAt = s.nowUTC()
 	}
@@ -336,6 +353,66 @@ func (s *SQLiteSessionStore) ListBoundaries(ctx context.Context, partition strin
 			return nil, err
 		}
 		out = append(out, boundary)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteSessionStore) UpsertDelegation(ctx context.Context, record core.SessionDelegationRecord) error {
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	operationsJSON, _ := json.Marshal(record.Operations)
+	expiresAt := ""
+	if !record.ExpiresAt.IsZero() {
+		expiresAt = record.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	if record.CreatedAt.IsZero() {
+		record.CreatedAt = s.nowUTC()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO session_delegations (session_id, tenant_id, grantee_kind, grantee_id, operations_json, created_at, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(session_id, grantee_kind, grantee_id) DO UPDATE SET
+			tenant_id = excluded.tenant_id,
+			operations_json = excluded.operations_json,
+			created_at = excluded.created_at,
+			expires_at = excluded.expires_at`,
+		record.SessionID, record.TenantID, string(record.Grantee.Kind), record.Grantee.ID, string(operationsJSON), record.CreatedAt.UTC().Format(time.RFC3339Nano), expiresAt)
+	return err
+}
+
+func (s *SQLiteSessionStore) ListDelegationsBySessionID(ctx context.Context, sessionID string) ([]core.SessionDelegationRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT session_id, tenant_id, grantee_kind, grantee_id, operations_json, created_at, expires_at FROM session_delegations WHERE session_id = ? ORDER BY grantee_kind ASC, grantee_id ASC`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.SessionDelegationRecord
+	for rows.Next() {
+		var record core.SessionDelegationRecord
+		var granteeKind, operationsJSON, createdAt, expiresAt string
+		if err := rows.Scan(&record.SessionID, &record.TenantID, &granteeKind, &record.Grantee.ID, &operationsJSON, &createdAt, &expiresAt); err != nil {
+			return nil, err
+		}
+		record.Grantee = core.SubjectRef{
+			TenantID: record.TenantID,
+			Kind:     core.SubjectKind(granteeKind),
+			ID:       record.Grantee.ID,
+		}
+		_ = json.Unmarshal([]byte(operationsJSON), &record.Operations)
+		record.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(expiresAt) != "" {
+			record.ExpiresAt, err = time.Parse(time.RFC3339Nano, expiresAt)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !record.ExpiresAt.IsZero() && s.nowUTC().After(record.ExpiresAt) {
+			continue
+		}
+		out = append(out, record)
 	}
 	return out, rows.Err()
 }

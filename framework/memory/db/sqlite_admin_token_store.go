@@ -39,6 +39,8 @@ func (s *SQLiteAdminTokenStore) init() error {
 	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS admin_tokens (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL DEFAULT '',
+		tenant_id TEXT NOT NULL DEFAULT '',
+		subject_kind TEXT NOT NULL DEFAULT '',
 		subject_id TEXT NOT NULL DEFAULT '',
 		token_hash TEXT NOT NULL,
 		scopes_json TEXT NOT NULL DEFAULT '[]',
@@ -47,7 +49,18 @@ func (s *SQLiteAdminTokenStore) init() error {
 		last_used_at TEXT NOT NULL DEFAULT '',
 		revoked_at TEXT NOT NULL DEFAULT ''
 	);`)
-	return err
+	if err != nil {
+		return err
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE admin_tokens ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE admin_tokens ADD COLUMN subject_kind TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return err
+		}
+	}
+	return nil
 }
 
 // listTokensMaxDefault is the upper bound applied by ListTokens when no explicit
@@ -73,7 +86,7 @@ func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offs
 		offset = 0
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at
+		`SELECT id, name, tenant_id, subject_kind, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at
 		 FROM admin_tokens ORDER BY issued_at DESC, id ASC LIMIT ? OFFSET ?`,
 		limit, offset)
 	if err != nil {
@@ -92,7 +105,7 @@ func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offs
 }
 
 func (s *SQLiteAdminTokenStore) GetToken(ctx context.Context, id string) (*core.AdminTokenRecord, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, name, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at FROM admin_tokens WHERE id = ?`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT id, name, tenant_id, subject_kind, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at FROM admin_tokens WHERE id = ?`, id)
 	record, err := scanAdminToken(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -113,10 +126,12 @@ func (s *SQLiteAdminTokenStore) CreateToken(ctx context.Context, record core.Adm
 	if record.IssuedAt.IsZero() {
 		record.IssuedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO admin_tokens (id, name, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO admin_tokens (id, name, tenant_id, subject_kind, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.ID,
 		record.Name,
+		record.TenantID,
+		string(record.SubjectKind),
 		record.SubjectID,
 		record.TokenHash,
 		marshalStringSlice(record.Scopes),
@@ -156,13 +171,15 @@ func (s *SQLiteAdminTokenStore) Close() error {
 func scanAdminToken(scan func(dest ...any) error) (core.AdminTokenRecord, error) {
 	var (
 		record                core.AdminTokenRecord
+		subjectKind           string
 		scopesJSON            string
 		issuedAt, expiresAt   string
 		lastUsedAt, revokedAt string
 	)
-	if err := scan(&record.ID, &record.Name, &record.SubjectID, &record.TokenHash, &scopesJSON, &issuedAt, &expiresAt, &lastUsedAt, &revokedAt); err != nil {
+	if err := scan(&record.ID, &record.Name, &record.TenantID, &subjectKind, &record.SubjectID, &record.TokenHash, &scopesJSON, &issuedAt, &expiresAt, &lastUsedAt, &revokedAt); err != nil {
 		return core.AdminTokenRecord{}, err
 	}
+	record.SubjectKind = core.SubjectKind(subjectKind)
 	parsedIssuedAt, err := time.Parse(time.RFC3339Nano, issuedAt)
 	if err != nil {
 		return core.AdminTokenRecord{}, err

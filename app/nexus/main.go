@@ -149,7 +149,7 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 		Partition:         nexusEventPartition,
 		StateMaterializer: stateMaterializer,
 		StartedAt:         time.Now().UTC(),
-		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore),
+		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore),
 		VerifyNodeConnection: func(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 			return verifyGatewayNodeChallenge(ctx, store, principal, info, conn)
 		},
@@ -169,7 +169,7 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 	return nil
 }
 
-func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
+func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore, identityStore identity.Store) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
 	if !cfg.Enabled {
 		return nil
 	}
@@ -242,7 +242,10 @@ func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusad
 				if subtle.ConstantTimeCompare([]byte(record.TokenHash), []byte(hashed)) != 1 {
 					continue
 				}
-				principal := dynamicTokenPrincipal(record)
+				principal, err := dynamicTokenPrincipal(ctx, record, identityStore)
+				if err != nil {
+					return fwgateway.ConnectionPrincipal{}, err
+				}
 				return fwgateway.ConnectionPrincipal{
 					Role:          principalRole(principal.Scopes),
 					Authenticated: true,
@@ -261,22 +264,75 @@ func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusad
 }
 
 func staticGatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
-	return gatewayPrincipalResolver(cfg, nil)
+	return gatewayPrincipalResolver(cfg, nil, nil)
 }
 
-func dynamicTokenPrincipal(record core.AdminTokenRecord) core.AuthenticatedPrincipal {
-	tenantID := nexusserver.NormalizeTenantID("")
-	return core.AuthenticatedPrincipal{
+func dynamicTokenPrincipal(ctx context.Context, record core.AdminTokenRecord, identityStore identity.Store) (core.AuthenticatedPrincipal, error) {
+	tenantID := nexusserver.NormalizeTenantID(record.TenantID)
+	subjectID := strings.TrimSpace(record.SubjectID)
+	if subjectID == "" {
+		return core.AuthenticatedPrincipal{}, fmt.Errorf("token %s missing subject id", record.ID)
+	}
+	subjectKind := record.SubjectKind
+	if identityStore != nil {
+		tenant, err := identityStore.GetTenant(ctx, tenantID)
+		if err != nil {
+			return core.AuthenticatedPrincipal{}, fmt.Errorf("lookup token tenant: %w", err)
+		}
+		if tenant == nil {
+			return core.AuthenticatedPrincipal{}, fmt.Errorf("token tenant %s not found", tenantID)
+		}
+		if tenant.DisabledAt != nil {
+			return core.AuthenticatedPrincipal{}, fmt.Errorf("token tenant %s disabled", tenantID)
+		}
+		if subjectKind != "" {
+			subject, err := identityStore.GetSubject(ctx, tenantID, subjectKind, subjectID)
+			if err != nil {
+				return core.AuthenticatedPrincipal{}, fmt.Errorf("lookup token subject: %w", err)
+			}
+			if subject == nil {
+				return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s/%s not found", subjectKind, subjectID)
+			}
+			if subject.DisabledAt != nil {
+				return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s/%s disabled", subjectKind, subjectID)
+			}
+		} else {
+			subjects, err := identityStore.ListSubjects(ctx, tenantID)
+			if err != nil {
+				return core.AuthenticatedPrincipal{}, fmt.Errorf("list token subjects: %w", err)
+			}
+			for _, subject := range subjects {
+				if strings.EqualFold(subject.ID, subjectID) {
+					if subject.DisabledAt != nil {
+						return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s/%s disabled", subject.Kind, subjectID)
+					}
+					subjectKind = subject.Kind
+					break
+				}
+			}
+			if subjectKind == "" {
+				return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s not found", subjectID)
+			}
+		}
+	}
+	if subjectKind == "" {
+		subjectKind = core.SubjectKindServiceAccount
+	}
+	principal := core.AuthenticatedPrincipal{
 		TenantID:      tenantID,
 		AuthMethod:    core.AuthMethodBearerToken,
 		Authenticated: true,
 		Scopes:        append([]string(nil), record.Scopes...),
 		Subject: core.SubjectRef{
 			TenantID: tenantID,
-			Kind:     core.SubjectKindServiceAccount,
-			ID:       record.SubjectID,
+			Kind:     subjectKind,
+			ID:       subjectID,
 		},
 	}
+	if err := principal.Validate(); err != nil {
+		return core.AuthenticatedPrincipal{}, fmt.Errorf("token principal invalid: %w", err)
+	}
+	return principal, nil
 }
 
 func principalRole(scopes []string) string {
@@ -439,7 +495,7 @@ func newAdminMCPCmd(workspace, configPath *string) *cobra.Command {
 				nexusadmin.NewMCPExporter(adminSvc),
 				mcpserver.Hooks{},
 			)
-			principal, err := stdioAdminPrincipal(cfg, tokenStore, token)
+			principal, err := stdioAdminPrincipal(cfg, tokenStore, identityStore, token)
 			if err != nil {
 				return err
 			}
@@ -461,9 +517,9 @@ type stdioReadWriteCloser struct {
 
 func (stdioReadWriteCloser) Close() error { return nil }
 
-func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, token string) (core.AuthenticatedPrincipal, error) {
+func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, identityStore identity.Store, token string) (core.AuthenticatedPrincipal, error) {
 	if strings.TrimSpace(token) != "" {
-		resolver := gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore)
+		resolver := gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore)
 		if resolver == nil {
 			return core.AuthenticatedPrincipal{}, fmt.Errorf("gateway auth disabled")
 		}
@@ -478,7 +534,7 @@ func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, 
 		if role != "admin" && role != "operator" {
 			continue
 		}
-		principal, err := stdioAdminPrincipal(cfg, tokenStore, entry.Token)
+		principal, err := stdioAdminPrincipal(cfg, tokenStore, identityStore, entry.Token)
 		if err == nil {
 			return principal, nil
 		}
@@ -514,6 +570,11 @@ func newNodePairCmd(workspace, configPath *string) *cobra.Command {
 			}
 			defer store.Close()
 			defer logStore.Close()
+			identityStore, err := db.NewSQLiteIdentityStore(paths.IdentityStoreFile())
+			if err != nil {
+				return err
+			}
+			defer identityStore.Close()
 			if deviceID == "" {
 				deviceID = fmt.Sprintf("node-%d", time.Now().UTC().Unix())
 			}
@@ -526,11 +587,21 @@ func newNodePairCmd(workspace, configPath *string) *cobra.Command {
 				return err
 			}
 			if approveNow || cfg.Nodes.AutoApproveLocal {
+				pairing, _, _ := manager.PairingStatus(ctx, code)
 				if err := manager.ApprovePairing(ctx, code); err != nil {
 					return err
 				}
-				if err := store.UpsertNode(ctx, nexusbootstrap.DefaultNodeDescriptor(deviceID)); err != nil {
-					return err
+				if pairing != nil {
+					enrollment := nodeEnrollmentFromPairing(*pairing)
+					if err := upsertTenantAndSubject(ctx, identityStore, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
+						return err
+					}
+					if err := identityStore.UpsertNodeEnrollment(ctx, enrollment); err != nil {
+						return err
+					}
+					if err := store.UpsertNode(ctx, nodeDescriptorFromEnrollment(enrollment)); err != nil {
+						return err
+					}
 				}
 				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Pairing approved for %s with code %s\n", deviceID, code)
 				return err

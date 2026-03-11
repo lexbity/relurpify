@@ -12,7 +12,23 @@ type Resolution struct {
 	TenantID string
 	Owner    core.SubjectRef
 	Binding  *core.ExternalSessionBinding
-	Resolved bool
+	State    ResolutionState
+}
+
+type ResolutionState string
+
+const (
+	ResolutionStateUnknown  ResolutionState = ""
+	ResolutionStateResolved ResolutionState = "resolved"
+	ResolutionStateUnbound  ResolutionState = "unbound"
+)
+
+func (r Resolution) Resolved() bool {
+	return r.State == ResolutionStateResolved
+}
+
+func (r Resolution) Unbound() bool {
+	return r.State == ResolutionStateUnbound
 }
 
 type Resolver interface {
@@ -38,6 +54,7 @@ func (r StoreResolver) ResolveInbound(ctx context.Context, inbound channel.Inbou
 		return Resolution{
 			TenantID: normalizeTenantID(r.DefaultTenantID),
 			Binding:  bindingForInbound(provider, inbound),
+			State:    ResolutionStateUnbound,
 		}, nil
 	}
 	tenantID := normalizeTenantID(r.DefaultTenantID)
@@ -51,13 +68,26 @@ func (r StoreResolver) ResolveInbound(ctx context.Context, inbound channel.Inbou
 				TenantID: identity.TenantID,
 				Owner:    identity.Subject,
 				Binding:  bindingForInbound(identity.Provider, inbound),
-				Resolved: true,
+				State:    ResolutionStateResolved,
+			}, nil
+		}
+		identity, err = r.lookupExternalIdentityAcrossTenants(ctx, tenantID, provider, accountID, externalID)
+		if err != nil {
+			return Resolution{}, err
+		}
+		if identity != nil {
+			return Resolution{
+				TenantID: identity.TenantID,
+				Owner:    identity.Subject,
+				Binding:  bindingForInbound(identity.Provider, inbound),
+				State:    ResolutionStateResolved,
 			}, nil
 		}
 	}
 	return Resolution{
 		TenantID: tenantID,
 		Binding:  bindingForInbound(provider, inbound),
+		State:    ResolutionStateUnbound,
 	}, nil
 }
 
@@ -99,4 +129,29 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func (r StoreResolver) lookupExternalIdentityAcrossTenants(ctx context.Context, defaultTenantID string, provider core.ExternalProvider, accountID, externalID string) (*core.ExternalIdentity, error) {
+	if r.Store == nil {
+		return nil, nil
+	}
+	tenants, err := r.Store.ListTenants(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defaultTenantID = normalizeTenantID(defaultTenantID)
+	for _, tenant := range tenants {
+		tenantID := normalizeTenantID(tenant.ID)
+		if tenantID == defaultTenantID {
+			continue
+		}
+		identity, err := r.Store.GetExternalIdentity(ctx, tenantID, provider, accountID, externalID)
+		if err != nil {
+			return nil, err
+		}
+		if identity != nil {
+			return identity, nil
+		}
+	}
+	return nil, nil
 }

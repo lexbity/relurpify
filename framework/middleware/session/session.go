@@ -43,6 +43,8 @@ type Store interface {
 	GetBoundaryBySessionID(ctx context.Context, sessionID string) (*core.SessionBoundary, error)
 	UpsertBoundary(ctx context.Context, key string, boundary *core.SessionBoundary) error
 	ListBoundaries(ctx context.Context, partition string) ([]core.SessionBoundary, error)
+	UpsertDelegation(ctx context.Context, record core.SessionDelegationRecord) error
+	ListDelegationsBySessionID(ctx context.Context, sessionID string) ([]core.SessionDelegationRecord, error)
 	DeleteBoundary(ctx context.Context, key string) error
 	DeleteExpiredBoundaries(ctx context.Context, before time.Time) (int, error)
 }
@@ -113,7 +115,7 @@ func (r *DefaultRouter) Route(ctx context.Context, msg InboundMessage) (*core.Se
 		TenantID:       msg.TenantID,
 		Scope:          scope,
 		Partition:      partition,
-		ActorID:        msg.ActorID,
+		ActorID:        routedActorID(msg),
 		Owner:          msg.Owner,
 		ChannelID:      msg.ChannelID,
 		PeerID:         msg.PeerID,
@@ -172,21 +174,52 @@ func (r *DefaultRouter) Authorize(ctx context.Context, req AuthorizationRequest)
 		}
 	}
 	isOwner := boundary.OwnerMatches(req.Actor)
+	isDelegated, err := r.isDelegated(ctx, boundary, req.Actor, req.Operation)
+	if err != nil {
+		return err
+	}
+	hasExternalBinding := boundary.Binding != nil
+	resolvedExternal := hasExternalBinding && boundary.Owner.ID != ""
+	restrictedExternal := boundary.AllowsLegacyActorOwnership()
+	externalProvider := core.ExternalProvider("")
+	externalAccountID := ""
+	externalChannelID := ""
+	externalConversationID := ""
+	externalThreadID := ""
+	externalUserID := ""
+	if boundary.Binding != nil {
+		externalProvider = boundary.Binding.Provider
+		externalAccountID = boundary.Binding.AccountID
+		externalChannelID = boundary.Binding.ChannelID
+		externalConversationID = boundary.Binding.ConversationID
+		externalThreadID = boundary.Binding.ThreadID
+		externalUserID = boundary.Binding.ExternalUserID
+	}
 	if r != nil && r.Policy != nil {
 		decision, err := r.Policy.Evaluate(ctx, core.PolicyRequest{
-			Target:           core.PolicyTargetSession,
-			Actor:            req.Actor,
-			Authenticated:    req.Authenticated,
-			ActorTenantID:    req.Actor.TenantID,
-			ResourceTenantID: boundary.TenantID,
-			TrustClass:       boundary.TrustClass,
-			Partition:        boundary.Partition,
-			ChannelID:        boundary.ChannelID,
-			SessionID:        boundary.SessionID,
-			SessionScope:     boundary.Scope,
-			SessionOperation: req.Operation,
-			SessionOwnerID:   sessionOwnerID(boundary),
-			IsOwner:          isOwner,
+			Target:                 core.PolicyTargetSession,
+			Actor:                  req.Actor,
+			Authenticated:          req.Authenticated,
+			ActorTenantID:          req.Actor.TenantID,
+			ResourceTenantID:       boundary.TenantID,
+			TrustClass:             boundary.TrustClass,
+			Partition:              boundary.Partition,
+			ChannelID:              boundary.ChannelID,
+			SessionID:              boundary.SessionID,
+			SessionScope:           boundary.Scope,
+			SessionOperation:       req.Operation,
+			SessionOwnerID:         sessionOwnerID(boundary),
+			IsOwner:                isOwner,
+			IsDelegated:            isDelegated,
+			ExternalProvider:       externalProvider,
+			ExternalAccountID:      externalAccountID,
+			ExternalChannelID:      externalChannelID,
+			ExternalConversationID: externalConversationID,
+			ExternalThreadID:       externalThreadID,
+			ExternalUserID:         externalUserID,
+			HasExternalBinding:     hasExternalBinding,
+			ResolvedExternal:       resolvedExternal,
+			RestrictedExternal:     restrictedExternal,
 		})
 		if err != nil {
 			return err
@@ -203,7 +236,7 @@ func (r *DefaultRouter) Authorize(ctx context.Context, req AuthorizationRequest)
 	if sessionOwnerID(boundary) == "" {
 		return fmt.Errorf("%w: session %s has no owner", ErrSessionBoundaryViolation, boundary.SessionID)
 	}
-	if !isOwner {
+	if !isOwner && !isDelegated {
 		return fmt.Errorf("%w: actor %s cannot access session %s", ErrSessionBoundaryViolation, req.Actor.ID, boundary.SessionID)
 	}
 	return nil
@@ -221,8 +254,38 @@ func sessionOwnerID(boundary *core.SessionBoundary) string {
 	if boundary == nil {
 		return ""
 	}
-	if boundary.Owner.ID != "" {
+	if boundary.HasCanonicalOwner() {
 		return boundary.Owner.ID
 	}
-	return boundary.ActorID
+	if boundary.AllowsLegacyActorOwnership() {
+		return boundary.ActorID
+	}
+	return ""
+}
+
+func routedActorID(msg InboundMessage) string {
+	if msg.Owner.ID != "" {
+		return ""
+	}
+	return msg.ActorID
+}
+
+func (r *DefaultRouter) isDelegated(ctx context.Context, boundary *core.SessionBoundary, actor core.EventActor, operation core.SessionOperation) (bool, error) {
+	if r == nil || r.Store == nil || boundary == nil {
+		return false, nil
+	}
+	if strings.TrimSpace(actor.ID) == "" || actor.SubjectKind == "" {
+		return false, nil
+	}
+	records, err := r.Store.ListDelegationsBySessionID(ctx, boundary.SessionID)
+	if err != nil {
+		return false, err
+	}
+	now := r.nowUTC()
+	for _, record := range records {
+		if record.Allows(actor, operation, now) {
+			return true, nil
+		}
+	}
+	return false, nil
 }

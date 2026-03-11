@@ -10,6 +10,8 @@ import (
 
 func TestCompileManifestPolicyRulesIncludesSessionAndProviderPolicies(t *testing.T) {
 	ownerOnly := true
+	delegated := true
+	hasBinding := true
 	rules, err := CompileManifestPolicyRules(&manifest.AgentManifest{
 		Metadata: manifest.ManifestMetadata{Name: "test-agent"},
 		Spec: manifest.ManifestSpec{
@@ -30,8 +32,11 @@ func TestCompileManifestPolicyRulesIncludesSessionAndProviderPolicies(t *testing
 					Name:    "Owner send",
 					Enabled: true,
 					Selector: core.SessionSelector{
-						Operations:       []core.SessionOperation{core.SessionOperationSend},
-						RequireOwnership: &ownerOnly,
+						Operations:             []core.SessionOperation{core.SessionOperationSend},
+						RequireOwnership:       &ownerOnly,
+						RequireDelegation:      &delegated,
+						RequireExternalBinding: &hasBinding,
+						ExternalProviders:      []core.ExternalProvider{core.ExternalProviderDiscord},
 					},
 					Effect: core.AgentPermissionAllow,
 				}},
@@ -43,6 +48,10 @@ func TestCompileManifestPolicyRulesIncludesSessionAndProviderPolicies(t *testing
 	require.Equal(t, "provider:remote-mcp:activate", rules[0].ID)
 	require.Equal(t, "owner-send", rules[1].ID)
 	require.Equal(t, "tool:file_read", rules[2].ID)
+	require.Equal(t, &ownerOnly, rules[1].Conditions.RequireOwnership)
+	require.Equal(t, &delegated, rules[1].Conditions.RequireDelegation)
+	require.Equal(t, &hasBinding, rules[1].Conditions.RequireExternalBinding)
+	require.Equal(t, []core.ExternalProvider{core.ExternalProviderDiscord}, rules[1].Conditions.ExternalProviders)
 }
 
 func TestCompileManifestPolicyRulesRejectsUnsupportedCapabilitySelector(t *testing.T) {

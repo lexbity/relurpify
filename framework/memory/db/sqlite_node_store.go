@@ -49,7 +49,8 @@ func (s *SQLiteNodeStore) init() error {
 			paired_at TEXT NOT NULL,
 			owner_kind TEXT NOT NULL DEFAULT '',
 			owner_id TEXT NOT NULL DEFAULT '',
-			tags_json TEXT NOT NULL DEFAULT '{}'
+			tags_json TEXT NOT NULL DEFAULT '{}',
+			approved_capabilities_json TEXT NOT NULL DEFAULT '[]'
 		);`,
 		`CREATE TABLE IF NOT EXISTS node_credentials (
 			device_id TEXT PRIMARY KEY,
@@ -78,6 +79,7 @@ func (s *SQLiteNodeStore) init() error {
 		`ALTER TABLE nodes ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE nodes ADD COLUMN owner_kind TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE nodes ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE nodes ADD COLUMN approved_capabilities_json TEXT NOT NULL DEFAULT '[]'`,
 		`ALTER TABLE node_credentials ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE node_credentials ADD COLUMN key_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE pending_pairings ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`,
@@ -91,10 +93,10 @@ func (s *SQLiteNodeStore) init() error {
 }
 
 func (s *SQLiteNodeStore) GetNode(ctx context.Context, id string) (*core.NodeDescriptor, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json FROM nodes WHERE id = ?`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json, approved_capabilities_json FROM nodes WHERE id = ?`, id)
 	var nodeDesc core.NodeDescriptor
-	var pairedAt, ownerKind, ownerID, tagsJSON string
-	err := row.Scan(&nodeDesc.ID, &nodeDesc.TenantID, &nodeDesc.Name, &nodeDesc.Platform, &nodeDesc.TrustClass, &pairedAt, &ownerKind, &ownerID, &tagsJSON)
+	var pairedAt, ownerKind, ownerID, tagsJSON, approvedCapabilitiesJSON string
+	err := row.Scan(&nodeDesc.ID, &nodeDesc.TenantID, &nodeDesc.Name, &nodeDesc.Platform, &nodeDesc.TrustClass, &pairedAt, &ownerKind, &ownerID, &tagsJSON, &approvedCapabilitiesJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -114,11 +116,12 @@ func (s *SQLiteNodeStore) GetNode(ctx context.Context, id string) (*core.NodeDes
 	}
 	nodeDesc.Tags = map[string]string{}
 	_ = json.Unmarshal([]byte(tagsJSON), &nodeDesc.Tags)
+	_ = json.Unmarshal([]byte(approvedCapabilitiesJSON), &nodeDesc.ApprovedCapabilities)
 	return &nodeDesc, nil
 }
 
 func (s *SQLiteNodeStore) ListNodes(ctx context.Context) ([]core.NodeDescriptor, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json FROM nodes ORDER BY id ASC`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json, approved_capabilities_json FROM nodes ORDER BY id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +129,8 @@ func (s *SQLiteNodeStore) ListNodes(ctx context.Context) ([]core.NodeDescriptor,
 	var out []core.NodeDescriptor
 	for rows.Next() {
 		var nodeDesc core.NodeDescriptor
-		var pairedAt, ownerKind, ownerID, tagsJSON string
-		if err := rows.Scan(&nodeDesc.ID, &nodeDesc.TenantID, &nodeDesc.Name, &nodeDesc.Platform, &nodeDesc.TrustClass, &pairedAt, &ownerKind, &ownerID, &tagsJSON); err != nil {
+		var pairedAt, ownerKind, ownerID, tagsJSON, approvedCapabilitiesJSON string
+		if err := rows.Scan(&nodeDesc.ID, &nodeDesc.TenantID, &nodeDesc.Name, &nodeDesc.Platform, &nodeDesc.TrustClass, &pairedAt, &ownerKind, &ownerID, &tagsJSON, &approvedCapabilitiesJSON); err != nil {
 			return nil, err
 		}
 		nodeDesc.PairedAt, err = time.Parse(time.RFC3339Nano, pairedAt)
@@ -143,6 +146,7 @@ func (s *SQLiteNodeStore) ListNodes(ctx context.Context) ([]core.NodeDescriptor,
 		}
 		nodeDesc.Tags = map[string]string{}
 		_ = json.Unmarshal([]byte(tagsJSON), &nodeDesc.Tags)
+		_ = json.Unmarshal([]byte(approvedCapabilitiesJSON), &nodeDesc.ApprovedCapabilities)
 		out = append(out, nodeDesc)
 	}
 	return out, rows.Err()
@@ -153,14 +157,15 @@ func (s *SQLiteNodeStore) UpsertNode(ctx context.Context, nodeDesc core.NodeDesc
 		nodeDesc.PairedAt = time.Now().UTC()
 	}
 	tagsJSON, _ := json.Marshal(nodeDesc.Tags)
+	approvedCapabilitiesJSON, _ := json.Marshal(nodeDesc.ApprovedCapabilities)
 	ownerKind := ""
 	ownerID := ""
 	if nodeDesc.Owner.ID != "" {
 		ownerKind = string(nodeDesc.Owner.Kind)
 		ownerID = nodeDesc.Owner.ID
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO nodes (id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO nodes (id, tenant_id, name, platform, trust_class, paired_at, owner_kind, owner_id, tags_json, approved_capabilities_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			tenant_id = excluded.tenant_id,
 			name = excluded.name,
@@ -169,8 +174,9 @@ func (s *SQLiteNodeStore) UpsertNode(ctx context.Context, nodeDesc core.NodeDesc
 			paired_at = excluded.paired_at,
 			owner_kind = excluded.owner_kind,
 			owner_id = excluded.owner_id,
-			tags_json = excluded.tags_json`,
-		nodeDesc.ID, nodeDesc.TenantID, nodeDesc.Name, string(nodeDesc.Platform), string(nodeDesc.TrustClass), nodeDesc.PairedAt.UTC().Format(time.RFC3339Nano), ownerKind, ownerID, string(tagsJSON))
+			tags_json = excluded.tags_json,
+			approved_capabilities_json = excluded.approved_capabilities_json`,
+		nodeDesc.ID, nodeDesc.TenantID, nodeDesc.Name, string(nodeDesc.Platform), string(nodeDesc.TrustClass), nodeDesc.PairedAt.UTC().Format(time.RFC3339Nano), ownerKind, ownerID, string(tagsJSON), string(approvedCapabilitiesJSON))
 	return err
 }
 

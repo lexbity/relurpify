@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/identity"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 	"github.com/lexcodex/relurpify/framework/middleware/session"
@@ -36,40 +37,18 @@ func (c *websocketRPCConn) Close() error {
 	return c.conn.Close()
 }
 
-func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
+func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 	if manager == nil {
 		return fmt.Errorf("node manager unavailable")
 	}
-	nodeDesc := core.NodeDescriptor{
-		ID:         frame.NodeID,
-		TenantID:   principal.Actor.TenantID,
-		Name:       frame.NodeName,
-		Platform:   core.NodePlatform(frame.NodePlatform),
-		TrustClass: core.TrustClass(frame.TrustClass),
-	}
-	if nodeDesc.ID == "" {
-		nodeDesc.ID = "node-session"
-	}
-	if nodeDesc.Name == "" {
-		nodeDesc.Name = nodeDesc.ID
-	}
-	if nodeDesc.Platform == "" {
-		nodeDesc.Platform = core.NodePlatformHeadless
-	}
-	if nodeDesc.TrustClass == "" {
-		nodeDesc.TrustClass = core.TrustClassWorkspaceTrusted
-	}
-	if principal.Actor.ID != "" {
-		nodeDesc.Owner = core.SubjectRef{
-			TenantID: principal.Actor.TenantID,
-			Kind:     principal.Actor.SubjectKind,
-			ID:       principal.Actor.ID,
-		}
+	nodeDesc, err := connectedNodeDescriptor(ctx, manager, identities, principal, frame)
+	if err != nil {
+		return err
 	}
 	wsConn := &fwnode.WSConnection{
 		Conn:          &websocketRPCConn{conn: conn},
 		Descriptor:    nodeDesc,
-		CapabilitySet: append([]core.CapabilityDescriptor(nil), frame.Capabilities...),
+		CapabilitySet: connectedNodeCapabilities(ctx, manager, nodeDesc.ID),
 		HealthState: core.NodeHealth{
 			Online:     true,
 			Foreground: true,
@@ -84,6 +63,92 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, p
 		_ = manager.HandleDisconnect(disconnectCtx, nodeDesc.ID, "websocket closed")
 	}()
 	return wsConn.ReadLoop(ctx)
+}
+
+func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (core.NodeDescriptor, error) {
+	tenantID := NormalizeTenantID(principal.Actor.TenantID)
+	nodeID := frame.NodeID
+	if nodeID == "" {
+		nodeID = principal.Actor.ID
+	}
+	if nodeID == "" {
+		return core.NodeDescriptor{}, fmt.Errorf("node id required")
+	}
+
+	var enrollment *core.NodeEnrollment
+	var err error
+	if identities != nil {
+		enrollment, err = identities.GetNodeEnrollment(ctx, tenantID, nodeID)
+		if err != nil {
+			return core.NodeDescriptor{}, err
+		}
+	}
+	if enrollment == nil {
+		return core.NodeDescriptor{}, fmt.Errorf("node enrollment not found")
+	}
+
+	nodeDesc := core.NodeDescriptor{
+		ID:         enrollment.NodeID,
+		TenantID:   enrollment.TenantID,
+		Name:       enrollment.NodeID,
+		Platform:   core.NodePlatformHeadless,
+		TrustClass: enrollment.TrustClass,
+		PairedAt:   enrollment.PairedAt,
+		Owner:      enrollment.Owner,
+	}
+	if manager != nil && manager.Store != nil {
+		storedNode, err := manager.Store.GetNode(ctx, enrollment.NodeID)
+		if err != nil {
+			return core.NodeDescriptor{}, err
+		}
+		if storedNode != nil {
+			if storedNode.Name != "" {
+				nodeDesc.Name = storedNode.Name
+			}
+			if storedNode.Platform != "" {
+				nodeDesc.Platform = storedNode.Platform
+			}
+			if len(storedNode.Tags) > 0 {
+				nodeDesc.Tags = copyNodeTags(storedNode.Tags)
+			}
+		}
+	}
+	return nodeDesc, nil
+}
+
+func ConnectedNodeDescriptorForTest(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (core.NodeDescriptor, error) {
+	return connectedNodeDescriptor(ctx, manager, identities, principal, frame)
+}
+
+func ConnectedNodeCapabilitiesForTest(ctx context.Context, manager *fwnode.Manager, nodeID string) []core.CapabilityDescriptor {
+	return connectedNodeCapabilities(ctx, manager, nodeID)
+}
+
+func copyNodeTags(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func connectedNodeCapabilities(ctx context.Context, manager *fwnode.Manager, nodeID string) []core.CapabilityDescriptor {
+	if manager == nil || manager.Store == nil || nodeID == "" {
+		return nil
+	}
+	storedNode, err := manager.Store.GetNode(ctx, nodeID)
+	if err != nil || storedNode == nil {
+		return nil
+	}
+	if len(storedNode.ApprovedCapabilities) == 0 {
+		return nil
+	}
+	out := make([]core.CapabilityDescriptor, len(storedNode.ApprovedCapabilities))
+	copy(out, storedNode.ApprovedCapabilities)
+	return out
 }
 
 func NewNodeDisconnectContext(ctx context.Context) (context.Context, context.CancelFunc) {

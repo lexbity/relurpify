@@ -16,10 +16,14 @@ import (
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
 )
 
-func (s *service) ListChannels(_ context.Context, req ListChannelsRequest) (ListChannelsResult, error) {
-	state := nexusgateway.StateSnapshot{}
-	if s.cfg.Materializer != nil {
-		state = s.cfg.Materializer.State()
+func (s *service) ListChannels(ctx context.Context, req ListChannelsRequest) (ListChannelsResult, error) {
+	tenantID, err := authorizeTenant(req.Principal, req.TenantID)
+	if err != nil {
+		return ListChannelsResult{}, err
+	}
+	projection, err := s.tenantRuntimeProjection(ctx, tenantID)
+	if err != nil {
+		return ListChannelsResult{}, err
 	}
 	statuses := map[string]channel.AdapterStatus{}
 	if s.cfg.Channels != nil {
@@ -34,7 +38,7 @@ func (s *service) ListChannels(_ context.Context, req ListChannelsRequest) (List
 	}
 	channels := make([]ChannelInfo, 0, len(names))
 	for name := range names {
-		activity := state.ChannelActivity[name]
+		activity := projection.ChannelActivity[name]
 		status := statuses[name]
 		_, configured := s.cfg.Config.Channels[name]
 		channels = append(channels, ChannelInfo{
@@ -53,6 +57,9 @@ func (s *service) ListChannels(_ context.Context, req ListChannelsRequest) (List
 }
 
 func (s *service) RestartChannel(ctx context.Context, req RestartChannelRequest) (RestartChannelResult, error) {
+	if _, err := authorizeTenant(req.Principal, req.TenantID); err != nil {
+		return RestartChannelResult{}, err
+	}
 	if s.cfg.Channels == nil {
 		return RestartChannelResult{}, notImplemented("restart channel not implemented", nil)
 	}
@@ -67,6 +74,9 @@ func (s *service) RestartChannel(ctx context.Context, req RestartChannelRequest)
 }
 
 func (s *service) ListPolicyRules(ctx context.Context, req ListPolicyRulesRequest) (ListPolicyRulesResult, error) {
+	if _, err := authorizeTenant(req.Principal, req.TenantID); err != nil {
+		return ListPolicyRulesResult{}, err
+	}
 	if s.cfg.Policies == nil {
 		return ListPolicyRulesResult{}, notImplemented("list policy rules not implemented", nil)
 	}
@@ -79,6 +89,9 @@ func (s *service) ListPolicyRules(ctx context.Context, req ListPolicyRulesReques
 }
 
 func (s *service) SetPolicyRuleEnabled(ctx context.Context, req SetPolicyRuleEnabledRequest) (SetPolicyRuleEnabledResult, error) {
+	if _, err := authorizeTenant(req.Principal, req.TenantID); err != nil {
+		return SetPolicyRuleEnabledResult{}, err
+	}
 	if s.cfg.Policies == nil {
 		return SetPolicyRuleEnabledResult{}, notImplemented("set policy rule enabled not implemented", nil)
 	}
@@ -95,9 +108,17 @@ func (s *service) SetPolicyRuleEnabled(ctx context.Context, req SetPolicyRuleEna
 }
 
 func (s *service) Health(ctx context.Context, req HealthRequest) (HealthResult, error) {
+	tenantID, err := authorizeTenant(req.Principal, req.TenantID)
+	if err != nil {
+		return HealthResult{}, err
+	}
 	state := nexusgateway.StateSnapshot{}
 	if s.cfg.Materializer != nil {
 		state = s.cfg.Materializer.State()
+	}
+	projection, err := s.tenantRuntimeProjection(ctx, tenantID)
+	if err != nil {
+		return HealthResult{}, err
 	}
 	nodes, err := s.ListNodes(ctx, ListNodesRequest{AdminRequest: req.AdminRequest})
 	if err != nil {
@@ -128,18 +149,22 @@ func (s *service) Health(ctx context.Context, req HealthRequest) (HealthResult, 
 		PID:              os.Getpid(),
 		BindAddr:         s.cfg.Config.Gateway.Bind,
 		UptimeSeconds:    int64(time.Since(s.cfg.StartedAt).Seconds()),
-		TenantID:         defaultTenant(req.TenantID),
-		LastSeq:          state.LastSeq,
+		TenantID:         tenantID,
+		LastSeq:          projection.LastSeq,
 		PairedNodes:      nodes.Nodes,
 		PendingPairings:  pairings.Pairings,
 		Channels:         channelResult.Channels,
 		ActiveSessions:   activeSessions,
 		SecurityWarnings: s.cfg.Config.SecurityWarnings(len(pairings.Pairings)),
-		EventCounts:      copyEventCounts(state.EventTypeCounts),
+		EventCounts:      copyEventCounts(projection.EventTypeCounts),
 	}, nil
 }
 
 func (s *service) ListEvents(ctx context.Context, req ListEventsRequest) (ListEventsResult, error) {
+	tenantID, err := authorizeTenant(req.Principal, req.TenantID)
+	if err != nil {
+		return ListEventsResult{}, err
+	}
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 50
@@ -152,6 +177,7 @@ func (s *service) ListEvents(ctx context.Context, req ListEventsRequest) (ListEv
 	if err != nil {
 		return ListEventsResult{}, internalError("list events failed", err, nil)
 	}
+	events = filterEventsByTenant(events, tenantID)
 	counts := make(map[string]uint64)
 	for _, ev := range events {
 		counts[ev.Type]++
@@ -176,6 +202,10 @@ func (s *service) ListEvents(ctx context.Context, req ListEventsRequest) (ListEv
 }
 
 func (s *service) ReadEventStream(ctx context.Context, req ReadEventStreamRequest) (ReadEventStreamResult, error) {
+	tenantID, err := authorizeTenant(req.Principal, req.TenantID)
+	if err != nil {
+		return ReadEventStreamResult{}, err
+	}
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 100
@@ -184,6 +214,7 @@ func (s *service) ReadEventStream(ctx context.Context, req ReadEventStreamReques
 	if err != nil {
 		return ReadEventStreamResult{}, internalError("read event stream failed", err, map[string]any{"after_seq": req.AfterSeq, "limit": limit})
 	}
+	events = filterEventsByTenant(events, tenantID)
 	result := ReadEventStreamResult{
 		AdminResult: resultEnvelope(req.AdminRequest),
 		AfterSeq:    req.AfterSeq,
@@ -201,6 +232,57 @@ func MarshalJSONContent(v any) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func (s *service) tenantRuntimeProjection(ctx context.Context, tenantID string) (nexusgateway.StateSnapshot, error) {
+	if s.cfg.Materializer != nil && strings.TrimSpace(tenantID) != "" {
+		return s.cfg.Materializer.StateForTenant(tenantID), nil
+	}
+	projection := nexusgateway.StateSnapshot{
+		ChannelActivity: map[string]nexusgateway.ChannelState{},
+		EventTypeCounts: map[string]uint64{},
+	}
+	if s.cfg.Events == nil || strings.TrimSpace(tenantID) == "" {
+		return projection, nil
+	}
+	events, err := s.cfg.Events.Read(ctx, s.cfg.Partition, 0, 0, false)
+	if err != nil {
+		return nexusgateway.StateSnapshot{}, internalError("read tenant runtime projection failed", err, map[string]any{"tenant_id": tenantID})
+	}
+	for _, ev := range filterEventsByTenant(events, tenantID) {
+		if ev.Seq > projection.LastSeq {
+			projection.LastSeq = ev.Seq
+		}
+		projection.EventTypeCounts[ev.Type]++
+		switch ev.Type {
+		case core.FrameworkEventMessageInbound:
+			if channelName := adminChannelFromPayload(ev.Payload); channelName != "" {
+				state := projection.ChannelActivity[channelName]
+				state.Inbound++
+				projection.ChannelActivity[channelName] = state
+			}
+		case core.FrameworkEventMessageOutbound:
+			if channelName := adminChannelFromPayload(ev.Payload); channelName != "" {
+				state := projection.ChannelActivity[channelName]
+				state.Outbound++
+				projection.ChannelActivity[channelName] = state
+			}
+		}
+	}
+	return projection, nil
+}
+
+func adminChannelFromPayload(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	var envelope struct {
+		Channel string `json:"channel"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return ""
+	}
+	return envelope.Channel
 }
 
 func newAdminToken() (string, string, error) {

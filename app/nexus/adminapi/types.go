@@ -45,20 +45,24 @@ type SessionInfo struct {
 }
 
 type SubjectInfo struct {
-	TenantID string           `json:"tenant_id"`
-	Kind     core.SubjectKind `json:"kind"`
-	ID       string           `json:"id"`
+	TenantID    string           `json:"tenant_id"`
+	Kind        core.SubjectKind `json:"kind"`
+	ID          string           `json:"id"`
+	DisplayName string           `json:"display_name,omitempty"`
+	Roles       []string         `json:"roles,omitempty"`
 }
 
 type TokenInfo struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name,omitempty"`
-	SubjectID  string     `json:"subject_id,omitempty"`
-	Scope      []string   `json:"scope,omitempty"`
-	IssuedAt   time.Time  `json:"issued_at"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
-	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name,omitempty"`
+	TenantID    string           `json:"tenant_id,omitempty"`
+	SubjectKind core.SubjectKind `json:"subject_kind,omitempty"`
+	SubjectID   string           `json:"subject_id,omitempty"`
+	Scope       []string         `json:"scope,omitempty"`
+	IssuedAt    time.Time        `json:"issued_at"`
+	ExpiresAt   *time.Time       `json:"expires_at,omitempty"`
+	LastUsedAt  *time.Time       `json:"last_used_at,omitempty"`
+	RevokedAt   *time.Time       `json:"revoked_at,omitempty"`
 }
 
 type ChannelInfo struct {
@@ -109,6 +113,17 @@ type GetNodeRequest struct {
 }
 
 type GetNodeResult struct {
+	AdminResult
+	Node *core.NodeDescriptor `json:"node,omitempty"`
+}
+
+type UpdateNodeCapabilitiesRequest struct {
+	AdminRequest
+	NodeID       string                      `json:"node_id"`
+	Capabilities []core.CapabilityDescriptor `json:"capabilities,omitempty"`
+}
+
+type UpdateNodeCapabilitiesResult struct {
 	AdminResult
 	Node *core.NodeDescriptor `json:"node,omitempty"`
 }
@@ -186,6 +201,20 @@ type CloseSessionResult struct {
 	SessionID string `json:"session_id"`
 }
 
+type GrantSessionDelegationRequest struct {
+	AdminRequest
+	SessionID   string                  `json:"session_id"`
+	SubjectKind core.SubjectKind        `json:"subject_kind"`
+	SubjectID   string                  `json:"subject_id"`
+	Operations  []core.SessionOperation `json:"operations,omitempty"`
+	ExpiresAt   *time.Time              `json:"expires_at,omitempty"`
+}
+
+type GrantSessionDelegationResult struct {
+	AdminResult
+	Delegation core.SessionDelegationRecord `json:"delegation"`
+}
+
 type ListSubjectsRequest struct {
 	AdminRequest
 	Page PageRequest `json:"page,omitempty"`
@@ -195,6 +224,37 @@ type ListSubjectsResult struct {
 	AdminResult
 	PageResult
 	Subjects []SubjectInfo `json:"subjects"`
+}
+
+type CreateSubjectRequest struct {
+	AdminRequest
+	SubjectTenantID string           `json:"subject_tenant_id,omitempty"`
+	SubjectKind     core.SubjectKind `json:"subject_kind"`
+	SubjectID       string           `json:"subject_id"`
+	DisplayName     string           `json:"display_name,omitempty"`
+	Roles           []string         `json:"roles,omitempty"`
+}
+
+type CreateSubjectResult struct {
+	AdminResult
+	Subject SubjectInfo `json:"subject"`
+}
+
+type BindExternalIdentityRequest struct {
+	AdminRequest
+	SubjectTenantID string                `json:"subject_tenant_id,omitempty"`
+	Provider        core.ExternalProvider `json:"provider"`
+	AccountID       string                `json:"account_id,omitempty"`
+	ExternalID      string                `json:"external_id"`
+	SubjectKind     core.SubjectKind      `json:"subject_kind"`
+	SubjectID       string                `json:"subject_id"`
+	DisplayName     string                `json:"display_name,omitempty"`
+	ProviderLabel   string                `json:"provider_label,omitempty"`
+}
+
+type BindExternalIdentityResult struct {
+	AdminResult
+	Identity core.ExternalIdentity `json:"identity"`
 }
 
 type ListExternalIdentitiesRequest struct {
@@ -221,8 +281,10 @@ type ListTokensResult struct {
 
 type IssueTokenRequest struct {
 	AdminRequest
-	SubjectID string   `json:"subject_id"`
-	Scopes    []string `json:"scopes,omitempty"`
+	SubjectTenantID string           `json:"subject_tenant_id,omitempty"`
+	SubjectKind     core.SubjectKind `json:"subject_kind,omitempty"`
+	SubjectID       string           `json:"subject_id"`
+	Scopes          []string         `json:"scopes,omitempty"`
 }
 
 type IssueTokenResult struct {

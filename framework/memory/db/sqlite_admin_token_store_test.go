@@ -17,18 +17,22 @@ func TestSQLiteAdminTokenStoreCreateListAndRevoke(t *testing.T) {
 
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
 	require.NoError(t, store.CreateToken(context.Background(), core.AdminTokenRecord{
-		ID:        "tok-1",
-		Name:      "subject-a",
-		SubjectID: "subject-a",
-		TokenHash: "hash-1",
-		Scopes:    []string{"nexus:admin"},
-		IssuedAt:  now,
+		ID:          "tok-1",
+		Name:        "subject-a",
+		TenantID:    "tenant-1",
+		SubjectKind: core.SubjectKindServiceAccount,
+		SubjectID:   "subject-a",
+		TokenHash:   "hash-1",
+		Scopes:      []string{"nexus:admin"},
+		IssuedAt:    now,
 	}))
 
 	records, err := store.ListTokens(context.Background())
 	require.NoError(t, err)
 	require.Len(t, records, 1)
 	require.Equal(t, "tok-1", records[0].ID)
+	require.Equal(t, "tenant-1", records[0].TenantID)
+	require.Equal(t, core.SubjectKindServiceAccount, records[0].SubjectKind)
 	require.Equal(t, []string{"nexus:admin"}, records[0].Scopes)
 
 	require.NoError(t, store.RevokeToken(context.Background(), "tok-1", now.Add(time.Hour)))

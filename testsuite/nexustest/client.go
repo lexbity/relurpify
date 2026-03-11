@@ -30,6 +30,7 @@ type TestGatewayClient struct {
 type connectedFrame struct {
 	Type         string                      `json:"type"`
 	SessionID    string                      `json:"session_id"`
+	FeedScope    string                      `json:"feed_scope,omitempty"`
 	Capabilities []core.CapabilityDescriptor `json:"capabilities,omitempty"`
 }
 
@@ -52,10 +53,18 @@ func NewTestGatewayClient() *TestGatewayClient {
 }
 
 func (c *TestGatewayClient) Connect(addr, token, role string) error {
-	return c.ConnectWithLastSeen(addr, token, role, 0)
+	return c.ConnectWithLastSeenAndFeed(addr, token, role, 0, "")
 }
 
 func (c *TestGatewayClient) ConnectWithLastSeen(addr, token, role string, lastSeenSeq uint64) error {
+	return c.ConnectWithLastSeenAndFeed(addr, token, role, lastSeenSeq, "")
+}
+
+func (c *TestGatewayClient) ConnectWithFeed(addr, token, role, feedScope string) error {
+	return c.ConnectWithLastSeenAndFeed(addr, token, role, 0, feedScope)
+}
+
+func (c *TestGatewayClient) ConnectWithLastSeenAndFeed(addr, token, role string, lastSeenSeq uint64, feedScope string) error {
 	if c == nil {
 		return fmt.Errorf("gateway client required")
 	}
@@ -73,6 +82,9 @@ func (c *TestGatewayClient) ConnectWithLastSeen(addr, token, role string, lastSe
 		"version":       "1.0",
 		"role":          role,
 		"last_seen_seq": lastSeenSeq,
+	}
+	if strings.TrimSpace(feedScope) != "" {
+		connect["feed_scope"] = strings.TrimSpace(feedScope)
 	}
 	if err := conn.WriteJSON(connect); err != nil {
 		_ = conn.Close()

@@ -44,6 +44,9 @@ func ruleMatchesRequest(rule core.PolicyRule, req core.PolicyRequest) bool {
 	if len(c.ProviderKinds) > 0 && !containsProviderKind(c.ProviderKinds, req.ProviderKind) {
 		return false
 	}
+	if len(c.ExternalProviders) > 0 && !containsExternalProvider(c.ExternalProviders, req.ExternalProvider) {
+		return false
+	}
 	if len(c.TrustClasses) > 0 && !containsTrustClass(c.TrustClasses, req.TrustClass) {
 		return false
 	}
@@ -72,6 +75,18 @@ func ruleMatchesRequest(rule core.PolicyRule, req core.PolicyRequest) bool {
 		return false
 	}
 	if c.RequireOwnership != nil && req.IsOwner != *c.RequireOwnership {
+		return false
+	}
+	if c.RequireDelegation != nil && req.IsDelegated != *c.RequireDelegation {
+		return false
+	}
+	if c.RequireExternalBinding != nil && req.HasExternalBinding != *c.RequireExternalBinding {
+		return false
+	}
+	if c.RequireResolvedExternal != nil && req.ResolvedExternal != *c.RequireResolvedExternal {
+		return false
+	}
+	if c.RequireRestrictedExternal != nil && req.RestrictedExternal != *c.RequireRestrictedExternal {
 		return false
 	}
 	if c.TimeWindow != nil && !matchesTimeWindow(*c.TimeWindow, req.Timestamp) {
@@ -136,6 +151,15 @@ func containsFold(values []string, want string) bool {
 }
 
 func containsProviderKind(values []core.ProviderKind, want core.ProviderKind) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsExternalProvider(values []core.ExternalProvider, want core.ExternalProvider) bool {
 	for _, value := range values {
 		if value == want {
 			return true

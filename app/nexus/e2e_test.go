@@ -70,7 +70,7 @@ func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
 		Config:            cfg,
 		Partition:         nexusEventPartition,
 		ChannelAdapters:   []channel.Adapter{adapter},
-		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore),
+		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore),
 		VerifyNodeConnection: func(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 			return verifyGatewayNodeChallenge(ctx, store, principal, info, conn)
 		},
@@ -292,6 +292,10 @@ func (h *nexusHarness) seedBoundary(t *testing.T, boundary *core.SessionBoundary
 }
 
 func (h *nexusHarness) enrollNode(t *testing.T, tenantID string, cred core.NodeCredential) {
+	h.enrollNodeWithApprovedCapabilities(t, tenantID, cred, nil)
+}
+
+func (h *nexusHarness) enrollNodeWithApprovedCapabilities(t *testing.T, tenantID string, cred core.NodeCredential, caps []core.CapabilityDescriptor) {
 	t.Helper()
 	cred.TenantID = tenantID
 	require.NoError(t, h.identityStore.UpsertNodeEnrollment(context.Background(), core.NodeEnrollment{
@@ -307,6 +311,16 @@ func (h *nexusHarness) enrollNode(t *testing.T, tenantID string, cred core.NodeC
 		KeyID:      cred.KeyID,
 		PairedAt:   cred.IssuedAt,
 		AuthMethod: core.AuthMethodNodeChallenge,
+	}))
+	require.NoError(t, h.nodeStore.UpsertNode(context.Background(), core.NodeDescriptor{
+		ID:                   cred.DeviceID,
+		TenantID:             tenantID,
+		Name:                 cred.DeviceID,
+		Platform:             core.NodePlatformHeadless,
+		TrustClass:           core.TrustClassRemoteApproved,
+		PairedAt:             cred.IssuedAt,
+		Owner:                core.SubjectRef{TenantID: tenantID, Kind: core.SubjectKindNode, ID: cred.DeviceID},
+		ApprovedCapabilities: append([]core.CapabilityDescriptor(nil), caps...),
 	}))
 }
 
@@ -402,14 +416,32 @@ func TestAgentRoleLockedToToken(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestBroadcastRespectsTenantIsolation(t *testing.T) {
+func TestBroadcastRestrictsRuntimeFeedToAuthorizedSessions(t *testing.T) {
 	h := newNexusHarness(t, testGatewayConfig())
 
 	tenantA := h.newClient(t, "agent-a", "agent")
 	tenantB := h.newClient(t, "agent-b", "agent")
 	admin := h.newClient(t, "admin-a", "admin")
 
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:  "sess-owned",
+		TenantID:   "tenant-a",
+		Scope:      core.SessionScopePerChannelPeer,
+		Partition:  nexusEventPartition,
+		ChannelID:  "webchat",
+		PeerID:     "conv-1",
+		Owner:      core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		TrustClass: core.TrustClassRemoteApproved,
+		CreatedAt:  time.Now().UTC(),
+	})
+
 	_, err := h.eventLog.Append(context.Background(), nexusEventPartition, []core.FrameworkEvent{{
+		Timestamp: time.Now().UTC(),
+		Type:      core.FrameworkEventSessionMessage,
+		Actor:     core.EventActor{Kind: "session", ID: "sess-owned", TenantID: "tenant-a"},
+		Partition: nexusEventPartition,
+		Payload:   json.RawMessage(`{"session_key":"sess-owned","text":"tenant-a"}`),
+	}, {
 		Timestamp: time.Now().UTC(),
 		Type:      core.FrameworkEventMessageInbound,
 		Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
@@ -418,9 +450,10 @@ func TestBroadcastRespectsTenantIsolation(t *testing.T) {
 	}})
 	require.NoError(t, err)
 
-	ev := h.waitForEvent(t, tenantA, core.FrameworkEventMessageInbound, 2*time.Second)
+	ev := h.waitForEvent(t, tenantA, core.FrameworkEventSessionMessage, 2*time.Second)
 	require.Equal(t, "tenant-a", ev.Actor.TenantID)
-	h.assertNoEventOfType(t, tenantB, core.FrameworkEventMessageInbound, 250*time.Millisecond)
+	h.assertNoEventOfType(t, tenantA, core.FrameworkEventMessageInbound, 250*time.Millisecond)
+	h.assertNoEventOfType(t, tenantB, core.FrameworkEventSessionMessage, 250*time.Millisecond)
 	adminEvent := h.waitForEvent(t, admin, core.FrameworkEventMessageInbound, 2*time.Second)
 	require.Equal(t, "tenant-a", adminEvent.Actor.TenantID)
 }
@@ -640,6 +673,57 @@ func TestAdminMCPResourcesAndRevokeTool(t *testing.T) {
 	require.Nil(t, nodeAfter)
 }
 
+func TestAdminMCPReadResourceDeniesCrossTenantQuery(t *testing.T) {
+	h := newNexusHarness(t, testGatewayConfig())
+
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:      "session-tenant-b",
+		RoutingKey:     core.SessionBoundaryKey(core.SessionScopePerChannelPeer, nexusEventPartition, "webchat", "peer-b", ""),
+		TenantID:       "tenant-b",
+		Scope:          core.SessionScopePerChannelPeer,
+		Partition:      nexusEventPartition,
+		ChannelID:      "webchat",
+		PeerID:         "peer-b",
+		TrustClass:     core.TrustClassRemoteApproved,
+		CreatedAt:      time.Now().UTC(),
+		LastActivityAt: time.Now().UTC(),
+	})
+
+	initResp, initPayload := h.adminMCPCall(t, "admin-a", "", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "1",
+		"method":  "initialize",
+		"params": mcpprotocol.InitializeRequest{
+			ProtocolVersion: mcpprotocol.Revision20250618,
+			ClientInfo:      mcpprotocol.PeerInfo{Name: "test-client", Version: "1.0.0"},
+		},
+	})
+	require.Equal(t, http.StatusOK, initResp.StatusCode)
+	require.NotNil(t, initPayload["result"])
+
+	sessionID := initResp.Header.Get(mcpserver.SessionHeader)
+	require.NotEmpty(t, sessionID)
+
+	notifyResp, _ := h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "notifications/initialized",
+		"params":  map[string]any{},
+	})
+	require.Equal(t, http.StatusAccepted, notifyResp.StatusCode)
+
+	resp, payload := h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "cross-tenant-read",
+		"method":  "resources/read",
+		"params":  mcpprotocol.ReadResourceParams{URI: "nexus://sessions/active?tenant=tenant-b"},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	errObj := payload["error"].(map[string]any)
+	require.NotNil(t, errObj)
+	message, _ := errObj["message"].(string)
+	require.Contains(t, strings.ToLower(message), "cross-tenant")
+}
+
 func TestAdminMCPCloseSessionAndManageTokensAndPolicies(t *testing.T) {
 	h := newNexusHarness(t, testGatewayConfig())
 
@@ -698,6 +782,24 @@ func TestAdminMCPCloseSessionAndManageTokensAndPolicies(t *testing.T) {
 	boundary, err := h.sessionStore.GetBoundaryBySessionID(context.Background(), "session-close-me")
 	require.NoError(t, err)
 	require.Nil(t, boundary)
+
+	resp, payload = h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "subject-1",
+		"method":  "tools/call",
+		"params": mcpprotocol.CallToolParams{
+			Name: "nexus.identity.create_subject",
+			Arguments: map[string]any{
+				"subject_tenant_id": "tenant-a",
+				"subject_kind":      string(core.SubjectKindServiceAccount),
+				"subject_id":        "subject-a",
+				"display_name":      "Subject A",
+				"roles":             []string{"operator"},
+				"api_version":       "v1alpha1",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	resp, payload = h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
 		"jsonrpc": "2.0",
@@ -851,6 +953,193 @@ func TestInboundMessageCreatesSession(t *testing.T) {
 	require.Equal(t, "hello", payload.Content.Text)
 }
 
+func TestAdminMCPBindExternalIdentityEnablesResolvedRouting(t *testing.T) {
+	h := newNexusHarness(t, testGatewayConfig())
+
+	initResp, initPayload := h.adminMCPCall(t, "admin-a", "", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "1",
+		"method":  "initialize",
+		"params": mcpprotocol.InitializeRequest{
+			ProtocolVersion: mcpprotocol.Revision20250618,
+			ClientInfo:      mcpprotocol.PeerInfo{Name: "test-client", Version: "1.0.0"},
+		},
+	})
+	require.Equal(t, http.StatusOK, initResp.StatusCode)
+	require.NotNil(t, initPayload["result"])
+	sessionID := initResp.Header.Get(mcpserver.SessionHeader)
+	require.NotEmpty(t, sessionID)
+
+	notifyResp, _ := h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "notifications/initialized",
+		"params":  map[string]any{},
+	})
+	require.Equal(t, http.StatusAccepted, notifyResp.StatusCode)
+
+	resp, payload := h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "subject-1",
+		"method":  "tools/call",
+		"params": mcpprotocol.CallToolParams{
+			Name: "nexus.identity.create_subject",
+			Arguments: map[string]any{
+				"subject_tenant_id": "tenant-a",
+				"subject_kind":      string(core.SubjectKindUser),
+				"subject_id":        "user-a",
+				"display_name":      "User A",
+				"api_version":       "v1alpha1",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NotNil(t, payload["result"])
+
+	resp, payload = h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "bind-1",
+		"method":  "tools/call",
+		"params": mcpprotocol.CallToolParams{
+			Name: "nexus.identity.bind_external",
+			Arguments: map[string]any{
+				"subject_tenant_id": "tenant-a",
+				"provider":          string(core.ExternalProviderWebchat),
+				"account_id":        "workspace-a",
+				"external_id":       "peer-bound",
+				"subject_kind":      string(core.SubjectKindUser),
+				"subject_id":        "user-a",
+				"display_name":      "Peer Bound",
+				"api_version":       "v1alpha1",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NotNil(t, payload["result"])
+
+	require.NoError(t, h.adapter.SendInbound(context.Background(), channel.InboundMessage{
+		Channel: "webchat",
+		Account: "workspace-a",
+		Sender: channel.Identity{
+			ChannelID: "peer-bound",
+		},
+		Conversation: channel.Conversation{
+			Kind: "dm",
+			ID:   "conv-bound",
+		},
+		Content: channel.MessageContent{Text: "hello from bound peer"},
+	}))
+
+	boundary := h.waitForBoundary(t, func(boundary core.SessionBoundary) bool {
+		return boundary.ChannelID == "webchat" && boundary.PeerID == "conv-bound"
+	})
+	require.Equal(t, "tenant-a", boundary.TenantID)
+	require.Equal(t, "user-a", boundary.Owner.ID)
+	require.Equal(t, core.TrustClassRemoteApproved, boundary.TrustClass)
+	require.NotNil(t, boundary.Binding)
+	require.Equal(t, "peer-bound", boundary.Binding.ExternalUserID)
+}
+
+func TestDelegatedServiceAccountCanSendToOwnedSession(t *testing.T) {
+	h := newNexusHarness(t, testGatewayConfig())
+
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:      "sess-owned",
+		RoutingKey:     core.SessionBoundaryKey(core.SessionScopePerChannelPeer, nexusEventPartition, "webchat", "peer-1", ""),
+		TenantID:       "tenant-a",
+		Scope:          core.SessionScopePerChannelPeer,
+		Partition:      nexusEventPartition,
+		ChannelID:      "webchat",
+		PeerID:         "peer-1",
+		Owner:          core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		TrustClass:     core.TrustClassRemoteApproved,
+		CreatedAt:      time.Now().UTC(),
+		LastActivityAt: time.Now().UTC(),
+	})
+
+	initResp, initPayload := h.adminMCPCall(t, "admin-a", "", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "1",
+		"method":  "initialize",
+		"params": mcpprotocol.InitializeRequest{
+			ProtocolVersion: mcpprotocol.Revision20250618,
+			ClientInfo:      mcpprotocol.PeerInfo{Name: "test-client", Version: "1.0.0"},
+		},
+	})
+	require.Equal(t, http.StatusOK, initResp.StatusCode)
+	require.NotNil(t, initPayload["result"])
+	sessionID := initResp.Header.Get(mcpserver.SessionHeader)
+	require.NotEmpty(t, sessionID)
+
+	notifyResp, _ := h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "notifications/initialized",
+		"params":  map[string]any{},
+	})
+	require.Equal(t, http.StatusAccepted, notifyResp.StatusCode)
+
+	resp, _ := h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "subject-1",
+		"method":  "tools/call",
+		"params": mcpprotocol.CallToolParams{
+			Name: "nexus.identity.create_subject",
+			Arguments: map[string]any{
+				"subject_tenant_id": "tenant-a",
+				"subject_kind":      string(core.SubjectKindServiceAccount),
+				"subject_id":        "delegate-a",
+				"display_name":      "Delegate A",
+				"api_version":       "v1alpha1",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, payload := h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "token-1",
+		"method":  "tools/call",
+		"params": mcpprotocol.CallToolParams{
+			Name: "nexus.tokens.issue",
+			Arguments: map[string]any{
+				"subject_tenant_id": "tenant-a",
+				"subject_kind":      string(core.SubjectKindServiceAccount),
+				"subject_id":        "delegate-a",
+				"scopes":            []string{"nexus:operator"},
+				"api_version":       "v1alpha1",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	issued := payload["result"].(map[string]any)["structuredContent"].(map[string]any)
+	delegateToken := issued["token"].(string)
+	require.NotEmpty(t, delegateToken)
+
+	resp, _ = h.adminMCPCall(t, "admin-a", sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "delegate-1",
+		"method":  "tools/call",
+		"params": mcpprotocol.CallToolParams{
+			Name: "nexus.sessions.grant_delegation",
+			Arguments: map[string]any{
+				"session_id":   "sess-owned",
+				"subject_kind": string(core.SubjectKindServiceAccount),
+				"subject_id":   "delegate-a",
+				"operations":   []string{string(core.SessionOperationSend)},
+				"api_version":  "v1alpha1",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	client := h.newClient(t, delegateToken, "operator")
+	require.NoError(t, client.SendOutbound("sess-owned", "delegated hello"))
+
+	outbound := h.waitForOutbound(t, 2*time.Second)
+	require.Equal(t, "webchat", outbound.Channel)
+	require.Equal(t, "peer-1", outbound.ConversationID)
+	require.Equal(t, "delegated hello", outbound.Content.Text)
+}
+
 func TestInboundMessageRoutesToExistingSession(t *testing.T) {
 	h := newNexusHarness(t, testGatewayConfig())
 
@@ -955,7 +1244,7 @@ func TestNodeConnectsAndRegistersCapabilities(t *testing.T) {
 	}}
 	device, err := nexustest.NewTestNodeDevice("node-a", nodeCaps)
 	require.NoError(t, err)
-	h.enrollNode(t, "tenant-a", device.Credential())
+	h.enrollNodeWithApprovedCapabilities(t, "tenant-a", device.Credential(), nodeCaps)
 	require.NoError(t, device.Connect(context.Background(), h.gatewayURL(), "node-a", "Node A", core.NodePlatformLinux))
 	t.Cleanup(func() {
 		_ = device.Close()
@@ -976,7 +1265,11 @@ func TestNodeDisconnectClearsCapabilities(t *testing.T) {
 		Kind: core.CapabilityKindTool,
 	}})
 	require.NoError(t, err)
-	h.enrollNode(t, "tenant-a", device.Credential())
+	h.enrollNodeWithApprovedCapabilities(t, "tenant-a", device.Credential(), []core.CapabilityDescriptor{{
+		ID:   "camera.capture",
+		Name: "camera.capture",
+		Kind: core.CapabilityKindTool,
+	}})
 	require.NoError(t, device.Connect(context.Background(), h.gatewayURL(), "node-a", "Node A", core.NodePlatformLinux))
 	require.Len(t, h.waitForCapabilities(t, "tenant-a", 1), 1)
 
@@ -999,7 +1292,11 @@ func TestAgentInvokesNodeCapability(t *testing.T) {
 		Kind: core.CapabilityKindTool,
 	}})
 	require.NoError(t, err)
-	h.enrollNode(t, "tenant-a", device.Credential())
+	h.enrollNodeWithApprovedCapabilities(t, "tenant-a", device.Credential(), []core.CapabilityDescriptor{{
+		ID:   "camera.capture",
+		Name: "camera.capture",
+		Kind: core.CapabilityKindTool,
+	}})
 	device.SetInvokeHandler(func(invocation nexustest.TestNodeInvocation) *core.CapabilityExecutionResult {
 		return &core.CapabilityExecutionResult{
 			Success: true,
@@ -1114,37 +1411,49 @@ func TestNodeRejectedWithMissingEnrollment(t *testing.T) {
 func TestReplayDeliversMissedEvents(t *testing.T) {
 	h := newNexusHarness(t, testGatewayConfig())
 
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:  "sess-owned",
+		TenantID:   "tenant-a",
+		Scope:      core.SessionScopePerChannelPeer,
+		Partition:  nexusEventPartition,
+		ChannelID:  "webchat",
+		PeerID:     "conv-1",
+		Owner:      core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		TrustClass: core.TrustClassRemoteApproved,
+		CreatedAt:  time.Now().UTC(),
+	})
+
 	initialSeqs := h.appendEvents(t,
 		core.FrameworkEvent{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-owned", TenantID: "tenant-a"},
 			Partition: nexusEventPartition,
-			Payload:   json.RawMessage(`{"text":"one"}`),
+			Payload:   json.RawMessage(`{"session_key":"sess-owned","text":"one"}`),
 		},
 		core.FrameworkEvent{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-owned", TenantID: "tenant-a"},
 			Partition: nexusEventPartition,
-			Payload:   json.RawMessage(`{"text":"two"}`),
+			Payload:   json.RawMessage(`{"session_key":"sess-owned","text":"two"}`),
 		},
 	)
 
 	newSeqs := h.appendEvents(t,
 		core.FrameworkEvent{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-owned", TenantID: "tenant-a"},
 			Partition: nexusEventPartition,
-			Payload:   json.RawMessage(`{"text":"three"}`),
+			Payload:   json.RawMessage(`{"session_key":"sess-owned","text":"three"}`),
 		},
 		core.FrameworkEvent{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-owned", TenantID: "tenant-a"},
 			Partition: nexusEventPartition,
-			Payload:   json.RawMessage(`{"text":"four"}`),
+			Payload:   json.RawMessage(`{"session_key":"sess-owned","text":"four"}`),
 		},
 	)
 
@@ -1155,7 +1464,7 @@ func TestReplayDeliversMissedEvents(t *testing.T) {
 
 	replayedSeqs := map[uint64]struct{}{}
 	for _, ev := range replayed {
-		if ev.Type == core.FrameworkEventMessageInbound {
+		if ev.Type == core.FrameworkEventSessionMessage {
 			replayedSeqs[ev.Seq] = struct{}{}
 		}
 	}
@@ -1168,27 +1477,68 @@ func TestReplayDeliversMissedEvents(t *testing.T) {
 func TestReplayExcludesForeignTenantEvents(t *testing.T) {
 	h := newNexusHarness(t, testGatewayConfig())
 
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:  "sess-owned",
+		TenantID:   "tenant-a",
+		Scope:      core.SessionScopePerChannelPeer,
+		Partition:  nexusEventPartition,
+		ChannelID:  "webchat",
+		PeerID:     "conv-owned",
+		Owner:      core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		TrustClass: core.TrustClassRemoteApproved,
+		CreatedAt:  time.Now().UTC(),
+	})
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:  "sess-foreign",
+		TenantID:   "tenant-a",
+		Scope:      core.SessionScopePerChannelPeer,
+		Partition:  nexusEventPartition,
+		ChannelID:  "webchat",
+		PeerID:     "conv-foreign",
+		Owner:      core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-other"},
+		TrustClass: core.TrustClassRemoteApproved,
+		CreatedAt:  time.Now().UTC(),
+	})
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:  "sess-tenant-b",
+		TenantID:   "tenant-b",
+		Scope:      core.SessionScopePerChannelPeer,
+		Partition:  nexusEventPartition,
+		ChannelID:  "webchat",
+		PeerID:     "conv-b",
+		Owner:      core.SubjectRef{TenantID: "tenant-b", Kind: core.SubjectKindServiceAccount, ID: "svc-b"},
+		TrustClass: core.TrustClassRemoteApproved,
+		CreatedAt:  time.Now().UTC(),
+	})
+
 	seqs := h.appendEvents(t,
 		core.FrameworkEvent{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-owned", TenantID: "tenant-a"},
 			Partition: nexusEventPartition,
-			Payload:   json.RawMessage(`{"text":"baseline"}`),
+			Payload:   json.RawMessage(`{"session_key":"sess-owned","text":"baseline"}`),
 		},
 		core.FrameworkEvent{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-owned", TenantID: "tenant-a"},
 			Partition: nexusEventPartition,
-			Payload:   json.RawMessage(`{"text":"tenant-a"}`),
+			Payload:   json.RawMessage(`{"session_key":"sess-owned","text":"tenant-a"}`),
 		},
 		core.FrameworkEvent{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-b"},
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-foreign", TenantID: "tenant-a"},
 			Partition: nexusEventPartition,
-			Payload:   json.RawMessage(`{"text":"tenant-b"}`),
+			Payload:   json.RawMessage(`{"session_key":"sess-foreign","text":"tenant-a-foreign"}`),
+		},
+		core.FrameworkEvent{
+			Timestamp: time.Now().UTC(),
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-tenant-b", TenantID: "tenant-b"},
+			Partition: nexusEventPartition,
+			Payload:   json.RawMessage(`{"session_key":"sess-tenant-b","text":"tenant-b"}`),
 		},
 	)
 
@@ -1199,7 +1549,7 @@ func TestReplayExcludesForeignTenantEvents(t *testing.T) {
 
 	delivered := map[uint64]struct{}{}
 	for _, ev := range replayed {
-		if ev.Type == core.FrameworkEventMessageInbound {
+		if ev.Type == core.FrameworkEventSessionMessage {
 			delivered[ev.Seq] = struct{}{}
 			require.Equal(t, "tenant-a", ev.Actor.TenantID)
 		}
@@ -1207,7 +1557,9 @@ func TestReplayExcludesForeignTenantEvents(t *testing.T) {
 	_, ok := delivered[seqs[1]]
 	require.True(t, ok, "expected tenant-a replay seq %d", seqs[1])
 	_, ok = delivered[seqs[2]]
-	require.False(t, ok, "did not expect tenant-b replay seq %d", seqs[2])
+	require.False(t, ok, "did not expect foreign-owner replay seq %d", seqs[2])
+	_, ok = delivered[seqs[3]]
+	require.False(t, ok, "did not expect tenant-b replay seq %d", seqs[3])
 }
 
 func TestConnectionProducesSessionCreatedEvent(t *testing.T) {

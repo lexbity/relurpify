@@ -23,18 +23,20 @@ func TestStateMaterializerTracksSessionsAndChannels(t *testing.T) {
 			Seq:       2,
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventSessionCreated,
-			Actor:     core.EventActor{Kind: "agent", ID: "agent-session"},
+			Actor:     core.EventActor{Kind: "agent", ID: "agent-session", TenantID: "tenant-a"},
 		},
 		{
 			Seq:       3,
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventMessageInbound,
+			Actor:     core.EventActor{Kind: "channel", ID: "webchat", TenantID: "tenant-a"},
 			Payload:   inbound,
 		},
 		{
 			Seq:       4,
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventMessageOutbound,
+			Actor:     core.EventActor{Kind: "channel", ID: "slack", TenantID: "tenant-b"},
 			Payload:   outbound,
 		},
 	})
@@ -46,6 +48,20 @@ func TestStateMaterializerTracksSessionsAndChannels(t *testing.T) {
 	require.Equal(t, uint64(1), state.ChannelActivity["webchat"].Inbound)
 	require.Equal(t, uint64(1), state.ChannelActivity["slack"].Outbound)
 	require.Equal(t, uint64(1), state.EventTypeCounts[core.FrameworkEventSessionCreated])
+
+	tenantA := materializer.StateForTenant("tenant-a")
+	require.Equal(t, uint64(3), tenantA.LastSeq)
+	require.Len(t, tenantA.ActiveSessions, 1)
+	require.Equal(t, uint64(1), tenantA.ChannelActivity["webchat"].Inbound)
+	require.Zero(t, tenantA.ChannelActivity["slack"].Outbound)
+	require.Equal(t, uint64(1), tenantA.EventTypeCounts[core.FrameworkEventSessionCreated])
+
+	tenantB := materializer.StateForTenant("tenant-b")
+	require.Equal(t, uint64(4), tenantB.LastSeq)
+	require.Empty(t, tenantB.ActiveSessions)
+	require.Equal(t, uint64(1), tenantB.ChannelActivity["slack"].Outbound)
+	require.Zero(t, tenantB.ChannelActivity["webchat"].Inbound)
+	require.Equal(t, uint64(1), tenantB.EventTypeCounts[core.FrameworkEventMessageOutbound])
 }
 
 func TestStateMaterializerSnapshotRestore(t *testing.T) {
@@ -54,7 +70,7 @@ func TestStateMaterializerSnapshotRestore(t *testing.T) {
 		Seq:       1,
 		Timestamp: time.Now().UTC(),
 		Type:      core.FrameworkEventSessionCreated,
-		Actor:     core.EventActor{Kind: "user", ID: "user-session"},
+		Actor:     core.EventActor{Kind: "user", ID: "user-session", TenantID: "tenant-a"},
 	}}))
 
 	data, err := materializer.Snapshot(context.Background())

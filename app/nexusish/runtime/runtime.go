@@ -77,12 +77,34 @@ func (r *Runtime) IssueToken(ctx context.Context, req IssueTokenRequest) (string
 	if err != nil {
 		return "", err
 	}
+	subjectKind := strings.TrimSpace(req.SubjectKind)
+	if subjectKind == "" {
+		subjectKind = string(core.SubjectKindServiceAccount)
+	}
+	createSubjectResult, err := client.CallTool(ctx, protocol.CallToolParams{
+		Name: "nexus.identity.create_subject",
+		Arguments: map[string]any{
+			"subject_tenant_id": req.SubjectTenantID,
+			"subject_kind":      subjectKind,
+			"subject_id":        req.SubjectID,
+			"display_name":      req.SubjectID,
+			"api_version":       nexusadminapi.APIVersionV1Alpha1,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if createSubjectResult.IsError {
+		return "", toolResultError(createSubjectResult)
+	}
 	result, err := client.CallTool(ctx, protocol.CallToolParams{
 		Name: "nexus.tokens.issue",
 		Arguments: map[string]any{
-			"subject_id":  req.SubjectID,
-			"scopes":      splitScope(req.Scope),
-			"api_version": nexusadminapi.APIVersionV1Alpha1,
+			"subject_tenant_id": req.SubjectTenantID,
+			"subject_kind":      subjectKind,
+			"subject_id":        req.SubjectID,
+			"scopes":            splitScope(req.Scope),
+			"api_version":       nexusadminapi.APIVersionV1Alpha1,
 		},
 	})
 	if err != nil {

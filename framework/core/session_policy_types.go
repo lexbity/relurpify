@@ -19,15 +19,20 @@ const (
 
 // SessionSelector matches session-oriented requests during policy evaluation.
 type SessionSelector struct {
-	Partitions        []string           `yaml:"partitions,omitempty" json:"partitions,omitempty"`
-	ChannelIDs        []string           `yaml:"channel_ids,omitempty" json:"channel_ids,omitempty"`
-	Scopes            []SessionScope     `yaml:"scopes,omitempty" json:"scopes,omitempty"`
-	TrustClasses      []TrustClass       `yaml:"trust_classes,omitempty" json:"trust_classes,omitempty"`
-	Operations        []SessionOperation `yaml:"operations,omitempty" json:"operations,omitempty"`
-	ActorKinds        []string           `yaml:"actor_kinds,omitempty" json:"actor_kinds,omitempty"`
-	ActorIDs          []string           `yaml:"actor_ids,omitempty" json:"actor_ids,omitempty"`
-	RequireOwnership  *bool              `yaml:"require_ownership,omitempty" json:"require_ownership,omitempty"`
-	AuthenticatedOnly *bool              `yaml:"authenticated_only,omitempty" json:"authenticated_only,omitempty"`
+	Partitions                []string           `yaml:"partitions,omitempty" json:"partitions,omitempty"`
+	ChannelIDs                []string           `yaml:"channel_ids,omitempty" json:"channel_ids,omitempty"`
+	Scopes                    []SessionScope     `yaml:"scopes,omitempty" json:"scopes,omitempty"`
+	TrustClasses              []TrustClass       `yaml:"trust_classes,omitempty" json:"trust_classes,omitempty"`
+	Operations                []SessionOperation `yaml:"operations,omitempty" json:"operations,omitempty"`
+	ActorKinds                []string           `yaml:"actor_kinds,omitempty" json:"actor_kinds,omitempty"`
+	ActorIDs                  []string           `yaml:"actor_ids,omitempty" json:"actor_ids,omitempty"`
+	ExternalProviders         []ExternalProvider `yaml:"external_providers,omitempty" json:"external_providers,omitempty"`
+	RequireOwnership          *bool              `yaml:"require_ownership,omitempty" json:"require_ownership,omitempty"`
+	RequireDelegation         *bool              `yaml:"require_delegation,omitempty" json:"require_delegation,omitempty"`
+	RequireExternalBinding    *bool              `yaml:"require_external_binding,omitempty" json:"require_external_binding,omitempty"`
+	RequireResolvedExternal   *bool              `yaml:"require_resolved_external,omitempty" json:"require_resolved_external,omitempty"`
+	RequireRestrictedExternal *bool              `yaml:"require_restricted_external,omitempty" json:"require_restricted_external,omitempty"`
+	AuthenticatedOnly         *bool              `yaml:"authenticated_only,omitempty" json:"authenticated_only,omitempty"`
 }
 
 // SessionPolicy configures access to session-scoped operations.
@@ -81,7 +86,12 @@ func ValidateSessionSelector(selector SessionSelector) error {
 		len(selector.Operations) == 0 &&
 		len(selector.ActorKinds) == 0 &&
 		len(selector.ActorIDs) == 0 &&
+		len(selector.ExternalProviders) == 0 &&
 		selector.RequireOwnership == nil &&
+		selector.RequireDelegation == nil &&
+		selector.RequireExternalBinding == nil &&
+		selector.RequireResolvedExternal == nil &&
+		selector.RequireRestrictedExternal == nil &&
 		selector.AuthenticatedOnly == nil {
 		return fmt.Errorf("at least one selector field required")
 	}
@@ -122,6 +132,11 @@ func ValidateSessionSelector(selector SessionSelector) error {
 	for _, actorID := range selector.ActorIDs {
 		if strings.TrimSpace(actorID) == "" {
 			return fmt.Errorf("actor_ids contains empty actor id")
+		}
+	}
+	for _, provider := range selector.ExternalProviders {
+		if err := provider.Validate(); err != nil {
+			return fmt.Errorf("external_providers contains invalid provider: %w", err)
 		}
 	}
 	return nil

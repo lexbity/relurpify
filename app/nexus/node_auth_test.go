@@ -79,4 +79,8 @@ func TestVerifyGatewayNodeChallenge(t *testing.T) {
 	}, fwgateway.NodeConnectInfo{NodeID: "node-1"}, conn)
 	require.NoError(t, err)
 	require.Len(t, conn.writes, 1)
+	enrollment, err := store.GetNodeEnrollment(context.Background(), "tenant-1", "node-1")
+	require.NoError(t, err)
+	require.NotNil(t, enrollment)
+	require.False(t, enrollment.LastVerifiedAt.IsZero())
 }

@@ -44,6 +44,45 @@ func TestSQLiteIdentityStoreExternalIdentityRoundTrip(t *testing.T) {
 	require.Equal(t, "user-42", list[0].ExternalID)
 }
 
+func TestSQLiteIdentityStoreTenantAndSubjectRoundTrip(t *testing.T) {
+	store, err := NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, store.UpsertTenant(context.Background(), core.TenantRecord{
+		ID:          "tenant-1",
+		DisplayName: "Tenant 1",
+		CreatedAt:   now,
+	}))
+	require.NoError(t, store.UpsertSubject(context.Background(), core.SubjectRecord{
+		TenantID:    "tenant-1",
+		Kind:        core.SubjectKindServiceAccount,
+		ID:          "svc-1",
+		DisplayName: "Service 1",
+		Roles:       []string{"operator"},
+		CreatedAt:   now,
+	}))
+
+	tenant, err := store.GetTenant(context.Background(), "tenant-1")
+	require.NoError(t, err)
+	require.NotNil(t, tenant)
+	require.Equal(t, "Tenant 1", tenant.DisplayName)
+
+	subject, err := store.GetSubject(context.Background(), "tenant-1", core.SubjectKindServiceAccount, "svc-1")
+	require.NoError(t, err)
+	require.NotNil(t, subject)
+	require.Equal(t, []string{"operator"}, subject.Roles)
+
+	tenants, err := store.ListTenants(context.Background())
+	require.NoError(t, err)
+	require.Len(t, tenants, 1)
+
+	subjects, err := store.ListSubjects(context.Background(), "tenant-1")
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+}
+
 func TestSQLiteIdentityStoreNodeEnrollmentRoundTrip(t *testing.T) {
 	store, err := NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
 	require.NoError(t, err)

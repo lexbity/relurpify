@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const RestrictedExternalTenantID = "__relurpify_unresolved_external__"
+
 type SessionScope string
 
 const (
@@ -34,6 +36,9 @@ func (b SessionBoundary) OwnerMatches(actor EventActor) bool {
 	if b.Owner.ID != "" {
 		return b.Owner.Matches(actor)
 	}
+	if !b.AllowsLegacyActorOwnership() {
+		return false
+	}
 	if b.ActorID == "" || actor.ID == "" {
 		return false
 	}
@@ -41,6 +46,16 @@ func (b SessionBoundary) OwnerMatches(actor EventActor) bool {
 		return false
 	}
 	return strings.EqualFold(b.ActorID, actor.ID)
+}
+
+func (b SessionBoundary) HasCanonicalOwner() bool {
+	return strings.TrimSpace(b.Owner.ID) != ""
+}
+
+func (b SessionBoundary) AllowsLegacyActorOwnership() bool {
+	return b.Binding != nil &&
+		!b.HasCanonicalOwner() &&
+		strings.EqualFold(strings.TrimSpace(b.TenantID), RestrictedExternalTenantID)
 }
 
 // SessionBoundaryKey returns the canonical routing key for a session scope.

@@ -117,6 +117,7 @@ func TestSQLiteSessionStorePersistsTenantOwnerAndBinding(t *testing.T) {
 	require.Equal(t, "bound", got.RoutingKey)
 	require.Equal(t, "tenant-1", got.TenantID)
 	require.Equal(t, core.SubjectKindUser, got.Owner.Kind)
+	require.Empty(t, got.ActorID)
 	require.NotNil(t, got.Binding)
 	require.Equal(t, "guild-1", got.Binding.AccountID)
 }
@@ -143,4 +144,29 @@ func TestSQLiteSessionStoreGetBoundaryBySessionID(t *testing.T) {
 	require.NotNil(t, got)
 	require.Equal(t, "local:discord:channel-1", got.RoutingKey)
 	require.Equal(t, "sess_opaque_1", got.SessionID)
+}
+
+func TestSQLiteSessionStorePersistsSessionDelegations(t *testing.T) {
+	store, err := NewSQLiteSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, store.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
+		TenantID:  "tenant-1",
+		SessionID: "sess_opaque_1",
+		Grantee: core.SubjectRef{
+			TenantID: "tenant-1",
+			Kind:     core.SubjectKindServiceAccount,
+			ID:       "operator-1",
+		},
+		Operations: []core.SessionOperation{core.SessionOperationSend, core.SessionOperationResume},
+		CreatedAt:  now,
+	}))
+
+	records, err := store.ListDelegationsBySessionID(context.Background(), "sess_opaque_1")
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, "operator-1", records[0].Grantee.ID)
+	require.Len(t, records[0].Operations, 2)
 }

@@ -21,7 +21,8 @@ func (s *stubPolicyEngine) Evaluate(_ context.Context, req core.PolicyRequest) (
 }
 
 type memoryStore struct {
-	values map[string]core.SessionBoundary
+	values      map[string]core.SessionBoundary
+	delegations map[string][]core.SessionDelegationRecord
 }
 
 func (m *memoryStore) GetBoundary(_ context.Context, key string) (*core.SessionBoundary, error) {
@@ -55,6 +56,19 @@ func (m *memoryStore) ListBoundaries(_ context.Context, partition string) ([]cor
 		}
 	}
 	return out, nil
+}
+func (m *memoryStore) UpsertDelegation(_ context.Context, record core.SessionDelegationRecord) error {
+	if m.delegations == nil {
+		m.delegations = map[string][]core.SessionDelegationRecord{}
+	}
+	m.delegations[record.SessionID] = append(m.delegations[record.SessionID], record)
+	return nil
+}
+func (m *memoryStore) ListDelegationsBySessionID(_ context.Context, sessionID string) ([]core.SessionDelegationRecord, error) {
+	if m.delegations == nil {
+		return nil, nil
+	}
+	return append([]core.SessionDelegationRecord(nil), m.delegations[sessionID]...), nil
 }
 func (m *memoryStore) DeleteBoundary(_ context.Context, key string) error {
 	delete(m.values, key)
@@ -92,9 +106,31 @@ func TestDefaultRouterRouteCreatesBoundary(t *testing.T) {
 	require.NotEmpty(t, boundary.SessionID)
 	require.NotEqual(t, "local:telegram:peer-1", boundary.SessionID)
 	require.Equal(t, "local:telegram:peer-1", boundary.RoutingKey)
-	require.Equal(t, "user-1", boundary.ActorID)
+	require.Empty(t, boundary.ActorID)
 	require.Equal(t, "tenant-1", boundary.TenantID)
 	require.Equal(t, "user-1", boundary.Owner.ID)
+}
+
+func TestDefaultRouterRouteKeepsActorIDForRestrictedExternalSession(t *testing.T) {
+	store := &memoryStore{values: map[string]core.SessionBoundary{}}
+	router := &DefaultRouter{Store: store, Scope: core.SessionScopePerChannelPeer}
+
+	boundary, err := router.Route(context.Background(), InboundMessage{
+		Partition: "local",
+		TenantID:  core.RestrictedExternalTenantID,
+		ChannelID: "webchat",
+		PeerID:    "conv-1",
+		ActorID:   "external-user-1",
+		Binding: &core.ExternalSessionBinding{
+			Provider:       core.ExternalProviderWebchat,
+			ConversationID: "conv-1",
+			ExternalUserID: "external-user-1",
+		},
+		TrustClass: core.TrustClassRemoteDeclared,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "external-user-1", boundary.ActorID)
+	require.Empty(t, boundary.Owner.ID)
 }
 
 func TestDefaultRouterAuthorizeRejectsActorMismatch(t *testing.T) {
@@ -154,13 +190,20 @@ func TestDefaultRouterAuthorizeUsesPolicyEngine(t *testing.T) {
 		Authenticated: true,
 		Operation:     core.SessionOperationSend,
 		Boundary: &core.SessionBoundary{
-			SessionID:  "local:telegram:peer-1",
-			Partition:  "local",
-			ActorID:    "user-1",
-			TenantID:   "tenant-1",
-			Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
-			ChannelID:  "telegram",
-			Scope:      core.SessionScopePerChannelPeer,
+			SessionID: "local:telegram:peer-1",
+			Partition: "local",
+			ActorID:   "user-1",
+			TenantID:  "tenant-1",
+			Owner:     core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+			ChannelID: "telegram",
+			Scope:     core.SessionScopePerChannelPeer,
+			Binding: &core.ExternalSessionBinding{
+				Provider:       core.ExternalProviderTelegram,
+				AccountID:      "bot-1",
+				ChannelID:      "telegram",
+				ConversationID: "peer-1",
+				ExternalUserID: "telegram-user-1",
+			},
 			TrustClass: core.TrustClassRemoteApproved,
 		},
 	})
@@ -169,6 +212,12 @@ func TestDefaultRouterAuthorizeUsesPolicyEngine(t *testing.T) {
 	require.Equal(t, core.SessionOperationSend, engine.lastReq.SessionOperation)
 	require.True(t, engine.lastReq.Authenticated)
 	require.True(t, engine.lastReq.ChannelID == "telegram")
+	require.True(t, engine.lastReq.HasExternalBinding)
+	require.Equal(t, core.ExternalProviderTelegram, engine.lastReq.ExternalProvider)
+	require.Equal(t, "bot-1", engine.lastReq.ExternalAccountID)
+	require.Equal(t, "peer-1", engine.lastReq.ExternalConversationID)
+	require.True(t, engine.lastReq.ResolvedExternal)
+	require.False(t, engine.lastReq.RestrictedExternal)
 }
 
 func TestDefaultRouterAuthorizeDeniesWhenPolicyEngineDenies(t *testing.T) {
@@ -192,6 +241,43 @@ func TestDefaultRouterAuthorizeDeniesWhenPolicyEngineDenies(t *testing.T) {
 	require.ErrorIs(t, err, ErrSessionBoundaryViolation)
 }
 
+func TestDefaultRouterAuthorizePassesDelegationStateToPolicyEngine(t *testing.T) {
+	engine := &stubPolicyEngine{decision: core.PolicyDecisionAllow("allowed")}
+	store := &memoryStore{
+		delegations: map[string][]core.SessionDelegationRecord{
+			"sess_1": {{
+				TenantID:  "tenant-1",
+				SessionID: "sess_1",
+				Grantee: core.SubjectRef{
+					TenantID: "tenant-1",
+					Kind:     core.SubjectKindServiceAccount,
+					ID:       "operator-1",
+				},
+				Operations: []core.SessionOperation{core.SessionOperationSend},
+				CreatedAt:  time.Now().UTC(),
+			}},
+		},
+	}
+	router := &DefaultRouter{Policy: engine, Store: store}
+	err := router.Authorize(context.Background(), AuthorizationRequest{
+		Actor:         core.EventActor{Kind: "agent", ID: "operator-1", TenantID: "tenant-1", SubjectKind: core.SubjectKindServiceAccount},
+		Authenticated: true,
+		Operation:     core.SessionOperationSend,
+		Boundary: &core.SessionBoundary{
+			SessionID:  "sess_1",
+			Partition:  "local",
+			TenantID:   "tenant-1",
+			Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+			ChannelID:  "discord",
+			Scope:      core.SessionScopePerChannelPeer,
+			TrustClass: core.TrustClassRemoteApproved,
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, engine.lastReq.IsDelegated)
+	require.False(t, engine.lastReq.IsOwner)
+}
+
 func TestDefaultRouterAuthorizeRejectsOwnerlessBoundaryWithoutPolicy(t *testing.T) {
 	router := &DefaultRouter{}
 	err := router.Authorize(context.Background(), AuthorizationRequest{
@@ -206,6 +292,27 @@ func TestDefaultRouterAuthorizeRejectsOwnerlessBoundaryWithoutPolicy(t *testing.
 	})
 	require.ErrorIs(t, err, ErrSessionBoundaryViolation)
 	require.ErrorContains(t, err, "has no owner")
+}
+
+func TestDefaultRouterAuthorizeAllowsRestrictedExternalLegacyOwnershipWithoutPolicy(t *testing.T) {
+	router := &DefaultRouter{}
+	err := router.Authorize(context.Background(), AuthorizationRequest{
+		Actor:         core.EventActor{Kind: "channel", ID: "external-user-1", TenantID: core.RestrictedExternalTenantID},
+		Authenticated: false,
+		Operation:     core.SessionOperationSend,
+		Boundary: &core.SessionBoundary{
+			SessionID: "sess_restricted",
+			Partition: "local",
+			TenantID:  core.RestrictedExternalTenantID,
+			ActorID:   "external-user-1",
+			Binding: &core.ExternalSessionBinding{
+				Provider:       core.ExternalProviderWebchat,
+				ConversationID: "conv-1",
+				ExternalUserID: "external-user-1",
+			},
+		},
+	})
+	require.NoError(t, err)
 }
 
 func TestDefaultRouterAuthorizeRejectsMissingActorIDForOwnedBoundary(t *testing.T) {
@@ -223,6 +330,87 @@ func TestDefaultRouterAuthorizeRejectsMissingActorIDForOwnedBoundary(t *testing.
 	})
 	require.ErrorIs(t, err, ErrSessionBoundaryViolation)
 	require.ErrorContains(t, err, "cannot access session")
+}
+
+func TestDefaultRouterAuthorizeAllowsDelegatedActorWithoutOwnership(t *testing.T) {
+	store := &memoryStore{
+		values: map[string]core.SessionBoundary{},
+		delegations: map[string][]core.SessionDelegationRecord{
+			"sess_1": {{
+				TenantID:  "tenant-1",
+				SessionID: "sess_1",
+				Grantee: core.SubjectRef{
+					TenantID: "tenant-1",
+					Kind:     core.SubjectKindServiceAccount,
+					ID:       "operator-1",
+				},
+				Operations: []core.SessionOperation{core.SessionOperationSend},
+				CreatedAt:  time.Now().UTC(),
+			}},
+		},
+	}
+	router := &DefaultRouter{Store: store}
+	err := router.Authorize(context.Background(), AuthorizationRequest{
+		Actor:         core.EventActor{Kind: "agent", ID: "operator-1", TenantID: "tenant-1", SubjectKind: core.SubjectKindServiceAccount},
+		Authenticated: true,
+		Operation:     core.SessionOperationSend,
+		Boundary: &core.SessionBoundary{
+			SessionID: "sess_1",
+			Partition: "local",
+			TenantID:  "tenant-1",
+			Owner:     core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+		},
+	})
+	require.NoError(t, err)
+}
+
+func TestDefaultRouterAuthorizeRejectsDelegatedActorForWrongOperation(t *testing.T) {
+	store := &memoryStore{
+		values: map[string]core.SessionBoundary{},
+		delegations: map[string][]core.SessionDelegationRecord{
+			"sess_1": {{
+				TenantID:  "tenant-1",
+				SessionID: "sess_1",
+				Grantee: core.SubjectRef{
+					TenantID: "tenant-1",
+					Kind:     core.SubjectKindServiceAccount,
+					ID:       "operator-1",
+				},
+				Operations: []core.SessionOperation{core.SessionOperationResume},
+				CreatedAt:  time.Now().UTC(),
+			}},
+		},
+	}
+	router := &DefaultRouter{Store: store}
+	err := router.Authorize(context.Background(), AuthorizationRequest{
+		Actor:         core.EventActor{Kind: "agent", ID: "operator-1", TenantID: "tenant-1", SubjectKind: core.SubjectKindServiceAccount},
+		Authenticated: true,
+		Operation:     core.SessionOperationSend,
+		Boundary: &core.SessionBoundary{
+			SessionID: "sess_1",
+			Partition: "local",
+			TenantID:  "tenant-1",
+			Owner:     core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+		},
+	})
+	require.ErrorIs(t, err, ErrSessionBoundaryViolation)
+}
+
+func TestDefaultRouterAuthorizeRejectsLegacyActorFallbackForNormalOwnerlessBoundary(t *testing.T) {
+	router := &DefaultRouter{}
+	err := router.Authorize(context.Background(), AuthorizationRequest{
+		Actor:         core.EventActor{Kind: "user", ID: "user-1", TenantID: "tenant-1"},
+		Authenticated: true,
+		Operation:     core.SessionOperationSend,
+		Boundary: &core.SessionBoundary{
+			SessionID: "sess_1",
+			Partition: "local",
+			TenantID:  "tenant-1",
+			ActorID:   "user-1",
+		},
+	})
+	require.ErrorIs(t, err, ErrSessionBoundaryViolation)
+	require.ErrorContains(t, err, "has no owner")
 }
 
 func TestDefaultRouterRouteRefreshesLastActivity(t *testing.T) {

@@ -125,12 +125,17 @@ func compileSessionPolicy(index int, policy core.SessionPolicy) (core.PolicyRule
 		return core.PolicyRule{}, err
 	}
 	conditions := core.PolicyConditions{
-		TrustClasses:      append([]core.TrustClass{}, policy.Selector.TrustClasses...),
-		Partitions:        append([]string{}, policy.Selector.Partitions...),
-		ChannelIDs:        append([]string{}, policy.Selector.ChannelIDs...),
-		SessionScopes:     append([]core.SessionScope{}, policy.Selector.Scopes...),
-		SessionOperations: append([]core.SessionOperation{}, policy.Selector.Operations...),
-		RequireOwnership:  policy.Selector.RequireOwnership,
+		TrustClasses:              append([]core.TrustClass{}, policy.Selector.TrustClasses...),
+		Partitions:                append([]string{}, policy.Selector.Partitions...),
+		ChannelIDs:                append([]string{}, policy.Selector.ChannelIDs...),
+		SessionScopes:             append([]core.SessionScope{}, policy.Selector.Scopes...),
+		SessionOperations:         append([]core.SessionOperation{}, policy.Selector.Operations...),
+		ExternalProviders:         append([]core.ExternalProvider{}, policy.Selector.ExternalProviders...),
+		RequireOwnership:          policy.Selector.RequireOwnership,
+		RequireDelegation:         policy.Selector.RequireDelegation,
+		RequireExternalBinding:    policy.Selector.RequireExternalBinding,
+		RequireResolvedExternal:   policy.Selector.RequireResolvedExternal,
+		RequireRestrictedExternal: policy.Selector.RequireRestrictedExternal,
 	}
 	if len(policy.Selector.ActorKinds) > 0 || len(policy.Selector.ActorIDs) > 0 || policy.Selector.AuthenticatedOnly != nil {
 		match := core.ActorMatch{

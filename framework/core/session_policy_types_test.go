@@ -42,3 +42,17 @@ func TestValidateSessionSelectorRejectsInvalidOperation(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "operation")
 }
+
+func TestValidateSessionSelectorAcceptsDelegationAndExternalBindingFields(t *testing.T) {
+	delegated := true
+	hasBinding := true
+	resolved := true
+	err := ValidateSessionSelector(SessionSelector{
+		Operations:              []SessionOperation{SessionOperationSend},
+		RequireDelegation:       &delegated,
+		RequireExternalBinding:  &hasBinding,
+		RequireResolvedExternal: &resolved,
+		ExternalProviders:       []ExternalProvider{ExternalProviderDiscord},
+	})
+	require.NoError(t, err)
+}

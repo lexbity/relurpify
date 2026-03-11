@@ -38,10 +38,14 @@ func ApprovePairing(ctx context.Context, workspace, configPath, pairingCode stri
 		return err
 	}
 	if pairing != nil {
-		if err := identityStore.UpsertNodeEnrollment(ctx, nodeEnrollmentFromPairing(*pairing)); err != nil {
+		enrollment := nodeEnrollmentFromPairing(*pairing)
+		if err := upsertTenantAndSubject(ctx, identityStore, enrollment.TenantID, enrollment.Owner.Kind, enrollment.Owner.ID, enrollment.Owner.ID, nil, enrollment.PairedAt); err != nil {
 			return err
 		}
-		if err := store.UpsertNode(ctx, nexusbootstrap.DefaultNodeDescriptor(pairing.Cred.DeviceID)); err != nil {
+		if err := identityStore.UpsertNodeEnrollment(ctx, enrollment); err != nil {
+			return err
+		}
+		if err := store.UpsertNode(ctx, nodeDescriptorFromEnrollment(enrollment)); err != nil {
 			return err
 		}
 	}

@@ -36,7 +36,7 @@ func TestReplayFramesIncludesReplayComplete(t *testing.T) {
 		Actor:         core.EventActor{Kind: "admin", ID: "admin-1"},
 		Principal: &core.AuthenticatedPrincipal{
 			Authenticated: true,
-			Scopes:        []string{"gateway:admin"},
+			Scopes:        []string{"gateway:admin", "gateway:admin:global"},
 		},
 	}, 0)
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestReplayFramesIncludesReplayComplete(t *testing.T) {
 	require.Equal(t, "replay_complete", frames[1].(replayCompleteFrame).Type)
 }
 
-func TestReplayFramesFiltersByTenantForNonAdmin(t *testing.T) {
+func TestReplayFramesFiltersBySessionAuthorizationForNonAdmin(t *testing.T) {
 	log, err := db.NewSQLiteEventLog(filepath.Join(t.TempDir(), "events.db"))
 	require.NoError(t, err)
 	defer log.Close()
@@ -53,22 +53,35 @@ func TestReplayFramesFiltersByTenantForNonAdmin(t *testing.T) {
 	_, err = log.Append(context.Background(), "local", []core.FrameworkEvent{
 		{
 			Timestamp: time.Now().UTC(),
-			Type:      core.FrameworkEventMessageInbound,
-			Payload:   mustReplayJSON(map[string]string{"text": "tenant-a"}),
-			Actor:     core.EventActor{Kind: "channel", ID: "discord", TenantID: "tenant-a"},
+			Type:      core.FrameworkEventSessionMessage,
+			Payload:   mustReplayJSON(map[string]string{"session_key": "sess-a", "text": "tenant-a"}),
+			Actor:     core.EventActor{Kind: "session", ID: "sess-a", TenantID: "tenant-a"},
 			Partition: "local",
 		},
 		{
 			Timestamp: time.Now().UTC(),
 			Type:      core.FrameworkEventMessageInbound,
-			Payload:   mustReplayJSON(map[string]string{"text": "tenant-b"}),
-			Actor:     core.EventActor{Kind: "channel", ID: "discord", TenantID: "tenant-b"},
+			Payload:   mustReplayJSON(map[string]string{"text": "tenant-a-raw"}),
+			Actor:     core.EventActor{Kind: "channel", ID: "discord", TenantID: "tenant-a"},
+			Partition: "local",
+		},
+		{
+			Timestamp: time.Now().UTC(),
+			Type:      core.FrameworkEventSessionMessage,
+			Payload:   mustReplayJSON(map[string]string{"session_key": "sess-b", "text": "tenant-a-other"}),
+			Actor:     core.EventActor{Kind: "session", ID: "sess-b", TenantID: "tenant-a"},
 			Partition: "local",
 		},
 	})
 	require.NoError(t, err)
 
-	server := &Server{Log: log, Partition: "local"}
+	server := &Server{
+		Log:       log,
+		Partition: "local",
+		SessionEventAuthorizer: func(_ context.Context, _ ConnectionPrincipal, sessionID string) (bool, error) {
+			return sessionID == "sess-a", nil
+		},
+	}
 	frames, err := server.replayFrames(context.Background(), ConnectionPrincipal{
 		Authenticated: true,
 		Actor:         core.EventActor{Kind: "agent", ID: "svc-1", TenantID: "tenant-a"},
@@ -77,7 +90,8 @@ func TestReplayFramesFiltersByTenantForNonAdmin(t *testing.T) {
 	require.Len(t, frames, 2)
 	eventFrame, ok := frames[0].(replayEventFrame)
 	require.True(t, ok)
-	require.Equal(t, "tenant-a", eventFrame.Event.Actor.TenantID)
+	require.Equal(t, core.FrameworkEventSessionMessage, eventFrame.Event.Type)
+	require.Equal(t, "sess-a", eventFrame.Event.Actor.ID)
 	complete := frames[1].(replayCompleteFrame)
 	require.Equal(t, 1, complete.EventCount)
 }
@@ -111,11 +125,52 @@ func TestReplayFramesAllowsAdminAcrossTenants(t *testing.T) {
 		Actor:         core.EventActor{Kind: "admin", ID: "admin-1"},
 		Principal: &core.AuthenticatedPrincipal{
 			Authenticated: true,
-			Scopes:        []string{"gateway:admin"},
+			Scopes:        []string{"gateway:admin", "gateway:admin:global"},
 		},
 	}, 0)
 	require.NoError(t, err)
 	require.Len(t, frames, 3)
 	complete := frames[2].(replayCompleteFrame)
 	require.Equal(t, 2, complete.EventCount)
+}
+
+func TestReplayFramesTenantAdminRemainsTenantScoped(t *testing.T) {
+	log, err := db.NewSQLiteEventLog(filepath.Join(t.TempDir(), "events.db"))
+	require.NoError(t, err)
+	defer log.Close()
+
+	_, err = log.Append(context.Background(), "local", []core.FrameworkEvent{
+		{
+			Timestamp: time.Now().UTC(),
+			Type:      core.FrameworkEventMessageInbound,
+			Payload:   mustReplayJSON(map[string]string{"text": "tenant-a"}),
+			Actor:     core.EventActor{Kind: "channel", ID: "discord", TenantID: "tenant-a"},
+			Partition: "local",
+		},
+		{
+			Timestamp: time.Now().UTC(),
+			Type:      core.FrameworkEventMessageInbound,
+			Payload:   mustReplayJSON(map[string]string{"text": "tenant-b"}),
+			Actor:     core.EventActor{Kind: "channel", ID: "discord", TenantID: "tenant-b"},
+			Partition: "local",
+		},
+	})
+	require.NoError(t, err)
+
+	server := &Server{Log: log, Partition: "local"}
+	frames, err := server.replayFrames(context.Background(), ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "admin", ID: "admin-1", TenantID: "tenant-a"},
+		Principal: &core.AuthenticatedPrincipal{
+			Authenticated: true,
+			TenantID:      "tenant-a",
+			Scopes:        []string{"gateway:admin"},
+		},
+	}, 0)
+	require.NoError(t, err)
+	require.Len(t, frames, 2)
+	eventFrame := frames[0].(replayEventFrame)
+	require.Equal(t, "tenant-a", eventFrame.Event.Actor.TenantID)
+	complete := frames[1].(replayCompleteFrame)
+	require.Equal(t, 1, complete.EventCount)
 }

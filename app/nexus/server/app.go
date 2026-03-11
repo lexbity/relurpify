@@ -140,6 +140,24 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 			}
 			return boundary.TenantID, nil
 		},
+		SessionEventAuthorizer: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionID string) (bool, error) {
+			boundary, err := a.SessionStore.GetBoundaryBySessionID(ctx, sessionID)
+			if err != nil {
+				return false, err
+			}
+			if boundary == nil {
+				return false, nil
+			}
+			if err := router.Authorize(ctx, session.AuthorizationRequest{
+				Actor:         principal.Actor,
+				Authenticated: principal.Authenticated,
+				Operation:     core.SessionOperationResume,
+				Boundary:      boundary,
+			}); err != nil {
+				return false, nil
+			}
+			return true, nil
+		},
 		InvokeCapability: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
 			return InvokeAuthorizedNodeCapability(ctx, router, a.SessionStore, nodeManager, principal, sessionKey, capabilityID, args)
 		},
@@ -163,18 +181,17 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 			return manager.Send(ctx, msg)
 		},
 		HandleNodeConnection: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
-			return HandleGatewayNodeConnection(ctx, nodeManager, principal, info, conn)
+			return HandleGatewayNodeConnection(ctx, nodeManager, a.IdentityStore, principal, info, conn)
 		},
 		AdminSnapshot: func(ctx context.Context, principal fwgateway.ConnectionPrincipal) (map[string]any, error) {
 			if a.StateMaterializer == nil {
 				return map[string]any{}, nil
 			}
-			return map[string]any{
-				"last_seq":         a.StateMaterializer.State().LastSeq,
-				"active_sessions":  a.StateMaterializer.State().ActiveSessions,
-				"channel_activity": a.StateMaterializer.State().ChannelActivity,
-				"event_counts":     a.StateMaterializer.State().EventTypeCounts,
-			}, nil
+			snapshot, err := snapshotForPrincipal(a.StateMaterializer, principal)
+			if err != nil {
+				return nil, err
+			}
+			return snapshot, nil
 		},
 	}
 	if err := srv.Start(ctx); err != nil {
@@ -223,6 +240,43 @@ func (a *NexusApp) gatewayPath() string {
 		return "/gateway"
 	}
 	return a.Config.Gateway.Path
+}
+
+func snapshotForPrincipal(materializer *nexusgateway.StateMaterializer, principal fwgateway.ConnectionPrincipal) (map[string]any, error) {
+	if materializer == nil {
+		return map[string]any{}, nil
+	}
+	state := materializer.State()
+	if hasGlobalSnapshotScope(principal) {
+		return map[string]any{
+			"last_seq":         state.LastSeq,
+			"active_sessions":  state.ActiveSessions,
+			"channel_activity": state.ChannelActivity,
+			"event_counts":     state.EventTypeCounts,
+		}, nil
+	}
+	tenantID := NormalizeTenantID(principal.Actor.TenantID)
+	tenantState := materializer.StateForTenant(tenantID)
+	return map[string]any{
+		"last_seq":         tenantState.LastSeq,
+		"tenant_id":        tenantID,
+		"active_sessions":  tenantState.ActiveSessions,
+		"channel_activity": tenantState.ChannelActivity,
+		"event_counts":     tenantState.EventTypeCounts,
+	}, nil
+}
+
+func hasGlobalSnapshotScope(principal fwgateway.ConnectionPrincipal) bool {
+	if !principal.Authenticated || principal.Principal == nil {
+		return false
+	}
+	for _, scope := range principal.Principal.Scopes {
+		switch strings.ToLower(strings.TrimSpace(scope)) {
+		case "nexus:admin:global", "gateway:admin:global", "admin:global":
+			return true
+		}
+	}
+	return false
 }
 
 func channelConfigs(cfg nexuscfg.Config) map[string]json.RawMessage {

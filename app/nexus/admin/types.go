@@ -54,6 +54,8 @@ type ListNodesRequest = adminapi.ListNodesRequest
 type ListNodesResult = adminapi.ListNodesResult
 type GetNodeRequest = adminapi.GetNodeRequest
 type GetNodeResult = adminapi.GetNodeResult
+type UpdateNodeCapabilitiesRequest = adminapi.UpdateNodeCapabilitiesRequest
+type UpdateNodeCapabilitiesResult = adminapi.UpdateNodeCapabilitiesResult
 type RevokeNodeRequest = adminapi.RevokeNodeRequest
 type RevokeNodeResult = adminapi.RevokeNodeResult
 type ListPendingPairingsRequest = adminapi.ListPendingPairingsRequest
@@ -68,9 +70,15 @@ type GetSessionRequest = adminapi.GetSessionRequest
 type GetSessionResult = adminapi.GetSessionResult
 type CloseSessionRequest = adminapi.CloseSessionRequest
 type CloseSessionResult = adminapi.CloseSessionResult
+type GrantSessionDelegationRequest = adminapi.GrantSessionDelegationRequest
+type GrantSessionDelegationResult = adminapi.GrantSessionDelegationResult
 type ListSubjectsRequest = adminapi.ListSubjectsRequest
 type SubjectInfo = adminapi.SubjectInfo
 type ListSubjectsResult = adminapi.ListSubjectsResult
+type CreateSubjectRequest = adminapi.CreateSubjectRequest
+type CreateSubjectResult = adminapi.CreateSubjectResult
+type BindExternalIdentityRequest = adminapi.BindExternalIdentityRequest
+type BindExternalIdentityResult = adminapi.BindExternalIdentityResult
 type ListExternalIdentitiesRequest = adminapi.ListExternalIdentitiesRequest
 type ListExternalIdentitiesResult = adminapi.ListExternalIdentitiesResult
 type ListTokensRequest = adminapi.ListTokensRequest
@@ -102,6 +110,7 @@ type SessionInfo = adminapi.SessionInfo
 type AdminService interface {
 	ListNodes(ctx context.Context, req ListNodesRequest) (ListNodesResult, error)
 	GetNode(ctx context.Context, req GetNodeRequest) (GetNodeResult, error)
+	UpdateNodeCapabilities(ctx context.Context, req UpdateNodeCapabilitiesRequest) (UpdateNodeCapabilitiesResult, error)
 	RevokeNode(ctx context.Context, req RevokeNodeRequest) (RevokeNodeResult, error)
 	ListPendingPairings(ctx context.Context, req ListPendingPairingsRequest) (ListPendingPairingsResult, error)
 	ApprovePairing(ctx context.Context, req ApprovePairingRequest) (ApprovePairingResult, error)
@@ -110,8 +119,11 @@ type AdminService interface {
 	ListSessions(ctx context.Context, req ListSessionsRequest) (ListSessionsResult, error)
 	GetSession(ctx context.Context, req GetSessionRequest) (GetSessionResult, error)
 	CloseSession(ctx context.Context, req CloseSessionRequest) (CloseSessionResult, error)
+	GrantSessionDelegation(ctx context.Context, req GrantSessionDelegationRequest) (GrantSessionDelegationResult, error)
 
 	ListSubjects(ctx context.Context, req ListSubjectsRequest) (ListSubjectsResult, error)
+	CreateSubject(ctx context.Context, req CreateSubjectRequest) (CreateSubjectResult, error)
+	BindExternalIdentity(ctx context.Context, req BindExternalIdentityRequest) (BindExternalIdentityResult, error)
 	ListExternalIdentities(ctx context.Context, req ListExternalIdentitiesRequest) (ListExternalIdentitiesResult, error)
 	ListTokens(ctx context.Context, req ListTokensRequest) (ListTokensResult, error)
 	IssueToken(ctx context.Context, req IssueTokenRequest) (IssueTokenResult, error)

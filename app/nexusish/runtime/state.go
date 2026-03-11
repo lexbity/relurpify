@@ -59,8 +59,10 @@ type PolicyRuleInfo struct {
 }
 
 type IssueTokenRequest struct {
-	SubjectID string
-	Scope     string
+	SubjectTenantID string
+	SubjectKind     string
+	SubjectID       string
+	Scope           string
 }
 
 type ListEventsRequest struct {

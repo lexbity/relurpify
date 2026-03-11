@@ -29,10 +29,15 @@ func NewMCPExporter(service AdminService) *MCPExporter {
 			{Name: "nexus.nodes.approve_pairing", Description: "Approve a pending node pairing request", Schema: mustSchema(approvePairingArgs{}), MinScope: "nexus:operator", Handler: handleApprovePairing},
 			{Name: "nexus.nodes.reject_pairing", Description: "Reject a pending node pairing request", Schema: mustSchema(rejectPairingArgs{}), MinScope: "nexus:operator", Handler: handleRejectPairing},
 			{Name: "nexus.nodes.list", Description: "List enrolled nodes", Schema: mustSchema(listNodesArgs{}), MinScope: "nexus:observer", Handler: handleListNodes},
+			{Name: "nexus.nodes.get", Description: "Get a single enrolled node", Schema: mustSchema(getNodeArgs{}), MinScope: "nexus:observer", Handler: handleGetNode},
+			{Name: "nexus.nodes.set_capabilities", Description: "Replace the approved capabilities for an enrolled node", Schema: mustSchema(updateNodeCapabilitiesArgs{}), MinScope: "nexus:admin", Handler: handleUpdateNodeCapabilities},
 			{Name: "nexus.nodes.revoke", Description: "Revoke an enrolled node", Schema: mustSchema(revokeNodeArgs{}), MinScope: "nexus:admin", Handler: handleRevokeNode},
 			{Name: "nexus.gateway.list_events", Description: "List gateway event counts", Schema: mustSchema(listEventsArgs{}), MinScope: "nexus:observer", Handler: handleListEvents},
 			{Name: "nexus.sessions.close", Description: "Close an active session", Schema: mustSchema(closeSessionArgs{}), MinScope: "nexus:operator", Handler: handleCloseSession},
+			{Name: "nexus.sessions.grant_delegation", Description: "Grant a subject permission to act on a session", Schema: mustSchema(grantSessionDelegationArgs{}), MinScope: "nexus:admin", Handler: handleGrantSessionDelegation},
 			{Name: "nexus.channels.restart", Description: "Restart a configured channel adapter", Schema: mustSchema(restartChannelArgs{}), MinScope: "nexus:operator", Handler: handleRestartChannel},
+			{Name: "nexus.identity.create_subject", Description: "Create or update a tenant-scoped subject", Schema: mustSchema(createSubjectArgs{}), MinScope: "nexus:admin", Handler: handleCreateSubject},
+			{Name: "nexus.identity.bind_external", Description: "Bind an external provider identity to a tenant-scoped subject", Schema: mustSchema(bindExternalIdentityArgs{}), MinScope: "nexus:admin", Handler: handleBindExternalIdentity},
 			{Name: "nexus.tokens.issue", Description: "Issue a bearer token", Schema: mustSchema(issueTokenArgs{}), MinScope: "nexus:admin", Handler: handleIssueToken},
 			{Name: "nexus.tokens.revoke", Description: "Revoke a bearer token", Schema: mustSchema(revokeTokenArgs{}), MinScope: "nexus:admin", Handler: handleRevokeToken},
 			{Name: "nexus.policy.set_rule_enabled", Description: "Enable or disable a policy rule", Schema: mustSchema(setPolicyRuleEnabledArgs{}), MinScope: "nexus:admin", Handler: handleSetPolicyRuleEnabled},
@@ -88,7 +93,9 @@ func (e *MCPExporter) GetPrompt(context.Context, string, map[string]any) (*proto
 func (e *MCPExporter) ListResources(context.Context) ([]protocol.Resource, error) {
 	return []protocol.Resource{
 		{URI: "nexus://gateway/health", Name: "gateway.health", MIMEType: "application/json"},
+		{URI: "nexus://tenants/list", Name: "tenants.list", MIMEType: "application/json"},
 		{URI: "nexus://nodes/enrolled", Name: "nodes.enrolled", MIMEType: "application/json"},
+		{URI: "nexus://nodes/detail", Name: "nodes.detail", MIMEType: "application/json"},
 		{URI: "nexus://nodes/pending", Name: "nodes.pending", MIMEType: "application/json"},
 		{URI: "nexus://channels/status", Name: "channels.status", MIMEType: "application/json"},
 		{URI: "nexus://sessions/active", Name: "sessions.active", MIMEType: "application/json"},
@@ -114,6 +121,11 @@ func (e *MCPExporter) ReadResource(ctx context.Context, uri string) (*protocol.R
 	if tenantID == "" {
 		tenantID = tenantFromPrincipal(principal)
 	}
+	authorizedTenantID, err := authorizeTenant(principal, tenantID)
+	if err != nil {
+		return nil, normalizeAdminError(err)
+	}
+	tenantID = authorizedTenantID
 	switch parsed.Host + parsed.Path {
 	case "gateway/health":
 		result, err := e.service.Health(ctx, HealthRequest{AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID)})
@@ -121,8 +133,20 @@ func (e *MCPExporter) ReadResource(ctx context.Context, uri string) (*protocol.R
 			return nil, normalizeAdminError(err)
 		}
 		return jsonResource(uri, result)
+	case "tenants/list":
+		result, err := e.service.ListTenants(ctx, ListTenantsRequest{AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID), Page: pageRequestFromQuery(parsed.Query())})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
 	case "nodes/enrolled":
 		result, err := e.service.ListNodes(ctx, ListNodesRequest{AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID), Page: pageRequestFromQuery(parsed.Query())})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "nodes/detail":
+		result, err := e.service.GetNode(ctx, GetNodeRequest{AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID), NodeID: strings.TrimSpace(parsed.Query().Get("node_id"))})
 		if err != nil {
 			return nil, normalizeAdminError(err)
 		}

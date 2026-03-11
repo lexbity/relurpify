@@ -209,21 +209,66 @@ func TestGatewayPrincipalResolverAcceptsIssuedToken(t *testing.T) {
 	store, err := db.NewSQLiteAdminTokenStore(filepath.Join(t.TempDir(), "admin_tokens.db"))
 	require.NoError(t, err)
 	defer store.Close()
-
-	require.NoError(t, store.CreateToken(context.Background(), core.AdminTokenRecord{
-		ID:        "tok-1",
-		Name:      "subject-1",
-		SubjectID: "subject-1",
-		TokenHash: nexusadmin.HashToken("issued-token"),
-		Scopes:    []string{"nexus:admin"},
-		IssuedAt:  time.Now().UTC(),
+	identityStore, err := db.NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
+	require.NoError(t, err)
+	defer identityStore.Close()
+	require.NoError(t, identityStore.UpsertTenant(context.Background(), core.TenantRecord{
+		ID:        "tenant-issued",
+		CreatedAt: time.Now().UTC(),
+	}))
+	require.NoError(t, identityStore.UpsertSubject(context.Background(), core.SubjectRecord{
+		TenantID:  "tenant-issued",
+		Kind:      core.SubjectKindUser,
+		ID:        "subject-1",
+		CreatedAt: time.Now().UTC(),
 	}))
 
-	resolver := gatewayPrincipalResolver(nexuscfg.GatewayAuthConfig{Enabled: true}, store)
+	require.NoError(t, store.CreateToken(context.Background(), core.AdminTokenRecord{
+		ID:          "tok-1",
+		Name:        "subject-1",
+		TenantID:    "tenant-issued",
+		SubjectKind: core.SubjectKindUser,
+		SubjectID:   "subject-1",
+		TokenHash:   nexusadmin.HashToken("issued-token"),
+		Scopes:      []string{"nexus:admin"},
+		IssuedAt:    time.Now().UTC(),
+	}))
+
+	resolver := gatewayPrincipalResolver(nexuscfg.GatewayAuthConfig{Enabled: true}, store, identityStore)
 	principal, err := resolver(context.Background(), "issued-token")
 	require.NoError(t, err)
 	require.Equal(t, "admin", principal.Role)
 	require.NotNil(t, principal.Principal)
 	require.Equal(t, "subject-1", principal.Principal.Subject.ID)
+	require.Equal(t, "tenant-issued", principal.Principal.TenantID)
+	require.Equal(t, core.SubjectKindUser, principal.Principal.Subject.Kind)
 	require.Equal(t, []string{"nexus:admin"}, principal.Principal.Scopes)
+}
+
+func TestGatewayPrincipalResolverRejectsIssuedTokenWithoutStoredSubject(t *testing.T) {
+	store, err := db.NewSQLiteAdminTokenStore(filepath.Join(t.TempDir(), "admin_tokens.db"))
+	require.NoError(t, err)
+	defer store.Close()
+	identityStore, err := db.NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
+	require.NoError(t, err)
+	defer identityStore.Close()
+	require.NoError(t, identityStore.UpsertTenant(context.Background(), core.TenantRecord{
+		ID:        "tenant-issued",
+		CreatedAt: time.Now().UTC(),
+	}))
+
+	require.NoError(t, store.CreateToken(context.Background(), core.AdminTokenRecord{
+		ID:          "tok-1",
+		Name:        "subject-1",
+		TenantID:    "tenant-issued",
+		SubjectKind: core.SubjectKindUser,
+		SubjectID:   "subject-1",
+		TokenHash:   nexusadmin.HashToken("issued-token"),
+		Scopes:      []string{"nexus:admin"},
+		IssuedAt:    time.Now().UTC(),
+	}))
+
+	resolver := gatewayPrincipalResolver(nexuscfg.GatewayAuthConfig{Enabled: true}, store, identityStore)
+	_, err = resolver(context.Background(), "issued-token")
+	require.ErrorContains(t, err, "token subject")
 }

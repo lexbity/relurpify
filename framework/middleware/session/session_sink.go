@@ -19,7 +19,7 @@ type SessionSink struct {
 	MaxUnresolvedExternalSessions int
 }
 
-const unresolvedExternalTenantID = "__relurpify_unresolved_external__"
+const unresolvedExternalTenantID = core.RestrictedExternalTenantID
 const defaultMaxUnresolvedExternalSessions = 256
 
 func (s *SessionSink) Emit(ctx context.Context, ev core.FrameworkEvent) error {
@@ -31,33 +31,38 @@ func (s *SessionSink) Emit(ctx context.Context, ev core.FrameworkEvent) error {
 		partition = s.partition()
 	}
 	ev.Partition = partition
+
+	var inbound channel.InboundMessage
+	resolution := identity.Resolution{}
+	if ev.Type == core.FrameworkEventMessageInbound {
+		if err := json.Unmarshal(ev.Payload, &inbound); err == nil {
+			if s.Resolver != nil {
+				resolved, err := s.Resolver.ResolveInbound(ctx, inbound)
+				if err != nil {
+					return err
+				}
+				resolution = resolved
+			}
+			if (resolution.Unbound() || resolution.State == identity.ResolutionStateUnknown) && isExternalSessionInbound(inbound, resolution) {
+				resolution.TenantID = unresolvedExternalTenantID
+			}
+			if resolution.TenantID != "" {
+				ev.Actor.TenantID = resolution.TenantID
+			}
+		}
+	}
 	if _, err := s.Log.Append(ctx, partition, []core.FrameworkEvent{ev}); err != nil {
 		return err
 	}
 	if ev.Type != core.FrameworkEventMessageInbound || s.Router == nil {
 		return nil
 	}
-	var inbound channel.InboundMessage
-	if err := json.Unmarshal(ev.Payload, &inbound); err != nil {
+	if inbound.Channel == "" && inbound.Conversation.ID == "" && inbound.Sender.ChannelID == "" && inbound.Sender.ResolvedID == "" {
 		return nil
-	}
-	resolution := identity.Resolution{}
-	if s.Resolver != nil {
-		resolved, err := s.Resolver.ResolveInbound(ctx, inbound)
-		if err != nil {
-			return err
-		}
-		resolution = resolved
-	}
-	if !resolution.Resolved && isExternalSessionInbound(inbound, resolution) {
-		resolution.TenantID = unresolvedExternalTenantID
-	}
-	if resolution.TenantID != "" {
-		ev.Actor.TenantID = resolution.TenantID
 	}
 	trustClass := core.TrustClassRemoteDeclared
 	actorID := inbound.Sender.ChannelID
-	if resolution.Resolved {
+	if resolution.Resolved() {
 		trustClass = core.TrustClassRemoteApproved
 		if resolution.Owner.ID != "" {
 			actorID = resolution.Owner.ID

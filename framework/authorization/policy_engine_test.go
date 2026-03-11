@@ -145,6 +145,71 @@ func TestPolicyEngineCompiledSessionRuleMatches(t *testing.T) {
 	assert.Equal(t, "owner-send", dec.Rule.ID)
 }
 
+func TestPolicyEngineRestrictedExternalSessionRequiresApprovalEvenWhenDefaultAllow(t *testing.T) {
+	pm := minimalPermissionManager(t)
+	pm.SetDefaultPolicy(core.AgentPermissionAllow)
+	engine := &ManifestPolicyEngine{agentID: "test", manager: pm}
+
+	dec, err := engine.Evaluate(context.Background(), core.PolicyRequest{
+		Target:             core.PolicyTargetSession,
+		SessionOperation:   core.SessionOperationSend,
+		TrustClass:         core.TrustClassRemoteDeclared,
+		HasExternalBinding: true,
+		RestrictedExternal: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "require_approval", dec.Effect)
+}
+
+func TestPolicyEngineResolvedExternalSessionCanUseDefaultAllow(t *testing.T) {
+	pm := minimalPermissionManager(t)
+	pm.SetDefaultPolicy(core.AgentPermissionAllow)
+	engine := &ManifestPolicyEngine{agentID: "test", manager: pm}
+
+	dec, err := engine.Evaluate(context.Background(), core.PolicyRequest{
+		Target:             core.PolicyTargetSession,
+		SessionOperation:   core.SessionOperationSend,
+		TrustClass:         core.TrustClassRemoteApproved,
+		IsOwner:            true,
+		HasExternalBinding: true,
+		ResolvedExternal:   true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "allow", dec.Effect)
+}
+
+func TestPolicyEngineSessionFallbackDeniesNonOwnerWithoutDelegationEvenWhenDefaultAllow(t *testing.T) {
+	pm := minimalPermissionManager(t)
+	pm.SetDefaultPolicy(core.AgentPermissionAllow)
+	engine := &ManifestPolicyEngine{agentID: "test", manager: pm}
+
+	dec, err := engine.Evaluate(context.Background(), core.PolicyRequest{
+		Target:           core.PolicyTargetSession,
+		SessionOperation: core.SessionOperationSend,
+		TrustClass:       core.TrustClassRemoteApproved,
+		IsOwner:          false,
+		IsDelegated:      false,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "deny", dec.Effect)
+}
+
+func TestPolicyEngineSessionFallbackAllowsDelegatedActorWhenDefaultAllow(t *testing.T) {
+	pm := minimalPermissionManager(t)
+	pm.SetDefaultPolicy(core.AgentPermissionAllow)
+	engine := &ManifestPolicyEngine{agentID: "test", manager: pm}
+
+	dec, err := engine.Evaluate(context.Background(), core.PolicyRequest{
+		Target:           core.PolicyTargetSession,
+		SessionOperation: core.SessionOperationSend,
+		TrustClass:       core.TrustClassRemoteApproved,
+		IsOwner:          false,
+		IsDelegated:      true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "allow", dec.Effect)
+}
+
 func TestPolicyEngineProviderFallbackPreservesRemoteApprovalDefault(t *testing.T) {
 	pm := minimalPermissionManager(t)
 	engine := &ManifestPolicyEngine{agentID: "test", manager: pm}

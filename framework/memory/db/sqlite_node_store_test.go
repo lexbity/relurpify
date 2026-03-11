@@ -103,6 +103,11 @@ func TestSQLiteNodeStorePersistsTenantOwnerAndCredentialMetadata(t *testing.T) {
 		TrustClass: core.TrustClassWorkspaceTrusted,
 		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-1"},
 		PairedAt:   time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
+		ApprovedCapabilities: []core.CapabilityDescriptor{{
+			ID:   "camera.capture",
+			Name: "camera.capture",
+			Kind: core.CapabilityKindTool,
+		}},
 	}))
 	require.NoError(t, store.SaveCredential(context.Background(), core.NodeCredential{
 		DeviceID:  "node-1",
@@ -117,6 +122,8 @@ func TestSQLiteNodeStorePersistsTenantOwnerAndCredentialMetadata(t *testing.T) {
 	require.NotNil(t, nodeDesc)
 	require.Equal(t, "tenant-1", nodeDesc.TenantID)
 	require.Equal(t, core.SubjectKindNode, nodeDesc.Owner.Kind)
+	require.Len(t, nodeDesc.ApprovedCapabilities, 1)
+	require.Equal(t, "camera.capture", nodeDesc.ApprovedCapabilities[0].ID)
 
 	cred, err := store.GetCredential(context.Background(), "node-1")
 	require.NoError(t, err)

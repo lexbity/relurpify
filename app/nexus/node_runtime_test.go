@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
 	nexusserver "github.com/lexcodex/relurpify/app/nexus/server"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 	"github.com/lexcodex/relurpify/framework/middleware/session"
@@ -55,6 +57,12 @@ func (s runtimeSessionStore) GetBoundaryBySessionID(_ context.Context, sessionID
 }
 func (s runtimeSessionStore) UpsertBoundary(context.Context, string, *core.SessionBoundary) error {
 	return nil
+}
+func (s runtimeSessionStore) UpsertDelegation(context.Context, core.SessionDelegationRecord) error {
+	return nil
+}
+func (s runtimeSessionStore) ListDelegationsBySessionID(context.Context, string) ([]core.SessionDelegationRecord, error) {
+	return nil, nil
 }
 func (s runtimeSessionStore) ListBoundaries(context.Context, string) ([]core.SessionBoundary, error) {
 	return nil, nil
@@ -191,4 +199,107 @@ func TestInvokeAuthorizedNodeCapabilityRequiresSessionOwnership(t *testing.T) {
 		Actor:         core.EventActor{Kind: "agent", ID: "user-2", TenantID: "tenant-1", SubjectKind: core.SubjectKindUser},
 	}, "sess-1", "camera.capture", map[string]any{"quality": "high"})
 	require.ErrorIs(t, err, session.ErrSessionBoundaryViolation)
+}
+
+func TestConnectedNodeDescriptorUsesEnrollmentAndStoredNodeState(t *testing.T) {
+	store, err := db.NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	nodeStore, err := db.NewSQLiteNodeStore(filepath.Join(t.TempDir(), "nodes.db"))
+	require.NoError(t, err)
+	defer nodeStore.Close()
+
+	now := time.Now().UTC()
+	require.NoError(t, store.UpsertNodeEnrollment(context.Background(), core.NodeEnrollment{
+		TenantID:   "tenant-1",
+		NodeID:     "node-1",
+		TrustClass: core.TrustClassRemoteApproved,
+		Owner: core.SubjectRef{
+			TenantID: "tenant-1",
+			Kind:     core.SubjectKindNode,
+			ID:       "node-1",
+		},
+		PublicKey:  []byte("pk"),
+		PairedAt:   now,
+		AuthMethod: core.AuthMethodNodeChallenge,
+	}))
+	require.NoError(t, nodeStore.UpsertNode(context.Background(), core.NodeDescriptor{
+		ID:         "node-1",
+		TenantID:   "tenant-1",
+		Name:       "Stored Node",
+		Platform:   core.NodePlatformLinux,
+		TrustClass: core.TrustClassWorkspaceTrusted,
+		PairedAt:   now,
+		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-1"},
+		Tags:       map[string]string{"rack": "a1"},
+	}))
+
+	manager := &fwnode.Manager{Store: nodeStore}
+	desc, err := nexusserver.ConnectedNodeDescriptorForTest(context.Background(), manager, store, fwgateway.ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "node", ID: "node-1", TenantID: "tenant-1", SubjectKind: core.SubjectKindNode},
+	}, fwgateway.NodeConnectInfo{
+		NodeID:       "node-1",
+		NodeName:     "Spoofed Name",
+		NodePlatform: string(core.NodePlatformAndroid),
+		TrustClass:   string(core.TrustClassWorkspaceTrusted),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "node-1", desc.ID)
+	require.Equal(t, "tenant-1", desc.TenantID)
+	require.Equal(t, "Stored Node", desc.Name)
+	require.Equal(t, core.NodePlatformLinux, desc.Platform)
+	require.Equal(t, core.TrustClassRemoteApproved, desc.TrustClass)
+	require.Equal(t, "node-1", desc.Owner.ID)
+	require.Equal(t, "a1", desc.Tags["rack"])
+
+	caps := nexusserver.ConnectedNodeCapabilitiesForTest(context.Background(), manager, "node-1")
+	require.Empty(t, caps)
+}
+
+func TestConnectedNodeCapabilitiesComeFromStoredApproval(t *testing.T) {
+	t.Parallel()
+
+	store, err := db.NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	nodeStore, err := db.NewSQLiteNodeStore(filepath.Join(t.TempDir(), "nodes.db"))
+	require.NoError(t, err)
+	defer nodeStore.Close()
+
+	now := time.Now().UTC()
+	require.NoError(t, store.UpsertNodeEnrollment(context.Background(), core.NodeEnrollment{
+		TenantID:   "tenant-1",
+		NodeID:     "node-1",
+		TrustClass: core.TrustClassRemoteApproved,
+		Owner: core.SubjectRef{
+			TenantID: "tenant-1",
+			Kind:     core.SubjectKindNode,
+			ID:       "node-1",
+		},
+		PublicKey:  []byte("pk"),
+		PairedAt:   now,
+		AuthMethod: core.AuthMethodNodeChallenge,
+	}))
+	require.NoError(t, nodeStore.UpsertNode(context.Background(), core.NodeDescriptor{
+		ID:       "node-1",
+		TenantID: "tenant-1",
+		Name:     "Stored Node",
+		Platform: core.NodePlatformLinux,
+		ApprovedCapabilities: []core.CapabilityDescriptor{{
+			ID:   "camera.capture",
+			Name: "camera.capture",
+			Kind: core.CapabilityKindTool,
+		}},
+		TrustClass: core.TrustClassRemoteApproved,
+		PairedAt:   now,
+		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-1"},
+	}))
+
+	manager := &fwnode.Manager{Store: nodeStore}
+	caps := nexusserver.ConnectedNodeCapabilitiesForTest(context.Background(), manager, "node-1")
+	require.Len(t, caps, 1)
+	require.Equal(t, "camera.capture", caps[0].ID)
 }

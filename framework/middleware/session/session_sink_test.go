@@ -117,6 +117,11 @@ func TestSessionSinkResolvesExternalIdentityBeforeRouting(t *testing.T) {
 	require.Equal(t, core.TrustClassRemoteApproved, boundary.TrustClass)
 	require.NotNil(t, boundary.Binding)
 	require.Equal(t, core.ExternalProviderDiscord, boundary.Binding.Provider)
+
+	events, err := log.Read(context.Background(), "local", 0, 10, false)
+	require.NoError(t, err)
+	require.Len(t, events, 3)
+	require.Equal(t, "tenant-1", events[0].Actor.TenantID)
 }
 
 func TestSessionSinkLeavesUnknownIdentityUnbound(t *testing.T) {
@@ -161,6 +166,11 @@ func TestSessionSinkLeavesUnknownIdentityUnbound(t *testing.T) {
 	require.Equal(t, "__relurpify_unresolved_external__", boundary.TenantID)
 	require.Empty(t, boundary.Owner.ID)
 	require.Equal(t, core.TrustClassRemoteDeclared, boundary.TrustClass)
+
+	events, err := log.Read(context.Background(), "local", 0, 10, false)
+	require.NoError(t, err)
+	require.Len(t, events, 3)
+	require.Equal(t, "__relurpify_unresolved_external__", events[0].Actor.TenantID)
 }
 
 func TestSessionSinkLeavesExternalIdentityWithoutResolverInUnresolvedTenant(t *testing.T) {

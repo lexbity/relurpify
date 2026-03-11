@@ -61,9 +61,21 @@ func (e *ManifestPolicyEngine) fallbackDecision(req core.PolicyRequest) core.Pol
 	switch req.Target {
 	case core.PolicyTargetProvider:
 		return e.providerFallbackDecision(req)
+	case core.PolicyTargetSession:
+		return e.sessionFallbackDecision(req)
 	default:
 		return e.capabilityFallbackDecision(req)
 	}
+}
+
+func (e *ManifestPolicyEngine) sessionFallbackDecision(req core.PolicyRequest) core.PolicyDecision {
+	if req.RestrictedExternal {
+		return core.PolicyDecisionRequireApproval(nil)
+	}
+	if !req.IsOwner && !req.IsDelegated {
+		return core.PolicyDecisionDeny("session access requires ownership or explicit delegation")
+	}
+	return e.capabilityFallbackDecision(req)
 }
 
 func (e *ManifestPolicyEngine) capabilityFallbackDecision(req core.PolicyRequest) core.PolicyDecision {

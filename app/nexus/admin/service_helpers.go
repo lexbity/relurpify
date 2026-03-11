@@ -29,6 +29,52 @@ func defaultTenant(tenantID string) string {
 	return tenantID
 }
 
+func authorizeTenant(principal core.AuthenticatedPrincipal, requestedTenantID string) (string, error) {
+	principalTenantID := strings.TrimSpace(principal.TenantID)
+	requestedTenantID = strings.TrimSpace(requestedTenantID)
+	if requestedTenantID == "" {
+		if principalTenantID != "" {
+			return principalTenantID, nil
+		}
+		return defaultTenant(""), nil
+	}
+	if principalTenantID == "" || strings.EqualFold(requestedTenantID, principalTenantID) || hasGlobalTenantScope(principal) {
+		return requestedTenantID, nil
+	}
+	return "", AdminError{
+		Code:    AdminErrorPolicyDenied,
+		Message: "cross-tenant access denied",
+		Detail: map[string]any{
+			"requested_tenant_id": requestedTenantID,
+			"principal_tenant_id": principalTenantID,
+		},
+	}
+}
+
+func hasGlobalTenantScope(principal core.AuthenticatedPrincipal) bool {
+	for _, scope := range principal.Scopes {
+		switch strings.ToLower(strings.TrimSpace(scope)) {
+		case "nexus:admin:global", "gateway:admin:global", "admin:global":
+			return true
+		}
+	}
+	return false
+}
+
+func filterEventsByTenant(events []core.FrameworkEvent, tenantID string) []core.FrameworkEvent {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return nil
+	}
+	filtered := make([]core.FrameworkEvent, 0, len(events))
+	for _, ev := range events {
+		if strings.EqualFold(strings.TrimSpace(ev.Actor.TenantID), tenantID) {
+			filtered = append(filtered, ev)
+		}
+	}
+	return filtered
+}
+
 func copyEventCounts(in map[string]uint64) map[string]uint64 {
 	out := make(map[string]uint64, len(in))
 	for key, value := range in {

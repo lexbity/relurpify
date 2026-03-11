@@ -71,6 +71,7 @@ func TestGatewayHandshakeIncludesDynamicCapabilities(t *testing.T) {
 	})
 	require.Len(t, response.Capabilities, 1)
 	require.Equal(t, "camera.capture", response.Capabilities[0].ID)
+	require.Equal(t, feedScopeRuntime, response.FeedScope)
 }
 
 func TestGatewayRejectsBadFirstFrame(t *testing.T) {
@@ -215,6 +216,46 @@ func TestValidateAndBindPrincipalFallsBackToResolvedSubjectID(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "agent", principal.Role)
 	require.Equal(t, "svc-1", principal.Actor.ID)
+	require.Equal(t, feedScopeRuntime, principal.FeedScope)
+}
+
+func TestValidateAndBindPrincipalHonorsExplicitRuntimeFeedForAdmin(t *testing.T) {
+	principal, err := validateAndBindPrincipal(connectFrame{Role: "admin", FeedScope: "runtime"}, ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "admin", ID: "admin-a", TenantID: "tenant-a"},
+		Principal: &core.AuthenticatedPrincipal{
+			Authenticated: true,
+			Scopes:        []string{"gateway:admin"},
+			Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, feedScopeRuntime, principal.FeedScope)
+}
+
+func TestValidateAndBindPrincipalRejectsUnauthorizedFeedScope(t *testing.T) {
+	_, err := validateAndBindPrincipal(connectFrame{Role: "agent", FeedScope: "tenant_admin"}, ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "agent", ID: "svc-a", TenantID: "tenant-a"},
+		Principal: &core.AuthenticatedPrincipal{
+			Authenticated: true,
+			Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		},
+	})
+	require.ErrorContains(t, err, "requires admin scope")
+}
+
+func TestValidateAndBindPrincipalRejectsGlobalFeedWithoutGlobalScope(t *testing.T) {
+	_, err := validateAndBindPrincipal(connectFrame{Role: "admin", FeedScope: "global_admin"}, ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "admin", ID: "admin-a", TenantID: "tenant-a"},
+		Principal: &core.AuthenticatedPrincipal{
+			Authenticated: true,
+			Scopes:        []string{"gateway:admin"},
+			Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+		},
+	})
+	require.ErrorContains(t, err, "requires global admin scope")
 }
 
 func TestValidateAndBindPrincipalRejectsAuthenticatedPrincipalWithoutActorIdentity(t *testing.T) {
@@ -364,6 +405,31 @@ func TestIsAdminPrincipalRequiresAdminScope(t *testing.T) {
 	}))
 }
 
+func TestConnectionFeedClassification(t *testing.T) {
+	require.Equal(t, feedScopeRuntime, connectionFeed(ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "agent", ID: "svc-1", TenantID: "tenant-a"},
+	}))
+
+	require.Equal(t, feedScopeTenantAdmin, connectionFeed(ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "admin", ID: "admin-a", TenantID: "tenant-a"},
+		Principal: &core.AuthenticatedPrincipal{
+			Authenticated: true,
+			Scopes:        []string{"gateway:admin"},
+		},
+	}))
+
+	require.Equal(t, feedScopeGlobalAdmin, connectionFeed(ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "admin", ID: "admin-a", TenantID: "tenant-a"},
+		Principal: &core.AuthenticatedPrincipal{
+			Authenticated: true,
+			Scopes:        []string{"gateway:admin", "gateway:admin:global"},
+		},
+	}))
+}
+
 func TestDefaultCheckOrigin(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "http://gateway.test", nil)
 	require.NoError(t, err)
@@ -467,7 +533,7 @@ func TestBroadcastEventEvictsFullQueueClient(t *testing.T) {
 		principal: ConnectionPrincipal{
 			Authenticated: true,
 			Actor:         core.EventActor{Kind: "agent", ID: "svc-1", TenantID: "tenant-1"},
-			Principal:     &core.AuthenticatedPrincipal{Authenticated: true, Scopes: []string{"admin"}},
+			Principal:     &core.AuthenticatedPrincipal{Authenticated: true, Scopes: []string{"admin", "admin:global"}},
 		},
 	}
 	for i := 0; i < broadcastQueueDepth; i++ {

@@ -27,5 +27,8 @@
 // ConnectionPrincipal carries the resolved role, EventActor, and optional
 // AuthenticatedPrincipal for an active connection. PrincipalResolver must be
 // set on the Server; the gateway rejects unauthenticated connections.
-// Admin principals receive all events regardless of tenant scope.
+// The gateway exposes three feed scopes:
+//   - runtime feed: session-authorized events only
+//   - tenant admin feed: tenant-wide events
+//   - global admin feed: cross-tenant events
 package gateway

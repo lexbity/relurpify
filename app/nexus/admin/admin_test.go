@@ -86,6 +86,9 @@ func TestApproveAndRejectPairing(t *testing.T) {
 	if nodeDesc == nil || nodeDesc.ID != "device-1" {
 		t.Fatalf("approved node = %+v", nodeDesc)
 	}
+	if nodeDesc.TenantID != "local" || nodeDesc.TrustClass != core.TrustClassRemoteApproved || nodeDesc.Owner.ID != "device-1" {
+		t.Fatalf("approved node metadata = %+v", nodeDesc)
+	}
 	cred, err := nodeStore.GetCredential(ctx, "device-1")
 	if err != nil {
 		t.Fatal(err)
@@ -105,5 +108,19 @@ func TestApproveAndRejectPairing(t *testing.T) {
 	}
 	if enrollment == nil || enrollment.NodeID != "device-1" {
 		t.Fatalf("approved enrollment = %+v", enrollment)
+	}
+	tenant, err := identityStore.GetTenant(ctx, "local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tenant == nil || tenant.ID != "local" {
+		t.Fatalf("approved tenant = %+v", tenant)
+	}
+	subject, err := identityStore.GetSubject(ctx, "local", core.SubjectKindNode, "device-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject == nil || subject.ID != "device-1" {
+		t.Fatalf("approved subject = %+v", subject)
 	}
 }
