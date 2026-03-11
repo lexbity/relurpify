@@ -11,8 +11,8 @@ import (
 
 	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory/db"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	"github.com/stretchr/testify/require"
 )

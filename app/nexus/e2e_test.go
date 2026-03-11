@@ -13,10 +13,11 @@ import (
 
 	"github.com/gorilla/websocket"
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
 	nexusserver "github.com/lexcodex/relurpify/app/nexus/server"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/identity"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	memdb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	mcpprotocol "github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
@@ -30,12 +31,12 @@ type nexusHarness struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	server        *httptest.Server
-	eventLog      *db.SQLiteEventLog
-	sessionStore  *db.SQLiteSessionStore
-	identityStore *db.SQLiteIdentityStore
-	nodeStore     *db.SQLiteNodeStore
-	tokenStore    *db.SQLiteAdminTokenStore
-	policyStore   *db.FilePolicyRuleStore
+	eventLog      *nexusdb.SQLiteEventLog
+	sessionStore  *nexusdb.SQLiteSessionStore
+	identityStore *nexusdb.SQLiteIdentityStore
+	nodeStore     *nexusdb.SQLiteNodeStore
+	tokenStore    *nexusdb.SQLiteAdminTokenStore
+	policyStore   *memdb.FilePolicyRuleStore
 	policyFile    string
 	adapter       *channel.TestChannelAdapter
 }
@@ -44,18 +45,18 @@ func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
 	t.Helper()
 
 	dir := t.TempDir()
-	eventLog, err := db.NewSQLiteEventLog(filepath.Join(dir, "events.db"))
+	eventLog, err := nexusdb.NewSQLiteEventLog(filepath.Join(dir, "events.db"))
 	require.NoError(t, err)
-	sessionStore, err := db.NewSQLiteSessionStore(filepath.Join(dir, "sessions.db"))
+	sessionStore, err := nexusdb.NewSQLiteSessionStore(filepath.Join(dir, "sessions.db"))
 	require.NoError(t, err)
-	identityStore, err := db.NewSQLiteIdentityStore(filepath.Join(dir, "identities.db"))
+	identityStore, err := nexusdb.NewSQLiteIdentityStore(filepath.Join(dir, "identities.db"))
 	require.NoError(t, err)
-	nodeStore, err := db.NewSQLiteNodeStore(filepath.Join(dir, "nodes.db"))
+	nodeStore, err := nexusdb.NewSQLiteNodeStore(filepath.Join(dir, "nodes.db"))
 	require.NoError(t, err)
-	tokenStore, err := db.NewSQLiteAdminTokenStore(filepath.Join(dir, "admin_tokens.db"))
+	tokenStore, err := nexusdb.NewSQLiteAdminTokenStore(filepath.Join(dir, "admin_tokens.db"))
 	require.NoError(t, err)
 	policyFile := filepath.Join(dir, "policy_rules.yaml")
-	policyStore, err := db.NewFilePolicyRuleStore(policyFile)
+	policyStore, err := memdb.NewFilePolicyRuleStore(policyFile)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

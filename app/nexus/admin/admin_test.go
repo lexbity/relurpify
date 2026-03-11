@@ -7,9 +7,9 @@ import (
 	"time"
 
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	"github.com/lexcodex/relurpify/app/nexus/db"
 	relconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/node"
 	"gopkg.in/yaml.v3"
 )

@@ -7,11 +7,11 @@ import (
 	"time"
 
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/app/nexus/gateway"
 	relconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/event"
-	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 type Snapshot struct {
@@ -143,4 +143,3 @@ func (s Snapshot) Summary() string {
 		s.PendingPairingCount,
 	)
 }
-

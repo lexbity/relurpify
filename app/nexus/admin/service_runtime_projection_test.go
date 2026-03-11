@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/stretchr/testify/require"
 )
 

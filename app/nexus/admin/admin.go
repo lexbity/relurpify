@@ -6,9 +6,9 @@ import (
 
 	nexusbootstrap "github.com/lexcodex/relurpify/app/nexus/bootstrap"
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory/db"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 )
 

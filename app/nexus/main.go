@@ -17,6 +17,7 @@ import (
 	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
 	nexusbootstrap "github.com/lexcodex/relurpify/app/nexus/bootstrap"
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/app/nexus/gateway"
 	nexusserver "github.com/lexcodex/relurpify/app/nexus/server"
 	nexusstatus "github.com/lexcodex/relurpify/app/nexus/status"
@@ -24,7 +25,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/event"
 	"github.com/lexcodex/relurpify/framework/identity"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	memdb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	mcpprotocol "github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
@@ -95,7 +96,7 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 	if err != nil {
 		return err
 	}
-	eventLog, err := db.NewSQLiteEventLog(paths.EventsFile())
+	eventLog, err := nexusdb.NewSQLiteEventLog(paths.EventsFile())
 	if err != nil {
 		return err
 	}
@@ -114,27 +115,27 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 		return err
 	}
 
-	sessionStore, err := db.NewSQLiteSessionStore(paths.SessionStoreFile())
+	sessionStore, err := nexusdb.NewSQLiteSessionStore(paths.SessionStoreFile())
 	if err != nil {
 		return err
 	}
 	defer sessionStore.Close()
-	identityStore, err := db.NewSQLiteIdentityStore(paths.IdentityStoreFile())
+	identityStore, err := nexusdb.NewSQLiteIdentityStore(paths.IdentityStoreFile())
 	if err != nil {
 		return err
 	}
 	defer identityStore.Close()
-	nodeStore, err := db.NewSQLiteNodeStore(paths.NodesFile())
+	nodeStore, err := nexusdb.NewSQLiteNodeStore(paths.NodesFile())
 	if err != nil {
 		return err
 	}
 	defer nodeStore.Close()
-	tokenStore, err := db.NewSQLiteAdminTokenStore(paths.AdminTokenStoreFile())
+	tokenStore, err := nexusdb.NewSQLiteAdminTokenStore(paths.AdminTokenStoreFile())
 	if err != nil {
 		return err
 	}
 	defer tokenStore.Close()
-	policyStore, err := db.NewFilePolicyRuleStore(paths.PolicyRulesFile())
+	policyStore, err := memdb.NewFilePolicyRuleStore(paths.PolicyRulesFile())
 	if err != nil {
 		return err
 	}
@@ -430,32 +431,32 @@ func newAdminMCPCmd(workspace, configPath *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			eventLog, err := db.NewSQLiteEventLog(paths.EventsFile())
+			eventLog, err := nexusdb.NewSQLiteEventLog(paths.EventsFile())
 			if err != nil {
 				return err
 			}
 			defer eventLog.Close()
-			sessionStore, err := db.NewSQLiteSessionStore(paths.SessionStoreFile())
+			sessionStore, err := nexusdb.NewSQLiteSessionStore(paths.SessionStoreFile())
 			if err != nil {
 				return err
 			}
 			defer sessionStore.Close()
-			identityStore, err := db.NewSQLiteIdentityStore(paths.IdentityStoreFile())
+			identityStore, err := nexusdb.NewSQLiteIdentityStore(paths.IdentityStoreFile())
 			if err != nil {
 				return err
 			}
 			defer identityStore.Close()
-			nodeStore, err := db.NewSQLiteNodeStore(paths.NodesFile())
+			nodeStore, err := nexusdb.NewSQLiteNodeStore(paths.NodesFile())
 			if err != nil {
 				return err
 			}
 			defer nodeStore.Close()
-			tokenStore, err := db.NewSQLiteAdminTokenStore(paths.AdminTokenStoreFile())
+			tokenStore, err := nexusdb.NewSQLiteAdminTokenStore(paths.AdminTokenStoreFile())
 			if err != nil {
 				return err
 			}
 			defer tokenStore.Close()
-			policyStore, err := db.NewFilePolicyRuleStore(paths.PolicyRulesFile())
+			policyStore, err := memdb.NewFilePolicyRuleStore(paths.PolicyRulesFile())
 			if err != nil {
 				return err
 			}
@@ -570,7 +571,7 @@ func newNodePairCmd(workspace, configPath *string) *cobra.Command {
 			}
 			defer store.Close()
 			defer logStore.Close()
-			identityStore, err := db.NewSQLiteIdentityStore(paths.IdentityStoreFile())
+			identityStore, err := nexusdb.NewSQLiteIdentityStore(paths.IdentityStoreFile())
 			if err != nil {
 				return err
 			}
