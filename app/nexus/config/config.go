@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -43,6 +45,42 @@ type GatewayLogConfig struct {
 type NodesConfig struct {
 	AutoApproveLocal bool          `yaml:"auto_approve_local,omitempty"`
 	PairingCodeTTL   time.Duration `yaml:"pairing_code_ttl,omitempty"`
+}
+
+// SecurityWarnings returns operator-visible warnings about the current config.
+func (cfg Config) SecurityWarnings(pendingPairings int) []string {
+	var warnings []string
+	if bind := strings.TrimSpace(cfg.Gateway.Bind); bind != "" && !IsLoopbackBind(bind) {
+		warnings = append(warnings, fmt.Sprintf("Gateway bind %q is not loopback-only.", bind))
+	}
+	if cfg.Nodes.AutoApproveLocal {
+		warnings = append(warnings, "Local node auto-approval is enabled.")
+	}
+	if pendingPairings > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d node pairing request(s) are pending approval.", pendingPairings))
+	}
+	if len(cfg.Channels) == 0 {
+		warnings = append(warnings, "No channels are configured; gateway surface may be incomplete.")
+	}
+	return warnings
+}
+
+// IsLoopbackBind reports whether bind address is loopback-only (safe for local dev).
+func IsLoopbackBind(bind string) bool {
+	switch {
+	case bind == "":
+		return true
+	case strings.HasPrefix(bind, ":"):
+		return true
+	case strings.HasPrefix(bind, "127.0.0.1:"):
+		return true
+	case strings.HasPrefix(bind, "localhost:"):
+		return true
+	case strings.HasPrefix(bind, "[::1]:"):
+		return true
+	default:
+		return false
+	}
 }
 
 func Load(path string) (Config, error) {

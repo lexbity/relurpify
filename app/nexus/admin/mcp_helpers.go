@@ -60,6 +60,10 @@ func requestEnvelope(principal core.AuthenticatedPrincipal, version, tenantID st
 }
 
 func structuredResult(v any) (*protocol.CallToolResult, error) {
+	// Fast path: already a map — no round-trip needed.
+	if m, ok := v.(map[string]any); ok {
+		return &protocol.CallToolResult{StructuredContent: m}, nil
+	}
 	data, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -110,21 +114,45 @@ func pageRequestFromQuery(values url.Values) PageRequest {
 	return PageRequest{Cursor: strings.TrimSpace(values.Get("cursor")), Limit: parseInt(values.Get("limit"))}
 }
 
+// scopeRank maps canonical nexus scope names to their rank. Aliases are
+// resolved in normalizeScope before the map is consulted.
+var scopeRank = map[string]int{
+	"nexus:observer": 1,
+	"nexus:operator": 2,
+	"nexus:admin":    3,
+}
+
+// normalizeScope maps well-known scope aliases to their canonical form.
+// It allocates only when the input needs trimming/lowering, so the common
+// case (already-normalized scopes stored at principal creation) is zero-alloc.
+func normalizeScope(s string) string {
+	switch s {
+	case "nexus:observer", "nexus:operator", "nexus:admin":
+		return s
+	case "gateway:admin", "admin":
+		return "nexus:admin"
+	case "operator":
+		return "nexus:operator"
+	}
+	// Only pay for lowercase+trim when the fast-path didn't match.
+	normalized := strings.ToLower(strings.TrimSpace(s))
+	switch normalized {
+	case "gateway:admin", "admin":
+		return "nexus:admin"
+	case "operator":
+		return "nexus:operator"
+	default:
+		return normalized
+	}
+}
+
 func hasScope(principal core.AuthenticatedPrincipal, minimum string) bool {
 	if minimum == "" {
 		return true
 	}
-	order := map[string]int{"nexus:observer": 1, "nexus:operator": 2, "nexus:admin": 3}
-	minRank := order[strings.ToLower(minimum)]
+	minRank := scopeRank[strings.ToLower(minimum)]
 	for _, scope := range principal.Scopes {
-		scope = strings.ToLower(strings.TrimSpace(scope))
-		switch scope {
-		case "gateway:admin", "admin":
-			scope = "nexus:admin"
-		case "operator":
-			scope = "nexus:operator"
-		}
-		if order[scope] >= minRank {
+		if scopeRank[normalizeScope(scope)] >= minRank {
 			return true
 		}
 	}

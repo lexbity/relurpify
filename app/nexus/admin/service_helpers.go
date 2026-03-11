@@ -2,7 +2,7 @@ package admin
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -39,7 +39,7 @@ func copyEventCounts(in map[string]uint64) map[string]uint64 {
 
 func filterNodesByTenant(nodes []core.NodeDescriptor, tenantID string) []core.NodeDescriptor {
 	if strings.TrimSpace(tenantID) == "" {
-		return append([]core.NodeDescriptor(nil), nodes...)
+		return nodes // already a fresh slice from the store; no copy needed
 	}
 	out := make([]core.NodeDescriptor, 0, len(nodes))
 	for _, node := range nodes {
@@ -73,6 +73,9 @@ func pageResult(total int) PageResult {
 	return PageResult{NextCursor: "", Total: total}
 }
 
+// decodeCursor decodes a pagination cursor into the last-seen sequence number.
+// Cursors are base64(decimal seq) — a deliberately simple format that avoids
+// a JSON round-trip on every paginated request.
 func decodeCursor(cursor string) (uint64, error) {
 	if strings.TrimSpace(cursor) == "" {
 		return 0, nil
@@ -81,21 +84,15 @@ func decodeCursor(cursor string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	var payload struct {
-		After uint64 `json:"after"`
-	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return 0, err
-	}
-	return payload.After, nil
+	return strconv.ParseUint(string(raw), 10, 64)
 }
 
 func nextCursor(events []core.FrameworkEvent) string {
 	if len(events) == 0 {
 		return ""
 	}
-	payload, _ := json.Marshal(map[string]uint64{"after": events[len(events)-1].Seq})
-	return base64.RawURLEncoding.EncodeToString(payload)
+	seq := events[len(events)-1].Seq
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatUint(seq, 10)))
 }
 
 func invalidArgument(message string, detail map[string]any) error {

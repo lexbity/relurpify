@@ -12,10 +12,11 @@ import (
 
 // ContextManager orchestrates context items within a budget.
 type ContextManager struct {
-	mu       sync.RWMutex
-	budget   *ContextBudget
-	items    []ContextItem
-	strategy PruningStrategy
+	mu            sync.RWMutex
+	budget        *ContextBudget
+	items         []ContextItem
+	strategy      PruningStrategy
+	filePathIndex map[string]int // path → index into items; rebuilt after pruning/compression
 }
 
 // PruningStrategy defines selection rules for compression/pruning.
@@ -27,9 +28,10 @@ type PruningStrategy interface {
 // NewContextManager builds a manager with the default strategy.
 func NewContextManager(budget *ContextBudget) *ContextManager {
 	return &ContextManager{
-		budget:   budget,
-		items:    make([]ContextItem, 0),
-		strategy: NewRelevanceBasedStrategy(),
+		budget:        budget,
+		items:         make([]ContextItem, 0),
+		strategy:      NewRelevanceBasedStrategy(),
+		filePathIndex: make(map[string]int),
 	}
 }
 
@@ -58,16 +60,10 @@ func (cm *ContextManager) UpsertFileItem(item *core.FileContextItem) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	index := -1
 	existingTokens := 0
-	for i, existing := range cm.items {
-		file, ok := existing.(*core.FileContextItem)
-		if !ok || file.Path != item.Path {
-			continue
-		}
-		index = i
-		existingTokens = file.TokenCount()
-		break
+	index, exists := cm.filePathIndex[item.Path]
+	if exists {
+		existingTokens = cm.items[index].TokenCount()
 	}
 
 	delta := item.TokenCount() - existingTokens
@@ -75,11 +71,14 @@ func (cm *ContextManager) UpsertFileItem(item *core.FileContextItem) error {
 		if err := cm.makeSpaceLocked(delta); err != nil {
 			return fmt.Errorf("cannot upsert file item: %w", err)
 		}
+		// Pruning may have shifted the index; look it up again.
+		index, exists = cm.filePathIndex[item.Path]
 	}
 
-	if index >= 0 {
+	if exists {
 		cm.items[index] = item
 	} else {
+		cm.filePathIndex[item.Path] = len(cm.items)
 		cm.items = append(cm.items, item)
 	}
 	cm.updateBudgetLocked()
@@ -135,6 +134,7 @@ func (cm *ContextManager) compressItemsLocked(targetTokens int) error {
 		return fmt.Errorf("compression freed only %d tokens, needed %d", freed, targetTokens)
 	}
 	cm.replaceItemsLocked(replacements)
+	cm.rebuildFilePathIndexLocked()
 	cm.updateBudgetLocked()
 	return nil
 }
@@ -160,6 +160,7 @@ func (cm *ContextManager) pruneItemsLocked(targetTokens int) error {
 		}
 	}
 	cm.items = filtered
+	cm.rebuildFilePathIndexLocked()
 	cm.updateBudgetLocked()
 	return nil
 }
@@ -204,6 +205,7 @@ func (cm *ContextManager) Clear() {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	cm.items = make([]ContextItem, 0)
+	cm.filePathIndex = make(map[string]int)
 	cm.updateBudgetLocked()
 }
 
@@ -246,6 +248,18 @@ func (cm *ContextManager) updateBudgetLocked() {
 		usage.ContextUsagePercent = float64(total) / float64(cm.budget.AvailableForContext)
 	}
 	cm.budget.SetCurrentUsage(usage)
+}
+
+// rebuildFilePathIndexLocked reconstructs filePathIndex from the current items slice.
+// Called after pruning or compression, which can remove or reorder file items.
+// Must be called with cm.mu held for write.
+func (cm *ContextManager) rebuildFilePathIndexLocked() {
+	clear(cm.filePathIndex)
+	for i, item := range cm.items {
+		if f, ok := item.(*core.FileContextItem); ok {
+			cm.filePathIndex[f.Path] = i
+		}
+	}
 }
 
 func (cm *ContextManager) replaceItemsLocked(replacements map[ContextItem]ContextItem) {

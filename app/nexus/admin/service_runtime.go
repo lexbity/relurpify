@@ -6,13 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
 	nexusgateway "github.com/lexcodex/relurpify/app/nexus/gateway"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
@@ -136,7 +134,7 @@ func (s *service) Health(ctx context.Context, req HealthRequest) (HealthResult, 
 		PendingPairings:  pairings.Pairings,
 		Channels:         channelResult.Channels,
 		ActiveSessions:   activeSessions,
-		SecurityWarnings: buildSecurityWarnings(s.cfg.Config, len(pairings.Pairings)),
+		SecurityWarnings: s.cfg.Config.SecurityWarnings(len(pairings.Pairings)),
 		EventCounts:      copyEventCounts(state.EventTypeCounts),
 	}, nil
 }
@@ -205,40 +203,6 @@ func MarshalJSONContent(v any) (string, error) {
 	return string(data), nil
 }
 
-func buildSecurityWarnings(cfg nexuscfg.Config, pendingPairings int) []string {
-	var warnings []string
-	if bind := strings.TrimSpace(cfg.Gateway.Bind); bind != "" && !isLoopbackBind(bind) {
-		warnings = append(warnings, fmt.Sprintf("Gateway bind %q is not loopback-only.", bind))
-	}
-	if cfg.Nodes.AutoApproveLocal {
-		warnings = append(warnings, "Local node auto-approval is enabled.")
-	}
-	if pendingPairings > 0 {
-		warnings = append(warnings, fmt.Sprintf("%d node pairing request(s) are pending approval.", pendingPairings))
-	}
-	if len(cfg.Channels) == 0 {
-		warnings = append(warnings, "No channels are configured; gateway surface may be incomplete.")
-	}
-	return warnings
-}
-
-func isLoopbackBind(bind string) bool {
-	switch {
-	case bind == "":
-		return true
-	case strings.HasPrefix(bind, ":"):
-		return true
-	case strings.HasPrefix(bind, "127.0.0.1:"):
-		return true
-	case strings.HasPrefix(bind, "localhost:"):
-		return true
-	case strings.HasPrefix(bind, "[::1]:"):
-		return true
-	default:
-		return false
-	}
-}
-
 func newAdminToken() (string, string, error) {
 	var tokenBytes [24]byte
 	if _, err := rand.Read(tokenBytes[:]); err != nil {
@@ -251,7 +215,9 @@ func newAdminToken() (string, string, error) {
 	return "tok_" + hex.EncodeToString(idBytes[:]), "nexus_" + hex.EncodeToString(tokenBytes[:]), nil
 }
 
-func hashAdminToken(token string) string {
+// HashToken returns the SHA-256 hex digest of token. Used for secure
+// storage and lookup of bearer tokens without keeping the plaintext.
+func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }

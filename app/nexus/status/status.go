@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
@@ -124,7 +123,7 @@ func Load(ctx context.Context, workspace, configPath string) (Snapshot, error) {
 		LogRetentionDays:     cfg.Gateway.Log.RetentionDays,
 		AutoApproveLocal:     cfg.Nodes.AutoApproveLocal,
 		PairingCodeTTL:       cfg.Nodes.PairingCodeTTL,
-		SecurityWarnings:     buildSecurityWarnings(cfg, len(pendingPairings)),
+		SecurityWarnings:     cfg.SecurityWarnings(len(pendingPairings)),
 		PendingPairings:      pendingInfo,
 	}, nil
 }
@@ -145,36 +144,3 @@ func (s Snapshot) Summary() string {
 	)
 }
 
-func buildSecurityWarnings(cfg nexuscfg.Config, pendingPairings int) []string {
-	var warnings []string
-	if bind := strings.TrimSpace(cfg.Gateway.Bind); bind != "" && !isLoopbackBind(bind) {
-		warnings = append(warnings, fmt.Sprintf("Gateway bind %q is not loopback-only.", bind))
-	}
-	if cfg.Nodes.AutoApproveLocal {
-		warnings = append(warnings, "Local node auto-approval is enabled.")
-	}
-	if pendingPairings > 0 {
-		warnings = append(warnings, fmt.Sprintf("%d node pairing request(s) are pending approval.", pendingPairings))
-	}
-	if len(cfg.Channels) == 0 {
-		warnings = append(warnings, "No channels are configured; gateway surface may be incomplete.")
-	}
-	return warnings
-}
-
-func isLoopbackBind(bind string) bool {
-	switch {
-	case bind == "":
-		return true
-	case strings.HasPrefix(bind, ":"):
-		return true
-	case strings.HasPrefix(bind, "127.0.0.1:"):
-		return true
-	case strings.HasPrefix(bind, "localhost:"):
-		return true
-	case strings.HasPrefix(bind, "[::1]:"):
-		return true
-	default:
-		return false
-	}
-}

@@ -40,27 +40,72 @@ func NewStateMaterializer() *StateMaterializer {
 func (m *StateMaterializer) Name() string { return "nexus-state" }
 
 func (m *StateMaterializer) Apply(_ context.Context, events []core.FrameworkEvent) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	if len(events) == 0 {
+		return nil
+	}
+	// Compute all mutations outside the lock to keep the critical section minimal.
+	type sessionOp struct {
+		id      string
+		state   SessionState
+		deleted bool
+	}
+	type channelOp struct {
+		channel  string
+		inbound  bool
+	}
+	var lastSeq uint64
+	typeCounts := make(map[string]uint64, len(events))
+	var sessionOps []sessionOp
+	var channelOps []channelOp
+
 	for _, ev := range events {
-		if ev.Seq > m.state.LastSeq {
-			m.state.LastSeq = ev.Seq
+		if ev.Seq > lastSeq {
+			lastSeq = ev.Seq
 		}
-		m.state.EventTypeCounts[ev.Type]++
+		typeCounts[ev.Type]++
 		switch ev.Type {
 		case core.FrameworkEventSessionCreated:
-			m.state.ActiveSessions[ev.Actor.ID] = SessionState{
-				Role:      ev.Actor.Kind,
-				CreatedAt: ev.Timestamp.UTC().Format(timeLayout),
-			}
+			sessionOps = append(sessionOps, sessionOp{
+				id:    ev.Actor.ID,
+				state: SessionState{Role: ev.Actor.Kind, CreatedAt: ev.Timestamp.UTC().Format(timeLayout)},
+			})
 		case core.FrameworkEventSessionClosed:
-			delete(m.state.ActiveSessions, ev.Actor.ID)
+			sessionOps = append(sessionOps, sessionOp{id: ev.Actor.ID, deleted: true})
 		case core.FrameworkEventMessageInbound:
-			m.bumpChannelCount(ev.Payload, true)
+			if ch := channelFromPayload(ev.Payload); ch != "" {
+				channelOps = append(channelOps, channelOp{channel: ch, inbound: true})
+			}
 		case core.FrameworkEventMessageOutbound:
-			m.bumpChannelCount(ev.Payload, false)
+			if ch := channelFromPayload(ev.Payload); ch != "" {
+				channelOps = append(channelOps, channelOp{channel: ch, inbound: false})
+			}
 		}
 	}
+
+	m.mu.Lock()
+	if lastSeq > m.state.LastSeq {
+		m.state.LastSeq = lastSeq
+	}
+	for t, n := range typeCounts {
+		m.state.EventTypeCounts[t] += n
+	}
+	for _, op := range sessionOps {
+		if op.deleted {
+			delete(m.state.ActiveSessions, op.id)
+		} else {
+			m.state.ActiveSessions[op.id] = op.state
+		}
+	}
+	for _, op := range channelOps {
+		s := m.state.ChannelActivity[op.channel]
+		if op.inbound {
+			s.Inbound++
+		} else {
+			s.Outbound++
+		}
+		m.state.ChannelActivity[op.channel] = s
+	}
+	m.mu.Unlock()
 	return nil
 }
 
@@ -113,23 +158,17 @@ func (m *StateMaterializer) cloneLocked() StateSnapshot {
 	return out
 }
 
-func (m *StateMaterializer) bumpChannelCount(payload []byte, inbound bool) {
+func channelFromPayload(payload []byte) string {
 	if len(payload) == 0 {
-		return
+		return ""
 	}
 	var envelope struct {
 		Channel string `json:"channel"`
 	}
-	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.Channel == "" {
-		return
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return ""
 	}
-	state := m.state.ChannelActivity[envelope.Channel]
-	if inbound {
-		state.Inbound++
-	} else {
-		state.Outbound++
-	}
-	m.state.ChannelActivity[envelope.Channel] = state
+	return envelope.Channel
 }
 
 const timeLayout = "2006-01-02T15:04:05.999999999Z07:00"

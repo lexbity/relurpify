@@ -151,7 +151,7 @@ func (s *service) IssueToken(ctx context.Context, req IssueTokenRequest) (IssueT
 		ID:        tokenID,
 		Name:      subjectID,
 		SubjectID: subjectID,
-		TokenHash: hashAdminToken(token),
+		TokenHash: HashToken(token),
 		Scopes:    append([]string(nil), req.Scopes...),
 		IssuedAt:  time.Now().UTC(),
 	}

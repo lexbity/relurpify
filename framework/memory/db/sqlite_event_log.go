@@ -21,8 +21,9 @@ var _ event.Log = (*SQLiteEventLog)(nil)
 
 // SQLiteEventLog persists framework events in SQLite.
 type SQLiteEventLog struct {
-	db   *sql.DB
-	path string
+	db          *sql.DB
+	path        string
+	stopCleanup context.CancelFunc
 }
 
 func NewSQLiteEventLog(path string) (*SQLiteEventLog, error) {
@@ -39,6 +40,12 @@ func NewSQLiteEventLog(path string) (*SQLiteEventLog, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	// Prune expired idempotency cache entries in the background so they don't
+	// add per-write overhead.  An initial cleanup runs immediately to clear
+	// leftovers from previous runs.
+	cleanCtx, cancel := context.WithCancel(context.Background())
+	log.stopCleanup = cancel
+	go log.idemCacheCleanupLoop(cleanCtx)
 	return log, nil
 }
 
@@ -92,9 +99,6 @@ func (l *SQLiteEventLog) Append(ctx context.Context, partition string, events []
 			_ = tx.Rollback()
 		}
 	}()
-	if _, err = tx.ExecContext(ctx, `DELETE FROM idem_cache WHERE expires <= ?`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
-		return nil, err
-	}
 	for _, ev := range events {
 		if ev.Timestamp.IsZero() {
 			ev.Timestamp = time.Now().UTC()
@@ -236,7 +240,30 @@ func (l *SQLiteEventLog) Close() error {
 	if l == nil || l.db == nil {
 		return nil
 	}
+	if l.stopCleanup != nil {
+		l.stopCleanup()
+	}
 	return l.db.Close()
+}
+
+const idemCacheCleanupInterval = 5 * time.Minute
+
+func (l *SQLiteEventLog) idemCacheCleanupLoop(ctx context.Context) {
+	l.pruneIdemCache(ctx)
+	ticker := time.NewTicker(idemCacheCleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			l.pruneIdemCache(ctx)
+		}
+	}
+}
+
+func (l *SQLiteEventLog) pruneIdemCache(ctx context.Context) {
+	_, _ = l.db.ExecContext(ctx, `DELETE FROM idem_cache WHERE expires <= ?`, time.Now().UTC().Format(time.RFC3339Nano))
 }
 
 func (l *SQLiteEventLog) readQuery(ctx context.Context, query string, args ...any) ([]core.FrameworkEvent, error) {

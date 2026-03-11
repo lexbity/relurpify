@@ -11,9 +11,10 @@ import (
 
 // ObjectRegistry stores non-serializable runtime objects behind string handles.
 type ObjectRegistry struct {
-	mu     sync.RWMutex
-	items  map[string]interface{}
-	scopes map[string]map[string]struct{}
+	mu            sync.RWMutex
+	items         map[string]interface{}
+	scopes        map[string]map[string]struct{}
+	handleToScope map[string]string // reverse index: O(1) scope lookup on Remove
 }
 
 type registryCloser interface {
@@ -23,8 +24,9 @@ type registryCloser interface {
 // NewObjectRegistry builds an empty registry.
 func NewObjectRegistry() *ObjectRegistry {
 	return &ObjectRegistry{
-		items:  make(map[string]interface{}),
-		scopes: make(map[string]map[string]struct{}),
+		items:         make(map[string]interface{}),
+		scopes:        make(map[string]map[string]struct{}),
+		handleToScope: make(map[string]string),
 	}
 }
 
@@ -53,6 +55,7 @@ func (r *ObjectRegistry) RegisterScoped(scope string, value interface{}) string 
 			r.scopes[scope] = make(map[string]struct{})
 		}
 		r.scopes[scope][handle] = struct{}{}
+		r.handleToScope[handle] = scope
 	}
 	r.mu.Unlock()
 	return handle
@@ -78,13 +81,12 @@ func (r *ObjectRegistry) Remove(handle string) {
 	r.mu.Lock()
 	value = r.items[handle]
 	delete(r.items, handle)
-	for scope, handles := range r.scopes {
-		if _, ok := handles[handle]; ok {
-			delete(handles, handle)
-			if len(handles) == 0 {
-				delete(r.scopes, scope)
-			}
-			break
+	if scope := r.handleToScope[handle]; scope != "" {
+		delete(r.handleToScope, handle)
+		handles := r.scopes[scope]
+		delete(handles, handle)
+		if len(handles) == 0 {
+			delete(r.scopes, scope)
 		}
 	}
 	r.mu.Unlock()
@@ -103,6 +105,7 @@ func (r *ObjectRegistry) ClearScope(scope string) {
 	for handle := range handles {
 		values = append(values, r.items[handle])
 		delete(r.items, handle)
+		delete(r.handleToScope, handle)
 	}
 	r.mu.Unlock()
 	for _, value := range values {
@@ -122,6 +125,7 @@ func (r *ObjectRegistry) CloseAll() error {
 	}
 	r.items = make(map[string]interface{})
 	r.scopes = make(map[string]map[string]struct{})
+	r.handleToScope = make(map[string]string)
 	r.mu.Unlock()
 
 	var errs []error

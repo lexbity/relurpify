@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -175,11 +173,10 @@ func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusad
 	if !cfg.Enabled {
 		return nil
 	}
-	type staticTokenPrincipal struct {
-		token     string
-		principal fwgateway.ConnectionPrincipal
-	}
-	tokens := make([]staticTokenPrincipal, 0, len(cfg.Tokens))
+	// Pre-hash every static token at startup so lookups are O(1) map reads
+	// rather than an O(N) constant-time scan.  SHA-256 collision resistance
+	// provides the same security guarantee as comparing the raw tokens.
+	staticByHash := make(map[string]fwgateway.ConnectionPrincipal, len(cfg.Tokens))
 	for _, entry := range cfg.Tokens {
 		if entry.Token == "" || entry.SubjectID == "" || entry.Role == "" {
 			continue
@@ -207,39 +204,31 @@ func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusad
 				ID:       entry.SubjectID,
 			},
 		}
-		tokens = append(tokens, staticTokenPrincipal{
-			token: entry.Token,
-			principal: fwgateway.ConnectionPrincipal{
-				Role:          entry.Role,
-				Authenticated: true,
-				Principal:     &principal,
-				Actor: core.EventActor{
-					Kind:        entry.Role,
-					ID:          entry.SubjectID,
-					TenantID:    tenantID,
-					SubjectKind: subjectKind,
-				},
+		staticByHash[nexusadmin.HashToken(entry.Token)] = fwgateway.ConnectionPrincipal{
+			Role:          entry.Role,
+			Authenticated: true,
+			Principal:     &principal,
+			Actor: core.EventActor{
+				Kind:        entry.Role,
+				ID:          entry.SubjectID,
+				TenantID:    tenantID,
+				SubjectKind: subjectKind,
 			},
-		})
+		}
 	}
 	return func(ctx context.Context, token string) (fwgateway.ConnectionPrincipal, error) {
 		if token == "" {
 			return fwgateway.ConnectionPrincipal{}, fmt.Errorf("bearer token required")
 		}
-		for _, candidate := range tokens {
-			if len(candidate.token) != len(token) {
-				continue
-			}
-			if subtle.ConstantTimeCompare([]byte(candidate.token), []byte(token)) == 1 {
-				return candidate.principal, nil
-			}
+		if principal, ok := staticByHash[nexusadmin.HashToken(token)]; ok {
+			return principal, nil
 		}
 		if tokenStore != nil {
 			records, err := tokenStore.ListTokens(ctx)
 			if err != nil {
 				return fwgateway.ConnectionPrincipal{}, fmt.Errorf("lookup bearer token: %w", err)
 			}
-			hashed := hashBearerToken(token)
+			hashed := nexusadmin.HashToken(token)
 			for _, record := range records {
 				if len(record.TokenHash) != len(hashed) {
 					continue
@@ -305,11 +294,6 @@ func principalRole(scopes []string) string {
 		}
 	}
 	return role
-}
-
-func hashBearerToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
 }
 
 func runStatus(ctx context.Context, out interface{ Write([]byte) (int, error) }, workspace, configPath string) error {

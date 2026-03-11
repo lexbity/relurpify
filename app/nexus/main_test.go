@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory/db"
@@ -213,7 +214,7 @@ func TestGatewayPrincipalResolverAcceptsIssuedToken(t *testing.T) {
 		ID:        "tok-1",
 		Name:      "subject-1",
 		SubjectID: "subject-1",
-		TokenHash: hashBearerToken("issued-token"),
+		TokenHash: nexusadmin.HashToken("issued-token"),
 		Scopes:    []string{"nexus:admin"},
 		IssuedAt:  time.Now().UTC(),
 	}))
