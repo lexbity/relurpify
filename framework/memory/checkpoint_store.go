@@ -3,13 +3,17 @@ package memory
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/graph"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lexcodex/relurpify/framework/graph"
 )
 
 // CheckpointStore persists graph checkpoints to disk.
+// Deprecated: prefer CheckpointSnapshotStore implementations backed by the
+// workflow runtime store, such as db.SQLiteCheckpointStore. This file-based
+// store remains as a compatibility fallback for legacy checkpoints.
 type CheckpointStore struct {
 	basePath string
 }
@@ -40,6 +44,9 @@ func (cs *CheckpointStore) Load(taskID, checkpointID string) (*graph.GraphCheckp
 	path := filepath.Join(cs.basePath, taskID, checkpointID+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrCheckpointNotFound
+		}
 		return nil, err
 	}
 	var checkpoint graph.GraphCheckpoint
@@ -54,6 +61,9 @@ func (cs *CheckpointStore) List(taskID string) ([]string, error) {
 	path := filepath.Join(cs.basePath, taskID)
 	entries, err := os.ReadDir(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	result := make([]string, 0, len(entries))

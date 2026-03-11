@@ -19,7 +19,7 @@ import (
 )
 
 // WorkflowStateSchemaVersion is the current schema version for workflow state storage.
-const WorkflowStateSchemaVersion = 5
+const WorkflowStateSchemaVersion = 7
 const workflowStateSchemaVersion = WorkflowStateSchemaVersion
 
 // SQLiteWorkflowStateStore persists workflow state in SQLite.
@@ -51,6 +51,14 @@ func (s *SQLiteWorkflowStateStore) Close() error {
 		return nil
 	}
 	return s.db.Close()
+}
+
+// DB exposes the underlying SQLite handle for package-local adapters.
+func (s *SQLiteWorkflowStateStore) DB() *sql.DB {
+	if s == nil {
+		return nil
+	}
+	return s.db
 }
 
 func (s *SQLiteWorkflowStateStore) init() error {
@@ -189,6 +197,17 @@ func (s *SQLiteWorkflowStateStore) init() error {
 			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE,
 			FOREIGN KEY(run_id) REFERENCES workflow_runs(run_id) ON DELETE CASCADE
 		);`,
+		`CREATE TABLE IF NOT EXISTS pipeline_checkpoints (
+			checkpoint_id TEXT PRIMARY KEY,
+			task_id TEXT NOT NULL,
+			workflow_id TEXT NOT NULL DEFAULT '',
+			run_id TEXT NOT NULL DEFAULT '',
+			stage_name TEXT NOT NULL DEFAULT '',
+			stage_index INTEGER NOT NULL DEFAULT 0,
+			context_json TEXT NOT NULL DEFAULT '',
+			result_json TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS workflow_knowledge (
 			record_id TEXT PRIMARY KEY,
 			workflow_id TEXT NOT NULL,
@@ -212,6 +231,19 @@ func (s *SQLiteWorkflowStateStore) init() error {
 			metadata_json TEXT NOT NULL DEFAULT '{}',
 			created_at TEXT NOT NULL,
 			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS graph_checkpoints (
+			checkpoint_id TEXT PRIMARY KEY,
+			task_id TEXT NOT NULL,
+			workflow_id TEXT NOT NULL DEFAULT '',
+			run_id TEXT NOT NULL DEFAULT '',
+			completed_node_id TEXT NOT NULL DEFAULT '',
+			next_node_id TEXT NOT NULL DEFAULT '',
+			graph_hash TEXT NOT NULL DEFAULT '',
+			state_json TEXT NOT NULL DEFAULT 'null',
+			transition_json TEXT NOT NULL DEFAULT 'null',
+			metadata_json TEXT NOT NULL DEFAULT '{}',
+			created_at TEXT NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS workflow_provider_snapshots (
 			snapshot_id TEXT PRIMARY KEY,
@@ -283,7 +315,9 @@ func (s *SQLiteWorkflowStateStore) init() error {
 		`CREATE INDEX IF NOT EXISTS idx_workflow_artifacts_scope ON workflow_artifacts(workflow_id, run_id, created_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_scope ON workflow_stage_results(workflow_id, run_id, stage_index ASC, retry_attempt ASC, finished_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_valid ON workflow_stage_results(workflow_id, run_id, stage_name, validation_ok, retry_attempt DESC, finished_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_pipeline_checkpoints_task_created ON pipeline_checkpoints(task_id, created_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_events_workflow_created ON workflow_events(workflow_id, created_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_graph_checkpoints_task_created ON graph_checkpoints(task_id, created_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_provider_snapshots_scope ON workflow_provider_snapshots(workflow_id, run_id, captured_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_provider_session_snapshots_scope ON workflow_provider_session_snapshots(workflow_id, run_id, captured_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_delegations_scope ON workflow_delegations(workflow_id, run_id, updated_at ASC);`,
@@ -934,6 +968,75 @@ func (s *SQLiteWorkflowStateStore) GetLatestValidStageResult(ctx context.Context
 		return nil, ok, err
 	}
 	return record, true, nil
+}
+
+func (s *SQLiteWorkflowStateStore) SavePipelineCheckpoint(ctx context.Context, record memory.PipelineCheckpointRecord) error {
+	if strings.TrimSpace(record.CheckpointID) == "" || strings.TrimSpace(record.TaskID) == "" {
+		return errors.New("pipeline checkpoint requires checkpoint and task ids")
+	}
+	record.CreatedAt = ensureTime(record.CreatedAt)
+	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO pipeline_checkpoints (
+		checkpoint_id, task_id, workflow_id, run_id, stage_name, stage_index, context_json, result_json, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		record.CheckpointID,
+		record.TaskID,
+		record.WorkflowID,
+		record.RunID,
+		record.StageName,
+		record.StageIndex,
+		record.ContextJSON,
+		record.ResultJSON,
+		timeString(record.CreatedAt),
+	)
+	return err
+}
+
+func (s *SQLiteWorkflowStateStore) LoadPipelineCheckpoint(ctx context.Context, taskID, checkpointID string) (*memory.PipelineCheckpointRecord, bool, error) {
+	if strings.TrimSpace(taskID) == "" || strings.TrimSpace(checkpointID) == "" {
+		return nil, false, errors.New("task id and checkpoint id required")
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT checkpoint_id, task_id, workflow_id, run_id, stage_name, stage_index, context_json, result_json, created_at
+		FROM pipeline_checkpoints WHERE task_id = ? AND checkpoint_id = ?`, taskID, checkpointID)
+	var record memory.PipelineCheckpointRecord
+	var createdAt string
+	if err := row.Scan(
+		&record.CheckpointID,
+		&record.TaskID,
+		&record.WorkflowID,
+		&record.RunID,
+		&record.StageName,
+		&record.StageIndex,
+		&record.ContextJSON,
+		&record.ResultJSON,
+		&createdAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	record.CreatedAt = parseTime(createdAt)
+	return &record, true, nil
+}
+
+func (s *SQLiteWorkflowStateStore) ListPipelineCheckpoints(ctx context.Context, taskID string) ([]string, error) {
+	if strings.TrimSpace(taskID) == "" {
+		return nil, errors.New("task id required")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT checkpoint_id FROM pipeline_checkpoints WHERE task_id = ? ORDER BY created_at DESC`, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var checkpointID string
+		if err := rows.Scan(&checkpointID); err != nil {
+			return nil, err
+		}
+		ids = append(ids, checkpointID)
+	}
+	return ids, rows.Err()
 }
 
 func (s *SQLiteWorkflowStateStore) PutKnowledge(ctx context.Context, record memory.KnowledgeRecord) error {

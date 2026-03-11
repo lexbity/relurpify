@@ -411,6 +411,46 @@ func TestSQLiteWorkflowStateStoreListsStageResultsOrderedByStageAndRetry(t *test
 	require.Equal(t, []string{"r1a", "r1b", "r2"}, []string{results[0].ResultID, results[1].ResultID, results[2].ResultID})
 }
 
+func TestSQLiteWorkflowStateStorePersistsPipelineCheckpoints(t *testing.T) {
+	store := newTestWorkflowStateStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, store.SavePipelineCheckpoint(ctx, memory.PipelineCheckpointRecord{
+		CheckpointID: "cp-1",
+		TaskID:       "task-pipeline",
+		WorkflowID:   "wf-pipeline",
+		RunID:        "run-pipeline",
+		StageName:    "explore",
+		StageIndex:   0,
+		ContextJSON:  `{"state":{"a":1}}`,
+		ResultJSON:   `{"stage_name":"explore"}`,
+		CreatedAt:    now,
+	}))
+	require.NoError(t, store.SavePipelineCheckpoint(ctx, memory.PipelineCheckpointRecord{
+		CheckpointID: "cp-2",
+		TaskID:       "task-pipeline",
+		WorkflowID:   "wf-pipeline",
+		RunID:        "run-pipeline",
+		StageName:    "analyze",
+		StageIndex:   1,
+		ContextJSON:  `{"state":{"b":2}}`,
+		ResultJSON:   `{"stage_name":"analyze"}`,
+		CreatedAt:    now.Add(time.Second),
+	}))
+
+	record, ok, err := store.LoadPipelineCheckpoint(ctx, "task-pipeline", "cp-2")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "analyze", record.StageName)
+	require.Equal(t, `{"state":{"b":2}}`, record.ContextJSON)
+
+	ids, err := store.ListPipelineCheckpoints(ctx, "task-pipeline")
+	require.NoError(t, err)
+	require.Equal(t, []string{"cp-2", "cp-1"}, ids)
+}
+
 func TestSQLiteWorkflowStateStoreInvalidatesDependents(t *testing.T) {
 	store := newTestWorkflowStateStore(t)
 	defer store.Close()

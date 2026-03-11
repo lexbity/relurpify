@@ -173,6 +173,20 @@ type WorkflowStageResultRecord struct {
 	FinishedAt       time.Time
 }
 
+// PipelineCheckpointRecord stores a resumable pipeline checkpoint including
+// the serialized execution context needed to restart from the next stage.
+type PipelineCheckpointRecord struct {
+	CheckpointID string
+	TaskID       string
+	WorkflowID   string
+	RunID        string
+	StageName    string
+	StageIndex   int
+	ContextJSON  string
+	ResultJSON   string
+	CreatedAt    time.Time
+}
+
 // KnowledgeRecord stores extracted facts, issues, or decisions for prompting.
 type KnowledgeRecord struct {
 	RecordID   string
@@ -309,6 +323,9 @@ type WorkflowStateStore interface {
 	SaveStageResult(ctx context.Context, record WorkflowStageResultRecord) error
 	ListStageResults(ctx context.Context, workflowID, runID string) ([]WorkflowStageResultRecord, error)
 	GetLatestValidStageResult(ctx context.Context, workflowID, runID, stageName string) (*WorkflowStageResultRecord, bool, error)
+	SavePipelineCheckpoint(ctx context.Context, record PipelineCheckpointRecord) error
+	LoadPipelineCheckpoint(ctx context.Context, taskID, checkpointID string) (*PipelineCheckpointRecord, bool, error)
+	ListPipelineCheckpoints(ctx context.Context, taskID string) ([]string, error)
 
 	PutKnowledge(ctx context.Context, record KnowledgeRecord) error
 	ListKnowledge(ctx context.Context, workflowID string, kind KnowledgeKind, unresolvedOnly bool) ([]KnowledgeRecord, error)

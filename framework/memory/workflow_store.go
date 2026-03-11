@@ -33,6 +33,7 @@ type WorkflowSnapshot struct {
 }
 
 // WorkflowStore persists snapshots between runs.
+// Deprecated: use CheckpointSnapshotStore-backed runtime persistence instead.
 type WorkflowStore interface {
 	Save(ctx context.Context, snapshot *WorkflowSnapshot) error
 	Load(ctx context.Context, id string) (*WorkflowSnapshot, bool, error)
@@ -41,6 +42,7 @@ type WorkflowStore interface {
 }
 
 // FileWorkflowStore stores snapshots as JSON on disk.
+// Deprecated: use db.SQLiteCheckpointStore or another CheckpointSnapshotStore implementation.
 type FileWorkflowStore struct {
 	path  string
 	mu    sync.RWMutex
@@ -48,6 +50,7 @@ type FileWorkflowStore struct {
 }
 
 // NewFileWorkflowStore creates a store under the provided directory.
+// Deprecated: new code should use CheckpointSnapshotStore-backed runtime storage.
 func NewFileWorkflowStore(root string) (*FileWorkflowStore, error) {
 	if root == "" {
 		return nil, errors.New("workflow store root required")
