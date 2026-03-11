@@ -21,40 +21,51 @@ The result is an agent you can trust to run on a real codebase.
 
 ## Mental Model
 
-Think of Relurpify in four layers, each building on the one below:
+Think of Relurpify in five layers, each building on the one below:
 
 ```
-┌──────────────────────────────────────────┐
-│  Interface Layer                         │
-│  relurpish TUI · HTTP API · dev-agent   │
-└────────────────┬─────────────────────────┘
-                 │
-┌────────────────▼─────────────────────────┐
-│  Agent Layer                             │
-│  CodingAgent · PlannerAgent · ReActAgent │
-│  ReflectionAgent · (more on the way)     │
-└────────────────┬─────────────────────────┘
-                 │
-┌────────────────▼─────────────────────────┐
-│  Framework Layer                         │
-│  Graph runtime · PermissionManager       │
-│  ContextManager · CapabilityRegistry     │
-│  Memory · Search · local logging         │
-└────────────────┬─────────────────────────┘
-                 │
-┌────────────────▼─────────────────────────┐
-│  Execution Layer                         │
-│  Ollama (LLM) · gVisor container (tools) │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Application Layer                                   │
+│  relurpish TUI · Nexus gateway · nexusish · dev-agent│
+└──────────────────────┬───────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────┐
+│  Agent Layer                                         │
+│  CodingAgent · ArchitectAgent · PipelineAgent        │
+│  PlannerAgent · ReActAgent · ReflectionAgent         │
+│  EternalAgent                                        │
+└──────────────────────┬───────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────┐
+│  Framework Layer                                     │
+│  Graph runtime · Pipeline runner · ContextManager    │
+│  CapabilityRegistry · AuthorizationManager · Memory  │
+│  Event log · Telemetry · AST index                   │
+└──────────────────────┬───────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────┐
+│  Middleware Layer                                    │
+│  MCP client/server · Nexus transport (WebSocket)     │
+│  Session routing · Channel manager · Replay recorder │
+└──────────────────────┬───────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────┐
+│  Platform / Execution Layer                          │
+│  Ollama (LLM) · gVisor (sandboxed tools)             │
+│  Shell · Git · Filesystem · Language tools (Go/Rust/ │
+│  Python/JS) · LSP · Browser · SQLite · AST tools     │
+└──────────────────────────────────────────────────────┘
 ```
 
-**Interface layer** — how you talk to the system. The `relurpish` TUI is the primary end-user interface. `relurpish doctor` handles workspace initialization and local dependency checks. The `dev-agent` CLI is for development and scripted use. The HTTP API (`relurpish serve`) exposes the same runtime for editor integrations.
+**Application layer** — how you interact with the system. `relurpish` is the primary end-user TUI. `nexus` is the gateway server that coordinates distributed agent nodes. `nexusish` is the admin TUI for nexus. `dev-agent` is the CLI for development and scripted testing.
 
-**Agent layer** — the reasoning layer. An agent receives an instruction, builds a plan or enters a reasoning loop, decides which tools to call, and produces a result. Different agent types implement different reasoning patterns (see [agents.md](agents.md)).
+**Agent layer** — the reasoning layer. Agents receive an instruction, build a plan or enter a reasoning loop, decide which tools to call, and produce a result. Seven agent types implement different strategies: CodingAgent (multi-mode), ArchitectAgent (plan-then-execute), PipelineAgent (typed stages), PlannerAgent, ReActAgent, ReflectionAgent, EternalAgent. See [agents.md](agents.md).
 
-**Framework layer** — the infrastructure agents sit on top of. The graph runtime executes the agent's workflow as a deterministic state machine. The capability registry owns framework-visible tools, prompts, resources, and provider-backed capabilities. The permission manager enforces file scopes, tooling execution rules, and other aspects of the security contract. The context manager compresses token usage extending the limits of local models. These components are invisible to end-users but define the system's behaviour.
+**Framework layer** — the infrastructure agents sit on top of. The graph runtime executes workflows as deterministic state machines. The pipeline runner executes typed stage sequences with declared contracts. The capability registry owns all tools, prompts, and provider-backed capabilities. The authorization manager enforces the three-level policy (Allow/Ask/Deny) derived from the manifest. The context manager compresses token usage for small local models. See [framework.md](framework.md).
 
-**Execution layer** — where work actually happens. LLM reasoning happens via Ollama on the host. Tool execution (running tests, editing files, calling git) happens inside a gVisor-sandboxed container, isolated from the rest of your system. In the default coding runtime, language-aware tools such as `go_test`, `python_pytest`, and `rust_cargo_test` are the primary verification surface; generic execution helpers are not registered by default.
+**Middleware layer** — transport and protocol. The MCP client/server implementation (versions 2025-06-18 and 2025-11-25) allows Relurpify to both consume capabilities from external MCP servers and expose its own capabilities to MCP clients. The Nexus transport layer (WebSocket) connects remote relurpish instances to the gateway. Session routing and channel management keep concurrent sessions isolated. See [middleware.md](middleware.md).
+
+**Platform / Execution layer** — where work actually happens. LLM reasoning via Ollama on the host. Tool execution (tests, edits, git) inside a gVisor-sandboxed container. Language-aware tools (go_test, cargo_test, pytest, npm_test) are the primary verification surface. See [platform.md](platform.md).
 
 ---
 
@@ -147,5 +158,9 @@ Shared templates are not runtime state. They are copied into `relurpify_cfg/` an
 - [Workspace Layout](workspace-layout.md) — canonical `relurpify_cfg/` contract and ownership rules
 - [Configuration](configuration.md) — manifests, workspace config, skills
 - [Agents](agents.md) — agent types and when to use each
+- [Framework](framework.md) — per-package reference for all framework packages
+- [Middleware](middleware.md) — MCP and Nexus transport layer
+- [Platform](platform.md) — LLM client, language tools, and execution layer
+- [Applications](applications.md) — relurpish, nexus, nexusish, dev-agent
 - [Permission Model](permission-model.md) — how the security contract works
 - [TUI](Relurpish_TUI.md) — using the relurpish interface

@@ -9,6 +9,8 @@
 | [Workspace Layout](workspace-layout.md) | Canonical `relurpify_cfg/` contract, ownership rules, and test run layout |
 | [Configuration](configuration.md) | Workspace config, agent manifests, skills |
 | [Agents](agents.md) | Agent types, modes, when to use each |
+| [MCP Architecture](mcp.md) | Capability model, provider lifecycle, security, and MCP client/server design |
+| [Nexus Admin API](nexus-admin-api.md) | Canonical Nexus admin service and MCP adapter boundary |
 | [Permission Model](permission-model.md) | How the security contract is enforced |
 | [TUI](Relurpish_TUI.md) | relurpish interface — panes, keybindings, workflow |
 | [Testing](testing.md) | Unit tests, agenttest, recording and replay |

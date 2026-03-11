@@ -59,6 +59,47 @@ The ownership rule is simple:
 - template files are copy-from only
 - workspace copies are editable and authoritative
 
+### Template Resolution Rules
+
+Template discovery follows a strict ownership order:
+
+1. shared installed templates are the preferred source for starter assets
+2. repo-local templates are development fallbacks
+3. files already copied into `relurpify_cfg/` are the runtime source of truth
+
+This means runtime code should not treat template directories as live inventory.
+Templates exist to seed workspaces, not to act as an implicit second
+configuration layer.
+
+Template categories are:
+
+- `workspace/` for starter workspace files
+- `agents/` for agent manifest templates
+- `skills/` for skill package templates
+- `testsuite/` for derived test workspace profiles
+
+Once a manifest or skill is copied into the workspace, the copied version is
+authoritative even if the shared template later changes.
+
+### Workspace Ownership Model
+
+`relurpify_cfg/` is the only workspace-local authority for runtime
+configuration and generated state.
+
+That has several concrete consequences:
+
+- runtime code should derive active paths from the workspace contract rather
+  than ad hoc path concatenation
+- `relurpify_cfg/agents/` and `relurpify_cfg/skills/` are not builtin inventory;
+  they are user-owned workspace copies
+- runtime state such as logs, telemetry, memory, and sessions belongs under
+  `relurpify_cfg/`, not scattered across repo-local convenience paths
+- tests and setup flows should materialize derived workspaces from templates
+  rather than mutating template roots directly
+
+This ownership rule prevents ambiguity between starter assets and active
+configuration.
+
 ---
 
 ## Doctor Initialization
@@ -74,6 +115,48 @@ If `relurpify_cfg/` is missing, doctor can:
 - validate Docker, `runsc`, Ollama, and Chromium
 
 `doctor --fix` can overwrite the starter workspace files from current templates. That is intentional: the copied workspace files remain authoritative after the overwrite.
+
+### Doctor Flow
+
+Doctor serves two roles:
+
+- initialize a missing workspace
+- validate whether the local machine is ready to run Relurpify features
+
+The intended flow is:
+
+1. detect whether `relurpify_cfg/` exists
+2. if missing, offer or perform workspace initialization from templates
+3. validate required local dependencies
+4. classify results as blocking, warning, or informational
+5. optionally refresh starter files with `doctor --fix`
+
+Doctor checks are intentionally not all equal.
+
+Blocking readiness checks include:
+
+- Docker
+- `runsc`
+- Ollama
+
+Warning-only checks include:
+
+- Chromium, unless a manifest or tool policy makes browser support required
+
+This separation matters because some environments can still use Relurpify for
+non-browser tasks even when browser tooling is unavailable.
+
+### Security-Relevant Setup Checks
+
+Doctor is also the first place where workspace safety assumptions are surfaced.
+It validates dependencies that underpin Relurpify's execution boundary, such as:
+
+- sandbox support through `runsc`
+- container/runtime prerequisites through Docker
+- local model access through Ollama
+
+These checks do not replace manifest policy, but they determine whether the
+expected runtime boundary can actually be enforced on the current machine.
 
 ---
 
@@ -94,6 +177,40 @@ relurpify_cfg/test_runs/<agent>/<run-id>/
 ```
 
 The temp workspace is derived from a testsuite template profile and layered with suite or case overrides. Tests must not write into the live workspace's top-level `logs/`, `telemetry/`, `memory/`, or `sessions/` directories.
+
+The isolation rule is important: tests should exercise copied workspace state
+and per-run outputs, not mutate the active developer workspace.
+
+---
+
+## Security-Related Configuration
+
+The workspace layout exists partly to keep security-sensitive configuration and
+generated state in predictable places.
+
+Important boundaries:
+
+- `config.yaml` stores workspace defaults and convenience selections
+- agent manifests define the actual execution and permission contract
+- skills provide guidance and policy hints but do not widen permissions
+- generated state such as sessions, memory, logs, and telemetry stays under the
+  workspace runtime tree for auditability
+
+In practice, security-related configuration is centered in workspace-owned
+manifests and associated skill packages:
+
+- capability allowlists and selector-based narrowing
+- capability execution policy
+- provider activation and trust defaults
+- filesystem, executable, and network permissions
+- audit and telemetry settings
+
+The layout makes those settings inspectable and explicit. It also keeps them
+separate from starter templates so a shared install cannot silently change a
+workspace's live security posture after initialization.
+
+See [Configuration](configuration.md) for the manifest-level details of those
+security settings.
 
 ---
 

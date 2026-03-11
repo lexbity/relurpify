@@ -8,11 +8,13 @@ An agent is the reasoning layer between your instruction and the tools that act 
 
 ## Why Multiple Agent Types
 
-A single agent type is not optimal for all tasks. Answering a question about code requires different reasoning than planning a refactor, which requires different reasoning than iteratively debugging a failing test. Relurpify ships five agent types, each tuned for a different pattern:
+A single agent type is not optimal for all tasks. Answering a question about code requires different reasoning than planning a refactor, which requires different reasoning than iteratively debugging a failing test. Relurpify ships seven agent types, each tuned for a different pattern:
 
 | Agent | Strategy | Best for |
 |-------|----------|----------|
 | **CodingAgent** | Adaptive (delegates by mode) | General-purpose day-to-day work |
+| **ArchitectAgent** | Plan → step-by-step ReAct with recovery | Multi-step tasks that benefit from an upfront plan |
+| **PipelineAgent** | Deterministic typed stages | Structured workflows with declared input/output contracts |
 | **PlannerAgent** | Plan generation only | Thinking through a task before acting |
 | **ReActAgent** | Thought → Action → Observation loop | Open-ended exploration and tool-heavy tasks |
 | **ReflectionAgent** | ReAct + self-critique pass | Tasks where output quality is more important than speed |
@@ -70,6 +72,172 @@ CodingAgent execution mode (`code`, `architect`, `ask`, `debug`, `docs`) is sele
 relurpish chat --agent coding-go
 relurpish chat --agent coding-rust
 ```
+
+---
+
+## Skill System
+
+Skills are a shared policy and guidance layer that shape how agents use already
+available capabilities. They are not executable runtime types and they do not
+expand an agent's permissions.
+
+In the current model, skills can:
+
+- prioritize or narrow capability usage
+- steer phase-specific behavior
+- define verification expectations
+- suggest recovery probes when work fails
+- provide planning and review hints
+
+Skills cannot:
+
+- register new capabilities
+- widen `allowed_capabilities`
+- bypass manifest permissions
+- bypass runtime policy checks or sandboxing
+
+This means skills act inside the existing security envelope. They can guide
+agent behavior, but they never grant authority.
+
+### Capability selectors
+
+Skills select capabilities through ordered selectors rather than fixed hardcoded
+tool lists. A selector can target an exact capability name or match by tags,
+with optional exclusions.
+
+Example shape:
+
+```yaml
+capability: "go_test"
+tags: ["lang:go", "test"]
+exclude_tags: ["destructive"]
+```
+
+Selector resolution follows these rules:
+
+1. selectors never grant access on their own
+2. resolution only considers capabilities already registered and allowed
+3. exact capability names win over tag-based matches
+4. tag selectors require all listed tags and reject excluded tags
+
+This lets a skill prefer capability families such as tests, linters, formatters,
+or language-specific tooling without hardwiring a single tool name into every
+agent manifest.
+
+### Phase capability selectors
+
+Skills can define ordered `phase_capability_selectors` so agents know which
+capabilities are preferred during different phases of work.
+
+Typical uses include:
+
+- discovery and probing before edits
+- editing and refactoring during code changes
+- verification after changes
+- review or inspection before final output
+
+Because these are selectors rather than grants, they work across different
+agent implementations and different workspace capability registries while still
+respecting local policy.
+
+### Verification success criteria
+
+Skills can declare `verification.success_capability_selectors` to identify what
+counts as a successful verification pass for a task.
+
+This is useful when "verification" should mean more than "run any test." A
+language skill can, for example, prefer:
+
+- language-native test runners
+- build or compile checks
+- lint or static analysis families
+- domain-specific health checks
+
+Agents can use these selectors to decide which verification actions matter most
+and whether a task has met the skill's expected completion bar.
+
+### Recovery probes
+
+Skills can declare `recovery.failure_probe_capability_selectors` as an ordered
+set of probes to run after a failure.
+
+These probes help agents diagnose problems consistently. Common examples are:
+
+- rerunning a focused test
+- gathering compiler output
+- checking formatting or lint state
+- running read-only inspection commands that narrow the fault
+
+Because the probes are ordered, a skill can encode a preferred debugging path
+instead of leaving every failure to ad hoc tool choice.
+
+### Planning hints
+
+Skills can also carry planning guidance that helps agents structure work before
+they start changing files.
+
+Planning hints may include:
+
+- required discovery or probe steps before editing
+- preferred edit capability families
+- preferred verification capability families
+- reusable step templates for common task shapes
+
+This is especially useful for coding and architect-style flows where the agent
+needs to decide whether it has enough context to edit safely and what
+verification path should follow.
+
+### Runtime behavior
+
+At runtime, skill policy is resolved against the current capability registry.
+Agents consume the resolved result for:
+
+- phase disclosure and tool preference
+- verification success matching
+- recovery probe ordering
+- planning guidance
+- review hints
+
+The important constraint is unchanged: the resolved skill policy can only
+filter, prioritize, or organize capabilities that the framework has already
+admitted and allowed.
+
+---
+
+## ArchitectAgent
+
+ArchitectAgent implements plan-then-execute: it uses PlannerAgent to produce a
+multi-step plan, then drives ReActAgent through each step sequentially,
+persisting workflow state after every step so interrupted work can resume.
+
+Two capability registries are used:
+- **PlannerTools** (read-only) — used during planning; prevents side effects
+  while the plan is being developed.
+- **ExecutorTools** (full) — used during execution of each plan step.
+
+When a step fails, the agent attempts to diagnose the root cause and recover
+before marking the step as failed. Workflow state is persisted to
+`SQLiteWorkflowStateStore` so a crash or timeout during a long plan does not
+lose completed work.
+
+```bash
+relurpish --agent architect
+```
+
+---
+
+## PipelineAgent
+
+PipelineAgent executes a deterministic sequence of typed pipeline stages
+declared via `framework/pipeline` contracts. Each stage has a `ContractDescriptor`
+naming its input key, output key, schema version, and retry policy.
+
+Use PipelineAgent when you need the agent's reasoning process to follow a
+fixed structure — for example, the coding stage sequence:
+Explore → Analyze → Plan → Code → Verify.
+
+Stage results are persisted after each stage, so interrupted pipelines resume
+from the last completed stage rather than starting over.
 
 ---
 
