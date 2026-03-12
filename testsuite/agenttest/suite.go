@@ -27,6 +27,7 @@ type SuiteSpec struct {
 	Manifest  string `yaml:"manifest"`
 
 	Workspace WorkspaceSpec `yaml:"workspace"`
+	Memory    MemorySpec    `yaml:"memory,omitempty"`
 	Models    []ModelSpec   `yaml:"models,omitempty"`
 	Recording RecordingSpec `yaml:"recording,omitempty"`
 	Cases     []CaseSpec    `yaml:"cases"`
@@ -80,8 +81,10 @@ type RequiresSpec struct {
 }
 
 type SetupSpec struct {
-	Files   []SetupFileSpec `yaml:"files,omitempty"`
-	GitInit bool            `yaml:"git_init,omitempty"`
+	Files     []SetupFileSpec    `yaml:"files,omitempty"`
+	GitInit   bool               `yaml:"git_init,omitempty"`
+	Memory    MemorySeedSpec     `yaml:"memory,omitempty"`
+	Workflows []WorkflowSeedSpec `yaml:"workflows,omitempty"`
 }
 
 type SetupFileSpec struct {
@@ -102,16 +105,107 @@ type ExpectSpec struct {
 	ToolCallsMustInclude []string `yaml:"tool_calls_must_include,omitempty"`
 	ToolCallsMustExclude []string `yaml:"tool_calls_must_exclude,omitempty"`
 	MaxToolCalls         int      `yaml:"max_tool_calls,omitempty"`
+	StateKeysMustExist   []string `yaml:"state_keys_must_exist,omitempty"`
 }
 
 type CaseOverrideSpec struct {
-	MaxIterations       int                       `yaml:"max_iterations,omitempty"`
-	Model               *ModelSpec                `yaml:"model,omitempty"`
-	Recording           *RecordingSpec            `yaml:"recording,omitempty"`
-	Workspace           *WorkspaceSpec            `yaml:"workspace,omitempty"`
-	ExtraEnv            map[string]string         `yaml:"extra_env,omitempty"`
-	AllowedCapabilities []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
-	ControlFlow         string                    `yaml:"control_flow,omitempty"`
+	MaxIterations        int                       `yaml:"max_iterations,omitempty"`
+	Model                *ModelSpec                `yaml:"model,omitempty"`
+	Recording            *RecordingSpec            `yaml:"recording,omitempty"`
+	Workspace            *WorkspaceSpec            `yaml:"workspace,omitempty"`
+	Memory               *MemorySpec               `yaml:"memory,omitempty"`
+	ExtraEnv             map[string]string         `yaml:"extra_env,omitempty"`
+	AllowedCapabilities  []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
+	RestrictCapabilities bool                      `yaml:"restrict_capabilities,omitempty"`
+	ControlFlow          string                    `yaml:"control_flow,omitempty"`
+}
+
+type MemorySpec struct {
+	Backend   string              `yaml:"backend,omitempty"` // hybrid|sqlite_runtime
+	Retrieval MemoryRetrievalSpec `yaml:"retrieval,omitempty"`
+}
+
+type MemoryRetrievalSpec struct {
+	Embedder string `yaml:"embedder,omitempty"` // "", "test"
+}
+
+type MemorySeedSpec struct {
+	Declarative []DeclarativeMemorySeedSpec `yaml:"declarative,omitempty"`
+	Procedural  []ProceduralMemorySeedSpec  `yaml:"procedural,omitempty"`
+}
+
+type DeclarativeMemorySeedSpec struct {
+	RecordID    string         `yaml:"record_id"`
+	Scope       string         `yaml:"scope,omitempty"`
+	Kind        string         `yaml:"kind,omitempty"`
+	Title       string         `yaml:"title,omitempty"`
+	Content     string         `yaml:"content,omitempty"`
+	Summary     string         `yaml:"summary,omitempty"`
+	WorkflowID  string         `yaml:"workflow_id,omitempty"`
+	TaskID      string         `yaml:"task_id,omitempty"`
+	ProjectID   string         `yaml:"project_id,omitempty"`
+	ArtifactRef string         `yaml:"artifact_ref,omitempty"`
+	Tags        []string       `yaml:"tags,omitempty"`
+	Metadata    map[string]any `yaml:"metadata,omitempty"`
+	Verified    bool           `yaml:"verified,omitempty"`
+}
+
+type ProceduralMemorySeedSpec struct {
+	RoutineID              string                    `yaml:"routine_id"`
+	Scope                  string                    `yaml:"scope,omitempty"`
+	Kind                   string                    `yaml:"kind,omitempty"`
+	Name                   string                    `yaml:"name,omitempty"`
+	Description            string                    `yaml:"description,omitempty"`
+	Summary                string                    `yaml:"summary,omitempty"`
+	WorkflowID             string                    `yaml:"workflow_id,omitempty"`
+	TaskID                 string                    `yaml:"task_id,omitempty"`
+	ProjectID              string                    `yaml:"project_id,omitempty"`
+	BodyRef                string                    `yaml:"body_ref,omitempty"`
+	InlineBody             string                    `yaml:"inline_body,omitempty"`
+	CapabilityDependencies []core.CapabilitySelector `yaml:"capability_dependencies,omitempty"`
+	VerificationMetadata   map[string]any            `yaml:"verification_metadata,omitempty"`
+	PolicySnapshotID       string                    `yaml:"policy_snapshot_id,omitempty"`
+	Verified               bool                      `yaml:"verified,omitempty"`
+	Version                int                       `yaml:"version,omitempty"`
+	ReuseCount             int                       `yaml:"reuse_count,omitempty"`
+}
+
+type WorkflowSeedSpec struct {
+	Workflow  WorkflowRecordSeedSpec      `yaml:"workflow"`
+	Runs      []WorkflowRunSeedSpec       `yaml:"runs,omitempty"`
+	Knowledge []WorkflowKnowledgeSeedSpec `yaml:"knowledge,omitempty"`
+}
+
+type WorkflowRecordSeedSpec struct {
+	WorkflowID   string         `yaml:"workflow_id"`
+	TaskID       string         `yaml:"task_id,omitempty"`
+	TaskType     string         `yaml:"task_type,omitempty"`
+	Instruction  string         `yaml:"instruction,omitempty"`
+	Status       string         `yaml:"status,omitempty"`
+	CursorStepID string         `yaml:"cursor_step_id,omitempty"`
+	Metadata     map[string]any `yaml:"metadata,omitempty"`
+}
+
+type WorkflowRunSeedSpec struct {
+	RunID          string         `yaml:"run_id"`
+	WorkflowID     string         `yaml:"workflow_id,omitempty"`
+	Status         string         `yaml:"status,omitempty"`
+	AgentName      string         `yaml:"agent_name,omitempty"`
+	AgentMode      string         `yaml:"agent_mode,omitempty"`
+	RuntimeVersion string         `yaml:"runtime_version,omitempty"`
+	Metadata       map[string]any `yaml:"metadata,omitempty"`
+}
+
+type WorkflowKnowledgeSeedSpec struct {
+	RecordID   string         `yaml:"record_id"`
+	WorkflowID string         `yaml:"workflow_id,omitempty"`
+	StepRunID  string         `yaml:"step_run_id,omitempty"`
+	StepID     string         `yaml:"step_id,omitempty"`
+	Kind       string         `yaml:"kind,omitempty"`
+	Title      string         `yaml:"title,omitempty"`
+	Content    string         `yaml:"content,omitempty"`
+	Status     string         `yaml:"status,omitempty"`
+	Metadata   map[string]any `yaml:"metadata,omitempty"`
 }
 
 func LoadSuite(path string) (*Suite, error) {
@@ -152,6 +246,9 @@ func (s *Suite) Validate() error {
 	if s.Spec.Workspace.TemplateProfile == "" {
 		s.Spec.Workspace.TemplateProfile = "default"
 	}
+	if err := validateMemorySpec(s.Spec.Memory, "suite spec.memory"); err != nil {
+		return err
+	}
 	if len(s.Spec.Cases) == 0 {
 		return fmt.Errorf("suite missing spec.cases")
 	}
@@ -162,12 +259,63 @@ func (s *Suite) Validate() error {
 		if c.Prompt == "" {
 			return fmt.Errorf("suite case[%s] missing prompt", c.Name)
 		}
+		if c.Overrides.Memory != nil {
+			if err := validateMemorySpec(*c.Overrides.Memory, fmt.Sprintf("suite case[%s] overrides.memory", c.Name)); err != nil {
+				return err
+			}
+		}
 		for fixtureName, fixture := range c.BrowserFixtures {
 			if fixtureName == "" {
 				return fmt.Errorf("suite case[%s] has browser fixture with empty name", c.Name)
 			}
 			if fixture.File == "" && fixture.Content == "" {
 				return fmt.Errorf("suite case[%s] browser fixture[%s] missing file or content", c.Name, fixtureName)
+			}
+		}
+		if err := validateSetup(c.Setup, c.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateMemorySpec(spec MemorySpec, location string) error {
+	switch spec.Backend {
+	case "", "hybrid", "sqlite_runtime":
+	default:
+		return fmt.Errorf("%s backend %q unsupported", location, spec.Backend)
+	}
+	switch spec.Retrieval.Embedder {
+	case "", "test":
+	default:
+		return fmt.Errorf("%s retrieval.embedder %q unsupported", location, spec.Retrieval.Embedder)
+	}
+	return nil
+}
+
+func validateSetup(setup SetupSpec, caseName string) error {
+	for _, record := range setup.Memory.Declarative {
+		if record.RecordID == "" {
+			return fmt.Errorf("suite case[%s] setup.memory.declarative missing record_id", caseName)
+		}
+	}
+	for _, record := range setup.Memory.Procedural {
+		if record.RoutineID == "" {
+			return fmt.Errorf("suite case[%s] setup.memory.procedural missing routine_id", caseName)
+		}
+	}
+	for _, workflow := range setup.Workflows {
+		if workflow.Workflow.WorkflowID == "" {
+			return fmt.Errorf("suite case[%s] setup.workflows missing workflow.workflow_id", caseName)
+		}
+		for _, run := range workflow.Runs {
+			if run.RunID == "" {
+				return fmt.Errorf("suite case[%s] setup.workflows[%s] run missing run_id", caseName, workflow.Workflow.WorkflowID)
+			}
+		}
+		for _, knowledge := range workflow.Knowledge {
+			if knowledge.RecordID == "" {
+				return fmt.Errorf("suite case[%s] setup.workflows[%s] knowledge missing record_id", caseName, workflow.Workflow.WorkflowID)
 			}
 		}
 	}

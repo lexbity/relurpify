@@ -1,0 +1,80 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.retrieval
+  description: "Retrieval- and semantic-search-oriented prompts for the coding agent."
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agents/coding-go.yaml
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: ask_mode_semantic_search_retrieval_docs
+      task_type: analysis
+      context:
+        mode: ask
+      overrides:
+        allowed_capabilities:
+          - name: search_semantic
+            kind: tool
+          - name: file_read
+            kind: tool
+      prompt: "Use search_semantic to find the retrieval architecture documentation for 'durable retrieval subsystem', read the most relevant file, and summarize the subsystem in 3 bullets. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)retrieval
+          - (?i)(document|chunk|index|memory)
+        tool_calls_must_include:
+          - search_semantic
+          - file_read
+        tool_calls_must_exclude:
+          - file_write
+    - name: ask_mode_find_similar_retrieval_service_implementations
+      task_type: analysis
+      context:
+        mode: ask
+      overrides:
+        allowed_capabilities:
+          - name: search_find_similar
+            kind: tool
+      prompt: "Use search_find_similar with a snippet resembling 'func RetrievalService() retrieval.RetrieverService' to find similar implementations in the repository, then name the two most relevant files and explain what each one provides. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)sqlite_runtime_memory_store
+          - (?i)sqlite_workflow_state_store
+        tool_calls_must_include:
+          - search_find_similar
+        tool_calls_must_exclude:
+          - file_write
+    - name: debug_mode_semantic_search_retrieval_pipeline
+      task_type: analysis
+      context:
+        mode: debug
+      overrides:
+        allowed_capabilities:
+          - name: search_semantic
+            kind: tool
+          - name: file_read
+            kind: tool
+      prompt: "Use search_semantic to find where workflow retrieval is applied in agent execution, inspect the most relevant implementation files, and explain the current retrieval path through the agents. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)workflow_retrieval
+          - (?i)(architect|pipeline|planner)
+        tool_calls_must_include:
+          - search_semantic
+          - file_read

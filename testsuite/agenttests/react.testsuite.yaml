@@ -1,0 +1,70 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: react
+  description: "End-to-end smoke coverage for the standalone ReAct agent."
+spec:
+  agent_name: react
+  manifest: relurpify_cfg/agents/react.yaml
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: edit_fixture_file
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/hello.txt
+            content: "hello\n"
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/hello.txt
+            content: "hello\n"
+      prompt: "Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt. Use file_write to apply the edit."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/hello.txt
+        tool_calls_must_include:
+          - file_write
+    - name: verify_go_fixture_without_edits
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              func Add(a, b int) int {
+              	return a + b
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      overrides:
+        allowed_capabilities:
+          - name: cli_go
+            kind: tool
+      prompt: "Run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm whether the package is already correct. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(correct|passes|ok)
+        tool_calls_must_include:
+          - cli_go

@@ -86,7 +86,10 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 					n.agent.debugf("%s executing tool=%s args=%v", n.id, call.Name, call.Args)
 					res, err := n.agent.Tools.InvokeCapability(ctx, state, call.Name, call.Args)
 					if err != nil {
-						return nil, err
+						// Convert hard tool errors (e.g. schema validation, permission denial)
+						// into soft ToolResult failures so the LLM can observe and recover.
+						res = &core.ToolResult{Success: false, Error: err.Error()}
+						err = nil
 					}
 					if res != nil {
 						envelope := n.capabilityEnvelope(ctx, state, nil, call, res)
@@ -289,7 +292,6 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, state *core.Conte
 			res.Metadata = map[string]interface{}{}
 		}
 		res.Metadata["insertion_decision"] = envelope.Insertion
-		res.Metadata["capability_result_envelope"] = envelope
 	}
 	return envelope
 }

@@ -1,0 +1,70 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+    name: react-browser
+    version: 1.0.0
+    description: ReAct agent manifest with browser automation enabled for fixture-backed live tests
+spec:
+    image: ghcr.io/lexcodex/relurpify/runtime:latest
+    runtime: gvisor
+    defaults:
+        permissions:
+            filesystem:
+                - action: fs:read
+                  path: /home/lex/Public/Relurpify/**
+                  justification: Read workspace
+                - action: fs:list
+                  path: /home/lex/Public/Relurpify/**
+                  justification: List workspace
+                - action: fs:write
+                  path: /home/lex/Public/Relurpify/**
+                  justification: Modify workspace
+                - action: fs:execute
+                  path: /home/lex/Public/Relurpify/**
+                  justification: Execute tooling inside workspace
+            network:
+                - direction: egress
+                  protocol: tcp
+                  host: localhost
+                  port: 11434
+                  description: Ollama
+        resources:
+            limits:
+                cpu: "2"
+                memory: 4Gi
+                disk_io: 200MBps
+    security:
+        run_as_user: 1000
+        read_only_root: false
+        no_new_privileges: true
+    audit:
+        level: verbose
+        retention_days: 7
+    agent:
+        implementation: react
+        mode: primary
+        version: 1.0.0
+        prompt: You are a ReAct agent. Follow project rules, use the browser tool when the task depends on page content, and summarize outcomes clearly.
+        model:
+            provider: ollama
+            name: qwen2.5-coder:14b
+            temperature: 0.2
+            max_tokens: 4096
+        browser:
+            enabled: true
+            default_backend: cdp
+            allowed_backends: [cdp]
+            actions:
+                open: allow
+                navigate: allow
+                click: allow
+                type: allow
+                wait: allow
+                get_text: allow
+                get_html: allow
+                current_url: allow
+                close: allow
+        ollama_tool_calling: true
+    skills:
+        - system
+        - coding

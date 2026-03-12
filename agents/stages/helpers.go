@@ -18,11 +18,15 @@ func workspaceRoot(task *core.Task) string {
 	if task == nil || task.Context == nil {
 		return ""
 	}
-	root := strings.TrimSpace(fmt.Sprint(task.Context["workspace"]))
-	if root == "" {
+	raw, ok := task.Context["workspace"]
+	if !ok || raw == nil {
 		return ""
 	}
-	return root
+	s, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(s)
 }
 
 func renderContextFiles(task *core.Task, maxBytes int) string {

@@ -46,3 +46,47 @@ func TestSuiteValidateRejectsLegacyWorkspaceStrategies(t *testing.T) {
 		t.Fatal("expected Validate() to reject legacy workspace strategy")
 	}
 }
+
+func TestSuiteValidateRejectsUnsupportedMemoryBackend(t *testing.T) {
+	suite := &Suite{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Spec: SuiteSpec{
+			AgentName: "coding",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Memory:    MemorySpec{Backend: "mystery"},
+			Cases: []CaseSpec{{
+				Name:   "smoke",
+				Prompt: "summarize",
+			}},
+		},
+	}
+
+	if err := suite.Validate(); err == nil {
+		t.Fatal("expected unsupported memory backend to fail validation")
+	}
+}
+
+func TestSuiteValidateRejectsIncompleteWorkflowSeed(t *testing.T) {
+	suite := &Suite{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Spec: SuiteSpec{
+			AgentName: "coding",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Cases: []CaseSpec{{
+				Name:   "smoke",
+				Prompt: "summarize",
+				Setup: SetupSpec{
+					Workflows: []WorkflowSeedSpec{{
+						Workflow: WorkflowRecordSeedSpec{},
+					}},
+				},
+			}},
+		},
+	}
+
+	if err := suite.Validate(); err == nil {
+		t.Fatal("expected incomplete workflow seed to fail validation")
+	}
+}

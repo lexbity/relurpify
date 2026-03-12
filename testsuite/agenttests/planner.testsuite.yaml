@@ -1,0 +1,33 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: planner
+  description: "End-to-end smoke coverage for the planner agent."
+spec:
+  agent_name: planner
+  manifest: relurpify_cfg/agents/planner.yaml
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: summarize_readme_with_read_only_plan
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: "Use only file_read to inspect README.md, then summarize the project in 3 bullets. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)relurpify
+        tool_calls_must_include:
+          - file_read

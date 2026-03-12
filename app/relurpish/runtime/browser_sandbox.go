@@ -131,6 +131,7 @@ func runSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig, h
 		"-d",
 		"--rm",
 		"--runtime", runtimeName,
+		"--add-host", "host.docker.internal:host-gateway",
 		"-p", fmt.Sprintf("127.0.0.1:%d:%d", hostPort, containerPort),
 		"--tmpfs", "/tmp:exec,mode=1777",
 		"--tmpfs", "/var/tmp:exec,mode=1777",

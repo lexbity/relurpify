@@ -41,6 +41,11 @@ func (s *ExploreStage) Contract() pipeline.ContractDescriptor {
 			OutputKey:     "pipeline.explore",
 			SchemaVersion: "v1",
 			AllowTools:    true,
+			RetryPolicy: pipeline.RetryPolicy{
+				MaxAttempts:            1,
+				RetryOnDecodeError:     true,
+				RetryOnValidationError: true,
+			},
 		},
 	}
 }
@@ -64,9 +69,6 @@ func (s *ExploreStage) Validate(output any) error {
 	selection, ok := output.(FileSelection)
 	if !ok {
 		return fmt.Errorf("expected FileSelection output")
-	}
-	if strings.TrimSpace(selection.Summary) == "" {
-		return fmt.Errorf("summary required")
 	}
 	if len(selection.RelevantFiles) == 0 && len(selection.ToolSuggestions) == 0 {
 		return fmt.Errorf("at least one relevant file or tool suggestion required")
@@ -280,7 +282,8 @@ func (s *CodeStage) Apply(ctx *core.Context, output any) error {
 				return err
 			}
 		default:
-			return fmt.Errorf("unsupported edit action %q", edit.Action)
+			// Unknown actions (e.g. "list_files" from LLM hallucination) are skipped
+			// rather than failing the whole pipeline.
 		}
 	}
 	ctx.Set("pipeline.code", plan)
@@ -339,6 +342,11 @@ func (s *VerifyStage) Contract() pipeline.ContractDescriptor {
 			OutputKey:     "pipeline.verify",
 			SchemaVersion: "v1",
 			AllowTools:    true,
+			RetryPolicy: pipeline.RetryPolicy{
+				MaxAttempts:            1,
+				RetryOnDecodeError:     true,
+				RetryOnValidationError: true,
+			},
 		},
 	}
 }

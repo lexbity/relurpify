@@ -1,0 +1,85 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.workflow_retrieval
+  description: "Live workflow retrieval hydration coverage for architect and pipeline coding flows."
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agents/coding-go.yaml
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: architect_mode_hydrates_workflow_retrieval
+      task_type: analysis
+      context:
+        mode: architect
+        workflow_id: wf-architect-retrieval
+      setup:
+        workflows:
+          - workflow:
+              workflow_id: wf-architect-retrieval
+              task_type: analysis
+              instruction: Use retrieval-backed planning context
+              status: running
+            runs:
+              - run_id: seed-run-architect
+                status: running
+            knowledge:
+              - record_id: architect-knowledge-1
+                kind: decision
+                title: Prior design note
+                content: Use retrieval-backed planning context for the architect flow.
+                status: accepted
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: "Use only file_read to inspect README.md, then summarize the project in 3 bullets. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)relurpify
+        state_keys_must_exist:
+          - planner.workflow_retrieval
+    - name: pipeline_mode_hydrates_workflow_retrieval
+      task_type: analysis
+      context:
+        workflow_id: wf-pipeline-retrieval
+      setup:
+        workflows:
+          - workflow:
+              workflow_id: wf-pipeline-retrieval
+              task_type: code_modification
+              instruction: Workflow history should be searchable through retrieval
+              status: running
+            runs:
+              - run_id: seed-run-pipeline
+                status: running
+            knowledge:
+              - record_id: pipeline-knowledge-1
+                kind: fact
+                title: Prior workflow fact
+                content: Workflow history should be searchable through retrieval.
+                status: accepted
+      overrides:
+        control_flow: pipeline
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: "Read README.md and summarize the project in 3 bullets. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)relurpify
+        state_keys_must_exist:
+          - pipeline.workflow_retrieval

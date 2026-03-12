@@ -5,6 +5,7 @@ import (
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -83,24 +84,54 @@ func (s *browserFixtureServer) InjectTask(task *core.Task) {
 	if s == nil || task == nil {
 		return
 	}
+	localURLs := make(map[string]string, len(s.urls))
+	exposedURLs := make(map[string]string, len(s.urls))
+	for name, rawURL := range s.urls {
+		localURLs[name] = rawURL
+		exposedURLs[name] = rewriteLoopbackURLForBrowser(rawURL)
+	}
+	baseURL := rewriteLoopbackURLForBrowser(s.server.URL)
+
 	if task.Context == nil {
 		task.Context = make(map[string]any)
 	}
-	urls := make(map[string]string, len(s.urls))
-	for name, rawURL := range s.urls {
-		urls[name] = rawURL
-	}
 	task.Context["browser_fixtures"] = map[string]any{
-		"base_url": s.server.URL,
-		"urls":     urls,
+		"base_url":       baseURL,
+		"urls":           exposedURLs,
+		"local_base_url": s.server.URL,
+		"local_urls":     localURLs,
 	}
 
 	if task.Metadata == nil {
 		task.Metadata = make(map[string]string)
 	}
-	task.Metadata["browser.fixture.base_url"] = s.server.URL
+	task.Metadata["browser.fixture.base_url"] = baseURL
+	task.Metadata["browser.fixture.local_base_url"] = s.server.URL
 	for name, rawURL := range s.urls {
-		task.Metadata[fmt.Sprintf("browser.fixture.%s.url", sanitizeName(name))] = rawURL
+		safeName := sanitizeName(name)
+		task.Metadata[fmt.Sprintf("browser.fixture.%s.url", safeName)] = rewriteLoopbackURLForBrowser(rawURL)
+		task.Metadata[fmt.Sprintf("browser.fixture.%s.local_url", safeName)] = rawURL
+	}
+}
+
+func rewriteLoopbackURLForBrowser(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed == nil {
+		return rawURL
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		return rawURL
+	}
+	switch strings.ToLower(host) {
+	case "127.0.0.1", "localhost", "::1":
+		parsed.Host = "host.docker.internal"
+		if port := parsed.Port(); port != "" {
+			parsed.Host += ":" + port
+		}
+		return parsed.String()
+	default:
+		return rawURL
 	}
 }
 

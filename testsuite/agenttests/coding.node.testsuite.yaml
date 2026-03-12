@@ -144,3 +144,43 @@ spec:
         output_regex:
           - "(?i)(correct|passes|ok)"
         tool_calls_must_include: ["cli_node"]
+    - name: multi_file_module_fix_and_run_tests
+      task_type: code_modification
+      requires:
+        executables: ["node"]
+        tools: ["cli_node"]
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/nodesuite/sum.js
+            content: |
+              const { add } = require("./math");
+
+              module.exports = { add };
+          - path: testsuite/agenttest_fixtures/nodesuite/math.js
+            content: |
+              function add(a, b) {
+                return a + b;
+              }
+
+              module.exports = { add };
+          - path: testsuite/agenttest_fixtures/nodesuite/test_sum.js
+            content: |
+              const assert = require("assert");
+              const { add, mul } = require("./sum");
+
+              assert.strictEqual(add(2, 2), 4);
+              assert.strictEqual(mul(3, 4), 12);
+
+              console.log("ok");
+      overrides:
+        allowed_capabilities:
+          - name: cli_node
+            kind: tool
+      prompt: "Implement mul(a,b) in testsuite/agenttest_fixtures/nodesuite/math.js and export it from testsuite/agenttest_fixtures/nodesuite/sum.js without changing tests, then run cli_node args [\"test_sum.js\"] with working_directory \"testsuite/agenttest_fixtures/nodesuite\"."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/nodesuite/sum.js
+          - testsuite/agenttest_fixtures/nodesuite/math.js
+        tool_calls_must_include:
+          - cli_node

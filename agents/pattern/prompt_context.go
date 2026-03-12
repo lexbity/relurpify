@@ -38,6 +38,9 @@ func (a *promptContextAssembler) buildPrompt(state *core.Context, tools []core.T
 	if external := a.externalStateSlice(); external != "" {
 		sections = append(sections, "External State Slice:\n"+external)
 	}
+	if memory := a.declarativeMemory(state); memory != "" {
+		sections = append(sections, "Relevant Memory:\n"+memory)
+	}
 	if workflow := a.workflowRetrieval(); workflow != "" {
 		sections = append(sections, "Workflow Retrieval:\n"+workflow)
 	}
@@ -146,6 +149,34 @@ func (a *promptContextAssembler) externalStateSlice() string {
 		}
 		return string(encoded)
 	}
+}
+
+func (a *promptContextAssembler) declarativeMemory(state *core.Context) string {
+	if state == nil {
+		return ""
+	}
+	raw, ok := state.Get("graph.declarative_memory")
+	if !ok || raw == nil {
+		return ""
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok {
+		return ""
+	}
+	results, _ := payload["results"].([]core.MemoryRecordEnvelope)
+	if len(results) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, r := range results {
+		if summary := strings.TrimSpace(r.Summary); summary != "" {
+			parts = append(parts, "- "+summary)
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n")
 }
 
 func (a *promptContextAssembler) workflowRetrieval() string {

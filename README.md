@@ -49,16 +49,16 @@ go build ./app/relurpish
 
 ```bash
 # Scaffold a new skill
-go run ./cmd/dev-agent skill init my-skill --description "My focused workflow" --with-tests
+go run ./app/dev-agent-cli skill init my-skill --description "My focused workflow" --with-tests
 
 # Validate skill manifest + resources
-go run ./cmd/dev-agent skill validate my-skill
+go run ./app/dev-agent-cli validate my-skill
 
 # Diagnose tool/permission compatibility (optional agent manifest)
-go run ./cmd/dev-agent skill doctor my-skill --manifest relurpify_cfg/agent.manifest.yaml
+go run ./app/dev-agent-cli skill doctor my-skill --manifest relurpify_cfg/agent.manifest.yaml
 
 # Run the skill testsuite.yaml
-go run ./cmd/dev-agent skill test my-skill
+go run ./app/dev-agent-cli skill test my-skill
 ```
 
 ### Generate Code documentation

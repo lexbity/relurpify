@@ -17,20 +17,3 @@ Language-specific coding agent manifests are typically copied into `relurpify_cf
 
 For full details see [docs/agents.md](docs/agents.md).
 
-
----
-
-## Repository Layout
-
-```
-framework/   Graph runtime, shared context, memory, telemetry, tool registry
-agents/      Planner, coder, reflection, and ReAct-inspired orchestrators
-templates/   Workspace, agent, skill, and testsuite starter assets
-tools/       File, git, search, execution, and LSP proxy implementations
-cmd/         CLI entry points (`relurpish`, `dev-agent`)
-server/      HTTP + LSP servers and dependency wiring
-framework/persistence/ Workflow + message stores for pause/resume and logging
-llm/         Ollama HTTP client that satisfies core.LanguageModel
-scripts/     Helper scripts (documentation generation, etc.)
-relurpify_cfg/ Workspace configuration, manifests, memory, and telemetry outputs
-```

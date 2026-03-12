@@ -1,0 +1,51 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: react.memory
+  description: "Live runtime-memory retrieval coverage for the standalone ReAct agent."
+spec:
+  agent_name: react
+  manifest: relurpify_cfg/agents/react.yaml
+  memory:
+    backend: sqlite_runtime
+    retrieval:
+      embedder: test
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+      - relurpify_cfg/memory/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: recalls_seeded_runtime_memory
+      task_type: analysis
+      setup:
+        memory:
+          declarative:
+            - record_id: runtime-memory-1
+              scope: project
+              kind: project-knowledge
+              title: Runtime retrieval mirror
+              summary: Declarative runtime memory is mirrored into retrieval.
+              content: The SQLite runtime memory store mirrors declarative records into retrieval tables so agents can recall them during execution.
+              tags: ["retrieval", "memory"]
+              verified: true
+      overrides:
+        restrict_capabilities: true
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: "What does the project's runtime memory say about retrieval mirroring? Answer in one sentence and do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(runtime memory|retrieval)
+        state_keys_must_exist:
+          - graph.declarative_memory
+          - react.final_output

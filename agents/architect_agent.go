@@ -283,9 +283,9 @@ func (a *ArchitectAgent) executeWithWorkflowStore(ctx context.Context, task *cor
 		return nil, err
 	}
 	if !ok {
-		if resumeRequested {
-			return nil, fmt.Errorf("workflow %s has no active plan", workflowID)
-		}
+		// No active plan found — run the planning phase regardless of how the
+		// workflow was identified. Providing a workflow_id associates this run
+		// with existing retrieval context; it does not require a pre-existing plan.
 		planRecord, err = a.planIntoWorkflowStore(ctx, task, state, store, workflowID, runID)
 		if err != nil {
 			return nil, err

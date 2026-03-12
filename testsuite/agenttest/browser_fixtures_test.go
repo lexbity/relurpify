@@ -90,13 +90,21 @@ func TestBrowserFixtureServerServesRoutesAndInjectsTask(t *testing.T) {
 
 	fixtures, ok := task.Context["browser_fixtures"].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, server.server.URL, fixtures["base_url"])
+	require.Equal(t, rewriteLoopbackURLForBrowser(server.server.URL), fixtures["base_url"])
+	require.Equal(t, server.server.URL, fixtures["local_base_url"])
 
 	urls, ok := fixtures["urls"].(map[string]string)
 	require.True(t, ok)
-	require.Equal(t, server.urls["root"], urls["root"])
-	require.Equal(t, server.urls["json_data"], urls["json_data"])
+	require.Equal(t, rewriteLoopbackURLForBrowser(server.urls["root"]), urls["root"])
+	require.Equal(t, rewriteLoopbackURLForBrowser(server.urls["json_data"]), urls["json_data"])
 
-	require.Equal(t, server.server.URL, task.Metadata["browser.fixture.base_url"])
-	require.Equal(t, server.urls["json_data"], task.Metadata["browser.fixture.json_data.url"])
+	localURLs, ok := fixtures["local_urls"].(map[string]string)
+	require.True(t, ok)
+	require.Equal(t, server.urls["root"], localURLs["root"])
+	require.Equal(t, server.urls["json_data"], localURLs["json_data"])
+
+	require.Equal(t, rewriteLoopbackURLForBrowser(server.server.URL), task.Metadata["browser.fixture.base_url"])
+	require.Equal(t, server.server.URL, task.Metadata["browser.fixture.local_base_url"])
+	require.Equal(t, rewriteLoopbackURLForBrowser(server.urls["json_data"]), task.Metadata["browser.fixture.json_data.url"])
+	require.Equal(t, server.urls["json_data"], task.Metadata["browser.fixture.json_data.local_url"])
 }

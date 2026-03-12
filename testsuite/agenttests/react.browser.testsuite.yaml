@@ -1,0 +1,88 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: react.browser
+  description: "Live browser-backed coverage against fixture-served pages."
+spec:
+  agent_name: react
+  manifest: relurpify_cfg/agents/react-browser.yaml
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: browser_reads_fixture_page
+      description: "ReAct should open a fixture page in the browser and report its visible content."
+      task_type: analysis
+      requires:
+        executables: ["docker", "runsc"]
+        tools: ["browser"]
+      browser_fixtures:
+        root:
+          path: /
+          content: |
+            <!doctype html>
+            <html>
+            <body>
+              <main>
+                <h1>Relurpify Browser Fixture</h1>
+                <p id="summary">Fixture-backed browser coverage is enabled.</p>
+              </main>
+            </body>
+            </html>
+      prompt: >
+        Use the browser tool to open the URL at browser_fixtures.urls.root, inspect
+        the page, and answer with the page title text and the summary sentence.
+        Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_contains:
+          - Relurpify Browser Fixture
+          - Fixture-backed browser coverage is enabled.
+        tool_calls_must_include:
+          - browser
+        state_keys_must_exist:
+          - browser.last_page_state
+          - browser.page_states
+          - react.final_output
+    - name: browser_interacts_with_fixture_form
+      description: "ReAct should drive a simple browser interaction flow against fixture content."
+      task_type: analysis
+      requires:
+        executables: ["docker", "runsc"]
+        tools: ["browser"]
+      browser_fixtures:
+        root:
+          path: /
+          content: |
+            <!doctype html>
+            <html>
+            <body>
+              <label for="name">Name</label>
+              <input id="name" />
+              <button id="submit" onclick="document.querySelector('#result').textContent = 'browser-ok';">Submit</button>
+              <div id="result">idle</div>
+            </body>
+            </html>
+      prompt: >
+        Use the browser tool to open browser_fixtures.urls.root, type any short
+        value into #name, click #submit, confirm the result div changed from idle
+        to browser-ok, and summarize what happened. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_contains:
+          - browser-ok
+        tool_calls_must_include:
+          - browser
+        state_keys_must_exist:
+          - browser.last_page_state
+          - browser.page_states
+          - react.final_output

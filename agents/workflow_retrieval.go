@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
@@ -16,6 +17,10 @@ type workflowRetrievalResult struct {
 
 type workflowRetrievalProvider interface {
 	RetrievalService() retrieval.RetrieverService
+}
+
+type workflowKnowledgeLister interface {
+	ListKnowledge(ctx context.Context, workflowID string, kind memory.KnowledgeKind, unresolvedOnly bool) ([]memory.KnowledgeRecord, error)
 }
 
 type workflowRetrievalQuery struct {
@@ -52,7 +57,30 @@ func hydrateWorkflowRetrieval(ctx context.Context, provider workflowRetrievalPro
 	}
 	results := contentBlockResults(blocks)
 	if len(results) == 0 {
-		return nil, nil
+		// Semantic retrieval found nothing — fall back to listing all knowledge
+		// for this workflow directly so callers always get context when it exists.
+		if lister, ok := provider.(workflowKnowledgeLister); ok {
+			records, listErr := lister.ListKnowledge(ctx, strings.TrimSpace(workflowID), "", false)
+			if listErr != nil {
+				return nil, listErr
+			}
+			for _, rec := range records {
+				parts := make([]string, 0, 2)
+				if t := strings.TrimSpace(rec.Title); t != "" {
+					parts = append(parts, t)
+				}
+				if c := strings.TrimSpace(rec.Content); c != "" {
+					parts = append(parts, c)
+				}
+				text := strings.Join(parts, ": ")
+				if text != "" {
+					results = append(results, workflowRetrievalResult{Text: text})
+				}
+			}
+		}
+		if len(results) == 0 {
+			return nil, nil
+		}
 	}
 	texts := make([]string, 0, len(results))
 	citationCount := 0

@@ -44,3 +44,25 @@ spec:
         must_succeed: true
         files_changed: ["testsuite/agenttest_fixtures/hello.txt"]
         tool_calls_must_include: ["file_write"]
+    - name: edit_file_in_git_workspace_and_report_status
+      task_type: code_modification
+      setup:
+        git_init: true
+        files:
+          - path: testsuite/agenttest_fixtures/hello.txt
+            content: "hello\n"
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/hello.txt
+            content: "hello\n"
+      overrides:
+        allowed_capabilities:
+          - name: cli_git
+            kind: tool
+      prompt: "Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt, then run cli_git args [\"status\",\"--short\"] and summarize the result."
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/agenttest_fixtures/hello.txt"]
+        output_regex:
+          - (?m)testsuite/agenttest_fixtures/hello.txt
+        tool_calls_must_include: ["cli_git", "file_write"]

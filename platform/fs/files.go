@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -14,8 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 )
-
-var errBinaryFile = errors.New("binary file detected")
 
 func shouldSkipGeneratedDir(name string) bool {
 	name = strings.TrimSpace(name)
@@ -69,7 +66,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, state *core.Context, args ma
 		return &core.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	if !isText(data) {
-		return nil, errBinaryFile
+		return &core.ToolResult{Success: false, Error: "binary file detected; cannot read binary files"}, nil
 	}
 	info, err = os.Stat(path)
 	if err != nil {

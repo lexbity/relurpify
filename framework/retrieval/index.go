@@ -176,7 +176,7 @@ func (s *SparseIndex) searchFTS(ctx context.Context, queryText string, allowChun
 		WHERE retrieval_chunks_fts MATCH ?
 		  AND c.tombstoned = 0
 		  AND cv.tombstoned = 0`
-	args := []any{queryText}
+	args := []any{fts5OrQuery(queryText)}
 	if len(allowChunkIDs) > 0 {
 		base += " AND " + sqlInClause("cv.chunk_id", len(allowChunkIDs))
 		for _, id := range allowChunkIDs {
@@ -209,9 +209,13 @@ func (s *SparseIndex) searchFallback(ctx context.Context, queryText string, allo
 		WHERE c.tombstoned = 0
 		  AND cv.tombstoned = 0`
 	args := make([]any, 0, len(terms)+len(allowChunkIDs))
+	orParts := make([]string, 0, len(terms))
 	for _, term := range terms {
-		base += " AND lower(rf.text) LIKE ?"
+		orParts = append(orParts, "lower(rf.text) LIKE ?")
 		args = append(args, "%"+term+"%")
+	}
+	if len(orParts) > 0 {
+		base += " AND (" + strings.Join(orParts, " OR ") + ")"
 	}
 	if len(allowChunkIDs) > 0 {
 		base += " AND " + sqlInClause("cv.chunk_id", len(allowChunkIDs))
@@ -278,6 +282,16 @@ func isFTSBacked(ctx context.Context, db *sql.DB) (bool, error) {
 		return false, err
 	}
 	return strings.Contains(strings.ToLower(sqlText), "using fts5"), nil
+}
+
+// fts5OrQuery converts a natural language query string into an FTS5 OR expression
+// so that documents matching ANY of the terms are returned, ranked by BM25.
+func fts5OrQuery(text string) string {
+	terms := strings.Fields(text)
+	if len(terms) <= 1 {
+		return text
+	}
+	return strings.Join(terms, " OR ")
 }
 
 func sqlInClause(column string, n int) string {

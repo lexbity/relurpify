@@ -48,6 +48,58 @@ Agent tests are YAML-driven suites stored in `testsuite/agenttests/`. Run them w
 go run ./cmd/dev-agent agenttest run
 ```
 
+## Live Coverage Targets
+
+The live `dev-agent agenttest` layer is intended to prove agent behavior against
+the real runtime surface, not just prompt formatting or isolated tool stubs.
+
+The acceptance target for the canonical live suite catalog is:
+
+- every shipped primary agent implementation has at least one canonical live suite
+- every shipped `CodingAgent` mode has at least one canonical live suite
+- read/write/execute flows are covered for the main language manifests
+- pipeline and architect control-flow paths both have live coverage
+- workspace lifecycle features such as derived workspaces, fixture layering, and `git_init` are exercised by at least one suite
+- replay-backed suites exist for the stable CI subset, even when broader coverage also runs live
+
+Newer framework features must also be covered at the live agenttest layer, not
+only by unit tests.
+
+Current target areas:
+
+- retrieval-backed runtime memory using the SQLite runtime memory store
+- workflow retrieval hydration for planner, architect, and pipeline flows
+- browser-driven execution against fixture-backed pages
+- persistence and recall across repeated runs or resumed workflows
+- retrieval and memory provenance surfacing in the agent-visible prompt/output path
+
+### Acceptance Criteria For New Harness Work
+
+The live harness work is considered sufficient when all of the following are
+true:
+
+- suites can opt into the newer SQLite-backed runtime memory/retrieval path instead of always using `HybridMemory`
+- suites can seed runtime memory, workflow knowledge, and retrieval-relevant state before execution
+- expectations can assert retrieval-specific outcomes such as hydrated workflow retrieval state, citations, or persisted retrieval artifacts
+- at least one canonical live suite proves runtime memory retrieval through actual agent execution
+- at least one canonical live suite proves workflow retrieval hydration in an architect or pipeline execution path
+- at least one canonical live suite proves a browser-driven flow against local fixture content
+- a replay-capable subset exists for CI so newer feature coverage is not live-only
+
+### Current Non-Goals
+
+The live agenttest layer does not need to replace fine-grained framework unit
+tests. In particular, it is not the right place to exhaustively validate:
+
+- retrieval ranking math or compaction internals
+- low-level SQLite schema migrations in isolation
+- browser backend protocol edge cases across every transport
+- every possible model-dependent phrasing outcome
+
+Those remain package-level test responsibilities. Agenttests should instead
+prove that these features are reachable and functional through the real agent
+runtime.
+
 ### Prerequisites
 
 For live runs, Ollama must be available with the target model pulled:
@@ -107,6 +159,10 @@ metadata:
 spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-go.yaml
+  memory:
+    backend: sqlite_runtime
+    retrieval:
+      embedder: test
   workspace:
     strategy: derived
     template_profile: default
@@ -131,6 +187,13 @@ spec:
           - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
             content: |
               package mathutil
+        memory:
+          declarative:
+            - record_id: fact-1
+              scope: project
+              kind: project-knowledge
+              summary: Prior retrieval-backed memory
+              content: Runtime memory is mirrored into retrieval tables.
       overrides:
         allowed_capabilities:
           - name: cli_go
@@ -142,6 +205,8 @@ spec:
           - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
         tool_calls_must_include:
           - cli_go
+        state_keys_must_exist:
+          - react.final_output
 ```
 
 ### Top-Level Fields
@@ -155,6 +220,7 @@ spec:
 | `spec.workspace.exclude` | Globs omitted from the derived temp workspace |
 | `spec.workspace.ignore_changes` | Paths ignored in change assertions |
 | `spec.workspace.files` | Additional files layered onto the derived workspace before execution |
+| `spec.memory` | Optional live memory backend configuration (`hybrid` or `sqlite_runtime`) |
 | `spec.models` | One or more model/endpoint combinations |
 | `spec.recording` | Default tape mode/path for all cases |
 | `spec.cases` | Individual prompts plus setup and expectations |
@@ -169,14 +235,23 @@ spec:
 | `prompt` | The user instruction sent to the agent |
 | `context` | Extra task context such as `mode: debug` |
 | `metadata` | Extra task metadata |
+| `browser_fixtures` | Local fixture routes served before execution and injected into task context |
 | `setup.files` | Files materialized before the case runs |
 | `setup.git_init` | Initialize a git repository before execution |
+| `setup.memory` | Seed runtime memory before execution |
+| `setup.workflows` | Seed workflow/run/knowledge records before execution |
 | `requires.executables` | Skip unless required binaries exist |
 | `requires.tools` | Skip unless required tools are registered |
 | `expect` | Structured expectations for output, files, and tool calls |
-| `overrides` | Per-case overrides for model, recording, env, allowed tools, or control flow |
+| `overrides` | Per-case overrides for model, recording, memory backend, env, allowed tools, or control flow |
 
 `derived` is the required strategy. It copies the worktree into a temp run workspace, materializes a fresh `relurpify_cfg/` from a testsuite template profile, and then layers suite/case overrides on top.
+
+Browser-backed cases can define `browser_fixtures` with inline HTML or fixture
+files. The harness injects fixture URLs into `task.Context.browser_fixtures`.
+For browser automation these URLs are rewritten to container-reachable
+`host.docker.internal` addresses, and the original host-loopback URLs remain
+available under `local_base_url` and `local_urls`.
 
 ### Expectations
 
@@ -190,6 +265,80 @@ spec:
 | `tool_calls_must_include` | Required tool names were called |
 | `tool_calls_must_exclude` | Forbidden tool names were not called |
 | `max_tool_calls` | Hard cap on total tool invocations |
+| `state_keys_must_exist` | Named context state keys were present at completion |
+
+### Memory Backends
+
+The live runner supports two memory backends:
+
+```yaml
+spec:
+  memory:
+    backend: hybrid
+```
+
+or:
+
+```yaml
+spec:
+  memory:
+    backend: sqlite_runtime
+    retrieval:
+      embedder: test
+```
+
+Notes:
+
+- `hybrid` is the backward-compatible default
+- `sqlite_runtime` provisions `relurpify_cfg/memory/runtime_memory.db`
+- `retrieval.embedder: test` enables a deterministic test embedder for dense retrieval coverage in agenttests
+
+### Seeding Runtime Memory
+
+Suites can seed runtime memory before the baseline workspace snapshot:
+
+```yaml
+setup:
+  memory:
+    declarative:
+      - record_id: fact-1
+        scope: project
+        kind: project-knowledge
+        title: Retrieval mirror
+        summary: Declarative memory should be searchable.
+        content: The runtime store mirrors declarative records into retrieval.
+    procedural:
+      - routine_id: routine-1
+        scope: project
+        kind: capability-composition
+        name: checkpoint-and-summarize
+        summary: Reusable verification routine
+```
+
+`procedural` seeds require the `sqlite_runtime` backend.
+
+### Seeding Workflow Retrieval State
+
+Suites can also seed workflow history directly into the workflow state store:
+
+```yaml
+setup:
+  workflows:
+    - workflow:
+        workflow_id: wf-1
+        instruction: Use retrieval-backed planning context
+      runs:
+        - run_id: seed-run
+      knowledge:
+        - record_id: knowledge-1
+          kind: decision
+          title: Prior decision
+          content: Use retrieval-backed planning context.
+```
+
+This is intended for architect and pipeline cases that should hydrate
+`planner.workflow_retrieval`, `architect.workflow_retrieval`, or
+`pipeline.workflow_retrieval`.
 
 ---
 

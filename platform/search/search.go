@@ -124,7 +124,8 @@ func (t *SimilarityTool) Parameters() []core.ToolParameter {
 	}
 }
 func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	root := preparePath(t.BasePath, fmt.Sprint(args["directory"]))
+	dirArg, _ := args["directory"].(string)
+	root := preparePath(t.BasePath, dirArg)
 	permissions := newTraversalPermissionCache(t.manager, t.agentID)
 	if permissions != nil {
 		if err := permissions.Check(ctx, core.FileSystemList, root); err != nil {

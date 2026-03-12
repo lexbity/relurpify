@@ -603,8 +603,19 @@ func (n *ToolNode) Execute(ctx context.Context, state *Context) (*Result, error)
 	if err != nil {
 		return nil, err
 	}
-	attachCapabilityEnvelope(n.Registry, n.Tool, state, res, n.Args)
-	return resultFromToolExecution(n.id, res), nil
+	envelope := attachCapabilityEnvelope(n.Registry, n.Tool, state, res, n.Args)
+	result := resultFromToolExecution(n.id, res)
+	if envelope != nil {
+		// Build a fresh metadata map so the envelope pointer is not written back
+		// into res.Metadata (which would recreate the ToolResult → Envelope cycle).
+		meta := make(map[string]any, len(res.Metadata)+1)
+		for k, v := range res.Metadata {
+			meta[k] = v
+		}
+		meta["capability_result_envelope"] = envelope
+		result.Metadata = meta
+	}
+	return result, nil
 }
 
 // ConditionalNode computes the next branch dynamically.
@@ -737,15 +748,15 @@ func resultFromToolExecution(nodeID string, res *core.ToolResult) *Result {
 	}
 }
 
-func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, state *Context, res *core.ToolResult, args map[string]interface{}) {
+func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, state *Context, res *core.ToolResult, args map[string]interface{}) *core.CapabilityResultEnvelope {
 	if registry == nil || tool == nil || res == nil {
-		return
+		return nil
 	}
 	if res.Metadata == nil {
 		res.Metadata = map[string]interface{}{}
 	}
-	if envelope, ok := core.ToolResultEnvelope(res); ok && envelope != nil {
-		return
+	if res.Metadata["capability_envelope_created"] == true {
+		return nil
 	}
 
 	desc, ok := res.Metadata["capability_descriptor"].(core.CapabilityDescriptor)
@@ -771,5 +782,6 @@ func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, state *Cont
 		envelope = core.ApplyInsertionDecision(envelope, decision)
 	}
 	res.Metadata["insertion_decision"] = envelope.Insertion
-	res.Metadata["capability_result_envelope"] = envelope
+	res.Metadata["capability_envelope_created"] = true
+	return envelope
 }
