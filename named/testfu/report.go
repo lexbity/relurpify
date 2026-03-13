@@ -1,0 +1,70 @@
+package testfu
+
+import (
+	"path/filepath"
+	"sort"
+
+	runnerpkg "github.com/lexcodex/relurpify/named/testfu/runner"
+)
+
+func suitePassed(report *runnerpkg.SuiteReport) bool {
+	if report == nil {
+		return false
+	}
+	for _, c := range report.Cases {
+		if c.Skipped {
+			continue
+		}
+		if !c.Success {
+			return false
+		}
+	}
+	return true
+}
+
+func failedCaseNames(report map[string]any) []string {
+	switch typed := report["suite"].(type) {
+	case *runnerpkg.SuiteReport:
+		out := make([]string, 0)
+		for _, c := range typed.Cases {
+			if !c.Success && !c.Skipped {
+				out = append(out, c.Name)
+			}
+		}
+		return out
+	case *runnerpkg.CaseReport:
+		if typed.Success || typed.Skipped {
+			return nil
+		}
+		return []string{typed.Name}
+	default:
+		return nil
+	}
+}
+
+func listSuites(workspace string) ([]map[string]any, error) {
+	patterns := []string{
+		filepath.Join(workspace, "testsuite", "agenttests", "*.testsuite.yaml"),
+		filepath.Join(workspace, "relurpify_cfg", "testsuites", "*.testsuite.yaml"),
+	}
+	results := make([]map[string]any, 0)
+	seen := map[string]struct{}{}
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, err
+		}
+		sort.Strings(matches)
+		for _, match := range matches {
+			if _, ok := seen[match]; ok {
+				continue
+			}
+			seen[match] = struct{}{}
+			results = append(results, map[string]any{
+				"path": match,
+				"name": filepath.Base(match),
+			})
+		}
+	}
+	return results, nil
+}
