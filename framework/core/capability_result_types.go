@@ -292,20 +292,32 @@ func moreRestrictiveInsertionDecision(base, candidate InsertionDecision) Inserti
 }
 
 func ApprovalBindingFromCapability(descriptor CapabilityDescriptor, state *Context, args map[string]interface{}) *ApprovalBinding {
+	targetResource := inferTargetResource(args)
+	taskID := ""
+	workflowID := ""
+	if state != nil {
+		taskID = strings.TrimSpace(state.GetString("task.id"))
+		workflowID = strings.TrimSpace(state.GetString("architect.workflow_id"))
+	}
+	if descriptor.Source.ProviderID == "" &&
+		descriptor.Source.SessionID == "" &&
+		len(descriptor.EffectClasses) == 0 &&
+		targetResource == "" &&
+		taskID == "" &&
+		workflowID == "" {
+		return nil
+	}
 	binding := &ApprovalBinding{
 		CapabilityID:   descriptor.ID,
 		CapabilityName: descriptor.Name,
 		ProviderID:     descriptor.Source.ProviderID,
 		SessionID:      descriptor.Source.SessionID,
-		EffectClasses:  append([]EffectClass{}, descriptor.EffectClasses...),
+		TargetResource: targetResource,
+		TaskID:         taskID,
+		WorkflowID:     workflowID,
 	}
-	if state != nil {
-		binding.TaskID = strings.TrimSpace(state.GetString("task.id"))
-		binding.WorkflowID = strings.TrimSpace(state.GetString("architect.workflow_id"))
-	}
-	binding.TargetResource = inferTargetResource(args)
-	if binding.CapabilityID == "" && binding.CapabilityName == "" && binding.ProviderID == "" && binding.SessionID == "" && len(binding.EffectClasses) == 0 && binding.TargetResource == "" && binding.TaskID == "" && binding.WorkflowID == "" {
-		return nil
+	if len(descriptor.EffectClasses) > 0 {
+		binding.EffectClasses = descriptor.EffectClasses
 	}
 	return binding
 }

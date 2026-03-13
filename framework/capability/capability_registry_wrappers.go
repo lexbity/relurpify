@@ -16,26 +16,12 @@ func (r *CapabilityRegistry) wrapTool(tool Tool) Tool {
 		return nil
 	}
 	if existing, ok := tool.(*instrumentedTool); ok {
-		existing.manager = r.permissionManager
-		existing.agentID = r.registeredAgentID
-		existing.telemetry = r.telemetry
-		existing.policy = r.toolPolicies[existing.Tool.Name()]
-		existing.capabilityPolicies = append([]core.CapabilityPolicy{}, r.capabilityPolicies...)
-		existing.hasPolicy = r.agentSpec != nil
-		existing.globalPolicies = r.globalPolicies
-		existing.safety = r.safety
+		existing.registry = r
 		return existing
 	}
 	return &instrumentedTool{
-		Tool:               tool,
-		manager:            r.permissionManager,
-		agentID:            r.registeredAgentID,
-		telemetry:          r.telemetry,
-		policy:             r.toolPolicies[tool.Name()],
-		capabilityPolicies: append([]core.CapabilityPolicy{}, r.capabilityPolicies...),
-		hasPolicy:          r.agentSpec != nil,
-		globalPolicies:     r.globalPolicies,
-		safety:             r.safety,
+		Tool:     tool,
+		registry: r,
 	}
 }
 
@@ -43,53 +29,52 @@ func (r *CapabilityRegistry) wrapCapabilityHandler(handler core.CapabilityHandle
 	if handler == nil {
 		return nil
 	}
+	if aware, ok := handler.(PermissionAware); ok && r.permissionManager != nil {
+		aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
+	}
 	if aware, ok := handler.(AgentSpecAware); ok && r.agentSpec != nil {
 		aware.SetAgentSpec(r.agentSpec, r.registeredAgentID)
 	}
 	if existing, ok := handler.(instrumentCapabilityHandler); ok {
-		existing.registeredAgentID = r.registeredAgentID
-		existing.manager = r.permissionManager
-		existing.toolPolicies = r.toolPolicies
-		existing.capabilityPolicies = append([]core.CapabilityPolicy{}, r.capabilityPolicies...)
-		existing.globalPolicies = cloneGlobalPolicies(r.globalPolicies)
-		existing.telemetry = r.telemetry
-		existing.safety = r.safety
+		existing.registry = r
 		return existing
 	}
+	desc := core.NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
 	return instrumentCapabilityHandler{
-		handler:            handler,
-		registeredAgentID:  r.registeredAgentID,
-		manager:            r.permissionManager,
-		toolPolicies:       r.toolPolicies,
-		capabilityPolicies: append([]core.CapabilityPolicy{}, r.capabilityPolicies...),
-		globalPolicies:     cloneGlobalPolicies(r.globalPolicies),
-		telemetry:          r.telemetry,
-		safety:             r.safety,
+		handler:    handler,
+		registry:   r,
+		descriptor: desc,
+		profile:    buildDescriptorProfile(desc),
 	}
 }
 
 type instrumentedTool struct {
 	Tool
-	manager            *PermissionManager
-	agentID            string
-	telemetry          Telemetry
-	policy             ToolPolicy
-	capabilityPolicies []core.CapabilityPolicy
-	hasPolicy          bool
-	globalPolicies     map[string]AgentPermissionLevel
-	safety             *runtimeSafetyController
+	registry *CapabilityRegistry
 }
 
-
 type instrumentCapabilityHandler struct {
-	handler            core.CapabilityHandler
-	registeredAgentID  string
-	manager            *PermissionManager
-	toolPolicies       map[string]ToolPolicy
-	capabilityPolicies []core.CapabilityPolicy
-	globalPolicies     map[string]AgentPermissionLevel
-	telemetry          Telemetry
-	safety             *runtimeSafetyController
+	handler    core.CapabilityHandler
+	registry   *CapabilityRegistry
+	descriptor core.CapabilityDescriptor
+	profile    descriptorProfile
+}
+
+func (t *instrumentedTool) runtimeState() executionRuntimeState {
+	if t == nil {
+		return executionRuntimeState{policy: &compiledRuntimePolicy{}}
+	}
+	if t.registry == nil {
+		return executionRuntimeState{policy: &compiledRuntimePolicy{}}
+	}
+	return t.registry.executionRuntimeState()
+}
+
+func (h instrumentCapabilityHandler) runtimeState() executionRuntimeState {
+	if h.registry == nil {
+		return executionRuntimeState{policy: &compiledRuntimePolicy{}}
+	}
+	return h.registry.executionRuntimeState()
 }
 
 func toolParametersFromSchema(schema *core.Schema) []core.ToolParameter {
@@ -118,6 +103,9 @@ func toolParametersFromSchema(schema *core.Schema) []core.ToolParameter {
 }
 
 func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, state *Context) core.CapabilityDescriptor {
+	if h.descriptor.ID != "" {
+		return h.descriptor
+	}
 	if h.handler == nil {
 		return core.CapabilityDescriptor{}
 	}
@@ -136,49 +124,29 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, state *Context,
 	if !ok {
 		return nil, fmt.Errorf("capability handler unavailable")
 	}
-	desc := h.Descriptor(ctx, state)
+	desc := h.descriptor
+	if desc.ID == "" {
+		desc = h.Descriptor(ctx, state)
+	}
 	approvalBinding := core.ApprovalBindingFromCapability(desc, state, args)
 	approvalMetadata := map[string]string(nil)
 	if approvalBinding != nil {
 		approvalMetadata = approvalBinding.PermissionMetadata()
 	}
-	if h.safety != nil {
-		if err := h.safety.CheckBeforeExecution(desc); err != nil {
-			return nil, err
-		}
-	}
+	stateSnapshot := h.runtimeState()
 	if err := core.ValidateValueAgainstSchema(args, desc.InputSchema); err != nil {
 		return nil, fmt.Errorf("capability %s blocked: input schema invalid: %w", desc.ID, err)
 	}
-	if desc.Kind == core.CapabilityKindTool && desc.RuntimeFamily == core.CapabilityRuntimeFamilyLocalTool && len(h.toolPolicies) > 0 {
-		if policy, ok := h.toolPolicies[desc.Name]; ok {
-			switch policy.Execute {
-			case AgentPermissionDeny:
-				return nil, fmt.Errorf("capability %s blocked: execution denied by tool policy", desc.ID)
-			case AgentPermissionAsk:
-				return nil, h.requireApproval(ctx, desc, approvalMetadata, "tool execution approval")
-			}
+	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, approvalMetadata); err != nil {
+		return nil, err
+	}
+	if stateSnapshot.safety != nil {
+		if err := stateSnapshot.safety.CheckBeforeExecution(desc); err != nil {
+			return nil, err
 		}
 	}
-	if len(h.capabilityPolicies) > 0 {
-		effective := effectiveCapabilityPolicyForDescriptor(desc, h.capabilityPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("capability %s blocked: execution denied by capability selector policy", desc.ID)
-		case AgentPermissionAsk:
-			return nil, h.requireApproval(ctx, desc, approvalMetadata, "capability selector policy approval")
-		}
-	}
-	if len(h.globalPolicies) > 0 {
-		effective := effectiveClassPolicyForDescriptor(desc, h.globalPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("capability %s blocked: execution denied by capability policy", desc.ID)
-		case AgentPermissionAsk:
-			return nil, h.requireApproval(ctx, desc, approvalMetadata, "capability class policy approval")
-		}
-	}
-	emitCapabilityInvocationTelemetry(h.telemetry, desc, h.registeredAgentID, args)
+	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
+	startedAt := time.Now().UTC()
 	result, err := invocable.Invoke(ctx, state, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
 		if schemaErr := core.ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
@@ -187,8 +155,8 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, state *Context,
 			result.Error = err.Error()
 		}
 	}
-	if err == nil && h.safety != nil {
-		if safetyErr := h.safety.RecordResult(desc, result); safetyErr != nil {
+	if err == nil && stateSnapshot.safety != nil {
+		if safetyErr := stateSnapshot.safety.RecordResult(desc, result); safetyErr != nil {
 			err = safetyErr
 			if result == nil {
 				result = &core.ToolResult{Success: false, Error: safetyErr.Error()}
@@ -208,7 +176,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, state *Context,
 		}
 		result.Metadata["insertion_decision"] = core.DefaultInsertionDecision(desc, core.ContentDispositionRaw)
 	}
-	emitCapabilityResultTelemetry(h.telemetry, desc, h.registeredAgentID, result, err)
+	emitCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
@@ -217,36 +185,26 @@ func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, state *Co
 	if !ok {
 		return nil, fmt.Errorf("prompt handler unavailable")
 	}
-	desc := h.Descriptor(ctx, state)
-	if h.safety != nil {
-		if err := h.safety.CheckBeforeExecution(desc); err != nil {
-			return nil, err
-		}
+	desc := h.descriptor
+	if desc.ID == "" {
+		desc = h.Descriptor(ctx, state)
 	}
+	stateSnapshot := h.runtimeState()
 	if err := core.ValidateValueAgainstSchema(args, desc.InputSchema); err != nil {
 		return nil, fmt.Errorf("capability %s blocked: input schema invalid: %w", desc.ID, err)
 	}
-	if len(h.capabilityPolicies) > 0 {
-		effective := effectiveCapabilityPolicyForDescriptor(desc, h.capabilityPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("capability %s blocked: execution denied by capability selector policy", desc.ID)
-		case AgentPermissionAsk:
-			return nil, h.requireApproval(ctx, desc, nil, "capability selector policy approval")
+	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, nil); err != nil {
+		return nil, err
+	}
+	if stateSnapshot.safety != nil {
+		if err := stateSnapshot.safety.CheckBeforeExecution(desc); err != nil {
+			return nil, err
 		}
 	}
-	if len(h.globalPolicies) > 0 {
-		effective := effectiveClassPolicyForDescriptor(desc, h.globalPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("capability %s blocked: execution denied by capability policy", desc.ID)
-		case AgentPermissionAsk:
-			return nil, h.requireApproval(ctx, desc, nil, "capability class policy approval")
-		}
-	}
-	emitCapabilityInvocationTelemetry(h.telemetry, desc, h.registeredAgentID, args)
+	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
+	startedAt := time.Now().UTC()
 	result, err := promptHandler.RenderPrompt(ctx, state, args)
-	emitPromptCapabilityResultTelemetry(h.telemetry, desc, h.registeredAgentID, result, err)
+	emitPromptCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
@@ -255,47 +213,71 @@ func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, state *Co
 	if !ok {
 		return nil, fmt.Errorf("resource handler unavailable")
 	}
-	desc := h.Descriptor(ctx, state)
-	if h.safety != nil {
-		if err := h.safety.CheckBeforeExecution(desc); err != nil {
+	desc := h.descriptor
+	if desc.ID == "" {
+		desc = h.Descriptor(ctx, state)
+	}
+	stateSnapshot := h.runtimeState()
+	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, nil); err != nil {
+		return nil, err
+	}
+	if stateSnapshot.safety != nil {
+		if err := stateSnapshot.safety.CheckBeforeExecution(desc); err != nil {
 			return nil, err
 		}
 	}
-	if len(h.capabilityPolicies) > 0 {
-		effective := effectiveCapabilityPolicyForDescriptor(desc, h.capabilityPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("capability %s blocked: execution denied by capability selector policy", desc.ID)
-		case AgentPermissionAsk:
-			return nil, h.requireApproval(ctx, desc, nil, "capability selector policy approval")
-		}
-	}
-	if len(h.globalPolicies) > 0 {
-		effective := effectiveClassPolicyForDescriptor(desc, h.globalPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("capability %s blocked: execution denied by capability policy", desc.ID)
-		case AgentPermissionAsk:
-			return nil, h.requireApproval(ctx, desc, nil, "capability class policy approval")
-		}
-	}
-	emitCapabilityInvocationTelemetry(h.telemetry, desc, h.registeredAgentID, nil)
+	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, nil)
+	startedAt := time.Now().UTC()
 	result, err := resourceHandler.ReadResource(ctx, state)
-	emitResourceCapabilityResultTelemetry(h.telemetry, desc, h.registeredAgentID, result, err)
+	emitResourceCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) requireApproval(ctx context.Context, desc core.CapabilityDescriptor, metadata map[string]string, reason string) error {
-	if h.manager == nil {
+func requestCapabilityApproval(ctx context.Context, desc core.CapabilityDescriptor, stateSnapshot executionRuntimeState, metadata map[string]string, reason string) error {
+	if stateSnapshot.manager == nil {
 		return fmt.Errorf("capability %s blocked: approval required but permission manager missing", desc.ID)
 	}
-	return h.manager.RequireApproval(ctx, h.registeredAgentID, PermissionDescriptor{
+	return stateSnapshot.manager.RequireApproval(ctx, stateSnapshot.agentID, PermissionDescriptor{
 		Type:         PermissionTypeHITL,
 		Action:       fmt.Sprintf("capability:%s", desc.ID),
-		Resource:     h.registeredAgentID,
+		Resource:     stateSnapshot.agentID,
 		Metadata:     metadata,
 		RequiresHITL: true,
 	}, reason, GrantScopeOneTime, RiskLevelMedium, 0)
+}
+
+func enforceDescriptorExecutionPolicies(ctx context.Context, desc core.CapabilityDescriptor, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
+	return enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, buildDescriptorProfile(desc), stateSnapshot, approvalMetadata)
+}
+
+func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc core.CapabilityDescriptor, profile descriptorProfile, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
+	if desc.Kind == core.CapabilityKindTool && desc.RuntimeFamily == core.CapabilityRuntimeFamilyLocalTool && stateSnapshot.policy.agentSpec != nil {
+		switch stateSnapshot.policy.toolPolicies[desc.Name].Execute {
+		case AgentPermissionDeny:
+			return fmt.Errorf("capability %s blocked: execution denied by tool policy", desc.ID)
+		case AgentPermissionAsk:
+			return requestCapabilityApproval(ctx, desc, stateSnapshot, approvalMetadata, "tool execution approval")
+		}
+	}
+	if len(stateSnapshot.policy.compiledCapabilityPolicies) > 0 {
+		effective := effectiveCompiledCapabilityPolicyForProfile(profile, stateSnapshot.policy.compiledCapabilityPolicies)
+		switch effective {
+		case AgentPermissionDeny:
+			return fmt.Errorf("capability %s blocked: execution denied by capability selector policy", desc.ID)
+		case AgentPermissionAsk:
+			return requestCapabilityApproval(ctx, desc, stateSnapshot, approvalMetadata, "capability selector policy approval")
+		}
+	}
+	if len(stateSnapshot.policy.globalPolicies) > 0 {
+		effective := effectiveClassPolicyForProfile(profile, stateSnapshot.policy.globalPolicies)
+		switch effective {
+		case AgentPermissionDeny:
+			return fmt.Errorf("capability %s blocked: execution denied by capability policy", desc.ID)
+		case AgentPermissionAsk:
+			return requestCapabilityApproval(ctx, desc, stateSnapshot, approvalMetadata, "capability class policy approval")
+		}
+	}
+	return nil
 }
 
 // Execute authorizes the wrapped tool before delegating to the original implementation.
@@ -306,75 +288,15 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 	if approvalBinding != nil {
 		approvalMetadata = approvalBinding.PermissionMetadata()
 	}
-	if t.safety != nil {
-		if err := t.safety.CheckBeforeExecution(desc); err != nil {
-			return nil, err
-		}
-	}
+	stateSnapshot := t.runtimeState()
 	if err := core.ValidateValueAgainstSchema(args, desc.InputSchema); err != nil {
 		return nil, fmt.Errorf("tool %s blocked: input schema invalid: %w", t.Tool.Name(), err)
 	}
-	if t.hasPolicy {
-		switch t.policy.Execute {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("tool %s blocked: execution denied by policy", t.Tool.Name())
-		case AgentPermissionAsk:
-			if t.manager == nil {
-				return nil, fmt.Errorf("tool %s blocked: approval required but permission manager missing", t.Tool.Name())
-			}
-			if err := t.manager.RequireApproval(ctx, t.agentID, PermissionDescriptor{
-				Type:         PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool:%s", t.Tool.Name()),
-				Resource:     t.agentID,
-				Metadata:     approvalMetadata,
-				RequiresHITL: true,
-			}, "tool execution approval", GrantScopeOneTime, RiskLevelMedium, 0); err != nil {
-				return nil, err
-			}
-		}
+	if err := enforceDescriptorExecutionPolicies(ctx, desc, stateSnapshot, approvalMetadata); err != nil {
+		return nil, normalizeToolExecutionPolicyError(t.Tool.Name(), err)
 	}
-	if len(t.capabilityPolicies) > 0 {
-		effective := effectiveCapabilityPolicy(t.Tool, t.capabilityPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("tool %s blocked: execution denied by capability selector policy", t.Tool.Name())
-		case AgentPermissionAsk:
-			if t.manager == nil {
-				return nil, fmt.Errorf("tool %s blocked: approval required but permission manager missing", t.Tool.Name())
-			}
-			if err := t.manager.RequireApproval(ctx, t.agentID, PermissionDescriptor{
-				Type:         PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool:%s", t.Tool.Name()),
-				Resource:     t.agentID,
-				Metadata:     approvalMetadata,
-				RequiresHITL: true,
-			}, "capability selector policy approval", GrantScopeOneTime, RiskLevelMedium, 0); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if len(t.globalPolicies) > 0 {
-		effective := effectiveClassPolicy(t.Tool, t.globalPolicies)
-		switch effective {
-		case AgentPermissionDeny:
-			return nil, fmt.Errorf("tool %s blocked: execution denied by capability policy", t.Tool.Name())
-		case AgentPermissionAsk:
-			if t.manager == nil {
-				return nil, fmt.Errorf("tool %s blocked: approval required but permission manager missing", t.Tool.Name())
-			}
-			if err := t.manager.RequireApproval(ctx, t.agentID, PermissionDescriptor{
-				Type:         PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool:%s", t.Tool.Name()),
-				Resource:     t.agentID,
-				Metadata:     approvalMetadata,
-				RequiresHITL: true,
-			}, "capability class policy approval", GrantScopeOneTime, RiskLevelMedium, 0); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if t.manager != nil {
-		if err := t.manager.AuthorizeTool(ctx, t.agentID, t.Tool, args); err != nil {
+	if stateSnapshot.manager != nil {
+		if err := stateSnapshot.manager.AuthorizeTool(ctx, stateSnapshot.agentID, t.Tool, args); err != nil {
 			var denied *PermissionDeniedError
 			if errors.As(err, &denied) {
 				return nil, fmt.Errorf("tool %s blocked: %w", t.Tool.Name(), err)
@@ -382,18 +304,24 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 			return nil, err
 		}
 	}
-	if t.telemetry != nil {
-		t.telemetry.Emit(Event{
+	if stateSnapshot.safety != nil {
+		if err := stateSnapshot.safety.CheckBeforeExecution(desc); err != nil {
+			return nil, err
+		}
+	}
+	if stateSnapshot.telemetry != nil {
+		stateSnapshot.telemetry.Emit(Event{
 			Type:      EventToolCall,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s invoked", t.Tool.Name()),
-			Metadata: redactTelemetryMetadata(t.safety, map[string]interface{}{
+			Metadata: redactTelemetryMetadata(stateSnapshot.safety, map[string]interface{}{
 				"tool":     t.Tool.Name(),
-				"agent_id": t.agentID,
+				"agent_id": stateSnapshot.agentID,
 				"args":     summarizeArgs(args),
 			}),
 		})
 	}
+	startedAt := time.Now().UTC()
 	result, err := t.Tool.Execute(ctx, state, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
 		if schemaErr := core.ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
@@ -402,8 +330,8 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 			result.Error = err.Error()
 		}
 	}
-	if err == nil && t.safety != nil {
-		if safetyErr := t.safety.RecordResult(desc, result); safetyErr != nil {
+	if err == nil && stateSnapshot.safety != nil {
+		if safetyErr := stateSnapshot.safety.RecordResult(desc, result); safetyErr != nil {
 			err = safetyErr
 			if result == nil {
 				result = &ToolResult{Success: false, Error: safetyErr.Error()}
@@ -429,10 +357,10 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 			err = fmt.Errorf("tool %s blocked: %w", t.Tool.Name(), err)
 		}
 	}
-	if t.telemetry != nil {
+	if stateSnapshot.telemetry != nil {
 		metadata := map[string]interface{}{
 			"tool":     t.Tool.Name(),
-			"agent_id": t.agentID,
+			"agent_id": stateSnapshot.agentID,
 		}
 		if result != nil {
 			metadata["success"] = result.Success
@@ -443,14 +371,22 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 		if err != nil {
 			metadata["error"] = err.Error()
 		}
-		t.telemetry.Emit(Event{
+		metadata["duration_ms"] = time.Since(startedAt).Milliseconds()
+		stateSnapshot.telemetry.Emit(Event{
 			Type:      EventToolResult,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s completed", t.Tool.Name()),
-			Metadata:  redactTelemetryMetadata(t.safety, metadata),
+			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, metadata),
 		})
 	}
 	return result, err
+}
+
+func normalizeToolExecutionPolicyError(name string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("tool %s blocked: %s", name, strings.TrimPrefix(err.Error(), "capability tool:"+name+" blocked: "))
 }
 
 func redactTelemetryMetadata(controller *runtimeSafetyController, metadata map[string]interface{}) map[string]interface{} {
@@ -554,7 +490,7 @@ func emitCapabilityInvocationTelemetry(telemetry Telemetry, desc core.Capability
 	})
 }
 
-func emitCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.CapabilityExecutionResult, err error) {
+func emitCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.CapabilityExecutionResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -574,6 +510,7 @@ func emitCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDesc
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
+	metadata["duration_ms"] = duration.Milliseconds()
 	telemetry.Emit(Event{
 		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
@@ -582,7 +519,7 @@ func emitCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDesc
 	})
 }
 
-func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.PromptRenderResult, err error) {
+func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.PromptRenderResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -599,6 +536,7 @@ func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc core.Capabili
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
+	metadata["duration_ms"] = duration.Milliseconds()
 	telemetry.Emit(Event{
 		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
@@ -607,7 +545,7 @@ func emitPromptCapabilityResultTelemetry(telemetry Telemetry, desc core.Capabili
 	})
 }
 
-func emitResourceCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.ResourceReadResult, err error) {
+func emitResourceCapabilityResultTelemetry(telemetry Telemetry, desc core.CapabilityDescriptor, agentID string, result *core.ResourceReadResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -624,6 +562,7 @@ func emitResourceCapabilityResultTelemetry(telemetry Telemetry, desc core.Capabi
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
+	metadata["duration_ms"] = duration.Milliseconds()
 	telemetry.Emit(Event{
 		Type:      EventCapabilityResult,
 		Timestamp: time.Now().UTC(),

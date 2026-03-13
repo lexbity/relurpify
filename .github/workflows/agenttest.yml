@@ -1,0 +1,61 @@
+name: agenttest
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "Agenttest lane to run on the self-hosted live job"
+        required: false
+        default: "pr-smoke"
+        type: choice
+        options:
+          - pr-smoke
+          - merge-stable
+          - quarantined-live
+
+jobs:
+  agenttest-guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate agenttest code and catalog
+        run: go test ./testsuite/agenttest ./named/testfu ./app/dev-agent-cli
+
+      - name: Build dev-agent CLI
+        run: go build ./cmd/dev-agent
+
+  agenttest-live:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: self-hosted
+    needs: agenttest-guardrails
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Ensure Ollama is reachable
+        run: |
+          ollama version
+          curl --fail --silent http://127.0.0.1:11434/api/tags > /dev/null
+
+      - name: Build dev-agent CLI
+        run: go build ./cmd/dev-agent
+
+      - name: Run live agenttest lane
+        env:
+          AGENTTEST_LANE: ${{ inputs.lane || 'pr-smoke' }}
+        run: ./dev-agent agenttest run --lane "$AGENTTEST_LANE"

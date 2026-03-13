@@ -58,7 +58,8 @@ func MergeAgentContextSpec(base AgentContextSpec, overlays ...AgentContextSpecOv
 			merged.CompressionStrategy = *overlay.CompressionStrategy
 		}
 		if overlay.ProgressiveLoading != nil {
-			merged.ProgressiveLoading = *overlay.ProgressiveLoading
+			value := *overlay.ProgressiveLoading
+			merged.ProgressiveLoading = &value
 		}
 	}
 	return merged

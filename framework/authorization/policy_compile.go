@@ -18,11 +18,19 @@ const (
 
 // CompileManifestPolicyRules compiles manifest policy surfaces into normalized policy rules.
 func CompileManifestPolicyRules(m *manifest.AgentManifest) ([]core.PolicyRule, error) {
-	if m == nil || m.Spec.Agent == nil {
+	if m == nil {
+		return nil, nil
+	}
+	return CompileAgentSpecPolicyRules(m.Spec.Agent)
+}
+
+// CompileAgentSpecPolicyRules compiles policy surfaces from an effective agent
+// spec rather than a raw manifest.
+func CompileAgentSpecPolicyRules(spec *core.AgentRuntimeSpec) ([]core.PolicyRule, error) {
+	if spec == nil {
 		return nil, nil
 	}
 	var rules []core.PolicyRule
-	spec := m.Spec.Agent
 
 	for toolName, policy := range spec.ToolExecutionPolicy {
 		rule, ok := compileToolExecutionPolicy(toolName, policy)
@@ -192,8 +200,8 @@ func compileGlobalPolicy(key string, level core.AgentPermissionLevel) (*core.Pol
 }
 
 func compileCapabilitySelector(selector core.CapabilitySelector) (core.PolicyConditions, error) {
-	if selector.ExcludeTags != nil || selector.Tags != nil || selector.SourceScopes != nil || selector.CoordinationRoles != nil ||
-		selector.CoordinationTaskTypes != nil || selector.CoordinationExecutionModes != nil ||
+	if len(selector.ExcludeTags) > 0 || len(selector.Tags) > 0 || len(selector.SourceScopes) > 0 || len(selector.CoordinationRoles) > 0 ||
+		len(selector.CoordinationTaskTypes) > 0 || len(selector.CoordinationExecutionModes) > 0 ||
 		selector.CoordinationLongRunning != nil || selector.CoordinationDirectInsertion != nil {
 		return core.PolicyConditions{}, fmt.Errorf("selector fields require descriptor-time evaluation")
 	}

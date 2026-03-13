@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 )
@@ -22,6 +23,12 @@ type EternalAgent struct {
 	Infinite          bool
 	MaxCycles         int
 	SleepPerCycle     time.Duration
+}
+
+func (a *EternalAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+	a.Model = env.Model
+	a.Config = env.Config
+	return a.Initialize(env.Config)
 }
 
 // Initialize configures the agent.

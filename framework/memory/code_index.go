@@ -30,10 +30,11 @@ type IndexData struct {
 
 // CodeIndex coordinates parsing, indexing, and memory.
 type CodeIndex struct {
-	mu        sync.RWMutex
-	rootPath  string
-	indexPath string
-	data      *IndexData
+	mu         sync.RWMutex
+	rootPath   string
+	indexPath  string
+	data       *IndexData
+	pathFilter func(path string, isDir bool) bool
 }
 
 // NewCodeIndex returns a ready-to-use indexer.
@@ -75,6 +76,14 @@ func (ci *CodeIndex) load() error {
 	return nil
 }
 
+// SetPathFilter installs an optional filter that can skip directories/files
+// during indexing (for example to enforce manifest filesystem permissions).
+func (ci *CodeIndex) SetPathFilter(filter func(path string, isDir bool) bool) {
+	ci.mu.Lock()
+	defer ci.mu.Unlock()
+	ci.pathFilter = filter
+}
+
 // BuildIndex scans the entire repository to refresh metadata.
 func (ci *CodeIndex) BuildIndex(ctx context.Context) error {
 	data := ci.newIndexData()
@@ -82,10 +91,19 @@ func (ci *CodeIndex) BuildIndex(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		ci.mu.RLock()
+		filter := ci.pathFilter
+		ci.mu.RUnlock()
 		if entry.IsDir() {
+			if filter != nil && !filter(path, true) {
+				return filepath.SkipDir
+			}
 			if strings.HasPrefix(entry.Name(), ".git") || strings.Contains(path, "/.relurpify") {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if filter != nil && !filter(path, false) {
 			return nil
 		}
 		select {
@@ -124,23 +142,45 @@ func (ci *CodeIndex) BuildIndex(ctx context.Context) error {
 
 // UpdateIncremental refreshes the index for the provided files only.
 func (ci *CodeIndex) UpdateIncremental(files []string) error {
+	ci.mu.RLock()
+	filter := ci.pathFilter
+	ci.mu.RUnlock()
+
 	ci.mu.Lock()
 	defer ci.mu.Unlock()
 	if ci.data == nil {
 		ci.data = ci.newIndexData()
 	}
 	for _, file := range files {
-		if meta, chunks := ci.indexFile(filepath.Join(ci.rootPath, file)); meta != nil {
-			meta.Path = file
-			ci.data.Files[file] = meta
-			ci.data.ChunksByFile[file] = nil
-			for _, chunk := range chunks {
-				ci.data.Chunks[chunk.ID] = chunk
-				ci.data.ChunksByFile[file] = append(ci.data.ChunksByFile[file], chunk.ID)
+		fullPath := file
+		if !filepath.IsAbs(fullPath) {
+			fullPath = filepath.Join(ci.rootPath, file)
+		}
+		relPath := file
+		if filepath.IsAbs(file) {
+			if rel, err := filepath.Rel(ci.rootPath, file); err == nil {
+				relPath = rel
 			}
 		}
+		if filter != nil && !filter(fullPath, false) {
+			ci.removeFileLocked(relPath)
+			continue
+		}
+		if meta, chunks := ci.indexFile(fullPath); meta != nil {
+			meta.Path = relPath
+			ci.data.Files[relPath] = meta
+			ci.data.ChunksByFile[relPath] = nil
+			for _, chunk := range chunks {
+				ci.data.Chunks[chunk.ID] = chunk
+				ci.data.ChunksByFile[relPath] = append(ci.data.ChunksByFile[relPath], chunk.ID)
+			}
+		} else {
+			ci.removeFileLocked(relPath)
+		}
 	}
+	ci.rebuildDerivedLocked()
 	ci.data.LastUpdate = time.Now().UTC()
+	ci.data.Version = fmt.Sprintf("%d", ci.data.LastUpdate.Unix())
 	return nil
 }
 
@@ -382,6 +422,38 @@ func (ci *CodeIndex) newIndexData() *IndexData {
 		ReverseImports: make(map[string][]string),
 		Chunks:         make(map[string]*core.CodeChunk),
 		ChunksByFile:   make(map[string][]string),
+	}
+}
+
+func (ci *CodeIndex) removeFileLocked(path string) {
+	delete(ci.data.Files, path)
+	if ids := ci.data.ChunksByFile[path]; len(ids) > 0 {
+		for _, id := range ids {
+			delete(ci.data.Chunks, id)
+		}
+	}
+	delete(ci.data.ChunksByFile, path)
+	delete(ci.data.Dependencies, path)
+}
+
+func (ci *CodeIndex) rebuildDerivedLocked() {
+	ci.data.Symbols = make(map[string][]core.SymbolLocation)
+	ci.data.ReverseImports = make(map[string][]string)
+	for path, meta := range ci.data.Files {
+		chunkIDs := ci.data.ChunksByFile[path]
+		chunks := make([]*core.CodeChunk, 0, len(chunkIDs))
+		for _, id := range chunkIDs {
+			if chunk, ok := ci.data.Chunks[id]; ok {
+				chunks = append(chunks, chunk)
+			}
+		}
+		meta.Symbols = meta.Symbols[:0]
+		for name, locs := range ci.extractSymbols(meta, chunks) {
+			ci.data.Symbols[name] = append(ci.data.Symbols[name], locs...)
+		}
+		for _, imp := range meta.Imports {
+			ci.data.ReverseImports[imp] = append(ci.data.ReverseImports[imp], path)
+		}
 	}
 }
 

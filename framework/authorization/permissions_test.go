@@ -615,6 +615,22 @@ func TestCheckFileAccessDefaultPolicies(t *testing.T) {
 		require.NoError(t, m.CheckFileAccess(ctx, "agent", core.FileSystemWrite, "/ws/main.go"))
 		assert.Equal(t, 1, hitl.calls, "cached grant must prevent a second HITL call")
 	})
+
+	t.Run("filesystem permission lookup populates cache for match and miss", func(t *testing.T) {
+		m := newTestPM(t, "/ws", declared)
+		require.NoError(t, m.CheckFileAccess(ctx, "agent", core.FileSystemRead, "/ws/src/main.go"))
+		m.SetDefaultPolicy(core.AgentPermissionAllow)
+		require.NoError(t, m.CheckFileAccess(ctx, "agent", core.FileSystemRead, "/ws/other/file.go"))
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		matchKey := string(core.FileSystemRead) + ":/ws/src/main.go"
+		missKey := string(core.FileSystemRead) + ":/ws/other/file.go"
+		require.Contains(t, m.fsPermCache, matchKey)
+		require.Contains(t, m.fsPermCache, missKey)
+		require.NotNil(t, m.fsPermCache[matchKey])
+		require.Nil(t, m.fsPermCache[missKey])
+	})
 }
 
 // ---- CheckExecutable — arg and env matching, default policies ----
@@ -680,6 +696,20 @@ func TestCheckExecutable(t *testing.T) {
 		m.SetDefaultPolicy(core.AgentPermissionAsk)
 		require.NoError(t, m.CheckExecutable(ctx, "agent", "npm", nil, nil))
 		assert.Equal(t, 1, hitl.calls)
+	})
+
+	t.Run("executable permission lookup populates cache for match and miss", func(t *testing.T) {
+		m := newTestPM(t, "/ws", declared)
+		require.NoError(t, m.CheckExecutable(ctx, "agent", "git", []string{"status"}, nil))
+		m.SetDefaultPolicy(core.AgentPermissionAllow)
+		require.NoError(t, m.CheckExecutable(ctx, "agent", "npm", nil, nil))
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		require.Contains(t, m.execPermCache, "git")
+		require.Contains(t, m.execPermCache, "npm")
+		require.NotNil(t, m.execPermCache["git"])
+		require.Nil(t, m.execPermCache["npm"])
 	})
 }
 

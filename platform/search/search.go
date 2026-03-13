@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -133,6 +134,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args 
 		}
 	}
 	target := sanitizeSnippet(fmt.Sprint(args["snippet"]))
+	terms := semanticTerms(fmt.Sprint(args["snippet"]))
 	type match struct {
 		File     string  `json:"file"`
 		Score    float64 `json:"score"`
@@ -156,12 +158,18 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args 
 				return nil
 			}
 		}
+		if !isSimilarityCandidate(path) {
+			return nil
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
 		content := string(data)
-		score := jaccard(target, sanitizeSnippet(content))
+		score := semanticScore(terms, strings.ToLower(content))
+		if score == 0 {
+			score = jaccard(target, sanitizeSnippet(content))
+		}
 		if score > 0.3 {
 			matches = append(matches, match{File: path, Score: score, Fragment: summarize(content)})
 		}
@@ -170,6 +178,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args 
 	if err != nil {
 		return nil, err
 	}
+	sort.Slice(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
 	return &core.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
 func (t *SimilarityTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
@@ -201,6 +210,7 @@ func (t *SemanticSearchTool) Parameters() []core.ToolParameter {
 }
 func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	query := strings.ToLower(fmt.Sprint(args["query"]))
+	terms := semanticTerms(query)
 	var hits []map[string]interface{}
 	permissions := newTraversalPermissionCache(t.manager, t.agentID)
 	if permissions != nil {
@@ -228,15 +238,19 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, a
 				return nil
 			}
 		}
+		if !isSemanticCandidate(path) {
+			return nil
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
 		content := strings.ToLower(string(data))
-		if strings.Contains(content, query) {
+		score := semanticScore(terms, content)
+		if score > 0 {
 			hits = append(hits, map[string]interface{}{
 				"file":    path,
-				"score":   float64(len(query)) / float64(len(content)+1),
+				"score":   score,
 				"snippet": summarize(string(data)),
 			})
 		}
@@ -245,6 +259,11 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, a
 	if err != nil {
 		return nil, err
 	}
+	sort.Slice(hits, func(i, j int) bool {
+		left, _ := hits[i]["score"].(float64)
+		right, _ := hits[j]["score"].(float64)
+		return left > right
+	})
 	return &core.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
 }
 func (t *SemanticSearchTool) IsAvailable(ctx context.Context, state *core.Context) bool {
@@ -258,6 +277,71 @@ func (t *SemanticSearchTool) Tags() []string { return []string{core.TagReadOnly,
 
 func sanitizeSnippet(snippet string) string {
 	return strings.ToLower(strings.ReplaceAll(snippet, " ", ""))
+}
+
+func isSimilarityCandidate(path string) bool {
+	if shouldSkipSearchPath(path) {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".go", ".rs", ".py", ".js", ".ts", ".tsx", ".jsx", ".sql":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSemanticCandidate(path string) bool {
+	if shouldSkipSearchPath(path) {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".go", ".md", ".txt", ".sql", ".rs", ".py", ".js", ".ts", ".tsx", ".jsx":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldSkipSearchPath(path string) bool {
+	path = filepath.ToSlash(path)
+	if strings.Contains(path, "/testsuite/agenttests/") {
+		return true
+	}
+	base := filepath.Base(path)
+	return strings.HasPrefix(base, ".")
+}
+
+func semanticTerms(query string) []string {
+	fields := strings.FieldsFunc(strings.ToLower(query), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+	})
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if len(field) < 3 {
+			continue
+		}
+		if _, ok := seen[field]; ok {
+			continue
+		}
+		seen[field] = struct{}{}
+		out = append(out, field)
+	}
+	return out
+}
+
+func semanticScore(terms []string, content string) float64 {
+	if len(terms) == 0 {
+		return 0
+	}
+	matches := 0
+	for _, term := range terms {
+		if strings.Contains(content, term) {
+			matches++
+		}
+	}
+	return float64(matches) / float64(len(terms))
 }
 
 func jaccard(a, b string) float64 {

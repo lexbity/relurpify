@@ -1,17 +1,120 @@
 package contextmgr
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
+	frameworkmemory "github.com/lexcodex/relurpify/framework/memory"
+	frameworksearch "github.com/lexcodex/relurpify/framework/search"
 )
 
 type stubContextStrategy struct {
 	request *ContextRequest
 }
+
+type stubMemoryStore struct {
+	results []frameworkmemory.MemoryRecord
+	err     error
+}
+
+type blockingASTParser struct {
+	release <-chan struct{}
+}
+
+func (s *stubMemoryStore) Remember(context.Context, string, map[string]interface{}, frameworkmemory.MemoryScope) error {
+	return nil
+}
+
+func (s *stubMemoryStore) Recall(context.Context, string, frameworkmemory.MemoryScope) (*frameworkmemory.MemoryRecord, bool, error) {
+	return nil, false, nil
+}
+
+func (s *stubMemoryStore) Search(context.Context, string, frameworkmemory.MemoryScope) ([]frameworkmemory.MemoryRecord, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]frameworkmemory.MemoryRecord(nil), s.results...), nil
+}
+
+func (s *stubMemoryStore) Forget(context.Context, string, frameworkmemory.MemoryScope) error {
+	return nil
+}
+
+func (s *stubMemoryStore) Summarize(context.Context, frameworkmemory.MemoryScope) (string, error) {
+	return "", nil
+}
+
+func (p *blockingASTParser) Parse(content string, path string) (*ast.ParseResult, error) {
+	<-p.release
+	now := time.Now().UTC()
+	fileID := ast.GenerateFileID(path)
+	root := &ast.Node{
+		ID:        fileID + ":root",
+		FileID:    fileID,
+		Type:      ast.NodeTypePackage,
+		Category:  ast.CategoryCode,
+		Language:  "go",
+		Name:      "sample",
+		StartLine: 1,
+		EndLine:   1,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	fn := &ast.Node{
+		ID:         fileID + ":fn",
+		ParentID:   root.ID,
+		FileID:     fileID,
+		Type:       ast.NodeTypeFunction,
+		Category:   ast.CategoryCode,
+		Language:   "go",
+		Name:       "Hello",
+		Signature:  "func Hello()",
+		IsExported: true,
+		StartLine:  2,
+		EndLine:    2,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	return &ast.ParseResult{
+		RootNode: root,
+		Nodes:    []*ast.Node{root, fn},
+		Edges: []*ast.Edge{{
+			ID:       fileID + ":contains",
+			SourceID: root.ID,
+			TargetID: fn.ID,
+			Type:     ast.EdgeTypeContains,
+		}},
+		Metadata: &ast.FileMetadata{
+			ID:            fileID,
+			Path:          path,
+			RelativePath:  filepath.Base(path),
+			Language:      "go",
+			Category:      ast.CategoryCode,
+			LineCount:     2,
+			TokenCount:    len(content),
+			ContentHash:   ast.HashContent(content),
+			RootNodeID:    root.ID,
+			NodeCount:     2,
+			EdgeCount:     1,
+			IndexedAt:     now,
+			ParserVersion: "blocking-context-test",
+		},
+	}, nil
+}
+
+func (p *blockingASTParser) ParseIncremental(_ *ast.ParseResult, _ []ast.ContentChange) (*ast.ParseResult, error) {
+	return nil, nil
+}
+
+func (p *blockingASTParser) Language() string          { return "go" }
+func (p *blockingASTParser) Category() ast.Category    { return ast.CategoryCode }
+func (p *blockingASTParser) SupportsIncremental() bool { return false }
 
 func (s stubContextStrategy) SelectContext(task *core.Task, budget *core.ContextBudget) (*ContextRequest, error) {
 	return s.request, nil
@@ -42,7 +145,7 @@ func TestProgressiveLoaderPromotesFileDetail(t *testing.T) {
 
 	budget := core.NewContextBudget(16000)
 	cm := NewContextManager(budget)
-	loader := NewProgressiveLoader(cm, nil, nil, budget, &core.SimpleSummarizer{})
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
 
 	if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailMinimal, Priority: 2}); err != nil {
 		t.Fatalf("initial load: %v", err)
@@ -88,7 +191,7 @@ func TestProgressiveLoaderDemotesFileDetailWithoutDuplicates(t *testing.T) {
 
 	budget := core.NewContextBudget(20000)
 	cm := NewContextManager(budget)
-	loader := NewProgressiveLoader(cm, nil, nil, budget, &core.SimpleSummarizer{})
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
 
 	for _, path := range []string{pathA, pathB} {
 		if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailFull, Priority: 2}); err != nil {
@@ -129,7 +232,7 @@ func TestProgressiveLoaderPreservesProtectedFilesDuringDemotion(t *testing.T) {
 
 	budget := core.NewContextBudget(20000)
 	cm := NewContextManager(budget)
-	loader := NewProgressiveLoader(cm, nil, nil, budget, &core.SimpleSummarizer{})
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
 
 	for _, path := range []string{pathA, pathB} {
 		if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailFull, Priority: 2}); err != nil {
@@ -211,7 +314,7 @@ func TestProgressiveLoaderInitialLoadResolvesRelativePathsFromWorkspace(t *testi
 
 	budget := core.NewContextBudget(8000)
 	cm := NewContextManager(budget)
-	loader := NewProgressiveLoader(cm, nil, nil, budget, &core.SimpleSummarizer{})
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
 	task := &core.Task{
 		Instruction: "Inspect testsuite/fixture/sample.txt",
 		Context: map[string]any{
@@ -237,5 +340,174 @@ func TestProgressiveLoaderInitialLoadResolvesRelativePathsFromWorkspace(t *testi
 	}
 	if strings.Contains(item.Content, "live repo") {
 		t.Fatalf("loaded content from cwd instead of workspace: %q", item.Content)
+	}
+}
+
+func TestProgressiveLoaderExecuteASTQueryWaitsForIndexReadiness(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := ast.NewSQLiteStore(filepath.Join(dir, "index.db"))
+	if err != nil {
+		t.Fatalf("sqlite init failed: %v", err)
+	}
+	defer store.Close()
+
+	path := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(path, []byte("package main\nfunc Hello() {}\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir, ParallelWorkers: 1})
+	release := make(chan struct{})
+	manager.RegisterParser(&blockingASTParser{release: release})
+	if err := manager.StartIndexing(context.Background()); err != nil {
+		t.Fatalf("start indexing: %v", err)
+	}
+
+	budget := core.NewContextBudget(8000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, manager, nil, nil, budget, &core.SimpleSummarizer{})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- loader.ExecuteContextRequest(&ContextRequest{
+			ASTQueries: []ASTQuery{{
+				Type: ASTQueryListSymbols,
+				Filter: ASTFilter{
+					Types: []ast.NodeType{ast.NodeTypeFunction},
+				},
+			}},
+		}, "initial")
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("ast query returned before index was ready: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("execute request failed: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for execute request to finish")
+	}
+
+	items := cm.GetItemsByType(core.ContextTypeToolResult)
+	if len(items) != 1 {
+		t.Fatalf("expected one AST tool result item, got %d", len(items))
+	}
+	resultItem, ok := items[0].(*core.ToolResultContextItem)
+	if !ok {
+		t.Fatalf("expected tool result context item, got %T", items[0])
+	}
+	if resultItem.Result == nil || !resultItem.Result.Success {
+		t.Fatalf("expected successful AST result, got %#v", resultItem.Result)
+	}
+}
+
+func TestProgressiveLoaderExecuteSearchQueryLoadsMatchingFiles(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "match.go")
+	content := "package sample\nfunc Hello() string { return \"needle\" }\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	codeIndex, err := frameworkmemory.NewCodeIndex(dir, filepath.Join(dir, "code_index.json"))
+	if err != nil {
+		t.Fatalf("new code index: %v", err)
+	}
+	if err := codeIndex.BuildIndex(context.Background()); err != nil {
+		t.Fatalf("build code index: %v", err)
+	}
+	searchEngine := frameworksearch.NewSearchEngine(nil, codeIndex)
+
+	budget := core.NewContextBudget(8000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, nil, searchEngine, nil, budget, &core.SimpleSummarizer{})
+
+	if err := loader.ExecuteContextRequest(&ContextRequest{
+		SearchQueries: []SearchQuery{{
+			Text:       "needle",
+			Mode:       frameworksearch.SearchKeyword,
+			MaxResults: 1,
+		}},
+	}, "initial"); err != nil {
+		t.Fatalf("execute search query: %v", err)
+	}
+
+	item := loader.fileItem(path)
+	if item == nil {
+		t.Fatal("expected matching file to be loaded into context")
+	}
+	if !strings.Contains(item.Content, "needle") {
+		t.Fatalf("expected loaded file content to include search match, got %q", item.Content)
+	}
+}
+
+func TestProgressiveLoaderExecuteMemoryQueryAddsMemoryContextItem(t *testing.T) {
+	t.Helper()
+	budget := core.NewContextBudget(8000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, nil, nil, &stubMemoryStore{
+		results: []frameworkmemory.MemoryRecord{
+			{Key: "incident", Scope: frameworkmemory.MemoryScopeProject, Value: map[string]interface{}{"summary": "rollback failure"}},
+			{Key: "playbook", Scope: frameworkmemory.MemoryScopeProject, Value: map[string]interface{}{"summary": "recovery steps"}},
+		},
+	}, budget, &core.SimpleSummarizer{})
+
+	if err := loader.ExecuteContextRequest(&ContextRequest{
+		MemoryQueries: []MemoryQuery{{
+			Scope:      frameworkmemory.MemoryScopeProject,
+			Query:      "rollback",
+			MaxResults: 1,
+		}},
+	}, "initial"); err != nil {
+		t.Fatalf("execute memory query: %v", err)
+	}
+
+	items := cm.GetItemsByType(core.ContextTypeMemory)
+	if len(items) != 1 {
+		t.Fatalf("expected one memory item, got %d", len(items))
+	}
+	item, ok := items[0].(*core.MemoryContextItem)
+	if !ok {
+		t.Fatalf("expected memory context item, got %T", items[0])
+	}
+	if !strings.Contains(item.Content, "Relevant agent memories:") {
+		t.Fatalf("expected memory heading, got %q", item.Content)
+	}
+	if !strings.Contains(item.Content, "incident") {
+		t.Fatalf("expected top result to be included, got %q", item.Content)
+	}
+	if strings.Contains(item.Content, "playbook") {
+		t.Fatalf("expected MaxResults limit to exclude second result, got %q", item.Content)
+	}
+}
+
+func TestProgressiveLoaderExecuteMemoryQueryNoopsWithoutStore(t *testing.T) {
+	t.Helper()
+	budget := core.NewContextBudget(8000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
+
+	if err := loader.ExecuteContextRequest(&ContextRequest{
+		MemoryQueries: []MemoryQuery{{
+			Scope: frameworkmemory.MemoryScopeProject,
+			Query: "rollback",
+		}},
+	}, "initial"); err != nil {
+		t.Fatalf("execute memory query without store: %v", err)
+	}
+
+	items := cm.GetItemsByType(core.ContextTypeMemory)
+	if len(items) != 0 {
+		t.Fatalf("expected no memory items, got %d", len(items))
 	}
 }

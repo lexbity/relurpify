@@ -219,6 +219,12 @@ func buildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep, state *
 		if cb, ok := task.Context["stream_callback"]; ok {
 			stepTask.Context["stream_callback"] = cb
 		}
+		if retrieval, ok := task.Context["workflow_retrieval"]; ok {
+			stepTask.Context["workflow_retrieval"] = retrieval
+		}
+		if retrievalPayload, ok := task.Context["workflow_retrieval_payload"]; ok {
+			stepTask.Context["workflow_retrieval_payload"] = retrievalPayload
+		}
 	}
 	stepTask.Instruction = fmt.Sprintf("Execute step %s only: %s", step.ID, step.Description)
 	if len(step.Files) > 0 {

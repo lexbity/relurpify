@@ -2,9 +2,11 @@ package contextmgr
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/search"
 	platformast "github.com/lexcodex/relurpify/platform/ast"
 	"path/filepath"
@@ -13,11 +15,14 @@ import (
 	"time"
 )
 
+const astIndexReadyTimeout = 2 * time.Second
+
 // ProgressiveLoader manages incremental context loading.
 type ProgressiveLoader struct {
 	contextManager *ContextManager
 	indexManager   *ast.IndexManager
 	searchEngine   *search.SearchEngine
+	memoryStore    memory.MemoryStore
 	summarizer     core.Summarizer
 	budget         *core.ContextBudget
 
@@ -30,6 +35,7 @@ func NewProgressiveLoader(
 	contextManager *ContextManager,
 	indexManager *ast.IndexManager,
 	searchEngine *search.SearchEngine,
+	memoryStore memory.MemoryStore,
 	budget *core.ContextBudget,
 	summarizer core.Summarizer,
 ) *ProgressiveLoader {
@@ -37,6 +43,7 @@ func NewProgressiveLoader(
 		contextManager: contextManager,
 		indexManager:   indexManager,
 		searchEngine:   searchEngine,
+		memoryStore:    memoryStore,
 		budget:         budget,
 		summarizer:     summarizer,
 		loadHistory:    make([]ContextLoadEvent, 0),
@@ -452,6 +459,9 @@ func (pl *ProgressiveLoader) executeASTQuery(query ASTQuery) error {
 	if pl.indexManager == nil {
 		return fmt.Errorf("ast index unavailable")
 	}
+	if err := pl.waitForASTIndexReady(astIndexReadyTimeout); err != nil {
+		return err
+	}
 	tool := platformast.NewASTTool(pl.indexManager)
 	if tool == nil {
 		return fmt.Errorf("cannot create ast tool")
@@ -486,6 +496,22 @@ func (pl *ProgressiveLoader) executeASTQuery(query ASTQuery) error {
 	return nil
 }
 
+func (pl *ProgressiveLoader) waitForASTIndexReady(timeout time.Duration) error {
+	if pl == nil || pl.indexManager == nil {
+		return nil
+	}
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	if err := pl.indexManager.WaitUntilReady(ctx); err != nil {
+		return fmt.Errorf("wait for ast index readiness: %w", err)
+	}
+	return nil
+}
+
 func (pl *ProgressiveLoader) executeSearchQuery(query SearchQuery) error {
 	if pl.searchEngine == nil {
 		return nil
@@ -514,7 +540,37 @@ func (pl *ProgressiveLoader) executeSearchQuery(query SearchQuery) error {
 }
 
 func (pl *ProgressiveLoader) executeMemoryQuery(query MemoryQuery) error {
-	// Hook memory subsystem when available.
-	_ = query
-	return nil
+	if pl.memoryStore == nil || pl.contextManager == nil {
+		return nil
+	}
+	maxResults := query.MaxResults
+	if maxResults <= 0 {
+		maxResults = 5
+	}
+	results, err := pl.memoryStore.Search(context.Background(), query.Query, query.Scope)
+	if err != nil {
+		return err
+	}
+	if len(results) == 0 {
+		return nil
+	}
+	var sb strings.Builder
+	sb.WriteString("Relevant agent memories:\n")
+	for i, result := range results {
+		if i >= maxResults {
+			break
+		}
+		data, err := json.Marshal(result.Value)
+		if err != nil {
+			data = []byte("{}")
+		}
+		fmt.Fprintf(&sb, "- %s: %s\n", result.Key, data)
+	}
+	return pl.contextManager.AddItem(&core.MemoryContextItem{
+		Source:       "memory:" + query.Query,
+		Content:      sb.String(),
+		LastAccessed: time.Now().UTC(),
+		Relevance:    0.9,
+		PriorityVal:  1,
+	})
 }

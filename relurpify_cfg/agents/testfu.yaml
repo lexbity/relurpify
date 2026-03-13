@@ -1,0 +1,59 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+    name: testfu
+    version: 1.0.0
+    description: TestFu agent manifest
+spec:
+    image: ghcr.io/lexcodex/relurpify/runtime:latest
+    runtime: gvisor
+    defaults:
+        permissions:
+            filesystem:
+                - action: fs:read
+                  path: /home/lex/Public/Relurpify/**
+                  justification: Read workspace and testsuites
+                - action: fs:list
+                  path: /home/lex/Public/Relurpify/**
+                  justification: Discover testsuites and artifacts
+                - action: fs:write
+                  path: /home/lex/Public/Relurpify/relurpify_cfg/test_runs/**
+                  justification: Persist test run artifacts
+            network:
+                - direction: egress
+                  protocol: tcp
+                  host: localhost
+                  port: 11434
+                  description: Ollama
+        resources:
+            limits:
+                cpu: "2"
+                memory: 4Gi
+                disk_io: 200MBps
+    security:
+        run_as_user: 1000
+        read_only_root: false
+        no_new_privileges: true
+    audit:
+        level: verbose
+        retention_days: 7
+    agent:
+        implementation: testfu
+        mode: primary
+        version: 1.0.0
+        prompt: You are TestFu. Run testsuites deterministically and report structured results.
+        model:
+            provider: ollama
+            name: qwen2.5-coder:14b
+            temperature: 0.0
+            max_tokens: 2048
+        ollama_tool_calling: true
+        allowed_capabilities:
+            - name: testfu:run_suite
+              kind: tool
+            - name: testfu:run_case
+              kind: tool
+            - name: testfu:list_suites
+              kind: tool
+    skills:
+        - system

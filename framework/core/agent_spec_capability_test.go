@@ -146,6 +146,34 @@ func TestEffectiveAllowedCapabilitySelectorsClonesSelectors(t *testing.T) {
 	require.True(t, *spec.AllowedCapabilities[0].CoordinationLongRunning)
 }
 
+func TestMergeAgentSpecsPreservesNilCapabilitySelectorSlices(t *testing.T) {
+	spec := &AgentRuntimeSpec{
+		Mode: AgentModePrimary,
+		Model: AgentModelConfig{
+			Provider: "ollama",
+			Name:     "test",
+		},
+		CapabilityPolicies: []CapabilityPolicy{{
+			Selector: CapabilitySelector{
+				Kind:        CapabilityKindTool,
+				RiskClasses: []RiskClass{RiskClassDestructive},
+			},
+			Execute: AgentPermissionAsk,
+		}},
+	}
+
+	merged := MergeAgentSpecs(spec, AgentSpecOverlay{})
+
+	require.Len(t, merged.CapabilityPolicies, 1)
+	require.Nil(t, merged.CapabilityPolicies[0].Selector.Tags)
+	require.Nil(t, merged.CapabilityPolicies[0].Selector.ExcludeTags)
+	require.Nil(t, merged.CapabilityPolicies[0].Selector.SourceScopes)
+	require.Nil(t, merged.CapabilityPolicies[0].Selector.CoordinationRoles)
+	require.Nil(t, merged.CapabilityPolicies[0].Selector.CoordinationTaskTypes)
+	require.Nil(t, merged.CapabilityPolicies[0].Selector.CoordinationExecutionModes)
+	require.Equal(t, []RiskClass{RiskClassDestructive}, merged.CapabilityPolicies[0].Selector.RiskClasses)
+}
+
 func TestValidatePolicyClassKeyAcceptsCapabilityClasses(t *testing.T) {
 	require.NoError(t, ValidatePolicyClassKey(string(RiskClassExecute)))
 	require.NoError(t, ValidatePolicyClassKey(string(EffectClassNetworkEgress)))

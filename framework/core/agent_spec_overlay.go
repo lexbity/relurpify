@@ -24,6 +24,7 @@ type AgentSpecOverlay struct {
 	Files               *AgentFileMatrix                `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
 	Invocation          *AgentInvocationSpec            `yaml:"invocation,omitempty" json:"invocation,omitempty"`
 	Coordination        *AgentCoordinationSpec          `yaml:"coordination,omitempty" json:"coordination,omitempty"`
+	Composition         *AgentCompositionSpec           `yaml:"composition,omitempty" json:"composition,omitempty"`
 	ContextOverlay      *AgentContextSpecOverlay        `yaml:"context,omitempty" json:"context,omitempty"`
 	LSPOverlay          *AgentLSPSpecOverlay            `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	SearchOverlay       *AgentSearchSpecOverlay         `yaml:"search,omitempty" json:"search,omitempty"`
@@ -60,13 +61,17 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 	files := spec.Files
 	invocation := spec.Invocation
 	coordination := cloneAgentCoordinationSpec(spec.Coordination)
+	composition := cloneAgentCompositionSpec(spec.Composition)
 	contextOverlay := AgentContextSpecOverlay{
 		MaxFiles:            &spec.Context.MaxFiles,
 		MaxTokens:           &spec.Context.MaxTokens,
 		IncludeGitHistory:   &spec.Context.IncludeGitHistory,
 		IncludeDependencies: &spec.Context.IncludeDependencies,
 		CompressionStrategy: &spec.Context.CompressionStrategy,
-		ProgressiveLoading:  &spec.Context.ProgressiveLoading,
+	}
+	if spec.Context.ProgressiveLoading != nil {
+		progressive := *spec.Context.ProgressiveLoading
+		contextOverlay.ProgressiveLoading = &progressive
 	}
 	lspOverlay := AgentLSPSpecOverlay{
 		Servers: spec.LSP.Servers,
@@ -108,6 +113,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		Files:               &files,
 		Invocation:          &invocation,
 		Coordination:        &coordination,
+		Composition:         composition,
 		ContextOverlay:      &contextOverlay,
 		LSPOverlay:          &lspOverlay,
 		SearchOverlay:       &searchOverlay,
@@ -190,6 +196,9 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 	if overlay.Coordination != nil {
 		spec.Coordination = mergeAgentCoordinationSpec(spec.Coordination, *overlay.Coordination)
 	}
+	if overlay.Composition != nil {
+		spec.Composition = cloneAgentCompositionSpec(overlay.Composition)
+	}
 	if overlay.ModelOverlay != nil {
 		spec.Model = MergeAgentModelConfig(spec.Model, *overlay.ModelOverlay)
 	}
@@ -245,6 +254,7 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 	clone.Files.Edit.DenyPatterns = append([]string{}, spec.Files.Edit.DenyPatterns...)
 	clone.Invocation.AllowedSubagents = append([]string{}, spec.Invocation.AllowedSubagents...)
 	clone.Coordination = cloneAgentCoordinationSpec(spec.Coordination)
+	clone.Composition = cloneAgentCompositionSpec(spec.Composition)
 	clone.Metadata.Tags = append([]string{}, spec.Metadata.Tags...)
 	if spec.Logging != nil {
 		llm := spec.Logging.LLM
@@ -256,6 +266,18 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 		for k, v := range spec.LSP.Servers {
 			clone.LSP.Servers[k] = v
 		}
+	}
+	return &clone
+}
+
+func cloneAgentCompositionSpec(spec *AgentCompositionSpec) *AgentCompositionSpec {
+	if spec == nil {
+		return nil
+	}
+	clone := *spec
+	if spec.Policy != nil {
+		policy := *spec.Policy
+		clone.Policy = &policy
 	}
 	return &clone
 }
@@ -365,15 +387,33 @@ func cloneCapabilitySelectors(selectors []CapabilitySelector) []CapabilitySelect
 }
 
 func cloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
-	selector.Tags = append([]string{}, selector.Tags...)
-	selector.ExcludeTags = append([]string{}, selector.ExcludeTags...)
-	selector.SourceScopes = append([]CapabilityScope{}, selector.SourceScopes...)
-	selector.TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
-	selector.RiskClasses = append([]RiskClass{}, selector.RiskClasses...)
-	selector.EffectClasses = append([]EffectClass{}, selector.EffectClasses...)
-	selector.CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
-	selector.CoordinationTaskTypes = append([]string{}, selector.CoordinationTaskTypes...)
-	selector.CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
+	if selector.Tags != nil {
+		selector.Tags = append([]string{}, selector.Tags...)
+	}
+	if selector.ExcludeTags != nil {
+		selector.ExcludeTags = append([]string{}, selector.ExcludeTags...)
+	}
+	if selector.SourceScopes != nil {
+		selector.SourceScopes = append([]CapabilityScope{}, selector.SourceScopes...)
+	}
+	if selector.TrustClasses != nil {
+		selector.TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
+	}
+	if selector.RiskClasses != nil {
+		selector.RiskClasses = append([]RiskClass{}, selector.RiskClasses...)
+	}
+	if selector.EffectClasses != nil {
+		selector.EffectClasses = append([]EffectClass{}, selector.EffectClasses...)
+	}
+	if selector.CoordinationRoles != nil {
+		selector.CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
+	}
+	if selector.CoordinationTaskTypes != nil {
+		selector.CoordinationTaskTypes = append([]string{}, selector.CoordinationTaskTypes...)
+	}
+	if selector.CoordinationExecutionModes != nil {
+		selector.CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
+	}
 	if selector.CoordinationLongRunning != nil {
 		value := *selector.CoordinationLongRunning
 		selector.CoordinationLongRunning = &value

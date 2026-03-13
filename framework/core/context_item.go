@@ -129,6 +129,54 @@ func (fci *FileContextItem) Age() time.Duration {
 	return time.Since(fci.LastAccessed)
 }
 
+// MemoryContextItem captures retrieved memories as a synthetic context block.
+type MemoryContextItem struct {
+	Source       string
+	Content      string
+	LastAccessed time.Time
+	Relevance    float64
+	PriorityVal  int
+}
+
+func (mci *MemoryContextItem) TokenCount() int {
+	return estimateTokens(mci.Content)
+}
+
+func (mci *MemoryContextItem) RelevanceScore() float64 {
+	if mci.Relevance == 0 {
+		mci.Relevance = 0.85
+	}
+	age := time.Since(mci.LastAccessed)
+	decay := 1.0 / (1.0 + age.Hours()/12.0)
+	return mci.Relevance * decay
+}
+
+func (mci *MemoryContextItem) Priority() int {
+	return mci.PriorityVal
+}
+
+func (mci *MemoryContextItem) Compress() (ContextItem, error) {
+	content := mci.Content
+	if len(content) > 250 {
+		content = content[:250] + "..."
+	}
+	return &MemoryContextItem{
+		Source:       mci.Source,
+		Content:      content,
+		LastAccessed: mci.LastAccessed,
+		Relevance:    mci.Relevance * 0.9,
+		PriorityVal:  mci.PriorityVal + 1,
+	}, nil
+}
+
+func (mci *MemoryContextItem) Type() ContextItemType {
+	return ContextTypeMemory
+}
+
+func (mci *MemoryContextItem) Age() time.Duration {
+	return time.Since(mci.LastAccessed)
+}
+
 // CapabilityResultContextItem represents structured capability outputs inside context.
 type CapabilityResultContextItem struct {
 	ToolName     string

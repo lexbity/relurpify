@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/event"
 )
@@ -50,9 +51,7 @@ type Store interface {
 	DeleteExpiredBoundaries(ctx context.Context, before time.Time) (int, error)
 }
 
-type PolicyEngine interface {
-	Evaluate(ctx context.Context, req core.PolicyRequest) (core.PolicyDecision, error)
-}
+type PolicyEngine = authorization.PolicyEngine
 
 // AuthorizationRequest is the normalized session authorization input.
 type AuthorizationRequest struct {
@@ -197,7 +196,7 @@ func (r *DefaultRouter) Authorize(ctx context.Context, req AuthorizationRequest)
 		externalUserID = boundary.Binding.ExternalUserID
 	}
 	if r != nil && r.Policy != nil {
-		decision, err := r.Policy.Evaluate(ctx, core.PolicyRequest{
+		decision, err := authorization.EvaluatePolicyRequest(ctx, r.Policy, core.PolicyRequest{
 			Target:                 core.PolicyTargetSession,
 			Actor:                  req.Actor,
 			Authenticated:          req.Authenticated,

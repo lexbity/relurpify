@@ -10,12 +10,12 @@ import (
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
-type workflowRetrievalResult struct {
-	Text      string                    `json:"text"`
+type WorkflowRetrievalResult struct {
+	Text      string                     `json:"text"`
 	Citations []retrieval.PackedCitation `json:"citations,omitempty"`
 }
 
-type workflowRetrievalProvider interface {
+type WorkflowRetrievalProvider interface {
 	RetrievalService() retrieval.RetrieverService
 }
 
@@ -23,7 +23,7 @@ type workflowKnowledgeLister interface {
 	ListKnowledge(ctx context.Context, workflowID string, kind memory.KnowledgeKind, unresolvedOnly bool) ([]memory.KnowledgeRecord, error)
 }
 
-type workflowRetrievalQuery struct {
+type WorkflowRetrievalQuery struct {
 	Primary       string
 	TaskText      string
 	StageName     string
@@ -34,7 +34,9 @@ type workflowRetrievalQuery struct {
 	PreviousNotes []string
 }
 
-func hydrateWorkflowRetrieval(ctx context.Context, provider workflowRetrievalProvider, workflowID string, query workflowRetrievalQuery, limit, maxTokens int) (map[string]any, error) {
+type workflowRetrievalQuery = WorkflowRetrievalQuery
+
+func HydrateWorkflowRetrieval(ctx context.Context, provider WorkflowRetrievalProvider, workflowID string, query WorkflowRetrievalQuery, limit, maxTokens int) (map[string]any, error) {
 	if provider == nil || strings.TrimSpace(workflowID) == "" {
 		return nil, nil
 	}
@@ -74,7 +76,7 @@ func hydrateWorkflowRetrieval(ctx context.Context, provider workflowRetrievalPro
 				}
 				text := strings.Join(parts, ": ")
 				if text != "" {
-					results = append(results, workflowRetrievalResult{Text: text})
+					results = append(results, WorkflowRetrievalResult{Text: text})
 				}
 			}
 		}
@@ -107,14 +109,14 @@ func hydrateWorkflowRetrieval(ctx context.Context, provider workflowRetrievalPro
 	}, nil
 }
 
-func applyWorkflowRetrievalState(state *core.Context, key string, payload map[string]any) {
+func ApplyWorkflowRetrievalState(state *core.Context, key string, payload map[string]any) {
 	if state == nil || strings.TrimSpace(key) == "" || len(payload) == 0 {
 		return
 	}
 	state.Set(strings.TrimSpace(key), payload)
 }
 
-func applyWorkflowRetrievalTask(task *core.Task, payload map[string]any) *core.Task {
+func ApplyWorkflowRetrievalTask(task *core.Task, payload map[string]any) *core.Task {
 	if task == nil || len(payload) == 0 {
 		return task
 	}
@@ -138,13 +140,13 @@ func contentBlockTexts(blocks []core.ContentBlock) []string {
 	return out
 }
 
-func contentBlockResults(blocks []core.ContentBlock) []workflowRetrievalResult {
-	results := make([]workflowRetrievalResult, 0, len(blocks))
+func contentBlockResults(blocks []core.ContentBlock) []WorkflowRetrievalResult {
+	results := make([]WorkflowRetrievalResult, 0, len(blocks))
 	for _, block := range blocks {
 		switch typed := block.(type) {
 		case core.TextContentBlock:
 			if text := strings.TrimSpace(typed.Text); text != "" {
-				results = append(results, workflowRetrievalResult{Text: text})
+				results = append(results, WorkflowRetrievalResult{Text: text})
 			}
 		case core.StructuredContentBlock:
 			payload, ok := typed.Data.(map[string]any)
@@ -153,7 +155,7 @@ func contentBlockResults(blocks []core.ContentBlock) []workflowRetrievalResult {
 			}
 			text := strings.TrimSpace(fmt.Sprint(payload["text"]))
 			if text != "" && text != "<nil>" {
-				results = append(results, workflowRetrievalResult{
+				results = append(results, WorkflowRetrievalResult{
 					Text:      text,
 					Citations: parseWorkflowRetrievalCitations(payload["citations"]),
 				})
@@ -187,7 +189,7 @@ func parseWorkflowRetrievalCitations(raw any) []retrieval.PackedCitation {
 	}
 }
 
-func buildWorkflowRetrievalQuery(q workflowRetrievalQuery) string {
+func buildWorkflowRetrievalQuery(q WorkflowRetrievalQuery) string {
 	parts := make([]string, 0, 5)
 	add := func(value string) {
 		value = strings.TrimSpace(value)
@@ -211,7 +213,7 @@ func buildWorkflowRetrievalQuery(q workflowRetrievalQuery) string {
 	return strings.Join(parts, "\n")
 }
 
-func taskRetrievalPaths(task *core.Task) []string {
+func TaskRetrievalPaths(task *core.Task) []string {
 	if task == nil {
 		return nil
 	}
@@ -237,4 +239,20 @@ func taskRetrievalPaths(task *core.Task) []string {
 		}
 	}
 	return out
+}
+
+func hydrateWorkflowRetrieval(ctx context.Context, provider WorkflowRetrievalProvider, workflowID string, query WorkflowRetrievalQuery, limit, maxTokens int) (map[string]any, error) {
+	return HydrateWorkflowRetrieval(ctx, provider, workflowID, query, limit, maxTokens)
+}
+
+func applyWorkflowRetrievalState(state *core.Context, key string, payload map[string]any) {
+	ApplyWorkflowRetrievalState(state, key, payload)
+}
+
+func applyWorkflowRetrievalTask(task *core.Task, payload map[string]any) *core.Task {
+	return ApplyWorkflowRetrievalTask(task, payload)
+}
+
+func taskRetrievalPaths(task *core.Task) []string {
+	return TaskRetrievalPaths(task)
 }

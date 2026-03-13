@@ -5,6 +5,7 @@ package ast
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -34,7 +35,20 @@ type IndexManager struct {
 	config           IndexConfig
 	symbolProvider   DocumentSymbolProvider
 	pathFilter       func(path string, isDir bool) bool
+	workspaceIndex   workspaceIndexState
 }
+
+type workspaceIndexState struct {
+	running bool
+	ready   bool
+	err     error
+	readyCh chan struct{}
+}
+
+var (
+	ErrWorkspaceIndexInProgress = errors.New("workspace index already running")
+	errWorkspaceIndexReady      = errors.New("workspace index already ready")
+)
 
 // NewIndexManager builds a manager with default parsers.
 func NewIndexManager(store IndexStore, config IndexConfig) *IndexManager {
@@ -44,6 +58,9 @@ func NewIndexManager(store IndexStore, config IndexConfig) *IndexManager {
 		languageDetector: NewLanguageDetector(),
 		indexing:         make(map[string]bool),
 		config:           config,
+		workspaceIndex: workspaceIndexState{
+			readyCh: make(chan struct{}),
+		},
 	}
 	manager.registerDefaultParsers()
 	return manager
@@ -132,8 +149,138 @@ func (im *IndexManager) IndexFile(path string) error {
 	return im.persist(result, contentHash)
 }
 
+// RefreshFiles incrementally refreshes the AST index for the provided files.
+// Missing or now-disallowed files are removed from the index.
+func (im *IndexManager) RefreshFiles(paths []string) error {
+	if im == nil || len(paths) == 0 {
+		return nil
+	}
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		if err := im.refreshFile(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (im *IndexManager) refreshFile(path string) error {
+	im.mu.Lock()
+	filter := im.pathFilter
+	im.mu.Unlock()
+	if filter != nil && !filter(path, false) {
+		return im.removeIndexedFile(path)
+	}
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return im.removeIndexedFile(path)
+		}
+		return err
+	}
+	return im.IndexFile(path)
+}
+
+func (im *IndexManager) removeIndexedFile(path string) error {
+	existing, err := im.store.GetFileByPath(path)
+	if err != nil || existing == nil {
+		return err
+	}
+	return im.store.DeleteFile(existing.ID)
+}
+
+// StartIndexing launches a background workspace index pass unless one is
+// already running or the current workspace is already ready.
+func (im *IndexManager) StartIndexing(ctx context.Context) error {
+	if err := im.beginWorkspaceIndex(); err != nil {
+		if errors.Is(err, ErrWorkspaceIndexInProgress) || errors.Is(err, errWorkspaceIndexReady) {
+			return nil
+		}
+		return err
+	}
+	go func() {
+		im.finishWorkspaceIndex(im.runWorkspaceIndex(ctx))
+	}()
+	return nil
+}
+
+// Ready reports whether the most recent workspace index pass completed
+// successfully.
+func (im *IndexManager) Ready() bool {
+	if im == nil {
+		return false
+	}
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	return im.workspaceIndex.ready
+}
+
+// WaitUntilReady blocks until the current workspace index pass completes or
+// the caller's context expires. If no workspace index is running, it returns
+// the latest terminal state immediately.
+func (im *IndexManager) WaitUntilReady(ctx context.Context) error {
+	if im == nil {
+		return nil
+	}
+	im.mu.Lock()
+	running := im.workspaceIndex.running
+	ready := im.workspaceIndex.ready
+	err := im.workspaceIndex.err
+	readyCh := im.workspaceIndex.readyCh
+	im.mu.Unlock()
+
+	if ready || (!running && err == nil) {
+		return nil
+	}
+	if !running {
+		return err
+	}
+	select {
+	case <-readyCh:
+		im.mu.Lock()
+		defer im.mu.Unlock()
+		return im.workspaceIndex.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// LastIndexError returns the terminal error from the latest workspace index
+// pass, if any.
+func (im *IndexManager) LastIndexError() error {
+	if im == nil {
+		return nil
+	}
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	return im.workspaceIndex.err
+}
+
 // IndexWorkspace walks the workspace and indexes files.
 func (im *IndexManager) IndexWorkspace() error {
+	return im.IndexWorkspaceContext(context.Background())
+}
+
+// IndexWorkspaceContext walks the workspace and indexes files until completion
+// or cancellation.
+func (im *IndexManager) IndexWorkspaceContext(ctx context.Context) error {
+	if err := im.beginWorkspaceIndex(); err != nil {
+		if errors.Is(err, errWorkspaceIndexReady) {
+			return nil
+		}
+		return err
+	}
+	err := im.runWorkspaceIndex(ctx)
+	im.finishWorkspaceIndex(err)
+	return err
+}
+
+func (im *IndexManager) runWorkspaceIndex(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	root := im.config.WorkspacePath
 	if root == "" {
 		root = "."
@@ -141,6 +288,9 @@ func (im *IndexManager) IndexWorkspace() error {
 	var files []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		im.mu.Lock()
@@ -165,9 +315,9 @@ func (im *IndexManager) IndexWorkspace() error {
 		return err
 	}
 	if im.config.ParallelWorkers > 1 {
-		return im.indexFilesParallel(files)
+		return im.indexFilesParallel(ctx, files)
 	}
-	return im.indexFilesSequential(files)
+	return im.indexFilesSequential(ctx, files)
 }
 
 func (im *IndexManager) shouldIgnore(path string) bool {
@@ -183,8 +333,11 @@ func (im *IndexManager) shouldIgnore(path string) bool {
 	return false
 }
 
-func (im *IndexManager) indexFilesSequential(files []string) error {
+func (im *IndexManager) indexFilesSequential(ctx context.Context, files []string) error {
 	for _, file := range files {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := im.IndexFile(file); err != nil {
 			log.Printf("AST index warning: %v", err)
 		}
@@ -192,7 +345,7 @@ func (im *IndexManager) indexFilesSequential(files []string) error {
 	return nil
 }
 
-func (im *IndexManager) indexFilesParallel(files []string) error {
+func (im *IndexManager) indexFilesParallel(ctx context.Context, files []string) error {
 	workerCount := im.config.ParallelWorkers
 	if workerCount <= 0 {
 		workerCount = 2
@@ -205,6 +358,10 @@ func (im *IndexManager) indexFilesParallel(files []string) error {
 		go func() {
 			defer wg.Done()
 			for file := range fileCh {
+				if err := ctx.Err(); err != nil {
+					errCh <- err
+					return
+				}
 				if err := im.IndexFile(file); err != nil {
 					errCh <- fmt.Errorf("%s: %w", file, err)
 				}
@@ -212,6 +369,12 @@ func (im *IndexManager) indexFilesParallel(files []string) error {
 		}()
 	}
 	for _, file := range files {
+		if err := ctx.Err(); err != nil {
+			close(fileCh)
+			wg.Wait()
+			close(errCh)
+			return err
+		}
 		fileCh <- file
 	}
 	close(fileCh)
@@ -221,6 +384,34 @@ func (im *IndexManager) indexFilesParallel(files []string) error {
 		return <-errCh
 	}
 	return nil
+}
+
+func (im *IndexManager) beginWorkspaceIndex() error {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	if im.workspaceIndex.running {
+		return ErrWorkspaceIndexInProgress
+	}
+	if im.workspaceIndex.ready {
+		return errWorkspaceIndexReady
+	}
+	im.workspaceIndex.running = true
+	im.workspaceIndex.ready = false
+	im.workspaceIndex.err = nil
+	im.workspaceIndex.readyCh = make(chan struct{})
+	return nil
+}
+
+func (im *IndexManager) finishWorkspaceIndex(err error) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	if !im.workspaceIndex.running {
+		return
+	}
+	im.workspaceIndex.running = false
+	im.workspaceIndex.ready = err == nil
+	im.workspaceIndex.err = err
+	close(im.workspaceIndex.readyCh)
 }
 
 // Close releases any underlying resources owned by the store.

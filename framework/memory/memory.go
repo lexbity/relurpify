@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,9 +48,10 @@ type MemoryStore interface {
 // design keeps session data transient (great for experiments) while persisting
 // project/global scopes across runs for longer-term recall.
 type HybridMemory struct {
-	mu       sync.RWMutex
-	cache    map[MemoryScope]map[string]MemoryRecord
-	basePath string
+	mu          sync.RWMutex
+	cache       map[MemoryScope]map[string]MemoryRecord
+	basePath    string
+	vectorStore VectorStore
 }
 
 // NewHybridMemory creates a new memory store.
@@ -74,6 +76,22 @@ func NewHybridMemory(basePath string) (*HybridMemory, error) {
 	return store, nil
 }
 
+// WithVectorStore enables semantic indexing for remembered values while keeping
+// the nil default safe for existing callers.
+func (m *HybridMemory) WithVectorStore(vs VectorStore) *HybridMemory {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	m.vectorStore = vs
+	records := m.snapshotLocked()
+	m.mu.Unlock()
+	if vs != nil {
+		m.warmVectorStore(context.Background(), vs, records)
+	}
+	return m
+}
+
 // loadFromDisk hydrates the in-memory cache from JSON files previously written
 // to disk. Missing files are ignored so the store can start empty on first run.
 func (m *HybridMemory) loadFromDisk() error {
@@ -93,6 +111,9 @@ func (m *HybridMemory) loadFromDisk() error {
 		for _, r := range records {
 			m.cache[scope][r.Key] = r
 		}
+	}
+	if m.vectorStore != nil {
+		m.warmVectorStore(context.Background(), m.vectorStore, m.snapshot())
 	}
 	return nil
 }
@@ -128,7 +149,6 @@ func (m *HybridMemory) Remember(ctx context.Context, key string, value map[strin
 	default:
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	record := MemoryRecord{
 		Key:       key,
 		Value:     value,
@@ -136,10 +156,27 @@ func (m *HybridMemory) Remember(ctx context.Context, key string, value map[strin
 		Timestamp: time.Now().UTC(),
 	}
 	m.cache[scope][key] = record
+	vectorStore := m.vectorStore
 	if scope == MemoryScopeSession {
+		m.mu.Unlock()
+		if vectorStore != nil {
+			if err := vectorStore.Upsert(ctx, memoryDocument(record)); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
-	return m.persist(scope)
+	if err := m.persist(scope); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	m.mu.Unlock()
+	if vectorStore != nil {
+		if err := vectorStore.Upsert(ctx, memoryDocument(record)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Recall retrieves a memory record.
@@ -167,6 +204,21 @@ func (m *HybridMemory) Search(ctx context.Context, query string, scope MemorySco
 		return nil, ctx.Err()
 	default:
 	}
+	m.mu.RLock()
+	vectorStore := m.vectorStore
+	m.mu.RUnlock()
+	if vectorStore != nil {
+		vectorResults, err := vectorStore.Query(ctx, query, 10)
+		if err != nil {
+			return nil, err
+		}
+		if len(vectorResults) > 0 {
+			results := m.recordsForVectorResults(scope, vectorResults)
+			if len(results) > 0 {
+				return results, nil
+			}
+		}
+	}
 	lower := strings.ToLower(query)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -189,12 +241,28 @@ func (m *HybridMemory) Forget(ctx context.Context, key string, scope MemoryScope
 	default:
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	delete(m.cache[scope], key)
+	vectorStore := m.vectorStore
 	if scope == MemoryScopeSession {
+		m.mu.Unlock()
+		if vectorStore != nil {
+			if err := vectorStore.Delete(ctx, memoryDocumentID(scope, key)); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
-	return m.persist(scope)
+	if err := m.persist(scope); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	m.mu.Unlock()
+	if vectorStore != nil {
+		if err := vectorStore.Delete(ctx, memoryDocumentID(scope, key)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Summarize compresses older records into a textual summary. Teams often call
@@ -221,4 +289,86 @@ func (m *HybridMemory) Summarize(ctx context.Context, scope MemoryScope) (string
 		builder.WriteRune('\n')
 	}
 	return builder.String(), nil
+}
+
+func (m *HybridMemory) recordsForVectorResults(scope MemoryScope, vectorResults []SearchResult) []MemoryRecord {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	results := make([]MemoryRecord, 0, len(vectorResults))
+	for _, result := range vectorResults {
+		key, resultScope, ok := memoryDocumentRef(result.Document)
+		if !ok || resultScope != scope {
+			continue
+		}
+		record, exists := m.cache[scope][key]
+		if !exists {
+			continue
+		}
+		results = append(results, record)
+	}
+	return results
+}
+
+func (m *HybridMemory) snapshot() []MemoryRecord {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.snapshotLocked()
+}
+
+func (m *HybridMemory) snapshotLocked() []MemoryRecord {
+	count := 0
+	for _, scoped := range m.cache {
+		count += len(scoped)
+	}
+	records := make([]MemoryRecord, 0, count)
+	for _, scoped := range m.cache {
+		for _, record := range scoped {
+			records = append(records, record)
+		}
+	}
+	return records
+}
+
+func (m *HybridMemory) warmVectorStore(ctx context.Context, vs VectorStore, records []MemoryRecord) {
+	for _, record := range records {
+		_ = vs.Upsert(ctx, memoryDocument(record))
+	}
+}
+
+func memoryDocument(record MemoryRecord) Document {
+	return Document{
+		ID:      memoryDocumentID(record.Scope, record.Key),
+		Content: record.Key + " " + flattenValue(record.Value),
+		Metadata: map[string]interface{}{
+			"key":   record.Key,
+			"scope": string(record.Scope),
+		},
+	}
+}
+
+func memoryDocumentID(scope MemoryScope, key string) string {
+	return fmt.Sprintf("%s:%s", scope, key)
+}
+
+func memoryDocumentRef(doc Document) (string, MemoryScope, bool) {
+	if doc.Metadata != nil {
+		key, keyOK := doc.Metadata["key"].(string)
+		scopeRaw, scopeOK := doc.Metadata["scope"].(string)
+		if keyOK && scopeOK {
+			return key, MemoryScope(scopeRaw), true
+		}
+	}
+	parts := strings.SplitN(doc.ID, ":", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[1], MemoryScope(parts[0]), true
+}
+
+func flattenValue(value map[string]interface{}) string {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }

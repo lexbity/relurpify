@@ -76,3 +76,29 @@ func TestCompileManifestPolicyRulesRejectsUnsupportedCapabilitySelector(t *testi
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "descriptor-time evaluation")
 }
+
+func TestCompileManifestPolicyRulesAcceptsRiskClassSelectorAfterSpecClone(t *testing.T) {
+	spec := &core.AgentRuntimeSpec{
+		Mode: core.AgentModePrimary,
+		Model: core.AgentModelConfig{
+			Provider: "ollama",
+			Name:     "test",
+		},
+		CapabilityPolicies: []core.CapabilityPolicy{{
+			Selector: core.CapabilitySelector{
+				Kind:        core.CapabilityKindTool,
+				RiskClasses: []core.RiskClass{core.RiskClassDestructive},
+			},
+			Execute: core.AgentPermissionAsk,
+		}},
+	}
+
+	cloned := core.MergeAgentSpecs(spec, core.AgentSpecOverlay{})
+	rules, err := CompileAgentSpecPolicyRules(cloned)
+
+	require.NoError(t, err)
+	require.Len(t, rules, 1)
+	require.Equal(t, "capability-policy:0", rules[0].ID)
+	require.Equal(t, []core.CapabilityKind{core.CapabilityKindTool}, rules[0].Conditions.CapabilityKinds)
+	require.Equal(t, []core.RiskClass{core.RiskClassDestructive}, rules[0].Conditions.MinRiskClasses)
+}

@@ -30,10 +30,15 @@ type CapabilityRegistry struct {
 	mu                  sync.RWMutex
 	capabilities        map[string]core.CapabilityDescriptor
 	entries             map[string]*capabilityEntry
+	capabilityNameIndex map[string][]string
+	localToolNameIndex  map[string]string
+	prechecks           []InvocationPrecheck
 	permissionManager   *PermissionManager
 	registeredAgentID   string
 	agentSpec           *AgentRuntimeSpec
+	runtimePolicy       *compiledRuntimePolicy
 	allowedCapabilities []core.CapabilitySelector
+	allowedMatchers     []compiledSelector
 	toolPolicies        map[string]ToolPolicy
 	capabilityPolicies  []core.CapabilityPolicy
 	exposurePolicies    []core.CapabilityExposurePolicy
@@ -47,27 +52,36 @@ type CapabilityRegistry struct {
 // NewCapabilityRegistry builds a capability registry instance.
 func NewCapabilityRegistry() *CapabilityRegistry {
 	return &CapabilityRegistry{
-		capabilities: make(map[string]core.CapabilityDescriptor),
-		entries:      make(map[string]*capabilityEntry),
-		toolPolicies: make(map[string]ToolPolicy),
-		safety:       newRuntimeSafetyController(),
+		capabilities:        make(map[string]core.CapabilityDescriptor),
+		entries:             make(map[string]*capabilityEntry),
+		capabilityNameIndex: make(map[string][]string),
+		localToolNameIndex:  make(map[string]string),
+		toolPolicies:        make(map[string]ToolPolicy),
+		safety:              newRuntimeSafetyController(),
 	}
 }
 
+// AddPrecheck appends a pre-invocation guard to the registry.
+func (r *CapabilityRegistry) AddPrecheck(p InvocationPrecheck) {
+	if r == nil || p == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.prechecks = append(r.prechecks, p)
+}
+
 func (r *CapabilityRegistry) localToolEntryByNameLocked(name string) (*capabilityEntry, bool) {
-	name = strings.TrimSpace(name)
+	name = normalizeComparable(name)
 	if name == "" {
 		return nil, false
 	}
-	for _, entry := range r.entries {
-		if entry == nil || entry.legacyTool == nil {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(entry.legacyTool.Name()), name) {
-			return entry, true
-		}
+	id, ok := r.localToolNameIndex[name]
+	if !ok || id == "" {
+		return nil, false
 	}
-	return nil, false
+	entry, ok := r.entries[id]
+	return entry, ok && entry != nil && entry.legacyTool != nil
 }
 
 func (r *CapabilityRegistry) localToolEntriesLocked() []*capabilityEntry {
@@ -96,8 +110,78 @@ func (r *CapabilityRegistry) rewrapLegacyEntryLocked(entry *capabilityEntry) {
 	entry.handler = legacyToolHandler{tool: entry.legacyTool}
 }
 
+func (r *CapabilityRegistry) syncPermissionAwareEntriesLocked() {
+	if r == nil {
+		return
+	}
+	for _, entry := range r.entries {
+		if entry == nil {
+			continue
+		}
+		if entry.legacyTool != nil {
+			if aware, ok := unwrapTool(entry.legacyTool).(PermissionAware); ok {
+				aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
+			}
+			continue
+		}
+		if entry.handler == nil {
+			continue
+		}
+		if aware, ok := unwrapCapabilityHandler(entry.handler).(PermissionAware); ok {
+			aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
+		}
+	}
+}
+
+func (r *CapabilityRegistry) syncAgentSpecAwareEntriesLocked(spec *AgentRuntimeSpec, agentID string) {
+	if r == nil || spec == nil {
+		return
+	}
+	for _, entry := range r.entries {
+		if entry == nil {
+			continue
+		}
+		if entry.legacyTool != nil {
+			if aware, ok := unwrapTool(entry.legacyTool).(AgentSpecAware); ok {
+				aware.SetAgentSpec(spec, agentID)
+			}
+			continue
+		}
+		if entry.handler == nil {
+			continue
+		}
+		if aware, ok := unwrapCapabilityHandler(entry.handler).(AgentSpecAware); ok {
+			aware.SetAgentSpec(spec, agentID)
+		}
+	}
+}
+
+func (r *CapabilityRegistry) rebuildIndexesLocked() {
+	if r == nil {
+		return
+	}
+	r.capabilityNameIndex = make(map[string][]string, len(r.entries))
+	r.localToolNameIndex = make(map[string]string)
+	for id, entry := range r.entries {
+		if entry == nil {
+			continue
+		}
+		name := normalizeComparable(entry.descriptor.Name)
+		if name != "" {
+			r.capabilityNameIndex[name] = append(r.capabilityNameIndex[name], id)
+		}
+		if entry.legacyTool != nil {
+			toolName := normalizeComparable(entry.legacyTool.Name())
+			if toolName != "" {
+				r.localToolNameIndex[toolName] = id
+			}
+		}
+	}
+}
+
 type capabilityEntry struct {
 	descriptor core.CapabilityDescriptor
+	profile    descriptorProfile
 	handler    core.CapabilityHandler
 	legacyTool Tool
 	providerID string
@@ -121,16 +205,18 @@ func (r *CapabilityRegistry) RegisterCapability(descriptor core.CapabilityDescri
 		r.mu.Unlock()
 		return fmt.Errorf("capability %s already registered", descriptor.ID)
 	}
-	if !matchesAnyCapabilitySelector(r.allowedCapabilities, descriptor) {
+	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, buildDescriptorProfile(descriptor)) {
 		r.mu.Unlock()
 		return nil
 	}
 	r.capabilities[descriptor.ID] = descriptor
 	r.entries[descriptor.ID] = &capabilityEntry{
 		descriptor: descriptor,
+		profile:    buildDescriptorProfile(descriptor),
 		providerID: descriptor.Source.ProviderID,
 		sessionID:  descriptor.Source.SessionID,
 	}
+	r.rebuildIndexesLocked()
 	telemetry := r.telemetry
 	exposure := r.effectiveExposureLocked(descriptor)
 	r.mu.Unlock()
@@ -154,7 +240,7 @@ func (r *CapabilityRegistry) RegisterInvocableCapability(handler core.InvocableC
 		return err
 	}
 	r.mu.Lock()
-	if !matchesAnyCapabilitySelector(r.allowedCapabilities, desc) {
+	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, buildDescriptorProfile(desc)) {
 		r.mu.Unlock()
 		return nil
 	}
@@ -165,10 +251,12 @@ func (r *CapabilityRegistry) RegisterInvocableCapability(handler core.InvocableC
 	r.capabilities[desc.ID] = desc
 	r.entries[desc.ID] = &capabilityEntry{
 		descriptor: desc,
+		profile:    buildDescriptorProfile(desc),
 		handler:    r.wrapCapabilityHandler(handler),
 		providerID: desc.Source.ProviderID,
 		sessionID:  desc.Source.SessionID,
 	}
+	r.rebuildIndexesLocked()
 	telemetry := r.telemetry
 	exposure := r.effectiveExposureLocked(desc)
 	r.mu.Unlock()
@@ -192,7 +280,7 @@ func (r *CapabilityRegistry) RegisterPromptCapability(handler core.PromptCapabil
 		return err
 	}
 	r.mu.Lock()
-	if !matchesAnyCapabilitySelector(r.allowedCapabilities, desc) {
+	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, buildDescriptorProfile(desc)) {
 		r.mu.Unlock()
 		return nil
 	}
@@ -203,10 +291,12 @@ func (r *CapabilityRegistry) RegisterPromptCapability(handler core.PromptCapabil
 	r.capabilities[desc.ID] = desc
 	r.entries[desc.ID] = &capabilityEntry{
 		descriptor: desc,
+		profile:    buildDescriptorProfile(desc),
 		handler:    r.wrapCapabilityHandler(handler),
 		providerID: desc.Source.ProviderID,
 		sessionID:  desc.Source.SessionID,
 	}
+	r.rebuildIndexesLocked()
 	telemetry := r.telemetry
 	exposure := r.effectiveExposureLocked(desc)
 	r.mu.Unlock()
@@ -230,7 +320,7 @@ func (r *CapabilityRegistry) RegisterResourceCapability(handler core.ResourceCap
 		return err
 	}
 	r.mu.Lock()
-	if !matchesAnyCapabilitySelector(r.allowedCapabilities, desc) {
+	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, buildDescriptorProfile(desc)) {
 		r.mu.Unlock()
 		return nil
 	}
@@ -241,10 +331,12 @@ func (r *CapabilityRegistry) RegisterResourceCapability(handler core.ResourceCap
 	r.capabilities[desc.ID] = desc
 	r.entries[desc.ID] = &capabilityEntry{
 		descriptor: desc,
+		profile:    buildDescriptorProfile(desc),
 		handler:    r.wrapCapabilityHandler(handler),
 		providerID: desc.Source.ProviderID,
 		sessionID:  desc.Source.SessionID,
 	}
+	r.rebuildIndexesLocked()
 	telemetry := r.telemetry
 	exposure := r.effectiveExposureLocked(desc)
 	r.mu.Unlock()
@@ -307,7 +399,7 @@ func (r *CapabilityRegistry) RegisterLegacyTool(tool Tool) error {
 		r.mu.Unlock()
 		return fmt.Errorf("capability %s already registered", desc.ID)
 	}
-	if !matchesAnyCapabilitySelector(r.allowedCapabilities, desc) {
+	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, buildDescriptorProfile(desc)) {
 		r.mu.Unlock()
 		return nil
 	}
@@ -327,11 +419,13 @@ func (r *CapabilityRegistry) RegisterLegacyTool(tool Tool) error {
 	r.capabilities[desc.ID] = desc
 	r.entries[desc.ID] = &capabilityEntry{
 		descriptor: desc,
+		profile:    buildDescriptorProfile(desc),
 		handler:    adapter,
 		legacyTool: wrapped,
 		providerID: desc.Source.ProviderID,
 		sessionID:  desc.Source.SessionID,
 	}
+	r.rebuildIndexesLocked()
 	telemetry := r.telemetry
 	exposure := r.effectiveExposureLocked(desc)
 	r.mu.Unlock()
@@ -460,9 +554,11 @@ func (r *CapabilityRegistry) GetCapability(idOrName string) (CapabilityDescripto
 	if capability, ok := r.capabilities[idOrName]; ok {
 		return capability, true
 	}
-	for _, capability := range r.capabilities {
-		if capability.ID == idOrName || capability.Name == idOrName {
-			return capability, true
+	if ids := r.capabilityNameIndex[normalizeComparable(idOrName)]; len(ids) > 0 {
+		for _, id := range ids {
+			if capability, ok := r.capabilities[id]; ok {
+				return capability, true
+			}
 		}
 	}
 	return CapabilityDescriptor{}, false
@@ -521,7 +617,7 @@ func (r *CapabilityRegistry) CoordinationTargets(selectors ...core.CapabilitySel
 		}
 		matched := true
 		for _, selector := range selectors {
-			if !core.SelectorMatchesDescriptor(selector, entry.descriptor) {
+			if !compiledSelectorMatches(compileSelector(selector), entry.profile) {
 				matched = false
 				break
 			}
@@ -558,10 +654,15 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 	clone := &CapabilityRegistry{
 		capabilities:        make(map[string]core.CapabilityDescriptor),
 		entries:             make(map[string]*capabilityEntry),
+		capabilityNameIndex: make(map[string][]string),
+		localToolNameIndex:  make(map[string]string),
+		prechecks:           append([]InvocationPrecheck{}, r.prechecks...),
 		permissionManager:   r.permissionManager,
 		registeredAgentID:   r.registeredAgentID,
 		agentSpec:           r.agentSpec,
+		runtimePolicy:       r.currentRuntimePolicyLocked(),
 		allowedCapabilities: cloneCapabilitySelectors(r.allowedCapabilities),
+		allowedMatchers:     append([]compiledSelector{}, r.allowedMatchers...),
 		telemetry:           r.telemetry,
 		safety:              r.safety,
 		toolPolicies:        make(map[string]ToolPolicy, len(r.toolPolicies)),
@@ -572,6 +673,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 	for name, pol := range r.toolPolicies {
 		clone.toolPolicies[name] = pol
 	}
+	clone.refreshRuntimePolicyLocked()
 	for id, capability := range r.capabilities {
 		if capability.Kind == core.CapabilityKindTool {
 			continue
@@ -579,6 +681,9 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 		clone.capabilities[id] = capability
 		if entry, ok := r.entries[id]; ok {
 			clonedEntry := *entry
+			if clonedEntry.handler != nil {
+				clonedEntry.handler = clone.wrapCapabilityHandler(unwrapCapabilityHandler(clonedEntry.handler))
+			}
 			clone.entries[id] = &clonedEntry
 		}
 	}
@@ -589,33 +694,28 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 		if keep != nil && !keep(entry.legacyTool) {
 			continue
 		}
-		clonedTool := cloneTool(entry.legacyTool)
+		clonedTool := cloneTool(entry.legacyTool, clone)
 		desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), nil, unwrapTool(clonedTool)))
 		clone.capabilities[desc.ID] = desc
 		clonedEntry := *entry
 		clonedEntry.descriptor = desc
+		clonedEntry.profile = buildDescriptorProfile(desc)
 		clonedEntry.legacyTool = clonedTool
 		clonedEntry.handler = legacyToolHandler{tool: clonedTool}
 		clone.entries[desc.ID] = &clonedEntry
 	}
+	clone.rebuildIndexesLocked()
 	return clone
 }
 
-func cloneTool(tool Tool) Tool {
+func cloneTool(tool Tool, registry *CapabilityRegistry) Tool {
 	if tool == nil {
 		return nil
 	}
 	if t, ok := tool.(*instrumentedTool); ok {
 		return &instrumentedTool{
-			Tool:               t.Tool,
-			manager:            t.manager,
-			agentID:            t.agentID,
-			telemetry:          t.telemetry,
-			policy:             t.policy,
-			capabilityPolicies: append([]core.CapabilityPolicy{}, t.capabilityPolicies...),
-			hasPolicy:          t.hasPolicy,
-			globalPolicies:     t.globalPolicies,
-			safety:             t.safety,
+			Tool:     t.Tool,
+			registry: registry,
 		}
 	}
 	return tool
@@ -626,59 +726,13 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *Contex
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
-	entry, err := r.capabilityEntry(idOrName)
+	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
 	if err != nil {
 		return nil, err
 	}
 	invocable, ok := entry.handler.(core.InvocableCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not invocable", entry.descriptor.ID)
-	}
-	if aware, ok := entry.handler.(core.AvailabilityAwareCapabilityHandler); ok {
-		if availability := aware.Availability(ctx, state); !availability.Available {
-			reason := strings.TrimSpace(availability.Reason)
-			if reason == "" {
-				reason = "capability unavailable"
-			}
-			return nil, fmt.Errorf("capability %s blocked: %s", entry.descriptor.ID, reason)
-		}
-	}
-	r.mu.RLock()
-	policyEngine := r.policyEngine
-	agentID := r.registeredAgentID
-	r.mu.RUnlock()
-	if policyEngine != nil {
-		decision, err := policyEngine.Evaluate(ctx, core.PolicyRequest{
-			Target:         core.PolicyTargetCapability,
-			Actor:          core.EventActor{Kind: "agent", ID: agentID},
-			CapabilityID:   entry.descriptor.ID,
-			CapabilityName: entry.descriptor.Name,
-			CapabilityKind: entry.descriptor.Kind,
-			RuntimeFamily:  entry.descriptor.RuntimeFamily,
-			ProviderKind:   providerKindForDescriptor(entry.descriptor),
-			TrustClass:     entry.descriptor.TrustClass,
-			RiskClasses:    append([]core.RiskClass{}, entry.descriptor.RiskClasses...),
-			EffectClasses:  append([]core.EffectClass{}, entry.descriptor.EffectClasses...),
-		})
-		if err != nil {
-			return nil, err
-		}
-		switch decision.Effect {
-		case "deny":
-			return nil, fmt.Errorf("capability %s blocked: %s", entry.descriptor.ID, decision.Reason)
-		case "require_approval":
-			if r.permissionManager == nil {
-				return nil, fmt.Errorf("capability %s blocked: approval required but permission manager unavailable", entry.descriptor.ID)
-			}
-			if err := r.permissionManager.RequireApproval(ctx, agentID, core.PermissionDescriptor{
-				Type:         core.PermissionTypeCapability,
-				Action:       "capability:" + entry.descriptor.Name,
-				Resource:     entry.descriptor.ID,
-				RequiresHITL: true,
-			}, "capability policy approval", authorization.GrantScopeSession, authorization.RiskLevelMedium, 0); err != nil {
-				return nil, err
-			}
-		}
 	}
 	return invocable.Invoke(ctx, state, args)
 }
@@ -688,22 +742,13 @@ func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state *Context, i
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
-	entry, err := r.capabilityEntry(idOrName)
+	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
 	if err != nil {
 		return nil, err
 	}
 	promptHandler, ok := entry.handler.(core.PromptCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not a prompt handler", entry.descriptor.ID)
-	}
-	if aware, ok := entry.handler.(core.AvailabilityAwareCapabilityHandler); ok {
-		if availability := aware.Availability(ctx, state); !availability.Available {
-			reason := strings.TrimSpace(availability.Reason)
-			if reason == "" {
-				reason = "capability unavailable"
-			}
-			return nil, fmt.Errorf("capability %s blocked: %s", entry.descriptor.ID, reason)
-		}
 	}
 	return promptHandler.RenderPrompt(ctx, state, args)
 }
@@ -713,13 +758,21 @@ func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *Context, i
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
-	entry, err := r.capabilityEntry(idOrName)
+	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, nil)
 	if err != nil {
 		return nil, err
 	}
 	resourceHandler, ok := entry.handler.(core.ResourceCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not a resource handler", entry.descriptor.ID)
+	}
+	return resourceHandler.ReadResource(ctx, state)
+}
+
+func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, state *Context, idOrName string, args map[string]interface{}) (*capabilityEntry, error) {
+	entry, err := r.capabilityEntry(idOrName)
+	if err != nil {
+		return nil, err
 	}
 	if aware, ok := entry.handler.(core.AvailabilityAwareCapabilityHandler); ok {
 		if availability := aware.Availability(ctx, state); !availability.Available {
@@ -730,7 +783,64 @@ func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *Context, i
 			return nil, fmt.Errorf("capability %s blocked: %s", entry.descriptor.ID, reason)
 		}
 	}
-	return resourceHandler.ReadResource(ctx, state)
+	if err := r.enforceCapabilityPolicy(ctx, entry); err != nil {
+		return nil, err
+	}
+	if err := r.runPrechecks(entry.descriptor, args); err != nil {
+		return nil, err
+	}
+	return entry, nil
+}
+
+func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {
+	desc := entry.descriptor
+	r.mu.RLock()
+	policyEngine := r.policyEngine
+	agentID := r.registeredAgentID
+	manager := r.permissionManager
+	r.mu.RUnlock()
+	_, err := authorization.EnforcePolicyRequest(ctx, policyEngine, core.PolicyRequest{
+		Target:         core.PolicyTargetCapability,
+		Actor:          core.EventActor{Kind: "agent", ID: agentID},
+		CapabilityID:   desc.ID,
+		CapabilityName: desc.Name,
+		CapabilityKind: desc.Kind,
+		RuntimeFamily:  desc.RuntimeFamily,
+		ProviderKind:   providerKindForDescriptor(desc),
+		TrustClass:     desc.TrustClass,
+		RiskClasses:    desc.RiskClasses,
+		EffectClasses:  desc.EffectClasses,
+	}, authorization.ApprovalRequest{
+		AgentID: agentID,
+		Manager: manager,
+		Permission: core.PermissionDescriptor{
+			Type:         core.PermissionTypeCapability,
+			Action:       "capability:" + desc.Name,
+			Resource:     desc.ID,
+			RequiresHITL: true,
+		},
+		Justification:      "capability policy approval",
+		Scope:              authorization.GrantScopeSession,
+		Risk:               authorization.RiskLevelMedium,
+		MissingManagerErr:  "approval required but permission manager unavailable",
+		DenyReasonFallback: "denied by policy",
+	})
+	if err != nil {
+		return fmt.Errorf("capability %s blocked: %w", desc.ID, err)
+	}
+	return nil
+}
+
+func (r *CapabilityRegistry) runPrechecks(desc core.CapabilityDescriptor, args map[string]interface{}) error {
+	r.mu.RLock()
+	prechecks := append([]InvocationPrecheck{}, r.prechecks...)
+	r.mu.RUnlock()
+	for _, precheck := range prechecks {
+		if err := precheck.Check(desc, args); err != nil {
+			return fmt.Errorf("capability %s blocked: %w", desc.ID, err)
+		}
+	}
+	return nil
 }
 
 func (r *CapabilityRegistry) capabilityEntry(idOrName string) (*capabilityEntry, error) {
@@ -739,9 +849,11 @@ func (r *CapabilityRegistry) capabilityEntry(idOrName string) (*capabilityEntry,
 	if entry, ok := r.entries[idOrName]; ok {
 		return entry, nil
 	}
-	for _, entry := range r.entries {
-		if entry.descriptor.ID == idOrName || entry.descriptor.Name == idOrName {
-			return entry, nil
+	if ids := r.capabilityNameIndex[normalizeComparable(idOrName)]; len(ids) > 0 {
+		for _, id := range ids {
+			if entry, ok := r.entries[id]; ok {
+				return entry, nil
+			}
 		}
 	}
 	return nil, fmt.Errorf("capability %s not found", idOrName)

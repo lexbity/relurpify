@@ -2,8 +2,10 @@ package capability
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
@@ -78,12 +80,40 @@ type invocableCapabilityStub struct {
 type promptCapabilityStub struct {
 	desc   core.CapabilityDescriptor
 	result *core.PromptRenderResult
+	calls  int
 }
 
 type resourceCapabilityStub struct {
 	desc   core.CapabilityDescriptor
 	result *core.ResourceReadResult
+	calls  int
 }
+
+type recordingPrecheck struct {
+	calls int
+	err   error
+}
+
+func (p *recordingPrecheck) Check(core.CapabilityDescriptor, map[string]any) error {
+	p.calls++
+	return p.err
+}
+
+type policyEngineStub struct {
+	decision core.PolicyDecision
+	err      error
+	calls    int
+}
+
+func (s *policyEngineStub) Evaluate(context.Context, core.PolicyRequest) (core.PolicyDecision, error) {
+	s.calls++
+	if s.err != nil {
+		return core.PolicyDecision{}, s.err
+	}
+	return s.decision, nil
+}
+
+var _ authorization.PolicyEngine = (*policyEngineStub)(nil)
 
 func (t schemaValidatedTool) Name() string        { return t.name }
 func (t schemaValidatedTool) Description() string { return "schema" }
@@ -143,19 +173,21 @@ func (s invocableCapabilityStub) Invoke(context.Context, *core.Context, map[stri
 	return s.result, nil
 }
 
-func (s promptCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (s *promptCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
 	return s.desc
 }
 
-func (s promptCapabilityStub) RenderPrompt(context.Context, *core.Context, map[string]interface{}) (*core.PromptRenderResult, error) {
+func (s *promptCapabilityStub) RenderPrompt(context.Context, *core.Context, map[string]interface{}) (*core.PromptRenderResult, error) {
+	s.calls++
 	return s.result, nil
 }
 
-func (s resourceCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (s *resourceCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
 	return s.desc
 }
 
-func (s resourceCapabilityStub) ReadResource(context.Context, *core.Context) (*core.ResourceReadResult, error) {
+func (s *resourceCapabilityStub) ReadResource(context.Context, *core.Context) (*core.ResourceReadResult, error) {
+	s.calls++
 	return s.result, nil
 }
 
@@ -249,6 +281,8 @@ func TestInvocableCapabilityTelemetryIncludesRuntimeFamily(t *testing.T) {
 	require.Equal(t, "provider:catalog", sink.events[1].Metadata["capability_id"])
 	require.Equal(t, core.EventCapabilityResult, sink.events[2].Type)
 	require.Equal(t, "provider", sink.events[2].Metadata["runtime_family"])
+	_, durationOK := sink.events[2].Metadata["duration_ms"]
+	require.True(t, durationOK)
 }
 
 func TestInvocableCapabilitiesIncludesNonToolHandlers(t *testing.T) {
@@ -541,6 +575,49 @@ func TestCapturePolicySnapshotClonesRegistryPolicies(t *testing.T) {
 	require.Equal(t, AgentPermissionAsk, registry.GetToolPolicies()["cli_git"].Execute)
 }
 
+func TestCapturePolicySnapshotReflectsLivePolicyUpdates(t *testing.T) {
+	registry := NewCapabilityRegistry()
+	require.NoError(t, registry.Register(capabilityStubTool{name: "cli_git"}))
+	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
+		ToolExecutionPolicy: map[string]ToolPolicy{
+			"cli_git": {Execute: AgentPermissionAsk},
+		},
+		GlobalPolicies: map[string]core.AgentPermissionLevel{
+			string(core.RiskClassExecute): core.AgentPermissionAsk,
+		},
+	})
+
+	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: AgentPermissionDeny})
+	registry.UpdateClassPolicy(string(core.RiskClassExecute), core.AgentPermissionDeny)
+
+	snapshot := registry.CapturePolicySnapshot()
+	require.NotNil(t, snapshot)
+	require.Equal(t, AgentPermissionDeny, snapshot.ToolPolicies["cli_git"].Execute)
+	require.Equal(t, core.AgentPermissionDeny, snapshot.GlobalPolicies[string(core.RiskClassExecute)])
+	require.Equal(t, AgentPermissionDeny, registry.GetToolPolicies()["cli_git"].Execute)
+	require.Equal(t, core.AgentPermissionDeny, registry.GetClassPolicies()[string(core.RiskClassExecute)])
+}
+
+func TestToolWrapperRemainsStableAcrossPolicyUpdates(t *testing.T) {
+	registry := NewCapabilityRegistry()
+	require.NoError(t, registry.Register(capabilityStubTool{name: "cli_git"}))
+
+	before, ok := registry.Get("cli_git")
+	require.True(t, ok)
+
+	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
+		ToolExecutionPolicy: map[string]ToolPolicy{
+			"cli_git": {Execute: AgentPermissionAsk},
+		},
+	})
+	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: AgentPermissionDeny})
+	registry.UseTelemetry(&recordingTelemetry{})
+
+	after, ok := registry.Get("cli_git")
+	require.True(t, ok)
+	require.Same(t, before, after)
+}
+
 func TestInstrumentedToolAttachesApprovalBindingMetadata(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.Register(capabilityStubTool{name: "file_read"}))
@@ -623,7 +700,7 @@ func TestRegisterInvocableCapabilityInvokesByIDAndName(t *testing.T) {
 
 func TestRegisterPromptCapabilityRendersByIDAndName(t *testing.T) {
 	registry := NewCapabilityRegistry()
-	handler := promptCapabilityStub{
+	handler := &promptCapabilityStub{
 		desc: core.CapabilityDescriptor{
 			ID:          "prompt:runtime.summary",
 			Kind:        core.CapabilityKindPrompt,
@@ -654,7 +731,7 @@ func TestRegisterPromptCapabilityRendersByIDAndName(t *testing.T) {
 
 func TestRegisterResourceCapabilityReadsByIDAndName(t *testing.T) {
 	registry := NewCapabilityRegistry()
-	handler := resourceCapabilityStub{
+	handler := &resourceCapabilityStub{
 		desc: core.CapabilityDescriptor{
 			ID:          "resource:workspace.docs",
 			Kind:        core.CapabilityKindResource,
@@ -679,6 +756,55 @@ func TestRegisterResourceCapabilityReadsByIDAndName(t *testing.T) {
 	resource, err = registry.ReadResource(context.Background(), core.NewContext(), "workspace.docs")
 	require.NoError(t, err)
 	require.Equal(t, "guide", resource.Contents[0].(core.TextContentBlock).Text)
+}
+
+func TestRenderPromptUsesPolicyEngineAndSkipsPrechecksWhenDenied(t *testing.T) {
+	registry := NewCapabilityRegistry()
+	handler := &promptCapabilityStub{
+		desc: core.CapabilityDescriptor{
+			ID:           "prompt:runtime.summary",
+			Kind:         core.CapabilityKindPrompt,
+			Name:         "runtime.summary",
+			TrustClass:   core.TrustClassRemoteApproved,
+			Availability: core.AvailabilitySpec{Available: true},
+		},
+		result: &core.PromptRenderResult{},
+	}
+	engine := &policyEngineStub{decision: core.PolicyDecisionDeny("blocked")}
+	precheck := &recordingPrecheck{}
+	registry.SetPolicyEngine(engine)
+	registry.AddPrecheck(precheck)
+	require.NoError(t, registry.RegisterPromptCapability(handler))
+
+	_, err := registry.RenderPrompt(context.Background(), core.NewContext(), "runtime.summary", nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "blocked")
+	require.Equal(t, 1, engine.calls)
+	require.Equal(t, 0, precheck.calls)
+	require.Equal(t, 0, handler.calls)
+}
+
+func TestReadResourceRunsSharedPrechecks(t *testing.T) {
+	registry := NewCapabilityRegistry()
+	handler := &resourceCapabilityStub{
+		desc: core.CapabilityDescriptor{
+			ID:           "resource:workspace.docs",
+			Kind:         core.CapabilityKindResource,
+			Name:         "workspace.docs",
+			TrustClass:   core.TrustClassWorkspaceTrusted,
+			Availability: core.AvailabilitySpec{Available: true},
+		},
+		result: &core.ResourceReadResult{},
+	}
+	precheck := &recordingPrecheck{err: fmt.Errorf("blocked by precheck")}
+	registry.AddPrecheck(precheck)
+	require.NoError(t, registry.RegisterResourceCapability(handler))
+
+	_, err := registry.ReadResource(context.Background(), core.NewContext(), "workspace.docs")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "blocked by precheck")
+	require.Equal(t, 1, precheck.calls)
+	require.Equal(t, 0, handler.calls)
 }
 
 func TestInvokeCapabilitySupportsProviderCapabilitiesWithoutLegacyToolAdapter(t *testing.T) {
@@ -881,6 +1007,65 @@ func TestCloneFilteredRemovesCapabilityEntriesForDroppedTools(t *testing.T) {
 	result, err := clone.InvokeCapability(context.Background(), core.NewContext(), "tool:cli_git", nil)
 	require.NoError(t, err)
 	require.True(t, result.Success)
+}
+
+func TestInvokeCapabilityPrecheckBlocksInvocation(t *testing.T) {
+	registry := NewCapabilityRegistry()
+	require.NoError(t, registry.RegisterInvocableCapability(invocableCapabilityStub{
+		desc: core.CapabilityDescriptor{
+			ID:           "relurpic:writer",
+			Kind:         core.CapabilityKindTool,
+			Name:         "writer",
+			TrustClass:   core.TrustClassBuiltinTrusted,
+			Availability: core.AvailabilitySpec{Available: true},
+		},
+		result: &core.ToolResult{Success: true},
+	}))
+	registry.AddPrecheck(&recordingPrecheck{err: fmt.Errorf("blocked by precheck")})
+
+	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "relurpic:writer", nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "blocked by precheck")
+}
+
+func TestInvokeCapabilitySkipsPrecheckWhenPolicyEngineDenies(t *testing.T) {
+	registry := NewCapabilityRegistry()
+	require.NoError(t, registry.RegisterInvocableCapability(invocableCapabilityStub{
+		desc: core.CapabilityDescriptor{
+			ID:           "relurpic:writer",
+			Kind:         core.CapabilityKindTool,
+			Name:         "writer",
+			TrustClass:   core.TrustClassBuiltinTrusted,
+			Availability: core.AvailabilitySpec{Available: true},
+		},
+		result: &core.ToolResult{Success: true},
+	}))
+	engine := &policyEngineStub{decision: core.PolicyDecisionDeny("denied by policy")}
+	precheck := &recordingPrecheck{}
+	registry.SetPolicyEngine(engine)
+	registry.AddPrecheck(precheck)
+
+	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "relurpic:writer", nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "denied by policy")
+	require.Equal(t, 1, engine.calls)
+	require.Equal(t, 0, precheck.calls)
+}
+
+func TestCloneFilteredCopiesPrechecks(t *testing.T) {
+	registry := NewCapabilityRegistry()
+	require.NoError(t, registry.Register(capabilityStubTool{name: "cli_git"}))
+	precheck := &recordingPrecheck{err: fmt.Errorf("blocked by precheck")}
+	registry.AddPrecheck(precheck)
+
+	clone := registry.CloneFiltered(func(tool Tool) bool {
+		return tool.Name() == "cli_git"
+	})
+
+	_, err := clone.InvokeCapability(context.Background(), core.NewContext(), "tool:cli_git", nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "blocked by precheck")
+	require.Equal(t, 1, precheck.calls)
 }
 
 func TestProviderCapabilityRegistrarNormalizesProviderBackedCapability(t *testing.T) {

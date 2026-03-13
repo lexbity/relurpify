@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/search"
 	"strings"
 )
 
@@ -25,6 +27,8 @@ type ContextPolicyConfig struct {
 	Summarizer          core.Summarizer
 	Preferences         ContextPolicyPreferences
 	IndexManager        *ast.IndexManager
+	SearchEngine        *search.SearchEngine
+	MemoryStore         memory.MemoryStore
 }
 
 // ContextPolicy centralizes strategy selection, progressive loading, and compression.
@@ -71,7 +75,7 @@ func NewContextPolicy(cfg ContextPolicyConfig, spec *core.AgentContextSpec) *Con
 		policy.Strategy = NewAdaptiveStrategy()
 	}
 	if policy.Progressive == nil {
-		policy.Progressive = NewProgressiveLoader(policy.ContextManager, cfg.IndexManager, nil, policy.Budget, policy.Summarizer)
+		policy.Progressive = NewProgressiveLoader(policy.ContextManager, cfg.IndexManager, cfg.SearchEngine, cfg.MemoryStore, policy.Budget, policy.Summarizer)
 	}
 	policy.ApplyAgentContextSpec(spec)
 	return policy
@@ -87,7 +91,7 @@ func (p *ContextPolicy) ApplyAgentContextSpec(spec *core.AgentContextSpec) {
 		spec.IncludeGitHistory ||
 		spec.IncludeDependencies ||
 		spec.CompressionStrategy != "" ||
-		spec.ProgressiveLoading
+		spec.ProgressiveLoading != nil
 	if !hasOverrides {
 		return
 	}
@@ -95,9 +99,9 @@ func (p *ContextPolicy) ApplyAgentContextSpec(spec *core.AgentContextSpec) {
 		p.Budget = core.NewContextBudget(spec.MaxTokens)
 		p.ContextManager = NewContextManager(p.Budget)
 		if p.Progressive != nil {
-			p.Progressive = NewProgressiveLoader(p.ContextManager, p.Progressive.indexManager, p.Progressive.searchEngine, p.Budget, p.Summarizer)
+			p.Progressive = NewProgressiveLoader(p.ContextManager, p.Progressive.indexManager, p.Progressive.searchEngine, p.Progressive.memoryStore, p.Budget, p.Summarizer)
 		} else if p.ProgressiveEnabled {
-			p.Progressive = NewProgressiveLoader(p.ContextManager, nil, nil, p.Budget, p.Summarizer)
+			p.Progressive = NewProgressiveLoader(p.ContextManager, nil, nil, nil, p.Budget, p.Summarizer)
 		}
 	}
 	if spec.CompressionStrategy != "" {
@@ -108,7 +112,9 @@ func (p *ContextPolicy) ApplyAgentContextSpec(spec *core.AgentContextSpec) {
 			p.CompressionStrategy = core.NewSimpleCompressionStrategy()
 		}
 	}
-	p.ProgressiveEnabled = spec.ProgressiveLoading
+	if spec.ProgressiveLoading != nil {
+		p.ProgressiveEnabled = *spec.ProgressiveLoading
+	}
 }
 
 // InitialLoad executes the strategy's initial context request.

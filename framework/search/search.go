@@ -60,6 +60,14 @@ type SearchEngine struct {
 	codeIndex   CodeIndex
 }
 
+type incrementalCodeIndex interface {
+	UpdateIncremental(files []string) error
+}
+
+type persistentCodeIndex interface {
+	Save() error
+}
+
 // NewSearchEngine returns a ready-to-use hybrid search instance.
 func NewSearchEngine(vs SemanticStore, idx CodeIndex) *SearchEngine {
 	return &SearchEngine{
@@ -88,6 +96,27 @@ func (se *SearchEngine) Search(q SearchQuery) ([]SearchResult, error) {
 		}
 		return mergeResults(semantic, keyword, q.MaxResults), nil
 	}
+}
+
+// RefreshFiles updates the underlying code index for the provided paths when
+// the configured index supports incremental refresh. It is a no-op otherwise.
+func (se *SearchEngine) RefreshFiles(files []string) error {
+	if se == nil || len(files) == 0 || se.codeIndex == nil {
+		return nil
+	}
+	updater, ok := se.codeIndex.(incrementalCodeIndex)
+	if !ok {
+		return nil
+	}
+	if err := updater.UpdateIncremental(files); err != nil {
+		return err
+	}
+	if saver, ok := se.codeIndex.(persistentCodeIndex); ok {
+		if err := saver.Save(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SearchWithBudget executes the query but stops once the aggregated snippet

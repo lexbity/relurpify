@@ -68,11 +68,6 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 			permissions.SetDefaultPolicy(policy)
 		}
 	}
-	policyEngine, err := FromManifestWithConfig(agentManifest, agentManifest.Metadata.Name, nil)
-	if err != nil {
-		return nil, fmt.Errorf("policy engine init: %w", err)
-	}
-	policyEngine.manager = permissions
 	permissions.AttachRuntime(runtime)
 	networkRules := buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
 	policy := sandbox.SandboxPolicy{
@@ -85,7 +80,6 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		Manifest:    agentManifest,
 		Runtime:     runtime,
 		Permissions: permissions,
-		Policy:      policyEngine,
 		Audit:       audit,
 		HITL:        hitl,
 	}, nil

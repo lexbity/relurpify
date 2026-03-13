@@ -7,6 +7,7 @@ import (
 // Tools returns file navigation/search helpers.
 func Tools(basePath string) []core.Tool {
 	return []core.Tool{
+		NewGitTool(basePath),
 		NewFindTool(basePath),
 		NewFDTool(basePath),
 		NewRGTool(basePath),

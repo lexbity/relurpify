@@ -30,6 +30,7 @@ type AgentRuntimeSpec struct {
 	Files               AgentFileMatrix                 `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
 	Invocation          AgentInvocationSpec             `yaml:"invocation,omitempty" json:"invocation,omitempty"`
 	Coordination        AgentCoordinationSpec           `yaml:"coordination,omitempty" json:"coordination,omitempty"`
+	Composition         *AgentCompositionSpec           `yaml:"composition,omitempty" json:"composition,omitempty"`
 	Context             AgentContextSpec                `yaml:"context,omitempty" json:"context,omitempty"`
 	Browser             *AgentBrowserSpec               `yaml:"browser,omitempty" json:"browser,omitempty"`
 	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
@@ -215,7 +216,7 @@ type AgentContextSpec struct {
 	IncludeGitHistory   bool   `yaml:"include_git_history" json:"include_git_history"`
 	IncludeDependencies bool   `yaml:"include_dependencies" json:"include_dependencies"`
 	CompressionStrategy string `yaml:"compression_strategy" json:"compression_strategy"` // "summary", "truncate", "hybrid"
-	ProgressiveLoading  bool   `yaml:"progressive_loading" json:"progressive_loading"`
+	ProgressiveLoading  *bool  `yaml:"progressive_loading,omitempty" json:"progressive_loading,omitempty"`
 }
 
 // AgentBrowserSpec configures the model-facing browser tool and its action
@@ -405,6 +406,11 @@ func (a *AgentRuntimeSpec) Validate() error {
 	}
 	if err := a.Coordination.Validate(a.Invocation); err != nil {
 		return fmt.Errorf("coordination invalid: %w", err)
+	}
+	if a.Composition != nil {
+		if err := a.Composition.Validate(); err != nil {
+			return fmt.Errorf("composition invalid: %w", err)
+		}
 	}
 	for _, selector := range a.AllowedCapabilities {
 		if err := ValidateCapabilitySelector(selector); err != nil {

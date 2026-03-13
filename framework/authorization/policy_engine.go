@@ -35,6 +35,16 @@ func FromManifestWithConfig(m *manifest.AgentManifest, agentID string, manager *
 	return &ManifestPolicyEngine{agentID: id, manager: manager, rules: rules}, nil
 }
 
+// FromAgentSpecWithConfig constructs a ManifestPolicyEngine from an effective
+// runtime spec rather than a raw manifest.
+func FromAgentSpecWithConfig(spec *core.AgentRuntimeSpec, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
+	rules, err := CompileAgentSpecPolicyRules(spec)
+	if err != nil {
+		return nil, err
+	}
+	return &ManifestPolicyEngine{agentID: agentID, manager: manager, rules: rules}, nil
+}
+
 // Evaluate decides whether req should be allowed, denied, or routed to HITL.
 //
 // Trust class dispatch:

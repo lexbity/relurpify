@@ -99,6 +99,10 @@ func (p Paths) ASTIndexDB() string {
 	return filepath.Join(p.ASTIndexDir(), "index.db")
 }
 
+func (p Paths) RetrievalDB() string {
+	return filepath.Join(p.MemoryDir(), "retrieval.db")
+}
+
 func (p Paths) SessionsDir() string {
 	return filepath.Join(p.ConfigRoot(), "sessions")
 }

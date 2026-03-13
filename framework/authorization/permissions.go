@@ -51,6 +51,8 @@ type PermissionManager struct {
 	eventLogger    func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})
 	taskGrants     map[string]taskGrant
 	hitlRateLimits map[string]*hitlRateBucket
+	fsPermCache    map[string]*core.FileSystemPermission
+	execPermCache  map[string]*core.ExecutablePermission
 }
 
 type taskGrant struct {
@@ -74,6 +76,8 @@ func NewPermissionManager(basePath string, declared *core.PermissionSet, audit c
 		grants:         make(map[string]*PermissionGrant),
 		taskGrants:     make(map[string]taskGrant),
 		hitlRateLimits: make(map[string]*hitlRateBucket),
+		fsPermCache:    make(map[string]*core.FileSystemPermission),
+		execPermCache:  make(map[string]*core.ExecutablePermission),
 		grantClock:     time.Now,
 	}
 	pm.inflateScopes()
@@ -546,15 +550,28 @@ func (m *PermissionManager) findFilesystemPermission(action core.FileSystemActio
 		return nil
 	}
 	normalized := filepath.ToSlash(filepath.Clean(path))
+	cacheKey := string(action) + ":" + normalized
+	m.mu.RLock()
+	if perm, ok := m.fsPermCache[cacheKey]; ok {
+		m.mu.RUnlock()
+		return perm
+	}
+	m.mu.RUnlock()
+	var matched *core.FileSystemPermission
 	for _, perm := range m.declared.FileSystem {
 		if perm.Action != action {
 			continue
 		}
 		if matchGlob(perm.Path, normalized) {
-			return &perm
+			permCopy := perm
+			matched = &permCopy
+			break
 		}
 	}
-	return nil
+	m.mu.Lock()
+	m.fsPermCache[cacheKey] = matched
+	m.mu.Unlock()
+	return matched
 }
 
 // findExecutablePermission locates the manifest entry authorizing a binary.
@@ -562,12 +579,25 @@ func (m *PermissionManager) findExecutablePermission(binary string) *core.Execut
 	if m == nil || m.declared == nil {
 		return nil
 	}
+	cacheKey := strings.TrimSpace(binary)
+	m.mu.RLock()
+	if perm, ok := m.execPermCache[cacheKey]; ok {
+		m.mu.RUnlock()
+		return perm
+	}
+	m.mu.RUnlock()
+	var matched *core.ExecutablePermission
 	for _, perm := range m.declared.Executables {
 		if perm.Binary == binary {
-			return &perm
+			permCopy := perm
+			matched = &permCopy
+			break
 		}
 	}
-	return nil
+	m.mu.Lock()
+	m.execPermCache[cacheKey] = matched
+	m.mu.Unlock()
+	return matched
 }
 
 // findNetworkPermission resolves whether the host/port pair is authorized for
