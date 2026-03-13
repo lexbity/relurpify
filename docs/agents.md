@@ -77,13 +77,16 @@ relurpish chat --agent coding-rust
 
 ## Skill System
 
-Skills are a shared policy and guidance layer that shape how agents use already
-available capabilities. They are not executable runtime types and they do not
-expand an agent's permissions.
+Skills are a shared policy and guidance layer that shape how agents use runtime
+capabilities. They can also contribute prompt and resource capabilities, but
+only inside the manifest-defined security envelope.
 
 In the current model, skills can:
 
 - prioritize or narrow capability usage
+- contribute prompt capabilities
+- contribute resource capabilities backed by contained workspace files
+- widen `allowed_capabilities` through skill-declared selectors before final admission
 - steer phase-specific behavior
 - define verification expectations
 - suggest recovery probes when work fails
@@ -91,13 +94,13 @@ In the current model, skills can:
 
 Skills cannot:
 
-- register new capabilities
-- widen `allowed_capabilities`
 - bypass manifest permissions
 - bypass runtime policy checks or sandboxing
 
-This means skills act inside the existing security envelope. They can guide
-agent behavior, but they never grant authority.
+This means skills can change what is visible and callable inside the runtime,
+but they still act inside the existing security envelope. They can influence
+behavior and contribute admitted prompt/resource surfaces, but they never grant
+authority outside manifest-enforced policy.
 
 ### Capability selectors
 

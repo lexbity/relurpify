@@ -232,9 +232,19 @@ Skills are composable prompt and policy packages declared in `spec.skills` and l
 | `sqlcoder` | SQL and SQLite conventions |
 | `devops` | CI/CD and shell automation conventions |
 
-Skills can narrow behavior, adjust prompts, and supply policy hints. They do not bypass manifest permissions or sandbox enforcement.
+Skills can contribute:
+
+- prompt snippets and prompt capabilities
+- resource capabilities backed by contained workspace files
+- additional allowed-capability selectors
+- capability, provider, session, insertion, and global policy
+- planning, verification, and recovery guidance
+
+Skills do not bypass manifest permissions or sandbox enforcement.
 
 Like manifests, skill packages under `relurpify_cfg/skills/` are workspace-owned copies after initialization or manual copying. Shared skill templates are not used as runtime state directly.
+
+Skill resource paths are validated for workspace containment during contract resolution. At runtime, skill resource reads still pass through the permission manager, so a skill cannot use direct filesystem reads to escape the manifest contract.
 
 ---
 
@@ -287,14 +297,26 @@ LoadWorkspaceConfig(config.yaml) -> apply workspace defaults
 RegisterAgent(manifest) -> validate manifest + build PermissionManager
     |
     v
-ApplySkills(spec.skills) -> merge prompts and policy hints
+ResolveEffectiveAgentContract() -> merge manifest defaults, skills, overlays
     |
     v
-BuildCapabilityRegistry() -> register capabilities and apply effective policies
+BuildFromContract() -> compile one policy bundle from effective contract
+    |
+    v
+BuildBuiltinCapabilityBundle() -> register builtin runtime capabilities
+    |
+    v
+Admit skill/provider capabilities against final selector set
     |
     v
 Agent is ready
 ```
+
+The same contract-first path is reused for:
+
+- initial runtime startup
+- preset switching (`SwitchAgent`)
+- live policy/spec reload when capability topology is unchanged
 
 ---
 

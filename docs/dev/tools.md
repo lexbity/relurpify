@@ -209,22 +209,26 @@ func (t *MyFileTool) Execute(ctx context.Context, state *core.Context, args map[
 }
 ```
 
-### 3. Register in BuildCapabilityRegistry
+### 3. Register in BuildBuiltinCapabilityBundle
 
 Add your tool to the capability-registry wiring in `app/relurpish/runtime/runtime.go`:
 
 ```go
-func BuildCapabilityRegistry(workspace string, runner CommandRunner, opts CapabilityRegistryOptions) (*capability.Registry, *ast.IndexManager, error) {
+func BuildBuiltinCapabilityBundle(workspace string, runner CommandRunner, opts CapabilityRegistryOptions) (*CapabilityBundle, error) {
     registry := capability.NewRegistry()
     // ... existing tools ...
     if err := registry.Register(&tools.EchoTool{}); err != nil {
-        return nil, nil, err
+        return nil, err
     }
-    return registry, indexManager, nil
+    return &CapabilityBundle{
+        Registry: registry,
+        IndexManager: indexManager,
+        SearchEngine: searchEngine,
+    }, nil
 }
 ```
 
-The registry remains capability-native even here: local tools are one runtime family inside the capability model, not a separate generic execution architecture.
+The registry remains capability-native even here: local tools are one runtime family inside the capability model, not a separate generic execution architecture. The runtime also wires shared indexing/search helpers here so agents and progressive context loading reuse the same workspace services.
 
 ### 4. Declare in Manifest
 

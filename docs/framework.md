@@ -12,12 +12,15 @@ The `framework/` layer is the infrastructure that all agents, applications, and 
 framework/
 ├── core/           Foundational types shared across every layer
 ├── capability/     Central capability registry
+├── capabilityplan/ Explicit capability admission planning
+├── contract/       Effective runtime contract resolution
 ├── contextmgr/     LLM context window management
 ├── graph/          Deterministic state-machine workflow runtime
 ├── pipeline/       Staged LLM execution with typed contracts
 ├── manifest/       Agent security manifest parsing (relurpify/v1alpha1)
 ├── memory/         Hybrid storage (checkpoints, messages, vectors, workflows)
 ├── authorization/  Permission enforcement and HITL approval
+├── policybundle/   Compiled policy bundle built from effective contract
 ├── search/         File glob and content search
 ├── identity/       Identity resolution and storage
 ├── telemetry/      Structured audit logging and execution tracing
@@ -47,7 +50,7 @@ framework/
 
 `framework/core` defines every type shared between agents, tools, providers, and the runtime. No other framework package defines domain types — they all import from core.
 
-**Agent & task** — `Agent`, `AgentRuntimeSpec`, `Task`, `Plan`. The spec merge/overlay system composes manifest-declared skill configurations at startup.
+**Agent & task** — `Agent`, `AgentRuntimeSpec`, `Task`, `Plan`. The spec merge/overlay system composes manifest defaults, skill contributions, agent-definition overlays, and runtime overrides into the effective runtime contract.
 
 **Context** — `Context` is the mutable state bag threaded through every graph node and tool call. It holds messages, tool observations, budget signals, and per-scope key/value pairs. `SharedContext` merges results from parallel graph branches.
 
@@ -83,16 +86,52 @@ framework/
 
 ## capability
 
-`framework/capability` maps descriptors to implementations and enforces provider policies at dispatch time.
+`framework/capability` is the runtime container for already admitted capabilities. It owns descriptor lookup, wrapper/runtime-policy bindings, and common invocation gating across tools, prompt capabilities, and resource capabilities.
 
 **CapabilityRegistry** is the authoritative source for what an agent may call. It distinguishes:
 - `KindTool` — local-native tools, subject to gVisor sandboxing.
 - `KindPrompt` — LLM prompt templates injected into context.
 - `KindResource` — structured data resources attached to context.
 
-Dispatch is gated by `CapabilityPolicy` and `ProviderPolicy`. Every result is wrapped in a `CapabilityResultEnvelope` carrying provenance and an `InsertionDecision`.
+Dispatch is gated by the compiled policy engine plus concrete permission checks. Every result is wrapped in a `CapabilityResultEnvelope` carrying provenance and an `InsertionDecision`.
 
 `tool_formatting.go` converts descriptors to Ollama's JSON schema tool format. `node_support.go` wires node-device providers for Nexus-backed capabilities.
+
+## capabilityplan
+
+`framework/capabilityplan` evaluates capability candidates against the final allowed selector set before they are admitted to the registry.
+
+Today it is used primarily for skill-backed prompt/resource capabilities so startup can record a deterministic admitted/rejected result set instead of relying on incremental register-then-prune behavior.
+
+**AdmissionResult** records:
+
+- capability ID and public name
+- capability kind
+- admitted / rejected state
+- rejection reason when filtered
+
+This admission output is surfaced into runtime inspection so the TUI and debug tooling can explain why a capability is missing.
+
+## contract
+
+`framework/contract` resolves one canonical `EffectiveAgentContract` for a runtime.
+
+The contract is built from:
+
+1. manifest defaults
+2. manifest `spec.agent`
+3. skill contributions
+4. agent-definition overlays
+5. runtime overlays
+
+The resulting contract includes:
+
+- effective `AgentRuntimeSpec`
+- effective permission set and resources
+- resolved skills and skill application results
+- a source summary for inspection/debugging
+
+Downstream runtime code should consume this contract instead of recomputing manifest, skill, and overlay state independently.
 
 ---
 
@@ -264,7 +303,7 @@ Each **Stage** implements four methods:
 
 **SkillManifest** defines reusable skill packages composed into agent manifests.
 
-**Composition** — `merge.go` overlays workspace-local overrides onto the base template; `resolve.go` resolves relative paths; `skills_resolver.go` expands skill references into `CapabilityDescriptor` sets at startup.
+**Composition** — permission/resource defaults are resolved before contract compilation; skill manifests are validated and resolved into pure skill data first, then admitted later against the final selector set. Skill resource paths are containment-checked against the workspace and later read through permission-aware handlers rather than direct filesystem reads.
 
 ---
 
@@ -335,15 +374,27 @@ Nexus-specific stores (`sqlite_identity_store`, `sqlite_session_store`, `sqlite_
 
 `framework/authorization` enforces the three-level policy model: **Allow**, **Ask**, **Deny**.
 
-**PermissionManager** gates every tool invocation, checking required file paths, executables, and network endpoints against the compiled policy.
+**PermissionManager** gates every tool invocation, checking required file paths, executables, and network endpoints against declared permissions. It now also serves permission-aware capability/resource handlers, including skill-backed resource capabilities.
 
-**PolicyEngine** compiles declarative `PolicyRule` objects into a fast match structure. `policy_compile.go` builds it; `policy_match.go` evaluates incoming requests.
+**PolicyEngine** compiles declarative `PolicyRule` objects into a fast match structure. It is built from the effective contract rather than the raw manifest so provider/session/capability enforcement all evaluate the final resolved runtime spec.
 
 **HITL** — when a request falls into the Ask path, `hitl.go` surfaces a `HITLRequest` to the operator. Responses: `[y]` once, `[s]` session, `[a]` always, `[n]` deny.
 
 **Command authorization** — `command_authorization.go` checks binary names and argument patterns against the manifest's allowed executables.
 
 **Delegations** — `delegations.go` manages bounded grants of capability authority issued by one agent to another.
+
+## policybundle
+
+`framework/policybundle` compiles an immutable runtime policy bundle from an `EffectiveAgentContract`.
+
+The compiled bundle carries:
+
+- effective `PolicyRule` set
+- executable `PolicyEngine`
+- agent ID and effective spec metadata
+
+Runtime startup, preset switching, and live reload now compile through `BuildFromContract(...)` so policy state stays aligned with the resolved contract.
 
 ---
 

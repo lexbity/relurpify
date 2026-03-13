@@ -61,7 +61,7 @@ Think of Relurpify in five layers, each building on the one below:
 
 **Agent layer** — the reasoning layer. Agents receive an instruction, build a plan or enter a reasoning loop, decide which tools to call, and produce a result. Seven agent types implement different strategies: CodingAgent (multi-mode), ArchitectAgent (plan-then-execute), PipelineAgent (typed stages), PlannerAgent, ReActAgent, ReflectionAgent, EternalAgent. See [agents.md](agents.md).
 
-**Framework layer** — the infrastructure agents sit on top of. The graph runtime executes workflows as deterministic state machines; every node declares a contract (side-effect class, idempotency, placement, checkpoint policy, state boundaries) and the runtime validates those contracts before execution. Tool calls at node boundaries route through the capability registry with policy evaluation. Checkpoints capture transition-boundary state so interrupted graphs resume without replaying completed work. System nodes (CheckpointNode, SummarizeContextNode, RetrieveDeclarativeMemoryNode, RetrieveProceduralMemoryNode, HydrateContextNode, PersistenceWriterNode) are first-class graph steps for structured memory, summarisation, and persistence. The pipeline runner executes typed stage sequences with declared contracts. The capability registry owns all tools, prompts, and provider-backed capabilities. The authorization manager enforces the three-level policy (Allow/Ask/Deny) derived from the manifest. The context manager compresses token usage for small local models. Memory is separated into working, declarative (facts, decisions), and procedural (routines) lanes backed by SQLite. See [framework.md](framework.md).
+**Framework layer** — the infrastructure agents sit on top of. The graph runtime executes workflows as deterministic state machines; every node declares a contract (side-effect class, idempotency, placement, checkpoint policy, state boundaries) and the runtime validates those contracts before execution. Tool calls at node boundaries route through the capability registry with policy evaluation. Checkpoints capture transition-boundary state so interrupted graphs resume without replaying completed work. System nodes (CheckpointNode, SummarizeContextNode, RetrieveDeclarativeMemoryNode, RetrieveProceduralMemoryNode, HydrateContextNode, PersistenceWriterNode) are first-class graph steps for structured memory, summarisation, and persistence. The pipeline runner executes typed stage sequences with declared contracts. Runtime startup first resolves an effective contract from the manifest, skills, and overlays, then compiles one policy bundle from that contract, then admits capabilities into the registry. The authorization manager enforces the three-level policy (Allow/Ask/Deny) against that final resolved state. The context manager compresses token usage for small local models. Memory is separated into working, declarative (facts, decisions), and procedural (routines) lanes backed by SQLite. See [framework.md](framework.md).
 
 **Middleware layer** — transport and protocol. The MCP client/server implementation (versions 2025-06-18 and 2025-11-25) allows Relurpify to both consume capabilities from external MCP servers and expose its own capabilities to MCP clients. The Nexus transport layer (WebSocket) connects remote relurpish instances to the gateway. Session routing and channel management keep concurrent sessions isolated. See [middleware.md](middleware.md).
 
@@ -103,7 +103,9 @@ Final response streamed to TUI
 
 ### The Manifest as Contract
 
-Before any of the above happens, the agent's manifest is loaded and validated. The manifest is a YAML file that declares:
+Before any of the above happens, the runtime resolves an effective contract. The manifest is the starting point for that contract, but the final runtime state also includes skill contributions, agent-definition overlays, and runtime overrides.
+
+The manifest declares:
 
 - Which filesystem paths the agent may read, write, or execute
 - Which binaries it may run (go, git, bash, etc.)
@@ -111,7 +113,15 @@ Before any of the above happens, the agent's manifest is loaded and validated. T
 - Which container image to run tools inside
 - What to do with actions not explicitly declared (ask / allow / deny)
 
-The manifest is checked at startup. If it requires `runtime: gvisor` (mandatory) and gVisor isn't installed, the system refuses to start. This is intentional — a degraded mode without sandbox isolation defeats the purpose.
+At startup the runtime:
+
+1. loads and validates the manifest
+2. resolves effective permissions/resources
+3. resolves skills and overlays into one effective agent spec
+4. compiles one policy bundle from that effective contract
+5. builds and admits capabilities against the final selector set
+
+If the manifest requires `runtime: gvisor` (mandatory) and gVisor isn't installed, the system refuses to start. This is intentional — a degraded mode without sandbox isolation defeats the purpose.
 
 ### Token Budget Management
 
@@ -137,6 +147,8 @@ relurpify_cfg/
 Everything Relurpify creates or modifies at runtime is scoped to the project directory — either inside `relurpify_cfg/` or inside the workspace paths declared in the manifest.
 
 Shared templates are not runtime state. They are copied into `relurpify_cfg/` and become workspace-owned from that point forward.
+
+Skill resource paths are also contained to the workspace. Prompt/resource capabilities contributed by skills are admitted against the final resolved selector set and their resource reads still go through manifest filesystem enforcement.
 
 ---
 

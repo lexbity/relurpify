@@ -48,7 +48,7 @@ Every permission check resolves to one of three outcomes:
 
 The permission manager checks four categories:
 
-**Capability calls** — before any tool capability executes, its declared permission requirements are compared against the manifest's `spec.defaults.permissions`. Capability trust/risk/effect policy is evaluated first, then the runtime permission manager checks whether the required low-level permissions are actually declared.
+**Capability calls** — before any tool, prompt, or resource capability executes, compiled capability policy is evaluated first. If execution is allowed, the runtime permission manager then checks any required low-level permissions (filesystem, executable, network, session/provider approval) against the resolved contract.
 
 **File access** — `fs:read`, `fs:write`, `fs:execute`, and `fs:list` actions are checked against the filesystem permission entries in the manifest. Paths use glob matching with `**` for recursive subtrees.
 
@@ -106,26 +106,27 @@ If you do not respond within the HITL timeout (default 45 seconds), the request 
 
 ## Policy Resolution Order
 
-For a given tool call, the runtime resolves in this order:
+For a given capability invocation, provider activation, or session-bound operation, the runtime resolves in this order:
 
-1. **Per-tool policy** — `spec.agent.tool_execution_policy.<tool_name>` in the manifest
-2. **Trust policy** — `spec.agent.policies.<trust_class>`
-3. **Capability selector policy** — `spec.agent.capability_policies[]`
-4. **Class policy** — `spec.agent.policies.<risk_or_effect_class>`
-5. **Runtime permission checks** — filesystem/executable/network declarations under `spec.defaults.permissions`
-6. **Fallback** — `Ask` if nothing else matches
+1. **Descriptor lookup** — resolve the registered tool/prompt/resource/provider target
+2. **Compiled policy evaluation** — per-tool policy, selector policy, provider/session policy, trust/risk/effect class policy
+3. **Approval handling** — HITL request if the resolved decision is `ask`
+4. **Concrete permission checks** — filesystem/executable/network/session checks against the resolved permission set
+5. **Runtime safety / revocation** — deny revoked or unavailable runtime entries
+6. **Execution**
 
 ---
 
-## The Manifest as the Source of Truth
+## The Effective Contract as the Source of Truth
 
-Everything above flows from the agent manifest. The manifest is:
+Everything above flows from the runtime's effective contract. The manifest is the primary input, but the final contract also includes resolved skills and later overlays. The effective contract is:
 
 - **Validated at startup** — a manifest that declares an invalid permission structure prevents the agent from loading
-- **Read-only at runtime** — you cannot loosen permissions without editing the file and restarting
+- **Compiled once per active runtime state** — startup, preset switch, and reload all rebuild policy from the same contract path
+- **Reloadable in place when topology is stable** — policy/spec changes can be recompiled without rebuilding wrappers; capability-topology changes still require a restart/rebuild
 - **Written by the `a` approval** — pressing always in a HITL prompt is the only runtime-initiated manifest write
 
-This means the manifest always reflects the actual permission state. There are no hidden in-memory overrides that don't survive a restart.
+This means the live runtime policy stays aligned with the resolved contract. There are no separate raw-manifest and post-skill policy engines drifting apart anymore.
 
 ---
 
