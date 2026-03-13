@@ -2,6 +2,8 @@ package agenttest
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -234,8 +236,138 @@ func seedWorkflowStore(ctx context.Context, path string, workflows []WorkflowSee
 				return err
 			}
 		}
+		for _, checkpoint := range item.Checkpoints {
+			contextJSON, err := json.Marshal(map[string]any{
+				"state": cloneContextMap(checkpoint.ContextState),
+			})
+			if err != nil {
+				return err
+			}
+			resultJSON, err := json.Marshal(map[string]any{
+				"stage_name":     checkpoint.StageName,
+				"decoded_output": map[string]any{"type": "json", "value": cloneContextMap(checkpoint.ResultData)},
+				"validation_ok":  true,
+				"transition": map[string]any{
+					"kind": "next",
+				},
+			})
+			if err != nil {
+				return err
+			}
+			if err := store.SavePipelineCheckpoint(ctx, memory.PipelineCheckpointRecord{
+				CheckpointID: checkpoint.CheckpointID,
+				TaskID:       checkpoint.TaskID,
+				WorkflowID:   firstNonEmpty(checkpoint.WorkflowID, workflowID),
+				RunID:        firstNonEmpty(checkpoint.RunID, firstWorkflowRunID(item.Runs)),
+				StageName:    checkpoint.StageName,
+				StageIndex:   checkpoint.StageIndex,
+				ContextJSON:  string(contextJSON),
+				ResultJSON:   string(resultJSON),
+			}); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+func collectMemoryOutcome(ctx context.Context, workspace string, store memory.MemoryStore) (MemoryOutcomeReport, error) {
+	out := MemoryOutcomeReport{}
+	if runtimeStore, ok := store.(memory.RuntimeMemoryStore); ok {
+		decl, err := runtimeStore.SearchDeclarative(ctx, memory.DeclarativeMemoryQuery{Limit: 10000})
+		if err != nil {
+			return out, err
+		}
+		proc, err := runtimeStore.SearchProcedural(ctx, memory.ProceduralMemoryQuery{Limit: 10000})
+		if err != nil {
+			return out, err
+		}
+		out.DeclarativeRecordsCreated = len(decl)
+		out.ProceduralRecordsCreated = len(proc)
+		out.MemoryRecordsCreated = out.DeclarativeRecordsCreated + out.ProceduralRecordsCreated
+	} else if store != nil {
+		total := 0
+		for _, scope := range []memory.MemoryScope{memory.MemoryScopeSession, memory.MemoryScopeProject, memory.MemoryScopeGlobal} {
+			records, err := store.Search(ctx, "", scope)
+			if err != nil {
+				return out, err
+			}
+			total += len(records)
+		}
+		out.MemoryRecordsCreated = total
+	}
+
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(config.New(workspace).WorkflowStateFile())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return out, nil
+		}
+		return out, err
+	}
+	defer workflowStore.Close()
+	workflowRows, err := countWorkflowRows(workflowStore.DB())
+	if err != nil {
+		return out, err
+	}
+	out.WorkflowRowsCreated = workflowRows
+	out.WorkflowStateUpdated = workflowRows > 0
+	return out, nil
+}
+
+func diffMemoryOutcome(before, after MemoryOutcomeReport) MemoryOutcomeReport {
+	out := MemoryOutcomeReport{
+		DeclarativeRecordsCreated: maxInt(after.DeclarativeRecordsCreated-before.DeclarativeRecordsCreated, 0),
+		ProceduralRecordsCreated:  maxInt(after.ProceduralRecordsCreated-before.ProceduralRecordsCreated, 0),
+		MemoryRecordsCreated:      maxInt(after.MemoryRecordsCreated-before.MemoryRecordsCreated, 0),
+		WorkflowRowsCreated:       maxInt(after.WorkflowRowsCreated-before.WorkflowRowsCreated, 0),
+	}
+	out.WorkflowStateUpdated = out.WorkflowRowsCreated > 0
+	return out
+}
+
+func countWorkflowRows(db *sql.DB) (int, error) {
+	if db == nil {
+		return 0, nil
+	}
+	tables := []string{
+		"workflows",
+		"workflow_runs",
+		"workflow_plans",
+		"workflow_steps",
+		"step_runs",
+		"step_artifacts",
+		"workflow_artifacts",
+		"workflow_stage_results",
+		"pipeline_checkpoints",
+		"workflow_knowledge",
+		"workflow_events",
+	}
+	total := 0
+	for _, table := range tables {
+		var count int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
+			if strings.Contains(err.Error(), "no such table") {
+				continue
+			}
+			return 0, err
+		}
+		total += count
+	}
+	return total, nil
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func firstWorkflowRunID(runs []WorkflowRunSeedSpec) string {
+	if len(runs) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(runs[0].RunID)
 }
 
 func parseMemoryScope(raw string) memory.MemoryScope {

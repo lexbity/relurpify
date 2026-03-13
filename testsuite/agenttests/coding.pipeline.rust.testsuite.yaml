@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: coding.pipeline.rust
   description: "Pipeline control-flow coverage for Rust coding tasks."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
 spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-rust.yaml
+  execution:
+    profile: ci-live
+    strict: true
   workspace:
     strategy: derived
     exclude:
@@ -55,7 +61,6 @@ spec:
                   }
               }
       overrides:
-        control_flow: pipeline
         allowed_capabilities:
           - name: cli_cargo
             kind: tool
@@ -90,7 +95,6 @@ spec:
                   }
               }
       overrides:
-        control_flow: pipeline
         allowed_capabilities:
           - name: cli_cargo
             kind: tool

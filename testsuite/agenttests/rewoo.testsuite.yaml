@@ -1,0 +1,133 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: rewoo
+  description: "Live ReWOO coverage for planning, retrieval hydration, failure handling, and synthesis."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: rewoo
+  manifest: relurpify_cfg/agents/rewoo.yaml
+  execution:
+    profile: ci-live
+    strict: true
+  memory:
+    backend: sqlite_runtime
+    retrieval:
+      embedder: test
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: rewoo_basic
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Use file_read to inspect README.md and summarize the project in 3 bullets. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - rewoo.synthesis
+          - rewoo.tool_results
+        tool_calls_must_include:
+          - file_read
+    - name: rewoo_retrieval_hydration
+      task_type: analysis
+      context:
+        workflow_id: wf-rewoo-retrieval
+      setup:
+        workflows:
+          - workflow:
+              workflow_id: wf-rewoo-retrieval
+              task_type: analysis
+              instruction: Use retrieval-backed workflow history
+              status: running
+            runs:
+              - run_id: rewoo-seed-run
+                status: running
+            knowledge:
+              - record_id: rewoo-knowledge-1
+                kind: fact
+                title: Prior workflow fact
+                content: Known API constraint
+                status: accepted
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Read README.md and summarize the project in 2 bullets. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - rewoo.retrieval_applied
+          - rewoo.workflow_retrieval
+    - name: rewoo_step_skip_on_failure
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Create a plan with two steps: first try reading testsuite/agenttest_fixtures/does_not_exist.txt and
+        mark that step on_failure as skip; second read README.md and produce a short summary. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - rewoo.tool_results
+    - name: rewoo_replan
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        First plan a failing step that reads testsuite/agenttest_fixtures/does_not_exist.txt with on_failure set to replan.
+        On replan, switch to reading README.md and summarize the project. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)replan|summary|relurpify
+        state_keys_must_exist:
+          - rewoo.tool_results
+    - name: rewoo_kb_persistence
+      task_type: analysis
+      context:
+        workflow_id: wf-rewoo-kb
+      setup:
+        workflows:
+          - workflow:
+              workflow_id: wf-rewoo-kb
+              task_type: analysis
+              instruction: Persist synthesis into workflow knowledge
+              status: running
+            runs:
+              - run_id: rewoo-kb-run
+                status: running
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Read README.md and summarize the project in 2 bullets. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - rewoo.synthesis
+          - rewoo.tool_results

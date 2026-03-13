@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: reflection
   description: "End-to-end smoke coverage for the reflection agent."
+  owner: agent-platform
+  tier: smoke
+  quarantined: false
 spec:
   agent_name: reflection
   manifest: relurpify_cfg/agents/reflection.yaml
+  execution:
+    profile: ci-live
+    strict: true
   workspace:
     strategy: derived
     exclude:

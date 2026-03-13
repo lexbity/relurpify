@@ -1,9 +1,14 @@
 package agenttest
 
 import (
+	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"gopkg.in/yaml.v3"
@@ -20,17 +25,26 @@ type Suite struct {
 type SuiteMeta struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
+	Owner       string `yaml:"owner,omitempty"`
+	Tier        string `yaml:"tier,omitempty"`
+	Quarantined bool   `yaml:"quarantined,omitempty"`
 }
 
 type SuiteSpec struct {
 	AgentName string `yaml:"agent_name"`
 	Manifest  string `yaml:"manifest"`
 
-	Workspace WorkspaceSpec `yaml:"workspace"`
-	Memory    MemorySpec    `yaml:"memory,omitempty"`
-	Models    []ModelSpec   `yaml:"models,omitempty"`
-	Recording RecordingSpec `yaml:"recording,omitempty"`
-	Cases     []CaseSpec    `yaml:"cases"`
+	Execution SuiteExecutionSpec `yaml:"execution,omitempty"`
+	Workspace WorkspaceSpec      `yaml:"workspace"`
+	Memory    MemorySpec         `yaml:"memory,omitempty"`
+	Models    []ModelSpec        `yaml:"models,omitempty"`
+	Recording RecordingSpec      `yaml:"recording,omitempty"`
+	Cases     []CaseSpec         `yaml:"cases"`
+}
+
+type SuiteExecutionSpec struct {
+	Profile string `yaml:"profile,omitempty"`
+	Strict  bool   `yaml:"strict,omitempty"`
 }
 
 type WorkspaceSpec struct {
@@ -54,6 +68,7 @@ type RecordingSpec struct {
 type CaseSpec struct {
 	Name            string                        `yaml:"name"`
 	Description     string                        `yaml:"description,omitempty"`
+	Timeout         string                        `yaml:"timeout,omitempty"`
 	TaskType        string                        `yaml:"task_type,omitempty"`
 	Prompt          string                        `yaml:"prompt"`
 	Context         map[string]any                `yaml:"context,omitempty"`
@@ -96,16 +111,29 @@ type SetupFileSpec struct {
 type ExpectSpec struct {
 	MustSucceed bool `yaml:"must_succeed,omitempty"`
 
-	OutputContains []string `yaml:"output_contains,omitempty"`
-	OutputRegex    []string `yaml:"output_regex,omitempty"`
+	OutputContains []string                 `yaml:"output_contains,omitempty"`
+	OutputRegex    []string                 `yaml:"output_regex,omitempty"`
+	FilesContain   []FileContentExpectation `yaml:"files_contain,omitempty"`
 
 	NoFileChanges bool     `yaml:"no_file_changes,omitempty"`
 	FilesChanged  []string `yaml:"files_changed,omitempty"`
 
 	ToolCallsMustInclude []string `yaml:"tool_calls_must_include,omitempty"`
 	ToolCallsMustExclude []string `yaml:"tool_calls_must_exclude,omitempty"`
+	ToolCallsInOrder     []string `yaml:"tool_calls_in_order,omitempty"`
+	LLMCalls             int      `yaml:"llm_calls,omitempty"`
 	MaxToolCalls         int      `yaml:"max_tool_calls,omitempty"`
+	MaxPromptTokens      int      `yaml:"max_prompt_tokens,omitempty"`
+	MaxCompletionTokens  int      `yaml:"max_completion_tokens,omitempty"`
+	MaxTotalTokens       int      `yaml:"max_total_tokens,omitempty"`
+	MemoryRecordsCreated int      `yaml:"memory_records_created,omitempty"`
+	WorkflowStateUpdated bool     `yaml:"workflow_state_updated,omitempty"`
 	StateKeysMustExist   []string `yaml:"state_keys_must_exist,omitempty"`
+}
+
+type FileContentExpectation struct {
+	Path     string   `yaml:"path"`
+	Contains []string `yaml:"contains,omitempty"`
 }
 
 type CaseOverrideSpec struct {
@@ -171,9 +199,10 @@ type ProceduralMemorySeedSpec struct {
 }
 
 type WorkflowSeedSpec struct {
-	Workflow  WorkflowRecordSeedSpec      `yaml:"workflow"`
-	Runs      []WorkflowRunSeedSpec       `yaml:"runs,omitempty"`
-	Knowledge []WorkflowKnowledgeSeedSpec `yaml:"knowledge,omitempty"`
+	Workflow    WorkflowRecordSeedSpec       `yaml:"workflow"`
+	Runs        []WorkflowRunSeedSpec        `yaml:"runs,omitempty"`
+	Knowledge   []WorkflowKnowledgeSeedSpec  `yaml:"knowledge,omitempty"`
+	Checkpoints []WorkflowCheckpointSeedSpec `yaml:"checkpoints,omitempty"`
 }
 
 type WorkflowRecordSeedSpec struct {
@@ -208,13 +237,26 @@ type WorkflowKnowledgeSeedSpec struct {
 	Metadata   map[string]any `yaml:"metadata,omitempty"`
 }
 
+type WorkflowCheckpointSeedSpec struct {
+	CheckpointID string         `yaml:"checkpoint_id"`
+	TaskID       string         `yaml:"task_id"`
+	WorkflowID   string         `yaml:"workflow_id,omitempty"`
+	RunID        string         `yaml:"run_id,omitempty"`
+	StageName    string         `yaml:"stage_name"`
+	StageIndex   int            `yaml:"stage_index,omitempty"`
+	ContextState map[string]any `yaml:"context_state,omitempty"`
+	ResultData   map[string]any `yaml:"result_data,omitempty"`
+}
+
 func LoadSuite(path string) (*Suite, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	var suite Suite
-	if err := yaml.Unmarshal(data, &suite); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&suite); err != nil {
 		return nil, err
 	}
 	suite.SourcePath = path
@@ -236,6 +278,21 @@ func (s *Suite) Validate() error {
 	}
 	if s.Spec.Manifest == "" {
 		return fmt.Errorf("suite missing spec.manifest")
+	}
+	if s.Metadata.Tier == "" {
+		s.Metadata.Tier = "stable"
+	}
+	if err := validateSuiteTier(s.Metadata.Tier); err != nil {
+		return err
+	}
+	if s.Spec.Execution.Profile == "" {
+		s.Spec.Execution.Profile = "live"
+	}
+	if err := validateExecutionProfile(s.Spec.Execution.Profile); err != nil {
+		return err
+	}
+	if err := validateRecordingSpec(s.Spec.Recording, "suite spec.recording"); err != nil {
+		return err
 	}
 	strategy := s.Spec.Workspace.Strategy
 	if strategy == "" {
@@ -259,8 +316,22 @@ func (s *Suite) Validate() error {
 		if c.Prompt == "" {
 			return fmt.Errorf("suite case[%s] missing prompt", c.Name)
 		}
+		if _, err := parseCaseTimeout(c.Timeout); err != nil {
+			return fmt.Errorf("suite case[%s] timeout invalid: %w", c.Name, err)
+		}
 		if c.Overrides.Memory != nil {
 			if err := validateMemorySpec(*c.Overrides.Memory, fmt.Sprintf("suite case[%s] overrides.memory", c.Name)); err != nil {
+				return err
+			}
+		}
+		if c.Overrides.MaxIterations < 0 {
+			return fmt.Errorf("suite case[%s] overrides.max_iterations must be >= 0", c.Name)
+		}
+		if strings.TrimSpace(c.Overrides.ControlFlow) != "" {
+			return fmt.Errorf("suite case[%s] overrides.control_flow %q unsupported", c.Name, c.Overrides.ControlFlow)
+		}
+		if c.Overrides.Recording != nil {
+			if err := validateRecordingSpec(*c.Overrides.Recording, fmt.Sprintf("suite case[%s] overrides.recording", c.Name)); err != nil {
 				return err
 			}
 		}
@@ -277,6 +348,122 @@ func (s *Suite) Validate() error {
 		}
 	}
 	return nil
+}
+
+func validateSuiteTier(raw string) error {
+	switch raw {
+	case "smoke", "stable", "live-flaky", "quarantined":
+		return nil
+	default:
+		return fmt.Errorf("suite metadata.tier %q unsupported", raw)
+	}
+}
+
+func validateExecutionProfile(raw string) error {
+	switch raw {
+	case "live", "record", "replay", "developer-live", "ci-live", "ci-replay":
+		return nil
+	default:
+		return fmt.Errorf("suite spec.execution.profile %q unsupported", raw)
+	}
+}
+
+func parseCaseTimeout(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	dur, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, err
+	}
+	if dur <= 0 {
+		return 0, fmt.Errorf("must be > 0")
+	}
+	return dur, nil
+}
+
+func (s *Suite) EffectiveProfile(override string) string {
+	if override != "" {
+		return override
+	}
+	if s != nil && s.Spec.Execution.Profile != "" {
+		return s.Spec.Execution.Profile
+	}
+	return "live"
+}
+
+func (s *Suite) IsStrictRun(overrideProfile string, strict bool) bool {
+	if strict {
+		return true
+	}
+	profile := s.EffectiveProfile(overrideProfile)
+	if profile == "ci-live" || profile == "ci-replay" {
+		return true
+	}
+	if s != nil && s.Spec.Execution.Strict {
+		return true
+	}
+	return false
+}
+
+func (s *Suite) MatchesTier(tier string) bool {
+	if strings.TrimSpace(tier) == "" {
+		return true
+	}
+	if s == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(s.Metadata.Tier), strings.TrimSpace(tier))
+}
+
+func (c CaseSpec) MatchesAnyTag(tags []string) bool {
+	if len(tags) == 0 {
+		return true
+	}
+	if len(c.Tags) == 0 {
+		return false
+	}
+	for _, want := range tags {
+		want = strings.TrimSpace(want)
+		if want == "" {
+			continue
+		}
+		for _, have := range c.Tags {
+			if strings.EqualFold(strings.TrimSpace(have), want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func FilterSuiteCasesByTags(suite *Suite, tags []string) *Suite {
+	if suite == nil {
+		return nil
+	}
+	if len(tags) == 0 {
+		return suite
+	}
+	filtered := *suite
+	filtered.Spec = suite.Spec
+	filtered.Spec.Cases = nil
+	for _, c := range suite.Spec.Cases {
+		if c.MatchesAnyTag(tags) {
+			filtered.Spec.Cases = append(filtered.Spec.Cases, c)
+		}
+	}
+	return &filtered
+}
+
+func (s *Suite) MatchesProfile(profile string) bool {
+	if strings.TrimSpace(profile) == "" {
+		return true
+	}
+	if s == nil {
+		return false
+	}
+	return strings.EqualFold(s.EffectiveProfile(""), strings.TrimSpace(profile))
 }
 
 func validateMemorySpec(spec MemorySpec, location string) error {
@@ -299,6 +486,14 @@ func validateSetup(setup SetupSpec, caseName string) error {
 			return fmt.Errorf("suite case[%s] setup.memory.declarative missing record_id", caseName)
 		}
 	}
+	for _, file := range setup.Files {
+		if strings.TrimSpace(file.Path) == "" {
+			return fmt.Errorf("suite case[%s] setup.files missing path", caseName)
+		}
+		if _, err := parseSetupFileMode(file.Mode); err != nil {
+			return fmt.Errorf("suite case[%s] setup.files[%s] invalid mode: %w", caseName, file.Path, err)
+		}
+	}
 	for _, record := range setup.Memory.Procedural {
 		if record.RoutineID == "" {
 			return fmt.Errorf("suite case[%s] setup.memory.procedural missing routine_id", caseName)
@@ -318,8 +513,44 @@ func validateSetup(setup SetupSpec, caseName string) error {
 				return fmt.Errorf("suite case[%s] setup.workflows[%s] knowledge missing record_id", caseName, workflow.Workflow.WorkflowID)
 			}
 		}
+		for _, checkpoint := range workflow.Checkpoints {
+			if checkpoint.CheckpointID == "" {
+				return fmt.Errorf("suite case[%s] setup.workflows[%s] checkpoint missing checkpoint_id", caseName, workflow.Workflow.WorkflowID)
+			}
+			if checkpoint.TaskID == "" {
+				return fmt.Errorf("suite case[%s] setup.workflows[%s] checkpoint missing task_id", caseName, workflow.Workflow.WorkflowID)
+			}
+			if checkpoint.StageName == "" {
+				return fmt.Errorf("suite case[%s] setup.workflows[%s] checkpoint missing stage_name", caseName, workflow.Workflow.WorkflowID)
+			}
+		}
 	}
 	return nil
+}
+
+func validateRecordingSpec(spec RecordingSpec, location string) error {
+	switch strings.TrimSpace(spec.Mode) {
+	case "", "off", "record", "replay":
+		return nil
+	default:
+		return fmt.Errorf("%s mode %q unsupported", location, spec.Mode)
+	}
+}
+
+func parseSetupFileMode(raw string) (fs.FileMode, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0o644, nil
+	}
+	value, err := strconv.ParseUint(raw, 8, 32)
+	if err != nil {
+		return 0, fmt.Errorf("mode must be an octal string like 0644 or 0755")
+	}
+	mode := fs.FileMode(value)
+	if mode > 0o777 {
+		return 0, fmt.Errorf("mode %q exceeds permission bits", raw)
+	}
+	return mode, nil
 }
 
 func (s *Suite) ResolvePath(rel string) string {

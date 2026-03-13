@@ -10,16 +10,21 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/config"
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/policybundle"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	namedfactory "github.com/lexcodex/relurpify/named/factory"
 )
+
+var bootstrapAgentRuntime = appruntime.BootstrapAgentRuntime
 
 func shouldSkipCase(req RequiresSpec, agent graph.Agent) (reason string, ok bool) {
 	for _, bin := range req.Executables {
@@ -50,16 +55,13 @@ func shouldSkipCase(req RequiresSpec, agent graph.Agent) (reason string, ok bool
 }
 
 func extractCapabilityRegistry(agent graph.Agent) *capability.Registry {
-	switch a := agent.(type) {
-	case *agents.CodingAgent:
-		return a.Tools
-	case *agents.PlannerAgent:
-		return a.Tools
-	case *agents.ReActAgent:
-		return a.Tools
-	default:
-		return nil
+	type capabilityRegistryProvider interface {
+		CapabilityRegistry() *capability.Registry
 	}
+	if provider, ok := agent.(capabilityRegistryProvider); ok {
+		return provider.CapabilityRegistry()
+	}
+	return nil
 }
 
 func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.AgentRuntimeSpec {
@@ -99,11 +101,21 @@ func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.Ag
 	return &clone
 }
 
-func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem memory.MemoryStore) (graph.Agent, *core.Context, error) {
+func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem memory.MemoryStore) (graph.Agent, *core.Context, error) {
+	executionAgentName := resolveExecutionAgentName(agentName, c)
 	agentManifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
 		return nil, nil, err
 	}
+	if agentSpec == nil {
+		agentSpec = agents.ApplyManifestDefaults(agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
+		if agentSpec == nil {
+			agentSpec = &core.AgentRuntimeSpec{}
+		}
+	}
+	bootstrapSpec := core.MergeAgentSpecs(agentSpec, core.AgentSpecOverlay{
+		AllowedCapabilities: uniqueCapabilitySelectors(allowedCapabilities),
+	})
 
 	audit := core.NewInMemoryAuditLogger(512)
 	hitl := fauthorization.NewHITLBroker(30 * time.Second)
@@ -153,90 +165,133 @@ func buildAgent(workspace, manifestPath, agentName string, agentSpec *core.Agent
 		runner = fsandbox.NewLocalCommandRunner(workspace, extraEnv)
 	}
 
-	registry, indexManager, err := appruntime.BuildCapabilityRegistry(workspace, runner, appruntime.CapabilityRegistryOptions{
-		AgentID:           agentManifest.Metadata.Name,
-		PermissionManager: permMgr,
-		AgentSpec:         agentSpec,
+	maxIterations := resolveCaseMaxIterations(opts, c)
+	boot, err := bootstrapAgentRuntime(workspace, appruntime.AgentBootstrapOptions{
+		Context:             ctx,
+		AgentID:             agentManifest.Metadata.Name,
+		AgentName:           executionAgentName,
+		ConfigName:          executionAgentName,
+		AgentsDir:           config.New(workspace).AgentsDir(),
+		AgentSpec:           bootstrapSpec,
+		Manifest:            agentManifest,
+		PermissionManager:   permMgr,
+		Runner:              runner,
+		Model:               model,
+		Memory:              mem,
+		Telemetry:           telemetry,
+		OllamaEndpoint:      firstNonEmpty(opts.EndpointOverride, "http://localhost:11434"),
+		OllamaModel:         firstNonEmpty(opts.ModelOverride, agentSpec.Model.Name),
+		SkipASTIndex:        opts.SkipASTIndex,
+		AllowedCapabilities: uniqueCapabilitySelectors(allowedCapabilities),
+		MaxIterations:       maxIterations,
+		DebugLLM:            opts.DebugLLM,
+		DebugAgent:          opts.DebugAgent,
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	applyAgentTestCapabilityDefaults(registry, allowedCapabilities)
-	registry.UseTelemetry(telemetry)
-	registry.UsePermissionManager(agentManifest.Metadata.Name, permMgr)
-	registry.UseAgentSpec(agentManifest.Metadata.Name, agentSpec)
-
-	if mem == nil {
-		paths := config.New(workspace)
-		mem, err = memory.NewHybridMemory(paths.MemoryDir())
+	registry := boot.Registry
+	indexManager := boot.IndexManager
+	searchEngine := boot.SearchEngine
+	compiledPolicy := boot.CompiledPolicy
+	if compiledPolicy == nil {
+		contract := boot.Contract
+		if contract == nil {
+			contract = &contractpkg.EffectiveAgentContract{
+				AgentID:   agentManifest.Metadata.Name,
+				AgentSpec: boot.AgentSpec,
+			}
+		}
+		compiledPolicy, err = policybundle.BuildFromContract(contract, permMgr)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
+	registry.SetPolicyEngine(compiledPolicy.Engine)
+	applyAgentTestCapabilityDefaults(registry, allowedCapabilities)
+	mem = boot.Memory
 
-	agent := instantiateAgentByName(
-		workspace,
-		agentName,
-		model,
-		registry,
-		mem,
-		indexManager,
-	)
+	env := boot.Environment
+	env.Model = model
+	env.Registry = registry
+	env.Memory = mem
+	env.IndexManager = indexManager
+	env.SearchEngine = searchEngine
+	agent := instantiateAgentByName(workspace, executionAgentName, env)
 	if err := applyCaseControlFlowOverride(agent, c); err != nil {
 		return nil, nil, err
-	}
-
-	maxIterations := opts.MaxIterations
-	if maxIterations <= 0 {
-		maxIterations = 8
-	}
-	cfg := &core.Config{
-		Name:              agentManifest.Metadata.Name,
-		Model:             firstNonEmpty(opts.ModelOverride, agentSpec.Model.Name),
-		OllamaEndpoint:    firstNonEmpty(opts.EndpointOverride, "http://localhost:11434"),
-		MaxIterations:     maxIterations,
-		OllamaToolCalling: agentSpec.ToolCallingEnabled(),
-		AgentSpec:         agentSpec,
-		DebugLLM:          opts.DebugLLM,
-		DebugAgent:        opts.DebugAgent,
-		Telemetry:         telemetry,
-	}
-	if err := agent.Initialize(cfg); err != nil {
-		return nil, nil, err
-	}
-	if reflection, ok := agent.(*agents.ReflectionAgent); ok && reflection.Delegate != nil {
-		_ = reflection.Delegate.Initialize(cfg)
 	}
 	return agent, core.NewContext(), nil
 }
 
-func applyCaseControlFlowOverride(agent graph.Agent, c CaseSpec) error {
+func resolveExecutionAgentName(agentName string, c CaseSpec) string {
+	name := strings.ToLower(strings.TrimSpace(agentName))
+	if name != "coding" {
+		return agentName
+	}
+	mode := ""
+	workflowID := ""
+	if c.Context != nil {
+		if raw, ok := c.Context["mode"]; ok {
+			mode = strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
+		}
+		if raw, ok := c.Context["workflow_id"]; ok {
+			workflowID = strings.TrimSpace(fmt.Sprint(raw))
+		}
+	}
+	switch mode {
+	case "architect":
+		if workflowID == "" {
+			return "architect"
+		}
+		return "coding"
+	case "ask", "debug", "docs", "code":
+		return "coding"
+	}
+	return agentName
+}
+
+func resolveCaseMaxIterations(opts RunOptions, c CaseSpec) int {
+	maxIterations := opts.MaxIterations
+	if c.Overrides.MaxIterations > 0 {
+		maxIterations = c.Overrides.MaxIterations
+	}
+	if maxIterations <= 0 {
+		maxIterations = 8
+	}
+	return maxIterations
+}
+
+func resolveCaseTimeout(opts RunOptions, c CaseSpec) (time.Duration, error) {
+	if timeout, err := parseCaseTimeout(c.Timeout); err != nil {
+		return 0, err
+	} else if timeout > 0 {
+		return timeout, nil
+	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 45 * time.Second
+	}
+	return timeout, nil
+}
+
+func resolveBootstrapTimeout(opts RunOptions) time.Duration {
+	timeout := opts.BootstrapTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	return timeout
+}
+
+func applyCaseControlFlowOverride(_ graph.Agent, c CaseSpec) error {
 	flow := strings.TrimSpace(c.Overrides.ControlFlow)
 	if flow == "" {
 		return nil
 	}
-	coding, ok := agent.(*agents.CodingAgent)
-	if !ok {
-		return nil
-	}
-	mode := agents.ModeCode
-	if c.Context != nil {
-		if raw, ok := c.Context["mode"]; ok {
-			if parsed := strings.TrimSpace(fmt.Sprint(raw)); parsed != "" {
-				mode = agents.Mode(strings.ToLower(parsed))
-			}
-		}
-	}
-	switch strings.ToLower(flow) {
-	case string(agents.ControlFlowPipeline):
-		return coding.OverrideControlFlow(mode, agents.ControlFlowPipeline)
-	case string(agents.ControlFlowArchitect):
-		return coding.OverrideControlFlow(mode, agents.ControlFlowArchitect)
-	case string(agents.ControlFlowReAct):
-		return coding.OverrideControlFlow(mode, agents.ControlFlowReAct)
-	default:
-		return fmt.Errorf("unsupported control_flow override %q", flow)
-	}
+	// Control flow overrides are no longer supported via CodingAgent modes.
+	// Named agents define their own control scheme. Return an error so test
+	// authors are aware the override field has no effect.
+	return fmt.Errorf("control_flow override %q not supported: named agents manage their own control scheme", flow)
 }
 
 func defaultAgenttestAllowedCapabilities() []core.CapabilitySelector {
@@ -347,43 +402,6 @@ func (t *aliasTool) Permissions() core.ToolPermissions {
 }
 func (t *aliasTool) Tags() []string { return t.target.Tags() }
 
-func instantiateAgentByName(workspace, name string, model core.LanguageModel, tools *capability.Registry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
-	paths := config.New(workspace)
-	checkpointPath := paths.CheckpointsDir()
-	workflowStatePath := paths.WorkflowStateFile()
-	switch strings.ToLower(name) {
-	case "planner":
-		return &agents.PlannerAgent{Model: model, Tools: tools, Memory: mem}
-	case "react":
-		return &agents.ReActAgent{
-			Model:          model,
-			Tools:          tools,
-			Memory:         mem,
-			IndexManager:   indexManager,
-			CheckpointPath: checkpointPath,
-		}
-	case "reflection":
-		return &agents.ReflectionAgent{
-			Reviewer: model,
-			Delegate: &agents.CodingAgent{
-				Model:             model,
-				Tools:             tools,
-				Memory:            mem,
-				IndexManager:      indexManager,
-				CheckpointPath:    checkpointPath,
-				WorkflowStatePath: workflowStatePath,
-			},
-		}
-	case "eternal":
-		return &agents.EternalAgent{Model: model}
-	default:
-		return &agents.CodingAgent{
-			Model:             model,
-			Tools:             tools,
-			Memory:            mem,
-			IndexManager:      indexManager,
-			CheckpointPath:    checkpointPath,
-			WorkflowStatePath: workflowStatePath,
-		}
-	}
+func instantiateAgentByName(workspace, name string, env agentenv.AgentEnvironment) graph.Agent {
+	return namedfactory.InstantiateByName(workspace, name, env)
 }

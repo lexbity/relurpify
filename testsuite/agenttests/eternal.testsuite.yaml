@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: eternal
   description: "End-to-end smoke coverage for the eternal agent."
+  owner: agent-platform
+  tier: smoke
+  quarantined: false
 spec:
   agent_name: eternal
   manifest: relurpify_cfg/agents/eternal.yaml
+  execution:
+    profile: ci-live
+    strict: true
   workspace:
     strategy: derived
     exclude:

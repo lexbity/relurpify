@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/lexcodex/relurpify/agents"
 )
 
 type sessionSnapshot struct {
@@ -48,7 +47,7 @@ func newSessionSaveCmd() *cobra.Command {
 				agent = "coding"
 			}
 			if mode == "" {
-				mode = string(agents.ModeCode)
+				mode = "default"
 			}
 			snap := sessionSnapshot{
 				Name:      name,

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/framework/manifest"
 )
 
 func TestSnapshotAndDiffWorkspace(t *testing.T) {
@@ -117,5 +118,94 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	}
 	if _, err := os.Stat(filepath.Join(derived, config.DirName, "logs")); err != nil {
 		t.Fatalf("expected derived logs dir: %v", err)
+	}
+}
+
+func TestMaterializeDerivedWorkspaceCopiesReferencedSkills(t *testing.T) {
+	shared := t.TempDir()
+	t.Setenv("RELURPIFY_SHARED_DIR", shared)
+
+	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", config.DirName)
+	if err := os.MkdirAll(profileRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profileRoot, "agent.manifest.yaml"), []byte("name: ${workspace}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	target := t.TempDir()
+	manifestPath := filepath.Join(target, config.DirName, "agent.manifest.yaml")
+	skillPath := filepath.Join(target, config.DirName, "skills", "system", "skill.manifest.yaml")
+	for _, dir := range []string{filepath.Dir(manifestPath), filepath.Dir(skillPath)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(manifestPath, []byte(`apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: coding
+spec:
+  image: ghcr.io/lexcodex/relurpify/runtime:latest
+  runtime: gvisor
+  agent:
+    implementation: coding
+    mode: primary
+    model:
+      provider: ollama
+      name: test-model
+  skills:
+    - system
+  defaults:
+    permissions:
+      filesystem:
+        - action: fs:read
+          path: /tmp/**
+          justification: Read workspace
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manifest.LoadAgentManifest(manifestPath); err != nil {
+		t.Fatalf("LoadAgentManifest: %v", err)
+	}
+	if err := os.WriteFile(skillPath, []byte("apiVersion: relurpify/v1alpha1\nkind: SkillManifest\nmetadata:\n  name: system\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	derived := filepath.Join(t.TempDir(), "run", "workspace")
+	if err := MaterializeDerivedWorkspace(
+		target,
+		derived,
+		"default",
+		filepath.ToSlash(filepath.Join(config.DirName, "agent.manifest.yaml")),
+		nil,
+		nil,
+	); err != nil {
+		t.Fatalf("MaterializeDerivedWorkspace() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(derived, config.DirName, "skills", "system", "skill.manifest.yaml")); err != nil {
+		t.Fatalf("expected referenced skill to be copied into derived workspace: %v", err)
+	}
+}
+
+func TestApplyWorkspaceFilesUsesConfiguredFileMode(t *testing.T) {
+	root := t.TempDir()
+
+	err := applyWorkspaceFiles(root, []SetupFileSpec{{
+		Path:    "bin/run.sh",
+		Content: "#!/bin/sh\n",
+		Mode:    "0755",
+	}})
+	if err != nil {
+		t.Fatalf("applyWorkspaceFiles: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(root, "bin", "run.sh"))
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("expected 0755 perms, got %#o", got)
 	}
 }

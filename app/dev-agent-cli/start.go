@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+
 	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
@@ -14,6 +15,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/platform/llm"
 	"github.com/spf13/cobra"
+
 	"log"
 	"os"
 	"strings"
@@ -62,7 +64,7 @@ func newStartCmd() *cobra.Command {
 				if spec.Mode != "" {
 					mode = string(spec.Mode)
 				} else {
-					mode = string(agents.ModeCode)
+					mode = "default"
 				}
 			}
 			logLLM := false
@@ -148,24 +150,63 @@ func newStartCmd() *cobra.Command {
 				}
 				runner = sandboxRunner
 			}
-			tools, indexManager, err := appruntime.BuildCapabilityRegistry(ws, runner, appruntime.CapabilityRegistryOptions{
+			telemetrySink := telemetry.LoggerTelemetry{Logger: log.Default()}
+			paths := config.New(ws)
+			memoryPath := paths.MemoryDir()
+			memStore, err := memory.NewHybridMemory(memoryPath)
+			if err != nil {
+				return err
+			}
+			memStore = memStore.WithVectorStore(memory.NewInMemoryVectorStore())
+			modelName := spec.Model.Name
+			if modelName == "" {
+				modelName = defaultModelName()
+			}
+			client := llm.NewClient(defaultEndpoint(), modelName)
+			client.SetDebugLogging(logLLM)
+			model := llm.NewInstrumentedModel(client, telemetrySink, logLLM)
+
+			boot, err := appruntime.BootstrapAgentRuntime(ws, appruntime.AgentBootstrapOptions{
+				Context:           runCtx,
 				AgentID:           registration.ID,
-				PermissionManager: registration.Permissions,
+				AgentName:         agentName,
+				ConfigName:        manifest.Metadata.Name,
+				AgentsDir:         config.New(ws).AgentsDir(),
 				AgentSpec:         spec,
+				Manifest:          manifest,
+				PermissionManager: registration.Permissions,
+				Runner:            runner,
+				Model:             model,
+				Memory:            memStore,
+				Telemetry:         telemetrySink,
+				OllamaEndpoint:    runtimeCfg.OllamaEndpoint,
+				OllamaModel:       modelName,
+				MaxIterations:     8,
+				DebugLLM:          logLLM,
+				DebugAgent:        logAgent,
 			})
 			if err != nil {
 				return err
 			}
-			spec, skillResults := agents.ApplySkills(ws, spec, manifest.Spec.Skills, tools, registration.Permissions, registration.ID)
+			spec = boot.AgentSpec
+			tools := boot.Registry
+			indexManager := boot.IndexManager
+			searchEngine := boot.SearchEngine
+			runtimeMemory := boot.Memory
 			if spec.Logging != nil {
 				if spec.Logging.LLM != nil {
 					logLLM = *spec.Logging.LLM
+					client.SetDebugLogging(logLLM)
 				}
 				if spec.Logging.Agent != nil {
 					logAgent = *spec.Logging.Agent
 				}
 			}
-			tools.UseAgentSpec(registration.ID, spec)
+			compiledPolicy := boot.CompiledPolicy
+			if compiledPolicy == nil {
+				return fmt.Errorf("compiled policy missing from bootstrap")
+			}
+			registration.Policy = compiledPolicy.Engine
 			providerRuntime := &appruntime.Runtime{
 				Tools:        tools,
 				Context:      core.NewContext(),
@@ -175,30 +216,12 @@ func newStartCmd() *cobra.Command {
 			if err := appruntime.RegisterBuiltinProviders(runCtx, providerRuntime); err != nil {
 				return err
 			}
-			telemetry := telemetry.LoggerTelemetry{Logger: log.Default()}
-			tools.UseTelemetry(telemetry)
-			if registration.Permissions != nil {
-				tools.UsePermissionManager(registration.ID, registration.Permissions)
-			}
-			paths := config.New(ws)
-			memoryPath := paths.MemoryDir()
-			memory, err := memory.NewHybridMemory(memoryPath)
-			if err != nil {
-				return err
-			}
-			modelName := spec.Model.Name
-			if modelName == "" {
-				modelName = defaultModelName()
-			}
-			client := llm.NewClient(defaultEndpoint(), modelName)
-			client.SetDebugLogging(logLLM)
-			agent := &agents.CodingAgent{
-				Model:             llm.NewInstrumentedModel(client, telemetry, logLLM),
-				Tools:             tools,
-				Memory:            memory,
-				IndexManager:      indexManager,
-				CheckpointPath:    paths.CheckpointsDir(),
-				WorkflowStatePath: paths.WorkflowStateFile(),
+			env := agents.AgentEnvironment{
+				Model:        model,
+				Registry:     tools,
+				IndexManager: indexManager,
+				SearchEngine: searchEngine,
+				Memory:       runtimeMemory,
 			}
 			cfg := &core.Config{
 				Name:              agentName,
@@ -210,8 +233,16 @@ func newStartCmd() *cobra.Command {
 				DebugLLM:          logLLM,
 				DebugAgent:        logAgent,
 			}
-			if err := agent.Initialize(cfg); err != nil {
+			env.Config = cfg
+			agent, err := agents.BuildFromSpec(env, *spec)
+			if err != nil {
+				agent, err = agents.BuildFromSpec(env, core.AgentRuntimeSpec{Implementation: "react"})
+			}
+			if err != nil {
 				return err
+			}
+			if react, ok := agent.(*agents.ReActAgent); ok {
+				react.CheckpointPath = paths.CheckpointsDir()
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -237,7 +268,7 @@ func newStartCmd() *cobra.Command {
 			state.Set("task.id", task.ID)
 			state.Set("task.type", string(task.Type))
 			state.Set("task.instruction", task.Instruction)
-			for _, skill := range skillResults {
+			for _, skill := range boot.SkillResults {
 				if !skill.Applied || skill.Paths.Root == "" {
 					continue
 				}
@@ -254,7 +285,7 @@ func newStartCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&mode, "mode", string(agents.ModeCode), "Execution mode (code, architect, ask, debug, security, docs)")
+	cmd.Flags().StringVar(&mode, "mode", "default", "Execution mode (code, architect, ask, debug, security, docs)")
 	cmd.Flags().StringVar(&agentName, "agent", "", "Agent name from manifest registry")
 	cmd.Flags().StringVar(&instruction, "instruction", "", "Instruction to execute")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate configuration without executing")
@@ -269,6 +300,9 @@ func newStartCmd() *cobra.Command {
 // selectDefaultAgent picks the first registry entry so users can run commands
 // without specifying --agent.
 func selectDefaultAgent(reg *agents.Registry) string {
+	if _, ok := reg.Get("testfu"); ok {
+		return "testfu"
+	}
 	list := reg.List()
 	if len(list) == 0 {
 		return "coding"

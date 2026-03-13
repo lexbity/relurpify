@@ -4,19 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/framework/manifest"
 )
 
 type RunOptions struct {
-	TargetWorkspace string
-	OutputDir       string
-	Sandbox         bool
-	Timeout         time.Duration
+	TargetWorkspace  string
+	OutputDir        string
+	Sandbox          bool
+	Timeout          time.Duration
+	BootstrapTimeout time.Duration
+	SkipASTIndex     bool
+	Profile          string
+	Strict           bool
 
 	ModelOverride    string
 	EndpointOverride string
@@ -33,28 +40,65 @@ type RunOptions struct {
 }
 
 type SuiteReport struct {
-	SuitePath  string
-	RunID      string
-	StartedAt  time.Time
-	FinishedAt time.Time
-	Cases      []CaseReport
+	SuitePath      string
+	RunID          string
+	Profile        string
+	Strict         bool
+	StartedAt      time.Time
+	FinishedAt     time.Time
+	DurationMS     int64
+	PassedCases    int
+	FailedCases    int
+	SkippedCases   int
+	InfraFailures  int
+	AssertFailures int
+	Cases          []CaseReport
 }
 
 type CaseReport struct {
-	Name         string
-	Model        string
-	Endpoint     string
-	Workspace    string
-	ArtifactsDir string
+	Name          string
+	Model         string
+	ModelDigest   string
+	ModelLoadedAs string
+	ModelSource   string
+	ManifestModel string
+	Endpoint      string
+	RecordingMode string
+	TapePath      string
+	Workspace     string
+	ArtifactsDir  string
+	StartedAt     time.Time
+	FinishedAt    time.Time
+	DurationMS    int64
 
 	Skipped    bool
 	SkipReason string
 
-	Success      bool
-	Error        string
-	Output       string
-	ChangedFiles []string
-	ToolCalls    map[string]int
+	Success          bool
+	Error            string
+	FailureKind      string
+	RetryCount       int
+	RetryTriggeredBy []string
+	Output           string
+	ChangedFiles     []string
+	ToolCalls        map[string]int
+	TokenUsage       TokenUsageReport
+	MemoryOutcome    MemoryOutcomeReport
+}
+
+type TokenUsageReport struct {
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	LLMCalls         int
+}
+
+type MemoryOutcomeReport struct {
+	DeclarativeRecordsCreated int
+	ProceduralRecordsCreated  int
+	MemoryRecordsCreated      int
+	WorkflowRowsCreated       int
+	WorkflowStateUpdated      bool
 }
 
 type Runner struct {
@@ -94,12 +138,17 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	report := &SuiteReport{
 		SuitePath: suite.SourcePath,
 		RunID:     runID,
+		Profile:   suite.EffectiveProfile(opts.Profile),
+		Strict:    suite.IsStrictRun(opts.Profile, opts.Strict),
 		StartedAt: time.Now().UTC(),
 	}
 
 	models := suite.Spec.Models
 	if len(models) == 0 {
 		models = []ModelSpec{{Name: "", Endpoint: ""}}
+	}
+	if err := r.preflightSuite(ctx, suite, opts, targetWorkspace, models); err != nil {
+		return nil, err
 	}
 
 	for _, c := range suite.Spec.Cases {
@@ -114,9 +163,63 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	}
 
 	report.FinishedAt = time.Now().UTC()
+	report.DurationMS = report.FinishedAt.Sub(report.StartedAt).Milliseconds()
+	for _, c := range report.Cases {
+		switch {
+		case c.Skipped:
+			report.SkippedCases++
+		case c.Success:
+			report.PassedCases++
+		default:
+			report.FailedCases++
+			if c.FailureKind == "infra" {
+				report.InfraFailures++
+			} else {
+				report.AssertFailures++
+			}
+		}
+	}
 	data, _ := json.MarshalIndent(report, "", "  ")
 	_ = os.WriteFile(filepath.Join(outDir, "report.json"), data, 0o644)
 	return report, nil
+}
+
+func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
+	manifestModel := ""
+	if suite != nil {
+		suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
+		suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
+		suiteManifestAbs = fallbackManifestPath(suiteManifestAbs, targetWorkspace)
+		if loadedManifest, err := manifest.LoadAgentManifest(suiteManifestAbs); err == nil && loadedManifest.Spec.Agent != nil {
+			manifestModel = loadedManifest.Spec.Agent.Model.Name
+		}
+	}
+	checked := map[string]struct{}{}
+	layout := newRunCaseLayout(filepath.Join(targetWorkspace, "relurpify_cfg", "test_runs_preflight"), "preflight", "preflight")
+	for _, c := range suite.Spec.Cases {
+		caseModels := models
+		if c.Overrides.Model != nil {
+			caseModels = []ModelSpec{*c.Overrides.Model}
+		}
+		for _, model := range caseModels {
+			exec, err := resolveCaseExecution(suite, c, model, manifestModel, opts, layout, targetWorkspace, targetWorkspace)
+			if err != nil {
+				return err
+			}
+			if !shouldPreflightOllama(exec.RecordingMode) {
+				continue
+			}
+			key := strings.TrimSpace(exec.Endpoint) + "|" + strings.TrimSpace(exec.Model)
+			if _, ok := checked[key]; ok {
+				continue
+			}
+			checked[key] = struct{}{}
+			if err := preflightOllama(exec.Endpoint, exec.Model); err != nil {
+				return fmt.Errorf("ollama preflight failed for suite %s case %s: %w", filepath.Base(suite.SourcePath), c.Name, err)
+			}
+		}
+	}
+	return nil
 }
 
 func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {

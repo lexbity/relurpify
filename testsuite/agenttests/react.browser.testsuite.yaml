@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: react.browser
   description: "Live browser-backed coverage against fixture-served pages."
+  owner: agent-platform
+  tier: live-flaky
+  quarantined: false
 spec:
   agent_name: react
   manifest: relurpify_cfg/agents/react-browser.yaml
+  execution:
+    profile: ci-live
+    strict: true
   workspace:
     strategy: derived
     exclude:

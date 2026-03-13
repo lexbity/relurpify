@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: coding.go
   description: "Go-focused prompts for the coding agent across common workflows."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
 spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-go.yaml
+  execution:
+    profile: ci-live
+    strict: true
   workspace:
     strategy: derived
     exclude:

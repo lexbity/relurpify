@@ -1,12 +1,26 @@
 package agenttest
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 )
+
+var ollamaHTTPClient = &http.Client{Timeout: 5 * time.Second}
+
+type OllamaModelProvenance struct {
+	RequestedModel string         `json:"requested_model"`
+	LoadedName     string         `json:"loaded_name,omitempty"`
+	LoadedModel    string         `json:"loaded_model,omitempty"`
+	Digest         string         `json:"digest,omitempty"`
+	Details        map[string]any `json:"details,omitempty"`
+}
 
 func shouldResetOllama(err error, patterns []string) bool {
 	if err == nil || len(patterns) == 0 {
@@ -48,13 +62,10 @@ func maybeResetOllama(logger *log.Logger, opts RunOptions, modelName string) {
 		if strings.TrimSpace(modelName) == "" {
 			return
 		}
-		// Best-effort unload of the model so the next call re-loads it fresh.
 		_ = runBestEffort(logger, bin, "stop", modelName)
 		time.Sleep(200 * time.Millisecond)
 	case "server":
-		// Best-effort restart: prefer systemctl if present.
 		if err := runBestEffort(logger, "systemctl", "restart", service); err != nil {
-			// Fallback: try to stop running models.
 			if strings.TrimSpace(modelName) != "" {
 				_ = runBestEffort(logger, bin, "stop", modelName)
 			}
@@ -79,4 +90,80 @@ func runBestEffort(logger *log.Logger, name string, args ...string) error {
 		}
 	}
 	return err
+}
+
+func shouldPreflightOllama(recordingMode string) bool {
+	mode := strings.ToLower(strings.TrimSpace(recordingMode))
+	return mode == "" || mode == "off" || mode == "record"
+}
+
+func preflightOllama(endpoint, model string) error {
+	provenance, err := lookupOllamaModelProvenance(endpoint, model)
+	if err != nil {
+		return err
+	}
+	if provenance == nil {
+		return fmt.Errorf("ollama model %q is not loaded at %s", strings.TrimSpace(model), strings.TrimRight(strings.TrimSpace(endpoint), "/"))
+	}
+	return nil
+}
+
+func lookupOllamaModelProvenance(endpoint, model string) (*OllamaModelProvenance, error) {
+	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
+	model = strings.TrimSpace(model)
+	if endpoint == "" || model == "" {
+		return nil, nil
+	}
+
+	tagsReq, err := http.NewRequest(http.MethodGet, endpoint+"/api/tags", nil)
+	if err != nil {
+		return nil, fmt.Errorf("ollama preflight request: %w", err)
+	}
+	tagsResp, err := ollamaHTTPClient.Do(tagsReq)
+	if err != nil {
+		return nil, fmt.Errorf("ollama preflight tags failed for %s: %w", endpoint, err)
+	}
+	defer tagsResp.Body.Close()
+	if tagsResp.StatusCode < 200 || tagsResp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(tagsResp.Body, 2048))
+		return nil, fmt.Errorf("ollama preflight tags failed for %s: status %d: %s", endpoint, tagsResp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	psReq, err := http.NewRequest(http.MethodGet, endpoint+"/api/ps", nil)
+	if err != nil {
+		return nil, fmt.Errorf("ollama preflight request: %w", err)
+	}
+	psResp, err := ollamaHTTPClient.Do(psReq)
+	if err != nil {
+		return nil, fmt.Errorf("ollama preflight ps failed for %s: %w", endpoint, err)
+	}
+	defer psResp.Body.Close()
+	if psResp.StatusCode < 200 || psResp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(psResp.Body, 2048))
+		return nil, fmt.Errorf("ollama preflight ps failed for %s: status %d: %s", endpoint, psResp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var payload struct {
+		Models []struct {
+			Name    string         `json:"name"`
+			Model   string         `json:"model"`
+			Digest  string         `json:"digest"`
+			Details map[string]any `json:"details"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(psResp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("ollama preflight ps decode failed for %s: %w", endpoint, err)
+	}
+	for _, item := range payload.Models {
+		if strings.EqualFold(strings.TrimSpace(item.Name), model) || strings.EqualFold(strings.TrimSpace(item.Model), model) {
+			return &OllamaModelProvenance{
+				RequestedModel: model,
+				LoadedName:     strings.TrimSpace(item.Name),
+				LoadedModel:    strings.TrimSpace(item.Model),
+				Digest:         strings.TrimSpace(item.Digest),
+				Details:        item.Details,
+			}, nil
+		}
+	}
+	return nil, nil
 }

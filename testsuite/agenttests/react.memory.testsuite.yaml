@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: react.memory
   description: "Live runtime-memory retrieval coverage for the standalone ReAct agent."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
 spec:
   agent_name: react
   manifest: relurpify_cfg/agents/react.yaml
+  execution:
+    profile: ci-live
+    strict: true
   memory:
     backend: sqlite_runtime
     retrieval:

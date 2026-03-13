@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: coding.modes
   description: "Coverage for CodingAgent ask, debug, and docs execution modes."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
 spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-go.yaml
+  execution:
+    profile: ci-live
+    strict: true
   workspace:
     strategy: derived
     exclude:

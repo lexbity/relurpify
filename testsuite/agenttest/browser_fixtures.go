@@ -169,13 +169,30 @@ func loadBrowserFixtureResponse(suite *Suite, targetWorkspace, workspace string,
 }
 
 func resolveBrowserFixtureFile(suite *Suite, targetWorkspace, workspace, file string) (string, error) {
-	resolved := file
-	if suite != nil {
+	resolved := strings.TrimSpace(file)
+	if suite != nil && !filepath.IsAbs(resolved) {
+		baseDir := filepath.Dir(filepath.Clean(suite.SourcePath))
+		checked, err := resolvePathWithin(baseDir, resolved)
+		if err != nil {
+			return "", err
+		}
+		resolved = checked
+	} else if suite != nil {
 		resolved = suite.ResolvePath(file)
 	}
 	resolved = resolveAgainstWorkspace(targetWorkspace, resolved, file)
+	if targetWorkspace != "" {
+		checked, err := ensurePathWithin(targetWorkspace, resolved)
+		if err != nil {
+			return "", err
+		}
+		resolved = checked
+	}
 	if workspace != "" && targetWorkspace != "" && workspace != targetWorkspace {
 		mapped := mapTargetPathToWorkspace(resolved, targetWorkspace, workspace)
+		if checked, err := ensurePathWithin(workspace, mapped); err == nil {
+			mapped = checked
+		}
 		if _, err := os.Stat(mapped); err == nil {
 			resolved = mapped
 		}

@@ -3,6 +3,7 @@ package agenttest
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -10,7 +11,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
-func evaluateExpectations(expect ExpectSpec, output string, changed []string, toolCalls map[string]int, snapshot *core.ContextSnapshot) error {
+func evaluateExpectations(expect ExpectSpec, workspace, output string, changed []string, toolCalls map[string]int, events []core.Event, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, snapshot *core.ContextSnapshot) error {
 	var failures []string
 
 	if expect.NoFileChanges && len(changed) > 0 {
@@ -45,6 +46,28 @@ func evaluateExpectations(expect ExpectSpec, output string, changed []string, to
 			failures = append(failures, fmt.Sprintf("output did not match %q", expr))
 		}
 	}
+	for _, fileExpect := range expect.FilesContain {
+		if strings.TrimSpace(fileExpect.Path) == "" {
+			failures = append(failures, "expected file content path")
+			continue
+		}
+		path, err := resolvePathWithin(workspace, fileExpect.Path)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("expected file %s: %v", fileExpect.Path, err))
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("expected file %s readable: %v", fileExpect.Path, err))
+			continue
+		}
+		content := string(data)
+		for _, sub := range fileExpect.Contains {
+			if !strings.Contains(content, sub) {
+				failures = append(failures, fmt.Sprintf("file %s missing %q", fileExpect.Path, sub))
+			}
+		}
+	}
 	for _, tool := range expect.ToolCallsMustInclude {
 		if toolCalls[tool] == 0 {
 			failures = append(failures, fmt.Sprintf("expected tool call %s", tool))
@@ -64,6 +87,32 @@ func evaluateExpectations(expect ExpectSpec, output string, changed []string, to
 			failures = append(failures, fmt.Sprintf("expected at most %d tool calls, got %d", expect.MaxToolCalls, total))
 		}
 	}
+	if len(expect.ToolCallsInOrder) > 0 {
+		if !toolCallsAppearInOrder(events, expect.ToolCallsInOrder) {
+			failures = append(failures, fmt.Sprintf("expected tool calls in order %v", expect.ToolCallsInOrder))
+		}
+	}
+	if expect.LLMCalls > 0 {
+		got := countLLMCalls(events)
+		if got != expect.LLMCalls {
+			failures = append(failures, fmt.Sprintf("expected exactly %d llm calls, got %d", expect.LLMCalls, got))
+		}
+	}
+	if expect.MaxPromptTokens > 0 && tokenUsage.PromptTokens > expect.MaxPromptTokens {
+		failures = append(failures, fmt.Sprintf("expected at most %d prompt tokens, got %d", expect.MaxPromptTokens, tokenUsage.PromptTokens))
+	}
+	if expect.MaxCompletionTokens > 0 && tokenUsage.CompletionTokens > expect.MaxCompletionTokens {
+		failures = append(failures, fmt.Sprintf("expected at most %d completion tokens, got %d", expect.MaxCompletionTokens, tokenUsage.CompletionTokens))
+	}
+	if expect.MaxTotalTokens > 0 && tokenUsage.TotalTokens > expect.MaxTotalTokens {
+		failures = append(failures, fmt.Sprintf("expected at most %d total tokens, got %d", expect.MaxTotalTokens, tokenUsage.TotalTokens))
+	}
+	if expect.MemoryRecordsCreated > 0 && memoryOutcome.MemoryRecordsCreated < expect.MemoryRecordsCreated {
+		failures = append(failures, fmt.Sprintf("expected at least %d memory records created, got %d", expect.MemoryRecordsCreated, memoryOutcome.MemoryRecordsCreated))
+	}
+	if expect.WorkflowStateUpdated && !memoryOutcome.WorkflowStateUpdated {
+		failures = append(failures, "expected workflow state updated")
+	}
 	for _, key := range expect.StateKeysMustExist {
 		if !contextSnapshotHasKey(snapshot, key) {
 			failures = append(failures, fmt.Sprintf("expected state key %s", key))
@@ -73,6 +122,36 @@ func evaluateExpectations(expect ExpectSpec, output string, changed []string, to
 		return errors.New(strings.Join(failures, "; "))
 	}
 	return nil
+}
+
+func toolCallsAppearInOrder(events []core.Event, expected []string) bool {
+	if len(expected) == 0 {
+		return true
+	}
+	next := 0
+	for _, ev := range events {
+		if ev.Type != core.EventToolCall {
+			continue
+		}
+		name, _ := ev.Metadata["tool"].(string)
+		if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(expected[next])) {
+			next++
+			if next == len(expected) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func countLLMCalls(events []core.Event) int {
+	total := 0
+	for _, ev := range events {
+		if ev.Type == core.EventLLMResponse {
+			total++
+		}
+	}
+	return total
 }
 
 func contextSnapshotHasKey(snapshot *core.ContextSnapshot, key string) bool {

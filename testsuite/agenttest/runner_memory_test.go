@@ -2,6 +2,8 @@ package agenttest
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/config"
@@ -117,6 +119,57 @@ func TestSeedCaseStateWritesRuntimeMemoryAndWorkflowStore(t *testing.T) {
 	}
 }
 
+func TestSeedCaseStateWritesWorkflowCheckpoints(t *testing.T) {
+	workspace := t.TempDir()
+	suite := &Suite{Spec: SuiteSpec{Memory: MemorySpec{Backend: "sqlite_runtime"}}}
+	prepared, err := prepareCaseMemory(workspace, suite, CaseSpec{}, nil)
+	if err != nil {
+		t.Fatalf("prepareCaseMemory: %v", err)
+	}
+	defer prepared.Close()
+
+	setup := SetupSpec{
+		Workflows: []WorkflowSeedSpec{{
+			Workflow: WorkflowRecordSeedSpec{
+				WorkflowID: "wf-checkpoint",
+			},
+			Runs: []WorkflowRunSeedSpec{{
+				RunID: "run-checkpoint",
+			}},
+			Checkpoints: []WorkflowCheckpointSeedSpec{{
+				CheckpointID: "cp-1",
+				TaskID:       "task-1",
+				StageName:    "explain.explore",
+				StageIndex:   0,
+				ContextState: map[string]any{
+					"plan.completed_steps": []string{"explain.explore"},
+				},
+			}},
+		}},
+	}
+
+	if err := seedCaseState(context.Background(), workspace, prepared.Store, setup); err != nil {
+		t.Fatalf("seedCaseState: %v", err)
+	}
+
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(config.New(workspace).WorkflowStateFile())
+	if err != nil {
+		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
+	}
+	defer workflowStore.Close()
+
+	record, ok, err := workflowStore.LoadPipelineCheckpoint(context.Background(), "task-1", "cp-1")
+	if err != nil {
+		t.Fatalf("LoadPipelineCheckpoint: %v", err)
+	}
+	if !ok || record == nil {
+		t.Fatal("expected seeded checkpoint")
+	}
+	if record.StageName != "explain.explore" {
+		t.Fatalf("unexpected checkpoint: %#v", record)
+	}
+}
+
 func TestEvaluateExpectationsChecksStateKeys(t *testing.T) {
 	snapshot := &core.ContextSnapshot{
 		State: map[string]any{
@@ -126,7 +179,46 @@ func TestEvaluateExpectationsChecksStateKeys(t *testing.T) {
 
 	if err := evaluateExpectations(ExpectSpec{
 		StateKeysMustExist: []string{"pipeline.workflow_retrieval"},
-	}, "", nil, nil, snapshot); err != nil {
+	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, snapshot); err != nil {
+		t.Fatalf("evaluateExpectations: %v", err)
+	}
+}
+
+func TestEvaluateExpectationsChecksMemoryAndWorkflowOutcome(t *testing.T) {
+	err := evaluateExpectations(ExpectSpec{
+		MemoryRecordsCreated: 2,
+		WorkflowStateUpdated: true,
+	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{
+		MemoryRecordsCreated: 2,
+		WorkflowStateUpdated: true,
+	}, &core.ContextSnapshot{})
+	if err != nil {
+		t.Fatalf("evaluateExpectations: %v", err)
+	}
+}
+
+func TestEvaluateExpectationsChecksFileContentAndTelemetry(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "out.txt"), []byte("hello final world"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	events := []core.Event{
+		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
+		{Type: core.EventToolCall, Metadata: map[string]any{"tool": "file_write"}},
+		{Type: core.EventLLMResponse},
+		{Type: core.EventLLMResponse},
+		{Type: core.EventLLMResponse},
+	}
+
+	err := evaluateExpectations(ExpectSpec{
+		FilesContain: []FileContentExpectation{{
+			Path:     "out.txt",
+			Contains: []string{"final"},
+		}},
+		ToolCallsInOrder: []string{"file_read", "file_write"},
+		LLMCalls:         3,
+	}, workspace, "", nil, map[string]int{"file_read": 1, "file_write": 1}, events, TokenUsageReport{}, MemoryOutcomeReport{}, &core.ContextSnapshot{})
+	if err != nil {
 		t.Fatalf("evaluateExpectations: %v", err)
 	}
 }

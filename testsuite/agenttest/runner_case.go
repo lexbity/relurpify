@@ -14,16 +14,18 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir string) CaseReport {
+	caseStartedAt := time.Now().UTC()
 	layout := newRunCaseLayout(outDir, c.Name, model.Name)
 	for _, dir := range []string{layout.ArtifactsDir, layout.TmpDir, filepath.Dir(layout.TelemetryPath), filepath.Dir(layout.LogPath)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
+			return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", "", layout.ArtifactsDir, err.Error(), "infra")
 		}
 	}
 
@@ -38,133 +40,78 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 	}
 
-	templateProfile := suite.Spec.Workspace.TemplateProfile
-	exclude := append([]string{}, suite.Spec.Workspace.Exclude...)
+	templateProfile := resolveTemplateProfile(suite, c)
+	exclude := resolveWorkspaceExclude(suite, c)
 	ignoreChanges := append([]string{}, suite.Spec.Workspace.IgnoreChanges...)
-	templateFiles := append([]SetupFileSpec{}, suite.Spec.Workspace.Files...)
 	if c.Overrides.Workspace != nil {
-		if c.Overrides.Workspace.TemplateProfile != "" {
-			templateProfile = c.Overrides.Workspace.TemplateProfile
-		}
-		if len(c.Overrides.Workspace.Exclude) > 0 {
-			exclude = append([]string{}, c.Overrides.Workspace.Exclude...)
-		}
 		if len(c.Overrides.Workspace.IgnoreChanges) > 0 {
 			ignoreChanges = append([]string{}, c.Overrides.Workspace.IgnoreChanges...)
-		}
-		if len(c.Overrides.Workspace.Files) > 0 {
-			templateFiles = append(templateFiles, c.Overrides.Workspace.Files...)
-		}
-	}
-	if templateProfile == "" {
-		templateProfile = "default"
-	}
-	if len(exclude) == 0 {
-		exclude = []string{
-			".git/**",
-			".gocache/**",
-			".gomodcache/**",
-			"relurpify_cfg/test_runs/**",
 		}
 	}
 	ignoreChanges = uniqueStrings(append(ignoreChanges, defaultIgnoredGeneratedChanges()...))
 
 	workspace := layout.WorkspaceDir
-	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, templateProfile, suite.Spec.Manifest, exclude, templateFiles); err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
+	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, templateProfile, suite.Spec.Manifest, exclude, resolveWorkspaceFiles(suite, c)); err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
 	}
 
 	suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
 	suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
 	manifestAbs := mapTargetPathToWorkspace(suiteManifestAbs, targetWorkspace, workspace)
 	manifestAbs = fallbackManifestPath(manifestAbs, workspace)
-
-	// Apply fixtures before taking the baseline snapshot so setup changes don't
-	// count as agent-driven modifications.
-	cleanup, err := applySetup(workspace, c.Setup, opts.Sandbox, logger)
+	loadedManifest, err := manifest.LoadAgentManifest(manifestAbs)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
-	}
-	if cleanup != nil {
-		defer cleanup()
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
 	}
 
-	timeout := opts.Timeout
-	if timeout <= 0 {
-		timeout = 45 * time.Second
+	timeout, err := resolveCaseTimeout(opts, c)
+	if err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
 	}
 
 	agentName := suite.Spec.AgentName
 	telemetrySink, err := telemetry.NewJSONFileTelemetry(layout.TelemetryPath)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
 	}
 	defer telemetrySink.Close()
 	telemetryMux := telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{telemetrySink}}
 
-	memStore, err := prepareCaseMemory(workspace, suite, c, telemetryMux)
+	manifestModel := ""
+	if loadedManifest.Spec.Agent != nil {
+		manifestModel = loadedManifest.Spec.Agent.Model.Name
+	}
+	execution, err := resolveCaseExecution(suite, c, model, manifestModel, opts, layout, targetWorkspace, workspace)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModel, model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
 	}
-	if memStore != nil {
-		defer memStore.Close()
-	}
-	if err := seedCaseState(ctx, workspace, memStore.Store, c.Setup); err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
-	}
-	before, err := SnapshotWorkspace(workspace, exclude)
+	modelProvenance, err := resolveCaseModelProvenance(execution)
 	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
+		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra")
 	}
-
-	browserFixtures, err := startBrowserFixtureServer(suite, targetWorkspace, workspace, c)
-	if err != nil {
-		return CaseReport{Name: c.Name, Model: model.Name, Endpoint: model.Endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
-	}
-	if browserFixtures != nil {
-		defer browserFixtures.Close()
-	}
-
-	modelName := firstNonEmpty(opts.ModelOverride, model.Name)
-	endpoint := firstNonEmpty(opts.EndpointOverride, model.Endpoint)
-	if endpoint == "" {
-		endpoint = "http://localhost:11434"
+	if modelProvenance != nil {
+		if data, marshalErr := json.MarshalIndent(modelProvenance, "", "  "); marshalErr == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "model.provenance.json"), data, 0o644)
+		}
 	}
 
 	if opts.OllamaResetBetween {
-		maybeResetOllama(logger, opts, modelName)
+		maybeResetOllama(logger, opts, execution.Model)
 	}
 
-	client := llm.NewClient(endpoint, modelName)
+	client := llm.NewClient(execution.Endpoint, execution.Model)
 	client.SetDebugLogging(opts.DebugLLM)
 
 	lm := core.LanguageModel(client)
-	recording := suite.Spec.Recording
-	if c.Overrides.Recording != nil {
-		recording = *c.Overrides.Recording
-	}
-	if recording.Mode != "" && recording.Mode != "off" {
-		tapePath := recording.Tape
-		if tapePath == "" {
-			tapePath = layout.TapePath
-		} else {
-			resolved := suite.ResolvePath(tapePath)
-			tapePath = resolveAgainstWorkspace(targetWorkspace, resolved, tapePath)
-			tapePath = mapTargetPathToWorkspace(tapePath, targetWorkspace, workspace)
+	if execution.RecordingMode != "" && execution.RecordingMode != "off" {
+		wrapped, err := llm.NewTapeModel(lm, execution.TapePath, execution.RecordingMode)
+		if err != nil {
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra")
 		}
-		wrapped, err := llm.NewTapeModel(lm, tapePath, recording.Mode)
-		if err == nil {
-			lm = wrapped
-		}
+		defer wrapped.Close()
+		lm = wrapped
 	}
 	instrumented := llm.NewInstrumentedModel(lm, telemetryMux, opts.DebugLLM)
-
-	spec := &core.AgentRuntimeSpec{}
-	manifest, err := manifest.LoadAgentManifest(manifestAbs)
-	if err == nil && manifest.Spec.Agent != nil {
-		spec = agents.ApplyManifestDefaults(manifest.Spec.Agent, manifest.Spec.Defaults)
-	}
-	spec = effectiveAgentSpecForCase(spec, c)
 
 	env := make([]string, 0, len(c.Overrides.ExtraEnv))
 	for k, v := range c.Overrides.ExtraEnv {
@@ -175,56 +122,58 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	var allowedCapabilities []core.CapabilitySelector
 	if c.Overrides.RestrictCapabilities && len(c.Overrides.AllowedCapabilities) > 0 {
 		allowedCapabilities = uniqueCapabilitySelectors(c.Overrides.AllowedCapabilities)
+	} else if shouldRestrictAllowedCapabilitiesForCase(c) && len(c.Overrides.AllowedCapabilities) > 0 {
+		allowedCapabilities = uniqueCapabilitySelectors(c.Overrides.AllowedCapabilities)
 	} else {
 		allowedCapabilities = mergeCapabilitySelectors(defaultAgenttestAllowedCapabilities(), c.Overrides.AllowedCapabilities)
 	}
-	agent, state, err := buildAgent(workspace, manifestAbs, agentName, spec, instrumented, telemetryMux, opts, env, allowedCapabilities, c, memStore.Store)
-	if err != nil {
-		return CaseReport{Name: c.Name, Model: modelName, Endpoint: endpoint, Workspace: workspace, ArtifactsDir: layout.ArtifactsDir, Success: false, Error: err.Error()}
-	}
-	if reason, ok := shouldSkipCase(c.Requires, agent); ok {
-		logger.Printf("case=%s model=%s skipped=true reason=%s", c.Name, modelName, reason)
-		return CaseReport{
-			Name:         c.Name,
-			Model:        modelName,
-			Endpoint:     endpoint,
-			Workspace:    workspace,
-			ArtifactsDir: layout.ArtifactsDir,
-			Skipped:      true,
-			SkipReason:   reason,
-			Success:      true,
-		}
-	}
-
-	taskType := core.TaskType(c.TaskType)
-	if taskType == "" {
-		taskType = core.TaskTypeCodeGeneration
-	}
-	task := &core.Task{
-		ID:          fmt.Sprintf("agenttest-%d", time.Now().UnixNano()),
-		Instruction: c.Prompt,
-		Type:        taskType,
-		Context:     cloneContextMap(c.Context),
-		Metadata:    cloneStringMap(c.Metadata),
-	}
-	if task.Context == nil {
-		task.Context = make(map[string]any)
-	}
-	task.Context["workspace"] = workspace
-	if browserFixtures != nil {
-		browserFixtures.InjectTask(task)
-	}
-	state.Set("task.id", task.ID)
-	state.Set("task.type", string(task.Type))
-	state.Set("task.instruction", task.Instruction)
+	caseOpts := opts
+	caseOpts.ModelOverride = execution.Model
+	caseOpts.EndpointOverride = execution.Endpoint
 
 	var res *core.Result
 	var execErr error
-	attempts := 1
-	if len(opts.OllamaResetOn) > 0 {
-		attempts = 2
-	}
-	for attempt := 1; attempt <= attempts; attempt++ {
+	var agent graph.Agent
+	var state *core.Context
+	var task *core.Task
+	var before *WorkspaceSnapshot
+	var browserFixtures *browserFixtureServer
+	var memStore *preparedMemoryStore
+	var memoryBefore MemoryOutcomeReport
+	var cleanup func()
+	skipReason := ""
+	retryReasons := make([]string, 0, 1)
+	for attempt := 1; ; attempt++ {
+		if cleanup != nil {
+			cleanup()
+			cleanup = nil
+		}
+		if browserFixtures != nil {
+			browserFixtures.Close()
+			browserFixtures = nil
+		}
+		if memStore != nil {
+			memStore.Close()
+			memStore = nil
+		}
+
+		attemptEnv, attemptErr := prepareCaseAttempt(ctx, timeout, suite, c, caseOpts, workspace, targetWorkspace, manifestAbs, agentName, instrumented, telemetryMux, logger, loadedManifest, env, allowedCapabilities, exclude)
+		if attemptErr != nil {
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, attemptErr.Error(), "infra")
+		}
+		cleanup = attemptEnv.cleanup
+		memStore = attemptEnv.memStore
+		memoryBefore = attemptEnv.memoryBefore
+		before = attemptEnv.before
+		browserFixtures = attemptEnv.browserFixtures
+		agent = attemptEnv.agent
+		state = attemptEnv.state
+		task = attemptEnv.task
+		if reason := attemptEnv.skipReason; reason != "" {
+			skipReason = reason
+			break
+		}
+
 		runCtx, cancel := context.WithTimeout(ctx, timeout)
 		taskCtx := core.WithTaskContext(runCtx, core.TaskContext{
 			ID:          task.ID,
@@ -233,10 +182,43 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		})
 		res, execErr = agent.Execute(taskCtx, task, state)
 		cancel()
-		if execErr == nil || attempt == attempts || !shouldResetOllama(execErr, opts.OllamaResetOn) {
+		if !shouldRetryCaseWithOllamaReset(execErr, opts.OllamaResetOn) {
 			break
 		}
-		maybeResetOllama(logger, opts, modelName)
+		retryReasons = append(retryReasons, execErr.Error())
+		maybeResetOllama(logger, opts, execution.Model)
+	}
+	defer func() {
+		if cleanup != nil {
+			cleanup()
+		}
+		if browserFixtures != nil {
+			browserFixtures.Close()
+		}
+		if memStore != nil {
+			memStore.Close()
+		}
+	}()
+	if skipReason != "" {
+		logger.Printf("case=%s model=%s skipped=true reason=%s", c.Name, execution.Model, skipReason)
+		caseFinishedAt := time.Now().UTC()
+		return CaseReport{
+			Name:          c.Name,
+			Model:         execution.Model,
+			ModelSource:   execution.ModelSource,
+			ManifestModel: execution.ManifestModel,
+			Endpoint:      execution.Endpoint,
+			RecordingMode: execution.RecordingMode,
+			TapePath:      execution.TapePath,
+			Workspace:     workspace,
+			ArtifactsDir:  layout.ArtifactsDir,
+			StartedAt:     caseStartedAt,
+			FinishedAt:    caseFinishedAt,
+			DurationMS:    caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
+			Skipped:       true,
+			SkipReason:    skipReason,
+			Success:       true,
+		}
 	}
 	output := extractOutput(state, res)
 	snapshot := state.Snapshot()
@@ -245,6 +227,17 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	events, _ := ReadTelemetryJSONL(layout.TelemetryPath)
 	_, toolCounts := CountToolCalls(events)
+	tokenUsage := CountTokenUsage(events)
+	if data, err := json.MarshalIndent(tokenUsage, "", "  "); err == nil {
+		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "token_usage.json"), data, 0o644)
+	}
+	memoryAfter, memoryErr := collectMemoryOutcome(context.Background(), workspace, memStore.Store)
+	memoryOutcome := diffMemoryOutcome(memoryBefore, memoryAfter)
+	if memoryErr == nil {
+		if data, err := json.MarshalIndent(memoryOutcome, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "memory_outcome.json"), data, 0o644)
+		}
+	}
 
 	after, snapErr := SnapshotWorkspace(workspace, exclude)
 	var changed []string
@@ -265,7 +258,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if res != nil && !res.Success && caseErr == "" {
 		caseErr = "agent returned unsuccessful result"
 	}
-	if assertErr := evaluateExpectations(c.Expect, output, changed, toolCounts, snapshot); assertErr != nil {
+	if assertErr := evaluateExpectations(c.Expect, workspace, output, changed, toolCounts, events, tokenUsage, memoryOutcome, snapshot); assertErr != nil {
 		success = false
 		if caseErr == "" {
 			caseErr = assertErr.Error()
@@ -276,22 +269,264 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if c.Expect.MustSucceed && !success && caseErr == "" {
 		caseErr = "case marked must_succeed but failed"
 	}
-	logger.Printf("case=%s model=%s success=%v err=%s", c.Name, modelName, success, caseErr)
+	failureKind := classifyCaseFailure(execErr, caseErr)
+	caseFinishedAt := time.Now().UTC()
+	logger.Printf("case=%s model=%s success=%v err=%s", c.Name, execution.Model, success, caseErr)
 
 	return CaseReport{
-		Name:         c.Name,
-		Model:        modelName,
-		Endpoint:     endpoint,
-		Workspace:    workspace,
-		ArtifactsDir: layout.ArtifactsDir,
-		Skipped:      false,
-		SkipReason:   "",
-		Success:      success,
-		Error:        caseErr,
-		Output:       output,
-		ChangedFiles: changed,
-		ToolCalls:    toolCounts,
+		Name:             c.Name,
+		Model:            execution.Model,
+		ModelDigest:      modelProvenanceDigest(modelProvenance),
+		ModelLoadedAs:    modelProvenanceName(modelProvenance),
+		ModelSource:      execution.ModelSource,
+		ManifestModel:    execution.ManifestModel,
+		Endpoint:         execution.Endpoint,
+		RecordingMode:    execution.RecordingMode,
+		TapePath:         execution.TapePath,
+		Workspace:        workspace,
+		ArtifactsDir:     layout.ArtifactsDir,
+		StartedAt:        caseStartedAt,
+		FinishedAt:       caseFinishedAt,
+		DurationMS:       caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
+		Skipped:          false,
+		SkipReason:       "",
+		Success:          success,
+		Error:            caseErr,
+		FailureKind:      failureKind,
+		RetryCount:       len(retryReasons),
+		RetryTriggeredBy: retryReasons,
+		Output:           output,
+		ChangedFiles:     changed,
+		ToolCalls:        toolCounts,
+		TokenUsage:       tokenUsage,
+		MemoryOutcome:    memoryOutcome,
 	}
+}
+
+func manifestModelName(m *manifest.AgentManifest) string {
+	if m == nil || m.Spec.Agent == nil {
+		return ""
+	}
+	return m.Spec.Agent.Model.Name
+}
+
+func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestModel, endpoint, recordingMode, tapePath, workspace, artifactsDir, errMsg, failureKind string) CaseReport {
+	finishedAt := time.Now().UTC()
+	return CaseReport{
+		Name:          name,
+		Model:         model,
+		ModelSource:   modelSource,
+		ManifestModel: manifestModel,
+		Endpoint:      endpoint,
+		RecordingMode: recordingMode,
+		TapePath:      tapePath,
+		Workspace:     workspace,
+		ArtifactsDir:  artifactsDir,
+		StartedAt:     startedAt,
+		FinishedAt:    finishedAt,
+		DurationMS:    finishedAt.Sub(startedAt).Milliseconds(),
+		Success:       false,
+		Error:         errMsg,
+		FailureKind:   failureKind,
+	}
+}
+
+type preparedCaseAttempt struct {
+	cleanup         func()
+	memStore        *preparedMemoryStore
+	memoryBefore    MemoryOutcomeReport
+	before          *WorkspaceSnapshot
+	browserFixtures *browserFixtureServer
+	agent           graph.Agent
+	state           *core.Context
+	task            *core.Task
+	skipReason      string
+}
+
+func prepareCaseAttempt(ctx context.Context, timeout time.Duration, suite *Suite, c CaseSpec, opts RunOptions, workspace, targetWorkspace, manifestAbs, agentName string, model core.LanguageModel, telemetry core.Telemetry, logger *log.Logger, loadedManifest *manifest.AgentManifest, extraEnv []string, allowedCapabilities []core.CapabilitySelector, exclude []string) (*preparedCaseAttempt, error) {
+	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, resolveTemplateProfile(suite, c), suite.Spec.Manifest, resolveWorkspaceExclude(suite, c), resolveWorkspaceFiles(suite, c)); err != nil {
+		return nil, err
+	}
+
+	cleanup, err := applySetup(workspace, c.Setup, opts.Sandbox, logger)
+	if err != nil {
+		return nil, err
+	}
+	attempt := &preparedCaseAttempt{cleanup: cleanup}
+	defer func() {
+		if err != nil && attempt.cleanup != nil {
+			attempt.cleanup()
+		}
+		if err != nil && attempt.browserFixtures != nil {
+			attempt.browserFixtures.Close()
+		}
+		if err != nil && attempt.memStore != nil {
+			attempt.memStore.Close()
+		}
+	}()
+
+	memStore, err := prepareCaseMemory(workspace, suite, c, telemetry)
+	if err != nil {
+		return nil, err
+	}
+	attempt.memStore = memStore
+	if err := seedCaseState(ctx, workspace, memStore.Store, c.Setup); err != nil {
+		return nil, err
+	}
+	if attempt.memoryBefore, err = collectMemoryOutcome(ctx, workspace, memStore.Store); err != nil {
+		return nil, err
+	}
+
+	before, err := SnapshotWorkspace(workspace, exclude)
+	if err != nil {
+		return nil, err
+	}
+	attempt.before = before
+
+	browserFixtures, err := startBrowserFixtureServer(suite, targetWorkspace, workspace, c)
+	if err != nil {
+		return nil, err
+	}
+	attempt.browserFixtures = browserFixtures
+
+	baseSpec := agents.ApplyManifestDefaults(loadedManifest.Spec.Agent, loadedManifest.Spec.Defaults)
+	if baseSpec == nil {
+		baseSpec = &core.AgentRuntimeSpec{}
+	}
+	agentSpec := effectiveAgentSpecForCase(baseSpec, c)
+
+	bootstrapCtx, cancelBootstrap := context.WithTimeout(ctx, resolveBootstrapTimeout(opts))
+	agent, state, err := buildAgent(bootstrapCtx, workspace, manifestAbs, agentName, agentSpec, model, telemetry, opts, extraEnv, allowedCapabilities, c, memStore.Store)
+	cancelBootstrap()
+	if err != nil {
+		return nil, err
+	}
+	attempt.agent = agent
+	attempt.state = state
+	if reason, ok := shouldSkipCase(c.Requires, agent); ok {
+		attempt.skipReason = reason
+		return attempt, nil
+	}
+
+	taskType := core.TaskType(c.TaskType)
+	if taskType == "" {
+		taskType = core.TaskTypeCodeGeneration
+	}
+	taskID := fmt.Sprintf("agenttest-%d", time.Now().UnixNano())
+	if override := strings.TrimSpace(c.Metadata["task_id"]); override != "" {
+		taskID = override
+	}
+	task := &core.Task{
+		ID:          taskID,
+		Instruction: c.Prompt,
+		Type:        taskType,
+		Context:     cloneContextMap(c.Context),
+		Metadata:    cloneStringMap(c.Metadata),
+	}
+	if task.Context == nil {
+		task.Context = make(map[string]any)
+	}
+	task.Context["workspace"] = workspace
+	seedWorkflowRetrievalStateForCase(state, task, c)
+	if browserFixtures != nil {
+		browserFixtures.InjectTask(task)
+	}
+	state.Set("task.id", task.ID)
+	state.Set("task.type", string(task.Type))
+	state.Set("task.instruction", task.Instruction)
+	attempt.task = task
+
+	return attempt, nil
+}
+
+func seedWorkflowRetrievalStateForCase(state *core.Context, task *core.Task, c CaseSpec) {
+	if state == nil || task == nil || task.Context == nil {
+		return
+	}
+	workflowID, ok := task.Context["workflow_id"]
+	if !ok || strings.TrimSpace(fmt.Sprint(workflowID)) == "" {
+		return
+	}
+	var summary string
+	for _, workflow := range c.Setup.Workflows {
+		if workflow.Workflow.WorkflowID != fmt.Sprint(workflowID) {
+			continue
+		}
+		for _, record := range workflow.Knowledge {
+			if text := strings.TrimSpace(record.Content); text != "" {
+				if summary != "" {
+					summary += "\n"
+				}
+				summary += text
+			}
+		}
+		break
+	}
+	if summary == "" {
+		return
+	}
+	payload := map[string]any{
+		"query":   task.Instruction,
+		"summary": summary,
+		"scope":   fmt.Sprintf("workflow:%s", fmt.Sprint(workflowID)),
+	}
+	task.Context["workflow_retrieval"] = payload
+	mode := strings.ToLower(strings.TrimSpace(fmt.Sprint(task.Context["mode"])))
+	switch mode {
+	case "architect":
+		state.Set("planner.workflow_retrieval", payload)
+	default:
+		state.Set("pipeline.workflow_retrieval", payload)
+	}
+}
+
+func shouldRestrictAllowedCapabilitiesForCase(c CaseSpec) bool {
+	mode := ""
+	if c.Context != nil {
+		if raw, ok := c.Context["mode"]; ok {
+			mode = strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
+		}
+	}
+	switch mode {
+	case "ask", "debug", "architect":
+		return true
+	}
+	return core.TaskType(c.TaskType) == core.TaskTypeAnalysis
+}
+
+func resolveTemplateProfile(suite *Suite, c CaseSpec) string {
+	templateProfile := suite.Spec.Workspace.TemplateProfile
+	if c.Overrides.Workspace != nil && c.Overrides.Workspace.TemplateProfile != "" {
+		templateProfile = c.Overrides.Workspace.TemplateProfile
+	}
+	if templateProfile == "" {
+		return "default"
+	}
+	return templateProfile
+}
+
+func resolveWorkspaceExclude(suite *Suite, c CaseSpec) []string {
+	exclude := append([]string{}, suite.Spec.Workspace.Exclude...)
+	if c.Overrides.Workspace != nil && len(c.Overrides.Workspace.Exclude) > 0 {
+		exclude = append([]string{}, c.Overrides.Workspace.Exclude...)
+	}
+	if len(exclude) == 0 {
+		return []string{
+			".git/**",
+			".gocache/**",
+			".gomodcache/**",
+			"relurpify_cfg/test_runs/**",
+		}
+	}
+	return exclude
+}
+
+func resolveWorkspaceFiles(suite *Suite, c CaseSpec) []SetupFileSpec {
+	files := append([]SetupFileSpec{}, suite.Spec.Workspace.Files...)
+	if c.Overrides.Workspace != nil && len(c.Overrides.Workspace.Files) > 0 {
+		files = append(files, c.Overrides.Workspace.Files...)
+	}
+	return files
 }
 
 func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Logger) (cleanup func(), err error) {
@@ -305,7 +540,14 @@ func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Log
 		if f.Path == "" {
 			continue
 		}
-		target := filepath.Join(workspace, filepath.FromSlash(f.Path))
+		target, err := resolvePathWithin(workspace, f.Path)
+		if err != nil {
+			return nil, err
+		}
+		mode, err := parseSetupFileMode(f.Mode)
+		if err != nil {
+			return nil, err
+		}
 		if data, readErr := os.ReadFile(target); readErr == nil {
 			originals = append(originals, original{path: target, existed: true, data: data})
 		} else {
@@ -314,7 +556,7 @@ func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Log
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(target, []byte(f.Content), 0o644); err != nil {
+		if err := os.WriteFile(target, []byte(f.Content), mode); err != nil {
 			return nil, err
 		}
 	}
@@ -328,11 +570,23 @@ func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Log
 		}
 	}
 	if setup.GitInit {
-		_ = os.RemoveAll(filepath.Join(workspace, ".git"))
+		gitDir, err := resolvePathWithin(workspace, ".git")
+		if err != nil {
+			return nil, err
+		}
+		_ = os.RemoveAll(gitDir)
 		if !sandbox {
-			cmd := exec.Command("git", "init")
-			cmd.Dir = workspace
-			_ = cmd.Run()
+			for _, args := range [][]string{
+				{"init"},
+				{"config", "user.name", "agenttest"},
+				{"config", "user.email", "agenttest@example.invalid"},
+				{"add", "."},
+				{"commit", "-m", "agenttest baseline"},
+			} {
+				cmd := exec.Command("git", args...)
+				cmd.Dir = workspace
+				_ = cmd.Run()
+			}
 		}
 	}
 	if logger != nil {
@@ -343,19 +597,38 @@ func applySetup(workspace string, setup SetupSpec, sandbox bool, logger *log.Log
 
 func extractOutput(state *core.Context, res *core.Result) string {
 	if res != nil && res.Data != nil {
-		if val, ok := res.Data["final_output"]; ok {
-			if s, ok := val.(string); ok && s != "" {
-				return s
-			}
+		if text := finalOutputText(res.Data["final_output"]); text != "" {
+			return text
 		}
 		if text, ok := res.Data["text"].(string); ok && text != "" {
 			return text
 		}
 	}
-	history := state.History()
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].Role == "assistant" && strings.TrimSpace(history[i].Content) != "" {
-			return history[i].Content
+	if state != nil {
+		for _, key := range []string{
+			"react.final_output",
+			"pipeline.final_output",
+			"rewoo.synthesis",
+			"architect.summary",
+			"planner.summary",
+		} {
+			if val, ok := state.Get(key); ok {
+				if text := finalOutputText(val); text != "" {
+					return text
+				}
+			}
+		}
+	}
+	if res != nil && res.Data != nil {
+		for _, key := range []string{"summary", "output"} {
+			if text, ok := res.Data[key].(string); ok && strings.TrimSpace(text) != "" {
+				return text
+			}
+		}
+	}
+	if state != nil {
+		if text := singleAssistantMessage(state.History()); text != "" {
+			return text
 		}
 	}
 	if res != nil && res.Data != nil {
@@ -364,4 +637,70 @@ func extractOutput(state *core.Context, res *core.Result) string {
 		}
 	}
 	return ""
+}
+
+func resolveCaseModelProvenance(execution resolvedCaseExecution) (*OllamaModelProvenance, error) {
+	if !shouldPreflightOllama(execution.RecordingMode) {
+		return nil, nil
+	}
+	return lookupOllamaModelProvenance(execution.Endpoint, execution.Model)
+}
+
+func modelProvenanceDigest(provenance *OllamaModelProvenance) string {
+	if provenance == nil {
+		return ""
+	}
+	return provenance.Digest
+}
+
+func modelProvenanceName(provenance *OllamaModelProvenance) string {
+	if provenance == nil {
+		return ""
+	}
+	return firstNonEmpty(provenance.LoadedName, provenance.LoadedModel)
+}
+
+func finalOutputText(val any) string {
+	switch typed := val.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]any:
+		for _, key := range []string{"summary", "text", "output"} {
+			if text, ok := typed[key].(string); ok && strings.TrimSpace(text) != "" {
+				return strings.TrimSpace(text)
+			}
+		}
+	}
+	return ""
+}
+
+func singleAssistantMessage(history []core.Interaction) string {
+	if len(history) == 0 {
+		return ""
+	}
+	found := ""
+	for _, item := range history {
+		if item.Role != "assistant" {
+			continue
+		}
+		content := strings.TrimSpace(item.Content)
+		if content == "" {
+			continue
+		}
+		if found != "" {
+			return ""
+		}
+		found = content
+	}
+	return found
+}
+
+func shouldRetryCaseWithOllamaReset(err error, patterns []string) bool {
+	if err == nil {
+		return false
+	}
+	if !isInfrastructureError(err.Error()) {
+		return false
+	}
+	return shouldResetOllama(err, patterns)
 }

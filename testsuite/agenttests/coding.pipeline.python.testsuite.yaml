@@ -3,9 +3,15 @@ kind: AgentTestSuite
 metadata:
   name: coding.pipeline.python
   description: "Pipeline control-flow coverage for Python coding tasks."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
 spec:
   agent_name: coding
   manifest: relurpify_cfg/agents/coding-python.yaml
+  execution:
+    profile: ci-live
+    strict: true
   workspace:
     strategy: derived
     exclude:
@@ -41,7 +47,6 @@ spec:
               if __name__ == "__main__":
                   unittest.main()
       overrides:
-        control_flow: pipeline
         allowed_capabilities:
           - name: cli_python
             kind: tool
@@ -78,7 +83,6 @@ spec:
               if __name__ == "__main__":
                   unittest.main()
       overrides:
-        control_flow: pipeline
         allowed_capabilities:
           - name: cli_python
             kind: tool
