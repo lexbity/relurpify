@@ -92,7 +92,14 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 		return fmt.Errorf("runtime unavailable")
 	}
 	if r.Registration != nil && r.Registration.Policy != nil {
-		decision, err := r.Registration.Policy.Evaluate(ctx, core.PolicyRequest{
+		metadata := map[string]string{
+			"provider_id":   desc.ID,
+			"provider_kind": string(desc.Kind),
+		}
+		if desc.Security.Origin != "" {
+			metadata["provider_origin"] = string(desc.Security.Origin)
+		}
+		_, err := fauthorization.EnforcePolicyRequest(ctx, r.Registration.Policy, core.PolicyRequest{
 			Target:         core.PolicyTargetProvider,
 			Actor:          core.EventActor{Kind: "agent", ID: r.Registration.ID},
 			CapabilityID:   "provider:" + desc.ID + ":activate",
@@ -100,34 +107,26 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc core.Pro
 			ProviderKind:   desc.Kind,
 			ProviderOrigin: desc.Security.Origin,
 			TrustClass:     desc.TrustBaseline,
-		})
-		if err != nil {
-			return err
-		}
-		switch decision.Effect {
-		case "allow":
-			return nil
-		case "deny":
-			return fmt.Errorf("provider %s activation denied by policy", desc.ID)
-		case "require_approval":
-			if r.Registration.Permissions == nil {
-				return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
-			}
-			metadata := map[string]string{
-				"provider_id":   desc.ID,
-				"provider_kind": string(desc.Kind),
-			}
-			if desc.Security.Origin != "" {
-				metadata["provider_origin"] = string(desc.Security.Origin)
-			}
-			return r.Registration.Permissions.RequireApproval(ctx, r.Registration.ID, core.PermissionDescriptor{
+		}, fauthorization.ApprovalRequest{
+			AgentID: r.Registration.ID,
+			Manager: r.Registration.Permissions,
+			Permission: core.PermissionDescriptor{
 				Type:         core.PermissionTypeCapability,
 				Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 				Resource:     desc.ID,
 				Metadata:     metadata,
 				RequiresHITL: true,
-			}, fmt.Sprintf("activate provider %s", desc.ID), fauthorization.GrantScopeSession, fauthorization.RiskLevelMedium, 0)
+			},
+			Justification:      fmt.Sprintf("activate provider %s", desc.ID),
+			Scope:              fauthorization.GrantScopeSession,
+			Risk:               fauthorization.RiskLevelMedium,
+			MissingManagerErr:  fmt.Sprintf("provider %s activation requires approval but permission manager is missing", desc.ID),
+			DenyReasonFallback: fmt.Sprintf("provider %s activation denied by policy", desc.ID),
+		})
+		if err != nil {
+			return err
 		}
+		return nil
 	}
 	level := core.AgentPermissionAllow
 	if desc.Security.Origin == core.ProviderOriginRemote || desc.Kind == core.ProviderKindMCPClient || desc.Kind == core.ProviderKindMCPServer {

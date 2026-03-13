@@ -50,8 +50,9 @@ node_registration:
 func TestLocalNexusNodeProviderRegistersProviderScopedCapabilities(t *testing.T) {
 	dir := t.TempDir()
 	runner := fsandbox.NewLocalCommandRunner(dir, nil)
-	registry, _, err := BuildCapabilityRegistry(dir, runner)
+	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner)
 	require.NoError(t, err)
+	registry := capabilities.Registry
 
 	provider, err := NewLocalNexusNodeProvider(registry, NodeRegistrationConfig{
 		Enabled: true,

@@ -34,11 +34,13 @@ func (f *fakeTasksRuntimeAdapter) SessionInfo() SessionInfo  { return SessionInf
 func (f *fakeTasksRuntimeAdapter) ResolveContextFiles(context.Context, []string) ContextFileResolution {
 	return ContextFileResolution{}
 }
-func (f *fakeTasksRuntimeAdapter) SessionArtifacts() SessionArtifacts             { return SessionArtifacts{} }
-func (f *fakeTasksRuntimeAdapter) OllamaModels(context.Context) ([]string, error) { return nil, nil }
-func (f *fakeTasksRuntimeAdapter) RecordingMode() string                          { return "off" }
-func (f *fakeTasksRuntimeAdapter) SetRecordingMode(string) error                  { return nil }
-func (f *fakeTasksRuntimeAdapter) SaveModel(string) error                         { return nil }
+func (f *fakeTasksRuntimeAdapter) SessionArtifacts() SessionArtifacts              { return SessionArtifacts{} }
+func (f *fakeTasksRuntimeAdapter) OllamaModels(context.Context) ([]string, error)  { return nil, nil }
+func (f *fakeTasksRuntimeAdapter) RecordingMode() string                           { return "off" }
+func (f *fakeTasksRuntimeAdapter) SetRecordingMode(string) error                   { return nil }
+func (f *fakeTasksRuntimeAdapter) SaveModel(string) error                          { return nil }
+func (f *fakeTasksRuntimeAdapter) ContractSummary() *ContractSummary               { return nil }
+func (f *fakeTasksRuntimeAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo { return nil }
 func (f *fakeTasksRuntimeAdapter) SaveToolPolicy(string, core.AgentPermissionLevel) error {
 	return nil
 }

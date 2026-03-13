@@ -40,6 +40,29 @@ type SessionArtifacts struct {
 	LogPath       string
 }
 
+// ContractSummary exposes the resolved runtime contract for inspection.
+type ContractSummary struct {
+	AgentID         string
+	ManifestName    string
+	ManifestVersion string
+	Workspace       string
+	AppliedSkills   []string
+	FailedSkills    []string
+	CapabilityCount int
+	AdmissionCount  int
+	RejectedCount   int
+	PolicyRuleCount int
+}
+
+// CapabilityAdmissionInfo exposes explicit admission decisions captured during bootstrap.
+type CapabilityAdmissionInfo struct {
+	CapabilityID   string
+	CapabilityName string
+	Kind           string
+	Admitted       bool
+	Reason         string
+}
+
 // InspectableMeta is the shared metadata subset used by TUI inspection models.
 type InspectableMeta struct {
 	ID            string

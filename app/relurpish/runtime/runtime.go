@@ -19,12 +19,17 @@ import (
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/capabilityplan"
 	"github.com/lexcodex/relurpify/framework/config"
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	"github.com/lexcodex/relurpify/framework/policybundle"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	"github.com/lexcodex/relurpify/framework/search"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	platformast "github.com/lexcodex/relurpify/platform/ast"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
@@ -38,22 +43,26 @@ import (
 // agent fruntime. It centralizes tool registration, manifests, sandbox
 // registration, and log management.
 type Runtime struct {
-	Config            Config
-	Tools             *capability.Registry
-	Memory            memory.MemoryStore
-	Context           *core.Context
-	Agent             graph.Agent
-	Model             core.LanguageModel
-	IndexManager      *ast.IndexManager
-	Registration      *fauthorization.AgentRegistration
-	Delegations       *fauthorization.DelegationManager
-	AgentSpec         *core.AgentRuntimeSpec
-	AgentDefinitions  map[string]*core.AgentDefinition
-	Telemetry         core.Telemetry
-	Logger            *log.Logger
-	Workspace         WorkspaceConfig
-	NexusNodeProvider core.NodeProvider
-	NexusClient       *NexusClient
+	Config               Config
+	Tools                *capability.Registry
+	Memory               memory.MemoryStore
+	Context              *core.Context
+	Agent                graph.Agent
+	Model                core.LanguageModel
+	IndexManager         *ast.IndexManager
+	SearchEngine         *search.SearchEngine
+	Registration         *fauthorization.AgentRegistration
+	Delegations          *fauthorization.DelegationManager
+	AgentSpec            *core.AgentRuntimeSpec
+	AgentDefinitions     map[string]*core.AgentDefinition
+	CapabilityAdmissions []capabilityplan.AdmissionResult
+	EffectiveContract    *contractpkg.EffectiveAgentContract
+	CompiledPolicy       *policybundle.CompiledPolicyBundle
+	Telemetry            core.Telemetry
+	Logger               *log.Logger
+	Workspace            WorkspaceConfig
+	NexusNodeProvider    core.NodeProvider
+	NexusClient          *NexusClient
 
 	logFile  io.Closer
 	eventLog io.Closer
@@ -89,11 +98,12 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 	logger := log.New(logFile, "relurpish ", log.LstdFlags|log.Lmicroseconds)
 
-	memory, err := memory.NewHybridMemory(cfg.MemoryPath)
+	memStore, err := memory.NewHybridMemory(cfg.MemoryPath)
 	if err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("memory init: %w", err)
 	}
+	memStore = memStore.WithVectorStore(memory.NewInMemoryVectorStore())
 
 	var workspaceCfg WorkspaceConfig
 	var allowedCapabilities []core.CapabilitySelector
@@ -133,28 +143,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent.model.name")
 	}
-	runner, err := fsandbox.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
-	if err != nil {
-		logFile.Close()
-		return nil, err
-	}
-	registry, indexManager, err := BuildCapabilityRegistry(cfg.Workspace, runner, CapabilityRegistryOptions{
-		AgentID:           registration.ID,
-		PermissionManager: registration.Permissions,
-		AgentSpec:         agentSpec,
-	})
-	if err != nil {
-		logFile.Close()
-		return nil, err
-	}
-	if registration.Policy != nil {
-		registry.SetPolicyEngine(registration.Policy)
-	}
-	agentSpec, skillResults := agents.ApplySkills(cfg.Workspace, agentSpec, registration.Manifest.Spec.Skills, registry, registration.Permissions, registration.ID)
-	if cfg.AgentName == "" {
-		cfg.AgentName = registration.Manifest.Metadata.Name
-	}
-
 	if cfg.OllamaModel == "" {
 		cfg.OllamaModel = agentSpec.Model.Name
 	}
@@ -162,14 +150,11 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("ollama model not configured; update %s", cfg.ManifestPath)
 	}
-
-	// Load all agent definitions from the agents directory
-	agentDefs, err := LoadAgentDefinitions(cfg.AgentsDir)
-	if err != nil && !os.IsNotExist(err) {
-		// Log warning but proceed with builtin agents
-		logger.Printf("warning: failed to load agent definitions: %v", err)
+	runner, err := fsandbox.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
+	if err != nil {
+		logFile.Close()
+		return nil, err
 	}
-
 	// Setup Telemetry
 	var sinks []core.Telemetry
 	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
@@ -220,7 +205,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		}
 	}
 	telemetry := telemetry.MultiplexTelemetry{Sinks: sinks}
-	registry.UseTelemetry(telemetry)
 
 	logLLM := false
 	if agentSpec.Logging != nil && agentSpec.Logging.LLM != nil {
@@ -230,38 +214,78 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	modelClient.SetDebugLogging(logLLM)
 	model := llm.NewInstrumentedModel(modelClient, telemetry, logLLM)
 
-	// Create base config derived from manifest + CLI args
-	agentCfg := &core.Config{
-		Name:              cfg.AgentLabel(),
-		Model:             cfg.OllamaModel,
-		OllamaEndpoint:    cfg.OllamaEndpoint,
-		MaxIterations:     8,
-		OllamaToolCalling: agentSpec.ToolCallingEnabled(),
-		AgentSpec:         agentSpec, // Default to manifest spec
-		Telemetry:         telemetry,
+	if cfg.AgentName == "" {
+		cfg.AgentName = registration.Manifest.Metadata.Name
 	}
-	registry.UseAgentSpec(registration.ID, agentSpec)
-	if err := agents.RegisterBuiltinRelurpicCapabilities(registry, model, agentCfg); err != nil {
+	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
+		Context:             ctx,
+		AgentID:             registration.ID,
+		AgentName:           cfg.AgentName,
+		ConfigName:          cfg.AgentLabel(),
+		AgentsDir:           cfg.AgentsDir,
+		Manifest:            registration.Manifest,
+		PermissionManager:   registration.Permissions,
+		Runner:              runner,
+		Model:               model,
+		Memory:              memStore,
+		Telemetry:           telemetry,
+		OllamaEndpoint:      cfg.OllamaEndpoint,
+		OllamaModel:         cfg.OllamaModel,
+		MaxIterations:       8,
+		AllowedCapabilities: allowedCapabilities,
+		DebugLLM:            logLLM,
+	})
+	if err != nil {
 		logFile.Close()
-		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
+		return nil, err
 	}
+	registry := boot.Registry
+	indexManager := boot.IndexManager
+	searchEngine := boot.SearchEngine
+	agentSpec = boot.AgentSpec
+	agentCfg := boot.AgentConfig
+	agentEnv := boot.Environment
+	agentDefs := boot.AgentDefinitions
+	skillResults := boot.SkillResults
+	compiledPolicy := boot.CompiledPolicy
+	if compiledPolicy == nil {
+		var err error
+		contract := boot.Contract
+		if contract == nil {
+			contract = &contractpkg.EffectiveAgentContract{
+				AgentID:   registration.ID,
+				AgentSpec: agentSpec,
+			}
+		}
+		compiledPolicy, err = policybundle.BuildFromContract(contract, registration.Permissions)
+		if err != nil {
+			logFile.Close()
+			return nil, fmt.Errorf("compile effective policy: %w", err)
+		}
+	}
+	registration.Policy = compiledPolicy.Engine
+	registry.SetPolicyEngine(compiledPolicy.Engine)
 
 	rt := &Runtime{
-		Config:           cfg,
-		Tools:            registry,
-		Memory:           memory,
-		Context:          core.NewContext(),
-		Model:            model,
-		IndexManager:     indexManager,
-		Logger:           logger,
-		logFile:          logFile,
-		eventLog:         io.Closer(nil),
-		Workspace:        workspaceCfg,
-		Registration:     registration,
-		Delegations:      fauthorization.NewDelegationManager(),
-		AgentSpec:        agentSpec,
-		AgentDefinitions: agentDefs,
-		Telemetry:        telemetry,
+		Config:               cfg,
+		Tools:                registry,
+		Memory:               memStore,
+		Context:              core.NewContext(),
+		Model:                model,
+		IndexManager:         indexManager,
+		SearchEngine:         searchEngine,
+		Logger:               logger,
+		logFile:              logFile,
+		eventLog:             io.Closer(nil),
+		Workspace:            workspaceCfg,
+		Registration:         registration,
+		Delegations:          fauthorization.NewDelegationManager(),
+		AgentSpec:            agentSpec,
+		AgentDefinitions:     agentDefs,
+		CapabilityAdmissions: boot.CapabilityAdmissions,
+		EffectiveContract:    boot.Contract,
+		CompiledPolicy:       compiledPolicy,
+		Telemetry:            telemetry,
 	}
 	if eventTelemetry.Log != nil {
 		if closer, ok := eventTelemetry.Log.(io.Closer); ok {
@@ -297,25 +321,13 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("register local nexus node: %w", err)
 	}
 
-	agent := instantiateAgent(cfg, model, registry, memory, agentDefs, agentCfg, indexManager)
+	agent := instantiateAgent(cfg, agentEnv, agentDefs)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
 	if agentCfg.AgentSpec != nil {
 		registry.UseAgentSpec(registration.ID, agentCfg.AgentSpec)
 	}
 
-	if err := agent.Initialize(agentCfg); err != nil {
-		_ = rt.Close()
-		return nil, fmt.Errorf("initialize agent: %w", err)
-	}
-	if reflection, ok := agent.(*agents.ReflectionAgent); ok {
-		if reflection.Delegate != nil {
-			_ = reflection.Delegate.Initialize(agentCfg)
-		}
-	}
-	if len(allowedCapabilities) > 0 {
-		registry.RestrictToCapabilities(allowedCapabilities)
-	}
 	rt.Agent = agent
 	return rt, nil
 }
@@ -411,59 +423,125 @@ func (r *Runtime) SwitchAgent(name string) error {
 	if r.Registration == nil || r.Registration.Manifest == nil || r.Registration.Manifest.Spec.Agent == nil {
 		return errors.New("agent manifest missing")
 	}
+	effectiveContract, compiledPolicy, agentDefs, err := r.resolveEffectiveContractForAgent(name)
+	if err != nil {
+		return err
+	}
+	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
+}
+
+// ReloadEffectiveContract reapplies the effective contract and compiled policy
+// for the currently selected agent using the same consolidated resolution path
+// as startup and SwitchAgent.
+func (r *Runtime) ReloadEffectiveContract() error {
+	if r == nil {
+		return errors.New("runtime unavailable")
+	}
+	name := strings.TrimSpace(r.Config.AgentName)
+	if name == "" && r.Registration != nil {
+		name = strings.TrimSpace(r.Registration.ID)
+	}
+	if name == "" {
+		return errors.New("agent name required")
+	}
+	effectiveContract, compiledPolicy, agentDefs, err := r.resolveEffectiveContractForAgent(name)
+	if err != nil {
+		return err
+	}
+	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
+}
+
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contractpkg.EffectiveAgentContract, compiledPolicy *policybundle.CompiledPolicyBundle, agentDefs map[string]*core.AgentDefinition) error {
+	if r == nil {
+		return errors.New("runtime unavailable")
+	}
+	if effectiveContract == nil || effectiveContract.AgentSpec == nil {
+		return errors.New("effective contract missing agent spec")
+	}
+	if compiledPolicy == nil || compiledPolicy.Engine == nil {
+		return errors.New("compiled policy missing")
+	}
 	cfg := r.Config
 	cfg.AgentName = name
-	baseSpec := agents.ApplyManifestDefaults(r.Registration.Manifest.Spec.Agent, r.Registration.Manifest.Spec.Defaults)
+	if effectiveContract.AgentSpec != nil && effectiveContract.AgentSpec.Model.Name != "" && effectiveContract.AgentSpec.Model.Name != cfg.OllamaModel {
+		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, effectiveContract.AgentSpec.Model.Name)
+	}
+	if err := ensureStableSkillCapabilityTopology(r.EffectiveContract, effectiveContract); err != nil {
+		return err
+	}
 	agentCfg := &core.Config{
 		Name:              cfg.AgentLabel(),
 		Model:             cfg.OllamaModel,
 		OllamaEndpoint:    cfg.OllamaEndpoint,
 		MaxIterations:     8,
-		OllamaToolCalling: baseSpec.ToolCallingEnabled(),
-		AgentSpec:         baseSpec,
+		OllamaToolCalling: effectiveContract.AgentSpec.ToolCallingEnabled(),
+		AgentSpec:         effectiveContract.AgentSpec,
 		Telemetry:         r.Telemetry,
 	}
-	agent := instantiateAgent(cfg, r.Model, r.Tools, r.Memory, r.AgentDefinitions, agentCfg, r.IndexManager)
+	agent := instantiateAgent(cfg, agents.AgentEnvironment{
+		Model:        r.Model,
+		Registry:     r.Tools,
+		IndexManager: r.IndexManager,
+		SearchEngine: r.SearchEngine,
+		Memory:       r.Memory,
+		Config:       agentCfg,
+	}, agentDefs)
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)
 	}
-	if agentCfg.Model != cfg.OllamaModel {
-		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, agentCfg.Model)
-	}
-	if agentCfg.AgentSpec != nil {
-		r.Tools.UseAgentSpec(r.Registration.ID, agentCfg.AgentSpec)
-	}
-	if err := agent.Initialize(agentCfg); err != nil {
-		return err
-	}
-	if reflection, ok := agent.(*agents.ReflectionAgent); ok {
-		if reflection.Delegate != nil {
-			_ = reflection.Delegate.Initialize(agentCfg)
-		}
-	}
+	r.Tools.UseAgentSpec(r.Registration.ID, effectiveContract.AgentSpec)
+	r.Tools.SetPolicyEngine(compiledPolicy.Engine)
+	r.Registration.Policy = compiledPolicy.Engine
 	r.Agent = agent
+	r.AgentSpec = effectiveContract.AgentSpec
+	r.AgentDefinitions = agentDefs
+	r.EffectiveContract = effectiveContract
+	r.CompiledPolicy = compiledPolicy
+	r.CapabilityAdmissions = capabilityplan.EvaluateSkillCapabilities(
+		effectiveContract.ResolvedSkills,
+		core.EffectiveAllowedCapabilitySelectors(effectiveContract.AgentSpec),
+	)
+	r.syncSkillContextPaths(effectiveContract.SkillResults)
 	r.Config.AgentName = name
 	return nil
 }
 
 // CapabilityRegistryOptions carries optional manifest/runtime policies into capability construction.
 type CapabilityRegistryOptions struct {
+	Context           context.Context
 	AgentID           string
 	PermissionManager *fauthorization.PermissionManager
 	AgentSpec         *core.AgentRuntimeSpec
+	OllamaEndpoint    string
+	OllamaModel       string
+	SkipASTIndex      bool
 }
 
-// BuildCapabilityRegistry registers builtin tool capabilities scoped to the workspace.
-func BuildCapabilityRegistry(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (*capability.Registry, *ast.IndexManager, error) {
+// CapabilityBundle groups the runtime-scoped capability registry and the
+// shared indexing/search services built alongside it.
+type CapabilityBundle struct {
+	Registry     *capability.Registry
+	IndexManager *ast.IndexManager
+	SearchEngine *search.SearchEngine
+}
+
+// BuildBuiltinCapabilityBundle registers builtin tool capabilities scoped to
+// the workspace without resolving a full runtime contract. It is intended for
+// tests and low-level tooling that only need the builtin capability bundle.
+func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (*CapabilityBundle, error) {
 	if workspace == "" {
 		workspace = "."
 	}
 	if runner == nil {
-		return nil, nil, fmt.Errorf("command runner required")
+		return nil, fmt.Errorf("command runner required")
 	}
 	var cfg CapabilityRegistryOptions
 	if len(opts) > 0 {
 		cfg = opts[0]
+	}
+	buildCtx := cfg.Context
+	if buildCtx == nil {
+		buildCtx = context.Background()
 	}
 	registry := capability.NewRegistry()
 	if cfg.PermissionManager != nil {
@@ -480,7 +558,7 @@ func BuildCapabilityRegistry(workspace string, runner fsandbox.CommandRunner, op
 	}
 	for _, tool := range platformfs.FileOperations(workspace) {
 		if err := register(tool); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
@@ -488,7 +566,7 @@ func BuildCapabilityRegistry(workspace string, runner fsandbox.CommandRunner, op
 		&platformsearch.SemanticSearchTool{BasePath: workspace},
 	} {
 		if err := register(tool); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
@@ -499,22 +577,22 @@ func BuildCapabilityRegistry(workspace string, runner fsandbox.CommandRunner, op
 		&platformgit.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: runner},
 	} {
 		if err := register(tool); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	for _, tool := range platformshell.CommandLineTools(workspace, runner) {
 		if err := register(tool); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	paths := config.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	store, err := ast.NewSQLiteStore(paths.ASTIndexDB())
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	manager := ast.NewIndexManager(store, ast.IndexConfig{
 		WorkspacePath:   workspace,
@@ -531,10 +609,86 @@ func BuildCapabilityRegistry(workspace string, runner fsandbox.CommandRunner, op
 	}
 	platformast.AttachASTSymbolProvider(manager, registry)
 	if err := register(platformast.NewASTTool(manager)); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	go manager.IndexWorkspace()
-	return registry, manager, nil
+	codeIndex, err := memory.NewCodeIndex(workspace, filepath.Join(paths.MemoryDir(), "code_index.json"))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.PermissionManager != nil {
+		codeIndex.SetPathFilter(func(path string, isDir bool) bool {
+			action := core.FileSystemRead
+			if isDir {
+				action = core.FileSystemList
+			}
+			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
+		})
+	}
+	if err := codeIndex.BuildIndex(buildCtx); err != nil {
+		if !shouldIgnoreBootstrapIndexError(err) {
+			return nil, err
+		}
+		log.Printf("runtime bootstrap warning: code index build incomplete: %v", err)
+	}
+	if err := codeIndex.Save(); err != nil {
+		return nil, err
+	}
+	if cfg.SkipASTIndex {
+		// Test-only fast path: agenttests can skip AST/bootstrap indexing when
+		// isolating execution behavior from slow workspace indexing and embedding.
+		searchEngine := search.NewSearchEngine(nil, codeIndex)
+		if searchEngine == nil {
+			return nil, fmt.Errorf("search engine initialization failed")
+		}
+		return &CapabilityBundle{
+			Registry:     registry,
+			IndexManager: manager,
+			SearchEngine: searchEngine,
+		}, nil
+	}
+	if err := manager.StartIndexing(buildCtx); err != nil {
+		return nil, err
+	}
+	if err := manager.WaitUntilReady(buildCtx); err != nil {
+		if !shouldIgnoreBootstrapIndexError(err) {
+			return nil, err
+		}
+		log.Printf("runtime bootstrap warning: AST index readiness incomplete: %v", err)
+	}
+	var semanticStore search.SemanticStore
+	if strings.TrimSpace(cfg.OllamaModel) != "" {
+		retrievalDB, err := openRetrievalDB(paths.RetrievalDB())
+		if err != nil {
+			return nil, err
+		}
+		embedder := retrieval.NewOllamaEmbedder(cfg.OllamaEndpoint, cfg.OllamaModel)
+		if err := ingestCodeIndex(buildCtx, workspace, codeIndex, retrieval.NewIngestionPipeline(retrievalDB, embedder)); err != nil {
+			if !shouldIgnoreBootstrapIndexError(err) {
+				return nil, err
+			}
+			log.Printf("runtime bootstrap warning: semantic ingestion incomplete: %v", err)
+		} else {
+			semanticStore = &retrieverSemanticAdapter{retriever: retrieval.NewRetriever(retrievalDB, embedder)}
+		}
+	}
+	searchEngine := search.NewSearchEngine(semanticStore, codeIndex)
+	if searchEngine == nil {
+		return nil, fmt.Errorf("search engine initialization failed")
+	}
+	return &CapabilityBundle{
+		Registry:     registry,
+		IndexManager: manager,
+		SearchEngine: searchEngine,
+	}, nil
+}
+
+func shouldIgnoreBootstrapIndexError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(err.Error(), "no parser for ")
 }
 
 // LoadAgentDefinitions scans the directory for YAML files and parses them.
@@ -565,68 +719,141 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 }
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, model core.LanguageModel, registry *capability.Registry, mem memory.MemoryStore, defs map[string]*core.AgentDefinition, agentCfg *core.Config, indexManager *ast.IndexManager) graph.Agent {
+func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*core.AgentDefinition) graph.Agent {
 	paths := config.New(cfg.Workspace)
-	workflowStatePath := paths.WorkflowStateFile()
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
-		// Update config with the definition's spec
-		agentCfg.AgentSpec = &def.Spec
-		agentCfg.OllamaToolCalling = def.Spec.ToolCallingEnabled()
-		if def.Spec.Model.Name != "" {
-			agentCfg.Model = def.Spec.Model.Name
+		spec := env.Config.AgentSpec
+		if spec == nil {
+			spec = &def.Spec
+			env.Config.AgentSpec = spec
+		}
+		env.Config.OllamaToolCalling = spec.ToolCallingEnabled()
+		if spec.Model.Name != "" {
+			env.Config.Model = spec.Model.Name
 		}
 
-		return instantiateDefinitionAgent(cfg, def, model, registry, mem, indexManager)
+		return instantiateDefinitionAgent(cfg, def, env)
 	}
 
+	builder := agents.NewAgentBuilder().WithEnvironment(&env)
 	switch cfg.AgentLabel() {
 	case "planner":
-		return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
+		agent, _ := builder.Build("planner")
+		return configureBuiltAgent(agent, paths)
 	case "react":
-		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: paths.CheckpointsDir()}
+		agent, _ := builder.Build("react")
+		return configureBuiltAgent(agent, paths)
 	case "reflection":
-		return &agents.ReflectionAgent{
-			Reviewer: model,
-			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: paths.CheckpointsDir(), WorkflowStatePath: workflowStatePath},
-		}
+		agent, _ := builder.Build("reflection")
+		return configureBuiltAgent(agent, paths)
 	default:
-		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: paths.CheckpointsDir(), WorkflowStatePath: workflowStatePath}
+		agent, _ := builder.Build("react")
+		return configureBuiltAgent(agent, paths)
 	}
 }
 
-func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, model core.LanguageModel, registry *capability.Registry, mem memory.MemoryStore, indexManager *ast.IndexManager) graph.Agent {
+func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, env agents.AgentEnvironment) graph.Agent {
 	paths := config.New(cfg.Workspace)
-	checkpointPath := paths.CheckpointsDir()
-	workflowStatePath := paths.WorkflowStateFile()
-	implementation := strings.ToLower(strings.TrimSpace(def.Spec.Implementation))
-	switch implementation {
-	case "planner":
-		return &agents.PlannerAgent{Model: model, Tools: registry, Memory: mem}
-	case "react":
-		return &agents.ReActAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath}
-	case "reflection":
-		return &agents.ReflectionAgent{
-			Reviewer: model,
-			Delegate: &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath, WorkflowStatePath: workflowStatePath},
-		}
-	case "architect":
-		return &agents.ArchitectAgent{
-			Model:             model,
-			PlannerTools:      registry,
-			ExecutorTools:     registry,
-			Memory:            mem,
-			IndexManager:      indexManager,
-			CheckpointPath:    checkpointPath,
-			WorkflowStatePath: workflowStatePath,
-		}
-	case "eternal":
-		return &agents.EternalAgent{Model: model}
-	case "coding", "expert", "":
-		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath, WorkflowStatePath: workflowStatePath}
-	default:
-		return &agents.CodingAgent{Model: model, Tools: registry, Memory: mem, IndexManager: indexManager, CheckpointPath: checkpointPath, WorkflowStatePath: workflowStatePath}
+	spec := def.Spec
+	if env.Config != nil && env.Config.AgentSpec != nil {
+		spec = *env.Config.AgentSpec
 	}
+	agent, err := agents.BuildFromSpec(env, spec)
+	if err != nil {
+		agent, _ = agents.BuildFromSpec(env, core.AgentRuntimeSpec{Implementation: "react"})
+	}
+	return configureBuiltAgent(agent, paths)
+}
+
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*contractpkg.EffectiveAgentContract, *policybundle.CompiledPolicyBundle, map[string]*core.AgentDefinition, error) {
+	agentDefs := r.AgentDefinitions
+	if r.Config.AgentsDir != "" {
+		loaded, err := LoadAgentDefinitions(r.Config.AgentsDir)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, nil, nil, fmt.Errorf("load agent definitions: %w", err)
+		}
+		if loaded != nil {
+			agentDefs = loaded
+		}
+	}
+	effectiveContract, err := contractpkg.ResolveEffectiveAgentContract(r.Config.Workspace, r.Registration.Manifest, contractpkg.ResolveOptions{
+		AgentOverlays: selectedAgentDefinitionOverlays(name, agentDefs),
+	})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("resolve effective contract: %w", err)
+	}
+	compiledPolicy, err := policybundle.BuildFromContract(effectiveContract, r.Registration.Permissions)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("compile effective policy: %w", err)
+	}
+	return effectiveContract, compiledPolicy, agentDefs, nil
+}
+
+func ensureStableSkillCapabilityTopology(current, next *contractpkg.EffectiveAgentContract) error {
+	currentIDs := skillCapabilityIDSet(current)
+	nextIDs := skillCapabilityIDSet(next)
+	if len(currentIDs) != len(nextIDs) {
+		return fmt.Errorf("agent switch changes skill capability topology; restart required to rebuild runtime registry")
+	}
+	for id := range currentIDs {
+		if _, ok := nextIDs[id]; !ok {
+			return fmt.Errorf("agent switch changes skill capability topology; restart required to rebuild runtime registry")
+		}
+	}
+	return nil
+}
+
+func skillCapabilityIDSet(contract *contractpkg.EffectiveAgentContract) map[string]struct{} {
+	if contract == nil {
+		return nil
+	}
+	candidates := agents.EnumerateSkillCapabilities(contract.ResolvedSkills)
+	if len(candidates) == 0 {
+		return nil
+	}
+	ids := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Descriptor.ID == "" {
+			continue
+		}
+		ids[candidate.Descriptor.ID] = struct{}{}
+	}
+	return ids
+}
+
+func (r *Runtime) syncSkillContextPaths(results []agents.SkillResolution) {
+	if r == nil || r.Context == nil {
+		return
+	}
+	for _, skill := range results {
+		if !skill.Applied {
+			continue
+		}
+		r.Context.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
+	}
+}
+
+func configureBuiltAgent(agent graph.Agent, paths config.Paths) graph.Agent {
+	switch typed := agent.(type) {
+	case *agents.ReActAgent:
+		typed.CheckpointPath = paths.CheckpointsDir()
+	case *agents.PlannerAgent:
+		typed.CheckpointPath = paths.CheckpointsDir()
+	case *agents.ArchitectAgent:
+		typed.CheckpointPath = paths.CheckpointsDir()
+		typed.WorkflowStatePath = paths.WorkflowStateFile()
+	case *agents.HTNAgent:
+		typed.CheckpointPath = paths.WorkflowStateFile()
+	case *agents.PipelineAgent:
+		typed.WorkflowStatePath = paths.WorkflowStateFile()
+	}
+	if reflection, ok := agent.(*agents.ReflectionAgent); ok {
+		if delegate, ok := reflection.Delegate.(*agents.ReActAgent); ok {
+			delegate.CheckpointPath = paths.CheckpointsDir()
+		}
+	}
+	return agent
 }
 
 // RunTask executes a task against the configured agent while preserving shared

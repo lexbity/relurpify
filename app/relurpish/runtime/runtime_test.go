@@ -2,14 +2,24 @@ package runtime
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/config"
+	contract "github.com/lexcodex/relurpify/framework/contract"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	frameworksearch "github.com/lexcodex/relurpify/framework/search"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // TestProbeEnvironmentHandlesMissingRunsc surfaces a helpful error message.
@@ -111,10 +121,14 @@ func TestBuildCapabilityRegistryDoesNotRegisterGenericExecutionToolsByDefault(t 
 	dir := t.TempDir()
 	runner := fsandbox.NewLocalCommandRunner(dir, nil)
 
-	registry, indexManager, err := BuildCapabilityRegistry(dir, runner)
+	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner)
 	require.NoError(t, err)
+	registry := capabilities.Registry
+	indexManager := capabilities.IndexManager
+	searchEngine := capabilities.SearchEngine
 	require.NotNil(t, registry)
 	require.NotNil(t, indexManager)
+	require.NotNil(t, searchEngine)
 
 	_, ok := registry.Get("exec_run_tests")
 	require.False(t, ok)
@@ -131,4 +145,200 @@ func TestBuildCapabilityRegistryDoesNotRegisterGenericExecutionToolsByDefault(t 
 	require.True(t, ok)
 	_, ok = registry.Get("file_search")
 	require.True(t, ok)
+}
+
+func TestBuildCapabilityRegistryReturnsUsableSearchEngine(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "match.go"), []byte("package sample\nfunc Hello() string { return \"needle\" }\n"), 0o644))
+	runner := fsandbox.NewLocalCommandRunner(dir, nil)
+
+	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner)
+	require.NoError(t, err)
+	searchEngine := capabilities.SearchEngine
+	require.NotNil(t, searchEngine)
+
+	results, err := searchEngine.Search(frameworksearch.SearchQuery{
+		Text:       "needle",
+		Mode:       frameworksearch.SearchKeyword,
+		MaxResults: 5,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	require.Contains(t, results[0].File, "match.go")
+}
+
+func TestBuildCapabilityRegistryContinuesWhenBootstrapContextCanceled(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "match.go"), []byte("package sample\nfunc Hello() string { return \"needle\" }\n"), 0o644))
+	runner := fsandbox.NewLocalCommandRunner(dir, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner, CapabilityRegistryOptions{Context: ctx})
+	require.NoError(t, err)
+	require.NotNil(t, capabilities)
+	require.NotNil(t, capabilities.Registry)
+	require.NotNil(t, capabilities.IndexManager)
+	require.NotNil(t, capabilities.SearchEngine)
+}
+
+func TestBuildCapabilityRegistrySkipASTIndexSkipsSemanticBootstrap(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "match.go"), []byte("package sample\nfunc Hello() string { return \"needle\" }\n"), 0o644))
+	runner := fsandbox.NewLocalCommandRunner(dir, nil)
+
+	var embedCalls atomic.Int32
+	embedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		embedCalls.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"embeddings":[[1,2]]}`))
+	}))
+	defer embedServer.Close()
+
+	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner, CapabilityRegistryOptions{
+		OllamaEndpoint: embedServer.URL,
+		OllamaModel:    "test-embedder",
+		SkipASTIndex:   true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, capabilities)
+	require.NotNil(t, capabilities.IndexManager)
+	require.NotNil(t, capabilities.SearchEngine)
+	require.Zero(t, embedCalls.Load())
+
+	results, err := capabilities.SearchEngine.Search(frameworksearch.SearchQuery{
+		Text:       "needle",
+		Mode:       frameworksearch.SearchKeyword,
+		MaxResults: 5,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	require.Contains(t, results[0].File, "match.go")
+}
+
+func TestReloadEffectiveContractRefreshesDefinitionOverlay(t *testing.T) {
+	workspace := t.TempDir()
+	agentsDir := filepath.Join(workspace, "agents")
+	require.NoError(t, os.MkdirAll(agentsDir, 0o755))
+	defPath := filepath.Join(agentsDir, "reviewer.yaml")
+	writeAgentDefinitionFixture(t, defPath, core.AgentPermissionDeny)
+
+	permMgr, err := authorization.NewPermissionManager(workspace, &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "**"}},
+	}, nil, nil)
+	require.NoError(t, err)
+	rt := &Runtime{
+		Config: Config{
+			Workspace:      workspace,
+			AgentsDir:      agentsDir,
+			AgentName:      "reviewer",
+			OllamaModel:    "manifest-model",
+			OllamaEndpoint: "http://localhost:11434",
+		},
+		Tools: capability.NewRegistry(),
+		Registration: &authorization.AgentRegistration{
+			ID: "coding",
+			Manifest: &manifest.AgentManifest{
+				Metadata: manifest.ManifestMetadata{Name: "coding"},
+				Spec: manifest.ManifestSpec{
+					Agent: &core.AgentRuntimeSpec{
+						Implementation: "react",
+						Mode:           core.AgentModePrimary,
+						Model:          core.AgentModelConfig{Provider: "ollama", Name: "manifest-model"},
+					},
+				},
+			},
+			Permissions: permMgr,
+		},
+		Context: core.NewContext(),
+	}
+	require.NoError(t, rt.ReloadEffectiveContract())
+	require.Equal(t, core.AgentPermissionDeny, rt.EffectiveContract.AgentSpec.ProviderPolicies["browser"].Activate)
+
+	writeAgentDefinitionFixture(t, defPath, core.AgentPermissionAllow)
+	require.NoError(t, rt.ReloadEffectiveContract())
+	require.Equal(t, core.AgentPermissionAllow, rt.EffectiveContract.AgentSpec.ProviderPolicies["browser"].Activate)
+	require.NotNil(t, rt.CompiledPolicy)
+}
+
+func TestReloadEffectiveContractRejectsSkillTopologyChanges(t *testing.T) {
+	workspace := t.TempDir()
+	skillRoot := filepath.Join(workspace, "relurpify_cfg", "skills", "reviewer")
+	for _, dir := range []string{"scripts", "resources", "templates"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(skillRoot, dir), 0o755))
+	}
+	skill := manifest.SkillManifest{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "SkillManifest",
+		Metadata:   manifest.ManifestMetadata{Name: "reviewer", Version: "1.0.0"},
+		Spec: manifest.SkillSpec{
+			PromptSnippets: []string{"Review carefully."},
+			AllowedCapabilities: []core.CapabilitySelector{{
+				Name: "reviewer.prompt.1",
+				Kind: core.CapabilityKindPrompt,
+			}},
+		},
+	}
+	data, err := yaml.Marshal(skill)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(skillRoot, "skill.manifest.yaml"), data, 0o644))
+
+	permMgr, err := authorization.NewPermissionManager(workspace, &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "**"}},
+	}, nil, nil)
+	require.NoError(t, err)
+	rt := &Runtime{
+		Config: Config{
+			Workspace:      workspace,
+			AgentName:      "coding",
+			OllamaModel:    "manifest-model",
+			OllamaEndpoint: "http://localhost:11434",
+		},
+		Tools: capability.NewRegistry(),
+		Registration: &authorization.AgentRegistration{
+			ID: "coding",
+			Manifest: &manifest.AgentManifest{
+				Metadata: manifest.ManifestMetadata{Name: "coding"},
+				Spec: manifest.ManifestSpec{
+					Agent: &core.AgentRuntimeSpec{
+						Implementation: "react",
+						Mode:           core.AgentModePrimary,
+						Model:          core.AgentModelConfig{Provider: "ollama", Name: "manifest-model"},
+					},
+				},
+			},
+			Permissions: permMgr,
+		},
+		Context: core.NewContext(),
+		EffectiveContract: &contract.EffectiveAgentContract{
+			AgentID: "coding",
+			AgentSpec: &core.AgentRuntimeSpec{
+				Implementation: "react",
+				Mode:           core.AgentModePrimary,
+				Model:          core.AgentModelConfig{Provider: "ollama", Name: "manifest-model"},
+			},
+		},
+	}
+	rt.Registration.Manifest.Spec.Skills = []string{"reviewer"}
+
+	err = rt.ReloadEffectiveContract()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "skill capability topology")
+}
+
+func writeAgentDefinitionFixture(t *testing.T, path string, level core.AgentPermissionLevel) {
+	t.Helper()
+	require.NoError(t, os.WriteFile(path, []byte(`
+kind: AgentDefinition
+name: reviewer
+spec:
+  implementation: react
+  mode: primary
+  model:
+    provider: ollama
+    name: manifest-model
+  provider_policies:
+    browser:
+      activate: `+string(level)+`
+`), 0o644))
 }

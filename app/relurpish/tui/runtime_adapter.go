@@ -68,6 +68,8 @@ type RuntimeAdapter interface {
 	RecordingMode() string
 	SetRecordingMode(mode string) error
 	SaveModel(model string) error
+	ContractSummary() *ContractSummary
+	CapabilityAdmissions() []CapabilityAdmissionInfo
 	// SaveToolPolicy persists a per-tool execution policy to the agent manifest.
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
 	SaveToolPolicy(toolName string, level core.AgentPermissionLevel) error
@@ -171,19 +173,64 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	return info
 }
 
+func (r *runtimeAdapter) ContractSummary() *ContractSummary {
+	if r == nil || r.rt == nil || r.rt.EffectiveContract == nil {
+		return nil
+	}
+	summary := &ContractSummary{
+		AgentID:         r.rt.EffectiveContract.AgentID,
+		ManifestName:    r.rt.EffectiveContract.Sources.ManifestName,
+		ManifestVersion: r.rt.EffectiveContract.Sources.ManifestVersion,
+		Workspace:       r.rt.EffectiveContract.Sources.Workspace,
+		AppliedSkills:   append([]string(nil), r.rt.EffectiveContract.Sources.AppliedSkills...),
+		FailedSkills:    append([]string(nil), r.rt.EffectiveContract.Sources.FailedSkills...),
+		AdmissionCount:  len(r.rt.CapabilityAdmissions),
+	}
+	if r.rt.Tools != nil {
+		summary.CapabilityCount = len(r.rt.Tools.AllCapabilities())
+	}
+	for _, admission := range r.rt.CapabilityAdmissions {
+		if !admission.Admitted {
+			summary.RejectedCount++
+		}
+	}
+	if r.rt.CompiledPolicy != nil {
+		summary.PolicyRuleCount = len(r.rt.CompiledPolicy.Rules)
+	}
+	return summary
+}
+
+func (r *runtimeAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo {
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	out := make([]CapabilityAdmissionInfo, 0, len(r.rt.CapabilityAdmissions))
+	for _, admission := range r.rt.CapabilityAdmissions {
+		out = append(out, CapabilityAdmissionInfo{
+			CapabilityID:   admission.CapabilityID,
+			CapabilityName: admission.CapabilityName,
+			Kind:           string(admission.Kind),
+			Admitted:       admission.Admitted,
+			Reason:         admission.Reason,
+		})
+	}
+	return out
+}
+
 func describeAgentRuntime(agent graph.Agent) (string, string) {
 	switch typed := agent.(type) {
-	case *agents.CodingAgent:
-		return describeCodingMode(agents.ModeCode)
 	case *agents.ArchitectAgent:
-		return string(agents.ModeArchitect), "plan-execute"
+		return "architect", "plan-execute"
 	case *agents.ReActAgent:
-		mode := agents.Mode(strings.TrimSpace(typed.Mode))
-		return describeCodingMode(mode)
+		mode := strings.TrimSpace(typed.Mode)
+		if mode == "" {
+			mode = "react"
+		}
+		return mode, "react"
 	case *agents.ReflectionAgent:
 		mode, _ := describeAgentRuntime(typed.Delegate)
 		if mode == "" {
-			mode = string(agents.ModeCode)
+			mode = "react"
 		}
 		return mode, "reflection"
 	case *agents.PlannerAgent:
@@ -191,15 +238,9 @@ func describeAgentRuntime(agent graph.Agent) (string, string) {
 	case *agents.EternalAgent:
 		return "loop", "eternal"
 	default:
+		_ = typed
 		return "", ""
 	}
-}
-
-func describeCodingMode(mode agents.Mode) (string, string) {
-	if profile, ok := agents.ModeProfiles[mode]; ok {
-		return string(profile.Name), profile.PreferredStrategy
-	}
-	return string(agents.ModeCode), agents.ModeProfiles[agents.ModeCode].PreferredStrategy
 }
 
 func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution {

@@ -11,11 +11,14 @@ import (
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/capabilityplan"
 	"github.com/lexcodex/relurpify/framework/config"
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/policybundle"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +29,7 @@ func TestRuntimeAdapterSessionInfoUsesLiveAgentModeAndStrategy(t *testing.T) {
 			OllamaModel: "base-model",
 			AgentName:   "coding-go",
 		},
-		Agent: &agents.CodingAgent{},
+		Agent: &agents.ReActAgent{},
 		Registration: &fauthorization.AgentRegistration{
 			Manifest: &manifest.AgentManifest{
 				Metadata: manifest.ManifestMetadata{Name: "coding-go"},
@@ -48,17 +51,17 @@ func TestRuntimeAdapterSessionInfoUsesLiveAgentModeAndStrategy(t *testing.T) {
 	require.Equal(t, "coding-go", info.Agent)
 	require.Equal(t, "manifest-model", info.Model)
 	require.Equal(t, "primary", info.Role)
-	require.Equal(t, string(agents.ModeCode), info.Mode)
-	require.Equal(t, agents.ModeProfiles[agents.ModeCode].PreferredStrategy, info.Strategy)
+	require.Equal(t, "react", info.Mode)
+	require.Equal(t, "react", info.Strategy)
 	require.Equal(t, 4096, info.MaxTokens)
 }
 
 func TestDescribeAgentRuntimeForReflectionUsesDelegateMode(t *testing.T) {
 	mode, strategy := describeAgentRuntime(&agents.ReflectionAgent{
-		Delegate: &agents.CodingAgent{},
+		Delegate: &agents.ReActAgent{},
 	})
 
-	require.Equal(t, string(agents.ModeCode), mode)
+	require.Equal(t, "react", mode)
 	require.Equal(t, "reflection", strategy)
 }
 
@@ -230,6 +233,48 @@ func TestRuntimeAdapterListToolsInfoReportsLocalToolRuntimeFamily(t *testing.T) 
 	require.Len(t, tools, 1)
 	require.Equal(t, "local-tool", tools[0].RuntimeFamily)
 	require.Equal(t, "builtin", tools[0].Scope)
+}
+
+func TestRuntimeAdapterExposesContractSummaryAndAdmissions(t *testing.T) {
+	adapter := &runtimeAdapter{rt: &runtimesvc.Runtime{
+		Tools: capability.NewRegistry(),
+		EffectiveContract: &contractpkg.EffectiveAgentContract{
+			AgentID: "coding",
+			Sources: contractpkg.SourceSummary{
+				ManifestName:    "coding",
+				ManifestVersion: "1.2.3",
+				Workspace:       "/tmp/ws",
+				AppliedSkills:   []string{"reviewer"},
+				FailedSkills:    []string{"broken-skill"},
+			},
+		},
+		CompiledPolicy: &policybundle.CompiledPolicyBundle{
+			AgentID: "coding",
+			Rules: []core.PolicyRule{
+				{ID: "rule-1", Name: "rule-1"},
+			},
+		},
+		CapabilityAdmissions: []capabilityplan.AdmissionResult{
+			{CapabilityID: "prompt:reviewer:1", CapabilityName: "reviewer.prompt.1", Kind: core.CapabilityKindPrompt, Admitted: true, Reason: "admitted"},
+			{CapabilityID: "resource:broken:1", CapabilityName: "broken.resource.1", Kind: core.CapabilityKindResource, Admitted: false, Reason: "filtered by allowed capabilities"},
+		},
+	}}
+
+	summary := adapter.ContractSummary()
+	require.NotNil(t, summary)
+	require.Equal(t, "coding", summary.AgentID)
+	require.Equal(t, "1.2.3", summary.ManifestVersion)
+	require.Equal(t, 2, summary.AdmissionCount)
+	require.Equal(t, 1, summary.RejectedCount)
+	require.Equal(t, 1, summary.PolicyRuleCount)
+	require.Equal(t, []string{"reviewer"}, summary.AppliedSkills)
+	require.Equal(t, []string{"broken-skill"}, summary.FailedSkills)
+
+	admissions := adapter.CapabilityAdmissions()
+	require.Len(t, admissions, 2)
+	require.Equal(t, "prompt:reviewer:1", admissions[0].CapabilityID)
+	require.False(t, admissions[1].Admitted)
+	require.Equal(t, "filtered by allowed capabilities", admissions[1].Reason)
 }
 
 type relurpicCapabilityStub struct {
