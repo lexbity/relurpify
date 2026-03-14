@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
@@ -173,6 +174,21 @@ func TestPipelineAgentSelectsStagesByTaskTypeAndMode(t *testing.T) {
 	}
 	if results[0].StageName != "analyze" {
 		t.Fatalf("expected analysis stage, got %s", results[0].StageName)
+	}
+}
+
+func TestPipelineAgentNewDoesNotInjectCodingStagesByDefault(t *testing.T) {
+	agent := New(agentenv.AgentEnvironment{
+		Model:  &stubPipelineModel{responses: []*core.LLMResponse{{Text: "{}"}}},
+		Config: &core.Config{Model: "test-model"},
+	})
+
+	_, err := agent.Execute(context.Background(), &core.Task{ID: "task-generic", Instruction: "run pipeline"}, core.NewContext())
+	if err == nil {
+		t.Fatal("expected missing stages error")
+	}
+	if !strings.Contains(err.Error(), "pipeline stages not configured") {
+		t.Fatalf("expected missing stages error, got %v", err)
 	}
 }
 

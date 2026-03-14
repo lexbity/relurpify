@@ -3,8 +3,6 @@ package stages
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -206,10 +204,6 @@ func (s *CodeStage) Name() string { return "code" }
 func (s *CodeStage) AllowedToolNames() []string {
 	return []string{
 		"file_read",
-		"file_write",
-		"file_create",
-		"file_delete",
-		"lsp_format",
 	}
 }
 func (s *CodeStage) Contract() pipeline.ContractDescriptor {
@@ -226,8 +220,8 @@ func (s *CodeStage) Contract() pipeline.ContractDescriptor {
 func (s *CodeStage) BuildPrompt(ctx *core.Context) (string, error) {
 	raw, _ := ctx.Get("pipeline.plan")
 	return buildStagePrompt("code", s.Task, ctx, "Fix plan", map[string]any{
-		"fix_plan":     raw,
-		"instructions": "For every update action, content must be the complete final file contents, not a partial snippet. Use file_read first if you need the current file.",
+		"fix_plan": raw,
+		"instructions": "Return requested edit intents only. Do not mutate files in this stage. For every update action, content must be the complete final file contents, not a partial snippet. Use file_read first if you need the current file.",
 	}, s.AllowedToolNames(), `{
   "edits":[{"path":"...","action":"create|update|delete","content":"...","summary":"..."}],
   "summary":"..."
@@ -255,38 +249,24 @@ func (s *CodeStage) Validate(output any) error {
 		if strings.TrimSpace(edit.Path) == "" {
 			return fmt.Errorf("edit path required")
 		}
-		if strings.TrimSpace(edit.Action) == "" {
-			return fmt.Errorf("edit action required")
+		switch strings.TrimSpace(edit.Action) {
+		case "create", "update":
+			if strings.TrimSpace(edit.Content) == "" {
+				return fmt.Errorf("edit content required for %s", strings.TrimSpace(edit.Action))
+			}
+		case "delete":
+		default:
+			return fmt.Errorf("invalid edit action")
 		}
 	}
 	return nil
 }
 func (s *CodeStage) Apply(ctx *core.Context, output any) error {
 	plan := output.(EditPlan)
-	root := workspaceRoot(s.Task)
-	for _, edit := range plan.Edits {
-		path := filepath.Clean(edit.Path)
-		if root != "" && !filepath.IsAbs(path) {
-			path = filepath.Join(root, path)
-		}
-		switch strings.TrimSpace(edit.Action) {
-		case "create", "update":
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(path, []byte(edit.Content), 0o644); err != nil {
-				return err
-			}
-		case "delete":
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-		default:
-			// Unknown actions (e.g. "list_files" from LLM hallucination) are skipped
-			// rather than failing the whole pipeline.
-		}
-	}
+	// Coding stages now persist requested edits as an artifact-like intent only.
+	// Mutation must happen through an admitted capability path outside stage Apply.
 	ctx.Set("pipeline.code", plan)
+	ctx.Set("pipeline.code.intent_only", true)
 	return nil
 }
 

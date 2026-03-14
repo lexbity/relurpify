@@ -1,8 +1,6 @@
 package stages
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -124,17 +122,7 @@ func TestVerifyStageDecodeValidateApply(t *testing.T) {
 	}
 }
 
-func TestCodeStageApplyWritesEditsToDisk(t *testing.T) {
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
-	}
-	tmp := t.TempDir()
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatalf("chdir failed: %v", err)
-	}
-	defer func() { _ = os.Chdir(wd) }()
-
+func TestCodeStageApplyStoresEditIntentWithoutMutatingWorkspace(t *testing.T) {
 	stage := &CodeStage{Task: &core.Task{Instruction: "apply edits"}}
 	ctx := core.NewContext()
 	out := EditPlan{
@@ -150,42 +138,25 @@ func TestCodeStageApplyWritesEditsToDisk(t *testing.T) {
 	if err := pipeline.ApplyStageOutput(stage, ctx, out); err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(tmp, "src", "lib.rs"))
-	if err != nil {
-		t.Fatalf("read file failed: %v", err)
+	if got := ctx.GetString("pipeline.code"); got == "" {
+		t.Fatalf("expected edit intent stored")
 	}
-	if string(data) != out.Edits[0].Content {
-		t.Fatalf("unexpected file content: %q", string(data))
+	raw, ok := ctx.Get("pipeline.code.intent_only")
+	if !ok || raw != true {
+		t.Fatalf("expected intent-only marker, got %#v", raw)
 	}
 }
 
-func TestCodeStageApplyResolvesRelativePathsFromWorkspace(t *testing.T) {
-	workspace := t.TempDir()
-	stage := &CodeStage{Task: &core.Task{
-		Instruction: "apply edits",
-		Context: map[string]any{
-			"workspace": workspace,
-		},
-	}}
-	out := EditPlan{
-		Edits: []FileEdit{{
-			Path:    filepath.ToSlash(filepath.Join("nested", "main.rs")),
-			Action:  "update",
-			Content: "fn main() {}\n",
-			Summary: "write file",
-		}},
-		Summary: "ok",
-	}
+func TestCodeStageRejectsUnknownEditAction(t *testing.T) {
+	stage := &CodeStage{Task: &core.Task{Instruction: "code"}}
+	resp := &core.LLMResponse{Text: `{"edits":[{"path":"src/lib.rs","action":"list_files","content":"x","summary":"bad"}],"summary":"edit"}`}
 
-	if err := stage.Apply(core.NewContext(), out); err != nil {
-		t.Fatalf("apply failed: %v", err)
-	}
-	data, err := os.ReadFile(filepath.Join(workspace, "nested", "main.rs"))
+	out, err := pipeline.DecodeStageOutput(stage, resp)
 	if err != nil {
-		t.Fatalf("read failed: %v", err)
+		t.Fatalf("decode failed: %v", err)
 	}
-	if string(data) != "fn main() {}\n" {
-		t.Fatalf("unexpected content: %q", string(data))
+	if err := pipeline.ValidateStageOutput(stage, out); err == nil {
+		t.Fatalf("expected validation failure")
 	}
 }
 
