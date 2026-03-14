@@ -12,6 +12,7 @@ import (
 // PlanExecutionOptions configures how plan steps are executed.
 type PlanExecutionOptions struct {
 	MaxRecoveryAttempts int
+	BuildStepTask       func(parentTask *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task
 	Diagnose            func(ctx context.Context, step core.PlanStep, err error) (string, error)
 	Recover             func(ctx context.Context, step core.PlanStep, stepTask *core.Task, state *core.Context, err error) (*StepRecovery, error)
 	BeforeStep          func(step core.PlanStep, stepTask *core.Task, state *core.Context)
@@ -148,7 +149,13 @@ func completedStepIDs(state *core.Context) []string {
 }
 
 func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context, maxRecovery int) error {
-	stepTask := buildStepTask(task, plan, step, state)
+	stepTask := defaultBuildStepTask(task, plan, step)
+	if p.Options.BuildStepTask != nil {
+		stepTask = p.Options.BuildStepTask(task, plan, step, state)
+		if stepTask == nil {
+			stepTask = defaultBuildStepTask(task, plan, step)
+		}
+	}
 	state.Set("plan", plan)
 	if p.Options.BeforeStep != nil {
 		p.Options.BeforeStep(step, stepTask, state)
@@ -313,6 +320,10 @@ func mergeParallelBranches(parent *core.Context, branches []BranchExecutionResul
 }
 
 func buildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task {
+	return defaultBuildStepTask(task, plan, step)
+}
+
+func defaultBuildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep) *core.Task {
 	var metadata map[string]string
 	var taskID string
 	var taskType core.TaskType
@@ -355,11 +366,6 @@ func buildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep, state *
 	}
 	if step.Verification != "" {
 		stepTask.Instruction += fmt.Sprintf("\nVerification: %s", step.Verification)
-	}
-	if state != nil {
-		if prev := state.GetString("architect.last_step_summary"); prev != "" {
-			stepTask.Context["previous_step_result"] = prev
-		}
 	}
 	if plan != nil && plan.Goal != "" {
 		stepTask.Context["plan_goal"] = plan.Goal

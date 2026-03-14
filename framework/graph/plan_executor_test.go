@@ -156,6 +156,16 @@ func TestBuildStepTaskHandlesNilTask(t *testing.T) {
 	}
 }
 
+func TestBuildStepTaskDoesNotReadArchitectState(t *testing.T) {
+	step := core.PlanStep{ID: "s1", Description: "do work"}
+	state := core.NewContext()
+	state.Set("architect.last_step_summary", "framework should not read this")
+	task := buildStepTask(&core.Task{}, nil, step, state)
+	if _, ok := task.Context["previous_step_result"]; ok {
+		t.Fatal("expected framework step task builder not to inject architect-specific context")
+	}
+}
+
 type isolatedExecutor struct {
 	shared *isolatedExecutorShared
 }

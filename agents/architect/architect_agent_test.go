@@ -595,6 +595,40 @@ func TestArchitectAgentRecoverStepFailureReturnsStructuredNotes(t *testing.T) {
 	}
 }
 
+func TestArchitectBuildPlanStepTaskInjectsPreviousSummary(t *testing.T) {
+	agent := &ArchitectAgent{}
+	parentTask := &core.Task{
+		ID:          "task-1",
+		Type:        core.TaskTypeCodeModification,
+		Instruction: "parent instruction",
+		Context: map[string]any{
+			"mode": "architect",
+		},
+	}
+	plan := &core.Plan{Goal: "ship the change"}
+	step := core.PlanStep{ID: "step-1", Description: "edit README"}
+	state := core.NewContext()
+	state.Set("architect.last_step_summary", "step-0 completed")
+
+	stepTask := agent.buildPlanStepTask(parentTask, plan, step, state)
+	if stepTask == nil {
+		t.Fatal("expected step task")
+	}
+	if got := stepTask.Context["previous_step_result"]; got != "step-0 completed" {
+		t.Fatalf("expected previous_step_result, got %v", got)
+	}
+	if got := stepTask.Context["plan_goal"]; got != "ship the change" {
+		t.Fatalf("expected plan_goal, got %v", got)
+	}
+	gotStep, ok := stepTask.Context["current_step"].(core.PlanStep)
+	if !ok {
+		t.Fatalf("expected typed current_step, got %T", stepTask.Context["current_step"])
+	}
+	if gotStep.ID != step.ID {
+		t.Fatalf("expected current_step %q, got %q", step.ID, gotStep.ID)
+	}
+}
+
 func TestArchitectAgentRerunFromStepInvalidatesDependentsAndReplays(t *testing.T) {
 	llm := &architectStubLLM{
 		responses: []*core.LLMResponse{

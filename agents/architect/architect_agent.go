@@ -161,6 +161,7 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 	executor := graph.PlanExecutor{
 		Options: graph.PlanExecutionOptions{
 			MaxRecoveryAttempts: 2,
+			BuildStepTask:       a.buildPlanStepTask,
 			Diagnose:            a.diagnoseStepFailure,
 			Recover:             a.recoverStepFailure,
 			BeforeStep: func(step core.PlanStep, stepTask *core.Task, state *core.Context) {
@@ -196,6 +197,34 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 	}
 	execResult.Data["summary"] = verifySummary
 	return execResult, nil
+}
+
+func (a *ArchitectAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task {
+	stepTask := core.CloneTask(parentTask)
+	if stepTask == nil {
+		stepTask = &core.Task{}
+	}
+	if stepTask.Context == nil {
+		stepTask.Context = map[string]any{}
+	}
+	stepTask.Context["current_step"] = step
+	if plan != nil && strings.TrimSpace(plan.Goal) != "" {
+		stepTask.Context["plan_goal"] = plan.Goal
+	}
+	if previous := strings.TrimSpace(state.GetString("architect.last_step_summary")); previous != "" {
+		stepTask.Context["previous_step_result"] = previous
+	}
+	stepTask.Instruction = fmt.Sprintf("Execute step %s only: %s", step.ID, step.Description)
+	if len(step.Files) > 0 {
+		stepTask.Instruction += fmt.Sprintf("\nRelevant files: %v", step.Files)
+	}
+	if step.Expected != "" {
+		stepTask.Instruction += fmt.Sprintf("\nExpected outcome: %s", step.Expected)
+	}
+	if step.Verification != "" {
+		stepTask.Instruction += fmt.Sprintf("\nVerification: %s", step.Verification)
+	}
+	return stepTask
 }
 
 func (a *ArchitectAgent) maybeSelectCandidate(ctx context.Context, task *core.Task, state *core.Context) (string, error) {
