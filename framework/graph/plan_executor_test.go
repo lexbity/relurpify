@@ -166,6 +166,23 @@ func TestBuildStepTaskDoesNotReadArchitectState(t *testing.T) {
 	}
 }
 
+func TestBuildStepTaskDoesNotCopyCallerSpecificContext(t *testing.T) {
+	step := core.PlanStep{ID: "s1", Description: "do work"}
+	task := buildStepTask(&core.Task{
+		Context: map[string]any{
+			"mode":                       "debug",
+			"stream_callback":            func(string) {},
+			"workflow_retrieval":         "retrieval text",
+			"workflow_retrieval_payload": map[string]any{"kind": "payload"},
+		},
+	}, nil, step, nil)
+	for _, key := range []string{"mode", "stream_callback", "workflow_retrieval", "workflow_retrieval_payload"} {
+		if _, ok := task.Context[key]; ok {
+			t.Fatalf("expected framework step task builder not to copy %q", key)
+		}
+	}
+}
+
 type isolatedExecutor struct {
 	shared *isolatedExecutorShared
 }

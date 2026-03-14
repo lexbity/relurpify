@@ -341,6 +341,8 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 	t.Cleanup(func() { _ = runtimeStore.Close() })
 
 	var seenRetrieval string
+	var seenMode string
+	var sawPayload bool
 	composite := frameworkmemory.NewCompositeRuntimeStore(workflowStore, runtimeStore, nil)
 	agent := &htn.HTNAgent{
 		Memory: composite,
@@ -348,6 +350,8 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, task *core.Task, _ *core.Context) (*core.Result, error) {
 			if task != nil && task.Context != nil {
 				seenRetrieval = fmt.Sprint(task.Context["workflow_retrieval"])
+				seenMode = fmt.Sprint(task.Context["mode"])
+				_, sawPayload = task.Context["workflow_retrieval_payload"]
 			}
 			return &core.Result{Success: true, Data: map[string]any{"text": "implemented subtask"}}, nil
 		}},
@@ -361,7 +365,10 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 		ID:          "htn-retrieval",
 		Type:        core.TaskTypeCodeGeneration,
 		Instruction: "implement the feature",
-		Context:     map[string]any{"workflow_id": "workflow-htn"},
+		Context: map[string]any{
+			"workflow_id": "workflow-htn",
+			"mode":        "debug",
+		},
 	}
 	if _, err := agent.Execute(context.Background(), task, state); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -371,6 +378,12 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 	}
 	if seenRetrieval == "" || seenRetrieval != "Prior result: Known API constraint" {
 		t.Fatalf("expected primitive step to receive retrieval text, got %q", seenRetrieval)
+	}
+	if seenMode != "debug" {
+		t.Fatalf("expected primitive step to preserve mode, got %q", seenMode)
+	}
+	if !sawPayload {
+		t.Fatal("expected primitive step to preserve workflow_retrieval_payload")
 	}
 }
 

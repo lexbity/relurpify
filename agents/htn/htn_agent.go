@@ -170,6 +170,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 	}
 	executor := &graph.PlanExecutor{
 		Options: graph.PlanExecutionOptions{
+			BuildStepTask: a.buildPlanStepTask,
 			AfterStep: func(step core.PlanStep, s *core.Context, result *core.Result) {
 				// Track completed steps for checkpoint resume support.
 				completed := core.StringSliceFromContext(s, "plan.completed_steps")
@@ -219,6 +220,31 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 		_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))
 	}
 	return result, nil
+}
+
+func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, step core.PlanStep, _ *core.Context) *core.Task {
+	stepTask := core.CloneTask(parentTask)
+	if stepTask == nil {
+		stepTask = &core.Task{}
+	}
+	if stepTask.Context == nil {
+		stepTask.Context = map[string]any{}
+	}
+	stepTask.Context["current_step"] = step
+	if plan != nil && strings.TrimSpace(plan.Goal) != "" {
+		stepTask.Context["plan_goal"] = plan.Goal
+	}
+	stepTask.Instruction = fmt.Sprintf("Execute step %s only: %s", step.ID, step.Description)
+	if len(step.Files) > 0 {
+		stepTask.Instruction += fmt.Sprintf("\nRelevant files: %v", step.Files)
+	}
+	if step.Expected != "" {
+		stepTask.Instruction += fmt.Sprintf("\nExpected outcome: %s", step.Expected)
+	}
+	if step.Verification != "" {
+		stepTask.Instruction += fmt.Sprintf("\nVerification: %s", step.Verification)
+	}
+	return stepTask
 }
 
 // delegateToPrimitive passes the task directly to the primitive executor.

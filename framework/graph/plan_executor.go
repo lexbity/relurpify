@@ -343,20 +343,6 @@ func defaultBuildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep) 
 		Metadata: metadata,
 		Context:  map[string]any{},
 	}
-	if task != nil && task.Context != nil {
-		if mode, ok := task.Context["mode"]; ok {
-			stepTask.Context["mode"] = mode
-		}
-		if cb, ok := task.Context["stream_callback"]; ok {
-			stepTask.Context["stream_callback"] = cb
-		}
-		if retrieval, ok := task.Context["workflow_retrieval"]; ok {
-			stepTask.Context["workflow_retrieval"] = retrieval
-		}
-		if retrievalPayload, ok := task.Context["workflow_retrieval_payload"]; ok {
-			stepTask.Context["workflow_retrieval_payload"] = retrievalPayload
-		}
-	}
 	stepTask.Instruction = fmt.Sprintf("Execute step %s only: %s", step.ID, step.Description)
 	if len(step.Files) > 0 {
 		stepTask.Instruction += fmt.Sprintf("\nRelevant files: %v", step.Files)
