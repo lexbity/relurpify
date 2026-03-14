@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -35,7 +36,7 @@ func (s *stubExecutor) Execute(ctx context.Context, task *core.Task, state *core
 	return &core.Result{Success: true}, nil
 }
 
-func TestPlanExecutorMergesParallelContextsDeterministically(t *testing.T) {
+func TestPlanExecutorSerializesReadyStepsWithoutBranchIsolation(t *testing.T) {
 	executor := &stubExecutor{}
 	plan := &core.Plan{
 		Steps: []core.PlanStep{
@@ -63,6 +64,10 @@ func TestPlanExecutorMergesParallelContextsDeterministically(t *testing.T) {
 	conflict, ok := state.Get("conflict")
 	require.True(t, ok)
 	require.Equal(t, "step-2", conflict)
+
+	executor.mu.Lock()
+	defer executor.mu.Unlock()
+	require.Equal(t, []string{"step-1", "step-2"}, executor.steps)
 }
 
 func TestPlanExecutorSkipsPreviouslyCompletedSteps(t *testing.T) {
@@ -149,4 +154,173 @@ func TestBuildStepTaskHandlesNilTask(t *testing.T) {
 	if task.Instruction == "" {
 		t.Fatalf("expected instruction to be populated")
 	}
+}
+
+type isolatedExecutor struct {
+	shared *isolatedExecutorShared
+}
+
+type isolatedExecutorShared struct {
+	started       chan string
+	release       chan struct{}
+	current       int32
+	maxConcurrent int32
+}
+
+func (e *isolatedExecutor) Initialize(config *core.Config) error { return nil }
+func (e *isolatedExecutor) Capabilities() []core.Capability      { return nil }
+func (e *isolatedExecutor) BuildGraph(task *core.Task) (*Graph, error) {
+	return nil, nil
+}
+
+func (e *isolatedExecutor) BranchAgent() (Agent, error) {
+	return &isolatedExecutor{shared: e.shared}, nil
+}
+
+func (e *isolatedExecutor) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	stepVal, ok := task.Context["current_step"]
+	if !ok {
+		return &core.Result{Success: true}, nil
+	}
+	step, ok := stepVal.(core.PlanStep)
+	if !ok {
+		return &core.Result{Success: true}, nil
+	}
+	current := atomic.AddInt32(&e.shared.current, 1)
+	for {
+		maxSeen := atomic.LoadInt32(&e.shared.maxConcurrent)
+		if current <= maxSeen {
+			break
+		}
+		if atomic.CompareAndSwapInt32(&e.shared.maxConcurrent, maxSeen, current) {
+			break
+		}
+	}
+	e.shared.started <- step.ID
+	<-e.shared.release
+	atomic.AddInt32(&e.shared.current, -1)
+	state.Set("completed."+step.ID, true)
+	return &core.Result{Success: true}, nil
+}
+
+func TestPlanExecutorRunsReadyStepsInParallelWithIsolatedBranchAgents(t *testing.T) {
+	shared := &isolatedExecutorShared{
+		started: make(chan string, 2),
+		release: make(chan struct{}),
+	}
+	executor := &isolatedExecutor{shared: shared}
+	plan := &core.Plan{
+		Steps: []core.PlanStep{
+			{ID: "step-1", Description: "first"},
+			{ID: "step-2", Description: "second"},
+		},
+		Dependencies: make(map[string][]string),
+	}
+	state := core.NewContext()
+	task := &core.Task{ID: "task-parallel", Instruction: "parallel steps"}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := (&PlanExecutor{}).Execute(context.Background(), executor, task, plan, state)
+		done <- err
+	}()
+
+	require.ElementsMatch(t, []string{"step-1", "step-2"}, []string{<-shared.started, <-shared.started})
+	close(shared.release)
+	require.NoError(t, <-done)
+	require.Equal(t, int32(2), atomic.LoadInt32(&shared.maxConcurrent))
+
+	val, ok := state.Get("completed.step-1")
+	require.True(t, ok)
+	require.Equal(t, true, val)
+	val, ok = state.Get("completed.step-2")
+	require.True(t, ok)
+	require.Equal(t, true, val)
+}
+
+type conflictingIsolatedExecutor struct {
+	shared *isolatedExecutorShared
+}
+
+func (e *conflictingIsolatedExecutor) Initialize(config *core.Config) error { return nil }
+func (e *conflictingIsolatedExecutor) Capabilities() []core.Capability      { return nil }
+func (e *conflictingIsolatedExecutor) BuildGraph(task *core.Task) (*Graph, error) {
+	return nil, nil
+}
+func (e *conflictingIsolatedExecutor) BranchAgent() (Agent, error) {
+	return &conflictingIsolatedExecutor{shared: e.shared}, nil
+}
+func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	stepVal, _ := task.Context["current_step"]
+	step, _ := stepVal.(core.PlanStep)
+	state.Set("shared.conflict", step.ID)
+	return &core.Result{Success: true}, nil
+}
+
+func TestPlanExecutorRejectsConflictingParallelStateMergesByDefault(t *testing.T) {
+	executor := &conflictingIsolatedExecutor{shared: &isolatedExecutorShared{}}
+	plan := &core.Plan{
+		Steps: []core.PlanStep{
+			{ID: "step-1", Description: "first"},
+			{ID: "step-2", Description: "second"},
+		},
+		Dependencies: make(map[string][]string),
+	}
+	state := core.NewContext()
+	task := &core.Task{ID: "task-conflict", Instruction: "parallel conflict"}
+
+	_, err := (&PlanExecutor{}).Execute(context.Background(), executor, task, plan, state)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parallel branch merge conflict")
+}
+
+type historyMutatingExecutor struct{}
+
+func (e *historyMutatingExecutor) Initialize(config *core.Config) error { return nil }
+func (e *historyMutatingExecutor) Capabilities() []core.Capability      { return nil }
+func (e *historyMutatingExecutor) BuildGraph(task *core.Task) (*Graph, error) {
+	return nil, nil
+}
+func (e *historyMutatingExecutor) BranchAgent() (Agent, error) {
+	return &historyMutatingExecutor{}, nil
+}
+func (e *historyMutatingExecutor) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	state.AddInteraction("assistant", "branch note", nil)
+	return &core.Result{Success: true}, nil
+}
+
+func TestPlanExecutorRejectsParallelHistoryMutationWithoutCustomMergePolicy(t *testing.T) {
+	plan := &core.Plan{
+		Steps: []core.PlanStep{
+			{ID: "step-1", Description: "first"},
+			{ID: "step-2", Description: "second"},
+		},
+		Dependencies: make(map[string][]string),
+	}
+	_, err := (&PlanExecutor{}).Execute(context.Background(), &historyMutatingExecutor{}, &core.Task{ID: "task-history"}, plan, core.NewContext())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "changed interaction history")
+}
+
+func TestPlanExecutorAllowsCustomParallelMergePolicy(t *testing.T) {
+	executor := &conflictingIsolatedExecutor{shared: &isolatedExecutorShared{}}
+	plan := &core.Plan{
+		Steps: []core.PlanStep{
+			{ID: "step-1", Description: "first"},
+			{ID: "step-2", Description: "second"},
+		},
+		Dependencies: make(map[string][]string),
+	}
+	state := core.NewContext()
+	task := &core.Task{ID: "task-custom-merge", Instruction: "parallel conflict"}
+
+	_, err := (&PlanExecutor{Options: PlanExecutionOptions{
+		MergeBranches: func(parent *core.Context, branches []BranchExecutionResult) error {
+			parent.Set("parallel.steps", []string{branches[0].Step.ID, branches[1].Step.ID})
+			parent.Set("parallel.merge_policy", "custom")
+			return nil
+		},
+	}}).Execute(context.Background(), executor, task, plan, state)
+	require.NoError(t, err)
+	require.Equal(t, "custom", state.GetString("parallel.merge_policy"))
 }

@@ -209,7 +209,7 @@ func TestBootstrapAgentRuntimeAppliesSelectedAgentDefinitionOverlayToEffectiveCo
 	workspace := t.TempDir()
 	agentsDir := filepath.Join(workspace, "agents")
 	requireNoError(t, os.MkdirAll(agentsDir, 0o755))
-requireNoError(t, os.WriteFile(filepath.Join(agentsDir, "reviewer.yaml"), []byte(`
+	requireNoError(t, os.WriteFile(filepath.Join(agentsDir, "reviewer.yaml"), []byte(`
 kind: AgentDefinition
 name: reviewer
 spec:
@@ -256,11 +256,43 @@ spec:
 	}
 }
 
+func TestBootstrapAgentRuntimeMigratesLegacyCodingManifestToEucloByDefault(t *testing.T) {
+	workspace := t.TempDir()
+	store, err := memory.NewHybridMemory(t.TempDir())
+	requireNoError(t, err)
+
+	boot, err := BootstrapAgentRuntime(workspace, AgentBootstrapOptions{
+		AgentID:    "coding",
+		AgentName:  "coding",
+		ConfigName: "coding",
+		Manifest: &manifest.AgentManifest{
+			Metadata: manifest.ManifestMetadata{Name: "coding"},
+			Spec: manifest.ManifestSpec{
+				Agent: &core.AgentRuntimeSpec{
+					Implementation: "react",
+					Mode:           core.AgentModePrimary,
+					Model:          core.AgentModelConfig{Provider: "ollama", Name: "manifest-model"},
+				},
+			},
+		},
+		Runner:       fsandbox.NewLocalCommandRunner(workspace, nil),
+		Memory:       store,
+		SkipASTIndex: true,
+	})
+	requireNoError(t, err)
+	if boot.Contract == nil || boot.Contract.AgentSpec == nil {
+		t.Fatal("expected effective contract")
+	}
+	if boot.Contract.AgentSpec.Implementation != "coding" {
+		t.Fatalf("expected migrated coding implementation, got %q", boot.Contract.AgentSpec.Implementation)
+	}
+}
+
 func TestSwitchAgentUsesEffectiveContractOverlay(t *testing.T) {
 	workspace := t.TempDir()
 	agentsDir := filepath.Join(workspace, "agents")
 	requireNoError(t, os.MkdirAll(agentsDir, 0o755))
-requireNoError(t, os.WriteFile(filepath.Join(agentsDir, "reviewer.yaml"), []byte(`
+	requireNoError(t, os.WriteFile(filepath.Join(agentsDir, "reviewer.yaml"), []byte(`
 kind: AgentDefinition
 name: reviewer
 spec:
@@ -285,9 +317,9 @@ spec:
 			OllamaModel:    "manifest-model",
 			OllamaEndpoint: "http://localhost:11434",
 		},
-		Tools: capability.NewRegistry(),
-		Model: nil,
-		Memory: nil,
+		Tools:        capability.NewRegistry(),
+		Model:        nil,
+		Memory:       nil,
 		IndexManager: nil,
 		SearchEngine: nil,
 		Registration: &authorization.AgentRegistration{

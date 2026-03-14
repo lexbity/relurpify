@@ -21,6 +21,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/eternal"
 )
 
@@ -98,8 +99,10 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 		return nil, fmt.Errorf("agent implementation required")
 	}
 	switch agentType {
-	case "react", "coding":
+	case "react":
 		return reactpkg.New(env), nil
+	case "coding":
+		return euclo.New(env), nil
 	case "architect":
 		return architectpkg.New(
 			env,
@@ -141,9 +144,14 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 		agent := plannerpkg.New(env)
 		agent.CheckpointPath = paths.CheckpointsDir()
 		return agent
-	case "react", "coding":
+	case "react":
 		agent := reactpkg.New(env)
 		agent.CheckpointPath = paths.CheckpointsDir()
+		return agent
+	case "coding":
+		agent := euclo.New(env)
+		agent.CheckpointPath = paths.CheckpointsDir()
+		_ = agent.Initialize(env.Config)
 		return agent
 	case "reflection":
 		agent := reflectionpkg.New(env, nil)

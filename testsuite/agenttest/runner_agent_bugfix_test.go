@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -154,19 +153,16 @@ func TestBuildAgentExposesDefaultAgenttestToolsForCoding(t *testing.T) {
 		t.Fatalf("buildAgent: %v", err)
 	}
 
-	reactAgent, ok := agent.(*reactpkg.ReActAgent)
-	if !ok {
-		t.Fatalf("expected ReActAgent, got %T", agent)
-	}
-	if reactAgent.Tools == nil {
-		t.Fatal("expected bootstrapped tool registry")
+	registry := extractCapabilityRegistry(agent)
+	if registry == nil {
+		t.Fatalf("expected capability registry, got %T", agent)
 	}
 	for _, required := range []string{"file_read", "file_write", "file_list"} {
-		if _, ok := reactAgent.Tools.Get(required); !ok {
+		if _, ok := registry.Get(required); !ok {
 			t.Fatalf("expected %s to remain registered", required)
 		}
 	}
-	tools := reactAgent.Tools.ModelCallableTools()
+	tools := registry.ModelCallableTools()
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		names = append(names, tool.Name())
@@ -284,11 +280,11 @@ spec:
 		t.Fatalf("buildAgent: %v", err)
 	}
 
-	reactAgent, ok := agent.(*reactpkg.ReActAgent)
-	if !ok {
-		t.Fatalf("expected ReActAgent, got %T", agent)
+	registry := extractCapabilityRegistry(agent)
+	if registry == nil {
+		t.Fatalf("expected capability registry, got %T", agent)
 	}
-	if _, ok := reactAgent.Tools.Get("cli_git"); !ok {
+	if _, ok := registry.Get("cli_git"); !ok {
 		t.Fatal("expected cli_git to survive bootstrap restriction")
 	}
 }
@@ -296,6 +292,8 @@ spec:
 func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := writeAgenttestManifest(t, workspace, "testfu")
+	ollama := newLoadedOllamaServer(t, "fake-model")
+	defer ollama.Close()
 
 	agentName := "testfu"
 	shared := &retryCheckShared{}
@@ -335,7 +333,7 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 			Workspace: WorkspaceSpec{Strategy: "derived"},
 			Models: []ModelSpec{{
 				Name:     "fake-model",
-				Endpoint: "http://localhost:11434",
+				Endpoint: ollama.URL,
 			}},
 			Cases: []CaseSpec{{
 				Name:   "retry_reset",
@@ -385,6 +383,8 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := writeAgenttestManifest(t, workspace, "testfu")
+	ollama := newLoadedOllamaServer(t, "fake-model")
+	defer ollama.Close()
 
 	shared := &retryCheckShared{}
 	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.AgentEnvironment) graph.Agent {
@@ -418,7 +418,7 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 			AgentName: "testfu",
 			Manifest:  filepath.ToSlash(strings.TrimPrefix(manifestPath, workspace+string(os.PathSeparator))),
 			Workspace: WorkspaceSpec{Strategy: "derived"},
-			Models:    []ModelSpec{{Name: "fake-model", Endpoint: "http://localhost:11434"}},
+			Models:    []ModelSpec{{Name: "fake-model", Endpoint: ollama.URL}},
 			Cases:     []CaseSpec{{Name: "no_retry", Prompt: "no retry"}},
 		},
 	}
@@ -448,6 +448,8 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := writeAgenttestManifest(t, workspace, "testfu")
+	ollama := newLoadedOllamaServer(t, "fake-model")
+	defer ollama.Close()
 
 	shared := &executionTimeoutShared{}
 	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ agentenv.AgentEnvironment) graph.Agent {
@@ -482,7 +484,7 @@ func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 			AgentName: "testfu",
 			Manifest:  filepath.ToSlash(strings.TrimPrefix(manifestPath, workspace+string(os.PathSeparator))),
 			Workspace: WorkspaceSpec{Strategy: "derived"},
-			Models:    []ModelSpec{{Name: "fake-model", Endpoint: "http://localhost:11434"}},
+			Models:    []ModelSpec{{Name: "fake-model", Endpoint: ollama.URL}},
 			Cases:     []CaseSpec{{Name: "separate_timeout", Prompt: "wait for context cancellation"}},
 		},
 	}

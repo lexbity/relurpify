@@ -138,7 +138,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
 	}
-	agentSpec := agents.ApplyManifestDefaults(registration.Manifest.Spec.Agent, registration.Manifest.Spec.Defaults)
+	agentSpec := agents.ApplyManifestDefaultsForAgent(registration.Manifest.Metadata.Name, registration.Manifest.Spec.Agent, registration.Manifest.Spec.Defaults)
 	if agentSpec.Model.Name == "" {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent.model.name")

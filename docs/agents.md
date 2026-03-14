@@ -12,7 +12,7 @@ A single agent type is not optimal for all tasks. Answering a question about cod
 
 | Agent | Strategy | Best for |
 |-------|----------|----------|
-| **CodingAgent** | Adaptive (delegates by mode) | General-purpose day-to-day work |
+| **CodingAgent** | Euclo runtime (mode/profile routed) | General-purpose day-to-day work |
 | **ArchitectAgent** | Plan → step-by-step ReAct with recovery | Multi-step tasks that benefit from an upfront plan |
 | **PipelineAgent** | Deterministic typed stages | Structured workflows with declared input/output contracts |
 | **PlannerAgent** | Plan generation only | Thinking through a task before acting |
@@ -23,6 +23,24 @@ A single agent type is not optimal for all tasks. Answering a question about cod
 ---
 
 ## How Agents Work
+
+### CodingAgent Rollout
+
+`coding` now resolves to the Euclo runtime by default. Euclo is the canonical
+coding runtime layer that selects mode, execution profile, retrieval policy,
+capability-family routing, verification policy, and proof surfaces before
+delegating to generic paradigms such as ReAct, Planner, or Reflection.
+
+For legacy manifests that still declare `implementation: react` under a
+`coding` manifest name, the runtime migrates them to Euclo by default during
+contract/bootstrap resolution.
+
+Compatibility control:
+
+- set `RELURPIFY_CODING_RUNTIME_COMPAT=legacy-react` to preserve the old
+  `coding -> react` behavior for migration/debugging
+- omit it, or set `RELURPIFY_CODING_RUNTIME_COMPAT=euclo`, to keep Euclo as
+  the default runtime
 
 ### The ReAct Loop
 
@@ -44,34 +62,6 @@ As the loop runs, the context grows: messages, tool results, file contents. Relu
 ### How Tool Calls are Authorised
 
 Before any tool executes, the permission manager checks it against the manifest's declared permissions. The outcome is one of three things: the call proceeds, it is blocked with an error, or it is paused and you are asked (HITL). The agent does not proceed until you respond. See [Permission Model](permission-model.md) for the full details.
-
----
-
-## CodingAgent
-
-The primary agent for interactive development work. It delegates to specialised strategies based on `mode`:
-
-| Mode | Strategy | What it focuses on |
-|------|----------|--------------------|
-| `code` | ReAct | Reading, editing, and creating files; running tests and builds |
-| `architect` | Candidate select → Plan → step-scoped ReAct | Chooses an approach for branchy tasks, then executes one step at a time with compact per-step context |
-| `ask` | ReAct (cautious) | Answers questions without modifying files |
-| `debug` | ReAct | Diagnostic focus: runs tests, reads stack traces, searches code |
-| `docs` | ReAct (write-focused) | Writes or updates documentation files |
-
-Two different "mode" concepts exist:
-
-1. `spec.agent.implementation` selects the top-level agent implementation (`coding`, `planner`, `react`, `reflection`, `eternal`).
-2. `spec.agent.mode` is the manifest role (`primary`, `subagent`, `system`).
-
-CodingAgent execution mode (`code`, `architect`, `ask`, `debug`, `docs`) is selected per task through task metadata or task context. In `architect` mode the caller can also request resume-from-checkpoint via task context so interrupted long plans continue from the latest saved step. Language-specific manifests are typically copied into `relurpify_cfg/agents/` from shared or repo-local templates. Once copied, those workspace manifests are authoritative. These differ in their skill stacks, declared executables, and system prompts.
-
-**Selecting a language-specific agent:**
-
-```bash
-relurpish chat --agent coding-go
-relurpish chat --agent coding-rust
-```
 
 ---
 

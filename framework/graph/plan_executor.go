@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
+	"reflect"
 	"strings"
 	"sync"
 )
@@ -15,6 +16,7 @@ type PlanExecutionOptions struct {
 	Recover             func(ctx context.Context, step core.PlanStep, stepTask *core.Task, state *core.Context, err error) (*StepRecovery, error)
 	BeforeStep          func(step core.PlanStep, stepTask *core.Task, state *core.Context)
 	AfterStep           func(step core.PlanStep, state *core.Context, result *core.Result)
+	MergeBranches       func(parent *core.Context, branches []BranchExecutionResult) error
 }
 
 // StepRecovery captures structured retry guidance after a failed step attempt.
@@ -27,6 +29,20 @@ type StepRecovery struct {
 // PlanExecutor runs plan steps with dependency awareness.
 type PlanExecutor struct {
 	Options PlanExecutionOptions
+}
+
+// BranchAgentProvider allows plan execution to allocate an isolated agent per
+// branch before any parallel step execution is attempted.
+type BranchAgentProvider interface {
+	BranchAgent() (Agent, error)
+}
+
+// BranchExecutionResult captures the isolated context and step metadata for one
+// completed parallel branch.
+type BranchExecutionResult struct {
+	Step            core.PlanStep
+	State           *core.Context
+	InitialSnapshot *core.ContextSnapshot
 }
 
 // Execute runs the plan using the provided executor agent and shared state.
@@ -104,35 +120,11 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 			continue
 		}
 
-		var wg sync.WaitGroup
-		errChan := make(chan error, len(readySteps))
-		branchCtxs := make([]*core.Context, len(readySteps))
-		for idx, step := range readySteps {
-			idx, step := idx, step
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				branchCtx := state.Clone()
-				if err := p.executeStep(ctx, executor, task, plan, step, branchCtx, maxRecovery); err != nil {
-					errChan <- err
-					return
-				}
-				branchCtxs[idx] = branchCtx
-			}()
+		executed, err := p.executeReadySteps(ctx, executor, task, plan, readySteps, state, maxRecovery)
+		if err != nil {
+			return nil, err
 		}
-		wg.Wait()
-		close(errChan)
-		for err := range errChan {
-			if err != nil {
-				return nil, err
-			}
-		}
-		for _, branchCtx := range branchCtxs {
-			if branchCtx != nil {
-				state.Merge(branchCtx)
-			}
-		}
-		for _, step := range readySteps {
+		for _, step := range executed {
 			completedSteps[step.ID] = true
 		}
 	}
@@ -190,6 +182,134 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *co
 		}
 	}
 	return fmt.Errorf("step %s failed: %w", step.ID, stepErr)
+}
+
+func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
+	if len(readySteps) == 0 {
+		return nil, nil
+	}
+	if len(readySteps) == 1 {
+		if err := p.executeStep(ctx, executor, task, plan, readySteps[0], state, maxRecovery); err != nil {
+			return nil, err
+		}
+		return readySteps, nil
+	}
+	provider, ok := executor.(BranchAgentProvider)
+	if !ok {
+		return p.executeReadyStepsSerial(ctx, executor, task, plan, readySteps, state, maxRecovery)
+	}
+	return p.executeReadyStepsParallel(ctx, provider, task, plan, readySteps, state, maxRecovery)
+}
+
+func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
+	executed := make([]core.PlanStep, 0, len(readySteps))
+	for _, step := range readySteps {
+		if err := p.executeStep(ctx, executor, task, plan, step, state, maxRecovery); err != nil {
+			return nil, err
+		}
+		executed = append(executed, step)
+	}
+	return executed, nil
+}
+
+func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider BranchAgentProvider, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
+	type branchResult struct {
+		index   int
+		step    core.PlanStep
+		state   *core.Context
+		initial *core.ContextSnapshot
+		err     error
+	}
+
+	var wg sync.WaitGroup
+	results := make(chan branchResult, len(readySteps))
+	for idx, step := range readySteps {
+		idx, step := idx, step
+		branchExecutor, err := provider.BranchAgent()
+		if err != nil {
+			return nil, err
+		}
+		wg.Add(1)
+		go func(exec Agent) {
+			defer wg.Done()
+			branchCtx := state.Clone()
+			initial := branchCtx.Snapshot()
+			err := p.executeStep(ctx, exec, task, plan, step, branchCtx, maxRecovery)
+			results <- branchResult{index: idx, step: step, state: branchCtx, initial: initial, err: err}
+		}(branchExecutor)
+	}
+	wg.Wait()
+	close(results)
+
+	branches := make([]BranchExecutionResult, len(readySteps))
+	for result := range results {
+		if result.err != nil {
+			return nil, result.err
+		}
+		branches[result.index] = BranchExecutionResult{
+			Step:            result.step,
+			State:           result.state,
+			InitialSnapshot: result.initial,
+		}
+	}
+	if p.Options.MergeBranches != nil {
+		if err := p.Options.MergeBranches(state, branches); err != nil {
+			return nil, err
+		}
+		return readySteps, nil
+	}
+	if err := mergeParallelBranches(state, branches); err != nil {
+		return nil, err
+	}
+	return readySteps, nil
+}
+
+func mergeParallelBranches(parent *core.Context, branches []BranchExecutionResult) error {
+	if parent == nil || len(branches) == 0 {
+		return nil
+	}
+	type deltaEntry struct {
+		step  string
+		value any
+	}
+	merged := core.NewContext()
+	changed := make(map[string]deltaEntry)
+	for _, branch := range branches {
+		if branch.State == nil || branch.InitialSnapshot == nil {
+			return fmt.Errorf("parallel branch merge requires isolated state snapshots")
+		}
+		final := branch.State.Snapshot()
+		if final == nil {
+			return fmt.Errorf("parallel branch merge requires branch snapshots")
+		}
+		if !reflect.DeepEqual(branch.InitialSnapshot.Variables, final.Variables) {
+			return fmt.Errorf("parallel branch merge conflict: step %s changed context variables outside merge policy", branch.Step.ID)
+		}
+		if !reflect.DeepEqual(branch.InitialSnapshot.Knowledge, final.Knowledge) {
+			return fmt.Errorf("parallel branch merge conflict: step %s changed context knowledge outside merge policy", branch.Step.ID)
+		}
+		if !reflect.DeepEqual(branch.InitialSnapshot.History, final.History) ||
+			!reflect.DeepEqual(branch.InitialSnapshot.CompressedHistory, final.CompressedHistory) ||
+			!reflect.DeepEqual(branch.InitialSnapshot.CompressionLog, final.CompressionLog) {
+			return fmt.Errorf("parallel branch merge conflict: step %s changed interaction history outside merge policy", branch.Step.ID)
+		}
+		for key, value := range final.State {
+			initialValue, existed := branch.InitialSnapshot.State[key]
+			if existed && reflect.DeepEqual(initialValue, value) {
+				continue
+			}
+			if existing, ok := changed[key]; ok {
+				if !reflect.DeepEqual(existing.value, value) {
+					return fmt.Errorf("parallel branch merge conflict on state key %q between steps %s and %s", key, existing.step, branch.Step.ID)
+				}
+				continue
+			}
+			changed[key] = deltaEntry{step: branch.Step.ID, value: value}
+			merged.Set(key, value)
+		}
+	}
+	parent.Merge(merged)
+	return nil
 }
 
 func buildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task {

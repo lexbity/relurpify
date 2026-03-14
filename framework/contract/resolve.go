@@ -28,7 +28,7 @@ func ResolveEffectiveAgentContract(workspace string, m *manifest.AgentManifest, 
 		return nil, fmt.Errorf("resolve resources: %w", err)
 	}
 
-	baseSpec := agents.ApplyManifestDefaults(m.Spec.Agent, m.Spec.Defaults)
+	baseSpec := agents.ApplyManifestDefaultsForAgent(m.Metadata.Name, m.Spec.Agent, m.Spec.Defaults)
 	if baseSpec == nil {
 		baseSpec = &core.AgentRuntimeSpec{}
 	}

@@ -132,6 +132,73 @@ spec:
 	require.Equal(t, []string{"missing-skill"}, contract.Sources.FailedSkills)
 }
 
+func TestResolveEffectiveAgentContractMigratesLegacyCodingReactManifestToCodingByDefault(t *testing.T) {
+	workspace := t.TempDir()
+	m := writeAgentManifestFixture(t, workspace, `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: coding
+  version: 1.0.0
+spec:
+  image: relurpify:test
+  runtime: gvisor
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: src/**
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+      disk_io: "1Gi"
+  agent:
+    implementation: react
+    mode: primary
+    model:
+      provider: ollama
+      name: qwen
+`)
+
+	contract, err := ResolveEffectiveAgentContract(workspace, m, ResolveOptions{})
+	require.NoError(t, err)
+	require.Equal(t, "coding", contract.AgentSpec.Implementation)
+}
+
+func TestResolveEffectiveAgentContractHonorsLegacyReactCompatToggle(t *testing.T) {
+	t.Setenv("RELURPIFY_CODING_RUNTIME_COMPAT", "legacy-react")
+	workspace := t.TempDir()
+	m := writeAgentManifestFixture(t, workspace, `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: coding
+  version: 1.0.0
+spec:
+  image: relurpify:test
+  runtime: gvisor
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: src/**
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+      disk_io: "1Gi"
+  agent:
+    implementation: react
+    mode: primary
+    model:
+      provider: ollama
+      name: qwen
+`)
+
+	contract, err := ResolveEffectiveAgentContract(workspace, m, ResolveOptions{})
+	require.NoError(t, err)
+	require.Equal(t, "react", contract.AgentSpec.Implementation)
+}
+
 func writeSkillFixture(t *testing.T, workspace, name, body string) {
 	t.Helper()
 	root := filepath.Join(workspace, "relurpify_cfg", "skills", name)

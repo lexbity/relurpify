@@ -17,6 +17,22 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
+func newLoadedOllamaServer(t *testing.T, modelName string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/tags":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"models":[{"name":%q,"model":%q,"digest":"sha256:test"}]}`, modelName, modelName)))
+		case "/api/ps":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"models":[{"name":%q,"model":%q,"digest":"sha256:test"}]}`, modelName, modelName)))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
 	manifest := config.New(workspace).ManifestFile()
@@ -520,6 +536,8 @@ func TestNewRunCaseLayoutUsesStructuredRunSubdirectories(t *testing.T) {
 
 func TestRunCaseFailsWhenBootstrapExceedsTimeout(t *testing.T) {
 	workspace := t.TempDir()
+	ollama := newLoadedOllamaServer(t, "qwen2.5-coder:14b")
+	defer ollama.Close()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
@@ -562,7 +580,7 @@ spec:
 			Workspace: WorkspaceSpec{Strategy: "derived"},
 			Models: []ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
-				Endpoint: "http://localhost:11434",
+				Endpoint: ollama.URL,
 			}},
 			Cases: []CaseSpec{{
 				Name:   "bootstrap_timeout",
