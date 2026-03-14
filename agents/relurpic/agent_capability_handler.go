@@ -12,7 +12,6 @@ import (
 	goalconpkg "github.com/lexcodex/relurpify/agents/goalcon"
 	htnpkg "github.com/lexcodex/relurpify/agents/htn"
 	pipelinepkg "github.com/lexcodex/relurpify/agents/pipeline"
-	pipelinestages "github.com/lexcodex/relurpify/agents/pipeline/stages"
 	plannerpkg "github.com/lexcodex/relurpify/agents/planner"
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	reflectionpkg "github.com/lexcodex/relurpify/agents/reflection"
@@ -75,7 +74,7 @@ func buildAgentFromEnvironment(env agentenv.AgentEnvironment, agentType string) 
 	case "planner":
 		agent = &plannerpkg.PlannerAgent{}
 	case "pipeline":
-		agent = &pipelinepkg.PipelineAgent{StageFactory: pipelinestages.CodingStageFactory{}}
+		agent = &pipelinepkg.PipelineAgent{}
 	case "reflection":
 		agent = &reflectionpkg.ReflectionAgent{Delegate: &reactpkg.ReActAgent{}}
 	case "chainer":

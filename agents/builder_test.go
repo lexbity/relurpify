@@ -78,6 +78,10 @@ func TestAgentBuilderBuildsAllSupportedAgentTypes(t *testing.T) {
 			agent, err := NewAgentBuilder().WithEnvironment(&env).Build(agentType)
 			require.NoError(t, err)
 			_, err = agent.BuildGraph(&core.Task{ID: "task-1", Instruction: "test"})
+			if agentType == "pipeline" {
+				require.ErrorContains(t, err, "pipeline stages not configured")
+				return
+			}
 			require.NoError(t, err)
 		})
 	}

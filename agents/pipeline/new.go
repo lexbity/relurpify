@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	pipelinestages "github.com/lexcodex/relurpify/agents/pipeline/stages"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
 )
@@ -21,7 +20,7 @@ func WithStageFactory(factory PipelineStageFactory) Option {
 }
 
 func New(env agentenv.AgentEnvironment, opts ...Option) *PipelineAgent {
-	agent := &PipelineAgent{StageFactory: pipelinestages.CodingStageFactory{}}
+	agent := &PipelineAgent{}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(agent)

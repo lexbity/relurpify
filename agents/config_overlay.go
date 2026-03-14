@@ -1,6 +1,9 @@
 package agents
 
 import (
+	"os"
+	"strings"
+
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 )
@@ -33,11 +36,42 @@ func ResolveAgentSpec(global *GlobalConfig, spec *core.AgentRuntimeSpec, overlay
 	return core.MergeAgentSpecs(base, ordered...)
 }
 
-// ApplyManifestDefaults returns the spec unchanged (manifest defaults no longer
-// carry an agent overlay — that layer was removed in the skills redesign).
-func ApplyManifestDefaults(spec *core.AgentRuntimeSpec, _ *manifest.ManifestDefaults) *core.AgentRuntimeSpec {
+const codingRuntimeCompatEnv = "RELURPIFY_CODING_RUNTIME_COMPAT"
+
+// ApplyManifestDefaultsForAgent applies rollout-era compatibility defaults for
+// manifests before global overlays and skills are resolved.
+func ApplyManifestDefaultsForAgent(agentName string, spec *core.AgentRuntimeSpec, _ *manifest.ManifestDefaults) *core.AgentRuntimeSpec {
 	if spec == nil {
 		return &core.AgentRuntimeSpec{}
 	}
-	return spec
+	cloned := *spec
+	agentName = strings.TrimSpace(strings.ToLower(agentName))
+	if agentName != "coding" && agentName != "coder" {
+		return &cloned
+	}
+	switch strings.TrimSpace(strings.ToLower(cloned.Implementation)) {
+	case "":
+		cloned.Implementation = "coding"
+	case "react":
+		if codingRuntimeCompatMode() != "legacy-react" {
+			cloned.Implementation = "coding"
+		}
+	}
+	return &cloned
+}
+
+// ApplyManifestDefaults returns the spec unchanged (manifest defaults no longer
+// carry an agent overlay — that layer was removed in the skills redesign).
+func ApplyManifestDefaults(spec *core.AgentRuntimeSpec, _ *manifest.ManifestDefaults) *core.AgentRuntimeSpec {
+	return ApplyManifestDefaultsForAgent("", spec, nil)
+}
+
+func codingRuntimeCompatMode() string {
+	mode := strings.TrimSpace(strings.ToLower(os.Getenv(codingRuntimeCompatEnv)))
+	switch mode {
+	case "legacy-react", "euclo":
+		return mode
+	default:
+		return "euclo"
+	}
 }

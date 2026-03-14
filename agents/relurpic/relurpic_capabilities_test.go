@@ -215,3 +215,18 @@ func TestExecutorInvokeCapabilityRejectsCoordinationTargets(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "coordination target")
 }
+
+func TestBuildAgentFromEnvironmentLeavesGenericPipelineUnconfigured(t *testing.T) {
+	agent, err := buildAgentFromEnvironment(agentenv.AgentEnvironment{
+		Model:  &relurpicCapabilityQueueModel{},
+		Config: &core.Config{Name: "generic-pipeline", Model: "stub"},
+	}, "pipeline")
+	require.NoError(t, err)
+
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "pipeline-generic",
+		Instruction: "run pipeline",
+	}, core.NewContext())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "pipeline stages not configured")
+}
