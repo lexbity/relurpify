@@ -13,7 +13,7 @@ surfaces that consume framework-native contracts.
 
 ## Why Multiple Agent Types
 
-A single agent type is not optimal for all tasks. Answering a question about code requires different reasoning than planning a refactor, which requires different reasoning than iteratively debugging a failing test. Relurpify ships seven agent types, each tuned for a different pattern:
+A single agent type is not optimal for all tasks. Answering a question about code requires different reasoning than planning a refactor, which requires different reasoning than iteratively debugging a failing test. Relurpify ships eight agent types, each tuned for a different pattern:
 
 | Agent | Strategy | Best for |
 |-------|----------|----------|
@@ -24,6 +24,7 @@ A single agent type is not optimal for all tasks. Answering a question about cod
 | **ReActAgent** | Thought → Action → Observation loop | Open-ended exploration and tool-heavy tasks |
 | **ReflectionAgent** | ReAct + self-critique pass | Tasks where output quality is more important than speed |
 | **EternalAgent** | Infinite loop with configurable pacing | Background monitoring or continuous autonomous work |
+| **BlackboardAgent** | Data-driven knowledge-source dispatch | Tasks where the next specialist depends on evolving shared state |
 
 ---
 
@@ -265,6 +266,48 @@ ReActAgent supports the same system node flags as PlannerAgent:
 - `UseStructuredPersistence` — includes a `PersistenceWriterNode` that persists the final output summary to declarative memory.
 
 Useful for exploratory tasks where you want the model to reason freely across the full tool set.
+
+---
+
+## BlackboardAgent
+
+BlackboardAgent is the repository's blackboard-paradigm runtime: multiple
+knowledge sources contribute to a shared workspace, and a controller selects the
+next specialist based on the current state instead of a fixed stage order.
+
+BlackboardAgent is graph-native, not a standalone private loop. The runtime is
+defined in [Developer Blackboard Runtime Note](dev/blackboard-runtime.md) and
+uses framework-owned execution surfaces for:
+
+- controller-cycle execution
+- capability-routed tool and sub-agent dispatch
+- resumable checkpointing
+- declarative/procedural retrieval and structured persistence
+- telemetry and audit visibility
+- graph preflight and capability placement checks
+
+The shipped runtime publishes namespaced blackboard state into `core.Context`,
+supports callback-based resumable checkpoints plus explicit checkpoint nodes,
+hydrates prior declarative/procedural memory before dispatch, persists
+declarative and procedural outputs through `PersistenceWriterNode`, and exposes
+controller telemetry plus an in-context audit trail.
+
+Built-in knowledge sources currently cover:
+
+- `Explorer`
+- `Analyzer`
+- `Planner`
+- `Review`
+- `Executor`
+- `FailureTriage`
+- `Verifier`
+- `Summarizer`
+
+Use BlackboardAgent when the problem benefits from data-driven specialist
+selection and shared intermediate state, not when you need a strictly linear
+workflow. Prefer ReActAgent, PlannerAgent, ArchitectAgent, or PipelineAgent
+when the task shape is already well-known and a simpler fixed execution model
+is easier to reason about.
 
 ---
 

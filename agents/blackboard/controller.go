@@ -62,6 +62,39 @@ func (c *Controller) Run(ctx context.Context, bb *Blackboard, tools *capability.
 	return fmt.Errorf("blackboard: reached cycle limit (%d) without satisfying goal", maxCycles)
 }
 
+// Snapshot returns controller metadata derived from the current blackboard
+// state. The current prototype controller does not persist cycle counters, so
+// callers must provide the last cycle they want exposed.
+func (c *Controller) Snapshot(bb *Blackboard, cycle int, termination, lastSource string) ControllerState {
+	maxCycles := c.MaxCycles
+	if maxCycles <= 0 {
+		maxCycles = defaultMaxCycles
+	}
+	return ControllerState{
+		Cycle:         cycle,
+		MaxCycles:     maxCycles,
+		Termination:   termination,
+		LastSource:    lastSource,
+		GoalSatisfied: bb != nil && bb.IsGoalSatisfied(),
+	}
+}
+
+// ExecutionMode describes how the controller schedules eligible knowledge
+// sources. Phase 11 keeps the runtime explicitly single-fire serial.
+func (c *Controller) ExecutionMode() ExecutionMode {
+	return ExecutionModeSingleFireSerial
+}
+
+// MergePolicy describes how future isolated KS branch results must be merged.
+func (c *Controller) MergePolicy() BranchMergePolicy {
+	return BranchMergePolicyRejectConflicts
+}
+
+// SelectionPolicy documents the current deterministic source selection rule.
+func (c *Controller) SelectionPolicy() string {
+	return "highest_priority_then_name"
+}
+
 // eligibleSources returns all KS whose CanActivate returns true, sorted
 // descending by priority.
 func (c *Controller) eligibleSources(bb *Blackboard) []KnowledgeSource {
@@ -72,7 +105,12 @@ func (c *Controller) eligibleSources(bb *Blackboard) []KnowledgeSource {
 		}
 	}
 	sort.Slice(eligible, func(i, j int) bool {
-		return eligible[i].Priority() > eligible[j].Priority()
+		left := ResolveKnowledgeSource(eligible[i])
+		right := ResolveKnowledgeSource(eligible[j])
+		if left.Spec.Priority == right.Spec.Priority {
+			return left.Spec.Name < right.Spec.Name
+		}
+		return left.Spec.Priority > right.Spec.Priority
 	})
 	return eligible
 }

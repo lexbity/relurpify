@@ -7,10 +7,17 @@
 // pattern well-suited for tasks where the exact shape of work is not known
 // upfront.
 //
-// Built-in knowledge sources cover the Explorer → Analyzer → Planner →
-// Executor → Verifier lifecycle. Custom knowledge sources can be registered
-// alongside the built-ins or used as a standalone replacement.
+// BlackboardAgent runs on the graph runtime: controller cycles, checkpoint
+// boundaries, capability invocation, retrieval, structured persistence,
+// telemetry, and resumable recovery are expressed through framework-owned
+// execution surfaces rather than a package-private loop.
 //
-// The blackboard workspace lives in core.Context for in-process sharing and is
-// flushed to a CheckpointPersister at configurable intervals for recovery.
+// Built-in knowledge sources cover the Explorer → Analyzer → Planner → Review
+// → Executor → FailureTriage → Verifier → Summarizer lifecycle. Custom
+// knowledge sources can be registered alongside the built-ins or used as a
+// standalone replacement.
+//
+// The blackboard runtime note in docs/dev/blackboard-runtime.md remains the
+// architectural contract for this package and now documents the implemented
+// graph-native model plus follow-on extension areas.
 package blackboard
