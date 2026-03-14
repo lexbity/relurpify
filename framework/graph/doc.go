@@ -6,7 +6,8 @@
 // A Graph is a directed acyclic structure of typed nodes. The executor runs
 // nodes in topological order, threading a Context through each step and
 // collecting results. Parallel branches clone the context, execute
-// independently, and merge via SharedContext when they converge.
+// independently, and merge explicit state deltas back into the parent context
+// when they converge.
 //
 // # Node types
 //
@@ -21,12 +22,15 @@
 // # Checkpointing
 //
 // graph_checkpoint.go supports pause-and-resume: a checkpoint captures the
-// full execution state (completed nodes, pending branches, context snapshot)
-// so interrupted workflows can continue without replaying from the start.
+// transition boundary (completed node, next node, execution counters, and
+// context snapshot) so interrupted workflows can continue without replaying
+// completed work.
 //
 // # Plan executor
 //
-// plan_executor.go compiles a Plan (ordered list of steps) into a linear
-// graph, enabling agents that produce structured plans to hand off execution
-// to the graph runtime with no manual wiring.
+// plan_executor.go executes dependency-aware plan/workflow steps against a
+// runtime executor contract with optional branch isolation, retry hooks, and
+// checkpoint-friendly state handling. Agent packages may supply step shaping,
+// recovery policy, completed-step tracking, and state conventions on top of
+// this framework-owned runner.
 package graph

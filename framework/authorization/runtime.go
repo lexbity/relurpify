@@ -104,8 +104,8 @@ func buildNetworkPolicy(perms []core.NetworkPermission) []sandbox.NetworkRule {
 	return rules
 }
 
-// Execute enforces permissions prior to delegating to the agent.
-func (r *AgentRegistration) Execute(ctx context.Context, agent graph.Agent, task *core.Task, state *core.Context) (*core.Result, error) {
+// Execute enforces permissions prior to delegating to the runtime executor.
+func (r *AgentRegistration) Execute(ctx context.Context, agent graph.WorkflowExecutor, task *core.Task, state *core.Context) (*core.Result, error) {
 	if agent == nil {
 		return nil, errors.New("agent missing")
 	}

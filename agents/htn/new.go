@@ -8,7 +8,7 @@ import (
 
 type Option func(*HTNAgent)
 
-func WithPrimitiveExec(agent graph.Agent) Option {
+func WithPrimitiveExec(agent graph.WorkflowExecutor) Option {
 	return func(htn *HTNAgent) {
 		htn.PrimitiveExec = agent
 	}

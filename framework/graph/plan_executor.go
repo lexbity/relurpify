@@ -13,6 +13,7 @@ import (
 type PlanExecutionOptions struct {
 	MaxRecoveryAttempts int
 	BuildStepTask       func(parentTask *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task
+	CompletedStepIDs    func(state *core.Context) []string
 	Diagnose            func(ctx context.Context, step core.PlanStep, err error) (string, error)
 	Recover             func(ctx context.Context, step core.PlanStep, stepTask *core.Task, state *core.Context, err error) (*StepRecovery, error)
 	BeforeStep          func(step core.PlanStep, stepTask *core.Task, state *core.Context)
@@ -32,22 +33,25 @@ type PlanExecutor struct {
 	Options PlanExecutionOptions
 }
 
-// BranchAgentProvider allows plan execution to allocate an isolated agent per
-// branch before any parallel step execution is attempted.
-type BranchAgentProvider interface {
-	BranchAgent() (Agent, error)
+// BranchExecutorProvider allows plan execution to allocate an isolated runtime
+// executor per branch before any parallel step execution is attempted.
+type BranchExecutorProvider interface {
+	BranchExecutor() (WorkflowExecutor, error)
 }
+
+// Deprecated: use BranchExecutorProvider.
+type BranchAgentProvider = BranchExecutorProvider
 
 // BranchExecutionResult captures the isolated context and step metadata for one
 // completed parallel branch.
 type BranchExecutionResult struct {
-	Step            core.PlanStep
-	State           *core.Context
-	InitialSnapshot *core.ContextSnapshot
+	Step  core.PlanStep
+	State *core.Context
+	Delta core.DirtyContextDelta
 }
 
 // Execute runs the plan using the provided executor agent and shared state.
-func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, state *core.Context) (*core.Result, error) {
+func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *core.Plan, state *core.Context) (*core.Result, error) {
 	if executor == nil {
 		return nil, fmt.Errorf("executor agent required")
 	}
@@ -71,7 +75,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor Agent, task *core.T
 	}
 
 	completedSteps := make(map[string]bool)
-	for _, stepID := range completedStepIDs(state) {
+	for _, stepID := range p.completedStepIDs(state) {
 		if stepID != "" {
 			completedSteps[stepID] = true
 		}
@@ -144,11 +148,14 @@ func ValidatePlan(plan *core.Plan) error {
 	return validatePlanDependencies(plan)
 }
 
-func completedStepIDs(state *core.Context) []string {
-	return core.StringSliceFromContext(state, "plan.completed_steps")
+func (p *PlanExecutor) completedStepIDs(state *core.Context) []string {
+	if p.Options.CompletedStepIDs != nil {
+		return p.Options.CompletedStepIDs(state)
+	}
+	return nil
 }
 
-func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context, maxRecovery int) error {
+func (p *PlanExecutor) executeStep(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context, maxRecovery int) error {
 	stepTask := defaultBuildStepTask(task, plan, step)
 	if p.Options.BuildStepTask != nil {
 		stepTask = p.Options.BuildStepTask(task, plan, step, state)
@@ -156,7 +163,6 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *co
 			stepTask = defaultBuildStepTask(task, plan, step)
 		}
 	}
-	state.Set("plan", plan)
 	if p.Options.BeforeStep != nil {
 		p.Options.BeforeStep(step, stepTask, state)
 	}
@@ -164,7 +170,6 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *co
 	var stepErr error
 	for attempt := 0; attempt <= maxRecovery; attempt++ {
 		if attempt > 0 {
-			stepTask.Instruction += fmt.Sprintf("\nRetry %d: Last error: %v", attempt, stepErr)
 			if p.Options.Recover != nil && stepErr != nil {
 				if recovery, err := p.Options.Recover(ctx, step, stepTask, state, stepErr); err == nil && recovery != nil {
 					applyStepRecovery(stepTask, state, step, recovery)
@@ -172,9 +177,17 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *co
 			}
 			if p.Options.Diagnose != nil && stepErr != nil {
 				if diagnosis, err := p.Options.Diagnose(ctx, step, stepErr); err == nil && diagnosis != "" {
-					stepTask.Instruction += fmt.Sprintf("\nDiagnosis: %s", diagnosis)
+					if stepTask.Context == nil {
+						stepTask.Context = map[string]any{}
+					}
+					stepTask.Context["step_diagnosis"] = diagnosis
 				}
 			}
+			if stepTask.Context == nil {
+				stepTask.Context = map[string]any{}
+			}
+			stepTask.Context["retry_attempt"] = attempt
+			stepTask.Context["retry_error"] = stepErr.Error()
 		}
 		res, err := executor.Execute(ctx, stepTask, state)
 		if err == nil && res != nil && res.Success {
@@ -191,7 +204,7 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor Agent, task *co
 	return fmt.Errorf("step %s failed: %w", step.ID, stepErr)
 }
 
-func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
+func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
 	if len(readySteps) == 0 {
 		return nil, nil
 	}
@@ -201,14 +214,14 @@ func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor Agent, ta
 		}
 		return readySteps, nil
 	}
-	provider, ok := executor.(BranchAgentProvider)
+	provider, ok := executor.(BranchExecutorProvider)
 	if !ok {
 		return p.executeReadyStepsSerial(ctx, executor, task, plan, readySteps, state, maxRecovery)
 	}
 	return p.executeReadyStepsParallel(ctx, provider, task, plan, readySteps, state, maxRecovery)
 }
 
-func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor Agent, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
+func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor WorkflowExecutor, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
 	executed := make([]core.PlanStep, 0, len(readySteps))
 	for _, step := range readySteps {
 		if err := p.executeStep(ctx, executor, task, plan, step, state, maxRecovery); err != nil {
@@ -219,30 +232,29 @@ func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor Age
 	return executed, nil
 }
 
-func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider BranchAgentProvider, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
+func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider BranchExecutorProvider, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
 	type branchResult struct {
-		index   int
-		step    core.PlanStep
-		state   *core.Context
-		initial *core.ContextSnapshot
-		err     error
+			index int
+			step  core.PlanStep
+			state *core.Context
+			delta core.DirtyContextDelta
+			err   error
 	}
 
 	var wg sync.WaitGroup
 	results := make(chan branchResult, len(readySteps))
 	for idx, step := range readySteps {
 		idx, step := idx, step
-		branchExecutor, err := provider.BranchAgent()
-		if err != nil {
-			return nil, err
-		}
-		wg.Add(1)
-		go func(exec Agent) {
-			defer wg.Done()
-			branchCtx := state.Clone()
-			initial := branchCtx.Snapshot()
-			err := p.executeStep(ctx, exec, task, plan, step, branchCtx, maxRecovery)
-			results <- branchResult{index: idx, step: step, state: branchCtx, initial: initial, err: err}
+			branchExecutor, err := provider.BranchExecutor()
+			if err != nil {
+				return nil, err
+			}
+			wg.Add(1)
+			go func(exec WorkflowExecutor) {
+				defer wg.Done()
+				branchCtx := state.Clone()
+				err := p.executeStep(ctx, exec, task, plan, step, branchCtx, maxRecovery)
+			results <- branchResult{index: idx, step: step, state: branchCtx, delta: branchCtx.DirtyDelta(), err: err}
 		}(branchExecutor)
 	}
 	wg.Wait()
@@ -254,9 +266,9 @@ func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider B
 			return nil, result.err
 		}
 		branches[result.index] = BranchExecutionResult{
-			Step:            result.step,
-			State:           result.state,
-			InitialSnapshot: result.initial,
+			Step:  result.step,
+			State: result.state,
+			Delta: result.delta,
 		}
 	}
 	if p.Options.MergeBranches != nil {
@@ -282,29 +294,19 @@ func mergeParallelBranches(parent *core.Context, branches []BranchExecutionResul
 	merged := core.NewContext()
 	changed := make(map[string]deltaEntry)
 	for _, branch := range branches {
-		if branch.State == nil || branch.InitialSnapshot == nil {
-			return fmt.Errorf("parallel branch merge requires isolated state snapshots")
+		if branch.State == nil {
+			return fmt.Errorf("parallel branch merge requires isolated state")
 		}
-		final := branch.State.Snapshot()
-		if final == nil {
-			return fmt.Errorf("parallel branch merge requires branch snapshots")
-		}
-		if !reflect.DeepEqual(branch.InitialSnapshot.Variables, final.Variables) {
+		if len(branch.Delta.VariableValues) > 0 {
 			return fmt.Errorf("parallel branch merge conflict: step %s changed context variables outside merge policy", branch.Step.ID)
 		}
-		if !reflect.DeepEqual(branch.InitialSnapshot.Knowledge, final.Knowledge) {
+		if len(branch.Delta.KnowledgeValues) > 0 {
 			return fmt.Errorf("parallel branch merge conflict: step %s changed context knowledge outside merge policy", branch.Step.ID)
 		}
-		if !reflect.DeepEqual(branch.InitialSnapshot.History, final.History) ||
-			!reflect.DeepEqual(branch.InitialSnapshot.CompressedHistory, final.CompressedHistory) ||
-			!reflect.DeepEqual(branch.InitialSnapshot.CompressionLog, final.CompressionLog) {
+		if branch.Delta.HistoryChanged || branch.Delta.CompressedChanged || branch.Delta.LogChanged || branch.Delta.PhaseChanged {
 			return fmt.Errorf("parallel branch merge conflict: step %s changed interaction history outside merge policy", branch.Step.ID)
 		}
-		for key, value := range final.State {
-			initialValue, existed := branch.InitialSnapshot.State[key]
-			if existed && reflect.DeepEqual(initialValue, value) {
-				continue
-			}
+		for key, value := range branch.Delta.StateValues {
 			if existing, ok := changed[key]; ok {
 				if !reflect.DeepEqual(existing.value, value) {
 					return fmt.Errorf("parallel branch merge conflict on state key %q between steps %s and %s", key, existing.step, branch.Step.ID)
@@ -327,6 +329,7 @@ func defaultBuildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep) 
 	var metadata map[string]string
 	var taskID string
 	var taskType core.TaskType
+	var instruction string
 	if task != nil && task.Metadata != nil {
 		metadata = make(map[string]string, len(task.Metadata))
 		for k, v := range task.Metadata {
@@ -336,31 +339,35 @@ func defaultBuildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep) 
 	if task != nil {
 		taskID = task.ID
 		taskType = task.Type
+		instruction = task.Instruction
+	}
+	if strings.TrimSpace(instruction) == "" {
+		instruction = step.Description
 	}
 	stepTask := &core.Task{
-		ID:       taskID,
-		Type:     taskType,
-		Metadata: metadata,
-		Context:  map[string]any{},
-	}
-	stepTask.Instruction = fmt.Sprintf("Execute step %s only: %s", step.ID, step.Description)
-	if len(step.Files) > 0 {
-		stepTask.Instruction += fmt.Sprintf("\nRelevant files: %v", step.Files)
-	}
-	if step.Expected != "" {
-		stepTask.Instruction += fmt.Sprintf("\nExpected outcome: %s", step.Expected)
-	}
-	if step.Verification != "" {
-		stepTask.Instruction += fmt.Sprintf("\nVerification: %s", step.Verification)
+		ID:          taskID,
+		Type:        taskType,
+		Instruction: instruction,
+		Metadata:    metadata,
+		Context:     map[string]any{},
 	}
 	if plan != nil && plan.Goal != "" {
 		stepTask.Context["plan_goal"] = plan.Goal
 	}
 	stepTask.Context["current_step"] = step
+	if step.Expected != "" {
+		stepTask.Context["step_expected"] = step.Expected
+	}
+	if step.Verification != "" {
+		stepTask.Context["step_verification"] = step.Verification
+	}
+	if len(step.Files) > 0 {
+		stepTask.Context["step_files"] = append([]string{}, step.Files...)
+	}
 	return stepTask
 }
 
-func applyStepRecovery(stepTask *core.Task, state *core.Context, step core.PlanStep, recovery *StepRecovery) {
+func applyStepRecovery(stepTask *core.Task, _ *core.Context, _ core.PlanStep, recovery *StepRecovery) {
 	if stepTask == nil || recovery == nil {
 		return
 	}
@@ -369,23 +376,13 @@ func applyStepRecovery(stepTask *core.Task, state *core.Context, step core.PlanS
 	}
 	if recovery.Diagnosis != "" {
 		stepTask.Context["recovery_diagnosis"] = recovery.Diagnosis
-		stepTask.Instruction += fmt.Sprintf("\nRecovery diagnosis: %s", recovery.Diagnosis)
 	}
 	if len(recovery.Notes) > 0 {
 		stepTask.Context["recovery_notes"] = append([]string{}, recovery.Notes...)
-		stepTask.Instruction += fmt.Sprintf("\nRecovery notes:\n- %s", strings.Join(recovery.Notes, "\n- "))
 	}
 	if len(recovery.Context) > 0 {
 		for k, v := range recovery.Context {
 			stepTask.Context[k] = v
-		}
-	}
-	if state != nil {
-		key := "plan.recovery." + step.ID
-		state.Set(key+".diagnosis", recovery.Diagnosis)
-		state.Set(key+".notes", append([]string{}, recovery.Notes...))
-		if len(recovery.Context) > 0 {
-			state.Set(key+".context", recovery.Context)
 		}
 	}
 }

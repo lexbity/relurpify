@@ -17,9 +17,9 @@ import (
 	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
 )
 
-// HTNAgent implements graph.Agent using a Hierarchical Task Network (HTN)
+// HTNAgent implements graph.WorkflowExecutor using a Hierarchical Task Network (HTN)
 // planning approach. Complex tasks are decomposed into primitive subtasks by
-// the method library; a primitive executor (default: any graph.Agent) then
+// the method library; a primitive executor (default: any graph.WorkflowExecutor) then
 // runs each leaf step.
 //
 // The agent is small-model-friendly: the LLM never decides how to structure
@@ -38,14 +38,14 @@ type HTNAgent struct {
 	// PrimitiveExec is the executor used for leaf subtasks.
 	// It must be initialised before Execute is called.
 	// When nil, HTNAgent falls back to a no-op that marks steps successful.
-	PrimitiveExec graph.Agent
+	PrimitiveExec graph.WorkflowExecutor
 	// CheckpointPath is an optional filesystem path for checkpoint storage.
 	CheckpointPath string
 
 	initialised bool
 }
 
-// Initialize satisfies graph.Agent. It wires configuration and ensures the
+// Initialize satisfies graph.WorkflowExecutor. It wires configuration and ensures the
 // method library is populated.
 func (a *HTNAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
@@ -171,6 +171,9 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 	executor := &graph.PlanExecutor{
 		Options: graph.PlanExecutionOptions{
 			BuildStepTask: a.buildPlanStepTask,
+			CompletedStepIDs: func(s *core.Context) []string {
+				return core.StringSliceFromContext(s, "plan.completed_steps")
+			},
 			AfterStep: func(step core.PlanStep, s *core.Context, result *core.Result) {
 				// Track completed steps for checkpoint resume support.
 				completed := core.StringSliceFromContext(s, "plan.completed_steps")
@@ -199,7 +202,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 		},
 	}
 
-	primitiveAgent := graph.Agent(a.primitiveAgent())
+	primitiveAgent := graph.WorkflowExecutor(a.primitiveAgent())
 	if surfaces.Workflow != nil || surfaces.Runtime != nil {
 		primitiveAgent = &recordingPrimitiveAgent{
 			delegate:   primitiveAgent,
@@ -254,7 +257,7 @@ func (a *HTNAgent) delegateToPrimitive(ctx context.Context, task *core.Task, sta
 }
 
 // primitiveAgent returns the configured primitive executor or a no-op fallback.
-func (a *HTNAgent) primitiveAgent() graph.Agent {
+func (a *HTNAgent) primitiveAgent() graph.WorkflowExecutor {
 	if a.PrimitiveExec != nil {
 		return a.PrimitiveExec
 	}
@@ -279,7 +282,7 @@ func (n *noopAgent) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*
 }
 
 type recordingPrimitiveAgent struct {
-	delegate graph.Agent
+	delegate graph.WorkflowExecutor
 	runtime  memory.RuntimeMemoryStore
 	workflow interface {
 		PutKnowledge(context.Context, memory.KnowledgeRecord) error

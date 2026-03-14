@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // NodeTransitionRecord captures a completed node and the next resume boundary.
@@ -51,7 +53,7 @@ func (g *Graph) CreateCheckpoint(taskID, completedNodeID, nextNodeID string, res
 	if ctx == nil {
 		return nil, fmt.Errorf("nil context")
 	}
-	ctxClone := ctx.Clone()
+	ctxClone := checkpointContextClone(ctx)
 	if transition == nil {
 		transition = &NodeTransitionRecord{
 			CompletedNodeID: completedNodeID,
@@ -127,6 +129,7 @@ func (g *Graph) ResumeFromCheckpoint(ctx context.Context, checkpoint *GraphCheck
 	}
 	g.executionPath = append([]string(nil), checkpoint.ExecutionPath...)
 	g.lastCheckpointNode = checkpoint.CompletedNodeID
+	g.nodesSinceCheckpoint = 0
 	g.execMu.Unlock()
 	if telemetry, ok := g.telemetry.(CheckpointTelemetry); ok {
 		telemetry.OnCheckpointRestored(checkpoint.TaskID, checkpoint.CheckpointID)
@@ -245,4 +248,11 @@ func (g *Graph) computeHash() string {
 	}
 	sum := sha256.Sum256([]byte(sb.String()))
 	return hex.EncodeToString(sum[:])
+}
+
+func checkpointContextClone(ctx *Context) *Context {
+	if ctx == nil {
+		return nil
+	}
+	return core.NewContextFromSnapshot(ctx.Snapshot(), ctx.Registry())
 }

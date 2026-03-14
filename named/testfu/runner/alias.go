@@ -43,4 +43,4 @@ var FilterSuiteCasesByTags = agenttestpkg.FilterSuiteCasesByTags
 
 // RegisterNamedAgent is retained as a compatibility no-op so existing
 // named/testfu callers do not need to change imports during the runner merge.
-func RegisterNamedAgent(_ string, _ func(string, agentenv.AgentEnvironment) graph.Agent) {}
+func RegisterNamedAgent(_ string, _ func(string, agentenv.AgentEnvironment) graph.WorkflowExecutor) {}

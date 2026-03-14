@@ -61,8 +61,8 @@ func (h *AgentCapabilityHandler) Invoke(ctx context.Context, state *core.Context
 	return toToolResult(result), nil
 }
 
-func buildAgentFromEnvironment(env agentenv.AgentEnvironment, agentType string) (graph.Agent, error) {
-	var agent graph.Agent
+func buildAgentFromEnvironment(env agentenv.AgentEnvironment, agentType string) (graph.WorkflowExecutor, error) {
+	var agent graph.WorkflowExecutor
 	switch strings.ToLower(strings.TrimSpace(agentType)) {
 	case "react":
 		agent = &reactpkg.ReActAgent{}

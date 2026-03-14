@@ -224,6 +224,31 @@ func TestResumeFromCheckpointAfterParallelBranchCompletionSkipsCompletedBranches
 	require.Equal(t, 1, branchBRuns)
 }
 
+func TestGraphParallelBranchesRejectConflictingStateWrites(t *testing.T) {
+	g := graph.NewGraph()
+	start := &countingNode{id: "start", kind: graph.NodeTypeSystem}
+	branchA := &countingNode{id: "branch-a", kind: graph.NodeTypeSystem, run: func(state *core.Context) {
+		state.Set("parallel.conflict", "a")
+	}}
+	branchB := &countingNode{id: "branch-b", kind: graph.NodeTypeSystem, run: func(state *core.Context) {
+		state.Set("parallel.conflict", "b")
+	}}
+	done := graph.NewTerminalNode("done")
+
+	require.NoError(t, g.AddNode(start))
+	require.NoError(t, g.AddNode(branchA))
+	require.NoError(t, g.AddNode(branchB))
+	require.NoError(t, g.AddNode(done))
+	require.NoError(t, g.SetStart(start.ID()))
+	require.NoError(t, g.AddEdge(start.ID(), branchA.ID(), nil, true))
+	require.NoError(t, g.AddEdge(start.ID(), branchB.ID(), nil, true))
+	require.NoError(t, g.AddEdge(start.ID(), done.ID(), nil, false))
+
+	_, err := g.Execute(context.Background(), core.NewContext())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parallel branch merge conflict")
+}
+
 func TestResumeFromCompletedCheckpointReturnsStoredResultWithoutRestart(t *testing.T) {
 	g := graph.NewGraph()
 	done := graph.NewTerminalNode("done")

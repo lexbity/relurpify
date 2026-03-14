@@ -1,8 +1,6 @@
 package core
 
 import (
-	"bytes"
-	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,6 +53,19 @@ type Context struct {
 	maxHistory        int
 	maxSnapshot       int
 	registry          *ObjectRegistry
+	stateShared       bool
+	variablesShared   bool
+	knowledgeShared   bool
+	historyShared     bool
+	compressedShared  bool
+	logShared         bool
+	dirtyState        map[string]struct{}
+	dirtyVariables    map[string]struct{}
+	dirtyKnowledge    map[string]struct{}
+	historyDirty      bool
+	compressedDirty   bool
+	compressionDirty  bool
+	phaseDirty        bool
 }
 
 // NewContext builds an empty execution context with sensible history limits so
@@ -71,6 +82,9 @@ func NewContext() *Context {
 		maxHistory:        200,
 		maxSnapshot:       32,
 		registry:          NewObjectRegistry(),
+		dirtyState:        make(map[string]struct{}),
+		dirtyVariables:    make(map[string]struct{}),
+		dirtyKnowledge:    make(map[string]struct{}),
 	}
 }
 
@@ -79,6 +93,7 @@ func (c *Context) SetExecutionPhase(phase string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.phase = phase
+	c.phaseDirty = true
 }
 
 // ExecutionPhase returns the current phase.
@@ -119,7 +134,9 @@ func (c *Context) StateSnapshot() map[string]interface{} {
 func (c *Context) Set(key string, value interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.ensureStateWritableLocked()
 	c.state[key] = value
+	c.dirtyState[key] = struct{}{}
 }
 
 // GetVariable returns a temporary variable.
@@ -134,7 +151,9 @@ func (c *Context) GetVariable(key string) (interface{}, bool) {
 func (c *Context) SetVariable(key string, value interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.ensureVariablesWritableLocked()
 	c.variables[key] = value
+	c.dirtyVariables[key] = struct{}{}
 }
 
 // Merge copies another context into the current one. It is primarily used when
@@ -181,14 +200,24 @@ func (c *Context) Merge(other *Context) {
 		}] = struct{}{}
 	}
 
+	c.ensureStateWritableLocked()
+	c.ensureVariablesWritableLocked()
+	c.ensureKnowledgeWritableLocked()
+	c.ensureHistoryWritableLocked()
+	c.ensureCompressedWritableLocked()
+	c.ensureLogWritableLocked()
+
 	for k, v := range other.state {
 		c.state[k] = v
+		c.dirtyState[k] = struct{}{}
 	}
 	for k, v := range other.variables {
 		c.variables[k] = v
+		c.dirtyVariables[k] = struct{}{}
 	}
 	for k, v := range other.knowledge {
 		c.knowledge[k] = v
+		c.dirtyKnowledge[k] = struct{}{}
 	}
 	for _, interaction := range other.history {
 		key := interactionKey{
@@ -202,6 +231,7 @@ func (c *Context) Merge(other *Context) {
 		}
 		existingInteractions[key] = struct{}{}
 		c.history = append(c.history, interaction)
+		c.historyDirty = true
 	}
 
 	existingCompressed := make(map[compressedKey]struct{}, len(c.compressedHistory))
@@ -225,6 +255,7 @@ func (c *Context) Merge(other *Context) {
 		}
 		existingCompressed[key] = struct{}{}
 		c.compressedHistory = append(c.compressedHistory, cc)
+		c.compressedDirty = true
 	}
 
 	existingEvents := make(map[compressionEventKey]struct{}, len(c.compressionLog))
@@ -250,6 +281,7 @@ func (c *Context) Merge(other *Context) {
 		}
 		existingEvents[key] = struct{}{}
 		c.compressionLog = append(c.compressionLog, event)
+		c.compressionDirty = true
 	}
 	if other.interactionIDCtr > c.interactionIDCtr {
 		c.interactionIDCtr = other.interactionIDCtr
@@ -257,30 +289,36 @@ func (c *Context) Merge(other *Context) {
 	c.smartTruncateHistoryLocked()
 }
 
-// Clone returns a deep copy of the context, enabling speculative work in
-// separate goroutines. Gob encoding keeps the implementation compact while
-// handling nested maps/slices without bespoke copy logic.
+// Clone returns a clone of the context suitable for speculative work in
+// separate goroutines. Map-backed state is deep-copied so nested mutations in a
+// branch cannot leak back into the parent; history-oriented slices remain
+// copy-on-write because they are append-dominated and much larger in practice.
 func (c *Context) Clone() *Context {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	clone := NewContext()
-	if err := cloneFromGob(c, clone); err == nil {
-		clone.phase = c.phase
-		clone.registry = c.registry
-		return clone
-	}
-
-	// Fallback to a shallow copy so we do not silently drop state on gob failures.
-	clone.state = shallowCopyMap(c.state)
-	clone.variables = shallowCopyMap(c.variables)
-	clone.knowledge = shallowCopyMap(c.knowledge)
-	clone.history = append([]Interaction(nil), c.history...)
-	clone.compressedHistory = append([]CompressedContext(nil), c.compressedHistory...)
-	clone.compressionLog = append([]CompressionEvent(nil), c.compressionLog...)
+	clone.state = deepCopyMap(c.state)
+	clone.variables = deepCopyMap(c.variables)
+	clone.knowledge = deepCopyMap(c.knowledge)
+	clone.history = c.history
+	clone.compressedHistory = c.compressedHistory
+	clone.compressionLog = c.compressionLog
 	clone.interactionIDCtr = c.interactionIDCtr
 	clone.phase = c.phase
+	clone.maxHistory = c.maxHistory
+	clone.maxSnapshot = c.maxSnapshot
 	clone.registry = c.registry
+	clone.stateShared = false
+	clone.variablesShared = false
+	clone.knowledgeShared = false
+	clone.historyShared = true
+	clone.compressedShared = true
+	clone.logShared = true
+	c.historyShared = true
+	c.compressedShared = true
+	c.logShared = true
+	clone.resetDirtyTrackingLocked()
 	return clone
 }
 
@@ -331,6 +369,13 @@ func (c *Context) Restore(snapshot *ContextSnapshot) error {
 	c.compressionLog = snapshot.CompressionLog
 	c.interactionIDCtr = snapshot.InteractionIDCounter
 	c.phase = snapshot.Phase
+	c.stateShared = false
+	c.variablesShared = false
+	c.knowledgeShared = false
+	c.historyShared = false
+	c.compressedShared = false
+	c.logShared = false
+	c.resetDirtyTrackingLocked()
 	c.smartTruncateHistoryLocked()
 	return nil
 }
@@ -422,6 +467,117 @@ func (c *Context) ClearHandleScope(scope string) {
 	}
 }
 
+// NewContextFromSnapshot rebuilds a context from a serializable snapshot while
+// preserving the shared object registry for non-serializable handles.
+func NewContextFromSnapshot(snapshot *ContextSnapshot, registry *ObjectRegistry) *Context {
+	ctx := NewContext()
+	if snapshot != nil {
+		_ = ctx.Restore(snapshot)
+	}
+	if registry != nil {
+		ctx.registry = registry
+	}
+	return ctx
+}
+
+// DirtyContextDelta summarizes mutations applied since the context was
+// created, cloned, restored, or explicitly reset.
+type DirtyContextDelta struct {
+	StateValues       map[string]interface{}
+	VariableValues    map[string]interface{}
+	KnowledgeValues   map[string]interface{}
+	HistoryChanged    bool
+	CompressedChanged bool
+	LogChanged        bool
+	PhaseChanged      bool
+}
+
+// DirtyDelta reports the currently tracked mutations.
+func (c *Context) DirtyDelta() DirtyContextDelta {
+	if c == nil {
+		return DirtyContextDelta{}
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	delta := DirtyContextDelta{
+		StateValues:       make(map[string]interface{}, len(c.dirtyState)),
+		VariableValues:    make(map[string]interface{}, len(c.dirtyVariables)),
+		KnowledgeValues:   make(map[string]interface{}, len(c.dirtyKnowledge)),
+		HistoryChanged:    c.historyDirty,
+		CompressedChanged: c.compressedDirty,
+		LogChanged:        c.compressionDirty,
+		PhaseChanged:      c.phaseDirty,
+	}
+	for key := range c.dirtyState {
+		delta.StateValues[key] = deepCopyValue(c.state[key])
+	}
+	for key := range c.dirtyVariables {
+		delta.VariableValues[key] = deepCopyValue(c.variables[key])
+	}
+	for key := range c.dirtyKnowledge {
+		delta.KnowledgeValues[key] = deepCopyValue(c.knowledge[key])
+	}
+	return delta
+}
+
+func (c *Context) resetDirtyTrackingLocked() {
+	c.dirtyState = make(map[string]struct{})
+	c.dirtyVariables = make(map[string]struct{})
+	c.dirtyKnowledge = make(map[string]struct{})
+	c.historyDirty = false
+	c.compressedDirty = false
+	c.compressionDirty = false
+	c.phaseDirty = false
+}
+
+func (c *Context) ensureStateWritableLocked() {
+	if !c.stateShared {
+		return
+	}
+	c.state = shallowCopyMap(c.state)
+	c.stateShared = false
+}
+
+func (c *Context) ensureVariablesWritableLocked() {
+	if !c.variablesShared {
+		return
+	}
+	c.variables = shallowCopyMap(c.variables)
+	c.variablesShared = false
+}
+
+func (c *Context) ensureKnowledgeWritableLocked() {
+	if !c.knowledgeShared {
+		return
+	}
+	c.knowledge = shallowCopyMap(c.knowledge)
+	c.knowledgeShared = false
+}
+
+func (c *Context) ensureHistoryWritableLocked() {
+	if !c.historyShared {
+		return
+	}
+	c.history = append([]Interaction(nil), c.history...)
+	c.historyShared = false
+}
+
+func (c *Context) ensureCompressedWritableLocked() {
+	if !c.compressedShared {
+		return
+	}
+	c.compressedHistory = append([]CompressedContext(nil), c.compressedHistory...)
+	c.compressedShared = false
+}
+
+func (c *Context) ensureLogWritableLocked() {
+	if !c.logShared {
+		return
+	}
+	c.compressionLog = append([]CompressionEvent(nil), c.compressionLog...)
+	c.logShared = false
+}
+
 func shallowCopyMap(src map[string]interface{}) map[string]interface{} {
 	if src == nil {
 		return nil
@@ -442,56 +598,6 @@ func deepCopyMap(src map[string]interface{}) map[string]interface{} {
 		dst[k] = deepCopyValue(v)
 	}
 	return dst
-}
-
-func cloneFromGob(src *Context, dst *Context) error {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(src.state); err != nil {
-		return err
-	}
-	if err := enc.Encode(src.variables); err != nil {
-		return err
-	}
-	if err := enc.Encode(src.knowledge); err != nil {
-		return err
-	}
-	if err := enc.Encode(src.history); err != nil {
-		return err
-	}
-	if err := enc.Encode(src.compressedHistory); err != nil {
-		return err
-	}
-	if err := enc.Encode(src.compressionLog); err != nil {
-		return err
-	}
-	if err := enc.Encode(src.interactionIDCtr); err != nil {
-		return err
-	}
-
-	dec := gob.NewDecoder(bytes.NewBuffer(buf.Bytes()))
-	if err := dec.Decode(&dst.state); err != nil {
-		return err
-	}
-	if err := dec.Decode(&dst.variables); err != nil {
-		return err
-	}
-	if err := dec.Decode(&dst.knowledge); err != nil {
-		return err
-	}
-	if err := dec.Decode(&dst.history); err != nil {
-		return err
-	}
-	if err := dec.Decode(&dst.compressedHistory); err != nil {
-		return err
-	}
-	if err := dec.Decode(&dst.compressionLog); err != nil {
-		return err
-	}
-	if err := dec.Decode(&dst.interactionIDCtr); err != nil {
-		return err
-	}
-	return nil
 }
 
 func deepCopyValue(value interface{}) interface{} {
@@ -531,6 +637,7 @@ func deepCopyValue(value interface{}) interface{} {
 func (c *Context) AddInteraction(role, content string, metadata map[string]interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.ensureHistoryWritableLocked()
 	id := c.interactionIDCtr
 	c.interactionIDCtr++
 	c.history = append(c.history, Interaction{
@@ -540,6 +647,7 @@ func (c *Context) AddInteraction(role, content string, metadata map[string]inter
 		Timestamp: time.Now().UTC(),
 		Metadata:  metadata,
 	})
+	c.historyDirty = true
 	c.smartTruncateHistoryLocked()
 }
 
@@ -560,8 +668,10 @@ func (c *Context) TrimHistory(keep int) {
 	if len(c.history) <= keep {
 		return
 	}
+	c.ensureHistoryWritableLocked()
 	start := len(c.history) - keep
 	c.history = append([]Interaction(nil), c.history[start:]...)
+	c.historyDirty = true
 }
 
 // LatestInteraction returns the most recent interaction if any.
@@ -590,7 +700,9 @@ func (c *Context) smartTruncateHistoryLocked() {
 func (c *Context) SetKnowledge(key string, value interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.ensureKnowledgeWritableLocked()
 	c.knowledge[key] = value
+	c.dirtyKnowledge[key] = struct{}{}
 }
 
 // GetKnowledge retrieves derived info.
@@ -645,9 +757,15 @@ func (c *Context) CompressHistory(keepRecentCount int, llm LanguageModel, strate
 	if compressibleCount > len(c.history) {
 		compressibleCount = len(c.history)
 	}
+	c.ensureHistoryWritableLocked()
+	c.ensureCompressedWritableLocked()
+	c.ensureLogWritableLocked()
 	c.history = append([]Interaction(nil), c.history[compressibleCount:]...)
 	c.compressedHistory = append(c.compressedHistory, *compressed)
 	c.compressionLog = append(c.compressionLog, event)
+	c.historyDirty = true
+	c.compressedDirty = true
+	c.compressionDirty = true
 	return nil
 }
 
@@ -662,7 +780,9 @@ func (c *Context) GetFullHistory() ([]CompressedContext, []Interaction) {
 func (c *Context) AppendCompressedContext(cc CompressedContext) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.ensureCompressedWritableLocked()
 	c.compressedHistory = append(c.compressedHistory, cc)
+	c.compressedDirty = true
 }
 
 // GetContextForLLM renders the context as a string suitable for prompts.

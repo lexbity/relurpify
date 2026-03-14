@@ -31,6 +31,10 @@ An edge connects two nodes. Unconditional edges are always followed. Conditional
 
 A graph is a set of nodes and edges with a designated start node. `graph.Execute(ctx, sharedCtx)` walks the graph until a `Terminal` node is reached, a cycle is detected, or an error occurs.
 
+Before execution, the runtime validates the graph structure and runs preflight
+against the active capability catalog when one is configured. Validation and
+preflight results are cached until the graph structure or catalog changes.
+
 ---
 
 ## Node Types
@@ -71,7 +75,8 @@ graph.Execute(ctx, sharedCtx)
   (repeat until Terminal or error)
 ```
 
-**Cycle detection** — the runtime tracks visited (node, context-hash) pairs. If the same node is reached with identical context twice, it returns an error rather than looping forever.
+**Cycle detection** — the runtime tracks per-node visit counts and rejects runs
+that exceed the configured `maxNodeVisits` threshold.
 
 **Telemetry** — every node execution is recorded: node type and name, start/end time, input token count, output summary, errors. Records are collected in the shared context and forwarded to the telemetry sinks.
 
@@ -99,20 +104,20 @@ The conditional edge checks whether the LLM's last response contained any tool c
 Agents construct their graph in `Initialize()` or lazily in `Execute()`.
 
 ```go
-g := graph.New("my-workflow")
+g := graph.NewGraph()
 
-think := g.AddNode(graph.NodeLLM, "think", thinkFn)
-act   := g.AddNode(graph.NodeTool, "act", actFn)
-done  := g.AddNode(graph.NodeTerminal, "done", nil)
+think := &graph.LLMNode{}
+act := graph.NewToolNode("act", tool, nil, registry)
+done := graph.NewTerminalNode("done")
 
-// Conditional: if last LLM response had tool calls, go to act
-g.AddEdge(think, act, hasToolCallsFn)
-// Otherwise, done
-g.AddEdge(think, done, noToolCallsFn)
-// After acting, always think again
-g.AddEdge(act, think, nil)
+_ = g.AddNode(think)
+_ = g.AddNode(act)
+_ = g.AddNode(done)
+_ = g.AddEdge(think.ID(), act.ID(), hasToolCallsFn, false)
+_ = g.AddEdge(think.ID(), done.ID(), noToolCallsFn, false)
+_ = g.AddEdge(act.ID(), think.ID(), nil, false)
 
-g.SetStart(think)
+_ = g.SetStart(think.ID())
 result, err := g.Execute(ctx, sharedCtx)
 ```
 
@@ -120,25 +125,47 @@ result, err := g.Execute(ctx, sharedCtx)
 
 ## PlanExecutor
 
-`PlanExecutor` takes a `Plan` (from PlannerAgent) and executes each `PlanStep` as its own graph run. Steps are executed in order; a step failure stops the executor unless the step is marked optional.
+`PlanExecutor` is a framework-owned workflow runner for dependency-aware
+`PlanStep` execution. It drives a `graph.WorkflowExecutor` through ready steps,
+supports optional branch isolation for parallel-ready steps, and leaves
+step-shaping, completed-step tracking, and recovery policy to the caller.
 
-This is how `CodingAgent` in `architect` mode works: PlannerAgent produces the plan, PlanExecutor drives the coding agent through each step.
+Higher-level agent paradigms such as architect- and HTN-style execution build
+on this runner, but the runner itself is runtime-oriented rather than
+agent-specific.
 
 ---
 
 ## Checkpointing
 
-`GraphCheckpoint` captures the full graph state at any node boundary: current node, context snapshot, pending tool calls, telemetry so far. Checkpoints can be saved and restored, enabling pause-and-resume across process restarts.
+`GraphCheckpoint` captures a transition boundary: the completed node, the next
+node, transition metadata, execution counters, and a context snapshot.
+Checkpoints can be saved and restored, enabling pause-and-resume across process
+restarts without replaying completed work.
 
-> **Status:** The checkpoint infrastructure (`CheckpointStore`, `GraphCheckpoint`) is implemented but is not yet wired into the default execution path. Graph runs do not currently auto-checkpoint.
+Checkpointing is wired into the default execution path in two ways:
+
+- callback-based checkpointing via `WithCheckpointing(every N, saveFn)`
+- explicit checkpoint persistence via `CheckpointNode`
 
 ---
 
 ## Parallel Branches
 
-The graph supports forking into parallel branches by cloning the shared context per branch and executing branches concurrently. Results are merged by a broker node.
+The graph supports forking into parallel branches by cloning the parent
+`Context` per branch and executing branches concurrently.
 
-> **Status:** Parallel branching is architecturally supported. The default execution is sequential. Ollama handles one request at a time, so parallel LLM branches queue behind each other regardless.
+Branch results are not merged by merging whole contexts. Instead, each branch
+reports explicit context deltas and the default merge policy:
+
+- merges non-conflicting state-key writes
+- rejects conflicting writes to the same key
+- rejects variable mutations
+- rejects knowledge mutations
+- rejects history/compression/phase mutations
+
+This makes branch convergence deterministic and surfaces hidden shared-state
+coupling as an error instead of silently overwriting one branch with another.
 
 ---
 

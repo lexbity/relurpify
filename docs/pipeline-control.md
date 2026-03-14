@@ -110,7 +110,7 @@ resume lookup for latest valid stage
 Phase 4: Pipeline Agent
 
 Add PipelineAgent.
-implements graph.Agent
+implements graph.WorkflowExecutor
 owns a PipelineRunner
 builds stage lists per task/mode
 Keep BuildGraph support.

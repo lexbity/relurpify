@@ -8,7 +8,7 @@ import (
 
 type Option func(*ReflectionAgent)
 
-func New(env agentenv.AgentEnvironment, delegate graph.Agent, opts ...Option) *ReflectionAgent {
+func New(env agentenv.AgentEnvironment, delegate graph.WorkflowExecutor, opts ...Option) *ReflectionAgent {
 	if delegate == nil {
 		delegate = reactpkg.New(env)
 	}

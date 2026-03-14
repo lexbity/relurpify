@@ -52,7 +52,7 @@ func (builderTestAgent) BuildGraph(*core.Task) (*graph.Graph, error) {
 }
 
 func TestAgentBuilderBuildsAllSupportedAgentTypes(t *testing.T) {
-	namedfactory.RegisterNamedAgent("testfu", func(string, AgentEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(string, AgentEnvironment) graph.WorkflowExecutor {
 		return builderTestAgent{}
 	})
 

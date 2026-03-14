@@ -60,7 +60,7 @@ framework/
 
 **Agent & task** — `Agent`, `AgentRuntimeSpec`, `Task`, `Plan`. The spec merge/overlay system composes manifest defaults, skill contributions, agent-definition overlays, and runtime overrides into the effective runtime contract.
 
-**Context** — `Context` is the mutable state bag threaded through every graph node and tool call. It holds messages, tool observations, budget signals, and per-scope key/value pairs. `SharedContext` merges results from parallel graph branches.
+**Context** — `Context` is the mutable state bag threaded through every graph node and tool call. It holds messages, tool observations, budget signals, and per-scope key/value pairs. `SharedContext` is a richer working-set and budget wrapper used by higher-level runtimes; graph-level parallel branch merging is handled by explicit context-delta rules in `framework/graph`.
 
 **Memory classes and state data classes** — graph state is typed to control what each node may read and write.
 
@@ -215,6 +215,9 @@ Before execution begins, `Graph.Preflight(catalog)` validates all nodes against 
 
 Agents set a catalog via `g.SetCapabilityCatalog(registry)` before calling `Execute`.
 
+Resolved node contracts, validation results, and preflight reports are cached
+until the graph structure or capability catalog changes.
+
 ### Checkpoint semantics
 
 `GraphCheckpoint` captures execution state at a transition boundary — not at a node entry point:
@@ -231,6 +234,27 @@ Context           snapshot of the full context at that boundary
 `CreateCheckpoint` and `CreateCompressedCheckpoint` both accept a `NodeTransitionRecord` so the caller controls what reason is recorded.
 
 The callback-based `WithCheckpointing(every N, saveFn)` is available for incremental checkpointing during execution without inserting explicit `CheckpointNode` steps.
+
+Automatic callback checkpointing is active when `WithCheckpointing` is set.
+Explicit `CheckpointNode` steps remain useful when a graph wants a visible,
+first-class persistence boundary in the workflow itself.
+
+### Parallel branch merge semantics
+
+Parallel graph edges clone the parent `Context`, execute each branch
+independently, and merge only the branch's explicit state-key writes back into
+the parent.
+
+The default merge policy:
+
+- allows non-conflicting state writes
+- rejects conflicting writes to the same state key
+- rejects variable mutations
+- rejects knowledge mutations
+- rejects history, compressed-history, compression-log, and phase mutations
+
+This keeps branch execution deterministic and makes merge conflicts explicit
+instead of silently accepting last-writer-wins behavior.
 
 ### System node interfaces
 

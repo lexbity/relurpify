@@ -17,7 +17,7 @@ type GoalConAgent struct {
 	Memory       memory.MemoryStore
 	Config       *core.Config
 	Operators    *OperatorRegistry
-	PlanExecutor graph.Agent
+	PlanExecutor graph.WorkflowExecutor
 	MaxDepth     int
 	InitialState map[string]bool
 	GoalOverride *GoalCondition
@@ -98,6 +98,9 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, state *core
 
 	executor := &graph.PlanExecutor{
 		Options: graph.PlanExecutionOptions{
+			CompletedStepIDs: func(s *core.Context) []string {
+				return core.StringSliceFromContext(s, "plan.completed_steps")
+			},
 			AfterStep: func(step core.PlanStep, s *core.Context, _ *core.Result) {
 				completed := core.StringSliceFromContext(s, "plan.completed_steps")
 				completed = append(completed, step.ID)
@@ -134,7 +137,7 @@ func (a *GoalConAgent) maxDepth() int {
 	return a.MaxDepth
 }
 
-func (a *GoalConAgent) planExecutorAgent() graph.Agent {
+func (a *GoalConAgent) planExecutorAgent() graph.WorkflowExecutor {
 	if a.PlanExecutor != nil {
 		return a.PlanExecutor
 	}

@@ -28,7 +28,7 @@ type Agent struct {
 }
 
 func init() {
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.AgentEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.AgentEnvironment) graph.WorkflowExecutor {
 		return New(env, WithWorkspace(workspace))
 	})
 }

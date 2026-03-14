@@ -15,7 +15,7 @@ import (
 // ReflectionAgent reviews outputs and triggers revisions when needed.
 type ReflectionAgent struct {
 	Reviewer      core.LanguageModel
-	Delegate      graph.Agent
+	Delegate      graph.WorkflowExecutor
 	Config        *core.Config
 	maxIterations int
 }

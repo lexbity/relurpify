@@ -231,7 +231,7 @@ func (a *Agent) eucloTask(task *core.Task, envelope TaskEnvelope, classification
 	return cloned
 }
 
-func (a *Agent) buildExecutorForRouting(routing CapabilityFamilyRouting) (graph.Agent, error) {
+func (a *Agent) buildExecutorForRouting(routing CapabilityFamilyRouting) (graph.WorkflowExecutor, error) {
 	env := a.Environment
 	switch routing.PrimaryFamilyID {
 	case "planning":

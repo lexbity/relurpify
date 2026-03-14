@@ -471,7 +471,7 @@ func requireNoErr(t *testing.T, err error) {
 	}
 }
 
-// stubAgent is a test helper implementing graph.Agent.
+// stubAgent is a test helper implementing graph.WorkflowExecutor.
 type stubAgent struct {
 	onExecute func(context.Context, *core.Task, *core.Context) (*core.Result, error)
 }

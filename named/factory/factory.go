@@ -27,7 +27,7 @@ import (
 
 var namedAgentRegistry sync.Map
 
-func RegisterNamedAgent(name string, ctor func(workspace string, env agentenv.AgentEnvironment) graph.Agent) {
+func RegisterNamedAgent(name string, ctor func(workspace string, env agentenv.AgentEnvironment) graph.WorkflowExecutor) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || ctor == nil {
 		return
@@ -35,12 +35,12 @@ func RegisterNamedAgent(name string, ctor func(workspace string, env agentenv.Ag
 	namedAgentRegistry.Store(name, ctor)
 }
 
-func instantiateRegisteredNamedAgent(workspace, name string, env agentenv.AgentEnvironment) (graph.Agent, bool) {
+func instantiateRegisteredNamedAgent(workspace, name string, env agentenv.AgentEnvironment) (graph.WorkflowExecutor, bool) {
 	value, ok := namedAgentRegistry.Load(strings.ToLower(strings.TrimSpace(name)))
 	if !ok {
 		return nil, false
 	}
-	ctor, ok := value.(func(workspace string, env agentenv.AgentEnvironment) graph.Agent)
+	ctor, ok := value.(func(workspace string, env agentenv.AgentEnvironment) graph.WorkflowExecutor)
 	if !ok || ctor == nil {
 		return nil, false
 	}
@@ -90,7 +90,7 @@ func ScopeRegistry(registry *capability.Registry, scope ToolScope) *capability.R
 	return cloned
 }
 
-func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.Agent, error) {
+func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 	agentType := strings.ToLower(strings.TrimSpace(spec.Implementation))
 	if agentType == "" && spec.Composition != nil {
 		agentType = strings.ToLower(strings.TrimSpace(spec.Composition.Type))
@@ -137,7 +137,7 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 	}
 }
 
-func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) graph.Agent {
+func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) graph.WorkflowExecutor {
 	paths := config.New(workspace)
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "planner":

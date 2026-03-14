@@ -10,9 +10,9 @@ import (
 	namedfactory "github.com/lexcodex/relurpify/named/factory"
 )
 
-// BuildFromSpec constructs an agent from the manifest/runtime spec and wires
+// BuildFromSpec constructs a workflow executor from the manifest/runtime spec and wires
 // the shared environment through InitializeEnvironment when supported.
-func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.Agent, error) {
+func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 	agentType := strings.ToLower(strings.TrimSpace(spec.Implementation))
 	if agentType == "" && spec.Composition != nil {
 		agentType = strings.ToLower(strings.TrimSpace(spec.Composition.Type))
@@ -36,7 +36,7 @@ func (b *AgentBuilder) WithEnvironment(env *agentenv.AgentEnvironment) *AgentBui
 	return b
 }
 
-func (b *AgentBuilder) Build(agentType string) (graph.Agent, error) {
+func (b *AgentBuilder) Build(agentType string) (graph.WorkflowExecutor, error) {
 	if b.env == nil {
 		return nil, fmt.Errorf("agent builder requires environment")
 	}

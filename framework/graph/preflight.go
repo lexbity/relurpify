@@ -49,6 +49,7 @@ func (g *Graph) SetCapabilityCatalog(catalog CapabilityCatalog) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.capabilityCatalog = catalog
+	g.invalidatePreflightLocked()
 }
 
 func (g *Graph) LastPreflightReport() *PreflightReport {
@@ -65,9 +66,21 @@ func (g *Graph) LastPreflightReport() *PreflightReport {
 
 func (g *Graph) Preflight() (*PreflightReport, error) {
 	g.mu.RLock()
+	if !g.preflightDirty && g.lastPreflight != nil {
+		report := *g.lastPreflight
+		report.Issues = append([]PreflightIssue(nil), g.lastPreflight.Issues...)
+		report.Placements = append([]PlacementDecision(nil), g.lastPreflight.Placements...)
+		err := g.lastPreflightErr
+		g.mu.RUnlock()
+		return &report, err
+	}
 	nodes := make([]Node, 0, len(g.nodes))
+	contracts := make(map[string]NodeContract, len(g.nodeContracts))
 	for _, node := range g.nodes {
 		nodes = append(nodes, node)
+	}
+	for id, contract := range g.nodeContracts {
+		contracts[id] = contract
 	}
 	catalog := g.capabilityCatalog
 	checkpointingEnabled := g.checkpointInterval > 0
@@ -89,7 +102,10 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 		}
 	}
 	for _, node := range nodes {
-		contract := ResolveNodeContract(node)
+		contract, ok := contracts[node.ID()]
+		if !ok {
+			contract = ResolveNodeContract(node)
+		}
 		if issue := checkpointIssue(node.ID(), contract, checkpointingEnabled || hasCheckpointNode); issue != nil {
 			report.Issues = append(report.Issues, *issue)
 		}
@@ -104,13 +120,16 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 			}
 		}
 	}
+	var err error
+	if report.HasBlockingIssues() {
+		err = blockingPreflightError(report.Issues)
+	}
 	g.mu.Lock()
 	g.lastPreflight = report
+	g.lastPreflightErr = err
+	g.preflightDirty = false
 	g.mu.Unlock()
-	if report.HasBlockingIssues() {
-		return report, blockingPreflightError(report.Issues)
-	}
-	return report, nil
+	return report, err
 }
 
 func checkpointIssue(nodeID string, contract NodeContract, available bool) *PreflightIssue {

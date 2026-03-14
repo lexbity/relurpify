@@ -10,7 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 )
 
-// BlackboardAgent implements graph.Agent using the Blackboard architecture.
+// BlackboardAgent implements graph.WorkflowExecutor using the Blackboard architecture.
 // A shared Blackboard workspace is maintained across a control loop; multiple
 // KnowledgeSource specialists read and write it each cycle. Execution order is
 // data-driven rather than structurally predetermined.
@@ -34,7 +34,7 @@ type BlackboardAgent struct {
 	initialised bool
 }
 
-// Initialize satisfies graph.Agent. It wires configuration and ensures
+// Initialize satisfies graph.WorkflowExecutor. It wires configuration and ensures
 // knowledge sources are populated.
 func (a *BlackboardAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg

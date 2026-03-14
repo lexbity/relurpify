@@ -80,10 +80,15 @@ func TestPlanExecutorSkipsPreviouslyCompletedSteps(t *testing.T) {
 		Dependencies: make(map[string][]string),
 	}
 	state := core.NewContext()
-	state.Set("plan.completed_steps", []string{"step-1"})
 	task := &core.Task{ID: "task-2", Instruction: "resume"}
 
-	pe := &PlanExecutor{}
+	pe := &PlanExecutor{
+		Options: PlanExecutionOptions{
+			CompletedStepIDs: func(*core.Context) []string {
+				return []string{"step-1"}
+			},
+		},
+	}
 	result, err := pe.Execute(context.Background(), executor, task, plan, state)
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -137,9 +142,7 @@ func TestPlanExecutorAppliesStructuredRecoveryBeforeRetry(t *testing.T) {
 	result, err := pe.Execute(context.Background(), executor, task, plan, state)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.Equal(t, "inspect the failing file", state.GetString("plan.recovery.step-1.diagnosis"))
-	notes, _ := state.Get("plan.recovery.step-1.notes")
-	require.NotNil(t, notes)
+	require.Equal(t, 2, executor.attempts)
 }
 
 func TestBuildStepTaskHandlesNilTask(t *testing.T) {
@@ -151,8 +154,8 @@ func TestBuildStepTaskHandlesNilTask(t *testing.T) {
 	if task.ID != "" {
 		t.Fatalf("expected empty id, got %q", task.ID)
 	}
-	if task.Instruction == "" {
-		t.Fatalf("expected instruction to be populated")
+	if task.Instruction != step.Description {
+		t.Fatalf("expected fallback instruction %q, got %q", step.Description, task.Instruction)
 	}
 }
 
@@ -200,7 +203,7 @@ func (e *isolatedExecutor) BuildGraph(task *core.Task) (*Graph, error) {
 	return nil, nil
 }
 
-func (e *isolatedExecutor) BranchAgent() (Agent, error) {
+func (e *isolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &isolatedExecutor{shared: e.shared}, nil
 }
 
@@ -274,7 +277,7 @@ func (e *conflictingIsolatedExecutor) Capabilities() []core.Capability      { re
 func (e *conflictingIsolatedExecutor) BuildGraph(task *core.Task) (*Graph, error) {
 	return nil, nil
 }
-func (e *conflictingIsolatedExecutor) BranchAgent() (Agent, error) {
+func (e *conflictingIsolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &conflictingIsolatedExecutor{shared: e.shared}, nil
 }
 func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
@@ -308,7 +311,7 @@ func (e *historyMutatingExecutor) Capabilities() []core.Capability      { return
 func (e *historyMutatingExecutor) BuildGraph(task *core.Task) (*Graph, error) {
 	return nil, nil
 }
-func (e *historyMutatingExecutor) BranchAgent() (Agent, error) {
+func (e *historyMutatingExecutor) BranchExecutor() (WorkflowExecutor, error) {
 	return &historyMutatingExecutor{}, nil
 }
 func (e *historyMutatingExecutor) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {

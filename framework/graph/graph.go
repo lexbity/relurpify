@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -45,6 +46,12 @@ type Edge struct {
 	Parallel  bool
 }
 
+type parallelBranchResult struct {
+	edge  Edge
+	delta core.DirtyContextDelta
+	err   error
+}
+
 // Graph orchestrates a workflow of nodes. It behaves like a tiny, deterministic
 // state machine: nodes are registered ahead of time, edges describe transitions,
 // and Execute walks the graph while recording telemetry plus enforcing invariants
@@ -52,6 +59,7 @@ type Edge struct {
 type Graph struct {
 	mu                 sync.RWMutex
 	nodes              map[string]Node
+	nodeContracts      map[string]NodeContract
 	edges              map[string][]Edge
 	startNodeID        string
 	maxNodeVisits      int
@@ -62,8 +70,15 @@ type Graph struct {
 	checkpointInterval int
 	checkpointCallback CheckpointCallback
 	lastCheckpointNode string
+	nodesSinceCheckpoint int
 	capabilityCatalog  CapabilityCatalog
 	lastPreflight      *PreflightReport
+	lastPreflightErr   error
+	preflightDirty     bool
+	lastValidationErr  error
+	validationDirty    bool
+	graphHash          string
+	hashDirty          bool
 }
 
 // CheckpointCallback receives checkpoints generated during execution.
@@ -72,11 +87,15 @@ type CheckpointCallback func(checkpoint *GraphCheckpoint) error
 // NewGraph creates a graph with sane defaults.
 func NewGraph() *Graph {
 	return &Graph{
-		nodes:         make(map[string]Node),
-		edges:         make(map[string][]Edge),
-		maxNodeVisits: 1024,
-		visitCounts:   make(map[string]int),
-		executionPath: make([]string, 0),
+		nodes:           make(map[string]Node),
+		nodeContracts:   make(map[string]NodeContract),
+		edges:           make(map[string][]Edge),
+		maxNodeVisits:   1024,
+		visitCounts:     make(map[string]int),
+		executionPath:   make([]string, 0),
+		preflightDirty:  true,
+		validationDirty: true,
+		hashDirty:       true,
 	}
 }
 
@@ -86,6 +105,7 @@ func (g *Graph) WithCheckpointing(interval int, callback CheckpointCallback) *Gr
 	defer g.mu.Unlock()
 	g.checkpointInterval = interval
 	g.checkpointCallback = callback
+	g.invalidatePreflightLocked()
 	return g
 }
 
@@ -94,6 +114,18 @@ func (g *Graph) SetTelemetry(t Telemetry) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.telemetry = t
+}
+
+func (g *Graph) invalidateStructureLocked() {
+	g.validationDirty = true
+	g.invalidatePreflightLocked()
+	g.hashDirty = true
+}
+
+func (g *Graph) invalidatePreflightLocked() {
+	g.preflightDirty = true
+	g.lastPreflight = nil
+	g.lastPreflightErr = nil
 }
 
 // SetMaxNodeVisits updates the cycle-guard visit cap.
@@ -136,6 +168,7 @@ func (g *Graph) SetStart(id string) error {
 		return fmt.Errorf("start node %s not found", id)
 	}
 	g.startNodeID = id
+	g.invalidateStructureLocked()
 	return nil
 }
 
@@ -147,6 +180,8 @@ func (g *Graph) AddNode(node Node) error {
 		return fmt.Errorf("node %s already exists", node.ID())
 	}
 	g.nodes[node.ID()] = node
+	g.nodeContracts[node.ID()] = ResolveNodeContract(node)
+	g.invalidateStructureLocked()
 	return nil
 }
 
@@ -166,6 +201,7 @@ func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool)
 		Condition: condition,
 		Parallel:  parallel,
 	})
+	g.invalidateStructureLocked()
 	return nil
 }
 
@@ -225,6 +261,7 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 		g.visitCounts = make(map[string]int)
 		g.executionPath = make([]string, 0)
 		g.lastCheckpointNode = ""
+		g.nodesSinceCheckpoint = 0
 	}
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -245,6 +282,7 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 			return nil, fmt.Errorf("potential cycle detected at node %s", current)
 		}
 		g.executionPath = append(g.executionPath, current)
+		g.nodesSinceCheckpoint++
 		g.emit(Event{
 			Type:      EventNodeStart,
 			NodeID:    current,
@@ -355,24 +393,14 @@ func (g *Graph) maybeCheckpoint(taskID, completedNode, nextNode, transitionReaso
 		return
 	}
 	g.lastCheckpointNode = completedNode
+	g.nodesSinceCheckpoint = 0
 }
 
 func (g *Graph) shouldCheckpoint() bool {
 	if g.checkpointInterval == 0 {
 		return false
 	}
-	pathLength := len(g.executionPath)
-	lastIndex := 0
-	if g.lastCheckpointNode != "" {
-		for idx := len(g.executionPath) - 1; idx >= 0; idx-- {
-			if g.executionPath[idx] == g.lastCheckpointNode {
-				lastIndex = idx + 1
-				break
-			}
-		}
-	}
-	nodesSinceCheckpoint := pathLength - lastIndex
-	return nodesSinceCheckpoint >= g.checkpointInterval
+	return g.nodesSinceCheckpoint >= g.checkpointInterval
 }
 
 func (g *Graph) previousNodeID() string {
@@ -406,7 +434,7 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 	// Launch parallel branches, merging their updates into the shared state.
 	if len(parallelEdges) > 0 {
 		var wg sync.WaitGroup
-		errChan := make(chan error, len(parallelEdges))
+		results := make(chan parallelBranchResult, len(parallelEdges))
 		for _, edge := range parallelEdges {
 			wg.Add(1)
 			edge := edge
@@ -414,19 +442,24 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 				defer wg.Done()
 				branchCtx := state.Clone()
 				_, err := g.executeBranch(ctx, edge.To, branchCtx)
-				if err != nil {
-					errChan <- err
-					return
+				results <- parallelBranchResult{
+					edge:  edge,
+					delta: branchCtx.DirtyDelta(),
+					err:   err,
 				}
-				state.Merge(branchCtx)
 			}()
 		}
 		wg.Wait()
-		close(errChan)
-		for err := range errChan {
-			if err != nil {
-				return "", "", err
+		close(results)
+		branches := make([]parallelBranchResult, 0, len(parallelEdges))
+		for result := range results {
+			if result.err != nil {
+				return "", "", result.err
 			}
+			branches = append(branches, result)
+		}
+		if err := mergeParallelBranchDeltas(state, branches); err != nil {
+			return "", "", err
 		}
 	}
 	if len(serialEdges) == 0 {
@@ -447,6 +480,42 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 	return serialEdges[0].To, reason, nil
 }
 
+func mergeParallelBranchDeltas(parent *Context, branches []parallelBranchResult) error {
+	if parent == nil || len(branches) == 0 {
+		return nil
+	}
+	type deltaEntry struct {
+		branch string
+		value  any
+	}
+	stateWrites := make(map[string]deltaEntry)
+	for _, branch := range branches {
+		label := branch.edge.To
+		if len(branch.delta.VariableValues) > 0 {
+			return fmt.Errorf("parallel branch merge conflict: branch %s changed context variables outside merge policy", label)
+		}
+		if len(branch.delta.KnowledgeValues) > 0 {
+			return fmt.Errorf("parallel branch merge conflict: branch %s changed context knowledge outside merge policy", label)
+		}
+		if branch.delta.HistoryChanged || branch.delta.CompressedChanged || branch.delta.LogChanged || branch.delta.PhaseChanged {
+			return fmt.Errorf("parallel branch merge conflict: branch %s changed interaction history outside merge policy", label)
+		}
+		for key, value := range branch.delta.StateValues {
+			if existing, ok := stateWrites[key]; ok {
+				if !reflect.DeepEqual(existing.value, value) {
+					return fmt.Errorf("parallel branch merge conflict on state key %q between branches %s and %s", key, existing.branch, label)
+				}
+				continue
+			}
+			stateWrites[key] = deltaEntry{branch: label, value: value}
+		}
+	}
+	for key, entry := range stateWrites {
+		parent.Set(key, entry.value)
+	}
+	return nil
+}
+
 // executeBranch runs a detached sub-graph that starts at the provided node.
 // The parent graph shares the node/edge definitions but each branch receives a
 // cloned Context, which preserves determinism until Merge recombines updates.
@@ -454,11 +523,14 @@ func (g *Graph) executeBranch(ctx context.Context, start string, state *Context)
 	// We reuse the same node/edge maps because branch graphs are read-only. The
 	// only mutable data lives inside the cloned Context passed to this function.
 	subGraph := &Graph{
-		nodes:         g.nodes,
-		edges:         g.edges,
-		startNodeID:   start,
-		maxNodeVisits: g.maxNodeVisits,
-		telemetry:     g.telemetry,
+		nodes:           g.nodes,
+		nodeContracts:   g.nodeContracts,
+		edges:           g.edges,
+		startNodeID:     start,
+		maxNodeVisits:   g.maxNodeVisits,
+		telemetry:       g.telemetry,
+		preflightDirty:  g.preflightDirty,
+		validationDirty: g.validationDirty,
 	}
 	return subGraph.Execute(ctx, state)
 }
@@ -466,28 +538,56 @@ func (g *Graph) executeBranch(ctx context.Context, start string, state *Context)
 // Validate ensures the graph is well-formed (start node present, edges reference known nodes).
 func (g *Graph) Validate() error {
 	g.mu.RLock()
-	defer g.mu.RUnlock()
+	if !g.validationDirty {
+		err := g.lastValidationErr
+		g.mu.RUnlock()
+		return err
+	}
+	g.mu.RUnlock()
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.validationDirty {
+		return g.lastValidationErr
+	}
 	if len(g.nodes) == 0 {
-		return errors.New("graph has no nodes")
+		g.lastValidationErr = errors.New("graph has no nodes")
+		g.validationDirty = false
+		return g.lastValidationErr
 	}
 	if g.startNodeID == "" {
-		return errors.New("graph has no start node")
+		g.lastValidationErr = errors.New("graph has no start node")
+		g.validationDirty = false
+		return g.lastValidationErr
 	}
 	for from, edges := range g.edges {
 		if _, ok := g.nodes[from]; !ok {
-			return fmt.Errorf("edge references missing node %s", from)
+			g.lastValidationErr = fmt.Errorf("edge references missing node %s", from)
+			g.validationDirty = false
+			return g.lastValidationErr
 		}
 		for _, edge := range edges {
 			if _, ok := g.nodes[edge.To]; !ok {
-				return fmt.Errorf("edge references missing node %s", edge.To)
+				g.lastValidationErr = fmt.Errorf("edge references missing node %s", edge.To)
+				g.validationDirty = false
+				return g.lastValidationErr
 			}
 		}
 	}
 	for _, node := range g.nodes {
-		if err := validateNodeContract(node, ResolveNodeContract(node)); err != nil {
+		contract, ok := g.nodeContracts[node.ID()]
+		if !ok {
+			contract = ResolveNodeContract(node)
+			g.nodeContracts[node.ID()] = contract
+		}
+		if err := validateNodeContract(node, contract); err != nil {
+			g.lastValidationErr = err
+			g.validationDirty = false
 			return err
 		}
 	}
+	g.lastValidationErr = nil
+	g.validationDirty = false
 	return nil
 }
 

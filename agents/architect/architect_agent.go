@@ -162,6 +162,9 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 		Options: graph.PlanExecutionOptions{
 			MaxRecoveryAttempts: 2,
 			BuildStepTask:       a.buildPlanStepTask,
+			CompletedStepIDs: func(state *core.Context) []string {
+				return core.StringSliceFromContext(state, "architect.completed_steps")
+			},
 			Diagnose:            a.diagnoseStepFailure,
 			Recover:             a.recoverStepFailure,
 			BeforeStep: func(step core.PlanStep, stepTask *core.Task, state *core.Context) {
