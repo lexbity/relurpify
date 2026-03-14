@@ -1,77 +1,35 @@
 package agents
 
 import (
-	"os"
-	"strings"
-
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 )
 
-// GlobalAgentDefaults builds a default agent spec from global configuration.
-func GlobalAgentDefaults(cfg *GlobalConfig) *core.AgentRuntimeSpec {
-	if cfg == nil {
-		return &core.AgentRuntimeSpec{}
-	}
-	spec := &core.AgentRuntimeSpec{}
-	if cfg.DefaultModel.Name != "" || cfg.DefaultModel.Provider != "" {
-		spec.Model = core.AgentModelConfig{
-			Provider:    cfg.DefaultModel.Provider,
-			Name:        cfg.DefaultModel.Name,
-			Temperature: cfg.DefaultModel.Temperature,
-			MaxTokens:   cfg.DefaultModel.MaxTokens,
-		}
-	}
-	llm := cfg.Logging.LLM
-	agent := cfg.Logging.Agent
-	spec.Logging = &core.AgentLoggingSpec{LLM: &llm, Agent: &agent}
-	return spec
-}
-
-// ResolveAgentSpec applies the global defaults and overlays to the agent spec.
-func ResolveAgentSpec(global *GlobalConfig, spec *core.AgentRuntimeSpec, overlays ...core.AgentSpecOverlay) *core.AgentRuntimeSpec {
-	base := GlobalAgentDefaults(global)
-	agentOverlay := core.AgentSpecOverlayFromSpec(spec)
-	ordered := append([]core.AgentSpecOverlay{agentOverlay}, overlays...)
-	return core.MergeAgentSpecs(base, ordered...)
-}
-
 const codingRuntimeCompatEnv = "RELURPIFY_CODING_RUNTIME_COMPAT"
 
+// Deprecated: use framework/contract.GlobalAgentDefaults.
+// GlobalAgentDefaults builds a default agent spec from global configuration.
+func GlobalAgentDefaults(cfg *GlobalConfig) *core.AgentRuntimeSpec {
+	return contractpkg.GlobalAgentDefaults(cfg)
+}
+
+// Deprecated: use framework/contract.ResolveAgentSpec.
+// ResolveAgentSpec applies the global defaults and overlays to the agent spec.
+func ResolveAgentSpec(global *GlobalConfig, spec *core.AgentRuntimeSpec, overlays ...core.AgentSpecOverlay) *core.AgentRuntimeSpec {
+	return contractpkg.ResolveAgentSpec(global, spec, overlays...)
+}
+
+// Deprecated: use framework/contract.ApplyManifestDefaultsForAgent.
 // ApplyManifestDefaultsForAgent applies rollout-era compatibility defaults for
 // manifests before global overlays and skills are resolved.
 func ApplyManifestDefaultsForAgent(agentName string, spec *core.AgentRuntimeSpec, _ *manifest.ManifestDefaults) *core.AgentRuntimeSpec {
-	if spec == nil {
-		return &core.AgentRuntimeSpec{}
-	}
-	cloned := *spec
-	agentName = strings.TrimSpace(strings.ToLower(agentName))
-	if agentName != "coding" && agentName != "coder" {
-		return &cloned
-	}
-	switch strings.TrimSpace(strings.ToLower(cloned.Implementation)) {
-	case "":
-		cloned.Implementation = "coding"
-	case "react":
-		if codingRuntimeCompatMode() != "legacy-react" {
-			cloned.Implementation = "coding"
-		}
-	}
-	return &cloned
+	return contractpkg.ApplyManifestDefaultsForAgent(agentName, spec, nil)
 }
 
+// Deprecated: use framework/contract.ApplyManifestDefaults.
 // ApplyManifestDefaults returns the spec unchanged (manifest defaults no longer
 // carry an agent overlay — that layer was removed in the skills redesign).
 func ApplyManifestDefaults(spec *core.AgentRuntimeSpec, _ *manifest.ManifestDefaults) *core.AgentRuntimeSpec {
-	return ApplyManifestDefaultsForAgent("", spec, nil)
-}
-
-func codingRuntimeCompatMode() string {
-	mode := strings.TrimSpace(strings.ToLower(os.Getenv(codingRuntimeCompatEnv)))
-	switch mode {
-	case "legacy-react", "euclo":
-		return mode
-	default:
-		return "euclo"
-	}
+	return contractpkg.ApplyManifestDefaults(spec, nil)
 }

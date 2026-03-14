@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 // ResolveEffectiveAgentContract merges manifest defaults, skill
@@ -28,12 +28,12 @@ func ResolveEffectiveAgentContract(workspace string, m *manifest.AgentManifest, 
 		return nil, fmt.Errorf("resolve resources: %w", err)
 	}
 
-	baseSpec := agents.ApplyManifestDefaultsForAgent(m.Metadata.Name, m.Spec.Agent, m.Spec.Defaults)
+	baseSpec := ApplyManifestDefaultsForAgent(m.Metadata.Name, m.Spec.Agent, m.Spec.Defaults)
 	if baseSpec == nil {
 		baseSpec = &core.AgentRuntimeSpec{}
 	}
-	resolvedSpec, resolvedSkills, skillResults := agents.ResolveSkills(workspace, baseSpec, m.Spec.Skills)
-	finalSpec := agents.ResolveAgentSpec(opts.GlobalConfig, resolvedSpec, opts.AgentOverlays...)
+	resolvedSpec, resolvedSkills, skillResults := frameworkskills.ResolveSkills(workspace, baseSpec, m.Spec.Skills)
+	finalSpec := ResolveAgentSpec(opts.GlobalConfig, resolvedSpec, opts.AgentOverlays...)
 
 	sources := SourceSummary{
 		ManifestName:     m.Metadata.Name,
@@ -58,8 +58,8 @@ func ResolveEffectiveAgentContract(workspace string, m *manifest.AgentManifest, 
 		AgentSpec:      finalSpec,
 		Permissions:    permissions,
 		Resources:      resources,
-		ResolvedSkills: append([]agents.ResolvedSkill{}, resolvedSkills...),
-		SkillResults:   append([]agents.SkillResolution{}, skillResults...),
+		ResolvedSkills: append([]frameworkskills.ResolvedSkill{}, resolvedSkills...),
+		SkillResults:   append([]frameworkskills.SkillResolution{}, skillResults...),
 		Sources:        sources,
 	}, nil
 }

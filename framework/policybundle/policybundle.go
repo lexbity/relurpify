@@ -17,7 +17,15 @@ type CompiledPolicyBundle struct {
 	Engine  authorization.PolicyEngine
 }
 
-func buildFromEffectiveSpec(agentID string, spec *core.AgentRuntimeSpec, manager *authorization.PermissionManager) (*CompiledPolicyBundle, error) {
+// BuildFromSpec compiles policy rules and constructs an engine directly from a
+// framework-native agent identifier and effective runtime spec.
+func BuildFromSpec(agentID string, spec *core.AgentRuntimeSpec, manager *authorization.PermissionManager) (*CompiledPolicyBundle, error) {
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id required")
+	}
+	if spec == nil {
+		return nil, fmt.Errorf("agent spec required")
+	}
 	engine, err := authorization.FromAgentSpecWithConfig(spec, agentID, manager)
 	if err != nil {
 		return nil, fmt.Errorf("compile policy from agent spec: %w", err)
@@ -40,5 +48,5 @@ func BuildFromContract(contract *contractpkg.EffectiveAgentContract, manager *au
 	if contract == nil {
 		return nil, fmt.Errorf("effective agent contract required")
 	}
-	return buildFromEffectiveSpec(contract.AgentID, contract.AgentSpec, manager)
+	return BuildFromSpec(contract.AgentID, contract.AgentSpec, manager)
 }

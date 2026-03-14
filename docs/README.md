@@ -28,3 +28,4 @@ For building on top of the framework — custom agents, custom tools, embedded u
 | [Custom Tools](dev/tools.md) | Tool interface, built-in tools, writing new ones |
 | [Context Budget](dev/context-budget.md) | Token budget management and pruning strategies |
 | [Custom Agents](dev/custom-agents.md) | Implementing the Agent interface, library usage |
+| [Layering Rules](dev/layering.md) | Framework vs agents ownership and dependency direction |

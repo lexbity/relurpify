@@ -12,11 +12,9 @@ import (
 	reflectionpkg "github.com/lexcodex/relurpify/agents/reflection"
 	relurpicpkg "github.com/lexcodex/relurpify/agents/relurpic"
 	rewoopkg "github.com/lexcodex/relurpify/agents/rewoo"
-	skillspkg "github.com/lexcodex/relurpify/agents/skills"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
@@ -57,20 +55,6 @@ type AgentInvocationPolicy = core.AgentInvocationPolicy
 // SQLitePipelineCheckpointStore re-exports the workflow-backed checkpoint store.
 type SQLitePipelineCheckpointStore = pipelinepkg.SQLitePipelineCheckpointStore
 
-// SkillPaths exposes the resolved resource paths for a skill.
-type SkillPaths = skillspkg.SkillPaths
-
-// SkillResolution captures skill loading outcomes.
-type SkillResolution = skillspkg.SkillResolution
-
-// ResolvedSkill carries validated manifests and resolved paths for later
-// registration after pure resolution completes.
-type ResolvedSkill = skillspkg.ResolvedSkill
-
-// SkillCapabilityCandidate represents a prompt/resource capability contributed
-// by a resolved skill.
-type SkillCapabilityCandidate = skillspkg.SkillCapabilityCandidate
-
 var ErrPipelineCheckpointNotFound = pipelinepkg.ErrPipelineCheckpointNotFound
 
 func NewSQLitePipelineCheckpointStore(store *db.SQLiteWorkflowStateStore, workflowID, runID string) *SQLitePipelineCheckpointStore {
@@ -87,40 +71,6 @@ func RegisterAgentCapabilities(registry *capability.Registry, env agentenv.Agent
 
 func RegisterCustomAgentHandler(registry *capability.Registry, id string, handler core.InvocableCapabilityHandler) error {
 	return relurpicpkg.RegisterCustomAgentHandler(registry, id, handler)
-}
-
-func ResolveSkillPaths(skill *manifest.SkillManifest) SkillPaths {
-	return skillspkg.ResolveSkillPaths(skill)
-}
-
-func ValidateSkillPaths(paths SkillPaths) error {
-	return skillspkg.ValidateSkillPaths(paths)
-}
-
-func DeriveGVisorAllowlist(allowed []core.CapabilitySelector, registry skillspkg.ToolDescriptorRegistry) []core.ExecutablePermission {
-	return skillspkg.DeriveGVisorAllowlist(allowed, registry)
-}
-
-func ApplySkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames []string,
-	registry *capability.Registry, permissions *capability.PermissionManager, agentID string,
-) (*core.AgentRuntimeSpec, []SkillResolution) {
-	return skillspkg.ApplySkills(workspace, baseSpec, skillNames, registry, permissions, agentID)
-}
-
-func ResolveSkills(workspace string, baseSpec *core.AgentRuntimeSpec, skillNames []string) (*core.AgentRuntimeSpec, []ResolvedSkill, []SkillResolution) {
-	return skillspkg.ResolveSkills(workspace, baseSpec, skillNames)
-}
-
-func EnumerateSkillCapabilities(resolved []ResolvedSkill) []SkillCapabilityCandidate {
-	return skillspkg.EnumerateSkillCapabilities(resolved)
-}
-
-func SkillRoot(workspace, name string) string {
-	return skillspkg.SkillRoot(workspace, name)
-}
-
-func SkillManifestPath(workspace, name string) string {
-	return skillspkg.SkillManifestPath(workspace, name)
 }
 
 // HTNAgent re-exports the hierarchical task network implementation.

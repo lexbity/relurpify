@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/lexcodex/relurpify/agents"
+	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 )
 
 // ensureWorkspace resolves the workspace CLI flag, defaulting to cwd.
@@ -27,7 +28,7 @@ func buildRegistry(workspace string) (*agents.Registry, error) {
 	if globalCfg != nil {
 		paths = globalCfg.AgentSearchPaths(workspace)
 	}
-	rulesPath := filepath.Join(agents.ConfigDir(workspace), "rules.yaml")
+	rulesPath := filepath.Join(frameworkconfig.New(workspace).ConfigRoot(), "rules.yaml")
 	reg := agents.NewRegistry(agents.RegistryOptions{
 		Workspace: workspace,
 		Paths:     paths,
@@ -137,7 +138,7 @@ func prettyValue(v interface{}) string {
 
 // sessionDir returns the path where session yaml files live.
 func sessionDir() string {
-	return filepath.Join(agents.ConfigDir(ensureWorkspace()), "sessions")
+	return filepath.Join(frameworkconfig.New(ensureWorkspace()).ConfigRoot(), "sessions")
 }
 
 // sanitizeName normalizes user-provided identifiers for filenames.

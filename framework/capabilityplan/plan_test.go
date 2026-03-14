@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,9 +27,9 @@ func TestAdmitSkillCapabilitiesRecordsRejectedCandidates(t *testing.T) {
 		},
 		SourcePath: filepath.Join(skillRoot, "skill.manifest.yaml"),
 	}
-	resolved := []agents.ResolvedSkill{{
+	resolved := []frameworkskills.ResolvedSkill{{
 		Manifest: skill,
-		Paths: agents.SkillPaths{
+		Paths: frameworkskills.SkillPaths{
 			Root:      skillRoot,
 			Scripts:   []string{filepath.Join(skillRoot, "scripts")},
 			Resources: []string{filepath.Join(skillRoot, "resources")},
@@ -37,8 +37,9 @@ func TestAdmitSkillCapabilitiesRecordsRejectedCandidates(t *testing.T) {
 		},
 	}}
 	registry := capability.NewRegistry()
+	candidates := toCandidates(frameworkskills.EnumerateSkillCapabilities(resolved))
 
-	results, err := AdmitSkillCapabilities(registry, resolved, []core.CapabilitySelector{{
+	results, err := AdmitCandidates(registry, candidates, []core.CapabilitySelector{{
 		Name: "reviewer.prompt.1",
 		Kind: core.CapabilityKindPrompt,
 	}})
@@ -60,7 +61,7 @@ func TestAdmitSkillCapabilitiesRecordsRejectedCandidates(t *testing.T) {
 }
 
 func TestEvaluateSkillCapabilitiesDoesNotRequireRegistry(t *testing.T) {
-	resolved := []agents.ResolvedSkill{{
+	resolved := []frameworkskills.ResolvedSkill{{
 		Manifest: &manifest.SkillManifest{
 			Metadata: manifest.ManifestMetadata{Name: "reviewer"},
 			Spec: manifest.SkillSpec{
@@ -68,8 +69,9 @@ func TestEvaluateSkillCapabilitiesDoesNotRequireRegistry(t *testing.T) {
 			},
 		},
 	}}
+	candidates := toCandidates(frameworkskills.EnumerateSkillCapabilities(resolved))
 
-	results := EvaluateSkillCapabilities(resolved, []core.CapabilitySelector{{
+	results := EvaluateCandidates(candidates, []core.CapabilitySelector{{
 		Name: "reviewer.prompt.1",
 		Kind: core.CapabilityKindPrompt,
 	}})
@@ -77,4 +79,16 @@ func TestEvaluateSkillCapabilitiesDoesNotRequireRegistry(t *testing.T) {
 	require.Len(t, results, 1)
 	require.True(t, results[0].Admitted)
 	require.Equal(t, "admitted", results[0].Reason)
+}
+
+func toCandidates(input []frameworkskills.SkillCapabilityCandidate) []Candidate {
+	out := make([]Candidate, 0, len(input))
+	for _, candidate := range input {
+		out = append(out, Candidate{
+			Descriptor:      candidate.Descriptor,
+			PromptHandler:   candidate.PromptHandler,
+			ResourceHandler: candidate.ResourceHandler,
+		})
+	}
+	return out
 }

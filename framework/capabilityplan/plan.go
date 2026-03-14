@@ -3,7 +3,6 @@ package capabilityplan
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -17,14 +16,22 @@ type AdmissionResult struct {
 	Reason         string
 }
 
-// AdmitSkillCapabilities admits prompt/resource capabilities from resolved
-// skills against the final selector set and records explicit results.
-func AdmitSkillCapabilities(registry *capability.Registry, resolved []agents.ResolvedSkill, allowed []core.CapabilitySelector) ([]AdmissionResult, error) {
+// Candidate describes a capability candidate before admission into the
+// registry. Callers may source these from skills or any other framework-owned
+// contribution mechanism.
+type Candidate struct {
+	Descriptor      core.CapabilityDescriptor
+	PromptHandler   core.PromptCapabilityHandler
+	ResourceHandler core.ResourceCapabilityHandler
+}
+
+// AdmitCandidates admits capability candidates against the final selector set
+// and records explicit results.
+func AdmitCandidates(registry *capability.Registry, candidates []Candidate, allowed []core.CapabilitySelector) ([]AdmissionResult, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("capability registry required")
 	}
-	results := EvaluateSkillCapabilities(resolved, allowed)
-	candidates := agents.EnumerateSkillCapabilities(resolved)
+	results := EvaluateCandidates(candidates, allowed)
 	for idx, candidate := range candidates {
 		if idx >= len(results) || !results[idx].Admitted {
 			continue
@@ -51,10 +58,9 @@ func AdmitSkillCapabilities(registry *capability.Registry, resolved []agents.Res
 	return results, nil
 }
 
-// EvaluateSkillCapabilities evaluates prompt/resource capabilities from
-// resolved skills against the final selector set without mutating the registry.
-func EvaluateSkillCapabilities(resolved []agents.ResolvedSkill, allowed []core.CapabilitySelector) []AdmissionResult {
-	candidates := agents.EnumerateSkillCapabilities(resolved)
+// EvaluateCandidates evaluates capability candidates against the final selector
+// set without mutating the registry.
+func EvaluateCandidates(candidates []Candidate, allowed []core.CapabilitySelector) []AdmissionResult {
 	results := make([]AdmissionResult, 0, len(candidates))
 	for _, candidate := range candidates {
 		desc := core.NormalizeCapabilityDescriptor(candidate.Descriptor)

@@ -4,6 +4,14 @@
 
 The `framework/` layer is the infrastructure that all agents, applications, and platform integrations build on. It provides foundational types, runtime services, and protocol implementations with no dependencies on specific agent logic or application surfaces.
 
+The intended rule is strict dependency direction:
+
+- `framework/` may define the canonical enforcement contract
+- `agents/` may consume that contract
+- `framework/` must not import `agents`
+
+This boundary is enforced by `scripts/check-framework-boundaries.sh`.
+
 ---
 
 ## Package Map
@@ -386,7 +394,7 @@ Nexus-specific stores (`sqlite_identity_store`, `sqlite_session_store`, `sqlite_
 
 ## policybundle
 
-`framework/policybundle` compiles an immutable runtime policy bundle from an `EffectiveAgentContract`.
+`framework/policybundle` compiles an immutable runtime policy bundle from an effective agent spec.
 
 The compiled bundle carries:
 
@@ -394,7 +402,7 @@ The compiled bundle carries:
 - executable `PolicyEngine`
 - agent ID and effective spec metadata
 
-Runtime startup, preset switching, and live reload now compile through `BuildFromContract(...)` so policy state stays aligned with the resolved contract.
+Runtime startup, preset switching, and live reload compile through `BuildFromSpec(agentID, spec, ...)`, with `BuildFromContract(...)` retained only as a compatibility wrapper.
 
 ---
 

@@ -30,6 +30,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	platformast "github.com/lexcodex/relurpify/platform/ast"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
@@ -138,7 +139,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
 	}
-	agentSpec := agents.ApplyManifestDefaultsForAgent(registration.Manifest.Metadata.Name, registration.Manifest.Spec.Agent, registration.Manifest.Spec.Defaults)
+	agentSpec := contractpkg.ApplyManifestDefaultsForAgent(registration.Manifest.Metadata.Name, registration.Manifest.Spec.Agent, registration.Manifest.Spec.Defaults)
 	if agentSpec.Model.Name == "" {
 		logFile.Close()
 		return nil, fmt.Errorf("agent manifest missing spec.agent.model.name")
@@ -257,7 +258,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 				AgentSpec: agentSpec,
 			}
 		}
-		compiledPolicy, err = policybundle.BuildFromContract(contract, registration.Permissions)
+		compiledPolicy, err = policybundle.BuildFromSpec(contract.AgentID, contract.AgentSpec, registration.Permissions)
 		if err != nil {
 			logFile.Close()
 			return nil, fmt.Errorf("compile effective policy: %w", err)
@@ -497,8 +498,8 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contra
 	r.AgentDefinitions = agentDefs
 	r.EffectiveContract = effectiveContract
 	r.CompiledPolicy = compiledPolicy
-	r.CapabilityAdmissions = capabilityplan.EvaluateSkillCapabilities(
-		effectiveContract.ResolvedSkills,
+	r.CapabilityAdmissions = capabilityplan.EvaluateCandidates(
+		toCapabilityPlanCandidates(frameworkskills.EnumerateSkillCapabilities(effectiveContract.ResolvedSkills)),
 		core.EffectiveAllowedCapabilitySelectors(effectiveContract.AgentSpec),
 	)
 	r.syncSkillContextPaths(effectiveContract.SkillResults)
@@ -691,6 +692,18 @@ func shouldIgnoreBootstrapIndexError(err error) bool {
 		strings.Contains(err.Error(), "no parser for ")
 }
 
+func toCapabilityPlanCandidates(input []frameworkskills.SkillCapabilityCandidate) []capabilityplan.Candidate {
+	out := make([]capabilityplan.Candidate, 0, len(input))
+	for _, candidate := range input {
+		out = append(out, capabilityplan.Candidate{
+			Descriptor:      candidate.Descriptor,
+			PromptHandler:   candidate.PromptHandler,
+			ResourceHandler: candidate.ResourceHandler,
+		})
+	}
+	return out
+}
+
 // LoadAgentDefinitions scans the directory for YAML files and parses them.
 func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) {
 	defs := make(map[string]*core.AgentDefinition)
@@ -783,7 +796,7 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*contractpkg.Ef
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
-	compiledPolicy, err := policybundle.BuildFromContract(effectiveContract, r.Registration.Permissions)
+	compiledPolicy, err := policybundle.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, r.Registration.Permissions)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("compile effective policy: %w", err)
 	}
@@ -808,7 +821,7 @@ func skillCapabilityIDSet(contract *contractpkg.EffectiveAgentContract) map[stri
 	if contract == nil {
 		return nil
 	}
-	candidates := agents.EnumerateSkillCapabilities(contract.ResolvedSkills)
+	candidates := frameworkskills.EnumerateSkillCapabilities(contract.ResolvedSkills)
 	if len(candidates) == 0 {
 		return nil
 	}
@@ -822,7 +835,7 @@ func skillCapabilityIDSet(contract *contractpkg.EffectiveAgentContract) map[stri
 	return ids
 }
 
-func (r *Runtime) syncSkillContextPaths(results []agents.SkillResolution) {
+func (r *Runtime) syncSkillContextPaths(results []frameworkskills.SkillResolution) {
 	if r == nil || r.Context == nil {
 		return
 	}

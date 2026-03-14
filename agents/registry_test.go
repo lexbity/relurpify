@@ -5,13 +5,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/stretchr/testify/require"
 )
 
 // TestRegistryLoad verifies that manifests are discovered from configured paths.
 func TestRegistryLoad(t *testing.T) {
 	dir := t.TempDir()
-	projectAgents := filepath.Join(ConfigDir(dir), "agents")
+	projectAgents := filepath.Join(frameworkconfig.New(dir).ConfigRoot(), "agents")
 	require.NoError(t, os.MkdirAll(projectAgents, 0o755))
 
 	content := `
@@ -110,7 +111,7 @@ spec:
 
 func TestRegistryLoadFilePath(t *testing.T) {
 	dir := t.TempDir()
-	cfgDir := ConfigDir(dir)
+	cfgDir := frameworkconfig.New(dir).ConfigRoot()
 	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
 	manifestPath := filepath.Join(cfgDir, "agent.manifest.yaml")
 

@@ -7,14 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lexcodex/relurpify/agents"
+	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 )
 
 var (
 	cfgFile   string
 	workspace string
 
-	globalCfg *agents.GlobalConfig
+	globalCfg *frameworkconfig.GlobalConfig
 )
 
 // Execute is the entry point for the CLI.
@@ -41,9 +41,9 @@ func NewRootCmd() *cobra.Command {
 				}
 			}
 			if cfgFile == "" {
-				cfgFile = agents.DefaultConfigPath(workspace)
+				cfgFile = frameworkconfig.DefaultConfigPath(workspace)
 			}
-			cfg, err := agents.LoadGlobalConfig(cfgFile, workspace)
+			cfg, err := frameworkconfig.LoadGlobalConfig(cfgFile, workspace)
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			}

@@ -4,6 +4,11 @@
 
 An agent is the reasoning layer between your instruction and the tools that act on your code. It decides what to do, in what order, and when to stop. Different agents implement different reasoning strategies — choosing the right one for a task affects both quality and speed.
 
+The `agents/` tree is not the owner of manifests, config, effective contract
+resolution, or skill resolution that affects sandbox policy. Those concerns are
+framework-owned. `agents/` owns concrete agent implementations and the runtime
+surfaces that consume framework-native contracts.
+
 ---
 
 ## Why Multiple Agent Types

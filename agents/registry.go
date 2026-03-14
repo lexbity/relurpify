@@ -3,6 +3,7 @@ package agents
 import (
 	"errors"
 	"fmt"
+	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"os"
@@ -238,7 +239,7 @@ func logRegistryError(workspace, path string, err error) {
 	if workspace == "" {
 		return
 	}
-	logDir := filepath.Join(ConfigDir(workspace), "logs")
+	logDir := filepath.Join(frameworkconfig.New(workspace).ConfigRoot(), "logs")
 	if mkErr := os.MkdirAll(logDir, 0o755); mkErr != nil {
 		return
 	}

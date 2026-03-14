@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents"
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
@@ -389,7 +389,7 @@ func prepareCaseAttempt(ctx context.Context, timeout time.Duration, suite *Suite
 	}
 	attempt.browserFixtures = browserFixtures
 
-	baseSpec := agents.ApplyManifestDefaults(loadedManifest.Spec.Agent, loadedManifest.Spec.Defaults)
+	baseSpec := contractpkg.ApplyManifestDefaults(loadedManifest.Spec.Agent, loadedManifest.Spec.Defaults)
 	if baseSpec == nil {
 		baseSpec = &core.AgentRuntimeSpec{}
 	}

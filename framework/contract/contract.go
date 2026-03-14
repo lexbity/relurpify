@@ -1,9 +1,10 @@
 package contract
 
 import (
-	"github.com/lexcodex/relurpify/agents"
+	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
@@ -14,8 +15,8 @@ type EffectiveAgentContract struct {
 	AgentSpec      *core.AgentRuntimeSpec
 	Permissions    core.PermissionSet
 	Resources      manifest.ResourceSpec
-	ResolvedSkills []agents.ResolvedSkill
-	SkillResults   []agents.SkillResolution
+	ResolvedSkills []frameworkskills.ResolvedSkill
+	SkillResults   []frameworkskills.SkillResolution
 	Sources        SourceSummary
 }
 
@@ -35,6 +36,6 @@ type SourceSummary struct {
 
 // ResolveOptions provides optional inputs layered on top of the raw manifest.
 type ResolveOptions struct {
-	GlobalConfig  *agents.GlobalConfig
+	GlobalConfig  *frameworkconfig.GlobalConfig
 	AgentOverlays []core.AgentSpecOverlay
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/policybundle"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 type AgentBootstrapOptions struct {
@@ -50,7 +51,7 @@ type BootstrappedAgentRuntime struct {
 	AgentConfig          *core.Config
 	Environment          agents.AgentEnvironment
 	AgentDefinitions     map[string]*core.AgentDefinition
-	SkillResults         []agents.SkillResolution
+	SkillResults         []frameworkskills.SkillResolution
 	CapabilityAdmissions []capabilityplan.AdmissionResult
 	Contract             *contractpkg.EffectiveAgentContract
 	CompiledPolicy       *policybundle.CompiledPolicyBundle
@@ -93,8 +94,8 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		return nil, err
 	}
 	agentSpec := effectiveContract.AgentSpec
-	skillResults := append([]agents.SkillResolution{}, effectiveContract.SkillResults...)
-	resolvedSkills := append([]agents.ResolvedSkill{}, effectiveContract.ResolvedSkills...)
+	skillResults := append([]frameworkskills.SkillResolution{}, effectiveContract.SkillResults...)
+	resolvedSkills := append([]frameworkskills.ResolvedSkill{}, effectiveContract.ResolvedSkills...)
 
 	resolvedModel := opts.OllamaModel
 	if resolvedModel == "" {
@@ -122,7 +123,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if opts.PermissionManager != nil {
 		registry.UsePermissionManager(opts.AgentID, opts.PermissionManager)
 	}
-	compiledPolicy, err := policybundle.BuildFromContract(effectiveContract, opts.PermissionManager)
+	compiledPolicy, err := policybundle.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, opts.PermissionManager)
 	if err != nil {
 		return nil, fmt.Errorf("compile effective policy: %w", err)
 	}
@@ -148,7 +149,11 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Telemetry:         opts.Telemetry,
 	}
 	registry.UseAgentSpec(opts.AgentID, agentSpec)
-	admissionResults, err := capabilityplan.AdmitSkillCapabilities(registry, resolvedSkills, core.EffectiveAllowedCapabilitySelectors(agentSpec))
+	admissionResults, err := capabilityplan.AdmitCandidates(
+		registry,
+		toCapabilityPlanCandidates(frameworkskills.EnumerateSkillCapabilities(resolvedSkills)),
+		core.EffectiveAllowedCapabilitySelectors(agentSpec),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("admit skill capabilities: %w", err)
 	}

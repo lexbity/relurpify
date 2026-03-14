@@ -9,6 +9,7 @@ import (
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/config"
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
@@ -58,8 +59,8 @@ func newStartCmd() *cobra.Command {
 			if spec == nil {
 				return fmt.Errorf("agent %s missing spec.agent section", manifest.Metadata.Name)
 			}
-			spec = agents.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
-			spec = agents.ResolveAgentSpec(globalCfg, spec)
+			spec = contractpkg.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
+			spec = contractpkg.ResolveAgentSpec(globalCfg, spec)
 			if mode == "" {
 				if spec.Mode != "" {
 					mode = string(spec.Mode)

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/lexcodex/relurpify/agents"
+	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/spf13/cobra"
@@ -72,7 +72,7 @@ func newAgentsCreateCmd() *cobra.Command {
 			if model == "" {
 				model = defaultModelName()
 			}
-			path := filepath.Join(agents.ConfigDir(ws), "agents")
+			path := filepath.Join(frameworkconfig.New(ws).ConfigRoot(), "agents")
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				return err
 			}

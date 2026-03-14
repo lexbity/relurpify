@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
@@ -20,6 +19,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/policybundle"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 	"github.com/lexcodex/relurpify/framework/templates"
 	"github.com/lexcodex/relurpify/testsuite/agenttest"
 )
@@ -55,7 +55,7 @@ func newSkillInitCmd() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf("skill name required")
 			}
-			root := agents.SkillRoot(ws, name)
+			root := frameworkskills.SkillRoot(ws, name)
 			if _, err := os.Stat(root); err == nil && !force {
 				return fmt.Errorf("skill %s already exists (use --force to overwrite)", name)
 			}
@@ -86,7 +86,7 @@ func newSkillInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			manifestPath := agents.SkillManifestPath(ws, name)
+			manifestPath := frameworkskills.SkillManifestPath(ws, name)
 			if err := os.WriteFile(manifestPath, encoded, 0o644); err != nil {
 				return err
 			}
@@ -126,13 +126,13 @@ func newSkillValidateCmd() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf("skill name required")
 			}
-			manifestPath := agents.SkillManifestPath(ws, name)
+			manifestPath := frameworkskills.SkillManifestPath(ws, name)
 			skill, err := manifest.LoadSkillManifest(manifestPath)
 			if err != nil {
 				return err
 			}
-			paths := agents.ResolveSkillPaths(skill)
-			if err := agents.ValidateSkillPaths(paths); err != nil {
+			paths := frameworkskills.ResolveSkillPaths(skill)
+			if err := frameworkskills.ValidateSkillPaths(paths); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Skill %s valid\n", skill.Metadata.Name)
@@ -156,13 +156,13 @@ func newSkillDoctorCmd() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf("skill name required")
 			}
-			skillPath := agents.SkillManifestPath(ws, name)
+			skillPath := frameworkskills.SkillManifestPath(ws, name)
 			skill, err := manifest.LoadSkillManifest(skillPath)
 			if err != nil {
 				return err
 			}
-			paths := agents.ResolveSkillPaths(skill)
-			if err := agents.ValidateSkillPaths(paths); err != nil {
+			paths := frameworkskills.ResolveSkillPaths(skill)
+			if err := frameworkskills.ValidateSkillPaths(paths); err != nil {
 				return err
 			}
 
@@ -211,7 +211,7 @@ func newSkillDoctorCmd() *cobra.Command {
 			}
 			registry := capabilities.Registry
 			if effectiveContract != nil {
-				compiledPolicy, err := policybundle.BuildFromContract(effectiveContract, permissions)
+				compiledPolicy, err := policybundle.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, permissions)
 				if err != nil {
 					return err
 				}
@@ -253,7 +253,7 @@ func newSkillTestCmd() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf("skill name required")
 			}
-			root := agents.SkillRoot(ws, name)
+			root := frameworkskills.SkillRoot(ws, name)
 			suitePath := filepath.Join(root, "testsuite.yaml")
 			if _, err := os.Stat(suitePath); err != nil {
 				return fmt.Errorf("testsuite.yaml missing for skill %s", name)

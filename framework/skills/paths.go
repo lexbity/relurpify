@@ -11,6 +11,8 @@ import (
 	"github.com/lexcodex/relurpify/framework/manifest"
 )
 
+const skillManifestName = "skill.manifest.yaml"
+
 // SkillRoot returns the skill directory for a name.
 func SkillRoot(workspace, name string) string {
 	return filepath.Join(configDir(workspace), "skills", name)
@@ -19,6 +21,16 @@ func SkillRoot(workspace, name string) string {
 // SkillManifestPath returns the default skill manifest path.
 func SkillManifestPath(workspace, name string) string {
 	return filepath.Join(SkillRoot(workspace, name), skillManifestName)
+}
+
+// ResolveSkillPaths exposes the resolved resource paths for a skill.
+func ResolveSkillPaths(skill *manifest.SkillManifest) SkillPaths {
+	return resolveSkillPaths(skill)
+}
+
+// ValidateSkillPaths ensures resource entries exist on disk.
+func ValidateSkillPaths(paths SkillPaths) error {
+	return validateSkillPaths(paths)
 }
 
 func resolveSkillPaths(skill *manifest.SkillManifest) SkillPaths {

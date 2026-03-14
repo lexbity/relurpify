@@ -1,0 +1,22 @@
+name: architecture-guardrails
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  framework-boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify framework layering guardrails
+        run: ./scripts/check-framework-boundaries.sh
+
+      - name: Verify deprecated wrapper guardrails
+        run: ./scripts/check-deprecated-agent-wrappers.sh

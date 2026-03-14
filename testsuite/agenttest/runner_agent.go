@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
@@ -108,7 +107,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		return nil, nil, err
 	}
 	if agentSpec == nil {
-		agentSpec = agents.ApplyManifestDefaults(agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
+		agentSpec = contractpkg.ApplyManifestDefaults(agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
 		if agentSpec == nil {
 			agentSpec = &core.AgentRuntimeSpec{}
 		}
@@ -199,10 +198,12 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		if contract == nil {
 			contract = &contractpkg.EffectiveAgentContract{
 				AgentID:   agentManifest.Metadata.Name,
-				AgentSpec: boot.AgentSpec,
+				AgentSpec: agentSpec,
 			}
+		} else if contract.AgentSpec == nil {
+			contract.AgentSpec = agentSpec
 		}
-		compiledPolicy, err = policybundle.BuildFromContract(contract, permMgr)
+		compiledPolicy, err = policybundle.BuildFromSpec(contract.AgentID, contract.AgentSpec, permMgr)
 		if err != nil {
 			return nil, nil, err
 		}

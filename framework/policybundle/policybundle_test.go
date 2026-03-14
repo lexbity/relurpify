@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/authorization"
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
@@ -33,10 +32,7 @@ func TestBuildFromSpecCompilesEffectiveSessionPolicies(t *testing.T) {
 	}, core.NewInMemoryAuditLogger(32), authorization.NewHITLBroker(0))
 	require.NoError(t, err)
 
-	bundle, err := BuildFromContract(&contractpkg.EffectiveAgentContract{
-		AgentID:   "agent-1",
-		AgentSpec: spec,
-	}, manager)
+	bundle, err := BuildFromSpec("agent-1", spec, manager)
 	require.NoError(t, err)
 	require.NotNil(t, bundle)
 	require.NotNil(t, bundle.Engine)

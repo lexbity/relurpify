@@ -300,7 +300,7 @@ RegisterAgent(manifest) -> validate manifest + build PermissionManager
 ResolveEffectiveAgentContract() -> merge manifest defaults, skills, overlays
     |
     v
-BuildFromContract() -> compile one policy bundle from effective contract
+BuildFromSpec() -> compile one policy bundle from effective agent id + spec
     |
     v
 BuildBuiltinCapabilityBundle() -> register builtin runtime capabilities

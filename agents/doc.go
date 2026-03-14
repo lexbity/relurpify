@@ -1,6 +1,18 @@
 // Package agents implements the agent types and orchestration capabilities
 // for the Relurpify framework.
 //
+// Framework ownership note:
+//
+// The framework layer owns manifests, workspace/global config schemas,
+// effective contract resolution, skill resolution that affects the sandbox
+// envelope, capability admission, and policy compilation.
+//
+// The agents package owns concrete agent implementations, the runtime-facing
+// registry/builder surfaces for those agents, and coordination capabilities.
+// Deprecated compatibility wrappers for framework-owned config/contract/skill
+// APIs may still exist here temporarily, but new code should use the
+// corresponding framework packages directly.
+//
 // # Agent types
 //
 //   - CodingAgent: general-purpose coding assistant with five operating modes:
@@ -30,7 +42,7 @@
 // # Skill system
 //
 // Skills are reusable capability bundles declared in SkillManifest YAML files.
-// The skill subsystem (skills*.go, skill_capabilities.go) resolves skill
-// references from agent manifests into CapabilityDescriptors registered with
-// the capability registry at agent startup.
+// Framework-owned skill resolution and capability admission live under
+// framework/skills. The agents package may expose temporary compatibility
+// wrappers under agents/skills, but those are not the canonical APIs.
 package agents

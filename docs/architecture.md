@@ -67,6 +67,22 @@ Think of Relurpify in five layers, each building on the one below:
 
 **Platform / Execution layer** — where work actually happens. LLM reasoning via Ollama on the host. Tool execution (tests, edits, git) inside a gVisor-sandboxed container. Language-aware tools (go_test, cargo_test, pytest, npm_test) are the primary verification surface. See [platform.md](platform.md).
 
+### Layering Rules
+
+The framework/agents split is defined by ownership of the security envelope, not by whether code feels "generic."
+
+- `framework/` owns manifests, config, effective contracts, skill resolution that affects the sandbox envelope, capability admission, and policy compilation.
+- `agents/` owns concrete agent implementations and runtime behavior that happens after the framework has produced the final contract.
+- `app/` owns product bootstrap and edge adapters.
+
+The critical dependency rule is:
+
+- packages under `framework/` must not import `agents`
+
+That rule exists so the framework remains the canonical source of truth for enforcement-critical state. Agent packages are allowed to consume framework-native contracts; framework packages are not allowed to depend upward on agent runtime code.
+
+See [Developer Layering Rules](dev/layering.md) for the repository-level boundary guidance.
+
 ---
 
 ## How It Works

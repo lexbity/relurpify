@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents"
+	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/stretchr/testify/require"
@@ -62,8 +62,8 @@ spec:
     prompt: "Base prompt."
   skills: [reviewer]
 `)
-	global := &agents.GlobalConfig{
-		DefaultModel: agents.ModelRef{
+	global := &frameworkconfig.GlobalConfig{
+		DefaultModel: frameworkconfig.ModelRef{
 			Provider: "global-provider",
 			Name:     "global-model",
 		},
