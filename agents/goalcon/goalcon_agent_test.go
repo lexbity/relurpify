@@ -76,8 +76,19 @@ func TestSolver_CycleDetection(t *testing.T) {
 	registry.Register(goalcon.Operator{Name: "A", Preconditions: []goalcon.Predicate{"y"}, Effects: []goalcon.Predicate{"x"}})
 	registry.Register(goalcon.Operator{Name: "B", Preconditions: []goalcon.Predicate{"x"}, Effects: []goalcon.Predicate{"y"}})
 	result := (&goalcon.Solver{Operators: registry, MaxDepth: 10}).Solve(goalcon.GoalCondition{Predicates: []goalcon.Predicate{"x"}}, goalcon.NewWorldState())
-	if len(result.Unsatisfied) == 0 || result.Unsatisfied[0] != "x" {
-		t.Fatalf("expected x unsatisfied, got %+v", result.Unsatisfied)
+	if len(result.Unsatisfied) == 0 {
+		t.Fatal("expected unsatisfied predicates due to cycle")
+	}
+	// Check that x is in unsatisfied (it's a circular dependency)
+	found := false
+	for _, p := range result.Unsatisfied {
+		if p == "x" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected x in unsatisfied, got %+v", result.Unsatisfied)
 	}
 }
 

@@ -3,6 +3,7 @@ package goalcon
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -12,16 +13,19 @@ import (
 
 // GoalConAgent plans via deterministic backward chaining and executes leaves.
 type GoalConAgent struct {
-	Model        core.LanguageModel
-	Tools        *capability.Registry
-	Memory       memory.MemoryStore
-	Config       *core.Config
-	Operators    *OperatorRegistry
-	PlanExecutor graph.WorkflowExecutor
-	MaxDepth     int
-	InitialState map[string]bool
-	GoalOverride *GoalCondition
-	initialised  bool
+	Model              core.LanguageModel
+	Tools              *capability.Registry
+	Memory             memory.MemoryStore
+	Config             *core.Config
+	Operators          *OperatorRegistry
+	PlanExecutor       graph.WorkflowExecutor
+	MaxDepth           int
+	InitialState       map[string]bool
+	GoalOverride       *GoalCondition
+	ClassifierConfig   ClassifierConfig
+	MetricsRecorder    *MetricsRecorder
+	AuditTrail         *CapabilityAuditTrail    // Phase 5: Provenance tracking
+	initialised        bool
 }
 
 func (a *GoalConAgent) Initialize(cfg *core.Config) error {
@@ -30,7 +34,19 @@ func (a *GoalConAgent) Initialize(cfg *core.Config) error {
 		a.Tools = capability.NewRegistry()
 	}
 	if a.Operators == nil {
+		// Use default operators
 		a.Operators = DefaultOperatorRegistry()
+	}
+	// Initialize classifier config if not already set
+	if a.ClassifierConfig.Cache == nil {
+		a.ClassifierConfig = DefaultClassifierConfig()
+	}
+	// Initialize metrics recorder and load from memory
+	if a.MetricsRecorder == nil {
+		a.MetricsRecorder = NewMetricsRecorder(a.Memory)
+		if a.MetricsRecorder != nil {
+			_ = a.MetricsRecorder.LoadExisting()
+		}
 	}
 	a.initialised = true
 	return nil
@@ -77,7 +93,17 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, state *core
 		state = core.NewContext()
 	}
 
+	// Phase 5: Create audit trail for provenance tracking
+	planID := task.ID
+	if planID == "" {
+		planID = "goalcon-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	a.AuditTrail = NewCapabilityAuditTrail(planID)
+	a.AuditTrail.SetAgentID("goalcon")
+
 	goal := a.goal(task)
+	state.Set("goalcon.goal", goal)
+
 	ws := NewWorldState()
 	for pred, satisfied := range a.InitialState {
 		if satisfied {
@@ -85,7 +111,12 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, state *core
 		}
 	}
 
-	solver := &Solver{Operators: a.Operators, MaxDepth: a.maxDepth()}
+	// Create solver with metrics recorder for quality-based operator ranking
+	solver := &Solver{
+		Operators: a.Operators,
+		MaxDepth:  a.maxDepth(),
+		Recorder:  a.MetricsRecorder,
+	}
 	planResult := solver.Solve(goal, ws)
 	state.Set("goalcon.plan", planResult.Plan)
 	state.Set("goalcon.unsatisfied", planResult.Unsatisfied)
@@ -117,6 +148,31 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, state *core
 	}
 	result.Data["search_depth"] = planResult.Depth
 	result.Data["unsatisfied_count"] = len(planResult.Unsatisfied)
+
+	// Record plan execution metrics if metrics recorder available
+	if a.MetricsRecorder != nil {
+		// Use a default duration estimate; in Phase 4 this will be precise
+		_ = a.MetricsRecorder.RecordPlanExecution(planResult.Plan, result, 0)
+	}
+
+	// Phase 5: Build and attach provenance summary
+	if a.AuditTrail != nil {
+		collector := NewProvenanceCollector(planResult.Plan, nil, a.AuditTrail)
+		provenance := collector.BuildProvenance()
+		result.Data["provenance"] = provenance
+
+		// Optionally persist to MemoryStore
+		if a.Memory != nil {
+			provenanceData := map[string]any{
+				"plan_goal":    planResult.Plan.Goal,
+				"invocations":  provenance.TotalCapabilityInvocations,
+				"success_rate": provenance.SuccessRate,
+				"summary":      provenance.HumanSummary,
+			}
+			_ = a.Memory.Remember(ctx, fmt.Sprintf("goalcon.audit.%s", planID), provenanceData, memory.MemoryScopeProject)
+		}
+	}
+
 	return result, nil
 }
 
@@ -127,7 +183,8 @@ func (a *GoalConAgent) goal(task *core.Task) GoalCondition {
 	if task == nil {
 		return GoalCondition{}
 	}
-	return ClassifyGoal(task.Instruction, a.Operators)
+	// Use LLM-based classification with fallback to keyword matching
+	return ClassifyGoalWithLLM(task.Instruction, a.Model, a.Operators, a.ClassifierConfig)
 }
 
 func (a *GoalConAgent) maxDepth() int {
