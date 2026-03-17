@@ -18,6 +18,18 @@ const (
 	FailurePolicyFailFast FailurePolicy = "fail_fast"
 )
 
+// TransitionKind defines how chain execution continues after this link.
+type TransitionKind string
+
+const (
+	// TransitionKindNext continues to the next link (default).
+	TransitionKindNext TransitionKind = "next"
+	// TransitionKindStop halts execution.
+	TransitionKindStop TransitionKind = "stop"
+	// TransitionKindSkipOnError skips to a specific link on error.
+	TransitionKindSkipOnError TransitionKind = "skip_on_error"
+)
+
 // ErrLinkParseFailure is returned when a link response cannot be parsed.
 var ErrLinkParseFailure = errors.New("chainer: link parse failure")
 
@@ -30,6 +42,13 @@ type Link struct {
 	Parse        ParseFunc
 	OnFailure    FailurePolicy
 	MaxRetries   int
+	// Phase 5: Validation & Transitions
+	Schema     string          // JSON Schema for output validation (optional)
+	Transition TransitionKind  // How to continue after this link
+	SkipTo     string          // Link name to skip to on error (if Transition == SkipOnError)
+	// Phase 6: Tool Integration & Capabilities
+	AllowedTools []string // Restrict which tools this link can access (optional; empty = all allowed)
+	RequiredTools []string // Tools this link must have access to (optional)
 }
 
 // Chain is an ordered list of links.
