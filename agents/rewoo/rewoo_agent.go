@@ -8,30 +8,39 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
+	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
+	frameworksearch "github.com/lexcodex/relurpify/framework/search"
 )
 
 // RewooAgent executes a strict plan/execute/synthesize workflow.
 type RewooAgent struct {
-	Model   core.LanguageModel
-	Tools   *capability.Registry
-	Memory  memory.MemoryStore
-	Config  *core.Config
-	Options RewooOptions
+	Model             core.LanguageModel
+	Tools             *capability.Registry
+	Memory            memory.MemoryStore
+	Config            *core.Config
+	Options           RewooOptions
+	ContextPolicy     *contextmgr.ContextPolicy
+	PermissionManager *authorization.PermissionManager
+	IndexManager      *ast.IndexManager
+	SearchEngine      *frameworksearch.SearchEngine
+	Telemetry         core.Telemetry
 
 	initialised bool
 }
 
-func (a *RewooAgent) Initialize(cfg *core.Config) error {
-	a.Config = cfg
-	if a.Tools == nil {
-		a.Tools = capability.NewRegistry()
+
+// debugf logs debug messages if Config.DebugAgent is enabled.
+func (a *RewooAgent) debugf(format string, args ...interface{}) {
+	if a == nil || a.Config == nil || !a.Config.DebugAgent {
+		return
 	}
-	a.initialised = true
-	return nil
+	fmt.Printf("[rewoo] "+format+"\n", args...)
 }
 
 func (a *RewooAgent) Capabilities() []core.Capability {
@@ -74,8 +83,19 @@ func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 	}
 
 	options := a.options()
-	planner := &rewooPlannerNode{Model: a.Model}
-	planningTask := task
+
+	// Set up context management
+	state.SetExecutionPhase(string(PhasePlan))
+	var sharedContext *core.SharedContext
+	if a.ContextPolicy != nil {
+		// Initialize context manager once at the start
+		if err := a.ContextPolicy.InitialLoad(task); err != nil {
+			a.debugf("context initial load failed: %v", err)
+			// Non-fatal: continue without progressive loading
+		}
+		sharedContext = core.NewSharedContext(state, a.ContextPolicy.Budget, a.ContextPolicy.Summarizer)
+	}
+
 	if surfaces.Workflow != nil {
 		if retrievalPayload, err := workflowutil.Hydrate(ctx, surfaces.Workflow, workflowID, workflowutil.RetrievalQuery{
 			Primary:   taskInstruction(task),
@@ -86,62 +106,81 @@ func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 		} else if len(retrievalPayload) > 0 {
 			workflowutil.ApplyState(state, "rewoo.workflow_retrieval", retrievalPayload)
 			state.Set("rewoo.retrieval_applied", true)
-			planningTask = workflowutil.ApplyTaskRetrieval(task, retrievalPayload)
+			// Note: task augmentation for retrieval happens at the graph level
+			// The graph node will apply retrieval context to planning
 		}
 	}
 
-	var (
-		plan      *RewooPlan
-		results   []RewooStepResult
-		synthesis string
-		err       error
+	// Phase 7: Create checkpoint store if workflow store is available
+	var checkpointStore *RewooCheckpointStore
+	if surfaces.Workflow != nil {
+		checkpointStore = NewRewooCheckpointStore(surfaces.Workflow, a.debugf)
+	}
+
+	// Build the static graph once at the start
+	// (Phase 6: Graph-based execution integration)
+	// (Phase 7: With checkpoint nodes if checkpoint store is available)
+	g, err := buildStaticGraphWithCheckpoints(
+		a.Model,
+		a.Tools,
+		task,
+		a.Tools.ModelCallableLLMToolSpecs(),
+		a.ContextPolicy,
+		sharedContext,
+		state,
+		options,
+		a.PermissionManager,
+		checkpointStore,
+		a.debugf,
 	)
-	for attempt := 0; attempt <= options.MaxReplanAttempts; attempt++ {
-		plan, err = planner.Plan(ctx, planningTask, a.Tools.ModelCallableLLMToolSpecs())
-		if err != nil {
-			if surfaces.Workflow != nil && runID != "" {
-				_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
-			}
-			return nil, fmt.Errorf("rewoo: planning: %w", err)
+	if err != nil {
+		if surfaces.Workflow != nil && runID != "" {
+			_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
 		}
-		state.Set("rewoo.plan", plan)
-		a.persistPlan(ctx, surfaces, workflowID, runID, plan, attempt)
+		return nil, fmt.Errorf("rewoo: build graph failed: %w", err)
+	}
 
-		results, err = (&rewooExecutor{
-			Registry:  a.Tools,
-			OnFailure: options.OnFailure,
-			MaxSteps:  options.MaxSteps,
-		}).Execute(ctx, plan, state)
-		state.Set("rewoo.tool_results", results)
-		a.persistStepResults(ctx, surfaces, workflowID, task, plan, results, attempt)
-		if err != nil {
-			if err == rewooErrReplanRequired && attempt < options.MaxReplanAttempts {
-				replanContext := buildReplanContext(plan, results, err)
-				state.Set("rewoo.replan_context", replanContext)
-				planningTask = cloneTaskWithContext(planningTask)
-				if planningTask.Context == nil {
-					planningTask.Context = map[string]any{}
-				}
-				planningTask.Context["rewoo_replan_context"] = replanContext
-				a.persistReplanSignal(ctx, surfaces, workflowID, runID, replanContext, attempt)
-				continue
-			}
-			if surfaces.Workflow != nil && runID != "" {
-				_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
-			}
-			return nil, fmt.Errorf("rewoo: execute: %w", err)
+	// Execute the graph (handles planning, execution, replan routing, and synthesis)
+	// The graph manages all phase transitions and replan logic through conditional edges
+	state.SetExecutionPhase(string(PhasePlan))
+	if _, err := g.Execute(ctx, state); err != nil {
+		if surfaces.Workflow != nil && runID != "" {
+			_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
 		}
+		return nil, fmt.Errorf("rewoo: graph execution failed: %w", err)
+	}
 
-		synthesis, err = synthesize(ctx, a.Model, planningTask, results)
-		if err != nil {
-			if surfaces.Workflow != nil && runID != "" {
-				_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
-			}
-			return nil, fmt.Errorf("rewoo: synthesis: %w", err)
+	// Extract results from state after graph completion
+	var plan *RewooPlan
+	if planVal, ok := state.Get("rewoo.plan"); ok {
+		if p, ok := planVal.(*RewooPlan); ok {
+			plan = p
 		}
-		state.Set("rewoo.synthesis", synthesis)
+	}
+
+	var results []RewooStepResult
+	if resultsVal, ok := state.Get("rewoo.tool_results"); ok {
+		if r, ok := resultsVal.([]RewooStepResult); ok {
+			results = r
+		}
+	}
+
+	synthesis := ""
+	if synthVal, ok := state.Get("rewoo.synthesis"); ok {
+		if s, ok := synthVal.(string); ok {
+			synthesis = s
+		}
+	}
+
+	// Persist final plan and results (for graph-based execution)
+	if plan != nil {
+		a.persistPlan(ctx, surfaces, workflowID, runID, plan, 0)
+	}
+	if len(results) > 0 {
+		a.persistStepResults(ctx, surfaces, workflowID, task, plan, results, 0)
+	}
+	if synthesis != "" {
 		a.persistSynthesis(ctx, surfaces, workflowID, runID, task, synthesis, results)
-		break
 	}
 	if surfaces.Workflow != nil && runID != "" {
 		_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))

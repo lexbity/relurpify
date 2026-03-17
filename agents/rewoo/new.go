@@ -20,5 +20,7 @@ func (a *RewooAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error 
 	a.Tools = env.Registry
 	a.Memory = env.Memory
 	a.Config = env.Config
+	a.IndexManager = env.IndexManager
+	a.SearchEngine = env.SearchEngine
 	return a.Initialize(env.Config)
 }

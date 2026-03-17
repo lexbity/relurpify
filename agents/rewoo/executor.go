@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -12,9 +13,11 @@ import (
 var rewooErrReplanRequired = errors.New("rewoo: replan required")
 
 type rewooExecutor struct {
-	Registry  *capability.Registry
-	OnFailure StepOnFailure
-	MaxSteps  int
+	Registry              *capability.Registry
+	PermissionManager     *authorization.PermissionManager
+	OnFailure             StepOnFailure
+	MaxSteps              int
+	OnPermissionDenied    StepOnFailure // How to handle denied permissions (default: abort)
 }
 
 func (e *rewooExecutor) Execute(ctx context.Context, plan *RewooPlan, state *core.Context) ([]RewooStepResult, error) {
@@ -95,6 +98,30 @@ func (e *rewooExecutor) executeStep(ctx context.Context, state *core.Context, st
 		Tool:    step.Tool,
 		Success: true,
 	}
+
+	// Check permissions before execution
+	if e.PermissionManager != nil {
+		if err := e.PermissionManager.CheckCapability(ctx, "rewoo", step.Tool); err != nil {
+			result.Success = false
+			result.Error = fmt.Sprintf("permission denied: %v", err)
+
+			// Handle permission denial based on configured policy
+			denyPolicy := e.OnPermissionDenied
+			if denyPolicy == "" {
+				denyPolicy = StepOnFailureAbort
+			}
+			switch denyPolicy {
+			case StepOnFailureAbort:
+				return result, fmt.Errorf("rewoo: permission denied for tool %s: %w", step.Tool, err)
+			case StepOnFailureReplan:
+				return result, rewooErrReplanRequired
+			default:
+				// Skip: record failure but continue
+				return result, nil
+			}
+		}
+	}
+
 	toolResult, err := e.Registry.InvokeCapability(ctx, state, step.Tool, step.Params)
 	if err == nil && toolResult != nil && !toolResult.Success {
 		err = errors.New(toolResult.Error)

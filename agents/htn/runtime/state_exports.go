@@ -74,9 +74,15 @@ func PublishTerminationState(state *core.Context, termination string) {
 
 // Exported constants for persistence use.
 const (
-	ContextKeySelectedMethod = contextKeySelectedMethod
-	ContextKeyMetrics       = contextKeyMetrics
-	ContextKeyLastDispatch  = contextKeyLastDispatch
-	ContextKnowledgeMethod  = contextKnowledgeMethod
-	HTNSchemaVersion        = htnSchemaVersion
+	ContextKeyTask              = contextKeyTask
+	ContextKeySelectedMethod    = contextKeySelectedMethod
+	ContextKeyMetrics           = contextKeyMetrics
+	ContextKeyPlan              = contextKeyPlan
+	ContextKeyCheckpoint        = contextKeyCheckpoint
+	ContextKnowledgeMethod      = contextKnowledgeMethod
+	HTNSchemaVersion            = htnSchemaVersion
+	ContextKeyLastRecoveryNotes = contextKeyLastRecoveryNotes
+	ContextKeyLastRecoveryDiag  = contextKeyLastRecoveryDiag
+	ContextKeyLastFailureStep   = contextKeyLastFailureStep
+	ContextKeyLastFailureError  = contextKeyLastFailureError
 )

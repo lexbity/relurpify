@@ -5,13 +5,28 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
-func synthesize(ctx context.Context, model core.LanguageModel, task *core.Task, results []RewooStepResult) (string, error) {
+func synthesize(
+	ctx context.Context,
+	model core.LanguageModel,
+	task *core.Task,
+	results []RewooStepResult,
+	policy *contextmgr.ContextPolicy,
+	shared *core.SharedContext,
+	state *core.Context,
+) (string, error) {
 	if model == nil {
 		return "", fmt.Errorf("rewoo: synthesizer model unavailable")
 	}
+
+	// Enforce budget before building prompt
+	if policy != nil && state != nil && shared != nil {
+		policy.EnforceBudget(state, shared, model, nil, nil)
+	}
+
 	summary, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("rewoo: results summary: %w", err)
@@ -23,5 +38,11 @@ func synthesize(ctx context.Context, model core.LanguageModel, task *core.Task, 
 	if err != nil {
 		return "", fmt.Errorf("rewoo: synthesis failed: %w", err)
 	}
+
+	// Record the interaction
+	if policy != nil && state != nil {
+		policy.RecordLatestInteraction(state, nil)
+	}
+
 	return resp.Text, nil
 }

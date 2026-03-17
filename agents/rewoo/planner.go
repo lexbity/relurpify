@@ -6,18 +6,28 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
 type rewooPlannerNode struct {
-	Model   core.LanguageModel
-	Options core.LLMOptions
+	Model         core.LanguageModel
+	Options       core.LLMOptions
+	ContextPolicy *contextmgr.ContextPolicy
+	SharedContext *core.SharedContext
+	State         *core.Context
 }
 
 func (n *rewooPlannerNode) Plan(ctx context.Context, task *core.Task, toolSpecs []core.LLMToolSpec) (*RewooPlan, error) {
 	if n == nil || n.Model == nil {
 		return nil, fmt.Errorf("rewoo: planner model unavailable")
 	}
+
+	// Enforce budget before building prompt (compress context if needed)
+	if n.ContextPolicy != nil && n.State != nil && n.SharedContext != nil {
+		n.ContextPolicy.EnforceBudget(n.State, n.SharedContext, n.Model, nil, nil)
+	}
+
 	resp, err := n.Model.Chat(ctx, []core.Message{
 		{Role: "system", Content: buildPlannerPrompt(task, toolSpecs)},
 		{Role: "user", Content: taskInstruction(task)},
@@ -25,6 +35,12 @@ func (n *rewooPlannerNode) Plan(ctx context.Context, task *core.Task, toolSpecs 
 	if err != nil {
 		return nil, fmt.Errorf("rewoo: planning failed: %w", err)
 	}
+
+	// Record the interaction
+	if n.ContextPolicy != nil && n.State != nil {
+		n.ContextPolicy.RecordLatestInteraction(n.State, nil)
+	}
+
 	plan, err := ParsePlan(resp.Text)
 	if err != nil {
 		return nil, fmt.Errorf("rewoo: parse plan: %w", err)
