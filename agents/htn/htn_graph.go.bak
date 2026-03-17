@@ -1,0 +1,553 @@
+package htn
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
+	agentpipeline "github.com/lexcodex/relurpify/agents/pipeline"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
+	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+)
+
+const (
+	contextKeyRuntimeTask   = "htn.runtime.task"
+	contextKeyRuntimeNext   = "htn.runtime.next"
+	contextKeyRuntimeResult = "htn.runtime.result"
+)
+
+type htnLoadNode struct {
+	id         string
+	agent      *HTNAgent
+	task       *core.Task
+	surfaces   workflowutil.RuntimeSurfaces
+	workflowID string
+	runID      string
+}
+
+func (n *htnLoadNode) ID() string           { return n.id }
+func (n *htnLoadNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *htnLoadNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		SideEffectClass:  graph.SideEffectContext,
+		Idempotency:      graph.IdempotencyReplaySafe,
+		Recoverability:   graph.NodeRecoverabilityInProcess,
+		CheckpointPolicy: graph.CheckpointPolicyPreferred,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:  []string{"task.*", "htn.*", "plan.*"},
+			WriteKeys: []string{"task.*", "htn.*", "plan.*"},
+		},
+	}
+}
+
+func (n *htnLoadNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+	if state == nil {
+		return nil, fmt.Errorf("htn: state required")
+	}
+	if n.task != nil {
+		state.Set("task.id", n.task.ID)
+		state.Set("task.type", string(n.task.Type))
+		state.Set("task.instruction", n.task.Instruction)
+	}
+	if n.surfaces.Workflow != nil {
+		if err := n.agent.resumeCheckpoint(ctx, n.surfaces.Workflow, n.workflowID, n.runID, n.task, state); err != nil {
+			return nil, err
+		}
+	}
+	publishTaskState(state, n.task)
+	executionState := loadExecutionState(state)
+	executionState.WorkflowID = n.workflowID
+	executionState.RunID = n.runID
+	publishExecutionState(state, executionState)
+	if _, _, err := LoadStateFromContext(state); err != nil {
+		return nil, err
+	}
+	state.Set(contextKeyRuntimeTask, core.CloneTask(n.task))
+	state.Set(contextKeyRuntimeNext, "htn_classify")
+	return &core.Result{Success: true, Data: map[string]any{"next": "htn_classify"}}, nil
+}
+
+type htnClassifyNode struct {
+	id string
+}
+
+func (n *htnClassifyNode) ID() string           { return n.id }
+func (n *htnClassifyNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *htnClassifyNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		SideEffectClass: graph.SideEffectContext,
+		Idempotency:     graph.IdempotencyReplaySafe,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:  []string{"task.*", "htn.*"},
+			WriteKeys: []string{"htn.*"},
+		},
+	}
+}
+
+func (n *htnClassifyNode) Execute(_ context.Context, state *core.Context) (*core.Result, error) {
+	task, err := activeHTNTask(state)
+	if err != nil {
+		return nil, err
+	}
+	if task.Type == "" {
+		task.Type = ClassifyTask(task)
+	}
+	publishTaskState(state, task)
+	state.Set(contextKeyRuntimeTask, task)
+	state.Set(contextKeyRuntimeNext, "htn_retrieve")
+	return &core.Result{Success: true, Data: map[string]any{"next": "htn_retrieve", "task_type": string(task.Type)}}, nil
+}
+
+type htnRetrieveNode struct {
+	id         string
+	surfaces   workflowutil.RuntimeSurfaces
+	workflowID string
+}
+
+func (n *htnRetrieveNode) ID() string           { return n.id }
+func (n *htnRetrieveNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *htnRetrieveNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		SideEffectClass: graph.SideEffectContext,
+		Idempotency:     graph.IdempotencyReplaySafe,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:  []string{"task.*", "htn.*"},
+			WriteKeys: []string{"htn.*"},
+		},
+	}
+}
+
+func (n *htnRetrieveNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+	task, err := activeHTNTask(state)
+	if err != nil {
+		return nil, err
+	}
+	applied := false
+	if n.surfaces.Workflow != nil {
+		payload, err := workflowutil.Hydrate(ctx, n.surfaces.Workflow, n.workflowID, workflowutil.RetrievalQuery{
+			Primary:   task.Instruction,
+			TaskText:  task.Instruction,
+			StepFiles: workflowutil.TaskPaths(task),
+		}, 4, 500)
+		if err != nil {
+			return nil, err
+		}
+		if len(payload) > 0 {
+			publishWorkflowRetrieval(state, payload, true)
+			task = workflowutil.ApplyTaskRetrieval(task, payload)
+			applied = true
+		} else {
+			publishWorkflowRetrieval(state, nil, false)
+		}
+	} else {
+		publishWorkflowRetrieval(state, nil, false)
+	}
+	state.Set(contextKeyRuntimeTask, task)
+	if _, _, err := LoadStateFromContext(state); err != nil {
+		return nil, err
+	}
+	state.Set(contextKeyRuntimeNext, "htn_select")
+	return &core.Result{Success: true, Data: map[string]any{"next": "htn_select", "retrieval_applied": applied}}, nil
+}
+
+type htnSelectMethodNode struct {
+	id    string
+	agent *HTNAgent
+}
+
+func (n *htnSelectMethodNode) ID() string           { return n.id }
+func (n *htnSelectMethodNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *htnSelectMethodNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		SideEffectClass:      graph.SideEffectContext,
+		Idempotency:          graph.IdempotencyReplaySafe,
+		RequiredCapabilities: aggregateMethodSelectors(n.agent.Methods.All()),
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:  []string{"task.*", "htn.*"},
+			WriteKeys: []string{"htn.*"},
+		},
+	}
+}
+
+func (n *htnSelectMethodNode) Execute(_ context.Context, state *core.Context) (*core.Result, error) {
+	task, err := activeHTNTask(state)
+	if err != nil {
+		return nil, err
+	}
+	method := n.agent.Methods.FindResolved(task)
+	if err := n.agent.enforceResolvedMethodContracts(method); err != nil {
+		publishTerminationState(state, "preflight_failed")
+		return nil, err
+	}
+	publishResolvedMethodState(state, method)
+	next := "htn_decompose"
+	if method == nil {
+		publishTerminationState(state, "delegated_to_primitive")
+		next = "htn_delegate"
+	}
+	if _, _, err := LoadStateFromContext(state); err != nil {
+		return nil, err
+	}
+	state.Set(contextKeyRuntimeNext, next)
+	return &core.Result{Success: true, Data: map[string]any{"next": next}}, nil
+}
+
+type htnDecomposeNode struct {
+	id    string
+	agent *HTNAgent
+}
+
+func (n *htnDecomposeNode) ID() string           { return n.id }
+func (n *htnDecomposeNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *htnDecomposeNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		SideEffectClass: graph.SideEffectContext,
+		Idempotency:     graph.IdempotencyReplaySafe,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:  []string{"task.*", "htn.*"},
+			WriteKeys: []string{"htn.*"},
+		},
+	}
+}
+
+func (n *htnDecomposeNode) Execute(_ context.Context, state *core.Context) (*core.Result, error) {
+	task, err := activeHTNTask(state)
+	if err != nil {
+		return nil, err
+	}
+	method := selectedResolvedMethodFromContext(state, n.agent.Methods)
+	if method == nil {
+		return nil, fmt.Errorf("htn: selected method missing")
+	}
+	plan, err := DecomposeResolved(task, method)
+	if err != nil {
+		publishTerminationState(state, "decomposition_failed")
+		return nil, err
+	}
+	publishPlanState(state, plan)
+	if _, _, err := LoadStateFromContext(state); err != nil {
+		return nil, err
+	}
+	state.Set(contextKeyRuntimeNext, "htn_execute_plan")
+	return &core.Result{Success: true, Data: map[string]any{"next": "htn_execute_plan", "step_count": len(plan.Steps)}}, nil
+}
+
+type htnExecutePlanNode struct {
+	id         string
+	agent      *HTNAgent
+	surfaces   workflowutil.RuntimeSurfaces
+	workflowID string
+	runID      string
+}
+
+func (n *htnExecutePlanNode) ID() string           { return n.id }
+func (n *htnExecutePlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *htnExecutePlanNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		SideEffectClass:  graph.SideEffectContext,
+		Idempotency:      graph.IdempotencyUnknown,
+		Recoverability:   graph.NodeRecoverabilityInProcess,
+		CheckpointPolicy: graph.CheckpointPolicyPreferred,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:  []string{"task.*", "htn.*", "plan.*"},
+			WriteKeys: []string{"htn.*", "plan.*"},
+		},
+	}
+}
+
+func (n *htnExecutePlanNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+	task, err := activeHTNTask(state)
+	if err != nil {
+		return nil, err
+	}
+	htnState, _, err := LoadStateFromContext(state)
+	if err != nil {
+		return nil, err
+	}
+	if htnState == nil || htnState.Plan == nil {
+		return nil, fmt.Errorf("htn: plan state missing")
+	}
+	result, err := n.agent.executePlan(ctx, task, htnState.Plan, state, n.surfaces, n.workflowID, n.runID)
+	if err != nil {
+		publishTerminationState(state, "plan_execution_failed")
+		return nil, err
+	}
+	state.Set(contextKeyRuntimeResult, result)
+	publishTerminationState(state, "completed")
+	if _, _, err := LoadStateFromContext(state); err != nil {
+		return nil, err
+	}
+	state.Set(contextKeyRuntimeNext, "htn_done")
+	return &core.Result{Success: true, Data: map[string]any{"next": "htn_done", "steps_completed": result.Data["steps_completed"]}}, nil
+}
+
+type htnDelegateNode struct {
+	id         string
+	agent      *HTNAgent
+	surfaces   workflowutil.RuntimeSurfaces
+	workflowID string
+	runID      string
+}
+
+func (n *htnDelegateNode) ID() string           { return n.id }
+func (n *htnDelegateNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *htnDelegateNode) Contract() graph.NodeContract {
+	return graph.NodeContract{
+		SideEffectClass: graph.SideEffectContext,
+		Idempotency:     graph.IdempotencyUnknown,
+		ContextPolicy: core.StateBoundaryPolicy{
+			ReadKeys:  []string{"task.*", "htn.*"},
+			WriteKeys: []string{"htn.*"},
+		},
+	}
+}
+
+func (n *htnDelegateNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
+	task, err := activeHTNTask(state)
+	if err != nil {
+		return nil, err
+	}
+	result, err := n.agent.delegateToPrimitive(ctx, task, state)
+	if err != nil {
+		if n.surfaces.Workflow != nil && n.workflowID != "" && n.runID != "" {
+			_ = n.surfaces.Workflow.UpdateRunStatus(ctx, n.runID, memory.WorkflowRunStatusFailed, timePtr(nowUTC()))
+		}
+		return nil, err
+	}
+	if n.surfaces.Workflow != nil && n.workflowID != "" && n.runID != "" {
+		_ = n.surfaces.Workflow.UpdateRunStatus(ctx, n.runID, memory.WorkflowRunStatusCompleted, timePtr(nowUTC()))
+	}
+	state.Set(contextKeyRuntimeResult, result)
+	publishTerminationState(state, "completed")
+	if _, _, err := LoadStateFromContext(state); err != nil {
+		return nil, err
+	}
+	state.Set(contextKeyRuntimeNext, "htn_done")
+	return &core.Result{Success: true, Data: map[string]any{"next": "htn_done"}}, nil
+}
+
+type htnDoneNode struct {
+	id string
+}
+
+func (n *htnDoneNode) ID() string           { return n.id }
+func (n *htnDoneNode) Type() graph.NodeType { return graph.NodeTypeTerminal }
+func (n *htnDoneNode) Execute(_ context.Context, state *core.Context) (*core.Result, error) {
+	if state != nil {
+		if raw, ok := state.Get(contextKeyRuntimeResult); ok {
+			if result, ok := raw.(*core.Result); ok && result != nil {
+				return result, nil
+			}
+			if result, ok := raw.(core.Result); ok {
+				return &result, nil
+			}
+		}
+	}
+	return &core.Result{Success: true, Data: map[string]any{}}, nil
+}
+
+func activeHTNTask(state *core.Context) (*core.Task, error) {
+	if state == nil {
+		return nil, fmt.Errorf("htn: state required")
+	}
+	if raw, ok := state.Get(contextKeyRuntimeTask); ok {
+		switch typed := raw.(type) {
+		case *core.Task:
+			if typed != nil {
+				return typed, nil
+			}
+		case core.Task:
+			copy := typed
+			return &copy, nil
+		}
+	}
+	loaded, _, err := LoadStateFromContext(state)
+	if err != nil {
+		return nil, err
+	}
+	if loaded != nil {
+		task := &core.Task{
+			ID:          loaded.Task.ID,
+			Type:        loaded.Task.Type,
+			Instruction: loaded.Task.Instruction,
+			Metadata:    mapsClone(loaded.Task.Metadata),
+		}
+		state.Set(contextKeyRuntimeTask, task)
+		return task, nil
+	}
+	return nil, fmt.Errorf("htn: runtime task missing")
+}
+
+func selectedResolvedMethodFromContext(state *core.Context, methods *MethodLibrary) *ResolvedMethod {
+	if state == nil || methods == nil {
+		return nil
+	}
+	raw, ok := state.Get(contextKeySelectedMethod)
+	if !ok {
+		return nil
+	}
+	var summary MethodState
+	if !decodeContextValue(raw, &summary) || summary.Name == "" {
+		return nil
+	}
+	for _, method := range methods.All() {
+		if method.Name == summary.Name {
+			resolved := ResolveMethod(method)
+			return &resolved
+		}
+	}
+	return nil
+}
+
+func (a *HTNAgent) buildRuntimeGraph(task *core.Task, surfaces workflowutil.RuntimeSurfaces, workflowID, runID string) (*graph.Graph, error) {
+	load := &htnLoadNode{id: "htn_load", agent: a, task: task, surfaces: surfaces, workflowID: workflowID, runID: runID}
+	classify := &htnClassifyNode{id: "htn_classify"}
+	retrieve := &htnRetrieveNode{id: "htn_retrieve", surfaces: surfaces, workflowID: workflowID}
+	selectMethod := &htnSelectMethodNode{id: "htn_select", agent: a}
+	decompose := &htnDecomposeNode{id: "htn_decompose", agent: a}
+	executePlan := &htnExecutePlanNode{id: "htn_execute_plan", agent: a, surfaces: surfaces, workflowID: workflowID, runID: runID}
+	delegate := &htnDelegateNode{id: "htn_delegate", agent: a, surfaces: surfaces, workflowID: workflowID, runID: runID}
+	done := &htnDoneNode{id: "htn_done"}
+
+	g := graph.NewGraph()
+	if a.Tools != nil && len(a.Tools.InspectableCapabilities()) > 0 {
+		g.SetCapabilityCatalog(a.Tools)
+	}
+	for _, node := range []graph.Node{load, classify, retrieve, selectMethod, decompose, executePlan, delegate, done} {
+		if err := g.AddNode(node); err != nil {
+			return nil, err
+		}
+	}
+	if err := g.SetStart(load.ID()); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(load.ID(), classify.ID(), nil, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(classify.ID(), retrieve.ID(), nil, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(retrieve.ID(), selectMethod.ID(), nil, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(selectMethod.ID(), decompose.ID(), func(_ *core.Result, state *core.Context) bool {
+		return state.GetString(contextKeyRuntimeNext) == decompose.ID()
+	}, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(selectMethod.ID(), delegate.ID(), func(_ *core.Result, state *core.Context) bool {
+		return state.GetString(contextKeyRuntimeNext) == delegate.ID()
+	}, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(decompose.ID(), executePlan.ID(), nil, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(executePlan.ID(), done.ID(), nil, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(delegate.ID(), done.ID(), nil, false); err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+func (a *HTNAgent) executePlan(ctx context.Context, task *core.Task, plan *core.Plan, state *core.Context, surfaces workflowutil.RuntimeSurfaces, workflowID, runID string) (*core.Result, error) {
+	stepIndexes := make(map[string]int, len(plan.Steps))
+	for idx, step := range plan.Steps {
+		stepIndexes[step.ID] = idx
+	}
+	var checkpointStore *agentpipeline.SQLitePipelineCheckpointStore
+	if surfaces.Workflow != nil && workflowID != "" && runID != "" {
+		checkpointStore = agentpipeline.NewSQLitePipelineCheckpointStore(surfaces.Workflow, workflowID, runID)
+	}
+	executor := &graph.PlanExecutor{
+		Options: graph.PlanExecutionOptions{
+			MaxRecoveryAttempts: 2,
+			BuildStepTask:       a.buildPlanStepTask,
+			CompletedStepIDs: func(s *core.Context) []string {
+				return completedStepsFromContext(s)
+			},
+			Diagnose: a.diagnoseStepFailure,
+			Recover:  a.recoverStepFailure,
+			BeforeStep: func(step core.PlanStep, sTask *core.Task, s *core.Context) {
+				if s == nil {
+					return
+				}
+				s.Set("htn.current_step_id", step.ID)
+				s.Set("htn.current_step", step)
+				if sTask != nil && sTask.Context != nil {
+					s.Set("htn.current_operator_executor", sTask.Context["operator_executor"])
+					s.Set("htn.current_operator_task_type", sTask.Context["operator_task_type"])
+				}
+			},
+			AfterStep: func(step core.PlanStep, s *core.Context, result *core.Result) {
+				appendCompletedStep(s, step.ID)
+				if checkpointStore != nil {
+					checkpointID := fmt.Sprintf("htn_%s_%d", step.ID, nowUTC().UnixNano())
+					publishCheckpointState(s, checkpointID, step.ID, stepIndexes[step.ID], workflowID, runID)
+					_ = checkpointStore.Save(&frameworkpipeline.Checkpoint{
+						CheckpointID: checkpointID,
+						TaskID:       taskID(task),
+						StageName:    step.ID,
+						StageIndex:   stepIndexes[step.ID],
+						CreatedAt:    nowUTC(),
+						Context:      s.Clone(),
+						Result: frameworkpipeline.StageResult{
+							StageName:     step.ID,
+							DecodedOutput: resultData(result),
+							ValidationOK:  result != nil && result.Success,
+							ErrorText:     resultErrorText(result),
+							Transition:    frameworkpipeline.StageTransition{Kind: frameworkpipeline.TransitionNext},
+						},
+					})
+					// Phase 7: Also persist HTN checkpoint to workflow artifacts for better durability.
+					if surfaces.Workflow != nil {
+						_ = a.saveHTNCheckpoint(context.Background(), s, surfaces.Workflow, workflowID, runID)
+					}
+				}
+				// Phase 9: Persist operator outcome to framework artifacts.
+				if surfaces.Workflow != nil && workflowID != "" && runID != "" {
+					operatorName := step.Tool
+					if step.Tool == "" {
+						operatorName = step.ID
+					}
+					success := result != nil && result.Success
+					var outputKeys []string
+					if result != nil && result.Data != nil {
+						for k := range result.Data {
+							outputKeys = append(outputKeys, k)
+						}
+					}
+					stepRunID := fmt.Sprintf("%s_%d", step.ID, nowUTC().UnixNano())
+					_ = a.persistOperatorOutcome(context.Background(), surfaces.Workflow, workflowID, runID, stepRunID, operatorName, step.ID, 0, success, outputKeys, nil)
+				}
+			},
+			MergeBranches: MergeHTNBranches,
+		},
+	}
+
+	primitiveAgent := graph.WorkflowExecutor(a.primitiveDispatcher())
+	if surfaces.Workflow != nil || surfaces.Runtime != nil {
+		primitiveAgent = &recordingPrimitiveAgent{
+			delegate:   primitiveAgent,
+			runtime:    surfaces.Runtime,
+			workflow:   surfaces.Workflow,
+			workflowID: workflowID,
+			runID:      runID,
+		}
+	}
+	result, err := executor.Execute(ctx, primitiveAgent, task, plan, state)
+	if err != nil {
+		if surfaces.Workflow != nil && workflowID != "" && runID != "" {
+			_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(nowUTC()))
+		}
+		return nil, fmt.Errorf("htn: plan execution failed: %w", err)
+	}
+	if surfaces.Workflow != nil && workflowID != "" && runID != "" {
+		_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(nowUTC()))
+	}
+	return result, nil
+}

@@ -9,6 +9,8 @@ import (
 
 	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	agentpipeline "github.com/lexcodex/relurpify/agents/pipeline"
+	"github.com/lexcodex/relurpify/agents/htn/persistence"
+	"github.com/lexcodex/relurpify/agents/htn/runtime"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -198,6 +200,22 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 						},
 					})
 				}
+				// Phase 9: Persist operator outcome to framework artifacts.
+				if surfaces.Workflow != nil && workflowID != "" && runID != "" {
+					operatorName := step.Tool
+					if step.Tool == "" {
+						operatorName = step.ID
+					}
+					success := result != nil && result.Success
+					var outputKeys []string
+					if result != nil && result.Data != nil {
+						for k := range result.Data {
+							outputKeys = append(outputKeys, k)
+						}
+					}
+					stepRunID := fmt.Sprintf("%s_%d", step.ID, time.Now().UnixNano())
+					_ = a.persistOperatorOutcome(ctx, surfaces.Workflow, workflowID, runID, stepRunID, operatorName, step.ID, 0, success, outputKeys, nil)
+				}
 			},
 		},
 	}
@@ -212,7 +230,9 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 			runID:      runID,
 		}
 	}
+	startTime := time.Now()
 	result, err := executor.Execute(ctx, primitiveAgent, resolvedTask, plan, state)
+	executionDuration := time.Since(startTime)
 	if err != nil {
 		if surfaces.Workflow != nil && workflowID != "" && runID != "" {
 			_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
@@ -221,6 +241,14 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 	}
 	if surfaces.Workflow != nil && workflowID != "" && runID != "" {
 		_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))
+	}
+
+	// Phase 9: Persist framework-native artifacts and metrics.
+	if surfaces.Workflow != nil && workflowID != "" && runID != "" {
+		success := result != nil && result.Success
+		_ = a.persistHTNRunSummary(ctx, state, surfaces.Workflow, workflowID, runID, startTime, success, nil)
+		_ = a.persistHTNMethodMetadata(ctx, state, surfaces.Workflow, workflowID, runID)
+		_ = a.persistHTNExecutionMetrics(ctx, state, surfaces.Workflow, workflowID, runID, time.Second, executionDuration)
 	}
 	return result, nil
 }

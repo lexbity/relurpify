@@ -2,13 +2,18 @@ package htn_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/htn"
 	agentpipeline "github.com/lexcodex/relurpify/agents/pipeline"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	frameworkmemory "github.com/lexcodex/relurpify/framework/memory"
@@ -106,6 +111,59 @@ func TestMethodLibrary_RegisterOverridesExisting(t *testing.T) {
 	}
 }
 
+func TestResolveMethod_DefaultRuntimeSpecs(t *testing.T) {
+	resolved := htn.ResolveMethod(htn.Method{
+		Name:     "code-new",
+		TaskType: core.TaskTypeCodeGeneration,
+		Priority: 7,
+		Subtasks: []htn.SubtaskSpec{
+			{Name: "plan", Type: core.TaskTypePlanning},
+			{Name: "code", Type: core.TaskTypeCodeGeneration, Executor: "pipeline"},
+		},
+	})
+	if resolved.Spec.Name != "code-new" {
+		t.Fatalf("expected method name, got %q", resolved.Spec.Name)
+	}
+	if resolved.Spec.OperatorCount != 2 {
+		t.Fatalf("expected operator count 2, got %d", resolved.Spec.OperatorCount)
+	}
+	if len(resolved.Spec.RequiredCapabilities) == 0 {
+		t.Fatal("expected required capability selectors")
+	}
+	if got := resolved.Operators[0].Executor; got != "react" {
+		t.Fatalf("expected default executor react, got %q", got)
+	}
+	if got := resolved.Operators[1].Executor; got != "pipeline" {
+		t.Fatalf("expected explicit executor pipeline, got %q", got)
+	}
+	if len(resolved.Operators[1].Contract.RequiredCapabilities) == 0 {
+		t.Fatal("expected operator contract required capabilities")
+	}
+}
+
+func TestMethodLibrary_FindResolvedBreaksPriorityTiesByName(t *testing.T) {
+	ml := &htn.MethodLibrary{}
+	ml.Register(htn.Method{
+		Name:     "z-method",
+		TaskType: core.TaskTypeAnalysis,
+		Priority: 5,
+		Subtasks: []htn.SubtaskSpec{{Name: "one", Type: core.TaskTypeAnalysis}},
+	})
+	ml.Register(htn.Method{
+		Name:     "a-method",
+		TaskType: core.TaskTypeAnalysis,
+		Priority: 5,
+		Subtasks: []htn.SubtaskSpec{{Name: "one", Type: core.TaskTypeAnalysis}},
+	})
+	resolved := ml.FindResolved(&core.Task{Type: core.TaskTypeAnalysis, Instruction: "explain"})
+	if resolved == nil {
+		t.Fatal("expected resolved method")
+	}
+	if resolved.Spec.Name != "a-method" {
+		t.Fatalf("expected stable name tie-break, got %q", resolved.Spec.Name)
+	}
+}
+
 func TestMethodLibrary_PreconditionFilters(t *testing.T) {
 	ml := htn.NewMethodLibrary()
 	// Register a method with a precondition that always fails.
@@ -177,6 +235,33 @@ func TestDecompose_WiresDependencies(t *testing.T) {
 	}
 	if len(deps) != 1 || deps[0] != "test-method.a" {
 		t.Errorf("unexpected deps: %v", deps)
+	}
+}
+
+func TestDecomposeResolved_PublishesOperatorMetadata(t *testing.T) {
+	resolved := htn.ResolveMethod(htn.Method{
+		Name:     "code-new",
+		TaskType: core.TaskTypeCodeGeneration,
+		Subtasks: []htn.SubtaskSpec{
+			{Name: "plan", Type: core.TaskTypePlanning},
+			{Name: "code", Type: core.TaskTypeCodeGeneration, Executor: "pipeline", DependsOn: []string{"plan"}},
+		},
+	})
+	plan, err := htn.DecomposeResolved(&core.Task{
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "implement feature",
+	}, &resolved)
+	if err != nil {
+		t.Fatalf("DecomposeResolved: %v", err)
+	}
+	if got := plan.Steps[0].Tool; got != "react" {
+		t.Fatalf("expected first step tool react, got %q", got)
+	}
+	if got := plan.Steps[1].Tool; got != "pipeline" {
+		t.Fatalf("expected second step tool pipeline, got %q", got)
+	}
+	if _, ok := plan.Steps[1].Params["required_capabilities"]; !ok {
+		t.Fatal("expected required_capabilities in step params")
 	}
 }
 
@@ -254,6 +339,568 @@ func TestHTNAgent_UnknownTypeDelegatesToPrimitive(t *testing.T) {
 	}
 	if !delegated {
 		t.Error("expected delegation to primitive executor for unknown task type")
+	}
+}
+
+func TestHTNAgent_ExecuteRoutesPrimitiveStepsThroughCapabilities(t *testing.T) {
+	registry := capability.NewRegistry()
+	var capabilityCalls int
+	requireNoErr(t, registry.RegisterInvocableCapability(&stubInvocableCapability{
+		desc: capabilityDescriptor("agent:react"),
+		invoke: func(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+			capabilityCalls++
+			return &core.CapabilityExecutionResult{
+				Success: true,
+				Data:    map[string]interface{}{"text": fmt.Sprint(args["instruction"])},
+			}, nil
+		},
+	}))
+
+	var fallbackCalls int
+	agent := &htn.HTNAgent{
+		Tools:  registry,
+		Config: &core.Config{MaxIterations: 8},
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+			fallbackCalls++
+			return &core.Result{Success: true}, nil
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	state := core.NewContext()
+	result, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-capability-steps",
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "implement feature",
+	}, state)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !result.Success {
+		t.Fatal("expected success")
+	}
+	if capabilityCalls == 0 {
+		t.Fatal("expected capability-routed step execution")
+	}
+	if fallbackCalls != 0 {
+		t.Fatalf("expected no fallback primitive calls, got %d", fallbackCalls)
+	}
+	lastDispatch, ok := state.Get("htn.execution.last_dispatch")
+	if !ok {
+		t.Fatal("expected last dispatch state")
+	}
+	dispatch, ok := lastDispatch.(map[string]any)
+	if !ok {
+		t.Fatalf("expected dispatch map, got %T", lastDispatch)
+	}
+	if dispatch["mode"] != "capability" {
+		t.Fatalf("expected capability dispatch mode, got %v", dispatch["mode"])
+	}
+	if dispatch["target"] != "agent:react" {
+		t.Fatalf("expected agent:react dispatch target, got %v", dispatch["target"])
+	}
+	if dispatch["requested_target"] != "agent:react" {
+		t.Fatalf("expected requested target agent:react, got %v", dispatch["requested_target"])
+	}
+	if dispatch["resolved_target"] != "agent:react" {
+		t.Fatalf("expected resolved target agent:react, got %v", dispatch["resolved_target"])
+	}
+	if dispatch["reason"] != "explicit_capability" {
+		t.Fatalf("expected explicit capability reason, got %v", dispatch["reason"])
+	}
+	if dispatch["operator"] != "verify" {
+		t.Fatalf("expected last operator verify, got %v", dispatch["operator"])
+	}
+	preflightValue, ok := state.Get("htn.preflight.report")
+	if !ok {
+		t.Fatal("expected preflight report in state")
+	}
+	report, ok := preflightValue.(*graph.PreflightReport)
+	if !ok {
+		t.Fatalf("expected *graph.PreflightReport, got %T", preflightValue)
+	}
+	if report.HasBlockingIssues() {
+		t.Fatalf("expected non-blocking preflight report, got %+v", report.Issues)
+	}
+	if state.GetString("htn.preflight.error") != "" {
+		t.Fatalf("expected empty preflight error, got %q", state.GetString("htn.preflight.error"))
+	}
+}
+
+func TestHTNAgent_ExecuteBindsOperatorMetadataOntoStepTask(t *testing.T) {
+	var seenTypes []core.TaskType
+	var seenOperatorTypes []string
+	var seenExecutors []string
+	var seenOperatorNames []string
+	var seenRequired [][]core.CapabilitySelector
+	agent := &htn.HTNAgent{
+		Config: &core.Config{MaxIterations: 8},
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, task *core.Task, _ *core.Context) (*core.Result, error) {
+			if task != nil {
+				seenTypes = append(seenTypes, task.Type)
+				if task.Context != nil {
+					seenOperatorTypes = append(seenOperatorTypes, fmt.Sprint(task.Context["operator_task_type"]))
+					seenExecutors = append(seenExecutors, fmt.Sprint(task.Context["operator_executor"]))
+					seenOperatorNames = append(seenOperatorNames, fmt.Sprint(task.Context["operator_name"]))
+					if raw, ok := task.Context["required_capabilities"]; ok {
+						var selectors []core.CapabilitySelector
+						if data, err := json.Marshal(raw); err == nil && json.Unmarshal(data, &selectors) == nil {
+							seenRequired = append(seenRequired, selectors)
+						}
+					}
+				}
+			}
+			return &core.Result{Success: true, Data: map[string]any{}}, nil
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-operator-bindings",
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "implement feature",
+	}, core.NewContext())
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(seenTypes) == 0 {
+		t.Fatal("expected primitive steps to execute")
+	}
+	if seenTypes[0] != core.TaskTypeAnalysis {
+		t.Fatalf("expected first step task type %q, got %q", core.TaskTypeAnalysis, seenTypes[0])
+	}
+	if seenOperatorTypes[0] != string(core.TaskTypeAnalysis) {
+		t.Fatalf("expected first operator task type %q, got %q", core.TaskTypeAnalysis, seenOperatorTypes[0])
+	}
+	if seenExecutors[0] != htn.ExecutorReact {
+		t.Fatalf("expected first operator executor %q, got %q", htn.ExecutorReact, seenExecutors[0])
+	}
+	if seenOperatorNames[0] != "explore" {
+		t.Fatalf("expected first operator name %q, got %q", "explore", seenOperatorNames[0])
+	}
+	if len(seenRequired) == 0 || len(seenRequired[0]) == 0 {
+		t.Fatal("expected required capabilities on step task")
+	}
+	if seenRequired[0][0].Name != "agent:react" {
+		t.Fatalf("expected first required capability %q, got %q", "agent:react", seenRequired[0][0].Name)
+	}
+}
+
+func TestHTNAgent_UnknownTypeDelegatesThroughCapabilityWhenAvailable(t *testing.T) {
+	registry := capability.NewRegistry()
+	var capabilityCalls int
+	requireNoErr(t, registry.RegisterInvocableCapability(&stubInvocableCapability{
+		desc: capabilityDescriptor("agent:react"),
+		invoke: func(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+			capabilityCalls++
+			return &core.CapabilityExecutionResult{
+				Success: true,
+				Data:    map[string]interface{}{"instruction": args["instruction"]},
+			}, nil
+		},
+	}))
+
+	var fallbackCalls int
+	agent := &htn.HTNAgent{
+		Tools:  registry,
+		Config: &core.Config{MaxIterations: 8},
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+			fallbackCalls++
+			return &core.Result{Success: true}, nil
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	result, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-capability-delegate",
+		Type:        "unknown_type_xyz",
+		Instruction: "do something unusual",
+	}, core.NewContext())
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !result.Success {
+		t.Fatal("expected success")
+	}
+	if capabilityCalls != 1 {
+		t.Fatalf("expected one capability delegation, got %d", capabilityCalls)
+	}
+	if fallbackCalls != 0 {
+		t.Fatalf("expected no fallback calls, got %d", fallbackCalls)
+	}
+}
+
+func TestHTNAgent_ExplicitCustomExecutorDispatchesToCapability(t *testing.T) {
+	registry := capability.NewRegistry()
+	var customCalls int
+	requireNoErr(t, registry.RegisterInvocableCapability(&stubInvocableCapability{
+		desc: capabilityDescriptor("agent:reviewer"),
+		invoke: func(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+			customCalls++
+			return &core.CapabilityExecutionResult{
+				Success: true,
+				Data:    map[string]interface{}{"operator": fmt.Sprint(args["instruction"])},
+			}, nil
+		},
+	}))
+
+	methods := &htn.MethodLibrary{}
+	methods.Register(htn.Method{
+		Name:     "custom-review",
+		TaskType: core.TaskTypeReview,
+		Subtasks: []htn.SubtaskSpec{
+			{Name: "report", Type: core.TaskTypeReview, Executor: "agent:reviewer", Instruction: "Report on: {{.Instruction}}"},
+		},
+	})
+
+	var fallbackCalls int
+	agent := &htn.HTNAgent{
+		Tools:   registry,
+		Config:  &core.Config{MaxIterations: 8},
+		Methods: methods,
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+			fallbackCalls++
+			return &core.Result{Success: true}, nil
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	state := core.NewContext()
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-custom-dispatch",
+		Type:        core.TaskTypeReview,
+		Instruction: "review this change",
+	}, state)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if customCalls != 1 {
+		t.Fatalf("expected one custom capability call, got %d", customCalls)
+	}
+	if fallbackCalls != 0 {
+		t.Fatalf("expected no fallback calls, got %d", fallbackCalls)
+	}
+	lastDispatch, ok := state.Get("htn.execution.last_dispatch")
+	if !ok {
+		t.Fatal("expected last dispatch state")
+	}
+	dispatch, ok := lastDispatch.(map[string]any)
+	if !ok {
+		t.Fatalf("expected dispatch map, got %T", lastDispatch)
+	}
+	if dispatch["requested_target"] != "agent:reviewer" {
+		t.Fatalf("expected requested target agent:reviewer, got %v", dispatch["requested_target"])
+	}
+	if dispatch["resolved_target"] != "agent:reviewer" {
+		t.Fatalf("expected resolved target agent:reviewer, got %v", dispatch["resolved_target"])
+	}
+	if dispatch["reason"] != "explicit_capability" {
+		t.Fatalf("expected explicit capability reason, got %v", dispatch["reason"])
+	}
+	if dispatch["operator"] != "report" {
+		t.Fatalf("expected operator report, got %v", dispatch["operator"])
+	}
+}
+
+func TestHTNAgent_FallbackDispatchRecordsReasonWhenCapabilityUnavailable(t *testing.T) {
+	var fallbackCalls int
+	agent := &htn.HTNAgent{
+		Config:  &core.Config{MaxIterations: 8},
+		Methods: &htn.MethodLibrary{},
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+			fallbackCalls++
+			return &core.Result{Success: true}, nil
+		}},
+	}
+	agent.Methods.Register(htn.Method{
+		Name:     "custom-review",
+		TaskType: core.TaskTypeReview,
+		Subtasks: []htn.SubtaskSpec{
+			{Name: "report", Type: core.TaskTypeReview, Executor: "agent:reviewer", Instruction: "Report on: {{.Instruction}}"},
+		},
+	})
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	state := core.NewContext()
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-fallback-dispatch",
+		Type:        core.TaskTypeReview,
+		Instruction: "review this change",
+	}, state)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if fallbackCalls != 1 {
+		t.Fatalf("expected one fallback call, got %d", fallbackCalls)
+	}
+	lastDispatch, ok := state.Get("htn.execution.last_dispatch")
+	if !ok {
+		t.Fatal("expected last dispatch state")
+	}
+	dispatch, ok := lastDispatch.(map[string]any)
+	if !ok {
+		t.Fatalf("expected dispatch map, got %T", lastDispatch)
+	}
+	if dispatch["mode"] != "fallback" {
+		t.Fatalf("expected fallback mode, got %v", dispatch["mode"])
+	}
+	if dispatch["reason"] != "capability_unresolved" {
+		t.Fatalf("expected capability_unresolved reason, got %v", dispatch["reason"])
+	}
+	if dispatch["requested_target"] != "agent:reviewer" {
+		t.Fatalf("expected requested target agent:reviewer, got %v", dispatch["requested_target"])
+	}
+	if dispatch["operator"] != "report" {
+		t.Fatalf("expected operator report, got %v", dispatch["operator"])
+	}
+}
+
+func TestHTNAgent_RetriesFailedStepWithRecoveryContext(t *testing.T) {
+	var attempts int
+	var retryAttemptValues []string
+	var recoveryDiagnoses []string
+	var recoveryNotesSeen bool
+	agent := &htn.HTNAgent{
+		Config: &core.Config{MaxIterations: 8},
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, task *core.Task, _ *core.Context) (*core.Result, error) {
+			attempts++
+			if task != nil && task.Context != nil {
+				retryAttemptValues = append(retryAttemptValues, fmt.Sprint(task.Context["retry_attempt"]))
+				recoveryDiagnoses = append(recoveryDiagnoses, fmt.Sprint(task.Context["recovery_diagnosis"]))
+				if _, ok := task.Context["recovery_notes"]; ok {
+					recoveryNotesSeen = true
+				}
+			}
+			if attempts == 1 {
+				return nil, fmt.Errorf("transient failure")
+			}
+			return &core.Result{Success: true, Data: map[string]any{"text": "recovered"}}, nil
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	state := core.NewContext()
+	result, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-retry-recovery",
+		Type:        core.TaskTypePlanning,
+		Instruction: "plan this implementation",
+	}, state)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !result.Success {
+		t.Fatal("expected success after retry")
+	}
+	if attempts < 2 {
+		t.Fatalf("expected retry attempt, got %d attempts", attempts)
+	}
+	if len(retryAttemptValues) < 2 || retryAttemptValues[1] != "1" {
+		t.Fatalf("expected second attempt retry_attempt=1, got %v", retryAttemptValues)
+	}
+	if len(recoveryDiagnoses) < 2 || strings.TrimSpace(recoveryDiagnoses[1]) == "" || recoveryDiagnoses[1] == "<nil>" {
+		t.Fatalf("expected recovery diagnosis on retry, got %v", recoveryDiagnoses)
+	}
+	if !recoveryNotesSeen {
+		t.Fatal("expected recovery notes in retry context")
+	}
+	if state.GetString("htn.last_recovery_diagnosis") == "" {
+		t.Fatal("expected htn.last_recovery_diagnosis in state")
+	}
+	if state.GetString("htn.last_failure_error") == "" {
+		t.Fatal("expected htn.last_failure_error in state")
+	}
+	if state.GetString("htn.last_failed_step") == "" {
+		t.Fatal("expected htn.last_failed_step in state")
+	}
+}
+
+func TestHTNAgent_PersistentFailureRecordsRecoveryState(t *testing.T) {
+	agent := &htn.HTNAgent{
+		Config: &core.Config{MaxIterations: 8},
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+			return nil, fmt.Errorf("persistent failure")
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	state := core.NewContext()
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-persistent-failure",
+		Type:        core.TaskTypePlanning,
+		Instruction: "plan this implementation",
+	}, state)
+	if err == nil {
+		t.Fatal("expected failure")
+	}
+	if state.GetString("htn.last_recovery_diagnosis") == "" {
+		t.Fatal("expected recovery diagnosis in state")
+	}
+	if state.GetString("htn.last_failure_error") == "" {
+		t.Fatal("expected failure error in state")
+	}
+	lastNotes, ok := state.Get("htn.last_recovery_notes")
+	if !ok {
+		t.Fatal("expected recovery notes in state")
+	}
+	notes, ok := lastNotes.([]string)
+	if !ok || len(notes) == 0 {
+		t.Fatalf("expected non-empty recovery notes, got %T %v", lastNotes, lastNotes)
+	}
+}
+
+func TestHTNAgent_ExecutesIndependentStepsInParallel(t *testing.T) {
+	methods := &htn.MethodLibrary{}
+	methods.Register(htn.Method{
+		Name:     "parallel-analysis",
+		TaskType: core.TaskTypeAnalysis,
+		Subtasks: []htn.SubtaskSpec{
+			{Name: "inspect-a", Type: core.TaskTypeAnalysis, Instruction: "Inspect A for {{.Instruction}}"},
+			{Name: "inspect-b", Type: core.TaskTypeAnalysis, Instruction: "Inspect B for {{.Instruction}}"},
+			{Name: "summarize", Type: core.TaskTypeAnalysis, Instruction: "Summarize {{.Instruction}}", DependsOn: []string{"inspect-a", "inspect-b"}},
+		},
+	})
+
+	var current int32
+	var maxSeen int32
+	agent := &htn.HTNAgent{
+		Config:  &core.Config{MaxIterations: 8},
+		Methods: methods,
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+			active := atomic.AddInt32(&current, 1)
+			for {
+				seen := atomic.LoadInt32(&maxSeen)
+				if active <= seen || atomic.CompareAndSwapInt32(&maxSeen, seen, active) {
+					break
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+			atomic.AddInt32(&current, -1)
+			return &core.Result{Success: true, Data: map[string]any{}}, nil
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	state := core.NewContext()
+	result, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-parallel",
+		Type:        core.TaskTypeAnalysis,
+		Instruction: "analyze this design",
+	}, state)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !result.Success {
+		t.Fatal("expected success")
+	}
+	if atomic.LoadInt32(&maxSeen) < 2 {
+		t.Fatalf("expected parallel execution, max concurrency=%d", atomic.LoadInt32(&maxSeen))
+	}
+	completedValue, ok := state.Get("htn.execution.completed_steps")
+	if !ok {
+		t.Fatal("expected completed steps in state")
+	}
+	completedSteps, ok := completedValue.([]string)
+	if !ok {
+		t.Fatalf("expected []string completed steps, got %T", completedValue)
+	}
+	if len(completedSteps) != 3 {
+		t.Fatalf("expected 3 completed steps, got %d", len(completedSteps))
+	}
+}
+
+func TestHTNAgent_ParallelMergeRejectsUnsafeBranchStateWrites(t *testing.T) {
+	methods := &htn.MethodLibrary{}
+	methods.Register(htn.Method{
+		Name:     "parallel-unsafe",
+		TaskType: core.TaskTypeAnalysis,
+		Subtasks: []htn.SubtaskSpec{
+			{Name: "inspect-a", Type: core.TaskTypeAnalysis, Instruction: "Inspect A for {{.Instruction}}"},
+			{Name: "inspect-b", Type: core.TaskTypeAnalysis, Instruction: "Inspect B for {{.Instruction}}"},
+		},
+	})
+
+	var mu sync.Mutex
+	var call int
+	agent := &htn.HTNAgent{
+		Config:  &core.Config{MaxIterations: 8},
+		Methods: methods,
+		PrimitiveExec: &stubAgent{onExecute: func(_ context.Context, _ *core.Task, state *core.Context) (*core.Result, error) {
+			mu.Lock()
+			call++
+			value := call
+			mu.Unlock()
+			if state != nil {
+				state.Set("unsafe.branch.key", value)
+			}
+			time.Sleep(10 * time.Millisecond)
+			return &core.Result{Success: true, Data: map[string]any{}}, nil
+		}},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-parallel-unsafe",
+		Type:        core.TaskTypeAnalysis,
+		Instruction: "analyze this design",
+	}, core.NewContext())
+	if err == nil {
+		t.Fatal("expected unsafe branch merge failure")
+	}
+	if !strings.Contains(err.Error(), "outside merge policy") {
+		t.Fatalf("expected merge policy error, got %v", err)
+	}
+}
+
+func TestHTNAgent_PrefightFailsWhenRequiredCapabilityMissing(t *testing.T) {
+	registry := capability.NewRegistry()
+	requireNoErr(t, registry.RegisterInvocableCapability(&stubInvocableCapability{
+		desc: capabilityDescriptor("agent:react"),
+		invoke: func(_ context.Context, _ *core.Context, _ map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+			return &core.CapabilityExecutionResult{Success: true}, nil
+		},
+	}))
+
+	methods := &htn.MethodLibrary{}
+	methods.Register(htn.Method{
+		Name:     "custom-review",
+		TaskType: core.TaskTypeReview,
+		Subtasks: []htn.SubtaskSpec{
+			{Name: "report", Type: core.TaskTypeReview, Executor: "agent:reviewer", Instruction: "Report on: {{.Instruction}}"},
+		},
+	})
+
+	agent := &htn.HTNAgent{
+		Tools:   registry,
+		Config:  &core.Config{MaxIterations: 8},
+		Methods: methods,
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	state := core.NewContext()
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-preflight-missing-capability",
+		Type:        core.TaskTypeReview,
+		Instruction: "review this change",
+	}, state)
+	if err == nil {
+		t.Fatal("expected preflight failure")
+	}
+	if !strings.Contains(err.Error(), "preflight failed") {
+		t.Fatalf("expected preflight failure error, got %v", err)
+	}
+	if state.GetString("htn.preflight.error") == "" {
+		t.Fatal("expected preflight error state")
+	}
+	preflightValue, ok := state.Get("htn.preflight.report")
+	if !ok {
+		t.Fatal("expected preflight report in state")
+	}
+	report, ok := preflightValue.(*graph.PreflightReport)
+	if !ok {
+		t.Fatalf("expected *graph.PreflightReport, got %T", preflightValue)
+	}
+	if !report.HasBlockingIssues() {
+		t.Fatalf("expected blocking preflight issues, got %+v", report.Issues)
 	}
 }
 
@@ -376,6 +1023,62 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 	if applied, ok := state.Get("htn.retrieval_applied"); !ok || applied != true {
 		t.Fatalf("expected retrieval flag in state, got %v", applied)
 	}
+	taskStateValue, ok := state.Get("htn.task")
+	if !ok {
+		t.Fatal("expected htn.task in state")
+	}
+	taskState, ok := taskStateValue.(htn.TaskState)
+	if !ok {
+		t.Fatalf("expected htn.TaskState, got %T", taskStateValue)
+	}
+	if taskState.Type != core.TaskTypeCodeGeneration {
+		t.Fatalf("expected task type %q, got %q", core.TaskTypeCodeGeneration, taskState.Type)
+	}
+	methodStateValue, ok := state.Get("htn.selected_method")
+	if !ok {
+		t.Fatal("expected htn.selected_method in state")
+	}
+	methodState, ok := methodStateValue.(htn.MethodState)
+	if !ok {
+		t.Fatalf("expected htn.MethodState, got %T", methodStateValue)
+	}
+	if methodState.Name == "" {
+		t.Fatal("expected selected method name")
+	}
+	if methodState.OperatorCount == 0 {
+		t.Fatal("expected selected method operator count")
+	}
+	if len(methodState.RequiredCapabilities) == 0 {
+		t.Fatal("expected selected method required capabilities")
+	}
+	planValue, ok := state.Get("htn.plan")
+	if !ok {
+		t.Fatal("expected htn.plan in state")
+	}
+	planState, ok := planValue.(*core.Plan)
+	if !ok {
+		t.Fatalf("expected *core.Plan, got %T", planValue)
+	}
+	if len(planState.Steps) == 0 {
+		t.Fatal("expected planned steps in htn.plan")
+	}
+	executionValue, ok := state.Get("htn.execution")
+	if !ok {
+		t.Fatal("expected htn.execution in state")
+	}
+	executionState, ok := executionValue.(htn.ExecutionState)
+	if !ok {
+		t.Fatalf("expected htn.ExecutionState, got %T", executionValue)
+	}
+	if executionState.PlannedStepCount != len(planState.Steps) {
+		t.Fatalf("expected planned step count %d, got %d", len(planState.Steps), executionState.PlannedStepCount)
+	}
+	if executionState.CompletedStepCount != len(planState.Steps) {
+		t.Fatalf("expected completed step count %d, got %d", len(planState.Steps), executionState.CompletedStepCount)
+	}
+	if got := state.GetString("htn.termination"); got != "completed" {
+		t.Fatalf("expected completed termination, got %q", got)
+	}
 	if seenRetrieval == "" || seenRetrieval != "Prior result: Known API constraint" {
 		t.Fatalf("expected primitive step to receive retrieval text, got %q", seenRetrieval)
 	}
@@ -462,6 +1165,139 @@ func TestHTNAgent_ResumesFromSQLiteCheckpoint(t *testing.T) {
 	if got := state.GetString("htn.resume_checkpoint_id"); got != "cp-seeded" {
 		t.Fatalf("expected resume checkpoint id, got %q", got)
 	}
+	completedValue, ok := state.Get("htn.execution.completed_steps")
+	if !ok {
+		t.Fatal("expected htn.execution.completed_steps in state")
+	}
+	completedSteps, ok := completedValue.([]string)
+	if !ok {
+		t.Fatalf("expected []string completed steps, got %T", completedValue)
+	}
+	if len(completedSteps) != len(plan.Steps) {
+		t.Fatalf("expected %d completed steps, got %d", len(plan.Steps), len(completedSteps))
+	}
+	executionValue, ok := state.Get("htn.execution")
+	if !ok {
+		t.Fatal("expected htn.execution in state")
+	}
+	executionState, ok := executionValue.(htn.ExecutionState)
+	if !ok {
+		t.Fatalf("expected htn.ExecutionState, got %T", executionValue)
+	}
+	if !executionState.Resumed {
+		t.Fatal("expected execution state to mark resumed")
+	}
+	if executionState.ResumeCheckpointID != "cp-seeded" {
+		t.Fatalf("expected resume checkpoint id %q, got %q", "cp-seeded", executionState.ResumeCheckpointID)
+	}
+}
+
+func TestLoadStateFromContext_RejectsCompletedStepOutsidePlan(t *testing.T) {
+	state := core.NewContext()
+	state.Set("htn.task", htn.TaskState{
+		ID:          "task-1",
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "implement feature",
+	})
+	state.Set("htn.selected_method", htn.MethodState{
+		Name:         "code-new",
+		TaskType:     core.TaskTypeCodeGeneration,
+		SubtaskCount: 1,
+	})
+	state.Set("htn.plan", &core.Plan{
+		Goal: "implement feature",
+		Steps: []core.PlanStep{
+			{ID: "code-new.plan", Description: "plan"},
+		},
+	})
+	state.Set("htn.execution", htn.ExecutionState{
+		PlannedStepCount:   1,
+		CompletedSteps:     []string{"code-new.unknown"},
+		CompletedStepCount: 1,
+	})
+	state.Set("htn.execution.completed_steps", []string{"code-new.unknown"})
+
+	_, loaded, err := htn.LoadStateFromContext(state)
+	if !loaded {
+		t.Fatal("expected state to load")
+	}
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestHTNAgent_RejectsInvalidCheckpointState(t *testing.T) {
+	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	if err != nil {
+		t.Fatalf("workflow store: %v", err)
+	}
+	t.Cleanup(func() { _ = workflowStore.Close() })
+	requireNoErr(t, workflowStore.CreateWorkflow(context.Background(), frameworkmemory.WorkflowRecord{
+		WorkflowID:  "workflow-htn-invalid",
+		TaskID:      "htn-invalid",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "resume invalid work",
+		Status:      frameworkmemory.WorkflowRunStatusRunning,
+	}))
+
+	checkpointState := core.NewContext()
+	checkpointState.Set("htn.task", htn.TaskState{
+		ID:          "htn-invalid",
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "resume invalid work",
+	})
+	checkpointState.Set("htn.selected_method", htn.MethodState{
+		Name:         "code-new",
+		TaskType:     core.TaskTypeCodeGeneration,
+		SubtaskCount: 1,
+	})
+	checkpointState.Set("htn.plan", &core.Plan{
+		Goal: "resume invalid work",
+		Steps: []core.PlanStep{
+			{ID: "code-new.plan", Description: "plan"},
+		},
+	})
+	checkpointState.Set("htn.execution", htn.ExecutionState{
+		PlannedStepCount:   1,
+		CompletedSteps:     []string{"code-new.missing"},
+		CompletedStepCount: 1,
+	})
+	checkpointState.Set("htn.execution.completed_steps", []string{"code-new.missing"})
+	checkpointState.Set("plan.completed_steps", []string{"code-new.missing"})
+	checkpointAdapter := agentpipeline.NewSQLitePipelineCheckpointStore(workflowStore, "workflow-htn-invalid", "seed-run")
+	requireNoErr(t, checkpointAdapter.Save(&frameworkpipeline.Checkpoint{
+		CheckpointID: "cp-invalid",
+		TaskID:       "htn-invalid",
+		StageName:    "code-new.plan",
+		StageIndex:   0,
+		CreatedAt:    time.Now().UTC(),
+		Context:      checkpointState,
+		Result: frameworkpipeline.StageResult{
+			StageName:    "code-new.plan",
+			ValidationOK: true,
+			Transition: frameworkpipeline.StageTransition{
+				Kind: frameworkpipeline.TransitionNext,
+			},
+		},
+	}))
+
+	agent := &htn.HTNAgent{
+		Memory: frameworkmemory.NewCompositeRuntimeStore(workflowStore, nil, nil),
+		Config: &core.Config{MaxIterations: 4},
+	}
+	if err := agent.Initialize(agent.Config); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-invalid",
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "resume invalid work",
+		Context:     map[string]any{"workflow_id": "workflow-htn-invalid"},
+	}, core.NewContext())
+	if err == nil {
+		t.Fatal("expected invalid checkpoint state error")
+	}
 }
 
 func requireNoErr(t *testing.T, err error) {
@@ -487,4 +1323,29 @@ func (s *stubAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 }
 func (s *stubAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	return s.onExecute(ctx, task, state)
+}
+
+type stubInvocableCapability struct {
+	desc   core.CapabilityDescriptor
+	invoke func(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error)
+}
+
+func (s *stubInvocableCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+	return s.desc
+}
+
+func (s *stubInvocableCapability) Invoke(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+	return s.invoke(ctx, state, args)
+}
+
+func capabilityDescriptor(name string) core.CapabilityDescriptor {
+	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
+		ID:            name,
+		Name:          name,
+		Kind:          core.CapabilityKindTool,
+		RuntimeFamily: core.CapabilityRuntimeFamilyRelurpic,
+		Source:        core.CapabilitySource{Scope: core.CapabilityScopeBuiltin},
+		TrustClass:    core.TrustClassBuiltinTrusted,
+		Availability:  core.AvailabilitySpec{Available: true},
+	})
 }

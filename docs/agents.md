@@ -13,13 +13,14 @@ surfaces that consume framework-native contracts.
 
 ## Why Multiple Agent Types
 
-A single agent type is not optimal for all tasks. Answering a question about code requires different reasoning than planning a refactor, which requires different reasoning than iteratively debugging a failing test. Relurpify ships eight agent types, each tuned for a different pattern:
+A single agent type is not optimal for all tasks. Answering a question about code requires different reasoning than planning a refactor, which requires different reasoning than iteratively debugging a failing test. Relurpify ships nine agent types, each tuned for a different pattern:
 
 | Agent | Strategy | Best for |
 |-------|----------|----------|
 | **CodingAgent** | Euclo runtime (mode/profile routed) | General-purpose day-to-day work |
 | **ArchitectAgent** | Plan → step-by-step ReAct with recovery | Multi-step tasks that benefit from an upfront plan |
 | **PipelineAgent** | Deterministic typed stages | Structured workflows with declared input/output contracts |
+| **HTNAgent** | Hierarchical task decomposition | Structured engineering recipes with explicit decomposition |
 | **PlannerAgent** | Plan generation only | Thinking through a task before acting |
 | **ReActAgent** | Thought → Action → Observation loop | Open-ended exploration and tool-heavy tasks |
 | **ReflectionAgent** | ReAct + self-critique pass | Tasks where output quality is more important than speed |
@@ -237,6 +238,34 @@ Explore → Analyze → Plan → Code → Verify.
 
 Stage results are persisted after each stage, so interrupted pipelines resume
 from the last completed stage rather than starting over.
+
+---
+
+## HTNAgent
+
+HTNAgent implements a hierarchical task network runtime: it classifies an
+incoming task, selects a matching method from a method library, decomposes the
+task into primitive subtasks, and executes those primitive steps through
+`graph.PlanExecutor`.
+
+HTNAgent is appropriate when you want the overall work structure to come from
+declared engineering recipes rather than from open-ended model reasoning. The
+model should execute leaf tasks, not invent the task tree.
+
+The runtime note for HTN is in [Developer HTN Runtime Note](dev/htn-runtime.md).
+The current implementation already integrates with framework-owned execution
+surfaces for:
+
+- primitive step execution through `graph.PlanExecutor`
+- workflow retrieval before primitive execution
+- workflow checkpointing and resume
+- workflow/runtime persistence of primitive outcomes
+- shared `core.Context` state propagation
+
+Use HTNAgent when the task fits a known decomposition pattern such as inspect →
+edit → verify or analyze → patch → validate. Prefer ReActAgent or BlackboardAgent
+when the next step should be chosen dynamically from evolving state rather than
+from a declared method library.
 
 ---
 
