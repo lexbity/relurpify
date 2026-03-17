@@ -63,7 +63,7 @@ func (w *WorldState) Clone() *WorldState {
 	return clone
 }
 
-func buildPlan(description string, ops []*Operator) *core.Plan {
+func BuildPlan(description string, ops []*Operator) *core.Plan {
 	steps := make([]core.PlanStep, 0, len(ops))
 	deps := make(map[string][]string)
 	for i, op := range ops {
@@ -124,4 +124,50 @@ func operatorSatisfiesAny(op *Operator, preconditions []Predicate) bool {
 		}
 	}
 	return false
+}
+
+// OperatorRegistry indexes operators by effects.
+type OperatorRegistry struct {
+	operators   []*Operator
+	effectIndex map[Predicate][]*Operator
+}
+
+// NewOperatorRegistry creates a new operator registry.
+func NewOperatorRegistry() *OperatorRegistry {
+	return &OperatorRegistry{
+		operators:   make([]*Operator, 0),
+		effectIndex: make(map[Predicate][]*Operator),
+	}
+}
+
+// Register adds an operator to the registry.
+func (r *OperatorRegistry) Register(op Operator) {
+	if r == nil {
+		return
+	}
+	if r.effectIndex == nil {
+		r.effectIndex = make(map[Predicate][]*Operator)
+	}
+	copyOp := op
+	r.operators = append(r.operators, &copyOp)
+	for _, effect := range copyOp.Effects {
+		r.effectIndex[effect] = append(r.effectIndex[effect], &copyOp)
+	}
+}
+
+// OperatorsSatisfying returns operators that can produce pred.
+func (r *OperatorRegistry) OperatorsSatisfying(pred Predicate) []*Operator {
+	if r == nil {
+		return nil
+	}
+	ops := r.effectIndex[pred]
+	return append([]*Operator(nil), ops...)
+}
+
+// All returns all registered operators.
+func (r *OperatorRegistry) All() []*Operator {
+	if r == nil {
+		return nil
+	}
+	return append([]*Operator(nil), r.operators...)
 }

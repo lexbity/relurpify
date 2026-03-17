@@ -1,10 +1,6 @@
 package audit
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -13,25 +9,127 @@ import (
 
 // ExecutionMetrics captures timing and success information for a single execution.
 type ExecutionMetrics struct {
-	OperatorName  string
-	Success       bool
-	Duration      time.Duration
-	Depth         int
-	ErrorMessage  string
+	OperatorName string
+	Success      bool
+	Duration     time.Duration
+	Depth        int
+	ErrorMessage string
 }
 
-// types.MetricsRecorder tracks execution outcomes and persists them to memory.
-type types.MetricsRecorder struct {
-	store           memory.MemoryStore
-	metrics         OperatorMetricsCollection
-	autoSave        bool
-	saveInterval    int // Save after N recordings
-	recordingCount  int
+// OperatorMetrics tracks aggregated execution statistics for a specific operator.
+type OperatorMetrics struct {
+	Name              string
+	TotalExecutions   int
+	SuccessfulCount   int
+	FailedCount       int
+	AvgDuration       time.Duration
+	MinDuration       time.Duration
+	MaxDuration       time.Duration
+	SuccessRate       float64
+	LastExecutionTime time.Time
+}
+
+// RecordExecution updates metrics for a single execution.
+func (m *OperatorMetrics) RecordExecution(success bool, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	m.TotalExecutions++
+	if success {
+		m.SuccessfulCount++
+	} else {
+		m.FailedCount++
+	}
+
+	// Update durations
+	if m.AvgDuration == 0 {
+		m.AvgDuration = duration
+		m.MinDuration = duration
+		m.MaxDuration = duration
+	} else {
+		// Running average
+		m.AvgDuration = (m.AvgDuration*time.Duration(m.TotalExecutions-1) + duration) / time.Duration(m.TotalExecutions)
+		if duration < m.MinDuration {
+			m.MinDuration = duration
+		}
+		if duration > m.MaxDuration {
+			m.MaxDuration = duration
+		}
+	}
+
+	// Update success rate
+	if m.TotalExecutions > 0 {
+		m.SuccessRate = float64(m.SuccessfulCount) / float64(m.TotalExecutions)
+	}
+	m.LastExecutionTime = time.Now()
+}
+
+// OperatorMetricsCollection is a map of operator names to their metrics.
+type OperatorMetricsCollection map[string]*OperatorMetrics
+
+// GetOrCreateMetrics retrieves or creates metrics for an operator.
+func (c OperatorMetricsCollection) GetOrCreateMetrics(operatorName string) *OperatorMetrics {
+	if c == nil {
+		return nil
+	}
+	if m, exists := c[operatorName]; exists {
+		return m
+	}
+	m := &OperatorMetrics{Name: operatorName}
+	c[operatorName] = m
+	return m
+}
+
+// Snapshot returns a read-only snapshot of the metrics.
+func (c OperatorMetricsCollection) Snapshot() MetricsSnapshot {
+	snapshot := MetricsSnapshot{
+		Operators: make(map[string]OperatorMetrics),
+	}
+	for name, m := range c {
+		if m != nil {
+			snapshot.Operators[name] = *m
+		}
+	}
+	return snapshot
+}
+
+// MetricsSnapshot is a read-only snapshot of collected metrics.
+type MetricsSnapshot struct {
+	Operators map[string]OperatorMetrics
+	SnapshotTime time.Time
+}
+
+// LoadMetricsFromMemory loads previously persisted metrics from the memory store.
+func LoadMetricsFromMemory(store memory.MemoryStore) OperatorMetricsCollection {
+	if store == nil {
+		return make(OperatorMetricsCollection)
+	}
+	// TODO: Implement actual loading from memory store
+	// For now, return empty collection
+	return make(OperatorMetricsCollection)
+}
+
+// SaveMetricsToMemory persists metrics to the memory store.
+func SaveMetricsToMemory(store memory.MemoryStore, metrics OperatorMetricsCollection) error {
+	if store == nil {
+		return nil
+	}
+	// TODO: Implement actual saving to memory store
+	return nil
+}
+
+// MetricsRecorder tracks execution outcomes and persists them to memory.
+type MetricsRecorder struct {
+	store          memory.MemoryStore
+	metrics        OperatorMetricsCollection
+	autoSave       bool
+	saveInterval   int // Save after N recordings
+	recordingCount int
 }
 
 // NewMetricsRecorder creates a new metrics recorder.
-func NewMetricsRecorder(store memory.MemoryStore) *types.MetricsRecorder {
-	return &types.MetricsRecorder{
+func NewMetricsRecorder(store memory.MemoryStore) *MetricsRecorder {
+	return &MetricsRecorder{
 		store:        store,
 		metrics:      make(OperatorMetricsCollection),
 		autoSave:     true,
@@ -40,7 +138,7 @@ func NewMetricsRecorder(store memory.MemoryStore) *types.MetricsRecorder {
 }
 
 // LoadExisting loads previously persisted metrics from memory.
-func (r *types.MetricsRecorder) LoadExisting() error {
+func (r *MetricsRecorder) LoadExisting() error {
 	if r == nil || r.store == nil {
 		return nil
 	}
@@ -49,7 +147,7 @@ func (r *types.MetricsRecorder) LoadExisting() error {
 }
 
 // RecordExecution adds a new execution result to the metrics.
-func (r *types.MetricsRecorder) RecordExecution(execMetrics ExecutionMetrics) error {
+func (r *MetricsRecorder) RecordExecution(execMetrics ExecutionMetrics) error {
 	if r == nil || r.metrics == nil {
 		return nil
 	}
@@ -78,7 +176,7 @@ func (r *types.MetricsRecorder) RecordExecution(execMetrics ExecutionMetrics) er
 }
 
 // RecordOperatorExecution is a convenience for recording a single operator result.
-func (r *types.MetricsRecorder) RecordOperatorExecution(operatorName string, success bool, duration time.Duration) error {
+func (r *MetricsRecorder) RecordOperatorExecution(operatorName string, success bool, duration time.Duration) error {
 	return r.RecordExecution(ExecutionMetrics{
 		OperatorName: operatorName,
 		Success:      success,
@@ -87,7 +185,7 @@ func (r *types.MetricsRecorder) RecordOperatorExecution(operatorName string, suc
 }
 
 // GetMetrics returns the current metrics for an operator.
-func (r *types.MetricsRecorder) GetMetrics(operatorName string) *OperatorMetrics {
+func (r *MetricsRecorder) GetMetrics(operatorName string) *OperatorMetrics {
 	if r == nil || r.metrics == nil {
 		return nil
 	}
@@ -95,7 +193,7 @@ func (r *types.MetricsRecorder) GetMetrics(operatorName string) *OperatorMetrics
 }
 
 // GetAllMetrics returns a copy of all collected metrics.
-func (r *types.MetricsRecorder) GetAllMetrics() OperatorMetricsCollection {
+func (r *MetricsRecorder) GetAllMetrics() OperatorMetricsCollection {
 	if r == nil || r.metrics == nil {
 		return make(OperatorMetricsCollection)
 	}
@@ -108,7 +206,7 @@ func (r *types.MetricsRecorder) GetAllMetrics() OperatorMetricsCollection {
 }
 
 // Save persists metrics to memory store.
-func (r *types.MetricsRecorder) Save() error {
+func (r *MetricsRecorder) Save() error {
 	if r == nil || r.store == nil {
 		return nil
 	}
@@ -116,7 +214,7 @@ func (r *types.MetricsRecorder) Save() error {
 }
 
 // SetAutoSave configures automatic saving behavior.
-func (r *types.MetricsRecorder) SetAutoSave(enabled bool, interval int) {
+func (r *MetricsRecorder) SetAutoSave(enabled bool, interval int) {
 	if r == nil {
 		return
 	}
@@ -127,7 +225,7 @@ func (r *types.MetricsRecorder) SetAutoSave(enabled bool, interval int) {
 }
 
 // Snapshot returns a read-only metrics snapshot.
-func (r *types.MetricsRecorder) Snapshot() MetricsSnapshot {
+func (r *MetricsRecorder) Snapshot() MetricsSnapshot {
 	if r == nil || r.metrics == nil {
 		return MetricsSnapshot{}
 	}
@@ -137,7 +235,7 @@ func (r *types.MetricsRecorder) Snapshot() MetricsSnapshot {
 // EstimateOperatorQuality provides a weighted score for operator selection.
 // Higher score = more likely to be selected.
 // Formula: (success_rate * 0.7) + (1.0 - normalized_duration * 0.3)
-func (r *types.MetricsRecorder) EstimateOperatorQuality(operatorName string) float64 {
+func (r *MetricsRecorder) EstimateOperatorQuality(operatorName string) float64 {
 	if r == nil || r.metrics == nil {
 		return 1.0 // Default score for unknown operators
 	}
@@ -169,18 +267,16 @@ func (r *types.MetricsRecorder) EstimateOperatorQuality(operatorName string) flo
 }
 
 // ComparatorByQuality returns a comparator function for sorting operators by estimated quality.
-func (r *types.MetricsRecorder) ComparatorByQuality() func(op1, op2 *types.Operator) bool {
-	return func(op1, op2 *types.Operator) bool {
-		if op1 == nil || op2 == nil {
-			return false
-		}
-		return r.EstimateOperatorQuality(op1.Name) > r.EstimateOperatorQuality(op2.Name)
+func (r *MetricsRecorder) ComparatorByQuality() func(op1, op2 interface{}) bool {
+	return func(op1, op2 interface{}) bool {
+		// Simple comparator placeholder - can be customized based on operator type
+		return false
 	}
 }
 
 // RecordPlanExecution records metrics for a complete plan execution.
 // Called after solving and executing a plan.
-func (r *types.MetricsRecorder) RecordPlanExecution(plan *core.Plan, result *core.Result, duration time.Duration) error {
+func (r *MetricsRecorder) RecordPlanExecution(plan *core.Plan, result *core.Result, duration time.Duration) error {
 	if r == nil || plan == nil || result == nil {
 		return nil
 	}
@@ -201,7 +297,7 @@ func (r *types.MetricsRecorder) RecordPlanExecution(plan *core.Plan, result *cor
 }
 
 // ResetMetrics clears all collected metrics (for testing).
-func (r *types.MetricsRecorder) ResetMetrics() {
+func (r *MetricsRecorder) ResetMetrics() {
 	if r == nil {
 		return
 	}

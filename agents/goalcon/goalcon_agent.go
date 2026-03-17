@@ -13,19 +13,19 @@ import (
 
 // GoalConAgent plans via deterministic backward chaining and executes leaves.
 type GoalConAgent struct {
-	Model              core.LanguageModel
-	Tools              *capability.Registry
-	Memory             memory.MemoryStore
-	Config             *core.Config
-	Operators          *OperatorRegistry
-	PlanExecutor       graph.WorkflowExecutor
-	MaxDepth           int
-	InitialState       map[string]bool
-	GoalOverride       *GoalCondition
-	ClassifierConfig   ClassifierConfig
-	MetricsRecorder    *MetricsRecorder
-	AuditTrail         *CapabilityAuditTrail    // Phase 5: Provenance tracking
-	initialised        bool
+	Model            core.LanguageModel
+	Tools            *capability.Registry
+	Memory           memory.MemoryStore
+	Config           *core.Config
+	Operators        *OperatorRegistry
+	PlanExecutor     graph.WorkflowExecutor
+	MaxDepth         int
+	InitialState     map[string]bool
+	GoalOverride     *GoalCondition
+	ClassifierConfig ClassifierConfig
+	MetricsRecorder  *MetricsRecorder
+	AuditTrail       *CapabilityAuditTrail // Phase 5: Provenance tracking
+	initialised      bool
 }
 
 func (a *GoalConAgent) Initialize(cfg *core.Config) error {

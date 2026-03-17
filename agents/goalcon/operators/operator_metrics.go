@@ -1,10 +1,6 @@
 package operators
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"time"

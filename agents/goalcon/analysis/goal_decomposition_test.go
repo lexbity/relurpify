@@ -152,7 +152,7 @@ func TestGoalDecomposer_ShouldDecompose_Simple(t *testing.T) {
 
 	goal := types.GoalCondition{
 		Description: "Simple goal",
-		Predicates: []types.Predicate{"p1=true"},
+		Predicates:  []types.Predicate{"p1=true"},
 	}
 
 	if decomposer.ShouldDecompose(goal, nil) {
@@ -184,27 +184,27 @@ func TestGoalDecomposer_ChooseBestStrategy(t *testing.T) {
 	decomposer := NewGoalDecomposer()
 
 	tests := []struct {
-		name           string
-		goal           types.GoalCondition
-		ambiguity      *AmbiguityScore
-		expectedStrat  DecompositionStrategy
+		name          string
+		goal          types.GoalCondition
+		ambiguity     *AmbiguityScore
+		expectedStrat DecompositionStrategy
 	}{
 		{
-			name: "High ambiguity",
-			goal: types.GoalCondition{Predicates: []types.Predicate{"p1", "p2"}},
-			ambiguity: &AmbiguityScore{OverallScore: 0.8},
+			name:          "High ambiguity",
+			goal:          types.GoalCondition{Predicates: []types.Predicate{"p1", "p2"}},
+			ambiguity:     &AmbiguityScore{OverallScore: 0.8},
 			expectedStrat: DecompositionStrategyHierarchical,
 		},
 		{
-			name: "Many predicates",
-			goal: types.GoalCondition{Predicates: []types.Predicate{"p1", "p2", "p3", "p4", "p5"}},
-			ambiguity: nil,
+			name:          "Many predicates",
+			goal:          types.GoalCondition{Predicates: []types.Predicate{"p1", "p2", "p3", "p4", "p5"}},
+			ambiguity:     nil,
 			expectedStrat: DecompositionStrategySequential,
 		},
 		{
-			name: "Default",
-			goal: types.GoalCondition{Predicates: []types.Predicate{"p1", "p2", "p3"}},
-			ambiguity: nil,
+			name:          "Default",
+			goal:          types.GoalCondition{Predicates: []types.Predicate{"p1", "p2", "p3"}},
+			ambiguity:     nil,
 			expectedStrat: DecompositionStrategyPredicates,
 		},
 	}
@@ -441,7 +441,7 @@ func TestDecomposition_Importance_Distribution(t *testing.T) {
 
 	goal := types.GoalCondition{
 		Description: "Test",
-		Predicates: []types.Predicate{"p1", "p2", "p3"},
+		Predicates:  []types.Predicate{"p1", "p2", "p3"},
 	}
 
 	decomp := decomposer.Decompose(goal, DecompositionStrategyPredicates, nil)

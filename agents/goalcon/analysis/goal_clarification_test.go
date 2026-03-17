@@ -1,15 +1,13 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/goalcon/types"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -324,7 +322,7 @@ func TestGoalClarifier_RiskLevelForScore(t *testing.T) {
 	clarifier := NewGoalClarifier(nil, nil, nil)
 
 	tests := []struct {
-		score       float32
+		score        float32
 		expectedRisk authorization.RiskLevel
 	}{
 		{0.2, authorization.RiskLevelLow},
@@ -394,3 +392,7 @@ func TestClarificationChoice_Fields(t *testing.T) {
 	}
 }
 
+// Helper function for substring checking in tests
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}

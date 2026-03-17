@@ -1,10 +1,6 @@
 package audit
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"encoding/json"
 	"testing"
 	"time"
@@ -15,14 +11,14 @@ import (
 // TestAuditEntry_Create tests basic audit entry creation.
 func TestAuditEntry_Create(t *testing.T) {
 	entry := &AuditEntry{
-		ID:             "test-1",
-		Timestamp:      time.Now().UTC(),
-		StepID:         "step1",
-		CapabilityID:   "read-file",
-		CapabilityName: "ReadFile",
-		TrustClass:     core.TrustClassBuiltinTrusted,
-		Success:        true,
-		Duration:       100,
+		ID:              "test-1",
+		Timestamp:       time.Now().UTC(),
+		StepID:          "step1",
+		CapabilityID:    "read-file",
+		CapabilityName:  "ReadFile",
+		TrustClass:      core.TrustClassBuiltinTrusted,
+		Success:         true,
+		Duration:        100,
 		InsertionAction: InsertionActionDirect,
 	}
 
@@ -311,7 +307,7 @@ func TestAuditTrail_Serialization(t *testing.T) {
 
 // TestAuditTrail_Nil_Safe tests nil-safe operations.
 func TestAuditTrail_Nil_Safe(t *testing.T) {
-	var trail *types.CapabilityAuditTrail
+	var trail *CapabilityAuditTrail
 
 	// These should not panic
 	entries := trail.GetEntries()

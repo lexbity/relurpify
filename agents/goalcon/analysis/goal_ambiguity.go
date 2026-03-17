@@ -11,22 +11,22 @@ import (
 
 // AmbiguityIndicator identifies a potential ambiguity in a goal.
 type AmbiguityIndicator struct {
-	Type           string    // "vague_verb", "missing_object", "conflicting_predicates", "unclear_scope"
-	Description    string    // Human-readable description
-	AffectedPhrase string    // Part of goal that's ambiguous
-	Confidence     float32   // 0.0-1.0, confidence in ambiguity
-	Suggestion     string    // How to clarify
+	Type           string  // "vague_verb", "missing_object", "conflicting_predicates", "unclear_scope"
+	Description    string  // Human-readable description
+	AffectedPhrase string  // Part of goal that's ambiguous
+	Confidence     float32 // 0.0-1.0, confidence in ambiguity
+	Suggestion     string  // How to clarify
 	Timestamp      time.Time
 }
 
 // AmbiguityScore represents the overall ambiguity of a goal.
 type AmbiguityScore struct {
-	Goal          types.GoalCondition
-	OverallScore  float32                // 0.0 (clear) to 1.0 (very ambiguous)
-	Indicators    []*AmbiguityIndicator
-	ShouldRefine  bool
-	Reason        string
-	Confidence    float32 // Confidence in the ambiguity assessment
+	Goal         types.GoalCondition
+	OverallScore float32 // 0.0 (clear) to 1.0 (very ambiguous)
+	Indicators   []*AmbiguityIndicator
+	ShouldRefine bool
+	Reason       string
+	Confidence   float32 // Confidence in the ambiguity assessment
 }
 
 // VagueVerbs is a list of verbs that often indicate ambiguous intentions.

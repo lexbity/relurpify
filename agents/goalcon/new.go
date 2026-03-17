@@ -1,11 +1,15 @@
 package goalcon
 
-import "github.com/lexcodex/relurpify/framework/agentenv"
+import (
+	"github.com/lexcodex/relurpify/agents/goalcon/operators"
+	"github.com/lexcodex/relurpify/framework/agentenv"
+)
 
 type Option func(*GoalConAgent)
 
-func NewOperatorRegistry() *OperatorRegistry {
-	return DefaultOperatorRegistry()
+// DefaultOperatorRegistry returns a default operator registry.
+func DefaultOperatorRegistry() *OperatorRegistry {
+	return operators.DefaultOperatorRegistry()
 }
 
 func New(env agentenv.AgentEnvironment, operators *OperatorRegistry, opts ...Option) *GoalConAgent {

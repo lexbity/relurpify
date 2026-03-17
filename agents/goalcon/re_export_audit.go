@@ -15,6 +15,6 @@ type ExecutionMetrics = audit.ExecutionMetrics
 // Re-exported constructors
 var (
 	NewCapabilityAuditTrail = audit.NewCapabilityAuditTrail
-	NewProvenanceCollector = audit.NewProvenanceCollector
-	NewMetricsRecorder = audit.NewMetricsRecorder
+	NewProvenanceCollector  = audit.NewProvenanceCollector
+	NewMetricsRecorder      = audit.NewMetricsRecorder
 )

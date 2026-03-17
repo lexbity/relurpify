@@ -1,10 +1,6 @@
 package audit
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -16,10 +12,10 @@ import (
 // ProvenanceSummary provides a complete audit and policy compliance view of plan execution.
 type ProvenanceSummary struct {
 	// Coverage
-	PlanID                string `json:"plan_id,omitempty" yaml:"plan_id,omitempty"`
-	AgentID               string `json:"agent_id,omitempty" yaml:"agent_id,omitempty"`
+	PlanID                     string `json:"plan_id,omitempty" yaml:"plan_id,omitempty"`
+	AgentID                    string `json:"agent_id,omitempty" yaml:"agent_id,omitempty"`
 	TotalCapabilityInvocations int    `json:"total_capability_invocations" yaml:"total_capability_invocations"`
-	UniqueCapabilities    int    `json:"unique_capabilities" yaml:"unique_capabilities"`
+	UniqueCapabilities         int    `json:"unique_capabilities" yaml:"unique_capabilities"`
 
 	// Trust distribution
 	TrustDistribution map[string]int `json:"trust_distribution" yaml:"trust_distribution"`
@@ -34,12 +30,12 @@ type ProvenanceSummary struct {
 	DeniedCapabilities    []string       `json:"denied_capabilities,omitempty" yaml:"denied_capabilities,omitempty"`
 
 	// Risk assessment
-	HighRiskExecutions []RiskHighlight     `json:"high_risk_executions,omitempty" yaml:"high_risk_executions,omitempty"`
-	PolicyViolations   []PolicyViolation   `json:"policy_violations,omitempty" yaml:"policy_violations,omitempty"`
+	HighRiskExecutions []RiskHighlight   `json:"high_risk_executions,omitempty" yaml:"high_risk_executions,omitempty"`
+	PolicyViolations   []PolicyViolation `json:"policy_violations,omitempty" yaml:"policy_violations,omitempty"`
 
 	// Execution quality
-	SuccessRate float64 `json:"success_rate" yaml:"success_rate"`
-	TotalDurationMS int64 `json:"total_duration_ms" yaml:"total_duration_ms"`
+	SuccessRate     float64 `json:"success_rate" yaml:"success_rate"`
+	TotalDurationMS int64   `json:"total_duration_ms" yaml:"total_duration_ms"`
 
 	// Narrative
 	HumanSummary string `json:"human_summary" yaml:"human_summary"`
@@ -50,33 +46,33 @@ type ProvenanceSummary struct {
 
 // RiskHighlight identifies executions with security-relevant effect classes.
 type RiskHighlight struct {
-	StepID         string                `json:"step_id" yaml:"step_id"`
-	CapabilityID   string                `json:"capability_id" yaml:"capability_id"`
-	CapabilityName string                `json:"capability_name" yaml:"capability_name"`
-	EffectClasses  []core.EffectClass    `json:"effect_classes" yaml:"effect_classes"`
-	TrustClass     core.TrustClass       `json:"trust_class" yaml:"trust_class"`
-	InsertionAction string                `json:"insertion_action" yaml:"insertion_action"`
+	StepID          string             `json:"step_id" yaml:"step_id"`
+	CapabilityID    string             `json:"capability_id" yaml:"capability_id"`
+	CapabilityName  string             `json:"capability_name" yaml:"capability_name"`
+	EffectClasses   []core.EffectClass `json:"effect_classes" yaml:"effect_classes"`
+	TrustClass      core.TrustClass    `json:"trust_class" yaml:"trust_class"`
+	InsertionAction string             `json:"insertion_action" yaml:"insertion_action"`
 }
 
 // PolicyViolation identifies execution decisions that require attention.
 type PolicyViolation struct {
-	StepID          string  `json:"step_id" yaml:"step_id"`
-	CapabilityID    string  `json:"capability_id" yaml:"capability_id"`
-	CapabilityName  string  `json:"capability_name" yaml:"capability_name"`
-	ViolationType   string  `json:"violation_type" yaml:"violation_type"` // "denied" or "hitl-required"
-	Reason          string  `json:"reason,omitempty" yaml:"reason,omitempty"`
-	TrustClass      core.TrustClass `json:"trust_class" yaml:"trust_class"`
+	StepID         string          `json:"step_id" yaml:"step_id"`
+	CapabilityID   string          `json:"capability_id" yaml:"capability_id"`
+	CapabilityName string          `json:"capability_name" yaml:"capability_name"`
+	ViolationType  string          `json:"violation_type" yaml:"violation_type"` // "denied" or "hitl-required"
+	Reason         string          `json:"reason,omitempty" yaml:"reason,omitempty"`
+	TrustClass     core.TrustClass `json:"trust_class" yaml:"trust_class"`
 }
 
 // ProvenanceCollector builds a provenance summary from plan execution data.
 type ProvenanceCollector struct {
 	plan       *core.Plan
-	trace      *types.ExecutionTrace
-	auditTrail *types.CapabilityAuditTrail
+	trace      interface{}
+	auditTrail *CapabilityAuditTrail
 }
 
 // NewProvenanceCollector creates a collector for the given execution artifacts.
-func NewProvenanceCollector(plan *core.Plan, trace *types.ExecutionTrace, auditTrail *types.CapabilityAuditTrail) *ProvenanceCollector {
+func NewProvenanceCollector(plan *core.Plan, trace interface{}, auditTrail *CapabilityAuditTrail) *ProvenanceCollector {
 	return &ProvenanceCollector{
 		plan:       plan,
 		trace:      trace,
@@ -166,11 +162,11 @@ func (c *ProvenanceCollector) BuildProvenance() ProvenanceSummary {
 		// High-risk executions (destructive, execute, network effects)
 		if c.isHighRisk(entry) {
 			summary.HighRiskExecutions = append(summary.HighRiskExecutions, RiskHighlight{
-				StepID:         entry.StepID,
-				CapabilityID:   entry.CapabilityID,
-				CapabilityName: entry.CapabilityName,
-				EffectClasses:  entry.EffectClasses,
-				TrustClass:     entry.TrustClass,
+				StepID:          entry.StepID,
+				CapabilityID:    entry.CapabilityID,
+				CapabilityName:  entry.CapabilityName,
+				EffectClasses:   entry.EffectClasses,
+				TrustClass:      entry.TrustClass,
 				InsertionAction: string(entry.InsertionAction),
 			})
 		}

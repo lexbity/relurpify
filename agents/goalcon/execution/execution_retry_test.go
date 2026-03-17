@@ -1,15 +1,12 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -309,7 +306,7 @@ func TestRetryExecutor_ApplyBackoff_ContextCancelled(t *testing.T) {
 // TestRetryExecutor_RecordRetryHistory tests retry history recording.
 func TestRetryExecutor_RecordRetryHistory(t *testing.T) {
 	executor := NewStepExecutor(capability.NewRegistry())
-	trail := NewCapabilityAuditTrail("plan-1")
+	trail := audit.NewCapabilityAuditTrail("plan-1")
 	retryExec := NewRetryExecutor(executor, nil, nil, nil, trail)
 
 	attempts := []*RetryAttempt{
@@ -333,7 +330,7 @@ func TestExecutionAttempt_Fields(t *testing.T) {
 		StartTime: time.Now(),
 		Duration:  100 * time.Millisecond,
 		Result: &StepExecutionResult{
-			StepID: "step1",
+			StepID:  "step1",
 			Success: true,
 		},
 		Backoff: 50 * time.Millisecond,

@@ -1,12 +1,10 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 )
 
 // FailureCategory classifies the nature of a failure.
@@ -77,12 +75,12 @@ func (rs RecoveryStrategy) String() string {
 
 // FailureDetector analyzes step results and categorizes failures.
 type FailureDetector struct {
-	metrics    *types.MetricsRecorder
-	auditTrail *types.CapabilityAuditTrail
+	metrics    *audit.MetricsRecorder
+	auditTrail *audit.CapabilityAuditTrail
 }
 
 // NewFailureDetector creates a new failure detector.
-func NewFailureDetector(metrics *types.MetricsRecorder, auditTrail *types.CapabilityAuditTrail) *FailureDetector {
+func NewFailureDetector(metrics *audit.MetricsRecorder, auditTrail *audit.CapabilityAuditTrail) *FailureDetector {
 	return &FailureDetector{
 		metrics:    metrics,
 		auditTrail: auditTrail,
@@ -108,8 +106,8 @@ func (fd *FailureDetector) AnalyzeStepFailure(result *StepExecutionResult) *Fail
 	if fd.metrics != nil {
 		metrics := fd.metrics.GetMetrics(result.ToolName)
 		if metrics != nil {
-			successCount := float64(metrics.SuccessCount)
-			totalCount := float64(metrics.SuccessCount + metrics.FailureCount)
+			successCount := float64(metrics.SuccessfulCount)
+			totalCount := float64(metrics.SuccessfulCount + metrics.FailedCount)
 			if totalCount > 0 {
 				fc.SuccessRate = successCount / totalCount
 			}
@@ -245,7 +243,7 @@ func (fd *FailureDetector) ShouldRetry(fc *FailureContext, policy *RetryPolicy) 
 
 // SuggestAlternativeOperators recommends alternatives to a failed operator.
 // This method will be used in Phase 6+ to guide re-planning.
-func (fd *FailureDetector) SuggestAlternativeOperators(fc *FailureContext, registry *types.OperatorRegistry) []*types.Operator {
+func (fd *FailureDetector) SuggestAlternativeOperators(fc *FailureContext, registry interface{}) []interface{} {
 	if fc == nil || registry == nil {
 		return nil
 	}

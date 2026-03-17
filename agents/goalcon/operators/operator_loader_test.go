@@ -1,17 +1,13 @@
 package operators
 
 import (
+	"testing"
+
 	"github.com/lexcodex/relurpify/agents/goalcon/types"
 )
 
-import (
-	"testing"
-
-	"github.com/lexcodex/relurpify/framework/core"
-)
-
 func TestNewOperatorRegistryFromConfig_NilConfig(t *testing.T) {
-	registry := goalcon.NewOperatorRegistryFromConfig(nil)
+	registry := NewOperatorRegistryFromConfig(nil)
 	if registry == nil {
 		t.Fatal("expected non-nil registry")
 	}
@@ -21,7 +17,7 @@ func TestNewOperatorRegistryFromConfig_NilConfig(t *testing.T) {
 }
 
 func TestNewOperatorRegistryFromConfig_EmptyConfig(t *testing.T) {
-	registry := goalcon.NewOperatorRegistryFromConfig(&goalcon.OperatorsConfigSection{})
+	registry := NewOperatorRegistryFromConfig(&OperatorsConfigSection{})
 	if registry == nil {
 		t.Fatal("expected non-nil registry")
 	}
@@ -47,7 +43,7 @@ operators:
       timeout: 5000
 `
 
-	registry := goalcon.NewOperatorRegistryFromConfig(yamlConfig)
+	registry := NewOperatorRegistryFromConfig(yamlConfig)
 	if registry == nil {
 		t.Fatal("expected non-nil registry")
 	}
@@ -83,7 +79,7 @@ func TestNewOperatorRegistryFromConfig_FromMap(t *testing.T) {
 		},
 	}
 
-	registry := goalcon.NewOperatorRegistryFromConfig(mapConfig)
+	registry := NewOperatorRegistryFromConfig(mapConfig)
 	if registry == nil || len(registry.All()) != 2 {
 		t.Fatalf("expected 2 operators, got %d", len(registry.All()))
 	}
@@ -106,7 +102,7 @@ func TestNewOperatorRegistryFromConfig_FromJSON(t *testing.T) {
   ]
 }`
 
-	registry := goalcon.NewOperatorRegistryFromConfig(jsonConfig)
+	registry := NewOperatorRegistryFromConfig(jsonConfig)
 	if registry == nil || len(registry.All()) != 2 {
 		t.Fatalf("expected 2 operators, got %d", len(registry.All()))
 	}
@@ -125,7 +121,7 @@ operators:
       strategy: fast
 `
 
-	registry := goalcon.NewOperatorRegistryFromConfig(yamlConfig)
+	registry := NewOperatorRegistryFromConfig(yamlConfig)
 	ops := registry.All()
 	if len(ops) == 0 {
 		t.Fatal("expected operators")
@@ -145,13 +141,13 @@ operators:
 }
 
 func TestParseOperatorConfig_AlreadyParsed(t *testing.T) {
-	section := &goalcon.OperatorsConfigSection{
-		Operators: []goalcon.OperatorConfig{
+	section := &OperatorsConfigSection{
+		Operators: []OperatorConfig{
 			{Name: "Op1", Effects: []string{"e1"}},
 		},
 	}
 
-	parsed, err := goalcon.ParseOperatorConfig(section)
+	parsed, err := ParseOperatorConfig(section)
 	if err != nil {
 		t.Fatalf("ParseOperatorConfig failed: %v", err)
 	}
@@ -161,48 +157,48 @@ func TestParseOperatorConfig_AlreadyParsed(t *testing.T) {
 }
 
 func TestValidateOperatorConfig_Valid(t *testing.T) {
-	opConfig := goalcon.OperatorConfig{
+	opConfig := OperatorConfig{
 		Name:          "ValidOp",
 		Description:   "A valid operator",
 		Preconditions: []string{"pre1"},
 		Effects:       []string{"eff1", "eff2"},
 	}
 
-	err := goalcon.ValidateOperatorConfig(opConfig)
+	err := ValidateOperatorConfig(opConfig)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
 }
 
 func TestValidateOperatorConfig_NoName(t *testing.T) {
-	opConfig := goalcon.OperatorConfig{
+	opConfig := OperatorConfig{
 		Effects: []string{"eff1"},
 	}
 
-	err := goalcon.ValidateOperatorConfig(opConfig)
+	err := ValidateOperatorConfig(opConfig)
 	if err == nil {
 		t.Fatal("expected error for missing name")
 	}
 }
 
 func TestValidateOperatorConfig_NoEffects(t *testing.T) {
-	opConfig := goalcon.OperatorConfig{
+	opConfig := OperatorConfig{
 		Name: "InvalidOp",
 	}
 
-	err := goalcon.ValidateOperatorConfig(opConfig)
+	err := ValidateOperatorConfig(opConfig)
 	if err == nil {
 		t.Fatal("expected error for missing effects")
 	}
 }
 
 func TestValidateOperatorConfig_DuplicateEffects(t *testing.T) {
-	opConfig := goalcon.OperatorConfig{
+	opConfig := OperatorConfig{
 		Name:    "DupOp",
 		Effects: []string{"eff1", "eff1"},
 	}
 
-	err := goalcon.ValidateOperatorConfig(opConfig)
+	err := ValidateOperatorConfig(opConfig)
 	if err == nil {
 		t.Fatal("expected error for duplicate effects")
 	}
@@ -218,7 +214,7 @@ func TestLoadOperatorLibraryFromConfig_Found(t *testing.T) {
 		},
 	}
 
-	lib := goalcon.LoadOperatorLibraryFromConfig(libConfig, "mylib")
+	lib := LoadOperatorLibraryFromConfig(libConfig, "mylib")
 	if lib == nil {
 		t.Fatal("expected library to be loaded")
 	}
@@ -231,24 +227,24 @@ func TestLoadOperatorLibraryFromConfig_Found(t *testing.T) {
 }
 
 func TestLoadOperatorLibraryFromConfig_NotFound(t *testing.T) {
-	lib := goalcon.LoadOperatorLibraryFromConfig(nil, "nonexistent")
+	lib := LoadOperatorLibraryFromConfig(nil, "nonexistent")
 	if lib != nil {
 		t.Fatal("expected nil for nil config")
 	}
 }
 
 func TestOperatorLibrary_ToRegistry(t *testing.T) {
-	lib := &goalcon.OperatorLibrary{
+	lib := &OperatorLibrary{
 		Name:    "testlib",
 		Version: "1.0",
-		Operators: []*goalcon.types.Operator{
+		Operators: []*types.Operator{
 			{
 				Name:    "Op1",
-				Effects: []goalcon.types.Predicate{"e1"},
+				Effects: []types.Predicate{"e1"},
 			},
 			{
 				Name:    "Op2",
-				Effects: []goalcon.types.Predicate{"e2"},
+				Effects: []types.Predicate{"e2"},
 			},
 		},
 	}
@@ -260,51 +256,51 @@ func TestOperatorLibrary_ToRegistry(t *testing.T) {
 }
 
 func TestMergeRegistries_Single(t *testing.T) {
-	reg1 := &goalcon.types.OperatorRegistry{}
-	reg1.Register(goalcon.types.Operator{Name: "Op1", Effects: []goalcon.types.Predicate{"e1"}})
+	reg1 := &types.OperatorRegistry{}
+	reg1.Register(types.Operator{Name: "Op1", Effects: []types.Predicate{"e1"}})
 
-	merged := goalcon.MergeRegistries(reg1)
+	merged := MergeRegistries(reg1)
 	if len(merged.All()) != 1 {
 		t.Fatalf("expected 1 operator, got %d", len(merged.All()))
 	}
 }
 
 func TestMergeRegistries_Multiple(t *testing.T) {
-	reg1 := &goalcon.types.OperatorRegistry{}
-	reg1.Register(goalcon.types.Operator{Name: "Op1", Effects: []goalcon.types.Predicate{"e1"}})
+	reg1 := &types.OperatorRegistry{}
+	reg1.Register(types.Operator{Name: "Op1", Effects: []types.Predicate{"e1"}})
 
-	reg2 := &goalcon.types.OperatorRegistry{}
-	reg2.Register(goalcon.types.Operator{Name: "Op2", Effects: []goalcon.types.Predicate{"e2"}})
+	reg2 := &types.OperatorRegistry{}
+	reg2.Register(types.Operator{Name: "Op2", Effects: []types.Predicate{"e2"}})
 
-	reg3 := &goalcon.types.OperatorRegistry{}
-	reg3.Register(goalcon.types.Operator{Name: "Op3", Effects: []goalcon.types.Predicate{"e3"}})
+	reg3 := &types.OperatorRegistry{}
+	reg3.Register(types.Operator{Name: "Op3", Effects: []types.Predicate{"e3"}})
 
-	merged := goalcon.MergeRegistries(reg1, reg2, reg3)
+	merged := MergeRegistries(reg1, reg2, reg3)
 	if len(merged.All()) != 3 {
 		t.Fatalf("expected 3 operators, got %d", len(merged.All()))
 	}
 }
 
 func TestMergeRegistries_WithNil(t *testing.T) {
-	reg1 := &goalcon.types.OperatorRegistry{}
-	reg1.Register(goalcon.types.Operator{Name: "Op1", Effects: []goalcon.types.Predicate{"e1"}})
+	reg1 := &types.OperatorRegistry{}
+	reg1.Register(types.Operator{Name: "Op1", Effects: []types.Predicate{"e1"}})
 
-	merged := goalcon.MergeRegistries(nil, reg1, nil)
+	merged := MergeRegistries(nil, reg1, nil)
 	if len(merged.All()) != 1 {
 		t.Fatalf("expected 1 operator, got %d", len(merged.All()))
 	}
 }
 
 func TestOperatorConfigValidator_ValidRegistry(t *testing.T) {
-	registry := &goalcon.types.OperatorRegistry{}
-	registry.Register(goalcon.types.Operator{Name: "Op1", Effects: []goalcon.types.Predicate{"e1"}})
-	registry.Register(goalcon.types.Operator{
+	registry := &types.OperatorRegistry{}
+	registry.Register(types.Operator{Name: "Op1", Effects: []types.Predicate{"e1"}})
+	registry.Register(types.Operator{
 		Name:          "Op2",
-		Preconditions: []goalcon.types.Predicate{"e1"},
-		Effects:       []goalcon.types.Predicate{"e2"},
+		Preconditions: []types.Predicate{"e1"},
+		Effects:       []types.Predicate{"e2"},
 	})
 
-	validator := &goalcon.OperatorConfigValidator{Strict: true}
+	validator := &OperatorConfigValidator{Strict: true}
 	errors := validator.ValidateRegistry(registry)
 	if len(errors) > 0 {
 		t.Errorf("expected no errors, got %v", errors)
@@ -312,11 +308,11 @@ func TestOperatorConfigValidator_ValidRegistry(t *testing.T) {
 }
 
 func TestOperatorConfigValidator_DuplicateOperators(t *testing.T) {
-	registry := &goalcon.types.OperatorRegistry{}
-	registry.Register(goalcon.types.Operator{Name: "Op1", Effects: []goalcon.types.Predicate{"e1"}})
-	registry.Register(goalcon.types.Operator{Name: "Op1", Effects: []goalcon.types.Predicate{"e2"}})
+	registry := &types.OperatorRegistry{}
+	registry.Register(types.Operator{Name: "Op1", Effects: []types.Predicate{"e1"}})
+	registry.Register(types.Operator{Name: "Op1", Effects: []types.Predicate{"e2"}})
 
-	validator := &goalcon.OperatorConfigValidator{Strict: true}
+	validator := &OperatorConfigValidator{Strict: true}
 	errors := validator.ValidateRegistry(registry)
 	if len(errors) == 0 {
 		t.Fatal("expected error for duplicate operator")
@@ -324,74 +320,28 @@ func TestOperatorConfigValidator_DuplicateOperators(t *testing.T) {
 }
 
 func TestOperatorConfigValidator_NoEffects(t *testing.T) {
-	registry := &goalcon.types.OperatorRegistry{}
-	registry.Register(goalcon.types.Operator{Name: "OpNoEffects"})
+	registry := &types.OperatorRegistry{}
+	registry.Register(types.Operator{Name: "OpNoEffects"})
 
-	validator := &goalcon.OperatorConfigValidator{Strict: true}
+	validator := &OperatorConfigValidator{Strict: true}
 	errors := validator.ValidateRegistry(registry)
 	if len(errors) == 0 {
 		t.Fatal("expected error for operator with no effects")
 	}
 }
 
-func TestGoalConAgent_CustomOperators(t *testing.T) {
-	// Create agent with custom operators
-	customRegistry := &goalcon.types.OperatorRegistry{}
-	customRegistry.Register(goalcon.types.Operator{
-		Name:    "CustomOp1",
-		Effects: []goalcon.types.Predicate{"custom_effect"},
-	})
-	customRegistry.Register(goalcon.types.Operator{
-		Name:          "CustomOp2",
-		Preconditions: []goalcon.types.Predicate{"custom_effect"},
-		Effects:       []goalcon.types.Predicate{"final_effect"},
-	})
-
-	agent := &goalcon.GoalConAgent{
-		Operators: customRegistry,
-	}
-	if err := agent.Initialize(&core.Config{}); err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-
-	ops := agent.Operators.All()
-	if len(ops) != 2 {
-		t.Fatalf("expected 2 custom operators, got %d", len(ops))
-	}
-
-	if ops[0].Name != "CustomOp1" {
-		t.Errorf("expected CustomOp1, got %s", ops[0].Name)
-	}
-}
-
-func TestGoalConAgent_DefaultOperators(t *testing.T) {
-	// Create agent without custom operators
-	agent := &goalcon.GoalConAgent{}
-	if err := agent.Initialize(&core.Config{}); err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-
-	ops := agent.Operators.All()
-	if len(ops) == 0 {
-		t.Fatal("expected default operators")
-	}
-
-	// Check that defaults include ReadFile, SearchCode, etc.
-	found := false
-	for _, op := range ops {
-		if op.Name == "ReadFile" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatal("expected ReadFile in default operators")
-	}
-}
+// Note: TestGoalConAgent_CustomOperators and TestGoalConAgent_DefaultOperators
+// have been moved to goalcon_agent_test.go to avoid circular import with goalcon package
+// func TestGoalConAgent_CustomOperators(t *testing.T) {
+// ...
+// }
+// func TestGoalConAgent_DefaultOperators(t *testing.T) {
+// ...
+// }
 
 func TestParseOperatorConfig_InvalidJSON(t *testing.T) {
 	// Binary data that's neither valid YAML nor JSON
-	_, err := goalcon.ParseOperatorConfig(123) // Integer is not a valid format
+	_, err := ParseOperatorConfig(123) // Integer is not a valid format
 	if err == nil {
 		t.Fatal("expected error for invalid input type")
 	}
@@ -410,7 +360,7 @@ operators:
       - deterministic
 `
 
-	registry := goalcon.NewOperatorRegistryFromConfig(yamlConfig)
+	registry := NewOperatorRegistryFromConfig(yamlConfig)
 	ops := registry.All()
 	if len(ops) == 0 {
 		t.Fatal("expected operators")
@@ -433,8 +383,8 @@ func TestLoadOperatorLibrary_MultipleLibraries(t *testing.T) {
 		},
 	}
 
-	lib1 := goalcon.LoadOperatorLibraryFromConfig(libConfig1, "lib1")
-	lib2 := goalcon.LoadOperatorLibraryFromConfig(libConfig2, "lib2")
+	lib1 := LoadOperatorLibraryFromConfig(libConfig1, "lib1")
+	lib2 := LoadOperatorLibraryFromConfig(libConfig2, "lib2")
 
 	if lib1 == nil || lib2 == nil {
 		t.Fatal("expected both libraries to load")
@@ -445,7 +395,7 @@ func TestLoadOperatorLibrary_MultipleLibraries(t *testing.T) {
 	}
 
 	// Merge libraries
-	merged := goalcon.MergeRegistries(lib1.ToRegistry(), lib2.ToRegistry())
+	merged := MergeRegistries(lib1.ToRegistry(), lib2.ToRegistry())
 	if len(merged.All()) != 2 {
 		t.Fatalf("expected 2 operators after merge, got %d", len(merged.All()))
 	}

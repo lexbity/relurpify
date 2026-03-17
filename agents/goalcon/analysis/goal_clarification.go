@@ -20,33 +20,33 @@ import (
 
 // ClarificationChoice represents a user's decision on how to clarify an ambiguity.
 type ClarificationChoice struct {
-	AmbiguityIndex    int       // Index in the ambiguity list
-	ChosenSuggestion  string    // The clarification suggestion selected
-	AlternativeText   string    // User-provided custom clarification (if not using suggestion)
-	Timestamp         time.Time
-	ApprovedBy        string // User who made the decision
-	GrantScope        authorization.GrantScope
+	AmbiguityIndex   int    // Index in the ambiguity list
+	ChosenSuggestion string // The clarification suggestion selected
+	AlternativeText  string // User-provided custom clarification (if not using suggestion)
+	Timestamp        time.Time
+	ApprovedBy       string // User who made the decision
+	GrantScope       authorization.GrantScope
 }
 
 // ClarificationSession tracks a goal clarification interaction.
 type ClarificationSession struct {
-	ID                 string
-	Goal               types.GoalCondition
-	AmbiguityScore     *AmbiguityScore
-	HITLRequestIDs     []string // Tracking IDs for HITL permission requests
-	Choices            []*ClarificationChoice
-	StartTime          time.Time
-	EndTime            time.Time
-	IsComplete         bool
-	RefinedGoal        *types.GoalCondition // Result after clarification
-	mu                 sync.Mutex
+	ID             string
+	Goal           types.GoalCondition
+	AmbiguityScore *AmbiguityScore
+	HITLRequestIDs []string // Tracking IDs for HITL permission requests
+	Choices        []*ClarificationChoice
+	StartTime      time.Time
+	EndTime        time.Time
+	IsComplete     bool
+	RefinedGoal    *types.GoalCondition // Result after clarification
+	mu             sync.Mutex
 }
 
 // GoalClarifier orchestrates goal clarification through HITL.
 type GoalClarifier struct {
-	hitlBroker       *authorization.HITLBroker
-	memoryStore      memory.MemoryStore
-	analyzer         *AmbiguityAnalyzer
+	hitlBroker        *authorization.HITLBroker
+	memoryStore       memory.MemoryStore
+	analyzer          *AmbiguityAnalyzer
 	highRiskThreshold float32 // Threshold to require HITL (default 0.75)
 }
 
@@ -95,12 +95,12 @@ func (gc *GoalClarifier) ClarifyGoalIfNeeded(
 
 	// Create clarification session
 	session := &ClarificationSession{
-		ID:              fmt.Sprintf("clarify-%d", time.Now().UnixNano()),
-		Goal:            goal,
-		AmbiguityScore:  score,
-		HITLRequestIDs:  make([]string, 0),
-		Choices:         make([]*ClarificationChoice, 0),
-		StartTime:       time.Now().UTC(),
+		ID:             fmt.Sprintf("clarify-%d", time.Now().UnixNano()),
+		Goal:           goal,
+		AmbiguityScore: score,
+		HITLRequestIDs: make([]string, 0),
+		Choices:        make([]*ClarificationChoice, 0),
+		StartTime:      time.Now().UTC(),
 	}
 
 	// Request HITL for high-ambiguity goals
@@ -142,13 +142,13 @@ func (gc *GoalClarifier) requestHITLClarification(
 	// Submit async (non-blocking) so we can continue with fallback
 	req := authorization.PermissionRequest{
 		Permission: core.PermissionDescriptor{
-			Action: "goal_clarification",
+			Action:   "goal_clarification",
 			Resource: fmt.Sprintf("goal:%s", session.Goal.Description),
 		},
-		Justification: justification,
-		Scope:         authorization.GrantScopeTask,
-		Risk:          gc.riskLevelForScore(session.AmbiguityScore.OverallScore),
-		Timeout:       2 * time.Minute,
+		Justification:   justification,
+		Scope:           authorization.GrantScopeTask,
+		Risk:            gc.riskLevelForScore(session.AmbiguityScore.OverallScore),
+		Timeout:         2 * time.Minute,
 		TimeoutBehavior: authorization.HITLTimeoutBehaviorSkip,
 	}
 
@@ -250,15 +250,15 @@ func (session *ClarificationSession) PersistToMemory(
 
 	// Build memory entry
 	data := map[string]interface{}{
-		"session_id":        session.ID,
-		"goal":              session.Goal.Description,
-		"ambiguity_score":   session.AmbiguityScore.OverallScore,
-		"num_ambiguities":   len(session.AmbiguityScore.Indicators),
-		"num_choices":       len(session.Choices),
-		"is_complete":       session.IsComplete,
-		"duration_ms":       session.EndTime.Sub(session.StartTime).Milliseconds(),
-		"start_time":        session.StartTime,
-		"end_time":          session.EndTime,
+		"session_id":      session.ID,
+		"goal":            session.Goal.Description,
+		"ambiguity_score": session.AmbiguityScore.OverallScore,
+		"num_ambiguities": len(session.AmbiguityScore.Indicators),
+		"num_choices":     len(session.Choices),
+		"is_complete":     session.IsComplete,
+		"duration_ms":     session.EndTime.Sub(session.StartTime).Milliseconds(),
+		"start_time":      session.StartTime,
+		"end_time":        session.EndTime,
 	}
 
 	if session.RefinedGoal != nil {

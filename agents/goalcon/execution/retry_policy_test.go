@@ -1,10 +1,6 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"testing"
 	"time"
 )

@@ -1,10 +1,6 @@
 package audit
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"encoding/json"
 	"strings"
 	"testing"

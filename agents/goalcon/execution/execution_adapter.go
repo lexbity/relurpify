@@ -1,13 +1,10 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"fmt"
 
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -117,7 +114,7 @@ func (a *PlanStepAgent) Execute(ctx context.Context, task *core.Task, state *cor
 		return &core.Result{
 			Success: true,
 			Data: map[string]any{
-				"steps_executed": 0,
+				"steps_executed":  0,
 				"steps_succeeded": 0,
 			},
 		}, nil
@@ -231,14 +228,14 @@ func (n *stepExecutionNode) Execute(ctx context.Context, state *core.Context) (*
 
 // ExecutionAdapter provides high-level integration between plan execution and agent execution.
 type ExecutionAdapter struct {
-	executor         *StepExecutor
-	registry         *capability.Registry
-	metricsRecorder  *types.MetricsRecorder
-	failureMode      FailureMode
+	executor        *StepExecutor
+	registry        *capability.Registry
+	metricsRecorder *audit.MetricsRecorder
+	failureMode     FailureMode
 }
 
 // NewExecutionAdapter creates a new execution adapter.
-func NewExecutionAdapter(registry *capability.Registry, recorder *types.MetricsRecorder) *ExecutionAdapter {
+func NewExecutionAdapter(registry *capability.Registry, recorder *audit.MetricsRecorder) *ExecutionAdapter {
 	executor := NewStepExecutor(registry)
 	executor.SetMetricsRecorder(recorder)
 
@@ -301,12 +298,12 @@ func (a *ExecutionAdapter) ExecutePlan(
 	for i, result := range results {
 		if result != nil {
 			stepResults[i] = map[string]any{
-				"step_id":   result.StepID,
-				"tool":      result.ToolName,
-				"success":   result.Success,
-				"duration":  result.Duration.String(),
-				"error":     result.Error,
-				"retries":   result.Retries,
+				"step_id":  result.StepID,
+				"tool":     result.ToolName,
+				"success":  result.Success,
+				"duration": result.Duration.String(),
+				"error":    result.Error,
+				"retries":  result.Retries,
 			}
 		}
 	}

@@ -1,25 +1,22 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 	"github.com/lexcodex/relurpify/framework/capability"
 )
 
 // RetryExecutor wraps StepExecutor with retry logic and backoff.
 type RetryExecutor struct {
-	executor         *StepExecutor
-	policies         OperatorRetryPolicies
-	failureDetector  *FailureDetector
-	metrics          *types.MetricsRecorder
-	auditTrail       *types.CapabilityAuditTrail
-	maxReplans       int
+	executor        *StepExecutor
+	policies        OperatorRetryPolicies
+	failureDetector *FailureDetector
+	metrics         *audit.MetricsRecorder
+	auditTrail      *audit.CapabilityAuditTrail
+	maxReplans      int
 }
 
 // NewRetryExecutor creates a new retry executor.
@@ -27,8 +24,8 @@ func NewRetryExecutor(
 	executor *StepExecutor,
 	policies OperatorRetryPolicies,
 	failureDetector *FailureDetector,
-	metrics *types.MetricsRecorder,
-	auditTrail *types.CapabilityAuditTrail,
+	metrics *audit.MetricsRecorder,
+	auditTrail *audit.CapabilityAuditTrail,
 ) *RetryExecutor {
 	if executor == nil {
 		executor = NewStepExecutor(capability.NewRegistry())
@@ -111,10 +108,10 @@ func (re *RetryExecutor) ExecuteWithRetry(
 		finalResult.Retries = retryCount
 
 		attempts = append(attempts, &RetryAttempt{
-			AttemptNumber:    retryCount + 1,
-			BackoffDuration:  backoff,
-			Timestamp:        time.Now().UTC(),
-			Error:            finalResult.Error,
+			AttemptNumber:   retryCount + 1,
+			BackoffDuration: backoff,
+			Timestamp:       time.Now().UTC(),
+			Error:           finalResult.Error,
 		})
 	}
 
@@ -218,13 +215,13 @@ type ExecutionAttempt struct {
 
 // RetryMetrics captures aggregated retry statistics.
 type RetryMetrics struct {
-	TotalAttempts      int
-	SuccessfulAttempt  int
-	FailedAttempts     int
-	TotalBackoffTime   time.Duration
-	AverageRetryTime   time.Duration
-	OperatorName       string
-	StepID             string
+	TotalAttempts       int
+	SuccessfulAttempt   int
+	FailedAttempts      int
+	TotalBackoffTime    time.Duration
+	AverageRetryTime    time.Duration
+	OperatorName        string
+	StepID              string
 	RecoveredAfterRetry bool
 }
 
@@ -239,9 +236,9 @@ func ComputeRetryMetrics(
 	}
 
 	metrics := &RetryMetrics{
-		TotalAttempts:      len(attempts),
-		StepID:             stepID,
-		OperatorName:       operatorName,
+		TotalAttempts:       len(attempts),
+		StepID:              stepID,
+		OperatorName:        operatorName,
 		RecoveredAfterRetry: recovered,
 	}
 

@@ -1,10 +1,6 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"fmt"
 	"time"
 )
@@ -19,8 +15,8 @@ type ExecutionEvent struct {
 	ErrorMessage string
 }
 
-// types.ExecutionTrace tracks all events during a plan execution.
-type types.ExecutionTrace struct {
+// ExecutionTrace tracks all events during a plan execution.
+type ExecutionTrace struct {
 	PlanGoal      string
 	StartTime     time.Time
 	EndTime       time.Time
@@ -29,8 +25,8 @@ type types.ExecutionTrace struct {
 }
 
 // NewExecutionTrace creates a new execution trace.
-func NewExecutionTrace(planGoal string) *types.ExecutionTrace {
-	return &types.ExecutionTrace{
+func NewExecutionTrace(planGoal string) *ExecutionTrace {
+	return &ExecutionTrace{
 		PlanGoal:    planGoal,
 		StartTime:   time.Now(),
 		Events:      make([]ExecutionEvent, 0),
@@ -39,7 +35,7 @@ func NewExecutionTrace(planGoal string) *types.ExecutionTrace {
 }
 
 // RecordPlanStart records the start of plan execution.
-func (t *types.ExecutionTrace) RecordPlanStart() {
+func (t *ExecutionTrace) RecordPlanStart() {
 	if t == nil {
 		return
 	}
@@ -53,7 +49,7 @@ func (t *types.ExecutionTrace) RecordPlanStart() {
 }
 
 // RecordPlanComplete records the completion of plan execution.
-func (t *types.ExecutionTrace) RecordPlanComplete(success bool, stepCount int) {
+func (t *ExecutionTrace) RecordPlanComplete(success bool, stepCount int) {
 	if t == nil {
 		return
 	}
@@ -69,7 +65,7 @@ func (t *types.ExecutionTrace) RecordPlanComplete(success bool, stepCount int) {
 }
 
 // RecordStepStart records the start of step execution.
-func (t *types.ExecutionTrace) RecordStepStart(stepID, toolName string) {
+func (t *ExecutionTrace) RecordStepStart(stepID, toolName string) {
 	if t == nil {
 		return
 	}
@@ -85,7 +81,7 @@ func (t *types.ExecutionTrace) RecordStepStart(stepID, toolName string) {
 }
 
 // RecordStepComplete records the completion of step execution.
-func (t *types.ExecutionTrace) RecordStepComplete(result *StepExecutionResult) {
+func (t *ExecutionTrace) RecordStepComplete(result *StepExecutionResult) {
 	if t == nil || result == nil {
 		return
 	}
@@ -115,7 +111,7 @@ func (t *types.ExecutionTrace) RecordStepComplete(result *StepExecutionResult) {
 }
 
 // RecordStepError records an error during step execution.
-func (t *types.ExecutionTrace) RecordStepError(stepID, toolName string, err error) {
+func (t *ExecutionTrace) RecordStepError(stepID, toolName string, err error) {
 	if t == nil {
 		return
 	}
@@ -134,7 +130,7 @@ func (t *types.ExecutionTrace) RecordStepError(stepID, toolName string, err erro
 }
 
 // recordEvent appends an event to the trace.
-func (t *types.ExecutionTrace) recordEvent(event ExecutionEvent) {
+func (t *ExecutionTrace) recordEvent(event ExecutionEvent) {
 	if t == nil {
 		return
 	}
@@ -145,7 +141,7 @@ func (t *types.ExecutionTrace) recordEvent(event ExecutionEvent) {
 }
 
 // Duration returns the total execution time.
-func (t *types.ExecutionTrace) Duration() time.Duration {
+func (t *ExecutionTrace) Duration() time.Duration {
 	if t == nil || t.EndTime.IsZero() {
 		return 0
 	}
@@ -153,7 +149,7 @@ func (t *types.ExecutionTrace) Duration() time.Duration {
 }
 
 // StepCount returns the number of steps executed.
-func (t *types.ExecutionTrace) StepCount() int {
+func (t *ExecutionTrace) StepCount() int {
 	if t == nil {
 		return 0
 	}
@@ -161,7 +157,7 @@ func (t *types.ExecutionTrace) StepCount() int {
 }
 
 // SuccessCount returns the number of successful steps.
-func (t *types.ExecutionTrace) SuccessCount() int {
+func (t *ExecutionTrace) SuccessCount() int {
 	if t == nil {
 		return 0
 	}
@@ -175,7 +171,7 @@ func (t *types.ExecutionTrace) SuccessCount() int {
 }
 
 // FailureCount returns the number of failed steps.
-func (t *types.ExecutionTrace) FailureCount() int {
+func (t *ExecutionTrace) FailureCount() int {
 	if t == nil {
 		return 0
 	}
@@ -183,7 +179,7 @@ func (t *types.ExecutionTrace) FailureCount() int {
 }
 
 // Summary returns a human-readable execution summary.
-func (t *types.ExecutionTrace) Summary() string {
+func (t *ExecutionTrace) Summary() string {
 	if t == nil {
 		return "No trace"
 	}
@@ -200,7 +196,7 @@ func (t *types.ExecutionTrace) Summary() string {
 }
 
 // EventsByType returns all events of a specific type.
-func (t *types.ExecutionTrace) EventsByType(eventType string) []ExecutionEvent {
+func (t *ExecutionTrace) EventsByType(eventType string) []ExecutionEvent {
 	if t == nil {
 		return nil
 	}
@@ -215,7 +211,7 @@ func (t *types.ExecutionTrace) EventsByType(eventType string) []ExecutionEvent {
 }
 
 // FailedSteps returns all failed step results.
-func (t *types.ExecutionTrace) FailedSteps() []*StepExecutionResult {
+func (t *ExecutionTrace) FailedSteps() []*StepExecutionResult {
 	if t == nil {
 		return nil
 	}
@@ -231,7 +227,7 @@ func (t *types.ExecutionTrace) FailedSteps() []*StepExecutionResult {
 
 // CriticalPath analyzes the execution timeline and returns a critical path analysis.
 // This identifies which steps took the longest.
-func (t *types.ExecutionTrace) CriticalPath() []*StepExecutionResult {
+func (t *ExecutionTrace) CriticalPath() []*StepExecutionResult {
 	if t == nil || len(t.StepResults) == 0 {
 		return nil
 	}
@@ -257,7 +253,7 @@ func (t *types.ExecutionTrace) CriticalPath() []*StepExecutionResult {
 }
 
 // ToDebugString returns a detailed trace for debugging.
-func (t *types.ExecutionTrace) ToDebugString() string {
+func (t *ExecutionTrace) ToDebugString() string {
 	if t == nil {
 		return "No trace"
 	}

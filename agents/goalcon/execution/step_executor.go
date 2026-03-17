@@ -1,14 +1,11 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -48,8 +45,8 @@ type StepExecutionResult struct {
 type StepExecutor struct {
 	registry   *capability.Registry
 	timeout    time.Duration
-	metrics    *types.MetricsRecorder          // Optional metrics recording
-	auditTrail *types.CapabilityAuditTrail     // Optional audit trail (Phase 5)
+	metrics    *audit.MetricsRecorder          // Optional metrics recording
+	auditTrail *audit.CapabilityAuditTrail     // Optional audit trail (Phase 5)
 }
 
 // NewStepExecutor creates a new step executor.
@@ -68,14 +65,14 @@ func (e *StepExecutor) SetTimeout(d time.Duration) {
 }
 
 // SetMetricsRecorder optionally records execution metrics.
-func (e *StepExecutor) SetMetricsRecorder(recorder *types.MetricsRecorder) {
+func (e *StepExecutor) SetMetricsRecorder(recorder *audit.MetricsRecorder) {
 	if e != nil {
 		e.metrics = recorder
 	}
 }
 
 // SetAuditTrail optionally records capability invocations to an audit trail.
-func (e *StepExecutor) SetAuditTrail(trail *types.CapabilityAuditTrail) {
+func (e *StepExecutor) SetAuditTrail(trail *audit.CapabilityAuditTrail) {
 	if e != nil {
 		e.auditTrail = trail
 	}
@@ -256,7 +253,7 @@ func (e *StepExecutor) recordMetrics(result *StepExecutionResult) {
 		return
 	}
 
-	execMetrics := ExecutionMetrics{
+	execMetrics := audit.ExecutionMetrics{
 		OperatorName: result.ToolName,
 		Success:      result.Success,
 		Duration:     result.Duration,

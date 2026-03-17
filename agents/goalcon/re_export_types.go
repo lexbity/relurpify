@@ -10,10 +10,8 @@ type GoalCondition = types.GoalCondition
 type WorldState = types.WorldState
 type Operator = types.Operator
 type OperatorRegistry = types.OperatorRegistry
-type MetricsRecorder = types.MetricsRecorder
-type CapabilityAuditTrail = types.CapabilityAuditTrail
-type ExecutionTrace = types.ExecutionTrace
 
 var (
 	NewWorldState = types.NewWorldState
+	NewOperatorRegistry = types.NewOperatorRegistry
 )

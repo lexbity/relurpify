@@ -11,13 +11,13 @@
 //
 // Typical workflow:
 //
-//   1. Classify goal using analysis.GoalClassifierLLM
-//   2. Detect ambiguities with analysis.AmbiguityAnalyzer
-//   3. Clarify if needed via analysis.GoalClarifier (HITL integration)
-//   4. Decompose into sub-goals using analysis.GoalDecomposer
-//   5. Generate plan with planning.Solver (backward chaining)
-//   6. Execute with execution.RetryExecutor (automatic retries + recovery)
-//   7. Track provenance with audit.CapabilityAuditTrail
+//  1. Classify goal using analysis.GoalClassifierLLM
+//  2. Detect ambiguities with analysis.AmbiguityAnalyzer
+//  3. Clarify if needed via analysis.GoalClarifier (HITL integration)
+//  4. Decompose into sub-goals using analysis.GoalDecomposer
+//  5. Generate plan with planning.Solver (backward chaining)
+//  6. Execute with execution.RetryExecutor (automatic retries + recovery)
+//  7. Track provenance with audit.CapabilityAuditTrail
 //
 // All types are re-exported at the package root level for backward compatibility.
 // For modular imports, use the subpackages directly.

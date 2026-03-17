@@ -11,8 +11,8 @@ import (
 // GoalCache is a simple LRU-like cache for goal classifications.
 // It avoids re-classifying identical task instructions.
 type GoalCache struct {
-	mu    sync.RWMutex
-	cache map[string]*types.GoalCondition
+	mu      sync.RWMutex
+	cache   map[string]*types.GoalCondition
 	maxSize int
 }
 

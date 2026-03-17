@@ -7,4 +7,3 @@ import (
 
 // Type aliases for convenience
 type Operator = types.Operator
-type OperatorRegistry = types.OperatorRegistry

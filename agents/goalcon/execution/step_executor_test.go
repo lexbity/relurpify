@@ -1,14 +1,12 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -51,7 +49,7 @@ func (e *testError) Error() string { return e.msg }
 
 func TestStepExecutor_Create(t *testing.T) {
 	registry := capability.NewRegistry()
-	executor := goalcon.NewStepExecutor(registry)
+	executor := NewStepExecutor(registry)
 
 	if executor == nil {
 		t.Fatal("expected executor to be created")
@@ -59,15 +57,15 @@ func TestStepExecutor_Create(t *testing.T) {
 }
 
 func TestStepExecutor_SetTimeout(t *testing.T) {
-	executor := goalcon.NewStepExecutor(nil)
+	executor := NewStepExecutor(nil)
 	executor.SetTimeout(5 * time.Second)
 	// No assertion needed, just verify no panic
 }
 
 func TestStepExecutor_Execute_NoTool(t *testing.T) {
-	executor := goalcon.NewStepExecutor(nil)
+	executor := NewStepExecutor(nil)
 
-	req := goalcon.StepExecutionRequest{
+	req := StepExecutionRequest{
 		Step: core.PlanStep{ID: "step1", Tool: ""},
 	}
 
@@ -79,9 +77,9 @@ func TestStepExecutor_Execute_NoTool(t *testing.T) {
 
 func TestStepExecutor_Execute_ToolNotFound(t *testing.T) {
 	registry := capability.NewRegistry()
-	executor := goalcon.NewStepExecutor(registry)
+	executor := NewStepExecutor(registry)
 
-	req := goalcon.StepExecutionRequest{
+	req := StepExecutionRequest{
 		Step: core.PlanStep{
 			ID:   "step1",
 			Tool: "nonexistent",
@@ -103,14 +101,14 @@ func TestStepExecutor_Execute_ToolNotFound(t *testing.T) {
 
 func TestStepExecutor_RecordMetrics(t *testing.T) {
 	registry := capability.NewRegistry()
-	executor := goalcon.NewStepExecutor(registry)
+	executor := NewStepExecutor(registry)
 
 	// Create metrics recorder
-	recorder := goalcon.NewMetricsRecorder(nil)
+	recorder := audit.NewMetricsRecorder(nil)
 	executor.SetMetricsRecorder(recorder)
 
 	// Execute a step
-	req := goalcon.StepExecutionRequest{
+	req := StepExecutionRequest{
 		Step: core.PlanStep{
 			ID:   "step1",
 			Tool: "TestTool",
@@ -128,8 +126,8 @@ func TestStepExecutor_RecordMetrics(t *testing.T) {
 }
 
 func TestExecutorChain_SingleStep(t *testing.T) {
-	executor := goalcon.NewStepExecutor(nil)
-	chain := goalcon.NewExecutorChain(executor)
+	executor := NewStepExecutor(nil)
+	chain := NewExecutorChain(executor)
 
 	steps := []core.PlanStep{
 		{ID: "step1", Tool: "Tool1", Description: "First step"},
@@ -149,8 +147,8 @@ func TestExecutorChain_MultipleSteps(t *testing.T) {
 	// Note: Steps will fail if capabilities not found in registry
 	// This tests the chain execution mechanism, not success
 	registry := capability.NewRegistry()
-	executor := goalcon.NewStepExecutor(registry)
-	chain := goalcon.NewExecutorChain(executor)
+	executor := NewStepExecutor(registry)
+	chain := NewExecutorChain(executor)
 
 	steps := []core.PlanStep{
 		{ID: "step1", Tool: "Tool1"},
@@ -170,8 +168,8 @@ func TestExecutorChain_MultipleSteps(t *testing.T) {
 }
 
 func TestExecutorChain_SuccessCount(t *testing.T) {
-	executor := goalcon.NewStepExecutor(nil)
-	chain := goalcon.NewExecutorChain(executor)
+	executor := NewStepExecutor(nil)
+	chain := NewExecutorChain(executor)
 
 	if chain.SuccessCount() != 0 {
 		t.Fatal("expected 0 success count before execution")
@@ -193,8 +191,8 @@ func TestExecutorChain_SuccessCount(t *testing.T) {
 }
 
 func TestExecutorChain_Summary(t *testing.T) {
-	executor := goalcon.NewStepExecutor(nil)
-	chain := goalcon.NewExecutorChain(executor)
+	executor := NewStepExecutor(nil)
+	chain := NewExecutorChain(executor)
 
 	// Before execution, summary should indicate no steps
 	summary := chain.Summary()
@@ -210,21 +208,21 @@ func TestExecutorChain_Summary(t *testing.T) {
 
 	// After execution, summary should reflect 1 failure
 	summary = chain.Summary()
-	if !contains(summary, "1 failed") {
+	if !stringContains(summary, "1 failed") {
 		t.Errorf("expected summary to mention '1 failed', got: %s", summary)
 	}
 }
 
 func TestExecutorChain_SetFailureMode(t *testing.T) {
-	executor := goalcon.NewStepExecutor(nil)
-	chain := goalcon.NewExecutorChain(executor)
+	executor := NewStepExecutor(nil)
+	chain := NewExecutorChain(executor)
 
-	chain.SetFailureMode(goalcon.FailureModeAbort)
+	chain.SetFailureMode(FailureModeAbort)
 	// Just verify no panic
 }
 
 func TestExecutionTrace_Create(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
 	if trace == nil {
 		t.Fatal("expected trace to be created")
@@ -235,7 +233,7 @@ func TestExecutionTrace_Create(t *testing.T) {
 }
 
 func TestExecutionTrace_RecordEvents(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
 	trace.RecordPlanStart()
 	trace.RecordStepStart("step1", "Tool1")
@@ -246,9 +244,9 @@ func TestExecutionTrace_RecordEvents(t *testing.T) {
 }
 
 func TestExecutionTrace_RecordStepComplete(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
-	result := &goalcon.StepExecutionResult{
+	result := &StepExecutionResult{
 		StepID:   "step1",
 		ToolName: "Tool1",
 		Success:  true,
@@ -266,7 +264,7 @@ func TestExecutionTrace_RecordStepComplete(t *testing.T) {
 }
 
 func TestExecutionTrace_Duration(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
 	trace.RecordPlanStart()
 	time.Sleep(10 * time.Millisecond)
@@ -279,16 +277,16 @@ func TestExecutionTrace_Duration(t *testing.T) {
 }
 
 func TestExecutionTrace_SuccessCount(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
 	// Add successful result
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:  "step1",
 		Success: true,
 	})
 
 	// Add failed result
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:  "step2",
 		Success: false,
 	})
@@ -302,7 +300,7 @@ func TestExecutionTrace_SuccessCount(t *testing.T) {
 }
 
 func TestExecutionTrace_EventsByType(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
 	trace.RecordPlanStart()
 	trace.RecordPlanStart()
@@ -315,14 +313,14 @@ func TestExecutionTrace_EventsByType(t *testing.T) {
 }
 
 func TestExecutionTrace_FailedSteps(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:  "step1",
 		Success: true,
 	})
 
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:  "step2",
 		Success: false,
 	})
@@ -337,22 +335,22 @@ func TestExecutionTrace_FailedSteps(t *testing.T) {
 }
 
 func TestExecutionTrace_CriticalPath(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
 	// Add steps with different durations
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:   "step1",
 		Success:  true,
 		Duration: 100 * time.Millisecond,
 	})
 
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:   "step2",
 		Success:  true,
 		Duration: 50 * time.Millisecond,
 	})
 
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:   "step3",
 		Success:  true,
 		Duration: 200 * time.Millisecond,
@@ -370,14 +368,14 @@ func TestExecutionTrace_CriticalPath(t *testing.T) {
 }
 
 func TestExecutionTrace_Summary(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:  "step1",
 		Success: true,
 	})
 
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:  "step2",
 		Success: false,
 	})
@@ -392,11 +390,11 @@ func TestExecutionTrace_Summary(t *testing.T) {
 }
 
 func TestExecutionTrace_ToDebugString(t *testing.T) {
-	trace := goalcon.NewExecutionTrace("test goal")
+	trace := NewExecutionTrace("test goal")
 
 	trace.RecordPlanStart()
 	trace.RecordStepStart("step1", "Tool1")
-	trace.RecordStepComplete(&goalcon.StepExecutionResult{
+	trace.RecordStepComplete(&StepExecutionResult{
 		StepID:   "step1",
 		ToolName: "Tool1",
 		Success:  true,
@@ -408,14 +406,14 @@ func TestExecutionTrace_ToDebugString(t *testing.T) {
 	if len(debugStr) == 0 {
 		t.Fatal("expected non-empty debug string")
 	}
-	if !contains(debugStr, "Execution Trace") {
+	if !stringContains(debugStr, "Execution Trace") {
 		t.Error("debug string should contain 'Execution Trace'")
 	}
-	if !contains(debugStr, "test goal") {
+	if !stringContains(debugStr, "test goal") {
 		t.Error("debug string should contain goal")
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0
+func stringContains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }

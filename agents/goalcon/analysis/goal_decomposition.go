@@ -15,17 +15,17 @@ import (
 type DecompositionStrategy string
 
 const (
-	DecompositionStrategyPredicates DecompositionStrategy = "by_predicates"     // One sub-goal per predicate
-	DecompositionStrategySequential  DecompositionStrategy = "sequential"       // Linear dependency chain
-	DecompositionStrategyHierarchical DecompositionStrategy = "hierarchical"    // Parent-child relationships
-	DecompositionStrategyDomainBased DecompositionStrategy = "domain_based"     // Group by semantic domain
+	DecompositionStrategyPredicates   DecompositionStrategy = "by_predicates" // One sub-goal per predicate
+	DecompositionStrategySequential   DecompositionStrategy = "sequential"    // Linear dependency chain
+	DecompositionStrategyHierarchical DecompositionStrategy = "hierarchical"  // Parent-child relationships
+	DecompositionStrategyDomainBased  DecompositionStrategy = "domain_based"  // Group by semantic domain
 )
 
 // SubGoal represents a decomposed goal.
 type SubGoal struct {
 	ID           string            // Unique identifier
 	Description  string            // What to accomplish
-	Predicates   []types.Predicate       // Target predicates
+	Predicates   []types.Predicate // Target predicates
 	Importance   float32           // 0.0-1.0 relative importance
 	Dependencies []string          // Sub-goal IDs that must complete first
 	DependsOn    []string          // Which parent goals this is part of
@@ -34,21 +34,21 @@ type SubGoal struct {
 
 // GoalDecomposition represents the result of decomposing a goal.
 type GoalDecomposition struct {
-	OriginalGoal  types.GoalCondition
-	SubGoals      []*SubGoal
-	Strategy      DecompositionStrategy
-	Rationale     string                      // Why goal was decomposed this way
-	AmbiguityInfo *AmbiguityScore             // Ambiguities that triggered decomposition
-	ExecutionOrder []string                   // IDs in recommended execution order
-	Timestamp     time.Time
+	OriginalGoal   types.GoalCondition
+	SubGoals       []*SubGoal
+	Strategy       DecompositionStrategy
+	Rationale      string          // Why goal was decomposed this way
+	AmbiguityInfo  *AmbiguityScore // Ambiguities that triggered decomposition
+	ExecutionOrder []string        // IDs in recommended execution order
+	Timestamp      time.Time
 }
 
 // GoalDecomposer breaks down goals into sub-goals.
 type GoalDecomposer struct {
-	strategies     map[DecompositionStrategy]DecompositionFunc
-	maxSubGoals    int // Max sub-goals to create (default 8)
-	minPredicates  int // Min predicates to consider for decomposition
-	mu             sync.RWMutex
+	strategies    map[DecompositionStrategy]DecompositionFunc
+	maxSubGoals   int // Max sub-goals to create (default 8)
+	minPredicates int // Min predicates to consider for decomposition
+	mu            sync.RWMutex
 }
 
 // DecompositionFunc is a function that decomposes a goal.

@@ -1,13 +1,11 @@
 package execution
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 )
 
 // TestFailureDetector_CategorizesTransientError tests detection of transient errors.
@@ -247,22 +245,22 @@ func TestRecoveryStrategy_String(t *testing.T) {
 // TestFailureDetector_WithMetrics tests failure detection with metrics context.
 func TestFailureDetector_WithMetrics(t *testing.T) {
 	// Create a metrics recorder (without memory store for testing)
-	recorder := NewMetricsRecorder(nil)
+	recorder := audit.NewMetricsRecorder(nil)
 
 	// Record some execution metrics
-	recorder.RecordExecution(ExecutionMetrics{
+	recorder.RecordExecution(audit.ExecutionMetrics{
 		OperatorName: "reliable-tool",
 		Success:      true,
 		Duration:     100 * time.Millisecond,
 	})
 	for i := 0; i < 8; i++ {
-		recorder.RecordExecution(ExecutionMetrics{
+		recorder.RecordExecution(audit.ExecutionMetrics{
 			OperatorName: "reliable-tool",
 			Success:      true,
 			Duration:     100 * time.Millisecond,
 		})
 	}
-	recorder.RecordExecution(ExecutionMetrics{
+	recorder.RecordExecution(audit.ExecutionMetrics{
 		OperatorName: "reliable-tool",
 		Success:      false,
 		Duration:     100 * time.Millisecond,
@@ -270,14 +268,14 @@ func TestFailureDetector_WithMetrics(t *testing.T) {
 
 	// Flaky tool with low success rate
 	for i := 0; i < 2; i++ {
-		recorder.RecordExecution(ExecutionMetrics{
+		recorder.RecordExecution(audit.ExecutionMetrics{
 			OperatorName: "flaky-tool",
 			Success:      true,
 			Duration:     100 * time.Millisecond,
 		})
 	}
 	for i := 0; i < 8; i++ {
-		recorder.RecordExecution(ExecutionMetrics{
+		recorder.RecordExecution(audit.ExecutionMetrics{
 			OperatorName: "flaky-tool",
 			Success:      false,
 			Duration:     100 * time.Millisecond,

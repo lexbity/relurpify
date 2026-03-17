@@ -1,10 +1,10 @@
 package planning
 
 import (
+	"github.com/lexcodex/relurpify/agents/goalcon/audit"
 	"github.com/lexcodex/relurpify/agents/goalcon/types"
+	"github.com/lexcodex/relurpify/framework/core"
 )
-
-import "github.com/lexcodex/relurpify/framework/core"
 
 // PlanningResult captures the solver output.
 type PlanningResult struct {
@@ -17,7 +17,7 @@ type PlanningResult struct {
 type Solver struct {
 	Operators       *types.OperatorRegistry
 	MaxDepth        int
-	Recorder        *types.MetricsRecorder               // Optional metrics recorder for quality-based operator ranking
+	Recorder        *audit.MetricsRecorder               // Optional metrics recorder for quality-based operator ranking
 	FailedOperators map[string]int                // Phase 6: Track failed operators and their failure counts
 }
 
@@ -107,7 +107,7 @@ func (s *Solver) Solve(goal types.GoalCondition, ws *types.WorldState) PlanningR
 	}
 
 	return PlanningResult{
-		Plan:        buildPlan(goal.Description, ordered),
+		Plan:        types.BuildPlan(goal.Description, ordered),
 		Depth:       maxSeenDepth,
 		Unsatisfied: unsatisfied,
 	}
