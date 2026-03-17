@@ -8,16 +8,12 @@ import (
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
-type eucloTelemetryRecorder struct {
-	events []core.Event
-}
-
-func (r *eucloTelemetryRecorder) Emit(event core.Event) {
-	r.events = append(r.events, event)
-}
+// eucloTelemetryRecorder wraps testutil.TelemetryRecorder for backward compatibility
+type eucloTelemetryRecorder = testutil.TelemetryRecorder
 
 func TestBuildActionLogAndProofSurfaceFromState(t *testing.T) {
 	state := core.NewContext()
@@ -79,10 +75,10 @@ func TestAgentExecutePublishesObservabilitySurfacesAndTelemetry(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "plan_stage_execute", proof.ProfileID)
 
-	require.NotEmpty(t, recorder.events)
+	require.NotEmpty(t, recorder.Events)
 	foundStateChange := false
 	foundAgentFinish := false
-	for _, event := range recorder.events {
+	for _, event := range recorder.Events {
 		if event.Type == core.EventStateChange {
 			foundStateChange = true
 		}

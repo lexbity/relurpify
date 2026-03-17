@@ -8,35 +8,12 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
-type eucloFileWriteTool struct{}
-
-func (eucloFileWriteTool) Name() string        { return "file_write" }
-func (eucloFileWriteTool) Description() string { return "writes a file" }
-func (eucloFileWriteTool) Category() string    { return "file" }
-func (eucloFileWriteTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
-		{Name: "path", Type: "string", Required: true},
-		{Name: "content", Type: "string", Required: true},
-	}
-}
-func (eucloFileWriteTool) Execute(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	path := filepath.Clean(args["path"].(string))
-	content := args["content"].(string)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return nil, err
-	}
-	return &core.ToolResult{Success: true, Data: map[string]any{"path": path}}, nil
-}
-func (eucloFileWriteTool) IsAvailable(_ context.Context, _ *core.Context) bool { return true }
-func (eucloFileWriteTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: &core.PermissionSet{
-		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemWrite, Path: "."}},
-	}}
-}
-func (eucloFileWriteTool) Tags() []string { return []string{core.TagDestructive, "file", "edit"} }
+// eucloFileWriteTool wraps testutil.FileWriteTool for backward compatibility
+type eucloFileWriteTool = testutil.FileWriteTool
 
 func TestApplyEditIntentArtifactsExecutesWritesThroughCapabilityRegistry(t *testing.T) {
 	registry := capability.NewRegistry()

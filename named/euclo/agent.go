@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	plannerpkg "github.com/lexcodex/relurpify/agents/planner"
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	reflectionpkg "github.com/lexcodex/relurpify/agents/reflection"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -24,9 +22,11 @@ type Agent struct {
 	Memory         memory.MemoryStore
 	Environment    agentenv.AgentEnvironment
 
-	ModeRegistry    *ModeRegistry
-	ProfileRegistry *ExecutionProfileRegistry
-	FamilyRegistry  *CapabilityFamilyRegistry
+	ModeRegistry        *ModeRegistry
+	ProfileRegistry     *ExecutionProfileRegistry
+	CodingCapabilities  *EucloCapabilityRegistry
+	ProfileCtrl         *ProfileController
+	RecoveryCtrl        *RecoveryController
 }
 
 func New(env agentenv.AgentEnvironment) *Agent {
@@ -50,8 +50,25 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 	if a.ProfileRegistry == nil {
 		a.ProfileRegistry = DefaultExecutionProfileRegistry()
 	}
-	if a.FamilyRegistry == nil {
-		a.FamilyRegistry = DefaultCapabilityFamilyRegistry()
+	if a.CodingCapabilities == nil {
+		a.CodingCapabilities = RegisterDefaultCodingCapabilities(env)
+	}
+	if a.RecoveryCtrl == nil {
+		a.RecoveryCtrl = NewRecoveryController(
+			a.CodingCapabilities,
+			a.ProfileRegistry,
+			a.ModeRegistry,
+			env,
+		)
+	}
+	if a.ProfileCtrl == nil {
+		a.ProfileCtrl = NewProfileController(
+			a.CodingCapabilities,
+			DefaultPhaseGates(),
+			env,
+			a.ProfileRegistry,
+			a.RecoveryCtrl,
+		)
 	}
 	return a.Initialize(env.Config)
 }
@@ -66,9 +83,6 @@ func (a *Agent) Initialize(cfg *core.Config) error {
 	}
 	if a.ProfileRegistry == nil {
 		a.ProfileRegistry = DefaultExecutionProfileRegistry()
-	}
-	if a.FamilyRegistry == nil {
-		a.FamilyRegistry = DefaultCapabilityFamilyRegistry()
 	}
 	if a.CheckpointPath != "" {
 		a.Delegate.CheckpointPath = a.CheckpointPath
@@ -109,6 +123,11 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	if state == nil {
 		state = core.NewContext()
 	}
+	// Session scoping: prevent recursive Euclo invocations.
+	sessionID := generateSessionID()
+	if scopeErr := enforceSessionScoping(state, sessionID); scopeErr != nil {
+		return &core.Result{Success: false, Error: scopeErr}, scopeErr
+	}
 	envelope, classification, mode, profile := a.runtimeState(task, state)
 	state.Set("euclo.envelope", envelope)
 	state.Set("euclo.classification", classification)
@@ -120,7 +139,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	var err error
 	retrievalPolicy := ResolveRetrievalPolicy(mode, profile)
 	state.Set("euclo.retrieval_policy", retrievalPolicy)
-	routing := RouteCapabilityFamilies(mode, profile, a.FamilyRegistry)
+	routing := RouteCapabilityFamilies(mode, profile)
 	state.Set("euclo.capability_family_routing", routing)
 	executionTask := a.eucloTask(task, envelope, classification, mode, profile)
 	if surfaces := resolveRuntimeSurfaces(a.Memory); surfaces.Workflow != nil {
@@ -132,15 +151,17 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		}
 		if expansion, expandErr := ExpandContext(ctx, surfaces.Workflow, workflowID, executionTask, state, retrievalPolicy); expandErr == nil {
 			executionTask = applyContextExpansion(state, executionTask, expansion)
-		} else if err == nil {
+		} else {
 			err = expandErr
 		}
 	}
-	executor, buildErr := a.buildExecutorForRouting(routing)
-	if buildErr != nil && err == nil {
-		err = buildErr
-	}
-	result, execErr := executor.Execute(ctx, executionTask, state)
+	var result *core.Result
+	var execErr error
+	execEnvelope := BuildExecutionEnvelope(
+		executionTask, state, mode, profile, a.Environment,
+		nil, "", "", a.ConfigTelemetry(),
+	)
+	result, _, execErr = a.ProfileCtrl.ExecuteProfile(ctx, profile, mode, execEnvelope)
 	if err == nil {
 		err = execErr
 	}
@@ -229,31 +250,6 @@ func (a *Agent) eucloTask(task *core.Task, envelope TaskEnvelope, classification
 	cloned.Context["euclo.envelope"] = envelope
 	cloned.Context["euclo.classification"] = classificationContextPayload(classification)
 	return cloned
-}
-
-func (a *Agent) buildExecutorForRouting(routing CapabilityFamilyRouting) (graph.WorkflowExecutor, error) {
-	env := a.Environment
-	switch routing.PrimaryFamilyID {
-	case "planning":
-		agent := plannerpkg.New(env)
-		return agent, nil
-	case "review":
-		agent := reflectionpkg.New(env, reactpkg.New(env))
-		return agent, nil
-	case "implementation", "debugging", "verification":
-		agent := reactpkg.New(env)
-		agent.Mode = routing.ModeID
-		if a.CheckpointPath != "" {
-			agent.CheckpointPath = a.CheckpointPath
-		}
-		return agent, nil
-	default:
-		if a.Delegate != nil {
-			a.Delegate.Mode = routing.ModeID
-			return a.Delegate, nil
-		}
-		return reactpkg.New(env), nil
-	}
 }
 
 func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, state *core.Context) {

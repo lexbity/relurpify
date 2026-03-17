@@ -10,28 +10,12 @@ import (
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
-type eucloStubModel struct{}
-
-func (eucloStubModel) Generate(context.Context, string, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
-}
-
-func (eucloStubModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
-	ch := make(chan string)
-	close(ch)
-	return ch, nil
-}
-
-func (eucloStubModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
-}
-
-func (eucloStubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
-}
+// eucloStubModel wraps testutil.StubModel for backward compatibility
+type eucloStubModel = testutil.StubModel
 
 func TestAgentExecutePublishesNormalizedArtifacts(t *testing.T) {
 	memStore, err := memory.NewHybridMemory(t.TempDir())

@@ -4,9 +4,6 @@ import (
 	"context"
 	"testing"
 
-	plannerpkg "github.com/lexcodex/relurpify/agents/planner"
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	reflectionpkg "github.com/lexcodex/relurpify/agents/reflection"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -18,7 +15,6 @@ func TestRouteCapabilityFamiliesUsesModeAndProfileDeterministically(t *testing.T
 	routing := RouteCapabilityFamilies(
 		ModeResolution{ModeID: "planning"},
 		ExecutionProfileSelection{ProfileID: "plan_stage_execute", PhaseRoutes: map[string]string{"plan": "planner", "summarize": "react"}},
-		DefaultCapabilityFamilyRegistry(),
 	)
 	require.Equal(t, "planning", routing.PrimaryFamilyID)
 	require.Equal(t, []string{"implementation"}, routing.FallbackFamilyIDs)
@@ -26,27 +22,52 @@ func TestRouteCapabilityFamiliesUsesModeAndProfileDeterministically(t *testing.T
 	require.Equal(t, "planning", routing.Routes[0].Family)
 }
 
-func TestBuildExecutorForRoutingChoosesPlannerAndReviewer(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	require.NoError(t, err)
-	agent := New(agentenv.AgentEnvironment{
-		Model:    eucloStubModel{},
-		Registry: capability.NewRegistry(),
-		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
-		Config:   &core.Config{Name: "euclo-routing", Model: "stub", MaxIterations: 1},
-	})
+func TestRouteCapabilityFamiliesDebugMode(t *testing.T) {
+	routing := RouteCapabilityFamilies(
+		ModeResolution{ModeID: "debug"},
+		ExecutionProfileSelection{ProfileID: "reproduce_localize_patch", PhaseRoutes: map[string]string{"reproduce": "react", "localize": "react", "patch": "pipeline", "verify": "react"}},
+	)
+	require.Equal(t, "debugging", routing.PrimaryFamilyID)
+	require.Equal(t, []string{"implementation", "verification"}, routing.FallbackFamilyIDs)
+}
 
-	executor, err := agent.buildExecutorForRouting(CapabilityFamilyRouting{ModeID: "planning", PrimaryFamilyID: "planning"})
-	require.NoError(t, err)
-	require.IsType(t, &plannerpkg.PlannerAgent{}, executor)
+func TestRouteCapabilityFamiliesReviewMode(t *testing.T) {
+	routing := RouteCapabilityFamilies(
+		ModeResolution{ModeID: "review"},
+		ExecutionProfileSelection{ProfileID: "review_suggest_implement", PhaseRoutes: map[string]string{"review": "reflection", "summarize": "react"}},
+	)
+	require.Equal(t, "review", routing.PrimaryFamilyID)
+	require.Equal(t, []string{"planning"}, routing.FallbackFamilyIDs)
+}
 
-	executor, err = agent.buildExecutorForRouting(CapabilityFamilyRouting{ModeID: "review", PrimaryFamilyID: "review"})
-	require.NoError(t, err)
-	require.IsType(t, &reflectionpkg.ReflectionAgent{}, executor)
+func TestRouteCapabilityFamiliesDefaultMode(t *testing.T) {
+	routing := RouteCapabilityFamilies(
+		ModeResolution{ModeID: "code"},
+		ExecutionProfileSelection{ProfileID: "edit_verify_repair", PhaseRoutes: map[string]string{"explore": "react"}},
+	)
+	require.Equal(t, "implementation", routing.PrimaryFamilyID)
+}
 
-	executor, err = agent.buildExecutorForRouting(CapabilityFamilyRouting{ModeID: "code", PrimaryFamilyID: "implementation"})
-	require.NoError(t, err)
-	require.IsType(t, &reactpkg.ReActAgent{}, executor)
+func TestRouteCapabilityFamiliesPhaseParadigmMapping(t *testing.T) {
+	routing := RouteCapabilityFamilies(
+		ModeResolution{ModeID: "code"},
+		ExecutionProfileSelection{ProfileID: "edit_verify_repair", PhaseRoutes: map[string]string{
+			"explore": "react", "plan": "pipeline", "edit": "pipeline", "verify": "react",
+		}},
+	)
+	// Routes should be sorted by phase.
+	require.Len(t, routing.Routes, 4)
+	// Plan phase should map to planning family with planner paradigm.
+	for _, route := range routing.Routes {
+		if route.Phase == "plan" {
+			require.Equal(t, "planning", route.Family)
+			require.Equal(t, "planner", route.Agent)
+		}
+		if route.Phase == "verify" {
+			require.Equal(t, "verification", route.Family)
+			require.Equal(t, "react", route.Agent)
+		}
+	}
 }
 
 func TestAgentPublishesCapabilityRoutingArtifact(t *testing.T) {
