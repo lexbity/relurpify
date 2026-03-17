@@ -82,7 +82,7 @@ func SaveRunSummary(ctx context.Context, state *core.Context,
 	}
 
 	summary := HTNRunSummary{
-		SchemaVersion:      htnSchemaVersion,
+		SchemaVersion:      runtime.HTNSchemaVersion,
 		TaskType:           snapshot.Task.Type,
 		SelectedMethod:     snapshot.Method.Name,
 		PlannedStepCount:   snapshot.Execution.PlannedStepCount,
@@ -184,12 +184,12 @@ func SaveExecutionMetrics(ctx context.Context, state *core.Context,
 	totalDuration := int(decompositionTime.Seconds()) + int(executionTime.Seconds())
 	failedSteps := snapshot.Execution.PlannedStepCount - snapshot.Execution.CompletedStepCount
 	retried := 0
-	if raw, ok := state.Get(contextKeyLastFailureStep); ok && raw != nil {
+	if raw, ok := state.Get(runtime.ContextKeyLastFailureStep); ok && raw != nil {
 		retried = 1
 	}
 
 	metrics := ExecutionMetrics{
-		SchemaVersion:     htnSchemaVersion,
+		SchemaVersion:     runtime.HTNSchemaVersion,
 		TotalDuration:     totalDuration,
 		DecompositionTime: int(decompositionTime.Seconds()),
 		ExecutionTime:     int(executionTime.Seconds()),
@@ -224,8 +224,8 @@ func SaveExecutionMetrics(ctx context.Context, state *core.Context,
 	return nil
 }
 
-// persistOperatorOutcome persists individual operator step outcome.
-func (a *HTNAgent) persistOperatorOutcome(ctx context.Context,
+// PersistOperatorOutcome persists individual operator step outcome.
+func PersistOperatorOutcome(ctx context.Context,
 	store memory.WorkflowStateStore,
 	workflowID, runID, stepRunID string,
 	operator string, stepID string,
@@ -309,8 +309,8 @@ func (a *HTNAgent) persistOperatorOutcome(ctx context.Context,
 	return nil
 }
 
-// appendHTNEvent appends an HTN execution event to workflow history.
-func (a *HTNAgent) appendHTNEvent(ctx context.Context,
+// AppendHTNEvent appends an HTN execution event to workflow history.
+func AppendHTNEvent(ctx context.Context,
 	store memory.WorkflowStateStore,
 	workflowID, runID, stepID string,
 	eventType, message string) error {

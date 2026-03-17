@@ -2,7 +2,7 @@ package htn
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"github.com/lexcodex/relurpify/agents/htn/persistence"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -28,25 +28,33 @@ func (a *HTNAgent) restoreHTNCheckpoint(ctx context.Context, state *core.Context
 }
 
 // persistHTNRunSummary saves metrics and execution metadata.
-func (a *HTNAgent) persistHTNRunSummary(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
+func (a *HTNAgent) persistHTNRunSummary(ctx context.Context, state *core.Context, store memory.WorkflowStateStore, workflowID, runID string, startTime time.Time, success bool, err error) error {
 	if store == nil || workflowID == "" || runID == "" {
 		return nil
 	}
-	return persistence.SaveRunSummary(ctx, store, workflowID, runID)
+	return persistence.SaveRunSummary(ctx, state, store, workflowID, runID, startTime, success, err)
 }
 
 // persistHTNMethodMetadata saves method metadata for future optimization.
-func (a *HTNAgent) persistHTNMethodMetadata(ctx context.Context, store memory.WorkflowStateStore, workflowID string) error {
-	if store == nil || workflowID == "" {
-		return nil
-	}
-	return persistence.SaveMethodMetadata(ctx, store, workflowID)
-}
-
-// persistHTNExecutionMetrics saves detailed execution metrics.
-func (a *HTNAgent) persistHTNExecutionMetrics(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
+func (a *HTNAgent) persistHTNMethodMetadata(ctx context.Context, state *core.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
 	if store == nil || workflowID == "" || runID == "" {
 		return nil
 	}
-	return persistence.SaveExecutionMetrics(ctx, store, workflowID, runID)
+	return persistence.SaveMethodMetadata(ctx, state, store, workflowID, runID)
+}
+
+// persistHTNExecutionMetrics saves detailed execution metrics.
+func (a *HTNAgent) persistHTNExecutionMetrics(ctx context.Context, state *core.Context, store memory.WorkflowStateStore, workflowID, runID string, decompositionTime, executionTime time.Duration) error {
+	if store == nil || workflowID == "" || runID == "" {
+		return nil
+	}
+	return persistence.SaveExecutionMetrics(ctx, state, store, workflowID, runID, decompositionTime, executionTime)
+}
+
+// persistOperatorOutcome records individual operator step outcomes.
+func (a *HTNAgent) persistOperatorOutcome(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID, stepRunID, operator, stepID string, duration int, success bool, outputKeys []string, err error) error {
+	if store == nil || workflowID == "" || runID == "" {
+		return nil
+	}
+	return persistence.PersistOperatorOutcome(ctx, store, workflowID, runID, stepRunID, operator, stepID, time.Duration(duration)*time.Second, success, outputKeys, err)
 }

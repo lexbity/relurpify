@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/htn/authoring"
-	"github.com/lexcodex/relurpify/agents/htn/runtime"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 )
@@ -248,7 +247,7 @@ func costToValue(cost authoring.CostClass) int {
 
 // EnrichExecutionContextWithHistoricalData augments execution context with historical metrics.
 // This enables informed decisions about timeouts, retries, and resource allocation.
-func (a *HTNAgent) EnrichExecutionContextWithHistoricalData(ctx context.Context, state *core.Context, operatorName string, store memory.WorkflowStateStore) {
+func EnrichExecutionContextWithHistoricalData(ctx context.Context, state *core.Context, operatorName string, store memory.WorkflowStateStore) {
 	if state == nil || store == nil {
 		return
 	}

@@ -4,14 +4,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/htn/runtime"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
 func TestCheckpointPersistenceEncodeAndDecode(t *testing.T) {
 	// Create a sample HTN state snapshot
-	snapshot := &HTNState{
-		SchemaVersion: htnSchemaVersion,
-		Task: TaskState{
+	snapshot := &runtime.HTNState{
+		SchemaVersion: runtime.HTNSchemaVersion,
+		Task: runtime.TaskState{
 			ID:          "task_001",
 			Type:        core.TaskType("code"),
 			Instruction: "Write a function",
@@ -19,7 +20,7 @@ func TestCheckpointPersistenceEncodeAndDecode(t *testing.T) {
 				"priority": "high",
 			},
 		},
-		Method: MethodState{
+		Method: runtime.MethodState{
 			Name:          "analyze_and_code",
 			TaskType:      core.TaskType("code"),
 			Priority:      1,
@@ -41,7 +42,7 @@ func TestCheckpointPersistenceEncodeAndDecode(t *testing.T) {
 				},
 			},
 		},
-		Execution: ExecutionState{
+		Execution: runtime.ExecutionState{
 			WorkflowID:        "wf_001",
 			RunID:             "run_001",
 			CompletedSteps:    []string{"analyze_and_code.1"},
@@ -50,7 +51,7 @@ func TestCheckpointPersistenceEncodeAndDecode(t *testing.T) {
 			CompletedStepCount: 1,
 			Resumed:           false,
 		},
-		Metrics: Metrics{
+		Metrics: runtime.Metrics{
 			PlannedStepCount:   2,
 			CompletedStepCount: 1,
 		},
@@ -96,14 +97,14 @@ func TestCheckpointPersistenceEncodeAndDecode(t *testing.T) {
 }
 
 func TestCheckpointRestoreToContext(t *testing.T) {
-	snapshot := &HTNState{
-		SchemaVersion: htnSchemaVersion,
-		Task: TaskState{
+	snapshot := &runtime.HTNState{
+		SchemaVersion: runtime.HTNSchemaVersion,
+		Task: runtime.TaskState{
 			ID:          "task_001",
 			Type:        core.TaskType("code"),
 			Instruction: "Implement feature X",
 		},
-		Method: MethodState{
+		Method: runtime.MethodState{
 			Name:     "code_method",
 			TaskType: core.TaskType("code"),
 		},
@@ -114,7 +115,7 @@ func TestCheckpointRestoreToContext(t *testing.T) {
 				{ID: "step.2", Description: "Implement"},
 			},
 		},
-		Execution: ExecutionState{
+		Execution: runtime.ExecutionState{
 			CompletedSteps:     []string{"step.1"},
 			PlannedStepCount:   2,
 			CompletedStepCount: 1,
@@ -131,11 +132,11 @@ func TestCheckpointRestoreToContext(t *testing.T) {
 	}
 
 	// Verify state is properly restored
-	if raw, ok := state.Get(contextKeyTask); !ok {
+	if raw, ok := state.Get(runtime.ContextKeyTask); !ok {
 		t.Fatal("Task state not restored")
 	} else {
-		var restored TaskState
-		if !decodeContextValue(raw, &restored) {
+		var restored runtime.TaskState
+		if !runtime.DecodeContextValue(raw, &restored) {
 			t.Fatal("Failed to decode restored task state")
 		}
 		if restored.ID != snapshot.Task.ID {
@@ -143,11 +144,11 @@ func TestCheckpointRestoreToContext(t *testing.T) {
 		}
 	}
 
-	if raw, ok := state.Get(contextKeySelectedMethod); !ok {
+	if raw, ok := state.Get(runtime.ContextKeySelectedMethod); !ok {
 		t.Fatal("Method state not restored")
 	} else {
-		var restored MethodState
-		if !decodeContextValue(raw, &restored) {
+		var restored runtime.MethodState
+		if !runtime.DecodeContextValue(raw, &restored) {
 			t.Fatal("Failed to decode restored method state")
 		}
 		if restored.Name != snapshot.Method.Name {
@@ -155,11 +156,11 @@ func TestCheckpointRestoreToContext(t *testing.T) {
 		}
 	}
 
-	if raw, ok := state.Get(contextKeyPlan); !ok {
+	if raw, ok := state.Get(runtime.ContextKeyPlan); !ok {
 		t.Fatal("Plan not restored")
 	} else {
 		var restored core.Plan
-		if !decodeContextValue(raw, &restored) {
+		if !runtime.DecodeContextValue(raw, &restored) {
 			t.Fatal("Failed to decode restored plan")
 		}
 		if len(restored.Steps) != len(snapshot.Plan.Steps) {
@@ -167,23 +168,23 @@ func TestCheckpointRestoreToContext(t *testing.T) {
 		}
 	}
 
-	completed := completedStepsFromContext(state)
+	completed := runtime.CompletedStepsFromContext(state)
 	if len(completed) != 1 || completed[0] != "step.1" {
 		t.Errorf("Completed steps mismatch: expected [step.1], got %v", completed)
 	}
 }
 
 func TestCheckpointMetadataGeneration(t *testing.T) {
-	snapshot := &HTNState{
-		SchemaVersion: htnSchemaVersion,
-		Task: TaskState{
+	snapshot := &runtime.HTNState{
+		SchemaVersion: runtime.HTNSchemaVersion,
+		Task: runtime.TaskState{
 			ID:   "task_001",
 			Type: core.TaskType("code"),
 		},
-		Method: MethodState{
+		Method: runtime.MethodState{
 			Name: "test_method",
 		},
-		Execution: ExecutionState{
+		Execution: runtime.ExecutionState{
 			CompletedSteps:     []string{"step.1", "step.2"},
 			PlannedStepCount:   3,
 			CompletedStepCount: 2,
@@ -195,8 +196,8 @@ func TestCheckpointMetadataGeneration(t *testing.T) {
 	cp := &checkpointPersistence{}
 	metadata := cp.checkpointMetadata(snapshot)
 
-	if metadata["schema_version"] != htnSchemaVersion {
-		t.Errorf("Schema version mismatch: expected %d, got %v", htnSchemaVersion, metadata["schema_version"])
+	if metadata["schema_version"] != runtime.HTNSchemaVersion {
+		t.Errorf("Schema version mismatch: expected %d, got %v", runtime.HTNSchemaVersion, metadata["schema_version"])
 	}
 	if metadata["method_name"] != "test_method" {
 		t.Errorf("Method name mismatch: expected test_method, got %v", metadata["method_name"])
@@ -213,16 +214,16 @@ func TestCheckpointMetadataGeneration(t *testing.T) {
 }
 
 func TestCheckpointSummarization(t *testing.T) {
-	snapshot := &HTNState{
-		SchemaVersion: htnSchemaVersion,
-		Task: TaskState{
+	snapshot := &runtime.HTNState{
+		SchemaVersion: runtime.HTNSchemaVersion,
+		Task: runtime.TaskState{
 			ID:   "task_001",
 			Type: core.TaskType("code"),
 		},
-		Method: MethodState{
+		Method: runtime.MethodState{
 			Name: "analyze_method",
 		},
-		Execution: ExecutionState{
+		Execution: runtime.ExecutionState{
 			PlannedStepCount:   5,
 			CompletedStepCount: 3,
 		},
@@ -268,8 +269,8 @@ func TestCheckpointIDGeneration(t *testing.T) {
 
 func TestHTNStateValidationAfterDecode(t *testing.T) {
 	// Create an invalid snapshot (missing schema version)
-	snapshot := &HTNState{
-		Task: TaskState{ID: "task_001"},
+	snapshot := &runtime.HTNState{
+		Task: runtime.TaskState{ID: "task_001"},
 	}
 
 	cp := &checkpointPersistence{}
@@ -285,8 +286,8 @@ func TestHTNStateValidationAfterDecode(t *testing.T) {
 	}
 
 	// Verify normalization occurred
-	if decoded.SchemaVersion != htnSchemaVersion {
-		t.Errorf("Schema version not normalized: expected %d, got %d", htnSchemaVersion, decoded.SchemaVersion)
+	if decoded.SchemaVersion != runtime.HTNSchemaVersion {
+		t.Errorf("Schema version not normalized: expected %d, got %d", runtime.HTNSchemaVersion, decoded.SchemaVersion)
 	}
 }
 
@@ -301,13 +302,13 @@ func TestPersistRecoveryMetadata(t *testing.T) {
 	persistRecoveryMetadata(state, diagnosis, notes, stepID, err)
 
 	// Verify metadata was persisted
-	if diag := state.GetString(contextKeyLastRecoveryDiag); diag != diagnosis {
+	if diag := state.GetString(runtime.ContextKeyLastRecoveryDiag); diag != diagnosis {
 		t.Errorf("Recovery diagnosis mismatch: expected %q, got %q", diagnosis, diag)
 	}
 
-	if raw, ok := state.Get(contextKeyLastRecoveryNotes); ok {
+	if raw, ok := state.Get(runtime.ContextKeyLastRecoveryNotes); ok {
 		var restoredNotes []string
-		if decodeContextValue(raw, &restoredNotes) {
+		if runtime.DecodeContextValue(raw, &restoredNotes) {
 			if len(restoredNotes) != len(notes) {
 				t.Errorf("Recovery notes count mismatch: expected %d, got %d", len(notes), len(restoredNotes))
 			}
@@ -316,7 +317,7 @@ func TestPersistRecoveryMetadata(t *testing.T) {
 		t.Fatal("Recovery notes not persisted")
 	}
 
-	if step := state.GetString(contextKeyLastFailureStep); step != stepID {
+	if step := state.GetString(runtime.ContextKeyLastFailureStep); step != stepID {
 		t.Errorf("Failure step mismatch: expected %s, got %s", stepID, step)
 	}
 }
@@ -331,9 +332,9 @@ func TestPersistDispatchMetadata(t *testing.T) {
 	persistDispatchMetadata(state, dispatcher, target, reason)
 
 	// Verify metadata was persisted
-	if raw, ok := state.Get(contextKeyLastDispatch); ok {
+	if raw, ok := state.Get(runtime.ContextKeyCheckpoint); ok {
 		var metadata map[string]any
-		if decodeContextValue(raw, &metadata) {
+		if runtime.DecodeContextValue(raw, &metadata) {
 			if metadata["mode"] != dispatcher {
 				t.Errorf("Dispatcher mismatch: expected %s, got %v", dispatcher, metadata["mode"])
 			}

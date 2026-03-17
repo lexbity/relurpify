@@ -136,8 +136,8 @@ func TestResolveMethod_DefaultRuntimeSpecs(t *testing.T) {
 	if got := resolved.Operators[1].Executor; got != "pipeline" {
 		t.Fatalf("expected explicit executor pipeline, got %q", got)
 	}
-	if len(resolved.Operators[1].Contract.RequiredCapabilities) == 0 {
-		t.Fatal("expected operator contract required capabilities")
+	if len(resolved.Operators[1].RequiredCapabilities) == 0 {
+		t.Fatal("expected operator required capabilities")
 	}
 }
 

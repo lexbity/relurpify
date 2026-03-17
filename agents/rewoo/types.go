@@ -37,9 +37,57 @@ type RewooStepResult struct {
 	Error   string         `json:"error,omitempty"`
 }
 
+// RewooContextConfig controls context management and token budgeting.
+type RewooContextConfig struct {
+	// StrategyName: "adaptive" (default), "conservative", "aggressive"
+	StrategyName string
+	// PreferredDetailLevel: controls AST/file detail in context ("brief", "normal", "detailed")
+	PreferredDetailLevel string
+	// MinHistorySize: minimum interactions to retain before pruning
+	MinHistorySize int
+	// CompressionThreshold: (0-1) when to trigger compression (e.g., 0.8 = 80% budget used)
+	CompressionThreshold float64
+	// BudgetSystemTokens: reserved for system/framework overhead
+	BudgetSystemTokens int
+	// BudgetToolTokens: reserved for tool specs in planning context
+	BudgetToolTokens int
+	// BudgetOutputTokens: reserved for response generation
+	BudgetOutputTokens int
+}
+
+// RewooPermissionConfig controls authorization and HITL.
+type RewooPermissionConfig struct {
+	// DefaultPolicy: "allow", "deny", "ask" (default)
+	DefaultPolicy string
+	// WorkspacePath: base path for file system permission scope
+	WorkspacePath string
+	// RequireApprovalForTools: if non-empty, only these tool names require explicit approval
+	RequireApprovalForTools []string
+	// EnableHITL: if true, unknown operations route to human-in-the-loop
+	EnableHITL bool
+}
+
+// RewooGraphConfig controls graph execution and parallelism.
+type RewooGraphConfig struct {
+	// MaxParallelSteps: limit concurrent step execution (default 4)
+	MaxParallelSteps int
+	// MaxNodeVisits: cycle guard for graph execution (default 1024)
+	MaxNodeVisits int
+	// CheckpointInterval: checkpoint every N nodes (0 = disabled)
+	CheckpointInterval int
+	// EnableParallelExecution: if false, all steps run sequentially
+	EnableParallelExecution bool
+}
+
 // RewooOptions controls execution limits and fallback behavior.
 type RewooOptions struct {
 	MaxReplanAttempts int
 	OnFailure         StepOnFailure
 	MaxSteps          int
+	// ContextConfig controls context budgeting and management
+	ContextConfig RewooContextConfig
+	// PermConfig controls permissions and authorization
+	PermConfig RewooPermissionConfig
+	// GraphConfig controls graph-based execution
+	GraphConfig RewooGraphConfig
 }

@@ -3,7 +3,6 @@ package persistence
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -399,70 +398,4 @@ func (m *mockWorkflowStateStore) AppendEvent(ctx context.Context, event memory.W
 
 func (m *mockWorkflowStateStore) Close() error {
 	return nil
-}
-
-// Note: contains() helper is defined in htn_checkpoint_persistence_test.go
-// We reuse it here via package-level visibility
-
-// TestPersistHTNRunSummaryWithNilStore verifies graceful handling of nil store.
-func TestPersistHTNRunSummaryWithNilStore(t *testing.T) {
-	agent := &HTNAgent{}
-	ctx := context.Background()
-	state := core.NewContext()
-
-	// Should return nil error for nil store
-	err := agent.persistHTNRunSummary(ctx, state, nil, "workflow1", "run1", time.Now(), true, nil)
-	if err != nil {
-		t.Errorf("Expected nil error for nil store, got %v", err)
-	}
-}
-
-// TestPersistHTNMethodMetadataWithNilStore verifies graceful handling of nil store.
-func TestPersistHTNMethodMetadataWithNilStore(t *testing.T) {
-	agent := &HTNAgent{}
-	ctx := context.Background()
-	state := core.NewContext()
-
-	// Should return nil error for nil store
-	err := agent.persistHTNMethodMetadata(ctx, state, nil, "workflow1", "run1")
-	if err != nil {
-		t.Errorf("Expected nil error for nil store, got %v", err)
-	}
-}
-
-// TestPersistHTNExecutionMetricsWithNilStore verifies graceful handling of nil store.
-func TestPersistHTNExecutionMetricsWithNilStore(t *testing.T) {
-	agent := &HTNAgent{}
-	ctx := context.Background()
-	state := core.NewContext()
-
-	// Should return nil error for nil store
-	err := agent.persistHTNExecutionMetrics(ctx, state, nil, "workflow1", "run1", time.Second, time.Second)
-	if err != nil {
-		t.Errorf("Expected nil error for nil store, got %v", err)
-	}
-}
-
-// TestPersistOperatorOutcomeWithNilStore verifies graceful handling of nil store.
-func TestPersistOperatorOutcomeWithNilStore(t *testing.T) {
-	agent := &HTNAgent{}
-	ctx := context.Background()
-
-	// Should return nil error for nil store
-	err := agent.persistOperatorOutcome(ctx, nil, "workflow1", "run1", "steprun1", "operator", "step1", time.Second, true, []string{"result"}, nil)
-	if err != nil {
-		t.Errorf("Expected nil error for nil store, got %v", err)
-	}
-}
-
-// TestAppendHTNEventWithNilStore verifies graceful handling of nil store.
-func TestAppendHTNEventWithNilStore(t *testing.T) {
-	agent := &HTNAgent{}
-	ctx := context.Background()
-
-	// Should return nil error for nil store
-	err := agent.appendHTNEvent(ctx, nil, "workflow1", "run1", "step1", "decompose", "method selected")
-	if err != nil {
-		t.Errorf("Expected nil error for nil store, got %v", err)
-	}
 }

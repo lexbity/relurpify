@@ -200,7 +200,7 @@ func (s *KnowledgeBasedMethodSelector) SelectBestMethod(ctx context.Context, tas
 		}
 	}
 
-	return bestMethod, bestMetrics
+	return &bestMethod, bestMetrics
 }
 
 // RankMethodsByPerformance sorts methods by effectiveness.
@@ -253,7 +253,7 @@ type MethodLibraryBuilder struct {
 // NewMethodLibraryBuilder creates a builder.
 func NewMethodLibraryBuilder(lib *runtime.MethodLibrary) *MethodLibraryBuilder {
 	if lib == nil {
-		lib = NewMethodLibrary()
+		lib = runtime.NewMethodLibrary()
 	}
 	return &MethodLibraryBuilder{library: lib}
 }
@@ -261,7 +261,7 @@ func NewMethodLibraryBuilder(lib *runtime.MethodLibrary) *MethodLibraryBuilder {
 // AddMethod adds a method to the library.
 func (b *MethodLibraryBuilder) AddMethod(method *runtime.Method) *MethodLibraryBuilder {
 	if b.library != nil && method != nil {
-		b.library.Add(method)
+		b.library.Register(*method)
 	}
 	return b
 }
@@ -297,7 +297,9 @@ func (b *MethodLibraryBuilder) ComposeMethod(composed *ComposedMethod) *MethodLi
 		Subtasks: subtasks,
 	}
 
-	b.library.Add(method)
+	if method != nil {
+		b.library.Register(*method)
+	}
 	return b
 }
 
@@ -464,16 +466,17 @@ func (a *MethodCompositionAnalyzer) CaptureSnapshot() *MethodLibrarySnapshot {
 		return nil
 	}
 
+	methods := a.Library.All()
 	snapshot := &MethodLibrarySnapshot{
 		Timestamp:   time.Now(),
-		MethodCount: len(a.Library.methods),
+		MethodCount: len(methods),
 		TaskTypes:   make(map[string]int),
 		Metadata:    make(map[string]any),
 	}
 
 	// Count by task type
 	prioritySum := 0
-	for _, method := range a.Library.methods {
+	for _, method := range methods {
 		taskTypeStr := string(method.TaskType)
 		snapshot.TaskTypes[taskTypeStr]++
 		prioritySum += method.Priority

@@ -65,6 +65,50 @@ func (ml *MethodLibrary) All() []Method {
 	return out
 }
 
+// FindAll returns all methods matching the given task, sorted by priority (highest first).
+func (ml *MethodLibrary) FindAll(task *core.Task) []Method {
+	if task == nil {
+		return nil
+	}
+	var candidates []Method
+	for _, m := range ml.methods {
+		if m.TaskType != task.Type {
+			continue
+		}
+		if m.Precondition != nil && !m.Precondition(task) {
+			continue
+		}
+		candidates = append(candidates, m)
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Priority > candidates[j].Priority
+	})
+	return candidates
+}
+
+// FindByName returns a method by its name, or nil if not found.
+func (ml *MethodLibrary) FindByName(name string) *Method {
+	for i, m := range ml.methods {
+		if m.Name == name {
+			return &ml.methods[i]
+		}
+	}
+	return nil
+}
+
+// FindResolved returns the best matching method resolved into a ResolvedMethod.
+func (ml *MethodLibrary) FindResolved(task *core.Task) *ResolvedMethod {
+	method := ml.Find(task)
+	if method == nil {
+		return nil
+	}
+	resolved := ResolveMethod(*method)
+	return &resolved
+}
+
 // registerDefaults installs the built-in method recipes.
 func (ml *MethodLibrary) registerDefaults() {
 	ml.methods = []Method{

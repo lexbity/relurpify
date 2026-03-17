@@ -252,7 +252,7 @@ func persistDispatchMetadata(state *core.Context, dispatcher string, target stri
 		"reason":           reason,
 		"timestamp":        time.Now().UTC().Unix(),
 	}
-	state.Set(runtime.ContextKeyLastDispatch, metadata)
+	state.Set(runtime.ContextKeyCheckpoint, metadata)
 }
 
 // persistRecoveryMetadata saves recovery diagnosis to context for resume.
@@ -260,11 +260,11 @@ func persistRecoveryMetadata(state *core.Context, diagnosis string, notes []stri
 	if state == nil {
 		return
 	}
-	state.Set(contextKeyLastRecoveryDiag, diagnosis)
-	state.Set(contextKeyLastRecoveryNotes, append([]string{}, notes...))
-	state.Set(contextKeyLastFailureStep, stepID)
+	state.Set(runtime.ContextKeyLastRecoveryDiag, diagnosis)
+	state.Set(runtime.ContextKeyLastRecoveryNotes, append([]string{}, notes...))
+	state.Set(runtime.ContextKeyLastFailureStep, stepID)
 	if err != nil {
-		state.Set(contextKeyLastFailureError, err.Error())
+		state.Set(runtime.ContextKeyLastFailureError, err.Error())
 	}
 }
 

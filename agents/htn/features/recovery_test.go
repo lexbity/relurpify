@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/htn/authoring"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
@@ -411,9 +412,9 @@ func TestRecoveryContextBuilder(t *testing.T) {
 
 	metadata := OperatorMetadata{
 		RetryClass: RetryClassIdempotent,
-		CostClass:  CostClassMedium,
+		CostClass:  authoring.CostClassMedium,
 		BranchSafe: true,
-		VerificationHint: &VerificationHint{
+		VerificationHint: VerificationHint{
 			Description: "Check output",
 		},
 	}

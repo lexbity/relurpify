@@ -6,15 +6,57 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/htn/authoring"
-	"github.com/lexcodex/relurpify/agents/htn/runtime"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 )
+
+// Note: VerificationHint and FileFocus need to be defined as structs with proper fields
 
 // Phase 11: Recovery optimization and file-scoped search.
 // Uses Phase 8 metadata (RetryClass, FileFocus, VerificationHint) and Phase 10 automation
 // (ShouldRetryStep, OperatorMetricsSnapshot) to implement intelligent recovery strategies,
 // adaptive timeouts, and scoped recovery searches.
+
+// RetryClass categorizes how a failed step should be retried.
+type RetryClass string
+
+const (
+	RetryClassIdempotent RetryClass = "idempotent"
+	RetryClassStateless  RetryClass = "stateless"
+	RetryClassStateful   RetryClass = "stateful"
+	RetryClassProbed     RetryClass = "probed"
+	RetryClassNone       RetryClass = "none"
+)
+
+// FileFocus restricts recovery search scope to specific files.
+type FileFocus struct {
+	Primary   []string
+	Secondary []string
+	Patterns  []string
+	Exclude   []string
+}
+
+// VerificationHint provides guidance for recovery verification.
+type VerificationHint struct {
+	Description string
+	Criteria    []string
+	Files       []string
+	Timeout     time.Duration
+}
+
+// OperatorMetadata encapsulates operator execution metrics and metadata.
+type OperatorMetadata struct {
+	Name              string
+	Duration          int
+	Success           bool
+	Retried           bool
+	RetryClass        RetryClass
+	CostClass         authoring.CostClass
+	BranchSafe        bool
+	VerificationHint  VerificationHint
+	FileFocus         FileFocus
+	ExpectedOutput    string
+}
 
 // RecoveryStrategy defines how to recover from a failed step.
 type RecoveryStrategy interface {
@@ -352,7 +394,7 @@ func (b *RecoveryContextBuilder) BuildRecoveryContext(
 	}
 
 	// Add verification hint
-	if metadata.VerificationHint != nil {
+	if metadata.VerificationHint.Description != "" || len(metadata.VerificationHint.Criteria) > 0 {
 		recoveryContext["verification_hint"] = map[string]any{
 			"description": metadata.VerificationHint.Description,
 			"criteria":    metadata.VerificationHint.Criteria,
@@ -362,7 +404,7 @@ func (b *RecoveryContextBuilder) BuildRecoveryContext(
 	}
 
 	// Add file focus
-	if metadata.FileFocus != nil {
+	if len(metadata.FileFocus.Primary) > 0 || len(metadata.FileFocus.Secondary) > 0 || len(metadata.FileFocus.Patterns) > 0 {
 		recoveryContext["file_focus"] = map[string]any{
 			"primary":   metadata.FileFocus.Primary,
 			"secondary": metadata.FileFocus.Secondary,
@@ -372,7 +414,7 @@ func (b *RecoveryContextBuilder) BuildRecoveryContext(
 	}
 
 	// Add expected output schema
-	if metadata.ExpectedOutput != nil {
+	if metadata.ExpectedOutput != "" {
 		recoveryContext["expected_output"] = metadata.ExpectedOutput
 	}
 

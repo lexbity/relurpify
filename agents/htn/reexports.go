@@ -14,6 +14,9 @@ type ResolvedMethod = runtime.ResolvedMethod
 type OperatorSpec = runtime.OperatorSpec
 type MethodSpec = runtime.MethodSpec
 type HTNState = runtime.HTNState
+type TaskState = runtime.TaskState
+type MethodState = runtime.MethodState
+type ExecutionState = runtime.ExecutionState
 
 var (
 	ClassifyTask         = runtime.ClassifyTask
@@ -23,4 +26,11 @@ var (
 	ResolveMethod        = runtime.ResolveMethod
 	LoadStateFromContext = runtime.LoadStateFromContext
 	MergeHTNBranches     = runtime.MergeHTNBranches
+)
+
+// Executor constants
+const (
+	ExecutorReact    = runtime.ExecutorReact
+	ExecutorPipeline = runtime.ExecutorPipeline
+	ExecutorHTN      = runtime.ExecutorHTN
 )
