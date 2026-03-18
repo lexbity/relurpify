@@ -10,6 +10,11 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/named/euclo/capabilities"
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/gate"
+	"github.com/lexcodex/relurpify/named/euclo/orchestrate"
+	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
 // Agent is the named coding-runtime boundary. The initial implementation keeps
@@ -22,11 +27,11 @@ type Agent struct {
 	Memory         memory.MemoryStore
 	Environment    agentenv.AgentEnvironment
 
-	ModeRegistry        *ModeRegistry
-	ProfileRegistry     *ExecutionProfileRegistry
-	CodingCapabilities  *EucloCapabilityRegistry
-	ProfileCtrl         *ProfileController
-	RecoveryCtrl        *RecoveryController
+	ModeRegistry        *euclotypes.ModeRegistry
+	ProfileRegistry     *euclotypes.ExecutionProfileRegistry
+	CodingCapabilities  *capabilities.EucloCapabilityRegistry
+	ProfileCtrl         *orchestrate.ProfileController
+	RecoveryCtrl        *orchestrate.RecoveryController
 }
 
 func New(env agentenv.AgentEnvironment) *Agent {
@@ -45,26 +50,35 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 		return err
 	}
 	if a.ModeRegistry == nil {
-		a.ModeRegistry = DefaultModeRegistry()
+		a.ModeRegistry = euclotypes.DefaultModeRegistry()
 	}
 	if a.ProfileRegistry == nil {
-		a.ProfileRegistry = DefaultExecutionProfileRegistry()
+		a.ProfileRegistry = euclotypes.DefaultExecutionProfileRegistry()
 	}
 	if a.CodingCapabilities == nil {
-		a.CodingCapabilities = RegisterDefaultCodingCapabilities(env)
+		a.CodingCapabilities = capabilities.NewDefaultCapabilityRegistry(env)
 	}
+
+	// Wire the snapshot function for orchestrate package.
+	orchestrate.SetDefaultSnapshotFunc(func(reg interface{}) euclotypes.CapabilitySnapshot {
+		if registry, ok := reg.(*capability.Registry); ok {
+			return eucloruntime.SnapshotCapabilities(registry)
+		}
+		return euclotypes.CapabilitySnapshot{}
+	})
+
 	if a.RecoveryCtrl == nil {
-		a.RecoveryCtrl = NewRecoveryController(
-			a.CodingCapabilities,
+		a.RecoveryCtrl = orchestrate.NewRecoveryController(
+			orchestrate.AdaptCapabilityRegistry(a.CodingCapabilities),
 			a.ProfileRegistry,
 			a.ModeRegistry,
 			env,
 		)
 	}
 	if a.ProfileCtrl == nil {
-		a.ProfileCtrl = NewProfileController(
-			a.CodingCapabilities,
-			DefaultPhaseGates(),
+		a.ProfileCtrl = orchestrate.NewProfileController(
+			orchestrate.AdaptCapabilityRegistry(a.CodingCapabilities),
+			gate.DefaultPhaseGates(),
 			env,
 			a.ProfileRegistry,
 			a.RecoveryCtrl,
@@ -79,10 +93,10 @@ func (a *Agent) Initialize(cfg *core.Config) error {
 		a.Delegate = &reactpkg.ReActAgent{}
 	}
 	if a.ModeRegistry == nil {
-		a.ModeRegistry = DefaultModeRegistry()
+		a.ModeRegistry = euclotypes.DefaultModeRegistry()
 	}
 	if a.ProfileRegistry == nil {
-		a.ProfileRegistry = DefaultExecutionProfileRegistry()
+		a.ProfileRegistry = euclotypes.DefaultExecutionProfileRegistry()
 	}
 	if a.CheckpointPath != "" {
 		a.Delegate.CheckpointPath = a.CheckpointPath
@@ -137,27 +151,27 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	state.Set("euclo.execution_profile", profile.ProfileID)
 	a.hydratePersistedArtifacts(ctx, task, state)
 	var err error
-	retrievalPolicy := ResolveRetrievalPolicy(mode, profile)
+	retrievalPolicy := eucloruntime.ResolveRetrievalPolicy(mode, profile)
 	state.Set("euclo.retrieval_policy", retrievalPolicy)
-	routing := RouteCapabilityFamilies(mode, profile)
+	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
 	state.Set("euclo.capability_family_routing", routing)
 	executionTask := a.eucloTask(task, envelope, classification, mode, profile)
-	if surfaces := resolveRuntimeSurfaces(a.Memory); surfaces.Workflow != nil {
+	if surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory); surfaces.Workflow != nil {
 		workflowID := state.GetString("euclo.workflow_id")
 		if workflowID == "" && task != nil && task.Context != nil {
 			if value, ok := task.Context["workflow_id"]; ok {
 				workflowID = stringValue(value)
 			}
 		}
-		if expansion, expandErr := ExpandContext(ctx, surfaces.Workflow, workflowID, executionTask, state, retrievalPolicy); expandErr == nil {
-			executionTask = applyContextExpansion(state, executionTask, expansion)
+		if expansion, expandErr := eucloruntime.ExpandContext(ctx, surfaces.Workflow, workflowID, executionTask, state, retrievalPolicy); expandErr == nil {
+			executionTask = eucloruntime.ApplyContextExpansion(state, executionTask, expansion)
 		} else {
 			err = expandErr
 		}
 	}
 	var result *core.Result
 	var execErr error
-	execEnvelope := BuildExecutionEnvelope(
+	execEnvelope := eucloruntime.BuildExecutionEnvelope(
 		executionTask, state, mode, profile, a.Environment,
 		nil, "", "", a.ConfigTelemetry(),
 	)
@@ -165,22 +179,22 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	if err == nil {
 		err = execErr
 	}
-	policy := ResolveVerificationPolicy(mode, profile)
+	policy := eucloruntime.ResolveVerificationPolicy(mode, profile)
 	state.Set("euclo.verification_policy", policy)
 	if err == nil && profile.MutationAllowed {
-		if _, applyErr := ApplyEditIntentArtifacts(ctx, a.CapabilityRegistry(), state); applyErr != nil {
+		if _, applyErr := eucloruntime.ApplyEditIntentArtifacts(ctx, a.CapabilityRegistry(), state); applyErr != nil {
 			err = applyErr
 		}
 	}
-	evidence := NormalizeVerificationEvidence(state)
+	evidence := eucloruntime.NormalizeVerificationEvidence(state)
 	state.Set("euclo.verification", evidence)
-	var editRecord *EditExecutionRecord
+	var editRecord *eucloruntime.EditExecutionRecord
 	if raw, ok := state.Get("euclo.edit_execution"); ok && raw != nil {
-		if typed, ok := raw.(EditExecutionRecord); ok {
+		if typed, ok := raw.(eucloruntime.EditExecutionRecord); ok {
 			editRecord = &typed
 		}
 	}
-	successGate := EvaluateSuccessGate(policy, evidence, editRecord)
+	successGate := eucloruntime.EvaluateSuccessGate(policy, evidence, editRecord)
 	state.Set("euclo.success_gate", successGate)
 	if result != nil {
 		if result.Data == nil {
@@ -198,12 +212,12 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 			result.Error = err
 		}
 	}
-	artifacts := CollectArtifactsFromState(state)
-	actionLog := BuildActionLog(state, artifacts)
+	artifacts := euclotypes.CollectArtifactsFromState(state)
+	actionLog := eucloruntime.BuildActionLog(state, artifacts)
 	state.Set("euclo.action_log", actionLog)
-	proofSurface := BuildProofSurface(state, artifacts)
+	proofSurface := eucloruntime.BuildProofSurface(state, artifacts)
 	state.Set("euclo.proof_surface", proofSurface)
-	artifacts = CollectArtifactsFromState(state)
+	artifacts = euclotypes.CollectArtifactsFromState(state)
 	state.Set("euclo.artifacts", artifacts)
 	if persistErr := a.persistArtifacts(ctx, task, state, artifacts); persistErr != nil && err == nil {
 		err = persistErr
@@ -212,9 +226,9 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 			result.Error = err
 		}
 	}
-	finalReport := AssembleFinalReport(artifacts)
+	finalReport := euclotypes.AssembleFinalReport(artifacts)
 	state.Set("euclo.final_report", finalReport)
-	EmitObservabilityTelemetry(a.ConfigTelemetry(), task, actionLog, proofSurface)
+	eucloruntime.EmitObservabilityTelemetry(a.ConfigTelemetry(), task, actionLog, proofSurface)
 	if result != nil {
 		if result.Data == nil {
 			result.Data = map[string]any{}
@@ -226,17 +240,17 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	return result, err
 }
 
-func (a *Agent) runtimeState(task *core.Task, state *core.Context) (TaskEnvelope, TaskClassification, ModeResolution, ExecutionProfileSelection) {
-	envelope := NormalizeTaskEnvelope(task, state, a.CapabilityRegistry())
-	classification := ClassifyTask(envelope)
-	mode := ResolveMode(envelope, classification, a.ModeRegistry)
-	profile := SelectExecutionProfile(envelope, classification, mode, a.ProfileRegistry)
+func (a *Agent) runtimeState(task *core.Task, state *core.Context) (eucloruntime.TaskEnvelope, eucloruntime.TaskClassification, euclotypes.ModeResolution, euclotypes.ExecutionProfileSelection) {
+	envelope := eucloruntime.NormalizeTaskEnvelope(task, state, a.CapabilityRegistry())
+	classification := eucloruntime.ClassifyTask(envelope)
+	mode := eucloruntime.ResolveMode(envelope, classification, a.ModeRegistry)
+	profile := eucloruntime.SelectExecutionProfile(envelope, classification, mode, a.ProfileRegistry)
 	envelope.ResolvedMode = mode.ModeID
 	envelope.ExecutionProfile = profile.ProfileID
 	return envelope, classification, mode, profile
 }
 
-func (a *Agent) eucloTask(task *core.Task, envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) *core.Task {
+func (a *Agent) eucloTask(task *core.Task, envelope eucloruntime.TaskEnvelope, classification eucloruntime.TaskClassification, mode euclotypes.ModeResolution, profile euclotypes.ExecutionProfileSelection) *core.Task {
 	cloned := core.CloneTask(task)
 	if cloned == nil {
 		cloned = &core.Task{}
@@ -248,7 +262,7 @@ func (a *Agent) eucloTask(task *core.Task, envelope TaskEnvelope, classification
 	cloned.Context["euclo.mode"] = mode.ModeID
 	cloned.Context["euclo.execution_profile"] = profile.ProfileID
 	cloned.Context["euclo.envelope"] = envelope
-	cloned.Context["euclo.classification"] = classificationContextPayload(classification)
+	cloned.Context["euclo.classification"] = eucloruntime.ClassificationContextPayload(classification)
 	return cloned
 }
 
@@ -259,7 +273,7 @@ func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, 
 	if raw, ok := state.Get("euclo.artifacts"); ok && raw != nil {
 		return
 	}
-	surfaces := resolveRuntimeSurfaces(a.Memory)
+	surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory)
 	if surfaces.Workflow == nil {
 		return
 	}
@@ -278,27 +292,27 @@ func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, 
 			runID = stringValue(value)
 		}
 	}
-	artifacts, err := LoadPersistedArtifacts(ctx, surfaces.Workflow, workflowID, runID)
+	artifacts, err := euclotypes.LoadPersistedArtifacts(ctx, surfaces.Workflow, workflowID, runID)
 	if err != nil || len(artifacts) == 0 {
 		return
 	}
 	state.Set("euclo.artifacts", artifacts)
-	RestoreStateFromArtifacts(state, artifacts)
+	euclotypes.RestoreStateFromArtifacts(state, artifacts)
 }
 
-func (a *Agent) persistArtifacts(ctx context.Context, task *core.Task, state *core.Context, artifacts []Artifact) error {
-	surfaces := resolveRuntimeSurfaces(a.Memory)
+func (a *Agent) persistArtifacts(ctx context.Context, task *core.Task, state *core.Context, artifacts []euclotypes.Artifact) error {
+	surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory)
 	if surfaces.Workflow == nil || len(artifacts) == 0 {
 		return nil
 	}
-	workflowID, runID, err := ensureWorkflowRun(ctx, surfaces.Workflow, task, state)
+	workflowID, runID, err := eucloruntime.EnsureWorkflowRun(ctx, surfaces.Workflow, task, state)
 	if err != nil {
 		return err
 	}
 	if workflowID == "" {
 		return nil
 	}
-	return PersistWorkflowArtifacts(ctx, surfaces.Workflow, workflowID, runID, artifacts)
+	return euclotypes.PersistWorkflowArtifacts(ctx, surfaces.Workflow, workflowID, runID, artifacts)
 }
 
 func (a *Agent) ConfigTelemetry() core.Telemetry {
@@ -306,4 +320,15 @@ func (a *Agent) ConfigTelemetry() core.Telemetry {
 		return nil
 	}
 	return a.Config.Telemetry
+}
+
+// stringValue extracts a string from an interface value.
+func stringValue(raw any) string {
+	if raw == nil {
+		return ""
+	}
+	if s, ok := raw.(string); ok {
+		return s
+	}
+	return ""
 }
