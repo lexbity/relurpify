@@ -24,6 +24,7 @@ type RunOptions struct {
 	SkipASTIndex     bool
 	Profile          string
 	Strict           bool
+	MaxRetries       int
 
 	ModelOverride    string
 	EndpointOverride string
@@ -77,6 +78,7 @@ type CaseReport struct {
 	Success          bool
 	Error            string
 	FailureKind      string
+	Attempts         int
 	RetryCount       int
 	RetryTriggeredBy []string
 	Output           string
@@ -106,12 +108,13 @@ type Runner struct {
 }
 
 type runCaseLayout struct {
-	ArtifactsDir  string
-	TmpDir        string
-	TelemetryPath string
-	LogPath       string
-	TapePath      string
-	WorkspaceDir  string
+	ArtifactsDir        string
+	TmpDir              string
+	TelemetryPath       string
+	LogPath             string
+	TapePath            string
+	InteractionTapePath string
+	WorkspaceDir        string
 }
 
 func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*SuiteReport, error) {
@@ -227,11 +230,12 @@ func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {
 	artifactsDir := filepath.Join(outDir, "artifacts", caseKey)
 	tmpDir := filepath.Join(outDir, "tmp", caseKey)
 	return runCaseLayout{
-		ArtifactsDir:  artifactsDir,
-		TmpDir:        tmpDir,
-		TelemetryPath: filepath.Join(outDir, "telemetry", caseKey+".jsonl"),
-		LogPath:       filepath.Join(outDir, "logs", caseKey+".log"),
-		TapePath:      filepath.Join(artifactsDir, "tape.jsonl"),
-		WorkspaceDir:  filepath.Join(tmpDir, "workspace"),
+		ArtifactsDir:        artifactsDir,
+		TmpDir:              tmpDir,
+		TelemetryPath:       filepath.Join(outDir, "telemetry", caseKey+".jsonl"),
+		LogPath:             filepath.Join(outDir, "logs", caseKey+".log"),
+		TapePath:            filepath.Join(artifactsDir, "tape.jsonl"),
+		InteractionTapePath: filepath.Join(artifactsDir, "interaction.tape.jsonl"),
+		WorkspaceDir:        filepath.Join(tmpDir, "workspace"),
 	}
 }

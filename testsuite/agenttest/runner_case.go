@@ -25,7 +25,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	layout := newRunCaseLayout(outDir, c.Name, model.Name)
 	for _, dir := range []string{layout.ArtifactsDir, layout.TmpDir, filepath.Dir(layout.TelemetryPath), filepath.Dir(layout.LogPath)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", "", layout.ArtifactsDir, err.Error(), "infra")
+			return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", "", layout.ArtifactsDir, err.Error(), "infra", 0)
 		}
 	}
 
@@ -52,7 +52,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 
 	workspace := layout.WorkspaceDir
 	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, templateProfile, suite.Spec.Manifest, exclude, resolveWorkspaceFiles(suite, c)); err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 
 	suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
@@ -61,18 +61,18 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	manifestAbs = fallbackManifestPath(manifestAbs, workspace)
 	loadedManifest, err := manifest.LoadAgentManifest(manifestAbs)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 
-	timeout, err := resolveCaseTimeout(opts, c)
+	timeout, err := resolveCaseTimeout(opts, suite, c)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 
 	agentName := suite.Spec.AgentName
 	telemetrySink, err := telemetry.NewJSONFileTelemetry(layout.TelemetryPath)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 	defer telemetrySink.Close()
 	telemetryMux := telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{telemetrySink}}
@@ -83,11 +83,11 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	execution, err := resolveCaseExecution(suite, c, model, manifestModel, opts, layout, targetWorkspace, workspace)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModel, model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra")
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModel, model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 	modelProvenance, err := resolveCaseModelProvenance(execution)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra")
+		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 	if modelProvenance != nil {
 		if data, marshalErr := json.MarshalIndent(modelProvenance, "", "  "); marshalErr == nil {
@@ -106,7 +106,16 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if execution.RecordingMode != "" && execution.RecordingMode != "off" {
 		wrapped, err := llm.NewTapeModel(lm, execution.TapePath, execution.RecordingMode)
 		if err != nil {
-			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra")
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		}
+		if err := wrapped.ConfigureHeader(llm.TapeHeader{
+			ModelName:   execution.Model,
+			ModelDigest: modelProvenanceDigest(modelProvenance),
+			SuiteName:   suite.Metadata.Name,
+			CaseName:    c.Name,
+		}); err != nil {
+			_ = wrapped.Close()
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 		}
 		defer wrapped.Close()
 		lm = wrapped
@@ -143,7 +152,9 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	var cleanup func()
 	skipReason := ""
 	retryReasons := make([]string, 0, 1)
-	for attempt := 1; ; attempt++ {
+	maxRetries := resolveCaseMaxRetries(opts)
+	attempts := 0
+	for attempt := 1; attempt <= 1+maxRetries; attempt++ {
 		if cleanup != nil {
 			cleanup()
 			cleanup = nil
@@ -159,7 +170,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 
 		attemptEnv, attemptErr := prepareCaseAttempt(ctx, timeout, suite, c, caseOpts, workspace, targetWorkspace, manifestAbs, agentName, instrumented, telemetryMux, logger, loadedManifest, env, allowedCapabilities, exclude)
 		if attemptErr != nil {
-			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, attemptErr.Error(), "infra")
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, attemptErr.Error(), "infra", attempt)
 		}
 		cleanup = attemptEnv.cleanup
 		memStore = attemptEnv.memStore
@@ -174,6 +185,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			break
 		}
 
+		attempts = attempt
 		runCtx, cancel := context.WithTimeout(ctx, timeout)
 		taskCtx := core.WithTaskContext(runCtx, core.TaskContext{
 			ID:          task.ID,
@@ -183,6 +195,9 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		res, execErr = agent.Execute(taskCtx, task, state)
 		cancel()
 		if !shouldRetryCaseWithOllamaReset(execErr, opts.OllamaResetOn) {
+			break
+		}
+		if attempt > maxRetries {
 			break
 		}
 		retryReasons = append(retryReasons, execErr.Error())
@@ -218,12 +233,16 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			Skipped:       true,
 			SkipReason:    skipReason,
 			Success:       true,
+			Attempts:      attempts,
 		}
 	}
 	output := extractOutput(state, res)
 	snapshot := state.Snapshot()
 	if data, err := json.MarshalIndent(snapshot, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "context.snapshot.json"), data, 0o644)
+	}
+	if err := writeInteractionTape(layout.InteractionTapePath, snapshot); err != nil {
+		logger.Printf("case=%s model=%s interaction_tape_error=%v", c.Name, execution.Model, err)
 	}
 	events, _ := ReadTelemetryJSONL(layout.TelemetryPath)
 	_, toolCounts := CountToolCalls(events)
@@ -293,6 +312,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		Success:          success,
 		Error:            caseErr,
 		FailureKind:      failureKind,
+		Attempts:         attempts,
 		RetryCount:       len(retryReasons),
 		RetryTriggeredBy: retryReasons,
 		Output:           output,
@@ -310,7 +330,7 @@ func manifestModelName(m *manifest.AgentManifest) string {
 	return m.Spec.Agent.Model.Name
 }
 
-func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestModel, endpoint, recordingMode, tapePath, workspace, artifactsDir, errMsg, failureKind string) CaseReport {
+func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestModel, endpoint, recordingMode, tapePath, workspace, artifactsDir, errMsg, failureKind string, attempts int) CaseReport {
 	finishedAt := time.Now().UTC()
 	return CaseReport{
 		Name:          name,
@@ -328,7 +348,61 @@ func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestMod
 		Success:       false,
 		Error:         errMsg,
 		FailureKind:   failureKind,
+		Attempts:      attempts,
 	}
+}
+
+func resolveCaseMaxRetries(opts RunOptions) int {
+	switch {
+	case opts.MaxRetries == 0:
+		return 3
+	case opts.MaxRetries < 0:
+		return 0
+	default:
+		return opts.MaxRetries
+	}
+}
+
+func writeInteractionTape(path string, snapshot *core.ContextSnapshot) error {
+	if snapshot == nil {
+		return nil
+	}
+	raw, ok := snapshot.State["euclo.interaction_records"]
+	if !ok || raw == nil {
+		return nil
+	}
+	lines, err := marshalInteractionRecords(raw)
+	if err != nil {
+		return err
+	}
+	if len(lines) == 0 {
+		return nil
+	}
+	return os.WriteFile(path, lines, 0o644)
+}
+
+func marshalInteractionRecords(raw any) ([]byte, error) {
+	records, ok := raw.([]any)
+	if !ok {
+		if typed, ok := raw.([]map[string]any); ok {
+			records = make([]any, 0, len(typed))
+			for _, item := range typed {
+				records = append(records, item)
+			}
+		} else {
+			return nil, nil
+		}
+	}
+	var out []byte
+	for _, record := range records {
+		line, err := json.Marshal(record)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, line...)
+		out = append(out, '\n')
+	}
+	return out, nil
 }
 
 type preparedCaseAttempt struct {
@@ -395,7 +469,7 @@ func prepareCaseAttempt(ctx context.Context, timeout time.Duration, suite *Suite
 	}
 	agentSpec := effectiveAgentSpecForCase(baseSpec, c)
 
-	bootstrapCtx, cancelBootstrap := context.WithTimeout(ctx, resolveBootstrapTimeout(opts))
+	bootstrapCtx, cancelBootstrap := context.WithTimeout(ctx, resolveBootstrapTimeout(opts, c))
 	agent, state, err := buildAgent(bootstrapCtx, workspace, manifestAbs, agentName, agentSpec, model, telemetry, opts, extraEnv, allowedCapabilities, c, memStore.Store)
 	cancelBootstrap()
 	if err != nil {
@@ -426,6 +500,9 @@ func prepareCaseAttempt(ctx context.Context, timeout time.Duration, suite *Suite
 	if task.Context == nil {
 		task.Context = make(map[string]any)
 	}
+	if len(c.InteractionScript) > 0 {
+		task.Context["euclo.interaction_script"] = interactionScriptContext(c.InteractionScript)
+	}
 	task.Context["workspace"] = workspace
 	seedWorkflowRetrievalStateForCase(state, task, c)
 	if browserFixtures != nil {
@@ -437,6 +514,26 @@ func prepareCaseAttempt(ctx context.Context, timeout time.Duration, suite *Suite
 	attempt.task = task
 
 	return attempt, nil
+}
+
+func interactionScriptContext(script []InteractionScriptStep) []map[string]any {
+	steps := make([]map[string]any, 0, len(script))
+	for _, step := range script {
+		entry := map[string]any{
+			"action": step.Action,
+		}
+		if step.Phase != "" {
+			entry["phase"] = step.Phase
+		}
+		if step.Kind != "" {
+			entry["kind"] = step.Kind
+		}
+		if step.Text != "" {
+			entry["text"] = step.Text
+		}
+		steps = append(steps, entry)
+	}
+	return steps
 }
 
 func seedWorkflowRetrievalStateForCase(state *core.Context, task *core.Task, c CaseSpec) {

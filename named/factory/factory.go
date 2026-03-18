@@ -21,8 +21,8 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/eternal"
+	"github.com/lexcodex/relurpify/named/euclo"
 )
 
 var namedAgentRegistry sync.Map
@@ -148,7 +148,7 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 		agent := reactpkg.New(env)
 		agent.CheckpointPath = paths.CheckpointsDir()
 		return agent
-	case "coding":
+	case "coding", "euclo":
 		agent := euclo.New(env)
 		agent.CheckpointPath = paths.CheckpointsDir()
 		_ = agent.Initialize(env.Config)

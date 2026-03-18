@@ -157,7 +157,7 @@ func TestBuildAgentExposesDefaultAgenttestToolsForCoding(t *testing.T) {
 	if registry == nil {
 		t.Fatalf("expected capability registry, got %T", agent)
 	}
-	for _, required := range []string{"file_read", "file_write", "file_list"} {
+	for _, required := range []string{"file_read", "file_write", "file_list", "go_test", "go_build"} {
 		if _, ok := registry.Get(required); !ok {
 			t.Fatalf("expected %s to remain registered", required)
 		}
@@ -167,7 +167,7 @@ func TestBuildAgentExposesDefaultAgenttestToolsForCoding(t *testing.T) {
 	for _, tool := range tools {
 		names = append(names, tool.Name())
 	}
-	for _, required := range []string{"file_read", "file_write", "file_list"} {
+	for _, required := range []string{"file_read", "file_write", "file_list", "go_test", "go_build"} {
 		if !slices.Contains(names, required) {
 			t.Fatalf("expected %s in model-callable tools, got %v", required, names)
 		}
@@ -221,7 +221,7 @@ func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 		t.Fatalf("BuildCapabilityRegistry: %v", err)
 	}
 
-	for _, required := range []string{"file_read", "file_write", "file_list"} {
+	for _, required := range []string{"file_read", "file_write", "file_list", "go_test", "go_build"} {
 		if _, ok := bundle.Registry.Get(required); !ok {
 			t.Fatalf("expected runtime registry to include %s before restriction", required)
 		}
@@ -229,9 +229,22 @@ func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 
 	applyAgentTestCapabilityDefaults(bundle.Registry, defaultAgenttestAllowedCapabilities())
 
-	for _, required := range []string{"file_read", "file_write", "file_list"} {
+	for _, required := range []string{"file_read", "file_write", "file_list", "go_test", "go_build"} {
 		if _, ok := bundle.Registry.Get(required); !ok {
 			t.Fatalf("expected runtime registry to include %s after restriction", required)
+		}
+	}
+}
+
+func TestDefaultAgenttestAllowlistIncludesExecutionAndVerificationTools(t *testing.T) {
+	allowed := defaultAgenttestAllowedCapabilities()
+	names := make([]string, 0, len(allowed))
+	for _, selector := range allowed {
+		names = append(names, selector.Name)
+	}
+	for _, required := range []string{"exec_run_build", "exec_run_code", "exec_run_linter", "exec_run_tests", "go_build", "go_test"} {
+		if !slices.Contains(names, required) {
+			t.Fatalf("expected allowlist to include %s, got %v", required, names)
 		}
 	}
 }
@@ -445,6 +458,78 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 	}
 }
 
+func TestRunCaseStopsRetryingAfterConfiguredLimit(t *testing.T) {
+	workspace := t.TempDir()
+	manifestPath := writeAgenttestManifest(t, workspace, "testfu")
+	ollama := newLoadedOllamaServer(t, "fake-model")
+	defer ollama.Close()
+
+	shared := &retryCheckShared{}
+	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ agentenv.AgentEnvironment) graph.Agent {
+		return &alwaysRetryAgent{shared: shared}
+	})
+
+	origBootstrap := bootstrapAgentRuntime
+	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+		registry := capability.NewRegistry()
+		cfg := &core.Config{Name: "retry", MaxIterations: 3, OllamaToolCalling: true}
+		return &appruntime.BootstrappedAgentRuntime{
+			Registry:    registry,
+			Memory:      opts.Memory,
+			AgentConfig: cfg,
+			Environment: agentenv.AgentEnvironment{
+				Model:    opts.Model,
+				Registry: registry,
+				Memory:   opts.Memory,
+				Config:   cfg,
+			},
+		}, nil
+	}
+	defer func() { bootstrapAgentRuntime = origBootstrap }()
+
+	suite := &Suite{
+		SourcePath: filepath.Join(workspace, "testsuite", "agenttests", "retry.testsuite.yaml"),
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Metadata:   SuiteMeta{Name: "retry"},
+		Spec: SuiteSpec{
+			AgentName: "testfu",
+			Manifest:  filepath.ToSlash(strings.TrimPrefix(manifestPath, workspace+string(os.PathSeparator))),
+			Workspace: WorkspaceSpec{Strategy: "derived"},
+			Models:    []ModelSpec{{Name: "fake-model", Endpoint: ollama.URL}},
+			Cases:     []CaseSpec{{Name: "retry_limit", Prompt: "stop retrying"}},
+		},
+	}
+
+	report := (&Runner{}).runCase(
+		context.Background(),
+		suite,
+		suite.Spec.Cases[0],
+		suite.Spec.Models[0],
+		RunOptions{
+			TargetWorkspace: workspace,
+			OutputDir:       t.TempDir(),
+			MaxRetries:      1,
+			OllamaResetOn:   []string{"reset requested"},
+		},
+		workspace,
+		t.TempDir(),
+	)
+
+	if report.Success {
+		t.Fatal("expected bounded retry case to fail")
+	}
+	if report.Attempts != 2 {
+		t.Fatalf("expected two total attempts, got %d", report.Attempts)
+	}
+	if report.RetryCount != 1 {
+		t.Fatalf("expected one retry, got %d", report.RetryCount)
+	}
+	if shared.attempt != 2 {
+		t.Fatalf("expected two execution attempts, got %d", shared.attempt)
+	}
+}
+
 func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := writeAgenttestManifest(t, workspace, "testfu")
@@ -599,6 +684,20 @@ func (a *nonInfraRetryAgent) Execute(_ context.Context, _ *core.Task, _ *core.Co
 }
 func (a *nonInfraRetryAgent) Capabilities() []core.Capability { return nil }
 func (a *nonInfraRetryAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
+	return nil, nil
+}
+
+type alwaysRetryAgent struct {
+	shared *retryCheckShared
+}
+
+func (a *alwaysRetryAgent) Initialize(_ *core.Config) error { return nil }
+func (a *alwaysRetryAgent) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+	a.shared.attempt++
+	return nil, errors.New("ollama error: reset requested")
+}
+func (a *alwaysRetryAgent) Capabilities() []core.Capability { return nil }
+func (a *alwaysRetryAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return nil, nil
 }
 

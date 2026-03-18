@@ -1,0 +1,213 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.transitions
+  description: "Euclo cross-mode transition tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 180s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: code_to_debug_on_failure
+      description: "Code mode proposes debug transition when verification fails."
+      task_type: code_modification
+      tags: [recovery, code-to-debug]
+      setup:
+        files:
+          - path: testsuite/fixtures/div.go
+            content: |
+              package main
+
+              func Divide(a, b int) int {
+                return a / b
+              }
+          - path: testsuite/fixtures/div_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestDivide(t *testing.T) {
+                if Divide(10, 3) != 3 {
+                  t.Errorf("got %d, want 3", Divide(10, 3))
+                }
+              }
+
+              func TestDivideByZero(t *testing.T) {
+                defer func() {
+                  if r := recover(); r == nil {
+                    t.Error("expected panic")
+                  }
+                }()
+                Divide(1, 0)
+              }
+      prompt: "Fix Divide to handle division by zero gracefully, returning 0 instead of panicking."
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/div.go
+            content: |
+              package main
+
+              func Divide(a, b int) int {
+                return a / b
+              }
+          - path: testsuite/fixtures/div_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestDivide(t *testing.T) {
+                if Divide(10, 3) != 3 {
+                  t.Errorf("got %d, want 3", Divide(10, 3))
+                }
+              }
+
+              func TestDivideByZero(t *testing.T) {
+                defer func() {
+                  if r := recover(); r == nil {
+                    t.Error("expected panic")
+                  }
+                }()
+                Divide(1, 0)
+              }
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/fixtures/div.go"]
+        euclo:
+          mode: code
+          min_frames_emitted: 1
+
+    - name: planning_to_code_execution
+      description: "Planning mode transitions to code for execution."
+      task_type: code_modification
+      interaction_script:
+        - phase: scope
+          action: confirm
+        - kind: transition
+          action: accept
+      setup:
+        files:
+          - path: testsuite/fixtures/config.go
+            content: |
+              package main
+
+              type Config struct {
+                Host string
+                Port int
+              }
+      prompt: "Plan and implement adding YAML config file loading to the Config struct in testsuite/fixtures/config.go."
+      context:
+        euclo.mode: planning
+        context_file_contents:
+          - path: testsuite/fixtures/config.go
+            content: |
+              package main
+
+              type Config struct {
+                Host string
+                Port int
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code
+          min_transitions_proposed: 1
+          frame_kinds_emitted:
+            - transition
+          phases_executed:
+            - scope
+            - generate
+            - execute
+
+    - name: code_to_planning_scope_expansion
+      description: "Code mode suggests planning when scope is cross-cutting."
+      task_type: code_modification
+      interaction_script:
+        - phase: understand
+          action: plan_first
+        - kind: transition
+          action: accept
+        - kind: transition
+          action: reject
+      prompt: "Refactor error handling across all HTTP handlers, middleware, and database layers to use structured errors with error codes."
+      context:
+        euclo.mode: code
+      expect:
+        must_succeed: true
+        euclo:
+          mode: planning
+          min_transitions_proposed: 2
+          frame_kinds_emitted:
+            - proposal
+            - transition
+          phases_executed:
+            - scope
+            - generate
+            - commit
+
+    - name: transition_rejected_stays_in_mode
+      description: "Rejecting a proposed transition keeps execution in code mode."
+      task_type: code_modification
+      interaction_script:
+        - phase: understand
+          action: plan_first
+        - kind: transition
+          action: reject
+      prompt: "Add structured logging across all API handlers and middleware."
+      context:
+        euclo.mode: code
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code
+          min_transitions_proposed: 1
+          max_transitions_proposed: 1
+          frame_kinds_emitted:
+            - transition
+          phases_executed:
+            - execute
+
+    - name: code_to_planning_and_back
+      description: "Code mode can transition to planning and then return to code."
+      task_type: code_modification
+      interaction_script:
+        - phase: understand
+          action: plan_first
+        - kind: transition
+          action: accept
+        - kind: transition
+          action: accept
+      prompt: "Add logging to all API handlers."
+      context:
+        euclo.mode: code
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code
+          min_transitions_proposed: 2
+          frame_kinds_emitted:
+            - transition
+          phases_executed:
+            - scope
+            - generate
+            - execute

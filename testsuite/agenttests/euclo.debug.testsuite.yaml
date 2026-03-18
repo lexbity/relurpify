@@ -1,0 +1,119 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.debug
+  description: "Euclo debug mode interaction flow tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 120s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: failing_test_investigation
+      description: "Debug mode for a failing test — investigate then fix."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/calc.go
+            content: |
+              package main
+
+              func Multiply(a, b int) int {
+                return a + b
+              }
+          - path: testsuite/fixtures/calc_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestMultiply(t *testing.T) {
+                if Multiply(3, 4) != 12 {
+                  t.Errorf("got %d, want 12", Multiply(3, 4))
+                }
+              }
+      prompt: "Debug why TestMultiply is failing and fix the issue."
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/calc.go
+            content: |
+              package main
+
+              func Multiply(a, b int) int {
+                return a + b
+              }
+          - path: testsuite/fixtures/calc_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestMultiply(t *testing.T) {
+                if Multiply(3, 4) != 12 {
+                  t.Errorf("got %d, want 12", Multiply(3, 4))
+                }
+              }
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/fixtures/calc.go"]
+        files_contain:
+          - path: testsuite/fixtures/calc.go
+            contains: ["a * b"]
+        euclo:
+          mode: debug
+          profile: reproduce_localize_patch
+
+    - name: error_with_stacktrace
+      description: "Debug auto-classified from error text in instruction."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/server.go
+            content: |
+              package main
+
+              func GetUser(id string) string {
+                var users map[string]string
+                return users[id]
+              }
+      prompt: |
+        panic: runtime error: index out of range
+        goroutine 1 [running]:
+        main.GetUser(0x0)
+          testsuite/fixtures/server.go:4
+        Fix the nil map access in GetUser.
+      context:
+        context_file_contents:
+          - path: testsuite/fixtures/server.go
+            content: |
+              package main
+
+              func GetUser(id string) string {
+                var users map[string]string
+                return users[id]
+              }
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/fixtures/server.go"]
+        euclo:
+          mode: debug
+          frame_kinds_emitted:
+            - result

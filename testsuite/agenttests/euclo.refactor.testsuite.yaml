@@ -1,0 +1,91 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.refactor
+  description: "Euclo API-compatible refactor tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 90s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: internal_extract_function
+      description: "Internal extract/rename refactor should succeed under API-compatible constraints."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/refactor_internal.go
+            content: |
+              package main
+
+              func Exported() int {
+                return helper()
+              }
+
+              func helper() int {
+                return 1
+              }
+      prompt: "Refactor by extracting a helper and renaming helper to worker while keeping the public API stable."
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/refactor_internal.go
+            content: |
+              package main
+
+              func Exported() int {
+                return helper()
+              }
+
+              func helper() int {
+                return 1
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code
+
+    - name: exported_rename_blocked
+      description: "Renaming an exported symbol should be blocked by compatibility constraints."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/refactor_exported.go
+            content: |
+              package main
+
+              func Exported() int {
+                return 1
+              }
+      prompt: "Refactor by renaming Exported to BetterExported while keeping the public API stable."
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/refactor_exported.go
+            content: |
+              package main
+
+              func Exported() int {
+                return 1
+              }
+      expect:
+        must_succeed: true
+        output_regex:
+          - (?i)(blocked|compatibility|public api)

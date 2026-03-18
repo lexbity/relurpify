@@ -45,6 +45,7 @@ type SuiteSpec struct {
 type SuiteExecutionSpec struct {
 	Profile string `yaml:"profile,omitempty"`
 	Strict  bool   `yaml:"strict,omitempty"`
+	Timeout string `yaml:"timeout,omitempty"`
 }
 
 type WorkspaceSpec struct {
@@ -61,24 +62,33 @@ type ModelSpec struct {
 }
 
 type RecordingSpec struct {
-	Mode string `yaml:"mode,omitempty"` // off|record|replay
-	Tape string `yaml:"tape,omitempty"`
+	Strategy string `yaml:"strategy,omitempty"` // live|replay-if-golden|replay-only
+	Mode     string `yaml:"mode,omitempty"`     // off|record|replay
+	Tape     string `yaml:"tape,omitempty"`
 }
 
 type CaseSpec struct {
-	Name            string                        `yaml:"name"`
-	Description     string                        `yaml:"description,omitempty"`
-	Timeout         string                        `yaml:"timeout,omitempty"`
-	TaskType        string                        `yaml:"task_type,omitempty"`
-	Prompt          string                        `yaml:"prompt"`
-	Context         map[string]any                `yaml:"context,omitempty"`
-	Metadata        map[string]string             `yaml:"metadata,omitempty"`
-	BrowserFixtures map[string]BrowserFixtureSpec `yaml:"browser_fixtures,omitempty"`
-	Setup           SetupSpec                     `yaml:"setup,omitempty"`
-	Requires        RequiresSpec                  `yaml:"requires,omitempty"`
-	Expect          ExpectSpec                    `yaml:"expect,omitempty"`
-	Overrides       CaseOverrideSpec              `yaml:"overrides,omitempty"`
-	Tags            []string                      `yaml:"tags,omitempty"`
+	Name              string                        `yaml:"name"`
+	Description       string                        `yaml:"description,omitempty"`
+	Timeout           string                        `yaml:"timeout,omitempty"`
+	TaskType          string                        `yaml:"task_type,omitempty"`
+	Prompt            string                        `yaml:"prompt"`
+	InteractionScript []InteractionScriptStep       `yaml:"interaction_script,omitempty"`
+	Context           map[string]any                `yaml:"context,omitempty"`
+	Metadata          map[string]string             `yaml:"metadata,omitempty"`
+	BrowserFixtures   map[string]BrowserFixtureSpec `yaml:"browser_fixtures,omitempty"`
+	Setup             SetupSpec                     `yaml:"setup,omitempty"`
+	Requires          RequiresSpec                  `yaml:"requires,omitempty"`
+	Expect            ExpectSpec                    `yaml:"expect,omitempty"`
+	Overrides         CaseOverrideSpec              `yaml:"overrides,omitempty"`
+	Tags              []string                      `yaml:"tags,omitempty"`
+}
+
+type InteractionScriptStep struct {
+	Phase  string `yaml:"phase,omitempty"`
+	Kind   string `yaml:"kind,omitempty"`
+	Action string `yaml:"action"`
+	Text   string `yaml:"text,omitempty"`
 }
 
 type BrowserFixtureSpec struct {
@@ -129,6 +139,25 @@ type ExpectSpec struct {
 	MemoryRecordsCreated int      `yaml:"memory_records_created,omitempty"`
 	WorkflowStateUpdated bool     `yaml:"workflow_state_updated,omitempty"`
 	StateKeysMustExist   []string `yaml:"state_keys_must_exist,omitempty"`
+
+	Euclo *EucloExpectSpec `yaml:"euclo,omitempty"`
+}
+
+// EucloExpectSpec defines expectations specific to Euclo's interactive execution.
+type EucloExpectSpec struct {
+	Mode                   string   `yaml:"mode,omitempty"`
+	Profile                string   `yaml:"profile,omitempty"`
+	PhasesExecuted         []string `yaml:"phases_executed,omitempty"`
+	PhasesSkipped          []string `yaml:"phases_skipped,omitempty"`
+	ArtifactsProduced      []string `yaml:"artifacts_produced,omitempty"` // artifact kinds
+	RecoveryAttempted      bool     `yaml:"recovery_attempted,omitempty"`
+	RecoveryStrategies     []string `yaml:"recovery_strategies,omitempty"`
+	MinTransitionsProposed int      `yaml:"min_transitions_proposed,omitempty"`
+	MaxTransitionsProposed int      `yaml:"max_transitions_proposed,omitempty"`
+	MinFramesEmitted       int      `yaml:"min_frames_emitted,omitempty"`
+	MaxFramesEmitted       int      `yaml:"max_frames_emitted,omitempty"`
+	FrameKindsEmitted      []string `yaml:"frame_kinds_emitted,omitempty"`
+	FrameKindsMustExclude  []string `yaml:"frame_kinds_must_exclude,omitempty"`
 }
 
 type FileContentExpectation struct {
@@ -138,6 +167,7 @@ type FileContentExpectation struct {
 
 type CaseOverrideSpec struct {
 	MaxIterations        int                       `yaml:"max_iterations,omitempty"`
+	BootstrapTimeout     string                    `yaml:"bootstrap_timeout,omitempty"`
 	Model                *ModelSpec                `yaml:"model,omitempty"`
 	Recording            *RecordingSpec            `yaml:"recording,omitempty"`
 	Workspace            *WorkspaceSpec            `yaml:"workspace,omitempty"`
@@ -291,6 +321,9 @@ func (s *Suite) Validate() error {
 	if err := validateExecutionProfile(s.Spec.Execution.Profile); err != nil {
 		return err
 	}
+	if _, err := parseCaseTimeout(s.Spec.Execution.Timeout); err != nil {
+		return fmt.Errorf("suite spec.execution.timeout invalid: %w", err)
+	}
 	if err := validateRecordingSpec(s.Spec.Recording, "suite spec.recording"); err != nil {
 		return err
 	}
@@ -319,6 +352,11 @@ func (s *Suite) Validate() error {
 		if _, err := parseCaseTimeout(c.Timeout); err != nil {
 			return fmt.Errorf("suite case[%s] timeout invalid: %w", c.Name, err)
 		}
+		for j, step := range c.InteractionScript {
+			if strings.TrimSpace(step.Action) == "" {
+				return fmt.Errorf("suite case[%s] interaction_script[%d] missing action", c.Name, j)
+			}
+		}
 		if c.Overrides.Memory != nil {
 			if err := validateMemorySpec(*c.Overrides.Memory, fmt.Sprintf("suite case[%s] overrides.memory", c.Name)); err != nil {
 				return err
@@ -326,6 +364,9 @@ func (s *Suite) Validate() error {
 		}
 		if c.Overrides.MaxIterations < 0 {
 			return fmt.Errorf("suite case[%s] overrides.max_iterations must be >= 0", c.Name)
+		}
+		if _, err := parseCaseTimeout(c.Overrides.BootstrapTimeout); err != nil {
+			return fmt.Errorf("suite case[%s] overrides.bootstrap_timeout invalid: %w", c.Name, err)
 		}
 		if strings.TrimSpace(c.Overrides.ControlFlow) != "" {
 			return fmt.Errorf("suite case[%s] overrides.control_flow %q unsupported", c.Name, c.Overrides.ControlFlow)
@@ -529,6 +570,11 @@ func validateSetup(setup SetupSpec, caseName string) error {
 }
 
 func validateRecordingSpec(spec RecordingSpec, location string) error {
+	switch strings.TrimSpace(spec.Strategy) {
+	case "", "live", "replay-if-golden", "replay-only":
+	default:
+		return fmt.Errorf("%s strategy %q unsupported", location, spec.Strategy)
+	}
 	switch strings.TrimSpace(spec.Mode) {
 	case "", "off", "record", "replay":
 		return nil

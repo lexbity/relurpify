@@ -66,6 +66,11 @@ func TestInstantiateByNameRoutesCodingToEuclo(t *testing.T) {
 	require.IsType(t, &euclo.Agent{}, agent)
 }
 
+func TestInstantiateByNameRoutesEucloAliasToEuclo(t *testing.T) {
+	agent := InstantiateByName(t.TempDir(), "euclo", testEnv(t))
+	require.IsType(t, &euclo.Agent{}, agent)
+}
+
 func TestInstantiateByNameKeepsReactSeparate(t *testing.T) {
 	agent := InstantiateByName(t.TempDir(), "react", testEnv(t))
 	require.NotEqual(t, reflect.TypeOf(&euclo.Agent{}), reflect.TypeOf(agent))

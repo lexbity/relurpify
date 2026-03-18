@@ -2,12 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/platform/llm"
 	"github.com/lexcodex/relurpify/testsuite/agenttest"
 	"github.com/spf13/cobra"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -17,6 +23,9 @@ func newAgentTestCmd() *cobra.Command {
 		Short: "Run YAML-driven agent test suites",
 	}
 	cmd.AddCommand(newAgentTestRunCmd())
+	cmd.AddCommand(newAgentTestPromoteCmd())
+	cmd.AddCommand(newAgentTestRefreshCmd())
+	cmd.AddCommand(newAgentTestTapesCmd())
 	return cmd
 }
 
@@ -34,6 +43,7 @@ func newAgentTestRunCmd() *cobra.Command {
 	var timeout time.Duration
 	var bootstrapTimeout time.Duration
 	var skipASTIndex bool
+	var maxRetries int
 	var model string
 	var endpoint string
 	var maxIterations int
@@ -101,6 +111,7 @@ func newAgentTestRunCmd() *cobra.Command {
 				SkipASTIndex:       skipASTIndex,
 				Profile:            profile,
 				Strict:             strict,
+				MaxRetries:         maxRetries,
 				ModelOverride:      model,
 				EndpointOverride:   endpoint,
 				MaxIterations:      maxIterations,
@@ -160,6 +171,7 @@ func newAgentTestRunCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
 	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout for agent/runtime setup before execution")
 	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", false, "Test-only fast path: skip AST/bootstrap indexing during agenttest setup")
+	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case for Ollama reset/retry handling; use -1 to disable retries")
 	cmd.Flags().StringVar(&model, "model", "", "Override model name for all cases")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Override Ollama endpoint for all cases")
 	cmd.Flags().IntVar(&maxIterations, "max-iterations", 8, "Override max iterations for agent loops")
@@ -175,6 +187,142 @@ func newAgentTestRunCmd() *cobra.Command {
 		"(?i)EOF",
 		"(?i)too many requests",
 	}, "Regex patterns that trigger reset+retry (repeatable)")
+	return cmd
+}
+
+func newAgentTestPromoteCmd() *cobra.Command {
+	var suitePath string
+	var runDir string
+	var caseName string
+	var all bool
+
+	cmd := &cobra.Command{
+		Use:   "promote",
+		Short: "Promote recorded run tapes into the golden tape directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(suitePath) == "" {
+				return errors.New("--suite is required")
+			}
+			if strings.TrimSpace(runDir) == "" {
+				return errors.New("--run is required")
+			}
+			if !all && strings.TrimSpace(caseName) == "" {
+				return errors.New("pass --case <name> or --all")
+			}
+			return promoteAgentTestRun(ensureWorkspace(), suitePath, runDir, caseName, all, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().StringVar(&suitePath, "suite", "", "Path to a testsuite YAML")
+	cmd.Flags().StringVar(&runDir, "run", "", "Path to a completed agenttest run directory")
+	cmd.Flags().StringVar(&caseName, "case", "", "Promote a single case by name")
+	cmd.Flags().BoolVar(&all, "all", false, "Promote all passing cases from the run")
+	return cmd
+}
+
+func newAgentTestRefreshCmd() *cobra.Command {
+	var suitePath string
+	var caseName string
+	var model string
+	var endpoint string
+	var outDir string
+	var timeout time.Duration
+	var bootstrapTimeout time.Duration
+	var skipASTIndex bool
+	var maxRetries int
+
+	cmd := &cobra.Command{
+		Use:   "refresh",
+		Short: "Re-record live tapes for a suite or case and promote them to golden tapes",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(suitePath) == "" {
+				return errors.New("--suite is required")
+			}
+			ws := ensureWorkspace()
+			suite, err := agenttest.LoadSuite(suitePath)
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(caseName) != "" {
+				filtered := *suite
+				filtered.Spec = suite.Spec
+				filtered.Spec.Cases = nil
+				for _, c := range suite.Spec.Cases {
+					if c.Name == caseName {
+						filtered.Spec.Cases = append(filtered.Spec.Cases, c)
+					}
+				}
+				if len(filtered.Spec.Cases) == 0 {
+					return fmt.Errorf("case %q not found in suite %s", caseName, suitePath)
+				}
+				suite = &filtered
+			}
+			suite.Spec.Recording.Strategy = "live"
+			suite.Spec.Recording.Mode = "record"
+			suite.Spec.Recording.Tape = ""
+			r := &agenttest.Runner{}
+			opts := agenttest.RunOptions{
+				TargetWorkspace:  ws,
+				OutputDir:        outDir,
+				Timeout:          timeout,
+				BootstrapTimeout: bootstrapTimeout,
+				SkipASTIndex:     skipASTIndex,
+				MaxRetries:       maxRetries,
+				ModelOverride:    model,
+				EndpointOverride: endpoint,
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			report, err := r.RunSuite(ctx, suite, opts)
+			if err != nil {
+				return err
+			}
+			runRoot := reportRunRoot(report)
+			if runRoot == "" {
+				return errors.New("unable to determine run directory for refresh")
+			}
+			passed := report.PassedCases == len(report.Cases)
+			if !passed {
+				return fmt.Errorf("refresh run failed: %d/%d cases passed; tapes not promoted", report.PassedCases, len(report.Cases))
+			}
+			promoteAll := strings.TrimSpace(caseName) == ""
+			return promoteAgentTestRun(ws, suitePath, runRoot, caseName, promoteAll, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().StringVar(&suitePath, "suite", "", "Path to a testsuite YAML")
+	cmd.Flags().StringVar(&caseName, "case", "", "Refresh a single case by name")
+	cmd.Flags().StringVar(&model, "model", "", "Override model name for the refresh run")
+	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Override Ollama endpoint for the refresh run")
+	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts")
+	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
+	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout")
+	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", false, "Skip AST/bootstrap indexing during setup")
+	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case")
+	return cmd
+}
+
+func newAgentTestTapesCmd() *cobra.Command {
+	var suites []string
+	var agentName string
+
+	cmd := &cobra.Command{
+		Use:   "tapes",
+		Short: "Report golden tape coverage and staleness",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ws := ensureWorkspace()
+			selectedSuites := suites
+			if len(selectedSuites) == 0 {
+				selectedSuites = discoverSuites(ws, agentName)
+			}
+			if len(selectedSuites) == 0 {
+				return fmt.Errorf("no testsuites found; pass --suite <path> or add suites to testsuite/agenttests/")
+			}
+			return reportAgentTestTapes(ws, selectedSuites, cmd.OutOrStdout(), time.Now().UTC())
+		},
+	}
+	cmd.Flags().StringArrayVar(&suites, "suite", nil, "Path to a testsuite YAML (repeatable)")
+	cmd.Flags().StringVar(&agentName, "agent", "", "Only report suites matching <agent> in testsuite/agenttests/")
 	return cmd
 }
 
@@ -212,6 +360,205 @@ func shouldRunAgentTestSuite(suite *agenttest.Suite, tier, profile string, inclu
 		return false
 	}
 	return true
+}
+
+func promoteAgentTestRun(workspace, suitePath, runDir, caseName string, all bool, stdout io.Writer) error {
+	suite, err := agenttest.LoadSuite(suitePath)
+	if err != nil {
+		return err
+	}
+	report, err := loadSuiteReport(filepath.Join(runDir, "report.json"))
+	if err != nil {
+		return err
+	}
+	targetCases := selectPromotableCases(report, caseName, all)
+	if len(targetCases) == 0 {
+		return fmt.Errorf("no promotable cases found in run %s", runDir)
+	}
+	for _, cr := range targetCases {
+		if cr.Skipped || !cr.Success {
+			return fmt.Errorf("case %q did not pass in run %s", cr.Name, runDir)
+		}
+		srcTape := filepath.Join(cr.ArtifactsDir, "tape.jsonl")
+		header, err := readTapeHeader(srcTape)
+		if err != nil {
+			return fmt.Errorf("case %q tape invalid: %w", cr.Name, err)
+		}
+		if header == nil {
+			return fmt.Errorf("case %q tape has no header", cr.Name)
+		}
+		if strings.TrimSpace(header.ModelName) != "" && strings.TrimSpace(cr.Model) != "" && strings.TrimSpace(header.ModelName) != strings.TrimSpace(cr.Model) {
+			return fmt.Errorf("case %q tape header model %q does not match report model %q", cr.Name, header.ModelName, cr.Model)
+		}
+		destTape := filepath.Join(workspace, "testsuite", "agenttests", "tapes", suite.Metadata.Name, goldenTapeFilename(cr.Name, cr.Model))
+		if err := os.MkdirAll(filepath.Dir(destTape), 0o755); err != nil {
+			return err
+		}
+		if err := copyFile(srcTape, destTape); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "promoted %s -> %s\n", srcTape, destTape)
+		srcInteractionTape := filepath.Join(cr.ArtifactsDir, "interaction.tape.jsonl")
+		if _, err := os.Stat(srcInteractionTape); err == nil {
+			destInteractionTape := strings.TrimSuffix(destTape, ".tape.jsonl") + ".interaction.tape.jsonl"
+			if err := copyFile(srcInteractionTape, destInteractionTape); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "promoted %s -> %s\n", srcInteractionTape, destInteractionTape)
+		}
+	}
+	return nil
+}
+
+func loadSuiteReport(path string) (*agenttest.SuiteReport, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var report agenttest.SuiteReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		return nil, err
+	}
+	return &report, nil
+}
+
+func selectPromotableCases(report *agenttest.SuiteReport, caseName string, all bool) []agenttest.CaseReport {
+	if report == nil {
+		return nil
+	}
+	if all {
+		out := append([]agenttest.CaseReport(nil), report.Cases...)
+		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		return out
+	}
+	for _, c := range report.Cases {
+		if c.Name == caseName {
+			return []agenttest.CaseReport{c}
+		}
+	}
+	return nil
+}
+
+func readTapeHeader(path string) (*llm.TapeHeader, error) {
+	inspection, err := llm.InspectTape(path)
+	if err != nil {
+		return nil, err
+	}
+	return inspection.Header, nil
+}
+
+func goldenTapeFilename(caseName, modelName string) string {
+	return sanitizeAgentTestTapeName(caseName) + "__" + sanitizeAgentTestTapeName(modelName) + ".tape.jsonl"
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
+func reportRunRoot(report *agenttest.SuiteReport) string {
+	if report == nil || len(report.Cases) == 0 {
+		return ""
+	}
+	return filepath.Dir(report.Cases[0].ArtifactsDir)
+}
+
+func sanitizeAgentTestTapeName(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "unnamed"
+	}
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return "unnamed"
+	}
+	return out
+}
+
+func reportAgentTestTapes(workspace string, suitePaths []string, stdout io.Writer, now time.Time) error {
+	for idx, suitePath := range suitePaths {
+		suite, err := agenttest.LoadSuite(suitePath)
+		if err != nil {
+			return err
+		}
+		if idx > 0 {
+			fmt.Fprintln(stdout)
+		}
+		fmt.Fprintf(stdout, "Suite: %s\n", suite.Metadata.Name)
+		for _, c := range suite.Spec.Cases {
+			fmt.Fprintf(stdout, "  %s:\n", c.Name)
+			models := suiteModelsForCase(suite, c)
+			if len(models) == 0 {
+				fmt.Fprintln(stdout, "    (no golden tape)")
+				continue
+			}
+			found := false
+			for _, model := range models {
+				tapePath := filepath.Join(workspace, "testsuite", "agenttests", "tapes", suite.Metadata.Name, goldenTapeFilename(c.Name, model.Name))
+				inspection, err := llm.InspectTape(tapePath)
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				if err != nil {
+					return err
+				}
+				found = true
+				fmt.Fprintf(stdout, "    %s  %s  %s\n", model.Name, formatRecordedAt(inspection.FirstRecordedAt), formatTapeStatus(inspection, model.Name, now))
+			}
+			if !found {
+				fmt.Fprintln(stdout, "    (no golden tape)")
+			}
+		}
+	}
+	return nil
+}
+
+func suiteModelsForCase(suite *agenttest.Suite, c agenttest.CaseSpec) []agenttest.ModelSpec {
+	if suite == nil {
+		return nil
+	}
+	if c.Overrides.Model != nil {
+		return []agenttest.ModelSpec{*c.Overrides.Model}
+	}
+	return append([]agenttest.ModelSpec(nil), suite.Spec.Models...)
+}
+
+func formatRecordedAt(recordedAt time.Time) string {
+	if recordedAt.IsZero() {
+		return "recorded unknown"
+	}
+	return "recorded " + recordedAt.UTC().Format("2006-01-02")
+}
+
+func formatTapeStatus(inspection *llm.TapeInspection, expectedModel string, now time.Time) string {
+	if inspection == nil || inspection.Header == nil {
+		return "legacy tape"
+	}
+	if model := strings.TrimSpace(inspection.Header.ModelName); model != "" && model != strings.TrimSpace(expectedModel) {
+		return fmt.Sprintf("x model mismatch (%s)", model)
+	}
+	if !inspection.FirstRecordedAt.IsZero() {
+		if age := now.Sub(inspection.FirstRecordedAt); age > 30*24*time.Hour {
+			return fmt.Sprintf("! %d days old", int(age.Round(24*time.Hour)/(24*time.Hour)))
+		}
+	}
+	return "ok model match"
 }
 
 type agentTestLanePreset struct {

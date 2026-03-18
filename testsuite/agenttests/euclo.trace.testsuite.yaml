@@ -1,0 +1,66 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.trace
+  description: "Euclo trace analysis tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 120s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: explicit_trace_request
+      description: "Trace-oriented debug prompt should stay on trace/analyze path."
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/fixtures/trace_target.go
+            content: |
+              package main
+
+              func Handle() error {
+                return nil
+              }
+      prompt: "Trace this function and analyze where the failure originates."
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/trace_target.go
+            content: |
+              package main
+
+              func Handle() error {
+                return nil
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: debug
+
+    - name: trace_to_candidate_root_cause
+      description: "Trace analysis should produce anomaly/root-cause oriented output."
+      task_type: analysis
+      prompt: "Analyze the trace and identify the most likely root cause candidate."
+      context:
+        euclo.mode: debug
+      expect:
+        must_succeed: true
+        output_regex:
+          - (?i)(trace|root cause|candidate|frame)

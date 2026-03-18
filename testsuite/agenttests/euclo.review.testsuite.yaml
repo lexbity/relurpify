@@ -1,0 +1,122 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.review
+  description: "Euclo review mode interaction flow tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 120s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: review_with_findings
+      description: "Review mode finds issues and suggests fixes."
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/fixtures/handler.go
+            content: |
+              package main
+
+              import (
+                "database/sql"
+                "fmt"
+                "net/http"
+              )
+
+              func UserHandler(w http.ResponseWriter, r *http.Request) {
+                id := r.URL.Query().Get("id")
+                db, _ := sql.Open("sqlite3", "app.db")
+                row := db.QueryRow("SELECT name FROM users WHERE id = '" + id + "'")
+                var name string
+                row.Scan(&name)
+                fmt.Fprintf(w, "Hello %s", name)
+              }
+      prompt: "Review testsuite/fixtures/handler.go for security issues and code quality."
+      context:
+        euclo.mode: review
+        context_file_contents:
+          - path: testsuite/fixtures/handler.go
+            content: |
+              package main
+
+              import (
+                "database/sql"
+                "fmt"
+                "net/http"
+              )
+
+              func UserHandler(w http.ResponseWriter, r *http.Request) {
+                id := r.URL.Query().Get("id")
+                db, _ := sql.Open("sqlite3", "app.db")
+                row := db.QueryRow("SELECT name FROM users WHERE id = '" + id + "'")
+                var name string
+                row.Scan(&name)
+                fmt.Fprintf(w, "Hello %s", name)
+              }
+      expect:
+        must_succeed: true
+        output_regex:
+          - (?i)(sql.injection|inject|security|sanitiz)
+        euclo:
+          mode: review
+          profile: review_suggest_implement
+
+    - name: review_clean_code
+      description: "Review mode with no major issues found."
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/fixtures/clean.go
+            content: |
+              package main
+
+              import "errors"
+
+              // ParseAge validates and parses an age value.
+              func ParseAge(v int) (int, error) {
+                if v < 0 || v > 150 {
+                  return 0, errors.New("age out of range")
+                }
+                return v, nil
+              }
+      prompt: "Review testsuite/fixtures/clean.go for issues."
+      context:
+        euclo.mode: review
+        context_file_contents:
+          - path: testsuite/fixtures/clean.go
+            content: |
+              package main
+
+              import "errors"
+
+              // ParseAge validates and parses an age value.
+              func ParseAge(v int) (int, error) {
+                if v < 0 || v > 150 {
+                  return 0, errors.New("age out of range")
+                }
+                return v, nil
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: review
+          frame_kinds_must_exclude:
+            - transition

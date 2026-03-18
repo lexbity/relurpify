@@ -181,6 +181,50 @@ func TestSuiteValidateRejectsUnsupportedExecutionProfile(t *testing.T) {
 	}
 }
 
+func TestSuiteValidateRejectsInvalidExecutionTimeout(t *testing.T) {
+	suite := &Suite{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Metadata:   SuiteMeta{Name: "coding"},
+		Spec: SuiteSpec{
+			AgentName: "coding",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Execution: SuiteExecutionSpec{Timeout: "nope"},
+			Cases: []CaseSpec{{
+				Name:   "smoke",
+				Prompt: "summarize",
+			}},
+		},
+	}
+
+	if err := suite.Validate(); err == nil {
+		t.Fatal("expected invalid execution timeout to fail validation")
+	}
+}
+
+func TestSuiteValidateRejectsInteractionScriptStepWithoutAction(t *testing.T) {
+	suite := &Suite{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Metadata:   SuiteMeta{Name: "euclo-transitions"},
+		Spec: SuiteSpec{
+			AgentName: "euclo",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Cases: []CaseSpec{{
+				Name:   "missing-action",
+				Prompt: "plan and implement the change",
+				InteractionScript: []InteractionScriptStep{{
+					Phase: "understand",
+				}},
+			}},
+		},
+	}
+
+	if err := suite.Validate(); err == nil {
+		t.Fatal("expected interaction script step without action to fail validation")
+	}
+}
+
 func TestSuiteIsStrictRunForCIProfiles(t *testing.T) {
 	suite := &Suite{
 		Spec: SuiteSpec{
@@ -217,6 +261,34 @@ spec:
 	}
 }
 
+func TestLoadSuiteRejectsUnknownEucloExpectationFields(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "suite.yaml")
+	err := os.WriteFile(path, []byte(`
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: sample
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  cases:
+    - name: smoke
+      prompt: summarize
+      expect:
+        euclo:
+          mode: code
+          transitions_accepted: 1
+`), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadSuite(path); err == nil {
+		t.Fatal("expected unknown expect.euclo field to fail load")
+	}
+}
+
 func TestSuiteValidateRejectsUnsupportedRecordingMode(t *testing.T) {
 	suite := &Suite{
 		APIVersion: "relurpify/v1alpha1",
@@ -235,6 +307,27 @@ func TestSuiteValidateRejectsUnsupportedRecordingMode(t *testing.T) {
 
 	if err := suite.Validate(); err == nil {
 		t.Fatal("expected unsupported recording mode to fail validation")
+	}
+}
+
+func TestSuiteValidateRejectsUnsupportedRecordingStrategy(t *testing.T) {
+	suite := &Suite{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Metadata:   SuiteMeta{Name: "coding"},
+		Spec: SuiteSpec{
+			AgentName: "coding",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Recording: RecordingSpec{Strategy: "mystery"},
+			Cases: []CaseSpec{{
+				Name:   "smoke",
+				Prompt: "summarize",
+			}},
+		},
+	}
+
+	if err := suite.Validate(); err == nil {
+		t.Fatal("expected unsupported recording strategy to fail validation")
 	}
 }
 
@@ -258,6 +351,29 @@ func TestSuiteValidateRejectsUnsupportedControlFlowOverride(t *testing.T) {
 
 	if err := suite.Validate(); err == nil {
 		t.Fatal("expected unsupported control_flow override to fail validation")
+	}
+}
+
+func TestSuiteValidateRejectsInvalidBootstrapTimeoutOverride(t *testing.T) {
+	suite := &Suite{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Metadata:   SuiteMeta{Name: "coding"},
+		Spec: SuiteSpec{
+			AgentName: "coding",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Cases: []CaseSpec{{
+				Name:   "smoke",
+				Prompt: "summarize",
+				Overrides: CaseOverrideSpec{
+					BootstrapTimeout: "nope",
+				},
+			}},
+		},
+	}
+
+	if err := suite.Validate(); err == nil {
+		t.Fatal("expected invalid bootstrap_timeout override to fail validation")
 	}
 }
 

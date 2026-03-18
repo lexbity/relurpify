@@ -1,0 +1,85 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.debug.regression
+  description: "Euclo regression investigation and debug flow tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 120s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: investigate_recent_regression
+      description: "Regression-shaped debug intake should route into regression investigation."
+      task_type: analysis
+      tags: [recovery, capability-fallback]
+      setup:
+        files:
+          - path: testsuite/fixtures/regression_math.go
+            content: |
+              package main
+
+              func Add(a, b int) int {
+                return a - b
+              }
+      prompt: "This used to work before recent changes. Investigate the regression in Add."
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/regression_math.go
+            content: |
+              package main
+
+              func Add(a, b int) int {
+                return a - b
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: debug
+          profile: reproduce_localize_patch
+
+    - name: regression_then_fix
+      description: "Regression debug request with explicit fix intent should still succeed end-to-end."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/regression_fix.go
+            content: |
+              package main
+
+              func Multiply(a, b int) int {
+                return a + b
+              }
+      prompt: "Investigate why Multiply regressed after recent changes and fix it."
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/regression_fix.go
+            content: |
+              package main
+
+              func Multiply(a, b int) int {
+                return a + b
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: debug

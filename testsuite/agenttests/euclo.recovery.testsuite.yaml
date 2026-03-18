@@ -1,0 +1,95 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.recovery
+  description: "Quarantined Euclo recovery-path recording templates."
+  owner: agent-platform
+  tier: quarantined
+  quarantined: true
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: developer-live
+    strict: false
+    timeout: 180s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    strategy: live
+    mode: off
+  cases:
+    - name: verification_failure_triggers_mode_escalation
+      description: "Recovery template: a failed code edit should surface mode escalation and emit a recovery trace."
+      task_type: code_modification
+      timeout: 180s
+      tags: [recovery, code-to-debug]
+      setup:
+        files:
+          - path: testsuite/fixtures/recovery_divide.go
+            content: |
+              package main
+
+              func Divide(a, b int) int {
+                return a / b
+              }
+          - path: testsuite/fixtures/recovery_divide_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestDivide(t *testing.T) {
+                if Divide(10, 3) != 3 {
+                  t.Errorf("got %d, want 3", Divide(10, 3))
+                }
+              }
+
+              func TestDivideByZero(t *testing.T) {
+                if Divide(1, 0) != 0 {
+                  t.Fatal("expected graceful zero division handling")
+                }
+              }
+      prompt: "Fix Divide to return 0 on division by zero. Verify the behavior and, if verification fails, switch into the appropriate debugging path."
+      context:
+        euclo.mode: code
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code
+          recovery_attempted: true
+          recovery_strategies:
+            - mode_escalation
+
+    - name: regression_investigation_prefers_capability_fallback
+      description: "Recovery template: regression investigation should capture a capability fallback when the first approach is weak."
+      task_type: analysis
+      timeout: 180s
+      tags: [recovery, capability-fallback]
+      setup:
+        files:
+          - path: testsuite/fixtures/recovery_regression.go
+            content: |
+              package main
+
+              func Multiply(a, b int) int {
+                return a + b
+              }
+      prompt: "This used to work before recent changes. Investigate the regression in Multiply, and if the first investigation path is inconclusive, fall back to the stronger debug capability."
+      context:
+        euclo.mode: debug
+      expect:
+        must_succeed: true
+        euclo:
+          mode: debug
+          recovery_attempted: true
+          recovery_strategies:
+            - capability_fallback

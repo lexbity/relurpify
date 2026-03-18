@@ -1,0 +1,81 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.capability_interactions
+  description: "Euclo cross-capability composition tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 120s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: regression_to_fix_flow
+      description: "Regression investigation should compose with follow-on fix behavior."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/interaction_regression.go
+            content: |
+              package main
+
+              func Multiply(a, b int) int {
+                return a + b
+              }
+      prompt: "Investigate the regression in Multiply after recent changes and fix it."
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/interaction_regression.go
+            content: |
+              package main
+
+              func Multiply(a, b int) int {
+                return a + b
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: debug
+
+    - name: review_then_safe_implement
+      description: "Review findings should flow into implement-if-safe behavior."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/interaction_review.go
+            content: |
+              package main
+
+              // TODO remove debug
+              func Run() {}
+      prompt: "Review this file and implement fixes if safe."
+      context:
+        euclo.mode: review
+        context_file_contents:
+          - path: testsuite/fixtures/interaction_review.go
+            content: |
+              package main
+
+              // TODO remove debug
+              func Run() {}
+      expect:
+        must_succeed: true
+        euclo:
+          mode: review

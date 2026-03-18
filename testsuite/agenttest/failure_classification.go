@@ -43,6 +43,7 @@ func isAssertionFailure(msg string) bool {
 		"case marked must_succeed but failed",
 		"mismatch for",
 		"tape exhausted",
+		"first request fingerprint mismatch",
 	}
 	for _, fragment := range fragments {
 		if strings.Contains(msg, fragment) {

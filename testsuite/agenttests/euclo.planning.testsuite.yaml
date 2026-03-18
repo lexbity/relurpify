@@ -1,0 +1,64 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.planning
+  description: "Euclo planning mode interaction flow tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 150s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: plan_with_alternatives
+      description: "Planning mode generates a plan with alternatives."
+      task_type: analysis
+      prompt: "How should we redesign the authentication system to support OAuth2 in addition to password login?"
+      context:
+        euclo.mode: planning
+      expect:
+        must_succeed: true
+        output_regex:
+          - (?i)(plan|approach|step|phase)
+        euclo:
+          mode: planning
+          profile: plan_stage_execute
+          frame_kinds_emitted:
+            - proposal
+
+    - name: plan_auto_classified
+      description: "Planning mode auto-classified from instruction structure."
+      task_type: analysis
+      prompt: "How should we migrate the database from PostgreSQL to CockroachDB while maintaining zero downtime?"
+      expect:
+        must_succeed: true
+        euclo:
+          mode: planning
+
+    - name: plan_cross_cutting
+      description: "Planning mode for cross-cutting changes across multiple packages."
+      task_type: analysis
+      prompt: "Plan the approach for adding structured logging across all HTTP handlers and database operations."
+      context:
+        euclo.mode: planning
+      expect:
+        must_succeed: true
+        euclo:
+          mode: planning
+          profile: plan_stage_execute

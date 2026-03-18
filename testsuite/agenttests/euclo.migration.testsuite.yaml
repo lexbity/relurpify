@@ -1,0 +1,84 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.migration
+  description: "Euclo migration execution tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 150s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: simple_import_migration
+      description: "Migration request should use plan-stage-execute with ordered migration steps."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/migrate_import.go
+            content: |
+              package main
+
+              import oldsdk "example.com/oldsdk"
+
+              func Run() string {
+                return oldsdk.Version()
+              }
+      prompt: "Execute the dependency migration from example.com/oldsdk to example.com/newsdk."
+      context:
+        euclo.mode: planning
+        context_file_contents:
+          - path: testsuite/fixtures/migrate_import.go
+            content: |
+              package main
+
+              import oldsdk "example.com/oldsdk"
+
+              func Run() string {
+                return oldsdk.Version()
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: planning
+          profile: plan_stage_execute
+
+    - name: migration_postcheck_failure
+      description: "Migration failures should surface rollback-oriented output."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/migrate_fail.go
+            content: |
+              package main
+
+              func Run() {}
+      prompt: "Execute the schema migration and verify rollback if postcheck fails."
+      context:
+        euclo.mode: planning
+        context_file_contents:
+          - path: testsuite/fixtures/migrate_fail.go
+            content: |
+              package main
+
+              func Run() {}
+      expect:
+        must_succeed: true
+        output_regex:
+          - (?i)(rollback|migration)

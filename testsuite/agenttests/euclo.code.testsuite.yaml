@@ -1,0 +1,147 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.code
+  description: "Euclo code mode interaction flow tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 90s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: basic_edit_task
+      description: "Full code mode interaction flow for a simple edit."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/hello.go
+            content: |
+              package main
+
+              func Hello() string {
+                return "hello"
+              }
+      prompt: "Change the Hello function in testsuite/fixtures/hello.go to return 'hello world' instead of 'hello'."
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/hello.go
+            content: |
+              package main
+
+              func Hello() string {
+                return "hello"
+              }
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/fixtures/hello.go"]
+        files_contain:
+          - path: testsuite/fixtures/hello.go
+            contains: ["hello world"]
+        euclo:
+          mode: code
+          profile: edit_verify_repair
+          phases_executed:
+            - intent
+            - propose
+
+    - name: edit_with_verification
+      description: "Code mode with verification step."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/add.go
+            content: |
+              package main
+
+              func Add(a, b int) int {
+                return a - b
+              }
+          - path: testsuite/fixtures/add_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+                if Add(2, 3) != 5 {
+                  t.Error("expected 5")
+                }
+              }
+      prompt: "Fix the Add function in testsuite/fixtures/add.go so that the test passes."
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/add.go
+            content: |
+              package main
+
+              func Add(a, b int) int {
+                return a - b
+              }
+          - path: testsuite/fixtures/add_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+                if Add(2, 3) != 5 {
+                  t.Error("expected 5")
+                }
+              }
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/fixtures/add.go"]
+        files_contain:
+          - path: testsuite/fixtures/add.go
+            contains: ["a + b"]
+        euclo:
+          mode: code
+          frame_kinds_emitted:
+            - proposal
+
+    - name: code_no_mode_hint
+      description: "Code mode auto-classified from instruction keywords."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/greet.go
+            content: |
+              package main
+
+              func Greet(name string) string {
+                return "Hi"
+              }
+      prompt: "Implement the Greet function to return 'Hi, <name>' where <name> is the argument."
+      context:
+        context_file_contents:
+          - path: testsuite/fixtures/greet.go
+            content: |
+              package main
+
+              func Greet(name string) string {
+                return "Hi"
+              }
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/fixtures/greet.go"]
+        euclo:
+          mode: code

@@ -263,11 +263,18 @@ func resolveCaseMaxIterations(opts RunOptions, c CaseSpec) int {
 	return maxIterations
 }
 
-func resolveCaseTimeout(opts RunOptions, c CaseSpec) (time.Duration, error) {
+func resolveCaseTimeout(opts RunOptions, suite *Suite, c CaseSpec) (time.Duration, error) {
 	if timeout, err := parseCaseTimeout(c.Timeout); err != nil {
 		return 0, err
 	} else if timeout > 0 {
 		return timeout, nil
+	}
+	if suite != nil {
+		if timeout, err := parseCaseTimeout(suite.Spec.Execution.Timeout); err != nil {
+			return 0, err
+		} else if timeout > 0 {
+			return timeout, nil
+		}
 	}
 	timeout := opts.Timeout
 	if timeout <= 0 {
@@ -276,7 +283,10 @@ func resolveCaseTimeout(opts RunOptions, c CaseSpec) (time.Duration, error) {
 	return timeout, nil
 }
 
-func resolveBootstrapTimeout(opts RunOptions) time.Duration {
+func resolveBootstrapTimeout(opts RunOptions, c CaseSpec) time.Duration {
+	if timeout, err := parseCaseTimeout(c.Overrides.BootstrapTimeout); err == nil && timeout > 0 {
+		return timeout
+	}
 	timeout := opts.BootstrapTimeout
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -298,6 +308,10 @@ func applyCaseControlFlowOverride(_ graph.Agent, c CaseSpec) error {
 func defaultAgenttestAllowedCapabilities() []core.CapabilitySelector {
 	return []core.CapabilitySelector{
 		{Name: "browser", Kind: core.CapabilityKindTool},
+		{Name: "exec_run_build", Kind: core.CapabilityKindTool},
+		{Name: "exec_run_code", Kind: core.CapabilityKindTool},
+		{Name: "exec_run_linter", Kind: core.CapabilityKindTool},
+		{Name: "exec_run_tests", Kind: core.CapabilityKindTool},
 		{Name: "file_read", Kind: core.CapabilityKindTool},
 		{Name: "file_list", Kind: core.CapabilityKindTool},
 		{Name: "file_search", Kind: core.CapabilityKindTool},
@@ -309,6 +323,8 @@ func defaultAgenttestAllowedCapabilities() []core.CapabilitySelector {
 		{Name: "git_diff", Kind: core.CapabilityKindTool},
 		{Name: "git_history", Kind: core.CapabilityKindTool},
 		{Name: "git_blame", Kind: core.CapabilityKindTool},
+		{Name: "go_build", Kind: core.CapabilityKindTool},
+		{Name: "go_test", Kind: core.CapabilityKindTool},
 		{Name: "query_ast", Kind: core.CapabilityKindTool},
 	}
 }

@@ -1,0 +1,123 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.classification
+  description: "Euclo mode-classification boundary and ambiguity tests."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 120s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: ambiguous_debug_or_code
+      description: "Regression language should dominate generic code-edit language."
+      task_type: analysis
+      prompt: "this test used to pass but now it doesn't after I changed the handler"
+      expect:
+        must_succeed: true
+        euclo:
+          mode: debug
+
+    - name: ambiguous_review_or_code
+      description: "Mixed inspection-plus-fix language should remain stable under ambiguity."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/parser.go
+            content: |
+              package main
+
+              func Parse(input string) string {
+                return input
+              }
+      prompt: "look at the error handling in parser.go and fix anything that's wrong"
+      context:
+        context_file_contents:
+          - path: testsuite/fixtures/parser.go
+            content: |
+              package main
+
+              func Parse(input string) string {
+                return input
+              }
+      expect:
+        must_succeed: true
+
+    - name: ambiguous_tdd_or_code
+      description: "Test-oriented implementation requests should surface TDD signals without failing E2E."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/create_user.go
+            content: |
+              package main
+
+              func CreateUser(name string) string {
+                return name
+              }
+      prompt: "add input validation to CreateUser and make sure it's tested"
+      context:
+        context_file_contents:
+          - path: testsuite/fixtures/create_user.go
+            content: |
+              package main
+
+              func CreateUser(name string) string {
+                return name
+              }
+      expect:
+        must_succeed: true
+
+    - name: pure_question_no_mode
+      description: "A plain explanatory question should fall back to code mode."
+      task_type: analysis
+      prompt: "how does the parser work?"
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code
+
+    - name: explicit_mode_overrides_classification
+      description: "An explicit mode override should beat review-like keywords."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/handler.go
+            content: |
+              package main
+
+              func Handle() string {
+                return "ok"
+              }
+      prompt: "review the code in handler.go"
+      context:
+        mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/handler.go
+            content: |
+              package main
+
+              func Handle() string {
+                return "ok"
+              }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code

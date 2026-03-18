@@ -81,6 +81,18 @@ func TestResolveCaseMaxIterationsPrefersCaseOverride(t *testing.T) {
 	}
 }
 
+func TestResolveCaseMaxRetries(t *testing.T) {
+	if got := resolveCaseMaxRetries(RunOptions{}); got != 3 {
+		t.Fatalf("expected default max retries 3, got %d", got)
+	}
+	if got := resolveCaseMaxRetries(RunOptions{MaxRetries: 5}); got != 5 {
+		t.Fatalf("expected explicit max retries 5, got %d", got)
+	}
+	if got := resolveCaseMaxRetries(RunOptions{MaxRetries: -1}); got != 0 {
+		t.Fatalf("expected negative max retries to disable retries, got %d", got)
+	}
+}
+
 func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) {
 	layout := newRunCaseLayout(t.TempDir(), "smoke", "model")
 	suite := &Suite{Spec: SuiteSpec{}}
@@ -131,8 +143,78 @@ func TestResolveCaseExecutionReplayRequiresTape(t *testing.T) {
 	}
 }
 
+func TestResolveCaseExecutionUsesGoldenTapeForReplayStrategy(t *testing.T) {
+	workspace := t.TempDir()
+	suitePath := filepath.Join(workspace, "testsuite", "agenttests", "euclo.code.testsuite.yaml")
+	goldenDir := filepath.Join(workspace, "testsuite", "agenttests", "tapes", "euclo.code")
+	if err := os.MkdirAll(goldenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	goldenPath := filepath.Join(goldenDir, "basic_edit_task__qwen2_5_coder_14b.tape.jsonl")
+	if err := os.WriteFile(goldenPath, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	layout := newRunCaseLayout(t.TempDir(), "basic_edit_task", "qwen2.5-coder:14b")
+	suite := &Suite{
+		SourcePath: suitePath,
+		Metadata:   SuiteMeta{Name: "euclo.code"},
+		Spec: SuiteSpec{
+			Recording: RecordingSpec{Strategy: "replay-if-golden"},
+		},
+	}
+
+	exec, err := resolveCaseExecution(suite, CaseSpec{Name: "basic_edit_task"}, ModelSpec{Name: "qwen2.5-coder:14b"}, "manifest-model", RunOptions{}, layout, workspace, workspace)
+	if err != nil {
+		t.Fatalf("resolveCaseExecution replay strategy: %v", err)
+	}
+	if exec.RecordingMode != "replay" {
+		t.Fatalf("expected replay mode, got %q", exec.RecordingMode)
+	}
+	if exec.TapePath != goldenPath {
+		t.Fatalf("expected golden tape path %q, got %q", goldenPath, exec.TapePath)
+	}
+}
+
+func TestResolveCaseExecutionReplayIfGoldenFallsBackToLiveWhenMissing(t *testing.T) {
+	layout := newRunCaseLayout(t.TempDir(), "basic_edit_task", "qwen2.5-coder:14b")
+	suite := &Suite{
+		SourcePath: filepath.Join(t.TempDir(), "testsuite", "agenttests", "euclo.code.testsuite.yaml"),
+		Metadata:   SuiteMeta{Name: "euclo.code"},
+		Spec: SuiteSpec{
+			Recording: RecordingSpec{Strategy: "replay-if-golden"},
+		},
+	}
+
+	exec, err := resolveCaseExecution(suite, CaseSpec{Name: "basic_edit_task"}, ModelSpec{Name: "qwen2.5-coder:14b"}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	if err != nil {
+		t.Fatalf("resolveCaseExecution replay-if-golden fallback: %v", err)
+	}
+	if exec.RecordingMode != "off" {
+		t.Fatalf("expected live/off mode, got %q", exec.RecordingMode)
+	}
+	if exec.TapePath != "" {
+		t.Fatalf("expected no tape path for live fallback, got %q", exec.TapePath)
+	}
+}
+
+func TestResolveCaseExecutionReplayOnlyFailsWithoutGoldenTape(t *testing.T) {
+	layout := newRunCaseLayout(t.TempDir(), "basic_edit_task", "qwen2.5-coder:14b")
+	suite := &Suite{
+		SourcePath: filepath.Join(t.TempDir(), "testsuite", "agenttests", "euclo.code.testsuite.yaml"),
+		Metadata:   SuiteMeta{Name: "euclo.code"},
+		Spec: SuiteSpec{
+			Recording: RecordingSpec{Strategy: "replay-only"},
+		},
+	}
+
+	_, err := resolveCaseExecution(suite, CaseSpec{Name: "basic_edit_task"}, ModelSpec{Name: "qwen2.5-coder:14b"}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	if err == nil {
+		t.Fatal("expected replay-only without golden tape to fail")
+	}
+}
+
 func TestResolveCaseTimeout(t *testing.T) {
-	got, err := resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, CaseSpec{Timeout: "2m"})
+	got, err := resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, nil, CaseSpec{Timeout: "2m"})
 	if err != nil {
 		t.Fatalf("resolveCaseTimeout case override: %v", err)
 	}
@@ -140,7 +222,7 @@ func TestResolveCaseTimeout(t *testing.T) {
 		t.Fatalf("expected 2m timeout, got %s", got)
 	}
 
-	got, err = resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, CaseSpec{})
+	got, err = resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, nil, CaseSpec{})
 	if err != nil {
 		t.Fatalf("resolveCaseTimeout global: %v", err)
 	}
@@ -148,17 +230,34 @@ func TestResolveCaseTimeout(t *testing.T) {
 		t.Fatalf("expected 30s timeout, got %s", got)
 	}
 
-	if _, err := resolveCaseTimeout(RunOptions{}, CaseSpec{Timeout: "nope"}); err == nil {
+	got, err = resolveCaseTimeout(RunOptions{Timeout: 30 * time.Second}, &Suite{
+		Spec: SuiteSpec{
+			Execution: SuiteExecutionSpec{Timeout: "90s"},
+		},
+	}, CaseSpec{})
+	if err != nil {
+		t.Fatalf("resolveCaseTimeout suite timeout: %v", err)
+	}
+	if got != 90*time.Second {
+		t.Fatalf("expected suite timeout 90s, got %s", got)
+	}
+
+	if _, err := resolveCaseTimeout(RunOptions{}, nil, CaseSpec{Timeout: "nope"}); err == nil {
 		t.Fatal("expected invalid case timeout to fail")
 	}
 }
 
 func TestResolveBootstrapTimeout(t *testing.T) {
-	if got := resolveBootstrapTimeout(RunOptions{BootstrapTimeout: 5 * time.Second}); got != 5*time.Second {
+	if got := resolveBootstrapTimeout(RunOptions{BootstrapTimeout: 5 * time.Second}, CaseSpec{}); got != 5*time.Second {
 		t.Fatalf("expected 5s bootstrap timeout, got %s", got)
 	}
-	if got := resolveBootstrapTimeout(RunOptions{}); got != 30*time.Second {
+	if got := resolveBootstrapTimeout(RunOptions{}, CaseSpec{}); got != 30*time.Second {
 		t.Fatalf("expected default bootstrap timeout, got %s", got)
+	}
+	if got := resolveBootstrapTimeout(RunOptions{BootstrapTimeout: 5 * time.Second}, CaseSpec{
+		Overrides: CaseOverrideSpec{BootstrapTimeout: "45s"},
+	}); got != 45*time.Second {
+		t.Fatalf("expected case bootstrap timeout override 45s, got %s", got)
 	}
 }
 
@@ -532,6 +631,26 @@ func TestNewRunCaseLayoutUsesStructuredRunSubdirectories(t *testing.T) {
 	if got := layout.TapePath; got != filepath.Join(runRoot, "artifacts", caseKey, "tape.jsonl") {
 		t.Fatalf("TapePath = %q", got)
 	}
+	if got := layout.InteractionTapePath; got != filepath.Join(runRoot, "artifacts", caseKey, "interaction.tape.jsonl") {
+		t.Fatalf("InteractionTapePath = %q", got)
+	}
+}
+
+func TestMarshalInteractionRecords(t *testing.T) {
+	data, err := marshalInteractionRecords([]any{
+		map[string]any{"kind": "proposal", "phase": "scope"},
+		map[string]any{"kind": "question", "phase": "clarify"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(lines))
+	}
+	if !strings.Contains(lines[0], `"kind":"proposal"`) {
+		t.Fatalf("unexpected first line %q", lines[0])
+	}
 }
 
 func TestRunCaseFailsWhenBootstrapExceedsTimeout(t *testing.T) {
@@ -617,5 +736,98 @@ spec:
 	}
 	if !strings.Contains(report.Error, context.DeadlineExceeded.Error()) {
 		t.Fatalf("expected deadline exceeded error, got %q", report.Error)
+	}
+}
+
+func TestRunCaseUsesCaseBootstrapTimeoutOverride(t *testing.T) {
+	workspace := t.TempDir()
+	ollama := newLoadedOllamaServer(t, "qwen2.5-coder:14b")
+	defer ollama.Close()
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		t.Fatalf("mkdir manifest dir: %v", err)
+	}
+	manifestData := `apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: coding
+spec:
+  image: relurpify:test
+  runtime: gvisor
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: README.md
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+      disk_io: "1Gi"
+  agent:
+    implementation: coding
+    mode: primary
+    model:
+      provider: ollama
+      name: qwen2.5-coder:14b
+`
+	if err := os.WriteFile(manifestPath, []byte(manifestData), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	suite := &Suite{
+		SourcePath: filepath.Join(workspace, "testsuite", "agenttests", "coding.testsuite.yaml"),
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Metadata:   SuiteMeta{Name: "coding", Tier: "smoke"},
+		Spec: SuiteSpec{
+			AgentName: "coding",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Workspace: WorkspaceSpec{Strategy: "derived"},
+			Models: []ModelSpec{{
+				Name:     "qwen2.5-coder:14b",
+				Endpoint: ollama.URL,
+			}},
+			Cases: []CaseSpec{{
+				Name:   "bootstrap_timeout_override",
+				Prompt: "Summarize README.md in 5 bullets.",
+				Overrides: CaseOverrideSpec{
+					BootstrapTimeout: "80ms",
+				},
+			}},
+		},
+	}
+	if err := suite.Validate(); err != nil {
+		t.Fatalf("suite.Validate: %v", err)
+	}
+
+	origBootstrap := bootstrapAgentRuntime
+	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+		time.Sleep(40 * time.Millisecond)
+		<-opts.Context.Done()
+		return nil, opts.Context.Err()
+	}
+	defer func() { bootstrapAgentRuntime = origBootstrap }()
+
+	report := (&Runner{}).runCase(
+		context.Background(),
+		suite,
+		suite.Spec.Cases[0],
+		suite.Spec.Models[0],
+		RunOptions{TargetWorkspace: workspace, OutputDir: t.TempDir(), Timeout: 20 * time.Millisecond, BootstrapTimeout: 20 * time.Millisecond},
+		workspace,
+		t.TempDir(),
+	)
+
+	if report.Success {
+		t.Fatal("expected bootstrap timeout to fail case")
+	}
+	if report.FailureKind != "infra" {
+		t.Fatalf("expected infra failure, got %q", report.FailureKind)
+	}
+	if !strings.Contains(report.Error, context.DeadlineExceeded.Error()) {
+		t.Fatalf("expected deadline exceeded error, got %q", report.Error)
+	}
+	if report.DurationMS < 70 {
+		t.Fatalf("expected case duration to reflect override budget, got %dms", report.DurationMS)
 	}
 }
