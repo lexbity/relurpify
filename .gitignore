@@ -1,4 +1,6 @@
 .gocache/
+.claude/
+.github/
 .gomodcache/
 .memory/
 .relurpify/
@@ -17,4 +19,5 @@ testsuite/agenttest_fixtures/**/target/
 testsuite/agenttest_fixtures/**/__pycache__/
 testsuite/agenttest_fixtures/**/*.pyc
 #temp
-/MCP-take-apart
+/docs/website/
+/docs/specs_new_tmp/

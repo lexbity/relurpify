@@ -92,6 +92,71 @@ func TestPlannerPlanRetryOnReflectionFeedback(t *testing.T) {
 	require.Equal(t, euclotypes.ArtifactKindPlan, result.Artifacts[0].Kind)
 }
 
+func TestPlannerPlanReusesExistingPlanWhenPlannerFails(t *testing.T) {
+	env := testEnv(t)
+	cap := &plannerPlanCapability{env: env}
+	state := core.NewContext()
+	state.Set("euclo.artifacts", []euclotypes.Artifact{{
+		ID:         "interaction_plan",
+		Kind:       euclotypes.ArtifactKindPlan,
+		Summary:    "interactive plan",
+		Payload:    map[string]any{"steps": []string{"inspect", "edit", "verify"}},
+		ProducerID: "euclo:interaction",
+		Status:     "produced",
+	}})
+	envelope := euclotypes.ExecutionEnvelope{
+		Task:        &core.Task{ID: "test-plan-fallback", Instruction: "design the implementation"},
+		Mode:        euclotypes.ModeResolution{ModeID: "planning"},
+		Profile:     euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"},
+		Registry:    env.Registry,
+		State:       state,
+		Memory:      env.Memory,
+		Environment: env,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := cap.Execute(ctx, envelope)
+	require.Equal(t, euclotypes.ExecutionStatusCompleted, result.Status)
+	require.Equal(t, "reused interaction-generated plan", result.Summary)
+	require.Len(t, result.Artifacts, 1)
+	require.Equal(t, euclotypes.ArtifactKindPlan, result.Artifacts[0].Kind)
+	require.Equal(t, "euclo:planner.plan", result.Artifacts[0].ProducerID)
+	require.Equal(t, "produced", result.Artifacts[0].Status)
+	require.Equal(t, "interaction_plan", result.Artifacts[0].ID)
+}
+
+func TestPlannerPlanSynthesizesPlanFromInteractionProposal(t *testing.T) {
+	env := testEnv(t)
+	cap := &plannerPlanCapability{env: env}
+	state := core.NewContext()
+	state.Set("propose.items", []map[string]any{{
+		"id":      "edit-1",
+		"content": "Add logging",
+	}})
+	envelope := euclotypes.ExecutionEnvelope{
+		Task:        &core.Task{ID: "test-plan-synth", Instruction: "design the implementation"},
+		Mode:        euclotypes.ModeResolution{ModeID: "code"},
+		Profile:     euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"},
+		Registry:    env.Registry,
+		State:       state,
+		Memory:      env.Memory,
+		Environment: env,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := cap.Execute(ctx, envelope)
+	require.Equal(t, euclotypes.ExecutionStatusCompleted, result.Status)
+	require.Equal(t, "reused interaction-generated plan", result.Summary)
+	require.Len(t, result.Artifacts, 1)
+	require.Equal(t, euclotypes.ArtifactKindPlan, result.Artifacts[0].Kind)
+	require.Equal(t, "interaction_plan", result.Artifacts[0].ID)
+	require.Equal(t, "euclo:planner.plan", result.Artifacts[0].ProducerID)
+}
+
 func TestPlannerPlanSupportedProfiles(t *testing.T) {
 	cap := &plannerPlanCapability{env: testEnv(t)}
 	desc := cap.Descriptor()

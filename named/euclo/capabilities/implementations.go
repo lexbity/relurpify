@@ -51,6 +51,12 @@ func (c *editVerifyRepairCapability) Contract() euclotypes.ArtifactContract {
 }
 
 func (c *editVerifyRepairCapability) Eligible(artifacts euclotypes.ArtifactState, snapshot euclotypes.CapabilitySnapshot) euclotypes.EligibilityResult {
+	if looksLikeAPICompatibleRefactorRequest(artifacts) {
+		return euclotypes.EligibilityResult{
+			Eligible: false,
+			Reason:   "specialized API-compatible refactor capability available",
+		}
+	}
 	if !snapshot.HasWriteTools {
 		return euclotypes.EligibilityResult{
 			Eligible:         false,
@@ -82,31 +88,43 @@ func (c *editVerifyRepairCapability) Execute(ctx context.Context, env euclotypes
 	}
 	exploreResult, err := exploreAgent.Execute(ctx, exploreTask, exploreState)
 	if err != nil || exploreResult == nil || !exploreResult.Success {
-		return euclotypes.ExecutionResult{
-			Status:  euclotypes.ExecutionStatusFailed,
-			Summary: "exploration phase failed",
-			FailureInfo: &euclotypes.CapabilityFailure{
-				Code:        "explore_failed",
-				Message:     errMsg(err, exploreResult),
-				Recoverable: true,
-				FailedPhase: "explore",
-				ParadigmUsed: "react",
-			},
-			RecoveryHint: &euclotypes.RecoveryHint{
-				Strategy:          euclotypes.RecoveryStrategyParadigmSwitch,
-				SuggestedParadigm: "planner",
-			},
+		if ctx.Err() != nil {
+			return euclotypes.ExecutionResult{
+				Status:  euclotypes.ExecutionStatusFailed,
+				Summary: "exploration phase failed",
+				FailureInfo: &euclotypes.CapabilityFailure{
+					Code:         "explore_failed",
+					Message:      errMsg(err, exploreResult),
+					Recoverable:  true,
+					FailedPhase:  "explore",
+					ParadigmUsed: "react",
+				},
+				RecoveryHint: &euclotypes.RecoveryHint{
+					Strategy:          euclotypes.RecoveryStrategyParadigmSwitch,
+					SuggestedParadigm: "planner",
+				},
+			}
 		}
+		artifacts = append(artifacts, euclotypes.Artifact{
+			ID:         "evr_explore",
+			Kind:       euclotypes.ArtifactKindExplore,
+			Summary:    "exploration degraded; proceeding to edit",
+			Payload:    map[string]any{"error": errMsg(err, exploreResult)},
+			ProducerID: producerID,
+			Status:     "degraded",
+		})
+		mergeStateArtifacts(env.State, exploreState)
+	} else {
+		artifacts = append(artifacts, euclotypes.Artifact{
+			ID:         "evr_explore",
+			Kind:       euclotypes.ArtifactKindExplore,
+			Summary:    resultSummary(exploreResult),
+			Payload:    exploreResult.Data,
+			ProducerID: producerID,
+			Status:     "produced",
+		})
+		mergeStateArtifacts(env.State, exploreState)
 	}
-	artifacts = append(artifacts, euclotypes.Artifact{
-		ID:         "evr_explore",
-		Kind:       euclotypes.ArtifactKindExplore,
-		Summary:    resultSummary(exploreResult),
-		Payload:    exploreResult.Data,
-		ProducerID: producerID,
-		Status:     "produced",
-	})
-	mergeStateArtifacts(env.State, exploreState)
 
 	// Phase 2: Plan + Edit — use ReActAgent with full tools
 	editState := env.State.Clone()
@@ -178,6 +196,13 @@ func (c *editVerifyRepairCapability) Execute(ctx context.Context, env euclotypes
 				Recoverable:  true,
 				FailedPhase:  "verify",
 				ParadigmUsed: "react",
+			},
+			RecoveryHint: &euclotypes.RecoveryHint{
+				Strategy: euclotypes.RecoveryStrategyProfileEscalation,
+				Context: map[string]any{
+					"preferred_profile": "reproduce_localize_patch",
+					"reason":            "verification failed after mutation",
+				},
 			},
 		}
 	}
@@ -319,7 +344,11 @@ func (c *reproduceLocalizePatchCapability) Execute(ctx context.Context, env eucl
 			},
 			RecoveryHint: &euclotypes.RecoveryHint{
 				Strategy:            euclotypes.RecoveryStrategyCapabilityFallback,
-				SuggestedCapability: "euclo:edit_verify_repair",
+				SuggestedCapability: "euclo:debug.investigate_regression",
+				Context: map[string]any{
+					"fallback_capabilities": []string{"euclo:debug.investigate_regression", "euclo:edit_verify_repair"},
+					"reason":                "insufficient localization evidence",
+				},
 			},
 		}
 	}
@@ -615,7 +644,13 @@ func (c *plannerPlanCapability) Contract() euclotypes.ArtifactContract {
 	}
 }
 
-func (c *plannerPlanCapability) Eligible(_ euclotypes.ArtifactState, snapshot euclotypes.CapabilitySnapshot) euclotypes.EligibilityResult {
+func (c *plannerPlanCapability) Eligible(artifacts euclotypes.ArtifactState, snapshot euclotypes.CapabilitySnapshot) euclotypes.EligibilityResult {
+	if looksLikeAPICompatibleRefactorRequest(artifacts) {
+		return euclotypes.EligibilityResult{
+			Eligible: false,
+			Reason:   "specialized API-compatible refactor capability available",
+		}
+	}
 	if !snapshot.HasReadTools {
 		return euclotypes.EligibilityResult{
 			Eligible: false,
@@ -630,6 +665,17 @@ func (c *plannerPlanCapability) Execute(ctx context.Context, env euclotypes.Exec
 
 	planResult, err := c.runPlanner(ctx, env, "")
 	if err != nil || planResult == nil || !planResult.Success {
+		if existing := existingPlanArtifact(env.State); existing != nil {
+			existing.ProducerID = producerID
+			if existing.Status == "" {
+				existing.Status = "produced"
+			}
+			return euclotypes.ExecutionResult{
+				Status:    euclotypes.ExecutionStatusCompleted,
+				Summary:   "reused interaction-generated plan",
+				Artifacts: []euclotypes.Artifact{*existing},
+			}
+		}
 		return euclotypes.ExecutionResult{
 			Status:  euclotypes.ExecutionStatusFailed,
 			Summary: "planning phase failed",
@@ -671,6 +717,55 @@ func (c *plannerPlanCapability) Execute(ctx context.Context, env euclotypes.Exec
 				Status:     "produced",
 			},
 		},
+	}
+}
+
+func existingPlanArtifact(state *core.Context) *euclotypes.Artifact {
+	if state == nil {
+		return nil
+	}
+	for _, artifacts := range []euclotypes.ArtifactState{
+		euclotypes.ArtifactStateFromContext(state),
+		euclotypes.NewArtifactState(euclotypes.CollectArtifactsFromState(state)),
+	} {
+		if !artifacts.Has(euclotypes.ArtifactKindPlan) {
+			continue
+		}
+		items := artifacts.OfKind(euclotypes.ArtifactKindPlan)
+		if len(items) == 0 {
+			continue
+		}
+		artifact := items[len(items)-1]
+		return &artifact
+	}
+	return synthesizedPlanArtifact(state)
+}
+
+func synthesizedPlanArtifact(state *core.Context) *euclotypes.Artifact {
+	if state == nil {
+		return nil
+	}
+	if raw, ok := state.Get("pipeline.plan"); ok && raw != nil {
+		return &euclotypes.Artifact{
+			ID:         "pipeline_plan",
+			Kind:       euclotypes.ArtifactKindPlan,
+			Summary:    "interaction-derived plan",
+			Payload:    raw,
+			ProducerID: "euclo:planner.plan",
+			Status:     "produced",
+		}
+	}
+	raw, ok := state.Get("propose.items")
+	if !ok || raw == nil {
+		return nil
+	}
+	return &euclotypes.Artifact{
+		ID:         "interaction_plan",
+		Kind:       euclotypes.ArtifactKindPlan,
+		Summary:    "interaction-derived plan",
+		Payload:    map[string]any{"items": raw},
+		ProducerID: "euclo:planner.plan",
+		Status:     "produced",
 	}
 }
 

@@ -3,6 +3,8 @@ package euclo
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	"github.com/lexcodex/relurpify/framework/agentenv"
@@ -13,6 +15,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/gate"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/orchestrate"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -29,6 +32,7 @@ type Agent struct {
 
 	ModeRegistry        *euclotypes.ModeRegistry
 	ProfileRegistry     *euclotypes.ExecutionProfileRegistry
+	InteractionRegistry *interaction.ModeMachineRegistry
 	CodingCapabilities  *capabilities.EucloCapabilityRegistry
 	ProfileCtrl         *orchestrate.ProfileController
 	RecoveryCtrl        *orchestrate.RecoveryController
@@ -54,6 +58,9 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 	}
 	if a.ProfileRegistry == nil {
 		a.ProfileRegistry = euclotypes.DefaultExecutionProfileRegistry()
+	}
+	if a.InteractionRegistry == nil {
+		a.InteractionRegistry = defaultInteractionRegistry()
 	}
 	if a.CodingCapabilities == nil {
 		a.CodingCapabilities = capabilities.NewDefaultCapabilityRegistry(env)
@@ -175,6 +182,32 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		executionTask, state, mode, profile, a.Environment,
 		nil, "", "", a.ConfigTelemetry(),
 	)
+	seedInteractionPrepass(state, executionTask, classification, mode)
+	if a.InteractionRegistry != nil {
+		emitter, withTransitions := interactionEmitterForTask(executionTask)
+		var interactionErr error
+		if withTransitions {
+			_, _, interactionErr = a.ProfileCtrl.ExecuteInteractiveWithTransitions(
+				ctx,
+				a.InteractionRegistry,
+				mode,
+				execEnvelope,
+				emitter,
+				interactionMaxTransitions(executionTask),
+			)
+		} else {
+			_, _, interactionErr = a.ProfileCtrl.ExecuteInteractive(
+				ctx,
+				a.InteractionRegistry,
+				mode,
+				execEnvelope,
+				emitter,
+			)
+		}
+		if interactionErr != nil && err == nil {
+			err = interactionErr
+		}
+	}
 	result, _, execErr = a.ProfileCtrl.ExecuteProfile(ctx, profile, mode, execEnvelope)
 	if err == nil {
 		err = execErr
@@ -264,6 +297,122 @@ func (a *Agent) eucloTask(task *core.Task, envelope eucloruntime.TaskEnvelope, c
 	cloned.Context["euclo.envelope"] = envelope
 	cloned.Context["euclo.classification"] = eucloruntime.ClassificationContextPayload(classification)
 	return cloned
+}
+
+func seedInteractionPrepass(state *core.Context, task *core.Task, classification eucloruntime.TaskClassification, mode euclotypes.ModeResolution) {
+	if state == nil {
+		return
+	}
+	instruction := ""
+	if task != nil {
+		instruction = strings.ToLower(strings.TrimSpace(task.Instruction))
+	}
+	state.Set("requires_evidence_before_mutation", classification.RequiresEvidenceBeforeMutation)
+	switch mode.ModeID {
+	case "debug":
+		if hasInstructionEvidence(instruction, classification.ReasonCodes) {
+			state.Set("has_evidence", true)
+			state.Set("evidence_in_instruction", true)
+		}
+	case "code":
+		if strings.Contains(instruction, "just do it") {
+			state.Set("just_do_it", true)
+		}
+	case "planning":
+		if strings.Contains(instruction, "just plan it") || strings.Contains(instruction, "skip to plan") {
+			state.Set("just_plan_it", true)
+		}
+	}
+}
+
+func hasInstructionEvidence(instruction string, reasonCodes []string) bool {
+	for _, reason := range reasonCodes {
+		if strings.HasPrefix(reason, "error_text:") {
+			return true
+		}
+	}
+	for _, token := range []string{"panic:", "stacktrace", "stack trace", "goroutine ", ".go:", "failing test", "runtime error"} {
+		if strings.Contains(instruction, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func interactionEmitterForTask(task *core.Task) (interaction.FrameEmitter, bool) {
+	script := interactionScriptFromTask(task)
+	if len(script) == 0 {
+		return &interaction.NoopEmitter{}, false
+	}
+	return interaction.NewTestFrameEmitter(script...), true
+}
+
+func interactionScriptFromTask(task *core.Task) []interaction.ScriptedResponse {
+	if task == nil || task.Context == nil {
+		return nil
+	}
+	raw, ok := task.Context["euclo.interaction_script"]
+	if !ok || raw == nil {
+		return nil
+	}
+	rows, ok := raw.([]any)
+	if !ok {
+		if typed, ok := raw.([]map[string]any); ok {
+			rows = make([]any, 0, len(typed))
+			for _, item := range typed {
+				rows = append(rows, item)
+			}
+		} else {
+			return nil
+		}
+	}
+	script := make([]interaction.ScriptedResponse, 0, len(rows))
+	for _, row := range rows {
+		entry, ok := row.(map[string]any)
+		if !ok {
+			continue
+		}
+		action := stringValue(entry["action"])
+		if action == "" {
+			continue
+		}
+		script = append(script, interaction.ScriptedResponse{
+			Phase:    stringValue(entry["phase"]),
+			Kind:     stringValue(entry["kind"]),
+			ActionID: action,
+			Text:     stringValue(entry["text"]),
+		})
+	}
+	return script
+}
+
+func interactionMaxTransitions(task *core.Task) int {
+	if task == nil || task.Context == nil {
+		return 5
+	}
+	raw, ok := task.Context["euclo.max_interactive_transitions"]
+	if !ok || raw == nil {
+		return 5
+	}
+	switch typed := raw.(type) {
+	case int:
+		if typed > 0 {
+			return typed
+		}
+	case int64:
+		if typed > 0 {
+			return int(typed)
+		}
+	case float64:
+		if typed > 0 {
+			return int(typed)
+		}
+	case string:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(typed)); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 5
 }
 
 func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, state *core.Context) {

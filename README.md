@@ -1,8 +1,8 @@
 # Relurpify
 
-To the day(s) it re-writes itself.
+To the day(s) it re-writes stuff.
 
-Relurpify is an local Agentic automation framework - whose sole goal is to one day re-write itself. 
+Relurpify is an local Agentic automation framework - whose sole goal is to one day re-write stuff. 
 
 It features a ground up stack all in golang , including 
 sandboxing with GVisor -> Ollama Integration -> Relurpify Apps/Agents
