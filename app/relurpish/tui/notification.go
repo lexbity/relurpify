@@ -131,6 +131,22 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 	if !isKey {
 		return nb, nil
 	}
+	// Handle interaction notifications with dynamic action slots.
+	if current.Kind == NotifKindInteraction {
+		key := kMsg.String()
+		if key == "d" || key == "esc" {
+			id := current.ID
+			nb.queue.Resolve(id)
+			return nb, func() tea.Msg { return NotifDismissMsg{ID: id} }
+		}
+		resp, ok := ResolveInteractionKey(current, key)
+		if ok {
+			id := current.ID
+			nb.queue.Resolve(id)
+			return nb, func() tea.Msg { return eucloResponseMsg{response: resp} }
+		}
+		return nb, nil
+	}
 	switch kMsg.String() {
 	case "y", "Y":
 		if current.Kind == NotifKindHITL {
@@ -190,6 +206,12 @@ func (nb *NotificationBar) View() string {
 		hint = dimStyle.Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
 	case NotifKindRestore:
 		hint = dimStyle.Render("  [enter] restore  [d] dismiss")
+	case NotifKindInteraction:
+		rendered := RenderInteractionNotification(current)
+		if nb.queue.Len() > 1 {
+			rendered += dimStyle.Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
+		}
+		return rendered
 	default:
 		hint = dimStyle.Render("  [d] dismiss")
 	}

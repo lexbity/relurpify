@@ -352,38 +352,56 @@ func (im *IndexManager) indexFilesParallel(ctx context.Context, files []string) 
 	}
 	var wg sync.WaitGroup
 	fileCh := make(chan string)
-	errCh := make(chan error, workerCount)
+	var (
+		errMu    sync.Mutex
+		firstErr error
+	)
+	recordErr := func(err error) {
+		if err == nil {
+			return
+		}
+		errMu.Lock()
+		if firstErr == nil {
+			firstErr = err
+		}
+		errMu.Unlock()
+	}
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for file := range fileCh {
-				if err := ctx.Err(); err != nil {
-					errCh <- err
+			for {
+				select {
+				case <-ctx.Done():
+					recordErr(ctx.Err())
 					return
-				}
-				if err := im.IndexFile(file); err != nil {
-					errCh <- fmt.Errorf("%s: %w", file, err)
+				case file, ok := <-fileCh:
+					if !ok {
+						return
+					}
+					if err := im.IndexFile(file); err != nil {
+						recordErr(fmt.Errorf("%s: %w", file, err))
+					}
 				}
 			}
 		}()
 	}
 	for _, file := range files {
-		if err := ctx.Err(); err != nil {
+		select {
+		case <-ctx.Done():
+			recordErr(ctx.Err())
 			close(fileCh)
 			wg.Wait()
-			close(errCh)
-			return err
+			return ctx.Err()
+		case fileCh <- file:
 		}
-		fileCh <- file
 	}
 	close(fileCh)
 	wg.Wait()
-	close(errCh)
-	if len(errCh) > 0 {
-		return <-errCh
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return nil
+	return firstErr
 }
 
 func (im *IndexManager) beginWorkspaceIndex() error {

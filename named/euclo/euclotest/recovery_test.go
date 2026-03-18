@@ -49,18 +49,20 @@ func TestRecoveryStackExhaustedPreventsAttempt(t *testing.T) {
 func TestRecoveryTraceArtifact(t *testing.T) {
 	stack := orchestrate.NewRecoveryStack()
 	stack.Record(orchestrate.RecoveryAttempt{
-		Level:   orchestrate.RecoveryLevelCapability,
-		From:    "cap_a",
-		To:      "cap_b",
-		Reason:  "fallback",
-		Success: true,
+		Level:    orchestrate.RecoveryLevelCapability,
+		Strategy: euclotypes.RecoveryStrategyCapabilityFallback,
+		From:     "cap_a",
+		To:       "cap_b",
+		Reason:   "fallback",
+		Success:  true,
 	})
 	stack.Record(orchestrate.RecoveryAttempt{
-		Level:   orchestrate.RecoveryLevelProfile,
-		From:    "profile_a",
-		To:      "profile_b",
-		Reason:  "escalation",
-		Success: false,
+		Level:    orchestrate.RecoveryLevelProfile,
+		Strategy: euclotypes.RecoveryStrategyProfileEscalation,
+		From:     "profile_a",
+		To:       "profile_b",
+		Reason:   "escalation",
+		Success:  false,
 	})
 
 	art := orchestrate.RecoveryTraceArtifact(stack, "euclo:test")
@@ -75,8 +77,10 @@ func TestRecoveryTraceArtifact(t *testing.T) {
 	require.True(t, ok)
 	assert.Len(t, attempts, 2)
 	assert.Equal(t, "capability", attempts[0]["level"])
+	assert.Equal(t, "capability_fallback", attempts[0]["strategy"])
 	assert.Equal(t, true, attempts[0]["success"])
 	assert.Equal(t, "profile", attempts[1]["level"])
+	assert.Equal(t, "profile_escalation", attempts[1]["strategy"])
 	assert.Equal(t, false, attempts[1]["success"])
 }
 

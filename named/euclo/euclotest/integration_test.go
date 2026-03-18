@@ -138,6 +138,7 @@ func TestFullExecuteWithRecoveryFallback(t *testing.T) {
 	env := testEnv(t)
 	rc := orchestrate.NewRecoveryController(orchestrate.AdaptCapabilityRegistry(reg), euclotypes.DefaultExecutionProfileRegistry(), euclotypes.DefaultModeRegistry(), env)
 	pc := orchestrate.NewProfileController(orchestrate.AdaptCapabilityRegistry(reg), gate.DefaultPhaseGates(), env, euclotypes.DefaultExecutionProfileRegistry(), rc)
+	execEnv := testEnvelope(nil)
 
 	profile := euclotypes.ExecutionProfileSelection{
 		ProfileID:   "edit_verify_repair",
@@ -145,7 +146,7 @@ func TestFullExecuteWithRecoveryFallback(t *testing.T) {
 	}
 	mode := euclotypes.ModeResolution{ModeID: "code"}
 
-	result, pcResult, err := pc.ExecuteProfile(context.Background(), profile, mode, testEnvelope(nil))
+	result, pcResult, err := pc.ExecuteProfile(context.Background(), profile, mode, execEnv)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.True(t, result.Success)
@@ -163,6 +164,16 @@ func TestFullExecuteWithRecoveryFallback(t *testing.T) {
 		}
 	}
 	assert.True(t, hasRecoveryTrace, "should have recovery trace artifact")
+
+	raw, ok := execEnv.State.Get("euclo.recovery_trace")
+	require.True(t, ok, "recovery trace should be written to state")
+	trace, ok := raw.(map[string]any)
+	require.True(t, ok)
+	attempts, ok := trace["attempts"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, attempts, 1)
+	assert.Equal(t, "capability", attempts[0]["level"])
+	assert.Equal(t, "capability_fallback", attempts[0]["strategy"])
 }
 
 func TestFullExecuteSessionScopingPreventsRecursion(t *testing.T) {

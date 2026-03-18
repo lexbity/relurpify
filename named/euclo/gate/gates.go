@@ -11,21 +11,21 @@ import (
 type Phase string
 
 const (
-	PhaseExplore    Phase = "explore"
-	PhasePlan       Phase = "plan"
-	PhaseEdit       Phase = "edit"
-	PhaseVerify     Phase = "verify"
-	PhaseReport     Phase = "report"
-	PhaseReproduce  Phase = "reproduce"
-	PhaseLocalize   Phase = "localize"
-	PhasePatch      Phase = "patch"
-	PhasePlanTests  Phase = "plan_tests"
-	PhaseImplement  Phase = "implement"
-	PhaseReview     Phase = "review"
-	PhaseSummarize  Phase = "summarize"
-	PhaseTrace      Phase = "trace"
-	PhaseAnalyze    Phase = "analyze"
-	PhaseStage      Phase = "stage"
+	PhaseExplore   Phase = "explore"
+	PhasePlan      Phase = "plan"
+	PhaseEdit      Phase = "edit"
+	PhaseVerify    Phase = "verify"
+	PhaseReport    Phase = "report"
+	PhaseReproduce Phase = "reproduce"
+	PhaseLocalize  Phase = "localize"
+	PhasePatch     Phase = "patch"
+	PhasePlanTests Phase = "plan_tests"
+	PhaseImplement Phase = "implement"
+	PhaseReview    Phase = "review"
+	PhaseSummarize Phase = "summarize"
+	PhaseTrace     Phase = "trace"
+	PhaseAnalyze   Phase = "analyze"
+	PhaseStage     Phase = "stage"
 )
 
 // GateFailPolicy determines how a failed gate is handled.
@@ -51,6 +51,8 @@ const (
 	ValidatorCheckHasKey ValidatorCheck = "has_key"
 	// ValidatorCheckMinCount checks that a slice payload has at least N items.
 	ValidatorCheckMinCount ValidatorCheck = "min_count"
+	// ValidatorCheckEquals checks that a value equals the expected one.
+	ValidatorCheckEquals ValidatorCheck = "equals"
 )
 
 // ArtifactValidator defines a single validation rule applied to an artifact's
@@ -67,12 +69,13 @@ type ArtifactValidator struct {
 // a phase transition can proceed.
 type ArtifactGate struct {
 	RequiredKinds []euclotypes.ArtifactKind
+	AnyOfKinds    [][]euclotypes.ArtifactKind
 	Validators    []ArtifactValidator
 }
 
 // IsEmpty returns true if the gate has no requirements.
 func (g ArtifactGate) IsEmpty() bool {
-	return len(g.RequiredKinds) == 0 && len(g.Validators) == 0
+	return len(g.RequiredKinds) == 0 && len(g.AnyOfKinds) == 0 && len(g.Validators) == 0
 }
 
 // PhaseGate defines evidence requirements for advancing from one phase
@@ -129,6 +132,13 @@ func EvaluateGate(gate PhaseGate, modeID string, artifacts euclotypes.ArtifactSt
 			eval.Missing = append(eval.Missing, kind)
 			eval.Passed = false
 		}
+	}
+	for _, group := range effective.AnyOfKinds {
+		if anyArtifactPresent(artifacts, group) {
+			continue
+		}
+		eval.Missing = append(eval.Missing, group...)
+		eval.Passed = false
 	}
 
 	// Run validators.
@@ -212,6 +222,14 @@ func runValidator(v ArtifactValidator, artifacts euclotypes.ArtifactState) strin
 		if count < minCount {
 			return fmt.Sprintf("min_count: %s has %d items, need %d", v.Kind, count, minCount)
 		}
+	case ValidatorCheckEquals:
+		if fmt.Sprint(payload) != fmt.Sprint(v.Value) {
+			field := string(v.Kind)
+			if v.Field != "" {
+				field += "." + v.Field
+			}
+			return fmt.Sprintf("equals: %s = %v, want %v", field, payload, v.Value)
+		}
 	default:
 		return fmt.Sprintf("unknown check: %s", v.Check)
 	}
@@ -263,6 +281,15 @@ func sliceLen(v any) int {
 	return 0
 }
 
+func anyArtifactPresent(artifacts euclotypes.ArtifactState, kinds []euclotypes.ArtifactKind) bool {
+	for _, kind := range kinds {
+		if artifacts.Has(kind) {
+			return true
+		}
+	}
+	return false
+}
+
 // toInt converts a value to int, handling common numeric types.
 func toInt(v any) int {
 	switch typed := v.(type) {
@@ -286,12 +313,12 @@ func toInt(v any) int {
 // stricter evidence requirements in modes like debug or tdd.
 func DefaultPhaseGates() map[string][]PhaseGate {
 	return map[string][]PhaseGate{
-		"edit_verify_repair":        editVerifyRepairGates(),
-		"reproduce_localize_patch":  reproduceLocalizePatchGates(),
-		"test_driven_generation":    testDrivenGenerationGates(),
-		"review_suggest_implement":  reviewSuggestImplementGates(),
-		"plan_stage_execute":        planStageExecuteGates(),
-		"trace_execute_analyze":     traceExecuteAnalyzeGates(),
+		"edit_verify_repair":       editVerifyRepairGates(),
+		"reproduce_localize_patch": reproduceLocalizePatchGates(),
+		"test_driven_generation":   testDrivenGenerationGates(),
+		"review_suggest_implement": reviewSuggestImplementGates(),
+		"plan_stage_execute":       planStageExecuteGates(),
+		"trace_execute_analyze":    traceExecuteAnalyzeGates(),
 	}
 }
 
@@ -357,14 +384,11 @@ func reproduceLocalizePatchGates() []PhaseGate {
 			From: PhaseLocalize,
 			To:   PhasePatch,
 			DefaultGate: ArtifactGate{
-				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindAnalyze},
+				AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindAnalyze, euclotypes.ArtifactKindRegressionAnalysis}},
 			},
 			ModeGates: map[string]ArtifactGate{
 				"debug": {
-					RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindAnalyze},
-					Validators: []ArtifactValidator{
-						{Kind: euclotypes.ArtifactKindAnalyze, Check: ValidatorCheckNotEmpty},
-					},
+					AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindAnalyze, euclotypes.ArtifactKindRegressionAnalysis}},
 				},
 			},
 			OnFail: GateFailBlock,
@@ -418,14 +442,11 @@ func reviewSuggestImplementGates() []PhaseGate {
 			From: PhaseReview,
 			To:   PhaseSummarize,
 			DefaultGate: ArtifactGate{
-				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindAnalyze},
+				AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindAnalyze, euclotypes.ArtifactKindReviewFindings}},
 			},
 			ModeGates: map[string]ArtifactGate{
 				"review": {
-					RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindAnalyze},
-					Validators: []ArtifactValidator{
-						{Kind: euclotypes.ArtifactKindAnalyze, Check: ValidatorCheckNotEmpty},
-					},
+					AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindAnalyze, euclotypes.ArtifactKindReviewFindings}},
 				},
 			},
 			OnFail: GateFailWarn,
@@ -440,14 +461,11 @@ func planStageExecuteGates() []PhaseGate {
 			From: PhasePlan,
 			To:   PhaseStage,
 			DefaultGate: ArtifactGate{
-				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindPlan},
+				AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindPlan, euclotypes.ArtifactKindMigrationPlan}},
 			},
 			ModeGates: map[string]ArtifactGate{
 				"planning": {
-					RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindPlan},
-					Validators: []ArtifactValidator{
-						{Kind: euclotypes.ArtifactKindPlan, Check: ValidatorCheckNotEmpty},
-					},
+					AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindPlan, euclotypes.ArtifactKindMigrationPlan}},
 				},
 			},
 			OnFail: GateFailBlock,
@@ -470,14 +488,11 @@ func traceExecuteAnalyzeGates() []PhaseGate {
 			From: PhaseTrace,
 			To:   PhaseAnalyze,
 			DefaultGate: ArtifactGate{
-				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindExplore},
+				AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindExplore, euclotypes.ArtifactKindTrace}},
 			},
 			ModeGates: map[string]ArtifactGate{
 				"debug": {
-					RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindExplore},
-					Validators: []ArtifactValidator{
-						{Kind: euclotypes.ArtifactKindExplore, Check: ValidatorCheckNotEmpty},
-					},
+					AnyOfKinds: [][]euclotypes.ArtifactKind{{euclotypes.ArtifactKindExplore, euclotypes.ArtifactKindTrace}},
 				},
 			},
 			OnFail: GateFailBlock,

@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/gate"
+	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	"github.com/lexcodex/relurpify/named/euclo/orchestrate"
 	"github.com/stretchr/testify/require"
 )
@@ -238,6 +239,220 @@ func TestProfileControllerReturnsPartialResultOnEarlyStop(t *testing.T) {
 	require.False(t, result.Success)
 	require.Contains(t, result.Data["status"].(string), "failed")
 }
+
+func TestProfileControllerSelectsRegressionCapabilityOnlyForRegressionIntake(t *testing.T) {
+	env := testEnv(t)
+	require.NoError(t, env.Registry.Register(profileReadTool{}))
+	require.NoError(t, env.Registry.Register(testutil.FileWriteTool{}))
+	require.NoError(t, env.Registry.Register(profileTestRunnerTool{}))
+	reg := capabilities.NewDefaultCapabilityRegistry(env)
+	pc := orchestrate.NewProfileController(
+		orchestrate.AdaptCapabilityRegistry(reg),
+		gate.DefaultPhaseGates(),
+		env,
+		euclotypes.DefaultExecutionProfileRegistry(),
+		nil,
+	)
+
+	regressionState := core.NewContext()
+	regressionState.Set("euclo.envelope", map[string]any{
+		"instruction": "This used to work but now fails after recent changes",
+	})
+	regressionState.Set("euclo.artifacts", []euclotypes.Artifact{{
+		Kind:    euclotypes.ArtifactKindIntake,
+		Payload: map[string]any{"instruction": "This used to work but now fails after recent changes"},
+	}})
+	regressionEnv := testEnvelope(regressionState)
+	regressionEnv.Mode = euclotypes.ModeResolution{ModeID: "debug"}
+	regressionEnv.Profile = euclotypes.ExecutionProfileSelection{ProfileID: "reproduce_localize_patch"}
+	regressionEnv.Registry = env.Registry
+	regressionEnv.Memory = env.Memory
+	regressionEnv.Environment = env
+
+	_, regressionResult, err := pc.ExecuteProfile(context.Background(), regressionEnv.Profile, regressionEnv.Mode, regressionEnv)
+	require.NoError(t, err)
+	require.NotEmpty(t, regressionResult.CapabilityIDs)
+	require.Equal(t, "euclo:debug.investigate_regression", regressionResult.CapabilityIDs[0])
+
+	normalState := core.NewContext()
+	normalState.Set("euclo.envelope", map[string]any{
+		"instruction": "Debug why TestMultiply is failing",
+	})
+	normalState.Set("euclo.artifacts", []euclotypes.Artifact{{
+		Kind:    euclotypes.ArtifactKindIntake,
+		Payload: map[string]any{"instruction": "Debug why TestMultiply is failing"},
+	}})
+	normalEnv := testEnvelope(normalState)
+	normalEnv.Mode = euclotypes.ModeResolution{ModeID: "debug"}
+	normalEnv.Profile = euclotypes.ExecutionProfileSelection{ProfileID: "reproduce_localize_patch"}
+	normalEnv.Registry = env.Registry
+	normalEnv.Memory = env.Memory
+	normalEnv.Environment = env
+
+	_, normalResult, err := pc.ExecuteProfile(context.Background(), normalEnv.Profile, normalEnv.Mode, normalEnv)
+	require.NoError(t, err)
+	require.NotEmpty(t, normalResult.CapabilityIDs)
+	require.Equal(t, "euclo:reproduce_localize_patch", normalResult.CapabilityIDs[0])
+}
+
+func TestProfileControllerSelectsAPICompatibleRefactorCapabilityForExplicitRefactorIntent(t *testing.T) {
+	env := testEnv(t)
+	require.NoError(t, env.Registry.Register(testutil.FileWriteTool{}))
+	require.NoError(t, env.Registry.Register(profileTestRunnerTool{}))
+	reg := capabilities.NewDefaultCapabilityRegistry(env)
+	pc := orchestrate.NewProfileController(
+		orchestrate.AdaptCapabilityRegistry(reg),
+		gate.DefaultPhaseGates(),
+		env,
+		euclotypes.DefaultExecutionProfileRegistry(),
+		nil,
+	)
+
+	refactorState := core.NewContext()
+	refactorState.Set("euclo.envelope", map[string]any{
+		"instruction": "Refactor by renaming helper to worker while keeping the public API stable",
+	})
+	refactorState.Set("euclo.artifacts", []euclotypes.Artifact{{
+		Kind:    euclotypes.ArtifactKindIntake,
+		Payload: map[string]any{"instruction": "Refactor by renaming helper to worker while keeping the public API stable"},
+	}})
+	refactorEnv := testEnvelope(refactorState)
+	refactorEnv.Mode = euclotypes.ModeResolution{ModeID: "code"}
+	refactorEnv.Profile = euclotypes.ExecutionProfileSelection{ProfileID: "edit_verify_repair"}
+	refactorEnv.Registry = env.Registry
+	refactorEnv.Memory = env.Memory
+	refactorEnv.Environment = env
+	refactorEnv.Task.Context = map[string]any{
+		"context_file_contents": []any{
+			map[string]any{"path": "service.go", "content": "package service\n\nfunc Exported() { helper() }\n\nfunc helper() {}\n"},
+		},
+	}
+	refactorEnv.Task.Instruction = "Refactor by renaming helper to worker while keeping the public API stable"
+
+	_, refactorResult, err := pc.ExecuteProfile(context.Background(), refactorEnv.Profile, refactorEnv.Mode, refactorEnv)
+	require.NoError(t, err)
+	require.NotEmpty(t, refactorResult.CapabilityIDs)
+	require.Equal(t, "euclo:refactor.api_compatible", refactorResult.CapabilityIDs[0])
+
+	normalState := core.NewContext()
+	normalState.Set("euclo.envelope", map[string]any{
+		"instruction": "Rename helper to worker",
+	})
+	normalState.Set("euclo.artifacts", []euclotypes.Artifact{{
+		Kind:    euclotypes.ArtifactKindIntake,
+		Payload: map[string]any{"instruction": "Rename helper to worker"},
+	}})
+	normalEnv := testEnvelope(normalState)
+	normalEnv.Mode = euclotypes.ModeResolution{ModeID: "code"}
+	normalEnv.Profile = euclotypes.ExecutionProfileSelection{ProfileID: "edit_verify_repair"}
+	normalEnv.Registry = env.Registry
+	normalEnv.Memory = env.Memory
+	normalEnv.Environment = env
+
+	_, normalResult, err := pc.ExecuteProfile(context.Background(), normalEnv.Profile, normalEnv.Mode, normalEnv)
+	require.NoError(t, err)
+	require.NotEmpty(t, normalResult.CapabilityIDs)
+	require.Equal(t, "euclo:edit_verify_repair", normalResult.CapabilityIDs[0])
+}
+
+func TestProfileControllerSelectsMigrationCapabilityForMigrationIntake(t *testing.T) {
+	env := testEnv(t)
+	require.NoError(t, env.Registry.Register(profileReadTool{}))
+	require.NoError(t, env.Registry.Register(testutil.FileWriteTool{}))
+	require.NoError(t, env.Registry.Register(profileTestRunnerTool{}))
+	reg := capabilities.NewDefaultCapabilityRegistry(env)
+	pc := orchestrate.NewProfileController(
+		orchestrate.AdaptCapabilityRegistry(reg),
+		gate.DefaultPhaseGates(),
+		env,
+		euclotypes.DefaultExecutionProfileRegistry(),
+		nil,
+	)
+
+	migrationState := core.NewContext()
+	migrationState.Set("euclo.envelope", map[string]any{
+		"instruction": "Execute the dependency migration to SDK v2",
+	})
+	migrationState.Set("euclo.artifacts", []euclotypes.Artifact{{
+		Kind:    euclotypes.ArtifactKindIntake,
+		Payload: map[string]any{"instruction": "Execute the dependency migration to SDK v2"},
+	}})
+	migrationEnv := testEnvelope(migrationState)
+	migrationEnv.Mode = euclotypes.ModeResolution{ModeID: "code"}
+	migrationEnv.Profile = euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
+	migrationEnv.Registry = env.Registry
+	migrationEnv.Memory = env.Memory
+	migrationEnv.Environment = env
+	migrationEnv.Task.Context = map[string]any{
+		"context_file_contents": []any{
+			map[string]any{"path": "go.mod", "content": "module example\n"},
+		},
+	}
+	migrationEnv.Task.Instruction = "Execute the dependency migration to SDK v2"
+
+	_, migrationResult, err := pc.ExecuteProfile(context.Background(), migrationEnv.Profile, migrationEnv.Mode, migrationEnv)
+	require.NoError(t, err)
+	require.NotEmpty(t, migrationResult.CapabilityIDs)
+	require.Equal(t, "euclo:migration.execute", migrationResult.CapabilityIDs[0])
+
+	normalState := core.NewContext()
+	normalState.Set("euclo.envelope", map[string]any{
+		"instruction": "Plan the implementation steps for this feature",
+	})
+	normalState.Set("euclo.artifacts", []euclotypes.Artifact{{
+		Kind:    euclotypes.ArtifactKindIntake,
+		Payload: map[string]any{"instruction": "Plan the implementation steps for this feature"},
+	}})
+	normalEnv := testEnvelope(normalState)
+	normalEnv.Mode = euclotypes.ModeResolution{ModeID: "code"}
+	normalEnv.Profile = euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
+	normalEnv.Registry = env.Registry
+	normalEnv.Memory = env.Memory
+	normalEnv.Environment = env
+
+	_, normalResult, err := pc.ExecuteProfile(context.Background(), normalEnv.Profile, normalEnv.Mode, normalEnv)
+	require.NoError(t, err)
+	require.NotEmpty(t, normalResult.CapabilityIDs)
+	require.Equal(t, "euclo:planner.plan", normalResult.CapabilityIDs[0])
+}
+
+type profileTestRunnerTool struct{}
+
+type profileReadTool struct{}
+
+func (profileReadTool) Name() string        { return "file_read" }
+func (profileReadTool) Description() string { return "reads files" }
+func (profileReadTool) Category() string    { return "file" }
+func (profileReadTool) Parameters() []core.ToolParameter {
+	return nil
+}
+func (profileReadTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true}, nil
+}
+func (profileReadTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (profileReadTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "."}},
+	}}
+}
+func (profileReadTool) Tags() []string { return []string{"read"} }
+
+func (profileTestRunnerTool) Name() string        { return "go_test" }
+func (profileTestRunnerTool) Description() string { return "runs go tests" }
+func (profileTestRunnerTool) Category() string    { return "exec" }
+func (profileTestRunnerTool) Parameters() []core.ToolParameter {
+	return nil
+}
+func (profileTestRunnerTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true}, nil
+}
+func (profileTestRunnerTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (profileTestRunnerTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: &core.PermissionSet{
+		Executables: []core.ExecutablePermission{{Binary: "go"}},
+	}}
+}
+func (profileTestRunnerTool) Tags() []string { return []string{"test"} }
 
 func TestProfileControllerRecordsObservability(t *testing.T) {
 	reg := capabilities.NewEucloCapabilityRegistry()

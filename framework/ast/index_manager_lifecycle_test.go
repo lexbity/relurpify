@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -165,6 +166,44 @@ func TestIndexManagerIndexWorkspaceMarksReady(t *testing.T) {
 	}
 	if meta == nil {
 		t.Fatal("expected indexed file metadata")
+	}
+}
+
+func TestIndexManagerIndexWorkspaceParallelReturnsWithoutDeadlockOnErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	if err != nil {
+		t.Fatalf("sqlite init failed: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
+		}
+	})
+
+	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir, ParallelWorkers: 2})
+	for i := 0; i < 8; i++ {
+		path := filepath.Join(tmpDir, "bad", fmt.Sprintf("script_%d.py", i))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte("print('hi')\n"), 0o644); err != nil {
+			t.Fatalf("write file %d: %v", i, err)
+		}
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- manager.IndexWorkspaceContext(context.Background())
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected indexing error for unsupported files")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for parallel indexing to finish")
 	}
 }
 

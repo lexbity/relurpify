@@ -41,46 +41,58 @@ func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capab
 	return envelope
 }
 
+// ClassifyTask performs keyword-based classification for backward compatibility.
+// For confidence-scored classification with ambiguity detection, use ClassifyTaskScored.
 func ClassifyTask(envelope TaskEnvelope) TaskClassification {
-	lower := strings.ToLower(envelope.Instruction)
-	intents := make([]string, 0, 3)
-	reasons := make([]string, 0, 6)
-	addIntent := func(intent string) {
-		intent = strings.TrimSpace(intent)
-		if intent == "" {
-			return
+	scored := ClassifyTaskScored(envelope)
+	return scored.TaskClassification
+}
+
+// ClassifyTaskScored performs signal-based classification with confidence scoring
+// and ambiguity detection. Returns ranked mode candidates with the signals that
+// contributed to each score.
+func ClassifyTaskScored(envelope TaskEnvelope) ScoredClassification {
+	signals := CollectSignals(envelope)
+	candidates := ScoreSignals(signals)
+
+	// Build intents from candidates for backward compat.
+	intents := make([]string, 0, len(candidates))
+	reasons := make([]string, 0, len(signals))
+	for _, c := range candidates {
+		intents = append(intents, c.Mode)
+	}
+	for _, s := range signals {
+		reasons = append(reasons, s.Kind+":"+s.Value)
+	}
+
+	// Default to code if no keyword/task_structure/error_text signals fired.
+	hasStrongSignal := false
+	for _, s := range signals {
+		if s.Kind == "keyword" || s.Kind == "task_structure" || s.Kind == "error_text" || s.Kind == "context_hint" {
+			hasStrongSignal = true
+			break
 		}
-		for _, existing := range intents {
-			if existing == intent {
-				return
-			}
+	}
+	if !hasStrongSignal {
+		// Inject a baseline code signal so it wins over weak workspace signals.
+		signals = append(signals, ClassificationSignal{
+			Kind: "default", Value: "code", Weight: WeightDefault, Mode: "code",
+		})
+		candidates = ScoreSignals(signals)
+		intents = make([]string, 0, len(candidates))
+		for _, c := range candidates {
+			intents = append(intents, c.Mode)
 		}
-		intents = append(intents, intent)
-	}
-	if containsAny(lower, "review", "audit", "inspect") {
-		addIntent("review")
-		reasons = append(reasons, "keyword:review")
-	}
-	if containsAny(lower, "debug", "diagnose", "root cause", "failing", "failure", "trace") {
-		addIntent("debug")
-		reasons = append(reasons, "keyword:debug")
-	}
-	if containsAny(lower, "plan", "design", "architecture", "approach") {
-		addIntent("planning")
-		reasons = append(reasons, "keyword:planning")
-	}
-	if containsAny(lower, "test first", "tdd", "write tests", "add tests") {
-		addIntent("tdd")
-		reasons = append(reasons, "keyword:tdd")
-	}
-	if containsAny(lower, "implement", "fix", "change", "refactor", "patch", "update") {
-		addIntent("code")
-		reasons = append(reasons, "keyword:code")
-	}
-	if len(intents) == 0 {
-		addIntent("code")
 		reasons = append(reasons, "default:code")
 	}
+	if len(intents) == 0 {
+		intents = []string{"code"}
+		reasons = append(reasons, "default:code")
+		candidates = []ModeCandidate{{Mode: "code", Score: 0, Signals: []string{"default"}}}
+	}
+
+	lower := strings.ToLower(envelope.Instruction)
+
 	classification := TaskClassification{
 		IntentFamilies:                 intents,
 		RecommendedMode:                intents[0],
@@ -108,7 +120,20 @@ func ClassifyTask(envelope TaskEnvelope) TaskClassification {
 	if envelope.CapabilitySnapshot.HasVerificationTools {
 		classification.ReasonCodes = append(classification.ReasonCodes, "capability:verification_available")
 	}
-	return classification
+
+	// Compute total weight for normalization.
+	totalWeight := 0.0
+	for _, s := range signals {
+		totalWeight += s.Weight
+	}
+
+	return ScoredClassification{
+		TaskClassification: classification,
+		Candidates:         candidates,
+		Confidence:         NormalizeConfidence(candidates, totalWeight),
+		Ambiguous:          IsAmbiguous(candidates),
+		Signals:            signals,
+	}
 }
 
 func ResolveMode(envelope TaskEnvelope, classification TaskClassification, registry *ModeRegistry) ModeResolution {
@@ -199,19 +224,44 @@ func primaryProfileForMode(modeID string, envelope TaskEnvelope, classification 
 	case "planning":
 		return "plan_stage_execute"
 	case "code":
-		if !envelope.EditPermitted {
-			return "plan_stage_execute"
+		return profileForCodeMode(envelope, classification)
+	default:
+		return profileForCodeMode(envelope, classification)
+	}
+}
+
+// profileForCodeMode selects the execution profile for code mode using
+// context-aware heuristics: workspace state, existing artifacts, and scope.
+func profileForCodeMode(envelope TaskEnvelope, classification TaskClassification) string {
+	if !envelope.EditPermitted {
+		return "plan_stage_execute"
+	}
+
+	// Evidence-first: debug signals or explicit verification → investigate first.
+	if classification.RequiresEvidenceBeforeMutation {
+		return "reproduce_localize_patch"
+	}
+
+	// Artifact-aware: plan already exists → execute it directly.
+	for _, kind := range envelope.PreviousArtifactKinds {
+		if strings.Contains(kind, "plan") {
+			return "edit_verify_repair"
 		}
-		if classification.RequiresEvidenceBeforeMutation {
+	}
+
+	// Artifact-aware: reproduction/analysis exists → continue investigation.
+	for _, kind := range envelope.PreviousArtifactKinds {
+		if strings.Contains(kind, "explore") || strings.Contains(kind, "analyze") {
 			return "reproduce_localize_patch"
 		}
-		return "edit_verify_repair"
-	default:
-		if !envelope.EditPermitted {
-			return "plan_stage_execute"
-		}
-		return "edit_verify_repair"
 	}
+
+	// Scope-aware: large scope (>5 files or cross-cutting) → plan first.
+	if classification.Scope == "cross_cutting" {
+		return "plan_stage_execute"
+	}
+
+	return "edit_verify_repair"
 }
 
 func SnapshotCapabilities(registry *capability.Registry) euclotypes.CapabilitySnapshot {

@@ -20,26 +20,38 @@ import (
 type ArtifactKind string
 
 const (
-	ArtifactKindIntake             ArtifactKind = "euclo.intake"
-	ArtifactKindClassification     ArtifactKind = "euclo.classification"
-	ArtifactKindModeResolution     ArtifactKind = "euclo.mode_resolution"
-	ArtifactKindExecutionProfile   ArtifactKind = "euclo.execution_profile"
-	ArtifactKindRetrievalPolicy    ArtifactKind = "euclo.retrieval_policy"
-	ArtifactKindContextExpansion   ArtifactKind = "euclo.context_expansion"
-	ArtifactKindCapabilityRouting  ArtifactKind = "euclo.capability_routing"
-	ArtifactKindVerificationPolicy ArtifactKind = "euclo.verification_policy"
-	ArtifactKindSuccessGate        ArtifactKind = "euclo.success_gate"
-	ArtifactKindActionLog          ArtifactKind = "euclo.action_log"
-	ArtifactKindProofSurface       ArtifactKind = "euclo.proof_surface"
-	ArtifactKindWorkflowRetrieval  ArtifactKind = "euclo.workflow_retrieval"
-	ArtifactKindExplore            ArtifactKind = "euclo.explore"
-	ArtifactKindAnalyze            ArtifactKind = "euclo.analyze"
-	ArtifactKindPlan               ArtifactKind = "euclo.plan"
-	ArtifactKindEditIntent         ArtifactKind = "euclo.edit_intent"
-	ArtifactKindEditExecution      ArtifactKind = "euclo.edit_execution"
-	ArtifactKindVerification       ArtifactKind = "euclo.verification"
-	ArtifactKindFinalReport        ArtifactKind = "euclo.final_report"
-	ArtifactKindRecoveryTrace      ArtifactKind = "euclo.recovery_trace"
+	ArtifactKindIntake                  ArtifactKind = "euclo.intake"
+	ArtifactKindClassification          ArtifactKind = "euclo.classification"
+	ArtifactKindModeResolution          ArtifactKind = "euclo.mode_resolution"
+	ArtifactKindExecutionProfile        ArtifactKind = "euclo.execution_profile"
+	ArtifactKindRetrievalPolicy         ArtifactKind = "euclo.retrieval_policy"
+	ArtifactKindContextExpansion        ArtifactKind = "euclo.context_expansion"
+	ArtifactKindCapabilityRouting       ArtifactKind = "euclo.capability_routing"
+	ArtifactKindVerificationPolicy      ArtifactKind = "euclo.verification_policy"
+	ArtifactKindSuccessGate             ArtifactKind = "euclo.success_gate"
+	ArtifactKindActionLog               ArtifactKind = "euclo.action_log"
+	ArtifactKindProofSurface            ArtifactKind = "euclo.proof_surface"
+	ArtifactKindWorkflowRetrieval       ArtifactKind = "euclo.workflow_retrieval"
+	ArtifactKindExplore                 ArtifactKind = "euclo.explore"
+	ArtifactKindTrace                   ArtifactKind = "euclo.trace"
+	ArtifactKindAnalyze                 ArtifactKind = "euclo.analyze"
+	ArtifactKindReviewFindings          ArtifactKind = "euclo.review_findings"
+	ArtifactKindCompatibilityAssessment ArtifactKind = "euclo.compatibility_assessment"
+	ArtifactKindPlan                    ArtifactKind = "euclo.plan"
+	ArtifactKindMigrationPlan           ArtifactKind = "euclo.migration_plan"
+	ArtifactKindPlanCandidates          ArtifactKind = "euclo.plan_candidates"
+	ArtifactKindEditIntent              ArtifactKind = "euclo.edit_intent"
+	ArtifactKindEditExecution           ArtifactKind = "euclo.edit_execution"
+	ArtifactKindVerification            ArtifactKind = "euclo.verification"
+	ArtifactKindDiffSummary             ArtifactKind = "euclo.diff_summary"
+	ArtifactKindVerificationSummary     ArtifactKind = "euclo.verification_summary"
+	ArtifactKindProfileSelection        ArtifactKind = "euclo.profile_selection"
+	ArtifactKindReproduction            ArtifactKind = "euclo.reproduction"
+	ArtifactKindRootCause               ArtifactKind = "euclo.root_cause"
+	ArtifactKindRootCauseCandidates     ArtifactKind = "euclo.root_cause_candidates"
+	ArtifactKindRegressionAnalysis      ArtifactKind = "euclo.regression_analysis"
+	ArtifactKindFinalReport             ArtifactKind = "euclo.final_report"
+	ArtifactKindRecoveryTrace           ArtifactKind = "euclo.recovery_trace"
 )
 
 // Artifact is Euclo's normalized runtime view over workflow and state outputs.
@@ -86,11 +98,23 @@ func CollectArtifactsFromState(state *core.Context) []Artifact {
 		{Key: "euclo.proof_surface", Kind: ArtifactKindProofSurface},
 		{Key: "pipeline.workflow_retrieval", Kind: ArtifactKindWorkflowRetrieval, Normalize: normalizeWorkflowRetrieval},
 		{Key: "pipeline.explore", Kind: ArtifactKindExplore},
+		{Key: "euclo.trace", Kind: ArtifactKindTrace},
 		{Key: "pipeline.analyze", Kind: ArtifactKindAnalyze},
+		{Key: "euclo.review_findings", Kind: ArtifactKindReviewFindings},
+		{Key: "euclo.compatibility_assessment", Kind: ArtifactKindCompatibilityAssessment},
 		{Key: "pipeline.plan", Kind: ArtifactKindPlan},
+		{Key: "euclo.migration_plan", Kind: ArtifactKindMigrationPlan},
+		{Key: "euclo.plan_candidates", Kind: ArtifactKindPlanCandidates},
 		{Key: "pipeline.code", Kind: ArtifactKindEditIntent, Normalize: normalizeEditIntent},
 		{Key: "euclo.edit_execution", Kind: ArtifactKindEditExecution},
 		{Key: "pipeline.verify", Kind: ArtifactKindVerification},
+		{Key: "euclo.diff_summary", Kind: ArtifactKindDiffSummary},
+		{Key: "euclo.verification_summary", Kind: ArtifactKindVerificationSummary},
+		{Key: "euclo.profile_selection", Kind: ArtifactKindProfileSelection},
+		{Key: "euclo.reproduction", Kind: ArtifactKindReproduction},
+		{Key: "euclo.root_cause", Kind: ArtifactKindRootCause},
+		{Key: "euclo.root_cause_candidates", Kind: ArtifactKindRootCauseCandidates},
+		{Key: "euclo.regression_analysis", Kind: ArtifactKindRegressionAnalysis},
 		{Key: "pipeline.final_output", Kind: ArtifactKindFinalReport},
 	}
 
@@ -233,9 +257,21 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 		ArtifactKindVerificationPolicy,
 		ArtifactKindActionLog,
 		ArtifactKindProofSurface,
+		ArtifactKindTrace,
+		ArtifactKindReviewFindings,
+		ArtifactKindCompatibilityAssessment,
+		ArtifactKindMigrationPlan,
+		ArtifactKindPlanCandidates,
 		ArtifactKindEditIntent,
 		ArtifactKindEditExecution,
 		ArtifactKindVerification,
+		ArtifactKindDiffSummary,
+		ArtifactKindVerificationSummary,
+		ArtifactKindProfileSelection,
+		ArtifactKindReproduction,
+		ArtifactKindRootCause,
+		ArtifactKindRootCauseCandidates,
+		ArtifactKindRegressionAnalysis,
 		ArtifactKindSuccessGate,
 		ArtifactKindFinalReport,
 	}
@@ -262,12 +298,36 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 				report["action_log"] = artifact.Payload
 			case ArtifactKindProofSurface:
 				report["proof_surface"] = artifact.Payload
+			case ArtifactKindTrace:
+				report["trace"] = artifact.Payload
+			case ArtifactKindReviewFindings:
+				report["review_findings"] = artifact.Payload
+			case ArtifactKindCompatibilityAssessment:
+				report["compatibility_assessment"] = artifact.Payload
+			case ArtifactKindMigrationPlan:
+				report["migration_plan"] = artifact.Payload
+			case ArtifactKindPlanCandidates:
+				report["plan_candidates"] = artifact.Payload
 			case ArtifactKindEditIntent:
 				report["edit_intent"] = artifact.Payload
 			case ArtifactKindEditExecution:
 				report["edit_execution"] = artifact.Payload
 			case ArtifactKindVerification:
 				report["verification"] = artifact.Payload
+			case ArtifactKindDiffSummary:
+				report["diff_summary"] = artifact.Payload
+			case ArtifactKindVerificationSummary:
+				report["verification_summary"] = artifact.Payload
+			case ArtifactKindProfileSelection:
+				report["profile_selection"] = artifact.Payload
+			case ArtifactKindReproduction:
+				report["reproduction"] = artifact.Payload
+			case ArtifactKindRootCause:
+				report["root_cause"] = artifact.Payload
+			case ArtifactKindRootCauseCandidates:
+				report["root_cause_candidates"] = artifact.Payload
+			case ArtifactKindRegressionAnalysis:
+				report["regression_analysis"] = artifact.Payload
 			case ArtifactKindSuccessGate:
 				report["success_gate"] = artifact.Payload
 			case ArtifactKindFinalReport:
@@ -959,16 +1019,40 @@ func StateKeyForArtifactKind(kind ArtifactKind) string {
 		return "pipeline.workflow_retrieval"
 	case ArtifactKindExplore:
 		return "pipeline.explore"
+	case ArtifactKindTrace:
+		return "euclo.trace"
 	case ArtifactKindAnalyze:
 		return "pipeline.analyze"
+	case ArtifactKindReviewFindings:
+		return "euclo.review_findings"
+	case ArtifactKindCompatibilityAssessment:
+		return "euclo.compatibility_assessment"
 	case ArtifactKindPlan:
 		return "pipeline.plan"
+	case ArtifactKindMigrationPlan:
+		return "euclo.migration_plan"
+	case ArtifactKindPlanCandidates:
+		return "euclo.plan_candidates"
 	case ArtifactKindEditIntent:
 		return "pipeline.code"
 	case ArtifactKindEditExecution:
 		return "euclo.edit_execution"
 	case ArtifactKindVerification:
 		return "pipeline.verify"
+	case ArtifactKindDiffSummary:
+		return "euclo.diff_summary"
+	case ArtifactKindVerificationSummary:
+		return "euclo.verification_summary"
+	case ArtifactKindProfileSelection:
+		return "euclo.profile_selection"
+	case ArtifactKindReproduction:
+		return "euclo.reproduction"
+	case ArtifactKindRootCause:
+		return "euclo.root_cause"
+	case ArtifactKindRootCauseCandidates:
+		return "euclo.root_cause_candidates"
+	case ArtifactKindRegressionAnalysis:
+		return "euclo.regression_analysis"
 	case ArtifactKindFinalReport:
 		return "pipeline.final_output"
 	case ArtifactKindRecoveryTrace:

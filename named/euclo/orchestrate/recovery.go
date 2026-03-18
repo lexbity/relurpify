@@ -20,11 +20,12 @@ const (
 
 // RecoveryAttempt records a single recovery action within a recovery stack.
 type RecoveryAttempt struct {
-	Level   RecoveryLevel
-	From    string
-	To      string
-	Reason  string
-	Success bool
+	Level    RecoveryLevel
+	Strategy euclotypes.RecoveryStrategy
+	From     string
+	To       string
+	Reason   string
+	Success  bool
 }
 
 // RecoveryStack tracks all recovery attempts during a profile execution,
@@ -127,11 +128,12 @@ func (rc *RecoveryController) attemptParadigmSwitch(
 ) euclotypes.ExecutionResult {
 	if hint.SuggestedParadigm == "" {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelParadigm,
-			From:    paradigmFromFailure(failedResult),
-			To:      "",
-			Reason:  "no suggested paradigm",
-			Success: false,
+			Level:    RecoveryLevelParadigm,
+			Strategy: hint.Strategy,
+			From:     paradigmFromFailure(failedResult),
+			To:       "",
+			Reason:   "no suggested paradigm",
+			Success:  false,
 		})
 		return failedResult
 	}
@@ -140,11 +142,12 @@ func (rc *RecoveryController) attemptParadigmSwitch(
 	producerID := producerIDFromFailure(failedResult)
 	if producerID == "" || rc.Capabilities == nil {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelParadigm,
-			From:    paradigmFromFailure(failedResult),
-			To:      hint.SuggestedParadigm,
-			Reason:  "cannot identify failed capability",
-			Success: false,
+			Level:    RecoveryLevelParadigm,
+			Strategy: hint.Strategy,
+			From:     paradigmFromFailure(failedResult),
+			To:       hint.SuggestedParadigm,
+			Reason:   "cannot identify failed capability",
+			Success:  false,
 		})
 		return failedResult
 	}
@@ -152,11 +155,12 @@ func (rc *RecoveryController) attemptParadigmSwitch(
 	cap, ok := rc.Capabilities.Lookup(producerID)
 	if !ok {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelParadigm,
-			From:    paradigmFromFailure(failedResult),
-			To:      hint.SuggestedParadigm,
-			Reason:  fmt.Sprintf("capability %s not found", producerID),
-			Success: false,
+			Level:    RecoveryLevelParadigm,
+			Strategy: hint.Strategy,
+			From:     paradigmFromFailure(failedResult),
+			To:       hint.SuggestedParadigm,
+			Reason:   fmt.Sprintf("capability %s not found", producerID),
+			Success:  false,
 		})
 		return failedResult
 	}
@@ -173,11 +177,12 @@ func (rc *RecoveryController) attemptParadigmSwitch(
 	result := cap.Execute(ctx, retryEnv)
 	success := result.Status != euclotypes.ExecutionStatusFailed
 	stack.Record(RecoveryAttempt{
-		Level:   RecoveryLevelParadigm,
-		From:    paradigmFromFailure(failedResult),
-		To:      hint.SuggestedParadigm,
-		Reason:  fmt.Sprintf("paradigm switch from %s", paradigmFromFailure(failedResult)),
-		Success: success,
+		Level:    RecoveryLevelParadigm,
+		Strategy: hint.Strategy,
+		From:     paradigmFromFailure(failedResult),
+		To:       hint.SuggestedParadigm,
+		Reason:   fmt.Sprintf("paradigm switch from %s", paradigmFromFailure(failedResult)),
+		Success:  success,
 	})
 	if success {
 		return result
@@ -194,25 +199,14 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 	env euclotypes.ExecutionEnvelope,
 	stack *RecoveryStack,
 ) euclotypes.ExecutionResult {
-	if hint.SuggestedCapability == "" || rc.Capabilities == nil {
+	if rc.Capabilities == nil {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelCapability,
-			From:    producerIDFromFailure(failedResult),
-			To:      hint.SuggestedCapability,
-			Reason:  "no suggested capability or registry unavailable",
-			Success: false,
-		})
-		return failedResult
-	}
-
-	cap, ok := rc.Capabilities.Lookup(hint.SuggestedCapability)
-	if !ok {
-		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelCapability,
-			From:    producerIDFromFailure(failedResult),
-			To:      hint.SuggestedCapability,
-			Reason:  fmt.Sprintf("capability %s not found", hint.SuggestedCapability),
-			Success: false,
+			Level:    RecoveryLevelCapability,
+			Strategy: hint.Strategy,
+			From:     producerIDFromFailure(failedResult),
+			To:       hint.SuggestedCapability,
+			Reason:   "capability registry unavailable",
+			Success:  false,
 		})
 		return failedResult
 	}
@@ -220,30 +214,60 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 	// Check eligibility.
 	artifacts := euclotypes.ArtifactStateFromContext(env.State)
 	snapshot := snapshotFromEnv(env)
-	eligibility := cap.Eligible(artifacts, snapshot)
-	if !eligibility.Eligible {
+
+	candidates := fallbackCapabilitiesFromHint(hint)
+	if len(candidates) == 0 {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelCapability,
-			From:    producerIDFromFailure(failedResult),
-			To:      hint.SuggestedCapability,
-			Reason:  fmt.Sprintf("fallback not eligible: %s", eligibility.Reason),
-			Success: false,
+			Level:    RecoveryLevelCapability,
+			Strategy: hint.Strategy,
+			From:     producerIDFromFailure(failedResult),
+			To:       "",
+			Reason:   "no suggested capability",
+			Success:  false,
 		})
 		return failedResult
 	}
 
-	result := cap.Execute(ctx, env)
-	success := result.Status != euclotypes.ExecutionStatusFailed
-	stack.Record(RecoveryAttempt{
-		Level:   RecoveryLevelCapability,
-		From:    producerIDFromFailure(failedResult),
-		To:      hint.SuggestedCapability,
-		Reason:  "capability fallback",
-		Success: success,
-	})
-	if success {
-		return result
+	failureReason := "no eligible capability in fallback chain"
+	failureTarget := firstFallbackCapability(candidates)
+	for _, candidateID := range candidates {
+		cap, ok := rc.Capabilities.Lookup(candidateID)
+		if !ok {
+			failureReason = fmt.Sprintf("capability %s not found", candidateID)
+			failureTarget = candidateID
+			continue
+		}
+		eligibility := cap.Eligible(artifacts, snapshot)
+		if !eligibility.Eligible {
+			failureReason = fmt.Sprintf("fallback not eligible: %s", eligibility.Reason)
+			failureTarget = candidateID
+			continue
+		}
+		result := cap.Execute(ctx, env)
+		success := result.Status != euclotypes.ExecutionStatusFailed
+		if success {
+			stack.Record(RecoveryAttempt{
+				Level:    RecoveryLevelCapability,
+				Strategy: hint.Strategy,
+				From:     producerIDFromFailure(failedResult),
+				To:       candidateID,
+				Reason:   "capability fallback",
+				Success:  true,
+			})
+			return result
+		}
+		failureReason = "capability fallback"
+		failureTarget = candidateID
 	}
+
+	stack.Record(RecoveryAttempt{
+		Level:    RecoveryLevelCapability,
+		Strategy: hint.Strategy,
+		From:     producerIDFromFailure(failedResult),
+		To:       failureTarget,
+		Reason:   failureReason,
+		Success:  false,
+	})
 	return failedResult
 }
 
@@ -258,11 +282,12 @@ func (rc *RecoveryController) attemptProfileEscalation(
 ) euclotypes.ExecutionResult {
 	if rc.Profiles == nil {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelProfile,
-			From:    env.Profile.ProfileID,
-			To:      "",
-			Reason:  "profile registry unavailable",
-			Success: false,
+			Level:    RecoveryLevelProfile,
+			Strategy: hint.Strategy,
+			From:     env.Profile.ProfileID,
+			To:       "",
+			Reason:   "profile registry unavailable",
+			Success:  false,
 		})
 		return failedResult
 	}
@@ -271,25 +296,27 @@ func (rc *RecoveryController) attemptProfileEscalation(
 	currentDesc, ok := rc.Profiles.Lookup(env.Profile.ProfileID)
 	if !ok || len(currentDesc.FallbackProfiles) == 0 {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelProfile,
-			From:    env.Profile.ProfileID,
-			To:      "",
-			Reason:  "no fallback profiles available",
-			Success: false,
+			Level:    RecoveryLevelProfile,
+			Strategy: hint.Strategy,
+			From:     env.Profile.ProfileID,
+			To:       "",
+			Reason:   "no fallback profiles available",
+			Success:  false,
 		})
 		return failedResult
 	}
 
-	// Try the first fallback profile.
-	fallbackID := currentDesc.FallbackProfiles[0]
+	// Try the preferred fallback profile first when provided.
+	fallbackID := preferredFallbackProfile(hint, currentDesc.FallbackProfiles)
 	fallbackDesc, ok := rc.Profiles.Lookup(fallbackID)
 	if !ok {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelProfile,
-			From:    env.Profile.ProfileID,
-			To:      fallbackID,
-			Reason:  fmt.Sprintf("fallback profile %s not found", fallbackID),
-			Success: false,
+			Level:    RecoveryLevelProfile,
+			Strategy: hint.Strategy,
+			From:     env.Profile.ProfileID,
+			To:       fallbackID,
+			Reason:   fmt.Sprintf("fallback profile %s not found", fallbackID),
+			Success:  false,
 		})
 		return failedResult
 	}
@@ -319,11 +346,12 @@ func (rc *RecoveryController) attemptProfileEscalation(
 
 	if fallbackCap == nil {
 		stack.Record(RecoveryAttempt{
-			Level:   RecoveryLevelProfile,
-			From:    env.Profile.ProfileID,
-			To:      fallbackID,
-			Reason:  "no eligible capability for fallback profile",
-			Success: false,
+			Level:    RecoveryLevelProfile,
+			Strategy: hint.Strategy,
+			From:     env.Profile.ProfileID,
+			To:       fallbackID,
+			Reason:   "no eligible capability for fallback profile",
+			Success:  false,
 		})
 		return failedResult
 	}
@@ -334,16 +362,74 @@ func (rc *RecoveryController) attemptProfileEscalation(
 	result := fallbackCap.Execute(ctx, fallbackEnv)
 	success := result.Status != euclotypes.ExecutionStatusFailed
 	stack.Record(RecoveryAttempt{
-		Level:   RecoveryLevelProfile,
-		From:    env.Profile.ProfileID,
-		To:      fallbackID,
-		Reason:  "profile escalation",
-		Success: success,
+		Level:    RecoveryLevelProfile,
+		Strategy: hint.Strategy,
+		From:     env.Profile.ProfileID,
+		To:       fallbackID,
+		Reason:   "profile escalation",
+		Success:  success,
 	})
 	if success {
 		return result
 	}
 	return failedResult
+}
+
+func fallbackCapabilitiesFromHint(hint euclotypes.RecoveryHint) []string {
+	var out []string
+	if hint.SuggestedCapability != "" {
+		out = append(out, hint.SuggestedCapability)
+	}
+	if hint.Context == nil {
+		return out
+	}
+	if raw, ok := hint.Context["fallback_capabilities"].([]string); ok {
+		out = append(out, raw...)
+		return uniqueRecoveryStrings(out)
+	}
+	if raw, ok := hint.Context["fallback_capabilities"].([]any); ok {
+		for _, item := range raw {
+			if value, ok := item.(string); ok {
+				out = append(out, value)
+			}
+		}
+	}
+	return uniqueRecoveryStrings(out)
+}
+
+func firstFallbackCapability(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func preferredFallbackProfile(hint euclotypes.RecoveryHint, defaults []string) string {
+	if hint.Context != nil {
+		if preferred, ok := hint.Context["preferred_profile"].(string); ok && preferred != "" {
+			return preferred
+		}
+	}
+	if len(defaults) == 0 {
+		return ""
+	}
+	return defaults[0]
+}
+
+func uniqueRecoveryStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 // handleModeEscalation does NOT auto-execute a mode change. Instead, it
@@ -355,11 +441,12 @@ func (rc *RecoveryController) handleModeEscalation(
 	stack *RecoveryStack,
 ) euclotypes.ExecutionResult {
 	stack.Record(RecoveryAttempt{
-		Level:   RecoveryLevelMode,
-		From:    "",
-		To:      "",
-		Reason:  "mode escalation recommended (requires user approval)",
-		Success: false,
+		Level:    RecoveryLevelMode,
+		Strategy: hint.Strategy,
+		From:     "",
+		To:       "",
+		Reason:   "mode escalation recommended (requires user approval)",
+		Success:  false,
 	})
 
 	// Return the original failure with an enriched recovery hint indicating
@@ -382,11 +469,12 @@ func RecoveryTraceArtifact(stack *RecoveryStack, producerID string) euclotypes.A
 	attempts := make([]map[string]any, 0, len(stack.Attempts))
 	for _, a := range stack.Attempts {
 		attempts = append(attempts, map[string]any{
-			"level":   string(a.Level),
-			"from":    a.From,
-			"to":      a.To,
-			"reason":  a.Reason,
-			"success": a.Success,
+			"level":    string(a.Level),
+			"strategy": string(a.Strategy),
+			"from":     a.From,
+			"to":       a.To,
+			"reason":   a.Reason,
+			"success":  a.Success,
 		})
 	}
 	return euclotypes.Artifact{

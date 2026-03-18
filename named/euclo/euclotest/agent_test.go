@@ -12,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	"github.com/stretchr/testify/require"
@@ -142,4 +143,197 @@ func TestAgentExecuteFailsWhenVerificationIsMissingForMutatingProfile(t *testing
 	require.True(t, ok)
 	require.False(t, gate.Allowed)
 	require.Equal(t, "verification_missing", gate.Reason)
+}
+
+func TestAgentExecuteSeedsDebugInteractionSkipState(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: capability.NewRegistry(),
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status":  "pass",
+		"summary": "verification passed",
+		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
+	})
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-skip-debug",
+		Instruction: "panic: runtime error: nil pointer dereference at server.go:42",
+		Context:     map[string]any{"workspace": "/tmp/ws"},
+	}, state)
+	require.NoError(t, err)
+
+	raw, ok := state.Get("euclo.interaction_state")
+	require.True(t, ok)
+	iState, ok := raw.(interaction.InteractionState)
+	require.True(t, ok)
+	require.Equal(t, "debug", iState.Mode)
+	require.Contains(t, iState.SkippedPhases, "intake")
+}
+
+func TestAgentExecuteSeedsCodeFastPathSkipState(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(testutil.FileWriteTool{}))
+
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: registry,
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status":  "pass",
+		"summary": "verification passed",
+		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
+	})
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-skip-code",
+		Instruction: "just do it and rename the function foo to bar in util.go",
+		Context:     map[string]any{"workspace": "/tmp/ws"},
+	}, state)
+	require.NoError(t, err)
+
+	raw, ok := state.Get("euclo.interaction_state")
+	require.True(t, ok)
+	iState, ok := raw.(interaction.InteractionState)
+	require.True(t, ok)
+	require.Equal(t, "code", iState.Mode)
+	require.Contains(t, iState.SkippedPhases, "propose")
+}
+
+func TestAgentExecuteSeedsPlanningFastPathSkipState(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: capability.NewRegistry(),
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+
+	state := core.NewContext()
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-skip-planning",
+		Instruction: "just plan it: add authentication to the API",
+		Context:     map[string]any{"workspace": "/tmp/ws", "mode": "planning"},
+	}, state)
+	require.NoError(t, err)
+
+	raw, ok := state.Get("euclo.interaction_state")
+	require.True(t, ok)
+	iState, ok := raw.(interaction.InteractionState)
+	require.True(t, ok)
+	require.Equal(t, "planning", iState.Mode)
+	require.Contains(t, iState.SkippedPhases, "clarify")
+	require.Contains(t, iState.SkippedPhases, "compare")
+	require.Contains(t, iState.SkippedPhases, "refine")
+}
+
+func TestAgentExecuteScriptedTransitionRejectStaysInCode(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(testutil.FileWriteTool{}))
+
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: registry,
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status":  "pass",
+		"summary": "verification passed",
+		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
+	})
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-transition-reject",
+		Instruction: "add logging to all API handlers",
+		Context: map[string]any{
+			"workspace": "/tmp/ws",
+			"euclo.interaction_script": []map[string]any{
+				{"phase": "understand", "action": "plan_first"},
+				{"kind": "transition", "action": "reject"},
+			},
+		},
+	}, state)
+	require.NoError(t, err)
+
+	raw, ok := state.Get("euclo.interaction_state")
+	require.True(t, ok)
+	iState, ok := raw.(interaction.InteractionState)
+	require.True(t, ok)
+	require.Equal(t, "code", iState.Mode)
+	require.Contains(t, iState.PhasesExecuted, "execute")
+
+	recordingRaw, ok := state.Get("euclo.interaction_recording")
+	require.True(t, ok)
+	recording, ok := recordingRaw.(map[string]any)
+	require.True(t, ok)
+	transitions, ok := recording["transitions"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, transitions, 1)
+}
+
+func TestAgentExecuteScriptedRoundTripCodePlanningCode(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(testutil.FileWriteTool{}))
+
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: registry,
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status":  "pass",
+		"summary": "verification passed",
+		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
+	})
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-transition-roundtrip",
+		Instruction: "add logging to all API handlers",
+		Context: map[string]any{
+			"workspace": "/tmp/ws",
+			"euclo.interaction_script": []map[string]any{
+				{"phase": "understand", "action": "plan_first"},
+				{"kind": "transition", "action": "accept"},
+				{"kind": "transition", "action": "accept"},
+			},
+		},
+	}, state)
+	require.NoError(t, err)
+
+	raw, ok := state.Get("euclo.interaction_state")
+	require.True(t, ok)
+	iState, ok := raw.(interaction.InteractionState)
+	require.True(t, ok)
+	require.Equal(t, "code", iState.Mode)
+	require.Contains(t, iState.PhasesExecuted, "scope")
+	require.Contains(t, iState.PhasesExecuted, "generate")
+	require.Contains(t, iState.PhasesExecuted, "commit")
+	require.Contains(t, iState.PhasesExecuted, "execute")
+
+	recordingRaw, ok := state.Get("euclo.interaction_recording")
+	require.True(t, ok)
+	recording, ok := recordingRaw.(map[string]any)
+	require.True(t, ok)
+	transitions, ok := recording["transitions"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, transitions, 2)
 }

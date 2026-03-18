@@ -108,6 +108,9 @@ func (pc *ProfileController) ExecuteProfile(
 			traceArt := RecoveryTraceArtifact(recoveryStack, "euclo:profile_controller")
 			pcResult.Artifacts = append(pcResult.Artifacts, traceArt)
 			pcResult.RecoveryAttempts = len(recoveryStack.Attempts)
+			if traceArt.Payload != nil {
+				env.State.Set("euclo.recovery_trace", traceArt.Payload)
+			}
 		}
 
 		recordProfileControllerObservability(env.State, pcResult, mode, profile)
@@ -208,6 +211,9 @@ func (pc *ProfileController) ExecuteProfile(
 					traceArt := RecoveryTraceArtifact(recoveryStack, "euclo:profile_controller")
 					pcResult.Artifacts = append(pcResult.Artifacts, traceArt)
 					pcResult.RecoveryAttempts = len(recoveryStack.Attempts)
+					if traceArt.Payload != nil {
+						env.State.Set("euclo.recovery_trace", traceArt.Payload)
+					}
 				}
 				recordProfileControllerObservability(env.State, pcResult, mode, profile)
 				return failedResult(env.Task, capResult, pcResult), pcResult,
@@ -216,6 +222,14 @@ func (pc *ProfileController) ExecuteProfile(
 		}
 	}
 
+	if len(recoveryStack.Attempts) > 0 {
+		traceArt := RecoveryTraceArtifact(recoveryStack, "euclo:profile_controller")
+		pcResult.Artifacts = append(pcResult.Artifacts, traceArt)
+		pcResult.RecoveryAttempts = len(recoveryStack.Attempts)
+		if traceArt.Payload != nil {
+			env.State.Set("euclo.recovery_trace", traceArt.Payload)
+		}
+	}
 	recordProfileControllerObservability(env.State, pcResult, mode, profile)
 	return completedResult(env.Task, pcResult), pcResult, nil
 }
