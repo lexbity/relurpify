@@ -128,23 +128,31 @@ func CarryOverArtifactsFromRules(from *ArtifactBundle, fromMode, toMode string, 
 // ExtractInteractionState builds an InteractionState snapshot from a machine.
 func ExtractInteractionState(m *PhaseMachine) InteractionState {
 	is := InteractionState{
-		Mode:           m.mode,
-		CurrentPhase:   m.CurrentPhase(),
-		PhaseStates:    make(map[string]any),
-		Selections:     make(map[string]string),
-		PhasesExecuted: make([]string, 0, m.current),
+		Mode:         m.mode,
+		CurrentPhase: m.CurrentPhase(),
+		PhaseStates:  make(map[string]any),
+		Selections:   make(map[string]string),
 	}
 	// Copy state entries namespaced by phase.
 	for k, v := range m.state {
 		is.PhaseStates[k] = v
 	}
-	for i := 0; i < m.current && i < len(m.phases); i++ {
-		is.PhasesExecuted = append(is.PhasesExecuted, m.phases[i].ID)
+	if executed := m.ExecutedPhases(); len(executed) > 0 {
+		is.PhasesExecuted = executed
+	} else {
+		is.PhasesExecuted = make([]string, 0, m.current)
+		for i := 0; i < m.current && i < len(m.phases); i++ {
+			is.PhasesExecuted = append(is.PhasesExecuted, m.phases[i].ID)
+		}
 	}
-	// Track skipped phases.
-	for i, p := range m.phases {
-		if i < m.current && p.SkipWhen != nil && p.SkipWhen(m.state, m.artifacts) {
-			is.SkippedPhases = append(is.SkippedPhases, p.ID)
+	if skipped := m.SkippedPhases(); len(skipped) > 0 {
+		is.SkippedPhases = skipped
+	} else {
+		// Fallback for machines built before skipped-phase tracking existed.
+		for i, p := range m.phases {
+			if i < m.current && p.SkipWhen != nil && p.SkipWhen(m.state, m.artifacts) {
+				is.SkippedPhases = append(is.SkippedPhases, p.ID)
+			}
 		}
 	}
 	return is
@@ -159,9 +167,12 @@ func ExtractInteractionResult(m *PhaseMachine) InteractionResult {
 	if toMode, ok := m.state["transition.accepted"].(string); ok {
 		result.TransitionTo = toMode
 	}
-	// Collect executed phase IDs.
-	for i := 0; i < m.current && i < len(m.phases); i++ {
-		result.PhasesExecuted = append(result.PhasesExecuted, m.phases[i].ID)
+	if executed := m.ExecutedPhases(); len(executed) > 0 {
+		result.PhasesExecuted = executed
+	} else {
+		for i := 0; i < m.current && i < len(m.phases); i++ {
+			result.PhasesExecuted = append(result.PhasesExecuted, m.phases[i].ID)
+		}
 	}
 	return result
 }

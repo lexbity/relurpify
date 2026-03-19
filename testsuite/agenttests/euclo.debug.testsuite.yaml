@@ -29,6 +29,7 @@ spec:
     - name: failing_test_investigation
       description: "Debug mode for a failing test — investigate then fix."
       task_type: code_modification
+      tags: [coverage-matrix, debug, reproduce_localize_patch]
       setup:
         files:
           - path: testsuite/fixtures/calc.go

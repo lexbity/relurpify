@@ -76,3 +76,18 @@ spec:
     profile: ci-live
     strict: true
 ```
+
+Coverage-matrix cases use the `coverage-matrix` tag so they can be run as a focused lane:
+
+```
+./dev-agent agenttest run --tag coverage-matrix
+```
+
+The current Euclo coverage matrix is represented by tagged cases for:
+- `code` + `edit_verify_repair`
+- `code` + `reproduce_localize_patch`
+- `debug` + `reproduce_localize_patch`
+- `tdd` + `test_driven_generation`
+- `review` + `review_suggest_implement`
+- `planning` + `plan_stage_execute`
+- `code -> debug`, `planning -> code`, and `code -> planning` transitions

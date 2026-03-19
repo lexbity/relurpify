@@ -64,6 +64,12 @@ func (pc *ProfileController) ExecuteInteractive(
 		}
 	}
 
+	if env.State != nil {
+		if err := maybeResumeInteractiveSession(ctx, machine, env.State, mode.ModeID); err != nil {
+			return nil, nil, fmt.Errorf("interactive resume for mode %q: %w", mode.ModeID, err)
+		}
+	}
+
 	// Run the machine.
 	if err := machine.Run(ctx); err != nil {
 		return nil, nil, fmt.Errorf("interactive execution for mode %q: %w", mode.ModeID, err)
@@ -116,6 +122,32 @@ func (pc *ProfileController) ExecuteInteractive(
 
 	icResult.Result = result
 	return result, icResult, nil
+}
+
+func maybeResumeInteractiveSession(ctx context.Context, machine *interaction.PhaseMachine, state *core.Context, modeID string) error {
+	if machine == nil || state == nil {
+		return nil
+	}
+	if resumed, _ := state.Get("euclo.session_resume_consumed"); resumed == true {
+		return nil
+	}
+	resume := interaction.ExtractSessionResume(state)
+	if resume == nil || resume.Mode == "" || resume.Mode != modeID || resume.LastPhase == "" {
+		return nil
+	}
+	frame := interaction.BuildResumeFrame(resume)
+	if err := machine.Emitter().Emit(ctx, frame); err != nil {
+		return fmt.Errorf("emit resume frame: %w", err)
+	}
+	resp, err := machine.Emitter().AwaitResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("await resume response: %w", err)
+	}
+	if interaction.HandleResumeResponse(resp) == "resume" {
+		interaction.ApplySessionResume(machine, resume)
+		state.Set("euclo.session_resume_consumed", true)
+	}
+	return nil
 }
 
 // ExecuteInteractiveWithTransitions runs interactive execution and handles

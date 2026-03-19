@@ -210,6 +210,8 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 	modeResolution := toStringAnyMap(snapshot.State["euclo.mode_resolution"])
 	profileSelection := toStringAnyMap(snapshot.State["euclo.execution_profile_selection"])
 	interactionRecording := toStringAnyMap(snapshot.State["euclo.interaction_recording"])
+	interactionRecords := toAnySlice(snapshot.State["euclo.interaction_records"])
+	profilePhaseRecords := toAnySlice(snapshot.State["euclo.profile_phase_records"])
 	recoveryTrace := toStringAnyMap(snapshot.State["euclo.recovery_trace"])
 
 	// Mode check.
@@ -280,6 +282,9 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 			}
 		}
 	}
+	if len(euclo.ArtifactChain) > 0 {
+		failures = append(failures, evaluateArtifactChainExpectations(euclo.ArtifactChain, append(append([]any{}, interactionRecords...), profilePhaseRecords...))...)
+	}
 
 	if euclo.RecoveryAttempted && recoveryTrace == nil {
 		failures = append(failures, "expected recovery to be attempted but euclo.recovery_trace is nil")
@@ -330,6 +335,163 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 	}
 
 	return failures
+}
+
+func evaluateArtifactChainExpectations(specs []ArtifactChainSpec, interactionRecords []any) []string {
+	if len(specs) == 0 {
+		return nil
+	}
+	records := collectInteractionPhaseRecords(interactionRecords)
+	if len(records) == 0 {
+		return []string{"euclo.artifact_chain: no interaction records available"}
+	}
+
+	var failures []string
+	for _, spec := range specs {
+		targetKind := normalizeArtifactKind(spec.Kind)
+		if targetKind == "" {
+			failures = append(failures, fmt.Sprintf("euclo.artifact_chain: invalid artifact kind %q", spec.Kind))
+			continue
+		}
+		if spec.ProducedByPhase != "" {
+			record, ok := findInteractionPhaseRecordForProduced(records, strings.TrimSpace(spec.ProducedByPhase), targetKind)
+			if !ok {
+				failures = append(failures, fmt.Sprintf("euclo.artifact_chain: phase %q did not produce %q", spec.ProducedByPhase, targetKind))
+			} else {
+				for _, needle := range spec.ContentContains {
+					if !recordContainsArtifactContent(record.ProducedArtifacts, targetKind, needle) {
+						failures = append(failures, fmt.Sprintf("euclo.artifact_chain: produced artifact %q in phase %q missing %q", targetKind, spec.ProducedByPhase, needle))
+					}
+				}
+			}
+		}
+		if spec.ConsumedByPhase != "" {
+			record, ok := findInteractionPhaseRecordForConsumed(records, strings.TrimSpace(spec.ConsumedByPhase), targetKind)
+			if !ok {
+				failures = append(failures, fmt.Sprintf("euclo.artifact_chain: phase %q did not consume %q", spec.ConsumedByPhase, targetKind))
+			}
+			_ = record
+		}
+	}
+	return failures
+}
+
+type interactionPhaseRecord struct {
+	Phase             string
+	ArtifactsProduced []string
+	ArtifactsConsumed []string
+	ProducedArtifacts []map[string]any
+}
+
+func collectInteractionPhaseRecords(records []any) []interactionPhaseRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]interactionPhaseRecord, 0, len(records))
+	for _, raw := range records {
+		record := toStringAnyMap(raw)
+		if record == nil {
+			continue
+		}
+		phase := strings.TrimSpace(toString(record["phase"]))
+		if phase == "" {
+			continue
+		}
+		out = append(out, interactionPhaseRecord{
+			Phase:             phase,
+			ArtifactsProduced: toStringSlice(record["artifacts_produced"]),
+			ArtifactsConsumed: toStringSlice(record["artifacts_consumed"]),
+			ProducedArtifacts: toMapSlice(record["produced_artifacts"]),
+		})
+	}
+	return out
+}
+
+func findInteractionPhaseRecord(records []interactionPhaseRecord, phase string) (interactionPhaseRecord, bool) {
+	for _, record := range records {
+		if strings.EqualFold(strings.TrimSpace(record.Phase), strings.TrimSpace(phase)) {
+			return record, true
+		}
+	}
+	return interactionPhaseRecord{}, false
+}
+
+func findInteractionPhaseRecordForProduced(records []interactionPhaseRecord, phase, kind string) (interactionPhaseRecord, bool) {
+	for _, record := range records {
+		if !strings.EqualFold(strings.TrimSpace(record.Phase), strings.TrimSpace(phase)) {
+			continue
+		}
+		if stringSliceContainsNormalized(record.ArtifactsProduced, kind) {
+			return record, true
+		}
+	}
+	return interactionPhaseRecord{}, false
+}
+
+func findInteractionPhaseRecordForConsumed(records []interactionPhaseRecord, phase, kind string) (interactionPhaseRecord, bool) {
+	for _, record := range records {
+		if !strings.EqualFold(strings.TrimSpace(record.Phase), strings.TrimSpace(phase)) {
+			continue
+		}
+		if stringSliceContainsNormalized(record.ArtifactsConsumed, kind) {
+			return record, true
+		}
+	}
+	return interactionPhaseRecord{}, false
+}
+
+func recordContainsArtifactContent(artifacts []map[string]any, kind, needle string) bool {
+	needle = strings.TrimSpace(needle)
+	if needle == "" {
+		return true
+	}
+	for _, artifact := range artifacts {
+		if normalizeArtifactKind(toString(artifact["kind"])) != kind {
+			continue
+		}
+		summary := strings.TrimSpace(toString(artifact["summary"]))
+		if strings.Contains(summary, needle) {
+			return true
+		}
+		payloadBytes, err := json.Marshal(artifact["payload"])
+		if err == nil && strings.Contains(string(payloadBytes), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeArtifactKind(kind string) string {
+	kind = strings.TrimSpace(strings.ToLower(kind))
+	switch kind {
+	case "":
+		return ""
+	case "exploration":
+		return "euclo.explore"
+	case "analysis":
+		return "euclo.analyze"
+	case "plan_candidates":
+		return "euclo.plan_candidates"
+	case "plan":
+		return "euclo.plan"
+	case "edit_intent":
+		return "euclo.edit_intent"
+	case "verification":
+		return "euclo.verification"
+	}
+	if strings.HasPrefix(kind, "euclo.") {
+		return kind
+	}
+	return "euclo." + kind
+}
+
+func stringSliceContainsNormalized(slice []string, target string) bool {
+	for _, s := range slice {
+		if normalizeArtifactKind(s) == target {
+			return true
+		}
+	}
+	return false
 }
 
 func collectArtifactKinds(snapshot *core.ContextSnapshot) []string {
@@ -438,6 +600,20 @@ func toStringAnyMap(raw any) map[string]any {
 	var out map[string]any
 	if err := json.Unmarshal(data, &out); err != nil {
 		return nil
+	}
+	return out
+}
+
+func toMapSlice(raw any) []map[string]any {
+	values := toAnySlice(raw)
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		if typed := toStringAnyMap(value); typed != nil {
+			out = append(out, typed)
+		}
 	}
 	return out
 }

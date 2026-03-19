@@ -29,6 +29,7 @@ spec:
     - name: basic_edit_task
       description: "Full code mode interaction flow for a simple edit."
       task_type: code_modification
+      tags: [coverage-matrix, code, edit_verify_repair]
       setup:
         files:
           - path: testsuite/fixtures/hello.go
@@ -61,6 +62,62 @@ spec:
           phases_executed:
             - intent
             - propose
+
+    - name: code_evidence_first_upgrade
+      description: "Code mode should upgrade into the evidence-first profile when failing-test evidence is present."
+      task_type: code_modification
+      tags: [coverage-matrix, code, reproduce_localize_patch]
+      setup:
+        files:
+          - path: testsuite/fixtures/calculator.go
+            content: |
+              package main
+
+              func Add(a, b int) int {
+                return a - b
+              }
+          - path: testsuite/fixtures/calculator_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+                if got := Add(2, 3); got != 5 {
+                  t.Errorf("got %d want 5", got)
+                }
+              }
+      prompt: "The API is returning wrong results. Fix the calculation in testsuite/fixtures/calculator.go so TestAdd passes."
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/calculator.go
+            content: |
+              package main
+
+              func Add(a, b int) int {
+                return a - b
+              }
+          - path: testsuite/fixtures/calculator_test.go
+            content: |
+              package main
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+                if got := Add(2, 3); got != 5 {
+                  t.Errorf("got %d want 5", got)
+                }
+              }
+      expect:
+        must_succeed: true
+        files_changed: ["testsuite/fixtures/calculator.go"]
+        files_contain:
+          - path: testsuite/fixtures/calculator.go
+            contains: ["a + b"]
+        euclo:
+          mode: code
+          profile: reproduce_localize_patch
 
     - name: edit_with_verification
       description: "Code mode with verification step."

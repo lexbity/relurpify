@@ -6,18 +6,19 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )
 
 // SessionResume holds the information needed to resume an interactive session.
 type SessionResume struct {
-	Mode             string            `json:"mode"`
-	LastPhase        string            `json:"last_phase"`
-	CompletedPhases  []string          `json:"completed_phases"`
-	SkippedPhases    []string          `json:"skipped_phases"`
-	PhaseStates      map[string]any    `json:"phase_states"`
-	Selections       map[string]string `json:"selections"`
-	HasArtifacts     bool              `json:"has_artifacts"`
-	ArtifactKinds    []string          `json:"artifact_kinds"`
+	Mode            string            `json:"mode"`
+	LastPhase       string            `json:"last_phase"`
+	CompletedPhases []string          `json:"completed_phases"`
+	SkippedPhases   []string          `json:"skipped_phases"`
+	PhaseStates     map[string]any    `json:"phase_states"`
+	Selections      map[string]string `json:"selections"`
+	HasArtifacts    bool              `json:"has_artifacts"`
+	ArtifactKinds   []string          `json:"artifact_kinds"`
 }
 
 // ExtractSessionResume builds a SessionResume from persisted state.
@@ -64,6 +65,18 @@ func ExtractSessionResume(state *core.Context) *SessionResume {
 				}
 			}
 		}
+		for _, key := range []string{"phases_executed", "completed_phases", "phases_completed"} {
+			if values, ok := typed[key].([]any); ok {
+				for _, v := range values {
+					if s, ok := v.(string); ok {
+						is.PhasesExecuted = append(is.PhasesExecuted, s)
+					}
+				}
+				if len(is.PhasesExecuted) > 0 {
+					break
+				}
+			}
+		}
 		return sessionResumeFromState(is, state)
 	}
 	return nil
@@ -75,11 +88,12 @@ func sessionResumeFromState(is InteractionState, state *core.Context) *SessionRe
 	}
 
 	resume := &SessionResume{
-		Mode:          is.Mode,
-		LastPhase:     is.CurrentPhase,
-		SkippedPhases: is.SkippedPhases,
-		PhaseStates:   is.PhaseStates,
-		Selections:    is.Selections,
+		Mode:            is.Mode,
+		LastPhase:       is.CurrentPhase,
+		CompletedPhases: append([]string{}, is.PhasesExecuted...),
+		SkippedPhases:   is.SkippedPhases,
+		PhaseStates:     is.PhaseStates,
+		Selections:      is.Selections,
 	}
 
 	// Collect artifact kinds from state.
@@ -88,6 +102,12 @@ func sessionResumeFromState(is InteractionState, state *core.Context) *SessionRe
 			resume.HasArtifacts = true
 			// Type may vary ([]Artifact or []any after persistence).
 			switch typed := raw.(type) {
+			case []euclotypes.Artifact:
+				for _, item := range typed {
+					if item.Kind != "" {
+						resume.ArtifactKinds = append(resume.ArtifactKinds, string(item.Kind))
+					}
+				}
 			case []any:
 				for _, item := range typed {
 					if m, ok := item.(map[string]any); ok {
@@ -108,7 +128,7 @@ func BuildResumeFrame(resume *SessionResume) InteractionFrame {
 	question := fmt.Sprintf("Resume %s mode from %s phase?", resume.Mode, resume.LastPhase)
 
 	return InteractionFrame{
-		Kind:  FrameQuestion,
+		Kind:  FrameSessionResume,
 		Mode:  resume.Mode,
 		Phase: "resume",
 		Content: QuestionContent{
@@ -145,6 +165,9 @@ func ApplySessionResume(machine *PhaseMachine, resume *SessionResume) {
 	machine.State()["session.last_phase"] = resume.LastPhase
 	if len(resume.CompletedPhases) > 0 {
 		machine.State()["session.completed_phases"] = resume.CompletedPhases
+	}
+	if resume.LastPhase != "" {
+		_ = machine.JumpToPhase(resume.LastPhase)
 	}
 }
 

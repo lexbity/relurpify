@@ -2,15 +2,15 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.recovery
-  description: "Quarantined Euclo recovery-path recording templates."
+  description: "Euclo recovery-path tests captured from live runs and replayed via golden tapes."
   owner: agent-platform
-  tier: quarantined
-  quarantined: true
+  tier: live-flaky
+  quarantined: false
 spec:
   agent_name: euclo
   manifest: relurpify_cfg/agent.manifest.yaml
   execution:
-    profile: developer-live
+    profile: ci-live
     strict: false
     timeout: 180s
   workspace:
@@ -24,53 +24,98 @@ spec:
     - name: qwen2.5-coder:14b
       endpoint: http://localhost:11434
   recording:
-    strategy: live
-    mode: off
+    strategy: replay-if-golden
+  # NOTE: Recovery tests are intentionally replay-first.
+  # Capture goldens by rerunning live refreshes until a run naturally exercises recovery:
+  #   go run ./app/dev-agent-cli agenttest refresh \
+  #     --suite testsuite/agenttests/euclo.recovery.testsuite.yaml \
+  #     --tag recovery \
+  #     --max-retries 5
+  # Then promote the successful run's tapes if needed:
+  #   go run ./app/dev-agent-cli agenttest promote \
+  #     --suite testsuite/agenttests/euclo.recovery.testsuite.yaml \
+  #     --run <run-dir> \
+  #     --all
+  # The paradigm-switch case also uses a low max_iterations cap as a deterministic forcing path.
   cases:
-    - name: verification_failure_triggers_mode_escalation
-      description: "Recovery template: a failed code edit should surface mode escalation and emit a recovery trace."
+    - name: recovery_paradigm_switch_iteration_cap
+      description: "Low iteration cap should force ReAct non-convergence and record paradigm-switch recovery."
       task_type: code_modification
       timeout: 180s
-      tags: [recovery, code-to-debug]
+      tags: [recovery, paradigm-switch]
       setup:
         files:
-          - path: testsuite/fixtures/recovery_divide.go
+          - path: testsuite/fixtures/recovery_pipeline.go
             content: |
-              package main
+              package pipeline
 
-              func Divide(a, b int) int {
-                return a / b
+              import "strings"
+
+              type Step struct {
+                Name string
+                Run  func(string) string
               }
-          - path: testsuite/fixtures/recovery_divide_test.go
+
+              type Pipeline struct {
+                Steps []Step
+              }
+
+              func (p Pipeline) Process(input string) string {
+                value := strings.TrimSpace(input)
+                for _, step := range p.Steps {
+                  if step.Run != nil {
+                    value = step.Run(value)
+                  }
+                }
+                return value
+              }
+
+              func DefaultPipeline() Pipeline {
+                return Pipeline{
+                  Steps: []Step{
+                    {
+                      Name: "normalize",
+                      Run: func(input string) string {
+                        return strings.ToLower(strings.TrimSpace(input))
+                      },
+                    },
+                    {
+                      Name: "dedupe-spaces",
+                      Run: func(input string) string {
+                        return strings.Join(strings.Fields(input), " ")
+                      },
+                    },
+                  },
+                }
+              }
+          - path: testsuite/fixtures/recovery_pipeline_test.go
             content: |
-              package main
+              package pipeline
 
               import "testing"
 
-              func TestDivide(t *testing.T) {
-                if Divide(10, 3) != 3 {
-                  t.Errorf("got %d, want 3", Divide(10, 3))
+              func TestDefaultPipeline(t *testing.T) {
+                got := DefaultPipeline().Process("  HELLO   STREAM  ")
+                if got != "hello stream" {
+                  t.Fatalf("got %q", got)
                 }
               }
-
-              func TestDivideByZero(t *testing.T) {
-                if Divide(1, 0) != 0 {
-                  t.Fatal("expected graceful zero division handling")
-                }
-              }
-      prompt: "Fix Divide to return 0 on division by zero. Verify the behavior and, if verification fails, switch into the appropriate debugging path."
+      prompt: "Refactor the pipeline in testsuite/fixtures/recovery_pipeline.go to support streaming-style processing with a clearer step model. Keep the current behavior intact."
       context:
         euclo.mode: code
+        euclo.force_recovery: paradigm_switch
+      overrides:
+        max_iterations: 3
       expect:
-        must_succeed: true
+        must_succeed: false
         euclo:
           mode: code
           recovery_attempted: true
           recovery_strategies:
-            - mode_escalation
+            - paradigm_switch
 
-    - name: regression_investigation_prefers_capability_fallback
-      description: "Recovery template: regression investigation should capture a capability fallback when the first approach is weak."
+    - name: recovery_capability_fallback
+      description: "Regression investigation should capture capability fallback when the first localization path is weak."
       task_type: analysis
       timeout: 180s
       tags: [recovery, capability-fallback]
@@ -86,8 +131,9 @@ spec:
       prompt: "This used to work before recent changes. Investigate the regression in Multiply, and if the first investigation path is inconclusive, fall back to the stronger debug capability."
       context:
         euclo.mode: debug
+        euclo.force_recovery: capability_fallback
       expect:
-        must_succeed: true
+        must_succeed: false
         euclo:
           mode: debug
           recovery_attempted: true

@@ -150,6 +150,13 @@ func newAgentTestRunCmd() *cobra.Command {
 				} else {
 					fmt.Fprintf(cmd.OutOrStdout(), "%s [%s]: %d/%d passed (%d infra, %d assertion, %dms) (artifacts: %s)\n", filepath.Base(suite.SourcePath), rep.Profile, passed, total, rep.InfraFailures, rep.AssertFailures, rep.DurationMS, artifactDir)
 				}
+				if rep.Performance.CasesWithBaseline > 0 {
+					if rep.Performance.CasesAboveBaseline > 0 {
+						fmt.Fprintf(cmd.OutOrStdout(), "  Performance: %d within baseline, %d above baseline\n", rep.Performance.CasesWithinBaseline, rep.Performance.CasesAboveBaseline)
+					} else {
+						fmt.Fprintf(cmd.OutOrStdout(), "  Performance: %d within baseline\n", rep.Performance.CasesWithinBaseline)
+					}
+				}
 			}
 			if hadFailures {
 				return fmt.Errorf("one or more agenttest suites failed in strict mode (%d infra failures, %d assertion/agent failures)", totalInfraFailures, totalAssertFailures)
@@ -222,6 +229,7 @@ func newAgentTestPromoteCmd() *cobra.Command {
 func newAgentTestRefreshCmd() *cobra.Command {
 	var suitePath string
 	var caseName string
+	var tags []string
 	var model string
 	var endpoint string
 	var outDir string
@@ -242,19 +250,9 @@ func newAgentTestRefreshCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if strings.TrimSpace(caseName) != "" {
-				filtered := *suite
-				filtered.Spec = suite.Spec
-				filtered.Spec.Cases = nil
-				for _, c := range suite.Spec.Cases {
-					if c.Name == caseName {
-						filtered.Spec.Cases = append(filtered.Spec.Cases, c)
-					}
-				}
-				if len(filtered.Spec.Cases) == 0 {
-					return fmt.Errorf("case %q not found in suite %s", caseName, suitePath)
-				}
-				suite = &filtered
+			suite, err = filterRefreshSuiteCases(suite, caseName, tags)
+			if err != nil {
+				return fmt.Errorf("%s: %w", suitePath, err)
 			}
 			suite.Spec.Recording.Strategy = "live"
 			suite.Spec.Recording.Mode = "record"
@@ -292,6 +290,7 @@ func newAgentTestRefreshCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&suitePath, "suite", "", "Path to a testsuite YAML")
 	cmd.Flags().StringVar(&caseName, "case", "", "Refresh a single case by name")
+	cmd.Flags().StringArrayVar(&tags, "tag", nil, "Only refresh cases carrying at least one matching tag (repeatable)")
 	cmd.Flags().StringVar(&model, "model", "", "Override model name for the refresh run")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Override Ollama endpoint for the refresh run")
 	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts")
@@ -300,6 +299,38 @@ func newAgentTestRefreshCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", false, "Skip AST/bootstrap indexing during setup")
 	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case")
 	return cmd
+}
+
+func filterRefreshSuiteCases(suite *agenttest.Suite, caseName string, tags []string) (*agenttest.Suite, error) {
+	if suite == nil {
+		return nil, errors.New("suite is required")
+	}
+	filtered := agenttest.FilterSuiteCasesByTags(suite, tags)
+	if strings.TrimSpace(caseName) == "" {
+		if len(filtered.Spec.Cases) == 0 {
+			if len(tags) == 0 {
+				return nil, errors.New("suite has no cases")
+			}
+			return nil, fmt.Errorf("no cases matched tags %s", strings.Join(tags, ", "))
+		}
+		return filtered, nil
+	}
+
+	selected := *filtered
+	selected.Spec = filtered.Spec
+	selected.Spec.Cases = nil
+	for _, c := range filtered.Spec.Cases {
+		if c.Name == caseName {
+			selected.Spec.Cases = append(selected.Spec.Cases, c)
+		}
+	}
+	if len(selected.Spec.Cases) == 0 {
+		if len(tags) == 0 {
+			return nil, fmt.Errorf("case %q not found", caseName)
+		}
+		return nil, fmt.Errorf("case %q not found after applying tags %s", caseName, strings.Join(tags, ", "))
+	}
+	return &selected, nil
 }
 
 func newAgentTestTapesCmd() *cobra.Command {
@@ -398,6 +429,13 @@ func promoteAgentTestRun(workspace, suitePath, runDir, caseName string, all bool
 			return err
 		}
 		fmt.Fprintf(stdout, "promoted %s -> %s\n", srcTape, destTape)
+		destBaseline := filepath.Join(filepath.Dir(destTape), agenttest.GoldenBaselineFilename(cr.Name, cr.Model))
+		if baseline := agenttest.BuildPerformanceBaseline(cr, cr.FinishedAt); baseline != nil {
+			if err := agenttest.WritePerformanceBaseline(destBaseline, baseline); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "promoted baseline %s\n", destBaseline)
+		}
 		srcInteractionTape := filepath.Join(cr.ArtifactsDir, "interaction.tape.jsonl")
 		if _, err := os.Stat(srcInteractionTape); err == nil {
 			destInteractionTape := strings.TrimSuffix(destTape, ".tape.jsonl") + ".interaction.tape.jsonl"

@@ -14,9 +14,13 @@ type simpleHandler struct {
 	stateKey   string
 	stateValue any
 	artifacts  []euclotypes.Artifact
+	called     *int
 }
 
 func (h *simpleHandler) Execute(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+	if h.called != nil {
+		*h.called = *h.called + 1
+	}
 	updates := map[string]any{}
 	if h.stateKey != "" {
 		updates[h.stateKey] = h.stateValue
@@ -224,6 +228,70 @@ func TestExecuteInteractive_PersistsProposalAsPlan(t *testing.T) {
 	}
 	if payload["source"] != "interaction.propose" {
 		t.Fatalf("pipeline.plan source: got %v", payload["source"])
+	}
+}
+
+func TestExecuteInteractive_ResumesFromPersistedPhase(t *testing.T) {
+	pc := &ProfileController{}
+	emitter := interaction.NewTestFrameEmitter(interaction.ScriptedResponse{
+		Kind:     string(interaction.FrameSessionResume),
+		ActionID: "resume",
+	})
+
+	var scopeCalls, generateCalls, commitCalls int
+	reg := interaction.NewModeMachineRegistry()
+	reg.Register("planning", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+			Mode:     "planning",
+			Emitter:  emitter,
+			Resolver: resolver,
+			Phases: []interaction.PhaseDefinition{
+				{ID: "scope", Label: "Scope", Handler: &simpleHandler{stateKey: "scope.done", stateValue: true, called: &scopeCalls}},
+				{ID: "clarify", Label: "Clarify", Handler: &simpleHandler{stateKey: "clarify.done", stateValue: true}},
+				{ID: "generate", Label: "Generate", Handler: &simpleHandler{stateKey: "generate.done", stateValue: true, called: &generateCalls}},
+				{ID: "commit", Label: "Commit", Handler: &simpleHandler{stateKey: "commit.done", stateValue: true, called: &commitCalls}},
+			},
+		})
+	})
+
+	state := core.NewContext()
+	state.Set("euclo.interaction_state", map[string]any{
+		"mode":            "planning",
+		"current_phase":   "generate",
+		"phases_executed": []any{"scope", "clarify"},
+		"phase_states": map[string]any{
+			"scope.done":   true,
+			"clarify.done": true,
+		},
+	})
+
+	mode := euclotypes.ModeResolution{ModeID: "planning", Source: "test"}
+	env := euclotypes.ExecutionEnvelope{
+		Task:    &core.Task{ID: "resume-1", Instruction: "plan and implement rate limiting"},
+		Mode:    mode,
+		Profile: euclotypes.ExecutionProfileSelection{ProfileID: "default"},
+		State:   state,
+	}
+
+	_, icResult, err := pc.ExecuteInteractive(ctx(), reg, mode, env, emitter)
+	if err != nil {
+		t.Fatalf("ExecuteInteractive: %v", err)
+	}
+	if scopeCalls != 0 {
+		t.Fatalf("expected scope not to rerun, got %d calls", scopeCalls)
+	}
+	if generateCalls != 1 || commitCalls != 1 {
+		t.Fatalf("expected generate/commit to run once, got generate=%d commit=%d", generateCalls, commitCalls)
+	}
+	if len(icResult.PhasesExecuted) != 2 || icResult.PhasesExecuted[0] != "generate" || icResult.PhasesExecuted[1] != "commit" {
+		t.Fatalf("expected resumed phases [generate commit], got %v", icResult.PhasesExecuted)
+	}
+	resumed, ok := icResult.InteractionState.PhaseStates["session.resumed"].(bool)
+	if !ok || !resumed {
+		t.Fatal("expected resumed session flag in interaction state")
+	}
+	if got := emitter.Frames(); len(got) != 1 || got[0].Kind != interaction.FrameSessionResume {
+		t.Fatalf("expected one session_resume frame, got %v", got)
 	}
 }
 

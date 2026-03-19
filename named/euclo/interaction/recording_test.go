@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )
 
 func TestInteractionRecording_RecordAndRetrieve(t *testing.T) {
@@ -187,5 +189,35 @@ func TestInteractionRecording_ToJSONLines(t *testing.T) {
 	}
 	if record.Kind != "proposal" || record.Phase != "scope" || record.Mode != "code" {
 		t.Fatalf("unexpected interaction record: %+v", record)
+	}
+}
+
+func TestInteractionRecording_RecordPhaseArtifacts(t *testing.T) {
+	rec := NewInteractionRecording()
+	rec.RecordFrame(InteractionFrame{Kind: FrameSummary, Phase: "commit", Mode: "planning"})
+	rec.RecordPhaseArtifacts("commit", "planning",
+		[]euclotypes.Artifact{{
+			Kind:    euclotypes.ArtifactKindPlan,
+			Summary: "rate limit plan",
+			Payload: map[string]any{"steps": []string{"add limiter"}},
+		}},
+		[]euclotypes.ArtifactKind{euclotypes.ArtifactKindExplore},
+	)
+
+	records := rec.Records()
+	if len(records) != 1 {
+		t.Fatalf("records: got %d, want 1", len(records))
+	}
+	if len(records[0].ArtifactsProduced) != 1 || records[0].ArtifactsProduced[0] != "euclo.plan" {
+		t.Fatalf("unexpected produced artifacts: %+v", records[0].ArtifactsProduced)
+	}
+	if len(records[0].ArtifactsConsumed) != 1 || records[0].ArtifactsConsumed[0] != "euclo.explore" {
+		t.Fatalf("unexpected consumed artifacts: %+v", records[0].ArtifactsConsumed)
+	}
+	if len(records[0].ProducedArtifacts) != 1 || records[0].ProducedArtifacts[0].Kind != "euclo.plan" {
+		t.Fatalf("unexpected produced artifact details: %+v", records[0].ProducedArtifacts)
+	}
+	if !strings.Contains(string(records[0].ProducedArtifacts[0].Payload), "limiter") {
+		t.Fatalf("expected artifact payload to be recorded, got %s", string(records[0].ProducedArtifacts[0].Payload))
 	}
 }

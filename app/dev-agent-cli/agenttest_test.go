@@ -12,6 +12,41 @@ import (
 	"github.com/lexcodex/relurpify/testsuite/agenttest"
 )
 
+func TestFilterRefreshSuiteCasesByTag(t *testing.T) {
+	suite := &agenttest.Suite{
+		Spec: agenttest.SuiteSpec{
+			Cases: []agenttest.CaseSpec{
+				{Name: "recovery_case", Tags: []string{"recovery"}},
+				{Name: "stable_case", Tags: []string{"stable"}},
+			},
+		},
+	}
+
+	filtered, err := filterRefreshSuiteCases(suite, "", []string{"recovery"})
+	if err != nil {
+		t.Fatalf("filterRefreshSuiteCases: %v", err)
+	}
+	if len(filtered.Spec.Cases) != 1 || filtered.Spec.Cases[0].Name != "recovery_case" {
+		t.Fatalf("unexpected filtered cases: %+v", filtered.Spec.Cases)
+	}
+}
+
+func TestFilterRefreshSuiteCasesRejectsCaseMissAfterTagFilter(t *testing.T) {
+	suite := &agenttest.Suite{
+		Spec: agenttest.SuiteSpec{
+			Cases: []agenttest.CaseSpec{
+				{Name: "recovery_case", Tags: []string{"recovery"}},
+				{Name: "stable_case", Tags: []string{"stable"}},
+			},
+		},
+	}
+
+	_, err := filterRefreshSuiteCases(suite, "stable_case", []string{"recovery"})
+	if err == nil || !strings.Contains(err.Error(), `case "stable_case" not found after applying tags recovery`) {
+		t.Fatalf("expected tag-filtered case miss, got %v", err)
+	}
+}
+
 func TestPromoteAgentTestRunCopiesPassingTapeToGoldenDir(t *testing.T) {
 	workspace := t.TempDir()
 	suitePath := filepath.Join(workspace, "testsuite", "agenttests", "euclo.code.testsuite.yaml")
@@ -71,6 +106,10 @@ spec:
 	destInteraction := filepath.Join(workspace, "testsuite", "agenttests", "tapes", "euclo.code", "basic_edit_task__qwen2_5_coder_14b.interaction.tape.jsonl")
 	if _, err := os.Stat(destInteraction); err != nil {
 		t.Fatalf("expected promoted interaction tape at %s: %v", destInteraction, err)
+	}
+	destBaseline := filepath.Join(workspace, "testsuite", "agenttests", "tapes", "euclo.code", "basic_edit_task__qwen2_5_coder_14b.baseline.json")
+	if _, err := os.Stat(destBaseline); err != nil {
+		t.Fatalf("expected promoted baseline at %s: %v", destBaseline, err)
 	}
 	if !strings.Contains(out.String(), "promoted") {
 		t.Fatalf("expected promote output, got %q", out.String())

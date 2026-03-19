@@ -29,6 +29,7 @@ spec:
     - name: plan_with_alternatives
       description: "Planning mode generates a plan with alternatives."
       task_type: analysis
+      tags: [coverage-matrix, planning, plan_stage_execute]
       prompt: "How should we redesign the authentication system to support OAuth2 in addition to password login?"
       context:
         euclo.mode: planning

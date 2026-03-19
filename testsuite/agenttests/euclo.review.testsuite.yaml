@@ -29,6 +29,7 @@ spec:
     - name: review_with_findings
       description: "Review mode finds issues and suggests fixes."
       task_type: analysis
+      tags: [coverage-matrix, review, review_suggest_implement]
       setup:
         files:
           - path: testsuite/fixtures/handler.go

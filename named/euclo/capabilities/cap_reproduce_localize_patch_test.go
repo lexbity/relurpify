@@ -102,3 +102,24 @@ func TestRLPRecoveryHintOnReproductionFailure(t *testing.T) {
 	// If reproduction fails, it should suggest edit_verify_repair fallback.
 	require.Contains(t, contract.ProducedOutputs, euclotypes.ArtifactKindExplore)
 }
+
+func TestRLPForcedCapabilityFallbackRecovery(t *testing.T) {
+	env := testEnv(t)
+	cap := &reproduceLocalizePatchCapability{env: env}
+	result := cap.Execute(context.Background(), euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			ID:          "forced-rlp-fallback",
+			Instruction: "force recovery",
+			Context:     map[string]any{"euclo.force_recovery": "capability_fallback"},
+		},
+		State:   core.NewContext(),
+		Mode:    euclotypes.ModeResolution{ModeID: "debug"},
+		Profile: euclotypes.ExecutionProfileSelection{ProfileID: "reproduce_localize_patch"},
+	})
+	require.Equal(t, euclotypes.ExecutionStatusPartial, result.Status)
+	require.NotNil(t, result.RecoveryHint)
+	require.Equal(t, euclotypes.RecoveryStrategyCapabilityFallback, result.RecoveryHint.Strategy)
+	require.Equal(t, "euclo:edit_verify_repair", result.RecoveryHint.SuggestedCapability)
+	require.Len(t, result.Artifacts, 1)
+	require.Equal(t, "euclo:reproduce_localize_patch", result.Artifacts[0].ProducerID)
+}

@@ -86,13 +86,15 @@ type PhaseDefinition struct {
 
 // PhaseMachine is the generic state machine that drives mode interactions.
 type PhaseMachine struct {
-	mode      string
-	phases    []PhaseDefinition
-	current   int
-	emitter   FrameEmitter
-	artifacts *ArtifactBundle
-	state     map[string]any
-	resolver  *AgencyResolver
+	mode           string
+	phases         []PhaseDefinition
+	current        int
+	emitter        FrameEmitter
+	artifacts      *ArtifactBundle
+	state          map[string]any
+	resolver       *AgencyResolver
+	executedPhases []string
+	skippedPhases  []string
 }
 
 // PhaseMachineConfig configures a new PhaseMachine.
@@ -125,12 +127,47 @@ func (m *PhaseMachine) Artifacts() *ArtifactBundle {
 	return m.artifacts
 }
 
+// Emitter returns the machine's frame emitter.
+func (m *PhaseMachine) Emitter() FrameEmitter {
+	return m.emitter
+}
+
 // CurrentPhase returns the ID of the current phase, or empty if done.
 func (m *PhaseMachine) CurrentPhase() string {
 	if m.current >= len(m.phases) {
 		return ""
 	}
 	return m.phases[m.current].ID
+}
+
+// ExecutedPhases returns the phases actually executed during this machine run.
+func (m *PhaseMachine) ExecutedPhases() []string {
+	if m == nil || len(m.executedPhases) == 0 {
+		return nil
+	}
+	out := make([]string, len(m.executedPhases))
+	copy(out, m.executedPhases)
+	return out
+}
+
+// SkippedPhases returns the phases actually skipped during this machine run.
+func (m *PhaseMachine) SkippedPhases() []string {
+	if m == nil || len(m.skippedPhases) == 0 {
+		return nil
+	}
+	out := make([]string, len(m.skippedPhases))
+	copy(out, m.skippedPhases)
+	return out
+}
+
+// JumpToPhase moves the machine cursor to the named phase.
+func (m *PhaseMachine) JumpToPhase(id string) bool {
+	idx := m.phaseIndex(id)
+	if idx < 0 {
+		return false
+	}
+	m.current = idx
+	return true
 }
 
 // Run executes the phase machine from the current phase to completion.
@@ -144,6 +181,7 @@ func (m *PhaseMachine) Run(ctx context.Context) error {
 
 		// Auto-skip check.
 		if phase.SkipWhen != nil && phase.SkipWhen(m.state, m.artifacts) {
+			m.skippedPhases = append(m.skippedPhases, phase.ID)
 			m.current++
 			continue
 		}
@@ -165,9 +203,15 @@ func (m *PhaseMachine) Run(ctx context.Context) error {
 			PhaseCount: len(m.phases),
 		}
 
+		consumedKinds := m.artifactKinds()
+
 		outcome, err := phase.Handler.Execute(ctx, mc)
 		if err != nil {
 			return fmt.Errorf("phase %q: %w", phase.ID, err)
+		}
+		m.executedPhases = append(m.executedPhases, phase.ID)
+		if recording, ok := m.emitter.(*RecordingEmitter); ok && recording != nil && recording.Recording != nil {
+			recording.Recording.RecordPhaseArtifacts(phase.ID, m.mode, outcome.Artifacts, consumedKinds)
 		}
 
 		// Merge artifacts.
@@ -204,6 +248,29 @@ func (m *PhaseMachine) Run(ctx context.Context) error {
 		m.current++
 	}
 	return nil
+}
+
+func (m *PhaseMachine) artifactKinds() []euclotypes.ArtifactKind {
+	if m == nil || m.artifacts == nil {
+		return nil
+	}
+	all := m.artifacts.All()
+	if len(all) == 0 {
+		return nil
+	}
+	out := make([]euclotypes.ArtifactKind, 0, len(all))
+	seen := make(map[euclotypes.ArtifactKind]struct{}, len(all))
+	for _, artifact := range all {
+		if artifact.Kind == "" {
+			continue
+		}
+		if _, ok := seen[artifact.Kind]; ok {
+			continue
+		}
+		seen[artifact.Kind] = struct{}{}
+		out = append(out, artifact.Kind)
+	}
+	return out
 }
 
 // proposeTransition emits a transition frame and waits for user response.

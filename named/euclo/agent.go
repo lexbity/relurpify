@@ -144,6 +144,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	if state == nil {
 		state = core.NewContext()
 	}
+	seedPersistedInteractionState(task, state)
 	// Session scoping: prevent recursive Euclo invocations.
 	sessionID := generateSessionID()
 	if scopeErr := enforceSessionScoping(state, sessionID); scopeErr != nil {
@@ -271,6 +272,17 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		result.Data["proof_surface"] = proofSurface
 	}
 	return result, err
+}
+
+func seedPersistedInteractionState(task *core.Task, state *core.Context) {
+	if task == nil || task.Context == nil || state == nil {
+		return
+	}
+	if _, ok := state.Get("euclo.interaction_state"); !ok {
+		if raw, ok := task.Context["euclo.interaction_state"]; ok && raw != nil {
+			state.Set("euclo.interaction_state", raw)
+		}
+	}
 }
 
 func (a *Agent) runtimeState(task *core.Task, state *core.Context) (eucloruntime.TaskEnvelope, eucloruntime.TaskClassification, euclotypes.ModeResolution, euclotypes.ExecutionProfileSelection) {

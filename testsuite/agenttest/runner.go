@@ -54,6 +54,7 @@ type SuiteReport struct {
 	InfraFailures  int
 	AssertFailures int
 	Cases          []CaseReport
+	Performance    PerformanceSummary `json:"performance,omitempty"`
 }
 
 type CaseReport struct {
@@ -75,17 +76,21 @@ type CaseReport struct {
 	Skipped    bool
 	SkipReason string
 
-	Success          bool
-	Error            string
-	FailureKind      string
-	Attempts         int
-	RetryCount       int
-	RetryTriggeredBy []string
-	Output           string
-	ChangedFiles     []string
-	ToolCalls        map[string]int
-	TokenUsage       TokenUsageReport
-	MemoryOutcome    MemoryOutcomeReport
+	Success             bool
+	Error               string
+	FailureKind         string
+	Attempts            int
+	RetryCount          int
+	RetryTriggeredBy    []string
+	Output              string
+	ChangedFiles        []string
+	ToolCalls           map[string]int
+	TokenUsage          TokenUsageReport
+	MemoryOutcome       MemoryOutcomeReport
+	PhaseMetrics        []PhaseMetric        `json:"phase_metrics,omitempty"`
+	BaselinePath        string               `json:"baseline_path,omitempty"`
+	BaselineFound       bool                 `json:"baseline_found,omitempty"`
+	PerformanceWarnings []PerformanceWarning `json:"performance_warnings,omitempty"`
 }
 
 type TokenUsageReport struct {
@@ -182,6 +187,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 			}
 		}
 	}
+	report.Performance = SummarizePerformance(report.Cases)
 	data, _ := json.MarshalIndent(report, "", "  ")
 	_ = os.WriteFile(filepath.Join(outDir, "report.json"), data, 0o644)
 	return report, nil

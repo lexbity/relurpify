@@ -49,9 +49,16 @@ type ProfileControllerResult struct {
 	GateEvals        []gate.GateEvaluation
 	CapabilityIDs    []string
 	PhasesExecuted   []string
+	PhaseRecords     []PhaseArtifactRecord
 	EarlyStop        bool
 	EarlyStopPhase   string
 	RecoveryAttempts int
+}
+
+type PhaseArtifactRecord struct {
+	Phase             string
+	ArtifactsProduced []euclotypes.Artifact
+	ArtifactsConsumed []euclotypes.ArtifactKind
 }
 
 // ExecuteProfile runs the profile's phases in order, evaluating evidence gates
@@ -75,6 +82,7 @@ func (pc *ProfileController) ExecuteProfile(
 	// execution and only evaluate gates post-execution for verification.
 	profileCap := pc.resolveProfileCapability(profile.ProfileID, artifacts, snapshot)
 	if profileCap != nil {
+		initialConsumed := artifactKindsFromState(artifacts)
 		capResult := profileCap.Execute(ctx, env)
 		capID := profileCap.Descriptor().ID
 		pcResult.CapabilityIDs = append(pcResult.CapabilityIDs, capID)
@@ -92,7 +100,7 @@ func (pc *ProfileController) ExecuteProfile(
 			pcResult.GateEvals = append(pcResult.GateEvals, eval)
 		}
 
-		if capResult.Status == euclotypes.ExecutionStatusFailed && capResult.RecoveryHint != nil && pc.Recovery != nil {
+		if shouldAttemptRecovery(capResult) && pc.Recovery != nil {
 			recoveredResult := pc.Recovery.AttemptRecovery(ctx, *capResult.RecoveryHint, capResult, env, recoveryStack)
 			if recoveredResult.Status != euclotypes.ExecutionStatusFailed {
 				capResult = recoveredResult
@@ -112,10 +120,11 @@ func (pc *ProfileController) ExecuteProfile(
 				env.State.Set("euclo.recovery_trace", traceArt.Payload)
 			}
 		}
+		pcResult.PhaseRecords = buildProfileCapabilityPhaseRecords(phases, initialConsumed, artifacts.All())
 
 		recordProfileControllerObservability(env.State, pcResult, mode, profile)
 
-		if capResult.Status == euclotypes.ExecutionStatusFailed {
+		if capResult.Status != euclotypes.ExecutionStatusCompleted {
 			return failedResult(env.Task, capResult, pcResult), pcResult,
 				fmt.Errorf("capability %s failed: %s", capID, capResult.Summary)
 		}
@@ -157,10 +166,16 @@ func (pc *ProfileController) ExecuteProfile(
 		}
 
 		// Execute the phase capability.
+		consumedKinds := artifactKindsFromState(artifacts)
 		capResult := phaseCap.Execute(ctx, env)
 		capID := phaseCap.Descriptor().ID
 		pcResult.CapabilityIDs = append(pcResult.CapabilityIDs, capID)
 		pcResult.PhasesExecuted = append(pcResult.PhasesExecuted, phase)
+		pcResult.PhaseRecords = append(pcResult.PhaseRecords, PhaseArtifactRecord{
+			Phase:             phase,
+			ArtifactsProduced: append([]euclotypes.Artifact{}, capResult.Artifacts...),
+			ArtifactsConsumed: consumedKinds,
+		})
 
 		for _, art := range capResult.Artifacts {
 			pcResult.Artifacts = append(pcResult.Artifacts, art)
@@ -168,13 +183,13 @@ func (pc *ProfileController) ExecuteProfile(
 		mergeCapabilityArtifactsToState(env.State, capResult.Artifacts)
 		artifacts = euclotypes.ArtifactStateFromContext(env.State)
 
-		if capResult.Status == euclotypes.ExecutionStatusFailed {
+		if capResult.Status != euclotypes.ExecutionStatusCompleted {
 			recovered := false
 
 			// First: try recovery controller if hint is available.
-			if capResult.RecoveryHint != nil && pc.Recovery != nil && recoveryStack.CanAttempt() {
+			if shouldAttemptRecovery(capResult) && pc.Recovery != nil && recoveryStack.CanAttempt() {
 				recoveredResult := pc.Recovery.AttemptRecovery(ctx, *capResult.RecoveryHint, capResult, env, recoveryStack)
-				if recoveredResult.Status != euclotypes.ExecutionStatusFailed {
+				if recoveredResult.Status == euclotypes.ExecutionStatusCompleted {
 					for _, art := range recoveredResult.Artifacts {
 						pcResult.Artifacts = append(pcResult.Artifacts, art)
 					}
@@ -232,6 +247,10 @@ func (pc *ProfileController) ExecuteProfile(
 	}
 	recordProfileControllerObservability(env.State, pcResult, mode, profile)
 	return completedResult(env.Task, pcResult), pcResult, nil
+}
+
+func shouldAttemptRecovery(result euclotypes.ExecutionResult) bool {
+	return result.Status != euclotypes.ExecutionStatusCompleted && result.RecoveryHint != nil
 }
 
 // resolveProfileCapability finds a capability that supports the entire profile.
@@ -412,11 +431,134 @@ func recordProfileControllerObservability(
 		"profile_id":        profile.ProfileID,
 		"capability_ids":    pcResult.CapabilityIDs,
 		"phases_executed":   pcResult.PhasesExecuted,
+		"phase_records":     profilePhaseRecordsState(pcResult.PhaseRecords),
 		"early_stop":        pcResult.EarlyStop,
 		"early_stop_phase":  pcResult.EarlyStopPhase,
 		"gate_evals_count":  len(pcResult.GateEvals),
 		"recovery_attempts": pcResult.RecoveryAttempts,
 	})
+	state.Set("euclo.profile_phase_records", profilePhaseRecordsState(pcResult.PhaseRecords))
+}
+
+func buildProfileCapabilityPhaseRecords(phases []string, consumed []euclotypes.ArtifactKind, artifacts []euclotypes.Artifact) []PhaseArtifactRecord {
+	if len(phases) == 0 {
+		return nil
+	}
+	currentConsumed := append([]euclotypes.ArtifactKind{}, consumed...)
+	records := make([]PhaseArtifactRecord, 0, len(phases))
+	for _, phase := range phases {
+		produced := filterArtifactsByKind(artifacts, phaseExpectedArtifact(phase))
+		records = append(records, PhaseArtifactRecord{
+			Phase:             phase,
+			ArtifactsProduced: produced,
+			ArtifactsConsumed: append([]euclotypes.ArtifactKind{}, currentConsumed...),
+		})
+		currentConsumed = appendUniqueArtifactKinds(currentConsumed, artifactKindsFromArtifacts(produced)...)
+	}
+	return records
+}
+
+func profilePhaseRecordsState(records []PhaseArtifactRecord) []map[string]any {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(records))
+	for _, record := range records {
+		entry := map[string]any{
+			"phase":              record.Phase,
+			"artifacts_consumed": artifactKindsToStrings(record.ArtifactsConsumed),
+			"artifacts_produced": artifactKindsToStrings(artifactKindsFromArtifacts(record.ArtifactsProduced)),
+		}
+		if len(record.ArtifactsProduced) > 0 {
+			produced := make([]map[string]any, 0, len(record.ArtifactsProduced))
+			for _, artifact := range record.ArtifactsProduced {
+				produced = append(produced, map[string]any{
+					"kind":    string(artifact.Kind),
+					"summary": artifact.Summary,
+					"payload": artifact.Payload,
+				})
+			}
+			entry["produced_artifacts"] = produced
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func artifactKindsFromState(state euclotypes.ArtifactState) []euclotypes.ArtifactKind {
+	return artifactKindsFromArtifacts(state.All())
+}
+
+func artifactKindsFromArtifacts(artifacts []euclotypes.Artifact) []euclotypes.ArtifactKind {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	out := make([]euclotypes.ArtifactKind, 0, len(artifacts))
+	seen := map[euclotypes.ArtifactKind]struct{}{}
+	for _, artifact := range artifacts {
+		if artifact.Kind == "" {
+			continue
+		}
+		if _, ok := seen[artifact.Kind]; ok {
+			continue
+		}
+		seen[artifact.Kind] = struct{}{}
+		out = append(out, artifact.Kind)
+	}
+	return out
+}
+
+func artifactKindsToStrings(kinds []euclotypes.ArtifactKind) []string {
+	if len(kinds) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(kinds))
+	for _, kind := range kinds {
+		if kind == "" {
+			continue
+		}
+		out = append(out, string(kind))
+	}
+	return out
+}
+
+func filterArtifactsByKind(artifacts []euclotypes.Artifact, kind euclotypes.ArtifactKind) []euclotypes.Artifact {
+	if len(artifacts) == 0 || kind == "" {
+		return nil
+	}
+	var out []euclotypes.Artifact
+	for _, artifact := range artifacts {
+		if artifact.Kind == kind {
+			out = append(out, artifact)
+		}
+	}
+	return out
+}
+
+func appendUniqueArtifactKinds(base []euclotypes.ArtifactKind, extra ...euclotypes.ArtifactKind) []euclotypes.ArtifactKind {
+	seen := make(map[euclotypes.ArtifactKind]struct{}, len(base)+len(extra))
+	out := make([]euclotypes.ArtifactKind, 0, len(base)+len(extra))
+	for _, kind := range base {
+		if kind == "" {
+			continue
+		}
+		if _, ok := seen[kind]; ok {
+			continue
+		}
+		seen[kind] = struct{}{}
+		out = append(out, kind)
+	}
+	for _, kind := range extra {
+		if kind == "" {
+			continue
+		}
+		if _, ok := seen[kind]; ok {
+			continue
+		}
+		seen[kind] = struct{}{}
+		out = append(out, kind)
+	}
+	return out
 }
 
 func partialResult(task *core.Task, pcResult *ProfileControllerResult) *core.Result {

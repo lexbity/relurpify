@@ -84,3 +84,71 @@ func TestEvaluateEucloExpectationsMatchesPhasesExecuted(t *testing.T) {
 		t.Fatalf("expected phase execution expectations to pass, got %v", failures)
 	}
 }
+
+func TestEvaluateEucloExpectationsMatchesArtifactChain(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.interaction_records": []any{
+				map[string]any{
+					"phase":              "commit",
+					"artifacts_produced": []any{"euclo.plan"},
+					"produced_artifacts": []any{
+						map[string]any{
+							"kind":    "euclo.plan",
+							"summary": "rate limit plan",
+							"payload": map[string]any{"steps": []any{"add rate limiting"}},
+						},
+					},
+				},
+				map[string]any{
+					"phase":              "execute",
+					"artifacts_consumed": []any{"euclo.plan"},
+				},
+			},
+		},
+	}
+
+	failures := evaluateEucloExpectations(&EucloExpectSpec{
+		ArtifactChain: []ArtifactChainSpec{{
+			Kind:            "plan",
+			ProducedByPhase: "commit",
+			ConsumedByPhase: "execute",
+			ContentContains: []string{"rate"},
+		}},
+	}, snapshot)
+	if len(failures) > 0 {
+		t.Fatalf("expected artifact chain expectations to pass, got %v", failures)
+	}
+}
+
+func TestEvaluateEucloExpectationsReportsMissingArtifactChainContent(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.interaction_records": []any{
+				map[string]any{
+					"phase":              "execute",
+					"artifacts_produced": []any{"euclo.edit_intent"},
+					"artifacts_consumed": []any{"euclo.plan"},
+					"produced_artifacts": []any{
+						map[string]any{"kind": "euclo.edit_intent", "summary": "small fix"},
+					},
+				},
+			},
+		},
+	}
+
+	failures := evaluateEucloExpectations(&EucloExpectSpec{
+		ArtifactChain: []ArtifactChainSpec{{
+			Kind:            "edit_intent",
+			ProducedByPhase: "execute",
+			ConsumedByPhase: "verify",
+			ContentContains: []string{"validation"},
+		}},
+	}, snapshot)
+	if len(failures) == 0 {
+		t.Fatal("expected artifact chain failure")
+	}
+	if !strings.Contains(strings.Join(failures, "; "), `missing "validation"`) {
+		t.Fatalf("expected missing content failure, got %v", failures)
+	}
+}

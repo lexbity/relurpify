@@ -6,16 +6,17 @@ import "time"
 type FrameKind string
 
 const (
-	FrameProposal   FrameKind = "proposal"   // system proposes scope/interpretation for confirmation
-	FrameQuestion   FrameKind = "question"    // system asks a targeted question with options
-	FrameCandidates FrameKind = "candidates"  // system presents multiple candidates for selection
-	FrameComparison FrameKind = "comparison"  // side-by-side comparison of candidates
-	FrameDraft      FrameKind = "draft"       // editable draft (plan, test list, edit proposal)
-	FrameResult     FrameKind = "result"      // execution result (verification, reproduction, findings)
-	FrameStatus     FrameKind = "status"      // progress/streaming status during execution
-	FrameSummary    FrameKind = "summary"     // final summary with produced artifacts
-	FrameTransition FrameKind = "transition"  // proposed mode transition
-	FrameHelp       FrameKind = "help"        // mode help surface
+	FrameProposal      FrameKind = "proposal"       // system proposes scope/interpretation for confirmation
+	FrameQuestion      FrameKind = "question"       // system asks a targeted question with options
+	FrameCandidates    FrameKind = "candidates"     // system presents multiple candidates for selection
+	FrameComparison    FrameKind = "comparison"     // side-by-side comparison of candidates
+	FrameDraft         FrameKind = "draft"          // editable draft (plan, test list, edit proposal)
+	FrameResult        FrameKind = "result"         // execution result (verification, reproduction, findings)
+	FrameStatus        FrameKind = "status"         // progress/streaming status during execution
+	FrameSummary       FrameKind = "summary"        // final summary with produced artifacts
+	FrameTransition    FrameKind = "transition"     // proposed mode transition
+	FrameHelp          FrameKind = "help"           // mode help surface
+	FrameSessionResume FrameKind = "session_resume" // resume previously persisted interaction state
 )
 
 // ActionKind identifies the type of user action available in a frame.

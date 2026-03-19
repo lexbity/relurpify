@@ -250,6 +250,10 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if data, err := json.MarshalIndent(tokenUsage, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "token_usage.json"), data, 0o644)
 	}
+	phaseMetrics := BuildPhaseMetrics(snapshot, tokenUsage)
+	if data, err := json.MarshalIndent(phaseMetrics, "", "  "); err == nil {
+		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "phase_metrics.json"), data, 0o644)
+	}
 	memoryAfter, memoryErr := collectMemoryOutcome(context.Background(), workspace, memStore.Store)
 	memoryOutcome := diffMemoryOutcome(memoryBefore, memoryAfter)
 	if memoryErr == nil {
@@ -292,34 +296,59 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	caseFinishedAt := time.Now().UTC()
 	logger.Printf("case=%s model=%s success=%v err=%s", c.Name, execution.Model, success, caseErr)
 
+	baselinePath := BaselineFilePath(targetWorkspace, suite.Metadata.Name, c.Name, execution.Model)
+	baselineFound := false
+	var performanceWarnings []PerformanceWarning
+	if shouldComparePerformanceBaseline(execution.RecordingMode) {
+		if baseline, err := LoadPerformanceBaseline(baselinePath); err == nil && baseline != nil {
+			baselineFound = true
+			performanceWarnings = ComparePerformanceBaseline(CaseReport{
+				Name:         c.Name,
+				Model:        execution.Model,
+				DurationMS:   caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
+				TokenUsage:   tokenUsage,
+				PhaseMetrics: phaseMetrics,
+			}, baseline)
+			if len(performanceWarnings) > 0 {
+				if data, err := json.MarshalIndent(performanceWarnings, "", "  "); err == nil {
+					_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "performance_warnings.json"), data, 0o644)
+				}
+			}
+		}
+	}
+
 	return CaseReport{
-		Name:             c.Name,
-		Model:            execution.Model,
-		ModelDigest:      modelProvenanceDigest(modelProvenance),
-		ModelLoadedAs:    modelProvenanceName(modelProvenance),
-		ModelSource:      execution.ModelSource,
-		ManifestModel:    execution.ManifestModel,
-		Endpoint:         execution.Endpoint,
-		RecordingMode:    execution.RecordingMode,
-		TapePath:         execution.TapePath,
-		Workspace:        workspace,
-		ArtifactsDir:     layout.ArtifactsDir,
-		StartedAt:        caseStartedAt,
-		FinishedAt:       caseFinishedAt,
-		DurationMS:       caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
-		Skipped:          false,
-		SkipReason:       "",
-		Success:          success,
-		Error:            caseErr,
-		FailureKind:      failureKind,
-		Attempts:         attempts,
-		RetryCount:       len(retryReasons),
-		RetryTriggeredBy: retryReasons,
-		Output:           output,
-		ChangedFiles:     changed,
-		ToolCalls:        toolCounts,
-		TokenUsage:       tokenUsage,
-		MemoryOutcome:    memoryOutcome,
+		Name:                c.Name,
+		Model:               execution.Model,
+		ModelDigest:         modelProvenanceDigest(modelProvenance),
+		ModelLoadedAs:       modelProvenanceName(modelProvenance),
+		ModelSource:         execution.ModelSource,
+		ManifestModel:       execution.ManifestModel,
+		Endpoint:            execution.Endpoint,
+		RecordingMode:       execution.RecordingMode,
+		TapePath:            execution.TapePath,
+		Workspace:           workspace,
+		ArtifactsDir:        layout.ArtifactsDir,
+		StartedAt:           caseStartedAt,
+		FinishedAt:          caseFinishedAt,
+		DurationMS:          caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
+		Skipped:             false,
+		SkipReason:          "",
+		Success:             success,
+		Error:               caseErr,
+		FailureKind:         failureKind,
+		Attempts:            attempts,
+		RetryCount:          len(retryReasons),
+		RetryTriggeredBy:    retryReasons,
+		Output:              output,
+		ChangedFiles:        changed,
+		ToolCalls:           toolCounts,
+		TokenUsage:          tokenUsage,
+		MemoryOutcome:       memoryOutcome,
+		PhaseMetrics:        phaseMetrics,
+		BaselinePath:        baselinePath,
+		BaselineFound:       baselineFound,
+		PerformanceWarnings: performanceWarnings,
 	}
 }
 

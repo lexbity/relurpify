@@ -140,6 +140,21 @@ func TestLoadCanonicalHTNAndRewooSuites(t *testing.T) {
 	}
 }
 
+func TestLoadCanonicalEucloCoverageMatrixSuites(t *testing.T) {
+	for _, path := range []string{
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.code.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.debug.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.tdd.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.review.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.planning.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.transitions.testsuite.yaml",
+	} {
+		if _, err := LoadSuite(path); err != nil {
+			t.Fatalf("LoadSuite(%q): %v", path, err)
+		}
+	}
+}
+
 func TestSuiteValidateRejectsUnsupportedTier(t *testing.T) {
 	suite := &Suite{
 		APIVersion: "relurpify/v1alpha1",
@@ -374,6 +389,33 @@ func TestSuiteValidateRejectsInvalidBootstrapTimeoutOverride(t *testing.T) {
 
 	if err := suite.Validate(); err == nil {
 		t.Fatal("expected invalid bootstrap_timeout override to fail validation")
+	}
+}
+
+func TestSuiteValidateRejectsArtifactChainWithoutPhase(t *testing.T) {
+	suite := &Suite{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentTestSuite",
+		Metadata:   SuiteMeta{Name: "euclo"},
+		Spec: SuiteSpec{
+			AgentName: "euclo",
+			Manifest:  "relurpify_cfg/agent.manifest.yaml",
+			Cases: []CaseSpec{{
+				Name:   "artifact_chain",
+				Prompt: "plan a change",
+				Expect: ExpectSpec{
+					Euclo: &EucloExpectSpec{
+						ArtifactChain: []ArtifactChainSpec{{
+							Kind: "plan",
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	if err := suite.Validate(); err == nil {
+		t.Fatal("expected invalid artifact_chain to fail validation")
 	}
 }
 

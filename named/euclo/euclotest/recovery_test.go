@@ -548,7 +548,8 @@ func TestProfileControllerRecoveryOnProfileLevelFailure(t *testing.T) {
 	}
 	mode := euclotypes.ModeResolution{ModeID: "code"}
 
-	result, pcResult, err := pc.ExecuteProfile(context.Background(), profile, mode, testEnvelope(nil))
+	execEnv := testEnvelope(nil)
+	result, pcResult, err := pc.ExecuteProfile(context.Background(), profile, mode, execEnv)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.True(t, result.Success)
@@ -563,6 +564,62 @@ func TestProfileControllerRecoveryOnProfileLevelFailure(t *testing.T) {
 		}
 	}
 	assert.True(t, hasRecoveryTrace, "should have recovery trace artifact")
+}
+
+func TestProfileControllerRecoveryOnProfileLevelPartial(t *testing.T) {
+	reg := capabilities.NewEucloCapabilityRegistry()
+	primary := &stubProfileCapability{
+		id:       "euclo:primary_partial",
+		profiles: []string{"edit_verify_repair"},
+		eligible: true,
+		executeResult: euclotypes.ExecutionResult{
+			Status:  euclotypes.ExecutionStatusPartial,
+			Summary: "primary partial",
+			Artifacts: []euclotypes.Artifact{
+				{Kind: euclotypes.ArtifactKindEditIntent, ProducerID: "euclo:primary_partial", Status: "produced"},
+			},
+			RecoveryHint: &euclotypes.RecoveryHint{
+				Strategy:            euclotypes.RecoveryStrategyCapabilityFallback,
+				SuggestedCapability: "euclo:recovery_succeeds",
+			},
+		},
+	}
+	recoveryCap := &stubProfileCapability{
+		id:       "euclo:recovery_succeeds",
+		profiles: []string{"edit_verify_repair"},
+		eligible: true,
+		executeResult: euclotypes.ExecutionResult{
+			Status:  euclotypes.ExecutionStatusCompleted,
+			Summary: "recovered",
+			Artifacts: []euclotypes.Artifact{
+				{Kind: euclotypes.ArtifactKindVerification, ProducerID: "euclo:recovery_succeeds", Status: "produced"},
+			},
+		},
+	}
+	_ = reg.Register(primary)
+	_ = reg.Register(recoveryCap)
+
+	env := testEnv(t)
+	rc := orchestrate.NewRecoveryController(orchestrate.AdaptCapabilityRegistry(reg), euclotypes.DefaultExecutionProfileRegistry(), euclotypes.DefaultModeRegistry(), env)
+	pc := orchestrate.NewProfileController(orchestrate.AdaptCapabilityRegistry(reg), gate.DefaultPhaseGates(), env, euclotypes.DefaultExecutionProfileRegistry(), rc)
+
+	profile := euclotypes.ExecutionProfileSelection{
+		ProfileID:   "edit_verify_repair",
+		PhaseRoutes: map[string]string{"explore": "react", "plan": "pipeline", "edit": "pipeline", "verify": "react"},
+	}
+	mode := euclotypes.ModeResolution{ModeID: "code"}
+
+	execEnv := testEnvelope(nil)
+	result, pcResult, err := pc.ExecuteProfile(context.Background(), profile, mode, execEnv)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Success)
+	assert.True(t, recoveryCap.executeCalled)
+	assert.Equal(t, 1, pcResult.RecoveryAttempts)
+
+	raw, ok := execEnv.State.Get("euclo.recovery_trace")
+	require.True(t, ok)
+	require.NotNil(t, raw)
 }
 
 func TestProfileControllerRecoveryExhaustedStillFails(t *testing.T) {

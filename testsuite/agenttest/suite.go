@@ -145,19 +145,27 @@ type ExpectSpec struct {
 
 // EucloExpectSpec defines expectations specific to Euclo's interactive execution.
 type EucloExpectSpec struct {
-	Mode                   string   `yaml:"mode,omitempty"`
-	Profile                string   `yaml:"profile,omitempty"`
-	PhasesExecuted         []string `yaml:"phases_executed,omitempty"`
-	PhasesSkipped          []string `yaml:"phases_skipped,omitempty"`
-	ArtifactsProduced      []string `yaml:"artifacts_produced,omitempty"` // artifact kinds
-	RecoveryAttempted      bool     `yaml:"recovery_attempted,omitempty"`
-	RecoveryStrategies     []string `yaml:"recovery_strategies,omitempty"`
-	MinTransitionsProposed int      `yaml:"min_transitions_proposed,omitempty"`
-	MaxTransitionsProposed int      `yaml:"max_transitions_proposed,omitempty"`
-	MinFramesEmitted       int      `yaml:"min_frames_emitted,omitempty"`
-	MaxFramesEmitted       int      `yaml:"max_frames_emitted,omitempty"`
-	FrameKindsEmitted      []string `yaml:"frame_kinds_emitted,omitempty"`
-	FrameKindsMustExclude  []string `yaml:"frame_kinds_must_exclude,omitempty"`
+	Mode                   string              `yaml:"mode,omitempty"`
+	Profile                string              `yaml:"profile,omitempty"`
+	PhasesExecuted         []string            `yaml:"phases_executed,omitempty"`
+	PhasesSkipped          []string            `yaml:"phases_skipped,omitempty"`
+	ArtifactsProduced      []string            `yaml:"artifacts_produced,omitempty"` // artifact kinds
+	ArtifactChain          []ArtifactChainSpec `yaml:"artifact_chain,omitempty"`
+	RecoveryAttempted      bool                `yaml:"recovery_attempted,omitempty"`
+	RecoveryStrategies     []string            `yaml:"recovery_strategies,omitempty"`
+	MinTransitionsProposed int                 `yaml:"min_transitions_proposed,omitempty"`
+	MaxTransitionsProposed int                 `yaml:"max_transitions_proposed,omitempty"`
+	MinFramesEmitted       int                 `yaml:"min_frames_emitted,omitempty"`
+	MaxFramesEmitted       int                 `yaml:"max_frames_emitted,omitempty"`
+	FrameKindsEmitted      []string            `yaml:"frame_kinds_emitted,omitempty"`
+	FrameKindsMustExclude  []string            `yaml:"frame_kinds_must_exclude,omitempty"`
+}
+
+type ArtifactChainSpec struct {
+	Kind            string   `yaml:"kind"`
+	ProducedByPhase string   `yaml:"produced_by_phase,omitempty"`
+	ConsumedByPhase string   `yaml:"consumed_by_phase,omitempty"`
+	ContentContains []string `yaml:"content_contains,omitempty"`
 }
 
 type FileContentExpectation struct {
@@ -355,6 +363,16 @@ func (s *Suite) Validate() error {
 		for j, step := range c.InteractionScript {
 			if strings.TrimSpace(step.Action) == "" {
 				return fmt.Errorf("suite case[%s] interaction_script[%d] missing action", c.Name, j)
+			}
+		}
+		if c.Expect.Euclo != nil {
+			for j, chain := range c.Expect.Euclo.ArtifactChain {
+				if strings.TrimSpace(chain.Kind) == "" {
+					return fmt.Errorf("suite case[%s] expect.euclo.artifact_chain[%d] missing kind", c.Name, j)
+				}
+				if strings.TrimSpace(chain.ProducedByPhase) == "" && strings.TrimSpace(chain.ConsumedByPhase) == "" {
+					return fmt.Errorf("suite case[%s] expect.euclo.artifact_chain[%d] must set produced_by_phase and/or consumed_by_phase", c.Name, j)
+				}
 			}
 		}
 		if c.Overrides.Memory != nil {

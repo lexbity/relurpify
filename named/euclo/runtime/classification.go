@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capability.Registry) TaskEnvelope {
@@ -34,11 +35,31 @@ func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capab
 		}
 	}
 	if state != nil {
-		envelope.ResumedMode = normalizedModeHint(state.GetString("euclo.mode"))
+		envelope.ResumedMode = resumedModeFromState(state)
 		envelope.PreviousArtifactKinds = previousArtifactKinds(state)
 	}
 	envelope.EditPermitted = envelope.CapabilitySnapshot.HasWriteTools
 	return envelope
+}
+
+func resumedModeFromState(state *core.Context) string {
+	if state == nil {
+		return ""
+	}
+	if mode := normalizedModeHint(state.GetString("euclo.mode")); mode != "" {
+		return mode
+	}
+	raw, ok := state.Get("euclo.interaction_state")
+	if !ok || raw == nil {
+		return ""
+	}
+	switch typed := raw.(type) {
+	case interaction.InteractionState:
+		return normalizedModeHint(typed.Mode)
+	case map[string]any:
+		return normalizedModeHint(typed["mode"])
+	}
+	return ""
 }
 
 // ClassifyTask performs keyword-based classification for backward compatibility.

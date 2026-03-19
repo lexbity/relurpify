@@ -29,7 +29,7 @@ spec:
     - name: code_to_debug_on_failure
       description: "Code mode proposes debug transition when verification fails."
       task_type: code_modification
-      tags: [recovery, code-to-debug]
+      tags: [coverage-matrix, transition, code-to-debug, recovery]
       setup:
         files:
           - path: testsuite/fixtures/div.go
@@ -100,6 +100,7 @@ spec:
     - name: planning_to_code_execution
       description: "Planning mode transitions to code for execution."
       task_type: code_modification
+      tags: [coverage-matrix, transition, planning-to-code]
       interaction_script:
         - phase: scope
           action: confirm
@@ -142,6 +143,7 @@ spec:
     - name: code_to_planning_scope_expansion
       description: "Code mode suggests planning when scope is cross-cutting."
       task_type: code_modification
+      tags: [coverage-matrix, transition, code-to-planning]
       interaction_script:
         - phase: understand
           action: plan_first

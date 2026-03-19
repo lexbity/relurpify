@@ -29,6 +29,7 @@ spec:
     - name: new_function_tdd
       description: "TDD: write tests first, then implement."
       task_type: code_generation
+      tags: [coverage-matrix, tdd, test_driven_generation]
       setup:
         files:
           - path: testsuite/fixtures/strings.go
@@ -48,6 +49,7 @@ spec:
           - "testsuite/fixtures/strings.go"
         euclo:
           mode: tdd
+          profile: test_driven_generation
 
     - name: add_test_cases
       description: "TDD mode: add test cases to existing function."
@@ -105,3 +107,4 @@ spec:
         files_changed: ["testsuite/fixtures/math_test.go"]
         euclo:
           mode: tdd
+          profile: test_driven_generation

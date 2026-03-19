@@ -337,3 +337,52 @@ func TestAgentExecuteScriptedRoundTripCodePlanningCode(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, transitions, 2)
 }
+
+func TestAgentExecuteSeedsPersistedInteractionStateFromTaskContext(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: capability.NewRegistry(),
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+
+	state := core.NewContext()
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-resume-seed",
+		Instruction: "plan and implement rate limiting",
+		Context: map[string]any{
+			"workspace":  "/tmp/ws",
+			"euclo.mode": "planning",
+			"euclo.interaction_state": map[string]any{
+				"mode":            "planning",
+				"current_phase":   "generate",
+				"phases_executed": []any{"scope", "clarify"},
+				"phase_states": map[string]any{
+					"scope.done":   true,
+					"clarify.done": true,
+				},
+			},
+			"euclo.interaction_script": []map[string]any{
+				{"kind": "session_resume", "action": "resume"},
+			},
+		},
+	}, state)
+	require.NoError(t, err)
+
+	raw, ok := state.Get("euclo.interaction_state")
+	require.True(t, ok)
+	iState, ok := raw.(interaction.InteractionState)
+	require.True(t, ok)
+	require.Contains(t, iState.PhasesExecuted, "generate")
+
+	recordingRaw, ok := state.Get("euclo.interaction_recording")
+	require.True(t, ok)
+	recording, ok := recordingRaw.(map[string]any)
+	require.True(t, ok)
+	frames, ok := recording["frames"].([]map[string]any)
+	require.True(t, ok)
+	require.NotEmpty(t, frames)
+	require.Equal(t, "session_resume", frames[0]["kind"])
+}

@@ -172,6 +172,7 @@ func (rc *RecoveryController) attemptParadigmSwitch(
 			retryEnv.Task.Context = map[string]any{}
 		}
 		retryEnv.Task.Context["euclo.paradigm_override"] = hint.SuggestedParadigm
+		retryEnv.Task.Context["euclo.recovery_active"] = true
 	}
 
 	result := cap.Execute(ctx, retryEnv)
@@ -243,7 +244,14 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 			failureTarget = candidateID
 			continue
 		}
-		result := cap.Execute(ctx, env)
+		retryEnv := env
+		if retryEnv.Task != nil {
+			if retryEnv.Task.Context == nil {
+				retryEnv.Task.Context = map[string]any{}
+			}
+			retryEnv.Task.Context["euclo.recovery_active"] = true
+		}
+		result := cap.Execute(ctx, retryEnv)
 		success := result.Status != euclotypes.ExecutionStatusFailed
 		if success {
 			stack.Record(RecoveryAttempt{
@@ -359,6 +367,12 @@ func (rc *RecoveryController) attemptProfileEscalation(
 	// Execute with the fallback profile.
 	fallbackEnv := env
 	fallbackEnv.Profile = fallbackProfile
+	if fallbackEnv.Task != nil {
+		if fallbackEnv.Task.Context == nil {
+			fallbackEnv.Task.Context = map[string]any{}
+		}
+		fallbackEnv.Task.Context["euclo.recovery_active"] = true
+	}
 	result := fallbackCap.Execute(ctx, fallbackEnv)
 	success := result.Status != euclotypes.ExecutionStatusFailed
 	stack.Record(RecoveryAttempt{

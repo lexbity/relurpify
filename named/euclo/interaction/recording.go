@@ -5,17 +5,28 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )
 
+type RecordedArtifact struct {
+	Kind    string          `json:"kind"`
+	Summary string          `json:"summary,omitempty"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
 type InteractionRecord struct {
-	Kind      string          `json:"kind"`
-	Mode      string          `json:"mode"`
-	Phase     string          `json:"phase"`
-	Content   json.RawMessage `json:"content"`
-	Actions   json.RawMessage `json:"actions"`
-	Response  json.RawMessage `json:"response,omitempty"`
-	Timestamp string          `json:"timestamp"`
-	Duration  string          `json:"duration,omitempty"`
+	Kind              string             `json:"kind"`
+	Mode              string             `json:"mode"`
+	Phase             string             `json:"phase"`
+	Content           json.RawMessage    `json:"content"`
+	Actions           json.RawMessage    `json:"actions"`
+	Response          json.RawMessage    `json:"response,omitempty"`
+	Timestamp         string             `json:"timestamp"`
+	Duration          string             `json:"duration,omitempty"`
+	ArtifactsProduced []string           `json:"artifacts_produced,omitempty"`
+	ArtifactsConsumed []string           `json:"artifacts_consumed,omitempty"`
+	ProducedArtifacts []RecordedArtifact `json:"produced_artifacts,omitempty"`
 }
 
 // InteractionEvent is a single recorded event in an interaction session.
@@ -112,6 +123,16 @@ func (r *InteractionRecording) RecordTransition(fromMode, toMode, trigger string
 	})
 }
 
+func (r *InteractionRecording) RecordPhaseArtifacts(phase, mode string, produced []euclotypes.Artifact, consumed []euclotypes.ArtifactKind) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	record := r.ensurePhaseRecordLocked(phase, mode)
+	record.ArtifactsConsumed = artifactKindStrings(consumed)
+	record.ArtifactsProduced = producedArtifactKindStrings(produced)
+	record.ProducedArtifacts = recordedArtifacts(produced)
+}
+
 // Events returns all recorded events.
 func (r *InteractionRecording) Events() []InteractionEvent {
 	r.mu.Lock()
@@ -191,9 +212,26 @@ func (r *InteractionRecording) ToStateMap() map[string]any {
 		}
 	}
 
+	records := make([]map[string]any, 0, len(r.full))
+	for _, record := range r.full {
+		entry := map[string]any{
+			"kind":  record.Kind,
+			"mode":  record.Mode,
+			"phase": record.Phase,
+		}
+		if len(record.ArtifactsProduced) > 0 {
+			entry["artifacts_produced"] = append([]string{}, record.ArtifactsProduced...)
+		}
+		if len(record.ArtifactsConsumed) > 0 {
+			entry["artifacts_consumed"] = append([]string{}, record.ArtifactsConsumed...)
+		}
+		records = append(records, entry)
+	}
+
 	return map[string]any{
 		"frames":      frames,
 		"transitions": transitions,
+		"records":     records,
 		"event_count": len(r.events),
 	}
 }
@@ -248,6 +286,78 @@ func (e *RecordingEmitter) AwaitResponse(ctx context.Context) (UserResponse, err
 		e.Recording.RecordResponse(resp, phase, mode)
 	}
 	return resp, err
+}
+
+func (r *InteractionRecording) ensurePhaseRecordLocked(phase, mode string) *InteractionRecord {
+	for i := len(r.full) - 1; i >= 0; i-- {
+		record := &r.full[i]
+		if record.Phase == phase && record.Mode == mode {
+			return record
+		}
+	}
+	now := time.Now().UTC()
+	r.full = append(r.full, InteractionRecord{
+		Kind:      "phase",
+		Mode:      mode,
+		Phase:     phase,
+		Timestamp: now.Format(time.RFC3339Nano),
+	})
+	return &r.full[len(r.full)-1]
+}
+
+func artifactKindStrings(kinds []euclotypes.ArtifactKind) []string {
+	if len(kinds) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(kinds))
+	seen := map[string]struct{}{}
+	for _, kind := range kinds {
+		value := string(kind)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func producedArtifactKindStrings(artifacts []euclotypes.Artifact) []string {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(artifacts))
+	seen := map[string]struct{}{}
+	for _, artifact := range artifacts {
+		value := string(artifact.Kind)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func recordedArtifacts(artifacts []euclotypes.Artifact) []RecordedArtifact {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	out := make([]RecordedArtifact, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		out = append(out, RecordedArtifact{
+			Kind:    string(artifact.Kind),
+			Summary: artifact.Summary,
+			Payload: mustJSON(artifact.Payload),
+		})
+	}
+	return out
 }
 
 func mustJSON(v any) json.RawMessage {

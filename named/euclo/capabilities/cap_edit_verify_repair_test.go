@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
@@ -95,6 +96,16 @@ func TestEditVerifyRepairExecuteProducesArtifacts(t *testing.T) {
 	require.True(t, kinds[euclotypes.ArtifactKindPlan])
 	require.True(t, kinds[euclotypes.ArtifactKindEditIntent])
 	require.True(t, kinds[euclotypes.ArtifactKindVerification])
+
+	raw, ok := state.Get("pipeline.verify")
+	require.True(t, ok)
+	payload, ok := raw.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "pass", payload["status"])
+	checks, ok := payload["checks"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, checks, 1)
+	require.Equal(t, "pass", checks[0]["status"])
 }
 
 func TestEditVerifyRepairTaskContextFromEnvelope(t *testing.T) {
@@ -113,8 +124,156 @@ func TestEditVerifyRepairTaskContextFromEnvelope(t *testing.T) {
 	require.Equal(t, "/tmp", ctx["workspace"])
 }
 
+func TestEditVerifyRepairForcedParadigmSwitchRecovery(t *testing.T) {
+	env := testEnv(t)
+	cap := &editVerifyRepairCapability{env: env}
+	result := cap.Execute(context.Background(), euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			ID:          "forced-evr-paradigm",
+			Instruction: "force recovery",
+			Context:     map[string]any{"euclo.force_recovery": "paradigm_switch"},
+		},
+		State:   core.NewContext(),
+		Mode:    euclotypes.ModeResolution{ModeID: "code"},
+		Profile: euclotypes.ExecutionProfileSelection{ProfileID: "edit_verify_repair"},
+	})
+	require.Equal(t, euclotypes.ExecutionStatusFailed, result.Status)
+	require.NotNil(t, result.RecoveryHint)
+	require.Equal(t, euclotypes.RecoveryStrategyParadigmSwitch, result.RecoveryHint.Strategy)
+	require.Len(t, result.Artifacts, 1)
+	require.Equal(t, "euclo:edit_verify_repair", result.Artifacts[0].ProducerID)
+}
+
+func TestEditVerifyRepairForcedModeEscalationRecovery(t *testing.T) {
+	env := testEnv(t)
+	cap := &editVerifyRepairCapability{env: env}
+	result := cap.Execute(context.Background(), euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			ID:          "forced-evr-mode",
+			Instruction: "force recovery",
+			Context:     map[string]any{"euclo.force_recovery": "mode_escalation"},
+		},
+		State:   core.NewContext(),
+		Mode:    euclotypes.ModeResolution{ModeID: "code"},
+		Profile: euclotypes.ExecutionProfileSelection{ProfileID: "edit_verify_repair"},
+	})
+	require.Equal(t, euclotypes.ExecutionStatusPartial, result.Status)
+	require.NotNil(t, result.RecoveryHint)
+	require.Equal(t, euclotypes.RecoveryStrategyModeEscalation, result.RecoveryHint.Strategy)
+	require.Len(t, result.Artifacts, 1)
+	require.Equal(t, "euclo:edit_verify_repair", result.Artifacts[0].ProducerID)
+}
+
+func TestEditVerifyRepairForcedRecoveryActiveCompletes(t *testing.T) {
+	env := testEnv(t)
+	state := core.NewContext()
+	cap := &editVerifyRepairCapability{env: env}
+	result := cap.Execute(context.Background(), euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			ID:          "forced-evr-recovery-active",
+			Instruction: "force recovery",
+			Context: map[string]any{
+				"euclo.force_recovery":  "paradigm_switch",
+				"euclo.recovery_active": true,
+			},
+		},
+		State:   state,
+		Mode:    euclotypes.ModeResolution{ModeID: "code"},
+		Profile: euclotypes.ExecutionProfileSelection{ProfileID: "edit_verify_repair"},
+	})
+	require.Equal(t, euclotypes.ExecutionStatusCompleted, result.Status)
+	require.Len(t, result.Artifacts, 3)
+	raw, ok := state.Get("pipeline.verify")
+	require.True(t, ok)
+	payload, ok := raw.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "pass", payload["status"])
+}
+
 func TestCapTaskInstructionFallback(t *testing.T) {
 	require.Equal(t, "the requested change", capTaskInstruction(nil))
 	require.Equal(t, "the requested change", capTaskInstruction(&core.Task{}))
 	require.Equal(t, "fix it", capTaskInstruction(&core.Task{Instruction: "fix it"}))
+}
+
+type verificationStubTool struct {
+	name string
+}
+
+func (t verificationStubTool) Name() string                     { return t.name }
+func (t verificationStubTool) Description() string              { return "stub verification tool" }
+func (t verificationStubTool) Category() string                 { return "test" }
+func (t verificationStubTool) Parameters() []core.ToolParameter { return nil }
+func (t verificationStubTool) IsAvailable(context.Context, *core.Context) bool {
+	return true
+}
+func (t verificationStubTool) Permissions() core.ToolPermissions { return core.ToolPermissions{} }
+func (t verificationStubTool) Tags() []string                    { return []string{core.TagExecute} }
+func (t verificationStubTool) Execute(_ context.Context, _ *core.Context, _ map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"summary": "tests passed",
+		},
+	}, nil
+}
+
+func TestVerificationFallbackPayloadUsesGoTest(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(verificationStubTool{name: "go_test"}))
+
+	state := core.NewContext()
+	state.Set("pipeline.code", map[string]any{
+		"final_output": map[string]any{
+			"result": map[string]any{
+				"file_write": map[string]any{
+					"data": map[string]any{
+						"path": "/tmp/ws/testsuite/fixtures/div.go",
+					},
+				},
+			},
+		},
+	})
+
+	payload, ok := verificationFallbackPayload(context.Background(), euclotypes.ExecutionEnvelope{
+		Task:     &core.Task{Context: map[string]any{"workspace": "/tmp/ws"}},
+		Registry: registry,
+		State:    state,
+	})
+	require.True(t, ok)
+	require.Equal(t, "pass", payload["status"])
+	checks, ok := payload["checks"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, checks, 1)
+	require.Equal(t, "go_test", checks[0]["name"])
+}
+
+func TestVerificationFallbackPayloadUsesExecRunTests(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(verificationStubTool{name: "exec_run_tests"}))
+
+	state := core.NewContext()
+	state.Set("pipeline.code", map[string]any{
+		"final_output": map[string]any{
+			"result": map[string]any{
+				"file_write": map[string]any{
+					"data": map[string]any{
+						"path": "/tmp/ws/testsuite/agenttest_fixtures/pysuite/calc.py",
+					},
+				},
+			},
+		},
+	})
+
+	payload, ok := verificationFallbackPayload(context.Background(), euclotypes.ExecutionEnvelope{
+		Task:     &core.Task{Context: map[string]any{"workspace": "/tmp/ws"}},
+		Registry: registry,
+		State:    state,
+	})
+	require.True(t, ok)
+	require.Equal(t, "pass", payload["status"])
+	checks, ok := payload["checks"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, checks, 1)
+	require.Equal(t, "exec_run_tests", checks[0]["name"])
 }

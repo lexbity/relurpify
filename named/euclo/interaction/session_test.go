@@ -36,6 +36,9 @@ func TestExtractSessionResume_FromInteractionState(t *testing.T) {
 	if resume.LastPhase != "propose" {
 		t.Errorf("last phase: got %q", resume.LastPhase)
 	}
+	if len(resume.CompletedPhases) != 0 {
+		t.Errorf("completed: got %v, want none", resume.CompletedPhases)
+	}
 	if len(resume.SkippedPhases) != 1 || resume.SkippedPhases[0] != "clarify" {
 		t.Errorf("skipped: got %v", resume.SkippedPhases)
 	}
@@ -48,6 +51,7 @@ func TestExtractSessionResume_FromMapAny(t *testing.T) {
 		"current_phase":  "localize",
 		"phase_states":   map[string]any{"intake.done": true},
 		"selections":     map[string]any{"strategy": "trace"},
+		"phases_executed": []any{"intake", "reproduce"},
 		"skipped_phases": []any{"reproduce"},
 	})
 
@@ -61,6 +65,9 @@ func TestExtractSessionResume_FromMapAny(t *testing.T) {
 	if resume.LastPhase != "localize" {
 		t.Errorf("last phase: got %q", resume.LastPhase)
 	}
+	if len(resume.CompletedPhases) != 2 || resume.CompletedPhases[0] != "intake" {
+		t.Errorf("completed: got %v", resume.CompletedPhases)
+	}
 }
 
 func TestBuildResumeFrame(t *testing.T) {
@@ -69,7 +76,7 @@ func TestBuildResumeFrame(t *testing.T) {
 		LastPhase: "propose",
 	}
 	frame := BuildResumeFrame(resume)
-	if frame.Kind != FrameQuestion {
+	if frame.Kind != FrameSessionResume {
 		t.Errorf("kind: got %q", frame.Kind)
 	}
 	if frame.Phase != "resume" {
@@ -111,7 +118,11 @@ func TestApplySessionResume(t *testing.T) {
 	machine := NewPhaseMachine(PhaseMachineConfig{
 		Mode:    "code",
 		Emitter: &NoopEmitter{},
-		Phases:  []PhaseDefinition{{ID: "scope"}},
+		Phases: []PhaseDefinition{
+			{ID: "scope"},
+			{ID: "propose"},
+			{ID: "commit"},
+		},
 	})
 	resume := &SessionResume{
 		Mode:            "code",
@@ -128,5 +139,8 @@ func TestApplySessionResume(t *testing.T) {
 	}
 	if machine.State()["scope.confirmed"] != true {
 		t.Error("expected phase state restored")
+	}
+	if machine.CurrentPhase() != "propose" {
+		t.Errorf("expected current phase propose, got %q", machine.CurrentPhase())
 	}
 }
