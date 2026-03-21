@@ -80,6 +80,21 @@ type EventInfo struct {
 	Count uint64 `json:"count"`
 }
 
+type FMPContinuationInfo struct {
+	LineageID           string                `json:"lineage_id"`
+	TenantID            string                `json:"tenant_id"`
+	TaskClass           string                `json:"task_class"`
+	ContextClass        string                `json:"context_class"`
+	Owner               core.SubjectRef       `json:"owner"`
+	SessionID           string                `json:"session_id,omitempty"`
+	TrustClass          core.TrustClass       `json:"trust_class,omitempty"`
+	CurrentOwnerAttempt string                `json:"current_owner_attempt,omitempty"`
+	CurrentOwnerRuntime string                `json:"current_owner_runtime,omitempty"`
+	LineageVersion      int64                 `json:"lineage_version,omitempty"`
+	UpdatedAt           time.Time             `json:"updated_at,omitempty"`
+	SensitivityClass    core.SensitivityClass `json:"sensitivity_class,omitempty"`
+}
+
 type HealthResult struct {
 	AdminResult
 	Online           bool                  `json:"online"`
@@ -373,6 +388,158 @@ type ReadEventStreamResult struct {
 	Events       []core.FrameworkEvent `json:"events"`
 }
 
+type ListFMPContinuationsRequest struct {
+	AdminRequest
+	Page PageRequest `json:"page,omitempty"`
+}
+
+type ListFMPContinuationsResult struct {
+	AdminResult
+	PageResult
+	Continuations []FMPContinuationInfo `json:"continuations"`
+}
+
+type ReadFMPContinuationAuditRequest struct {
+	AdminRequest
+	LineageID string `json:"lineage_id"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
+type ReadFMPContinuationAuditResult struct {
+	AdminResult
+	Lineage *FMPContinuationInfo  `json:"lineage,omitempty"`
+	Events  []core.FrameworkEvent `json:"events"`
+}
+
+type ListFMPTrustBundlesRequest struct {
+	AdminRequest
+	Page PageRequest `json:"page,omitempty"`
+}
+
+type ListFMPTrustBundlesResult struct {
+	AdminResult
+	PageResult
+	Bundles []core.TrustBundle `json:"bundles"`
+}
+
+type UpsertFMPTrustBundleRequest struct {
+	AdminRequest
+	Bundle core.TrustBundle `json:"bundle"`
+}
+
+type UpsertFMPTrustBundleResult struct {
+	AdminResult
+	Bundle core.TrustBundle `json:"bundle"`
+}
+
+type ListFMPBoundaryPoliciesRequest struct {
+	AdminRequest
+	Page PageRequest `json:"page,omitempty"`
+}
+
+type ListFMPBoundaryPoliciesResult struct {
+	AdminResult
+	PageResult
+	Policies []core.BoundaryPolicy `json:"policies"`
+}
+
+type SetFMPBoundaryPolicyRequest struct {
+	AdminRequest
+	Policy core.BoundaryPolicy `json:"policy"`
+}
+
+type SetFMPBoundaryPolicyResult struct {
+	AdminResult
+	Policy core.BoundaryPolicy `json:"policy"`
+}
+
+type TenantFMPExportInfo struct {
+	TenantID   string    `json:"tenant_id"`
+	ExportName string    `json:"export_name"`
+	Enabled    bool      `json:"enabled"`
+	UpdatedAt  time.Time `json:"updated_at,omitempty"`
+}
+
+type ListTenantFMPExportsRequest struct {
+	AdminRequest
+	Page PageRequest `json:"page,omitempty"`
+}
+
+type ListTenantFMPExportsResult struct {
+	AdminResult
+	PageResult
+	Exports []TenantFMPExportInfo `json:"exports"`
+}
+
+type SetTenantFMPExportRequest struct {
+	AdminRequest
+	ExportName string `json:"export_name"`
+	Enabled    bool   `json:"enabled"`
+}
+
+type SetTenantFMPExportResult struct {
+	AdminResult
+	Export TenantFMPExportInfo `json:"export"`
+}
+
+type TenantFMPFederationPolicyInfo struct {
+	TenantID            string    `json:"tenant_id"`
+	AllowedTrustDomains []string  `json:"allowed_trust_domains,omitempty"`
+	AllowedRouteModes   []string  `json:"allowed_route_modes,omitempty"`
+	AllowMediation      bool      `json:"allow_mediation,omitempty"`
+	MaxTransferBytes    int64     `json:"max_transfer_bytes,omitempty"`
+	UpdatedAt           time.Time `json:"updated_at,omitempty"`
+}
+
+type GetTenantFMPFederationPolicyRequest struct {
+	AdminRequest
+}
+
+type GetTenantFMPFederationPolicyResult struct {
+	AdminResult
+	Policy TenantFMPFederationPolicyInfo `json:"policy"`
+}
+
+type SetTenantFMPFederationPolicyRequest struct {
+	AdminRequest
+	AllowedTrustDomains []string `json:"allowed_trust_domains,omitempty"`
+	AllowedRouteModes   []string `json:"allowed_route_modes,omitempty"`
+	AllowMediation      bool     `json:"allow_mediation,omitempty"`
+	MaxTransferBytes    int64    `json:"max_transfer_bytes,omitempty"`
+}
+
+type SetTenantFMPFederationPolicyResult struct {
+	AdminResult
+	Policy TenantFMPFederationPolicyInfo `json:"policy"`
+}
+
+type EffectiveFMPFederationPolicyInfo struct {
+	TenantID                 string                        `json:"tenant_id"`
+	TrustDomain              string                        `json:"trust_domain"`
+	TenantPolicy             TenantFMPFederationPolicyInfo `json:"tenant_policy"`
+	TrustBundlePresent       bool                          `json:"trust_bundle_present"`
+	TrustBundle              *core.TrustBundle             `json:"trust_bundle,omitempty"`
+	BoundaryPolicyPresent    bool                          `json:"boundary_policy_present"`
+	BoundaryPolicy           *core.BoundaryPolicy          `json:"boundary_policy,omitempty"`
+	AllowedTrustDomain       bool                          `json:"allowed_trust_domain"`
+	AllowedRouteModes        []string                      `json:"allowed_route_modes,omitempty"`
+	AllowMediation           bool                          `json:"allow_mediation"`
+	MaxTransferBytes         int64                         `json:"max_transfer_bytes,omitempty"`
+	RequireGatewayAuth       bool                          `json:"require_gateway_authentication,omitempty"`
+	AcceptedSourceDomains    []string                      `json:"accepted_source_domains,omitempty"`
+	AcceptedSourceIdentities []core.SubjectRef             `json:"accepted_source_identities,omitempty"`
+}
+
+type GetEffectiveFMPFederationPolicyRequest struct {
+	AdminRequest
+	TrustDomain string `json:"trust_domain"`
+}
+
+type GetEffectiveFMPFederationPolicyResult struct {
+	AdminResult
+	Policy EffectiveFMPFederationPolicyInfo `json:"policy"`
+}
+
 type ListTenantsRequest struct {
 	AdminRequest
 	Page PageRequest `json:"page,omitempty"`
@@ -414,14 +581,14 @@ type SetTenantEnabledResult struct {
 }
 
 type NodeEnrollmentInfo struct {
-	TenantID       string           `json:"tenant_id"`
-	NodeID         string           `json:"node_id"`
-	Owner          core.SubjectRef  `json:"owner"`
-	TrustClass     core.TrustClass  `json:"trust_class"`
-	KeyID          string           `json:"key_id,omitempty"`
-	PairedAt       time.Time        `json:"paired_at"`
-	LastVerifiedAt time.Time        `json:"last_verified_at,omitempty"`
-	AuthMethod     core.AuthMethod  `json:"auth_method,omitempty"`
+	TenantID       string          `json:"tenant_id"`
+	NodeID         string          `json:"node_id"`
+	Owner          core.SubjectRef `json:"owner"`
+	TrustClass     core.TrustClass `json:"trust_class"`
+	KeyID          string          `json:"key_id,omitempty"`
+	PairedAt       time.Time       `json:"paired_at"`
+	LastVerifiedAt time.Time       `json:"last_verified_at,omitempty"`
+	AuthMethod     core.AuthMethod `json:"auth_method,omitempty"`
 }
 
 type ListNodeEnrollmentsRequest struct {

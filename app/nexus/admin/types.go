@@ -13,6 +13,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/event"
 	"github.com/lexcodex/relurpify/framework/identity"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 	"github.com/lexcodex/relurpify/framework/middleware/session"
 )
@@ -102,6 +103,32 @@ type EventInfo = adminapi.EventInfo
 type ListEventsResult = adminapi.ListEventsResult
 type ReadEventStreamRequest = adminapi.ReadEventStreamRequest
 type ReadEventStreamResult = adminapi.ReadEventStreamResult
+type FMPContinuationInfo = adminapi.FMPContinuationInfo
+type ListFMPContinuationsRequest = adminapi.ListFMPContinuationsRequest
+type ListFMPContinuationsResult = adminapi.ListFMPContinuationsResult
+type ReadFMPContinuationAuditRequest = adminapi.ReadFMPContinuationAuditRequest
+type ReadFMPContinuationAuditResult = adminapi.ReadFMPContinuationAuditResult
+type ListFMPTrustBundlesRequest = adminapi.ListFMPTrustBundlesRequest
+type ListFMPTrustBundlesResult = adminapi.ListFMPTrustBundlesResult
+type UpsertFMPTrustBundleRequest = adminapi.UpsertFMPTrustBundleRequest
+type UpsertFMPTrustBundleResult = adminapi.UpsertFMPTrustBundleResult
+type ListFMPBoundaryPoliciesRequest = adminapi.ListFMPBoundaryPoliciesRequest
+type ListFMPBoundaryPoliciesResult = adminapi.ListFMPBoundaryPoliciesResult
+type SetFMPBoundaryPolicyRequest = adminapi.SetFMPBoundaryPolicyRequest
+type SetFMPBoundaryPolicyResult = adminapi.SetFMPBoundaryPolicyResult
+type TenantFMPExportInfo = adminapi.TenantFMPExportInfo
+type ListTenantFMPExportsRequest = adminapi.ListTenantFMPExportsRequest
+type ListTenantFMPExportsResult = adminapi.ListTenantFMPExportsResult
+type SetTenantFMPExportRequest = adminapi.SetTenantFMPExportRequest
+type SetTenantFMPExportResult = adminapi.SetTenantFMPExportResult
+type TenantFMPFederationPolicyInfo = adminapi.TenantFMPFederationPolicyInfo
+type GetTenantFMPFederationPolicyRequest = adminapi.GetTenantFMPFederationPolicyRequest
+type GetTenantFMPFederationPolicyResult = adminapi.GetTenantFMPFederationPolicyResult
+type SetTenantFMPFederationPolicyRequest = adminapi.SetTenantFMPFederationPolicyRequest
+type SetTenantFMPFederationPolicyResult = adminapi.SetTenantFMPFederationPolicyResult
+type EffectiveFMPFederationPolicyInfo = adminapi.EffectiveFMPFederationPolicyInfo
+type GetEffectiveFMPFederationPolicyRequest = adminapi.GetEffectiveFMPFederationPolicyRequest
+type GetEffectiveFMPFederationPolicyResult = adminapi.GetEffectiveFMPFederationPolicyResult
 type ListTenantsRequest = adminapi.ListTenantsRequest
 type TenantInfo = adminapi.TenantInfo
 type ListTenantsResult = adminapi.ListTenantsResult
@@ -150,6 +177,17 @@ type AdminService interface {
 	Health(ctx context.Context, req HealthRequest) (HealthResult, error)
 	ListEvents(ctx context.Context, req ListEventsRequest) (ListEventsResult, error)
 	ReadEventStream(ctx context.Context, req ReadEventStreamRequest) (ReadEventStreamResult, error)
+	ListFMPContinuations(ctx context.Context, req ListFMPContinuationsRequest) (ListFMPContinuationsResult, error)
+	ReadFMPContinuationAudit(ctx context.Context, req ReadFMPContinuationAuditRequest) (ReadFMPContinuationAuditResult, error)
+	ListFMPTrustBundles(ctx context.Context, req ListFMPTrustBundlesRequest) (ListFMPTrustBundlesResult, error)
+	UpsertFMPTrustBundle(ctx context.Context, req UpsertFMPTrustBundleRequest) (UpsertFMPTrustBundleResult, error)
+	ListFMPBoundaryPolicies(ctx context.Context, req ListFMPBoundaryPoliciesRequest) (ListFMPBoundaryPoliciesResult, error)
+	SetFMPBoundaryPolicy(ctx context.Context, req SetFMPBoundaryPolicyRequest) (SetFMPBoundaryPolicyResult, error)
+	ListTenantFMPExports(ctx context.Context, req ListTenantFMPExportsRequest) (ListTenantFMPExportsResult, error)
+	SetTenantFMPExport(ctx context.Context, req SetTenantFMPExportRequest) (SetTenantFMPExportResult, error)
+	GetTenantFMPFederationPolicy(ctx context.Context, req GetTenantFMPFederationPolicyRequest) (GetTenantFMPFederationPolicyResult, error)
+	SetTenantFMPFederationPolicy(ctx context.Context, req SetTenantFMPFederationPolicyRequest) (SetTenantFMPFederationPolicyResult, error)
+	GetEffectiveFMPFederationPolicy(ctx context.Context, req GetEffectiveFMPFederationPolicyRequest) (GetEffectiveFMPFederationPolicyResult, error)
 
 	ListTenants(ctx context.Context, req ListTenantsRequest) (ListTenantsResult, error)
 	GetTenant(ctx context.Context, req GetTenantRequest) (GetTenantResult, error)
@@ -162,19 +200,22 @@ type AdminService interface {
 }
 
 type ServiceConfig struct {
-	Nodes        fwnode.NodeStore
-	NodeManager  *fwnode.Manager
-	Sessions     session.Store
-	Identities   identity.Store
-	Tokens       TokenStore
-	Policies     PolicyRuleStore
-	Events       event.Log
-	Materializer *nexusgateway.StateMaterializer
-	Channels     *channel.Manager
-	Partition    string
-	Config       nexuscfg.Config
-	StartedAt    time.Time
-	PolicyEngine authorization.PolicyEngine
+	Nodes         fwnode.NodeStore
+	NodeManager   *fwnode.Manager
+	Sessions      session.Store
+	Identities    identity.Store
+	Tokens        TokenStore
+	Policies      PolicyRuleStore
+	FMPExports    TenantFMPExportStore
+	FMPFederation TenantFMPFederationPolicyStore
+	Events        event.Log
+	Materializer  *nexusgateway.StateMaterializer
+	Channels      *channel.Manager
+	FMP           *fwfmp.Service
+	Partition     string
+	Config        nexuscfg.Config
+	StartedAt     time.Time
+	PolicyEngine  authorization.PolicyEngine
 }
 
 type TokenStore interface {
@@ -187,4 +228,15 @@ type TokenStore interface {
 type PolicyRuleStore interface {
 	ListRules(ctx context.Context) ([]core.PolicyRule, error)
 	SetRuleEnabled(ctx context.Context, ruleID string, enabled bool) error
+}
+
+type TenantFMPExportStore interface {
+	ListTenantExports(ctx context.Context, tenantID string) ([]TenantFMPExportInfo, error)
+	SetTenantExportEnabled(ctx context.Context, tenantID, exportName string, enabled bool) error
+	IsExportEnabled(ctx context.Context, tenantID, exportName string) (bool, bool, error)
+}
+
+type TenantFMPFederationPolicyStore interface {
+	GetTenantFederationPolicy(ctx context.Context, tenantID string) (*core.TenantFederationPolicy, error)
+	SetTenantFederationPolicy(ctx context.Context, policy core.TenantFederationPolicy) error
 }

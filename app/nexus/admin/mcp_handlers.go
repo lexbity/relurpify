@@ -40,6 +40,69 @@ type listEventsArgs struct {
 	Limit      int    `json:"limit,omitempty"`
 }
 
+type listFMPContinuationsArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	Cursor     string `json:"cursor,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
+type readFMPContinuationAuditArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	LineageID  string `json:"lineage_id"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
+type listFMPTrustBundlesArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	Cursor     string `json:"cursor,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
+type upsertFMPTrustBundleArgs struct {
+	APIVersion string           `json:"api_version,omitempty"`
+	Bundle     core.TrustBundle `json:"bundle"`
+}
+
+type listFMPBoundaryPoliciesArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	Cursor     string `json:"cursor,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
+type setFMPBoundaryPolicyArgs struct {
+	APIVersion string              `json:"api_version,omitempty"`
+	Policy     core.BoundaryPolicy `json:"policy"`
+}
+
+type listTenantFMPExportsArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	Cursor     string `json:"cursor,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
+type setTenantFMPExportArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	ExportName string `json:"export_name"`
+	Enabled    bool   `json:"enabled"`
+}
+
+type getTenantFMPFederationPolicyArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+}
+
+type setTenantFMPFederationPolicyArgs struct {
+	APIVersion          string   `json:"api_version,omitempty"`
+	AllowedTrustDomains []string `json:"allowed_trust_domains,omitempty"`
+	AllowedRouteModes   []string `json:"allowed_route_modes,omitempty"`
+	AllowMediation      bool     `json:"allow_mediation,omitempty"`
+	MaxTransferBytes    int64    `json:"max_transfer_bytes,omitempty"`
+}
+
+type getEffectiveFMPFederationPolicyArgs struct {
+	APIVersion  string `json:"api_version,omitempty"`
+	TrustDomain string `json:"trust_domain"`
+}
+
 type updateNodeCapabilitiesArgs struct {
 	APIVersion   string                      `json:"api_version,omitempty"`
 	NodeID       string                      `json:"node_id"`
@@ -197,6 +260,194 @@ func handleListEvents(ctx context.Context, svc AdminService, principal core.Auth
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ListEvents(ctx, ListEventsRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), PageRequest: PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)}})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleListFMPContinuations(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ListFMPContinuations(ctx, ListFMPContinuationsRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			Page:         PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleReadFMPContinuationAudit(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ReadFMPContinuationAudit(ctx, ReadFMPContinuationAuditRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			LineageID:    stringArg(args, "lineage_id", ""),
+			Limit:        intArg(args, "limit", 0),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleListFMPTrustBundles(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ListFMPTrustBundles(ctx, ListFMPTrustBundlesRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			Page:         PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleUpsertFMPTrustBundle(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		bundle, err := trustBundleArg(args, "bundle")
+		if err != nil {
+			return nil, err
+		}
+		result, err := svc.UpsertFMPTrustBundle(ctx, UpsertFMPTrustBundleRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			Bundle:       bundle,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleListFMPBoundaryPolicies(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ListFMPBoundaryPolicies(ctx, ListFMPBoundaryPoliciesRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			Page:         PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleSetFMPBoundaryPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		policy, err := boundaryPolicyArg(args, "policy")
+		if err != nil {
+			return nil, err
+		}
+		result, err := svc.SetFMPBoundaryPolicy(ctx, SetFMPBoundaryPolicyRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			Policy:       policy,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleListTenantFMPExports(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ListTenantFMPExports(ctx, ListTenantFMPExportsRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			Page:         PageRequest{Cursor: stringArg(args, "cursor", ""), Limit: intArg(args, "limit", 0)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleSetTenantFMPExport(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.SetTenantFMPExport(ctx, SetTenantFMPExportRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			ExportName:   stringArg(args, "export_name", ""),
+			Enabled:      boolArg(args, "enabled", false),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleGetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.GetTenantFMPFederationPolicy(ctx, GetTenantFMPFederationPolicyRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleSetTenantFMPFederationPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.SetTenantFMPFederationPolicy(ctx, SetTenantFMPFederationPolicyRequest{
+			AdminRequest:        requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			AllowedTrustDomains: stringListArg(args, "allowed_trust_domains"),
+			AllowedRouteModes:   stringListArg(args, "allowed_route_modes"),
+			AllowMediation:      boolArg(args, "allow_mediation", false),
+			MaxTransferBytes:    int64(intArg(args, "max_transfer_bytes", 0)),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleGetEffectiveFMPFederationPolicy(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.GetEffectiveFMPFederationPolicy(ctx, GetEffectiveFMPFederationPolicyRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			TrustDomain:  stringArg(args, "trust_domain", ""),
+		})
 		if err != nil {
 			return nil, err
 		}

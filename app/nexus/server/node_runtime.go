@@ -2,13 +2,16 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/identity"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 	"github.com/lexcodex/relurpify/framework/middleware/session"
@@ -37,7 +40,7 @@ func (c *websocketRPCConn) Close() error {
 	return c.conn.Close()
 }
 
-func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
+func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, mesh *fwfmp.Service, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 	if manager == nil {
 		return fmt.Errorf("node manager unavailable")
 	}
@@ -45,8 +48,9 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 	if err != nil {
 		return err
 	}
+	rpcConn := nodeRPCConnForTransport(principal, frame, &websocketRPCConn{conn: conn})
 	wsConn := &fwnode.WSConnection{
-		Conn:          &websocketRPCConn{conn: conn},
+		Conn:          rpcConn,
 		Descriptor:    nodeDesc,
 		CapabilitySet: connectedNodeCapabilities(ctx, manager, nodeDesc.ID),
 		HealthState: core.NodeHealth{
@@ -54,8 +58,16 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 			Foreground: true,
 		},
 	}
+	if mesh != nil && strings.TrimSpace(frame.TransportProfile) != "" {
+		wsConn.FrameHandler = meshTransportFrameHandler(mesh, frame)
+	}
 	if err := manager.HandleConnect(ctx, wsConn); err != nil {
 		return err
+	}
+	if mesh != nil {
+		if err := AdvertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame); err != nil {
+			return err
+		}
 	}
 	defer func() {
 		disconnectCtx, cancel := NewNodeDisconnectContext(ctx)
@@ -63,6 +75,305 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 		_ = manager.HandleDisconnect(disconnectCtx, nodeDesc.ID, "websocket closed")
 	}()
 	return wsConn.ReadLoop(ctx)
+}
+
+func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
+	return func(ctx context.Context, conn *fwnode.WSConnection, frame map[string]json.RawMessage) error {
+		if mesh == nil {
+			return nil
+		}
+		var frameType string
+		if raw, ok := frame["type"]; ok {
+			if err := json.Unmarshal(raw, &frameType); err != nil {
+				return err
+			}
+		}
+		switch frameType {
+		case "fmp.runtime.register":
+			var req struct {
+				Type        string                 `json:"type"`
+				TrustDomain string                 `json:"trust_domain"`
+				Runtime     core.RuntimeDescriptor `json:"runtime"`
+				ExpiresAt   time.Time              `json:"expires_at,omitempty"`
+				Signature   string                 `json:"signature,omitempty"`
+			}
+			if err := remarshalNodeFrame(frame, &req); err != nil {
+				return err
+			}
+			if strings.TrimSpace(req.TrustDomain) == "" {
+				req.TrustDomain = strings.TrimSpace(connectInfo.TrustDomain)
+			}
+			req.Runtime.NodeID = conn.Descriptor.ID
+			if strings.TrimSpace(req.Runtime.RuntimeID) == "" {
+				req.Runtime.RuntimeID = fallbackNodeRuntimeID(conn.Descriptor, connectInfo)
+			}
+			if strings.TrimSpace(req.Runtime.TrustDomain) == "" {
+				req.Runtime.TrustDomain = req.TrustDomain
+			}
+			if strings.TrimSpace(req.Runtime.RuntimeVersion) == "" {
+				req.Runtime.RuntimeVersion = fallbackRuntimeVersion(connectInfo)
+			}
+			if strings.TrimSpace(req.Runtime.CompatibilityClass) == "" {
+				req.Runtime.CompatibilityClass = fallbackCompatibilityClass(connectInfo)
+			}
+			if len(req.Runtime.SupportedContextClasses) == 0 {
+				req.Runtime.SupportedContextClasses = append([]string(nil), connectInfo.SupportedContextClasses...)
+			}
+			if err := mesh.RegisterRuntime(ctx, fwfmp.RuntimeRegistrationRequest{
+				TrustDomain: req.TrustDomain,
+				Node:        conn.Descriptor,
+				Runtime:     req.Runtime,
+				ExpiresAt:   req.ExpiresAt,
+				Signature:   req.Signature,
+			}); err != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.runtime.error", "operation": "register", "error": err.Error()})
+			}
+			return conn.SendJSON(map[string]any{"type": "fmp.runtime.registered", "runtime_id": req.Runtime.RuntimeID, "trust_domain": req.TrustDomain})
+		case "fmp.export.advertise":
+			var req struct {
+				Type        string                `json:"type"`
+				TrustDomain string                `json:"trust_domain"`
+				RuntimeID   string                `json:"runtime_id"`
+				Export      core.ExportDescriptor `json:"export"`
+				ExpiresAt   time.Time             `json:"expires_at,omitempty"`
+				Signature   string                `json:"signature,omitempty"`
+			}
+			if err := remarshalNodeFrame(frame, &req); err != nil {
+				return err
+			}
+			if strings.TrimSpace(req.TrustDomain) == "" {
+				req.TrustDomain = strings.TrimSpace(connectInfo.TrustDomain)
+			}
+			if strings.TrimSpace(req.RuntimeID) == "" {
+				req.RuntimeID = fallbackNodeRuntimeID(conn.Descriptor, connectInfo)
+			}
+			if err := mesh.AdvertiseExport(ctx, core.ExportAdvertisement{
+				TrustDomain: req.TrustDomain,
+				RuntimeID:   req.RuntimeID,
+				NodeID:      conn.Descriptor.ID,
+				Export:      req.Export,
+				ExpiresAt:   req.ExpiresAt,
+				Signature:   req.Signature,
+			}); err != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.export.error", "operation": "advertise", "error": err.Error()})
+			}
+			return conn.SendJSON(map[string]any{"type": "fmp.export.advertised", "runtime_id": req.RuntimeID, "export_name": req.Export.ExportName, "trust_domain": req.TrustDomain})
+		case "fmp.chunk.open":
+			var req struct {
+				Type      string               `json:"type"`
+				LineageID string               `json:"lineage_id"`
+				Manifest  core.ContextManifest `json:"manifest"`
+				Sealed    core.SealedContext   `json:"sealed"`
+			}
+			if err := remarshalNodeFrame(frame, &req); err != nil {
+				return err
+			}
+			session, err := mesh.OpenChunkTransfer(ctx, req.LineageID, req.Manifest, req.Sealed)
+			if err != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.chunk.error", "operation": "open", "error": err.Error()})
+			}
+			return conn.SendJSON(map[string]any{"type": "fmp.chunk.opened", "session": session})
+		case "fmp.chunk.read":
+			var req struct {
+				Type       string `json:"type"`
+				TransferID string `json:"transfer_id"`
+				MaxChunks  int    `json:"max_chunks,omitempty"`
+			}
+			if err := remarshalNodeFrame(frame, &req); err != nil {
+				return err
+			}
+			chunks, control, err := mesh.ReadChunkTransfer(ctx, req.TransferID, req.MaxChunks)
+			if err != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.chunk.error", "operation": "read", "transfer_id": req.TransferID, "error": err.Error()})
+			}
+			return conn.SendJSON(map[string]any{"type": "fmp.chunk.data", "transfer_id": req.TransferID, "chunks": chunks, "flow_control": control})
+		case "fmp.chunk.ack":
+			var req struct {
+				Type       string `json:"type"`
+				LineageID  string `json:"lineage_id"`
+				TransferID string `json:"transfer_id"`
+				AckedIndex int    `json:"acked_index"`
+				WindowSize int    `json:"window_size,omitempty"`
+			}
+			if err := remarshalNodeFrame(frame, &req); err != nil {
+				return err
+			}
+			control, err := mesh.AckChunkTransfer(ctx, req.LineageID, fwfmp.ChunkAck{
+				TransferID: req.TransferID,
+				AckedIndex: req.AckedIndex,
+				WindowSize: req.WindowSize,
+			})
+			if err != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.chunk.error", "operation": "ack", "transfer_id": req.TransferID, "error": err.Error()})
+			}
+			return conn.SendJSON(map[string]any{"type": "fmp.chunk.acked", "transfer_id": req.TransferID, "flow_control": control})
+		case "fmp.chunk.cancel":
+			var req struct {
+				Type       string `json:"type"`
+				LineageID  string `json:"lineage_id"`
+				TransferID string `json:"transfer_id"`
+				Reason     string `json:"reason,omitempty"`
+			}
+			if err := remarshalNodeFrame(frame, &req); err != nil {
+				return err
+			}
+			if err := mesh.CancelChunkTransfer(ctx, req.LineageID, req.TransferID, req.Reason); err != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.chunk.error", "operation": "cancel", "transfer_id": req.TransferID, "error": err.Error()})
+			}
+			return conn.SendJSON(map[string]any{"type": "fmp.chunk.cancelled", "transfer_id": req.TransferID, "reason": req.Reason})
+		case "fmp.resume.execute":
+			var req struct {
+				Type        string                `json:"type"`
+				Actor       core.SubjectRef       `json:"actor"`
+				RuntimeID   string                `json:"runtime_id,omitempty"`
+				Offer       core.HandoffOffer     `json:"offer"`
+				Destination core.ExportDescriptor `json:"destination"`
+				Manifest    core.ContextManifest  `json:"manifest"`
+				Sealed      core.SealedContext    `json:"sealed"`
+			}
+			if err := remarshalNodeFrame(frame, &req); err != nil {
+				return err
+			}
+			runtimeID := strings.TrimSpace(req.RuntimeID)
+			if runtimeID == "" {
+				runtimeID = fallbackNodeRuntimeID(conn.Descriptor, connectInfo)
+			}
+			executed, commit, authorized, refusal, err := mesh.ResumeHandoffForNode(ctx, req.Offer, req.Destination, runtimeID, conn.Descriptor.ID, req.Actor, req.Manifest, req.Sealed)
+			if err != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.resume.error", "operation": "execute", "error": err.Error()})
+			}
+			if refusal != nil {
+				return conn.SendJSON(map[string]any{"type": "fmp.resume.refused", "operation": "execute", "refusal": refusal})
+			}
+			return conn.SendJSON(map[string]any{
+				"type":       "fmp.resume.executed",
+				"authorized": authorized,
+				"executed":   executed,
+				"commit":     commit,
+			})
+		default:
+			return nil
+		}
+	}
+}
+
+func remarshalNodeFrame(input any, out any) error {
+	data, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, out)
+}
+
+func ChunkTransportFrameHandlerForTest(mesh *fwfmp.Service) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
+	return meshTransportFrameHandler(mesh, fwgateway.NodeConnectInfo{})
+}
+
+func MeshTransportFrameHandlerForTest(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
+	return meshTransportFrameHandler(mesh, connectInfo)
+}
+
+func nodeRPCConnForTransport(principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, base interface {
+	WriteJSON(v any) error
+	ReadJSON(v any) error
+	Close() error
+}) interface {
+	WriteJSON(v any) error
+	ReadJSON(v any) error
+	Close() error
+} {
+	if strings.TrimSpace(frame.TransportProfile) == "" {
+		return base
+	}
+	sessionID := frame.NodeID
+	if principal.Principal != nil && strings.TrimSpace(principal.Principal.SessionID) != "" {
+		sessionID = strings.TrimSpace(principal.Principal.SessionID)
+	}
+	if strings.TrimSpace(sessionID) == "" {
+		sessionID = frame.RuntimeID
+	}
+	return fwnode.NewFramedRPCConn(base, sessionID)
+}
+
+func NodeRPCConnForTransportForTest(principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, base interface {
+	WriteJSON(v any) error
+	ReadJSON(v any) error
+	Close() error
+}) interface {
+	WriteJSON(v any) error
+	ReadJSON(v any) error
+	Close() error
+} {
+	return nodeRPCConnForTransport(principal, frame, base)
+}
+
+func AdvertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) error {
+	if mesh == nil {
+		return nil
+	}
+	trustDomain := strings.TrimSpace(frame.TrustDomain)
+	if trustDomain == "" {
+		trustDomain = "local"
+	}
+	expiresAt := time.Now().UTC().Add(5 * time.Minute)
+	return mesh.RegisterRuntime(ctx, fwfmp.RuntimeRegistrationRequest{
+		TrustDomain: trustDomain,
+		Node:        nodeDesc,
+		ExpiresAt:   expiresAt,
+		Signature:   runtimeRegistrationSignature(nodeDesc, frame),
+		Runtime: core.RuntimeDescriptor{
+			RuntimeID:               fallbackNodeRuntimeID(nodeDesc, frame),
+			NodeID:                  nodeDesc.ID,
+			TrustDomain:             trustDomain,
+			RuntimeVersion:          fallbackRuntimeVersion(frame),
+			SupportedContextClasses: append([]string(nil), frame.SupportedContextClasses...),
+			CompatibilityClass:      fallbackCompatibilityClass(frame),
+			AttestationProfile:      "nexus.node_enrollment.v1",
+			AttestationClaims: map[string]string{
+				"node_id":         nodeDesc.ID,
+				"tenant_id":       nodeDesc.TenantID,
+				"trust_class":     string(nodeDesc.TrustClass),
+				"peer_key_id":     strings.TrimSpace(frame.PeerKeyID),
+				"transport":       strings.TrimSpace(frame.TransportProfile),
+				"runtime_version": fallbackRuntimeVersion(frame),
+			},
+			ExpiresAt: expiresAt,
+			Signature: runtimeRegistrationSignature(nodeDesc, frame),
+		},
+	})
+}
+
+func fallbackNodeRuntimeID(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
+	if strings.TrimSpace(frame.RuntimeID) != "" {
+		return strings.TrimSpace(frame.RuntimeID)
+	}
+	return nodeDesc.ID + ":default"
+}
+
+func fallbackRuntimeVersion(frame fwgateway.NodeConnectInfo) string {
+	if strings.TrimSpace(frame.RuntimeVersion) != "" {
+		return strings.TrimSpace(frame.RuntimeVersion)
+	}
+	return "0.0.0"
+}
+
+func fallbackCompatibilityClass(frame fwgateway.NodeConnectInfo) string {
+	if strings.TrimSpace(frame.CompatibilityClass) != "" {
+		return strings.TrimSpace(frame.CompatibilityClass)
+	}
+	return "default"
+}
+
+func runtimeRegistrationSignature(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
+	parts := []string{
+		"nexus-register",
+		nodeDesc.ID,
+		strings.TrimSpace(frame.RuntimeID),
+		strings.TrimSpace(frame.RuntimeVersion),
+		strings.TrimSpace(frame.PeerKeyID),
+		strings.TrimSpace(frame.TransportProfile),
+	}
+	return strings.Join(parts, ":")
 }
 
 func connectedNodeDescriptor(ctx context.Context, manager *fwnode.Manager, identities identity.Store, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo) (core.NodeDescriptor, error) {

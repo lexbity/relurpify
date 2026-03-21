@@ -19,6 +19,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/event"
 	"github.com/lexcodex/relurpify/framework/identity"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	mcpprotocol "github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
 	mcpserver "github.com/lexcodex/relurpify/framework/middleware/mcp/server"
@@ -31,14 +32,16 @@ const DefaultTenantID = "local"
 // NexusApp wires the Nexus gateway stack around already-open stores so tests can
 // construct the full handler without filesystem config or bound ports.
 type NexusApp struct {
-	EventLog      event.Log
-	SessionStore  session.Store
-	IdentityStore identity.Store
-	NodeStore     fwnode.NodeStore
-	TokenStore    nexusadmin.TokenStore
-	PolicyStore   nexusadmin.PolicyRuleStore
-	Config        nexuscfg.Config
-	Partition     string
+	EventLog           event.Log
+	SessionStore       session.Store
+	IdentityStore      identity.Store
+	NodeStore          fwnode.NodeStore
+	TokenStore         nexusadmin.TokenStore
+	PolicyStore        nexusadmin.PolicyRuleStore
+	FMPExportStore     nexusadmin.TenantFMPExportStore
+	FMPFederationStore nexusadmin.TenantFMPFederationPolicyStore
+	Config             nexuscfg.Config
+	Partition          string
 
 	ChannelAdapters []channel.Adapter
 	WebchatAdapter  *webchat.Adapter
@@ -46,6 +49,7 @@ type NexusApp struct {
 	NodeManager          *fwnode.Manager
 	ChannelManager       *channel.Manager
 	StateMaterializer    *nexusgateway.StateMaterializer
+	FMPService           *fwfmp.Service
 	StartedAt            time.Time
 	PrincipalResolver    func(context.Context, string) (fwgateway.ConnectionPrincipal, error)
 	VerifyNodeConnection func(context.Context, identity.Store, fwgateway.ConnectionPrincipal, fwgateway.NodeConnectInfo, *websocket.Conn) error
@@ -66,6 +70,16 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 	}
 	if a.NodeStore == nil {
 		return nil, fmt.Errorf("node store required")
+	}
+	if a.FMPService != nil {
+		wireFMPNexusAdapter(a.FMPService, a.IdentityStore, a.SessionStore)
+		if a.FMPService.Nexus.Exports == nil {
+			a.FMPService.Nexus.Exports = a.FMPExportStore
+		}
+		if a.FMPService.Nexus.Federation == nil {
+			a.FMPService.Nexus.Federation = a.FMPFederationStore
+		}
+		_ = EnsureFederatedMeshGateway(a.FMPService)
 	}
 
 	nodeManager := a.NodeManager
@@ -121,8 +135,9 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 	}()
 
 	srv := &fwgateway.Server{
-		Log:       a.EventLog,
-		Partition: a.partition(),
+		Log:                a.EventLog,
+		Partition:          a.partition(),
+		FMPTransportPolicy: fwgateway.DefaultFMPTransportPolicy(nexuscfg.IsLoopbackBind(a.Config.Gateway.Bind)),
 		ListCapabilitiesForPrincipal: func(principal fwgateway.ConnectionPrincipal) []core.CapabilityDescriptor {
 			return ListNodeCapabilities(nodeManager, principal)
 		},
@@ -181,7 +196,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 			return manager.Send(ctx, msg)
 		},
 		HandleNodeConnection: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
-			return HandleGatewayNodeConnection(ctx, nodeManager, a.IdentityStore, principal, info, conn)
+			return HandleGatewayNodeConnection(ctx, nodeManager, a.IdentityStore, a.FMPService, principal, info, conn)
 		},
 		AdminSnapshot: func(ctx context.Context, principal fwgateway.ConnectionPrincipal) (map[string]any, error) {
 			if a.StateMaterializer == nil {
@@ -199,18 +214,21 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 	}
 
 	adminSvc := nexusadmin.NewService(nexusadmin.ServiceConfig{
-		Nodes:        a.NodeStore,
-		NodeManager:  nodeManager,
-		Sessions:     a.SessionStore,
-		Identities:   a.IdentityStore,
-		Tokens:       a.TokenStore,
-		Policies:     a.PolicyStore,
-		Events:       a.EventLog,
-		Materializer: a.StateMaterializer,
-		Channels:     manager,
-		Partition:    a.partition(),
-		Config:       a.Config,
-		StartedAt:    a.StartedAt,
+		Nodes:         a.NodeStore,
+		NodeManager:   nodeManager,
+		Sessions:      a.SessionStore,
+		Identities:    a.IdentityStore,
+		Tokens:        a.TokenStore,
+		Policies:      a.PolicyStore,
+		FMPExports:    a.FMPExportStore,
+		Events:        a.EventLog,
+		Materializer:  a.StateMaterializer,
+		Channels:      manager,
+		FMP:           a.FMPService,
+		FMPFederation: a.FMPFederationStore,
+		Partition:     a.partition(),
+		Config:        a.Config,
+		StartedAt:     a.StartedAt,
 	})
 	adminExporter := nexusadmin.NewMCPExporter(adminSvc)
 	adminMCPSvc := mcpserver.New(
@@ -240,6 +258,24 @@ func (a *NexusApp) gatewayPath() string {
 		return "/gateway"
 	}
 	return a.Config.Gateway.Path
+}
+
+func wireFMPNexusAdapter(mesh *fwfmp.Service, identities identity.Store, sessions session.Store) {
+	if mesh == nil {
+		return
+	}
+	if mesh.Nexus.Tenants == nil {
+		mesh.Nexus.Tenants = identities
+	}
+	if mesh.Nexus.Subjects == nil {
+		mesh.Nexus.Subjects = identities
+	}
+	if mesh.Nexus.Nodes == nil {
+		mesh.Nexus.Nodes = identities
+	}
+	if mesh.Nexus.Sessions == nil {
+		mesh.Nexus.Sessions = sessions
+	}
 }
 
 func snapshotForPrincipal(materializer *nexusgateway.StateMaterializer, principal fwgateway.ConnectionPrincipal) (map[string]any, error) {

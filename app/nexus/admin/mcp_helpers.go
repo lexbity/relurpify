@@ -35,6 +35,8 @@ func mustSchema(sample any) map[string]any {
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "code": map[string]any{"type": "string"}}, "required": []string{"code"}}
 	case getNodeArgs, revokeNodeArgs:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "node_id": map[string]any{"type": "string"}}, "required": []string{"node_id"}}
+	case getEffectiveFMPFederationPolicyArgs:
+		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "trust_domain": map[string]any{"type": "string"}}, "required": []string{"trust_domain"}}
 	case updateNodeCapabilitiesArgs:
 		return map[string]any{
 			"type": "object",
@@ -78,6 +80,17 @@ func mustSchema(sample any) map[string]any {
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "token_id": map[string]any{"type": "string"}}, "required": []string{"token_id"}}
 	case setPolicyRuleEnabledArgs:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "rule_id": map[string]any{"type": "string"}, "enabled": map[string]any{"type": "boolean"}}, "required": []string{"rule_id", "enabled"}}
+	case setTenantFMPFederationPolicyArgs:
+		return map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"api_version":           map[string]any{"type": "string"},
+				"allowed_trust_domains": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"allowed_route_modes":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"allow_mediation":       map[string]any{"type": "boolean"},
+				"max_transfer_bytes":    map[string]any{"type": "integer"},
+			},
+		}
 	default:
 		return map[string]any{"type": "object", "properties": map[string]any{"api_version": map[string]any{"type": "string"}, "cursor": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}}
 	}
@@ -313,6 +326,37 @@ func timeArg(args map[string]any, key string) (*time.Time, error) {
 	}
 	parsed = parsed.UTC()
 	return &parsed, nil
+}
+
+func trustBundleArg(args map[string]any, key string) (core.TrustBundle, error) {
+	var bundle core.TrustBundle
+	if err := decodeJSONArg(args, key, &bundle); err != nil {
+		return core.TrustBundle{}, AdminError{Code: AdminErrorInvalidArgument, Message: "bundle invalid", Detail: map[string]any{"field": key, "cause": err.Error()}}
+	}
+	return bundle, nil
+}
+
+func boundaryPolicyArg(args map[string]any, key string) (core.BoundaryPolicy, error) {
+	var policy core.BoundaryPolicy
+	if err := decodeJSONArg(args, key, &policy); err != nil {
+		return core.BoundaryPolicy{}, AdminError{Code: AdminErrorInvalidArgument, Message: "policy invalid", Detail: map[string]any{"field": key, "cause": err.Error()}}
+	}
+	return policy, nil
+}
+
+func decodeJSONArg(args map[string]any, key string, out any) error {
+	if args == nil {
+		return fmt.Errorf("argument %s required", key)
+	}
+	value, ok := args[key]
+	if !ok {
+		return fmt.Errorf("argument %s required", key)
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, out)
 }
 
 func DecodeStructuredContent[T any](result *protocol.CallToolResult, target *T) error {

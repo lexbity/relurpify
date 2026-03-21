@@ -50,6 +50,9 @@ func verifyGatewayNodeChallenge(ctx context.Context, store identity.Store, princ
 	if principal.Actor.ID != "" && principal.Actor.ID != enrollment.NodeID {
 		return fmt.Errorf("principal actor id does not match enrolled node")
 	}
+	if info.PeerKeyID != "" && enrollment.KeyID != "" && info.PeerKeyID != enrollment.KeyID {
+		return fmt.Errorf("transport peer key id does not match enrolled node key")
+	}
 	nonce, err := generateNodeChallenge()
 	if err != nil {
 		return err

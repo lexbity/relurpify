@@ -33,6 +33,17 @@ func NewMCPExporter(service AdminService) *MCPExporter {
 			{Name: "nexus.nodes.set_capabilities", Description: "Replace the approved capabilities for an enrolled node", Schema: mustSchema(updateNodeCapabilitiesArgs{}), MinScope: "nexus:admin", Handler: handleUpdateNodeCapabilities},
 			{Name: "nexus.nodes.revoke", Description: "Revoke an enrolled node", Schema: mustSchema(revokeNodeArgs{}), MinScope: "nexus:admin", Handler: handleRevokeNode},
 			{Name: "nexus.gateway.list_events", Description: "List gateway event counts", Schema: mustSchema(listEventsArgs{}), MinScope: "nexus:observer", Handler: handleListEvents},
+			{Name: "nexus.fmp.list_continuations", Description: "List tenant-scoped FMP continuations", Schema: mustSchema(listFMPContinuationsArgs{}), MinScope: "nexus:observer", Handler: handleListFMPContinuations},
+			{Name: "nexus.fmp.read_audit", Description: "Read tenant-scoped FMP audit events for a lineage", Schema: mustSchema(readFMPContinuationAuditArgs{}), MinScope: "nexus:observer", Handler: handleReadFMPContinuationAudit},
+			{Name: "nexus.fmp.list_trust_bundles", Description: "List configured mesh trust bundles", Schema: mustSchema(listFMPTrustBundlesArgs{}), MinScope: "nexus:admin:global", Handler: handleListFMPTrustBundles},
+			{Name: "nexus.fmp.upsert_trust_bundle", Description: "Create or update a mesh trust bundle", Schema: mustSchema(upsertFMPTrustBundleArgs{}), MinScope: "nexus:admin:global", Handler: handleUpsertFMPTrustBundle},
+			{Name: "nexus.fmp.list_boundary_policies", Description: "List configured FMP boundary policies", Schema: mustSchema(listFMPBoundaryPoliciesArgs{}), MinScope: "nexus:admin:global", Handler: handleListFMPBoundaryPolicies},
+			{Name: "nexus.fmp.set_boundary_policy", Description: "Create or update an FMP boundary policy", Schema: mustSchema(setFMPBoundaryPolicyArgs{}), MinScope: "nexus:admin:global", Handler: handleSetFMPBoundaryPolicy},
+			{Name: "nexus.fmp.list_tenant_exports", Description: "List tenant export enablement overrides", Schema: mustSchema(listTenantFMPExportsArgs{}), MinScope: "nexus:admin", Handler: handleListTenantFMPExports},
+			{Name: "nexus.fmp.set_tenant_export", Description: "Enable or disable an export for the current tenant", Schema: mustSchema(setTenantFMPExportArgs{}), MinScope: "nexus:admin", Handler: handleSetTenantFMPExport},
+			{Name: "nexus.fmp.get_tenant_federation_policy", Description: "Get the current tenant federation policy", Schema: mustSchema(getTenantFMPFederationPolicyArgs{}), MinScope: "nexus:admin", Handler: handleGetTenantFMPFederationPolicy},
+			{Name: "nexus.fmp.set_tenant_federation_policy", Description: "Set the current tenant federation policy", Schema: mustSchema(setTenantFMPFederationPolicyArgs{}), MinScope: "nexus:admin", Handler: handleSetTenantFMPFederationPolicy},
+			{Name: "nexus.fmp.get_effective_federation_policy", Description: "Get the effective federation policy for the current tenant and trust domain", Schema: mustSchema(getEffectiveFMPFederationPolicyArgs{}), MinScope: "nexus:observer", Handler: handleGetEffectiveFMPFederationPolicy},
 			{Name: "nexus.sessions.close", Description: "Close an active session", Schema: mustSchema(closeSessionArgs{}), MinScope: "nexus:operator", Handler: handleCloseSession},
 			{Name: "nexus.sessions.grant_delegation", Description: "Grant a subject permission to act on a session", Schema: mustSchema(grantSessionDelegationArgs{}), MinScope: "nexus:admin", Handler: handleGrantSessionDelegation},
 			{Name: "nexus.channels.restart", Description: "Restart a configured channel adapter", Schema: mustSchema(restartChannelArgs{}), MinScope: "nexus:operator", Handler: handleRestartChannel},
@@ -105,6 +116,13 @@ func (e *MCPExporter) ListResources(context.Context) ([]protocol.Resource, error
 		{URI: "nexus://tokens/list", Name: "tokens.list", MIMEType: "application/json"},
 		{URI: "nexus://policy/rules", Name: "policy.rules", MIMEType: "application/json"},
 		{URI: "nexus://gateway/events", Name: "gateway.events", MIMEType: "application/json"},
+		{URI: "nexus://fmp/continuations", Name: "fmp.continuations", MIMEType: "application/json"},
+		{URI: "nexus://fmp/audit", Name: "fmp.audit", MIMEType: "application/json"},
+		{URI: "nexus://fmp/trust_bundles", Name: "fmp.trust_bundles", MIMEType: "application/json"},
+		{URI: "nexus://fmp/boundary_policies", Name: "fmp.boundary_policies", MIMEType: "application/json"},
+		{URI: "nexus://fmp/tenant_exports", Name: "fmp.tenant_exports", MIMEType: "application/json"},
+		{URI: "nexus://fmp/tenant_federation_policy", Name: "fmp.tenant_federation_policy", MIMEType: "application/json"},
+		{URI: "nexus://fmp/effective_federation_policy", Name: "fmp.effective_federation_policy", MIMEType: "application/json"},
 	}, nil
 }
 
@@ -206,6 +224,69 @@ func (e *MCPExporter) ReadResource(ctx context.Context, uri string) (*protocol.R
 	case "gateway/events":
 		page := pageRequestFromQuery(parsed.Query())
 		result, err := e.service.ListEvents(ctx, ListEventsRequest{AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID), PageRequest: page})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/continuations":
+		result, err := e.service.ListFMPContinuations(ctx, ListFMPContinuationsRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+			Page:         pageRequestFromQuery(parsed.Query()),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/audit":
+		result, err := e.service.ReadFMPContinuationAudit(ctx, ReadFMPContinuationAuditRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+			LineageID:    strings.TrimSpace(parsed.Query().Get("lineage_id")),
+			Limit:        parseInt(parsed.Query().Get("limit")),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/trust_bundles":
+		result, err := e.service.ListFMPTrustBundles(ctx, ListFMPTrustBundlesRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+			Page:         pageRequestFromQuery(parsed.Query()),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/boundary_policies":
+		result, err := e.service.ListFMPBoundaryPolicies(ctx, ListFMPBoundaryPoliciesRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+			Page:         pageRequestFromQuery(parsed.Query()),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/tenant_exports":
+		result, err := e.service.ListTenantFMPExports(ctx, ListTenantFMPExportsRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+			Page:         pageRequestFromQuery(parsed.Query()),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/tenant_federation_policy":
+		result, err := e.service.GetTenantFMPFederationPolicy(ctx, GetTenantFMPFederationPolicyRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/effective_federation_policy":
+		result, err := e.service.GetEffectiveFMPFederationPolicy(ctx, GetEffectiveFMPFederationPolicyRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+			TrustDomain:  strings.TrimSpace(parsed.Query().Get("trust_domain")),
+		})
 		if err != nil {
 			return nil, normalizeAdminError(err)
 		}
