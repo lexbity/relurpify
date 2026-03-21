@@ -140,6 +140,13 @@ func TestLoadCanonicalHTNAndRewooSuites(t *testing.T) {
 	}
 }
 
+func TestLoadCanonicalRexSuite(t *testing.T) {
+	path := "/home/lex/Public/Relurpify/testsuite/agenttests/rex.testsuite.yaml"
+	if _, err := LoadSuite(path); err != nil {
+		t.Fatalf("LoadSuite(%q): %v", path, err)
+	}
+}
+
 func TestLoadCanonicalEucloCoverageMatrixSuites(t *testing.T) {
 	for _, path := range []string{
 		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.code.testsuite.yaml",

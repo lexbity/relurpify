@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 type Agent struct {
 	Config      *core.Config
 	Environment agentenv.AgentEnvironment
+	Workspace   string
 	RexConfig   rexconfig.Config
 	Delegates   *delegates.Registry
 	Runtime     *rexruntime.Manager
@@ -35,20 +37,21 @@ type Agent struct {
 }
 
 func New(env agentenv.AgentEnvironment) *Agent {
+	return NewWithWorkspace(env, "")
+}
+
+func NewWithWorkspace(env agentenv.AgentEnvironment, workspace string) *Agent {
 	agent := &Agent{}
-	_ = agent.InitializeEnvironment(env)
+	_ = agent.InitializeEnvironment(env, workspace)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment, workspace string) error {
 	a.Environment = env
 	a.Config = env.Config
 	a.RexConfig = rexconfig.Default()
-	workspace := "."
-	if env.Config != nil && env.Config.Name != "" {
-		workspace = filepath.Dir(frameworkconfig.New(".").ConfigRoot())
-	}
-	a.Delegates = delegates.NewRegistry(env, workspace)
+	a.Workspace = resolveWorkspaceRoot(workspace)
+	a.Delegates = delegates.NewRegistry(env, a.Workspace)
 	a.Runtime = rexruntime.New(a.RexConfig, env.Memory)
 	return a.Initialize(env.Config)
 }
@@ -257,7 +260,7 @@ func persistProof(ctx context.Context, store interface {
 	}); err != nil {
 		return err
 	}
-	if raw, ok := stateCtx.Get("euclo.verification_policy"); ok && raw != nil {
+	if raw, ok := stateCtx.Get("rex.verification_policy"); ok && raw != nil {
 		payload, err := json.Marshal(raw)
 		if err != nil {
 			return err
@@ -277,7 +280,7 @@ func persistProof(ctx context.Context, store interface {
 			return err
 		}
 	}
-	if raw, ok := stateCtx.Get("euclo.verification"); ok && raw != nil {
+	if raw, ok := stateCtx.Get("rex.verification"); ok && raw != nil {
 		payload, err := json.Marshal(raw)
 		if err != nil {
 			return err
@@ -297,7 +300,7 @@ func persistProof(ctx context.Context, store interface {
 			return err
 		}
 	}
-	if raw, ok := stateCtx.Get("euclo.success_gate"); ok && raw != nil {
+	if raw, ok := stateCtx.Get("rex.success_gate"); ok && raw != nil {
 		payload, err := json.Marshal(raw)
 		if err != nil {
 			return err
@@ -373,4 +376,26 @@ func uniqueStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func resolveWorkspaceRoot(workspace string) string {
+	if trimmed := filepath.Clean(workspace); trimmed != "" && trimmed != "." {
+		return trimmed
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	current := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(current, frameworkconfig.DirName)); err == nil {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return cwd
 }

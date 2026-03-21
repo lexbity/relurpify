@@ -105,7 +105,7 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 	case "coding":
 		return euclo.New(env), nil
 	case "rex":
-		return rex.New(env), nil
+		return rex.NewWithWorkspace(env, ""), nil
 	case "architect":
 		return architectpkg.New(
 			env,
@@ -157,7 +157,7 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 			_ = agent.Initialize(env.Config)
 			return agent
 		case "rex":
-			agent := rex.New(env)
+			agent := rex.NewWithWorkspace(env, workspace)
 			_ = agent.Initialize(env.Config)
 			return agent
 	case "reflection":

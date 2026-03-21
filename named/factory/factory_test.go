@@ -79,8 +79,11 @@ func TestBuildFromSpecRoutesRex(t *testing.T) {
 }
 
 func TestInstantiateByNameRoutesRex(t *testing.T) {
-	agent := InstantiateByName(t.TempDir(), "rex", testEnv(t))
+	workspace := t.TempDir()
+	agent := InstantiateByName(workspace, "rex", testEnv(t))
 	require.IsType(t, &rex.Agent{}, agent)
+	rexAgent := agent.(*rex.Agent)
+	require.Equal(t, workspace, rexAgent.Workspace)
 }
 
 func TestInstantiateByNameKeepsReactSeparate(t *testing.T) {

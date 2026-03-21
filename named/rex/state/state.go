@@ -10,7 +10,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/euclo/runtime"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/named/rex/envelope"
 )
 
@@ -41,9 +41,25 @@ func ComputeIdentity(env envelope.Envelope) Identity {
 	return Identity{WorkflowID: workflowID, RunID: runID}
 }
 
+type RuntimeSurfaces struct {
+	Workflow *db.SQLiteWorkflowStateStore `json:"-"`
+	Runtime  memory.RuntimeMemoryStore    `json:"-"`
+}
+
 // ResolveRuntimeSurfaces exposes workflow/runtime stores when available.
-func ResolveRuntimeSurfaces(mem memory.MemoryStore) runtime.RuntimeSurfaces {
-	return runtime.ResolveRuntimeSurfaces(mem)
+func ResolveRuntimeSurfaces(mem memory.MemoryStore) RuntimeSurfaces {
+	switch typed := mem.(type) {
+	case *memory.CompositeRuntimeStore:
+		surfaces := RuntimeSurfaces{Runtime: typed.RuntimeMemoryStore}
+		if workflow, ok := typed.WorkflowStateStore.(*db.SQLiteWorkflowStateStore); ok {
+			surfaces.Workflow = workflow
+		}
+		return surfaces
+	case memory.RuntimeMemoryStore:
+		return RuntimeSurfaces{Runtime: typed}
+	default:
+		return RuntimeSurfaces{}
+	}
 }
 
 // RecoveryBoot scans workflow state for resumable work.

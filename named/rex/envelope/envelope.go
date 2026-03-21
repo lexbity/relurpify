@@ -43,16 +43,10 @@ func Normalize(task *core.Task, state *core.Context) Envelope {
 		env.Source = firstNonEmpty(stringValue(task.Context["source"]), env.Source)
 		env.EditPermitted = boolValue(task.Context["edit_permitted"]) || boolValue(task.Context["mutation_allowed"])
 		env.CapabilitySnapshot = stringSlice(task.Context["capability_snapshot"])
-		if env.ModeHint == "" {
-			env.ModeHint = stringValue(task.Context["euclo.mode"])
-		}
 	}
 	if state != nil {
 		if env.WorkflowID == "" {
 			env.WorkflowID = strings.TrimSpace(state.GetString("rex.workflow_id"))
-		}
-		if env.WorkflowID == "" {
-			env.WorkflowID = strings.TrimSpace(state.GetString("euclo.workflow_id"))
 		}
 		if env.RunID == "" {
 			env.RunID = strings.TrimSpace(state.GetString("rex.run_id"))

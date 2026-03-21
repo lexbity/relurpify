@@ -1,0 +1,125 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: rex
+  description: "End-to-end smoke coverage for the rex named runtime without Nexus integration."
+  owner: agent-platform
+  tier: smoke
+  quarantined: false
+spec:
+  agent_name: rex
+  manifest: relurpify_cfg/agents/rex.yaml
+  execution:
+    profile: ci-live
+    strict: true
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: rex_review_finds_issue
+      description: "Rex routes read-only review work and reports concrete findings."
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/fixtures/rex_handler.go
+            content: |
+              package main
+
+              import (
+                "database/sql"
+                "fmt"
+                "net/http"
+              )
+
+              func UserHandler(w http.ResponseWriter, r *http.Request) {
+                id := r.URL.Query().Get("id")
+                db, _ := sql.Open("sqlite3", "app.db")
+                row := db.QueryRow("SELECT name FROM users WHERE id = '" + id + "'")
+                var name string
+                _ = row.Scan(&name)
+                fmt.Fprintf(w, "Hello %s", name)
+              }
+      context:
+        edit_permitted: false
+        context_file_contents:
+          - path: testsuite/fixtures/rex_handler.go
+            content: |
+              package main
+
+              import (
+                "database/sql"
+                "fmt"
+                "net/http"
+              )
+
+              func UserHandler(w http.ResponseWriter, r *http.Request) {
+                id := r.URL.Query().Get("id")
+                db, _ := sql.Open("sqlite3", "app.db")
+                row := db.QueryRow("SELECT name FROM users WHERE id = '" + id + "'")
+                var name string
+                _ = row.Scan(&name)
+                fmt.Fprintf(w, "Hello %s", name)
+              }
+      prompt: "Review testsuite/fixtures/rex_handler.go for security and correctness issues. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(sql.?injection|security|parameteri[sz]e|unsafe)
+
+    - name: rex_planning_produces_staged_plan
+      description: "Rex routes planning work and returns a staged implementation plan."
+      task_type: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rex_config.go
+            content: |
+              package fixtures
+
+              type Config struct {
+                Host string
+                Port int
+              }
+      context:
+        edit_permitted: false
+        context_file_contents:
+          - path: testsuite/fixtures/rex_config.go
+            content: |
+              package fixtures
+
+              type Config struct {
+                Host string
+                Port int
+              }
+      prompt: "Create a design and implementation plan to add YAML config loading to testsuite/fixtures/rex_config.go. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(plan|step|stage|implementation)
+
+    - name: rex_mutation_updates_fixture
+      description: "Rex routes mutation-capable work and performs a simple workspace edit."
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/hello.txt
+            content: "hello\n"
+      context:
+        edit_permitted: true
+        mutation_allowed: true
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/hello.txt
+            content: "hello\n"
+      prompt: "Implement the requested patch by appending a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt."
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/hello.txt
