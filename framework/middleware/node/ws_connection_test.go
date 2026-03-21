@@ -56,7 +56,7 @@ func TestWSConnectionInvokeRoundTrip(t *testing.T) {
 		})
 		var frame map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(payload, &frame))
-		require.NoError(t, ws.handleFrame(frame))
+		require.NoError(t, ws.handleFrame(context.Background(), frame))
 	}()
 
 	result, err := ws.Invoke(ctx, "camera.capture", map[string]any{"quality": "high"})
@@ -84,6 +84,64 @@ func TestWSConnectionHealthFrameUpdatesState(t *testing.T) {
 	require.NoError(t, err)
 	var frame map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(payload, &frame))
-	require.NoError(t, ws.handleFrame(frame))
+	require.NoError(t, ws.handleFrame(context.Background(), frame))
 	require.True(t, ws.Health().Online)
+}
+
+func TestFramedRPCConnWrapsCapabilityFrames(t *testing.T) {
+	conn := &fakeRPCConn{}
+	framed := NewFramedRPCConn(conn, "sess-1")
+	framed.Now = func() time.Time { return time.Date(2026, 3, 20, 10, 0, 0, 0, time.UTC) }
+
+	require.NoError(t, framed.WriteJSON(invokeRequest{
+		Type:          "capability.invoke",
+		CorrelationID: "corr-1",
+		CapabilityID:  "camera.capture",
+	}))
+	require.Len(t, conn.writes, 1)
+	frame := conn.writes[0].(transportFrame)
+	require.Equal(t, TransportFrameType, frame.Type)
+	require.Equal(t, TransportChannelCapability, frame.Channel)
+	require.Equal(t, "sess-1", frame.SessionID)
+	require.NotEmpty(t, frame.Payload)
+}
+
+func TestFramedRPCConnUnwrapsTransportPayload(t *testing.T) {
+	responsePayload, err := json.Marshal(map[string]any{
+		"type":           "capability.result",
+		"correlation_id": "corr-1",
+		"result": map[string]any{
+			"success": true,
+		},
+	})
+	require.NoError(t, err)
+	framePayload, err := json.Marshal(map[string]any{
+		"type":       TransportFrameType,
+		"channel":    TransportChannelCapability,
+		"session_id": "sess-1",
+		"payload":    json.RawMessage(responsePayload),
+	})
+	require.NoError(t, err)
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(framePayload, &raw))
+
+	framed := NewFramedRPCConn(&fakeRPCConn{reads: []map[string]json.RawMessage{raw}}, "sess-1")
+	var frame map[string]json.RawMessage
+	require.NoError(t, framed.ReadJSON(&frame))
+	require.Equal(t, "capability.result", frameTypeFromRaw(frame))
+}
+
+func TestWSConnectionDelegatesUnknownFramesToHandler(t *testing.T) {
+	ws := &WSConnection{}
+	called := false
+	ws.FrameHandler = func(_ context.Context, _ *WSConnection, frame map[string]json.RawMessage) error {
+		called = frameTypeFromRaw(frame) == "fmp.chunk.read"
+		return nil
+	}
+	payload, err := json.Marshal(map[string]any{"type": "fmp.chunk.read"})
+	require.NoError(t, err)
+	var frame map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(payload, &frame))
+	require.NoError(t, ws.handleFrame(context.Background(), frame))
+	require.True(t, called)
 }

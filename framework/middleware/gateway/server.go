@@ -74,6 +74,7 @@ type Server struct {
 	Log                          event.Log
 	Partition                    string
 	Upgrader                     websocket.Upgrader
+	FMPTransportPolicy           *FMPTransportPolicy
 	Capabilities                 []core.CapabilityDescriptor
 	ListCapabilities             func() []core.CapabilityDescriptor
 	ListCapabilitiesForPrincipal func(principal ConnectionPrincipal) []core.CapabilityDescriptor
@@ -100,33 +101,55 @@ type Server struct {
 }
 
 type connectFrame struct {
-	Type         string                      `json:"type"`
-	Version      string                      `json:"version"`
-	Role         string                      `json:"role"`
-	FeedScope    string                      `json:"feed_scope,omitempty"`
-	ActorID      string                      `json:"actor_id,omitempty"`
-	LastSeenSeq  uint64                      `json:"last_seen_seq"`
-	NodeID       string                      `json:"node_id,omitempty"`
-	NodeName     string                      `json:"node_name,omitempty"`
-	NodePlatform string                      `json:"node_platform,omitempty"`
-	Capabilities []core.CapabilityDescriptor `json:"capabilities,omitempty"`
+	Type                    string                      `json:"type"`
+	Version                 string                      `json:"version"`
+	Role                    string                      `json:"role"`
+	FeedScope               string                      `json:"feed_scope,omitempty"`
+	ActorID                 string                      `json:"actor_id,omitempty"`
+	LastSeenSeq             uint64                      `json:"last_seen_seq"`
+	NodeID                  string                      `json:"node_id,omitempty"`
+	NodeName                string                      `json:"node_name,omitempty"`
+	NodePlatform            string                      `json:"node_platform,omitempty"`
+	TrustDomain             string                      `json:"trust_domain,omitempty"`
+	RuntimeID               string                      `json:"runtime_id,omitempty"`
+	RuntimeVersion          string                      `json:"runtime_version,omitempty"`
+	CompatibilityClass      string                      `json:"compatibility_class,omitempty"`
+	SupportedContextClasses []string                    `json:"supported_context_classes,omitempty"`
+	TransportProfile        string                      `json:"transport_profile,omitempty"`
+	SessionNonce            string                      `json:"session_nonce,omitempty"`
+	SessionIssuedAt         time.Time                   `json:"session_issued_at,omitempty"`
+	SessionExpiresAt        time.Time                   `json:"session_expires_at,omitempty"`
+	PeerKeyID               string                      `json:"peer_key_id,omitempty"`
+	Capabilities            []core.CapabilityDescriptor `json:"capabilities,omitempty"`
 }
 
 type connectedFrame struct {
-	Type         string                      `json:"type"`
-	SessionID    string                      `json:"session_id"`
-	FeedScope    connectionFeedScope         `json:"feed_scope,omitempty"`
-	ServerSeq    uint64                      `json:"server_seq"`
-	ReplayFrom   uint64                      `json:"replay_from"`
-	Capabilities []core.CapabilityDescriptor `json:"capabilities,omitempty"`
+	Type             string                      `json:"type"`
+	SessionID        string                      `json:"session_id"`
+	FeedScope        connectionFeedScope         `json:"feed_scope,omitempty"`
+	ServerSeq        uint64                      `json:"server_seq"`
+	ReplayFrom       uint64                      `json:"replay_from"`
+	Capabilities     []core.CapabilityDescriptor `json:"capabilities,omitempty"`
+	TransportProfile string                      `json:"transport_profile,omitempty"`
+	SessionExpiresAt time.Time                   `json:"session_expires_at,omitempty"`
 }
 
 type NodeConnectInfo struct {
-	NodeID       string
-	NodeName     string
-	NodePlatform string
-	TrustClass   string
-	Capabilities []core.CapabilityDescriptor
+	NodeID                  string
+	NodeName                string
+	NodePlatform            string
+	TrustClass              string
+	TrustDomain             string
+	RuntimeID               string
+	RuntimeVersion          string
+	CompatibilityClass      string
+	SupportedContextClasses []string
+	TransportProfile        string
+	SessionNonce            string
+	SessionIssuedAt         time.Time
+	SessionExpiresAt        time.Time
+	PeerKeyID               string
+	Capabilities            []core.CapabilityDescriptor
 }
 
 type ConnectionPrincipal struct {
@@ -164,7 +187,7 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		defer conn.Close()
-		_ = s.handleConnection(r.Context(), conn, principal)
+		_ = s.handleConnection(r.Context(), conn, principal, r.TLS != nil)
 	})
 	return mux
 }
@@ -201,7 +224,7 @@ func (s *Server) Start(ctx context.Context) error {
 	return runErr
 }
 
-func (s *Server) handleConnection(ctx context.Context, conn *websocket.Conn, resolvedPrincipal ConnectionPrincipal) error {
+func (s *Server) handleConnection(ctx context.Context, conn *websocket.Conn, resolvedPrincipal ConnectionPrincipal, tlsActive bool) error {
 	conn.SetReadLimit(maxInboundMessageSize)
 	_, data, err := conn.ReadMessage()
 	if err != nil {
@@ -222,6 +245,10 @@ func (s *Server) handleConnection(ctx context.Context, conn *websocket.Conn, res
 		_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "session initialization failed"), time.Now().Add(time.Second))
 		return err
 	}
+	if err := s.validateTransport(ctx, frame, tlsActive); err != nil {
+		_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, err.Error()), time.Now().Add(time.Second))
+		return err
+	}
 	response := s.connectedResponse(ctx, frame, principal)
 	if err := conn.WriteJSON(response); err != nil {
 		return err
@@ -238,13 +265,7 @@ func (s *Server) handleConnection(ctx context.Context, conn *websocket.Conn, res
 		}
 	}
 	if frame.Role == "node" && s.HandleNodeConnection != nil {
-		info := NodeConnectInfo{
-			NodeID:       nodeIDForConnection(frame, principal),
-			NodeName:     frame.NodeName,
-			NodePlatform: frame.NodePlatform,
-			TrustClass:   nodeTrustClassForConnection(principal),
-			Capabilities: append([]core.CapabilityDescriptor(nil), frame.Capabilities...),
-		}
+		info := nodeConnectInfoForFrame(frame, principal)
 		if s.VerifyNodeConnection != nil {
 			if err := s.VerifyNodeConnection(ctx, principal, info, conn); err != nil {
 				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, err.Error()), time.Now().Add(time.Second))
@@ -304,13 +325,42 @@ func (s *Server) connectedResponse(ctx context.Context, frame connectFrame, prin
 		capabilities = append([]core.CapabilityDescriptor(nil), s.ListCapabilities()...)
 	}
 	return connectedFrame{
-		Type:         "connected",
-		SessionID:    connectionSessionID(principal),
-		FeedScope:    connectionFeed(principal),
-		ServerSeq:    lastSeq,
-		ReplayFrom:   frame.LastSeenSeq,
-		Capabilities: capabilities,
+		Type:             "connected",
+		SessionID:        connectionSessionID(principal),
+		FeedScope:        connectionFeed(principal),
+		ServerSeq:        lastSeq,
+		ReplayFrom:       frame.LastSeenSeq,
+		Capabilities:     capabilities,
+		TransportProfile: frame.TransportProfile,
+		SessionExpiresAt: frame.SessionExpiresAt,
 	}
+}
+
+func nodeConnectInfoForFrame(frame connectFrame, principal ConnectionPrincipal) NodeConnectInfo {
+	return NodeConnectInfo{
+		NodeID:                  nodeIDForConnection(frame, principal),
+		NodeName:                frame.NodeName,
+		NodePlatform:            frame.NodePlatform,
+		TrustClass:              nodeTrustClassForConnection(principal),
+		TrustDomain:             strings.TrimSpace(frame.TrustDomain),
+		RuntimeID:               strings.TrimSpace(frame.RuntimeID),
+		RuntimeVersion:          strings.TrimSpace(frame.RuntimeVersion),
+		CompatibilityClass:      strings.TrimSpace(frame.CompatibilityClass),
+		SupportedContextClasses: append([]string(nil), frame.SupportedContextClasses...),
+		TransportProfile:        strings.TrimSpace(frame.TransportProfile),
+		SessionNonce:            strings.TrimSpace(frame.SessionNonce),
+		SessionIssuedAt:         frame.SessionIssuedAt.UTC(),
+		SessionExpiresAt:        frame.SessionExpiresAt.UTC(),
+		PeerKeyID:               strings.TrimSpace(frame.PeerKeyID),
+		Capabilities:            append([]core.CapabilityDescriptor(nil), frame.Capabilities...),
+	}
+}
+
+func (s *Server) validateTransport(ctx context.Context, frame connectFrame, tlsActive bool) error {
+	if s == nil || s.FMPTransportPolicy == nil {
+		return nil
+	}
+	return s.FMPTransportPolicy.validateNodeConnect(ctx, frame, tlsActive)
 }
 
 func (s *Server) handleClientFrame(ctx context.Context, bc *broadcastClient, connect connectFrame, principal ConnectionPrincipal, data []byte) error {

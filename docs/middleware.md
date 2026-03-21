@@ -14,6 +14,7 @@ session isolation, event routing, and the full MCP protocol stack.
 ```
 framework/middleware/
 ├── channel/    Concurrent communication channel manager
+├── fmp/        Federated mesh protocol orchestration, context transfer, discovery, and federation policy
 ├── gateway/    HTTP server and replay recording for Nexus
 ├── node/       WebSocket connections to remote agent nodes
 ├── session/    Session routing and event-stream isolation
@@ -55,6 +56,82 @@ to a tape file. In replay mode, the tape plays back verbatim. This enables
 integration tests to run against a recorded Nexus session without live node
 connections, keeping CI hermetic.
 
+The gateway is also the current admission point for FMP-aware node transport.
+`server.go` accepts node connect metadata that now includes:
+
+- `transport_profile`
+- `session_nonce`
+- `session_issued_at`
+- `session_expires_at`
+- `peer_key_id`
+- FMP runtime metadata such as `runtime_id`, `runtime_version`,
+  `compatibility_class`, and `supported_context_classes`
+
+`fmp_transport.go` defines `FMPTransportPolicy`, which validates:
+
+- whether an FMP transport profile is allowed
+- whether a nonce is present and non-replayed
+- whether the negotiated session lifetime is within policy
+- whether insecure transport is allowed only for loopback development
+
+This is the current bridge between generic gateway connections and
+mesh-specific transport hardening.
+
+---
+
+## fmp
+
+`framework/middleware/fmp` is the middleware owner for federated mesh protocol
+mechanics.
+
+It currently covers:
+
+- protocol objects and validation
+- lineage, attempt, lease, and fencing orchestration
+- context packaging and sealed context transport metadata
+- discovery advertisements for nodes, runtimes, and exports
+- route selection and capability projection
+- chunked and external transfer session management
+- trust bundle and boundary policy evaluation
+- federated gateway forwarding policy
+- Nexus adapter hooks for tenant, session, export, and federation policy
+
+The package does not own tenant administration or operator UX. Those surfaces
+live in `app/nexus`.
+
+### Runtime and export registration
+
+FMP now distinguishes between simple discovery records and authoritative
+runtime registration. Connected nodes can register runtimes and advertise
+exports through the framed mesh channel using messages such as:
+
+- `fmp.runtime.register`
+- `fmp.runtime.registered`
+- `fmp.export.advertise`
+- `fmp.export.advertised`
+
+These flows are routed from `app/nexus/server/node_runtime.go` into the FMP
+service so that runtime and export discovery can be tied back to enrolled node
+identity and attestation metadata.
+
+### Chunk transfer control path
+
+Chunked transfer no longer exists only as a packaging concept. The current
+framed node transport carries explicit FMP chunk session messages:
+
+- `fmp.chunk.open`
+- `fmp.chunk.opened`
+- `fmp.chunk.read`
+- `fmp.chunk.data`
+- `fmp.chunk.ack`
+- `fmp.chunk.acked`
+- `fmp.chunk.cancel`
+- `fmp.chunk.cancelled`
+- `fmp.chunk.error`
+
+These messages bridge the node transport in `framework/middleware/node` to the
+chunk transfer manager in `framework/middleware/fmp`.
+
 ---
 
 ## node
@@ -67,6 +144,18 @@ advertisement, and graceful disconnect.
 
 **ws_connection.go** owns the per-node WebSocket connection, framing messages,
 handling ping/pong, and surfacing structured events to the session router.
+
+The node transport now has a framed mode for mesh traffic. `FramedRPCConn`
+separates message channels such as:
+
+- `node.control`
+- `node.capability`
+- `fmp.control`
+- `fmp.data`
+
+`WSConnection` also supports a frame handler for non-capability messages, which
+is how Nexus routes FMP runtime registration, export advertisement, chunk
+transfer, and tenant-bound resume execution over the same node connection.
 
 **credential.go** stores and rotates node authentication credentials used
 during the pairing handshake.
@@ -177,6 +266,8 @@ The middleware packages are assembled by `app/nexus` at startup:
                       │                              │
   Remote node ──ws──▶ │  middleware/node             │
                       │      │                       │
+                      │  middleware/fmp              │
+                      │      │                       │
                       │  middleware/session          │
                       │      │                       │
                       │  middleware/channel          │
@@ -189,6 +280,17 @@ The middleware packages are assembled by `app/nexus` at startup:
 
 `app/nexus/bootstrap` wires these components together at startup, injecting
 the shared event log and identity store.
+
+In current Nexus wiring, the application also attaches optional FMP stores and
+adapters such as:
+
+- tenant export enablement store
+- tenant federation policy store
+- identity/session stores as the FMP Nexus authority adapter
+- the default FMP transport policy for node connections
+
+That makes the middleware stack FMP-aware without moving tenant control-plane
+ownership out of `app/nexus`.
 
 ---
 

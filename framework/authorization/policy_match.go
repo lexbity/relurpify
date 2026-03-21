@@ -41,6 +41,18 @@ func ruleMatchesRequest(rule core.PolicyRule, req core.PolicyRequest) bool {
 	if len(c.Capabilities) > 0 && !containsFold(c.Capabilities, req.CapabilityID) && !containsFold(c.Capabilities, req.CapabilityName) {
 		return false
 	}
+	if len(c.ExportNames) > 0 && !containsFold(c.ExportNames, req.ExportName) {
+		return false
+	}
+	if len(c.ContextClasses) > 0 && !containsFold(c.ContextClasses, req.ContextClass) {
+		return false
+	}
+	if len(c.SensitivityClasses) > 0 && !containsSensitivityClass(c.SensitivityClasses, req.SensitivityClass) {
+		return false
+	}
+	if len(c.RouteModes) > 0 && !containsRouteMode(c.RouteModes, req.RouteMode) {
+		return false
+	}
 	if len(c.ProviderKinds) > 0 && !containsProviderKind(c.ProviderKinds, req.ProviderKind) {
 		return false
 	}
@@ -216,6 +228,24 @@ func containsSessionScope(values []core.SessionScope, want core.SessionScope) bo
 }
 
 func containsSessionOperation(values []core.SessionOperation, want core.SessionOperation) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsSensitivityClass(values []core.SensitivityClass, want core.SensitivityClass) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsRouteMode(values []core.RouteMode, want core.RouteMode) bool {
 	for _, value := range values {
 		if value == want {
 			return true

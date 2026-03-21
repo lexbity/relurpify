@@ -92,6 +92,9 @@ The canonical interface supports operations such as:
 - listing and updating policy rules
 - health and event inspection
 - tenant listing
+- tenant-scoped FMP continuation and audit inspection
+- tenant-scoped FMP export and federation policy control
+- effective FMP federation policy inspection for a tenant and trust domain
 
 ---
 
@@ -326,6 +329,7 @@ Initial domains are:
 - `policy`
 - `gateway`
 - `tenants`
+- `fmp`
 
 The initial scope hierarchy is:
 
@@ -358,3 +362,66 @@ That structure gives Nexus:
 
 It also keeps offline repair helpers useful without letting them define the
 remote admin architecture.
+
+---
+
+## FMP Admin Surface
+
+The FMP portion of the Nexus admin API is split between mesh-global operator
+controls and tenant-scoped controls.
+
+Mesh-global controls remain appropriate for trust material and gateway boundary
+posture that currently applies to the whole mesh:
+
+- `nexus.fmp.list_trust_bundles`
+- `nexus.fmp.upsert_trust_bundle`
+- `nexus.fmp.list_boundary_policies`
+- `nexus.fmp.set_boundary_policy`
+
+Tenant-scoped controls apply to what a tenant may actually export, resume, or
+federate through that shared mesh:
+
+- `nexus.fmp.list_continuations`
+- `nexus.fmp.read_audit`
+- `nexus.fmp.list_tenant_exports`
+- `nexus.fmp.set_tenant_export`
+- `nexus.fmp.get_tenant_federation_policy`
+- `nexus.fmp.set_tenant_federation_policy`
+- `nexus.fmp.get_effective_federation_policy`
+
+The important rule is that tenant policy is not the same thing as mesh trust.
+Trust bundles and boundary policies describe what the mesh could allow. Tenant
+export and federation policy describe what a tenant is allowed to use inside
+that mesh.
+
+### Effective federation policy
+
+`GetEffectiveFMPFederationPolicy` exists because operators and tenants
+otherwise have to mentally compose several layers:
+
+- tenant federation policy
+- trust bundle presence for a trust domain
+- boundary policy for that trust domain
+
+The effective read model answers the practical question:
+
+- "Can tenant `X` federate with trust domain `Y`, by which route modes, under
+  what mediation posture, and with what transfer ceiling?"
+
+This is a read model only. It does not replace the underlying mesh-global or
+tenant-scoped stores.
+
+### FMP resources
+
+The current FMP resource set includes:
+
+- `nexus://fmp/continuations`
+- `nexus://fmp/audit`
+- `nexus://fmp/trust_bundles`
+- `nexus://fmp/boundary_policies`
+- `nexus://fmp/tenant_exports`
+- `nexus://fmp/tenant_federation_policy`
+- `nexus://fmp/effective_federation_policy`
+
+These resources expose typed admin results as JSON snapshots and remain subject
+to the same tenant and scope authorization rules as tool calls.

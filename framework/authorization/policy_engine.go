@@ -73,6 +73,8 @@ func (e *ManifestPolicyEngine) fallbackDecision(req core.PolicyRequest) core.Pol
 		return e.providerFallbackDecision(req)
 	case core.PolicyTargetSession:
 		return e.sessionFallbackDecision(req)
+	case core.PolicyTargetResume:
+		return e.resumeFallbackDecision(req)
 	default:
 		return e.capabilityFallbackDecision(req)
 	}
@@ -84,6 +86,16 @@ func (e *ManifestPolicyEngine) sessionFallbackDecision(req core.PolicyRequest) c
 	}
 	if !req.IsOwner && !req.IsDelegated {
 		return core.PolicyDecisionDeny("session access requires ownership or explicit delegation")
+	}
+	return e.capabilityFallbackDecision(req)
+}
+
+func (e *ManifestPolicyEngine) resumeFallbackDecision(req core.PolicyRequest) core.PolicyDecision {
+	if !req.IsOwner && !req.IsDelegated {
+		return core.PolicyDecisionDeny("resume requires ownership or explicit delegation")
+	}
+	if req.RestrictedExternal {
+		return core.PolicyDecisionRequireApproval(nil)
 	}
 	return e.capabilityFallbackDecision(req)
 }
@@ -144,6 +156,8 @@ func permissionActionForRequest(req core.PolicyRequest) string {
 		return req.CapabilityName
 	case req.CapabilityID != "":
 		return req.CapabilityID
+	case req.Target == core.PolicyTargetResume && req.ExportName != "":
+		return "resume:" + req.ExportName
 	case req.Target == core.PolicyTargetSession:
 		return "session:" + string(req.SessionOperation)
 	case req.Target == core.PolicyTargetProvider:
@@ -155,6 +169,8 @@ func permissionActionForRequest(req core.PolicyRequest) string {
 
 func permissionResourceForRequest(req core.PolicyRequest) string {
 	switch {
+	case req.LineageID != "":
+		return req.LineageID
 	case req.CapabilityID != "":
 		return req.CapabilityID
 	case req.SessionID != "":

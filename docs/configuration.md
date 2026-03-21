@@ -59,6 +59,81 @@ This file is optional. If it is absent, runtime defaults come from the manifest 
 
 ---
 
+## Nexus FMP Runtime Wiring
+
+The current federated mesh implementation also has runtime wiring points inside
+`app/nexus/server/app.go` that are not workspace-agent manifest settings.
+
+When Nexus is assembled, it can be given:
+
+- `FMPService`
+- `FMPExportStore`
+- `FMPFederationStore`
+
+These are application-runtime dependencies, not agent manifest fields. They
+wire the middleware FMP service to Nexus-owned tenant policy stores.
+
+The current store responsibilities are:
+
+| Dependency | Purpose |
+|------------|---------|
+| `FMPService` | FMP orchestration, discovery, routing, federation, and transfer control |
+| `FMPExportStore` | Tenant export enablement overrides |
+| `FMPFederationStore` | Tenant federation policy such as allowed trust domains, route modes, mediation, and transfer ceiling |
+
+These stores are currently backed by sqlite helper implementations in:
+
+- `app/nexus/db/sqlite_fmp_export_store.go`
+- `app/nexus/db/sqlite_fmp_federation_store.go`
+
+They are application state, not user-facing agent workspace preferences.
+
+---
+
+## Gateway FMP Transport Settings
+
+The Nexus gateway now enforces an FMP transport policy for node connections.
+This is configured in code through `DefaultFMPTransportPolicy(...)` and the
+gateway bind mode, not through the workspace manifest layer described above.
+
+The effective transport expectations for FMP-aware node connections are:
+
+- a declared `transport_profile`
+- a bounded session lifetime
+- a unique `session_nonce`
+- peer key identity binding through `peer_key_id`
+- TLS by default, with only a loopback development exception for insecure mode
+
+At the moment, this transport policy is application-wired rather than exposed
+as a standalone end-user YAML contract.
+
+---
+
+## FMP Node Frame Surface
+
+Current FMP node traffic is carried over the framed node WebSocket transport.
+The important message classes are:
+
+- runtime registration and export advertisement
+- chunk transfer control
+- tenant-bound resume execution
+
+Examples of active frame types include:
+
+- `fmp.runtime.register`
+- `fmp.export.advertise`
+- `fmp.chunk.open`
+- `fmp.chunk.read`
+- `fmp.chunk.ack`
+- `fmp.chunk.cancel`
+- `fmp.resume.execute`
+
+These are protocol-level middleware messages, not workspace configuration
+fields. They are documented here because they affect deployment expectations
+for Nexus nodes and any future external runtime implementation.
+
+---
+
 ## Agent Manifests
 
 **Location:** `relurpify_cfg/agent.manifest.yaml` or `relurpify_cfg/agents/<name>.yaml`

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/lexcodex/relurpify/app/nexus/db"
@@ -217,6 +218,124 @@ func TestValidateAndBindPrincipalFallsBackToResolvedSubjectID(t *testing.T) {
 	require.Equal(t, "agent", principal.Role)
 	require.Equal(t, "svc-1", principal.Actor.ID)
 	require.Equal(t, feedScopeRuntime, principal.FeedScope)
+}
+
+func TestNodeConnectInfoForFrameIncludesFMPMetadata(t *testing.T) {
+	info := nodeConnectInfoForFrame(connectFrame{
+		Role:                    "node",
+		NodeID:                  "node-1",
+		NodeName:                "Node One",
+		NodePlatform:            "linux",
+		TrustDomain:             "mesh.local",
+		RuntimeID:               "runtime-1",
+		RuntimeVersion:          "2.1.0",
+		CompatibilityClass:      "v2",
+		SupportedContextClasses: []string{"workflow-runtime", "agent-context"},
+		TransportProfile:        TransportProfileWebSocketTLS,
+		SessionNonce:            "nonce-1",
+		SessionIssuedAt:         time.Date(2026, 3, 20, 10, 0, 0, 0, time.UTC),
+		SessionExpiresAt:        time.Date(2026, 3, 20, 10, 30, 0, 0, time.UTC),
+		PeerKeyID:               "key-1",
+		Capabilities: []core.CapabilityDescriptor{{
+			ID:   "camera.capture",
+			Name: "camera.capture",
+			Kind: core.CapabilityKindTool,
+		}},
+	}, ConnectionPrincipal{
+		Authenticated: true,
+		Actor:         core.EventActor{Kind: "node", ID: "node-1", TenantID: "tenant-1", SubjectKind: core.SubjectKindNode},
+	})
+	require.Equal(t, "node-1", info.NodeID)
+	require.Equal(t, "mesh.local", info.TrustDomain)
+	require.Equal(t, "runtime-1", info.RuntimeID)
+	require.Equal(t, "2.1.0", info.RuntimeVersion)
+	require.Equal(t, "v2", info.CompatibilityClass)
+	require.Equal(t, []string{"workflow-runtime", "agent-context"}, info.SupportedContextClasses)
+	require.Equal(t, TransportProfileWebSocketTLS, info.TransportProfile)
+	require.Equal(t, "nonce-1", info.SessionNonce)
+	require.Equal(t, "key-1", info.PeerKeyID)
+	require.Len(t, info.Capabilities, 1)
+}
+
+func TestValidateTransportAcceptsNodeTLSProfile(t *testing.T) {
+	policy := DefaultFMPTransportPolicy(false)
+	now := time.Date(2026, 3, 20, 10, 0, 0, 0, time.UTC)
+	policy.Now = func() time.Time { return now }
+	policy.NonceStore = &InMemoryTransportNonceStore{Now: func() time.Time { return now }}
+	frame := connectFrame{
+		Role:             "node",
+		NodeID:           "node-1",
+		TrustDomain:      "mesh.local",
+		RuntimeID:        "runtime-1",
+		TransportProfile: TransportProfileWebSocketTLS,
+		SessionNonce:     "nonce-1",
+		SessionIssuedAt:  now.Add(-10 * time.Second),
+		SessionExpiresAt: now.Add(10 * time.Minute),
+		PeerKeyID:        "key-1",
+	}
+	server := &Server{FMPTransportPolicy: policy}
+	require.NoError(t, server.validateTransport(context.Background(), frame, true))
+}
+
+func TestValidateTransportRejectsReplayNonce(t *testing.T) {
+	policy := DefaultFMPTransportPolicy(false)
+	now := time.Date(2026, 3, 20, 10, 0, 0, 0, time.UTC)
+	policy.Now = func() time.Time { return now }
+	policy.NonceStore = &InMemoryTransportNonceStore{Now: func() time.Time { return now }}
+	frame := connectFrame{
+		Role:             "node",
+		NodeID:           "node-1",
+		TrustDomain:      "mesh.local",
+		RuntimeID:        "runtime-1",
+		TransportProfile: TransportProfileWebSocketTLS,
+		SessionNonce:     "nonce-1",
+		SessionIssuedAt:  now.Add(-10 * time.Second),
+		SessionExpiresAt: now.Add(10 * time.Minute),
+		PeerKeyID:        "key-1",
+	}
+	server := &Server{FMPTransportPolicy: policy}
+	require.NoError(t, server.validateTransport(context.Background(), frame, true))
+	require.ErrorContains(t, server.validateTransport(context.Background(), frame, true), "replay")
+}
+
+func TestValidateTransportRejectsExpiredNodeSession(t *testing.T) {
+	policy := DefaultFMPTransportPolicy(false)
+	now := time.Date(2026, 3, 20, 10, 0, 0, 0, time.UTC)
+	policy.Now = func() time.Time { return now }
+	policy.NonceStore = &InMemoryTransportNonceStore{Now: func() time.Time { return now }}
+	frame := connectFrame{
+		Role:             "node",
+		NodeID:           "node-1",
+		TrustDomain:      "mesh.local",
+		RuntimeID:        "runtime-1",
+		TransportProfile: TransportProfileWebSocketTLS,
+		SessionNonce:     "nonce-1",
+		SessionIssuedAt:  now.Add(-10 * time.Minute),
+		SessionExpiresAt: now.Add(-time.Minute),
+		PeerKeyID:        "key-1",
+	}
+	server := &Server{FMPTransportPolicy: policy}
+	require.ErrorContains(t, server.validateTransport(context.Background(), frame, true), "expired")
+}
+
+func TestValidateTransportRejectsInsecureLoopbackWhenNotAllowed(t *testing.T) {
+	policy := DefaultFMPTransportPolicy(false)
+	now := time.Date(2026, 3, 20, 10, 0, 0, 0, time.UTC)
+	policy.Now = func() time.Time { return now }
+	policy.NonceStore = &InMemoryTransportNonceStore{Now: func() time.Time { return now }}
+	frame := connectFrame{
+		Role:             "node",
+		NodeID:           "node-1",
+		TrustDomain:      "mesh.local",
+		RuntimeID:        "runtime-1",
+		TransportProfile: TransportProfileWebSocketLoopback,
+		SessionNonce:     "nonce-1",
+		SessionIssuedAt:  now.Add(-10 * time.Second),
+		SessionExpiresAt: now.Add(10 * time.Minute),
+		PeerKeyID:        "key-1",
+	}
+	server := &Server{FMPTransportPolicy: policy}
+	require.ErrorContains(t, server.validateTransport(context.Background(), frame, false), "not allowed")
 }
 
 func TestValidateAndBindPrincipalHonorsExplicitRuntimeFeedForAdmin(t *testing.T) {

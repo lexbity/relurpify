@@ -20,6 +20,10 @@ type PolicyRule struct {
 type PolicyConditions struct {
 	Actors                    []ActorMatch              `json:"actors,omitempty" yaml:"actors,omitempty"`
 	Capabilities              []string                  `json:"capabilities,omitempty" yaml:"capabilities,omitempty"`
+	ExportNames               []string                  `json:"export_names,omitempty" yaml:"export_names,omitempty"`
+	ContextClasses            []string                  `json:"context_classes,omitempty" yaml:"context_classes,omitempty"`
+	SensitivityClasses        []SensitivityClass        `json:"sensitivity_classes,omitempty" yaml:"sensitivity_classes,omitempty"`
+	RouteModes                []RouteMode               `json:"route_modes,omitempty" yaml:"route_modes,omitempty"`
 	ProviderKinds             []ProviderKind            `json:"provider_kinds,omitempty" yaml:"provider_kinds,omitempty"`
 	ExternalProviders         []ExternalProvider        `json:"external_providers,omitempty" yaml:"external_providers,omitempty"`
 	MinRiskClasses            []RiskClass               `json:"min_risk_classes,omitempty" yaml:"min_risk_classes,omitempty"`
@@ -74,6 +78,12 @@ type PolicyRequest struct {
 	ResourceTenantID       string
 	CapabilityID           string
 	CapabilityName         string
+	LineageID              string
+	AttemptID              string
+	ExportName             string
+	ContextClass           string
+	SensitivityClass       SensitivityClass
+	RouteMode              RouteMode
 	CapabilityKind         CapabilityKind
 	RuntimeFamily          CapabilityRuntimeFamily
 	ProviderKind           ProviderKind
@@ -107,6 +117,7 @@ const (
 	PolicyTargetCapability PolicyTarget = "capability"
 	PolicyTargetProvider   PolicyTarget = "provider"
 	PolicyTargetSession    PolicyTarget = "session"
+	PolicyTargetResume     PolicyTarget = "resume"
 )
 
 type PolicyDecision struct {
@@ -149,6 +160,26 @@ func (r PolicyRule) Validate() error {
 	for _, partition := range r.Conditions.Partitions {
 		if strings.TrimSpace(partition) == "" {
 			return errors.New("policy partition must not be empty")
+		}
+	}
+	for _, exportName := range r.Conditions.ExportNames {
+		if strings.TrimSpace(exportName) == "" {
+			return errors.New("policy export name must not be empty")
+		}
+	}
+	for _, contextClass := range r.Conditions.ContextClasses {
+		if strings.TrimSpace(contextClass) == "" {
+			return errors.New("policy context class must not be empty")
+		}
+	}
+	for _, sensitivityClass := range r.Conditions.SensitivityClasses {
+		if err := sensitivityClass.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, routeMode := range r.Conditions.RouteModes {
+		if err := routeMode.Validate(); err != nil {
+			return err
 		}
 	}
 	for _, channelID := range r.Conditions.ChannelIDs {
