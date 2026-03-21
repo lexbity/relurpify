@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo"
+	"github.com/lexcodex/relurpify/named/rex"
 	"github.com/stretchr/testify/require"
 )
 
@@ -69,6 +70,17 @@ func TestInstantiateByNameRoutesCodingToEuclo(t *testing.T) {
 func TestInstantiateByNameRoutesEucloAliasToEuclo(t *testing.T) {
 	agent := InstantiateByName(t.TempDir(), "euclo", testEnv(t))
 	require.IsType(t, &euclo.Agent{}, agent)
+}
+
+func TestBuildFromSpecRoutesRex(t *testing.T) {
+	agent, err := BuildFromSpec(testEnv(t), core.AgentRuntimeSpec{Implementation: "rex"})
+	require.NoError(t, err)
+	require.IsType(t, &rex.Agent{}, agent)
+}
+
+func TestInstantiateByNameRoutesRex(t *testing.T) {
+	agent := InstantiateByName(t.TempDir(), "rex", testEnv(t))
+	require.IsType(t, &rex.Agent{}, agent)
 }
 
 func TestInstantiateByNameKeepsReactSeparate(t *testing.T) {

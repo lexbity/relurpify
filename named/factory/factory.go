@@ -23,6 +23,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/eternal"
 	"github.com/lexcodex/relurpify/named/euclo"
+	"github.com/lexcodex/relurpify/named/rex"
 )
 
 var namedAgentRegistry sync.Map
@@ -103,6 +104,8 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 		return reactpkg.New(env), nil
 	case "coding":
 		return euclo.New(env), nil
+	case "rex":
+		return rex.New(env), nil
 	case "architect":
 		return architectpkg.New(
 			env,
@@ -148,11 +151,15 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 		agent := reactpkg.New(env)
 		agent.CheckpointPath = paths.CheckpointsDir()
 		return agent
-	case "coding", "euclo":
-		agent := euclo.New(env)
-		agent.CheckpointPath = paths.CheckpointsDir()
-		_ = agent.Initialize(env.Config)
-		return agent
+		case "coding", "euclo":
+			agent := euclo.New(env)
+			agent.CheckpointPath = paths.CheckpointsDir()
+			_ = agent.Initialize(env.Config)
+			return agent
+		case "rex":
+			agent := rex.New(env)
+			_ = agent.Initialize(env.Config)
+			return agent
 	case "reflection":
 		agent := reflectionpkg.New(env, nil)
 		if delegate, ok := agent.Delegate.(*reactpkg.ReActAgent); ok {
