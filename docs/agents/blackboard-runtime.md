@@ -17,6 +17,12 @@ paradigm through framework-owned execution surfaces:
 The blackboard paradigm remains agent-owned. The execution substrate remains
 framework-owned.
 
+That boundary is the key architectural constraint. Blackboard is allowed to own
+specialist scheduling, shared-state conventions, and controller policy, but it
+is not allowed to invent a parallel execution universe that bypasses graph
+nodes, capability admission, checkpointing, or telemetry. This document exists
+to keep that line clear.
+
 ## Current Status
 
 The graph-native runtime described here is now implemented in `agents/blackboard`.
@@ -36,6 +42,11 @@ Current implementation status:
 
 Remaining work is therefore extension work, not a separate reimplementation.
 
+That means future work should refine the current runtime rather than replacing
+it with another hidden controller loop. Improvements should preserve the
+current architectural position: blackboard semantics expressed through
+framework-native execution surfaces.
+
 ## Scope
 
 This document defines:
@@ -52,6 +63,10 @@ This document does not define:
 - the exact production prompt text for any knowledge source
 - the final UX for TUI visualization
 - the full production library of built-in knowledge sources
+
+That scope boundary matters because this document is about runtime semantics,
+not about productizing every domain-specific knowledge source. It is meant to
+stabilize the control model so future extensions fit into a coherent runtime.
 
 ## Architectural Position
 
@@ -72,6 +87,10 @@ that the agent inherits:
 The graph runtime is therefore the authoritative execution engine. Blackboard
 logic is expressed as graph-native controller and knowledge-source steps.
 
+In practice this gives Blackboard the same operational benefits as the other
+first-class runtimes: replay safety, inspectable state transitions, shared
+policy enforcement, and reusable persistence and telemetry surfaces.
+
 ## Target Execution Model
 
 The target blackboard runtime is a graph-driven control loop with one logical
@@ -91,6 +110,10 @@ Each cycle has these conceptual stages:
 The controller may remain single-dispatch per cycle in the first production
 implementation. Multi-dispatch or parallel dispatch is a later extension, not a
 phase-1 requirement.
+
+Single-dispatch is not just a simplification. It preserves determinism,
+reduces merge complexity, and makes the controller easier to reason about while
+the state model and specialist contracts are still stabilizing.
 
 ## State Ownership
 
@@ -120,6 +143,10 @@ State placement rules:
 This preserves compatibility with framework cloning, dirty-delta tracking, and
 merge semantics.
 
+The main operational implication is that Blackboard state must be serializable,
+namespaced, and inspectable. If state cannot survive cloning, merging, and
+checkpointing, it does not belong in the canonical blackboard.
+
 ## Knowledge Source Model
 
 A knowledge source is a specialized runtime unit with four responsibilities:
@@ -143,6 +170,11 @@ source needs a tool, it must invoke it through the admitted capability surface.
 If it delegates to another agent runtime, that delegation must also be explicit
 and auditable.
 
+This keeps knowledge sources from becoming opaque mini-agents with hidden
+authority. A knowledge source can be powerful, but its behaviour still needs to
+be reviewable in terms of inputs, activation rules, capability use, and state
+delta.
+
 ## Scheduling Semantics
 
 The scheduler is data-driven, not structurally hardcoded, but it must still be
@@ -160,6 +192,10 @@ Phase-1 target scheduling rules:
 Fairness rules for later phases may add cooldowns, starvation prevention, or
 quota-based dispatch. The initial production runtime should optimize first for
 determinism, inspectability, and replay safety.
+
+That is the right ordering. Fairness and throughput improvements are valuable,
+but they should be layered on top of a controller model that is already stable
+to observe, replay, and debug.
 
 ## Termination Semantics
 
@@ -182,6 +218,10 @@ The success policy should be configurable and able to consider:
 The controller must also produce an explicit termination reason for telemetry,
 debugging, and resumable recovery.
 
+Explicit termination is essential in a dynamic dispatch system. Without it,
+operators and tests cannot reliably distinguish success, deadlock, exhaustion,
+or terminal failure.
+
 ## Retry and Failure Semantics
 
 Retry semantics are controller-owned policy, not ad hoc per-source behavior.
@@ -197,6 +237,11 @@ Phase-1 target rules:
 External side effects must be treated as replay-sensitive. Recovery behavior
 must align with graph checkpoint semantics so completed single-shot actions are
 not replayed after resume.
+
+This is one of the harder operational constraints in the blackboard paradigm.
+Because scheduling is dynamic, it is easy to accidentally re-run a specialist
+after recovery unless its outputs and side effects are recorded in a way the
+controller can trust.
 
 ## Durability and Recovery
 
@@ -214,6 +259,10 @@ That means:
 In-process storage of raw pointers inside `Context` is not sufficient as the
 primary recovery mechanism.
 
+In other words, recovery has to be based on durable state, not on surviving Go
+process memory. If a resumed run depends on non-serializable in-memory objects,
+the runtime is not actually resumable.
+
 ## Persistence and Memory Requirements
 
 Blackboard execution should integrate with durable memory lanes rather than
@@ -229,6 +278,11 @@ The target design supports:
 Retrieval is also part of the target runtime. Blackboard runs should be able to
 hydrate relevant project memory before the controller begins dispatching.
 
+That retrieval step is especially important for Blackboard because early
+specialist choices often depend on facts that were learned in prior runs. A
+controller that starts from an empty working memory would make worse dispatch
+choices than one that can hydrate project memory up front.
+
 ## Observability Requirements
 
 The blackboard runtime must expose enough structure to debug and review a run.
@@ -241,6 +295,10 @@ Required observability surfaces:
 - explicit termination reason
 - graph structure that reflects the actual runtime flow
 - state summaries that the TUI and tests can inspect
+
+The blackboard runtime is much harder to trust if its scheduler decisions are
+opaque. Observability is therefore not optional polish; it is part of the
+runtime contract.
 
 ## Non-Goals
 
@@ -255,6 +313,11 @@ The target design does not attempt to:
 
 This document should now be read as the architectural contract for the shipped
 runtime plus the guide for follow-on extensions.
+
+When extending Blackboard, the safe question to ask is not "can I add this
+feature?" but "can I add this feature while preserving graph-native execution,
+explicit state ownership, auditable dispatch, and replay-safe recovery?" If the
+answer is no, the design probably needs to be reworked rather than patched in.
 
 Near-term extension areas include:
 
