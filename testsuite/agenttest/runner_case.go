@@ -16,6 +16,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/platform/llm"
 )
@@ -186,6 +187,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 
 		attempts = attempt
+		perfstats.Reset()
 		runCtx, cancel := context.WithTimeout(ctx, timeout)
 		taskCtx := core.WithTaskContext(runCtx, core.TaskContext{
 			ID:          task.ID,
@@ -250,6 +252,10 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if data, err := json.MarshalIndent(tokenUsage, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "token_usage.json"), data, 0o644)
 	}
+	frameworkPerf := perfstats.Get()
+	if data, err := json.MarshalIndent(frameworkPerf, "", "  "); err == nil {
+		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "framework_perf.json"), data, 0o644)
+	}
 	phaseMetrics := BuildPhaseMetrics(snapshot, tokenUsage)
 	if data, err := json.MarshalIndent(phaseMetrics, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "phase_metrics.json"), data, 0o644)
@@ -303,11 +309,12 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		if baseline, err := LoadPerformanceBaseline(baselinePath); err == nil && baseline != nil {
 			baselineFound = true
 			performanceWarnings = ComparePerformanceBaseline(CaseReport{
-				Name:         c.Name,
-				Model:        execution.Model,
-				DurationMS:   caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
-				TokenUsage:   tokenUsage,
-				PhaseMetrics: phaseMetrics,
+				Name:          c.Name,
+				Model:         execution.Model,
+				DurationMS:    caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
+				TokenUsage:    tokenUsage,
+				FrameworkPerf: frameworkPerf,
+				PhaseMetrics:  phaseMetrics,
 			}, baseline)
 			if len(performanceWarnings) > 0 {
 				if data, err := json.MarshalIndent(performanceWarnings, "", "  "); err == nil {
@@ -345,6 +352,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		ToolCalls:           toolCounts,
 		TokenUsage:          tokenUsage,
 		MemoryOutcome:       memoryOutcome,
+		FrameworkPerf:       frameworkPerf,
 		PhaseMetrics:        phaseMetrics,
 		BaselinePath:        baselinePath,
 		BaselineFound:       baselineFound,

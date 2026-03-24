@@ -1,0 +1,96 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.performance_context
+  description: "Performance-oriented Euclo coverage for long-running context and resume behavior."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 180s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: code_mode_large_context_walk
+      description: "Exercise multi-phase execution with a larger code context to establish a performance baseline."
+      tags: [performance-baseline, long-running, context-heavy]
+      task_type: analysis
+      timeout: 180s
+      setup:
+        files:
+          - path: handler.go
+            content: |
+              package handler
+
+              import "fmt"
+
+              func A(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("A:%s", input), nil }
+              func B(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("B:%s", input), nil }
+              func C(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("C:%s", input), nil }
+              func D(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("D:%s", input), nil }
+              func E(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("E:%s", input), nil }
+              func F(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("F:%s", input), nil }
+              func G(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("G:%s", input), nil }
+              func H(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("H:%s", input), nil }
+              func I(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("I:%s", input), nil }
+              func J(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("J:%s", input), nil }
+              func K(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("K:%s", input), nil }
+              func L(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("L:%s", input), nil }
+      overrides:
+        max_iterations: 6
+      prompt: "Inspect handler.go and explain, in 6 bullets, where context pressure or repeated analysis work could appear if an agent had to refactor all functions consistently. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        max_prompt_tokens: 8000
+        state_keys_must_exist:
+          - euclo.interaction_state
+          - euclo.interaction_recording
+        euclo:
+          min_frames_emitted: 1
+
+    - name: resume_from_saved_phase_with_context_pressure
+      description: "Exercise session resume and continued phase execution for a performance baseline."
+      tags: [performance-baseline, long-running, resume]
+      task_type: analysis
+      timeout: 180s
+      prompt: "Plan and explain a bounded retrieval strategy for large workflows."
+      context:
+        euclo.mode: planning
+        euclo.interaction_state:
+          mode: planning
+          current_phase: generate
+          phases_executed:
+            - scope
+            - clarify
+          phase_states:
+            scope.done: true
+            clarify.done: true
+        euclo.interaction_script:
+          - kind: session_resume
+            action: resume
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          mode: planning
+          phases_executed:
+            - generate
+            - commit
+          frame_kinds_emitted:
+            - session_resume

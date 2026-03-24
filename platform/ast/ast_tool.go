@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
+	"time"
 )
+
+const astToolReadyTimeout = 2 * time.Second
 
 // ASTTool exposes the AST index for querying.
 type ASTTool struct {
@@ -36,6 +39,9 @@ func (t *ASTTool) Execute(ctx context.Context, state *core.Context, args map[str
 	if t.manager == nil {
 		return nil, fmt.Errorf("ast index unavailable")
 	}
+	if err := t.waitUntilReady(ctx, astToolReadyTimeout); err != nil {
+		return nil, err
+	}
 	action := fmt.Sprint(args["action"])
 	switch action {
 	case "list_symbols", "search":
@@ -53,6 +59,25 @@ func (t *ASTTool) Execute(ctx context.Context, state *core.Context, args map[str
 	default:
 		return nil, fmt.Errorf("unknown action %q", action)
 	}
+}
+
+func (t *ASTTool) waitUntilReady(ctx context.Context, timeout time.Duration) error {
+	if t == nil || t.manager == nil || t.manager.Ready() {
+		return nil
+	}
+	waitCtx := ctx
+	if waitCtx == nil {
+		waitCtx = context.Background()
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(waitCtx, timeout)
+		defer cancel()
+	}
+	if err := t.manager.WaitUntilReady(waitCtx); err != nil {
+		return fmt.Errorf("wait for ast index readiness: %w", err)
+	}
+	return nil
 }
 
 func (t *ASTTool) querySymbol(args map[string]interface{}) (*ast.Node, error) {

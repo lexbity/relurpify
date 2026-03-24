@@ -2,6 +2,7 @@ package framework_test
 
 import (
 	"github.com/lexcodex/relurpify/framework/core"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,5 +40,33 @@ func TestSharedContextRefreshConversationSummary(t *testing.T) {
 	sc.RefreshConversationSummary()
 	if sc.GetConversationSummary() == "" {
 		t.Fatalf("expected conversation summary to be populated")
+	}
+}
+
+func TestSharedContextRehydratesFromCachedRawContent(t *testing.T) {
+	ctx := core.NewContext()
+	budget := core.NewContextBudget(512)
+	summarizer := &core.SimpleSummarizer{}
+	sc := core.NewSharedContext(ctx, budget, summarizer)
+
+	path := filepath.Join(t.TempDir(), "file.go")
+	content := strings.Repeat("func example() {}\n", 50)
+	fc, err := sc.AddFile(path, content, "go", core.DetailFull)
+	if err != nil {
+		t.Fatalf("AddFile failed: %v", err)
+	}
+	if err := sc.DowngradeOldFiles(core.DetailSummary, 1); err != nil {
+		t.Fatalf("DowngradeOldFiles failed: %v", err)
+	}
+	if fc.Content != "" || fc.RawContent == "" {
+		t.Fatalf("expected downgraded file to keep raw content cached, got %+v", fc)
+	}
+	if err := os.Remove(path); err == nil {
+		if _, err := sc.EnsureFileLevel(path, core.DetailFull); err != nil {
+			t.Fatalf("EnsureFileLevel should use cached raw content, got %v", err)
+		}
+		if fc.Content == "" {
+			t.Fatalf("expected content restored from cache")
+		}
 	}
 }

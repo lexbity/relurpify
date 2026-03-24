@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 )
 
 func TestBuildPhaseMetricsAllocatesAcrossRecordedDurations(t *testing.T) {
@@ -42,8 +43,9 @@ func TestBuildPhaseMetricsAllocatesAcrossRecordedDurations(t *testing.T) {
 
 func TestComparePerformanceBaselineWarnsOnRegression(t *testing.T) {
 	warnings := ComparePerformanceBaseline(CaseReport{
-		Name:       "edit_with_verification",
-		DurationMS: 31000,
+		Name:          "edit_with_verification",
+		DurationMS:    31000,
+		FrameworkPerf: perfstats.Snapshot{BranchClones: 4},
 		TokenUsage: TokenUsageReport{
 			LLMCalls:    7,
 			TotalTokens: 5000,
@@ -52,13 +54,17 @@ func TestComparePerformanceBaselineWarnsOnRegression(t *testing.T) {
 		LLMCalls:    4,
 		TotalTokens: 2000,
 		DurationMS:  10000,
+		Framework:   perfstats.Snapshot{BranchClones: 1},
 	})
 
-	if len(warnings) != 3 {
-		t.Fatalf("expected 3 warnings, got %+v", warnings)
+	if len(warnings) != 4 {
+		t.Fatalf("expected 4 warnings, got %+v", warnings)
 	}
 	if warnings[0].Metric != "llm_calls" {
 		t.Fatalf("unexpected first warning: %+v", warnings[0])
+	}
+	if warnings[3].Metric != "framework_perf.branch_clones" {
+		t.Fatalf("unexpected framework warning: %+v", warnings[3])
 	}
 }
 
@@ -84,6 +90,9 @@ func TestBuildAndWritePerformanceBaseline(t *testing.T) {
 			LLMCalls:    4,
 			TotalTokens: 3200,
 		},
+		FrameworkPerf: perfstats.Snapshot{
+			ContextBudgetRescanCount: 2,
+		},
 		PhaseMetrics: []PhaseMetric{{
 			Phase:      "execute",
 			DurationMS: 6000,
@@ -99,8 +108,21 @@ func TestBuildAndWritePerformanceBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPerformanceBaseline: %v", err)
 	}
-	if loaded.RecordedAt != "2026-03-18" || loaded.Phases["execute"].Tokens != 1600 {
+	if loaded.RecordedAt != "2026-03-18" || loaded.Phases["execute"].Tokens != 1600 || loaded.Framework.ContextBudgetRescanCount != 2 {
 		t.Fatalf("unexpected loaded baseline: %+v", loaded)
+	}
+}
+
+func TestComparePerformanceBaselineWarnsOnIntroducedFrameworkMetric(t *testing.T) {
+	warnings := ComparePerformanceBaseline(CaseReport{
+		Name:          "retrieval_case",
+		FrameworkPerf: perfstats.Snapshot{RetrievalCorpusStampCount: 1},
+	}, &PerformanceBaseline{})
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %+v", warnings)
+	}
+	if warnings[0].Metric != "framework_perf.retrieval_corpus_stamp_count" {
+		t.Fatalf("unexpected warning: %+v", warnings[0])
 	}
 }
 

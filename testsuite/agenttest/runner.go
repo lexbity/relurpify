@@ -13,6 +13,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 )
 
 type RunOptions struct {
@@ -87,6 +88,7 @@ type CaseReport struct {
 	ToolCalls           map[string]int
 	TokenUsage          TokenUsageReport
 	MemoryOutcome       MemoryOutcomeReport
+	FrameworkPerf       perfstats.Snapshot   `json:"framework_perf,omitempty"`
 	PhaseMetrics        []PhaseMetric        `json:"phase_metrics,omitempty"`
 	BaselinePath        string               `json:"baseline_path,omitempty"`
 	BaselineFound       bool                 `json:"baseline_found,omitempty"`

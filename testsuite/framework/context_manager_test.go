@@ -3,6 +3,7 @@ package framework_test
 import (
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 	"testing"
 	"time"
 )
@@ -75,5 +76,39 @@ func TestContextManagerPrune(t *testing.T) {
 	stats := manager.GetStats()
 	if stats.TotalItems == 0 {
 		t.Fatal("expected some items remaining after pruning")
+	}
+}
+
+func TestContextManagerCommonMutationsAvoidBudgetRescans(t *testing.T) {
+	perfstats.Reset()
+	budget := core.NewContextBudget(8000)
+	budget.SetReservations(0, 0, 0)
+	manager := contextmgr.NewContextManager(budget)
+
+	if err := manager.AddItem(&fakeContextItem{tokens: 40, relevance: 1.0, priority: 1, age: time.Hour}); err != nil {
+		t.Fatalf("AddItem returned error: %v", err)
+	}
+	if err := manager.UpsertFileItem(&core.FileContextItem{
+		Path:         "a.go",
+		Content:      "package sample\n",
+		Summary:      "sample",
+		LastAccessed: time.Now().UTC(),
+		Relevance:    0.8,
+		PriorityVal:  1,
+	}); err != nil {
+		t.Fatalf("UpsertFileItem returned error: %v", err)
+	}
+
+	stats := manager.GetStats()
+	if stats.TotalItems != 2 {
+		t.Fatalf("unexpected total items: %+v", stats)
+	}
+	if stats.TotalTokens == 0 || stats.ItemsByType[core.ContextTypeMemory] != 1 || stats.ItemsByType[core.ContextTypeFile] != 1 {
+		t.Fatalf("unexpected stats: %+v", stats)
+	}
+
+	snapshot := perfstats.Get()
+	if snapshot.ContextBudgetRescanCount != 0 {
+		t.Fatalf("expected no budget rescans for common mutations, got %+v", snapshot)
 	}
 }

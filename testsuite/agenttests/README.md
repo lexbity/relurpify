@@ -39,6 +39,7 @@ Flags:
 --strict
 --tier smoke
 --include-quarantined
+--skip-ast-index                 default true; live agenttests run without AST bootstrap
 --ollama-reset none|model|server   (default none)
 --ollama-reset-between             reset before each case
 --ollama-reset-on <regex>          repeatable; trigger reset+retry on matching errors
@@ -62,7 +63,12 @@ Examples:
 
 # Restart server and auto-retry on timeouts
 ./dev-agent agenttest run --agent coding --ollama-reset server --ollama-reset-between --timeout 2m
+
+# Dedicated AST-enabled end-to-end coverage
+./dev-agent agenttest run --agent coding --skip-ast-index=false
 ```
+
+By default, live `agenttest` runs skip AST/bootstrap indexing so end-to-end validation measures agent behavior instead of paying workspace AST warmup cost on every case. AST-enabled end-to-end coverage should be run separately and explicitly with `--skip-ast-index=false`.
 
 Committed suites in `testsuite/agenttests/` must declare CI metadata explicitly rather than relying on loader defaults. Every checked-in suite should include:
 
@@ -82,6 +88,17 @@ Coverage-matrix cases use the `coverage-matrix` tag so they can be run as a focu
 ```
 ./dev-agent agenttest run --tag coverage-matrix
 ```
+
+Performance-baseline cases use the `performance-baseline` tag so package-level benchmark work can be paired with end-to-end agent regression checks:
+
+```
+./dev-agent agenttest run --tag performance-baseline
+```
+
+These runs now persist framework hot-path counters alongside the existing token and duration artifacts:
+- `framework_perf.json` per case in the run artifacts directory
+- `framework` counters embedded in committed performance baseline files
+- regression warnings when branch cloning, context rescans, retrieval fixed-cost checks, runtime-memory query cost, or capability-registry rebuild counts materially exceed baseline
 
 The current Euclo coverage matrix is represented by tagged cases for:
 - `code` + `edit_verify_repair`

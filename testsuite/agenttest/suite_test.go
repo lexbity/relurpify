@@ -162,6 +162,18 @@ func TestLoadCanonicalEucloCoverageMatrixSuites(t *testing.T) {
 	}
 }
 
+func TestLoadCanonicalPerformanceBaselineSuites(t *testing.T) {
+	for _, path := range []string{
+		"/home/lex/Public/Relurpify/testsuite/agenttests/coding.performance_retrieval.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/react.performance_memory.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.performance_context.testsuite.yaml",
+	} {
+		if _, err := LoadSuite(path); err != nil {
+			t.Fatalf("LoadSuite(%q): %v", path, err)
+		}
+	}
+}
+
 func TestSuiteValidateRejectsUnsupportedTier(t *testing.T) {
 	suite := &Suite{
 		APIVersion: "relurpify/v1alpha1",

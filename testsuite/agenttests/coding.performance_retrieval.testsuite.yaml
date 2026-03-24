@@ -1,0 +1,100 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: coding.performance_retrieval
+  description: "Performance-oriented retrieval coverage for the coding agent."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: coding
+  manifest: relurpify_cfg/agents/coding-go.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 180s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: repeated_semantic_retrieval_walk
+      description: "Exercise repeated retrieval and file hydration in a single analysis execution."
+      tags: [performance-baseline, retrieval-heavy]
+      task_type: analysis
+      context:
+        mode: ask
+      overrides:
+        restrict_capabilities: true
+        allowed_capabilities:
+          - name: search_semantic
+            kind: tool
+          - name: file_read
+            kind: tool
+      prompt: "Use search_semantic at least three times with different phrasings to find retrieval service, metadata prefilter, and context packer implementations. Read the most relevant files for each result and produce a 5-bullet summary of how retrieval flows from query to packed context. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        tool_calls_must_include:
+          - search_semantic
+          - file_read
+        output_regex:
+          - (?i)retrieval
+          - (?i)prefilter
+          - (?i)packer
+
+    - name: workflow_and_repo_retrieval_summary
+      description: "Exercise retrieval-backed workflow hydration plus repository inspection in one execution."
+      tags: [performance-baseline, retrieval-heavy, workflow-retrieval]
+      task_type: analysis
+      context:
+        mode: architect
+        workflow_id: wf-performance-retrieval
+      setup:
+        workflows:
+          - workflow:
+              workflow_id: wf-performance-retrieval
+              task_type: analysis
+              instruction: Retrieval-backed performance walk
+              status: running
+            runs:
+              - run_id: seed-run-performance
+                status: running
+            knowledge:
+              - record_id: perf-knowledge-1
+                kind: decision
+                title: Retrieval should stay bounded
+                content: Retrieval should stay bounded and hydrate only the most relevant context.
+                status: accepted
+              - record_id: perf-knowledge-2
+                kind: fact
+                title: Workflow retrieval exists
+                content: Workflow history is available through retrieval-backed hydration.
+                status: accepted
+      overrides:
+        restrict_capabilities: true
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+          - name: search_semantic
+            kind: tool
+      prompt: "Inspect the retrieval flow and summarize how workflow retrieval context and repository retrieval context complement each other. Use search_semantic and file_read only. Do not modify any files."
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - planner.workflow_retrieval
+        tool_calls_must_include:
+          - search_semantic
+          - file_read
+        output_regex:
+          - (?i)workflow
+          - (?i)retrieval
