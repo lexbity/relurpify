@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
@@ -52,6 +53,8 @@ func (p *nexusGatewayRuntimeProvider) syncCapabilities(ctx context.Context, rt *
 		return err
 	}
 	current := make(map[string]struct{}, len(capabilities))
+	nonTools := make([]core.CapabilityDescriptor, 0, len(capabilities))
+	invocableItems := make([]capability.RegistrationBatchItem, 0, len(capabilities))
 	for _, desc := range capabilities {
 		normalized := desc
 		normalized.Source.ProviderID = p.Descriptor().ID
@@ -63,15 +66,33 @@ func (p *nexusGatewayRuntimeProvider) syncCapabilities(ctx context.Context, rt *
 			if _, ok := rt.Tools.GetCapability(normalized.ID); ok {
 				continue
 			}
-			if err := rt.Tools.RegisterInvocableCapability(nexusRemoteInvocableCapability{
-				client: p.client,
-				desc:   normalized,
-			}); err != nil && !isAlreadyRegistered(err) {
+			invocableItems = append(invocableItems, capability.RegistrationBatchItem{
+				InvocableHandler: nexusRemoteInvocableCapability{
+					client: p.client,
+					desc:   normalized,
+				},
+			})
+		default:
+			nonTools = append(nonTools, normalized)
+		}
+	}
+	if len(invocableItems) > 0 {
+		if err := rt.Tools.RegisterBatch(invocableItems); err != nil && !isAlreadyRegistered(err) {
+			return err
+		}
+	}
+	if len(nonTools) > 0 {
+		if batchRegistrar, ok := registrar.(interface {
+			RegisterCapabilitiesBatch([]core.CapabilityDescriptor) error
+		}); ok {
+			if err := batchRegistrar.RegisterCapabilitiesBatch(nonTools); err != nil && !isAlreadyRegistered(err) {
 				return err
 			}
-		default:
-			if err := registrar.RegisterCapability(normalized); err != nil && !isAlreadyRegistered(err) {
-				return err
+		} else {
+			for _, normalized := range nonTools {
+				if err := registrar.RegisterCapability(normalized); err != nil && !isAlreadyRegistered(err) {
+					return err
+				}
 			}
 		}
 	}

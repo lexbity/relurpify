@@ -25,6 +25,13 @@ func Run(ctx context.Context, rt *runtimesvc.Runtime) error {
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
+	// Inject the interaction emitter into the euclo agent after program is created
+	emitter := NewTUIFrameEmitter(program)
+	if m.runtime != nil {
+		m.runtime.SetInteractionEmitter(emitter)
+	}
+	m.eucloEmitter = emitter
+
 	final, err := program.Run()
 	if rm, ok := final.(RootModel); ok {
 		rm.cleanup()
@@ -65,6 +72,13 @@ type RootModel struct {
 	sharedCtx  *AgentContext
 	runtime    RuntimeAdapter
 	store      *SessionStore
+
+	// Interaction emitter for euclo agent
+	eucloEmitter *TUIFrameEmitter
+
+	// HITL subscription
+	hitlCh    <-chan fauthorization.HITLEvent
+	hitlUnsub func()
 
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
@@ -126,6 +140,12 @@ func newRootModel(rt RuntimeAdapter) RootModel {
 // sessionFoundMsg carries the latest persisted session found at startup.
 type sessionFoundMsg struct{ rec SessionRecord }
 
+// hitlSubscribedMsg carries the HITL subscription info from initialization.
+type hitlSubscribedMsg struct {
+	ch    <-chan fauthorization.HITLEvent
+	unsub func()
+}
+
 // Init starts the HITL listener, spinner, and text-input blink.
 func (m RootModel) Init() tea.Cmd {
 	return tea.Batch(
@@ -134,6 +154,7 @@ func (m RootModel) Init() tea.Cmd {
 		m.session.Init(),
 		m.settings.Init(),
 		m.restorePromptCmd(),
+		m.subscribeHITLCmd(),
 	)
 }
 
@@ -149,6 +170,18 @@ func (m RootModel) restorePromptCmd() tea.Cmd {
 			return nil
 		}
 		return sessionFoundMsg{rec: rec}
+	}
+}
+
+// subscribeHITLCmd subscribes to HITL events and returns the subscription info.
+func (m RootModel) subscribeHITLCmd() tea.Cmd {
+	rt := m.runtime
+	return func() tea.Msg {
+		if rt == nil {
+			return nil
+		}
+		ch, unsub := rt.SubscribeHITL()
+		return hitlSubscribedMsg{ch: ch, unsub: unsub}
 	}
 }
 
@@ -223,6 +256,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	// HITL subscription initialization.
+	case hitlSubscribedMsg:
+		m.hitlCh = msg.ch
+		m.hitlUnsub = msg.unsub
+		if m.hitlCh != nil {
+			return m, listenHITLEvents(m.hitlCh)
+		}
+		return m, nil
+
 	// Settings pane models.
 	case settingsModelsMsg:
 		sp, cmd := m.settings.Update(msg)
@@ -246,6 +288,31 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p, cmd := m.chat.Update(msg)
 		m.chat = p
 		return m, cmd
+
+	// HITL event handling.
+	case hitlEventMsg:
+		return m.handleHITLEvent(msg)
+	case hitlResolvedMsg:
+		return m.handleHITLResolved(msg)
+
+	// Euclo interaction frame handling.
+	case eucloFrameMsg:
+		// Push the frame as an interactive notification
+		if m.notifQ != nil {
+			m.notifQ.PushInteraction(msg.frame)
+		}
+		// Add the rendered frame to the chat feed
+		if m.chat != nil && m.chat.feed != nil {
+			m.chat.feed.AppendMessage(msg.message)
+		}
+		return m, nil
+
+	// Euclo interaction response handling.
+	case eucloResponseMsg:
+		if m.eucloEmitter != nil {
+			m.eucloEmitter.Resolve(msg.response)
+		}
+		return m, nil
 	}
 
 	// Route to active pane + chat (chat always listens for stream/spinner msgs).
@@ -441,6 +508,39 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 		if m.chat != nil {
 			m.chat.feed.SetSearchFilter("")
 		}
+	case "ctrl+z":
+		// Undo: remove the last message from chat feed
+		if m.chat != nil {
+			m.chat.Undo()
+		}
+	case "ctrl+y":
+		// Redo: restore the last undone message
+		if m.chat != nil {
+			m.chat.Redo()
+		}
+	case "ctrl+u":
+		// Scroll up: scroll the chat feed up
+		if m.chat != nil && m.activeTab == TabChat {
+			m.chat.feed.ScrollUp()
+		}
+	case "pagedown":
+		// Page down: scroll the chat feed down by page
+		if m.chat != nil && m.activeTab == TabChat {
+			m.chat.feed.PageDown()
+		}
+	case "pageup":
+		// Page up: scroll the chat feed up by page
+		if m.chat != nil && m.activeTab == TabChat {
+			m.chat.feed.PageUp()
+		}
+	case "@":
+		// File picker: enable file selection mode in input
+		m.inputBar.SetFilePickerMode(true)
+	case "ctrl+k":
+		// Compact: toggle message compactness in chat feed
+		if m.chat != nil {
+			m.chat.ToggleCompact()
+		}
 	}
 	return m, nil
 }
@@ -518,9 +618,59 @@ func (m RootModel) autoSave() {
 
 // cleanup cancels all runs and unsubscribes HITL.
 func (m RootModel) cleanup() {
+	if m.hitlUnsub != nil {
+		m.hitlUnsub()
+	}
 	if m.chat != nil {
 		m.chat.Cleanup()
 	}
+}
+
+// handleHITLEvent processes HITL events from the subscription.
+func (m RootModel) handleHITLEvent(msg hitlEventMsg) (RootModel, tea.Cmd) {
+	var pending []*fauthorization.PermissionRequest
+	if m.chat != nil && m.chat.hitlSvc != nil {
+		pending = m.chat.hitlSvc.PendingHITL()
+	}
+	switch msg.event.Type {
+	case fauthorization.HITLEventRequested:
+		req := msg.event.Request
+		if req == nil && len(pending) > 0 {
+			req = pending[0]
+		}
+		if req != nil && m.notifQ != nil {
+			m.notifQ.PushHITL(req)
+		}
+	case fauthorization.HITLEventResolved, fauthorization.HITLEventExpired:
+		if msg.event.Request != nil && m.notifQ != nil {
+			m.notifQ.Resolve(msg.event.Request.ID)
+		}
+		if msg.event.Type == fauthorization.HITLEventExpired && msg.event.Request != nil {
+			reason := msg.event.Error
+			if reason == "" {
+				reason = "expired"
+			}
+			m.addSystemMessage(fmt.Sprintf("Permission %s expired: %s", msg.event.Request.ID, reason))
+		}
+	}
+	// Re-queue the listener to continue draining the channel
+	return m, listenHITLEvents(m.hitlCh)
+}
+
+// handleHITLResolved processes HITL resolution messages.
+func (m RootModel) handleHITLResolved(msg hitlResolvedMsg) (RootModel, tea.Cmd) {
+	if m.notifQ != nil {
+		m.notifQ.Resolve(msg.requestID)
+	}
+	if msg.err != nil {
+		m.addSystemMessage(fmt.Sprintf("HITL %s failed: %v", msg.requestID, msg.err))
+	} else if msg.approved {
+		m.addSystemMessage(fmt.Sprintf("Approved %s", msg.requestID))
+	} else {
+		m.addSystemMessage(fmt.Sprintf("Denied %s", msg.requestID))
+	}
+	// Re-queue the listener to continue draining the channel
+	return m, listenHITLEvents(m.hitlCh)
 }
 
 // dequeueNextTask starts the next pending task from the task queue, if any.

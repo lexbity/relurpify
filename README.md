@@ -1,121 +1,57 @@
 # Relurpify
 
-To the day(s) it re-writes stuff.
+Relurpify is a local-first agent framework and terminal runtime for code-oriented workflows. The main entry point is `relurpish`, a Bubble Tea TUI backed by local manifests, sandboxed tool execution, and Ollama-based models.
 
-Relurpify is an local Agentic automation framework - whose sole goal is to one day re-write stuff. 
+## What You Run
 
-It features a ground up stack all in golang , including 
-sandboxing with GVisor -> Ollama Integration -> Relurpify Apps/Agents
+- `relurpish` in app/relurpish for interactive local use
+- `dev-agent` in app/dev-agent-cli for developer workflows, agent tests, and manifest/skill utilities
+- `nexus` in app/nexus for distributed coordination
+- `nexusish` in app/nexusish for Nexus administration
 
+## Requirements
 
-## Installation Prerequisites
+- Go 1.25+
+- Docker or another supported container runtime
+- gVisor `runsc`
+- Ollama
 
-- **Go 1.21+**
-- **docker**
-- **Ollama Endpoint (local or remote)** 
-- **golds** documentation tool (optional, only required for static docs): `go install go101.org/golds@latest`
-
-
-In sandboxed environments you can keep module/cache directories inside the repo:
+In sandboxed environments you may also want repo-local Go caches:
 
 ```bash
 export GOMODCACHE=$PWD/.gomodcache
 export GOCACHE=$PWD/.gocache
 ```
 
----
-
-## Build, Run, and Test
-
-### Install dependencies
-
-```bash
-go mod tidy
-```
-
-### Build everything
-
-```bash
-go build ./...
-```
-
-### Build Relurpish Agent TUI
+## First Run
 
 ```bash
 go build ./app/relurpish
+go run ./app/relurpish doctor
+go run ./app/relurpish chat
 ```
 
-### Skill workflows
+`doctor` checks local dependencies and initializes `relurpify_cfg/` when needed. After that, `chat` starts the TUI in the current workspace.
+
+## Common Commands
 
 ```bash
-# Scaffold a new skill
+# Build everything
+go build ./...
+
+# List discovered agents
+go run ./app/dev-agent-cli agents list
+
+# Run agent tests
+go run ./app/dev-agent-cli agenttest run
+
+# Scaffold a skill
 go run ./app/dev-agent-cli skill init my-skill --description "My focused workflow" --with-tests
 
-# Validate skill manifest + resources
-go run ./app/dev-agent-cli validate my-skill
-
-# Diagnose tool/permission compatibility (optional agent manifest)
-go run ./app/dev-agent-cli skill doctor my-skill --manifest relurpify_cfg/agent.manifest.yaml
-
-# Run the skill testsuite.yaml
-go run ./app/dev-agent-cli skill test my-skill
+# Validate a skill
+go run ./app/dev-agent-cli skill validate my-skill
 ```
 
-### Generate Code documentation
+## Documentation
 
-```bash
-./scripts/gen-docs.sh
-open docs/index.html   # or serve docs/ via any static file server
-```
-
----
-
-# Further Details
-
-Checkout docs/
-
-
-# Roadmap
-
-- [x] core graph oriented library
-- [x] gVisor Sandboxing + permissions integration 
-- [x] HTIL
-- [x] AST and context manager (context compression)
-- [x] planner agent
-- [x] react agent 
-- [x] Coder (modal) agent
-- [x] Ollama integration 
-
-- [] Framework Tooling
-    - [x] Essential (Linux assumed) local toolset
-    - [x] Toolset: Git support 
-    - [x] Toolset: python
-    - [x] Toolset: golang 
-    - [x] Toolset: rust 
-    - [x] Toolset: Nodejs + Npm
-    - [x] 'Skills' Support 
-    
-- [] Test Coverage
-    - [x] core framework unit tests
-    - [x] Automated Agent testsuite 
-    - [] Agent Testsuite: Skills coverage (partially completed)
-    - [] Extend Agent testsuite with standardized agent benchmarks (improvement over trust-me-bro^tm benchmarks)
-    
-- [] standard CLI-TUI interface for Agents
-    - [x] Coder Agent support
-    - [x] Chat
-    - [x] Tasks
-    - [x] Settings
-    - [x] Workspace doctor flow
-    - [x] Notifications with HTIL support 
-    
-- [x] Documentation (ongoing) 
-
-- [] Node-based Workflow App (GUI) 
-    - [] Terminal integration 
-    - [] Relurpish TUI support 
-    - [] Basic Nodeset 
-    - [] Script Node 
-    - [] Skill Node(s)
-    
-- [] (more experiments to come)
+The repository documentation lives under `docs/`.

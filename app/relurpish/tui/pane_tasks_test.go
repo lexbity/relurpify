@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/stretchr/testify/require"
 )
 
@@ -215,6 +216,9 @@ func (f *fakeTasksRuntimeAdapter) ApproveHITL(string, string, fauthorization.Gra
 func (f *fakeTasksRuntimeAdapter) DenyHITL(string, string) error { return nil }
 func (f *fakeTasksRuntimeAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 	return nil, func() {}
+}
+func (f *fakeTasksRuntimeAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {
+	// no-op for tests
 }
 
 func TestTasksPaneWorkflowInspector(t *testing.T) {

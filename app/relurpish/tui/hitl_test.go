@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 type fakeHITL struct {
@@ -71,8 +73,84 @@ func removeRequest(reqs []*authorization.PermissionRequest, id string) []*author
 	return reqs
 }
 
+// minimalHITLRuntimeAdapter implements RuntimeAdapter for HITL tests.
+type minimalHITLRuntimeAdapter struct {
+	hitlSvc hitlService
+}
+
+func (m *minimalHITLRuntimeAdapter) SubscribeHITL() (<-chan authorization.HITLEvent, func()) {
+	return m.hitlSvc.SubscribeHITL()
+}
+func (m *minimalHITLRuntimeAdapter) PendingHITL() []*authorization.PermissionRequest {
+	return m.hitlSvc.PendingHITL()
+}
+func (m *minimalHITLRuntimeAdapter) ApproveHITL(requestID, approver string, scope authorization.GrantScope, duration time.Duration) error {
+	return m.hitlSvc.ApproveHITL(requestID, approver, scope, duration)
+}
+func (m *minimalHITLRuntimeAdapter) DenyHITL(requestID, reason string) error {
+	return m.hitlSvc.DenyHITL(requestID, reason)
+}
+func (m *minimalHITLRuntimeAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {
+	// no-op
+}
+
+// Stubs for other RuntimeAdapter methods
+func (m *minimalHITLRuntimeAdapter) ExecuteInstruction(context.Context, string, core.TaskType, map[string]any) (*core.Result, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) ExecuteInstructionStream(context.Context, string, core.TaskType, map[string]any, func(string)) (*core.Result, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) AvailableAgents() []string { return nil }
+func (m *minimalHITLRuntimeAdapter) SwitchAgent(string) error  { return nil }
+func (m *minimalHITLRuntimeAdapter) SessionInfo() SessionInfo  { return SessionInfo{} }
+func (m *minimalHITLRuntimeAdapter) ResolveContextFiles(context.Context, []string) ContextFileResolution {
+	return ContextFileResolution{}
+}
+func (m *minimalHITLRuntimeAdapter) SessionArtifacts() SessionArtifacts              { return SessionArtifacts{} }
+func (m *minimalHITLRuntimeAdapter) OllamaModels(context.Context) ([]string, error)  { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) RecordingMode() string                           { return "off" }
+func (m *minimalHITLRuntimeAdapter) SetRecordingMode(string) error                   { return nil }
+func (m *minimalHITLRuntimeAdapter) SaveModel(string) error                          { return nil }
+func (m *minimalHITLRuntimeAdapter) ContractSummary() *ContractSummary               { return nil }
+func (m *minimalHITLRuntimeAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) SaveToolPolicy(string, core.AgentPermissionLevel) error {
+	return nil
+}
+func (m *minimalHITLRuntimeAdapter) ListToolsInfo() []ToolInfo          { return nil }
+func (m *minimalHITLRuntimeAdapter) ListCapabilities() []CapabilityInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) ListPrompts() []PromptInfo          { return nil }
+func (m *minimalHITLRuntimeAdapter) ListResources([]string) []ResourceInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) ListLiveProviders() []LiveProviderInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) ListLiveSessions() []LiveProviderSessionInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) ListApprovals() []ApprovalInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) GetCapabilityDetail(string) (*CapabilityDetail, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) GetPromptDetail(string) (*PromptDetail, error) { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) GetResourceDetail(string) (*ResourceDetail, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) GetLiveProviderDetail(string) (*LiveProviderDetail, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) GetLiveSessionDetail(string) (*LiveProviderSessionDetail, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) GetApprovalDetail(string) (*ApprovalDetail, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) GetClassPolicies() map[string]core.AgentPermissionLevel {
+	return nil
+}
+func (m *minimalHITLRuntimeAdapter) SetToolPolicyLive(string, core.AgentPermissionLevel) {}
+func (m *minimalHITLRuntimeAdapter) SetClassPolicyLive(string, core.AgentPermissionLevel) {}
+func (m *minimalHITLRuntimeAdapter) ListWorkflows(int) ([]WorkflowInfo, error) { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) GetWorkflow(string) (*WorkflowDetails, error) { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) CancelWorkflow(string) error                 { return nil }
+
 // TestHITLEventPushesNotification verifies that a HITLEventRequested event
-// causes the notification queue to receive a HITL item.
+// causes the notification queue to receive a HITL item via RootModel (after Gap 2).
 func TestHITLEventPushesNotification(t *testing.T) {
 	hitl := newFakeHITL()
 	req := &authorization.PermissionRequest{
@@ -83,11 +161,17 @@ func TestHITLEventPushesNotification(t *testing.T) {
 	hitl.pending = []*authorization.PermissionRequest{req}
 
 	notifQ := &NotificationQueue{}
-	pane := NewChatPane(nil, &AgentContext{}, &Session{}, notifQ)
-	pane.hitlSvc = hitl
+	chat := NewChatPane(nil, &AgentContext{}, &Session{}, notifQ)
+	chat.hitlSvc = hitl
+
+	// Create a RootModel and set up HITL
+	adapter := &minimalHITLRuntimeAdapter{hitlSvc: hitl}
+	m := newRootModel(adapter)
+	m.notifQ = notifQ
+	m.chat = chat
 
 	event := hitlEventMsg{event: authorization.HITLEvent{Type: authorization.HITLEventRequested, Request: req}}
-	_, _ = pane.Update(event)
+	_, _ = m.handleHITLEvent(event)
 
 	if notifQ.Len() == 0 {
 		t.Fatalf("expected notification pushed, got 0")

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
@@ -22,7 +23,24 @@ func registerSkillCapabilities(registry capabilityRegistrar, skill *manifest.Ski
 	if registry == nil || skill == nil {
 		return nil
 	}
-	for _, candidate := range EnumerateSkillCapabilities([]ResolvedSkill{{Manifest: skill, Paths: paths}}) {
+	candidates := EnumerateSkillCapabilities([]ResolvedSkill{{Manifest: skill, Paths: paths}})
+	if batchRegistry, ok := registry.(interface {
+		RegisterBatch([]capability.RegistrationBatchItem) error
+	}); ok {
+		items := make([]capability.RegistrationBatchItem, 0, len(candidates))
+		for _, candidate := range candidates {
+			item := capability.RegistrationBatchItem{Descriptor: candidate.Descriptor}
+			if candidate.PromptHandler != nil {
+				item.PromptHandler = candidate.PromptHandler
+			}
+			if candidate.ResourceHandler != nil {
+				item.ResourceHandler = candidate.ResourceHandler
+			}
+			items = append(items, item)
+		}
+		return batchRegistry.RegisterBatch(items)
+	}
+	for _, candidate := range candidates {
 		switch {
 		case candidate.PromptHandler != nil:
 			if err := registry.RegisterPromptCapability(candidate.PromptHandler); err != nil {

@@ -1,0 +1,378 @@
+package tui
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"github.com/stretchr/testify/require"
+)
+
+// TestKeybindingsUndo verifies ctrl+z removes the last message.
+func TestKeybindingsUndo(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+	m.chat.feed.AppendMessage(Message{
+		ID:   "msg-1",
+		Role: RoleUser,
+		Content: MessageContent{
+			Text: "Hello",
+		},
+		Timestamp: time.Now(),
+	})
+	m.chat.feed.AppendMessage(Message{
+		ID:   "msg-2",
+		Role: RoleAgent,
+		Content: MessageContent{
+			Text: "Hi there",
+		},
+		Timestamp: time.Now(),
+	})
+
+	// Initially 2 messages
+	require.Len(t, m.chat.feed.Messages(), 2)
+
+	// Undo should remove the last message
+	updated, _ := m.handleGlobalKey("ctrl+z")
+	m = updated.(RootModel)
+
+	// Now should have 1 message
+	require.Len(t, m.chat.feed.Messages(), 1)
+	require.Equal(t, "msg-1", m.chat.feed.Messages()[0].ID)
+}
+
+// TestKeybindingsRedo verifies ctrl+y restores the last undone message.
+func TestKeybindingsRedo(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+	msg := Message{
+		ID:   "msg-1",
+		Role: RoleUser,
+		Content: MessageContent{
+			Text: "Hello",
+		},
+		Timestamp: time.Now(),
+	}
+	m.chat.feed.AppendMessage(msg)
+
+	// Undo to remove the message
+	updated, _ := m.handleGlobalKey("ctrl+z")
+	m = updated.(RootModel)
+	require.Len(t, m.chat.feed.Messages(), 0)
+
+	// Redo should restore the message
+	updated, _ = m.handleGlobalKey("ctrl+y")
+	m = updated.(RootModel)
+
+	require.Len(t, m.chat.feed.Messages(), 1)
+	require.Equal(t, "msg-1", m.chat.feed.Messages()[0].ID)
+}
+
+// TestKeybindingsScrollUp verifies ctrl+u scrolls the feed up.
+func TestKeybindingsScrollUp(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+	m.activeTab = TabChat
+	m.chat.SetSize(80, 20)
+
+	// Add multiple messages
+	for i := 1; i <= 30; i++ {
+		m.chat.feed.AppendMessage(Message{
+			ID:        "msg-" + string(rune(i)),
+			Role:      RoleUser,
+			Content:   MessageContent{Text: "Message " + string(rune(i))},
+			Timestamp: time.Now(),
+		})
+	}
+
+	// Scroll to bottom
+	m.chat.feed.vp.GotoBottom()
+	initialOffset := m.chat.feed.vp.YOffset
+
+	// Scroll up
+	updated, _ := m.handleGlobalKey("ctrl+u")
+	m = updated.(RootModel)
+
+	// Should have scrolled up (smaller offset)
+	require.Less(t, m.chat.feed.vp.YOffset, initialOffset)
+}
+
+// TestKeybindingsScrollDown verifies pagedown scrolls the feed down.
+func TestKeybindingsScrollDown(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+	m.activeTab = TabChat
+	m.chat.SetSize(80, 20)
+
+	// Add multiple messages
+	for i := 1; i <= 30; i++ {
+		m.chat.feed.AppendMessage(Message{
+			ID:        "msg-" + string(rune(i)),
+			Role:      RoleUser,
+			Content:   MessageContent{Text: "Message " + string(rune(i))},
+			Timestamp: time.Now(),
+		})
+	}
+
+	// Start at top
+	m.chat.feed.vp.GotoTop()
+	initialOffset := m.chat.feed.vp.YOffset
+
+	// Scroll down
+	updated, _ := m.handleGlobalKey("pagedown")
+	m = updated.(RootModel)
+
+	// Should have scrolled down (larger offset)
+	require.Greater(t, m.chat.feed.vp.YOffset, initialOffset)
+}
+
+// TestKeybindingsPageUp verifies pageup scrolls the feed up by page.
+func TestKeybindingsPageUp(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+	m.activeTab = TabChat
+	m.chat.SetSize(80, 20)
+
+	// Add multiple messages to enable paging
+	for i := 1; i <= 50; i++ {
+		m.chat.feed.AppendMessage(Message{
+			ID:        "msg-" + string(rune(i)),
+			Role:      RoleUser,
+			Content:   MessageContent{Text: "Message " + string(rune(i))},
+			Timestamp: time.Now(),
+		})
+	}
+
+	// Scroll to bottom
+	m.chat.feed.vp.GotoBottom()
+	initialOffset := m.chat.feed.vp.YOffset
+
+	// Page up
+	updated, _ := m.handleGlobalKey("pageup")
+	m = updated.(RootModel)
+
+	// Should have scrolled up
+	require.Less(t, m.chat.feed.vp.YOffset, initialOffset)
+}
+
+// TestKeybindingsFilePicker verifies @ enters file picker mode.
+func TestKeybindingsFilePicker(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+
+	// Enable file picker mode
+	updated, _ := m.handleGlobalKey("@")
+	m = updated.(RootModel)
+
+	// Input should have file picker placeholder
+	require.Contains(t, m.inputBar.input.Placeholder, "select files")
+	// Input should start with @
+	require.Equal(t, "@", m.inputBar.Value())
+}
+
+// TestKeybindingsCompact verifies ctrl+k toggles compact mode.
+func TestKeybindingsCompact(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+
+	initialMode := m.chat.expandTarget
+	require.Equal(t, "thinking", initialMode)
+
+	// Toggle once
+	updated, _ := m.handleGlobalKey("ctrl+k")
+	m = updated.(RootModel)
+	require.Equal(t, "plan", m.chat.expandTarget)
+
+	// Toggle again
+	updated, _ = m.handleGlobalKey("ctrl+k")
+	m = updated.(RootModel)
+	require.Equal(t, "all", m.chat.expandTarget)
+
+	// Toggle back to thinking
+	updated, _ = m.handleGlobalKey("ctrl+k")
+	m = updated.(RootModel)
+	require.Equal(t, "thinking", m.chat.expandTarget)
+}
+
+// TestFeedScrollMethods verifies Feed scroll methods work correctly.
+func TestFeedScrollMethods(t *testing.T) {
+	feed := NewFeed()
+	feed.SetSize(80, 20)
+
+	// Add messages
+	for i := 1; i <= 30; i++ {
+		feed.AppendMessage(Message{
+			ID:        "msg-" + string(rune(i)),
+			Role:      RoleUser,
+			Content:   MessageContent{Text: "Message " + string(rune(i))},
+			Timestamp: time.Now(),
+		})
+	}
+
+	// Test ScrollUp
+	feed.vp.GotoBottom()
+	offsetBefore := feed.vp.YOffset
+	feed.ScrollUp()
+	require.Less(t, feed.vp.YOffset, offsetBefore)
+
+	// Test ScrollDown
+	feed.vp.GotoTop()
+	offsetBefore = feed.vp.YOffset
+	feed.ScrollDown()
+	require.Greater(t, feed.vp.YOffset, offsetBefore)
+
+	// Test PageUp
+	feed.vp.GotoBottom()
+	offsetBefore = feed.vp.YOffset
+	feed.PageUp()
+	require.Less(t, feed.vp.YOffset, offsetBefore)
+
+	// Test PageDown
+	feed.vp.GotoTop()
+	offsetBefore = feed.vp.YOffset
+	feed.PageDown()
+	require.Greater(t, feed.vp.YOffset, offsetBefore)
+}
+
+// TestChatPaneUndoRedo verifies undo/redo stack management.
+func TestChatPaneUndoRedo(t *testing.T) {
+	pane := NewChatPane(nil, nil, nil, nil)
+	pane.SetSize(80, 20)
+
+	// Add messages
+	msg1 := Message{ID: "msg-1", Role: RoleUser, Content: MessageContent{Text: "First"}, Timestamp: time.Now()}
+	msg2 := Message{ID: "msg-2", Role: RoleAgent, Content: MessageContent{Text: "Second"}, Timestamp: time.Now()}
+	msg3 := Message{ID: "msg-3", Role: RoleUser, Content: MessageContent{Text: "Third"}, Timestamp: time.Now()}
+
+	pane.feed.AppendMessage(msg1)
+	pane.feed.AppendMessage(msg2)
+	pane.feed.AppendMessage(msg3)
+
+	require.Len(t, pane.feed.Messages(), 3)
+
+	// Undo removes last message
+	pane.Undo()
+	require.Len(t, pane.feed.Messages(), 2)
+	require.Len(t, pane.undoStack, 1)
+	require.Equal(t, "msg-3", pane.undoStack[0].ID)
+
+	// Undo again
+	pane.Undo()
+	require.Len(t, pane.feed.Messages(), 1)
+	require.Len(t, pane.undoStack, 2)
+
+	// Redo restores message
+	pane.Redo()
+	require.Len(t, pane.feed.Messages(), 2)
+	require.Len(t, pane.undoStack, 1)
+
+	// Redo again
+	pane.Redo()
+	require.Len(t, pane.feed.Messages(), 3)
+	require.Len(t, pane.undoStack, 0)
+}
+
+// TestChatPaneToggleCompact verifies compact mode cycling.
+func TestChatPaneToggleCompact(t *testing.T) {
+	pane := NewChatPane(nil, nil, nil, nil)
+
+	require.Equal(t, "thinking", pane.expandTarget)
+
+	pane.ToggleCompact()
+	require.Equal(t, "plan", pane.expandTarget)
+
+	pane.ToggleCompact()
+	require.Equal(t, "all", pane.expandTarget)
+
+	pane.ToggleCompact()
+	require.Equal(t, "thinking", pane.expandTarget)
+}
+
+// TestKeybindingsScrollNoOpWhenWrongTab verifies scroll only works in chat tab.
+func TestKeybindingsScrollNoOpWhenWrongTab(t *testing.T) {
+	adapter := newMinimalTestAdapter()
+	m := newRootModel(adapter)
+	m.activeTab = TabTasks
+
+	// Add messages to chat
+	m.chat.SetSize(80, 20)
+	for i := 1; i <= 10; i++ {
+		m.chat.feed.AppendMessage(Message{
+			ID:        "msg-" + string(rune(i)),
+			Role:      RoleUser,
+			Content:   MessageContent{Text: "Message " + string(rune(i))},
+			Timestamp: time.Now(),
+		})
+	}
+
+	m.chat.feed.vp.GotoTop()
+	initialOffset := m.chat.feed.vp.YOffset
+
+	// Try to scroll while on tasks tab
+	updated, _ := m.handleGlobalKey("pagedown")
+	m = updated.(RootModel)
+
+	// Offset should not change (scroll didn't apply)
+	require.Equal(t, initialOffset, m.chat.feed.vp.YOffset)
+}
+
+// newMinimalTestAdapter creates a test runtime adapter for keybinding tests.
+func newMinimalTestAdapter() RuntimeAdapter {
+	return &minimalKeybindingTestAdapter{}
+}
+
+type minimalKeybindingTestAdapter struct{}
+
+func (m *minimalKeybindingTestAdapter) ExecuteInstruction(context.Context, string, core.TaskType, map[string]any) (*core.Result, error) {
+	return nil, nil
+}
+func (m *minimalKeybindingTestAdapter) ExecuteInstructionStream(context.Context, string, core.TaskType, map[string]any, func(string)) (*core.Result, error) {
+	return nil, nil
+}
+func (m *minimalKeybindingTestAdapter) AvailableAgents() []string                                    { return nil }
+func (m *minimalKeybindingTestAdapter) SwitchAgent(string) error                                      { return nil }
+func (m *minimalKeybindingTestAdapter) SessionInfo() SessionInfo                                      { return SessionInfo{} }
+func (m *minimalKeybindingTestAdapter) ResolveContextFiles(context.Context, []string) ContextFileResolution {
+	return ContextFileResolution{}
+}
+func (m *minimalKeybindingTestAdapter) SessionArtifacts() SessionArtifacts                            { return SessionArtifacts{} }
+func (m *minimalKeybindingTestAdapter) OllamaModels(context.Context) ([]string, error)               { return nil, nil }
+func (m *minimalKeybindingTestAdapter) RecordingMode() string                                         { return "off" }
+func (m *minimalKeybindingTestAdapter) SetRecordingMode(string) error                                 { return nil }
+func (m *minimalKeybindingTestAdapter) SaveModel(string) error                                        { return nil }
+func (m *minimalKeybindingTestAdapter) ContractSummary() *ContractSummary                            { return nil }
+func (m *minimalKeybindingTestAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo               { return nil }
+func (m *minimalKeybindingTestAdapter) SaveToolPolicy(string, core.AgentPermissionLevel) error       { return nil }
+func (m *minimalKeybindingTestAdapter) ListToolsInfo() []ToolInfo                                     { return nil }
+func (m *minimalKeybindingTestAdapter) ListCapabilities() []CapabilityInfo                           { return nil }
+func (m *minimalKeybindingTestAdapter) ListPrompts() []PromptInfo                                     { return nil }
+func (m *minimalKeybindingTestAdapter) ListResources([]string) []ResourceInfo                        { return nil }
+func (m *minimalKeybindingTestAdapter) ListLiveProviders() []LiveProviderInfo                        { return nil }
+func (m *minimalKeybindingTestAdapter) ListLiveSessions() []LiveProviderSessionInfo                  { return nil }
+func (m *minimalKeybindingTestAdapter) ListApprovals() []ApprovalInfo                                { return nil }
+func (m *minimalKeybindingTestAdapter) GetCapabilityDetail(string) (*CapabilityDetail, error)        { return nil, nil }
+func (m *minimalKeybindingTestAdapter) GetPromptDetail(string) (*PromptDetail, error)                { return nil, nil }
+func (m *minimalKeybindingTestAdapter) GetResourceDetail(string) (*ResourceDetail, error)            { return nil, nil }
+func (m *minimalKeybindingTestAdapter) GetLiveProviderDetail(string) (*LiveProviderDetail, error)    { return nil, nil }
+func (m *minimalKeybindingTestAdapter) GetLiveSessionDetail(string) (*LiveProviderSessionDetail, error) {
+	return nil, nil
+}
+func (m *minimalKeybindingTestAdapter) GetApprovalDetail(string) (*ApprovalDetail, error)            { return nil, nil }
+func (m *minimalKeybindingTestAdapter) GetClassPolicies() map[string]core.AgentPermissionLevel       { return nil }
+func (m *minimalKeybindingTestAdapter) SetToolPolicyLive(string, core.AgentPermissionLevel)          {}
+func (m *minimalKeybindingTestAdapter) SetClassPolicyLive(string, core.AgentPermissionLevel)         {}
+func (m *minimalKeybindingTestAdapter) ListWorkflows(int) ([]WorkflowInfo, error)                    { return nil, nil }
+func (m *minimalKeybindingTestAdapter) GetWorkflow(string) (*WorkflowDetails, error)                 { return nil, nil }
+func (m *minimalKeybindingTestAdapter) CancelWorkflow(string) error                                   { return nil }
+func (m *minimalKeybindingTestAdapter) PendingHITL() []*fauthorization.PermissionRequest             { return nil }
+func (m *minimalKeybindingTestAdapter) ApproveHITL(string, string, fauthorization.GrantScope, time.Duration) error {
+	return nil
+}
+func (m *minimalKeybindingTestAdapter) DenyHITL(string, string) error { return nil }
+func (m *minimalKeybindingTestAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
+	return nil, func() {}
+}
+func (m *minimalKeybindingTestAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {}

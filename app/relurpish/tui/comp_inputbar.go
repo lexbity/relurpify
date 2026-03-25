@@ -71,6 +71,18 @@ func (b *InputBar) SetSearchMode(on bool) {
 	}
 }
 
+// SetFilePickerMode enters or exits file picker mode.
+func (b *InputBar) SetFilePickerMode(on bool) {
+	if on {
+		b.input.Placeholder = "@ - select files or type path"
+		b.input.SetValue("@")
+		b.input.Focus()
+	} else {
+		b.input.Placeholder = "Type a message or /help for commands"
+		b.input.SetValue("")
+	}
+}
+
 // prefix returns the prompt prefix for the current context.
 func (b *InputBar) prefix(tab TabID) string {
 	if b.searchMode {

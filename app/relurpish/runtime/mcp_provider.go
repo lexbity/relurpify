@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	mclient "github.com/lexcodex/relurpify/framework/middleware/mcp/client"
 	"github.com/lexcodex/relurpify/framework/middleware/mcp/mapping"
@@ -110,11 +111,19 @@ func (p *mcpClientProvider) Initialize(ctx context.Context, rt *Runtime) error {
 	sessionID := primarySessionID(p.desc.ID)
 	sessionDesc := sessionCapabilityDescriptor(p.desc, sessionID, p.config.Target)
 	catalogDesc := clientCatalogCapabilityDescriptor(p.desc, sessionID, p.config.Target)
-	if err := registrar.RegisterCapability(sessionDesc); err != nil && !isAlreadyRegistered(err) {
-		return err
-	}
-	if err := registrar.RegisterCapability(catalogDesc); err != nil && !isAlreadyRegistered(err) {
-		return err
+	if batchRegistrar, ok := registrar.(interface {
+		RegisterCapabilitiesBatch([]core.CapabilityDescriptor) error
+	}); ok {
+		if err := batchRegistrar.RegisterCapabilitiesBatch([]core.CapabilityDescriptor{sessionDesc, catalogDesc}); err != nil && !isAlreadyRegistered(err) {
+			return err
+		}
+	} else {
+		if err := registrar.RegisterCapability(sessionDesc); err != nil && !isAlreadyRegistered(err) {
+			return err
+		}
+		if err := registrar.RegisterCapability(catalogDesc); err != nil && !isAlreadyRegistered(err) {
+			return err
+		}
 	}
 	p.capabilityIDs[sessionDesc.ID] = struct{}{}
 	p.capabilityIDs[catalogDesc.ID] = struct{}{}
@@ -171,6 +180,7 @@ func (p *mcpClientProvider) syncCatalog(ctx context.Context, rt *Runtime, regist
 		sessionCapabilityID(p.desc.ID):    {},
 		clientCatalogCapabilityID(p.desc): {},
 	}
+	invocableItems := make([]capability.RegistrationBatchItem, 0, len(tools)+len(resources))
 	for _, remoteTool := range tools {
 		desc, err := mapping.ImportedToolDescriptor(p.desc.ID, snap.SessionID, snap.NegotiatedVersion, remoteTool, p.desc.TrustBaseline)
 		if err != nil {
@@ -190,40 +200,73 @@ func (p *mcpClientProvider) syncCatalog(ctx context.Context, rt *Runtime, regist
 		if _, ok := rt.Tools.GetCapability(desc.ID); ok {
 			continue
 		}
-		if err := rt.Tools.RegisterInvocableCapability(mcpRemoteToolCapability{
-			desc:    desc,
-			client:  client,
-			tool:    remoteTool,
-			session: snap.SessionID,
-		}); err != nil && !isAlreadyRegistered(err) {
-			return err
-		}
+		invocableItems = append(invocableItems, capability.RegistrationBatchItem{
+			InvocableHandler: mcpRemoteToolCapability{
+				desc:    desc,
+				client:  client,
+				tool:    remoteTool,
+				session: snap.SessionID,
+			},
+		})
 	}
+	promptDescs := make([]core.CapabilityDescriptor, 0, len(prompts))
 	for _, prompt := range prompts {
 		desc := mapping.ImportedPromptDescriptor(p.desc.ID, snap.SessionID, snap.NegotiatedVersion, prompt, p.desc.TrustBaseline)
 		current[desc.ID] = struct{}{}
-		if err := registrar.RegisterCapability(desc); err != nil && !isAlreadyRegistered(err) {
-			return err
+		promptDescs = append(promptDescs, desc)
+	}
+	if len(promptDescs) > 0 {
+		if batchRegistrar, ok := registrar.(interface {
+			RegisterCapabilitiesBatch([]core.CapabilityDescriptor) error
+		}); ok {
+			if err := batchRegistrar.RegisterCapabilitiesBatch(promptDescs); err != nil && !isAlreadyRegistered(err) {
+				return err
+			}
+		} else {
+			for _, desc := range promptDescs {
+				if err := registrar.RegisterCapability(desc); err != nil && !isAlreadyRegistered(err) {
+					return err
+				}
+			}
 		}
 	}
+	resourceDescs := make([]core.CapabilityDescriptor, 0, len(resources))
 	for _, resource := range resources {
 		desc := mapping.ImportedResourceDescriptor(p.desc.ID, snap.SessionID, snap.NegotiatedVersion, resource, p.desc.TrustBaseline)
 		current[desc.ID] = struct{}{}
-		if err := registrar.RegisterCapability(desc); err != nil && !isAlreadyRegistered(err) {
-			return err
-		}
+		resourceDescs = append(resourceDescs, desc)
 		if supportsRemoteResourceSubscriptions(snap.RemoteCapabilities) {
 			subDesc := importedResourceSubscriptionDescriptor(p.desc.ID, snap.SessionID, snap.NegotiatedVersion, resource, p.desc.TrustBaseline)
 			current[subDesc.ID] = struct{}{}
 			if _, ok := rt.Tools.GetCapability(subDesc.ID); !ok {
-				if err := rt.Tools.RegisterInvocableCapability(mcpRemoteResourceSubscriptionCapability{
-					desc:     subDesc,
-					client:   client,
-					uri:      resource.URI,
-					session:  snap.SessionID,
-					provider: p.desc.ID,
-					owner:    p,
-				}); err != nil && !isAlreadyRegistered(err) {
+				invocableItems = append(invocableItems, capability.RegistrationBatchItem{
+					InvocableHandler: mcpRemoteResourceSubscriptionCapability{
+						desc:     subDesc,
+						client:   client,
+						uri:      resource.URI,
+						session:  snap.SessionID,
+						provider: p.desc.ID,
+						owner:    p,
+					},
+				})
+			}
+		}
+	}
+	if len(invocableItems) > 0 {
+		if err := rt.Tools.RegisterBatch(invocableItems); err != nil && !isAlreadyRegistered(err) {
+			return err
+		}
+	}
+	if len(resourceDescs) > 0 {
+		if batchRegistrar, ok := registrar.(interface {
+			RegisterCapabilitiesBatch([]core.CapabilityDescriptor) error
+		}); ok {
+			if err := batchRegistrar.RegisterCapabilitiesBatch(resourceDescs); err != nil && !isAlreadyRegistered(err) {
+				return err
+			}
+		} else {
+			for _, desc := range resourceDescs {
+				if err := registrar.RegisterCapability(desc); err != nil && !isAlreadyRegistered(err) {
 					return err
 				}
 			}

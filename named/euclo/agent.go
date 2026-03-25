@@ -36,6 +36,7 @@ type Agent struct {
 	CodingCapabilities  *capabilities.EucloCapabilityRegistry
 	ProfileCtrl         *orchestrate.ProfileController
 	RecoveryCtrl        *orchestrate.RecoveryController
+	Emitter             interaction.FrameEmitter // live emitter from TUI; nil means use task-scoped emitter
 }
 
 func New(env agentenv.AgentEnvironment) *Agent {
@@ -185,7 +186,16 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	)
 	seedInteractionPrepass(state, executionTask, classification, mode)
 	if a.InteractionRegistry != nil {
-		emitter, withTransitions := interactionEmitterForTask(executionTask)
+		var emitter interaction.FrameEmitter
+		var withTransitions bool
+		if a.Emitter != nil {
+			// Live emitter from TUI: use it directly without state transitions
+			emitter = a.Emitter
+			withTransitions = false
+		} else {
+			// Task-scoped emitter: check for test script or use NoopEmitter
+			emitter, withTransitions = interactionEmitterForTask(executionTask)
+		}
 		var interactionErr error
 		if withTransitions {
 			_, _, interactionErr = a.ProfileCtrl.ExecuteInteractiveWithTransitions(

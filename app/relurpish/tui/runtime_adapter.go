@@ -20,6 +20,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 const contextFileMaxBytes = 8000
@@ -61,6 +62,7 @@ type RuntimeAdapter interface {
 	ExecuteInstructionStream(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any, callback func(string)) (*core.Result, error)
 	AvailableAgents() []string
 	SwitchAgent(name string) error
+	SetInteractionEmitter(e interaction.FrameEmitter)
 	SessionInfo() SessionInfo
 	ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution
 	SessionArtifacts() SessionArtifacts
@@ -134,6 +136,13 @@ func (r *runtimeAdapter) SwitchAgent(name string) error {
 		return fmt.Errorf("runtime unavailable")
 	}
 	return r.rt.SwitchAgent(name)
+}
+
+func (r *runtimeAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {
+	if r == nil || r.rt == nil {
+		return
+	}
+	r.rt.SetInteractionEmitter(e)
 }
 
 func (r *runtimeAdapter) SessionInfo() SessionInfo {

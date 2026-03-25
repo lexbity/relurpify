@@ -105,6 +105,38 @@ func (f *Feed) FilterMessages(query string) []Message {
 	return out
 }
 
+// ScrollUp scrolls the feed up by one line.
+func (f *Feed) ScrollUp() {
+	if f.ready {
+		f.vp.LineUp(1)
+		f.autoFollow = f.vp.AtBottom()
+	}
+}
+
+// ScrollDown scrolls the feed down by one line.
+func (f *Feed) ScrollDown() {
+	if f.ready {
+		f.vp.LineDown(1)
+		f.autoFollow = f.vp.AtBottom()
+	}
+}
+
+// PageUp scrolls the feed up by one page.
+func (f *Feed) PageUp() {
+	if f.ready {
+		f.vp.PageUp()
+		f.autoFollow = f.vp.AtBottom()
+	}
+}
+
+// PageDown scrolls the feed down by one page.
+func (f *Feed) PageDown() {
+	if f.ready {
+		f.vp.PageDown()
+		f.autoFollow = f.vp.AtBottom()
+	}
+}
+
 // Update passes viewport scroll events through.
 func (f *Feed) Update(msg tea.Msg) (*Feed, tea.Cmd) {
 	if !f.ready {

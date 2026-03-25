@@ -17,6 +17,8 @@ import (
 	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/named/euclo"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/capabilityplan"
@@ -431,6 +433,18 @@ func (r *Runtime) SwitchAgent(name string) error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
 }
 
+// SetInteractionEmitter injects a live interaction emitter into the active euclo agent.
+// Type-asserts the active agent to *euclo.Agent; sets agent.Emitter = e.
+// Silent no-op if the agent is not *euclo.Agent.
+func (r *Runtime) SetInteractionEmitter(e interaction.FrameEmitter) {
+	if r == nil || r.Agent == nil {
+		return
+	}
+	if eucloAgent, ok := r.Agent.(*euclo.Agent); ok {
+		eucloAgent.Emitter = e
+	}
+}
+
 // ReloadEffectiveContract reapplies the effective contract and compiled policy
 // for the currently selected agent using the same consolidated resolution path
 // as startup and SwitchAgent.
@@ -650,12 +664,9 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if err := manager.StartIndexing(buildCtx); err != nil {
 		return nil, err
 	}
-	if err := manager.WaitUntilReady(buildCtx); err != nil {
-		if !shouldIgnoreBootstrapIndexError(err) {
-			return nil, err
-		}
-		log.Printf("runtime bootstrap warning: AST index readiness incomplete: %v", err)
-	}
+	// AST indexing is launched eagerly but remains eventually consistent during
+	// execution. Callers that truly require readiness should do a bounded wait at
+	// point of use instead of putting full-workspace AST warmup on every startup.
 	var semanticStore search.SemanticStore
 	if strings.TrimSpace(cfg.OllamaModel) != "" {
 		retrievalDB, err := openRetrievalDB(paths.RetrievalDB())

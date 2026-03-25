@@ -83,17 +83,17 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 	report.Dependencies = []DependencyStatus{
 		{
 			Name:      "runsc",
-			Required:  true,
+			Required:  false,
 			Available: env.Sandbox.Runsc.Error == "",
-			Blocking:  env.Sandbox.Runsc.Error != "",
-			Details:   firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Runsc.Error),
+			Blocking:  false,
+			Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Runsc.Error)),
 		},
 		{
 			Name:      "docker",
-			Required:  true,
+			Required:  false,
 			Available: env.Sandbox.Docker.Error == "",
-			Blocking:  env.Sandbox.Docker.Error != "",
-			Details:   firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error),
+			Blocking:  false,
+			Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error)),
 		},
 		{
 			Name:      "ollama",
@@ -188,6 +188,18 @@ func detectChromiumStatus(ctx context.Context) DependencyStatus {
 		Blocking:  false,
 		Details:   "not found",
 	}
+}
+
+func formatSandboxDetail(detail string) string {
+	if detail == "" {
+		return "sandbox unavailable — tool sandboxing disabled"
+	}
+	// If it's an error message, append the note
+	if strings.Contains(detail, "error") || strings.Contains(detail, "not found") {
+		return detail + " — sandbox unavailable — tool sandboxing disabled"
+	}
+	// If it's a version string, we're good
+	return detail
 }
 
 func firstNonEmpty(values ...string) string {

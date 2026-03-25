@@ -11,14 +11,13 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // chatSystemMsg is an internal message to add a system line to the chat feed.
 type chatSystemMsg struct{ text string }
 
-// ChatPane owns the message feed, run management, and HITL subscription.
+// ChatPane owns the message feed and run management.
 // It is always held by pointer so mutations survive tea.Model value copies.
 type ChatPane struct {
 	feed      *Feed
@@ -28,8 +27,6 @@ type ChatPane struct {
 	context    *AgentContext
 	session    *Session
 	notifQ     *NotificationQueue
-	hitlCh     <-chan fauthorization.HITLEvent
-	hitlOff    func()
 	hitlSvc    hitlService
 	runtime    RuntimeAdapter
 	lastPrompt string
@@ -38,18 +35,15 @@ type ChatPane struct {
 	expandTarget  string
 
 	width, height int
+
+	undoStack []Message
+	redoStack []Message
 }
 
 // NewChatPane initializes the ChatPane. The feed is created but not sized yet.
 func NewChatPane(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) *ChatPane {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
-
-	var hitlCh <-chan fauthorization.HITLEvent
-	var hitlOff func()
-	if rt != nil {
-		hitlCh, hitlOff = rt.SubscribeHITL()
-	}
 
 	svc := hitlService(rt)
 
@@ -60,24 +54,19 @@ func NewChatPane(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *No
 		context:      ctx,
 		session:      sess,
 		notifQ:       notifQ,
-		hitlCh:       hitlCh,
-		hitlOff:      hitlOff,
 		hitlSvc:      svc,
 		runtime:      rt,
 		expandTarget: "thinking",
 	}
 }
 
-// Init starts the HITL listener and spinner.
+// Init starts the spinner.
 func (p *ChatPane) Init() tea.Cmd {
-	return tea.Batch(p.spinner.Tick, listenHITLEvents(p.hitlCh))
+	return p.spinner.Tick
 }
 
-// Cleanup cancels all active runs and stops the HITL subscription.
+// Cleanup cancels all active runs.
 func (p *ChatPane) Cleanup() {
-	if p.hitlOff != nil {
-		p.hitlOff()
-	}
 	for _, run := range p.runStates {
 		if run.Cancel != nil {
 			run.Cancel()
@@ -90,6 +79,51 @@ func (p *ChatPane) SetSize(w, h int) {
 	p.width = w
 	p.height = h
 	p.feed.SetSize(w, h)
+}
+
+// Undo removes the last message and adds it to the redo stack.
+func (p *ChatPane) Undo() {
+	messages := p.feed.Messages()
+	if len(messages) == 0 {
+		return
+	}
+	lastMsg := messages[len(messages)-1]
+	p.undoStack = append(p.undoStack, lastMsg)
+
+	// Remove the last message from the feed
+	newMessages := make([]Message, 0, len(messages)-1)
+	newMessages = append(newMessages, messages[:len(messages)-1]...)
+	p.feed.ClearMessages()
+	for _, msg := range newMessages {
+		p.feed.AppendMessage(msg)
+	}
+
+	// Clear redo stack when undoing
+	p.redoStack = nil
+}
+
+// Redo restores the last undone message.
+func (p *ChatPane) Redo() {
+	if len(p.undoStack) == 0 {
+		return
+	}
+	lastUndone := p.undoStack[len(p.undoStack)-1]
+	p.undoStack = p.undoStack[:len(p.undoStack)-1]
+	p.feed.AppendMessage(lastUndone)
+}
+
+// ToggleCompact toggles between normal and compact message display.
+func (p *ChatPane) ToggleCompact() {
+	// Cycle through display modes: thinking -> plan -> all (or back to thinking)
+	switch p.expandTarget {
+	case "thinking":
+		p.expandTarget = "plan"
+	case "plan":
+		p.expandTarget = "all"
+	default:
+		p.expandTarget = "thinking"
+	}
+	p.addSystemMessage(fmt.Sprintf("Display mode: %s", p.expandTarget))
 }
 
 // HasActiveRuns returns true if any run is in flight.
@@ -116,12 +150,6 @@ func (p *ChatPane) Update(msg tea.Msg) (*ChatPane, tea.Cmd) {
 
 	case UpdateTaskMsg:
 		return p.handleUpdateTask(msg)
-
-	case hitlEventMsg:
-		return p.handleHITLEvent(msg)
-
-	case hitlResolvedMsg:
-		return p.handleHITLResolved(msg)
 
 	case chatSystemMsg:
 		p.addSystemMessage(msg.text)
@@ -427,50 +455,6 @@ func (p *ChatPane) handleUpdateTask(msg UpdateTaskMsg) (*ChatPane, tea.Cmd) {
 	}
 	p.feed.refresh()
 	return p, nil
-}
-
-func (p *ChatPane) handleHITLEvent(msg hitlEventMsg) (*ChatPane, tea.Cmd) {
-	next := listenHITLEvents(p.hitlCh)
-	var pending []*fauthorization.PermissionRequest
-	if p.hitlSvc != nil {
-		pending = p.hitlSvc.PendingHITL()
-	}
-	switch msg.event.Type {
-	case fauthorization.HITLEventRequested:
-		req := msg.event.Request
-		if req == nil && len(pending) > 0 {
-			req = pending[0]
-		}
-		if req != nil && p.notifQ != nil {
-			p.notifQ.PushHITL(req)
-		}
-	case fauthorization.HITLEventResolved, fauthorization.HITLEventExpired:
-		if msg.event.Request != nil && p.notifQ != nil {
-			p.notifQ.Resolve(msg.event.Request.ID)
-		}
-		if msg.event.Type == fauthorization.HITLEventExpired && msg.event.Request != nil {
-			reason := msg.event.Error
-			if reason == "" {
-				reason = "expired"
-			}
-			p.addSystemMessage(fmt.Sprintf("Permission %s expired: %s", msg.event.Request.ID, reason))
-		}
-	}
-	return p, next
-}
-
-func (p *ChatPane) handleHITLResolved(msg hitlResolvedMsg) (*ChatPane, tea.Cmd) {
-	if p.notifQ != nil {
-		p.notifQ.Resolve(msg.requestID)
-	}
-	if msg.err != nil {
-		p.addSystemMessage(fmt.Sprintf("HITL %s failed: %v", msg.requestID, msg.err))
-	} else if msg.approved {
-		p.addSystemMessage(fmt.Sprintf("Approved %s", msg.requestID))
-	} else {
-		p.addSystemMessage(fmt.Sprintf("Denied %s", msg.requestID))
-	}
-	return p, listenHITLEvents(p.hitlCh)
 }
 
 // streamCompletedCmd is a fire-and-forget used by the root model to trigger auto-save.
