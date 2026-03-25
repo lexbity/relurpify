@@ -67,7 +67,12 @@ func (s *Service) RegisterRuntime(ctx context.Context, req RuntimeRegistrationRe
 	}
 	runtime := req.Runtime
 	runtime.TrustDomain = req.TrustDomain
-	runtime.Signature = firstNonEmpty(req.Signature, runtime.Signature)
+	if err := SignRuntimeDescriptor(s.Signer, &runtime); err != nil {
+		return err
+	}
+	if strings.TrimSpace(runtime.Signature) == "" {
+		runtime.Signature = firstNonEmpty(req.Signature, runtime.Signature)
+	}
 	if runtime.ExpiresAt.IsZero() {
 		runtime.ExpiresAt = nodeAd.ExpiresAt
 	}

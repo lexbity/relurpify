@@ -114,6 +114,9 @@ func (s *Service) RegisterTrustBundle(ctx context.Context, bundle core.TrustBund
 	if bundle.IssuedAt.IsZero() {
 		bundle.IssuedAt = s.nowUTC()
 	}
+	if err := SignTrustBundle(s.Signer, &bundle); err != nil {
+		return err
+	}
 	if err := s.Trust.UpsertTrustBundle(ctx, bundle); err != nil {
 		return err
 	}
@@ -151,6 +154,9 @@ func (s *Service) ImportFederatedRuntimeAdvertisement(ctx context.Context, gatew
 	if err := validateAuthoritativeRuntime(ad); err != nil {
 		return err
 	}
+	if err := s.verifyFederatedRuntimeAdvertisement(ctx, ad); err != nil {
+		return err
+	}
 	if err := s.authorizeFederatedAdvertisement(ctx, gateway, ad.TrustDomain, sourceDomain, core.RouteModeGateway, ad.Runtime.MaxContextSize); err != nil {
 		return err
 	}
@@ -165,6 +171,9 @@ func (s *Service) ImportFederatedRuntimeAdvertisement(ctx context.Context, gatew
 
 func (s *Service) ImportFederatedExportAdvertisement(ctx context.Context, gateway core.SubjectRef, ad core.ExportAdvertisement, sourceDomain string) error {
 	if err := ad.Validate(); err != nil {
+		return err
+	}
+	if err := s.verifyFederatedExportAdvertisement(ctx, ad); err != nil {
 		return err
 	}
 	routeMode := resolveRouteMode(ad.Export)
@@ -202,6 +211,48 @@ func (s *Service) ImportFederatedExportAdvertisement(ctx context.Context, gatewa
 	return nil
 }
 
+func (s *Service) verifyFederatedRuntimeAdvertisement(ctx context.Context, ad core.RuntimeAdvertisement) error {
+	if strings.TrimSpace(ad.Runtime.SignatureAlgorithm) == "" {
+		return nil
+	}
+	if s == nil || s.Trust == nil {
+		return fmt.Errorf("trust bundle store unavailable")
+	}
+	bundle, err := s.Trust.GetTrustBundle(ctx, ad.TrustDomain)
+	if err != nil {
+		return err
+	}
+	if bundle == nil {
+		return fmt.Errorf("trust bundle not found for %s", ad.TrustDomain)
+	}
+	verifier, ok := verifierForTrustBundle(*bundle, ad.Runtime.SignatureAlgorithm)
+	if !ok {
+		return fmt.Errorf("trust bundle verifier unavailable for %s", ad.TrustDomain)
+	}
+	return VerifyRuntimeDescriptor(verifier, ad.Runtime)
+}
+
+func (s *Service) verifyFederatedExportAdvertisement(ctx context.Context, ad core.ExportAdvertisement) error {
+	if strings.TrimSpace(ad.Export.SignatureAlgorithm) == "" {
+		return nil
+	}
+	if s == nil || s.Trust == nil {
+		return fmt.Errorf("trust bundle store unavailable")
+	}
+	bundle, err := s.Trust.GetTrustBundle(ctx, ad.TrustDomain)
+	if err != nil {
+		return err
+	}
+	if bundle == nil {
+		return fmt.Errorf("trust bundle not found for %s", ad.TrustDomain)
+	}
+	verifier, ok := verifierForTrustBundle(*bundle, ad.Export.SignatureAlgorithm)
+	if !ok {
+		return fmt.Errorf("trust bundle verifier unavailable for %s", ad.TrustDomain)
+	}
+	return VerifyExportDescriptor(verifier, ad.Export)
+}
+
 func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, *core.TransferRefusal, error) {
 	if s.Forwarder == nil {
 		return nil, nil, fmt.Errorf("gateway forwarder unavailable")
@@ -214,6 +265,16 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 	}
 	if refusal := s.authorizeFederatedForward(ctx, req); refusal != nil {
 		return nil, refusal, nil
+	}
+	if req.MediationRequested {
+		mediated, refusal, err := s.Mediator.MediateForward(ctx, s, req)
+		if err != nil {
+			return nil, nil, err
+		}
+		if refusal != nil {
+			return nil, refusal, nil
+		}
+		req = mediated
 	}
 	result, err := s.Forwarder.ForwardSealedContext(ctx, req)
 	if err != nil {

@@ -31,6 +31,9 @@ type Service struct {
 	Partition  string
 	LeaseTTL   time.Duration
 	Now        func() time.Time
+	Signer     PayloadSigner
+	Verifier   PayloadVerifier
+	Mediator   *MediationController
 }
 
 type ExecutedHandoff struct {
@@ -146,6 +149,9 @@ func (s *Service) OfferHandoff(ctx context.Context, lineageID, attemptID, destin
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	if err := SignLeaseToken(s.Signer, lease); err != nil {
+		return nil, nil, nil, err
+	}
 	pkg, err := s.Packager.BuildPackage(ctx, *lineage, *attempt, query)
 	if err != nil {
 		return nil, nil, nil, err
@@ -172,6 +178,9 @@ func (s *Service) OfferHandoff(ctx context.Context, lineageID, attemptID, destin
 		RequestedCapabilityProjection: lineage.CapabilityEnvelope,
 		LeaseToken:                    *lease,
 		Expiry:                        lease.Expiry,
+	}
+	if err := SignHandoffOffer(s.Signer, offer); err != nil {
+		return nil, nil, nil, err
 	}
 	if err := offer.Validate(); err != nil {
 		return nil, nil, nil, err
@@ -214,6 +223,12 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	if err := offer.Validate(); err != nil {
 		return nil, nil, err
 	}
+	if err := VerifyLeaseToken(s.Verifier, offer.LeaseToken); err != nil {
+		return nil, &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}, nil
+	}
+	if err := VerifyHandoffOffer(s.Verifier, offer); err != nil {
+		return nil, &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}, nil
+	}
 	if err := s.Ownership.ValidateLease(ctx, offer.LeaseToken, s.nowUTC()); err != nil {
 		return nil, &core.TransferRefusal{Code: core.RefusalInvalidLease, Message: err.Error()}, nil
 	}
@@ -244,7 +259,7 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 		})
 		return nil, refusal, nil
 	}
-	if refusal := validateRuntimeAgainstOffer(runtimeDescriptor, offer, destination); refusal != nil {
+	if refusal := ValidateOfferCompatibility(runtimeDescriptor, offer, destination, s.nowUTC()); refusal != nil {
 		return nil, refusal, nil
 	}
 	effectiveActor := lineage.Owner
@@ -257,13 +272,14 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	}
 	if s.Nexus.Policies != nil {
 		decision, err := s.Nexus.Policies.EvaluateResume(ctx, ResumePolicyRequest{
-			Lineage:     *lineage,
-			Offer:       offer,
-			Destination: destination,
-			Actor:       effectiveActor,
-			IsOwner:     isOwner,
-			IsDelegated: isDelegated,
-			RouteMode:   resolveRouteMode(destination),
+			Lineage:      *lineage,
+			Offer:        offer,
+			Destination:  destination,
+			SourceDomain: trustDomainForOffer(destination, offer),
+			Actor:        effectiveActor,
+			IsOwner:      isOwner,
+			IsDelegated:  isDelegated,
+			RouteMode:    resolveRouteMode(destination),
 		})
 		if err != nil {
 			return nil, nil, err
@@ -298,6 +314,9 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 		ProvisionalAttemptID:         offer.LineageID + ":" + runtimeID + ":resume",
 		Expiry:                       s.nowUTC().Add(s.leaseTTL()),
 	}
+	if err := SignHandoffAccept(s.Signer, accept); err != nil {
+		return nil, nil, err
+	}
 	if err := accept.Validate(); err != nil {
 		return nil, nil, err
 	}
@@ -319,7 +338,13 @@ func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, ac
 	if err := accept.Validate(); err != nil {
 		return nil, err
 	}
+	if err := VerifyHandoffAccept(s.Verifier, accept); err != nil {
+		return nil, err
+	}
 	if err := receipt.Validate(); err != nil {
+		return nil, err
+	}
+	if err := VerifyResumeReceipt(s.Verifier, receipt); err != nil {
 		return nil, err
 	}
 	commit := &core.ResumeCommit{
@@ -329,6 +354,9 @@ func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, ac
 		DestinationRuntimeID: accept.DestinationRuntimeID,
 		ReceiptRef:           receipt.ReceiptID,
 		CommitTime:           s.nowUTC(),
+	}
+	if err := SignResumeCommit(s.Signer, commit); err != nil {
+		return nil, err
 	}
 	if err := s.Ownership.CommitHandoff(ctx, *commit); err != nil {
 		return nil, err
@@ -341,6 +369,9 @@ func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, ac
 		Reason:       "resume committed",
 		Issuer:       accept.DestinationRuntimeID,
 		IssuedAt:     s.nowUTC(),
+	}
+	if err := SignFenceNotice(s.Signer, &notice); err != nil {
+		return nil, err
 	}
 	if s.Runtime != nil {
 		if err := s.Runtime.FenceAttempt(ctx, notice); err != nil {
@@ -408,10 +439,20 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 	if err := manifest.Validate(); err != nil {
 		return nil, nil, nil, err
 	}
+	if err := VerifyContextManifest(s.Verifier, manifest); err != nil {
+		return nil, nil, &core.TransferRefusal{Code: core.RefusalUnauthorized, Message: err.Error()}, nil
+	}
 	if err := sealed.Validate(); err != nil {
 		return nil, nil, nil, err
 	}
 	if err := validateManifestForOffer(offer, manifest, sealed); err != nil {
+		return nil, nil, nil, err
+	}
+	if descriptor, err := s.Runtime.Descriptor(ctx); err == nil {
+		if compatErr := ValidateImportedContextCompatibility(descriptor, manifest, sealed); compatErr != nil {
+			return nil, nil, &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: compatErr.Error()}, nil
+		}
+	} else {
 		return nil, nil, nil, err
 	}
 	lineage, ok, err := s.Ownership.GetLineage(ctx, offer.LineageID)
@@ -489,6 +530,9 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 	}
 	if receipt.StartTime.IsZero() {
 		receipt.StartTime = s.nowUTC()
+	}
+	if err := SignResumeReceipt(s.Signer, receipt); err != nil {
+		return nil, nil, nil, err
 	}
 	if err := validateReceiptForCommit(offer, *accept, manifest, *receipt); err != nil {
 		return nil, nil, nil, err
@@ -642,6 +686,12 @@ func (s *Service) AdvertiseRuntime(ctx context.Context, ad core.RuntimeAdvertise
 	if s.Discovery == nil {
 		return fmt.Errorf("discovery store unavailable")
 	}
+	if err := SignRuntimeDescriptor(s.Signer, &ad.Runtime); err != nil {
+		return err
+	}
+	if strings.TrimSpace(ad.Signature) == "" {
+		ad.Signature = ad.Runtime.Signature
+	}
 	if err := validateAuthoritativeRuntime(ad); err != nil {
 		return err
 	}
@@ -654,6 +704,12 @@ func (s *Service) AdvertiseRuntime(ctx context.Context, ad core.RuntimeAdvertise
 func (s *Service) AdvertiseExport(ctx context.Context, ad core.ExportAdvertisement) error {
 	if s.Discovery == nil {
 		return fmt.Errorf("discovery store unavailable")
+	}
+	if err := SignExportDescriptor(s.Signer, &ad.Export); err != nil {
+		return err
+	}
+	if strings.TrimSpace(ad.Signature) == "" {
+		ad.Signature = ad.Export.Signature
 	}
 	runtimeAd, err := s.resolveRegisteredRuntimeAdvertisement(ctx, ad.TrustDomain, ad.RuntimeID)
 	if err != nil {
@@ -828,6 +884,19 @@ func (s *Service) validateRoutePolicySelection(ctx context.Context, req RouteSel
 	return nil, nil
 }
 
+func trustDomainForOffer(destination core.ExportDescriptor, offer core.HandoffOffer) string {
+	if strings.TrimSpace(destination.TrustDomain) != "" {
+		return strings.TrimSpace(destination.TrustDomain)
+	}
+	if IsQualifiedExportName(offer.DestinationExport) {
+		trustDomain, _, err := ParseQualifiedExportName(offer.DestinationExport)
+		if err == nil {
+			return trustDomain
+		}
+	}
+	return ""
+}
+
 func (s *Service) emitRefusal(ctx context.Context, lineageID string, refusal *core.TransferRefusal) {
 	if refusal == nil {
 		return
@@ -912,25 +981,7 @@ func (s *Service) validateExportPolicy(ctx context.Context, lineage core.Lineage
 }
 
 func validateRuntimeAgainstOffer(runtime core.RuntimeDescriptor, offer core.HandoffOffer, destination core.ExportDescriptor) *core.TransferRefusal {
-	if runtime.RuntimeID == "" {
-		return nil
-	}
-	if runtime.MaxContextSize > 0 && offer.ContextSizeBytes > runtime.MaxContextSize {
-		return &core.TransferRefusal{Code: core.RefusalContextTooLarge, Message: "context exceeds runtime max size"}
-	}
-	if len(runtime.SupportedContextClasses) > 0 && !containsFoldString(runtime.SupportedContextClasses, offer.ContextClass) {
-		return &core.TransferRefusal{Code: core.RefusalUnsupportedContext, Message: "runtime does not support context class"}
-	}
-	if len(destination.RequiredCompatibilityClasses) > 0 && !containsFoldString(destination.RequiredCompatibilityClasses, runtime.CompatibilityClass) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "runtime compatibility class not accepted"}
-	}
-	if offer.SourceCompatibilityClass != "" && len(destination.RequiredCompatibilityClasses) > 0 && !containsFoldString(destination.RequiredCompatibilityClasses, offer.SourceCompatibilityClass) {
-		return &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: "source compatibility class not accepted by export"}
-	}
-	if !runtime.ExpiresAt.IsZero() && time.Now().UTC().After(runtime.ExpiresAt) {
-		return &core.TransferRefusal{Code: core.RefusalAdmissionClosed, Message: "runtime advertisement expired"}
-	}
-	return nil
+	return ValidateOfferCompatibility(runtime, offer, destination, time.Now().UTC())
 }
 
 func policyDecisionRefusal(decision core.PolicyDecision) *core.TransferRefusal {

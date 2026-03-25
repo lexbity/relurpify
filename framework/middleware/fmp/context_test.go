@@ -3,6 +3,7 @@ package fmp
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -230,5 +231,89 @@ func TestJSONPackagerUsesEncryptedExternalObjectTransport(t *testing.T) {
 	}
 	if string(out.ExecutionPayload) != string(pkg.ExecutionPayload) {
 		t.Fatal("external payload mismatch")
+	}
+}
+
+func TestJSONPackagerSupportsRecipientKeyRotation(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	recipient := "runtime://mesh-a/node-1/rt-1"
+	sourceTrust := &InMemoryTrustBundleStore{}
+	if err := sourceTrust.UpsertTrustBundle(context.Background(), core.TrustBundle{
+		TrustDomain: "mesh-a",
+		BundleID:    "bundle-1",
+		RecipientKeys: []core.RecipientKeyAdvertisement{
+			{Recipient: recipient, KeyID: "old", Version: "v1", PublicKey: []byte("0123456789abcdef0123456789abcdef"), Active: true, ExpiresAt: now.Add(time.Hour)},
+			{Recipient: recipient, KeyID: "new", Version: "v2", PublicKey: []byte("abcdef0123456789abcdef0123456789"), Active: true, ExpiresAt: now.Add(2 * time.Hour)},
+		},
+		IssuedAt:  now,
+		ExpiresAt: now.Add(3 * time.Hour),
+	}); err != nil {
+		t.Fatalf("UpsertTrustBundle(source) error = %v", err)
+	}
+	packager := JSONPackager{
+		RuntimeStore: fakeWorkflowRuntimeStore{},
+		KeyResolver: &TrustBundleRecipientKeyResolver{
+			Trust: sourceTrust,
+			Now:   func() time.Time { return now },
+		},
+		LocalRecipient: recipient,
+	}
+	lineage := core.LineageRecord{
+		LineageID:    "lineage-1",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+	}
+	attempt := core.AttemptRecord{
+		AttemptID: "attempt-1",
+		LineageID: lineage.LineageID,
+		RuntimeID: "rt-1",
+		State:     core.AttemptStateRunning,
+	}
+	pkg, err := packager.BuildPackage(context.Background(), lineage, attempt, RuntimeQuery{WorkflowID: "wf-1", RunID: "run-1"})
+	if err != nil {
+		t.Fatalf("BuildPackage() error = %v", err)
+	}
+	sealed, err := packager.SealPackage(context.Background(), pkg.Manifest, pkg, []string{recipient})
+	if err != nil {
+		t.Fatalf("SealPackage() error = %v", err)
+	}
+	wrappedKeys, err := parseWrappedKeys(sealed.ReplayProtectionData)
+	if err != nil {
+		t.Fatalf("parseWrappedKeys() error = %v", err)
+	}
+	if len(wrappedKeys[recipient]) != 2 {
+		t.Fatalf("wrapped keys = %+v", wrappedKeys[recipient])
+	}
+
+	destTrust := &InMemoryTrustBundleStore{}
+	if err := destTrust.UpsertTrustBundle(context.Background(), core.TrustBundle{
+		TrustDomain: "mesh-a",
+		BundleID:    "bundle-2",
+		RecipientKeys: []core.RecipientKeyAdvertisement{
+			{Recipient: recipient, KeyID: "new", Version: "v2", PublicKey: []byte("abcdef0123456789abcdef0123456789"), Active: true, ExpiresAt: now.Add(2 * time.Hour)},
+		},
+		IssuedAt:  now,
+		ExpiresAt: now.Add(3 * time.Hour),
+	}); err != nil {
+		t.Fatalf("UpsertTrustBundle(dest) error = %v", err)
+	}
+	var out PortableContextPackage
+	err = (JSONPackager{
+		RuntimeStore: fakeWorkflowRuntimeStore{},
+		KeyResolver: &TrustBundleRecipientKeyResolver{
+			Trust: destTrust,
+			Now:   func() time.Time { return now },
+		},
+		LocalRecipient: recipient,
+	}).UnsealPackage(context.Background(), *sealed, &out)
+	if err != nil {
+		t.Fatalf("UnsealPackage() error = %v", err)
+	}
+	if string(out.ExecutionPayload) != string(pkg.ExecutionPayload) {
+		t.Fatal("rotation payload mismatch")
 	}
 }

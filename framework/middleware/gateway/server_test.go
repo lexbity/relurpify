@@ -13,15 +13,13 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGatewayHandshakeAcceptsConnectFrame(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{Log: log, Partition: "tenant-a"}
@@ -50,8 +48,7 @@ func TestGatewayHandshakeAcceptsConnectFrame(t *testing.T) {
 }
 
 func TestGatewayHandshakeIncludesDynamicCapabilities(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{
@@ -104,8 +101,7 @@ func TestGatewayPrincipalResolverRejectsUnknownToken(t *testing.T) {
 }
 
 func TestGatewayPrincipalResolverRejectsAnonymousAgent(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{
@@ -134,8 +130,7 @@ func TestGatewayPrincipalResolverRejectsAnonymousAgent(t *testing.T) {
 }
 
 func TestGatewayWithoutAuthConfigurationRejectsConnection(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{Log: log}
@@ -149,8 +144,7 @@ func TestGatewayWithoutAuthConfigurationRejectsConnection(t *testing.T) {
 }
 
 func TestGatewayPrincipalResolverUsesResolvedActor(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{
@@ -414,8 +408,7 @@ func TestExtractBearerToken(t *testing.T) {
 }
 
 func TestGatewayRecordOutboundDelegatesToHandler(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	var sessionKey string
@@ -446,8 +439,7 @@ func TestGatewayRecordOutboundDelegatesToHandler(t *testing.T) {
 }
 
 func TestGatewayRecordOutboundDoesNotLogWithoutHandler(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{Log: log}
@@ -462,8 +454,7 @@ func TestGatewayRecordOutboundDoesNotLogWithoutHandler(t *testing.T) {
 }
 
 func TestGatewayRecordOutboundDoesNotLogWithoutSessionKey(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{
@@ -640,8 +631,7 @@ func TestGatewayHandleClientFrameSessionCloseReturnsEOF(t *testing.T) {
 }
 
 func TestBroadcastEventEvictsFullQueueClient(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(t.TempDir() + "/events.db")
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	server := &Server{Log: log}

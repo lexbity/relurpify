@@ -3,18 +3,15 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 
 func TestReplayFramesIncludesReplayComplete(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(filepath.Join(t.TempDir(), "events.db"))
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
 	payload, err := json.Marshal(map[string]string{"text": "hello"})
@@ -46,10 +43,10 @@ func TestReplayFramesIncludesReplayComplete(t *testing.T) {
 }
 
 func TestReplayFramesFiltersBySessionAuthorizationForNonAdmin(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(filepath.Join(t.TempDir(), "events.db"))
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
+	var err error
 	_, err = log.Append(context.Background(), "local", []core.FrameworkEvent{
 		{
 			Timestamp: time.Now().UTC(),
@@ -97,10 +94,10 @@ func TestReplayFramesFiltersBySessionAuthorizationForNonAdmin(t *testing.T) {
 }
 
 func TestReplayFramesAllowsAdminAcrossTenants(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(filepath.Join(t.TempDir(), "events.db"))
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
+	var err error
 	_, err = log.Append(context.Background(), "local", []core.FrameworkEvent{
 		{
 			Timestamp: time.Now().UTC(),
@@ -135,10 +132,10 @@ func TestReplayFramesAllowsAdminAcrossTenants(t *testing.T) {
 }
 
 func TestReplayFramesTenantAdminRemainsTenantScoped(t *testing.T) {
-	log, err := db.NewSQLiteEventLog(filepath.Join(t.TempDir(), "events.db"))
-	require.NoError(t, err)
+	log := newTestEventLog()
 	defer log.Close()
 
+	var err error
 	_, err = log.Append(context.Background(), "local", []core.FrameworkEvent{
 		{
 			Timestamp: time.Now().UTC(),

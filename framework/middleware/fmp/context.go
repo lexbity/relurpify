@@ -42,7 +42,7 @@ type RuntimeSnapshotStore interface {
 }
 
 type RecipientKeyResolver interface {
-	ResolveRecipientKey(ctx context.Context, recipient string) ([]byte, error)
+	ResolveRecipientKeys(ctx context.Context, recipient string) ([]RecipientKeyRecord, error)
 }
 
 type EncryptedObjectStore interface {
@@ -76,9 +76,23 @@ func (r StaticRecipientKeyResolver) ResolveRecipientKey(_ context.Context, recip
 	return out, nil
 }
 
+func (r StaticRecipientKeyResolver) ResolveRecipientKeys(ctx context.Context, recipient string) ([]RecipientKeyRecord, error) {
+	key, err := r.ResolveRecipientKey(ctx, recipient)
+	if err != nil {
+		return nil, err
+	}
+	return []RecipientKeyRecord{{
+		Recipient: strings.TrimSpace(recipient),
+		KeyID:     "static",
+		PublicKey: key,
+		Active:    true,
+	}}, nil
+}
+
 type JSONPackager struct {
 	RuntimeStore      RuntimeSnapshotStore
 	KeyResolver       RecipientKeyResolver
+	Signer            PayloadSigner
 	ObjectStore       EncryptedObjectStore
 	DefaultRecipients []string
 	LocalRecipient    string
@@ -118,6 +132,9 @@ func (p JSONPackager) BuildPackage(ctx context.Context, lineage core.LineageReco
 		TransferMode:     transferMode,
 		EncryptionMode:   core.EncryptionModeEndToEnd,
 		CreationTime:     time.Now().UTC(),
+	}
+	if err := SignContextManifest(p.Signer, &manifest); err != nil {
+		return nil, err
 	}
 	return &PortableContextPackage{
 		Manifest:         manifest,
@@ -180,20 +197,29 @@ func (p JSONPackager) SealPackage(ctx context.Context, manifest core.ContextMani
 	default:
 		return nil, fmt.Errorf("unsupported transfer mode %q", manifest.TransferMode)
 	}
-	wrappedKeys := make(map[string]map[string]string, len(resolvedRecipients))
+	wrappedKeys := make(map[string][]map[string]string, len(resolvedRecipients))
 	for _, recipient := range resolvedRecipients {
-		recipientKey, err := resolver.ResolveRecipientKey(context.Background(), recipient)
+		recipientKeys, err := resolver.ResolveRecipientKeys(ctx, recipient)
 		if err != nil {
 			return nil, err
 		}
-		wrapNonce, wrappedDEK, err := encryptAEAD(normalizeKey(recipientKey), dek, wrapAAD(manifest.ContextID, recipient))
-		if err != nil {
-			return nil, err
+		if len(recipientKeys) == 0 {
+			return nil, fmt.Errorf("recipient key for %s not found", recipient)
 		}
-		wrappedKeys[recipient] = map[string]string{
-			"nonce":      base64.RawStdEncoding.EncodeToString(wrapNonce),
-			"ciphertext": base64.RawStdEncoding.EncodeToString(wrappedDEK),
+		entries := make([]map[string]string, 0, len(recipientKeys))
+		for _, recipientKey := range recipientKeys {
+			wrapNonce, wrappedDEK, err := encryptAEAD(normalizeKey(recipientKey.PublicKey), dek, wrapAAD(manifest.ContextID, recipient, recipientKey.KeyID))
+			if err != nil {
+				return nil, err
+			}
+			entries = append(entries, map[string]string{
+				"key_id":     strings.TrimSpace(recipientKey.KeyID),
+				"version":    strings.TrimSpace(recipientKey.Version),
+				"nonce":      base64.RawStdEncoding.EncodeToString(wrapNonce),
+				"ciphertext": base64.RawStdEncoding.EncodeToString(wrappedDEK),
+			})
 		}
+		wrappedKeys[recipient] = entries
 	}
 	sum := sha256.Sum256(payloadCiphertext)
 	sealed := &core.SealedContext{
@@ -205,12 +231,17 @@ func (p JSONPackager) SealPackage(ctx context.Context, manifest core.ContextMani
 		ExternalObjectRefs: externalRefs,
 		IntegrityTag:       hex.EncodeToString(sum[:]),
 		ReplayProtectionData: map[string]any{
-			"lineage_id":    manifest.LineageID,
-			"attempt_id":    manifest.AttemptID,
-			"payload_nonce": base64.RawStdEncoding.EncodeToString(payloadNonce),
-			"wrapped_keys":  wrappedKeys,
-			"transfer_mode": string(manifest.TransferMode),
-			"chunk_count":   len(externalRefs) + len(ciphertextChunks),
+			"lineage_id":        manifest.LineageID,
+			"attempt_id":        manifest.AttemptID,
+			"context_class":     manifest.ContextClass,
+			"schema_version":    manifest.SchemaVersion,
+			"content_hash":      manifest.ContentHash,
+			"sensitivity_class": string(manifest.SensitivityClass),
+			"encryption_mode":   string(manifest.EncryptionMode),
+			"payload_nonce":     base64.RawStdEncoding.EncodeToString(payloadNonce),
+			"wrapped_keys":      wrappedKeys,
+			"transfer_mode":     string(manifest.TransferMode),
+			"chunk_count":       len(externalRefs) + len(ciphertextChunks),
 		},
 	}
 	return sealed, sealed.Validate()
@@ -249,28 +280,42 @@ func (p JSONPackager) UnsealPackage(ctx context.Context, sealed core.SealedConte
 	}
 	var payload []byte
 	for _, recipient := range candidateRecipients {
-		entry, ok := wrappedKeys[recipient]
+		entries, ok := wrappedKeys[recipient]
 		if !ok {
 			continue
 		}
-		recipientKey, err := p.KeyResolver.ResolveRecipientKey(ctx, recipient)
+		recipientKeys, err := p.KeyResolver.ResolveRecipientKeys(ctx, recipient)
 		if err != nil {
 			continue
 		}
-		wrapNonce, err := base64.RawStdEncoding.DecodeString(entry["nonce"])
-		if err != nil {
-			continue
+		for _, entry := range entries {
+			wrapNonce, err := base64.RawStdEncoding.DecodeString(entry["nonce"])
+			if err != nil {
+				continue
+			}
+			wrappedDEK, err := base64.RawStdEncoding.DecodeString(entry["ciphertext"])
+			if err != nil {
+				continue
+			}
+			keyID := strings.TrimSpace(entry["key_id"])
+			for _, recipientKey := range recipientKeys {
+				if keyID != "" && !strings.EqualFold(strings.TrimSpace(recipientKey.KeyID), keyID) {
+					continue
+				}
+				dek, err := decryptAEAD(normalizeKey(recipientKey.PublicKey), wrapNonce, wrappedDEK, wrapAAD(sealed.ContextManifestRef, recipient, keyID))
+				if err != nil {
+					continue
+				}
+				payload, err = decryptAEAD(dek, payloadNonce, payloadCiphertext, payloadAAD(unsealManifestAAD(sealed), recipients))
+				if err == nil {
+					break
+				}
+			}
+			if err == nil && len(payload) > 0 {
+				break
+			}
 		}
-		wrappedDEK, err := base64.RawStdEncoding.DecodeString(entry["ciphertext"])
-		if err != nil {
-			continue
-		}
-		dek, err := decryptAEAD(normalizeKey(recipientKey), wrapNonce, wrappedDEK, wrapAAD(sealed.ContextManifestRef, recipient))
-		if err != nil {
-			continue
-		}
-		payload, err = decryptAEAD(dek, payloadNonce, payloadCiphertext, payloadAAD(unsealManifestAAD(sealed), recipients))
-		if err == nil {
+		if len(payload) > 0 {
 			break
 		}
 	}
@@ -307,12 +352,12 @@ func marshalSealedPayload(pkg *PortableContextPackage) ([]byte, error) {
 	})
 }
 
-func parseWrappedKeys(data map[string]any) (map[string]map[string]string, error) {
+func parseWrappedKeys(data map[string]any) (map[string][]map[string]string, error) {
 	raw, ok := data["wrapped_keys"]
 	if !ok {
 		return nil, fmt.Errorf("sealed context missing wrapped keys")
 	}
-	typed, ok := raw.(map[string]map[string]string)
+	typed, ok := raw.(map[string][]map[string]string)
 	if ok {
 		return typed, nil
 	}
@@ -320,23 +365,50 @@ func parseWrappedKeys(data map[string]any) (map[string]map[string]string, error)
 	if !ok {
 		return nil, fmt.Errorf("sealed context wrapped keys invalid")
 	}
-	out := make(map[string]map[string]string, len(intermediate))
+	out := make(map[string][]map[string]string, len(intermediate))
 	for recipient, value := range intermediate {
-		record, ok := value.(map[string]any)
-		if !ok {
+		switch typed := value.(type) {
+		case map[string]any:
+			record, err := normalizeWrappedKeyRecord(typed)
+			if err != nil {
+				return nil, err
+			}
+			out[recipient] = []map[string]string{record}
+		case []any:
+			records := make([]map[string]string, 0, len(typed))
+			for _, item := range typed {
+				record, ok := item.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("sealed context wrapped key record invalid")
+				}
+				normalized, err := normalizeWrappedKeyRecord(record)
+				if err != nil {
+					return nil, err
+				}
+				records = append(records, normalized)
+			}
+			out[recipient] = records
+		default:
 			return nil, fmt.Errorf("sealed context wrapped key record invalid")
-		}
-		nonce, _ := record["nonce"].(string)
-		ciphertext, _ := record["ciphertext"].(string)
-		if nonce == "" || ciphertext == "" {
-			return nil, fmt.Errorf("sealed context wrapped key record incomplete")
-		}
-		out[recipient] = map[string]string{
-			"nonce":      nonce,
-			"ciphertext": ciphertext,
 		}
 	}
 	return out, nil
+}
+
+func normalizeWrappedKeyRecord(record map[string]any) (map[string]string, error) {
+	nonce, _ := record["nonce"].(string)
+	ciphertext, _ := record["ciphertext"].(string)
+	if nonce == "" || ciphertext == "" {
+		return nil, fmt.Errorf("sealed context wrapped key record incomplete")
+	}
+	keyID, _ := record["key_id"].(string)
+	version, _ := record["version"].(string)
+	return map[string]string{
+		"key_id":     keyID,
+		"version":    version,
+		"nonce":      nonce,
+		"ciphertext": ciphertext,
+	}, nil
 }
 
 func replayBytes(data map[string]any, key string) ([]byte, error) {
@@ -389,8 +461,8 @@ func unsealManifestAAD(sealed core.SealedContext) core.ContextManifest {
 	return manifest
 }
 
-func wrapAAD(contextID, recipient string) []byte {
-	sum := sha256.Sum256([]byte(contextID + "|" + recipient))
+func wrapAAD(contextID, recipient, keyID string) []byte {
+	sum := sha256.Sum256([]byte(contextID + "|" + recipient + "|" + strings.TrimSpace(keyID)))
 	return sum[:]
 }
 

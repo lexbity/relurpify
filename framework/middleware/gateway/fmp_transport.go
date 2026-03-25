@@ -11,6 +11,14 @@ import (
 const (
 	TransportProfileWebSocketTLS      = "websocket.tls.v1"
 	TransportProfileWebSocketLoopback = "websocket.loopback.v1"
+	TransportProfileHTTPTLS           = "http.tls.v1"
+	TransportProfileHTTPLoopback      = "http.loopback.v1"
+
+	HeaderFMPTransportProfile = "X-FMP-Transport-Profile"
+	HeaderFMPSessionNonce     = "X-FMP-Session-Nonce"
+	HeaderFMPSessionIssuedAt  = "X-FMP-Session-Issued-At"
+	HeaderFMPSessionExpiresAt = "X-FMP-Session-Expires-At"
+	HeaderFMPPeerKeyID        = "X-FMP-Peer-Key-ID"
 )
 
 type FMPTransportPolicy struct {
@@ -34,10 +42,19 @@ type InMemoryTransportNonceStore struct {
 	Now     func() time.Time
 }
 
+type FederationTransportFrame struct {
+	TrustDomain      string
+	TransportProfile string
+	SessionNonce     string
+	SessionIssuedAt  time.Time
+	SessionExpiresAt time.Time
+	PeerKeyID        string
+}
+
 func DefaultFMPTransportPolicy(allowLoopbackInsecure bool) *FMPTransportPolicy {
-	profiles := []string{TransportProfileWebSocketTLS}
+	profiles := []string{TransportProfileWebSocketTLS, TransportProfileHTTPTLS}
 	if allowLoopbackInsecure {
-		profiles = append(profiles, TransportProfileWebSocketLoopback)
+		profiles = append(profiles, TransportProfileWebSocketLoopback, TransportProfileHTTPLoopback)
 	}
 	return &FMPTransportPolicy{
 		RequireNodeTransport:  true,
@@ -84,30 +101,81 @@ func (p *FMPTransportPolicy) validateNodeConnect(ctx context.Context, frame conn
 	if frame.Role != "node" || p == nil || !p.RequireNodeTransport {
 		return nil
 	}
+	return p.validateTransportFrame(ctx, transportValidationFrame{
+		Scope:            frame.NodeID + ":" + frame.RuntimeID,
+		TrustDomain:      frame.TrustDomain,
+		RuntimeID:        frame.RuntimeID,
+		TransportProfile: frame.TransportProfile,
+		SessionNonce:     frame.SessionNonce,
+		SessionIssuedAt:  frame.SessionIssuedAt,
+		SessionExpiresAt: frame.SessionExpiresAt,
+		PeerKeyID:        frame.PeerKeyID,
+		RequireTrust:     true,
+		RequireRuntime:   true,
+		Subject:          "node transport",
+	}, tlsActive)
+}
+
+func (p *FMPTransportPolicy) ValidateFederationForward(ctx context.Context, frame FederationTransportFrame, tlsActive bool) error {
+	if p == nil {
+		return nil
+	}
+	return p.validateTransportFrame(ctx, transportValidationFrame{
+		Scope:            strings.TrimSpace(frame.TrustDomain) + ":" + strings.TrimSpace(frame.PeerKeyID),
+		TrustDomain:      frame.TrustDomain,
+		TransportProfile: frame.TransportProfile,
+		SessionNonce:     frame.SessionNonce,
+		SessionIssuedAt:  frame.SessionIssuedAt,
+		SessionExpiresAt: frame.SessionExpiresAt,
+		PeerKeyID:        frame.PeerKeyID,
+		RequireTrust:     true,
+		Subject:          "federation transport",
+	}, tlsActive)
+}
+
+type transportValidationFrame struct {
+	Scope            string
+	TrustDomain      string
+	RuntimeID        string
+	TransportProfile string
+	SessionNonce     string
+	SessionIssuedAt  time.Time
+	SessionExpiresAt time.Time
+	PeerKeyID        string
+	RequireTrust     bool
+	RequireRuntime   bool
+	Subject          string
+}
+
+func (p *FMPTransportPolicy) validateTransportFrame(ctx context.Context, frame transportValidationFrame, tlsActive bool) error {
 	now := time.Now().UTC()
 	if p.Now != nil {
 		now = p.Now().UTC()
 	}
-	if strings.TrimSpace(frame.TrustDomain) == "" {
-		return fmt.Errorf("trust_domain required for node transport")
+	subject := strings.TrimSpace(frame.Subject)
+	if subject == "" {
+		subject = "transport"
 	}
-	if strings.TrimSpace(frame.RuntimeID) == "" {
-		return fmt.Errorf("runtime_id required for node transport")
+	if frame.RequireTrust && strings.TrimSpace(frame.TrustDomain) == "" {
+		return fmt.Errorf("trust_domain required for %s", subject)
+	}
+	if frame.RequireRuntime && strings.TrimSpace(frame.RuntimeID) == "" {
+		return fmt.Errorf("runtime_id required for %s", subject)
 	}
 	if strings.TrimSpace(frame.TransportProfile) == "" {
-		return fmt.Errorf("transport_profile required for node transport")
+		return fmt.Errorf("transport_profile required for %s", subject)
 	}
 	if !containsString(p.AllowedProfiles, frame.TransportProfile) {
 		return fmt.Errorf("transport profile %q not allowed", frame.TransportProfile)
 	}
 	if strings.TrimSpace(frame.SessionNonce) == "" {
-		return fmt.Errorf("session_nonce required for node transport")
+		return fmt.Errorf("session_nonce required for %s", subject)
 	}
 	if strings.TrimSpace(frame.PeerKeyID) == "" {
-		return fmt.Errorf("peer_key_id required for node transport")
+		return fmt.Errorf("peer_key_id required for %s", subject)
 	}
 	if frame.SessionIssuedAt.IsZero() || frame.SessionExpiresAt.IsZero() {
-		return fmt.Errorf("session issuance and expiry required for node transport")
+		return fmt.Errorf("session issuance and expiry required for %s", subject)
 	}
 	if !frame.SessionExpiresAt.After(frame.SessionIssuedAt) {
 		return fmt.Errorf("session expiry must be after issued_at")
@@ -130,13 +198,21 @@ func (p *FMPTransportPolicy) validateNodeConnect(ctx context.Context, frame conn
 		if !p.AllowLoopbackInsecure {
 			return fmt.Errorf("insecure loopback transport profile not allowed")
 		}
+	case TransportProfileHTTPTLS:
+		if p.RequireTLS && !tlsActive {
+			return fmt.Errorf("tls required for federation transport profile %q", frame.TransportProfile)
+		}
+	case TransportProfileHTTPLoopback:
+		if !p.AllowLoopbackInsecure {
+			return fmt.Errorf("insecure loopback transport profile not allowed")
+		}
 	default:
 		if p.RequireTLS && !tlsActive {
 			return fmt.Errorf("tls required for node transport")
 		}
 	}
 	if p.NonceStore != nil {
-		if err := p.NonceStore.Reserve(ctx, frame.NodeID+":"+frame.RuntimeID, frame.SessionNonce, frame.SessionExpiresAt); err != nil {
+		if err := p.NonceStore.Reserve(ctx, strings.TrimSpace(frame.Scope), frame.SessionNonce, frame.SessionExpiresAt); err != nil {
 			return err
 		}
 	}
