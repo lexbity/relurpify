@@ -2,6 +2,8 @@ package planner
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -15,6 +17,25 @@ import (
 )
 
 type plannerPathEchoTool struct{}
+
+type recordingPlannerLLM struct{ prompt string }
+
+func (r *recordingPlannerLLM) Generate(_ context.Context, prompt string, _ *core.LLMOptions) (*core.LLMResponse, error) {
+	r.prompt = prompt
+	return &core.LLMResponse{Text: `{"goal":"g","steps":[],"dependencies":{}}`}, nil
+}
+
+func (r *recordingPlannerLLM) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *recordingPlannerLLM) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *recordingPlannerLLM) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
+	return nil, errors.New("not implemented")
+}
 
 func (plannerPathEchoTool) Name() string        { return "file_read" }
 func (plannerPathEchoTool) Description() string { return "echo path" }
@@ -196,6 +217,63 @@ func TestPlannerExecuteNormalizesPathAliases(t *testing.T) {
 	}
 }
 
+func TestFormatPlannerWorkflowRetrievalUsesReferenceAwareEvidence(t *testing.T) {
+	rendered := formatPlannerWorkflowRetrieval(map[string]any{
+		"query": "find evidence",
+		"results": []map[string]any{
+			{
+				"summary": "workflow evidence summary",
+				"reference": map[string]any{
+					"kind":   string(core.ContextReferenceRetrievalEvidence),
+					"uri":    "memory://workflow/1",
+					"detail": "packed",
+				},
+			},
+		},
+	})
+
+	assert.Contains(t, rendered, "Query: find evidence")
+	assert.Contains(t, rendered, "workflow evidence summary")
+	assert.Contains(t, rendered, "Reference: memory://workflow/1")
+}
+
+func TestPlannerNodePrefersWorkflowRetrievalPayload(t *testing.T) {
+	llm := &recordingPlannerLLM{}
+	agent := &PlannerAgent{
+		Model:  llm,
+		Config: &core.Config{Model: "test-model"},
+	}
+	node := &plannerPlanNode{
+		id:    "planner_plan",
+		agent: agent,
+		task: &core.Task{
+			Instruction: "Use workflow retrieval evidence",
+			Context: map[string]any{
+				"workflow_retrieval": "legacy summary text",
+				"workflow_retrieval_payload": map[string]any{
+					"query": "find evidence",
+					"results": []map[string]any{
+						{
+							"summary": "workflow evidence summary",
+							"reference": map[string]any{
+								"kind": string(core.ContextReferenceRetrievalEvidence),
+								"uri":  "memory://workflow/4",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := node.Execute(context.Background(), core.NewContext())
+	require.NoError(t, err)
+
+	assert.Contains(t, llm.prompt, "workflow evidence summary")
+	assert.Contains(t, llm.prompt, "Reference: memory://workflow/4")
+	assert.NotContains(t, llm.prompt, "\"legacy summary text\"")
+}
+
 func TestPlannerExecuteUsesExplicitSummarizeCheckpointAndPersistenceNodes(t *testing.T) {
 	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
 	require.NoError(t, err)
@@ -246,6 +324,22 @@ func TestPlannerExecuteUsesExplicitSummarizeCheckpointAndPersistenceNodes(t *tes
 	require.True(t, ok)
 	_, ok = state.Get("graph.checkpoint")
 	require.True(t, ok)
+	rawResults, ok := state.Get("planner.results")
+	require.True(t, ok)
+	compactedResults, ok := rawResults.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "1", fmt.Sprint(compactedResults["result_count"]))
+	rawCheckpointRef, ok := state.Get("planner.checkpoint_ref")
+	require.True(t, ok)
+	checkpointRef, ok := rawCheckpointRef.(core.ArtifactReference)
+	require.True(t, ok)
+	require.NotEmpty(t, checkpointRef.ArtifactID)
+	rawResultData, ok := result.Data["results"]
+	require.True(t, ok)
+	fullResults, ok := rawResultData.([]map[string]interface{})
+	require.True(t, ok)
+	require.Len(t, fullResults, 1)
+	require.Equal(t, "README.md", fullResults[0]["output"].(map[string]any)["path"])
 
 	artifacts, err := workflowStore.ListWorkflowArtifacts(context.Background(), task.ID, "")
 	require.NoError(t, err)
@@ -266,6 +360,17 @@ func TestPlannerExecuteUsesExplicitSummarizeCheckpointAndPersistenceNodes(t *tes
 	checkpoints, err := composite.List(task.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, checkpoints)
+}
+
+func TestCompactPlannerSkippedToolsState(t *testing.T) {
+	compacted := compactPlannerSkippedToolsState([]map[string]string{
+		{"id": "read", "tool": "file_read", "reason": "capability unavailable"},
+	})
+	require.Equal(t, 1, compacted["count"])
+	last, ok := compacted["last"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "read", last["id"])
+	require.Equal(t, "file_read", last["tool"])
 }
 
 func TestPlannerExecuteCanDisableStructuredPersistence(t *testing.T) {
@@ -297,4 +402,45 @@ func TestPlannerExecuteCanDisableStructuredPersistence(t *testing.T) {
 	require.True(t, ok)
 	_, ok = state.Get("graph.persistence")
 	require.False(t, ok)
+}
+
+func TestMirrorPlannerSummaryReferenceUsesGraphSummaryArtifact(t *testing.T) {
+	state := core.NewContext()
+	state.Set("planner.summary", "planner completed")
+	state.Set("graph.summary_ref", core.ArtifactReference{
+		ArtifactID:  "artifact-1",
+		WorkflowID:  "workflow-1",
+		Kind:        "summary",
+		ContentType: "text/plain",
+	})
+	state.Set("graph.summary", "planner summary artifact")
+
+	mirrorPlannerSummaryReference(state)
+
+	rawRef, ok := state.Get("planner.summary_ref")
+	require.True(t, ok)
+	ref, ok := rawRef.(core.ArtifactReference)
+	require.True(t, ok)
+	require.Equal(t, "artifact-1", ref.ArtifactID)
+	require.Equal(t, "summary", ref.Kind)
+	require.Equal(t, "planner summary artifact", state.GetString("planner.summary_artifact_summary"))
+}
+
+func TestMirrorPlannerCheckpointReferenceUsesGraphCheckpointArtifact(t *testing.T) {
+	state := core.NewContext()
+	state.Set("graph.checkpoint_ref", core.ArtifactReference{
+		ArtifactID:  "checkpoint-1",
+		WorkflowID:  "workflow-1",
+		Kind:        "checkpoint",
+		ContentType: "application/json",
+	})
+
+	mirrorPlannerCheckpointReference(state)
+
+	rawRef, ok := state.Get("planner.checkpoint_ref")
+	require.True(t, ok)
+	ref, ok := rawRef.(core.ArtifactReference)
+	require.True(t, ok)
+	require.Equal(t, "checkpoint-1", ref.ArtifactID)
+	require.Equal(t, "checkpoint", ref.Kind)
 }

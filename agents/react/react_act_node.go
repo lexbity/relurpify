@@ -233,6 +233,13 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, state *core.Conte
 		}
 	}
 	if desc.ID == "" {
+		if n != nil && n.agent != nil {
+			if resolved, ok := n.agent.executionCapabilityDescriptor(call.Name); ok {
+				desc = resolved
+			}
+		}
+	}
+	if desc.ID == "" {
 		if tool != nil {
 			desc = core.ToolDescriptor(ctx, state, tool)
 		} else {
@@ -260,8 +267,8 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, state *core.Conte
 		approval = core.ApprovalBindingFromCapability(desc, state, call.Args)
 	}
 	var snapshot *core.PolicySnapshot
-	if n != nil && n.agent != nil && n.agent.Tools != nil {
-		snapshot = n.agent.Tools.CapturePolicySnapshot()
+	if n != nil && n.agent != nil {
+		snapshot = n.agent.executionPolicySnapshot()
 	}
 	envelope := core.NewCapabilityResultEnvelope(desc, res, core.ContentDispositionRaw, snapshot, approval)
 	envelope = core.ApplyInsertionDecision(envelope, resolveInsertionDecision(n.agent, n.task, envelope))

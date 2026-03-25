@@ -32,10 +32,10 @@ func MergeHTNBranches(parent *core.Context, branches []graph.BranchExecutionResu
 		if branch.State == nil {
 			return fmt.Errorf("htn branch merge requires isolated state")
 		}
-		if len(branch.Delta.VariableValues) > 0 {
+		if len(branch.Delta.SideEffects.VariableWrites) > 0 {
 			return fmt.Errorf("htn branch merge conflict: step %s changed context variables outside merge policy", branch.Step.ID)
 		}
-		for key, value := range branch.Delta.KnowledgeValues {
+		for key, value := range branch.Delta.SideEffects.KnowledgeWrites {
 			if !htnBranchMergeAllowedKnowledgeKey(key) {
 				return fmt.Errorf("htn branch merge conflict: step %s changed context knowledge %q outside merge policy", branch.Step.ID, key)
 			}
@@ -48,11 +48,11 @@ func MergeHTNBranches(parent *core.Context, branches []graph.BranchExecutionResu
 			changed["knowledge:"+key] = deltaEntry{step: branch.Step.ID, value: value}
 			merged.SetKnowledge(key, value)
 		}
-		if branch.Delta.HistoryChanged || branch.Delta.CompressedChanged || branch.Delta.LogChanged || branch.Delta.PhaseChanged {
+		if branch.Delta.SideEffects.HistoryChanged || branch.Delta.SideEffects.CompressedChanged || branch.Delta.SideEffects.LogChanged || branch.Delta.SideEffects.PhaseChanged {
 			return fmt.Errorf("htn branch merge conflict: step %s changed interaction history outside merge policy", branch.Step.ID)
 		}
 
-		for key, value := range branch.Delta.StateValues {
+		for key, value := range branch.Delta.StateWrites {
 			switch key {
 			case legacyPlanCompletedStepsKey, contextKeyCompletedSteps, contextKeyExecution, contextKeyMetrics, contextKeyState, contextKeyStateError:
 				continue
@@ -60,12 +60,12 @@ func MergeHTNBranches(parent *core.Context, branches []graph.BranchExecutionResu
 			if !htnBranchMergeAllowedKey(key) {
 				return fmt.Errorf("htn branch merge conflict: step %s changed state key %q outside merge policy", branch.Step.ID, key)
 			}
+			if htnBranchEphemeralKey(key) {
+				changed[key] = deltaEntry{step: branch.Step.ID, value: value}
+				merged.Set(key, value)
+				continue
+			}
 			if existing, ok := changed[key]; ok {
-				if htnBranchEphemeralKey(key) {
-					changed[key] = deltaEntry{step: branch.Step.ID, value: value}
-					merged.Set(key, value)
-					continue
-				}
 				if !reflect.DeepEqual(existing.value, value) {
 					return fmt.Errorf("htn branch merge conflict on state key %q between steps %s and %s", key, existing.step, branch.Step.ID)
 				}

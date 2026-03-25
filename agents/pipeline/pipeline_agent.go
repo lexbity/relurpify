@@ -34,6 +34,8 @@ type PipelineAgent struct {
 	Stages       []frameworkpipeline.Stage
 	StageBuilder func(task *core.Task) ([]frameworkpipeline.Stage, error)
 	StageFactory PipelineStageFactory
+
+	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
 }
 
 func (a *PipelineAgent) Initialize(cfg *core.Config) error {
@@ -42,6 +44,13 @@ func (a *PipelineAgent) Initialize(cfg *core.Config) error {
 }
 
 func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	a.executionCatalog = nil
+	if a.Tools != nil {
+		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
+	}
+	defer func() {
+		a.executionCatalog = nil
+	}()
 	if task == nil {
 		return nil, fmt.Errorf("task required")
 	}
@@ -121,8 +130,27 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *cor
 		final["stage_name"] = last.StageName
 		final["decoded_output"] = last.DecodedOutput
 	}
-	state.Set("pipeline.results", results)
-	state.Set("pipeline.final_output", final)
+	if store != nil {
+		if resultsRef, err := a.persistResultsArtifact(ctx, store, workflowID, runID, results); err != nil {
+			return nil, err
+		} else if resultsRef != nil {
+			state.Set("pipeline.results_ref", *resultsRef)
+			state.Set("pipeline.results", compactPipelineResultsState(results))
+		}
+		if outputRef, err := a.persistFinalOutputArtifact(ctx, store, workflowID, runID, final); err != nil {
+			return nil, err
+		} else if outputRef != nil {
+			state.Set("pipeline.final_output_ref", *outputRef)
+			state.Set("pipeline.final_output", compactPipelineFinalOutputState(final, results))
+		}
+	}
+	if _, ok := state.Get("pipeline.results"); !ok {
+		state.Set("pipeline.results", results)
+	}
+	if _, ok := state.Get("pipeline.final_output"); !ok {
+		state.Set("pipeline.final_output", final)
+	}
+	state.Set("pipeline.results_summary", summarizePipelineResults(results))
 	return &core.Result{
 		Success: true,
 		Data: map[string]any{
@@ -130,6 +158,50 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *cor
 			"final_output":  final,
 		},
 	}, nil
+}
+
+func compactPipelineResultsState(results []frameworkpipeline.StageResult) map[string]any {
+	value := map[string]any{
+		"stage_count": len(results),
+	}
+	if len(results) == 0 {
+		return value
+	}
+	stages := make([]map[string]any, 0, len(results))
+	for _, result := range results {
+		stages = append(stages, map[string]any{
+			"name":          result.StageName,
+			"validation_ok": result.ValidationOK,
+			"error_text":    result.ErrorText,
+			"transition":    result.Transition.Kind,
+		})
+	}
+	value["stages"] = stages
+	last := results[len(results)-1]
+	value["last_stage"] = map[string]any{
+		"name":          last.StageName,
+		"validation_ok": last.ValidationOK,
+		"error_text":    last.ErrorText,
+		"transition":    last.Transition.Kind,
+	}
+	return value
+}
+
+func compactPipelineFinalOutputState(final map[string]any, results []frameworkpipeline.StageResult) map[string]any {
+	value := map[string]any{
+		"stages":  len(results),
+		"summary": summarizePipelineResults(results),
+	}
+	if stageName := strings.TrimSpace(fmt.Sprint(final["stage_name"])); stageName != "" && stageName != "<nil>" {
+		value["stage_name"] = stageName
+	}
+	if workflowID := strings.TrimSpace(fmt.Sprint(final["workflow_id"])); workflowID != "" && workflowID != "<nil>" {
+		value["workflow_id"] = workflowID
+	}
+	if runID := strings.TrimSpace(fmt.Sprint(final["run_id"])); runID != "" && runID != "<nil>" {
+		value["run_id"] = runID
+	}
+	return value
 }
 
 func (a *PipelineAgent) Capabilities() []core.Capability {
@@ -200,7 +272,13 @@ func (a *PipelineAgent) telemetry() core.Telemetry {
 }
 
 func (a *PipelineAgent) availableTools() []core.Tool {
-	if a == nil || a.Tools == nil {
+	if a == nil {
+		return nil
+	}
+	if a.executionCatalog != nil {
+		return a.executionCatalog.ModelCallableTools()
+	}
+	if a.Tools == nil {
 		return nil
 	}
 	return a.Tools.ModelCallableTools()
@@ -311,6 +389,93 @@ func (a *PipelineAgent) persistStageResults(ctx context.Context, store *db.SQLit
 		}
 	}
 	return store.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, nil)
+}
+
+func (a *PipelineAgent) persistResultsArtifact(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID string, results []frameworkpipeline.StageResult) (*core.ArtifactReference, error) {
+	if store == nil || strings.TrimSpace(workflowID) == "" || len(results) == 0 {
+		return nil, nil
+	}
+	payload, err := json.Marshal(results)
+	if err != nil {
+		return nil, err
+	}
+	record := memory.WorkflowArtifactRecord{
+		ArtifactID:        fmt.Sprintf("%s-stage-results", runID),
+		WorkflowID:        workflowID,
+		RunID:             runID,
+		Kind:              "pipeline_stage_results",
+		ContentType:       "application/json",
+		StorageKind:       memory.ArtifactStorageInline,
+		SummaryText:       summarizePipelineResults(results),
+		SummaryMetadata:   map[string]any{"agent": "pipeline", "run_id": runID, "stage_count": len(results)},
+		InlineRawText:     string(payload),
+		RawSizeBytes:      int64(len(payload)),
+		CompressionMethod: "none",
+		CreatedAt:         time.Now().UTC(),
+	}
+	if err := store.UpsertWorkflowArtifact(ctx, record); err != nil {
+		return nil, err
+	}
+	ref := workflowutil.WorkflowArtifactReference(record)
+	return &ref, nil
+}
+
+func (a *PipelineAgent) persistFinalOutputArtifact(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID string, final map[string]any) (*core.ArtifactReference, error) {
+	if store == nil || strings.TrimSpace(workflowID) == "" || len(final) == 0 {
+		return nil, nil
+	}
+	payload, err := json.Marshal(final)
+	if err != nil {
+		return nil, err
+	}
+	record := memory.WorkflowArtifactRecord{
+		ArtifactID:        fmt.Sprintf("%s-final-output", runID),
+		WorkflowID:        workflowID,
+		RunID:             runID,
+		Kind:              "pipeline_final_output",
+		ContentType:       "application/json",
+		StorageKind:       memory.ArtifactStorageInline,
+		SummaryText:       summarizePipelineFinalOutput(final),
+		SummaryMetadata:   map[string]any{"agent": "pipeline", "run_id": runID},
+		InlineRawText:     string(payload),
+		RawSizeBytes:      int64(len(payload)),
+		CompressionMethod: "none",
+		CreatedAt:         time.Now().UTC(),
+	}
+	if err := store.UpsertWorkflowArtifact(ctx, record); err != nil {
+		return nil, err
+	}
+	ref := workflowutil.WorkflowArtifactReference(record)
+	return &ref, nil
+}
+
+func summarizePipelineResults(results []frameworkpipeline.StageResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(results))
+	for _, result := range results {
+		status := "ok"
+		if !result.ValidationOK {
+			status = "invalid"
+		}
+		if strings.TrimSpace(result.ErrorText) != "" {
+			status = "error"
+		}
+		parts = append(parts, fmt.Sprintf("%s [%s]", result.StageName, status))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func summarizePipelineFinalOutput(final map[string]any) string {
+	if len(final) == 0 {
+		return ""
+	}
+	stage := strings.TrimSpace(fmt.Sprint(final["stage_name"]))
+	if stage == "" || stage == "<nil>" {
+		stage = "pipeline"
+	}
+	return fmt.Sprintf("%s final output", stage)
 }
 
 type pipelineStageNode struct {

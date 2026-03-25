@@ -11,19 +11,19 @@ import (
 )
 
 const (
-	capabilityPlannerPlan   = "planner.plan"
-	capabilityReviewerReview = "reviewer.review"
-	capabilityVerifierVerify = "verifier.verify"
-	capabilityExecutorInvoke = "executor.invoke"
+	capabilityPlannerPlan         = "planner.plan"
+	capabilityReviewerReview      = "reviewer.review"
+	capabilityVerifierVerify      = "verifier.verify"
+	capabilityExecutorInvoke      = "executor.invoke"
 	capabilitySummarizerSummarize = "summarizer.summarize"
-	defaultAgentDispatch     = "agent:react"
+	defaultAgentDispatch          = "agent:react"
 )
 
 // ExplorerKS gathers facts from the codebase when none are present yet.
 type ExplorerKS struct{}
 
-func (k *ExplorerKS) Name() string     { return "Explorer" }
-func (k *ExplorerKS) Priority() int    { return 100 }
+func (k *ExplorerKS) Name() string  { return "Explorer" }
+func (k *ExplorerKS) Priority() int { return 100 }
 func (k *ExplorerKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Facts) == 0
 }
@@ -41,8 +41,8 @@ func (k *ExplorerKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Re
 // AnalyzerKS identifies issues once facts are available.
 type AnalyzerKS struct{}
 
-func (k *AnalyzerKS) Name() string     { return "Analyzer" }
-func (k *AnalyzerKS) Priority() int    { return 90 }
+func (k *AnalyzerKS) Name() string  { return "Analyzer" }
+func (k *AnalyzerKS) Priority() int { return 90 }
 func (k *AnalyzerKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Facts) > 0 && len(bb.Issues) == 0
 }
@@ -71,8 +71,8 @@ func (k *AnalyzerKS) Execute(ctx context.Context, bb *Blackboard, tools *capabil
 // PlannerKS creates action requests for each identified issue.
 type PlannerKS struct{}
 
-func (k *PlannerKS) Name() string     { return "Planner" }
-func (k *PlannerKS) Priority() int    { return 80 }
+func (k *PlannerKS) Name() string  { return "Planner" }
+func (k *PlannerKS) Priority() int { return 80 }
 func (k *PlannerKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Issues) > 0 && len(bb.PendingActions) == 0 && len(bb.CompletedActions) == 0
 }
@@ -128,8 +128,8 @@ func (k *ReviewKS) Execute(ctx context.Context, bb *Blackboard, tools *capabilit
 // ExecutorKS invokes pending tool/agent actions and records results.
 type ExecutorKS struct{}
 
-func (k *ExecutorKS) Name() string     { return "Executor" }
-func (k *ExecutorKS) Priority() int    { return 70 }
+func (k *ExecutorKS) Name() string  { return "Executor" }
+func (k *ExecutorKS) Priority() int { return 70 }
 func (k *ExecutorKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.PendingActions) > 0
 }
@@ -171,8 +171,8 @@ func (k *ExecutorKS) Execute(ctx context.Context, bb *Blackboard, tools *capabil
 // VerifierKS marks artifacts verified after checking them.
 type VerifierKS struct{}
 
-func (k *VerifierKS) Name() string     { return "Verifier" }
-func (k *VerifierKS) Priority() int    { return 60 }
+func (k *VerifierKS) Name() string  { return "Verifier" }
+func (k *VerifierKS) Priority() int { return 60 }
 func (k *VerifierKS) CanActivate(bb *Blackboard) bool {
 	return bb.HasUnverifiedArtifacts()
 }

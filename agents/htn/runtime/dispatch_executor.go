@@ -20,6 +20,13 @@ type primitiveDispatcher struct {
 	fallback graph.WorkflowExecutor
 }
 
+func NewPrimitiveDispatcher(tools *capability.Registry, fallback graph.WorkflowExecutor) graph.WorkflowExecutor {
+	return &primitiveDispatcher{
+		tools:    tools,
+		fallback: fallback,
+	}
+}
+
 func (d *primitiveDispatcher) BranchExecutor() (graph.WorkflowExecutor, error) {
 	if d == nil {
 		return &primitiveDispatcher{}, nil
@@ -70,12 +77,12 @@ func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, stat
 	target, selectors, args := dispatchMetadata(task)
 	operator := operatorNameFromTask(task)
 	if result, decision, ok, err := d.invokeCapability(ctx, state, target, operator, selectors, args); err != nil {
-		recordDispatch(state, decision)
 		persistDispatchMetadataToContext(state, decision)
+		recordDispatch(state, decision)
 		return nil, err
 	} else if ok {
-		recordDispatch(state, decision)
 		persistDispatchMetadataToContext(state, decision)
+		recordDispatch(state, decision)
 		return result, nil
 	}
 	fallbackDecision := dispatchDecision{
@@ -87,12 +94,12 @@ func (d *primitiveDispatcher) Execute(ctx context.Context, task *core.Task, stat
 		Selectors:       dedupeSelectors(selectors),
 	}
 	if d.fallback == nil {
-		recordDispatch(state, fallbackDecision)
 		persistDispatchMetadataToContext(state, fallbackDecision)
+		recordDispatch(state, fallbackDecision)
 		return nil, fmt.Errorf("htn: no primitive dispatch target available for operator %q (requested %q)", operator, target)
 	}
-	recordDispatch(state, fallbackDecision)
 	persistDispatchMetadataToContext(state, fallbackDecision)
+	recordDispatch(state, fallbackDecision)
 	return d.fallback.Execute(ctx, task, state)
 }
 

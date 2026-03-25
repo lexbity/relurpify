@@ -34,7 +34,8 @@ type BlackboardAgent struct {
 	// MaxCycles is the upper bound on control-loop iterations (default 20).
 	MaxCycles int
 
-	initialised bool
+	initialised      bool
+	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
 }
 
 // Initialize satisfies graph.WorkflowExecutor. It wires configuration and ensures
@@ -138,14 +139,14 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 					Reason:              "blackboard-summary",
 				},
 				{
-					StateKey:        contextKeyPersistenceDecision,
-					Scope:           string(memory.MemoryScopeProject),
-					Kind:            graph.DeclarativeKindDecision,
-					Title:           taskInstruction(task),
-					SummaryField:    "summary",
-					ContentField:    "decision",
-					Tags:            []string{"blackboard", "decision"},
-					Reason:          "blackboard-decision",
+					StateKey:     contextKeyPersistenceDecision,
+					Scope:        string(memory.MemoryScopeProject),
+					Kind:         graph.DeclarativeKindDecision,
+					Title:        taskInstruction(task),
+					SummaryField: "summary",
+					ContentField: "decision",
+					Tags:         []string{"blackboard", "decision"},
+					Reason:       "blackboard-decision",
 				},
 			}
 			persist.Procedural = []graph.ProceduralPersistenceRequest{{
@@ -211,8 +212,8 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 			return nil, err
 		}
 	}
-	if a.Tools != nil && len(a.Tools.InspectableCapabilities()) > 0 {
-		g.SetCapabilityCatalog(a.Tools)
+	if catalog := a.executionCapabilityCatalog(); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
+		g.SetCapabilityCatalog(catalog)
 	}
 	startNodeID := load.ID()
 	if retrieveDeclarative != nil {
@@ -285,6 +286,13 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 // Execute initialises the blackboard with the task goal and runs the controller
 // loop until the goal is satisfied or an error occurs.
 func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	a.executionCatalog = nil
+	if a.Tools != nil {
+		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
+	}
+	defer func() {
+		a.executionCatalog = nil
+	}()
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -349,6 +357,8 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, state *c
 		}
 		return nil, fmt.Errorf("blackboard: graph execution failed: %w", err)
 	}
+	mirrorBlackboardArtifactReferences(state)
+	compactBlackboardPostExecutionState(state)
 	bb := LoadFromContext(state, taskInstruction(task))
 	controllerRaw, _ := state.Get(contextKeyController)
 	controllerState, _ := controllerRaw.(ControllerState)
@@ -394,6 +404,71 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, state *c
 			"completed_count": len(bb.CompletedActions),
 		},
 	}, nil
+}
+
+func (a *BlackboardAgent) executionCapabilityCatalog() *capability.ExecutionCapabilityCatalogSnapshot {
+	if a == nil {
+		return nil
+	}
+	if a.executionCatalog != nil {
+		return a.executionCatalog
+	}
+	if a.Tools == nil {
+		return nil
+	}
+	return a.Tools.CaptureExecutionCatalogSnapshot()
+}
+
+func compactBlackboardPostExecutionState(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get(contextKeySummaryRef); !ok {
+		return
+	}
+	rawAudit, ok := state.Get(contextKeyAuditTrail)
+	if !ok {
+		return
+	}
+	entries, ok := rawAudit.([]map[string]any)
+	if !ok {
+		return
+	}
+	state.Set(contextKeyAuditTrail, compactBlackboardAudit(entries))
+}
+
+func compactBlackboardAudit(entries []map[string]any) map[string]any {
+	value := map[string]any{
+		"entry_count": len(entries),
+	}
+	if len(entries) == 0 {
+		return value
+	}
+	last := entries[len(entries)-1]
+	value["last_message"] = strings.TrimSpace(fmt.Sprint(last["message"]))
+	value["first_message"] = strings.TrimSpace(fmt.Sprint(entries[0]["message"]))
+	return value
+}
+
+func mirrorBlackboardArtifactReferences(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if strings.TrimSpace(state.GetString(contextKeySummary)) != "" {
+		if rawRef, ok := state.Get("graph.summary_ref"); ok {
+			if ref, ok := rawRef.(core.ArtifactReference); ok {
+				state.Set(contextKeySummaryRef, ref)
+			}
+		}
+		if summary := strings.TrimSpace(state.GetString("graph.summary")); summary != "" {
+			state.Set(contextKeySummaryArtifactSummary, summary)
+		}
+	}
+	if rawRef, ok := state.Get("graph.checkpoint_ref"); ok {
+		if ref, ok := rawRef.(core.ArtifactReference); ok {
+			state.Set(contextKeyCheckpointRef, ref)
+		}
+	}
 }
 
 func (a *BlackboardAgent) loadResumeCheckpoint(state *core.Context, task *core.Task) (*graph.GraphCheckpoint, error) {

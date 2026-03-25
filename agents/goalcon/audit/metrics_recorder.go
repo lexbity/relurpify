@@ -1,6 +1,8 @@
 package audit
 
 import (
+	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -64,6 +66,14 @@ func (m *OperatorMetrics) RecordExecution(success bool, duration time.Duration) 
 	m.LastExecutionTime = time.Now()
 }
 
+// SuccessRateOrDefault returns SuccessRate, or defaultRate when nil or no executions.
+func (m *OperatorMetrics) SuccessRateOrDefault(defaultRate float64) float64 {
+	if m == nil || m.TotalExecutions == 0 {
+		return defaultRate
+	}
+	return m.SuccessRate
+}
+
 // OperatorMetricsCollection is a map of operator names to their metrics.
 type OperatorMetricsCollection map[string]*OperatorMetrics
 
@@ -99,14 +109,30 @@ type MetricsSnapshot struct {
 	SnapshotTime time.Time
 }
 
+const metricsMemoryKey = "goalcon.operator_metrics"
+
 // LoadMetricsFromMemory loads previously persisted metrics from the memory store.
 func LoadMetricsFromMemory(store memory.MemoryStore) OperatorMetricsCollection {
 	if store == nil {
 		return make(OperatorMetricsCollection)
 	}
-	// TODO: Implement actual loading from memory store
-	// For now, return empty collection
-	return make(OperatorMetricsCollection)
+	record, ok, err := store.Recall(context.Background(), metricsMemoryKey, memory.MemoryScopeProject)
+	if err != nil || !ok || record == nil {
+		return make(OperatorMetricsCollection)
+	}
+	raw, ok := record.Value["metrics_json"]
+	if !ok {
+		return make(OperatorMetricsCollection)
+	}
+	jsonStr, ok := raw.(string)
+	if !ok {
+		return make(OperatorMetricsCollection)
+	}
+	var collection OperatorMetricsCollection
+	if err := json.Unmarshal([]byte(jsonStr), &collection); err != nil {
+		return make(OperatorMetricsCollection)
+	}
+	return collection
 }
 
 // SaveMetricsToMemory persists metrics to the memory store.
@@ -114,8 +140,13 @@ func SaveMetricsToMemory(store memory.MemoryStore, metrics OperatorMetricsCollec
 	if store == nil {
 		return nil
 	}
-	// TODO: Implement actual saving to memory store
-	return nil
+	data, err := json.Marshal(metrics)
+	if err != nil {
+		return err
+	}
+	return store.Remember(context.Background(), metricsMemoryKey, map[string]interface{}{
+		"metrics_json": string(data),
+	}, memory.MemoryScopeProject)
 }
 
 // MetricsRecorder tracks execution outcomes and persists them to memory.

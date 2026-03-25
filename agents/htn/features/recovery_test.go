@@ -230,16 +230,16 @@ func TestHintBasedVerificationStrategy(t *testing.T) {
 		t.Errorf("Expected name 'hint_based', got %s", strategy.Name())
 	}
 
-	// Without hint, should succeed
+	// Without hint, should defer to next strategy (return false with no issues)
 	vctx := &VerificationContext{
 		StepID: "step_1",
 	}
 	success, issues := strategy.Verify(context.Background(), core.NewContext(), vctx)
-	if !success {
-		t.Error("Should succeed without hint")
+	if success {
+		t.Error("Should defer (not succeed) without hint")
 	}
 	if len(issues) > 0 {
-		t.Errorf("Expected no issues, got %v", issues)
+		t.Errorf("Expected no issues on defer, got %v", issues)
 	}
 
 	// With hint, should check criteria

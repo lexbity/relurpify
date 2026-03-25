@@ -52,8 +52,8 @@ func (bc *BackoffCalculator) NextBackoff() time.Duration {
 		computedBackoff = maxBackoff
 	}
 
-	// Add jitter
-	if bc.policy.JitterFraction > 0 {
+	// Add jitter (skip on first attempt so Reset() produces exact InitialBackoff)
+	if bc.policy.JitterFraction > 0 && bc.attempt > 1 {
 		jitter := bc.ComputeJitter(computedBackoff)
 		computedBackoff = computedBackoff + jitter
 	}

@@ -34,7 +34,6 @@ type RewooAgent struct {
 	initialised bool
 }
 
-
 // debugf logs debug messages if Config.DebugAgent is enabled.
 func (a *RewooAgent) debugf(format string, args ...interface{}) {
 	if a == nil || a.Config == nil || !a.Config.DebugAgent {
@@ -83,6 +82,10 @@ func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 	}
 
 	options := a.options()
+	var executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
+	if a.Tools != nil {
+		executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
+	}
 
 	// Set up context management
 	state.SetExecutionPhase(string(PhasePlan))
@@ -124,7 +127,7 @@ func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 		a.Model,
 		a.Tools,
 		task,
-		a.Tools.ModelCallableLLMToolSpecs(),
+		executionModelToolSpecs(a.Tools, executionCatalog),
 		a.ContextPolicy,
 		sharedContext,
 		state,
@@ -178,9 +181,16 @@ func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 	}
 	if len(results) > 0 {
 		a.persistStepResults(ctx, surfaces, workflowID, task, plan, results, 0)
+		if toolResultsRef := a.persistToolResultsArtifact(ctx, surfaces, workflowID, runID, results); toolResultsRef != nil {
+			state.Set("rewoo.tool_results_ref", *toolResultsRef)
+			state.Set("rewoo.tool_results", compactRewooToolResultsState(results))
+		}
+		state.Set("rewoo.tool_results_summary", summarizeRewooStepResults(results))
 	}
 	if synthesis != "" {
-		a.persistSynthesis(ctx, surfaces, workflowID, runID, task, synthesis, results)
+		if synthRef := a.persistSynthesis(ctx, surfaces, workflowID, runID, task, synthesis, results); synthRef != nil {
+			state.Set("rewoo.synthesis_ref", *synthRef)
+		}
 	}
 	if surfaces.Workflow != nil && runID != "" {
 		_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))
@@ -200,6 +210,42 @@ func (a *RewooAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 			"steps_ok":  stepsOK,
 		},
 	}, nil
+}
+
+func executionModelToolSpecs(registry *capability.Registry, snapshot *capability.ExecutionCapabilityCatalogSnapshot) []core.LLMToolSpec {
+	if snapshot != nil {
+		return snapshot.ModelCallableLLMToolSpecs()
+	}
+	if registry == nil {
+		return nil
+	}
+	return registry.ModelCallableLLMToolSpecs()
+}
+
+func compactRewooToolResultsState(results []RewooStepResult) map[string]any {
+	value := map[string]any{
+		"step_count": len(results),
+	}
+	if len(results) == 0 {
+		return value
+	}
+	steps := make([]map[string]any, 0, len(results))
+	stepsOK := 0
+	for _, result := range results {
+		if result.Success {
+			stepsOK++
+		}
+		steps = append(steps, map[string]any{
+			"step_id": result.StepID,
+			"tool":    result.Tool,
+			"success": result.Success,
+			"error":   result.Error,
+		})
+	}
+	value["steps_ok"] = stepsOK
+	value["steps"] = steps
+	value["last_step"] = steps[len(steps)-1]
+	return value
 }
 
 func (a *RewooAgent) options() RewooOptions {
@@ -350,9 +396,9 @@ func (a *RewooAgent) persistReplanSignal(ctx context.Context, surfaces workflowu
 	})
 }
 
-func (a *RewooAgent) persistSynthesis(ctx context.Context, surfaces workflowutil.RuntimeSurfaces, workflowID, runID string, task *core.Task, synthesis string, results []RewooStepResult) {
+func (a *RewooAgent) persistSynthesis(ctx context.Context, surfaces workflowutil.RuntimeSurfaces, workflowID, runID string, task *core.Task, synthesis string, results []RewooStepResult) *core.ArtifactReference {
 	if strings.TrimSpace(synthesis) == "" {
-		return
+		return nil
 	}
 	now := time.Now().UTC()
 	stepSummaries := make([]string, 0, len(results))
@@ -404,7 +450,72 @@ func (a *RewooAgent) persistSynthesis(ctx context.Context, surfaces workflowutil
 			},
 			CreatedAt: now,
 		})
+		payload, _ := json.Marshal(map[string]any{
+			"synthesis":    synthesis,
+			"step_results": results,
+		})
+		artifact := memory.WorkflowArtifactRecord{
+			ArtifactID:        fmt.Sprintf("rewoo_synthesis_%d", now.UnixNano()),
+			WorkflowID:        workflowID,
+			RunID:             runID,
+			Kind:              "rewoo_synthesis",
+			ContentType:       "application/json",
+			StorageKind:       memory.ArtifactStorageInline,
+			SummaryText:       synthesis,
+			SummaryMetadata:   map[string]any{"agent": "rewoo", "run_id": runID},
+			InlineRawText:     string(payload),
+			RawSizeBytes:      int64(len(payload)),
+			CompressionMethod: "none",
+			CreatedAt:         now,
+		}
+		if err := surfaces.Workflow.UpsertWorkflowArtifact(ctx, artifact); err == nil {
+			ref := workflowutil.WorkflowArtifactReference(artifact)
+			return &ref
+		}
 	}
+	return nil
+}
+
+func (a *RewooAgent) persistToolResultsArtifact(ctx context.Context, surfaces workflowutil.RuntimeSurfaces, workflowID, runID string, results []RewooStepResult) *core.ArtifactReference {
+	if surfaces.Workflow == nil || strings.TrimSpace(workflowID) == "" || len(results) == 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	payload, _ := json.Marshal(results)
+	artifact := memory.WorkflowArtifactRecord{
+		ArtifactID:        fmt.Sprintf("rewoo_results_%d", now.UnixNano()),
+		WorkflowID:        workflowID,
+		RunID:             runID,
+		Kind:              "rewoo_tool_results",
+		ContentType:       "application/json",
+		StorageKind:       memory.ArtifactStorageInline,
+		SummaryText:       summarizeRewooStepResults(results),
+		SummaryMetadata:   map[string]any{"agent": "rewoo", "run_id": runID, "result_count": len(results)},
+		InlineRawText:     string(payload),
+		RawSizeBytes:      int64(len(payload)),
+		CompressionMethod: "none",
+		CreatedAt:         now,
+	}
+	if err := surfaces.Workflow.UpsertWorkflowArtifact(ctx, artifact); err != nil {
+		return nil
+	}
+	ref := workflowutil.WorkflowArtifactReference(artifact)
+	return &ref
+}
+
+func summarizeRewooStepResults(results []RewooStepResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(results))
+	for _, result := range results {
+		status := "ok"
+		if !result.Success {
+			status = "failed"
+		}
+		parts = append(parts, fmt.Sprintf("%s [%s]", result.StepID, status))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func buildReplanContext(plan *RewooPlan, results []RewooStepResult, err error) string {

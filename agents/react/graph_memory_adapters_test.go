@@ -149,7 +149,9 @@ func TestScopedMemoryRetrieverFallsBackToGenericMemoryStore(t *testing.T) {
 	require.Equal(t, 1, store.searchCalls)
 }
 
-type retrievalBackedMemoryStub struct{}
+type retrievalBackedMemoryStub struct {
+	structuredMemoryStub
+}
 
 func (retrievalBackedMemoryStub) Remember(context.Context, string, map[string]interface{}, memory.MemoryScope) error {
 	return nil
@@ -191,14 +193,34 @@ func (retrievalServiceStub) Retrieve(context.Context, retrieval.RetrievalQuery) 
 }
 
 func TestScopedMemoryRetrieverPrefersRetrievalServiceForDeclarativeQueries(t *testing.T) {
+	store := &retrievalBackedMemoryStub{}
+
 	results, err := (scopedMemoryRetriever{
-		store:       retrievalBackedMemoryStub{},
+		store:       store,
 		scope:       memory.MemoryScopeProject,
 		memoryClass: core.MemoryClassDeclarative,
 	}).Retrieve(context.Background(), "retrieval", 3)
 	require.NoError(t, err)
-	require.Len(t, results, 1)
+	require.Len(t, results, 2)
 	require.Equal(t, "doc:1", results[0].Key)
 	require.Equal(t, core.MemoryClassDeclarative, results[0].MemoryClass)
 	require.Contains(t, results[0].Summary, "retrieval backed declarative memory")
+	require.Equal(t, "fact-1", results[1].Key)
+	require.Equal(t, 1, store.declarativeSearchCalls)
+}
+
+func TestScopedMemoryRetrieverComposesRetrievalAndProceduralStore(t *testing.T) {
+	store := &retrievalBackedMemoryStub{}
+
+	results, err := (scopedMemoryRetriever{
+		store:       store,
+		scope:       memory.MemoryScopeProject,
+		memoryClass: core.MemoryClassProcedural,
+	}).Retrieve(context.Background(), "checkpoint", 3)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	require.Equal(t, "doc:1", results[0].Key)
+	require.Equal(t, core.MemoryClassProcedural, results[0].MemoryClass)
+	require.Equal(t, "routine-1", results[1].Key)
+	require.Equal(t, 1, store.proceduralSearchCalls)
 }

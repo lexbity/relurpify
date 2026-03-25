@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -22,11 +23,34 @@ type blackboardRetrievalServiceProvider interface {
 }
 
 func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit int) ([]core.MemoryRecordEnvelope, error) {
+	publication, err := r.RetrievePublication(ctx, query, limit)
+	if err != nil || publication == nil {
+		return nil, err
+	}
+	return publication.Results, nil
+}
+
+func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context, query string, limit int) (*graph.MemoryRetrievalPublication, error) {
 	if r.store == nil {
-		return nil, nil
+		return graph.BuildMemoryRetrievalPublication(strings.TrimSpace(query), nil, r.memoryClass), nil
 	}
 	switch r.memoryClass {
 	case core.MemoryClassDeclarative:
+		var blocks []core.ContentBlock
+		if provider, ok := r.store.(blackboardRetrievalServiceProvider); ok {
+			if service := provider.RetrievalService(); service != nil {
+				retrieved, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
+					Text:      query,
+					Scope:     string(r.scope),
+					MaxTokens: 400,
+					Limit:     limit,
+				})
+				if err != nil {
+					return nil, err
+				}
+				blocks = retrieved
+			}
+		}
 		if store, ok := r.store.(memory.DeclarativeMemoryStore); ok {
 			records, err := store.SearchDeclarative(ctx, memory.DeclarativeMemoryQuery{
 				Query: query,
@@ -45,13 +69,38 @@ func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query str
 					return nil, err
 				}
 			}
-			if len(records) > 0 {
-				return blackboardDeclarativeEnvelopes(records), nil
+			// Start with retrieval results (if available) - retrieval is preferred
+			out := make([]core.MemoryRecordEnvelope, 0)
+			if len(blocks) > 0 {
+				if retrievalEnvelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(retrievalEnvelopes) > 0 {
+					out = append(out, retrievalEnvelopes...)
+				}
 			}
+			// Then add memory store results
+			for _, record := range records {
+				out = append(out, core.MemoryRecordEnvelope{
+					Key:         record.RecordID,
+					MemoryClass: r.memoryClass,
+					Text:        record.Content,
+					Summary:     record.Summary,
+					Scope:       string(record.Scope),
+					Source:      "declarative",
+					RecordID:    record.RecordID,
+				})
+			}
+			if len(out) > 0 {
+				return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
+			}
+			return graph.BuildMemoryRetrievalPublication(query, nil, r.memoryClass), nil
 		}
+		if envelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(envelopes) > 0 {
+			return graph.BuildMemoryRetrievalPublication(query, envelopes, r.memoryClass), nil
+		}
+	case core.MemoryClassProcedural:
+		var blocks []core.ContentBlock
 		if provider, ok := r.store.(blackboardRetrievalServiceProvider); ok {
 			if service := provider.RetrievalService(); service != nil {
-				blocks, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
+				retrieved, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
 					Text:      query,
 					Scope:     string(r.scope),
 					MaxTokens: 400,
@@ -60,12 +109,9 @@ func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query str
 				if err != nil {
 					return nil, err
 				}
-				if envelopes := blackboardRetrievalEnvelopes(blocks, r.memoryClass, r.scope); len(envelopes) > 0 {
-					return envelopes, nil
-				}
+				blocks = retrieved
 			}
 		}
-	case core.MemoryClassProcedural:
 		if store, ok := r.store.(memory.ProceduralMemoryStore); ok {
 			records, err := store.SearchProcedural(ctx, memory.ProceduralMemoryQuery{
 				Query: query,
@@ -84,7 +130,32 @@ func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query str
 					return nil, err
 				}
 			}
-			return blackboardProceduralEnvelopes(records), nil
+			// Start with retrieval results (if available) - retrieval is preferred
+			out := make([]core.MemoryRecordEnvelope, 0)
+			if len(blocks) > 0 {
+				if retrievalEnvelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(retrievalEnvelopes) > 0 {
+					out = append(out, retrievalEnvelopes...)
+				}
+			}
+			// Then add memory store results
+			for _, record := range records {
+				out = append(out, core.MemoryRecordEnvelope{
+					Key:         record.RoutineID,
+					MemoryClass: r.memoryClass,
+					Text:        record.Description,
+					Summary:     record.Summary,
+					Scope:       string(record.Scope),
+					Source:      "procedural",
+					RecordID:    record.RoutineID,
+				})
+			}
+			if len(out) > 0 {
+				return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
+			}
+			return graph.BuildMemoryRetrievalPublication(query, nil, r.memoryClass), nil
+		}
+		if envelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(envelopes) > 0 {
+			return graph.BuildMemoryRetrievalPublication(query, envelopes, r.memoryClass), nil
 		}
 	}
 	records, err := r.store.Search(ctx, query, r.scope)
@@ -107,7 +178,7 @@ func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query str
 			Summary:     strings.TrimSpace(summary),
 		})
 	}
-	return out, nil
+	return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
 }
 
 func blackboardRuntimeStore(store memory.MemoryStore) graph.RuntimePersistenceStore {
@@ -122,18 +193,106 @@ func hydrateBlackboardFromMemory(state *core.Context, bb *Blackboard) int {
 		return 0
 	}
 	added := 0
-	if raw, ok := state.Get("graph.declarative_memory"); ok {
+	if raw, ok := state.Get("graph.declarative_memory_payload"); ok {
+		if payload, ok := raw.(map[string]any); ok {
+			if results, ok := payload["results"].([]map[string]any); ok {
+				for _, record := range results {
+					key := strings.TrimSpace(fmt.Sprint(record["record_id"]))
+					if key == "" {
+						key = strings.TrimSpace(fmt.Sprint(record["summary"]))
+					}
+					summary := strings.TrimSpace(fmt.Sprint(record["summary"]))
+					if summary == "" {
+						summary = strings.TrimSpace(fmt.Sprint(record["text"]))
+					}
+					if summary == "" {
+						continue
+					}
+					if bb.AddFact("memory:"+key, summary, "memory:"+strings.TrimSpace(fmt.Sprint(record["source"]))) {
+						// Stamp derivation and origin on the newly added fact
+						if len(bb.Facts) > 0 {
+							lastFact := &bb.Facts[len(bb.Facts)-1]
+							origin := core.OriginDerivation("memory")
+							recordID := strings.TrimSpace(fmt.Sprint(record["record_id"]))
+							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_id=%s", recordID))
+							lastFact.Derivation = &derived
+							// Add origin tracking
+							lastFact.Origin = &FactOrigin{
+								SourceSystem: strings.TrimSpace(fmt.Sprint(record["source"])),
+								RecordID:     recordID,
+								Derivation:   &derived,
+								CapturedAt:   time.Now().UTC(),
+							}
+						}
+						added++
+					}
+				}
+			}
+		}
+	} else if raw, ok := state.Get("graph.declarative_memory"); ok {
 		if payload, ok := raw.(map[string]any); ok {
 			if results, ok := payload["results"].([]core.MemoryRecordEnvelope); ok {
 				for _, record := range results {
 					if bb.AddFact("memory:"+record.Key, strings.TrimSpace(record.Summary), "memory:declarative") {
+						// Stamp derivation and origin on the newly added fact
+						if len(bb.Facts) > 0 {
+							lastFact := &bb.Facts[len(bb.Facts)-1]
+							origin := core.OriginDerivation("memory")
+							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
+							lastFact.Derivation = &derived
+							// Add origin tracking
+							lastFact.Origin = &FactOrigin{
+								SourceSystem: "declarative",
+								RecordID:     record.RecordID,
+								Scope:        record.Scope,
+								Kind:         "declarative",
+								Derivation:   &derived,
+								CapturedAt:   time.Now().UTC(),
+							}
+						}
 						added++
 					}
 				}
 			}
 		}
 	}
-	if raw, ok := state.Get("graph.procedural_memory"); ok {
+	if raw, ok := state.Get("graph.procedural_memory_payload"); ok {
+		if payload, ok := raw.(map[string]any); ok {
+			if results, ok := payload["results"].([]map[string]any); ok {
+				for _, record := range results {
+					key := strings.TrimSpace(fmt.Sprint(record["record_id"]))
+					if key == "" {
+						key = strings.TrimSpace(fmt.Sprint(record["summary"]))
+					}
+					description := strings.TrimSpace(fmt.Sprint(record["summary"]))
+					if description == "" {
+						description = strings.TrimSpace(fmt.Sprint(record["text"]))
+					}
+					if description == "" {
+						description = "consider learned routine " + key
+					}
+					if err := bb.AddHypothesis("memory:routine:"+key, description, 0.55, "memory:"+strings.TrimSpace(fmt.Sprint(record["source"]))); err == nil {
+						// Stamp derivation and origin on the newly added hypothesis
+						if len(bb.Hypotheses) > 0 {
+							lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
+							origin := core.OriginDerivation("memory")
+							recordID := strings.TrimSpace(fmt.Sprint(record["record_id"]))
+							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_id=%s", recordID))
+							lastHyp.Derivation = &derived
+							// Add origin tracking
+							lastHyp.Origin = &FactOrigin{
+								SourceSystem: strings.TrimSpace(fmt.Sprint(record["source"])),
+								RecordID:     recordID,
+								Derivation:   &derived,
+								CapturedAt:   time.Now().UTC(),
+							}
+						}
+						added++
+					}
+				}
+			}
+		}
+	} else if raw, ok := state.Get("graph.procedural_memory"); ok {
 		if payload, ok := raw.(map[string]any); ok {
 			if results, ok := payload["results"].([]core.MemoryRecordEnvelope); ok {
 				for _, record := range results {
@@ -143,6 +302,22 @@ func hydrateBlackboardFromMemory(state *core.Context, bb *Blackboard) int {
 						description = "consider learned routine " + strings.TrimSpace(record.Key)
 					}
 					if err := bb.AddHypothesis(id, description, 0.55, "memory:procedural"); err == nil {
+						// Stamp derivation and origin on the newly added hypothesis
+						if len(bb.Hypotheses) > 0 {
+							lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
+							origin := core.OriginDerivation("memory")
+							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
+							lastHyp.Derivation = &derived
+							// Add origin tracking
+							lastHyp.Origin = &FactOrigin{
+								SourceSystem: "procedural",
+								RecordID:     record.RecordID,
+								Scope:        record.Scope,
+								Kind:         "procedural",
+								Derivation:   &derived,
+								CapturedAt:   time.Now().UTC(),
+							}
+						}
 						added++
 					}
 				}
@@ -203,93 +378,4 @@ func publishPersistenceCandidates(state *core.Context, bb *Blackboard, controlle
 		}
 	}
 	state.Set(contextKeyPersistenceRoutine, routine)
-}
-
-func blackboardRetrievalEnvelopes(blocks []core.ContentBlock, memoryClass core.MemoryClass, scope memory.MemoryScope) []core.MemoryRecordEnvelope {
-	out := make([]core.MemoryRecordEnvelope, 0, len(blocks))
-	for _, block := range blocks {
-		structured, ok := block.(core.StructuredContentBlock)
-		if !ok {
-			continue
-		}
-		payload, ok := structured.Data.(map[string]any)
-		if !ok {
-			continue
-		}
-		text := strings.TrimSpace(fmt.Sprint(payload["text"]))
-		if text == "" {
-			continue
-		}
-		key := strings.TrimSpace(fmt.Sprint(payload["id"]))
-		if key == "" {
-			key = "retrieval:" + text
-		}
-		out = append(out, core.MemoryRecordEnvelope{
-			Key:         key,
-			MemoryClass: memoryClass,
-			Scope:       string(scope),
-			Summary:     summarizeMemoryText(text, 240),
-		})
-	}
-	return out
-}
-
-func blackboardDeclarativeEnvelopes(records []memory.DeclarativeMemoryRecord) []core.MemoryRecordEnvelope {
-	out := make([]core.MemoryRecordEnvelope, 0, len(records))
-	for _, record := range records {
-		key := strings.TrimSpace(record.RecordID)
-		if key == "" {
-			key = firstNonEmptyMemoryString(record.Title, record.Summary)
-		}
-		summary := strings.TrimSpace(record.Summary)
-		if summary == "" {
-			summary = strings.TrimSpace(record.Title)
-		}
-		out = append(out, core.MemoryRecordEnvelope{
-			Key:         key,
-			MemoryClass: core.MemoryClassDeclarative,
-			Scope:       string(record.Scope),
-			Summary:     summary,
-		})
-	}
-	return out
-}
-
-func blackboardProceduralEnvelopes(records []memory.ProceduralMemoryRecord) []core.MemoryRecordEnvelope {
-	out := make([]core.MemoryRecordEnvelope, 0, len(records))
-	for _, record := range records {
-		key := strings.TrimSpace(record.RoutineID)
-		if key == "" {
-			key = firstNonEmptyMemoryString(record.Name, record.Summary)
-		}
-		summary := strings.TrimSpace(record.Summary)
-		if summary == "" {
-			summary = strings.TrimSpace(record.Name)
-		}
-		out = append(out, core.MemoryRecordEnvelope{
-			Key:         key,
-			MemoryClass: core.MemoryClassProcedural,
-			Scope:       string(record.Scope),
-			Summary:     summary,
-		})
-	}
-	return out
-}
-
-func summarizeMemoryText(value string, limit int) string {
-	value = strings.TrimSpace(value)
-	if limit <= 0 || len(value) <= limit {
-		return value
-	}
-	return strings.TrimSpace(value[:limit]) + "..."
-}
-
-func firstNonEmptyMemoryString(values ...string) string {
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }

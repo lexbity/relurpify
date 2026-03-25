@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/agents/blackboard"
@@ -409,6 +410,12 @@ func TestBlackboardAgent_ExecutePublishesNamespacedContextState(t *testing.T) {
 	} else if summary, ok := raw.(string); !ok || summary == "" {
 		t.Fatalf("unexpected blackboard.summary knowledge: %#v", raw)
 	}
+	if raw, ok := state.Get("blackboard.summary_ref"); ok {
+		ref, ok := raw.(core.ArtifactReference)
+		if !ok || ref.ArtifactID == "" {
+			t.Fatalf("unexpected blackboard.summary_ref: %#v", raw)
+		}
+	}
 
 	if raw, ok := state.Get("blackboard.execution_summary"); !ok {
 		t.Fatal("expected blackboard.execution_summary")
@@ -418,6 +425,10 @@ func TestBlackboardAgent_ExecutePublishesNamespacedContextState(t *testing.T) {
 
 	if raw, ok := state.Get("blackboard.audit"); !ok {
 		t.Fatal("expected blackboard.audit")
+	} else if _, hasRef := state.Get("blackboard.summary_ref"); hasRef {
+		if audit, ok := raw.(map[string]any); !ok || audit["entry_count"] == nil {
+			t.Fatalf("unexpected compact blackboard.audit: %#v", raw)
+		}
 	} else if entries, ok := raw.([]map[string]any); !ok || len(entries) == 0 {
 		t.Fatalf("unexpected blackboard.audit: %#v", raw)
 	}
@@ -731,8 +742,8 @@ func TestMergeBlackboardBranches_MergesNonConflictingState(t *testing.T) {
 	branchB.Set("blackboard.issues", []blackboard.Issue{{ID: "i1", Description: "issue", Severity: "low", Source: "B"}})
 
 	err := blackboard.MergeBlackboardBranches(parent, []blackboard.BlackboardBranchResult{
-		{SourceName: "A", State: branchA, Delta: branchA.DirtyDelta()},
-		{SourceName: "B", State: branchB, Delta: branchB.DirtyDelta()},
+		{SourceName: "A", State: branchA, Delta: branchA.BranchDelta()},
+		{SourceName: "B", State: branchB, Delta: branchB.BranchDelta()},
 	})
 	if err != nil {
 		t.Fatalf("MergeBlackboardBranches: %v", err)
@@ -753,8 +764,8 @@ func TestMergeBlackboardBranches_RejectsConflictingWrites(t *testing.T) {
 	branchB.Set("blackboard.summary", "summary b")
 
 	err := blackboard.MergeBlackboardBranches(parent, []blackboard.BlackboardBranchResult{
-		{SourceName: "A", State: branchA, Delta: branchA.DirtyDelta()},
-		{SourceName: "B", State: branchB, Delta: branchB.DirtyDelta()},
+		{SourceName: "A", State: branchA, Delta: branchA.BranchDelta()},
+		{SourceName: "B", State: branchB, Delta: branchB.BranchDelta()},
 	})
 	if err == nil {
 		t.Fatal("expected merge conflict")
@@ -882,6 +893,11 @@ func TestBlackboardAgent_ExecuteUsesExplicitCheckpointNodes(t *testing.T) {
 	if _, ok := state.Get("graph.checkpoint_ref"); !ok {
 		t.Fatal("expected graph.checkpoint_ref state")
 	}
+	if raw, ok := state.Get("blackboard.checkpoint_ref"); !ok {
+		t.Fatal("expected blackboard.checkpoint_ref state")
+	} else if ref, ok := raw.(core.ArtifactReference); !ok || ref.ArtifactID == "" {
+		t.Fatalf("unexpected blackboard.checkpoint_ref: %#v", raw)
+	}
 	store := memory.NewCheckpointStore(a.CheckpointPath)
 	ids, err := store.List(task.ID)
 	if err != nil {
@@ -1003,13 +1019,13 @@ func TestBlackboardAgent_ExecuteHydratesFromRuntimeMemoryRetrieval(t *testing.T)
 		t.Fatalf("PutDeclarative: %v", err)
 	}
 	if err := store.PutProcedural(context.Background(), memory.ProceduralMemoryRecord{
-		RoutineID:   "routine-1",
-		Scope:       memory.MemoryScopeProject,
-		Kind:        memory.ProceduralMemoryKindRoutine,
-		Name:        "verify patch",
-		Summary:     "verify generated patches before completion",
-		InlineBody:  "run verification",
-		Verified:    true,
+		RoutineID:  "routine-1",
+		Scope:      memory.MemoryScopeProject,
+		Kind:       memory.ProceduralMemoryKindRoutine,
+		Name:       "verify patch",
+		Summary:    "verify generated patches before completion",
+		InlineBody: "run verification",
+		Verified:   true,
 	}); err != nil {
 		t.Fatalf("PutProcedural: %v", err)
 	}
@@ -1055,7 +1071,7 @@ func TestBlackboardAgent_ExecuteHydratesFromRuntimeMemoryRetrieval(t *testing.T)
 	}
 	found := false
 	for _, fact := range facts {
-		if fact.Value == "known bug context" && fact.Source == "memory:declarative" {
+		if fact.Value == "known bug context" && (fact.Source == "memory:declarative" || fact.Source == "memory:retrieval") {
 			found = true
 			break
 		}
@@ -1073,7 +1089,7 @@ func TestBlackboardAgent_ExecuteHydratesFromRuntimeMemoryRetrieval(t *testing.T)
 	}
 	found = false
 	for _, hypothesis := range hypotheses {
-		if hypothesis.ID == "memory:routine:routine-1" {
+		if hypothesis.ID == "memory:routine:routine-1" || strings.HasPrefix(hypothesis.ID, "memory:routine:chunk:") {
 			found = true
 			break
 		}
@@ -1082,6 +1098,7 @@ func TestBlackboardAgent_ExecuteHydratesFromRuntimeMemoryRetrieval(t *testing.T)
 		t.Fatalf("expected retrieved routine hypothesis in blackboard state: %#v", hypotheses)
 	}
 }
+
 
 func TestBlackboardAgent_ExecutePersistsStructuredMemory(t *testing.T) {
 	store, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
@@ -1473,8 +1490,8 @@ type recordingKS struct {
 	exec        func(*blackboard.Blackboard) error
 }
 
-func (r *recordingKS) Name() string { return r.name }
-func (r *recordingKS) Priority() int { return r.priority }
+func (r *recordingKS) Name() string                               { return r.name }
+func (r *recordingKS) Priority() int                              { return r.priority }
 func (r *recordingKS) CanActivate(bb *blackboard.Blackboard) bool { return r.canActivate(bb) }
 func (r *recordingKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
 	return r.exec(bb)
@@ -1486,8 +1503,8 @@ type checkpointResumeKS struct {
 	cancel   context.CancelFunc
 }
 
-func (k *checkpointResumeKS) Name() string     { return k.name }
-func (k *checkpointResumeKS) Priority() int    { return k.priority }
+func (k *checkpointResumeKS) Name() string                              { return k.name }
+func (k *checkpointResumeKS) Priority() int                             { return k.priority }
 func (k *checkpointResumeKS) CanActivate(_ *blackboard.Blackboard) bool { return true }
 func (k *checkpointResumeKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
 	hasResumeFact := false

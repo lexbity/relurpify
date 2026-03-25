@@ -74,10 +74,7 @@ func TestOperatorMetrics_SuccessRateOrDefault(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.metrics.SuccessRate
-			if got == 0 && tt.defaultRate > 0 {
-				got = tt.defaultRate
-			}
+			got := tt.metrics.SuccessRateOrDefault(tt.defaultRate)
 			if got != tt.expected {
 				t.Errorf("expected %.2f, got %.2f", tt.expected, got)
 			}
@@ -107,7 +104,7 @@ func TestOperatorMetricsCollection_Snapshot(t *testing.T) {
 	collection := make(audit.OperatorMetricsCollection)
 	m1 := collection.GetOrCreateMetrics("op1")
 	m1.RecordExecution(true, 50*time.Millisecond)
-	m1.RecordExecution(true, 100*time.Millisecond)
+	m1.RecordExecution(false, 100*time.Millisecond)
 
 	m2 := collection.GetOrCreateMetrics("op2")
 	m2.RecordExecution(true, 75*time.Millisecond)

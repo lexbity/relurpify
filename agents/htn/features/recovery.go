@@ -240,8 +240,8 @@ func (s *HintBasedVerificationStrategy) Name() string {
 
 func (s *HintBasedVerificationStrategy) Verify(ctx context.Context, state *core.Context, vctx *VerificationContext) (bool, []string) {
 	if vctx.Hint == nil || len(vctx.Hint.Criteria) == 0 {
-		// No hint, assume success
-		return true, nil
+		// No hint — defer to next strategy.
+		return false, nil
 	}
 
 	var issues []string

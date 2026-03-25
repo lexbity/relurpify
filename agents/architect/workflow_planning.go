@@ -21,10 +21,12 @@ import (
 // WorkflowPlanningResult captures the durable outputs of the planning phase so
 // architect execution can reuse them without rebuilding ad hoc state.
 type WorkflowPlanningResult struct {
-	PlanRecord        memory.WorkflowPlanRecord
-	PlannerOutput     map[string]any
-	PlanAdjustments   []string
-	SelectedCandidate string
+	PlanRecord           memory.WorkflowPlanRecord
+	PlannerOutput        map[string]any
+	PlannerOutputRef     *core.ArtifactReference
+	PlanAdjustments      []string
+	SelectedCandidate    string
+	SelectedCandidateRef *core.ArtifactReference
 }
 
 // WorkflowPlanningService runs the planning phase and persists workflow-scoped
@@ -124,6 +126,7 @@ func (s *WorkflowPlanningService) PlanAndPersist(ctx context.Context, task *core
 	if err := s.persistPlanningArtifacts(ctx, store, workflowID, runID, result); err != nil {
 		return nil, err
 	}
+	s.applyPlanningState(state, result)
 	if err := s.persistPlanningKnowledge(ctx, store, workflowID, result); err != nil {
 		return nil, err
 	}
@@ -142,11 +145,17 @@ func (s *WorkflowPlanningService) applyPlanningState(state *core.Context, result
 	if result.SelectedCandidate != "" {
 		state.Set("architect.selected_candidate", result.SelectedCandidate)
 	}
-	if result.PlannerOutput != nil {
-		state.Set("architect.plan_result", result.PlannerOutput)
+	if result.PlannerOutputRef != nil {
+		state.Set("architect.plan_result_ref", *result.PlannerOutputRef)
+	}
+	if value := plannerOutputStateValue(result); value != nil {
+		state.Set("architect.plan_result", value)
 	}
 	if len(result.PlanAdjustments) > 0 {
 		state.Set("planner.plan_adjustments", append([]string{}, result.PlanAdjustments...))
+	}
+	if result.SelectedCandidateRef != nil {
+		state.Set("architect.selected_candidate_ref", *result.SelectedCandidateRef)
 	}
 }
 
@@ -157,7 +166,7 @@ func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, 
 	}
 	if result.PlannerOutput != nil {
 		payload := mustJSONForArchitect(result.PlannerOutput)
-		if err := store.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
+		record := memory.WorkflowArtifactRecord{
 			ArtifactID:        architectRecordID("planner_artifact"),
 			WorkflowID:        workflowID,
 			RunID:             runID,
@@ -170,15 +179,18 @@ func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, 
 			RawSizeBytes:      int64(len(payload)),
 			CompressionMethod: "none",
 			CreatedAt:         now,
-		}); err != nil {
+		}
+		if err := store.UpsertWorkflowArtifact(ctx, record); err != nil {
 			return err
 		}
+		ref := workflowutil.WorkflowArtifactReference(record)
+		result.PlannerOutputRef = &ref
 	}
 	if strings.TrimSpace(result.SelectedCandidate) != "" {
 		payload := mustJSONForArchitect(map[string]any{
 			"selected_candidate": result.SelectedCandidate,
 		})
-		if err := store.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
+		record := memory.WorkflowArtifactRecord{
 			ArtifactID:        architectRecordID("candidate_artifact"),
 			WorkflowID:        workflowID,
 			RunID:             runID,
@@ -190,9 +202,12 @@ func (s *WorkflowPlanningService) persistPlanningArtifacts(ctx context.Context, 
 			RawSizeBytes:      int64(len(payload)),
 			CompressionMethod: "none",
 			CreatedAt:         now,
-		}); err != nil {
+		}
+		if err := store.UpsertWorkflowArtifact(ctx, record); err != nil {
 			return err
 		}
+		ref := workflowutil.WorkflowArtifactReference(record)
+		result.SelectedCandidateRef = &ref
 	}
 	return store.AppendEvent(ctx, memory.WorkflowEventRecord{
 		EventID:    architectRecordID("plan_created"),
@@ -323,12 +338,45 @@ func plannerOutputFromState(state *core.Context, result *core.Result, plan core.
 		if summary := state.GetString("planner.summary"); strings.TrimSpace(summary) != "" {
 			out["summary"] = summary
 		}
-		if rawResults, ok := state.Get("planner.results"); ok {
-			out["results"] = rawResults
+		if _, exists := out["results"]; !exists {
+			if rawResults, ok := state.Get("planner.results"); ok {
+				out["results"] = rawResults
+			}
 		}
-		if skipped, ok := state.Get("planner.skipped_tools"); ok {
-			out["skipped_tools"] = skipped
+		if _, exists := out["skipped_tools"]; !exists {
+			if skipped, ok := state.Get("planner.skipped_tools"); ok {
+				out["skipped_tools"] = skipped
+			}
 		}
 	}
 	return out
+}
+
+func plannerOutputStateValue(result *WorkflowPlanningResult) map[string]any {
+	if result == nil {
+		return nil
+	}
+	if result.PlannerOutputRef == nil {
+		if result.PlannerOutput == nil {
+			return nil
+		}
+		return result.PlannerOutput
+	}
+	return compactPlannerOutputState(result.PlanRecord.Plan, result.PlannerOutput, result.PlanAdjustments)
+}
+
+func compactPlannerOutputState(plan core.Plan, plannerOutput map[string]any, adjustments []string) map[string]any {
+	summary := ""
+	if plannerOutput != nil {
+		summary = strings.TrimSpace(fmt.Sprint(plannerOutput["summary"]))
+	}
+	value := map[string]any{
+		"summary":         summary,
+		"plan_step_count": len(plan.Steps),
+		"file_count":      len(plan.Files),
+	}
+	if len(adjustments) > 0 {
+		value["adjustments"] = append([]string{}, adjustments...)
+	}
+	return value
 }

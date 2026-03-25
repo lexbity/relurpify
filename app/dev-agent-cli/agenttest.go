@@ -177,7 +177,7 @@ func newAgentTestRunCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&sandbox, "sandbox", false, "Run tool execution via gVisor/docker (requires runsc + docker)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
 	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout for agent/runtime setup before execution")
-	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", false, "Test-only fast path: skip AST/bootstrap indexing during agenttest setup")
+	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Default true for live agenttests: skip AST/bootstrap indexing during setup; use --skip-ast-index=false for dedicated AST-enabled end-to-end runs")
 	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case for Ollama reset/retry handling; use -1 to disable retries")
 	cmd.Flags().StringVar(&model, "model", "", "Override model name for all cases")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Override Ollama endpoint for all cases")
@@ -296,7 +296,7 @@ func newAgentTestRefreshCmd() *cobra.Command {
 	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts")
 	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
 	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout")
-	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", false, "Skip AST/bootstrap indexing during setup")
+	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Default true for live agenttests: skip AST/bootstrap indexing during setup; use --skip-ast-index=false for dedicated AST-enabled end-to-end runs")
 	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case")
 	return cmd
 }

@@ -6,11 +6,11 @@ import (
 
 // OperatorSpec describes a resolved primitive step derived from a SubtaskSpec.
 type OperatorSpec struct {
-	Name             string
-	TaskType         core.TaskType
-	Instruction      string
-	Executor         string
-	DependsOn        []string
+	Name                 string
+	TaskType             core.TaskType
+	Instruction          string
+	Executor             string
+	DependsOn            []string
 	RequiredCapabilities []core.CapabilitySelector
 }
 
@@ -37,11 +37,11 @@ func ResolveMethod(method Method) ResolvedMethod {
 	resolved := ResolvedMethod{
 		Method: &method,
 		Spec: MethodSpec{
-			Name:         method.Name,
-			TaskType:     method.TaskType,
-			Priority:     method.Priority,
+			Name:          method.Name,
+			TaskType:      method.TaskType,
+			Priority:      method.Priority,
 			OperatorCount: len(method.Subtasks),
-			SubtaskCount: len(method.Subtasks),
+			SubtaskCount:  len(method.Subtasks),
 		},
 	}
 
@@ -50,15 +50,22 @@ func ResolveMethod(method Method) ResolvedMethod {
 		if executor == "" {
 			executor = ExecutorReact
 		}
+		required := []core.CapabilitySelector{{
+			Kind: core.CapabilityKindTool,
+			Name: capabilityTargetForOperator(executor),
+		}}
 		op := OperatorSpec{
-			Name:        subtask.Name,
-			TaskType:    subtask.Type,
-			Instruction: subtask.Instruction,
-			Executor:    executor,
-			DependsOn:   subtask.DependsOn,
+			Name:                 subtask.Name,
+			TaskType:             subtask.Type,
+			Instruction:          subtask.Instruction,
+			Executor:             executor,
+			DependsOn:            subtask.DependsOn,
+			RequiredCapabilities: required,
 		}
 		resolved.Operators = append(resolved.Operators, op)
+		resolved.Spec.RequiredCapabilities = append(resolved.Spec.RequiredCapabilities, required...)
 	}
+	resolved.Spec.RequiredCapabilities = dedupeSelectors(resolved.Spec.RequiredCapabilities)
 
 	return resolved
 }

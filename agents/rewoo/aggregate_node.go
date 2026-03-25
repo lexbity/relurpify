@@ -36,9 +36,16 @@ func (n *AggregateNode) Type() graph.NodeType {
 
 // Execute aggregates all step results from state.
 func (n *AggregateNode) Execute(ctx context.Context, state *core.Context) (*core.Result, error) {
-	if n.Plan == nil {
+	plan := n.Plan
+	if plan == nil {
+		if v, ok := state.Get("rewoo.plan"); ok {
+			plan, _ = v.(*RewooPlan)
+		}
+	}
+	if plan == nil {
 		return nil, fmt.Errorf("aggregate_node: plan unavailable")
 	}
+	n.Plan = plan
 
 	// Collect results in plan order
 	results := make([]RewooStepResult, 0, len(n.Plan.Steps))

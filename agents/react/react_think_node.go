@@ -171,6 +171,8 @@ func filterToolCalls(calls []core.ToolCall) []core.ToolCall {
 type contextFilePayload struct {
 	Path      string
 	Content   string
+	Summary   string
+	Reference *core.ContextReference
 	Truncated bool
 }
 
@@ -185,26 +187,23 @@ func renderContextFiles(task *core.Task, maxBytes int) string {
 	var b strings.Builder
 	remaining := maxBytes
 	for _, file := range files {
-		if file.Path == "" || file.Content == "" {
+		if file.Path == "" {
 			continue
 		}
-		header := fmt.Sprintf("File: %s\n", file.Path)
-		if remaining <= len(header) {
+		entry := renderContextFileEntry(file, remaining)
+		if entry == "" {
+			continue
+		}
+		if len(entry) > remaining {
+			entry = entry[:remaining]
+		}
+		if len(entry) == 0 {
 			break
 		}
-		b.WriteString(header)
-		remaining -= len(header)
-		content := file.Content
-		if len(content) > remaining {
-			content = content[:remaining]
-		}
-		b.WriteString("```")
-		b.WriteString("\n")
-		b.WriteString(content)
-		if !strings.HasSuffix(content, "\n") {
+		b.WriteString(entry)
+		if !strings.HasSuffix(entry, "\n") {
 			b.WriteString("\n")
 		}
-		b.WriteString("```\n")
 		remaining = maxBytes - b.Len()
 		if remaining <= 0 {
 			break
@@ -228,6 +227,8 @@ func extractContextFiles(task *core.Task) []contextFilePayload {
 			out = append(out, contextFilePayload{
 				Path:      file.Path,
 				Content:   file.Content,
+				Summary:   file.Summary,
+				Reference: file.Reference,
 				Truncated: file.Truncated,
 			})
 		}
@@ -241,10 +242,23 @@ func extractContextFiles(task *core.Task) []contextFilePayload {
 			}
 			path, _ := m["path"].(string)
 			content, _ := m["content"].(string)
+			summary, _ := m["summary"].(string)
 			truncated, _ := m["truncated"].(bool)
+			var reference *core.ContextReference
+			if rawRef, ok := m["reference"].(map[string]interface{}); ok {
+				reference = &core.ContextReference{
+					Kind:    core.ContextReferenceKind(strings.TrimSpace(fmt.Sprint(rawRef["kind"]))),
+					ID:      strings.TrimSpace(fmt.Sprint(rawRef["id"])),
+					URI:     strings.TrimSpace(fmt.Sprint(rawRef["uri"])),
+					Version: strings.TrimSpace(fmt.Sprint(rawRef["version"])),
+					Detail:  strings.TrimSpace(fmt.Sprint(rawRef["detail"])),
+				}
+			}
 			out = append(out, contextFilePayload{
 				Path:      path,
 				Content:   content,
+				Summary:   summary,
+				Reference: reference,
 				Truncated: truncated,
 			})
 		}
@@ -252,6 +266,35 @@ func extractContextFiles(task *core.Task) []contextFilePayload {
 	default:
 		return nil
 	}
+}
+
+func renderContextFileEntry(file contextFilePayload, maxBytes int) string {
+	if maxBytes <= 0 || file.Path == "" {
+		return ""
+	}
+	header := fmt.Sprintf("File: %s", file.Path)
+	if file.Reference != nil && strings.TrimSpace(file.Reference.Detail) != "" {
+		header += fmt.Sprintf(" [detail=%s]", strings.TrimSpace(file.Reference.Detail))
+	}
+	header += "\n"
+	remaining := maxBytes - len(header)
+	if remaining <= 0 {
+		return ""
+	}
+	body := strings.TrimSpace(file.Content)
+	if body == "" {
+		body = strings.TrimSpace(file.Summary)
+	}
+	if body == "" {
+		body = "reference only"
+	}
+	if len(body) > remaining {
+		body = body[:remaining]
+	}
+	if file.Content != "" {
+		return header + "```\n" + body + "\n```\n"
+	}
+	return header + body
 }
 
 // streamCallback extracts a stream callback from the task context, if present.

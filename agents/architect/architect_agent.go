@@ -155,8 +155,9 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 	state.Set("architect.completed_steps", []string{})
 	state.Set("plan.completed_steps", []string{})
 	state.Set("architect.last_step_summary", "")
-	if planResult != nil && planResult.Data != nil {
-		state.Set("architect.plan_result", planResult.Data)
+	plannerResultData := plannerOutputFromState(state, planResult, plan, nil)
+	if plannerResultData != nil {
+		state.Set("architect.plan_result", compactPlannerOutputState(plan, plannerResultData, nil))
 	}
 	executor := graph.PlanExecutor{
 		Options: graph.PlanExecutionOptions{
@@ -165,8 +166,8 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 			CompletedStepIDs: func(state *core.Context) []string {
 				return core.StringSliceFromContext(state, "architect.completed_steps")
 			},
-			Diagnose:            a.diagnoseStepFailure,
-			Recover:             a.recoverStepFailure,
+			Diagnose: a.diagnoseStepFailure,
+			Recover:  a.recoverStepFailure,
 			BeforeStep: func(step core.PlanStep, stepTask *core.Task, state *core.Context) {
 				state.Set("architect.current_step", step)
 				state.Set("architect.current_step_id", step.ID)
@@ -191,15 +192,26 @@ func (a *ArchitectAgent) executeLegacyPlan(ctx context.Context, task *core.Task,
 	}
 	verifySummary := fmt.Sprintf("Planned %d steps and executed %d steps.", len(plan.Steps), len(core.StringSliceFromContext(state, "architect.completed_steps")))
 	state.Set("architect.summary", verifySummary)
+	clearArchitectActiveStepState(state)
 	if execResult.Data == nil {
 		execResult.Data = map[string]any{}
 	}
 	execResult.Data["plan"] = plan
-	if raw, ok := state.Get("architect.plan_result"); ok {
+	if plannerResultData != nil {
+		execResult.Data["planner"] = plannerResultData
+	} else if raw, ok := state.Get("architect.plan_result"); ok {
 		execResult.Data["planner"] = raw
 	}
 	execResult.Data["summary"] = verifySummary
 	return execResult, nil
+}
+
+func clearArchitectActiveStepState(state *core.Context) {
+	if state == nil {
+		return
+	}
+	state.Set("architect.current_step", map[string]any{})
+	state.Set("architect.current_step_id", "")
 }
 
 func (a *ArchitectAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task {
@@ -527,7 +539,7 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 		CreatedAt:  finishedAt,
 	})
 	artifactPayload := mustJSONForArchitect(resultData(result, errorText))
-	_ = store.UpsertArtifact(ctx, memory.StepArtifactRecord{
+	stepArtifact := memory.StepArtifactRecord{
 		ArtifactID:        architectRecordID("step_artifact"),
 		WorkflowID:        workflowID,
 		StepRunID:         stepRunID,
@@ -539,7 +551,10 @@ func (a *ArchitectAgent) executeWorkflowStep(ctx context.Context, task *core.Tas
 		RawSizeBytes:      int64(len(artifactPayload)),
 		CompressionMethod: "none",
 		CreatedAt:         finishedAt,
-	})
+	}
+	_ = store.UpsertArtifact(ctx, stepArtifact)
+	state.Set("architect.last_step_result_ref", workflowutil.StepArtifactReference(stepArtifact))
+	state.Set("architect.last_step_result_summary", summary)
 	a.persistStepSecurityEvents(ctx, store, workflowID, runID, step.StepID, stepState, result, finishedAt)
 	a.persistStepKnowledge(ctx, store, workflowID, stepRunID, step.StepID, summary, status, stepTask, result, errorText, finishedAt)
 	if status != memory.StepStatusCompleted {

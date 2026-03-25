@@ -51,7 +51,10 @@ func (ml *MethodLibrary) Find(task *core.Task) *Method {
 	if len(candidates) == 0 {
 		return nil
 	}
-	sort.Slice(candidates, func(i, j int) bool {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Priority == candidates[j].Priority {
+			return candidates[i].Name < candidates[j].Name
+		}
 		return candidates[i].Priority > candidates[j].Priority
 	})
 	result := candidates[0]
@@ -83,7 +86,10 @@ func (ml *MethodLibrary) FindAll(task *core.Task) []Method {
 	if len(candidates) == 0 {
 		return nil
 	}
-	sort.Slice(candidates, func(i, j int) bool {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].Priority == candidates[j].Priority {
+			return candidates[i].Name < candidates[j].Name
+		}
 		return candidates[i].Priority > candidates[j].Priority
 	})
 	return candidates

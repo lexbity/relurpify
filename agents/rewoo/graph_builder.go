@@ -122,19 +122,10 @@ func buildStaticGraphWithCheckpoints(
 	}
 
 	// Phase 7: Create checkpoint nodes if checkpoint store is available
-	var checkpointPostPlanID string = "rewoo_plan"
 	var checkpointPostExecuteID string = "rewoo_aggregate"
 	var checkpointPostSynthesisID string = "rewoo_done"
 
 	if checkpointStore != nil {
-		// Checkpoint after planning
-		cpPostPlan := NewCheckpointNode("rewoo_checkpoint_post_plan", "plan", checkpointStore)
-		cpPostPlan.Debugf = debugf
-		if err := g.AddNode(cpPostPlan); err != nil {
-			return nil, fmt.Errorf("graph_builder: add checkpoint post-plan failed: %w", err)
-		}
-		checkpointPostPlanID = "rewoo_checkpoint_post_plan"
-
 		// Checkpoint after execution
 		cpPostExec := NewCheckpointNode("rewoo_checkpoint_post_execute", "execute", checkpointStore)
 		cpPostExec.Debugf = debugf
@@ -152,17 +143,10 @@ func buildStaticGraphWithCheckpoints(
 		checkpointPostSynthesisID = "rewoo_checkpoint_post_synthesis"
 	}
 
-	// Wire edges: plan → checkpoint → aggregate (step nodes will be inserted between these dynamically)
-	// Phase 6: MaterializePlanGraph (called by PlanNode) will insert nodes and wires between plan and aggregate
-	if err := g.AddEdge("rewoo_plan", checkpointPostPlanID, nil, false); err != nil {
-		return nil, fmt.Errorf("graph_builder: add plan→checkpoint edge failed: %w", err)
-	}
-
-	if checkpointPostPlanID != "rewoo_aggregate" {
-		if err := g.AddEdge(checkpointPostPlanID, "rewoo_aggregate", nil, false); err != nil {
-			return nil, fmt.Errorf("graph_builder: add checkpoint→aggregate edge failed: %w", err)
-		}
-	}
+	// NOTE: We intentionally do NOT wire plan → aggregate (or plan → checkpoint)
+	// here. MaterializePlanGraph (called by PlanNode during execution) handles
+	// all outgoing edges from plan dynamically: plan → step nodes → aggregate
+	// when there are steps, or plan → aggregate when the plan is empty.
 
 	// Wire edges: checkpoint → replan (or aggregate → replan if no checkpoint)
 	if err := g.AddEdge(checkpointPostExecuteID, "rewoo_replan", nil, false); err != nil {

@@ -6,32 +6,39 @@ import (
 )
 
 const (
-	contextKeyTask               = "htn.task"
-	contextKeyTaskType           = "htn.task_type"
-	contextKeySelectedMethod     = "htn.selected_method"
-	contextKeyPlan               = "htn.plan"
-	contextKeyExecution          = "htn.execution"
-	contextKeyCompletedSteps     = "htn.execution.completed_steps"
-	contextKeyState              = "htn.state"
-	contextKeyStateError         = "htn.state_error"
-	contextKeyMetrics            = "htn.metrics"
-	contextKeyTermination        = "htn.termination"
-	contextKeyWorkflowRetrieval  = "htn.workflow_retrieval"
-	contextKeyRetrievalApplied   = "htn.retrieval_applied"
-	contextKeyResumeCheckpointID = "htn.resume_checkpoint_id"
-	contextKeyPreflightReport    = "htn.preflight.report"
-	contextKeyPreflightError     = "htn.preflight.error"
-	contextKeyCheckpoint         = "htn.checkpoint"
-	contextKeyLastRecoveryNotes  = "htn.last_recovery_notes"
-	contextKeyLastRecoveryDiag   = "htn.last_recovery_diagnosis"
-	contextKeyLastFailureStep    = "htn.last_failed_step"
-	contextKeyLastFailureError   = "htn.last_failure_error"
-	contextKnowledgeSummary      = "htn.summary"
-	contextKnowledgeTaskType     = "htn.task_type"
-	contextKnowledgeMethod       = "htn.selected_method"
-	contextKnowledgeTermination  = "htn.termination"
-	legacyPlanCompletedStepsKey  = "plan.completed_steps"
-	htnSchemaVersion             = 1
+	contextKeyTask                     = "htn.task"
+	contextKeyTaskType                 = "htn.task_type"
+	contextKeySelectedMethod           = "htn.selected_method"
+	contextKeyPlan                     = "htn.plan"
+	contextKeyExecution                = "htn.execution"
+	contextKeyCompletedSteps           = "htn.execution.completed_steps"
+	contextKeyState                    = "htn.state"
+	contextKeyStateError               = "htn.state_error"
+	contextKeyMetrics                  = "htn.metrics"
+	contextKeyTermination              = "htn.termination"
+	contextKeyWorkflowRetrieval        = "htn.workflow_retrieval"
+	contextKeyWorkflowRetrievalPayload = "htn.workflow_retrieval_payload"
+	contextKeyRetrievalApplied         = "htn.retrieval_applied"
+	contextKeyResumeCheckpointID       = "htn.resume_checkpoint_id"
+	contextKeyPreflightReport          = "htn.preflight.report"
+	contextKeyPreflightError           = "htn.preflight.error"
+	contextKeyCheckpoint               = "htn.checkpoint"
+	contextKeyCheckpointRef            = "htn.checkpoint_ref"
+	contextKeyCheckpointSummary        = "htn.checkpoint_summary"
+	contextKeyRunSummaryRef            = "htn.run_summary_ref"
+	contextKeyRunSummarySummary        = "htn.run_summary_summary"
+	contextKeyExecutionMetricsRef      = "htn.execution_metrics_ref"
+	contextKeyExecutionMetricsSummary  = "htn.execution_metrics_summary"
+	contextKeyLastRecoveryNotes        = "htn.last_recovery_notes"
+	contextKeyLastRecoveryDiag         = "htn.last_recovery_diagnosis"
+	contextKeyLastFailureStep          = "htn.last_failed_step"
+	contextKeyLastFailureError         = "htn.last_failure_error"
+	contextKnowledgeSummary            = "htn.summary"
+	contextKnowledgeTaskType           = "htn.task_type"
+	contextKnowledgeMethod             = "htn.selected_method"
+	contextKnowledgeTermination        = "htn.termination"
+	legacyPlanCompletedStepsKey        = "plan.completed_steps"
+	htnSchemaVersion                   = 1
 )
 
 // TaskState summarizes the active HTN task in a durable, serializable form.
@@ -81,14 +88,14 @@ type PreflightState struct {
 // CheckpointState captures the HTN-owned checkpoint payload persisted inside
 // the broader workflow checkpoint context.
 type CheckpointState struct {
-	SchemaVersion int       `json:"schema_version"`
-	CheckpointID  string    `json:"checkpoint_id,omitempty"`
-	StageName     string    `json:"stage_name,omitempty"`
-	StageIndex    int       `json:"stage_index,omitempty"`
-	WorkflowID    string    `json:"workflow_id,omitempty"`
-	RunID         string    `json:"run_id,omitempty"`
-	CompletedSteps []string `json:"completed_steps,omitempty"`
-	Snapshot      *HTNState `json:"snapshot,omitempty"`
+	SchemaVersion  int       `json:"schema_version"`
+	CheckpointID   string    `json:"checkpoint_id,omitempty"`
+	StageName      string    `json:"stage_name,omitempty"`
+	StageIndex     int       `json:"stage_index,omitempty"`
+	WorkflowID     string    `json:"workflow_id,omitempty"`
+	RunID          string    `json:"run_id,omitempty"`
+	CompletedSteps []string  `json:"completed_steps,omitempty"`
+	Snapshot       *HTNState `json:"snapshot,omitempty"`
 }
 
 // HTNState is the canonical typed snapshot of HTN runtime state persisted in

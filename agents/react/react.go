@@ -47,10 +47,11 @@ type ReActAgent struct {
 	maxIterations  int
 	contextPolicy  *contextmgr.ContextPolicy
 
-	Mode            string
-	ModeProfile     ModeRuntimeProfile
-	sharedContext   *core.SharedContext
-	initialLoadDone bool
+	Mode             string
+	ModeProfile      ModeRuntimeProfile
+	sharedContext    *core.SharedContext
+	initialLoadDone  bool
+	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
 }
 
 const (
@@ -149,8 +150,13 @@ func (a *ReActAgent) debugf(format string, args ...interface{}) {
 
 // Execute runs the task through the workflow graph.
 func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	a.executionCatalog = nil
+	if a.Tools != nil {
+		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
+	}
 	g, err := a.BuildGraph(task)
 	if err != nil {
+		a.executionCatalog = nil
 		return nil, err
 	}
 	a.initialLoadDone = false
@@ -165,6 +171,7 @@ func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 	defer func() {
 		a.sharedContext = nil
 		a.initialLoadDone = false
+		a.executionCatalog = nil
 	}()
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
 		g.SetTelemetry(cfg.Telemetry)
@@ -209,6 +216,12 @@ func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 				result.Data["text"] = summary
 			}
 		}
+		mirrorReactFinalOutputReference(state)
+		compactReactFinalOutputState(state)
+		compactReactLastToolResultState(state)
+		compactReactToolObservationsState(state)
+		compactReactLoopState(state)
+		mirrorReactCheckpointReference(state)
 		if reason := strings.TrimSpace(state.GetString("react.incomplete_reason")); reason != "" {
 			result.Success = false
 			result.Error = fmt.Errorf("%s", reason)
@@ -219,6 +232,173 @@ func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 		}
 	}
 	return result, err
+}
+
+func mirrorReactFinalOutputReference(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get("react.final_output"); !ok {
+		return
+	}
+	if rawRef, ok := state.Get("graph.summary_ref"); ok {
+		if ref, ok := rawRef.(core.ArtifactReference); ok {
+			state.Set("react.final_output_ref", ref)
+		}
+	}
+	if summary := strings.TrimSpace(state.GetString("graph.summary")); summary != "" {
+		state.Set("react.final_output_summary", summary)
+	}
+}
+
+func mirrorReactCheckpointReference(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if rawRef, ok := state.Get("graph.checkpoint_ref"); ok {
+		if ref, ok := rawRef.(core.ArtifactReference); ok {
+			state.Set("react.checkpoint_ref", ref)
+		}
+	}
+}
+
+func compactReactFinalOutputState(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get("react.final_output_ref"); !ok {
+		return
+	}
+	raw, ok := state.Get("react.final_output")
+	if !ok {
+		return
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok {
+		return
+	}
+	summary := strings.TrimSpace(fmt.Sprint(payload["summary"]))
+	if summary == "" || summary == "<nil>" {
+		return
+	}
+	state.Set("react.final_output", map[string]any{
+		"summary": summary,
+	})
+}
+
+func compactReactToolObservationsState(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get("react.final_output_ref"); !ok {
+		return
+	}
+	raw, ok := state.Get("react.tool_observations")
+	if !ok {
+		return
+	}
+	observations, ok := raw.([]ToolObservation)
+	if !ok {
+		return
+	}
+	state.Set("react.tool_observations", compactReactToolObservations(observations))
+}
+
+func compactReactToolObservations(observations []ToolObservation) map[string]any {
+	value := map[string]any{
+		"observation_count": len(observations),
+	}
+	if len(observations) == 0 {
+		return value
+	}
+	last := observations[len(observations)-1]
+	value["last_tool"] = last.Tool
+	value["last_success"] = last.Success
+	if len(observations) > 0 {
+		recent := make([]string, 0, len(observations))
+		for _, observation := range observations {
+			tool := strings.TrimSpace(observation.Tool)
+			if tool == "" {
+				continue
+			}
+			recent = append(recent, tool)
+			if len(recent) == 3 {
+				break
+			}
+		}
+		if len(recent) > 0 {
+			value["recent_tools"] = recent
+		}
+	}
+	return value
+}
+
+func compactReactLastToolResultState(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get("react.final_output_ref"); !ok {
+		return
+	}
+	raw, ok := state.Get("react.last_tool_result")
+	if !ok {
+		return
+	}
+	payload, ok := raw.(map[string]interface{})
+	if !ok {
+		return
+	}
+	state.Set("react.last_tool_result", compactReactLastToolResult(payload))
+}
+
+func compactReactLastToolResult(payload map[string]interface{}) map[string]any {
+	keys := make([]string, 0, len(payload))
+	for key := range payload {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	value := map[string]any{
+		"key_count": len(keys),
+		"keys":      keys,
+	}
+	if errText := strings.TrimSpace(fmt.Sprint(payload["error"])); errText != "" && errText != "<nil>" {
+		value["error"] = errText
+	}
+	if success, ok := payload["success"].(bool); ok {
+		value["success"] = success
+	}
+	return value
+}
+
+func compactReactLoopState(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get("react.final_output_ref"); !ok {
+		return
+	}
+	if raw, ok := state.Get("react.decision"); ok && raw != nil {
+		state.Set("react.decision", map[string]any{"present": true})
+	}
+	if raw, ok := state.Get("react.tool_calls"); ok {
+		switch calls := raw.(type) {
+		case []core.ToolCall:
+			state.Set("react.tool_calls", map[string]any{"count": len(calls)})
+		case []any:
+			state.Set("react.tool_calls", map[string]any{"count": len(calls)})
+		}
+	}
+	if _, ok := state.Get("react.last_tool_result_envelope"); ok {
+		state.Set("react.last_tool_result_envelope", map[string]any{"present": true})
+	}
+	if raw, ok := state.Get("react.last_tool_result_envelopes"); ok {
+		switch envelopes := raw.(type) {
+		case []*core.CapabilityResultEnvelope:
+			state.Set("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)})
+		case []any:
+			state.Set("react.last_tool_result_envelopes", map[string]any{"count": len(envelopes)})
+		}
+	}
 }
 
 func (a *ReActAgent) completeExplicitReadOnlyRetrieval(ctx context.Context, task *core.Task, state *core.Context) error {
@@ -343,8 +523,8 @@ func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		checkpoint.Telemetry = telemetryForConfig(a.Config)
 	}
 	g := graph.NewGraph()
-	if a.Tools != nil && len(a.Tools.InspectableCapabilities()) > 0 {
-		g.SetCapabilityCatalog(a.Tools)
+	if catalog := a.executionCapabilityCatalog(); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
+		g.SetCapabilityCatalog(catalog)
 	}
 	if reactUsesDeclarativeRetrieval(a.Config) && a.Memory != nil {
 		retrieve := graph.NewRetrieveDeclarativeMemoryNode("react_retrieve_declarative", scopedMemoryRetriever{
@@ -488,7 +668,9 @@ func (a *ReActAgent) enforceBudget(state *core.Context) {
 		return
 	}
 	var tools []core.Tool
-	if a.Tools != nil {
+	if catalog := a.executionCapabilityCatalog(); catalog != nil {
+		tools = catalog.ModelCallableTools()
+	} else if a.Tools != nil {
 		tools = a.Tools.ModelCallableTools()
 	}
 	a.contextPolicy.EnforceBudget(state, a.sharedContext, a.Model, tools, a.debugf)
@@ -538,7 +720,8 @@ func (a *ReActAgent) initializePhase(state *core.Context, task *core.Task) {
 }
 
 func (a *ReActAgent) availableToolsForPhase(state *core.Context, task *core.Task) []core.Tool {
-	if a.Tools == nil {
+	catalog := a.executionCapabilityCatalog()
+	if catalog == nil && a.Tools == nil {
 		return nil
 	}
 	phase := contextmgrPhaseExplore
@@ -548,7 +731,8 @@ func (a *ReActAgent) availableToolsForPhase(state *core.Context, task *core.Task
 		}
 	}
 	var filtered []core.Tool
-	for _, tool := range a.Tools.ModelCallableTools() {
+	tools := executionCallableTools(a.Tools, catalog)
+	for _, tool := range tools {
 		if toolAllowedForPhase(tool, phase, task) || a.recoveryToolAllowed(state, task, tool.Name()) {
 			if !a.toolAllowedBySkillConfig(task, phase, tool.Name()) {
 				continue
@@ -561,6 +745,51 @@ func (a *ReActAgent) availableToolsForPhase(state *core.Context, task *core.Task
 	}
 	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Name() < filtered[j].Name() })
 	return filtered
+}
+
+func (a *ReActAgent) executionCapabilityCatalog() *capability.ExecutionCapabilityCatalogSnapshot {
+	if a == nil {
+		return nil
+	}
+	if a.executionCatalog != nil {
+		return a.executionCatalog
+	}
+	if a.Tools == nil {
+		return nil
+	}
+	return a.Tools.CaptureExecutionCatalogSnapshot()
+}
+
+func (a *ReActAgent) executionPolicySnapshot() *core.PolicySnapshot {
+	if catalog := a.executionCapabilityCatalog(); catalog != nil {
+		return catalog.PolicySnapshot()
+	}
+	if a == nil || a.Tools == nil {
+		return nil
+	}
+	return a.Tools.CapturePolicySnapshot()
+}
+
+func (a *ReActAgent) executionCapabilityDescriptor(idOrName string) (core.CapabilityDescriptor, bool) {
+	if catalog := a.executionCapabilityCatalog(); catalog != nil {
+		if entry, ok := catalog.GetCapability(idOrName); ok {
+			return entry.Descriptor, true
+		}
+	}
+	if a == nil || a.Tools == nil {
+		return core.CapabilityDescriptor{}, false
+	}
+	return a.Tools.GetCapability(idOrName)
+}
+
+func executionCallableTools(registry *capability.Registry, catalog *capability.ExecutionCapabilityCatalogSnapshot) []core.Tool {
+	if catalog != nil {
+		return catalog.ModelCallableTools()
+	}
+	if registry == nil {
+		return nil
+	}
+	return registry.ModelCallableTools()
 }
 
 func (a *ReActAgent) toolAllowedByExecutionContext(state *core.Context, task *core.Task, phase string, tool core.Tool) bool {

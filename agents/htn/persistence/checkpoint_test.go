@@ -1,11 +1,15 @@
 package persistence
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/htn/runtime"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 func TestCheckpointPersistenceEncodeAndDecode(t *testing.T) {
@@ -43,13 +47,13 @@ func TestCheckpointPersistenceEncodeAndDecode(t *testing.T) {
 			},
 		},
 		Execution: runtime.ExecutionState{
-			WorkflowID:        "wf_001",
-			RunID:             "run_001",
-			CompletedSteps:    []string{"analyze_and_code.1"},
-			LastCompletedStep: "analyze_and_code.1",
-			PlannedStepCount:  2,
+			WorkflowID:         "wf_001",
+			RunID:              "run_001",
+			CompletedSteps:     []string{"analyze_and_code.1"},
+			LastCompletedStep:  "analyze_and_code.1",
+			PlannedStepCount:   2,
 			CompletedStepCount: 1,
-			Resumed:           false,
+			Resumed:            false,
 		},
 		Metrics: runtime.Metrics{
 			PlannedStepCount:   2,
@@ -210,6 +214,79 @@ func TestCheckpointMetadataGeneration(t *testing.T) {
 	}
 	if metadata["last_completed_step"] != "step.2" {
 		t.Errorf("Last completed step mismatch: expected step.2, got %v", metadata["last_completed_step"])
+	}
+}
+
+func TestSaveCheckpointPublishesArtifactReference(t *testing.T) {
+	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	if err != nil {
+		t.Fatalf("workflow store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf_001",
+		TaskID:      "task_001",
+		TaskType:    core.TaskType("code"),
+		Instruction: "Implement feature X",
+		Status:      memory.WorkflowRunStatusRunning,
+	}); err != nil {
+		t.Fatalf("CreateWorkflow: %v", err)
+	}
+	if err := store.CreateRun(context.Background(), memory.WorkflowRunRecord{
+		RunID:      "run_001",
+		WorkflowID: "wf_001",
+		Status:     memory.WorkflowRunStatusRunning,
+		AgentName:  "htn",
+		StartedAt:  time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	state := core.NewContext()
+	runtime.PublishTaskState(state, &core.Task{
+		ID:          "task_001",
+		Type:        core.TaskType("code"),
+		Instruction: "Implement feature X",
+	})
+	state.Set(runtime.ContextKeySelectedMethod, runtime.MethodState{
+		Name:     "code_method",
+		TaskType: core.TaskType("code"),
+	})
+	runtime.PublishPlanState(state, &core.Plan{
+		Goal: "Feature implementation",
+		Steps: []core.PlanStep{
+			{ID: "step.1", Description: "Analyze"},
+			{ID: "step.2", Description: "Implement"},
+		},
+	})
+	runtime.PublishExecutionState(state, runtime.ExecutionState{
+		WorkflowID:         "wf_001",
+		RunID:              "run_001",
+		CompletedSteps:     []string{"step.1"},
+		LastCompletedStep:  "step.1",
+		PlannedStepCount:   2,
+		CompletedStepCount: 1,
+	})
+
+	if err := SaveCheckpoint(context.Background(), state, store, "wf_001", "run_001"); err != nil {
+		t.Fatalf("SaveCheckpoint: %v", err)
+	}
+
+	rawRef, ok := state.Get(runtime.ContextKeyCheckpointRef)
+	if !ok {
+		t.Fatal("expected checkpoint ref in state")
+	}
+	ref, ok := rawRef.(core.ArtifactReference)
+	if !ok {
+		t.Fatalf("expected core.ArtifactReference, got %T", rawRef)
+	}
+	if ref.Kind != "htn_checkpoint" {
+		t.Fatalf("expected htn_checkpoint ref, got %q", ref.Kind)
+	}
+	if ref.WorkflowID != "wf_001" || ref.RunID != "run_001" {
+		t.Fatalf("unexpected checkpoint ref scope: %#v", ref)
+	}
+	if state.GetString(runtime.ContextKeyCheckpointSummary) == "" {
+		t.Fatal("expected checkpoint summary in state")
 	}
 }
 

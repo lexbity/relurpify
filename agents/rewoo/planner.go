@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -29,7 +30,7 @@ func (n *rewooPlannerNode) Plan(ctx context.Context, task *core.Task, toolSpecs 
 	}
 
 	resp, err := n.Model.Chat(ctx, []core.Message{
-		{Role: "system", Content: buildPlannerPrompt(task, toolSpecs)},
+		{Role: "system", Content: buildPlannerPrompt(task, toolSpecs, n.SharedContext, n.ContextPolicy)},
 		{Role: "user", Content: taskInstruction(task)},
 	}, &n.Options)
 	if err != nil {
@@ -57,9 +58,9 @@ func ParsePlan(raw string) (*RewooPlan, error) {
 	return &plan, nil
 }
 
-func buildPlannerPrompt(task *core.Task, toolSpecs []core.LLMToolSpec) string {
+func buildPlannerPrompt(task *core.Task, toolSpecs []core.LLMToolSpec, shared *core.SharedContext, policy *contextmgr.ContextPolicy) string {
 	toolJSON, _ := json.MarshalIndent(toolSpecs, "", "  ")
-	contextBlock := plannerContextBlock(task)
+	contextBlock := plannerContextBlock(task, shared, policy)
 	return fmt.Sprintf(`You are a ReWOO planner.
 Create a tool execution plan for the task using only the provided tools.
 Output JSON only. Do not use markdown. Do not explain anything.
@@ -103,20 +104,26 @@ func taskInstruction(task *core.Task) string {
 	return task.Instruction
 }
 
-func plannerContextBlock(task *core.Task) string {
-	if task == nil || len(task.Context) == 0 {
-		return "None."
-	}
-	parts := make([]string, 0, 3)
-	if raw, ok := task.Context["workflow_retrieval"]; ok {
-		if text := strings.TrimSpace(fmt.Sprint(raw)); text != "" && text != "<nil>" {
-			parts = append(parts, "Workflow retrieval:\n"+text)
+func plannerContextBlock(task *core.Task, shared *core.SharedContext, policy *contextmgr.ContextPolicy) string {
+	parts := make([]string, 0, 4)
+	if task != nil && len(task.Context) > 0 {
+		if payload := workflowutil.TaskPayload(task, "workflow_retrieval"); len(payload) > 0 {
+			if text := workflowutil.RetrievalText(payload); text != "" && text != "<nil>" {
+				parts = append(parts, "Workflow retrieval:\n"+text)
+			}
+		} else if raw, ok := task.Context["workflow_retrieval"]; ok {
+			if text := strings.TrimSpace(fmt.Sprint(raw)); text != "" && text != "<nil>" {
+				parts = append(parts, "Workflow retrieval:\n"+text)
+			}
+		}
+		if raw, ok := task.Context["rewoo_replan_context"]; ok {
+			if text := strings.TrimSpace(fmt.Sprint(raw)); text != "" && text != "<nil>" {
+				parts = append(parts, "Replan context:\n"+text)
+			}
 		}
 	}
-	if raw, ok := task.Context["rewoo_replan_context"]; ok {
-		if text := strings.TrimSpace(fmt.Sprint(raw)); text != "" && text != "<nil>" {
-			parts = append(parts, "Replan context:\n"+text)
-		}
+	if sharedBlock := sharedContextPromptBlock(shared, policy); sharedBlock != "" {
+		parts = append(parts, sharedBlock)
 	}
 	if len(parts) == 0 {
 		return "None."

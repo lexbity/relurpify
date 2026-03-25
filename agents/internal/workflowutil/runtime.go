@@ -116,3 +116,51 @@ func fallbackInstruction(task *core.Task) string {
 	}
 	return task.Instruction
 }
+
+func WorkflowArtifactReference(record memory.WorkflowArtifactRecord) core.ArtifactReference {
+	return core.ArtifactReference{
+		ArtifactID:   strings.TrimSpace(record.ArtifactID),
+		WorkflowID:   strings.TrimSpace(record.WorkflowID),
+		RunID:        strings.TrimSpace(record.RunID),
+		Kind:         strings.TrimSpace(record.Kind),
+		ContentType:  strings.TrimSpace(record.ContentType),
+		StorageKind:  string(record.StorageKind),
+		URI:          fmt.Sprintf("workflow://artifact/%s/%s/%s", strings.TrimSpace(record.WorkflowID), strings.TrimSpace(record.RunID), strings.TrimSpace(record.ArtifactID)),
+		Summary:      strings.TrimSpace(record.SummaryText),
+		Metadata:     artifactReferenceMetadata(record.SummaryMetadata),
+		RawSizeBytes: record.RawSizeBytes,
+	}
+}
+
+func StepArtifactReference(record memory.StepArtifactRecord) core.ArtifactReference {
+	return core.ArtifactReference{
+		ArtifactID:   strings.TrimSpace(record.ArtifactID),
+		WorkflowID:   strings.TrimSpace(record.WorkflowID),
+		StepRunID:    strings.TrimSpace(record.StepRunID),
+		Kind:         strings.TrimSpace(record.Kind),
+		ContentType:  strings.TrimSpace(record.ContentType),
+		StorageKind:  string(record.StorageKind),
+		URI:          fmt.Sprintf("workflow://step-artifact/%s/%s/%s", strings.TrimSpace(record.WorkflowID), strings.TrimSpace(record.StepRunID), strings.TrimSpace(record.ArtifactID)),
+		Summary:      strings.TrimSpace(record.SummaryText),
+		Metadata:     artifactReferenceMetadata(record.SummaryMetadata),
+		RawSizeBytes: record.RawSizeBytes,
+	}
+}
+
+func artifactReferenceMetadata(src map[string]any) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(src))
+	for key, value := range src {
+		text := strings.TrimSpace(fmt.Sprint(value))
+		if text == "" || text == "<nil>" {
+			continue
+		}
+		out[key] = text
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}

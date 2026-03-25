@@ -82,6 +82,7 @@ func publishWorkflowRetrieval(state *core.Context, payload any, applied bool) {
 	}
 	if payload != nil {
 		state.Set(contextKeyWorkflowRetrieval, payload)
+		state.Set(contextKeyWorkflowRetrievalPayload, payload)
 	}
 	state.Set(contextKeyRetrievalApplied, applied)
 	mustPublishHTNState(state)
@@ -116,14 +117,14 @@ func publishCheckpointState(state *core.Context, checkpointID, stageName string,
 		return
 	}
 	checkpoint := CheckpointState{
-		SchemaVersion: htnSchemaVersion,
-		CheckpointID:  checkpointID,
-		StageName:     stageName,
-		StageIndex:    stageIndex,
-		WorkflowID:    workflowID,
-		RunID:         runID,
+		SchemaVersion:  htnSchemaVersion,
+		CheckpointID:   checkpointID,
+		StageName:      stageName,
+		StageIndex:     stageIndex,
+		WorkflowID:     workflowID,
+		RunID:          runID,
 		CompletedSteps: append([]string(nil), completedStepsFromContext(state)...),
-		Snapshot:      snapshot,
+		Snapshot:       snapshot,
 	}
 	state.Set(contextKeyCheckpoint, checkpoint)
 }

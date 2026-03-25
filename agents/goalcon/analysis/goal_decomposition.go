@@ -346,6 +346,9 @@ func (gd *GoalDecomposer) FormatDecompositionReport(decomp *GoalDecomposition) s
 
 		sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, sg.Description))
 		sb.WriteString(fmt.Sprintf("     Importance: %.0f%%\n", sg.Importance*100))
+		if len(sg.Predicates) > 0 {
+			sb.WriteString(fmt.Sprintf("     Predicates: %v\n", sg.Predicates))
+		}
 		if len(sg.Dependencies) > 0 {
 			sb.WriteString(fmt.Sprintf("     Depends on: %v\n", len(sg.Dependencies)))
 		}

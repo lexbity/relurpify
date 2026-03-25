@@ -190,6 +190,11 @@ func TestReactExecuteUsesExplicitRetrievalSummarizeAndCheckpointNodes(t *testing
 	assert.True(t, ok)
 	_, ok = state.Get("graph.checkpoint")
 	assert.True(t, ok)
+	rawCheckpointRef, ok := state.Get("react.checkpoint_ref")
+	assert.True(t, ok)
+	checkpointRef, ok := rawCheckpointRef.(core.ArtifactReference)
+	assert.True(t, ok)
+	assert.NotEmpty(t, checkpointRef.ArtifactID)
 
 	store := memory.NewCheckpointStore(agent.CheckpointPath)
 	ids, err := store.List(task.ID)
@@ -307,6 +312,132 @@ func TestPromptAssemblerFormatsWorkflowRetrievalEvidence(t *testing.T) {
 	assert.Contains(t, prompt, "Workflow Retrieval:")
 	assert.Contains(t, prompt, "Query: find evidence")
 	assert.Contains(t, prompt, "Sources: memory://workflow/1")
+}
+
+func TestPromptAssemblerFormatsReferenceOnlyWorkflowRetrievalEvidence(t *testing.T) {
+	task := &core.Task{
+		Instruction: "Use workflow retrieval evidence",
+		Context: map[string]any{
+			"workflow_retrieval": map[string]any{
+				"query": "find evidence",
+				"results": []map[string]any{
+					{
+						"summary": "retrieved workflow evidence summary",
+						"reference": map[string]any{
+							"kind":   string(core.ContextReferenceRetrievalEvidence),
+							"uri":    "memory://workflow/2",
+							"detail": "packed",
+						},
+					},
+				},
+			},
+		},
+	}
+	assembler := newPromptContextAssembler(&ReActAgent{}, task)
+	prompt := assembler.buildPrompt(core.NewContext(), []core.Tool{stubTool{name: "echo"}}, true)
+
+	assert.Contains(t, prompt, "retrieved workflow evidence summary")
+	assert.Contains(t, prompt, "Reference: memory://workflow/2")
+}
+
+func TestPromptAssemblerPrefersWorkflowRetrievalPayload(t *testing.T) {
+	task := &core.Task{
+		Instruction: "Use workflow retrieval evidence",
+		Context: map[string]any{
+			"workflow_retrieval": "legacy summary text",
+			"workflow_retrieval_payload": map[string]any{
+				"query": "find evidence",
+				"results": []map[string]any{
+					{
+						"summary": "structured workflow evidence",
+						"reference": map[string]any{
+							"kind": string(core.ContextReferenceRetrievalEvidence),
+							"uri":  "memory://workflow/3",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	assembler := newPromptContextAssembler(&ReActAgent{}, task)
+	prompt := assembler.buildPrompt(core.NewContext(), []core.Tool{stubTool{name: "echo"}}, true)
+
+	assert.Contains(t, prompt, "structured workflow evidence")
+	assert.Contains(t, prompt, "Reference: memory://workflow/3")
+	assert.NotContains(t, prompt, "\"legacy summary text\"")
+}
+
+func TestPromptAssemblerPrefersGraphDeclarativeMemoryPayload(t *testing.T) {
+	task := &core.Task{Instruction: "Use memory context"}
+	state := core.NewContext()
+	state.Set("graph.declarative_memory", map[string]any{
+		"results": []core.MemoryRecordEnvelope{{
+			Key:     "legacy-1",
+			Summary: "legacy memory summary",
+		}},
+	})
+	state.Set("graph.declarative_memory_payload", map[string]any{
+		"results": []map[string]any{
+			{
+				"summary": "mixed evidence memory summary",
+				"source":  "retrieval",
+			},
+		},
+	})
+
+	assembler := newPromptContextAssembler(&ReActAgent{}, task)
+	prompt := assembler.buildPrompt(state, []core.Tool{stubTool{name: "echo"}}, true)
+
+	assert.Contains(t, prompt, "mixed evidence memory summary [retrieval]")
+	assert.NotContains(t, prompt, "legacy memory summary")
+}
+
+func TestPromptAssemblerFallsBackToGraphDeclarativeMemoryRefs(t *testing.T) {
+	task := &core.Task{Instruction: "Use memory context"}
+	state := core.NewContext()
+	state.Set("graph.declarative_memory_payload", map[string]any{
+		"results": []map[string]any{
+			{
+				"reference": map[string]any{
+					"kind": string(core.ContextReferenceRetrievalEvidence),
+					"uri":  "memory://runtime/chunk-1",
+				},
+			},
+		},
+	})
+	state.Set("graph.declarative_memory_refs", []core.ContextReference{{
+		Kind: core.ContextReferenceRetrievalEvidence,
+		URI:  "memory://runtime/chunk-1",
+	}})
+
+	assembler := newPromptContextAssembler(&ReActAgent{}, task)
+	prompt := assembler.buildPrompt(state, []core.Tool{stubTool{name: "echo"}}, true)
+
+	assert.Contains(t, prompt, "Reference: memory://runtime/chunk-1")
+}
+
+func TestRenderContextFilesUsesSummaryAndReferenceWithoutHydration(t *testing.T) {
+	task := &core.Task{
+		Instruction: "inspect context",
+		Context: map[string]any{
+			"context_file_contents": []core.ContextFileContent{{
+				Path:    "src/lib.rs",
+				Summary: "Rust library entrypoint",
+				Reference: &core.ContextReference{
+					Kind:   core.ContextReferenceFile,
+					ID:     "src/lib.rs",
+					URI:    "src/lib.rs",
+					Detail: "summary",
+				},
+			}},
+		},
+	}
+
+	rendered := renderContextFiles(task, 512)
+	assert.Contains(t, rendered, "src/lib.rs [detail=summary]")
+	assert.Contains(t, rendered, "Rust library entrypoint")
+	assert.NotContains(t, rendered, "```")
 }
 
 // TestReActAgentExecute validates a minimal think-act-observe pass.
@@ -1211,6 +1342,57 @@ func TestAvailableToolsForPhaseExcludesInspectableOnlyTools(t *testing.T) {
 	assert.Empty(t, tools)
 }
 
+func TestAvailableToolsForPhaseUsesExecutionCatalogSnapshot(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "cli_cargo", tags: []string{core.TagExecute}}))
+
+	agent := &ReActAgent{Tools: registry}
+	agent.executionCatalog = registry.CaptureExecutionCatalogSnapshot()
+	defer func() { agent.executionCatalog = nil }()
+
+	registry.UseAgentSpec("agent", &core.AgentRuntimeSpec{
+		ExposurePolicies: []core.CapabilityExposurePolicy{
+			{
+				Selector: core.CapabilitySelector{Name: "cli_cargo"},
+				Access:   core.CapabilityExposureInspectable,
+			},
+		},
+	})
+
+	state := core.NewContext()
+	state.Set("react.phase", contextmgrPhaseVerify)
+	task := &core.Task{Instruction: "Run cargo test", Context: map[string]any{"mode": "debug"}}
+
+	tools := agent.availableToolsForPhase(state, task)
+	assert.Len(t, tools, 1)
+	assert.Equal(t, "cli_cargo", tools[0].Name())
+}
+
+func TestCapabilityEnvelopeUsesExecutionCatalogSnapshot(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(stubTool{name: "cli_cargo", tags: []string{core.TagExecute}}))
+	registry.UseAgentSpec("agent", &core.AgentRuntimeSpec{
+		ToolExecutionPolicy: map[string]core.ToolPolicy{
+			"cli_cargo": {Execute: core.AgentPermissionAsk},
+		},
+	})
+
+	agent := &ReActAgent{Tools: registry}
+	agent.executionCatalog = registry.CaptureExecutionCatalogSnapshot()
+	defer func() { agent.executionCatalog = nil }()
+
+	registry.UpdateToolPolicy("cli_cargo", core.ToolPolicy{Execute: core.AgentPermissionDeny})
+
+	node := &reactActNode{id: "act", agent: agent}
+	state := core.NewContext()
+	envelope := node.capabilityEnvelope(context.Background(), state, nil, core.ToolCall{Name: "cli_cargo"}, &core.ToolResult{Success: true})
+	if envelope == nil || envelope.Policy == nil {
+		t.Fatalf("expected capability envelope with policy snapshot")
+	}
+	assert.Equal(t, core.AgentPermissionAsk, envelope.Policy.ToolPolicies["cli_cargo"].Execute)
+	assert.Equal(t, "tool:cli_cargo", envelope.Descriptor.ID)
+}
+
 func TestScheduleRecoveryProbeUsesSkillOrder(t *testing.T) {
 	agent := &ReActAgent{Tools: makeRecoveryRegistry(t,
 		stubTool{name: "rust_workspace_detect", params: []core.ToolParameter{{Name: "path", Type: "string", Required: false}}},
@@ -1516,6 +1698,169 @@ func TestReactObserveCompletesWhenVerificationLatchIsSet(t *testing.T) {
 	final, ok := state.Get("react.final_output")
 	assert.True(t, ok)
 	assert.Contains(t, fmt.Sprint(final), "go_test succeeded after applying changes")
+}
+
+func TestMirrorReactFinalOutputReferenceUsesGraphSummaryArtifact(t *testing.T) {
+	state := core.NewContext()
+	state.Set("react.final_output", map[string]any{
+		"summary": "done",
+		"result":  map[string]any{"ok": true},
+	})
+	state.Set("graph.summary_ref", core.ArtifactReference{
+		ArtifactID:  "artifact-1",
+		WorkflowID:  "workflow-1",
+		Kind:        "summary",
+		ContentType: "text/plain",
+	})
+	state.Set("graph.summary", "react summary artifact")
+
+	mirrorReactFinalOutputReference(state)
+
+	rawRef, ok := state.Get("react.final_output_ref")
+	assert.True(t, ok)
+	ref, ok := rawRef.(core.ArtifactReference)
+	assert.True(t, ok)
+	assert.Equal(t, "artifact-1", ref.ArtifactID)
+	assert.Equal(t, "summary", ref.Kind)
+	assert.Equal(t, "react summary artifact", state.GetString("react.final_output_summary"))
+}
+
+func TestCompactReactFinalOutputStateWhenArtifactRefExists(t *testing.T) {
+	state := core.NewContext()
+	state.Set("react.final_output", map[string]any{
+		"summary": "done",
+		"result":  map[string]any{"large": "payload"},
+	})
+	state.Set("react.final_output_ref", core.ArtifactReference{
+		ArtifactID: "artifact-1",
+		Kind:       "summary",
+	})
+
+	compactReactFinalOutputState(state)
+
+	raw, ok := state.Get("react.final_output")
+	assert.True(t, ok)
+	payload, ok := raw.(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "done", payload["summary"])
+	_, hasResult := payload["result"]
+	assert.False(t, hasResult)
+}
+
+func TestCompactReactToolObservations(t *testing.T) {
+	compacted := compactReactToolObservations([]ToolObservation{
+		{Tool: "file_read", Success: true},
+		{Tool: "cli_go", Success: false},
+	})
+
+	assert.Equal(t, 2, compacted["observation_count"])
+	assert.Equal(t, "cli_go", compacted["last_tool"])
+	assert.Equal(t, false, compacted["last_success"])
+	assert.Equal(t, []string{"file_read", "cli_go"}, compacted["recent_tools"])
+}
+
+func TestCompactReactToolObservationsStateWhenArtifactRefExists(t *testing.T) {
+	state := core.NewContext()
+	state.Set("react.tool_observations", []ToolObservation{
+		{Tool: "file_read", Success: true},
+		{Tool: "cli_go", Success: false},
+	})
+	state.Set("react.final_output_ref", core.ArtifactReference{
+		ArtifactID: "artifact-1",
+		Kind:       "summary",
+	})
+
+	compactReactToolObservationsState(state)
+
+	raw, ok := state.Get("react.tool_observations")
+	assert.True(t, ok)
+	payload, ok := raw.(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, 2, payload["observation_count"])
+	assert.Equal(t, "cli_go", payload["last_tool"])
+}
+
+func TestCompactReactLastToolResult(t *testing.T) {
+	compacted := compactReactLastToolResult(map[string]interface{}{
+		"stdout":  "ok",
+		"results": []string{"a", "b"},
+		"success": true,
+	})
+
+	assert.Equal(t, 3, compacted["key_count"])
+	assert.Equal(t, []string{"results", "stdout", "success"}, compacted["keys"])
+	assert.Equal(t, true, compacted["success"])
+}
+
+func TestCompactReactLastToolResultStateWhenArtifactRefExists(t *testing.T) {
+	state := core.NewContext()
+	state.Set("react.last_tool_result", map[string]interface{}{
+		"stdout":  "ok",
+		"results": []string{"a", "b"},
+		"success": true,
+	})
+	state.Set("react.final_output_ref", core.ArtifactReference{
+		ArtifactID: "artifact-1",
+		Kind:       "summary",
+	})
+
+	compactReactLastToolResultState(state)
+
+	raw, ok := state.Get("react.last_tool_result")
+	assert.True(t, ok)
+	payload, ok := raw.(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, 3, payload["key_count"])
+	assert.Equal(t, true, payload["success"])
+}
+
+func TestCompactReactLoopStateWhenArtifactRefExists(t *testing.T) {
+	state := core.NewContext()
+	state.Set("react.final_output_ref", core.ArtifactReference{
+		ArtifactID: "artifact-1",
+		Kind:       "summary",
+	})
+	state.Set("react.decision", decisionPayload{Tool: "echo"})
+	state.Set("react.tool_calls", []core.ToolCall{{Name: "echo"}})
+	state.Set("react.last_tool_result_envelope", &core.CapabilityResultEnvelope{})
+	state.Set("react.last_tool_result_envelopes", []*core.CapabilityResultEnvelope{{}})
+
+	compactReactLoopState(state)
+
+	rawDecision, ok := state.Get("react.decision")
+	assert.True(t, ok)
+	assert.Equal(t, map[string]any{"present": true}, rawDecision)
+
+	rawCalls, ok := state.Get("react.tool_calls")
+	assert.True(t, ok)
+	assert.Equal(t, map[string]any{"count": 1}, rawCalls)
+
+	rawEnvelope, ok := state.Get("react.last_tool_result_envelope")
+	assert.True(t, ok)
+	assert.Equal(t, map[string]any{"present": true}, rawEnvelope)
+
+	rawEnvelopes, ok := state.Get("react.last_tool_result_envelopes")
+	assert.True(t, ok)
+	assert.Equal(t, map[string]any{"count": 1}, rawEnvelopes)
+}
+
+func TestMirrorReactCheckpointReferenceUsesGraphCheckpointArtifact(t *testing.T) {
+	state := core.NewContext()
+	state.Set("graph.checkpoint_ref", core.ArtifactReference{
+		ArtifactID:  "checkpoint-1",
+		WorkflowID:  "workflow-1",
+		Kind:        "checkpoint",
+		ContentType: "application/json",
+	})
+
+	mirrorReactCheckpointReference(state)
+
+	rawRef, ok := state.Get("react.checkpoint_ref")
+	assert.True(t, ok)
+	ref, ok := rawRef.(core.ArtifactReference)
+	assert.True(t, ok)
+	assert.Equal(t, "checkpoint-1", ref.ArtifactID)
+	assert.Equal(t, "checkpoint", ref.Kind)
 }
 
 func TestReadOnlySummaryFromStateUsesLatestFileRead(t *testing.T) {

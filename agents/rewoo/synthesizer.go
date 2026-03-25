@@ -31,9 +31,13 @@ func synthesize(
 	if err != nil {
 		return "", fmt.Errorf("rewoo: results summary: %w", err)
 	}
+	userPrompt := fmt.Sprintf("Task:\n%s\n\nTool results:\n%s", taskInstruction(task), string(summary))
+	if sharedBlock := sharedContextPromptBlock(shared, policy); sharedBlock != "" {
+		userPrompt += "\n\nShared context:\n" + sharedBlock
+	}
 	resp, err := model.Chat(ctx, []core.Message{
 		{Role: "system", Content: "You are a synthesis assistant. Produce a concise final answer using only the structured tool results."},
-		{Role: "user", Content: fmt.Sprintf("Task:\n%s\n\nTool results:\n%s", taskInstruction(task), string(summary))},
+		{Role: "user", Content: userPrompt},
 	}, nil)
 	if err != nil {
 		return "", fmt.Errorf("rewoo: synthesis failed: %w", err)

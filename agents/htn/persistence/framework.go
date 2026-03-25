@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/htn/runtime"
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 )
@@ -16,48 +17,48 @@ import (
 
 // HTNRunSummary captures end-of-run execution metrics and outcomes.
 type HTNRunSummary struct {
-	SchemaVersion      int              `json:"schema_version"`
-	TaskType           core.TaskType    `json:"task_type"`
-	SelectedMethod     string           `json:"selected_method"`
-	PlannedStepCount   int              `json:"planned_step_count"`
-	CompletedStepCount int              `json:"completed_step_count"`
-	TerminationStatus  string           `json:"termination_status"`
-	TotalDuration      int              `json:"total_duration_seconds"`
-	RetrievalApplied   bool             `json:"retrieval_applied"`
-	Success            bool             `json:"success"`
-	ErrorMessage       string           `json:"error_message,omitempty"`
+	SchemaVersion      int           `json:"schema_version"`
+	TaskType           core.TaskType `json:"task_type"`
+	SelectedMethod     string        `json:"selected_method"`
+	PlannedStepCount   int           `json:"planned_step_count"`
+	CompletedStepCount int           `json:"completed_step_count"`
+	TerminationStatus  string        `json:"termination_status"`
+	TotalDuration      int           `json:"total_duration_seconds"`
+	RetrievalApplied   bool          `json:"retrieval_applied"`
+	Success            bool          `json:"success"`
+	ErrorMessage       string        `json:"error_message,omitempty"`
 }
 
 // OperatorOutcome captures results from executing a primitive step.
 type OperatorOutcome struct {
-	OperatorName  string                 `json:"operator_name"`
-	StepID        string                 `json:"step_id"`
-	TaskType      core.TaskType          `json:"task_type"`
-	Success       bool                   `json:"success"`
-	Duration      int                    `json:"duration_seconds"`
-	CostClass     string                 `json:"cost_class,omitempty"`
-	RetryClass    string                 `json:"retry_class,omitempty"`
-	Retried       bool                   `json:"retried"`
-	RetryCount    int                    `json:"retry_count"`
-	ErrorMessage  string                 `json:"error_message,omitempty"`
-	OutputKeys    []string               `json:"output_keys,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	OperatorName string                 `json:"operator_name"`
+	StepID       string                 `json:"step_id"`
+	TaskType     core.TaskType          `json:"task_type"`
+	Success      bool                   `json:"success"`
+	Duration     int                    `json:"duration_seconds"`
+	CostClass    string                 `json:"cost_class,omitempty"`
+	RetryClass   string                 `json:"retry_class,omitempty"`
+	Retried      bool                   `json:"retried"`
+	RetryCount   int                    `json:"retry_count"`
+	ErrorMessage string                 `json:"error_message,omitempty"`
+	OutputKeys   []string               `json:"output_keys,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ExecutionMetrics captures quantitative measures of HTN execution.
 type ExecutionMetrics struct {
-	SchemaVersion     int     `json:"schema_version"`
-	TotalDuration     int     `json:"total_duration_seconds"`
-	DecompositionTime int     `json:"decomposition_time_seconds"`
-	ExecutionTime     int     `json:"execution_time_seconds"`
-	PlanStepCount     int     `json:"plan_step_count"`
-	CompletedSteps    int     `json:"completed_steps"`
-	FailedSteps       int     `json:"failed_steps"`
-	RetriedSteps      int     `json:"retried_steps"`
-	AverageCost       string  `json:"average_cost_class"`
-	ParallelBranches  int     `json:"parallel_branches"`
-	RetrievalApplied  bool    `json:"retrieval_applied"`
-	Success           bool    `json:"success"`
+	SchemaVersion     int    `json:"schema_version"`
+	TotalDuration     int    `json:"total_duration_seconds"`
+	DecompositionTime int    `json:"decomposition_time_seconds"`
+	ExecutionTime     int    `json:"execution_time_seconds"`
+	PlanStepCount     int    `json:"plan_step_count"`
+	CompletedSteps    int    `json:"completed_steps"`
+	FailedSteps       int    `json:"failed_steps"`
+	RetriedSteps      int    `json:"retried_steps"`
+	AverageCost       string `json:"average_cost_class"`
+	ParallelBranches  int    `json:"parallel_branches"`
+	RetrievalApplied  bool   `json:"retrieval_applied"`
+	Success           bool   `json:"success"`
 }
 
 // persistHTNRunSummary saves end-of-run summary to workflow artifacts.
@@ -110,6 +111,10 @@ func SaveRunSummary(ctx context.Context, state *core.Context,
 
 	if err := store.UpsertWorkflowArtifact(ctx, artifact); err != nil {
 		return fmt.Errorf("htn: failed to persist run summary: %w", err)
+	}
+	if state != nil {
+		state.Set(runtime.ContextKeyRunSummaryRef, workflowutil.WorkflowArtifactReference(artifact))
+		state.Set(runtime.ContextKeyRunSummarySummary, artifact.SummaryText)
 	}
 
 	return nil
@@ -220,6 +225,10 @@ func SaveExecutionMetrics(ctx context.Context, state *core.Context,
 	if err := store.UpsertWorkflowArtifact(ctx, artifact); err != nil {
 		return fmt.Errorf("htn: failed to persist execution metrics: %w", err)
 	}
+	if state != nil {
+		state.Set(runtime.ContextKeyExecutionMetricsRef, workflowutil.WorkflowArtifactReference(artifact))
+		state.Set(runtime.ContextKeyExecutionMetricsSummary, artifact.SummaryText)
+	}
 
 	return nil
 }
@@ -294,10 +303,10 @@ func PersistOperatorOutcome(ctx context.Context,
 		Content:    summarizeOperatorOutcome(outcome),
 		Status:     status,
 		Metadata: map[string]interface{}{
-			"operator":      operator,
-			"duration":      int(duration.Seconds()),
-			"success":       success,
-			"output_keys":   outputKeys,
+			"operator":    operator,
+			"duration":    int(duration.Seconds()),
+			"success":     success,
+			"output_keys": outputKeys,
 		},
 		CreatedAt: time.Now().UTC(),
 	}
@@ -371,15 +380,15 @@ func summarizeHTNRun(summary HTNRunSummary) string {
 
 func summarizeHTNRunMetadata(summary HTNRunSummary) map[string]interface{} {
 	return map[string]interface{}{
-		"schema_version":       summary.SchemaVersion,
-		"task_type":            string(summary.TaskType),
-		"selected_method":      summary.SelectedMethod,
-		"planned_steps":        summary.PlannedStepCount,
-		"completed_steps":      summary.CompletedStepCount,
-		"termination_status":   summary.TerminationStatus,
-		"total_duration":       summary.TotalDuration,
-		"retrieval_applied":    summary.RetrievalApplied,
-		"success":              summary.Success,
+		"schema_version":     summary.SchemaVersion,
+		"task_type":          string(summary.TaskType),
+		"selected_method":    summary.SelectedMethod,
+		"planned_steps":      summary.PlannedStepCount,
+		"completed_steps":    summary.CompletedStepCount,
+		"termination_status": summary.TerminationStatus,
+		"total_duration":     summary.TotalDuration,
+		"retrieval_applied":  summary.RetrievalApplied,
+		"success":            summary.Success,
 	}
 }
 
@@ -397,18 +406,18 @@ func summarizeExecutionMetrics(metrics ExecutionMetrics) string {
 
 func metricsMetadata(metrics ExecutionMetrics) map[string]interface{} {
 	return map[string]interface{}{
-		"schema_version":       metrics.SchemaVersion,
-		"total_duration":       metrics.TotalDuration,
-		"decomposition_time":   metrics.DecompositionTime,
-		"execution_time":       metrics.ExecutionTime,
-		"plan_steps":           metrics.PlanStepCount,
-		"completed_steps":      metrics.CompletedSteps,
-		"failed_steps":         metrics.FailedSteps,
-		"retried_steps":        metrics.RetriedSteps,
-		"average_cost":         metrics.AverageCost,
-		"parallel_branches":    metrics.ParallelBranches,
-		"retrieval_applied":    metrics.RetrievalApplied,
-		"success":              metrics.Success,
+		"schema_version":     metrics.SchemaVersion,
+		"total_duration":     metrics.TotalDuration,
+		"decomposition_time": metrics.DecompositionTime,
+		"execution_time":     metrics.ExecutionTime,
+		"plan_steps":         metrics.PlanStepCount,
+		"completed_steps":    metrics.CompletedSteps,
+		"failed_steps":       metrics.FailedSteps,
+		"retried_steps":      metrics.RetriedSteps,
+		"average_cost":       metrics.AverageCost,
+		"parallel_branches":  metrics.ParallelBranches,
+		"retrieval_applied":  metrics.RetrievalApplied,
+		"success":            metrics.Success,
 	}
 }
 
@@ -430,16 +439,16 @@ func summarizeOperatorOutcome(outcome OperatorOutcome) string {
 
 func operatorOutcomeMetadata(outcome OperatorOutcome) map[string]interface{} {
 	return map[string]interface{}{
-		"operator_name":  outcome.OperatorName,
-		"step_id":        outcome.StepID,
-		"task_type":      string(outcome.TaskType),
-		"success":        outcome.Success,
-		"duration":       outcome.Duration,
-		"cost_class":     outcome.CostClass,
-		"retry_class":    outcome.RetryClass,
-		"retried":        outcome.Retried,
-		"retry_count":    outcome.RetryCount,
-		"output_count":   len(outcome.OutputKeys),
+		"operator_name": outcome.OperatorName,
+		"step_id":       outcome.StepID,
+		"task_type":     string(outcome.TaskType),
+		"success":       outcome.Success,
+		"duration":      outcome.Duration,
+		"cost_class":    outcome.CostClass,
+		"retry_class":   outcome.RetryClass,
+		"retried":       outcome.Retried,
+		"retry_count":   outcome.RetryCount,
+		"output_count":  len(outcome.OutputKeys),
 	}
 }
 

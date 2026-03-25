@@ -1023,6 +1023,11 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 	if applied, ok := state.Get("htn.retrieval_applied"); !ok || applied != true {
 		t.Fatalf("expected retrieval flag in state, got %v", applied)
 	}
+	if rawPayload, ok := state.Get("htn.workflow_retrieval_payload"); !ok {
+		t.Fatal("expected htn.workflow_retrieval_payload in state")
+	} else if payload, ok := rawPayload.(map[string]any); !ok || strings.TrimSpace(fmt.Sprint(payload["summary"])) == "" {
+		t.Fatalf("expected structured workflow retrieval payload, got %#v", rawPayload)
+	}
 	taskStateValue, ok := state.Get("htn.task")
 	if !ok {
 		t.Fatal("expected htn.task in state")
@@ -1078,6 +1083,34 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 	}
 	if got := state.GetString("htn.termination"); got != "completed" {
 		t.Fatalf("expected completed termination, got %q", got)
+	}
+	rawRunSummaryRef, ok := state.Get("htn.run_summary_ref")
+	if !ok {
+		t.Fatal("expected htn.run_summary_ref in state")
+	}
+	runSummaryRef, ok := rawRunSummaryRef.(core.ArtifactReference)
+	if !ok {
+		t.Fatalf("expected core.ArtifactReference for htn.run_summary_ref, got %T", rawRunSummaryRef)
+	}
+	if runSummaryRef.Kind != "htn_run_summary" {
+		t.Fatalf("expected htn_run_summary ref, got %q", runSummaryRef.Kind)
+	}
+	if strings.TrimSpace(state.GetString("htn.run_summary_summary")) == "" {
+		t.Fatal("expected htn.run_summary_summary in state")
+	}
+	rawMetricsRef, ok := state.Get("htn.execution_metrics_ref")
+	if !ok {
+		t.Fatal("expected htn.execution_metrics_ref in state")
+	}
+	metricsRef, ok := rawMetricsRef.(core.ArtifactReference)
+	if !ok {
+		t.Fatalf("expected core.ArtifactReference for htn.execution_metrics_ref, got %T", rawMetricsRef)
+	}
+	if metricsRef.Kind != "htn_execution_metrics" {
+		t.Fatalf("expected htn_execution_metrics ref, got %q", metricsRef.Kind)
+	}
+	if strings.TrimSpace(state.GetString("htn.execution_metrics_summary")) == "" {
+		t.Fatal("expected htn.execution_metrics_summary in state")
 	}
 	if seenRetrieval == "" || seenRetrieval != "Prior result: Known API constraint" {
 		t.Fatalf("expected primitive step to receive retrieval text, got %q", seenRetrieval)

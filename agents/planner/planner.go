@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -50,7 +51,125 @@ func (a *PlannerAgent) Execute(ctx context.Context, task *core.Task, state *core
 		store := memory.NewCheckpointStore(filepath.Clean(a.CheckpointPath))
 		graph.WithCheckpointing(1, store.Save)
 	}
-	return graph.Execute(ctx, state)
+	result, err := graph.Execute(ctx, state)
+	preservePlannerExecutionResult(state, result)
+	mirrorPlannerSummaryReference(state)
+	mirrorPlannerCheckpointReference(state)
+	compactPlannerResultsStateInContext(state)
+	return result, err
+}
+
+func preservePlannerExecutionResult(state *core.Context, result *core.Result) {
+	if state == nil || result == nil {
+		return
+	}
+	if result.Data == nil {
+		result.Data = map[string]any{}
+	}
+	if raw, ok := state.Get("planner.results"); ok {
+		result.Data["results"] = raw
+	}
+	if raw, ok := state.Get("planner.skipped_tools"); ok {
+		result.Data["skipped_tools"] = raw
+	}
+	if summary := strings.TrimSpace(state.GetString("planner.summary")); summary != "" {
+		result.Data["summary"] = summary
+	}
+}
+
+func mirrorPlannerSummaryReference(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if strings.TrimSpace(state.GetString("planner.summary")) == "" {
+		return
+	}
+	if rawRef, ok := state.Get("graph.summary_ref"); ok {
+		if ref, ok := rawRef.(core.ArtifactReference); ok {
+			state.Set("planner.summary_ref", ref)
+		}
+	}
+	if summary := strings.TrimSpace(state.GetString("graph.summary")); summary != "" {
+		state.Set("planner.summary_artifact_summary", summary)
+	}
+}
+
+func mirrorPlannerCheckpointReference(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if rawRef, ok := state.Get("graph.checkpoint_ref"); ok {
+		if ref, ok := rawRef.(core.ArtifactReference); ok {
+			state.Set("planner.checkpoint_ref", ref)
+		}
+	}
+}
+
+func compactPlannerResultsStateInContext(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get("planner.summary_ref"); !ok {
+		return
+	}
+	raw, ok := state.Get("planner.results")
+	if !ok {
+		return
+	}
+	if compact := compactPlannerResultsState(raw); compact != nil {
+		state.Set("planner.results", compact)
+	}
+	if rawSkipped, ok := state.Get("planner.skipped_tools"); ok {
+		if compact := compactPlannerSkippedToolsState(rawSkipped); compact != nil {
+			state.Set("planner.skipped_tools", compact)
+		}
+	}
+}
+
+func compactPlannerResultsState(raw any) map[string]any {
+	results, ok := raw.([]map[string]interface{})
+	if !ok {
+		return nil
+	}
+	value := map[string]any{
+		"result_count": len(results),
+	}
+	if len(results) == 0 {
+		return value
+	}
+	steps := make([]map[string]any, 0, len(results))
+	for _, result := range results {
+		step := map[string]any{
+			"id": result["id"],
+		}
+		if output, ok := result["output"]; ok && output != nil {
+			step["has_output"] = true
+		}
+		steps = append(steps, step)
+	}
+	value["steps"] = steps
+	value["last_step"] = steps[len(steps)-1]
+	return value
+}
+
+func compactPlannerSkippedToolsState(raw any) map[string]any {
+	skipped, ok := raw.([]map[string]string)
+	if !ok {
+		return nil
+	}
+	value := map[string]any{
+		"count": len(skipped),
+	}
+	if len(skipped) == 0 {
+		return value
+	}
+	last := skipped[len(skipped)-1]
+	value["last"] = map[string]any{
+		"id":     last["id"],
+		"tool":   last["tool"],
+		"reason": last["reason"],
+	}
+	return value
 }
 
 // Capabilities enumerates features.
@@ -77,8 +196,11 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	summarizeNode.Telemetry = telemetryForConfig(a.Config)
 	done := graph.NewTerminalNode("planner_done")
 	g := graph.NewGraph()
-	if a.Tools != nil && len(a.Tools.InspectableCapabilities()) > 0 {
-		g.SetCapabilityCatalog(a.Tools)
+	if a.Tools != nil {
+		catalog := a.Tools.CaptureExecutionCatalogSnapshot()
+		if catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
+			g.SetCapabilityCatalog(catalog)
+		}
 	}
 	workflowStore := plannerWorkflowStateStore(a.Memory)
 	workflowID := plannerWorkflowID(task)
@@ -224,7 +346,11 @@ func (n *plannerPlanNode) Execute(ctx context.Context, state *core.Context) (*co
 		extraPrompt += "Skill Policy:\n" + policy + "\n\n"
 	}
 	if n.task != nil && n.task.Context != nil {
-		if raw, ok := n.task.Context["workflow_retrieval"]; ok && raw != nil {
+		if payload := workflowutil.TaskPayload(n.task, "workflow_retrieval"); len(payload) > 0 {
+			if formatted := formatPlannerWorkflowRetrieval(payload); formatted != "" {
+				extraPrompt += "Workflow Retrieval:\n" + formatted + "\n\n"
+			}
+		} else if raw, ok := n.task.Context["workflow_retrieval"]; ok && raw != nil {
 			encoded, err := json.MarshalIndent(raw, "", "  ")
 			if err == nil {
 				extraPrompt += "Workflow Retrieval:\n" + string(encoded) + "\n\n"
@@ -267,6 +393,67 @@ Use string step ids (UUID-safe).
 		"files":       plan.Files,
 		"adjustments": adjustments,
 	}}, nil
+}
+
+func formatPlannerWorkflowRetrieval(payload map[string]any) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	var sections []string
+	if query := strings.TrimSpace(fmt.Sprint(payload["query"])); query != "" && query != "<nil>" {
+		sections = append(sections, "Query: "+query)
+	}
+	if scope := strings.TrimSpace(fmt.Sprint(payload["scope"])); scope != "" && scope != "<nil>" {
+		sections = append(sections, "Scope: "+scope)
+	}
+	if cacheTier := strings.TrimSpace(fmt.Sprint(payload["cache_tier"])); cacheTier != "" && cacheTier != "<nil>" {
+		sections = append(sections, "Cache tier: "+cacheTier)
+	}
+	results, ok := payload["results"].([]map[string]any)
+	if !ok || len(results) == 0 {
+		return strings.Join(sections, "\n")
+	}
+	lines := make([]string, 0, len(results))
+	for i, result := range results {
+		text := strings.TrimSpace(fmt.Sprint(result["text"]))
+		if text == "" || text == "<nil>" {
+			text = strings.TrimSpace(fmt.Sprint(result["summary"]))
+		}
+		if text == "" || text == "<nil>" {
+			text = "reference only"
+		}
+		line := fmt.Sprintf("%d. %s", i+1, truncatePlannerPromptText(text, 240))
+		if ref := plannerWorkflowReference(result); ref != "" {
+			line += "\n   Reference: " + ref
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) > 0 {
+		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
+	}
+	return strings.Join(sections, "\n")
+}
+
+func plannerWorkflowReference(result map[string]any) string {
+	raw, ok := result["reference"].(map[string]any)
+	if !ok || len(raw) == 0 {
+		return ""
+	}
+	for _, key := range []string{"uri", "id", "detail"} {
+		value := strings.TrimSpace(fmt.Sprint(raw[key]))
+		if value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
+}
+
+func truncatePlannerPromptText(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+	return strings.TrimSpace(value[:limit]) + "..."
 }
 
 type plannerExecuteNode struct {

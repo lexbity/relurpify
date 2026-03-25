@@ -3,6 +3,7 @@ package rewoo_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -37,7 +38,9 @@ func (t stubTool) Execute(_ context.Context, _ *core.Context, args map[string]in
 }
 func (t stubTool) IsAvailable(context.Context, *core.Context) bool { return true }
 func (t stubTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
+	return core.ToolPermissions{Permissions: &core.PermissionSet{
+		Capabilities: []core.CapabilityPermission{{Capability: "testing"}},
+	}}
 }
 func (t stubTool) Tags() []string { return nil }
 
@@ -236,6 +239,39 @@ func TestRewooAgent_HydratesWorkflowRetrievalAndPersistsResults(t *testing.T) {
 	}
 	if len(model.messages) == 0 || !strings.Contains(model.messages[0][0].Content, "Known API constraint") {
 		t.Fatalf("expected planner prompt to include workflow retrieval, got %+v", model.messages)
+	}
+	rawToolResultsRef, ok := state.Get("rewoo.tool_results_ref")
+	if !ok {
+		t.Fatal("expected rewoo.tool_results_ref in state")
+	}
+	toolResultsRef, ok := rawToolResultsRef.(core.ArtifactReference)
+	if !ok || toolResultsRef.Kind != "rewoo_tool_results" {
+		t.Fatalf("unexpected tool results ref: %#v", rawToolResultsRef)
+	}
+	rawSynthesisRef, ok := state.Get("rewoo.synthesis_ref")
+	if !ok {
+		t.Fatal("expected rewoo.synthesis_ref in state")
+	}
+	synthesisRef, ok := rawSynthesisRef.(core.ArtifactReference)
+	if !ok || synthesisRef.Kind != "rewoo_synthesis" {
+		t.Fatalf("unexpected synthesis ref: %#v", rawSynthesisRef)
+	}
+	if summary := state.GetString("rewoo.tool_results_summary"); !strings.Contains(summary, "a [ok]") {
+		t.Fatalf("unexpected tool result summary: %q", summary)
+	}
+	rawToolResults, ok := state.Get("rewoo.tool_results")
+	if !ok {
+		t.Fatal("expected rewoo.tool_results in state")
+	}
+	toolResultsState, ok := rawToolResults.(map[string]any)
+	if !ok {
+		t.Fatalf("expected compact rewoo.tool_results map, got %#v", rawToolResults)
+	}
+	if got := fmt.Sprint(toolResultsState["step_count"]); got != "1" {
+		t.Fatalf("expected compact step_count=1, got %#v", toolResultsState)
+	}
+	if _, ok := toolResultsState["last_step"].(map[string]any); !ok {
+		t.Fatalf("expected compact last_step summary, got %#v", toolResultsState["last_step"])
 	}
 
 	records, err := workflowStore.ListKnowledge(context.Background(), "workflow-rewoo", "", false)

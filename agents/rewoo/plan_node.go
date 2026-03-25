@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -73,6 +74,16 @@ func (n *PlanNode) Execute(ctx context.Context, state *core.Context) (*core.Resu
 		n.ContextPolicy.EnforceBudget(n.State, n.SharedContext, n.Model, nil, n.Debugf)
 	}
 
+	// Augment task with workflow retrieval from execution state (set by Execute before graph runs).
+	task := n.Task
+	if state != nil {
+		if v, ok := state.Get("rewoo.workflow_retrieval"); ok {
+			if payload, ok := v.(map[string]any); ok {
+				task = workflowutil.ApplyTaskRetrieval(task, payload)
+			}
+		}
+	}
+
 	// Build planner and execute
 	planner := &rewooPlannerNode{
 		Model:         n.Model,
@@ -81,7 +92,7 @@ func (n *PlanNode) Execute(ctx context.Context, state *core.Context) (*core.Resu
 		State:         n.State,
 	}
 
-	plan, err := planner.Plan(ctx, n.Task, n.ToolSpecs)
+	plan, err := planner.Plan(ctx, task, n.ToolSpecs)
 	if err != nil {
 		return nil, fmt.Errorf("plan_node: %w", err)
 	}

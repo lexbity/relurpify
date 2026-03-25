@@ -53,6 +53,7 @@ func renderContextFiles(task *core.Task, maxBytes int) string {
 			files = append(files, core.ContextFileContent{
 				Path:      strings.TrimSpace(fmt.Sprint(m["path"])),
 				Content:   fmt.Sprint(m["content"]),
+				Summary:   strings.TrimSpace(fmt.Sprint(m["summary"])),
 				Truncated: m["truncated"] == true,
 			})
 		}
@@ -60,21 +61,21 @@ func renderContextFiles(task *core.Task, maxBytes int) string {
 	var b strings.Builder
 	remaining := maxBytes
 	for _, file := range files {
-		if file.Path == "" || file.Content == "" {
+		if file.Path == "" {
 			continue
 		}
-		header := fmt.Sprintf("File: %s\n", file.Path)
-		if len(header) >= remaining {
+		entry := renderContextFileEntry(file, remaining)
+		if entry == "" {
+			continue
+		}
+		if len(entry) > remaining {
+			entry = entry[:remaining]
+		}
+		if len(entry) == 0 {
 			break
 		}
-		b.WriteString(header)
-		remaining -= len(header)
-		content := file.Content
-		if len(content) > remaining {
-			content = content[:remaining]
-		}
-		b.WriteString(content)
-		if !strings.HasSuffix(content, "\n") {
+		b.WriteString(entry)
+		if !strings.HasSuffix(entry, "\n") {
 			b.WriteString("\n")
 		}
 		remaining = maxBytes - b.Len()
@@ -83,6 +84,32 @@ func renderContextFiles(task *core.Task, maxBytes int) string {
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func renderContextFileEntry(file core.ContextFileContent, maxBytes int) string {
+	if maxBytes <= 0 || file.Path == "" {
+		return ""
+	}
+	header := fmt.Sprintf("File: %s", file.Path)
+	if file.Reference != nil && file.Reference.Detail != "" {
+		header += fmt.Sprintf(" [detail=%s]", file.Reference.Detail)
+	}
+	header += "\n"
+	remaining := maxBytes - len(header)
+	if remaining <= 0 {
+		return ""
+	}
+	body := strings.TrimSpace(file.Content)
+	if body == "" {
+		body = strings.TrimSpace(file.Summary)
+	}
+	if body == "" {
+		body = "reference only"
+	}
+	if len(body) > remaining {
+		body = body[:remaining]
+	}
+	return header + body
 }
 
 func filePaths(selection FileSelection) []string {

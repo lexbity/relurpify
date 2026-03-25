@@ -204,6 +204,37 @@ func TestExploreStageBuildPromptIncludesContextAndTools(t *testing.T) {
 	}
 }
 
+func TestExploreStageBuildPromptRendersReferenceOnlyContextFiles(t *testing.T) {
+	stage := &ExploreStage{Task: &core.Task{
+		Instruction: "inspect referenced files",
+		Context: map[string]any{
+			"context_file_contents": []core.ContextFileContent{
+				{
+					Path:    "src/lib.rs",
+					Summary: "Rust library entrypoint",
+					Reference: &core.ContextReference{
+						Kind:   core.ContextReferenceFile,
+						ID:     "src/lib.rs",
+						URI:    "src/lib.rs",
+						Detail: "summary",
+					},
+				},
+			},
+		},
+	}}
+
+	prompt, err := stage.BuildPrompt(core.NewContext())
+	if err != nil {
+		t.Fatalf("build prompt failed: %v", err)
+	}
+	if !strings.Contains(prompt, "src/lib.rs [detail=summary]") {
+		t.Fatalf("expected reference detail in prompt, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Rust library entrypoint") {
+		t.Fatalf("expected summary-backed context file rendering, got %q", prompt)
+	}
+}
+
 func TestWorkflowRetrievalContextFormatsEvidenceAndCitations(t *testing.T) {
 	state := core.NewContext()
 	state.Set("pipeline.workflow_retrieval", map[string]any{
@@ -230,6 +261,31 @@ func TestWorkflowRetrievalContextFormatsEvidenceAndCitations(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "Sources: memory://workflow/1") {
 		t.Fatalf("expected citation source, got %q", rendered)
+	}
+}
+
+func TestWorkflowRetrievalContextFormatsReferenceOnlyEvidence(t *testing.T) {
+	state := core.NewContext()
+	state.Set("pipeline.workflow_retrieval", map[string]any{
+		"query": "find workflow evidence",
+		"results": []map[string]any{
+			{
+				"summary": "remembered workflow fact",
+				"reference": map[string]any{
+					"kind":   string(core.ContextReferenceRetrievalEvidence),
+					"uri":    "memory://workflow/2",
+					"detail": "packed",
+				},
+			},
+		},
+	})
+
+	rendered := workflowRetrievalContext(state)
+	if !strings.Contains(rendered, "remembered workflow fact") {
+		t.Fatalf("expected summary-backed retrieval evidence, got %q", rendered)
+	}
+	if !strings.Contains(rendered, "Reference: memory://workflow/2") {
+		t.Fatalf("expected retrieval reference, got %q", rendered)
 	}
 }
 

@@ -78,6 +78,12 @@ func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*core.Plan, e
 			Description: desc,
 			Tool:        spec.Executor,
 			Expected:    fmt.Sprintf("Complete %s operation", spec.Name),
+			Params: map[string]any{
+				"required_capabilities": spec.RequiredCapabilities,
+				"operator_task_type":    string(spec.TaskType),
+				"operator_executor":     spec.Executor,
+				"operator_name":         spec.Name,
+			},
 		}
 		plan.Steps = append(plan.Steps, step)
 

@@ -2,10 +2,12 @@ package agents
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
@@ -67,12 +69,17 @@ func TestTaskRetrievalPathsCollectsMetadataAndContextPaths(t *testing.T) {
 }
 
 type workflowRetrievalProviderStub struct {
-	blocks []core.ContentBlock
-	event  retrieval.RetrievalEvent
+	blocks  []core.ContentBlock
+	event   retrieval.RetrievalEvent
+	records []memory.KnowledgeRecord
 }
 
 func (s workflowRetrievalProviderStub) RetrievalService() retrieval.RetrieverService {
 	return workflowRetrievalServiceStub{blocks: s.blocks, event: s.event}
+}
+
+func (s workflowRetrievalProviderStub) ListKnowledge(context.Context, string, memory.KnowledgeKind, bool) ([]memory.KnowledgeRecord, error) {
+	return append([]memory.KnowledgeRecord{}, s.records...), nil
 }
 
 type workflowRetrievalServiceStub struct {
@@ -90,8 +97,14 @@ func TestHydrateWorkflowRetrievalIncludesResultsAndCitations(t *testing.T) {
 		workflowRetrievalProviderStub{
 			blocks: []core.ContentBlock{
 				core.StructuredContentBlock{Data: map[string]any{
-					"type": "retrieval_evidence",
-					"text": "retrieved workflow evidence",
+					"type":    "retrieval_evidence",
+					"text":    "retrieved workflow evidence",
+					"summary": "retrieved workflow evidence",
+					"reference": map[string]any{
+						"kind":   string(core.ContextReferenceRetrievalEvidence),
+						"uri":    "memory://workflow/1",
+						"detail": "packed",
+					},
 					"citations": []retrieval.PackedCitation{{
 						DocID:        "doc:1",
 						ChunkID:      "chunk:1",
@@ -121,11 +134,144 @@ func TestHydrateWorkflowRetrievalIncludesResultsAndCitations(t *testing.T) {
 	if !ok || len(results) != 1 {
 		t.Fatalf("expected structured results, got %#v", payload["results"])
 	}
+	if results[0]["summary"] != "retrieved workflow evidence" {
+		t.Fatalf("expected summary-backed result, got %#v", results[0])
+	}
+	ref, ok := results[0]["reference"].(map[string]any)
+	if !ok || ref["uri"] != "memory://workflow/1" {
+		t.Fatalf("expected reference in first result, got %#v", results[0]["reference"])
+	}
 	citations, ok := results[0]["citations"].([]retrieval.PackedCitation)
 	if !ok || len(citations) != 1 {
 		t.Fatalf("expected citations in first result, got %#v", results[0]["citations"])
 	}
 	if citations[0].ChunkID != "chunk:1" {
 		t.Fatalf("expected chunk citation, got %#v", citations[0])
+	}
+	if results[0]["source"] != "retrieval" {
+		t.Fatalf("expected retrieval source, got %#v", results[0])
+	}
+}
+
+func TestHydrateWorkflowRetrievalMergesWorkflowKnowledgeAfterRankedResults(t *testing.T) {
+	payload, err := hydrateWorkflowRetrieval(
+		context.Background(),
+		workflowRetrievalProviderStub{
+			blocks: []core.ContentBlock{
+				core.StructuredContentBlock{Data: map[string]any{
+					"type":    "retrieval_evidence",
+					"text":    "retrieved workflow evidence",
+					"summary": "retrieved workflow evidence",
+					"reference": map[string]any{
+						"kind": string(core.ContextReferenceRetrievalEvidence),
+						"uri":  "memory://workflow/1",
+					},
+				}},
+			},
+			records: []memory.KnowledgeRecord{
+				{RecordID: "knowledge-1", Kind: memory.KnowledgeKindDecision, Title: "Decision", Content: "Prefer transactional revision bumps."},
+				{RecordID: "knowledge-2", Kind: memory.KnowledgeKindFact, Title: "retrieved workflow evidence"},
+			},
+		},
+		"wf-1",
+		workflowRetrievalQuery{Primary: "find workflow evidence"},
+		4,
+		200,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	results, ok := payload["results"].([]map[string]any)
+	if !ok || len(results) != 2 {
+		t.Fatalf("expected merged results, got %#v", payload["results"])
+	}
+	if results[0]["source"] != "retrieval" {
+		t.Fatalf("expected ranked retrieval result first, got %#v", results[0])
+	}
+	if results[1]["source"] != "workflow_knowledge" {
+		t.Fatalf("expected workflow knowledge result second, got %#v", results[1])
+	}
+	if results[1]["record_id"] != "knowledge-1" || results[1]["kind"] != string(memory.KnowledgeKindDecision) {
+		t.Fatalf("expected workflow knowledge metadata, got %#v", results[1])
+	}
+	texts, ok := payload["texts"].([]string)
+	if !ok || len(texts) != 2 {
+		t.Fatalf("expected merged text summaries, got %#v", payload["texts"])
+	}
+	if texts[0] != "retrieved workflow evidence" {
+		t.Fatalf("expected retrieval summary first, got %#v", texts)
+	}
+	if !strings.Contains(texts[1], "Decision") {
+		t.Fatalf("expected knowledge summary second, got %#v", texts)
+	}
+}
+
+func TestHydrateWorkflowRetrievalMixedOrderingCanPromoteStrongKnowledgeMatch(t *testing.T) {
+	payload, err := hydrateWorkflowRetrieval(
+		context.Background(),
+		workflowRetrievalProviderStub{
+			blocks: []core.ContentBlock{
+				core.StructuredContentBlock{Data: map[string]any{
+					"type":    "retrieval_evidence",
+					"text":    "general workflow notes",
+					"summary": "general workflow notes",
+					"reference": map[string]any{
+						"kind": string(core.ContextReferenceRetrievalEvidence),
+						"uri":  "memory://workflow/general",
+					},
+				}},
+			},
+			records: []memory.KnowledgeRecord{
+				{RecordID: "knowledge-1", Kind: memory.KnowledgeKindDecision, Title: "Transactional revision bumps", Content: "Prefer transactional revision bumps during ingestion."},
+			},
+		},
+		"wf-1",
+		workflowRetrievalQuery{Primary: "transactional revision bumps"},
+		4,
+		200,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	results, ok := payload["results"].([]map[string]any)
+	if !ok || len(results) != 2 {
+		t.Fatalf("expected mixed results, got %#v", payload["results"])
+	}
+	if results[0]["source"] != "workflow_knowledge" {
+		t.Fatalf("expected workflow knowledge to outrank weak retrieval hit, got %#v", results)
+	}
+	if results[1]["source"] != "retrieval" {
+		t.Fatalf("expected retrieval result second, got %#v", results)
+	}
+}
+
+func TestApplyWorkflowRetrievalTaskPreservesPayloadAlongsidePromptContext(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-1",
+		Instruction: "test",
+		Context:     map[string]any{"mode": "debug"},
+	}
+	payload := map[string]any{
+		"summary": "retrieval summary",
+		"results": []map[string]any{{
+			"summary": "retrieved workflow evidence",
+			"reference": map[string]any{
+				"uri": "memory://workflow/1",
+			},
+		}},
+	}
+
+	cloned := ApplyWorkflowRetrievalTask(task, payload)
+	if cloned == task {
+		t.Fatal("expected task clone")
+	}
+	if got := cloned.Context["workflow_retrieval"]; !reflect.DeepEqual(got, payload) {
+		t.Fatalf("expected workflow retrieval payload in task context, got %#v", got)
+	}
+	if got := cloned.Context["workflow_retrieval_payload"]; !reflect.DeepEqual(got, payload) {
+		t.Fatalf("expected workflow retrieval payload mirror, got %#v", got)
+	}
+	if cloned.Context["mode"] != "debug" {
+		t.Fatalf("expected existing task context to survive, got %#v", cloned.Context)
 	}
 }

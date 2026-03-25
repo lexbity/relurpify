@@ -166,6 +166,14 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 	if workflowArtifacts[0].Kind != "planner_output" {
 		t.Fatalf("expected planner_output artifact, got %s", workflowArtifacts[0].Kind)
 	}
+	rawPlanRef, ok := state.Get("architect.plan_result_ref")
+	if !ok {
+		t.Fatal("expected architect.plan_result_ref in state")
+	}
+	planRef, ok := rawPlanRef.(core.ArtifactReference)
+	if !ok || planRef.Kind != "planner_output" {
+		t.Fatalf("unexpected plan result ref: %#v", rawPlanRef)
+	}
 	stepRuns, err := store.ListStepRuns(context.Background(), task.ID, "step-1")
 	if err != nil {
 		t.Fatalf("list step runs: %v", err)
@@ -179,6 +187,20 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 	}
 	if len(stepArtifacts) != 1 || stepArtifacts[0].Kind != "step_result" {
 		t.Fatalf("expected step_result artifact, got %+v", stepArtifacts)
+	}
+	rawStepRef, ok := state.Get("architect.last_step_result_ref")
+	if !ok {
+		t.Fatal("expected architect.last_step_result_ref in state")
+	}
+	stepRef, ok := rawStepRef.(core.ArtifactReference)
+	if !ok || stepRef.Kind != "step_result" {
+		t.Fatalf("unexpected last step result ref: %#v", rawStepRef)
+	}
+	if stepRef.StepRunID != stepRuns[0].StepRunID {
+		t.Fatalf("expected step ref to target %q, got %#v", stepRuns[0].StepRunID, stepRef)
+	}
+	if got := state.GetString("architect.last_step_result_summary"); !strings.Contains(got, "call echo") {
+		t.Fatalf("expected last step result summary, got %q", got)
 	}
 	events, err := store.ListEvents(context.Background(), task.ID, 20)
 	if err != nil {
@@ -196,6 +218,82 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 	}
 	if !foundSecurityEvent {
 		t.Fatal("expected persisted security insertion event")
+	}
+}
+
+func TestArchitectAgentLegacyExecutionCompactsPlanResultState(t *testing.T) {
+	llm := &architectStubLLM{
+		responses: []*core.LLMResponse{
+			{Text: `{"goal":"say hi","steps":[{"id":"step-1","description":"call echo","files":["README.md"]}],"dependencies":{},"files":["README.md"]}`},
+			{ToolCalls: []core.ToolCall{{Name: "echo", Args: map[string]interface{}{"value": "hi"}}}},
+			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"finished"}`},
+		},
+	}
+	plannerTools := capability.NewRegistry()
+	executorTools := capability.NewRegistry()
+	if err := plannerTools.Register(architectStubTool{}); err != nil {
+		t.Fatalf("register planner tool: %v", err)
+	}
+	if err := executorTools.Register(architectStubTool{}); err != nil {
+		t.Fatalf("register executor tool: %v", err)
+	}
+	agent := &ArchitectAgent{
+		Model:         llm,
+		PlannerTools:  plannerTools,
+		ExecutorTools: executorTools,
+	}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	if err := agent.Initialize(cfg); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	task := &core.Task{
+		ID:          "architect-legacy",
+		Instruction: "Implement a tiny change",
+		Type:        core.TaskTypeCodeModification,
+		Context:     map[string]any{"mode": string(ModeArchitect)},
+	}
+	state := core.NewContext()
+	state.Set("task.id", task.ID)
+
+	result, err := agent.Execute(context.Background(), task, state)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected success result, got %+v", result)
+	}
+	rawPlanResult, ok := state.Get("architect.plan_result")
+	if !ok {
+		t.Fatal("expected architect.plan_result in state")
+	}
+	planResultState, ok := rawPlanResult.(map[string]any)
+	if !ok {
+		t.Fatalf("expected compact architect.plan_result map, got %#v", rawPlanResult)
+	}
+	if _, exists := planResultState["results"]; exists {
+		t.Fatalf("did not expect full planner results inline in legacy state: %#v", planResultState)
+	}
+	if got := fmt.Sprint(planResultState["plan_step_count"]); got != "1" {
+		t.Fatalf("expected compact plan_step_count, got %#v", planResultState)
+	}
+	if rawStep, ok := state.Get("architect.current_step"); !ok {
+		t.Fatal("expected architect.current_step to remain present")
+	} else if step, ok := rawStep.(map[string]any); !ok || len(step) != 0 {
+		t.Fatalf("expected cleared architect.current_step, got %#v", rawStep)
+	}
+	if got := state.GetString("architect.current_step_id"); got != "" {
+		t.Fatalf("expected cleared architect.current_step_id, got %q", got)
+	}
+	rawPlannerResult, ok := result.Data["planner"]
+	if !ok {
+		t.Fatal("expected full planner result in execute result data")
+	}
+	plannerResult, ok := rawPlannerResult.(map[string]any)
+	if !ok {
+		t.Fatalf("expected planner result map, got %#v", rawPlannerResult)
+	}
+	if _, exists := plannerResult["results"]; !exists {
+		t.Fatalf("expected full planner result payload in execute result, got %#v", plannerResult)
 	}
 }
 
@@ -422,9 +520,99 @@ func TestWorkflowPlanningServiceHydratesWorkflowRetrievalIntoPlanningState(t *te
 	if !ok {
 		t.Fatalf("expected workflow retrieval payload, got %#v", raw)
 	}
+	rawPayload, ok := state.Get("planner.workflow_retrieval_payload")
+	if !ok {
+		t.Fatal("expected planner workflow retrieval payload in state")
+	}
+	if got, ok := rawPayload.(map[string]any); !ok || fmt.Sprint(got["summary"]) != fmt.Sprint(payload["summary"]) {
+		t.Fatalf("expected mirrored planner payload, got %#v", rawPayload)
+	}
 	summary := strings.TrimSpace(fmt.Sprint(payload["summary"]))
 	if !strings.Contains(summary, "retrieval-backed planning context") {
 		t.Fatalf("expected retrieval summary to contain mirrored knowledge, got %q", summary)
+	}
+	rawPlanRef, ok := state.Get("architect.plan_result_ref")
+	if !ok {
+		t.Fatal("expected architect.plan_result_ref in state")
+	}
+	planRef, ok := rawPlanRef.(core.ArtifactReference)
+	if !ok || planRef.Kind != "planner_output" {
+		t.Fatalf("unexpected architect plan result ref: %#v", rawPlanRef)
+	}
+	rawPlanResult, ok := state.Get("architect.plan_result")
+	if !ok {
+		t.Fatal("expected architect.plan_result in state")
+	}
+	planResult, ok := rawPlanResult.(map[string]any)
+	if !ok {
+		t.Fatalf("expected compact architect.plan_result map, got %#v", rawPlanResult)
+	}
+	if _, exists := planResult["results"]; exists {
+		t.Fatalf("did not expect full planner results inline once ref exists: %#v", planResult)
+	}
+	if got := fmt.Sprint(planResult["plan_step_count"]); got != "1" {
+		t.Fatalf("expected compact plan_step_count, got %#v", planResult)
+	}
+}
+
+func TestWorkflowPlanningServicePublishesSelectedCandidateRef(t *testing.T) {
+	llm := &architectStubLLM{
+		responses: []*core.LLMResponse{
+			{Text: `{"candidates":[{"id":"a","approach":"Approach A","tradeoffs":"slow"},{"id":"b","approach":"Approach B","tradeoffs":"balanced"},{"id":"c","approach":"Approach C","tradeoffs":"risky"}]}`},
+			{Text: `{"id":"b","reason":"best tradeoff"}`},
+			{Text: `{"goal":"good","steps":[{"id":"step-1","description":"inspect retrieval"}],"dependencies":{},"files":[]}`},
+		},
+	}
+	plannerTools := capability.NewRegistry()
+	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
+	agent := &ArchitectAgent{
+		Model:             llm,
+		PlannerTools:      plannerTools,
+		ExecutorTools:     capability.NewRegistry(),
+		WorkflowStatePath: workflowStatePath,
+	}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3}
+	requireNoErr(t, agent.Initialize(cfg))
+
+	store := newArchitectWorkflowStore(t, workflowStatePath)
+	defer store.Close()
+	requireNoErr(t, store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf-plan-candidate",
+		TaskID:      "wf-plan-candidate",
+		TaskType:    core.TaskTypePlanning,
+		Instruction: "Compare architecture approaches for this refactor",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	requireNoErr(t, store.CreateRun(context.Background(), memory.WorkflowRunRecord{
+		RunID:      "run-plan-candidate",
+		WorkflowID: "wf-plan-candidate",
+		Status:     memory.WorkflowRunStatusRunning,
+	}))
+
+	service := &WorkflowPlanningService{
+		Model:        llm,
+		Planner:      agent.planner,
+		PlannerTools: plannerTools,
+		Config:       cfg,
+	}
+	state := core.NewContext()
+	_, err := service.PlanAndPersist(context.Background(), &core.Task{
+		ID:          "run-plan-candidate",
+		Instruction: "Compare architecture approaches for this refactor",
+		Type:        core.TaskTypePlanning,
+	}, state, store, "wf-plan-candidate", "run-plan-candidate")
+	requireNoErr(t, err)
+
+	rawCandidateRef, ok := state.Get("architect.selected_candidate_ref")
+	if !ok {
+		t.Fatal("expected architect.selected_candidate_ref in state")
+	}
+	candidateRef, ok := rawCandidateRef.(core.ArtifactReference)
+	if !ok || candidateRef.Kind != "candidate_selection" {
+		t.Fatalf("unexpected selected candidate ref: %#v", rawCandidateRef)
+	}
+	if got := state.GetString("architect.selected_candidate"); !strings.Contains(got, "Approach B") {
+		t.Fatalf("unexpected selected candidate: %q", got)
 	}
 }
 

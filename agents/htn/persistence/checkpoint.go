@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents/htn/runtime"
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 )
@@ -69,6 +70,8 @@ func SaveCheckpoint(ctx context.Context, state *core.Context, store memory.Workf
 	if err := store.UpsertWorkflowArtifact(ctx, artifact); err != nil {
 		return fmt.Errorf("htn: failed to save checkpoint artifact: %w", err)
 	}
+	state.Set(runtime.ContextKeyCheckpointRef, workflowutil.WorkflowArtifactReference(artifact))
+	state.Set(runtime.ContextKeyCheckpointSummary, artifact.SummaryText)
 
 	// Update execution state with checkpoint ID.
 	execution := runtime.LoadExecutionState(state)
@@ -119,6 +122,8 @@ func RestoreCheckpoint(ctx context.Context, state *core.Context, store memory.Wo
 		return fmt.Errorf("htn: failed to restore checkpoint state: %w", err)
 	}
 
+	state.Set(runtime.ContextKeyCheckpointRef, workflowutil.WorkflowArtifactReference(*latestCheckpoint))
+	state.Set(runtime.ContextKeyCheckpointSummary, latestCheckpoint.SummaryText)
 	runtime.PublishResumeState(state, latestCheckpoint.ArtifactID)
 	return nil
 }
@@ -221,13 +226,13 @@ func (cp *checkpointPersistence) summarizeCheckpoint(snapshot *runtime.HTNState)
 // checkpointMetadata constructs metadata for checkpoint tracking.
 func (cp *checkpointPersistence) checkpointMetadata(snapshot *runtime.HTNState) map[string]any {
 	metadata := map[string]any{
-		"schema_version":       runtime.HTNSchemaVersion,
-		"task_type":            string(snapshot.Task.Type),
-		"method_name":          snapshot.Method.Name,
-		"planned_steps":        snapshot.Execution.PlannedStepCount,
-		"completed_steps":      snapshot.Execution.CompletedStepCount,
-		"termination_status":   snapshot.Termination,
-		"retrieval_applied":    snapshot.RetrievalApplied,
+		"schema_version":     runtime.HTNSchemaVersion,
+		"task_type":          string(snapshot.Task.Type),
+		"method_name":        snapshot.Method.Name,
+		"planned_steps":      snapshot.Execution.PlannedStepCount,
+		"completed_steps":    snapshot.Execution.CompletedStepCount,
+		"termination_status": snapshot.Termination,
+		"retrieval_applied":  snapshot.RetrievalApplied,
 	}
 	if len(snapshot.Execution.CompletedSteps) > 0 {
 		metadata["last_completed_step"] = snapshot.Execution.LastCompletedStep

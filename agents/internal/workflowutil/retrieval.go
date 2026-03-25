@@ -11,8 +11,7 @@ import (
 )
 
 type RetrievalResult struct {
-	Text      string                     `json:"text"`
-	Citations []retrieval.PackedCitation `json:"citations,omitempty"`
+	retrieval.MixedEvidenceResult
 }
 
 type RetrievalProvider interface {
@@ -56,60 +55,26 @@ func Hydrate(ctx context.Context, provider RetrievalProvider, workflowID string,
 		return nil, err
 	}
 	results := ContentBlockResults(blocks)
+	if lister, ok := provider.(knowledgeLister); ok {
+		records, listErr := lister.ListKnowledge(ctx, strings.TrimSpace(workflowID), "", false)
+		if listErr != nil {
+			return nil, listErr
+		}
+		results = BuildMixedResults(queryText, blocks, records)
+	}
 	if len(results) == 0 {
-		if lister, ok := provider.(knowledgeLister); ok {
-			records, listErr := lister.ListKnowledge(ctx, strings.TrimSpace(workflowID), "", false)
-			if listErr != nil {
-				return nil, listErr
-			}
-			for _, rec := range records {
-				parts := make([]string, 0, 2)
-				if t := strings.TrimSpace(rec.Title); t != "" {
-					parts = append(parts, t)
-				}
-				if c := strings.TrimSpace(rec.Content); c != "" {
-					parts = append(parts, c)
-				}
-				text := strings.Join(parts, ": ")
-				if text != "" {
-					results = append(results, RetrievalResult{Text: text})
-				}
-			}
-		}
-		if len(results) == 0 {
-			return nil, nil
-		}
+		return nil, nil
 	}
-	texts := make([]string, 0, len(results))
-	citationCount := 0
-	serializedResults := make([]map[string]any, 0, len(results))
-	for _, result := range results {
-		texts = append(texts, result.Text)
-		citationCount += len(result.Citations)
-		entry := map[string]any{"text": result.Text}
-		if len(result.Citations) > 0 {
-			entry["citations"] = result.Citations
-		}
-		serializedResults = append(serializedResults, entry)
-	}
-	return map[string]any{
-		"query":          queryText,
-		"scope":          "workflow:" + strings.TrimSpace(workflowID),
-		"cache_tier":     event.CacheTier,
-		"query_id":       event.QueryID,
-		"texts":          texts,
-		"results":        serializedResults,
-		"summary":        strings.Join(texts, "\n\n"),
-		"result_size":    len(texts),
-		"citation_count": citationCount,
-	}, nil
+	return BuildPayload(queryText, "workflow:"+strings.TrimSpace(workflowID), event, results), nil
 }
 
 func ApplyState(state *core.Context, key string, payload map[string]any) {
 	if state == nil || strings.TrimSpace(key) == "" || len(payload) == 0 {
 		return
 	}
-	state.Set(strings.TrimSpace(key), payload)
+	normalizedKey := strings.TrimSpace(key)
+	state.Set(normalizedKey, payload)
+	state.Set(PayloadKey(normalizedKey), payload)
 }
 
 func ApplyTask(task *core.Task, payload map[string]any) *core.Task {
@@ -124,7 +89,36 @@ func ApplyTask(task *core.Task, payload map[string]any) *core.Task {
 		cloned.Context = map[string]any{}
 	}
 	cloned.Context["workflow_retrieval"] = payload
+	cloned.Context["workflow_retrieval_payload"] = payload
 	return cloned
+}
+
+func PayloadKey(base string) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return ""
+	}
+	return base + "_payload"
+}
+
+func StatePayload(state *core.Context, key string) map[string]any {
+	if state == nil {
+		return nil
+	}
+	if payload := rawPayload(state.Get(PayloadKey(key))); len(payload) > 0 {
+		return payload
+	}
+	return rawPayload(state.Get(strings.TrimSpace(key)))
+}
+
+func TaskPayload(task *core.Task, key string) map[string]any {
+	if task == nil || task.Context == nil {
+		return nil
+	}
+	if payload := rawPayloadFromMap(task.Context, PayloadKey(key)); len(payload) > 0 {
+		return payload
+	}
+	return rawPayloadFromMap(task.Context, strings.TrimSpace(key))
 }
 
 func RetrievalText(payload map[string]any) string {
@@ -133,6 +127,18 @@ func RetrievalText(payload map[string]any) string {
 	}
 	if summary := strings.TrimSpace(fmt.Sprint(payload["summary"])); summary != "" && summary != "<nil>" {
 		return summary
+	}
+	// Extract from BuildMixedEvidencePayload results array format.
+	if results, ok := payload["results"].([]map[string]any); ok && len(results) > 0 {
+		parts := make([]string, 0, len(results))
+		for _, result := range results {
+			if text := strings.TrimSpace(fmt.Sprint(result["text"])); text != "" && text != "<nil>" {
+				parts = append(parts, text)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, "\n\n")
+		}
 	}
 	if texts, ok := payload["texts"].([]string); ok && len(texts) > 0 {
 		return strings.Join(texts, "\n\n")
@@ -170,28 +176,29 @@ func ApplyTaskRetrieval(task *core.Task, payload map[string]any) *core.Task {
 }
 
 func ContentBlockResults(blocks []core.ContentBlock) []RetrievalResult {
-	results := make([]RetrievalResult, 0, len(blocks))
-	for _, block := range blocks {
-		switch typed := block.(type) {
-		case core.TextContentBlock:
-			if text := strings.TrimSpace(typed.Text); text != "" {
-				results = append(results, RetrievalResult{Text: text})
-			}
-		case core.StructuredContentBlock:
-			payload, ok := typed.Data.(map[string]any)
-			if !ok {
-				continue
-			}
-			text := strings.TrimSpace(fmt.Sprint(payload["text"]))
-			if text != "" && text != "<nil>" {
-				results = append(results, RetrievalResult{
-					Text:      text,
-					Citations: ParseCitations(payload["citations"]),
-				})
-			}
-		}
+	source := retrieval.MixedEvidenceResultsFromBlocks(blocks)
+	results := make([]RetrievalResult, 0, len(source))
+	for _, result := range source {
+		results = append(results, RetrievalResult{MixedEvidenceResult: result})
 	}
 	return results
+}
+
+func BuildMixedResults(queryText string, blocks []core.ContentBlock, records []memory.KnowledgeRecord) []RetrievalResult {
+	source := retrieval.BuildMixedEvidenceResults(queryText, blocks, records)
+	results := make([]RetrievalResult, 0, len(source))
+	for _, result := range source {
+		results = append(results, RetrievalResult{MixedEvidenceResult: result})
+	}
+	return results
+}
+
+func BuildPayload(queryText, scope string, event retrieval.RetrievalEvent, results []RetrievalResult) map[string]any {
+	source := make([]retrieval.MixedEvidenceResult, 0, len(results))
+	for _, result := range results {
+		source = append(source, result.MixedEvidenceResult)
+	}
+	return retrieval.BuildMixedEvidencePayload(queryText, scope, event, source)
 }
 
 func ParseCitations(raw any) []retrieval.PackedCitation {
@@ -216,6 +223,60 @@ func ParseCitations(raw any) []retrieval.PackedCitation {
 	default:
 		return nil
 	}
+}
+
+func retrievalResultSummary(result RetrievalResult) string {
+	if summary := strings.TrimSpace(result.Summary); summary != "" && summary != "<nil>" {
+		return summary
+	}
+	text := strings.TrimSpace(result.Text)
+	if text == "" || text == "<nil>" {
+		return ""
+	}
+	if len(text) > 240 {
+		return text[:240] + "..."
+	}
+	return text
+}
+
+func asAnyMap(raw any) map[string]any {
+	if raw == nil {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case map[string]any:
+		return typed
+	default:
+		return nil
+	}
+}
+
+func cloneAnyMap(src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(src))
+	for key, value := range src {
+		out[key] = value
+	}
+	return out
+}
+
+func rawPayload(value any, ok bool) map[string]any {
+	if !ok || value == nil {
+		return nil
+	}
+	payload, _ := value.(map[string]any)
+	return payload
+}
+
+func rawPayloadFromMap(values map[string]any, key string) map[string]any {
+	key = strings.TrimSpace(key)
+	if key == "" || values == nil {
+		return nil
+	}
+	payload, _ := values[key].(map[string]any)
+	return payload
 }
 
 func BuildQuery(q RetrievalQuery) string {

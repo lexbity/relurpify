@@ -3,11 +3,14 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
@@ -84,6 +87,25 @@ func makePipelineStage(name, inputKey, outputKey string, output any) *stubPipeli
 		output: output,
 	}
 }
+
+type pipelineToolStub struct {
+	name string
+}
+
+func (t pipelineToolStub) Name() string        { return t.name }
+func (t pipelineToolStub) Description() string { return "stub tool" }
+func (t pipelineToolStub) Category() string    { return "testing" }
+func (t pipelineToolStub) Parameters() []core.ToolParameter {
+	return nil
+}
+func (t pipelineToolStub) Execute(context.Context, *core.Context, map[string]any) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true}, nil
+}
+func (t pipelineToolStub) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t pipelineToolStub) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
+}
+func (t pipelineToolStub) Tags() []string { return []string{core.TagExecute} }
 
 type taskTypeStageFactory struct{}
 
@@ -192,6 +214,27 @@ func TestPipelineAgentNewDoesNotInjectCodingStagesByDefault(t *testing.T) {
 	}
 }
 
+func TestPipelineAgentAvailableToolsUsesExecutionCatalogSnapshot(t *testing.T) {
+	registry := capability.NewRegistry()
+	requireNoError(t, registry.Register(pipelineToolStub{name: "cli_go_test"}))
+
+	agent := &PipelineAgent{Tools: registry}
+	agent.executionCatalog = registry.CaptureExecutionCatalogSnapshot()
+	defer func() { agent.executionCatalog = nil }()
+
+	registry.UseAgentSpec("agent", &core.AgentRuntimeSpec{
+		ExposurePolicies: []core.CapabilityExposurePolicy{{
+			Selector: core.CapabilitySelector{Name: "cli_go_test"},
+			Access:   core.CapabilityExposureInspectable,
+		}},
+	})
+
+	tools := agent.availableTools()
+	if len(tools) != 1 || tools[0].Name() != "cli_go_test" {
+		t.Fatalf("expected execution snapshot tools, got %#v", tools)
+	}
+}
+
 func TestPipelineAgentPersistsStageResults(t *testing.T) {
 	model := &stubPipelineModel{responses: []*core.LLMResponse{{Text: "{}"}}}
 	stage := makePipelineStage("explore", "in", "out", map[string]any{"files": 1})
@@ -219,6 +262,62 @@ func TestPipelineAgentPersistsStageResults(t *testing.T) {
 	}
 	if results[0].StageName != "explore" {
 		t.Fatalf("expected explore stage, got %s", results[0].StageName)
+	}
+	rawRef, ok := state.Get("pipeline.final_output_ref")
+	if !ok {
+		t.Fatal("expected pipeline.final_output_ref in state")
+	}
+	ref, ok := rawRef.(core.ArtifactReference)
+	if !ok {
+		t.Fatalf("expected ArtifactReference, got %#v", rawRef)
+	}
+	if ref.Kind != "pipeline_final_output" {
+		t.Fatalf("expected pipeline_final_output ref, got %#v", ref)
+	}
+	if !strings.Contains(ref.URI, "workflow://artifact/") {
+		t.Fatalf("expected workflow artifact uri, got %#v", ref)
+	}
+	rawFinal, ok := state.Get("pipeline.final_output")
+	if !ok {
+		t.Fatal("expected compact pipeline.final_output in state")
+	}
+	finalValue, ok := rawFinal.(map[string]any)
+	if !ok {
+		t.Fatalf("expected compact pipeline.final_output map, got %#v", rawFinal)
+	}
+	if _, exists := finalValue["decoded_output"]; exists {
+		t.Fatalf("did not expect decoded_output inline once ref exists: %#v", finalValue)
+	}
+	if !strings.Contains(fmt.Sprint(finalValue["summary"]), "explore [ok]") {
+		t.Fatalf("expected compact final output summary, got %#v", finalValue)
+	}
+	rawResultsRef, ok := state.Get("pipeline.results_ref")
+	if !ok {
+		t.Fatal("expected pipeline.results_ref in state")
+	}
+	resultsRef, ok := rawResultsRef.(core.ArtifactReference)
+	if !ok {
+		t.Fatalf("expected ArtifactReference, got %#v", rawResultsRef)
+	}
+	if resultsRef.Kind != "pipeline_stage_results" {
+		t.Fatalf("expected pipeline_stage_results ref, got %#v", resultsRef)
+	}
+	if summary := state.GetString("pipeline.results_summary"); !strings.Contains(summary, "explore [ok]") {
+		t.Fatalf("unexpected results summary: %q", summary)
+	}
+	resultsRaw, ok := state.Get("pipeline.results")
+	if !ok {
+		t.Fatal("expected compact pipeline.results in state")
+	}
+	resultsValue, ok := resultsRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected compact pipeline.results map, got %#v", resultsRaw)
+	}
+	if got := fmt.Sprint(resultsValue["stage_count"]); got != "1" {
+		t.Fatalf("expected compact stage_count=1, got %#v", resultsValue)
+	}
+	if _, ok := resultsValue["last_stage"].(map[string]any); !ok {
+		t.Fatalf("expected compact last_stage summary, got %#v", resultsValue["last_stage"])
 	}
 }
 
@@ -269,6 +368,13 @@ func TestPipelineAgentHydratesWorkflowRetrievalIntoState(t *testing.T) {
 	payload, ok := raw.(map[string]any)
 	if !ok {
 		t.Fatalf("expected workflow retrieval payload, got %#v", raw)
+	}
+	rawPayload, ok := state.Get("pipeline.workflow_retrieval_payload")
+	if !ok {
+		t.Fatal("expected pipeline workflow retrieval payload state")
+	}
+	if !reflect.DeepEqual(rawPayload, payload) {
+		t.Fatalf("expected payload mirror, got %#v want %#v", rawPayload, payload)
 	}
 	summary, _ := payload["summary"].(string)
 	if summary == "" || !strings.Contains(summary, "searchable through retrieval") {

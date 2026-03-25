@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/htn/runtime"
 	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	agentpipeline "github.com/lexcodex/relurpify/agents/pipeline"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -51,6 +52,12 @@ func (a *HTNAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Methods == nil {
 		a.Methods = NewMethodLibrary()
+	}
+	// Validate method library before use.
+	for _, method := range a.Methods.All() {
+		if err := method.Validate(); err != nil {
+			return fmt.Errorf("htn: invalid method library: %w", err)
+		}
 	}
 	if a.Tools == nil {
 		a.Tools = capability.NewRegistry()
@@ -140,24 +147,41 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 		}, 4, 500); err != nil {
 			return nil, fmt.Errorf("htn: retrieval hydrate failed: %w", err)
 		} else if len(retrievalPayload) > 0 {
-			workflowutil.ApplyState(state, "htn.workflow_retrieval", retrievalPayload)
-			state.Set("htn.retrieval_applied", true)
+			runtime.PublishWorkflowRetrieval(state, retrievalPayload, true)
 			resolvedTask = workflowutil.ApplyTaskRetrieval(resolvedTask, retrievalPayload)
 		}
 	}
+	runtime.PublishTaskState(state, resolvedTask)
 
 	// Find matching method.
 	method := a.Methods.Find(resolvedTask)
 	if method == nil {
 		// No method — delegate directly to primitive executor.
+		runtime.PublishResolvedMethodState(state, nil)
+		runtime.PublishTerminationState(state, "completed")
 		return a.delegateToPrimitive(ctx, resolvedTask, state)
 	}
+	resolvedMethod := ResolveMethod(*method)
+	runtime.PublishResolvedMethodState(state, &resolvedMethod)
 
-	// Decompose into a plan.
-	plan, err := Decompose(resolvedTask, method)
+	// Decompose into a plan using resolved method (includes operator metadata).
+	plan, err := DecomposeResolved(resolvedTask, &resolvedMethod)
 	if err != nil {
 		return nil, fmt.Errorf("htn: decomposition failed: %w", err)
 	}
+
+	// Run preflight to check required capabilities.
+	preflightReport, preflightErr := runtime.PlanPreflight(plan, a.Tools)
+	runtime.PublishPreflightState(state, preflightReport, preflightErr)
+	if preflightErr != nil {
+		return nil, fmt.Errorf("htn: %w", preflightErr)
+	}
+
+	runtime.PublishPlanState(state, plan)
+	executionState := runtime.LoadExecutionState(state)
+	executionState.WorkflowID = workflowID
+	executionState.RunID = runID
+	runtime.PublishExecutionState(state, executionState)
 
 	// Execute via plan_executor.
 	stepIndexes := make(map[string]int, len(plan.Steps))
@@ -171,14 +195,31 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 	executor := &graph.PlanExecutor{
 		Options: graph.PlanExecutionOptions{
 			BuildStepTask: a.buildPlanStepTask,
+			MergeBranches: runtime.MergeHTNBranches,
 			CompletedStepIDs: func(s *core.Context) []string {
-				return core.StringSliceFromContext(s, "plan.completed_steps")
+				return runtime.CompletedStepsFromContext(s)
+			},
+			Recover: func(ctx context.Context, step core.PlanStep, stepTask *core.Task, s *core.Context, err error) (*graph.StepRecovery, error) {
+				diagnosis := fmt.Sprintf("retrying step %q after failure: %v", step.ID, err)
+				notes := []string{fmt.Sprintf("step %q failed with: %v", step.ID, err)}
+				s.Set(runtime.ContextKeyLastRecoveryDiag, diagnosis)
+				s.Set(runtime.ContextKeyLastFailureStep, step.ID)
+				if err != nil {
+					s.Set(runtime.ContextKeyLastFailureError, err.Error())
+				}
+				s.Set(runtime.ContextKeyLastRecoveryNotes, notes)
+				return &graph.StepRecovery{Diagnosis: diagnosis, Notes: notes}, nil
 			},
 			AfterStep: func(step core.PlanStep, s *core.Context, result *core.Result) {
-				// Track completed steps for checkpoint resume support.
-				completed := core.StringSliceFromContext(s, "plan.completed_steps")
-				completed = append(completed, step.ID)
+				// Keep HTN execution state and legacy plan.completed_steps in sync.
+				completed := runtime.CompletedStepsFromContext(s)
+				if !containsStepID(completed, step.ID) {
+					completed = append(completed, step.ID)
+				}
 				s.Set("plan.completed_steps", completed)
+				execution := runtime.LoadExecutionState(s)
+				execution.CompletedSteps = append([]string(nil), completed...)
+				runtime.PublishExecutionState(s, execution)
 				if checkpointStore != nil {
 					_ = checkpointStore.Save(&frameworkpipeline.Checkpoint{
 						CheckpointID: fmt.Sprintf("htn_%s_%d", step.ID, time.Now().UnixNano()),
@@ -218,7 +259,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 		},
 	}
 
-	primitiveAgent := graph.WorkflowExecutor(a.primitiveAgent())
+	primitiveAgent := runtime.NewPrimitiveDispatcher(a.Tools, a.primitiveAgent())
 	if surfaces.Workflow != nil || surfaces.Runtime != nil {
 		primitiveAgent = &recordingPrimitiveAgent{
 			delegate:   primitiveAgent,
@@ -240,6 +281,17 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 	if surfaces.Workflow != nil && workflowID != "" && runID != "" {
 		_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))
 	}
+	completed := core.StringSliceFromContext(state, "plan.completed_steps")
+	executionState = runtime.LoadExecutionState(state)
+	executionState.WorkflowID = workflowID
+	executionState.RunID = runID
+	executionState.CompletedSteps = append([]string(nil), completed...)
+	executionState.CompletedStepCount = len(completed)
+	if plan != nil {
+		executionState.PlannedStepCount = len(plan.Steps)
+	}
+	runtime.PublishExecutionState(state, executionState)
+	runtime.PublishTerminationState(state, "completed")
 
 	// Phase 9: Persist framework-native artifacts and metrics.
 	if surfaces.Workflow != nil && workflowID != "" && runID != "" {
@@ -248,7 +300,66 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 		_ = a.persistHTNMethodMetadata(ctx, state, surfaces.Workflow, workflowID, runID)
 		_ = a.persistHTNExecutionMetrics(ctx, state, surfaces.Workflow, workflowID, runID, time.Second, executionDuration)
 	}
+	compactHTNCheckpointState(state)
 	return result, nil
+}
+
+func compactHTNCheckpointState(state *core.Context) {
+	if state == nil {
+		return
+	}
+	if _, ok := state.Get(runtime.ContextKeyCheckpointRef); !ok {
+		return
+	}
+	raw, ok := state.Get(runtime.ContextKeyCheckpoint)
+	if !ok {
+		return
+	}
+	switch checkpoint := raw.(type) {
+	case runtime.CheckpointState:
+		state.Set(runtime.ContextKeyCheckpoint, compactHTNCheckpoint(checkpoint))
+	case *runtime.CheckpointState:
+		if checkpoint != nil {
+			state.Set(runtime.ContextKeyCheckpoint, compactHTNCheckpoint(*checkpoint))
+		}
+	case map[string]any:
+		state.Set(runtime.ContextKeyCheckpoint, compactHTNCheckpointMap(checkpoint))
+	}
+}
+
+func compactHTNCheckpoint(checkpoint runtime.CheckpointState) map[string]any {
+	return map[string]any{
+		"checkpoint_id":    checkpoint.CheckpointID,
+		"stage_name":       checkpoint.StageName,
+		"stage_index":      checkpoint.StageIndex,
+		"workflow_id":      checkpoint.WorkflowID,
+		"run_id":           checkpoint.RunID,
+		"completed_steps":  len(checkpoint.CompletedSteps),
+		"has_snapshot":     checkpoint.Snapshot != nil,
+		"schema_version":   checkpoint.SchemaVersion,
+	}
+}
+
+func compactHTNCheckpointMap(checkpoint map[string]any) map[string]any {
+	value := map[string]any{
+		"checkpoint_id":  checkpoint["checkpoint_id"],
+		"stage_name":     checkpoint["stage_name"],
+		"stage_index":    checkpoint["stage_index"],
+		"workflow_id":    checkpoint["workflow_id"],
+		"run_id":         checkpoint["run_id"],
+		"schema_version": checkpoint["schema_version"],
+	}
+	if completed, ok := checkpoint["completed_steps"]; ok {
+		switch values := completed.(type) {
+		case []string:
+			value["completed_steps"] = len(values)
+		case []any:
+			value["completed_steps"] = len(values)
+		}
+	}
+	_, hasSnapshot := checkpoint["snapshot"]
+	value["has_snapshot"] = hasSnapshot
+	return value
 }
 
 func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, step core.PlanStep, _ *core.Context) *core.Task {
@@ -263,6 +374,18 @@ func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, ste
 	if plan != nil && strings.TrimSpace(plan.Goal) != "" {
 		stepTask.Context["plan_goal"] = plan.Goal
 	}
+	// Bind operator metadata from step params onto the step task.
+	if step.Params != nil {
+		if taskType, ok := step.Params["operator_task_type"].(string); ok && taskType != "" {
+			stepTask.Type = core.TaskType(taskType)
+		}
+		stepTask.Context["operator_task_type"] = step.Params["operator_task_type"]
+		stepTask.Context["operator_executor"] = step.Params["operator_executor"]
+		stepTask.Context["operator_name"] = step.Params["operator_name"]
+		if caps, ok := step.Params["required_capabilities"]; ok {
+			stepTask.Context["required_capabilities"] = caps
+		}
+	}
 	stepTask.Instruction = fmt.Sprintf("Execute step %s only: %s", step.ID, step.Description)
 	if len(step.Files) > 0 {
 		stepTask.Instruction += fmt.Sprintf("\nRelevant files: %v", step.Files)
@@ -276,10 +399,10 @@ func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, ste
 	return stepTask
 }
 
-// delegateToPrimitive passes the task directly to the primitive executor.
+// delegateToPrimitive passes the task through the capability dispatcher.
 func (a *HTNAgent) delegateToPrimitive(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
-	agent := a.primitiveAgent()
-	return agent.Execute(ctx, task, state)
+	dispatcher := runtime.NewPrimitiveDispatcher(a.Tools, a.primitiveAgent())
+	return dispatcher.Execute(ctx, task, state)
 }
 
 // primitiveAgent returns the configured primitive executor or a no-op fallback.
@@ -288,6 +411,15 @@ func (a *HTNAgent) primitiveAgent() graph.WorkflowExecutor {
 		return a.PrimitiveExec
 	}
 	return &noopAgent{}
+}
+
+func containsStepID(values []string, stepID string) bool {
+	for _, value := range values {
+		if value == stepID {
+			return true
+		}
+	}
+	return false
 }
 
 // noopAgent is a stand-in primitive executor that immediately succeeds. It is
@@ -316,6 +448,28 @@ type recordingPrimitiveAgent struct {
 	}
 	workflowID string
 	runID      string
+}
+
+func (a *recordingPrimitiveAgent) BranchExecutor() (graph.WorkflowExecutor, error) {
+	if a == nil {
+		return &recordingPrimitiveAgent{}, nil
+	}
+	branch := &recordingPrimitiveAgent{
+		runtime:    a.runtime,
+		workflow:   a.workflow,
+		workflowID: a.workflowID,
+		runID:      a.runID,
+	}
+	if provider, ok := a.delegate.(graph.BranchExecutorProvider); ok {
+		exec, err := provider.BranchExecutor()
+		if err != nil {
+			return nil, err
+		}
+		branch.delegate = exec
+		return branch, nil
+	}
+	branch.delegate = a.delegate
+	return branch, nil
 }
 
 func (a *recordingPrimitiveAgent) Initialize(cfg *core.Config) error {
@@ -483,6 +637,10 @@ func (a *HTNAgent) resumeCheckpoint(ctx context.Context, store *db.SQLiteWorkflo
 	}
 	state.Merge(checkpoint.Context)
 	state.Set("htn.resume_checkpoint_id", checkpoint.CheckpointID)
+	// Validate the merged checkpoint state to catch stale/invalid completed steps.
+	if _, loaded, err := runtime.LoadStateFromContext(state); loaded && err != nil {
+		return fmt.Errorf("invalid checkpoint state: %w", err)
+	}
 	return nil
 }
 

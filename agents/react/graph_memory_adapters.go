@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
@@ -21,14 +22,23 @@ type retrievalServiceProvider interface {
 }
 
 func (r scopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit int) ([]core.MemoryRecordEnvelope, error) {
+	publication, err := r.RetrievePublication(ctx, query, limit)
+	if err != nil || publication == nil {
+		return nil, err
+	}
+	return publication.Results, nil
+}
+
+func (r scopedMemoryRetriever) RetrievePublication(ctx context.Context, query string, limit int) (*graph.MemoryRetrievalPublication, error) {
 	if r.store == nil {
-		return nil, nil
+		return graph.BuildMemoryRetrievalPublication(strings.TrimSpace(query), nil, r.memoryClass), nil
 	}
 	switch r.memoryClass {
 	case core.MemoryClassDeclarative:
+		var blocks []core.ContentBlock
 		if provider, ok := r.store.(retrievalServiceProvider); ok {
 			if service := provider.RetrievalService(); service != nil {
-				blocks, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
+				retrieved, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
 					Text:      query,
 					Scope:     string(r.scope),
 					MaxTokens: 400,
@@ -37,9 +47,7 @@ func (r scopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit
 				if err != nil {
 					return nil, err
 				}
-				if envelopes := retrievalEnvelopes(blocks, r.memoryClass, r.scope); len(envelopes) > 0 {
-					return envelopes, nil
-				}
+				blocks = retrieved
 			}
 		}
 		if store, ok := r.store.(memory.DeclarativeMemoryStore); ok {
@@ -51,9 +59,49 @@ func (r scopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit
 			if err != nil {
 				return nil, err
 			}
-			return declarativeEnvelopes(records), nil
+			// Start with retrieval results (if available) - retrieval is preferred
+			out := make([]core.MemoryRecordEnvelope, 0)
+			if len(blocks) > 0 {
+				if retrievalEnvelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(retrievalEnvelopes) > 0 {
+					out = append(out, retrievalEnvelopes...)
+				}
+			}
+			// Then add memory store results
+			for _, record := range records {
+				out = append(out, core.MemoryRecordEnvelope{
+					Key:         record.RecordID,
+					MemoryClass: r.memoryClass,
+					Text:        record.Content,
+					Summary:     record.Summary,
+					Scope:       string(record.Scope),
+					Source:      "declarative",
+					RecordID:    record.RecordID,
+				})
+			}
+			if len(out) > 0 {
+				return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
+			}
+			return graph.BuildMemoryRetrievalPublication(query, nil, r.memoryClass), nil
+		}
+		if envelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(envelopes) > 0 {
+			return graph.BuildMemoryRetrievalPublication(query, envelopes, r.memoryClass), nil
 		}
 	case core.MemoryClassProcedural:
+		var blocks []core.ContentBlock
+		if provider, ok := r.store.(retrievalServiceProvider); ok {
+			if service := provider.RetrievalService(); service != nil {
+				retrieved, _, err := service.Retrieve(ctx, retrieval.RetrievalQuery{
+					Text:      query,
+					Scope:     string(r.scope),
+					MaxTokens: 400,
+					Limit:     limit,
+				})
+				if err != nil {
+					return nil, err
+				}
+				blocks = retrieved
+			}
+		}
 		if store, ok := r.store.(memory.ProceduralMemoryStore); ok {
 			records, err := store.SearchProcedural(ctx, memory.ProceduralMemoryQuery{
 				Query: query,
@@ -63,7 +111,32 @@ func (r scopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit
 			if err != nil {
 				return nil, err
 			}
-			return proceduralEnvelopes(records), nil
+			// Start with retrieval results (if available) - retrieval is preferred
+			out := make([]core.MemoryRecordEnvelope, 0)
+			if len(blocks) > 0 {
+				if retrievalEnvelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(retrievalEnvelopes) > 0 {
+					out = append(out, retrievalEnvelopes...)
+				}
+			}
+			// Then add memory store results
+			for _, record := range records {
+				out = append(out, core.MemoryRecordEnvelope{
+					Key:         record.RoutineID,
+					MemoryClass: r.memoryClass,
+					Text:        record.Description,
+					Summary:     record.Summary,
+					Scope:       string(record.Scope),
+					Source:      "procedural",
+					RecordID:    record.RoutineID,
+				})
+			}
+			if len(out) > 0 {
+				return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
+			}
+			return graph.BuildMemoryRetrievalPublication(query, nil, r.memoryClass), nil
+		}
+		if envelopes := retrieval.MemoryEnvelopes(blocks, r.memoryClass, string(r.scope)); len(envelopes) > 0 {
+			return graph.BuildMemoryRetrievalPublication(query, envelopes, r.memoryClass), nil
 		}
 	}
 	records, err := r.store.Search(ctx, query, r.scope)
@@ -95,73 +168,7 @@ func (r scopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit
 		}
 		out = append(out, envelope)
 	}
-	return out, nil
-}
-
-func retrievalEnvelopes(blocks []core.ContentBlock, memoryClass core.MemoryClass, scope memory.MemoryScope) []core.MemoryRecordEnvelope {
-	out := make([]core.MemoryRecordEnvelope, 0, len(blocks))
-	for _, block := range blocks {
-		structured, ok := block.(core.StructuredContentBlock)
-		if !ok {
-			continue
-		}
-		payload, ok := structured.Data.(map[string]any)
-		if !ok {
-			continue
-		}
-		text := strings.TrimSpace(stringify(payload["text"]))
-		if text == "" {
-			continue
-		}
-		key := ""
-		if citations, ok := payload["citations"].([]retrieval.PackedCitation); ok && len(citations) > 0 {
-			key = firstNonEmpty(citations[0].DocID, citations[0].ChunkID, citations[0].CanonicalURI)
-		}
-		if key == "" {
-			key = "retrieval:" + strings.TrimSpace(text)
-		}
-		out = append(out, core.MemoryRecordEnvelope{
-			Key:         key,
-			MemoryClass: memoryClass,
-			Scope:       string(scope),
-			Summary:     summarizeText(text, 240),
-		})
-	}
-	return out
-}
-
-func declarativeEnvelopes(records []memory.DeclarativeMemoryRecord) []core.MemoryRecordEnvelope {
-	out := make([]core.MemoryRecordEnvelope, 0, len(records))
-	for _, record := range records {
-		summary := record.Summary
-		if summary == "" {
-			summary = record.Title
-		}
-		out = append(out, core.MemoryRecordEnvelope{
-			Key:         record.RecordID,
-			MemoryClass: core.MemoryClassDeclarative,
-			Scope:       string(record.Scope),
-			Summary:     summary,
-		})
-	}
-	return out
-}
-
-func proceduralEnvelopes(records []memory.ProceduralMemoryRecord) []core.MemoryRecordEnvelope {
-	out := make([]core.MemoryRecordEnvelope, 0, len(records))
-	for _, record := range records {
-		summary := record.Summary
-		if summary == "" {
-			summary = record.Name
-		}
-		out = append(out, core.MemoryRecordEnvelope{
-			Key:         record.RoutineID,
-			MemoryClass: core.MemoryClassProcedural,
-			Scope:       string(record.Scope),
-			Summary:     summary,
-		})
-	}
-	return out
+	return graph.BuildMemoryRetrievalPublication(query, out, r.memoryClass), nil
 }
 
 func stringify(value interface{}) string {

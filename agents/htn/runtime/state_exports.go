@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 )
@@ -47,6 +48,11 @@ func PublishTaskState(state *core.Context, task *core.Task) {
 	publishTaskState(state, task)
 }
 
+// PublishResolvedMethodState is the exported version of publishResolvedMethodState.
+func PublishResolvedMethodState(state *core.Context, method *ResolvedMethod) {
+	publishResolvedMethodState(state, method)
+}
+
 // PublishPreflightState is the exported version of publishPreflightState.
 func PublishPreflightState(state *core.Context, report *graph.PreflightReport, err error) {
 	publishPreflightState(state, report, err)
@@ -72,17 +78,28 @@ func PublishTerminationState(state *core.Context, termination string) {
 	publishTerminationState(state, termination)
 }
 
+// PlanPreflight checks plan step required capabilities against the registry.
+func PlanPreflight(plan *core.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
+	return planPreflight(plan, registry)
+}
+
 // Exported constants for persistence use.
 const (
-	ContextKeyTask              = contextKeyTask
-	ContextKeySelectedMethod    = contextKeySelectedMethod
-	ContextKeyMetrics           = contextKeyMetrics
-	ContextKeyPlan              = contextKeyPlan
-	ContextKeyCheckpoint        = contextKeyCheckpoint
-	ContextKnowledgeMethod      = contextKnowledgeMethod
-	HTNSchemaVersion            = htnSchemaVersion
-	ContextKeyLastRecoveryNotes = contextKeyLastRecoveryNotes
-	ContextKeyLastRecoveryDiag  = contextKeyLastRecoveryDiag
-	ContextKeyLastFailureStep   = contextKeyLastFailureStep
-	ContextKeyLastFailureError  = contextKeyLastFailureError
+	ContextKeyTask                    = contextKeyTask
+	ContextKeySelectedMethod          = contextKeySelectedMethod
+	ContextKeyMetrics                 = contextKeyMetrics
+	ContextKeyPlan                    = contextKeyPlan
+	ContextKeyCheckpoint              = contextKeyCheckpoint
+	ContextKeyCheckpointRef           = contextKeyCheckpointRef
+	ContextKeyCheckpointSummary       = contextKeyCheckpointSummary
+	ContextKeyRunSummaryRef           = contextKeyRunSummaryRef
+	ContextKeyRunSummarySummary       = contextKeyRunSummarySummary
+	ContextKeyExecutionMetricsRef     = contextKeyExecutionMetricsRef
+	ContextKeyExecutionMetricsSummary = contextKeyExecutionMetricsSummary
+	ContextKnowledgeMethod            = contextKnowledgeMethod
+	HTNSchemaVersion                  = htnSchemaVersion
+	ContextKeyLastRecoveryNotes       = contextKeyLastRecoveryNotes
+	ContextKeyLastRecoveryDiag        = contextKeyLastRecoveryDiag
+	ContextKeyLastFailureStep         = contextKeyLastFailureStep
+	ContextKeyLastFailureError        = contextKeyLastFailureError
 )

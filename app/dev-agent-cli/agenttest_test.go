@@ -12,6 +12,28 @@ import (
 	"github.com/lexcodex/relurpify/testsuite/agenttest"
 )
 
+func TestAgentTestRunDefaultsSkipASTIndex(t *testing.T) {
+	cmd := newAgentTestRunCmd()
+	flag := cmd.Flags().Lookup("skip-ast-index")
+	if flag == nil {
+		t.Fatal("expected skip-ast-index flag")
+	}
+	if flag.DefValue != "true" {
+		t.Fatalf("expected skip-ast-index default true, got %q", flag.DefValue)
+	}
+}
+
+func TestAgentTestRefreshDefaultsSkipASTIndex(t *testing.T) {
+	cmd := newAgentTestRefreshCmd()
+	flag := cmd.Flags().Lookup("skip-ast-index")
+	if flag == nil {
+		t.Fatal("expected skip-ast-index flag")
+	}
+	if flag.DefValue != "true" {
+		t.Fatalf("expected skip-ast-index default true, got %q", flag.DefValue)
+	}
+}
+
 func TestFilterRefreshSuiteCasesByTag(t *testing.T) {
 	suite := &agenttest.Suite{
 		Spec: agenttest.SuiteSpec{

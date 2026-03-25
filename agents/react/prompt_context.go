@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
@@ -155,6 +157,20 @@ func (a *promptContextAssembler) declarativeMemory(state *core.Context) string {
 	if state == nil {
 		return ""
 	}
+	if raw, ok := state.Get("graph.declarative_memory_payload"); ok && raw != nil {
+		if payload, ok := raw.(map[string]any); ok {
+			if formatted := formatMemoryRetrievalPayload(payload); formatted != "" {
+				return formatted
+			}
+		}
+	}
+	if raw, ok := state.Get("graph.declarative_memory_refs"); ok && raw != nil {
+		if refs, ok := raw.([]core.ContextReference); ok {
+			if formatted := formatMemoryReferenceList(refs); formatted != "" {
+				return formatted
+			}
+		}
+	}
 	raw, ok := state.Get("graph.declarative_memory")
 	if !ok || raw == nil {
 		return ""
@@ -179,18 +195,74 @@ func (a *promptContextAssembler) declarativeMemory(state *core.Context) string {
 	return strings.Join(parts, "\n")
 }
 
+func formatMemoryRetrievalPayload(payload map[string]any) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	results, ok := payload["results"].([]map[string]any)
+	if !ok || len(results) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(results))
+	for _, result := range results {
+		text := strings.TrimSpace(fmt.Sprint(result["summary"]))
+		if text == "" || text == "<nil>" {
+			text = strings.TrimSpace(fmt.Sprint(result["text"]))
+		}
+		if text == "" || text == "<nil>" {
+			continue
+		}
+		if source := strings.TrimSpace(fmt.Sprint(result["source"])); source != "" && source != "<nil>" {
+			text += " [" + source + "]"
+		}
+		parts = append(parts, "- "+text)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n")
+}
+
+func formatMemoryReferenceList(refs []core.ContextReference) string {
+	if len(refs) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		label := strings.TrimSpace(ref.URI)
+		if label == "" {
+			label = strings.TrimSpace(ref.ID)
+		}
+		if label == "" {
+			continue
+		}
+		line := "- Reference: " + label
+		if ref.Kind != "" {
+			line += fmt.Sprintf(" (%s)", ref.Kind)
+		}
+		if ref.Detail != "" {
+			line += " [" + strings.TrimSpace(ref.Detail) + "]"
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (a *promptContextAssembler) workflowRetrieval() string {
 	if a == nil || a.task == nil || a.task.Context == nil {
 		return ""
 	}
-	raw, ok := a.task.Context["workflow_retrieval"]
-	if !ok || raw == nil {
-		return ""
-	}
-	if payload, ok := raw.(map[string]any); ok {
+	if payload := workflowutil.TaskPayload(a.task, "workflow_retrieval"); len(payload) > 0 {
 		if formatted := formatWorkflowRetrievalPayload(payload); formatted != "" {
 			return formatted
 		}
+	}
+	raw, ok := a.task.Context["workflow_retrieval"]
+	if !ok || raw == nil {
+		return ""
 	}
 	encoded, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
@@ -221,9 +293,15 @@ func formatWorkflowRetrievalPayload(payload map[string]any) string {
 	for i, result := range results {
 		text := strings.TrimSpace(fmt.Sprint(result["text"]))
 		if text == "" || text == "<nil>" {
-			continue
+			text = strings.TrimSpace(fmt.Sprint(result["summary"]))
+		}
+		if text == "" || text == "<nil>" {
+			text = "reference only"
 		}
 		line := fmt.Sprintf("%d. %s", i+1, truncateWorkflowEvidence(text, 240))
+		if ref := workflowRetrievalReference(result); ref != "" {
+			line += "\n   Reference: " + ref
+		}
 		if citations, ok := result["citations"].([]retrieval.PackedCitation); ok && len(citations) > 0 {
 			sources := make([]string, 0, len(citations))
 			for _, citation := range citations {
@@ -237,12 +315,38 @@ func formatWorkflowRetrievalPayload(payload map[string]any) string {
 				line += "\n   Sources: " + strings.Join(sources, ", ")
 			}
 		}
+		// Add anchor notices for drifted or superseded anchors
+		if anchors, ok := result["anchors"].([]any); ok {
+			anchorNotices := buildAnchorNotices(anchors)
+			if anchorNotices != "" {
+				line += "\n" + anchorNotices
+			}
+		}
+		// Add derivation depth warning if evidence is heavily transformed
+		if derivation, ok := result["derivation"].(map[string]any); ok {
+			depthWarning := buildDerivationDepthWarning(derivation)
+			if depthWarning != "" {
+				line += "\n" + depthWarning
+			}
+		}
 		lines = append(lines, line)
 	}
 	if len(lines) > 0 {
 		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
 	}
 	return strings.Join(sections, "\n")
+}
+
+func workflowRetrievalReference(result map[string]any) string {
+	raw, ok := result["reference"].(map[string]any)
+	if !ok || len(raw) == 0 {
+		return ""
+	}
+	return firstWorkflowSource(
+		strings.TrimSpace(fmt.Sprint(raw["uri"])),
+		strings.TrimSpace(fmt.Sprint(raw["id"])),
+		strings.TrimSpace(fmt.Sprint(raw["detail"])),
+	)
 }
 
 func truncateWorkflowEvidence(value string, limit int) string {
@@ -454,5 +558,103 @@ func toolSummaryBudgetForPhase(phase string) int {
 		return 4
 	default:
 		return 5
+	}
+}
+
+// buildAnchorNotices formats warning notices for drifted or superseded anchors in evidence.
+func buildAnchorNotices(anchorsData []any) string {
+	if len(anchorsData) == 0 {
+		return ""
+	}
+
+	var notices []string
+	for _, anchorAny := range anchorsData {
+		anchorMap, ok := anchorAny.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		term := fmt.Sprint(anchorMap["term"])
+		definition := fmt.Sprint(anchorMap["definition"])
+		status := fmt.Sprint(anchorMap["status"])
+
+		// Only show notices for non-fresh anchors
+		if status == "fresh" || status == "" {
+			continue
+		}
+
+		var notice string
+		switch status {
+		case "drifted":
+			notice = fmt.Sprintf("⚠ ANCHOR DRIFT: \"%s\" was defined as \"%s\" when this evidence was captured. The surrounding context has since changed.", term, definition)
+		case "superseded":
+			notice = fmt.Sprintf("⚠ ANCHOR SUPERSEDED: \"%s\" is no longer the active definition. This evidence uses an outdated term.", term)
+		}
+
+		if notice != "" {
+			notices = append(notices, "   "+notice)
+		}
+	}
+
+	if len(notices) > 0 {
+		return strings.Join(notices, "\n")
+	}
+	return ""
+}
+
+// buildDerivationDepthWarning formats a confidence warning for heavily transformed evidence.
+func buildDerivationDepthWarning(derivation map[string]any) string {
+	const (
+		depthThreshold = 4
+		lossThreshold  = 0.5
+	)
+
+	depth := toInt(derivation["depth"])
+	totalLoss := toFloat(derivation["total_loss"])
+	originSystem := fmt.Sprint(derivation["origin_system"])
+
+	// Check if depth or loss exceeds thresholds
+	if depth <= depthThreshold && totalLoss <= lossThreshold {
+		return ""
+	}
+
+	lossPercent := int(totalLoss * 100)
+	return fmt.Sprintf("   ⚠ CONFIDENCE: This evidence has been through %d transformations with estimated %d%% information loss. Origin: %s",
+		depth, lossPercent, originSystem)
+}
+
+// toInt safely converts any to int.
+func toInt(v any) int {
+	if v == nil {
+		return 0
+	}
+	switch typed := v.(type) {
+	case int:
+		return typed
+	case float64:
+		return int(typed)
+	case string:
+		i, _ := strconv.Atoi(typed)
+		return i
+	default:
+		return 0
+	}
+}
+
+// toFloat safely converts any to float64.
+func toFloat(v any) float64 {
+	if v == nil {
+		return 0.0
+	}
+	switch typed := v.(type) {
+	case float64:
+		return typed
+	case int:
+		return float64(typed)
+	case string:
+		f, _ := strconv.ParseFloat(typed, 64)
+		return f
+	default:
+		return 0.0
 	}
 }

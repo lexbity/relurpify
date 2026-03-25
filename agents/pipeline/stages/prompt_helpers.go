@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
@@ -75,14 +76,14 @@ func workflowRetrievalContext(state *core.Context) string {
 	if state == nil {
 		return ""
 	}
-	raw, ok := state.Get("pipeline.workflow_retrieval")
-	if !ok || raw == nil {
-		return ""
-	}
-	if payload, ok := raw.(map[string]any); ok {
+	if payload := workflowutil.StatePayload(state, "pipeline.workflow_retrieval"); len(payload) > 0 {
 		if formatted := formatWorkflowRetrievalPromptValue(payload); formatted != "" {
 			return formatted
 		}
+	}
+	raw, ok := state.Get("pipeline.workflow_retrieval")
+	if !ok || raw == nil {
+		return ""
 	}
 	return formatPromptValue(raw)
 }
@@ -109,9 +110,15 @@ func formatWorkflowRetrievalPromptValue(payload map[string]any) string {
 	for i, result := range results {
 		text := strings.TrimSpace(fmt.Sprint(result["text"]))
 		if text == "" || text == "<nil>" {
-			continue
+			text = strings.TrimSpace(fmt.Sprint(result["summary"]))
+		}
+		if text == "" || text == "<nil>" {
+			text = "reference only"
 		}
 		line := fmt.Sprintf("%d. %s", i+1, truncatePromptText(text, 240))
+		if ref := workflowRetrievalReference(result); ref != "" {
+			line += "\n   Reference: " + ref
+		}
 		if citations, ok := result["citations"].([]retrieval.PackedCitation); ok && len(citations) > 0 {
 			refs := make([]string, 0, len(citations))
 			for _, citation := range citations {
@@ -131,6 +138,18 @@ func formatWorkflowRetrievalPromptValue(payload map[string]any) string {
 		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
 	}
 	return strings.Join(sections, "\n")
+}
+
+func workflowRetrievalReference(result map[string]any) string {
+	raw, ok := result["reference"].(map[string]any)
+	if !ok || len(raw) == 0 {
+		return ""
+	}
+	return firstPromptValue(
+		strings.TrimSpace(fmt.Sprint(raw["uri"])),
+		strings.TrimSpace(fmt.Sprint(raw["id"])),
+		strings.TrimSpace(fmt.Sprint(raw["detail"])),
+	)
 }
 
 func truncatePromptText(value string, limit int) string {
