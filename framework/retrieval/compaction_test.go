@@ -52,7 +52,17 @@ func TestMaintenanceCompactPreservesActiveRetrievalResults(t *testing.T) {
 		Limit: 5,
 	})
 	require.NoError(t, err)
-	require.Equal(t, before.Fused, after.Fused)
+
+	// Compare without Derivation field (timestamps differ on each run)
+	require.Len(t, after.Fused, len(before.Fused))
+	for i := range before.Fused {
+		require.Equal(t, before.Fused[i].ChunkID, after.Fused[i].ChunkID)
+		require.Equal(t, before.Fused[i].DocID, after.Fused[i].DocID)
+		require.Equal(t, before.Fused[i].VersionID, after.Fused[i].VersionID)
+		require.Equal(t, before.Fused[i].FusedScore, after.Fused[i].FusedScore)
+		require.Equal(t, before.Fused[i].MatchedBySparse, after.Fused[i].MatchedBySparse)
+		require.Equal(t, before.Fused[i].MatchedByDense, after.Fused[i].MatchedByDense)
+	}
 	requireCount(t, db, "retrieval_document_versions", 1)
 	requireCount(t, db, "retrieval_chunk_versions", len(latest.Chunks))
 }

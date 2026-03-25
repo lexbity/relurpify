@@ -39,6 +39,39 @@ func TestMetadataPrefilterReturnsActiveAllowlist(t *testing.T) {
 	require.Contains(t, result.FilterSummary, "filtered=1")
 }
 
+func TestMetadataPrefilterUsesMetadataBackedActiveChunkCount(t *testing.T) {
+	db := openRetrievalTestDB(t)
+	p := NewIngestionPipeline(db, nil)
+	p.now = func() time.Time { return time.Date(2026, 3, 11, 12, 0, 0, 0, time.UTC) }
+
+	_, err := p.Ingest(context.Background(), IngestRequest{
+		CanonicalURI: "count-a.txt",
+		Content:      []byte("alpha"),
+		CorpusScope:  "workspace",
+	})
+	require.NoError(t, err)
+	_, err = p.Ingest(context.Background(), IngestRequest{
+		CanonicalURI: "count-b.txt",
+		Content:      []byte("beta"),
+		CorpusScope:  "workspace",
+	})
+	require.NoError(t, err)
+
+	count, err := currentActiveChunkCount(context.Background(), db)
+	require.NoError(t, err)
+	require.Equal(t, 2, count)
+
+	require.NoError(t, p.TombstoneDocument(context.Background(), "count-b.txt"))
+	count, err = currentActiveChunkCount(context.Background(), db)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	filter := NewMetadataPrefilter(db)
+	result, err := filter.Prefilter(context.Background(), RetrievalQuery{Scope: "workspace"})
+	require.NoError(t, err)
+	require.Contains(t, result.FilterSummary, "active=1")
+}
+
 func TestMetadataPrefilterFiltersByScopeAndSourceType(t *testing.T) {
 	db := openRetrievalTestDB(t)
 	p := NewIngestionPipeline(db, nil)
@@ -102,8 +135,8 @@ func TestMetadataPrefilterUsesSourceFreshnessNotLastIngestedAt(t *testing.T) {
 	sourceTime := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
 	p.now = func() time.Time { return sourceTime }
 	_, err := p.Ingest(context.Background(), IngestRequest{
-		CanonicalURI:   "stable.txt",
-		Content:        []byte("unchanged content"),
+		CanonicalURI:    "stable.txt",
+		Content:         []byte("unchanged content"),
 		SourceUpdatedAt: &sourceTime,
 	})
 	require.NoError(t, err)
@@ -266,7 +299,17 @@ func TestRetrieverFusedOrderingIsDeterministic(t *testing.T) {
 		Limit: 10,
 	})
 	require.NoError(t, err)
-	require.Equal(t, first.Fused, second.Fused)
+
+	// Compare without Derivation field (timestamps differ on each run)
+	require.Len(t, second.Fused, len(first.Fused))
+	for i := range first.Fused {
+		require.Equal(t, first.Fused[i].ChunkID, second.Fused[i].ChunkID)
+		require.Equal(t, first.Fused[i].DocID, second.Fused[i].DocID)
+		require.Equal(t, first.Fused[i].VersionID, second.Fused[i].VersionID)
+		require.Equal(t, first.Fused[i].FusedScore, second.Fused[i].FusedScore)
+		require.Equal(t, first.Fused[i].MatchedBySparse, second.Fused[i].MatchedBySparse)
+		require.Equal(t, first.Fused[i].MatchedByDense, second.Fused[i].MatchedByDense)
+	}
 }
 
 func TestRetrieverDoesNotUseFinalLimitToCapMetadataPrefilter(t *testing.T) {

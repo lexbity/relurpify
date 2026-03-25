@@ -17,6 +17,8 @@ type ContextManager struct {
 	items         []ContextItem
 	strategy      PruningStrategy
 	filePathIndex map[string]int // path → index into items; rebuilt after pruning/compression
+	totalTokens   int
+	itemsByType   map[ContextItemType]int
 }
 
 // PruningStrategy defines selection rules for compression/pruning.
@@ -32,6 +34,7 @@ func NewContextManager(budget *ContextBudget) *ContextManager {
 		items:         make([]ContextItem, 0),
 		strategy:      NewRelevanceBasedStrategy(),
 		filePathIndex: make(map[string]int),
+		itemsByType:   make(map[ContextItemType]int),
 	}
 }
 
@@ -48,7 +51,8 @@ func (cm *ContextManager) AddItem(item ContextItem) error {
 		}
 	}
 	cm.items = append(cm.items, item)
-	cm.updateBudgetLocked()
+	cm.addAggregateLocked(item)
+	cm.syncBudgetLocked()
 	return nil
 }
 
@@ -76,12 +80,14 @@ func (cm *ContextManager) UpsertFileItem(item *core.FileContextItem) error {
 	}
 
 	if exists {
+		cm.replaceAggregateLocked(cm.items[index], item)
 		cm.items[index] = item
 	} else {
 		cm.filePathIndex[item.Path] = len(cm.items)
 		cm.items = append(cm.items, item)
+		cm.addAggregateLocked(item)
 	}
-	cm.updateBudgetLocked()
+	cm.syncBudgetLocked()
 	return nil
 }
 
@@ -135,7 +141,7 @@ func (cm *ContextManager) compressItemsLocked(targetTokens int) error {
 	}
 	cm.replaceItemsLocked(replacements)
 	cm.rebuildFilePathIndexLocked()
-	cm.updateBudgetLocked()
+	cm.syncBudgetLocked()
 	return nil
 }
 
@@ -157,11 +163,13 @@ func (cm *ContextManager) pruneItemsLocked(targetTokens int) error {
 	for _, item := range cm.items {
 		if _, remove := removeSet[item]; !remove {
 			filtered = append(filtered, item)
+			continue
 		}
+		cm.removeAggregateLocked(item)
 	}
 	cm.items = filtered
 	cm.rebuildFilePathIndexLocked()
-	cm.updateBudgetLocked()
+	cm.syncBudgetLocked()
 	return nil
 }
 
@@ -206,7 +214,9 @@ func (cm *ContextManager) Clear() {
 	defer cm.mu.Unlock()
 	cm.items = make([]ContextItem, 0)
 	cm.filePathIndex = make(map[string]int)
-	cm.updateBudgetLocked()
+	cm.totalTokens = 0
+	cm.itemsByType = make(map[ContextItemType]int)
+	cm.syncBudgetLocked()
 }
 
 // GetStats reports aggregated item/budget information.
@@ -215,12 +225,8 @@ func (cm *ContextManager) GetStats() ContextStats {
 	defer cm.mu.RUnlock()
 	stats := ContextStats{
 		TotalItems:  len(cm.items),
-		TotalTokens: 0,
-		ItemsByType: make(map[ContextItemType]int),
-	}
-	for _, item := range cm.items {
-		stats.TotalTokens += item.TokenCount()
-		stats.ItemsByType[item.Type()]++
+		TotalTokens: cm.totalTokens,
+		ItemsByType: cloneContextItemCounts(cm.itemsByType),
 	}
 	stats.BudgetUsage = cm.budget.GetCurrentUsage()
 	stats.BudgetState = cm.budget.CheckBudget()
@@ -236,16 +242,12 @@ type ContextStats struct {
 	BudgetState BudgetState
 }
 
-func (cm *ContextManager) updateBudgetLocked() {
-	total := 0
-	for _, item := range cm.items {
-		total += item.TokenCount()
-	}
+func (cm *ContextManager) syncBudgetLocked() {
 	usage := cm.budget.GetCurrentUsage()
-	usage.ContextTokens = total
-	usage.TotalTokens = usage.SystemTokens + usage.ToolTokens + total + usage.OutputTokens
+	usage.ContextTokens = cm.totalTokens
+	usage.TotalTokens = usage.SystemTokens + usage.ToolTokens + cm.totalTokens + usage.OutputTokens
 	if cm.budget.AvailableForContext > 0 {
-		usage.ContextUsagePercent = float64(total) / float64(cm.budget.AvailableForContext)
+		usage.ContextUsagePercent = float64(cm.totalTokens) / float64(cm.budget.AvailableForContext)
 	}
 	cm.budget.SetCurrentUsage(usage)
 }
@@ -266,10 +268,68 @@ func (cm *ContextManager) replaceItemsLocked(replacements map[ContextItem]Contex
 	replaced := make([]ContextItem, 0, len(cm.items))
 	for _, item := range cm.items {
 		if replacement, ok := replacements[item]; ok {
+			cm.replaceAggregateLocked(item, replacement)
 			replaced = append(replaced, replacement)
 		} else {
 			replaced = append(replaced, item)
 		}
 	}
 	cm.items = replaced
+}
+
+func (cm *ContextManager) addAggregateLocked(item ContextItem) {
+	if item == nil {
+		return
+	}
+	cm.totalTokens += item.TokenCount()
+	cm.itemsByType[item.Type()]++
+}
+
+func (cm *ContextManager) removeAggregateLocked(item ContextItem) {
+	if item == nil {
+		return
+	}
+	cm.totalTokens -= item.TokenCount()
+	if cm.totalTokens < 0 {
+		cm.totalTokens = 0
+	}
+	itemType := item.Type()
+	if count := cm.itemsByType[itemType]; count <= 1 {
+		delete(cm.itemsByType, itemType)
+	} else {
+		cm.itemsByType[itemType] = count - 1
+	}
+}
+
+func (cm *ContextManager) replaceAggregateLocked(oldItem, newItem ContextItem) {
+	if oldItem == nil {
+		cm.addAggregateLocked(newItem)
+		return
+	}
+	if newItem == nil {
+		cm.removeAggregateLocked(oldItem)
+		return
+	}
+	cm.totalTokens += newItem.TokenCount() - oldItem.TokenCount()
+	oldType := oldItem.Type()
+	newType := newItem.Type()
+	if oldType != newType {
+		if count := cm.itemsByType[oldType]; count <= 1 {
+			delete(cm.itemsByType, oldType)
+		} else {
+			cm.itemsByType[oldType] = count - 1
+		}
+		cm.itemsByType[newType]++
+	}
+}
+
+func cloneContextItemCounts(input map[ContextItemType]int) map[ContextItemType]int {
+	if len(input) == 0 {
+		return make(map[ContextItemType]int)
+	}
+	out := make(map[ContextItemType]int, len(input))
+	for kind, count := range input {
+		out[kind] = count
+	}
+	return out
 }

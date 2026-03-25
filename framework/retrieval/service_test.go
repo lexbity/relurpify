@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 	"github.com/stretchr/testify/require"
 )
 
@@ -139,6 +140,90 @@ func TestServiceRetrieveUsesExactCacheWithoutPersistingSecondAuditRow(t *testing
 	err = db.QueryRow(`SELECT COUNT(*) FROM retrieval_events`).Scan(&eventRows)
 	require.NoError(t, err)
 	require.Equal(t, 1, eventRows)
+}
+
+func TestServiceRetrieveAvoidsRepeatedSchemaChecksOnHotPath(t *testing.T) {
+	db := openRetrievalTestDB(t)
+	p := NewIngestionPipeline(db, fakeEmbedder{})
+	_, err := p.Ingest(context.Background(), IngestRequest{
+		CanonicalURI: "schema-once.txt",
+		CorpusScope:  "workspace",
+		Content:      []byte("alpha beta gamma"),
+	})
+	require.NoError(t, err)
+
+	service := NewServiceWithOptions(db, fakeEmbedder{}, nil, ServiceOptions{
+		Cache: CacheConfig{MaxEntries: 8, TTL: time.Hour},
+	})
+	perfstats.Reset()
+	_, _, err = service.Retrieve(context.Background(), RetrievalQuery{
+		Text:      "alpha",
+		Scope:     "workspace",
+		MaxTokens: 100,
+		Limit:     5,
+	})
+	require.NoError(t, err)
+	_, _, err = service.Retrieve(context.Background(), RetrievalQuery{
+		Text:      "beta",
+		Scope:     "workspace",
+		MaxTokens: 100,
+		Limit:     5,
+	})
+	require.NoError(t, err)
+
+	stats := perfstats.Get()
+	require.Equal(t, int64(0), stats.RetrievalSchemaCheckCount)
+}
+
+func TestServiceRetrieveInvalidatesExactCacheWhenCorpusRevisionChanges(t *testing.T) {
+	db := openRetrievalTestDB(t)
+	p := NewIngestionPipeline(db, fakeEmbedder{})
+	p.now = func() time.Time { return time.Date(2026, 3, 11, 12, 0, 0, 0, time.UTC) }
+
+	_, err := p.Ingest(context.Background(), IngestRequest{
+		CanonicalURI: "cache-revision-a.txt",
+		CorpusScope:  "workspace",
+		Content:      []byte("alpha first"),
+	})
+	require.NoError(t, err)
+
+	service := NewServiceWithOptions(db, fakeEmbedder{}, nil, ServiceOptions{
+		Cache: CacheConfig{MaxEntries: 8, TTL: time.Hour},
+	})
+	service.now = func() time.Time { return time.Date(2026, 3, 11, 13, 0, 0, 0, time.UTC) }
+
+	_, firstEvent, err := service.Retrieve(context.Background(), RetrievalQuery{
+		Text:      "alpha",
+		Scope:     "workspace",
+		MaxTokens: 100,
+		Limit:     5,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "l3_main", firstEvent.CacheTier)
+
+	p.now = func() time.Time { return time.Date(2026, 3, 11, 13, 1, 0, 0, time.UTC) }
+	_, err = p.Ingest(context.Background(), IngestRequest{
+		CanonicalURI: "cache-revision-b.txt",
+		CorpusScope:  "workspace",
+		Content:      []byte("alpha second"),
+	})
+	require.NoError(t, err)
+
+	service.now = func() time.Time { return time.Date(2026, 3, 11, 13, 2, 0, 0, time.UTC) }
+	_, secondEvent, err := service.Retrieve(context.Background(), RetrievalQuery{
+		Text:      "alpha",
+		Scope:     "workspace",
+		MaxTokens: 100,
+		Limit:     5,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "l3_main", secondEvent.CacheTier)
+	require.NotEqual(t, firstEvent.QueryID, secondEvent.QueryID)
+
+	var eventRows int
+	err = db.QueryRow(`SELECT COUNT(*) FROM retrieval_events`).Scan(&eventRows)
+	require.NoError(t, err)
+	require.Equal(t, 2, eventRows)
 }
 
 func TestServiceRetrieveCanUseHotStoreNarrowing(t *testing.T) {

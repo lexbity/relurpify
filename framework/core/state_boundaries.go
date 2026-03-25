@@ -268,10 +268,18 @@ func classifyStateValue(key string, value interface{}) StateDataClass {
 
 // MemoryRecordEnvelope is a compact retrieval-shaped wrapper used by state linting.
 type MemoryRecordEnvelope struct {
-	Key         string      `json:"key,omitempty" yaml:"key,omitempty"`
-	MemoryClass MemoryClass `json:"memory_class,omitempty" yaml:"memory_class,omitempty"`
-	Scope       string      `json:"scope,omitempty" yaml:"scope,omitempty"`
-	Summary     string      `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Key         string           `json:"key,omitempty" yaml:"key,omitempty"`
+	MemoryClass MemoryClass      `json:"memory_class,omitempty" yaml:"memory_class,omitempty"`
+	Scope       string           `json:"scope,omitempty" yaml:"scope,omitempty"`
+	Summary     string           `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Text        string           `json:"text,omitempty" yaml:"text,omitempty"`
+	Source      string           `json:"source,omitempty" yaml:"source,omitempty"`
+	RecordID    string           `json:"record_id,omitempty" yaml:"record_id,omitempty"`
+	Kind        string           `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Score       float64          `json:"score,omitempty" yaml:"score,omitempty"`
+	Reference   any              `json:"reference,omitempty" yaml:"reference,omitempty"`
+	Citations   any              `json:"citations,omitempty" yaml:"citations,omitempty"`
+	Derivation  *DerivationChain `json:"derivation,omitempty" yaml:"derivation,omitempty"`
 }
 
 func estimateStateValueBytes(value interface{}) int {

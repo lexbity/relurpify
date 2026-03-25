@@ -41,3 +41,85 @@ func TestNewContextPolicyHonorsExplicitProgressiveEnable(t *testing.T) {
 		t.Fatal("expected explicit progressive_loading=true to enable progressive loading")
 	}
 }
+
+func TestRecordGraphMemoryPublicationsAddsReferenceCapableMemoryItems(t *testing.T) {
+	policy := NewContextPolicy(ContextPolicyConfig{}, nil)
+	state := core.NewContext()
+	state.Set("graph.declarative_memory_payload", map[string]any{
+		"results": []map[string]any{
+			{
+				"summary":   "retrieved design constraint",
+				"text":      "retrieved design constraint",
+				"source":    "retrieval",
+				"record_id": "doc:1",
+				"kind":      "document",
+				"reference": map[string]any{
+					"kind": string(core.ContextReferenceRetrievalEvidence),
+					"uri":  "memory://runtime/doc:1",
+				},
+			},
+		},
+	})
+
+	policy.RecordGraphMemoryPublications(state, nil)
+
+	items := policy.ContextManager.GetItemsByType(core.ContextTypeMemory)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 memory item, got %d", len(items))
+	}
+	item, ok := items[0].(*core.MemoryContextItem)
+	if !ok {
+		t.Fatalf("expected MemoryContextItem, got %T", items[0])
+	}
+	if item.Reference == nil || item.Reference.URI != "memory://runtime/doc:1" {
+		t.Fatalf("unexpected memory reference: %#v", item.Reference)
+	}
+	if item.Summary != "retrieved design constraint" {
+		t.Fatalf("unexpected summary: %#v", item.Summary)
+	}
+}
+
+func TestRecordGraphMemoryPublicationsDedupesByReference(t *testing.T) {
+	policy := NewContextPolicy(ContextPolicyConfig{}, nil)
+	state := core.NewContext()
+	state.Set("graph.declarative_memory_payload", map[string]any{
+		"results": []map[string]any{
+			{
+				"summary": "retrieved design constraint",
+				"reference": map[string]any{
+					"kind": string(core.ContextReferenceRetrievalEvidence),
+					"uri":  "memory://runtime/doc:1",
+				},
+			},
+		},
+	})
+
+	policy.RecordGraphMemoryPublications(state, nil)
+	policy.RecordGraphMemoryPublications(state, nil)
+
+	items := policy.ContextManager.GetItemsByType(core.ContextTypeMemory)
+	if len(items) != 1 {
+		t.Fatalf("expected deduped memory item, got %d", len(items))
+	}
+}
+
+func TestRecordGraphMemoryPublicationsFallsBackToRefs(t *testing.T) {
+	policy := NewContextPolicy(ContextPolicyConfig{}, nil)
+	state := core.NewContext()
+	state.Set("graph.procedural_memory_refs", []core.ContextReference{{
+		Kind: core.ContextReferenceRuntimeMemory,
+		ID:   "routine-1",
+		URI:  "memory://runtime/routine-1",
+	}})
+
+	policy.RecordGraphMemoryPublications(state, nil)
+
+	items := policy.ContextManager.GetItemsByType(core.ContextTypeMemory)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 memory item from refs fallback, got %d", len(items))
+	}
+	item, ok := items[0].(*core.MemoryContextItem)
+	if !ok || item.Reference == nil || item.Reference.URI != "memory://runtime/routine-1" {
+		t.Fatalf("unexpected fallback item: %#v", items[0])
+	}
+}

@@ -1,6 +1,7 @@
 package fmp
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -42,6 +43,63 @@ func ValidateImportedContextCompatibility(runtime core.RuntimeDescriptor, manife
 	}
 	if strings.TrimSpace(manifest.SchemaVersion) != "" && !strings.EqualFold(strings.TrimSpace(manifest.SchemaVersion), "fmp.context.v1") {
 		return fmt.Errorf("unsupported schema version %s", manifest.SchemaVersion)
+	}
+	return nil
+}
+
+// Phase 6.4: Version Skew Handling
+
+// CompatibilityWindow defines acceptable version ranges per context class.
+type CompatibilityWindow struct {
+	ContextClass         string `json:"context_class" yaml:"context_class"`
+	MinSchemaVersion     string `json:"min_schema_version,omitempty" yaml:"min_schema_version,omitempty"`
+	MaxSchemaVersion     string `json:"max_schema_version,omitempty" yaml:"max_schema_version,omitempty"`
+	MinRuntimeVersion    string `json:"min_runtime_version,omitempty" yaml:"min_runtime_version,omitempty"`
+	MaxRuntimeVersion    string `json:"max_runtime_version,omitempty" yaml:"max_runtime_version,omitempty"`
+}
+
+// CompatibilityWindowStore manages version compatibility windows per context class.
+type CompatibilityWindowStore interface {
+	GetWindow(ctx context.Context, contextClass string) (*CompatibilityWindow, bool, error)
+	UpsertWindow(ctx context.Context, window CompatibilityWindow) error
+	ListWindows(ctx context.Context) ([]CompatibilityWindow, error)
+	DeleteWindow(ctx context.Context, contextClass string) error
+}
+
+// ValidateVersionSkew checks if schemaVersion and runtimeVersion fall within the configured window.
+// Uses lexicographic string comparison (safe for semver vX.Y.Z format).
+func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersion string) *core.TransferRefusal {
+	if schemaVersion != "" && window.MinSchemaVersion != "" {
+		if schemaVersion < window.MinSchemaVersion {
+			return &core.TransferRefusal{
+				Code:    core.RefusalIncompatibleRuntime,
+				Message: fmt.Sprintf("schema version %s below minimum %s", schemaVersion, window.MinSchemaVersion),
+			}
+		}
+	}
+	if schemaVersion != "" && window.MaxSchemaVersion != "" {
+		if schemaVersion > window.MaxSchemaVersion {
+			return &core.TransferRefusal{
+				Code:    core.RefusalIncompatibleRuntime,
+				Message: fmt.Sprintf("schema version %s above maximum %s", schemaVersion, window.MaxSchemaVersion),
+			}
+		}
+	}
+	if runtimeVersion != "" && window.MinRuntimeVersion != "" {
+		if runtimeVersion < window.MinRuntimeVersion {
+			return &core.TransferRefusal{
+				Code:    core.RefusalIncompatibleRuntime,
+				Message: fmt.Sprintf("runtime version %s below minimum %s", runtimeVersion, window.MinRuntimeVersion),
+			}
+		}
+	}
+	if runtimeVersion != "" && window.MaxRuntimeVersion != "" {
+		if runtimeVersion > window.MaxRuntimeVersion {
+			return &core.TransferRefusal{
+				Code:    core.RefusalIncompatibleRuntime,
+				Message: fmt.Sprintf("runtime version %s above maximum %s", runtimeVersion, window.MaxRuntimeVersion),
+			}
+		}
 	}
 	return nil
 }

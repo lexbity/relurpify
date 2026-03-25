@@ -38,23 +38,32 @@ type IndexQuery struct {
 
 // SparseIndex searches lexical matches over active chunk text.
 type SparseIndex struct {
-	db *sql.DB
+	db        *sql.DB
+	schemaErr error
 }
 
 // DenseIndex searches vector similarity over active embeddings.
 type DenseIndex struct {
-	db       *sql.DB
-	embedder Embedder
+	db        *sql.DB
+	embedder  Embedder
+	schemaErr error
 }
 
 // NewSparseIndex constructs a sparse index over the retrieval SQLite store.
 func NewSparseIndex(db *sql.DB) *SparseIndex {
-	return &SparseIndex{db: db}
+	return &SparseIndex{
+		db:        db,
+		schemaErr: ensureRuntimeSchema(context.Background(), db),
+	}
 }
 
 // NewDenseIndex constructs an exact dense index over persisted embeddings.
 func NewDenseIndex(db *sql.DB, embedder Embedder) *DenseIndex {
-	return &DenseIndex{db: db, embedder: embedder}
+	return &DenseIndex{
+		db:        db,
+		embedder:  embedder,
+		schemaErr: ensureRuntimeSchema(context.Background(), db),
+	}
 }
 
 // Search queries the sparse index using FTS5 when available and a LIKE fallback otherwise.
@@ -62,8 +71,8 @@ func (s *SparseIndex) Search(ctx context.Context, q IndexQuery) ([]SearchCandida
 	if s == nil || s.db == nil {
 		return nil, errors.New("sparse index db required")
 	}
-	if err := EnsureSchema(ctx, s.db); err != nil {
-		return nil, err
+	if s.schemaErr != nil {
+		return nil, s.schemaErr
 	}
 	queryText := strings.TrimSpace(q.Text)
 	if queryText == "" {
@@ -91,8 +100,8 @@ func (d *DenseIndex) Search(ctx context.Context, q IndexQuery) ([]SearchCandidat
 	if d.embedder == nil {
 		return nil, errors.New("dense index embedder required")
 	}
-	if err := EnsureSchema(ctx, d.db); err != nil {
-		return nil, err
+	if d.schemaErr != nil {
+		return nil, d.schemaErr
 	}
 	queryText := strings.TrimSpace(q.Text)
 	if queryText == "" {

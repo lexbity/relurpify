@@ -36,17 +36,19 @@ type IngestionPipeline struct {
 	textChunkChars int
 	textOverlap    int
 	now            func() time.Time
+	schemaErr      error
 }
 
 // IngestRequest describes a single ingestion operation.
 type IngestRequest struct {
-	CanonicalURI   string
-	Content        []byte
-	SourceType     string
-	CorpusScope    string
-	PolicyTags     []string
+	CanonicalURI    string
+	Content         []byte
+	SourceType      string
+	CorpusScope     string
+	PolicyTags      []string
 	SourceUpdatedAt *time.Time
-	SkipEmbeddings bool
+	SkipEmbeddings  bool
+	Anchors         []AnchorDeclaration // optional anchor declarations
 }
 
 // IngestResult summarizes the persisted records.
@@ -66,6 +68,7 @@ func NewIngestionPipeline(db *sql.DB, embedder Embedder) *IngestionPipeline {
 		textChunkChars: defaultTextChunkChars,
 		textOverlap:    defaultTextOverlap,
 		now:            func() time.Time { return time.Now().UTC() },
+		schemaErr:      ensureRuntimeSchema(context.Background(), db),
 	}
 }
 
@@ -81,10 +84,10 @@ func (p *IngestionPipeline) IngestFile(ctx context.Context, path string, corpusS
 	}
 	sourceUpdatedAt := info.ModTime().UTC()
 	return p.Ingest(ctx, IngestRequest{
-		CanonicalURI: path,
-		Content:      content,
-		CorpusScope:  corpusScope,
-		PolicyTags:   policyTags,
+		CanonicalURI:    path,
+		Content:         content,
+		CorpusScope:     corpusScope,
+		PolicyTags:      policyTags,
 		SourceUpdatedAt: &sourceUpdatedAt,
 	})
 }
@@ -94,8 +97,8 @@ func (p *IngestionPipeline) Ingest(ctx context.Context, req IngestRequest) (*Ing
 	if p == nil || p.db == nil {
 		return nil, errors.New("ingestion pipeline db required")
 	}
-	if err := EnsureSchema(ctx, p.db); err != nil {
-		return nil, err
+	if p.schemaErr != nil {
+		return nil, p.schemaErr
 	}
 	uri := CanonicalizeURI(req.CanonicalURI)
 	if uri == "" {
@@ -156,6 +159,15 @@ func (p *IngestionPipeline) Ingest(ctx context.Context, req IngestRequest) (*Ing
 	if err := persistIngestedDocument(ctx, p.db, doc, version, chunks, embeddings); err != nil {
 		return nil, err
 	}
+
+	// Extract and persist semantic anchors
+	if len(req.Anchors) > 0 {
+		if err := extractAndPersistAnchors(ctx, p.db, req.Anchors, version.VersionID, chunks, doc); err != nil {
+			// Log the error but don't fail the entire ingest operation
+			fmt.Fprintf(os.Stderr, "warning: failed to extract anchors: %v\n", err)
+		}
+	}
+
 	return &IngestResult{
 		Document:   doc,
 		Version:    version,
@@ -169,8 +181,8 @@ func (p *IngestionPipeline) TombstoneDocument(ctx context.Context, canonicalURI 
 	if p == nil || p.db == nil {
 		return errors.New("ingestion pipeline db required")
 	}
-	if err := EnsureSchema(ctx, p.db); err != nil {
-		return err
+	if p.schemaErr != nil {
+		return p.schemaErr
 	}
 	docID := DeriveDocID(canonicalURI)
 	now := p.now().Format(time.RFC3339Nano)
@@ -203,6 +215,9 @@ func (p *IngestionPipeline) TombstoneDocument(ctx context.Context, canonicalURI 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM retrieval_document_policy_tags WHERE doc_id = ?`, docID); err != nil {
 		return err
 	}
+	if err := refreshCorpusMetadataTx(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -220,8 +235,8 @@ func (p *IngestionPipeline) BackfillEmbeddings(ctx context.Context, req Backfill
 	if p.embedder == nil {
 		return nil, nil
 	}
-	if err := EnsureSchema(ctx, p.db); err != nil {
-		return nil, err
+	if p.schemaErr != nil {
+		return nil, p.schemaErr
 	}
 	rows, err := p.db.QueryContext(ctx, `SELECT cv.chunk_id, cv.doc_id, cv.version_id, cv.text, cv.structural_key, cv.start_offset, cv.end_offset, cv.parent_chunk, cv.tombstoned, cv.created_at
 		FROM retrieval_chunk_versions cv
@@ -455,6 +470,9 @@ func persistIngestedDocument(ctx context.Context, db *sql.DB, doc DocumentRecord
 			}
 		}
 	}
+	if err := refreshCorpusMetadataTx(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -563,6 +581,9 @@ func updateDocumentMetadata(ctx context.Context, db *sql.DB, doc DocumentRecord)
 	if err := replaceDocumentPolicyTags(ctx, tx, doc.DocID, doc.PolicyTags); err != nil {
 		return err
 	}
+	if err := refreshCorpusMetadataTx(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -642,6 +663,9 @@ func persistEmbeddings(ctx context.Context, db *sql.DB, embeddings []EmbeddingRe
 		); err != nil {
 			return err
 		}
+	}
+	if err := refreshCorpusMetadataTx(ctx, tx); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -977,4 +1001,139 @@ func boolToInt(v bool) int {
 		return 1
 	}
 	return 0
+}
+
+// extractAndPersistAnchors processes anchor declarations and persists them to the database.
+func extractAndPersistAnchors(ctx context.Context, db *sql.DB, anchors []AnchorDeclaration, versionID string, chunks []ChunkRecord, doc DocumentRecord) error {
+	if len(anchors) == 0 {
+		return nil
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	now := time.Now().UTC()
+	for _, anchorDecl := range anchors {
+		if anchorDecl.Term == "" {
+			continue
+		}
+
+		// Validate anchor class
+		anchorClass := anchorDecl.Class
+		if anchorClass == "" {
+			anchorClass = "technical"
+		}
+		switch anchorClass {
+		case "policy", "identity", "commitment", "technical":
+			// Valid classes
+		default:
+			anchorClass = "technical"
+		}
+
+		termNormalized := normalizeTerm(anchorDecl.Term)
+		contextSummary := summarizeContext(anchorDecl.Context)
+		anchorID := generateAnchorID()
+
+		// Find which chunk(s) contain this term
+		sourceChunkID := ""
+		termLower := strings.ToLower(anchorDecl.Term)
+		for _, chunk := range chunks {
+			if strings.Contains(strings.ToLower(chunk.Text), termLower) {
+				sourceChunkID = chunk.ChunkID
+				break
+			}
+		}
+
+		// Check if we already have an active anchor with the same term and scope
+		var existingAnchorID string
+		var existingDef string
+		err := tx.QueryRowContext(ctx, `
+			SELECT anchor_id, definition
+			FROM retrieval_semantic_anchors
+			WHERE term_normalized = ? AND corpus_scope = ? AND invalidated_at IS NULL
+			LIMIT 1
+		`, termNormalized, doc.CorpusScope).Scan(&existingAnchorID, &existingDef)
+
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+
+		if err == nil {
+			// We found an existing anchor
+			if existingDef == anchorDecl.Definition {
+				// Definition matches, no-op
+				continue
+			}
+
+			// Definition differs - supersede the old anchor
+			newDef := anchorDecl.Definition
+			newContextSummary := contextSummary
+
+			// Insert new anchor
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO retrieval_semantic_anchors
+				(anchor_id, term, term_normalized, definition, context_summary, scope,
+				 anchor_class, source_chunk_id, source_version_id, source_doc_id,
+				 corpus_scope, superseded_by, created_at, invalidated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`, anchorID, anchorDecl.Term, termNormalized, newDef, newContextSummary,
+				"workspace", anchorClass, sourceChunkID, versionID, doc.DocID, doc.CorpusScope, nil,
+				now.Format(time.RFC3339), nil)
+			if err != nil {
+				return err
+			}
+
+			// Mark old anchor as superseded
+			_, err = tx.ExecContext(ctx, `
+				UPDATE retrieval_semantic_anchors
+				SET superseded_by = ?
+				WHERE anchor_id = ?
+			`, anchorID, existingAnchorID)
+			if err != nil {
+				return err
+			}
+
+			// Record the supersession event
+			eventID := generateAnchorID() + "-evt"
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO retrieval_anchor_events
+				(event_id, anchor_id, event_type, detail, old_definition, new_definition, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
+			`, eventID, existingAnchorID, "superseded", fmt.Sprintf("superseded by %s", anchorID),
+				existingDef, newDef, now.Format(time.RFC3339))
+			if err != nil {
+				return err
+			}
+		} else {
+			// No existing anchor, create a new one
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO retrieval_semantic_anchors
+				(anchor_id, term, term_normalized, definition, context_summary, scope,
+				 anchor_class, source_chunk_id, source_version_id, source_doc_id,
+				 corpus_scope, superseded_by, created_at, invalidated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`, anchorID, anchorDecl.Term, termNormalized, anchorDecl.Definition, contextSummary,
+				"workspace", anchorClass, sourceChunkID, versionID, doc.DocID, doc.CorpusScope, nil,
+				now.Format(time.RFC3339), nil)
+			if err != nil {
+				return err
+			}
+
+			// Record the creation event
+			eventID := generateAnchorID() + "-evt"
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO retrieval_anchor_events
+				(event_id, anchor_id, event_type, detail, created_at)
+				VALUES (?, ?, ?, ?, ?)
+			`, eventID, anchorID, "created", "", now.Format(time.RFC3339))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
 }

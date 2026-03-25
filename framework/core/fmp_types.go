@@ -80,6 +80,8 @@ const (
 	RefusalExpiredOffer        RefusalReasonCode = "expired_offer"
 	RefusalUntrustedPeer       RefusalReasonCode = "untrusted_peer"
 	RefusalTransferBudget      RefusalReasonCode = "transfer_budget_exceeded"
+	RefusalDuplicateHandoff    RefusalReasonCode = "duplicate_handoff"
+	RefusalStaleEpoch          RefusalReasonCode = "stale_epoch"
 )
 
 type CapabilityEnvelope struct {
@@ -111,6 +113,7 @@ type RuntimeDescriptor struct {
 	AttestationProfile        string            `json:"attestation_profile,omitempty" yaml:"attestation_profile,omitempty"`
 	AttestationClaims         map[string]string `json:"attestation_claims,omitempty" yaml:"attestation_claims,omitempty"`
 	ExpiresAt                 time.Time         `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
+	SignatureAlgorithm        string            `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
 	Signature                 string            `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
@@ -129,6 +132,7 @@ type ExportDescriptor struct {
 	RouteMode                    RouteMode        `json:"route_mode,omitempty" yaml:"route_mode,omitempty"`
 	AdmissionSummary             AvailabilitySpec `json:"admission_summary,omitempty" yaml:"admission_summary,omitempty"`
 	AllowedTransportPaths        []RouteMode      `json:"allowed_transport_paths,omitempty" yaml:"allowed_transport_paths,omitempty"`
+	SignatureAlgorithm           string           `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
 	Signature                    string           `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
@@ -168,22 +172,23 @@ type AttemptRecord struct {
 }
 
 type ContextManifest struct {
-	ContextID        string           `json:"context_id" yaml:"context_id"`
-	LineageID        string           `json:"lineage_id" yaml:"lineage_id"`
-	AttemptID        string           `json:"attempt_id" yaml:"attempt_id"`
-	ContextClass     string           `json:"context_class" yaml:"context_class"`
-	SchemaVersion    string           `json:"schema_version" yaml:"schema_version"`
-	SizeBytes        int64            `json:"size_bytes,omitempty" yaml:"size_bytes,omitempty"`
-	ChunkCount       int              `json:"chunk_count,omitempty" yaml:"chunk_count,omitempty"`
-	ContentHash      string           `json:"content_hash" yaml:"content_hash"`
-	SensitivityClass SensitivityClass `json:"sensitivity_class,omitempty" yaml:"sensitivity_class,omitempty"`
-	TTL              time.Duration    `json:"ttl,omitempty" yaml:"ttl,omitempty"`
-	ObjectRefs       []string         `json:"object_refs,omitempty" yaml:"object_refs,omitempty"`
-	TransferMode     TransferMode     `json:"transfer_mode,omitempty" yaml:"transfer_mode,omitempty"`
-	EncryptionMode   EncryptionMode   `json:"encryption_mode,omitempty" yaml:"encryption_mode,omitempty"`
-	RecipientSet     []string         `json:"recipient_set,omitempty" yaml:"recipient_set,omitempty"`
-	CreationTime     time.Time        `json:"creation_time,omitempty" yaml:"creation_time,omitempty"`
-	Signature        string           `json:"signature,omitempty" yaml:"signature,omitempty"`
+	ContextID          string           `json:"context_id" yaml:"context_id"`
+	LineageID          string           `json:"lineage_id" yaml:"lineage_id"`
+	AttemptID          string           `json:"attempt_id" yaml:"attempt_id"`
+	ContextClass       string           `json:"context_class" yaml:"context_class"`
+	SchemaVersion      string           `json:"schema_version" yaml:"schema_version"`
+	SizeBytes          int64            `json:"size_bytes,omitempty" yaml:"size_bytes,omitempty"`
+	ChunkCount         int              `json:"chunk_count,omitempty" yaml:"chunk_count,omitempty"`
+	ContentHash        string           `json:"content_hash" yaml:"content_hash"`
+	SensitivityClass   SensitivityClass `json:"sensitivity_class,omitempty" yaml:"sensitivity_class,omitempty"`
+	TTL                time.Duration    `json:"ttl,omitempty" yaml:"ttl,omitempty"`
+	ObjectRefs         []string         `json:"object_refs,omitempty" yaml:"object_refs,omitempty"`
+	TransferMode       TransferMode     `json:"transfer_mode,omitempty" yaml:"transfer_mode,omitempty"`
+	EncryptionMode     EncryptionMode   `json:"encryption_mode,omitempty" yaml:"encryption_mode,omitempty"`
+	RecipientSet       []string         `json:"recipient_set,omitempty" yaml:"recipient_set,omitempty"`
+	CreationTime       time.Time        `json:"creation_time,omitempty" yaml:"creation_time,omitempty"`
+	SignatureAlgorithm string           `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
+	Signature          string           `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
 type SealedContext struct {
@@ -198,14 +203,15 @@ type SealedContext struct {
 }
 
 type LeaseToken struct {
-	LeaseID      string    `json:"lease_id" yaml:"lease_id"`
-	LineageID    string    `json:"lineage_id" yaml:"lineage_id"`
-	AttemptID    string    `json:"attempt_id" yaml:"attempt_id"`
-	Issuer       string    `json:"issuer" yaml:"issuer"`
-	IssuedAt     time.Time `json:"issued_at" yaml:"issued_at"`
-	Expiry       time.Time `json:"expiry" yaml:"expiry"`
-	FencingEpoch int64     `json:"fencing_epoch" yaml:"fencing_epoch"`
-	Signature    string    `json:"signature,omitempty" yaml:"signature,omitempty"`
+	LeaseID            string    `json:"lease_id" yaml:"lease_id"`
+	LineageID          string    `json:"lineage_id" yaml:"lineage_id"`
+	AttemptID          string    `json:"attempt_id" yaml:"attempt_id"`
+	Issuer             string    `json:"issuer" yaml:"issuer"`
+	IssuedAt           time.Time `json:"issued_at" yaml:"issued_at"`
+	Expiry             time.Time `json:"expiry" yaml:"expiry"`
+	FencingEpoch       int64     `json:"fencing_epoch" yaml:"fencing_epoch"`
+	SignatureAlgorithm string    `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
+	Signature          string    `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
 type TraceContext struct {
@@ -228,6 +234,7 @@ type HandoffOffer struct {
 	LeaseToken                    LeaseToken         `json:"lease_token" yaml:"lease_token"`
 	Expiry                        time.Time          `json:"expiry" yaml:"expiry"`
 	TraceContext                  TraceContext       `json:"trace_context,omitempty" yaml:"trace_context,omitempty"`
+	SignatureAlgorithm            string             `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
 	Signature                     string             `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
@@ -239,6 +246,7 @@ type HandoffAccept struct {
 	RewrapRequest                bool               `json:"rewrap_request,omitempty" yaml:"rewrap_request,omitempty"`
 	ProvisionalAttemptID         string             `json:"provisional_attempt_id" yaml:"provisional_attempt_id"`
 	Expiry                       time.Time          `json:"expiry" yaml:"expiry"`
+	SignatureAlgorithm           string             `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
 	Signature                    string             `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
@@ -249,17 +257,19 @@ type ResumeCommit struct {
 	DestinationRuntimeID string    `json:"destination_runtime_id" yaml:"destination_runtime_id"`
 	ReceiptRef           string    `json:"receipt_ref" yaml:"receipt_ref"`
 	CommitTime           time.Time `json:"commit_time" yaml:"commit_time"`
+	SignatureAlgorithm   string    `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
 	Signature            string    `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
 type FenceNotice struct {
-	LineageID    string    `json:"lineage_id" yaml:"lineage_id"`
-	AttemptID    string    `json:"attempt_id" yaml:"attempt_id"`
-	FencingEpoch int64     `json:"fencing_epoch" yaml:"fencing_epoch"`
-	Reason       string    `json:"reason,omitempty" yaml:"reason,omitempty"`
-	Issuer       string    `json:"issuer" yaml:"issuer"`
-	IssuedAt     time.Time `json:"issued_at,omitempty" yaml:"issued_at,omitempty"`
-	Signature    string    `json:"signature,omitempty" yaml:"signature,omitempty"`
+	LineageID          string    `json:"lineage_id" yaml:"lineage_id"`
+	AttemptID          string    `json:"attempt_id" yaml:"attempt_id"`
+	FencingEpoch       int64     `json:"fencing_epoch" yaml:"fencing_epoch"`
+	Reason             string    `json:"reason,omitempty" yaml:"reason,omitempty"`
+	Issuer             string    `json:"issuer" yaml:"issuer"`
+	IssuedAt           time.Time `json:"issued_at,omitempty" yaml:"issued_at,omitempty"`
+	SignatureAlgorithm string    `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
+	Signature          string    `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
 type ResumeReceipt struct {
@@ -272,6 +282,7 @@ type ResumeReceipt struct {
 	CompatibilityVerified       bool               `json:"compatibility_verified,omitempty" yaml:"compatibility_verified,omitempty"`
 	CapabilityProjectionApplied CapabilityEnvelope `json:"capability_projection_applied,omitempty" yaml:"capability_projection_applied,omitempty"`
 	Status                      ReceiptStatus      `json:"status" yaml:"status"`
+	SignatureAlgorithm          string             `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
 	Signature                   string             `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
@@ -305,16 +316,32 @@ type ExportAdvertisement struct {
 	Imported    bool             `json:"imported,omitempty" yaml:"imported,omitempty"`
 	ExpiresAt   time.Time        `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
 	Signature   string           `json:"signature,omitempty" yaml:"signature,omitempty"`
+	// Phase 7.3: DR metadata for federation health summaries
+	FailoverReady  bool            `json:"failover_ready,omitempty" yaml:"failover_ready,omitempty"`
+	RecoveryState  string          `json:"recovery_state,omitempty" yaml:"recovery_state,omitempty"`
+	RuntimeVersion string          `json:"runtime_version,omitempty" yaml:"runtime_version,omitempty"`
+}
+
+type RecipientKeyAdvertisement struct {
+	Recipient string    `json:"recipient" yaml:"recipient"`
+	KeyID     string    `json:"key_id,omitempty" yaml:"key_id,omitempty"`
+	Version   string    `json:"version,omitempty" yaml:"version,omitempty"`
+	PublicKey []byte    `json:"public_key" yaml:"public_key"`
+	Active    bool      `json:"active,omitempty" yaml:"active,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
+	RevokedAt time.Time `json:"revoked_at,omitempty" yaml:"revoked_at,omitempty"`
 }
 
 type TrustBundle struct {
-	TrustDomain       string       `json:"trust_domain" yaml:"trust_domain"`
-	BundleID          string       `json:"bundle_id" yaml:"bundle_id"`
-	GatewayIdentities []SubjectRef `json:"gateway_identities,omitempty" yaml:"gateway_identities,omitempty"`
-	TrustAnchors      []string     `json:"trust_anchors,omitempty" yaml:"trust_anchors,omitempty"`
-	IssuedAt          time.Time    `json:"issued_at,omitempty" yaml:"issued_at,omitempty"`
-	ExpiresAt         time.Time    `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
-	Signature         string       `json:"signature,omitempty" yaml:"signature,omitempty"`
+	TrustDomain        string                      `json:"trust_domain" yaml:"trust_domain"`
+	BundleID           string                      `json:"bundle_id" yaml:"bundle_id"`
+	GatewayIdentities  []SubjectRef                `json:"gateway_identities,omitempty" yaml:"gateway_identities,omitempty"`
+	TrustAnchors       []string                    `json:"trust_anchors,omitempty" yaml:"trust_anchors,omitempty"`
+	RecipientKeys      []RecipientKeyAdvertisement `json:"recipient_keys,omitempty" yaml:"recipient_keys,omitempty"`
+	IssuedAt           time.Time                   `json:"issued_at,omitempty" yaml:"issued_at,omitempty"`
+	ExpiresAt          time.Time                   `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
+	SignatureAlgorithm string                      `json:"signature_algorithm,omitempty" yaml:"signature_algorithm,omitempty"`
+	Signature          string                      `json:"signature,omitempty" yaml:"signature,omitempty"`
 }
 
 type BoundaryPolicy struct {
@@ -420,7 +447,8 @@ func (r RefusalReasonCode) Validate() error {
 	case RefusalUnauthorized, RefusalIncompatibleRuntime, RefusalUnsupportedContext,
 		RefusalContextTooLarge, RefusalAdmissionClosed, RefusalSensitivityDenied,
 		RefusalDestinationBusy, RefusalInvalidLease, RefusalExpiredOffer,
-		RefusalUntrustedPeer, RefusalTransferBudget:
+		RefusalUntrustedPeer, RefusalTransferBudget,
+		RefusalDuplicateHandoff, RefusalStaleEpoch:
 		return nil
 	default:
 		return fmt.Errorf("refusal reason code %s invalid", r)
@@ -604,6 +632,14 @@ func (b TrustBundle) Validate() error {
 	for _, anchor := range b.TrustAnchors {
 		if strings.TrimSpace(anchor) == "" {
 			return errors.New("trust anchors must not contain empty values")
+		}
+	}
+	for _, key := range b.RecipientKeys {
+		if strings.TrimSpace(key.Recipient) == "" {
+			return errors.New("recipient keys require recipient")
+		}
+		if len(key.PublicKey) == 0 {
+			return errors.New("recipient keys require public_key")
 		}
 	}
 	return nil

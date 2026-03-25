@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
-	"reflect"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 	"strings"
 	"sync"
+	"time"
 )
 
 // PlanExecutionOptions configures how plan steps are executed.
@@ -47,7 +48,7 @@ type BranchAgentProvider = BranchExecutorProvider
 type BranchExecutionResult struct {
 	Step  core.PlanStep
 	State *core.Context
-	Delta core.DirtyContextDelta
+	Delta core.BranchContextDelta
 }
 
 // Execute runs the plan using the provided executor agent and shared state.
@@ -234,27 +235,33 @@ func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor Wor
 
 func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider BranchExecutorProvider, task *core.Task, plan *core.Plan, readySteps []core.PlanStep, state *core.Context, maxRecovery int) ([]core.PlanStep, error) {
 	type branchResult struct {
-			index int
-			step  core.PlanStep
-			state *core.Context
-			delta core.DirtyContextDelta
-			err   error
+		index int
+		step  core.PlanStep
+		state *core.Context
+		delta core.BranchContextDelta
+		err   error
 	}
 
 	var wg sync.WaitGroup
 	results := make(chan branchResult, len(readySteps))
+	keepBranchState := p.Options.MergeBranches != nil
 	for idx, step := range readySteps {
 		idx, step := idx, step
-			branchExecutor, err := provider.BranchExecutor()
-			if err != nil {
-				return nil, err
+		branchExecutor, err := provider.BranchExecutor()
+		if err != nil {
+			return nil, err
+		}
+		wg.Add(1)
+		go func(exec WorkflowExecutor) {
+			defer wg.Done()
+			perfstats.IncBranchClone()
+			branchCtx := state.Clone()
+			err := p.executeStep(ctx, exec, task, plan, step, branchCtx, maxRecovery)
+			result := branchResult{index: idx, step: step, delta: branchCtx.BranchDelta(), err: err}
+			if keepBranchState {
+				result.state = branchCtx
 			}
-			wg.Add(1)
-			go func(exec WorkflowExecutor) {
-				defer wg.Done()
-				branchCtx := state.Clone()
-				err := p.executeStep(ctx, exec, task, plan, step, branchCtx, maxRecovery)
-			results <- branchResult{index: idx, step: step, state: branchCtx, delta: branchCtx.DirtyDelta(), err: err}
+			results <- result
 		}(branchExecutor)
 	}
 	wg.Wait()
@@ -272,14 +279,18 @@ func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider B
 		}
 	}
 	if p.Options.MergeBranches != nil {
+		mergeStarted := time.Now()
 		if err := p.Options.MergeBranches(state, branches); err != nil {
 			return nil, err
 		}
+		perfstats.ObserveBranchMerge(time.Since(mergeStarted))
 		return readySteps, nil
 	}
+	mergeStarted := time.Now()
 	if err := mergeParallelBranches(state, branches); err != nil {
 		return nil, err
 	}
+	perfstats.ObserveBranchMerge(time.Since(mergeStarted))
 	return readySteps, nil
 }
 
@@ -287,38 +298,11 @@ func mergeParallelBranches(parent *core.Context, branches []BranchExecutionResul
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	type deltaEntry struct {
-		step  string
-		value any
-	}
-	merged := core.NewContext()
-	changed := make(map[string]deltaEntry)
+	deltas := core.NewBranchDeltaSet(len(branches))
 	for _, branch := range branches {
-		if branch.State == nil {
-			return fmt.Errorf("parallel branch merge requires isolated state")
-		}
-		if len(branch.Delta.VariableValues) > 0 {
-			return fmt.Errorf("parallel branch merge conflict: step %s changed context variables outside merge policy", branch.Step.ID)
-		}
-		if len(branch.Delta.KnowledgeValues) > 0 {
-			return fmt.Errorf("parallel branch merge conflict: step %s changed context knowledge outside merge policy", branch.Step.ID)
-		}
-		if branch.Delta.HistoryChanged || branch.Delta.CompressedChanged || branch.Delta.LogChanged || branch.Delta.PhaseChanged {
-			return fmt.Errorf("parallel branch merge conflict: step %s changed interaction history outside merge policy", branch.Step.ID)
-		}
-		for key, value := range branch.Delta.StateValues {
-			if existing, ok := changed[key]; ok {
-				if !reflect.DeepEqual(existing.value, value) {
-					return fmt.Errorf("parallel branch merge conflict on state key %q between steps %s and %s", key, existing.step, branch.Step.ID)
-				}
-				continue
-			}
-			changed[key] = deltaEntry{step: branch.Step.ID, value: value}
-			merged.Set(key, value)
-		}
+		deltas.Add("step "+branch.Step.ID, branch.Delta)
 	}
-	parent.Merge(merged)
-	return nil
+	return deltas.ApplyTo(parent)
 }
 
 func buildStepTask(task *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task {

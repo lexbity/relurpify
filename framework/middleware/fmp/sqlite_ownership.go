@@ -677,6 +677,108 @@ func boolToInt(value bool) int {
 	return 0
 }
 
+// Phase 6 optional interface implementations
+
+// HasActiveAttemptForLineage returns true if the lineage has any active handoff-related attempt.
+func (s *SQLiteOwnershipStore) HasActiveAttemptForLineage(ctx context.Context, lineageID string) (bool, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM fmp_attempts
+		 WHERE lineage_id = ?
+		   AND state IN ('HANDOFF_OFFERED', 'HANDOFF_ACCEPTED', 'RESUME_PENDING')
+		   AND fenced = 0
+		 LIMIT 1`,
+		lineageID)
+	return recordExists(ctx, row), nil
+}
+
+// ListActiveAttemptsByLineage returns all non-terminal, non-fenced attempts for the lineage.
+func (s *SQLiteOwnershipStore) ListActiveAttemptsByLineage(ctx context.Context, lineageID string) ([]core.AttemptRecord, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT attempt_id, lineage_id, runtime_id, state, lease_id, lease_expiry,
+		        start_time, last_progress_time, fenced, fencing_epoch, previous_attempt_id
+		 FROM fmp_attempts
+		 WHERE lineage_id = ?
+		   AND state NOT IN ('COMPLETED', 'FAILED', 'ORPHANED', 'COMMITTED_REMOTE', 'FENCED')
+		   AND fenced = 0
+		 ORDER BY start_time DESC`,
+		lineageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.AttemptRecord
+	for rows.Next() {
+		var attempt core.AttemptRecord
+		var leaseIDStr, leaseExpiryStr, startTimeStr, lastProgressStr, prevAttemptStr string
+		if err := rows.Scan(&attempt.AttemptID, &attempt.LineageID, &attempt.RuntimeID, &attempt.State,
+			&leaseIDStr, &leaseExpiryStr, &startTimeStr, &lastProgressStr, &attempt.Fenced,
+			&attempt.FencingEpoch, &prevAttemptStr); err != nil {
+			return nil, err
+		}
+		attempt.LeaseID = leaseIDStr
+		if leaseExpiryStr != "" {
+			if t, err := time.Parse(time.RFC3339Nano, leaseExpiryStr); err == nil {
+				attempt.LeaseExpiry = t
+			}
+		}
+		if startTimeStr != "" {
+			if t, err := time.Parse(time.RFC3339Nano, startTimeStr); err == nil {
+				attempt.StartTime = t
+			}
+		}
+		if lastProgressStr != "" {
+			if t, err := time.Parse(time.RFC3339Nano, lastProgressStr); err == nil {
+				attempt.LastProgressTime = t
+			}
+		}
+		attempt.PreviousAttemptID = prevAttemptStr
+		out = append(out, attempt)
+	}
+	return out, rows.Err()
+}
+
+// ListExpiredLeases returns all leases that have expired.
+func (s *SQLiteOwnershipStore) ListExpiredLeases(ctx context.Context, now time.Time) ([]core.LeaseToken, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT lineage_id, lease_id, attempt_id, issuer, issued_at, expiry, fencing_epoch
+		 FROM fmp_active_leases
+		 WHERE expiry < ?`,
+		now.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.LeaseToken
+	for rows.Next() {
+		var token core.LeaseToken
+		var issuedStr, expiryStr string
+		if err := rows.Scan(&token.LineageID, &token.LeaseID, &token.AttemptID, &token.Issuer,
+			&issuedStr, &expiryStr, &token.FencingEpoch); err != nil {
+			return nil, err
+		}
+		if issuedStr != "" {
+			if t, err := time.Parse(time.RFC3339Nano, issuedStr); err == nil {
+				token.IssuedAt = t
+			}
+		}
+		if expiryStr != "" {
+			if t, err := time.Parse(time.RFC3339Nano, expiryStr); err == nil {
+				token.Expiry = t
+			}
+		}
+		out = append(out, token)
+	}
+	return out, rows.Err()
+}
+
+// HasCommitForLineage returns true if there is a commit record for the lineage.
+func (s *SQLiteOwnershipStore) HasCommitForLineage(ctx context.Context, lineageID string) (bool, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM fmp_resume_commits WHERE lineage_id = ? LIMIT 1`,
+		lineageID)
+	return recordExists(ctx, row), nil
+}
+
 func rollback(tx *sql.Tx) {
 	_ = tx.Rollback()
 }

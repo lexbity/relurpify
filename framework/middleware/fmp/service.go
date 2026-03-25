@@ -10,6 +10,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/event"
+	"github.com/lexcodex/relurpify/named/rex/reconcile"
 )
 
 type Service struct {
@@ -34,6 +35,12 @@ type Service struct {
 	Signer     PayloadSigner
 	Verifier   PayloadVerifier
 	Mediator   *MediationController
+	// Phase 6.3: PartitionDetector is optional; if set, guards against issuing/accepting handoffs during partition
+	PartitionDetector PartitionDetector
+	// Phase 6.5: CircuitBreakers is optional; if set, applies per-trust-domain circuit breaker logic
+	CircuitBreakers CircuitBreakerStore
+	// Phase 6.4: CompatibilityWindows is optional; if set, enforces version skew limits
+	CompatibilityWindows CompatibilityWindowStore
 }
 
 type ExecutedHandoff struct {
@@ -41,6 +48,21 @@ type ExecutedHandoff struct {
 	Attempt core.AttemptRecord      `json:"attempt" yaml:"attempt"`
 	Receipt core.ResumeReceipt      `json:"receipt" yaml:"receipt"`
 	Package *PortableContextPackage `json:"package,omitempty" yaml:"package,omitempty"`
+}
+
+// ReconcileLeaseResult captures summary statistics from lease reconciliation.
+type ReconcileLeaseResult struct {
+	Scanned  int `json:"scanned"`
+	Orphaned int `json:"orphaned"`
+	Skipped  int `json:"skipped"`
+	Errors   int `json:"errors"`
+}
+
+// GCResult captures summary statistics from garbage collection.
+type GCResult struct {
+	ScannedObjects int `json:"scanned_objects"`
+	DeletedObjects int `json:"deleted_objects"`
+	Errors         int `json:"errors"`
 }
 
 func (s *Service) OpenChunkTransfer(ctx context.Context, lineageID string, manifest core.ContextManifest, sealed core.SealedContext) (*ChunkTransferSession, error) {
@@ -130,6 +152,10 @@ func (s *Service) CreateLineage(ctx context.Context, lineage core.LineageRecord)
 func (s *Service) OfferHandoff(ctx context.Context, lineageID, attemptID, destinationExport, issuer string, query RuntimeQuery) (*core.HandoffOffer, *PortableContextPackage, *core.SealedContext, error) {
 	if s.Ownership == nil || s.Packager == nil {
 		return nil, nil, nil, fmt.Errorf("fmp service not configured")
+	}
+	// Phase 6.3: Check partition state before issuing new handoff offers
+	if s.isPartitioned() {
+		return nil, nil, nil, fmt.Errorf("ownership store partitioned: cannot issue new handoff offers")
 	}
 	lineage, ok, err := s.Ownership.GetLineage(ctx, lineageID)
 	if err != nil {
@@ -232,6 +258,19 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	if err := s.Ownership.ValidateLease(ctx, offer.LeaseToken, s.nowUTC()); err != nil {
 		return nil, &core.TransferRefusal{Code: core.RefusalInvalidLease, Message: err.Error()}, nil
 	}
+	// Phase 6.2: Check for stale fencing epoch
+	if sourceAttempt, ok, err := s.Ownership.GetAttempt(ctx, offer.SourceAttemptID); err == nil && ok {
+		if offer.LeaseToken.FencingEpoch < sourceAttempt.FencingEpoch {
+			return nil, &core.TransferRefusal{
+				Code:    core.RefusalStaleEpoch,
+				Message: fmt.Sprintf("offer epoch %d predates current fencing epoch %d", offer.LeaseToken.FencingEpoch, sourceAttempt.FencingEpoch),
+			}, nil
+		}
+	}
+	// Phase 6.2: Duplicate protection via provisional attempt ID
+	// The provisional ID (lineage:runtime:resume) ensures idempotent re-accepts
+	// are safe (they resolve to the same attempt record). No explicit check needed here
+	// since idempotency is enforced at the reservation level.
 	if err := destination.Validate(); err != nil {
 		return nil, nil, err
 	}
@@ -320,6 +359,25 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	if err := accept.Validate(); err != nil {
 		return nil, nil, err
 	}
+	// Phase 6.3: Check partition state before accepting new handoffs
+	if s.isPartitioned() {
+		return nil, &core.TransferRefusal{
+			Code:    core.RefusalAdmissionClosed,
+			Message: "ownership store partitioned: no new handoffs accepted",
+			RetryAt: s.nowUTC().Add(30 * time.Second),
+		}, nil
+	}
+	// Phase 6.5: Check circuit breaker state for the trust domain
+	if s.CircuitBreakers != nil {
+		trustDomain := trustDomainForOffer(destination, offer)
+		if state, err := s.CircuitBreakers.GetState(ctx, trustDomain); err == nil && state == CircuitOpen {
+			return nil, &core.TransferRefusal{
+				Code:    core.RefusalAdmissionClosed,
+				Message: fmt.Sprintf("circuit breaker open for trust domain %s", trustDomain),
+				RetryAt: s.nowUTC().Add(30 * time.Second),
+			}, nil
+		}
+	}
 	if refusal := s.reserveResumeSlot(ctx, accept.ProvisionalAttemptID, offer.ContextSizeBytes); refusal != nil {
 		return nil, refusal, nil
 	}
@@ -397,6 +455,183 @@ func (s *Service) CommitHandoff(ctx context.Context, offer core.HandoffOffer, ac
 	return commit, nil
 }
 
+// ReconcileExpiredLeases performs Phase 6 reconciliation on expired ownership leases.
+// For each expired lease, if no commit receipt exists, the source attempt is orphaned.
+func (s *Service) ReconcileExpiredLeases(ctx context.Context) (ReconcileLeaseResult, error) {
+	result := ReconcileLeaseResult{}
+
+	// Check if ownership store supports the extended interfaces
+	lister, ok := s.Ownership.(AttemptLister)
+	if !ok {
+		// Graceful no-op: ownership store doesn't support extended interface
+		return result, nil
+	}
+
+	checker, _ := s.Ownership.(CommitChecker)
+
+	expired, err := lister.ListExpiredLeases(ctx, s.nowUTC())
+	if err != nil {
+		result.Errors++
+		return result, fmt.Errorf("failed to list expired leases: %w", err)
+	}
+	result.Scanned = len(expired)
+
+	for _, token := range expired {
+		// Get the current attempt state
+		attempt, ok, err := s.Ownership.GetAttempt(ctx, token.AttemptID)
+		if err != nil {
+			result.Errors++
+			continue
+		}
+		if !ok {
+			// Attempt no longer exists
+			result.Skipped++
+			continue
+		}
+
+		// Skip if already terminal
+		switch attempt.State {
+		case core.AttemptStateFenced, core.AttemptStateCompleted, core.AttemptStateFailed, core.AttemptStateOrphaned, core.AttemptStateCommittedRemote:
+			result.Skipped++
+			continue
+		}
+
+		// Check if a commit receipt exists (ownership transferred cleanly)
+		if checker != nil {
+			if hasCommit, err := checker.HasCommitForLineage(ctx, token.LineageID); err == nil && hasCommit {
+				// Commit exists, ownership is resolved
+				result.Skipped++
+				continue
+			}
+		}
+
+		// No commit exists: fence the source attempt and mark as orphaned
+		notice := core.FenceNotice{
+			LineageID:    token.LineageID,
+			AttemptID:    token.AttemptID,
+			FencingEpoch: token.FencingEpoch,
+			Reason:       "lease_expired_no_receipt",
+			Issuer:       s.Partition, // use partition ID as issuer
+			IssuedAt:     s.nowUTC(),
+		}
+		if err := SignFenceNotice(s.Signer, &notice); err != nil {
+			result.Errors++
+			continue
+		}
+		if err := s.Ownership.Fence(ctx, notice); err != nil {
+			result.Errors++
+			continue
+		}
+
+		// Upsert the attempt as ORPHANED
+		attempt.State = core.AttemptStateOrphaned
+		attempt.Fenced = true
+		attempt.FencingEpoch = notice.FencingEpoch
+		if err := s.Ownership.UpsertAttempt(ctx, *attempt); err != nil {
+			result.Errors++
+			continue
+		}
+
+		// Emit event
+		s.emit(ctx, core.FrameworkEventFMPFenceIssued, core.SubjectRef{}, map[string]any{
+			"lineage_id": token.LineageID,
+			"attempt_id": token.AttemptID,
+			"epoch":      notice.FencingEpoch,
+			"reason":     "reconciliation: lease expired, no receipt",
+		})
+		result.Orphaned++
+	}
+
+	return result, nil
+}
+
+// GCContextObjects performs garbage collection on orphaned context objects.
+// This method is optional and relies on optional interface support from the Packager.
+func (s *Service) GCContextObjects(ctx context.Context) (GCResult, error) {
+	result := GCResult{}
+
+	// Check if packager supports optional GC interface
+	type contextObjectGC interface {
+		GCContextObjects(context.Context) (int, int, error) // (scanned, deleted, error)
+	}
+
+	gcr, ok := s.Packager.(contextObjectGC)
+	if !ok {
+		// Graceful no-op: packager doesn't support GC interface
+		return result, nil
+	}
+
+	scanned, deleted, err := gcr.GCContextObjects(ctx)
+	result.ScannedObjects = scanned
+	result.DeletedObjects = deleted
+	if err != nil {
+		result.Errors = 1
+		return result, fmt.Errorf("context object GC failed: %w", err)
+	}
+
+	return result, nil
+}
+
+// ReconcileAttemptFromOutcome updates FMP attempt state based on Rex reconciliation outcome.
+// This bridges reconciliation decisions back to FMP ownership tracking.
+func (s *Service) ReconcileAttemptFromOutcome(ctx context.Context, lineageID string, outcome *reconcile.Record) (*core.AttemptRecord, error) {
+	if outcome == nil {
+		return nil, nil
+	}
+
+	lineage, ok, err := s.Ownership.GetLineage(ctx, lineageID)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	// Find the attempt associated with this reconciliation outcome
+	// Use the RunID as the attemptID if present
+	attemptID := outcome.RunID
+	if attemptID == "" {
+		attemptID = outcome.ID
+	}
+
+	attempt, ok, err := s.Ownership.GetAttempt(ctx, attemptID)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	// Map reconciliation status to attempt state
+	var newState core.AttemptState
+	switch outcome.Status {
+	case reconcile.StatusTerminal:
+		newState = core.AttemptStateFailed
+	case reconcile.StatusVerified:
+		newState = core.AttemptStateCompleted
+	case reconcile.StatusRepaired:
+		newState = core.AttemptStateCompleted
+	case reconcile.StatusOperatorReview:
+		// Keep the current state
+		newState = attempt.State
+	default:
+		newState = core.AttemptStateFailed
+	}
+
+	// Update the attempt
+	attempt.State = newState
+	attempt.LastProgressTime = s.nowUTC()
+
+	if err := s.Ownership.UpsertAttempt(ctx, *attempt); err != nil {
+		return nil, err
+	}
+
+	// Emit reconciliation outcome event
+	s.emit(ctx, core.FrameworkEventFMPReconciliationOutcome, lineage.Owner, map[string]any{
+		"lineage_id":    lineageID,
+		"attempt_id":    attemptID,
+		"outcome_status": outcome.Status,
+		"repair_summary": outcome.RepairSummary,
+		"resolution_notes": outcome.ResolutionNotes,
+	})
+
+	return attempt, nil
+}
+
 func (s *Service) ResumeHandoff(ctx context.Context, offer core.HandoffOffer, destination core.ExportDescriptor, runtimeID string, manifest core.ContextManifest, sealed core.SealedContext) (*ExecutedHandoff, *core.ResumeCommit, *core.TransferRefusal, error) {
 	return s.resumeHandoff(ctx, offer, destination, runtimeID, manifest, sealed, nil, "")
 }
@@ -451,6 +686,14 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 	if descriptor, err := s.Runtime.Descriptor(ctx); err == nil {
 		if compatErr := ValidateImportedContextCompatibility(descriptor, manifest, sealed); compatErr != nil {
 			return nil, nil, &core.TransferRefusal{Code: core.RefusalIncompatibleRuntime, Message: compatErr.Error()}, nil
+		}
+		// Phase 6.4: Check version skew against compatibility window
+		if s.CompatibilityWindows != nil {
+			if window, ok, err := s.CompatibilityWindows.GetWindow(ctx, manifest.ContextClass); err == nil && ok {
+				if refusal := ValidateVersionSkew(*window, manifest.SchemaVersion, descriptor.RuntimeVersion); refusal != nil {
+					return nil, nil, refusal, nil
+				}
+			}
 		}
 	} else {
 		return nil, nil, nil, err
@@ -560,7 +803,17 @@ func (s *Service) resumeHandoff(ctx context.Context, offer core.HandoffOffer, de
 	}
 	commit, err := s.CommitHandoff(ctx, offer, *accept, *receipt)
 	if err != nil {
+		// Record failure for circuit breaker (Phase 6.5)
+		if s.CircuitBreakers != nil {
+			trustDomain := trustDomainForOffer(destination, offer)
+			_ = s.CircuitBreakers.RecordFailure(ctx, trustDomain, s.nowUTC())
+		}
 		return nil, nil, nil, err
+	}
+	// Record success for circuit breaker (Phase 6.5)
+	if s.CircuitBreakers != nil {
+		trustDomain := trustDomainForOffer(destination, offer)
+		_ = s.CircuitBreakers.RecordSuccess(ctx, trustDomain, s.nowUTC())
 	}
 	release = false
 	return &ExecutedHandoff{
@@ -632,6 +885,47 @@ func (s *Service) validateContinuationAuthority(ctx context.Context, lineage cor
 		}
 	}
 	return nil
+}
+
+// isPartitioned returns true if the ownership store is partitioned (Phase 6.3).
+func (s *Service) isPartitioned() bool {
+	if s == nil || s.PartitionDetector == nil {
+		return false
+	}
+	return s.PartitionDetector.IsPartitioned()
+}
+
+// listLiveNodeAds returns node advertisements, filtering expired entries if LiveDiscoveryStore is available.
+func (s *Service) listLiveNodeAds(ctx context.Context) ([]core.NodeAdvertisement, error) {
+	if s.Discovery == nil {
+		return nil, nil
+	}
+	if live, ok := s.Discovery.(LiveDiscoveryStore); ok {
+		return live.ListLiveNodeAdvertisements(ctx, s.nowUTC())
+	}
+	return s.Discovery.ListNodeAdvertisements(ctx)
+}
+
+// listLiveRuntimeAds returns runtime advertisements, filtering expired entries if LiveDiscoveryStore is available.
+func (s *Service) listLiveRuntimeAds(ctx context.Context) ([]core.RuntimeAdvertisement, error) {
+	if s.Discovery == nil {
+		return nil, nil
+	}
+	if live, ok := s.Discovery.(LiveDiscoveryStore); ok {
+		return live.ListLiveRuntimeAdvertisements(ctx, s.nowUTC())
+	}
+	return s.Discovery.ListRuntimeAdvertisements(ctx)
+}
+
+// listLiveExportAds returns export advertisements, filtering expired entries if LiveDiscoveryStore is available.
+func (s *Service) listLiveExportAds(ctx context.Context) ([]core.ExportAdvertisement, error) {
+	if s.Discovery == nil {
+		return nil, nil
+	}
+	if live, ok := s.Discovery.(LiveDiscoveryStore); ok {
+		return live.ListLiveExportAdvertisements(ctx, s.nowUTC())
+	}
+	return s.Discovery.ListExportAdvertisements(ctx)
 }
 
 func (s *Service) nowUTC() time.Time {

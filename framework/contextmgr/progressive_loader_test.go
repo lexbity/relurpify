@@ -18,6 +18,10 @@ type stubContextStrategy struct {
 	request *ContextRequest
 }
 
+type countingSummarizer struct {
+	count int
+}
+
 type stubMemoryStore struct {
 	results []frameworkmemory.MemoryRecord
 	err     error
@@ -48,6 +52,27 @@ func (s *stubMemoryStore) Forget(context.Context, string, frameworkmemory.Memory
 
 func (s *stubMemoryStore) Summarize(context.Context, frameworkmemory.MemoryScope) (string, error) {
 	return "", nil
+}
+
+func (s *countingSummarizer) Summarize(content string, level core.SummaryLevel) (string, error) {
+	s.count++
+	return "summary:" + content, nil
+}
+
+func (s *countingSummarizer) SummarizeFile(path string, content string, level core.SummaryLevel) (*core.FileSummary, error) {
+	summary, err := s.Summarize(content, level)
+	if err != nil {
+		return nil, err
+	}
+	return &core.FileSummary{Path: path, Level: level, Summary: summary}, nil
+}
+
+func (s *countingSummarizer) SummarizeDirectory(path string, files []core.FileSummary, level core.SummaryLevel) (*core.DirectorySummary, error) {
+	return &core.DirectorySummary{Path: path, Level: level}, nil
+}
+
+func (s *countingSummarizer) SummarizeChunk(chunk core.CodeChunk, content string, level core.SummaryLevel) (*core.ChunkSummary, error) {
+	return &core.ChunkSummary{ChunkID: chunk.ID, Level: level}, nil
 }
 
 func (p *blockingASTParser) Parse(content string, path string) (*ast.ParseResult, error) {
@@ -175,6 +200,9 @@ func TestProgressiveLoaderPromotesFileDetail(t *testing.T) {
 	if len(cm.FileItems()) != 1 {
 		t.Fatalf("expected upserted file item, got %d items", len(cm.FileItems()))
 	}
+	if item.Reference == nil || item.Reference.Kind != core.ContextReferenceFile || item.Reference.URI != path {
+		t.Fatalf("expected file reference metadata, got %+v", item.Reference)
+	}
 }
 
 func TestProgressiveLoaderDemotesFileDetailWithoutDuplicates(t *testing.T) {
@@ -256,6 +284,102 @@ func TestProgressiveLoaderPreservesProtectedFilesDuringDemotion(t *testing.T) {
 	}
 	if afterOther >= beforeOther {
 		t.Fatalf("expected unprotected file to shrink, before=%d after=%d", beforeOther, afterOther)
+	}
+}
+
+func TestProgressiveLoaderDemotionUsesCachedFileContent(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cached.go")
+	content := strings.Repeat("package sample\nfunc Example() string { return \"value\" }\n", 80)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	budget := core.NewContextBudget(20000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
+	if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailFull, Priority: 2}); err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove file: %v", err)
+	}
+
+	freed, err := loader.DemoteToFree(1, nil)
+	if err != nil {
+		t.Fatalf("demote to free: %v", err)
+	}
+	if freed <= 0 {
+		t.Fatalf("expected freed tokens, got %d", freed)
+	}
+	if got := loader.fileItem(path); got == nil || got.TokenCount() == 0 {
+		t.Fatalf("expected cached file item after demotion, got %#v", got)
+	}
+}
+
+func TestProgressiveLoaderInvalidatesCachedFileContentOnChange(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.go")
+	initial := strings.Repeat("package sample\nfunc Example() string { return \"old\" }\n", 10)
+	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
+		t.Fatalf("write initial file: %v", err)
+	}
+
+	budget := core.NewContextBudget(16000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
+	if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailMinimal, Priority: 2}); err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+
+	updated := strings.Repeat("package sample\nfunc Example() string { return \"new\" }\n", 20)
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		t.Fatalf("write updated file: %v", err)
+	}
+	now := time.Now().UTC().Add(2 * time.Second)
+	if err := os.Chtimes(path, now, now); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	if err := loader.ExpandContext(path, DetailFull); err != nil {
+		t.Fatalf("expand context: %v", err)
+	}
+	item := loader.fileItem(path)
+	if item == nil {
+		t.Fatal("expected file item after refresh")
+	}
+	if !strings.Contains(item.Content, "\"new\"") {
+		t.Fatalf("expected refreshed content, got %q", item.Content)
+	}
+}
+
+func TestProgressiveLoaderCachesDerivedSummariesAcrossDetailTransitions(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "summary.go")
+	content := strings.Repeat("package sample\nfunc Example() string { return \"value\" }\n", 40)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	budget := core.NewContextBudget(16000)
+	cm := NewContextManager(budget)
+	summarizer := &countingSummarizer{}
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, summarizer)
+
+	if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailConcise, Priority: 2}); err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+	if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailMinimal, Priority: 2}); err != nil {
+		t.Fatalf("minimal load: %v", err)
+	}
+	if err := loader.loadFile(FileRequest{Path: path, DetailLevel: DetailConcise, Priority: 2}); err != nil {
+		t.Fatalf("concise reload: %v", err)
+	}
+	if summarizer.count != 1 {
+		t.Fatalf("expected summary to be reused from cache, count=%d", summarizer.count)
 	}
 }
 
@@ -488,6 +612,9 @@ func TestProgressiveLoaderExecuteMemoryQueryAddsMemoryContextItem(t *testing.T) 
 	}
 	if strings.Contains(item.Content, "playbook") {
 		t.Fatalf("expected MaxResults limit to exclude second result, got %q", item.Content)
+	}
+	if item.Reference == nil || item.Reference.Kind != core.ContextReferenceRuntimeMemory || item.Reference.ID != "rollback" {
+		t.Fatalf("expected runtime memory reference, got %+v", item.Reference)
 	}
 }
 

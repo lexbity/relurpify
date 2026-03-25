@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type CompactionResult struct {
 	DeletedDocumentVersions int
 	DeletedEvents           int
 	ReindexedRows           int
+	DriftEventsDetected     int
 }
 
 // EmbeddingRebuildOptions scopes embedding regeneration.
@@ -43,17 +45,19 @@ type EmbeddingRebuildOptions struct {
 
 // Maintenance provides compaction and rebuild operations over retrieval storage.
 type Maintenance struct {
-	db       *sql.DB
-	embedder Embedder
-	now      func() time.Time
+	db        *sql.DB
+	embedder  Embedder
+	now       func() time.Time
+	schemaErr error
 }
 
 // NewMaintenance constructs a maintenance operator over retrieval storage.
 func NewMaintenance(db *sql.DB, embedder Embedder) *Maintenance {
 	return &Maintenance{
-		db:       db,
-		embedder: embedder,
-		now:      func() time.Time { return time.Now().UTC() },
+		db:        db,
+		embedder:  embedder,
+		now:       func() time.Time { return time.Now().UTC() },
+		schemaErr: ensureRuntimeSchema(context.Background(), db),
 	}
 }
 
@@ -62,8 +66,8 @@ func (m *Maintenance) Compact(ctx context.Context, opts CompactionOptions) (Comp
 	if m == nil || m.db == nil {
 		return CompactionResult{}, errors.New("maintenance db required")
 	}
-	if err := EnsureSchema(ctx, m.db); err != nil {
-		return CompactionResult{}, err
+	if m.schemaErr != nil {
+		return CompactionResult{}, m.schemaErr
 	}
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -72,6 +76,14 @@ func (m *Maintenance) Compact(ctx context.Context, opts CompactionOptions) (Comp
 	defer tx.Rollback()
 
 	result := CompactionResult{}
+
+	// Detect anchor drift before deleting chunk versions
+	if driftEventCount, err := m.detectAnchorDrift(ctx, tx); err != nil {
+		return CompactionResult{}, err
+	} else {
+		result.DriftEventsDetected = driftEventCount
+	}
+
 	if result.DeletedEmbeddings, err = execDeleteCount(ctx, tx, `DELETE FROM retrieval_embeddings
 		WHERE EXISTS (
 			SELECT 1
@@ -122,6 +134,9 @@ func (m *Maintenance) Compact(ctx context.Context, opts CompactionOptions) (Comp
 		}
 		result.DeletedEvents = deletedRetrievalEvents + deletedPackingEvents
 	}
+	if err := refreshCorpusMetadataTx(ctx, tx); err != nil {
+		return CompactionResult{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return CompactionResult{}, err
 	}
@@ -137,8 +152,8 @@ func (m *Maintenance) RebuildSearchIndex(ctx context.Context) (int, error) {
 	if m == nil || m.db == nil {
 		return 0, errors.New("maintenance db required")
 	}
-	if err := EnsureSchema(ctx, m.db); err != nil {
-		return 0, err
+	if m.schemaErr != nil {
+		return 0, m.schemaErr
 	}
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -161,6 +176,9 @@ func (m *Maintenance) RebuildSearchIndex(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	if err := refreshCorpusMetadataTx(ctx, tx); err != nil {
+		return 0, err
+	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
@@ -179,8 +197,8 @@ func (m *Maintenance) RebuildEmbeddings(ctx context.Context, opts EmbeddingRebui
 	if m.embedder == nil {
 		return 0, errors.New("maintenance embedder required")
 	}
-	if err := EnsureSchema(ctx, m.db); err != nil {
-		return 0, err
+	if m.schemaErr != nil {
+		return 0, m.schemaErr
 	}
 	if opts.Force {
 		args := []any{m.embedder.ModelID()}
@@ -259,4 +277,134 @@ func execDeleteCount(ctx context.Context, tx *sql.Tx, query string, args ...any)
 		return 0, err
 	}
 	return int(n), nil
+}
+
+// detectAnchorDrift identifies drift in anchored terms by comparing old and new chunk versions.
+// For each chunk version about to be deleted, check if anchors reference it and compare
+// the anchored term's context between versions using Jaccard similarity.
+func (m *Maintenance) detectAnchorDrift(ctx context.Context, tx *sql.Tx) (int, error) {
+	if m == nil || m.db == nil {
+		return 0, nil
+	}
+
+	const driftThreshold = 0.6
+
+	// Query for chunk versions that are about to be deleted (inactive versions)
+	rows, err := tx.QueryContext(ctx, `
+		SELECT cv.chunk_id, cv.version_id, cv.text
+		FROM retrieval_chunk_versions cv
+		WHERE cv.tombstoned = 0
+		  AND EXISTS (
+			SELECT 1
+			FROM retrieval_chunks c
+			WHERE c.chunk_id = cv.chunk_id
+			  AND c.active_version_id != cv.version_id
+		  )
+	`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	eventCount := 0
+	for rows.Next() {
+		var oldChunkID, oldVersionID, oldText string
+		if err := rows.Scan(&oldChunkID, &oldVersionID, &oldText); err != nil {
+			return 0, err
+		}
+
+		// Query anchors that reference this chunk
+		anchorRows, err := tx.QueryContext(ctx, `
+			SELECT anchor_id, term, term_normalized
+			FROM retrieval_semantic_anchors
+			WHERE source_chunk_id = ?
+			  AND superseded_by IS NULL
+			  AND invalidated_at IS NULL
+		`, oldChunkID)
+		if err != nil {
+			return 0, err
+		}
+		defer anchorRows.Close()
+
+		for anchorRows.Next() {
+			var anchorID, term, termNorm string
+			if err := anchorRows.Scan(&anchorID, &term, &termNorm); err != nil {
+				return 0, err
+			}
+
+			// Get the active version for this chunk
+			var newText string
+			err := tx.QueryRowContext(ctx, `
+				SELECT cv.text
+				FROM retrieval_chunk_versions cv
+				JOIN retrieval_chunks c ON c.chunk_id = cv.chunk_id
+				WHERE c.chunk_id = ?
+				  AND cv.version_id = c.active_version_id
+			`, oldChunkID).Scan(&newText)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					// Chunk was deleted, emit drift event with similarity 0.0
+					similarity := 0.0
+					eventID := generateAnchorID() + "-evt"
+					_, err := tx.ExecContext(ctx, `
+						INSERT INTO retrieval_anchor_events
+						  (event_id, anchor_id, event_type, detail, similarity_score, created_at)
+						VALUES (?, ?, ?, ?, ?, ?)
+					`, eventID, anchorID, "drift_detected", "term removed from source", similarity, m.now().UTC())
+					if err != nil {
+						return 0, err
+					}
+					eventCount++
+					continue
+				}
+				return 0, err
+			}
+
+			// Extract sentences and compare
+			oldSentence, _, _, oldFound := ExtractSentence(oldText, term)
+			newSentence, _, _, newFound := ExtractSentence(newText, term)
+
+			if !oldFound || !newFound {
+				// Term no longer present in active version
+				eventID := generateAnchorID() + "-evt"
+				similarity := 0.0
+				if !newFound {
+					_, err := tx.ExecContext(ctx, `
+						INSERT INTO retrieval_anchor_events
+						  (event_id, anchor_id, event_type, detail, old_definition, similarity_score, created_at)
+						VALUES (?, ?, ?, ?, ?, ?, ?)
+					`, eventID, anchorID, "drift_detected", "term removed from source", oldSentence, similarity, m.now().UTC())
+					if err != nil {
+						return 0, err
+					}
+					eventCount++
+				}
+				continue
+			}
+
+			// Compute Jaccard similarity
+			similarity := JaccardSimilarity(oldSentence, newSentence)
+			if similarity < driftThreshold {
+				eventID := generateAnchorID() + "-evt"
+				_, err := tx.ExecContext(ctx, `
+					INSERT INTO retrieval_anchor_events
+					  (event_id, anchor_id, event_type, detail, old_definition, new_definition, similarity_score, created_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				`, eventID, anchorID, "drift_detected", fmt.Sprintf("similarity %.2f < threshold %.2f", similarity, driftThreshold),
+					oldSentence, newSentence, similarity, m.now().UTC())
+				if err != nil {
+					return 0, err
+				}
+				eventCount++
+			}
+		}
+		if err := anchorRows.Err(); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	return eventCount, nil
 }

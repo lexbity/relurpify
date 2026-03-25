@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/search"
 	"strings"
+	"time"
 )
 
 // ContextPolicyPreferences tune how the policy compresses and expands context.
@@ -280,6 +281,34 @@ func (p *ContextPolicy) RecordLatestInteraction(state *core.Context, debugf func
 	if err := p.ContextManager.AddItem(item); err != nil && debugf != nil {
 		debugf("context item add failed: %v", err)
 	}
+	p.RecordGraphMemoryPublications(state, debugf)
+}
+
+// RecordGraphMemoryPublications ingests richer graph memory publication state
+// into the managed context set so reference-capable memory items are available
+// to any prompt/runtime flow using ContextManager.
+func (p *ContextPolicy) RecordGraphMemoryPublications(state *core.Context, debugf func(string, ...interface{})) {
+	if p == nil || p.ContextManager == nil || state == nil {
+		return
+	}
+	existing := graphMemoryItemKeySet(p.ContextManager.GetItemsByType(core.ContextTypeMemory))
+	if existing == nil {
+		existing = make(map[string]struct{})
+	}
+	for _, publication := range graphMemoryContextItems(state) {
+		key := graphMemoryItemKey(publication)
+		if key == "" {
+			continue
+		}
+		if _, ok := existing[key]; ok {
+			continue
+		}
+		if err := p.ContextManager.AddItem(publication); err != nil && debugf != nil {
+			debugf("graph memory context item add failed: %v", err)
+			continue
+		}
+		existing[key] = struct{}{}
+	}
 }
 
 // HandleSignals expands context when the strategy detects gaps or uncertainty.
@@ -293,6 +322,180 @@ func (p *ContextPolicy) HandleSignals(state *core.Context, shared *core.SharedCo
 	if p.detectUncertainty(state) {
 		p.handleUncertainty(state)
 	}
+}
+
+func graphMemoryContextItems(state *core.Context) []*core.MemoryContextItem {
+	if state == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	items := make([]*core.MemoryContextItem, 0)
+	items = append(items, memoryItemsFromGraphPublication(
+		state,
+		"graph.declarative_memory_payload",
+		"graph.declarative_memory_refs",
+		core.ContextReferenceRuntimeMemory,
+		now,
+	)...)
+	items = append(items, memoryItemsFromGraphPublication(
+		state,
+		"graph.procedural_memory_payload",
+		"graph.procedural_memory_refs",
+		core.ContextReferenceRuntimeMemory,
+		now,
+	)...)
+	if len(items) == 0 {
+		return nil
+	}
+	return items
+}
+
+func memoryItemsFromGraphPublication(state *core.Context, payloadKey, refsKey string, defaultKind core.ContextReferenceKind, now time.Time) []*core.MemoryContextItem {
+	if state == nil {
+		return nil
+	}
+	var items []*core.MemoryContextItem
+	if raw, ok := state.Get(payloadKey); ok && raw != nil {
+		if payload, ok := raw.(map[string]any); ok {
+			if results, ok := payload["results"].([]map[string]any); ok {
+				for _, result := range results {
+					item := memoryItemFromPublicationResult(result, defaultKind, now)
+					if item != nil {
+						items = append(items, item)
+					}
+				}
+			}
+		}
+	}
+	if len(items) > 0 {
+		return items
+	}
+	if raw, ok := state.Get(refsKey); ok && raw != nil {
+		if refs, ok := raw.([]core.ContextReference); ok {
+			for _, ref := range refs {
+				ref := ref
+				label := strings.TrimSpace(ref.ID)
+				if label == "" {
+					label = strings.TrimSpace(ref.URI)
+				}
+				if label == "" {
+					continue
+				}
+				items = append(items, &core.MemoryContextItem{
+					Source:       "graph_memory",
+					Summary:      label,
+					Reference:    &ref,
+					LastAccessed: now,
+					Relevance:    0.8,
+					PriorityVal:  1,
+				})
+			}
+		}
+	}
+	return items
+}
+
+func memoryItemFromPublicationResult(result map[string]any, defaultKind core.ContextReferenceKind, now time.Time) *core.MemoryContextItem {
+	summary := strings.TrimSpace(fmt.Sprint(result["summary"]))
+	content := strings.TrimSpace(fmt.Sprint(result["text"]))
+	if summary == "" || summary == "<nil>" {
+		summary = content
+	}
+	if content == "<nil>" {
+		content = ""
+	}
+	if summary == "" {
+		return nil
+	}
+	ref := publicationReference(result, defaultKind)
+	return &core.MemoryContextItem{
+		Source:       strings.TrimSpace(fmt.Sprint(result["source"])),
+		Content:      content,
+		Summary:      summary,
+		Reference:    ref,
+		LastAccessed: now,
+		Relevance:    0.85,
+		PriorityVal:  1,
+	}
+}
+
+func publicationReference(result map[string]any, defaultKind core.ContextReferenceKind) *core.ContextReference {
+	raw, _ := result["reference"].(map[string]any)
+	ref := &core.ContextReference{
+		Kind:    defaultKind,
+		ID:      strings.TrimSpace(fmt.Sprint(result["record_id"])),
+		Detail:  strings.TrimSpace(fmt.Sprint(result["kind"])),
+		URI:     "",
+		Version: "",
+	}
+	if len(raw) > 0 {
+		if kind := strings.TrimSpace(fmt.Sprint(raw["kind"])); kind != "" && kind != "<nil>" {
+			ref.Kind = core.ContextReferenceKind(kind)
+		}
+		if id := strings.TrimSpace(fmt.Sprint(raw["id"])); id != "" && id != "<nil>" {
+			ref.ID = id
+		}
+		if uri := strings.TrimSpace(fmt.Sprint(raw["uri"])); uri != "" && uri != "<nil>" {
+			ref.URI = uri
+		}
+		if version := strings.TrimSpace(fmt.Sprint(raw["version"])); version != "" && version != "<nil>" {
+			ref.Version = version
+		}
+		if detail := strings.TrimSpace(fmt.Sprint(raw["detail"])); detail != "" && detail != "<nil>" {
+			ref.Detail = detail
+		}
+	}
+	if ref.ID == "" && ref.URI == "" {
+		return nil
+	}
+	return ref
+}
+
+func graphMemoryItemExists(items []ContextItem, candidate *core.MemoryContextItem) bool {
+	if candidate == nil {
+		return true
+	}
+	candidateKey := graphMemoryItemKey(candidate)
+	if candidateKey == "" {
+		return false
+	}
+	for _, item := range items {
+		existing, ok := item.(*core.MemoryContextItem)
+		if !ok {
+			continue
+		}
+		if graphMemoryItemKey(existing) == candidateKey {
+			return true
+		}
+	}
+	return false
+}
+
+func graphMemoryItemKeySet(items []ContextItem) map[string]struct{} {
+	if len(items) == 0 {
+		return nil
+	}
+	keys := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		existing, ok := item.(*core.MemoryContextItem)
+		if !ok {
+			continue
+		}
+		if key := graphMemoryItemKey(existing); key != "" {
+			keys[key] = struct{}{}
+		}
+	}
+	return keys
+}
+
+func graphMemoryItemKey(item *core.MemoryContextItem) string {
+	if item == nil {
+		return ""
+	}
+	if item.Reference != nil {
+		return string(item.Reference.Kind) + "|" + item.Reference.ID + "|" + item.Reference.URI
+	}
+	return strings.TrimSpace(item.Source) + "|" + strings.TrimSpace(item.Summary)
 }
 
 func (p *ContextPolicy) expandContextFromResult(result *core.Result) {

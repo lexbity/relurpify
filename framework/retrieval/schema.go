@@ -7,15 +7,30 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+
+	"github.com/lexcodex/relurpify/framework/perfstats"
 )
 
 // SchemaVersion is the current retrieval schema version.
-const SchemaVersion = 4
+const SchemaVersion = 5
 
-const schemaMetadataKey = "retrieval_schema_version"
+const (
+	schemaMetadataKey           = "retrieval_schema_version"
+	corpusRevisionMetadataKey   = "retrieval_corpus_revision"
+	activeChunkCountMetadataKey = "retrieval_active_chunk_count"
+)
+
+type runtimeSchemaState struct {
+	once sync.Once
+	err  error
+}
+
+var runtimeSchemaCache sync.Map
 
 // EnsureSchema creates or upgrades the retrieval tables in an existing SQLite database.
 func EnsureSchema(ctx context.Context, db *sql.DB) error {
+	perfstats.IncRetrievalSchemaCheck()
 	if db == nil {
 		return errors.New("retrieval schema db required")
 	}
@@ -44,11 +59,49 @@ func EnsureSchema(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
+	if version < 5 {
+		if err := migrateToSchemaV5(ctx, db); err != nil {
+			return err
+		}
+	}
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO schema_metadata (key, value) VALUES (?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 		schemaMetadataKey,
 		fmt.Sprintf("%d", SchemaVersion),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO schema_metadata (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO NOTHING`,
+		corpusRevisionMetadataKey,
+		"0",
+	)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO schema_metadata (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO NOTHING`,
+		activeChunkCountMetadataKey,
+		"0",
+	)
+	if err != nil {
+		return err
+	}
+	count, err := activeChunkCountQuerier(ctx, db)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx,
+		`UPDATE schema_metadata
+			SET value = ?
+		  WHERE key = ?
+		    AND (value = '' OR value = '0')`,
+		fmt.Sprintf("%d", count),
+		activeChunkCountMetadataKey,
 	)
 	return err
 }
@@ -75,6 +128,123 @@ func currentSchemaVersionOrZero(ctx context.Context, db *sql.DB) (int, error) {
 		return 0, err
 	}
 	return version, nil
+}
+
+func ensureRuntimeSchema(ctx context.Context, db *sql.DB) error {
+	if db == nil {
+		return errors.New("retrieval schema db required")
+	}
+	stateAny, _ := runtimeSchemaCache.LoadOrStore(db, &runtimeSchemaState{})
+	state := stateAny.(*runtimeSchemaState)
+	state.once.Do(func() {
+		state.err = EnsureSchema(ctx, db)
+	})
+	return state.err
+}
+
+func currentCorpusRevision(ctx context.Context, db *sql.DB) (string, error) {
+	if err := ensureRuntimeSchema(ctx, db); err != nil {
+		return "", err
+	}
+	row := db.QueryRowContext(ctx, `SELECT value FROM schema_metadata WHERE key = ?`, corpusRevisionMetadataKey)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "0", nil
+		}
+		return "", err
+	}
+	if strings.TrimSpace(value) == "" {
+		return "0", nil
+	}
+	return value, nil
+}
+
+func currentActiveChunkCount(ctx context.Context, db *sql.DB) (int, error) {
+	if err := ensureRuntimeSchema(ctx, db); err != nil {
+		return 0, err
+	}
+	row := db.QueryRowContext(ctx, `SELECT value FROM schema_metadata WHERE key = ?`, activeChunkCountMetadataKey)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	var count int
+	if strings.TrimSpace(value) == "" {
+		return 0, nil
+	}
+	if _, err := fmt.Sscanf(value, "%d", &count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func bumpCorpusRevisionTx(ctx context.Context, tx *sql.Tx) error {
+	if tx == nil {
+		return errors.New("retrieval schema tx required")
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE schema_metadata
+		SET value = printf('%d', CAST(COALESCE(NULLIF(value, ''), '0') AS INTEGER) + 1)
+		WHERE key = ?`, corpusRevisionMetadataKey)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows > 0 {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO schema_metadata (key, value) VALUES (?, ?)`, corpusRevisionMetadataKey, "1")
+	return err
+}
+
+func refreshCorpusMetadataTx(ctx context.Context, tx *sql.Tx) error {
+	if err := bumpCorpusRevisionTx(ctx, tx); err != nil {
+		return err
+	}
+	count, err := activeChunkCountQuerier(ctx, tx)
+	if err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE schema_metadata SET value = ? WHERE key = ?`, fmt.Sprintf("%d", count), activeChunkCountMetadataKey)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows > 0 {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO schema_metadata (key, value) VALUES (?, ?)`, activeChunkCountMetadataKey, fmt.Sprintf("%d", count))
+	return err
+}
+
+type rowQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func activeChunkCountQuerier(ctx context.Context, q rowQuerier) (int, error) {
+	row := q.QueryRowContext(ctx, `SELECT COUNT(*)
+		FROM retrieval_chunks c
+		JOIN retrieval_chunk_versions cv
+			ON cv.chunk_id = c.chunk_id AND cv.version_id = c.active_version_id
+		JOIN retrieval_document_versions dv
+			ON dv.version_id = c.active_version_id AND dv.superseded = 0
+		WHERE c.tombstoned = 0
+		  AND cv.tombstoned = 0
+		  AND c.active_version_id <> ''`)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func migrateToSchemaV2(ctx context.Context, db *sql.DB) error {
@@ -158,6 +328,84 @@ func migrateToSchemaV4(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	return backfillDocumentPolicyTagsV4(ctx, db)
+}
+
+func migrateToSchemaV5(ctx context.Context, db *sql.DB) error {
+	// Create retrieval_semantic_anchors table
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS retrieval_semantic_anchors (
+		anchor_id         TEXT PRIMARY KEY,
+		term              TEXT NOT NULL,
+		term_normalized   TEXT NOT NULL,
+		definition        TEXT NOT NULL,
+		context_summary   TEXT,
+		scope             TEXT NOT NULL DEFAULT 'workspace',
+		anchor_class      TEXT NOT NULL DEFAULT 'technical',
+		source_chunk_id   TEXT,
+		source_version_id TEXT,
+		source_doc_id     TEXT,
+		corpus_scope      TEXT NOT NULL DEFAULT 'workspace',
+		policy_snapshot_id TEXT,
+		superseded_by     TEXT,
+		created_at        TEXT NOT NULL,
+		invalidated_at    TEXT,
+		FOREIGN KEY (source_chunk_id) REFERENCES retrieval_chunks(chunk_id),
+		FOREIGN KEY (source_doc_id) REFERENCES retrieval_documents(doc_id)
+	);`); err != nil {
+		return err
+	}
+
+	// Create indexes for anchors table
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_anchors_term_scope
+		ON retrieval_semantic_anchors(term_normalized, corpus_scope)
+		WHERE invalidated_at IS NULL;`); err != nil {
+		return err
+	}
+
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_anchors_chunk
+		ON retrieval_semantic_anchors(source_chunk_id)
+		WHERE invalidated_at IS NULL;`); err != nil {
+		return err
+	}
+
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_anchors_superseded
+		ON retrieval_semantic_anchors(superseded_by)
+		WHERE superseded_by IS NOT NULL;`); err != nil {
+		return err
+	}
+
+	// Create retrieval_anchor_events table
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS retrieval_anchor_events (
+		event_id    TEXT PRIMARY KEY,
+		anchor_id   TEXT NOT NULL,
+		event_type  TEXT NOT NULL,
+		detail      TEXT,
+		old_definition TEXT,
+		new_definition TEXT,
+		similarity_score REAL,
+		created_at  TEXT NOT NULL,
+		resolved_at TEXT,
+		FOREIGN KEY (anchor_id) REFERENCES retrieval_semantic_anchors(anchor_id)
+	);`); err != nil {
+		return err
+	}
+
+	// Create indexes for events table
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_anchor_events_anchor
+		ON retrieval_anchor_events(anchor_id);`); err != nil {
+		return err
+	}
+
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_anchor_events_type
+		ON retrieval_anchor_events(event_type, created_at);`); err != nil {
+		return err
+	}
+
+	// Migrate resolved_at column for existing databases
+	if err := ensureColumn(ctx, db, "retrieval_anchor_events", "resolved_at", `ALTER TABLE retrieval_anchor_events ADD COLUMN resolved_at TEXT`); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func createDocumentTablesV2(ctx context.Context, db *sql.DB) error {

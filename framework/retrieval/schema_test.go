@@ -148,6 +148,11 @@ func TestEnsureSchemaMigratesLegacyChunkStorage(t *testing.T) {
 	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM retrieval_chunk_versions WHERE chunk_id = 'chunk:1'`).Scan(&versionCount)
 	require.NoError(t, err)
 	require.Equal(t, 1, versionCount)
+
+	var activeChunkCount string
+	err = db.QueryRowContext(ctx, `SELECT value FROM schema_metadata WHERE key = ?`, activeChunkCountMetadataKey).Scan(&activeChunkCount)
+	require.NoError(t, err)
+	require.Equal(t, "1", activeChunkCount)
 }
 
 func requireHasColumn(t *testing.T, db *sql.DB, table, column string) {

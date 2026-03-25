@@ -21,6 +21,7 @@ type PolicyConditions struct {
 	Actors                    []ActorMatch              `json:"actors,omitempty" yaml:"actors,omitempty"`
 	Capabilities              []string                  `json:"capabilities,omitempty" yaml:"capabilities,omitempty"`
 	ExportNames               []string                  `json:"export_names,omitempty" yaml:"export_names,omitempty"`
+	SourceDomains             []string                  `json:"source_domains,omitempty" yaml:"source_domains,omitempty"`
 	ContextClasses            []string                  `json:"context_classes,omitempty" yaml:"context_classes,omitempty"`
 	SensitivityClasses        []SensitivityClass        `json:"sensitivity_classes,omitempty" yaml:"sensitivity_classes,omitempty"`
 	RouteModes                []RouteMode               `json:"route_modes,omitempty" yaml:"route_modes,omitempty"`
@@ -81,6 +82,7 @@ type PolicyRequest struct {
 	LineageID              string
 	AttemptID              string
 	ExportName             string
+	SourceDomain           string
 	ContextClass           string
 	SensitivityClass       SensitivityClass
 	RouteMode              RouteMode

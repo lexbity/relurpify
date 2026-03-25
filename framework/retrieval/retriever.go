@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // RetrievalQuery is the caller-facing retrieval contract used by prefiltering and retrieval.
@@ -24,13 +26,13 @@ type RetrievalQuery struct {
 
 // PrefilterChunk captures active chunk metadata that passed the SQL prefilter.
 type PrefilterChunk struct {
-	ChunkID       string
-	DocID         string
-	VersionID     string
-	CanonicalURI  string
-	SourceType    string
-	CorpusScope   string
-	StructuralKey string
+	ChunkID         string
+	DocID           string
+	VersionID       string
+	CanonicalURI    string
+	SourceType      string
+	CorpusScope     string
+	StructuralKey   string
 	SourceUpdatedAt time.Time
 }
 
@@ -45,7 +47,8 @@ type PrefilterResult struct {
 
 // MetadataPrefilter narrows retrieval candidates using indexed metadata before scoring.
 type MetadataPrefilter struct {
-	db *sql.DB
+	db        *sql.DB
+	schemaErr error
 }
 
 // RankedCandidate is a fused retrieval result prior to context packing.
@@ -62,14 +65,15 @@ type RankedCandidate struct {
 	DenseRank       int
 	MatchedBySparse bool
 	MatchedByDense  bool
+	Derivation      *core.DerivationChain
 }
 
 // RetrievalResult captures the prefilter output, raw index candidates, and fused ranking.
 type RetrievalResult struct {
-	Prefilter *PrefilterResult
-	Sparse    []SearchCandidate
-	Dense     []SearchCandidate
-	Fused     []RankedCandidate
+	Prefilter       *PrefilterResult
+	Sparse          []SearchCandidate
+	Dense           []SearchCandidate
+	Fused           []RankedCandidate
 	ExcludedReasons map[string]string
 }
 
@@ -85,7 +89,10 @@ type Retriever struct {
 
 // NewMetadataPrefilter constructs a prefilter over the retrieval SQLite store.
 func NewMetadataPrefilter(db *sql.DB) *MetadataPrefilter {
-	return &MetadataPrefilter{db: db}
+	return &MetadataPrefilter{
+		db:        db,
+		schemaErr: ensureRuntimeSchema(context.Background(), db),
+	}
 }
 
 // NewRetriever constructs the phase-5 retriever over the retrieval SQLite store.
@@ -105,18 +112,18 @@ func (m *MetadataPrefilter) Prefilter(ctx context.Context, q RetrievalQuery) (*P
 	if m == nil || m.db == nil {
 		return nil, errors.New("metadata prefilter db required")
 	}
-	if err := EnsureSchema(ctx, m.db); err != nil {
-		return nil, err
+	if m.schemaErr != nil {
+		return nil, m.schemaErr
 	}
-	activeCount, err := m.activeChunkCount(ctx)
+	activeCount, err := currentActiveChunkCount(ctx, m.db)
 	if err != nil {
 		return nil, err
 	}
 
-	base := `SELECT c.chunk_id, c.doc_id, c.active_version_id, d.canonical_uri, d.source_type, d.corpus_scope, c.structural_key, d.source_updated_at
-		FROM retrieval_chunks c
-		JOIN retrieval_documents d
-			ON d.doc_id = c.doc_id
+	base := `SELECT c.chunk_id, c.doc_id
+			FROM retrieval_chunks c
+			JOIN retrieval_documents d
+				ON d.doc_id = c.doc_id
 		JOIN retrieval_document_versions dv
 			ON dv.version_id = c.active_version_id AND dv.superseded = 0
 		JOIN retrieval_chunk_versions cv
@@ -124,7 +131,7 @@ func (m *MetadataPrefilter) Prefilter(ctx context.Context, q RetrievalQuery) (*P
 		WHERE c.tombstoned = 0
 		  AND cv.tombstoned = 0
 		  AND c.active_version_id <> ''`
-	args := make([]any, 0)
+	args := make([]any, 0, len(q.SourceTypes)+len(q.AllowChunkIDs)+len(q.PolicyTags)+2)
 
 	scope := normalizeScope(q.Scope)
 	if scope != "" {
@@ -147,7 +154,7 @@ func (m *MetadataPrefilter) Prefilter(ctx context.Context, q RetrievalQuery) (*P
 		base += " AND d.source_updated_at >= ?"
 		args = append(args, q.UpdatedAfter.UTC().Format(time.RFC3339Nano))
 	}
-	for _, tag := range cloneStrings(q.PolicyTags) {
+	for _, tag := range q.PolicyTags {
 		base += ` AND EXISTS (
 			SELECT 1
 			FROM retrieval_document_policy_tags dpt
@@ -164,19 +171,21 @@ func (m *MetadataPrefilter) Prefilter(ctx context.Context, q RetrievalQuery) (*P
 	}
 	defer rows.Close()
 
+	resultCapacity := activeCount
+	if len(q.AllowChunkIDs) > 0 && len(q.AllowChunkIDs) < resultCapacity {
+		resultCapacity = len(q.AllowChunkIDs)
+	}
+	if resultCapacity < 0 {
+		resultCapacity = 0
+	}
 	result := &PrefilterResult{
-		AllowChunkIDs: make([]string, 0),
-		Chunks:        make([]PrefilterChunk, 0),
+		AllowChunkIDs: make([]string, 0, resultCapacity),
+		Chunks:        make([]PrefilterChunk, 0, resultCapacity),
 		ActiveChunks:  activeCount,
 	}
 	for rows.Next() {
 		var chunk PrefilterChunk
-		var sourceUpdatedAt string
-		if err := rows.Scan(&chunk.ChunkID, &chunk.DocID, &chunk.VersionID, &chunk.CanonicalURI, &chunk.SourceType, &chunk.CorpusScope, &chunk.StructuralKey, &sourceUpdatedAt); err != nil {
-			return nil, err
-		}
-		chunk.SourceUpdatedAt, err = time.Parse(time.RFC3339Nano, sourceUpdatedAt)
-		if err != nil {
+		if err := rows.Scan(&chunk.ChunkID, &chunk.DocID); err != nil {
 			return nil, err
 		}
 		result.AllowChunkIDs = append(result.AllowChunkIDs, chunk.ChunkID)
@@ -188,23 +197,6 @@ func (m *MetadataPrefilter) Prefilter(ctx context.Context, q RetrievalQuery) (*P
 	result.FilteredIn = len(result.AllowChunkIDs)
 	result.FilterSummary = formatFilterSummary(q, result.ActiveChunks, result.FilteredIn)
 	return result, nil
-}
-
-func (m *MetadataPrefilter) activeChunkCount(ctx context.Context) (int, error) {
-	row := m.db.QueryRowContext(ctx, `SELECT COUNT(*)
-		FROM retrieval_chunks c
-		JOIN retrieval_chunk_versions cv
-			ON cv.chunk_id = c.chunk_id AND cv.version_id = c.active_version_id
-		JOIN retrieval_document_versions dv
-			ON dv.version_id = c.active_version_id AND dv.superseded = 0
-		WHERE c.tombstoned = 0
-		  AND cv.tombstoned = 0
-		  AND c.active_version_id <> ''`)
-	var count int
-	if err := row.Scan(&count); err != nil {
-		return 0, err
-	}
-	return count, nil
 }
 
 func formatFilterSummary(q RetrievalQuery, active, filtered int) string {
@@ -219,8 +211,8 @@ func formatFilterSummary(q RetrievalQuery, active, filtered int) string {
 	if q.UpdatedAfter != nil {
 		parts = append(parts, "updated_after="+q.UpdatedAfter.UTC().Format(time.RFC3339))
 	}
-	if tags := cloneStrings(q.PolicyTags); len(tags) > 0 {
-		parts = append(parts, "policy_tags="+strings.Join(tags, ","))
+	if len(q.PolicyTags) > 0 {
+		parts = append(parts, "policy_tags="+strings.Join(q.PolicyTags, ","))
 	}
 	return strings.Join(parts, " ")
 }
@@ -350,6 +342,17 @@ func fuseCandidatesRRF(sparse, dense []SearchCandidate, k int) []RankedCandidate
 		}
 		return out[i].FusedScore > out[j].FusedScore
 	})
+
+	// Stamp RRF fusion derivation on candidates
+	for i := range out {
+		origin := core.OriginDerivation("retrieval")
+		// Record sparse and dense scores in detail
+		detail := fmt.Sprintf("sparse_score=%.4f sparse_rank=%d dense_score=%.4f dense_rank=%d fused_score=%.4f",
+			out[i].SparseScore, out[i].SparseRank, out[i].DenseScore, out[i].DenseRank, out[i].FusedScore)
+		origin = origin.Derive("rrf_fusion", "retrieval", 0.05, detail)
+		out[i].Derivation = &origin
+	}
+
 	return out
 }
 

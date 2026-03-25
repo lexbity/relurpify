@@ -12,25 +12,25 @@ func TestContextDirtyDeltaTracksMutationsAndCloneStartsClean(t *testing.T) {
 	ctx.SetExecutionPhase("executing")
 
 	delta := ctx.DirtyDelta()
-	if len(delta.StateValues) != 1 {
-		t.Fatalf("expected 1 dirty state value, got %d", len(delta.StateValues))
+	if len(delta.StateWrites) != 1 {
+		t.Fatalf("expected 1 dirty state value, got %d", len(delta.StateWrites))
 	}
-	if len(delta.VariableValues) != 1 {
-		t.Fatalf("expected 1 dirty variable value, got %d", len(delta.VariableValues))
+	if len(delta.SideEffects.VariableWrites) != 1 {
+		t.Fatalf("expected 1 dirty variable value, got %d", len(delta.SideEffects.VariableWrites))
 	}
-	if len(delta.KnowledgeValues) != 1 {
-		t.Fatalf("expected 1 dirty knowledge value, got %d", len(delta.KnowledgeValues))
+	if len(delta.SideEffects.KnowledgeWrites) != 1 {
+		t.Fatalf("expected 1 dirty knowledge value, got %d", len(delta.SideEffects.KnowledgeWrites))
 	}
-	if !delta.HistoryChanged || !delta.CompressedChanged || !delta.PhaseChanged {
+	if !delta.SideEffects.HistoryChanged || !delta.SideEffects.CompressedChanged || !delta.SideEffects.PhaseChanged {
 		t.Fatalf("expected history/compressed/phase mutations to be tracked: %+v", delta)
 	}
 
 	clone := ctx.Clone()
 	cloneDelta := clone.DirtyDelta()
-	if len(cloneDelta.StateValues) != 0 || len(cloneDelta.VariableValues) != 0 || len(cloneDelta.KnowledgeValues) != 0 {
+	if len(cloneDelta.StateWrites) != 0 || len(cloneDelta.SideEffects.VariableWrites) != 0 || len(cloneDelta.SideEffects.KnowledgeWrites) != 0 {
 		t.Fatalf("expected cloned context to start clean, got %+v", cloneDelta)
 	}
-	if cloneDelta.HistoryChanged || cloneDelta.CompressedChanged || cloneDelta.LogChanged || cloneDelta.PhaseChanged {
+	if cloneDelta.SideEffects.HistoryChanged || cloneDelta.SideEffects.CompressedChanged || cloneDelta.SideEffects.LogChanged || cloneDelta.SideEffects.PhaseChanged {
 		t.Fatalf("expected cloned context mutation flags to be clear, got %+v", cloneDelta)
 	}
 }
@@ -100,5 +100,48 @@ func TestContextCloneDeepCopiesNestedStateValues(t *testing.T) {
 	origOuter := origNested["outer"].(map[string]interface{})
 	if got := origOuter["value"]; got != "base" {
 		t.Fatalf("expected original nested value to remain base, got %#v", got)
+	}
+}
+
+func TestContextCloneStateOverlayFreezesParentViewAtCloneTime(t *testing.T) {
+	original := NewContext()
+	original.Set("shared", "base")
+
+	clone := original.Clone()
+	original.Set("shared", "parent-updated")
+
+	if got := clone.GetString("shared"); got != "base" {
+		t.Fatalf("expected clone to retain cloned parent view, got %q", got)
+	}
+
+	clone.Set("shared", "clone-updated")
+	if got := original.GetString("shared"); got != "parent-updated" {
+		t.Fatalf("expected parent to retain parent update, got %q", got)
+	}
+}
+
+func TestContextCloneVariableAndKnowledgeOverlayFreezeParentViewAtCloneTime(t *testing.T) {
+	original := NewContext()
+	original.SetVariable("temp", map[string]interface{}{"value": "base"})
+	original.SetKnowledge("fact", map[string]interface{}{"value": "base"})
+
+	clone := original.Clone()
+	original.SetVariable("temp", map[string]interface{}{"value": "parent-updated"})
+	original.SetKnowledge("fact", map[string]interface{}{"value": "parent-updated"})
+
+	temp, _ := clone.GetVariable("temp")
+	tempMap := temp.(map[string]interface{})
+	tempMap["value"] = "clone-updated"
+	fact, _ := clone.GetKnowledge("fact")
+	factMap := fact.(map[string]interface{})
+	factMap["value"] = "clone-updated"
+
+	origTemp, _ := original.GetVariable("temp")
+	if got := origTemp.(map[string]interface{})["value"]; got != "parent-updated" {
+		t.Fatalf("expected parent variable to retain parent update, got %#v", got)
+	}
+	origFact, _ := original.GetKnowledge("fact")
+	if got := origFact.(map[string]interface{})["value"]; got != "parent-updated" {
+		t.Fatalf("expected parent knowledge to retain parent update, got %#v", got)
 	}
 }

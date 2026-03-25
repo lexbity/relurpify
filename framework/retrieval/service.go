@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 )
 
 // RetrieverService is the runtime-facing retrieval interface.
@@ -27,6 +28,7 @@ type Service struct {
 	hotWindow time.Duration
 	hotLimit  int
 	now       func() time.Time
+	schemaErr error
 }
 
 // NewService constructs a runtime-facing retrieval service.
@@ -53,6 +55,7 @@ func NewServiceWithOptions(db *sql.DB, embedder Embedder, telemetry core.Telemet
 		hotWindow: hotWindow,
 		hotLimit:  hotLimit,
 		now:       func() time.Time { return time.Now().UTC() },
+		schemaErr: ensureRuntimeSchema(context.Background(), db),
 	}
 }
 
@@ -61,8 +64,8 @@ func (s *Service) Retrieve(ctx context.Context, q RetrievalQuery) ([]core.Conten
 	if s == nil || s.db == nil || s.retriever == nil || s.packer == nil {
 		return nil, RetrievalEvent{}, errors.New("retrieval service not configured")
 	}
-	if err := EnsureSchema(ctx, s.db); err != nil {
-		return nil, RetrievalEvent{}, err
+	if s.schemaErr != nil {
+		return nil, RetrievalEvent{}, s.schemaErr
 	}
 	now := s.now()
 	corpusStamp, err := s.corpusStamp(ctx)
@@ -193,22 +196,8 @@ func mergeExcludedReasons(retrievalExcluded, packingDropped map[string]string) m
 }
 
 func (s *Service) corpusStamp(ctx context.Context) (string, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(MAX(last_ingested_at), '') FROM retrieval_documents`)
-	var docCount int
-	var maxUpdatedAt string
-	if err := row.Scan(&docCount, &maxUpdatedAt); err != nil {
-		return "", err
-	}
-	row = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM retrieval_chunks WHERE tombstoned = 0 AND active_version_id <> ''`)
-	var activeChunks int
-	if err := row.Scan(&activeChunks); err != nil {
-		return "", err
-	}
-	return shortStableHash(strings.Join([]string{
-		maxUpdatedAt,
-		strconv.Itoa(docCount),
-		strconv.Itoa(activeChunks),
-	}, "|")), nil
+	perfstats.IncRetrievalCorpusStamp()
+	return currentCorpusRevision(ctx, s.db)
 }
 
 func exactCacheKey(q RetrievalQuery, corpusStamp string) string {

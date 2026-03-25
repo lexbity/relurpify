@@ -198,11 +198,23 @@ type ErrorContentBlock struct {
 
 func (ErrorContentBlock) ContentType() string { return "error" }
 
+// AnchorRef represents a semantic anchor reference for provenance tracking.
+type AnchorRef struct {
+	AnchorID   string `json:"anchor_id"`
+	Term       string `json:"term"`
+	Definition string `json:"definition"`
+	Class      string `json:"class"`
+	Active     bool   `json:"active"`
+	CreatedAt  string `json:"created_at"`
+}
+
 type ContentProvenance struct {
 	CapabilityID string             `json:"capability_id,omitempty" yaml:"capability_id,omitempty"`
 	ProviderID   string             `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
 	TrustClass   TrustClass         `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
 	Disposition  ContentDisposition `json:"disposition,omitempty" yaml:"disposition,omitempty"`
+	Derivation   *DerivationChain   `json:"derivation,omitempty" yaml:"derivation,omitempty"`        // NEW: transformation history
+	Anchors      []AnchorRef        `json:"anchors,omitempty" yaml:"anchors,omitempty"`              // NEW: semantic anchors in result
 }
 
 type CapabilityDescriptorProvider interface {

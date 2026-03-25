@@ -32,28 +32,37 @@ func AdmitCandidates(registry *capability.Registry, candidates []Candidate, allo
 		return nil, fmt.Errorf("capability registry required")
 	}
 	results := EvaluateCandidates(candidates, allowed)
+	items := make([]capability.RegistrationBatchItem, 0, len(candidates))
 	for idx, candidate := range candidates {
 		if idx >= len(results) || !results[idx].Admitted {
 			continue
 		}
 		desc := core.NormalizeCapabilityDescriptor(candidate.Descriptor)
+		item := capability.RegistrationBatchItem{Descriptor: desc}
 		switch {
 		case candidate.PromptHandler != nil:
-			if err := registry.RegisterPromptCapability(candidate.PromptHandler); err != nil {
-				return results[:idx], err
-			}
+			item.PromptHandler = candidate.PromptHandler
 		case candidate.ResourceHandler != nil:
-			if err := registry.RegisterResourceCapability(candidate.ResourceHandler); err != nil {
-				return results[:idx], err
-			}
+			item.ResourceHandler = candidate.ResourceHandler
 		case desc.ID != "":
-			if err := registry.RegisterCapability(desc); err != nil {
-				return results[:idx], err
-			}
 		default:
 			results[idx].Admitted = false
 			results[idx].Reason = "candidate missing registration handler"
+			continue
 		}
+		items = append(items, item)
+	}
+	if err := registry.RegisterBatch(items); err != nil {
+		for idx, candidate := range candidates {
+			if idx >= len(results) || !results[idx].Admitted {
+				continue
+			}
+			desc := core.NormalizeCapabilityDescriptor(candidate.Descriptor)
+			if desc.ID == "" && candidate.PromptHandler == nil && candidate.ResourceHandler == nil {
+				return results[:idx], err
+			}
+		}
+		return results, err
 	}
 	return results, nil
 }

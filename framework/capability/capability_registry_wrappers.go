@@ -29,6 +29,14 @@ func (r *CapabilityRegistry) wrapCapabilityHandler(handler core.CapabilityHandle
 	if handler == nil {
 		return nil
 	}
+	desc := core.NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
+	return r.wrapCapabilityHandlerPrepared(handler, desc, buildDescriptorProfile(desc))
+}
+
+func (r *CapabilityRegistry) wrapCapabilityHandlerPrepared(handler core.CapabilityHandler, desc core.CapabilityDescriptor, profile descriptorProfile) core.CapabilityHandler {
+	if handler == nil {
+		return nil
+	}
 	if aware, ok := handler.(PermissionAware); ok && r.permissionManager != nil {
 		aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
 	}
@@ -37,14 +45,15 @@ func (r *CapabilityRegistry) wrapCapabilityHandler(handler core.CapabilityHandle
 	}
 	if existing, ok := handler.(instrumentCapabilityHandler); ok {
 		existing.registry = r
+		existing.descriptor = desc
+		existing.profile = profile
 		return existing
 	}
-	desc := core.NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
 	return instrumentCapabilityHandler{
 		handler:    handler,
 		registry:   r,
 		descriptor: desc,
-		profile:    buildDescriptorProfile(desc),
+		profile:    profile,
 	}
 }
 

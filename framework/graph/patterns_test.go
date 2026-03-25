@@ -220,6 +220,18 @@ func TestWrapWithDeclarativeRetrievalPrependsRetrieveNode(t *testing.T) {
 	results, ok := payload["results"].([]core.MemoryRecordEnvelope)
 	require.True(t, ok)
 	require.Len(t, results, 1)
+	rawPayload, ok := state.Get("graph.declarative_memory_payload")
+	require.True(t, ok)
+	mixedPayload, ok := rawPayload.(map[string]any)
+	require.True(t, ok)
+	mixedResults, ok := mixedPayload["results"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, mixedResults, 1)
+	rawRefs, ok := state.Get("graph.declarative_memory_refs")
+	require.True(t, ok)
+	refs, ok := rawRefs.([]core.ContextReference)
+	require.True(t, ok)
+	require.Len(t, refs, 1)
 }
 
 func TestWrapWithDeclarativeRetrievalRejectsNilArgs(t *testing.T) {
@@ -255,6 +267,18 @@ func TestWrapWithProceduralRetrievalPrependsRetrieveNode(t *testing.T) {
 	results, ok := payload["results"].([]core.MemoryRecordEnvelope)
 	require.True(t, ok)
 	require.Len(t, results, 1)
+	rawPayload, ok := state.Get("graph.procedural_memory_payload")
+	require.True(t, ok)
+	mixedPayload, ok := rawPayload.(map[string]any)
+	require.True(t, ok)
+	mixedResults, ok := mixedPayload["results"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, mixedResults, 1)
+	rawRefs, ok := state.Get("graph.procedural_memory_refs")
+	require.True(t, ok)
+	refs, ok := rawRefs.([]core.ContextReference)
+	require.True(t, ok)
+	require.Len(t, refs, 1)
 }
 
 func TestWrapWithProceduralRetrievalRejectsNilArgs(t *testing.T) {

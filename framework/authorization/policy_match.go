@@ -44,6 +44,9 @@ func ruleMatchesRequest(rule core.PolicyRule, req core.PolicyRequest) bool {
 	if len(c.ExportNames) > 0 && !containsFold(c.ExportNames, req.ExportName) {
 		return false
 	}
+	if len(c.SourceDomains) > 0 && !containsFold(c.SourceDomains, req.SourceDomain) {
+		return false
+	}
 	if len(c.ContextClasses) > 0 && !containsFold(c.ContextClasses, req.ContextClass) {
 		return false
 	}

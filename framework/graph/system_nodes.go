@@ -38,6 +38,22 @@ type MemoryRetriever interface {
 	Retrieve(ctx context.Context, query string, limit int) ([]core.MemoryRecordEnvelope, error)
 }
 
+// PublishedMemoryRetriever can return the richer graph publication shape
+// directly once callers are ready for it.
+type PublishedMemoryRetriever interface {
+	RetrievePublication(ctx context.Context, query string, limit int) (*MemoryRetrievalPublication, error)
+}
+
+// MemoryRetrievalPublication is the richer retrieval publication contract used
+// by graph memory nodes once mixed-evidence consumers exist.
+type MemoryRetrievalPublication struct {
+	Query      string
+	Results    []core.MemoryRecordEnvelope
+	References []core.MemoryReference
+	Payload    map[string]any
+	Refs       []core.ContextReference
+}
+
 // StateHydrator restores selected durable references into active state.
 type StateHydrator interface {
 	Hydrate(ctx context.Context, refs []string) (map[string]any, error)
@@ -296,7 +312,7 @@ func (n *RetrieveDeclarativeMemoryNode) Contract() NodeContract {
 		Idempotency:     IdempotencyReplaySafe,
 		ContextPolicy: core.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*"},
-			WriteKeys:                []string{"graph.declarative_memory"},
+			WriteKeys:                []string{"graph.declarative_memory*"},
 			AllowRetrieval:           true,
 			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassDeclarative},
 			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassMemoryRef, core.StateDataClassStructuredState},
@@ -335,7 +351,7 @@ func (n *RetrieveProceduralMemoryNode) Contract() NodeContract {
 		Idempotency:     IdempotencyReplaySafe,
 		ContextPolicy: core.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*"},
-			WriteKeys:                []string{"graph.procedural_memory"},
+			WriteKeys:                []string{"graph.procedural_memory*"},
 			AllowRetrieval:           true,
 			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassProcedural},
 			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassMemoryRef, core.StateDataClassStructuredState},
@@ -398,11 +414,15 @@ func (n *HydrateContextNode) Execute(ctx context.Context, state *Context) (*Resu
 }
 
 func executeMemoryRetrievalNode(ctx context.Context, state *Context, nodeID string, retriever MemoryRetriever, query string, limit int, stateKey string, expectedClass core.MemoryClass) (*Result, error) {
+	payloadKey := stateKey + "_payload"
+	refsKey := stateKey + "_refs"
 	if retriever == nil {
 		if state != nil {
 			state.Set(stateKey, []core.MemoryRecordEnvelope{})
+			state.Set(payloadKey, map[string]any{})
+			state.Set(refsKey, []core.ContextReference{})
 		}
-		return &Result{NodeID: nodeID, Success: true, Data: map[string]any{"results": []core.MemoryRecordEnvelope{}}}, nil
+		return &Result{NodeID: nodeID, Success: true, Data: map[string]any{"results": []core.MemoryRecordEnvelope{}, "payload": map[string]any{}, "refs": []core.ContextReference{}}}, nil
 	}
 	query = strings.TrimSpace(query)
 	if query == "" && state != nil {
@@ -414,18 +434,71 @@ func executeMemoryRetrievalNode(ctx context.Context, state *Context, nodeID stri
 	if limit <= 0 {
 		limit = 3
 	}
-	results, err := retriever.Retrieve(ctx, query, limit)
-	if err != nil {
-		return nil, err
+	var publication *MemoryRetrievalPublication
+	var err error
+	if rich, ok := retriever.(PublishedMemoryRetriever); ok {
+		publication, err = rich.RetrievePublication(ctx, query, limit)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		results, err := retriever.Retrieve(ctx, query, limit)
+		if err != nil {
+			return nil, err
+		}
+		publication = BuildMemoryRetrievalPublication(query, results, expectedClass)
 	}
-	if len(results) > limit {
-		results = results[:limit]
+	if publication == nil {
+		publication = BuildMemoryRetrievalPublication(query, nil, expectedClass)
 	}
-	references := make([]core.MemoryReference, 0, len(results))
+	if state != nil {
+		state.Set(stateKey, map[string]any{
+			"query":      query,
+			"results":    publication.Results,
+			"references": publication.References,
+		})
+		state.Set(payloadKey, publication.Payload)
+		state.Set(refsKey, publication.Refs)
+	}
+	return &Result{NodeID: nodeID, Success: true, Data: map[string]any{
+		"query":      query,
+		"results":    publication.Results,
+		"references": publication.References,
+		"payload":    publication.Payload,
+		"refs":       publication.Refs,
+	}}, nil
+}
+
+// BuildMemoryRetrievalPublication derives the richer graph publication shape
+// from legacy envelope results.
+func BuildMemoryRetrievalPublication(query string, results []core.MemoryRecordEnvelope, expectedClass core.MemoryClass) *MemoryRetrievalPublication {
+	if len(results) == 0 {
+		return &MemoryRetrievalPublication{
+			Query:      query,
+			Results:    []core.MemoryRecordEnvelope{},
+			References: []core.MemoryReference{},
+			Payload:    nil,
+			Refs:       nil,
+		}
+	}
+	normalized := results
+	needsNormalization := false
 	for _, record := range results {
 		if record.MemoryClass == "" {
-			record.MemoryClass = expectedClass
+			needsNormalization = true
+			break
 		}
+	}
+	if needsNormalization {
+		normalized = append([]core.MemoryRecordEnvelope(nil), results...)
+		for i := range normalized {
+			if normalized[i].MemoryClass == "" {
+				normalized[i].MemoryClass = expectedClass
+			}
+		}
+	}
+	references := make([]core.MemoryReference, 0, len(results))
+	for _, record := range normalized {
 		references = append(references, core.MemoryReference{
 			MemoryClass: record.MemoryClass,
 			Scope:       record.Scope,
@@ -433,18 +506,189 @@ func executeMemoryRetrievalNode(ctx context.Context, state *Context, nodeID stri
 			Summary:     record.Summary,
 		})
 	}
-	if state != nil {
-		state.Set(stateKey, map[string]any{
-			"query":      query,
-			"results":    results,
-			"references": references,
-		})
+	return &MemoryRetrievalPublication{
+		Query:      query,
+		Results:    normalized,
+		References: references,
+		Payload:    mixedEvidencePayloadFromEnvelopes(query, normalized),
+		Refs:       contextReferencesFromEnvelopes(normalized, expectedClass),
 	}
-	return &Result{NodeID: nodeID, Success: true, Data: map[string]any{
-		"query":      query,
-		"results":    results,
-		"references": references,
-	}}, nil
+}
+
+func mixedEvidencePayloadFromEnvelopes(query string, results []core.MemoryRecordEnvelope) map[string]any {
+	if len(results) == 0 {
+		return nil
+	}
+	texts := make([]string, 0, len(results))
+	entries := make([]map[string]any, 0, len(results))
+	citationCount := 0
+	for _, result := range results {
+		summary := strings.TrimSpace(result.Summary)
+		text := strings.TrimSpace(result.Text)
+		if summary == "" && text == "" {
+			continue
+		}
+		if summary == "" {
+			summary = text
+		}
+		texts = append(texts, summary)
+		entry := map[string]any{
+			"summary": summary,
+		}
+		if text != "" {
+			entry["text"] = text
+		}
+		if source := strings.TrimSpace(result.Source); source != "" {
+			entry["source"] = source
+		}
+		if recordID := strings.TrimSpace(result.RecordID); recordID != "" {
+			entry["record_id"] = recordID
+		} else if key := strings.TrimSpace(result.Key); key != "" {
+			entry["record_id"] = key
+		}
+		if kind := strings.TrimSpace(result.Kind); kind != "" {
+			entry["kind"] = kind
+		}
+		if result.Reference != nil {
+			entry["reference"] = result.Reference
+		}
+		switch typed := result.Citations.(type) {
+		case []map[string]any:
+			if len(typed) > 0 {
+				entry["citations"] = typed
+				citationCount += len(typed)
+			}
+		case []any:
+			if len(typed) > 0 {
+				entry["citations"] = typed
+				citationCount += len(typed)
+			}
+		}
+		entries = append(entries, entry)
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	return map[string]any{
+		"query":          query,
+		"texts":          texts,
+		"results":        entries,
+		"summary":        strings.Join(texts, "\n\n"),
+		"result_size":    len(entries),
+		"citation_count": citationCount,
+	}
+}
+
+func contextReferencesFromEnvelopes(results []core.MemoryRecordEnvelope, expectedClass core.MemoryClass) []core.ContextReference {
+	if len(results) == 0 {
+		return nil
+	}
+	refs := make([]core.ContextReference, 0, len(results))
+	seen := make(map[contextReferenceKey]struct{}, len(results))
+	for _, result := range results {
+		ref := contextReferenceFromEnvelope(result, expectedClass)
+		if ref == nil {
+			continue
+		}
+		key := contextReferenceKey{kind: ref.Kind, id: ref.ID, uri: ref.URI}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		refs = append(refs, *ref)
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	return refs
+}
+
+type contextReferenceKey struct {
+	kind core.ContextReferenceKind
+	id   string
+	uri  string
+}
+
+func contextReferenceFromEnvelope(result core.MemoryRecordEnvelope, expectedClass core.MemoryClass) *core.ContextReference {
+	values, ok := result.Reference.(map[string]any)
+	if ok && len(values) > 0 {
+		ref := &core.ContextReference{
+			Kind:    core.ContextReferenceKind(trimmedAnyString(values["kind"])),
+			ID:      trimmedAnyString(values["id"]),
+			URI:     trimmedAnyString(values["uri"]),
+			Version: trimmedAnyString(values["version"]),
+			Detail:  trimmedAnyString(values["detail"]),
+		}
+		if ref.Kind == "" {
+			ref.Kind = defaultContextReferenceKind(result, expectedClass)
+		}
+		recordID := trimmedAnyString(values["record_id"])
+		source := trimmedAnyString(values["source"])
+		kind := trimmedAnyString(values["kind"])
+		if recordID != "" || source != "" || kind != "" {
+			metadata := make(map[string]string, 3)
+			if recordID != "" {
+				metadata["record_id"] = recordID
+			}
+			if source != "" {
+				metadata["source"] = source
+			}
+			if kind != "" {
+				metadata["kind"] = kind
+			}
+			ref.Metadata = metadata
+		}
+		if ref.ID != "" || ref.URI != "" {
+			return ref
+		}
+	}
+	key := strings.TrimSpace(result.RecordID)
+	if key == "" {
+		key = strings.TrimSpace(result.Key)
+	}
+	if key == "" {
+		return nil
+	}
+	return &core.ContextReference{
+		Kind:   defaultContextReferenceKind(result, expectedClass),
+		ID:     key,
+		Detail: strings.TrimSpace(result.Kind),
+		Metadata: map[string]string{
+			"memory_class": string(nonEmptyMemoryClass(result.MemoryClass, expectedClass)),
+			"source":       strings.TrimSpace(result.Source),
+		},
+	}
+}
+
+func defaultContextReferenceKind(result core.MemoryRecordEnvelope, expectedClass core.MemoryClass) core.ContextReferenceKind {
+	if strings.TrimSpace(result.Source) == "retrieval" {
+		return core.ContextReferenceRetrievalEvidence
+	}
+	return core.ContextReferenceRuntimeMemory
+}
+
+func nonEmptyMemoryClass(class core.MemoryClass, fallback core.MemoryClass) core.MemoryClass {
+	if strings.TrimSpace(string(class)) != "" {
+		return class
+	}
+	return fallback
+}
+
+func trimmedAnyString(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case fmt.Stringer:
+		return strings.TrimSpace(typed.String())
+	case nil:
+		return ""
+	default:
+		formatted := strings.TrimSpace(fmt.Sprint(typed))
+		if formatted == "<nil>" {
+			return ""
+		}
+		return formatted
+	}
 }
 
 func summarizeNodePayload(state *Context, keys []string, includeHistory bool) string {

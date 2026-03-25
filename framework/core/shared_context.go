@@ -24,6 +24,7 @@ type FileContext struct {
 	Path         string
 	Language     string
 	Content      string
+	RawContent   string
 	Summary      string
 	Level        DetailLevel
 	LastAccessed time.Time
@@ -59,12 +60,21 @@ const (
 	EvictByRelevance
 )
 
+// EvictionRecord tracks a file eviction event
+type EvictionRecord struct {
+	Path          string    `json:"path"`
+	EvictedAt     time.Time `json:"evicted_at"`
+	EvictionScore float64   `json:"eviction_score"`
+	DetailLevel   DetailLevel `json:"detail_level"`
+}
+
 // WorkingSet retains the active file contexts for an agent session.
 type WorkingSet struct {
-	mu             sync.RWMutex
-	files          map[string]*FileContext
-	maxSize        int
-	evictionPolicy EvictionPolicy
+	mu              sync.RWMutex
+	files           map[string]*FileContext
+	maxSize         int
+	evictionPolicy  EvictionPolicy
+	evictionLog     []EvictionRecord
 }
 
 // NewWorkingSet returns a working set with a bounded capacity.
@@ -73,9 +83,10 @@ func NewWorkingSet(maxSize int, policy EvictionPolicy) *WorkingSet {
 		maxSize = 12
 	}
 	return &WorkingSet{
-		files:          make(map[string]*FileContext),
-		maxSize:        maxSize,
-		evictionPolicy: policy,
+		files:           make(map[string]*FileContext),
+		maxSize:         maxSize,
+		evictionPolicy:  policy,
+		evictionLog:     make([]EvictionRecord, 0, 64),
 	}
 }
 
@@ -169,6 +180,18 @@ func (ws *WorkingSet) evictLocked(count int) []string {
 		if count == 0 {
 			break
 		}
+		// Record eviction in log (cap at 64 entries)
+		record := EvictionRecord{
+			Path:          fc.Path,
+			EvictedAt:     time.Now().UTC(),
+			EvictionScore: 0.0, // Could be enhanced with actual score
+			DetailLevel:   fc.Level,
+		}
+		if len(ws.evictionLog) >= 64 {
+			ws.evictionLog = ws.evictionLog[1:]
+		}
+		ws.evictionLog = append(ws.evictionLog, record)
+
 		delete(ws.files, fc.Path)
 		evicted = append(evicted, fc.Path)
 		count--
@@ -176,10 +199,31 @@ func (ws *WorkingSet) evictLocked(count int) []string {
 	return evicted
 }
 
+// EvictionHistory returns a copy of the eviction log
+func (ws *WorkingSet) EvictionHistory() []EvictionRecord {
+	ws.mu.RLock()
+	defer ws.mu.RUnlock()
+	if len(ws.evictionLog) == 0 {
+		return nil
+	}
+	history := make([]EvictionRecord, len(ws.evictionLog))
+	copy(history, ws.evictionLog)
+	return history
+}
+
 // ContextTokenUsage exposes aggregated token consumption by category.
 type ContextTokenUsage struct {
 	Total     int
 	BySection map[string]int
+}
+
+// StateMutation records a mutation to shared context state.
+type StateMutation struct {
+	Key        string             `json:"key"`
+	Operation  string             `json:"operation"`  // "set", "delete", "merge_overwrite"
+	AgentID    string             `json:"agent_id"`
+	Timestamp  time.Time          `json:"timestamp"`
+	Derivation *DerivationChain   `json:"derivation,omitempty"`
 }
 
 // SharedContext wraps Context with richer memory primitives (working set,
@@ -195,6 +239,7 @@ type SharedContext struct {
 	conversationSummary string
 	changeLogSummary    string
 	fileItems           map[string]*fileBudgetItem
+	mutationLog         []StateMutation  // capped ring buffer of recent state mutations
 }
 
 // NewSharedContext constructs a shared context with optional helpers. Passing
@@ -228,6 +273,7 @@ func (sc *SharedContext) AddFile(path, content, language string, level DetailLev
 		Path:         path,
 		Language:     language,
 		Content:      content,
+		RawContent:   content,
 		Level:        level,
 		LastAccessed: time.Now().UTC(),
 	}
@@ -250,6 +296,61 @@ func (sc *SharedContext) GetFile(path string) (*FileContext, bool) {
 	return sc.workingSet.Get(path)
 }
 
+// FileReference returns the stable reference for a tracked file, if present.
+func (sc *SharedContext) FileReference(path string) (ContextReference, bool) {
+	fc, ok := sc.GetFile(path)
+	if !ok || fc == nil {
+		return ContextReference{}, false
+	}
+	return ContextReference{
+		Kind:    ContextReferenceFile,
+		ID:      fc.Path,
+		URI:     fc.Path,
+		Version: fc.Version,
+		Detail:  detailLevelName(fc.Level),
+		Metadata: map[string]string{
+			"language": fc.Language,
+		},
+	}, true
+}
+
+// HydrateFileReference ensures the referenced file is available at the desired detail level.
+func (sc *SharedContext) HydrateFileReference(ref ContextReference, desired DetailLevel) (*FileContext, error) {
+	if sc == nil {
+		return nil, fmt.Errorf("shared context unavailable")
+	}
+	if ref.Kind != ContextReferenceFile {
+		return nil, fmt.Errorf("unsupported context reference kind %q", ref.Kind)
+	}
+	path := strings.TrimSpace(ref.URI)
+	if path == "" {
+		path = strings.TrimSpace(ref.ID)
+	}
+	if path == "" {
+		return nil, fmt.Errorf("file reference missing path")
+	}
+	return sc.EnsureFileLevel(path, desired)
+}
+
+// WorkingSetReferences returns the current tracked-file references without hydrating content.
+func (sc *SharedContext) WorkingSetReferences() []ContextReference {
+	if sc == nil || sc.workingSet == nil {
+		return nil
+	}
+	files := sc.workingSet.List()
+	refs := make([]ContextReference, 0, len(files))
+	for _, fc := range files {
+		if fc == nil {
+			continue
+		}
+		ref, ok := sc.FileReference(fc.Path)
+		if ok {
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
+
 // EnsureFileLevel upgrades or downgrades a file to the desired detail level.
 func (sc *SharedContext) EnsureFileLevel(path string, desired DetailLevel) (*FileContext, error) {
 	fc, ok := sc.workingSet.Get(path)
@@ -261,26 +362,27 @@ func (sc *SharedContext) EnsureFileLevel(path string, desired DetailLevel) (*Fil
 	}
 	switch desired {
 	case DetailFull, DetailBodyOnly:
-		content, err := os.ReadFile(path)
+		content, err := ensureFileRawContent(path, fc)
 		if err != nil {
 			return nil, err
 		}
-		fc.Content = string(content)
+		fc.Content = content
 		fc.Level = DetailFull
 	case DetailSignature:
-		if fc.Content == "" {
-			data, err := os.ReadFile(path)
-			if err != nil {
+		if fc.RawContent == "" {
+			if _, err := ensureFileRawContent(path, fc); err != nil {
 				return nil, err
 			}
-			fc.Content = string(data)
 		}
-		lines := linesAround(fc.Content, 40)
+		lines := linesAround(fc.RawContent, 40)
 		fc.Content = lines
 		fc.Level = DetailSignature
 	default:
-		if sc.summarizer != nil && fc.Content != "" {
-			if summary, err := sc.summarizer.Summarize(fc.Content, SummaryMinimal); err == nil {
+		if fc.RawContent == "" && fc.Content != "" {
+			fc.RawContent = fc.Content
+		}
+		if sc.summarizer != nil && fc.RawContent != "" {
+			if summary, err := sc.summarizer.Summarize(fc.RawContent, SummaryMinimal); err == nil {
 				fc.Summary = summary
 			}
 		}
@@ -291,6 +393,21 @@ func (sc *SharedContext) EnsureFileLevel(path string, desired DetailLevel) (*Fil
 		item.refresh()
 	}
 	return fc, nil
+}
+
+func detailLevelName(level DetailLevel) string {
+	switch level {
+	case DetailFull:
+		return "full"
+	case DetailBodyOnly:
+		return "body"
+	case DetailSignature:
+		return "signature"
+	case DetailSummary:
+		return "summary"
+	default:
+		return "unknown"
+	}
 }
 
 // TouchFile bumps the recency metadata to keep the file pinned in the working set.
@@ -311,8 +428,11 @@ func (sc *SharedContext) DowngradeOldFiles(target DetailLevel, maxTokens int) er
 		if fc.Pinned || fc.Level >= target {
 			continue
 		}
-		if sc.summarizer != nil && fc.Content != "" {
-			if summary, err := sc.summarizer.Summarize(fc.Content, SummaryMinimal); err == nil {
+		if fc.RawContent == "" && fc.Content != "" {
+			fc.RawContent = fc.Content
+		}
+		if sc.summarizer != nil && fc.RawContent != "" {
+			if summary, err := sc.summarizer.Summarize(fc.RawContent, SummaryMinimal); err == nil {
 				fc.Summary = summary
 			}
 		}
@@ -437,6 +557,33 @@ func joinLines(lines []string) string {
 	return out
 }
 
+func ensureFileRawContent(path string, fc *FileContext) (string, error) {
+	if fc == nil {
+		return "", fmt.Errorf("file context required")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if fc.RawContent != "" {
+			return fc.RawContent, nil
+		}
+		return "", err
+	}
+	version := fmt.Sprintf("%d:%d", info.ModTime().UTC().UnixNano(), info.Size())
+	if fc.RawContent != "" && fc.Version == version {
+		return fc.RawContent, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if fc.RawContent != "" {
+			return fc.RawContent, nil
+		}
+		return "", err
+	}
+	fc.RawContent = string(data)
+	fc.Version = version
+	return fc.RawContent, nil
+}
+
 type fileBudgetItem struct {
 	file         *FileContext
 	summarizer   Summarizer
@@ -508,3 +655,67 @@ func (sc *SharedContext) OnBudgetExceeded(string, int, int) {}
 
 // OnCompression records that compression happened; no-op for shared context.
 func (sc *SharedContext) OnCompression(string, int) {}
+
+// RecordMutation logs a state mutation to the mutation history buffer.
+// Maintains a capped ring buffer (default 100 entries).
+func (sc *SharedContext) RecordMutation(key, operation, agentID string, derivation *DerivationChain) {
+	if sc == nil {
+		return
+	}
+
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+
+	mutation := StateMutation{
+		Key:        key,
+		Operation:  operation,
+		AgentID:    agentID,
+		Timestamp:  time.Now().UTC(),
+		Derivation: derivation,
+	}
+
+	// Maintain capped ring buffer (max 100 entries)
+	const maxMutations = 100
+	if len(sc.mutationLog) >= maxMutations {
+		// Remove oldest entry
+		sc.mutationLog = sc.mutationLog[1:]
+	}
+	sc.mutationLog = append(sc.mutationLog, mutation)
+}
+
+// MutationHistory returns all mutations for a given key.
+func (sc *SharedContext) MutationHistory(key string) []StateMutation {
+	if sc == nil {
+		return nil
+	}
+
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+
+	var result []StateMutation
+	for _, mutation := range sc.mutationLog {
+		if mutation.Key == key {
+			result = append(result, mutation)
+		}
+	}
+	return result
+}
+
+// RecentMutations returns the last N mutations across all keys.
+func (sc *SharedContext) RecentMutations(limit int) []StateMutation {
+	if sc == nil || limit <= 0 {
+		return nil
+	}
+
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+
+	if limit > len(sc.mutationLog) {
+		limit = len(sc.mutationLog)
+	}
+
+	// Return the most recent 'limit' entries
+	result := make([]StateMutation, limit)
+	copy(result, sc.mutationLog[len(sc.mutationLog)-limit:])
+	return result
+}

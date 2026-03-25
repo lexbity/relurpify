@@ -184,3 +184,87 @@ func (s *InMemoryOwnershipStore) Fence(_ context.Context, notice core.FenceNotic
 	s.attempts[notice.AttemptID] = attempt
 	return nil
 }
+
+// Phase 6 optional interfaces below
+
+// DuplicateHandoffChecker is an optional extension to OwnershipStore for detecting concurrent handoff offers.
+type DuplicateHandoffChecker interface {
+	HasActiveAttemptForLineage(ctx context.Context, lineageID string) (bool, error)
+}
+
+// AttemptLister is an optional extension to OwnershipStore for reconciliation queries.
+type AttemptLister interface {
+	ListActiveAttemptsByLineage(ctx context.Context, lineageID string) ([]core.AttemptRecord, error)
+	ListExpiredLeases(ctx context.Context, now time.Time) ([]core.LeaseToken, error)
+}
+
+// CommitChecker is an optional extension to OwnershipStore for checking commit existence.
+type CommitChecker interface {
+	HasCommitForLineage(ctx context.Context, lineageID string) (bool, error)
+}
+
+// HasActiveAttemptForLineage returns true if the lineage has any non-terminal,
+// non-fenced attempt in one of the handoff-related states.
+func (s *InMemoryOwnershipStore) HasActiveAttemptForLineage(_ context.Context, lineageID string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, attempt := range s.attempts {
+		if attempt.LineageID != lineageID || attempt.Fenced {
+			continue
+		}
+		switch attempt.State {
+		case core.AttemptStateHandoffOffered, core.AttemptStateHandoffAccepted, core.AttemptStateResumePending:
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ListActiveAttemptsByLineage returns all attempts for the lineage that are not terminal or fenced.
+func (s *InMemoryOwnershipStore) ListActiveAttemptsByLineage(_ context.Context, lineageID string) ([]core.AttemptRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []core.AttemptRecord
+	for _, attempt := range s.attempts {
+		if attempt.LineageID != lineageID || attempt.Fenced {
+			continue
+		}
+		switch attempt.State {
+		case core.AttemptStateCompleted, core.AttemptStateFailed, core.AttemptStateOrphaned, core.AttemptStateCommittedRemote, core.AttemptStateFenced:
+			continue
+		default:
+			out = append(out, attempt)
+		}
+	}
+	return out, nil
+}
+
+// ListExpiredLeases returns all leases that have expired.
+func (s *InMemoryOwnershipStore) ListExpiredLeases(_ context.Context, now time.Time) ([]core.LeaseToken, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []core.LeaseToken
+	for _, token := range s.leaseByLineage {
+		if now.After(token.Expiry) {
+			out = append(out, token)
+		}
+	}
+	return out, nil
+}
+
+// HasCommitForLineage returns true if there is a commit record for the lineage.
+// In the in-memory implementation, we track this with a simple presence check.
+func (s *InMemoryOwnershipStore) HasCommitForLineage(ctx context.Context, lineageID string) (bool, error) {
+	// For the in-memory store, we don't track commits separately.
+	// In practice, if the lineage exists and its current owner runtime is set,
+	// a commit has occurred. This is a simplification; the SQLite implementation
+	// will check fmp_resume_commits table.
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	lineage, ok := s.lineages[lineageID]
+	if !ok {
+		return false, nil
+	}
+	// If both current owner attempt and runtime are set, a commit has happened
+	return lineage.CurrentOwnerAttempt != "" && lineage.CurrentOwnerRuntime != "", nil
+}

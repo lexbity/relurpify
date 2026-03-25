@@ -7,6 +7,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1221,6 +1222,35 @@ func TestRegisterCapabilityEmitsAdmissionSecurityEvent(t *testing.T) {
 
 	require.NotEmpty(t, telemetry.events)
 	require.Equal(t, "capability_admitted", telemetry.events[0].Metadata["security_event"])
+}
+
+func TestRegisterCapabilityUsesIncrementalIndexMaintenance(t *testing.T) {
+	perfstats.Reset()
+	registry := NewCapabilityRegistry()
+
+	require.NoError(t, registry.RegisterCapability(core.CapabilityDescriptor{
+		ID:   "prompt:skill:1",
+		Kind: core.CapabilityKindPrompt,
+		Name: "skill.prompt.1",
+		Source: core.CapabilitySource{
+			Scope: core.CapabilityScopeWorkspace,
+		},
+		TrustClass: core.TrustClassWorkspaceTrusted,
+	}))
+	require.NoError(t, registry.RegisterCapability(core.CapabilityDescriptor{
+		ID:   "prompt:skill:2",
+		Kind: core.CapabilityKindPrompt,
+		Name: "skill.prompt.2",
+		Source: core.CapabilitySource{
+			Scope: core.CapabilityScopeWorkspace,
+		},
+		TrustClass: core.TrustClassWorkspaceTrusted,
+	}))
+
+	stats := perfstats.Get()
+	require.Equal(t, int64(0), stats.CapabilityRegistryRebuildCount)
+	require.True(t, registry.HasCapability("skill.prompt.1"))
+	require.True(t, registry.HasCapability("skill.prompt.2"))
 }
 
 func TestUseAgentSpecEmitsExposureSecurityEvent(t *testing.T) {

@@ -4,15 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 	"github.com/lexcodex/relurpify/framework/search"
 	platformast "github.com/lexcodex/relurpify/platform/ast"
-	"path/filepath"
-	"sort"
-	"strings"
-	"time"
 )
 
 const astIndexReadyTimeout = 2 * time.Second
@@ -28,6 +32,20 @@ type ProgressiveLoader struct {
 
 	loadHistory []ContextLoadEvent
 	loadedFiles map[string]DetailLevel
+	fileCache   map[string]cachedFileContent
+	viewCache   map[string]cachedFileViews
+}
+
+type cachedFileContent struct {
+	content string
+	version string
+}
+
+type cachedFileViews struct {
+	version    string
+	summary    string
+	detailed   string
+	signatures string
 }
 
 // NewProgressiveLoader builds a loader with optional helpers.
@@ -48,6 +66,8 @@ func NewProgressiveLoader(
 		summarizer:     summarizer,
 		loadHistory:    make([]ContextLoadEvent, 0),
 		loadedFiles:    make(map[string]DetailLevel),
+		fileCache:      make(map[string]cachedFileContent),
+		viewCache:      make(map[string]cachedFileViews),
 	}
 }
 
@@ -167,11 +187,32 @@ func (pl *ProgressiveLoader) loadFile(req FileRequest) error {
 	if req.Path == "" {
 		return fmt.Errorf("file path required")
 	}
-	content, err := ReadFile(req.Path)
+	prevLevel, reread := pl.loadedFiles[req.Path]
+	demotion := reread && req.DetailLevel != DetailFull
+	content, refreshed, err := pl.rawFileContent(req.Path)
 	if err != nil {
 		return err
 	}
+	perfstats.IncProgressiveFileRead(reread && refreshed, demotion && refreshed)
 	item := pl.buildFileContextItem(req, content)
+
+	// Stamp detail_demotion derivation if demoting to a lower detail level
+	if demotion {
+		loss := lossForDetailDemotion(prevLevel, req.DetailLevel)
+		if existing := pl.fileItem(req.Path); existing != nil {
+			var chain *core.DerivationChain
+			if existing.Derivation() != nil {
+				chain = existing.Derivation()
+			} else {
+				origin := core.OriginDerivation("contextmgr")
+				chain = &origin
+			}
+			detail := fmt.Sprintf("demotion %s → %s", prevLevel, req.DetailLevel)
+			derived := chain.Derive("detail_demotion", "contextmgr", loss, detail)
+			item = item.WithDerivation(derived).(*core.FileContextItem)
+		}
+	}
+
 	if err := pl.contextManager.UpsertFileItem(item); err != nil {
 		return fmt.Errorf("add file to context: %w", err)
 	}
@@ -269,7 +310,7 @@ func (pl *ProgressiveLoader) applyDetailLevel(content, path string, level Detail
 		}
 		return content
 	case DetailConcise:
-		if summary := pl.fileSummary(path); summary != "" {
+		if summary := pl.fileSummary(path, content); summary != "" {
 			return summary
 		}
 		if len(content) > 500 {
@@ -292,7 +333,7 @@ func (pl *ProgressiveLoader) applyDetailLevel(content, path string, level Detail
 }
 
 func (pl *ProgressiveLoader) buildFileContextItem(req FileRequest, content string) *core.FileContextItem {
-	summary := pl.fileSummary(req.Path)
+	summary := pl.fileSummary(req.Path, content)
 	if summary == "" {
 		summary = pl.fileStats(req.Path)
 	}
@@ -311,9 +352,18 @@ func (pl *ProgressiveLoader) buildFileContextItem(req FileRequest, content strin
 		}
 	}
 	return &core.FileContextItem{
-		Path:         req.Path,
-		Content:      processed,
-		Summary:      summary,
+		Path:    req.Path,
+		Content: processed,
+		Summary: summary,
+		Reference: &core.ContextReference{
+			Kind:   core.ContextReferenceFile,
+			ID:     req.Path,
+			URI:    req.Path,
+			Detail: detailLevelLabel(req.DetailLevel),
+			Metadata: map[string]string{
+				"priority": strconv.Itoa(req.Priority),
+			},
+		},
 		LastAccessed: time.Now(),
 		Relevance:    relevance,
 		PriorityVal:  req.Priority,
@@ -365,6 +415,9 @@ func inferredDetailLevel(item *core.FileContextItem) DetailLevel {
 }
 
 func (pl *ProgressiveLoader) formatDetailed(path string) string {
+	if cached := pl.cachedViews(path); cached != nil && cached.detailed != "" {
+		return cached.detailed
+	}
 	nodes := pl.nodesForFile(path)
 	if len(nodes) == 0 {
 		return ""
@@ -385,10 +438,17 @@ func (pl *ProgressiveLoader) formatDetailed(path string) string {
 			sb.WriteString("\n")
 		}
 	}
-	return sb.String()
+	formatted := sb.String()
+	pl.updateCachedViews(path, func(views *cachedFileViews) {
+		views.detailed = formatted
+	})
+	return formatted
 }
 
 func (pl *ProgressiveLoader) formatSignaturesOnly(path string) string {
+	if cached := pl.cachedViews(path); cached != nil && cached.signatures != "" {
+		return cached.signatures
+	}
 	nodes := pl.nodesForFile(path)
 	if len(nodes) == 0 {
 		return ""
@@ -405,7 +465,11 @@ func (pl *ProgressiveLoader) formatSignaturesOnly(path string) string {
 			sb.WriteString("\n")
 		}
 	}
-	return sb.String()
+	formatted := sb.String()
+	pl.updateCachedViews(path, func(views *cachedFileViews) {
+		views.signatures = formatted
+	})
+	return formatted
 }
 
 func (pl *ProgressiveLoader) nodesForFile(path string) []*ast.Node {
@@ -423,25 +487,111 @@ func (pl *ProgressiveLoader) nodesForFile(path string) []*ast.Node {
 	return nodes
 }
 
-func (pl *ProgressiveLoader) fileSummary(path string) string {
+func (pl *ProgressiveLoader) fileSummary(path, content string) string {
 	if pl.indexManager == nil {
-		return ""
+		if content == "" || pl.summarizer == nil {
+			return ""
+		}
+		return pl.summarizeFileContent(path, content)
 	}
 	meta, err := pl.indexManager.Store().GetFileByPath(path)
 	if err != nil || meta == nil {
-		return ""
+		if content == "" || pl.summarizer == nil {
+			return ""
+		}
+		return pl.summarizeFileContent(path, content)
 	}
 	if meta.Summary != "" {
 		return meta.Summary
 	}
-	if pl.summarizer != nil {
-		if content, err := ReadFile(path); err == nil {
-			if summary, err := pl.summarizer.Summarize(content, core.SummaryConcise); err == nil {
-				return summary
-			}
-		}
+	if content != "" && pl.summarizer != nil {
+		return pl.summarizeFileContent(path, content)
 	}
 	return ""
+}
+
+func (pl *ProgressiveLoader) rawFileContent(path string) (string, bool, error) {
+	if path == "" {
+		return "", false, fmt.Errorf("file path required")
+	}
+	version, err := fileVersion(path)
+	if err != nil {
+		if cached, ok := pl.fileCache[path]; ok {
+			return cached.content, false, nil
+		}
+		return "", false, err
+	}
+	if cached, ok := pl.fileCache[path]; ok && cached.version == version {
+		return cached.content, false, nil
+	}
+	content, err := ReadFile(path)
+	if err != nil {
+		return "", false, err
+	}
+	if cached, ok := pl.fileCache[path]; ok && cached.version != version {
+		delete(pl.viewCache, path)
+	}
+	pl.fileCache[path] = cachedFileContent{
+		content: content,
+		version: version,
+	}
+	return content, true, nil
+}
+
+func fileVersion(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d:%d", info.ModTime().UTC().UnixNano(), info.Size()), nil
+}
+
+func (pl *ProgressiveLoader) summarizeFileContent(path, content string) string {
+	if content == "" || pl.summarizer == nil {
+		return ""
+	}
+	if cached := pl.cachedViews(path); cached != nil && cached.summary != "" {
+		return cached.summary
+	}
+	summary, err := pl.summarizer.Summarize(content, core.SummaryConcise)
+	if err != nil {
+		return ""
+	}
+	pl.updateCachedViews(path, func(views *cachedFileViews) {
+		views.summary = summary
+	})
+	return summary
+}
+
+func (pl *ProgressiveLoader) cachedViews(path string) *cachedFileViews {
+	if path == "" {
+		return nil
+	}
+	fileCache, ok := pl.fileCache[path]
+	if !ok {
+		return nil
+	}
+	views, ok := pl.viewCache[path]
+	if !ok || views.version != fileCache.version {
+		return nil
+	}
+	return &views
+}
+
+func (pl *ProgressiveLoader) updateCachedViews(path string, mutate func(*cachedFileViews)) {
+	if path == "" || mutate == nil {
+		return
+	}
+	fileCache, ok := pl.fileCache[path]
+	if !ok {
+		return
+	}
+	views := pl.viewCache[path]
+	if views.version != fileCache.version {
+		views = cachedFileViews{version: fileCache.version}
+	}
+	mutate(&views)
+	pl.viewCache[path] = views
 }
 
 func (pl *ProgressiveLoader) fileStats(path string) string {
@@ -567,10 +717,71 @@ func (pl *ProgressiveLoader) executeMemoryQuery(query MemoryQuery) error {
 		fmt.Fprintf(&sb, "- %s: %s\n", result.Key, data)
 	}
 	return pl.contextManager.AddItem(&core.MemoryContextItem{
-		Source:       "memory:" + query.Query,
-		Content:      sb.String(),
+		Source:  "memory:" + query.Query,
+		Content: sb.String(),
+		Summary: fmt.Sprintf("memory query %q (%d results)", query.Query, minInt(len(results), maxResults)),
+		Reference: &core.ContextReference{
+			Kind:   core.ContextReferenceRuntimeMemory,
+			ID:     query.Query,
+			Detail: "query-results",
+			Metadata: map[string]string{
+				"max_results": strconv.Itoa(maxResults),
+			},
+		},
 		LastAccessed: time.Now().UTC(),
 		Relevance:    0.9,
 		PriorityVal:  1,
 	})
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func detailLevelLabel(level DetailLevel) string {
+	switch level {
+	case DetailFull:
+		return "full"
+	case DetailDetailed:
+		return "detailed"
+	case DetailConcise:
+		return "concise"
+	case DetailMinimal:
+		return "minimal"
+	case DetailSignatureOnly:
+		return "signature"
+	default:
+		return "unknown"
+	}
+}
+
+// lossForDetailDemotion calculates information loss magnitude for demoting from one detail level to another
+func lossForDetailDemotion(from, to DetailLevel) float64 {
+	switch {
+	case from == DetailFull && to == DetailDetailed:
+		return 0.15
+	case from == DetailFull && to == DetailConcise:
+		return 0.3
+	case from == DetailFull && to == DetailMinimal:
+		return 0.5
+	case from == DetailFull && to == DetailSignatureOnly:
+		return 0.6
+	case from == DetailDetailed && to == DetailConcise:
+		return 0.3
+	case from == DetailDetailed && to == DetailMinimal:
+		return 0.5
+	case from == DetailDetailed && to == DetailSignatureOnly:
+		return 0.6
+	case from == DetailConcise && to == DetailMinimal:
+		return 0.5
+	case from == DetailConcise && to == DetailSignatureOnly:
+		return 0.6
+	case from == DetailMinimal && to == DetailSignatureOnly:
+		return 0.6
+	default:
+		return 0.0
+	}
 }

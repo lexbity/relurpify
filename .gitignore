@@ -13,6 +13,7 @@ relurpify/
 /relurpify_cfg/logs/
 /relurpify_cfg/sessions/
 /relurpify_cfg/telemetry.jsonl
+dev-agent-cli
 dev-agent
 # Build artifacts from test fixtures
 testsuite/agenttest_fixtures/**/target/

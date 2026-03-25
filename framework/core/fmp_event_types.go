@@ -17,4 +17,5 @@ const (
 	FrameworkEventFMPChunkOpened       = "fmp.chunk.opened.v1"
 	FrameworkEventFMPChunkAcked        = "fmp.chunk.acked.v1"
 	FrameworkEventFMPChunkCancelled    = "fmp.chunk.cancelled.v1"
+	FrameworkEventFMPReconciliationOutcome = "fmp.reconciliation.outcome.v1"
 )

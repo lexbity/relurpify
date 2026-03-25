@@ -192,3 +192,51 @@ func ParseQualifiedExportName(value string) (trustDomain, exportName string, err
 	}
 	return parts[0], parts[1], nil
 }
+
+// Phase 6.6: Advertisement TTL Enforcement
+
+// LiveDiscoveryStore is an optional extension that filters expired advertisements at query time.
+type LiveDiscoveryStore interface {
+	ListLiveNodeAdvertisements(ctx context.Context, now time.Time) ([]core.NodeAdvertisement, error)
+	ListLiveRuntimeAdvertisements(ctx context.Context, now time.Time) ([]core.RuntimeAdvertisement, error)
+	ListLiveExportAdvertisements(ctx context.Context, now time.Time) ([]core.ExportAdvertisement, error)
+}
+
+// ListLiveNodeAdvertisements returns only non-expired node advertisements.
+func (s *InMemoryDiscoveryStore) ListLiveNodeAdvertisements(ctx context.Context, now time.Time) ([]core.NodeAdvertisement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []core.NodeAdvertisement
+	for _, ad := range s.nodes {
+		if ad.ExpiresAt.IsZero() || now.Before(ad.ExpiresAt) {
+			out = append(out, ad)
+		}
+	}
+	return out, nil
+}
+
+// ListLiveRuntimeAdvertisements returns only non-expired runtime advertisements.
+func (s *InMemoryDiscoveryStore) ListLiveRuntimeAdvertisements(ctx context.Context, now time.Time) ([]core.RuntimeAdvertisement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []core.RuntimeAdvertisement
+	for _, ad := range s.runtimes {
+		if ad.ExpiresAt.IsZero() || now.Before(ad.ExpiresAt) {
+			out = append(out, ad)
+		}
+	}
+	return out, nil
+}
+
+// ListLiveExportAdvertisements returns only non-expired export advertisements.
+func (s *InMemoryDiscoveryStore) ListLiveExportAdvertisements(ctx context.Context, now time.Time) ([]core.ExportAdvertisement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []core.ExportAdvertisement
+	for _, ad := range s.exports {
+		if ad.ExpiresAt.IsZero() || now.Before(ad.ExpiresAt) {
+			out = append(out, ad)
+		}
+	}
+	return out, nil
+}

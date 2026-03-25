@@ -186,6 +186,20 @@ func SummarizeCapabilityResultEnvelope(source *CapabilityResultEnvelope, summary
 	}
 	envelope := NewCapabilityResultEnvelope(source.Descriptor, result, ContentDispositionSummarized, source.Policy, source.Approval)
 	envelope.RecordedAt = source.RecordedAt
+
+	// Append summarize derivation step to provenance chain
+	provenance := envelope.Provenance
+	if provenance.Derivation == nil {
+		// Start a new derivation chain
+		origin := OriginDerivation("capability_result")
+		provenance.Derivation = &origin
+	} else {
+		// Append to existing chain
+		derived := provenance.Derivation.Derive("compress_summarize", "capability_result", 0.1, summary)
+		provenance.Derivation = &derived
+	}
+	envelope.Provenance = provenance
+
 	decision := source.Insertion
 	if decision.Action == "" {
 		decision = envelope.Insertion

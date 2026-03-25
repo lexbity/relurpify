@@ -3,8 +3,9 @@ package retrieval
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,7 @@ import (
 func TestOllamaEmbedderEmbed(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodPost, r.Method)
 		require.Equal(t, "/api/embed", r.URL.Path)
 
@@ -28,10 +29,20 @@ func TestOllamaEmbedderEmbed(t *testing.T) {
 				{4, 5, 6},
 			},
 		}))
-	}))
-	defer server.Close()
+	})
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("local listener unavailable in this environment: %v", err)
+	}
+	server := &http.Server{Handler: handler}
+	go func() {
+		_ = server.Serve(listener)
+	}()
+	defer func() {
+		_ = server.Shutdown(context.Background())
+	}()
 
-	embedder := NewOllamaEmbedder(server.URL, "nomic-embed-text")
+	embedder := NewOllamaEmbedder(fmt.Sprintf("http://%s", listener.Addr().String()), "nomic-embed-text")
 	vectors, err := embedder.Embed(context.Background(), []string{"alpha", "beta"})
 	require.NoError(t, err)
 	require.Len(t, vectors, 2)

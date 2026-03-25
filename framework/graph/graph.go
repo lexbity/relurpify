@@ -8,11 +8,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/perfstats"
 )
 
 // NodeType enumerates supported node categories.
@@ -48,7 +48,7 @@ type Edge struct {
 
 type parallelBranchResult struct {
 	edge  Edge
-	delta core.DirtyContextDelta
+	delta core.BranchContextDelta
 	err   error
 }
 
@@ -57,28 +57,28 @@ type parallelBranchResult struct {
 // and Execute walks the graph while recording telemetry plus enforcing invariants
 // such as bounded node visits (to guard against accidental cycles).
 type Graph struct {
-	mu                 sync.RWMutex
-	nodes              map[string]Node
-	nodeContracts      map[string]NodeContract
-	edges              map[string][]Edge
-	startNodeID        string
-	maxNodeVisits      int
-	telemetry          Telemetry
-	execMu             sync.Mutex
-	visitCounts        map[string]int
-	executionPath      []string
-	checkpointInterval int
-	checkpointCallback CheckpointCallback
-	lastCheckpointNode string
+	mu                   sync.RWMutex
+	nodes                map[string]Node
+	nodeContracts        map[string]NodeContract
+	edges                map[string][]Edge
+	startNodeID          string
+	maxNodeVisits        int
+	telemetry            Telemetry
+	execMu               sync.Mutex
+	visitCounts          map[string]int
+	executionPath        []string
+	checkpointInterval   int
+	checkpointCallback   CheckpointCallback
+	lastCheckpointNode   string
 	nodesSinceCheckpoint int
-	capabilityCatalog  CapabilityCatalog
-	lastPreflight      *PreflightReport
-	lastPreflightErr   error
-	preflightDirty     bool
-	lastValidationErr  error
-	validationDirty    bool
-	graphHash          string
-	hashDirty          bool
+	capabilityCatalog    CapabilityCatalog
+	lastPreflight        *PreflightReport
+	lastPreflightErr     error
+	preflightDirty       bool
+	lastValidationErr    error
+	validationDirty      bool
+	graphHash            string
+	hashDirty            bool
 }
 
 // CheckpointCallback receives checkpoints generated during execution.
@@ -263,8 +263,10 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 		g.lastCheckpointNode = ""
 		g.nodesSinceCheckpoint = 0
 	}
-	g.mu.RLock()
-	defer g.mu.RUnlock()
+	// NOTE: We intentionally do NOT hold g.mu.RLock across the entire loop.
+	// Nodes may mutate the graph during execution (e.g. MaterializePlanGraph
+	// adds step nodes/edges dynamically). Holding a read lock here would
+	// deadlock against the write lock those mutations require.
 
 	var lastResult *Result
 	for current != "" {
@@ -273,7 +275,9 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 			return nil, ctx.Err()
 		default:
 		}
+		g.mu.RLock()
 		node, ok := g.nodes[current]
+		g.mu.RUnlock()
 		if !ok {
 			return nil, fmt.Errorf("node %s missing", current)
 		}
@@ -415,7 +419,10 @@ func (g *Graph) previousNodeID() string {
 // traditional state machine transition. Returning a single node ID keeps the
 // main Execute loop simple and debuggable.
 func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result *Result) (string, string, error) {
-	outEdges := g.edges[node.ID()]
+	g.mu.RLock()
+	outEdges := make([]Edge, len(g.edges[node.ID()]))
+	copy(outEdges, g.edges[node.ID()])
+	g.mu.RUnlock()
 	if len(outEdges) == 0 || node.Type() == NodeTypeTerminal {
 		return "", "terminal", nil
 	}
@@ -440,11 +447,12 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 			edge := edge
 			go func() {
 				defer wg.Done()
+				perfstats.IncBranchClone()
 				branchCtx := state.Clone()
 				_, err := g.executeBranch(ctx, edge.To, branchCtx)
 				results <- parallelBranchResult{
 					edge:  edge,
-					delta: branchCtx.DirtyDelta(),
+					delta: branchCtx.BranchDelta(),
 					err:   err,
 				}
 			}()
@@ -458,9 +466,11 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 			}
 			branches = append(branches, result)
 		}
+		mergeStarted := time.Now()
 		if err := mergeParallelBranchDeltas(state, branches); err != nil {
 			return "", "", err
 		}
+		perfstats.ObserveBranchMerge(time.Since(mergeStarted))
 	}
 	if len(serialEdges) == 0 {
 		if len(parallelEdges) > 0 {
@@ -484,36 +494,12 @@ func mergeParallelBranchDeltas(parent *Context, branches []parallelBranchResult)
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	type deltaEntry struct {
-		branch string
-		value  any
-	}
-	stateWrites := make(map[string]deltaEntry)
+	deltas := core.NewBranchDeltaSet(len(branches))
 	for _, branch := range branches {
 		label := branch.edge.To
-		if len(branch.delta.VariableValues) > 0 {
-			return fmt.Errorf("parallel branch merge conflict: branch %s changed context variables outside merge policy", label)
-		}
-		if len(branch.delta.KnowledgeValues) > 0 {
-			return fmt.Errorf("parallel branch merge conflict: branch %s changed context knowledge outside merge policy", label)
-		}
-		if branch.delta.HistoryChanged || branch.delta.CompressedChanged || branch.delta.LogChanged || branch.delta.PhaseChanged {
-			return fmt.Errorf("parallel branch merge conflict: branch %s changed interaction history outside merge policy", label)
-		}
-		for key, value := range branch.delta.StateValues {
-			if existing, ok := stateWrites[key]; ok {
-				if !reflect.DeepEqual(existing.value, value) {
-					return fmt.Errorf("parallel branch merge conflict on state key %q between branches %s and %s", key, existing.branch, label)
-				}
-				continue
-			}
-			stateWrites[key] = deltaEntry{branch: label, value: value}
-		}
+		deltas.Add("branch "+label, branch.delta)
 	}
-	for key, entry := range stateWrites {
-		parent.Set(key, entry.value)
-	}
-	return nil
+	return deltas.ApplyTo(parent)
 }
 
 // executeBranch runs a detached sub-graph that starts at the provided node.

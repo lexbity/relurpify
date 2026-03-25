@@ -1,0 +1,217 @@
+package capability
+
+import (
+	"fmt"
+	"sort"
+	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
+)
+
+// ExecutionCapabilityCatalogEntry records the effective visibility of one
+// admitted capability for a single execution snapshot.
+type ExecutionCapabilityCatalogEntry struct {
+	Descriptor    CapabilityDescriptor
+	Exposure      core.CapabilityExposure
+	Inspectable   bool
+	Callable      bool
+	ModelCallable bool
+	LocalTool     bool
+	localTool     Tool
+}
+
+// ExecutionCapabilityCatalogSnapshot freezes the effective capability catalog
+// for one agent execution so callers can reuse a compiled descriptive view
+// instead of repeatedly deriving it from live registry state.
+//
+// Important: this snapshot is descriptive, not authoritative for authorization.
+// It is safe to use for stable execution-scoped views such as:
+//   - callable/inspectable catalog presentation
+//   - model tool lists
+//   - provenance descriptor lookup
+//   - policy snapshot attachment for reporting
+//
+// It must not replace live authorization, safety, revocation, or permission
+// checks at invocation time. Capability execution decisions still belong to the
+// live registry, permission manager, and runtime safety controller.
+type ExecutionCapabilityCatalogSnapshot struct {
+	ID         string
+	CapturedAt time.Time
+	AgentID    string
+
+	entries                []ExecutionCapabilityCatalogEntry
+	callableCapabilities   []CapabilityDescriptor
+	inspectableCaps        []CapabilityDescriptor
+	modelCallableTools     []Tool
+	modelCallableToolSpecs []core.LLMToolSpec
+	policySnapshot         *core.PolicySnapshot
+	allowedCapabilities    []core.CapabilitySelector
+}
+
+// CaptureExecutionCatalogSnapshot compiles an execution-scoped descriptive
+// capability catalog from the registry's current admitted capabilities and
+// effective runtime policy.
+func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabilityCatalogSnapshot {
+	if r == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	snapshot := &ExecutionCapabilityCatalogSnapshot{
+		ID:                     fmt.Sprintf("capability-catalog-%d", now.UnixNano()),
+		CapturedAt:             now,
+		AgentID:                r.registeredAgentID,
+		entries:                make([]ExecutionCapabilityCatalogEntry, 0, len(r.entries)),
+		callableCapabilities:   make([]CapabilityDescriptor, 0, len(r.entries)),
+		inspectableCaps:        make([]CapabilityDescriptor, 0, len(r.entries)),
+		modelCallableTools:     make([]Tool, 0, len(r.entries)),
+		modelCallableToolSpecs: make([]core.LLMToolSpec, 0, len(r.entries)),
+		policySnapshot:         r.capturePolicySnapshotLocked(now),
+		allowedCapabilities:    cloneCapabilitySelectors(r.allowedCapabilities),
+	}
+
+	ids := make([]string, 0, len(r.entries))
+	for id := range r.entries {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	for _, id := range ids {
+		entry := r.entries[id]
+		if entry == nil {
+			continue
+		}
+		exposure := r.effectiveExposureLocked(entry.descriptor)
+		catalogEntry := ExecutionCapabilityCatalogEntry{
+			Descriptor:    entry.descriptor,
+			Exposure:      exposure,
+			Inspectable:   exposure != core.CapabilityExposureHidden,
+			Callable:      exposure == core.CapabilityExposureCallable,
+			ModelCallable: exposure == core.CapabilityExposureCallable && (entry.legacyTool != nil || isInvocableCapabilityEntry(entry)),
+			LocalTool:     entry.legacyTool != nil,
+			localTool:     entry.legacyTool,
+		}
+		snapshot.entries = append(snapshot.entries, catalogEntry)
+		if catalogEntry.Inspectable {
+			snapshot.inspectableCaps = append(snapshot.inspectableCaps, entry.descriptor)
+		}
+		if catalogEntry.Callable {
+			snapshot.callableCapabilities = append(snapshot.callableCapabilities, entry.descriptor)
+			switch {
+			case entry.legacyTool != nil:
+				snapshot.modelCallableTools = append(snapshot.modelCallableTools, entry.legacyTool)
+				snapshot.modelCallableToolSpecs = append(snapshot.modelCallableToolSpecs, core.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
+			case isInvocableCapabilityEntry(entry):
+				snapshot.modelCallableToolSpecs = append(snapshot.modelCallableToolSpecs, core.LLMToolSpecFromDescriptor(entry.descriptor))
+			}
+		}
+	}
+
+	return snapshot
+}
+
+func isInvocableCapabilityEntry(entry *capabilityEntry) bool {
+	if entry == nil {
+		return false
+	}
+	_, ok := entry.handler.(core.InvocableCapabilityHandler)
+	return ok
+}
+
+// Entries returns the admitted catalog entries for this execution.
+func (s *ExecutionCapabilityCatalogSnapshot) Entries() []ExecutionCapabilityCatalogEntry {
+	if s == nil {
+		return nil
+	}
+	return append([]ExecutionCapabilityCatalogEntry(nil), s.entries...)
+}
+
+// CallableCapabilities returns the callable capability descriptors for this execution.
+func (s *ExecutionCapabilityCatalogSnapshot) CallableCapabilities() []CapabilityDescriptor {
+	if s == nil {
+		return nil
+	}
+	return append([]CapabilityDescriptor(nil), s.callableCapabilities...)
+}
+
+// InspectableCapabilities returns the non-hidden capability descriptors for this execution.
+func (s *ExecutionCapabilityCatalogSnapshot) InspectableCapabilities() []CapabilityDescriptor {
+	if s == nil {
+		return nil
+	}
+	return append([]CapabilityDescriptor(nil), s.inspectableCaps...)
+}
+
+// ModelCallableLLMToolSpecs returns the precompiled LLM tool specs for this execution.
+func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableLLMToolSpecs() []core.LLMToolSpec {
+	if s == nil {
+		return nil
+	}
+	return append([]core.LLMToolSpec(nil), s.modelCallableToolSpecs...)
+}
+
+// ModelCallableTools returns the callable local tools for this execution.
+func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableTools() []Tool {
+	if s == nil {
+		return nil
+	}
+	return append([]Tool(nil), s.modelCallableTools...)
+}
+
+// GetModelTool resolves a callable local tool from the execution snapshot.
+func (s *ExecutionCapabilityCatalogSnapshot) GetModelTool(name string) (Tool, bool) {
+	if s == nil {
+		return nil, false
+	}
+	normalized := normalizeComparable(name)
+	if normalized == "" {
+		return nil, false
+	}
+	for _, tool := range s.modelCallableTools {
+		if tool == nil {
+			continue
+		}
+		if normalizeComparable(tool.Name()) == normalized {
+			return tool, true
+		}
+	}
+	return nil, false
+}
+
+// GetCapability resolves a capability entry by capability ID or public name.
+func (s *ExecutionCapabilityCatalogSnapshot) GetCapability(idOrName string) (ExecutionCapabilityCatalogEntry, bool) {
+	if s == nil {
+		return ExecutionCapabilityCatalogEntry{}, false
+	}
+	normalized := normalizeComparable(idOrName)
+	if normalized == "" {
+		return ExecutionCapabilityCatalogEntry{}, false
+	}
+	for _, entry := range s.entries {
+		if normalizeComparable(entry.Descriptor.ID) == normalized || normalizeComparable(entry.Descriptor.Name) == normalized {
+			return entry, true
+		}
+	}
+	return ExecutionCapabilityCatalogEntry{}, false
+}
+
+// PolicySnapshot returns a cloned policy snapshot for this execution.
+// The returned snapshot is intended for provenance and reporting, not to
+// authorize future invocations after runtime policy has changed.
+func (s *ExecutionCapabilityCatalogSnapshot) PolicySnapshot() *core.PolicySnapshot {
+	if s == nil {
+		return nil
+	}
+	return clonePolicySnapshot(s.policySnapshot)
+}
+
+// AllowedCapabilities returns the admitted capability selectors active for this execution.
+func (s *ExecutionCapabilityCatalogSnapshot) AllowedCapabilities() []core.CapabilitySelector {
+	if s == nil {
+		return nil
+	}
+	return cloneCapabilitySelectors(s.allowedCapabilities)
+}

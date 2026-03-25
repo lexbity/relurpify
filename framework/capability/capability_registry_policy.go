@@ -97,13 +97,10 @@ func (r *CapabilityRegistry) setExposurePolicies(policies []core.CapabilityExpos
 	r.exposurePolicies = append([]core.CapabilityExposurePolicy{}, policies...)
 	r.refreshRuntimePolicyLocked()
 	telemetry := r.telemetry
-	descriptors := make([]core.CapabilityDescriptor, 0, len(r.capabilities))
-	for _, capability := range r.capabilities {
-		descriptors = append(descriptors, capability)
-	}
+	resolved := r.snapshotResolvedExposureLocked()
 	r.mu.Unlock()
-	for _, descriptor := range descriptors {
-		emitCapabilitySecurityEvent(telemetry, "capability_exposure_resolved", descriptor, r.EffectiveExposure(descriptor), "")
+	for _, item := range resolved {
+		emitCapabilitySecurityEvent(telemetry, "capability_exposure_resolved", item.descriptor, item.exposure, "")
 	}
 }
 
@@ -115,14 +112,30 @@ func (r *CapabilityRegistry) AddExposurePolicies(policies []core.CapabilityExpos
 	r.exposurePolicies = append(r.exposurePolicies, policies...)
 	r.refreshRuntimePolicyLocked()
 	telemetry := r.telemetry
-	descriptors := make([]core.CapabilityDescriptor, 0, len(r.capabilities))
-	for _, capability := range r.capabilities {
-		descriptors = append(descriptors, capability)
-	}
+	resolved := r.snapshotResolvedExposureLocked()
 	r.mu.Unlock()
-	for _, descriptor := range descriptors {
-		emitCapabilitySecurityEvent(telemetry, "capability_exposure_resolved", descriptor, r.EffectiveExposure(descriptor), "")
+	for _, item := range resolved {
+		emitCapabilitySecurityEvent(telemetry, "capability_exposure_resolved", item.descriptor, item.exposure, "")
 	}
+}
+
+type resolvedExposure struct {
+	descriptor core.CapabilityDescriptor
+	exposure   core.CapabilityExposure
+}
+
+func (r *CapabilityRegistry) snapshotResolvedExposureLocked() []resolvedExposure {
+	if r == nil {
+		return nil
+	}
+	out := make([]resolvedExposure, 0, len(r.capabilities))
+	for _, capability := range r.capabilities {
+		out = append(out, resolvedExposure{
+			descriptor: capability,
+			exposure:   r.effectiveExposureLocked(capability),
+		})
+	}
+	return out
 }
 
 func effectiveExposurePolicies(spec *AgentRuntimeSpec) []core.CapabilityExposurePolicy {
@@ -333,16 +346,23 @@ func (r *CapabilityRegistry) CapturePolicySnapshot() *core.PolicySnapshot {
 	now := time.Now().UTC()
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.capturePolicySnapshotLocked(now)
+}
+
+func (r *CapabilityRegistry) capturePolicySnapshotLocked(now time.Time) *core.PolicySnapshot {
+	if r == nil {
+		return nil
+	}
+	policy := r.currentRuntimePolicyLocked()
 	snapshot := &core.PolicySnapshot{
 		ID:                 fmt.Sprintf("policy-%d", now.UnixNano()),
 		CapturedAt:         now,
 		AgentID:            r.registeredAgentID,
-		ToolPolicies:       make(map[string]ToolPolicy, len(r.currentRuntimePolicyLocked().toolPolicies)),
-		CapabilityPolicies: append([]core.CapabilityPolicy{}, r.currentRuntimePolicyLocked().capabilityPolicies...),
-		ExposurePolicies:   append([]core.CapabilityExposurePolicy{}, r.currentRuntimePolicyLocked().exposurePolicies...),
-		GlobalPolicies:     cloneGlobalPolicies(r.currentRuntimePolicyLocked().globalPolicies),
+		ToolPolicies:       make(map[string]ToolPolicy, len(policy.toolPolicies)),
+		CapabilityPolicies: append([]core.CapabilityPolicy{}, policy.capabilityPolicies...),
+		ExposurePolicies:   append([]core.CapabilityExposurePolicy{}, policy.exposurePolicies...),
+		GlobalPolicies:     cloneGlobalPolicies(policy.globalPolicies),
 	}
-	policy := r.currentRuntimePolicyLocked()
 	if policy != nil {
 		snapshot.InsertionPolicies = cloneInsertionPolicies(policy.insertionPolicies)
 		snapshot.ProviderPolicies = cloneProviderPolicies(policy.providerPolicies)
@@ -355,6 +375,40 @@ func (r *CapabilityRegistry) CapturePolicySnapshot() *core.PolicySnapshot {
 		snapshot.ToolPolicies[name] = policy
 	}
 	return snapshot
+}
+
+func clonePolicySnapshot(input *core.PolicySnapshot) *core.PolicySnapshot {
+	if input == nil {
+		return nil
+	}
+	return &core.PolicySnapshot{
+		ID:                 input.ID,
+		CapturedAt:         input.CapturedAt,
+		AgentID:            input.AgentID,
+		ToolPolicies:       cloneToolPolicies(input.ToolPolicies),
+		CapabilityPolicies: append([]core.CapabilityPolicy{}, input.CapabilityPolicies...),
+		ExposurePolicies:   append([]core.CapabilityExposurePolicy{}, input.ExposurePolicies...),
+		InsertionPolicies:  cloneInsertionPolicies(input.InsertionPolicies),
+		GlobalPolicies:     cloneGlobalPolicies(input.GlobalPolicies),
+		ProviderPolicies:   cloneProviderPolicies(input.ProviderPolicies),
+		RuntimeSafety:      cloneRuntimeSafetySpec(input.RuntimeSafety),
+		Revocations: core.RevocationSnapshot{
+			Capabilities: cloneSnapshotStringMap(input.Revocations.Capabilities),
+			Providers:    cloneSnapshotStringMap(input.Revocations.Providers),
+			Sessions:     cloneSnapshotStringMap(input.Revocations.Sessions),
+		},
+	}
+}
+
+func cloneSnapshotStringMap(input map[string]string) map[string]string {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func (r *CapabilityRegistry) RevokeCapability(id, reason string) {

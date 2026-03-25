@@ -50,6 +50,40 @@ type AuditQuery struct {
 	Result     string
 }
 
+// AuditChainEntry captures an append-only audit record with integrity metadata.
+type AuditChainEntry struct {
+	Sequence           int64       `json:"sequence"`
+	Record             AuditRecord `json:"record"`
+	PreviousHash       string      `json:"previous_hash,omitempty"`
+	RecordHash         string      `json:"record_hash"`
+	SignatureAlgorithm string      `json:"signature_algorithm,omitempty"`
+	Signature          string      `json:"signature,omitempty"`
+}
+
+// AuditChainFilter scopes append-only audit queries and verification.
+type AuditChainFilter struct {
+	AuditQuery
+	Correlation string
+	LineageID   string
+	Limit       int
+}
+
+// AuditChainVerification reports the integrity status of a filtered chain view.
+type AuditChainVerification struct {
+	Verified     bool   `json:"verified"`
+	EntryCount   int    `json:"entry_count"`
+	LastSequence int64  `json:"last_sequence,omitempty"`
+	LastHash     string `json:"last_hash,omitempty"`
+	Failure      string `json:"failure,omitempty"`
+}
+
+// AuditChainReader extends the audit logger with chain-aware read and verify APIs.
+type AuditChainReader interface {
+	AuditLogger
+	ReadChain(ctx context.Context, filter AuditChainFilter) ([]AuditChainEntry, error)
+	VerifyChain(ctx context.Context, filter AuditChainFilter) (AuditChainVerification, error)
+}
+
 // InMemoryAuditLogger appends logs to a bounded buffer.
 type InMemoryAuditLogger struct {
 	mu     sync.RWMutex

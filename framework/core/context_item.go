@@ -5,6 +5,24 @@ import (
 	"time"
 )
 
+type ContextReferenceKind string
+
+const (
+	ContextReferenceFile              ContextReferenceKind = "file"
+	ContextReferenceRetrievalEvidence ContextReferenceKind = "retrieval_evidence"
+	ContextReferenceRuntimeMemory     ContextReferenceKind = "runtime_memory"
+	ContextReferenceWorkflowArtifact  ContextReferenceKind = "workflow_artifact"
+)
+
+type ContextReference struct {
+	Kind     ContextReferenceKind `json:"kind" yaml:"kind"`
+	ID       string               `json:"id,omitempty" yaml:"id,omitempty"`
+	URI      string               `json:"uri,omitempty" yaml:"uri,omitempty"`
+	Version  string               `json:"version,omitempty" yaml:"version,omitempty"`
+	Detail   string               `json:"detail,omitempty" yaml:"detail,omitempty"`
+	Metadata map[string]string    `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+}
+
 // ContextItem represents a unit that can be managed for budget purposes.
 type ContextItem interface {
 	TokenCount() int
@@ -15,12 +33,28 @@ type ContextItem interface {
 	Age() time.Duration
 }
 
+// ReferenceCapableContextItem exposes a stable reference that callers can keep
+// even when inline payload is compressed or omitted.
+type ReferenceCapableContextItem interface {
+	ContextItem
+	References() []ContextReference
+	HasInlinePayload() bool
+}
+
+// DerivationCapableContextItem exposes the transformation history of a context item.
+type DerivationCapableContextItem interface {
+	ContextItem
+	Derivation() *DerivationChain
+	WithDerivation(chain DerivationChain) ContextItem
+}
+
 // ContextItemType categorizes managed items.
 type ContextItemType string
 
 const (
 	ContextTypeInteraction      ContextItemType = "interaction"
 	ContextTypeFile             ContextItemType = "file"
+	ContextTypeRetrieval        ContextItemType = "retrieval"
 	ContextTypeCapabilityResult ContextItemType = "capability_result"
 	ContextTypeToolResult       ContextItemType = ContextTypeCapabilityResult
 	ContextTypeMemory           ContextItemType = "memory"
@@ -72,13 +106,15 @@ func (ici *InteractionContextItem) Age() time.Duration {
 
 // FileContextItem represents file contents tracked in context.
 type FileContextItem struct {
-	Path         string
-	Content      string
-	Summary      string
-	LastAccessed time.Time
-	Relevance    float64
-	PriorityVal  int
-	Pinned       bool
+	Path              string
+	Content           string
+	Summary           string
+	Reference         *ContextReference
+	LastAccessed      time.Time
+	Relevance         float64
+	PriorityVal       int
+	Pinned            bool
+	derives   *DerivationChain
 }
 
 func (fci *FileContextItem) TokenCount() int {
@@ -110,14 +146,31 @@ func (fci *FileContextItem) Compress() (ContextItem, error) {
 	if summary == "" {
 		summary = truncate(fci.Content, 200)
 	}
+
+	// Calculate compression loss
+	lossMagnitude := 0.0
+	if fci.Content != "" {
+		lossMagnitude = float64(len(fci.Content)-len(summary)) / float64(len(fci.Content))
+		if lossMagnitude > 0.7 {
+			lossMagnitude = 0.7
+		}
+	}
+
+	chain := fci.derivationOrEmpty()
+	if lossMagnitude > 0 {
+		chain = chain.Derive("compress_truncate", "contextmgr", lossMagnitude, "")
+	}
+
 	return &FileContextItem{
 		Path:         fci.Path,
 		Content:      "",
 		Summary:      summary,
+		Reference:    cloneContextReference(fci.Reference),
 		LastAccessed: fci.LastAccessed,
 		Relevance:    fci.Relevance * 0.9,
 		PriorityVal:  fci.PriorityVal + 1,
 		Pinned:       fci.Pinned,
+		derives:   &chain,
 	}, nil
 }
 
@@ -129,17 +182,54 @@ func (fci *FileContextItem) Age() time.Duration {
 	return time.Since(fci.LastAccessed)
 }
 
+func (fci *FileContextItem) References() []ContextReference {
+	if fci == nil || fci.Reference == nil {
+		return nil
+	}
+	return []ContextReference{*cloneContextReference(fci.Reference)}
+}
+
+func (fci *FileContextItem) HasInlinePayload() bool {
+	return fci != nil && (fci.Content != "" || fci.Summary != "")
+}
+
+func (fci *FileContextItem) Derivation() *DerivationChain {
+	return fci.derives
+}
+
+func (fci *FileContextItem) WithDerivation(chain DerivationChain) ContextItem {
+	copied := *fci
+	copied.derives = &chain
+	return &copied
+}
+
+func (fci *FileContextItem) derivationOrEmpty() DerivationChain {
+	if fci.derives == nil {
+		return DerivationChain{Steps: []DerivationStep{}}
+	}
+	return fci.derives.Clone()
+}
+
 // MemoryContextItem captures retrieved memories as a synthetic context block.
 type MemoryContextItem struct {
 	Source       string
 	Content      string
+	Summary      string
+	Reference    *ContextReference
 	LastAccessed time.Time
 	Relevance    float64
 	PriorityVal  int
+	derives      *DerivationChain
 }
 
 func (mci *MemoryContextItem) TokenCount() int {
-	return estimateTokens(mci.Content)
+	if mci.Content != "" {
+		return estimateTokens(mci.Content)
+	}
+	if mci.Summary != "" {
+		return estimateTokens(mci.Summary)
+	}
+	return estimateTokens(mci.Source)
 }
 
 func (mci *MemoryContextItem) RelevanceScore() float64 {
@@ -160,12 +250,34 @@ func (mci *MemoryContextItem) Compress() (ContextItem, error) {
 	if len(content) > 250 {
 		content = content[:250] + "..."
 	}
+	summary := mci.Summary
+	if summary == "" {
+		summary = content
+	}
+
+	// Calculate compression loss based on truncation
+	lossMagnitude := 0.0
+	if mci.Content != "" && content != mci.Content {
+		lossMagnitude = float64(len(mci.Content)-len(content)) / float64(len(mci.Content))
+		if lossMagnitude > 0.6 {
+			lossMagnitude = 0.6
+		}
+	}
+
+	chain := mci.derivationOrEmpty()
+	if lossMagnitude > 0 {
+		chain = chain.Derive("compress_truncate", "contextmgr", lossMagnitude, "")
+	}
+
 	return &MemoryContextItem{
 		Source:       mci.Source,
-		Content:      content,
+		Content:      "",
+		Summary:      summary,
+		Reference:    cloneContextReference(mci.Reference),
 		LastAccessed: mci.LastAccessed,
 		Relevance:    mci.Relevance * 0.9,
 		PriorityVal:  mci.PriorityVal + 1,
+		derives:   &chain,
 	}, nil
 }
 
@@ -177,6 +289,139 @@ func (mci *MemoryContextItem) Age() time.Duration {
 	return time.Since(mci.LastAccessed)
 }
 
+func (mci *MemoryContextItem) References() []ContextReference {
+	if mci == nil || mci.Reference == nil {
+		return nil
+	}
+	return []ContextReference{*cloneContextReference(mci.Reference)}
+}
+
+func (mci *MemoryContextItem) HasInlinePayload() bool {
+	return mci != nil && (mci.Content != "" || mci.Summary != "")
+}
+
+func (mci *MemoryContextItem) Derivation() *DerivationChain {
+	return mci.derives
+}
+
+func (mci *MemoryContextItem) WithDerivation(chain DerivationChain) ContextItem {
+	copied := *mci
+	copied.derives = &chain
+	return &copied
+}
+
+func (mci *MemoryContextItem) derivationOrEmpty() DerivationChain {
+	if mci.derives == nil {
+		return DerivationChain{Steps: []DerivationStep{}}
+	}
+	return mci.derives.Clone()
+}
+
+// RetrievalContextItem captures packed retrieval evidence with a stable
+// reference so prompt assembly can choose between inline hydration and
+// reference-only retention.
+type RetrievalContextItem struct {
+	Source       string
+	Content      string
+	Summary      string
+	Reference    *ContextReference
+	LastAccessed time.Time
+	Relevance    float64
+	PriorityVal  int
+	derives      *DerivationChain
+}
+
+func (rci *RetrievalContextItem) TokenCount() int {
+	if rci.Content != "" {
+		return estimateTokens(rci.Content)
+	}
+	if rci.Summary != "" {
+		return estimateTokens(rci.Summary)
+	}
+	return estimateTokens(rci.Source)
+}
+
+func (rci *RetrievalContextItem) RelevanceScore() float64 {
+	if rci.Relevance == 0 {
+		rci.Relevance = 0.85
+	}
+	age := time.Since(rci.LastAccessed)
+	decay := 1.0 / (1.0 + age.Hours()/12.0)
+	return rci.Relevance * decay
+}
+
+func (rci *RetrievalContextItem) Priority() int {
+	return rci.PriorityVal
+}
+
+func (rci *RetrievalContextItem) Compress() (ContextItem, error) {
+	summary := rci.Summary
+	if summary == "" {
+		summary = truncate(rci.Content, 250)
+	}
+
+	// Calculate compression loss
+	lossMagnitude := 0.0
+	if rci.Content != "" {
+		lossMagnitude = float64(len(rci.Content)-len(summary)) / float64(len(rci.Content))
+		if lossMagnitude > 0.6 {
+			lossMagnitude = 0.6
+		}
+	}
+
+	chain := rci.derivationOrEmpty()
+	if lossMagnitude > 0 {
+		chain = chain.Derive("compress_truncate", "contextmgr", lossMagnitude, "")
+	}
+
+	return &RetrievalContextItem{
+		Source:       rci.Source,
+		Content:      "",
+		Summary:      summary,
+		Reference:    cloneContextReference(rci.Reference),
+		LastAccessed: rci.LastAccessed,
+		Relevance:    rci.Relevance * 0.9,
+		PriorityVal:  rci.PriorityVal + 1,
+		derives:   &chain,
+	}, nil
+}
+
+func (rci *RetrievalContextItem) Type() ContextItemType {
+	return ContextTypeRetrieval
+}
+
+func (rci *RetrievalContextItem) Age() time.Duration {
+	return time.Since(rci.LastAccessed)
+}
+
+func (rci *RetrievalContextItem) References() []ContextReference {
+	if rci == nil || rci.Reference == nil {
+		return nil
+	}
+	return []ContextReference{*cloneContextReference(rci.Reference)}
+}
+
+func (rci *RetrievalContextItem) HasInlinePayload() bool {
+	return rci != nil && (rci.Content != "" || rci.Summary != "")
+}
+
+func (rci *RetrievalContextItem) Derivation() *DerivationChain {
+	return rci.derives
+}
+
+func (rci *RetrievalContextItem) WithDerivation(chain DerivationChain) ContextItem {
+	copied := *rci
+	copied.derives = &chain
+	return &copied
+}
+
+func (rci *RetrievalContextItem) derivationOrEmpty() DerivationChain {
+	if rci.derives == nil {
+		return DerivationChain{Steps: []DerivationStep{}}
+	}
+	return rci.derives.Clone()
+}
+
 // CapabilityResultContextItem represents structured capability outputs inside context.
 type CapabilityResultContextItem struct {
 	ToolName     string
@@ -185,6 +430,7 @@ type CapabilityResultContextItem struct {
 	LastAccessed time.Time
 	Relevance    float64
 	PriorityVal  int
+	derives      *DerivationChain
 }
 
 func (tr *CapabilityResultContextItem) tokenPayload() string {
@@ -224,9 +470,22 @@ func (tr *CapabilityResultContextItem) Priority() int {
 
 func (tr *CapabilityResultContextItem) Compress() (ContextItem, error) {
 	payload := tr.tokenPayload()
+	originalLen := len(payload)
 	if len(payload) > 250 {
 		payload = payload[:250] + "..."
 	}
+
+	// Calculate compression loss based on summarization
+	lossMagnitude := 0.45 // Standard loss for summarization
+	if originalLen <= 250 {
+		lossMagnitude = 0.0 // No loss if already under limit
+	}
+
+	chain := tr.derivationOrEmpty()
+	if lossMagnitude > 0 {
+		chain = chain.Derive("compress_summarize", "contextmgr", lossMagnitude, "")
+	}
+
 	return &CapabilityResultContextItem{
 		ToolName:     tr.ToolName,
 		Result:       &ToolResult{Success: tr.Result.Success, Data: map[string]interface{}{"summary": payload}},
@@ -234,6 +493,7 @@ func (tr *CapabilityResultContextItem) Compress() (ContextItem, error) {
 		LastAccessed: tr.LastAccessed,
 		Relevance:    tr.Relevance * 0.9,
 		PriorityVal:  tr.PriorityVal + 1,
+		derives:   &chain,
 	}, nil
 }
 
@@ -243,6 +503,37 @@ func (tr *CapabilityResultContextItem) Type() ContextItemType {
 
 func (tr *CapabilityResultContextItem) Age() time.Duration {
 	return time.Since(tr.LastAccessed)
+}
+
+func (tr *CapabilityResultContextItem) Derivation() *DerivationChain {
+	return tr.derives
+}
+
+func (tr *CapabilityResultContextItem) WithDerivation(chain DerivationChain) ContextItem {
+	copied := *tr
+	copied.derives = &chain
+	return &copied
+}
+
+func (tr *CapabilityResultContextItem) derivationOrEmpty() DerivationChain {
+	if tr.derives == nil {
+		return DerivationChain{Steps: []DerivationStep{}}
+	}
+	return tr.derives.Clone()
+}
+
+func cloneContextReference(ref *ContextReference) *ContextReference {
+	if ref == nil {
+		return nil
+	}
+	out := *ref
+	if len(ref.Metadata) > 0 {
+		out.Metadata = make(map[string]string, len(ref.Metadata))
+		for key, value := range ref.Metadata {
+			out.Metadata[key] = value
+		}
+	}
+	return &out
 }
 
 // ToolResultContextItem is a compatibility alias retained while tool-specific

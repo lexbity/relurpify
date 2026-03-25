@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,14 @@ type CompressionEvent struct {
 	CompressedSummaryTokens int       `json:"compressed_summary_tokens"`
 }
 
+// MergeConflictRecord tracks a conflict that occurred during context merge.
+type MergeConflictRecord struct {
+	Key              string        `json:"key"`
+	ConflictArea     string        `json:"conflict_area"` // "state", "variables", or "knowledge"
+	LosingValueHash  string        `json:"losing_value_hash"`
+	Timestamp        time.Time     `json:"timestamp"`
+}
+
 // Context acts as the in-memory “blackboard” shared by nodes inside a graph.
 // It separates information into three buckets:
 //   - state: durable facts that should be visible to all downstream nodes
@@ -43,11 +52,15 @@ type CompressionEvent struct {
 type Context struct {
 	mu                sync.RWMutex
 	state             map[string]interface{}
+	parentState       map[string]interface{}
 	variables         map[string]interface{}
+	parentVariables   map[string]interface{}
 	knowledge         map[string]interface{}
+	parentKnowledge   map[string]interface{}
 	history           []Interaction
 	compressedHistory []CompressedContext
 	compressionLog    []CompressionEvent
+	mergeConflicts    []MergeConflictRecord
 	interactionIDCtr  int
 	phase             string
 	maxHistory        int
@@ -73,11 +86,15 @@ type Context struct {
 func NewContext() *Context {
 	return &Context{
 		state:             make(map[string]interface{}),
+		parentState:       nil,
 		variables:         make(map[string]interface{}),
+		parentVariables:   nil,
 		knowledge:         make(map[string]interface{}),
+		parentKnowledge:   nil,
 		history:           make([]Interaction, 0),
 		compressedHistory: make([]CompressedContext, 0),
 		compressionLog:    make([]CompressionEvent, 0),
+		mergeConflicts:    make([]MergeConflictRecord, 0),
 		phase:             "planning",
 		maxHistory:        200,
 		maxSnapshot:       32,
@@ -105,9 +122,19 @@ func (c *Context) ExecutionPhase() string {
 
 // Get retrieves a value from the shared state.
 func (c *Context) Get(key string) (interface{}, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	v, ok := c.state[key]
+	if ok {
+		return v, true
+	}
+	if c.parentState != nil {
+		v, ok = c.parentState[key]
+		if ok {
+			v = deepCopyValue(v)
+			c.state[key] = v
+		}
+	}
 	return v, ok
 }
 
@@ -127,23 +154,32 @@ func (c *Context) StateSnapshot() map[string]interface{} {
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return deepCopyMap(c.state)
+	return deepCopyMap(c.materializedStateLocked())
 }
 
 // Set stores a value in the shared state.
 func (c *Context) Set(key string, value interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.ensureStateWritableLocked()
 	c.state[key] = value
 	c.dirtyState[key] = struct{}{}
 }
 
 // GetVariable returns a temporary variable.
 func (c *Context) GetVariable(key string) (interface{}, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	v, ok := c.variables[key]
+	if ok {
+		return v, true
+	}
+	if c.parentVariables != nil {
+		v, ok = c.parentVariables[key]
+		if ok {
+			v = deepCopyValue(v)
+			c.variables[key] = v
+		}
+	}
 	return v, ok
 }
 
@@ -151,7 +187,6 @@ func (c *Context) GetVariable(key string) (interface{}, bool) {
 func (c *Context) SetVariable(key string, value interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.ensureVariablesWritableLocked()
 	c.variables[key] = value
 	c.dirtyVariables[key] = struct{}{}
 }
@@ -207,15 +242,43 @@ func (c *Context) Merge(other *Context) {
 	c.ensureCompressedWritableLocked()
 	c.ensureLogWritableLocked()
 
-	for k, v := range other.state {
+	// Initialize merge conflicts list if not present
+	if c.mergeConflicts == nil {
+		c.mergeConflicts = []MergeConflictRecord{}
+	}
+
+	for k, v := range other.materializedStateLocked() {
+		var existing interface{}
+		var hasExisting bool
+		if existing, hasExisting = c.state[k]; hasExisting && !deepEqual(existing, v) {
+			// Conflict detected: both branches wrote different values for same key
+			c.recordMergeConflict(k, existing, v, "state")
+		}
 		c.state[k] = v
 		c.dirtyState[k] = struct{}{}
+		// Stamp merge_overwrite derivation if the new value is derivation-capable and there was a conflict
+		if hasExisting {
+			if item, isItem := v.(DerivationCapableContextItem); isItem {
+				chain := item.Derivation()
+				if chain != nil {
+					merged := chain.Derive("merge_overwrite", "context", 0.05, fmt.Sprintf("conflict on key %s", k))
+					updated := item.WithDerivation(merged)
+					c.state[k] = updated
+				}
+			}
+		}
 	}
-	for k, v := range other.variables {
+	for k, v := range other.materializedVariablesLocked() {
+		if existing, ok := c.variables[k]; ok && !deepEqual(existing, v) {
+			c.recordMergeConflict(k, existing, v, "variables")
+		}
 		c.variables[k] = v
 		c.dirtyVariables[k] = struct{}{}
 	}
-	for k, v := range other.knowledge {
+	for k, v := range other.materializedKnowledgeLocked() {
+		if existing, ok := c.knowledge[k]; ok && !deepEqual(existing, v) {
+			c.recordMergeConflict(k, existing, v, "knowledge")
+		}
 		c.knowledge[k] = v
 		c.dirtyKnowledge[k] = struct{}{}
 	}
@@ -298,9 +361,12 @@ func (c *Context) Clone() *Context {
 	defer c.mu.Unlock()
 
 	clone := NewContext()
-	clone.state = deepCopyMap(c.state)
-	clone.variables = deepCopyMap(c.variables)
-	clone.knowledge = deepCopyMap(c.knowledge)
+	clone.state = make(map[string]interface{})
+	clone.parentState = shallowCopyMap(c.materializedStateLocked())
+	clone.variables = make(map[string]interface{})
+	clone.parentVariables = shallowCopyMap(c.materializedVariablesLocked())
+	clone.knowledge = make(map[string]interface{})
+	clone.parentKnowledge = shallowCopyMap(c.materializedKnowledgeLocked())
 	clone.history = c.history
 	clone.compressedHistory = c.compressedHistory
 	clone.compressionLog = c.compressionLog
@@ -340,9 +406,9 @@ func (c *Context) Snapshot() *ContextSnapshot {
 	defer c.mu.RUnlock()
 
 	snapshot := &ContextSnapshot{
-		State:                deepCopyMap(c.state),
-		Variables:            deepCopyMap(c.variables),
-		Knowledge:            deepCopyMap(c.knowledge),
+		State:                deepCopyMap(c.materializedStateLocked()),
+		Variables:            deepCopyMap(c.materializedVariablesLocked()),
+		Knowledge:            deepCopyMap(c.materializedKnowledgeLocked()),
 		History:              append([]Interaction(nil), c.history...),
 		CompressedHistory:    append([]CompressedContext(nil), c.compressedHistory...),
 		CompressionLog:       append([]CompressionEvent(nil), c.compressionLog...),
@@ -362,8 +428,11 @@ func (c *Context) Restore(snapshot *ContextSnapshot) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.state = snapshot.State
+	c.parentState = nil
 	c.variables = snapshot.Variables
+	c.parentVariables = nil
 	c.knowledge = snapshot.Knowledge
+	c.parentKnowledge = nil
 	c.history = snapshot.History
 	c.compressedHistory = snapshot.CompressedHistory
 	c.compressionLog = snapshot.CompressionLog
@@ -385,9 +454,9 @@ func (c *Context) MarshalJSON() ([]byte, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return json.Marshal(&ContextSnapshot{
-		State:                c.state,
-		Variables:            c.variables,
-		Knowledge:            c.knowledge,
+		State:                c.materializedStateLocked(),
+		Variables:            c.materializedVariablesLocked(),
+		Knowledge:            c.materializedKnowledgeLocked(),
 		History:              c.history,
 		CompressedHistory:    c.compressedHistory,
 		CompressionLog:       c.compressionLog,
@@ -480,16 +549,36 @@ func NewContextFromSnapshot(snapshot *ContextSnapshot, registry *ObjectRegistry)
 	return ctx
 }
 
-// DirtyContextDelta summarizes mutations applied since the context was
-// created, cloned, restored, or explicitly reset.
-type DirtyContextDelta struct {
-	StateValues       map[string]interface{}
-	VariableValues    map[string]interface{}
-	KnowledgeValues   map[string]interface{}
+// BranchContextSideEffects captures branch mutations that the default parallel
+// merge path treats as conflicts rather than mergeable writes.
+type BranchContextSideEffects struct {
+	VariableWrites    map[string]interface{}
+	KnowledgeWrites   map[string]interface{}
 	HistoryChanged    bool
 	CompressedChanged bool
 	LogChanged        bool
 	PhaseChanged      bool
+}
+
+// BranchContextDelta captures the branch-local write set and non-mergeable
+// side-effect markers emitted by a cloned context.
+type BranchContextDelta struct {
+	StateWrites map[string]interface{}
+	SideEffects BranchContextSideEffects
+}
+
+// DirtyContextDelta is retained as a compatibility alias while the execution
+// layer migrates to explicit branch delta naming.
+type DirtyContextDelta = BranchContextDelta
+
+// BranchDelta reports the currently tracked branch-local mutations.
+func (c *Context) BranchDelta() BranchContextDelta {
+	if c == nil {
+		return BranchContextDelta{}
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.branchDeltaLocked(false)
 }
 
 // DirtyDelta reports the currently tracked mutations.
@@ -499,25 +588,181 @@ func (c *Context) DirtyDelta() DirtyContextDelta {
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	delta := DirtyContextDelta{
-		StateValues:       make(map[string]interface{}, len(c.dirtyState)),
-		VariableValues:    make(map[string]interface{}, len(c.dirtyVariables)),
-		KnowledgeValues:   make(map[string]interface{}, len(c.dirtyKnowledge)),
-		HistoryChanged:    c.historyDirty,
-		CompressedChanged: c.compressedDirty,
-		LogChanged:        c.compressionDirty,
-		PhaseChanged:      c.phaseDirty,
+	return c.branchDeltaLocked(true)
+}
+
+func (c *Context) branchDeltaLocked(detachValues bool) BranchContextDelta {
+	delta := BranchContextDelta{
+		SideEffects: BranchContextSideEffects{
+			HistoryChanged:    c.historyDirty,
+			CompressedChanged: c.compressedDirty,
+			LogChanged:        c.compressionDirty,
+			PhaseChanged:      c.phaseDirty,
+		},
 	}
-	for key := range c.dirtyState {
-		delta.StateValues[key] = deepCopyValue(c.state[key])
+	if len(c.dirtyState) > 0 {
+		delta.StateWrites = make(map[string]interface{}, len(c.dirtyState))
+		for key := range c.dirtyState {
+			delta.StateWrites[key] = branchDeltaValue(c.state[key], detachValues)
+		}
 	}
-	for key := range c.dirtyVariables {
-		delta.VariableValues[key] = deepCopyValue(c.variables[key])
+	if len(c.dirtyVariables) > 0 {
+		delta.SideEffects.VariableWrites = make(map[string]interface{}, len(c.dirtyVariables))
+		for key := range c.dirtyVariables {
+			delta.SideEffects.VariableWrites[key] = branchDeltaValue(c.variables[key], detachValues)
+		}
 	}
-	for key := range c.dirtyKnowledge {
-		delta.KnowledgeValues[key] = deepCopyValue(c.knowledge[key])
+	if len(c.dirtyKnowledge) > 0 {
+		delta.SideEffects.KnowledgeWrites = make(map[string]interface{}, len(c.dirtyKnowledge))
+		for key := range c.dirtyKnowledge {
+			delta.SideEffects.KnowledgeWrites[key] = branchDeltaValue(c.knowledge[key], detachValues)
+		}
 	}
 	return delta
+}
+
+type branchDeltaEntry struct {
+	label string
+	value any
+}
+
+// BranchDeltaEntry is one labeled branch delta collected during parallel execution.
+type BranchDeltaEntry struct {
+	Label string
+	Delta BranchContextDelta
+}
+
+// BranchDeltaSet accumulates labeled branch deltas before they are validated
+// and applied to a parent context.
+type BranchDeltaSet struct {
+	entries []BranchDeltaEntry
+}
+
+// NewBranchDeltaSet constructs an empty labeled branch-delta collection.
+func NewBranchDeltaSet(capacity int) *BranchDeltaSet {
+	if capacity < 0 {
+		capacity = 0
+	}
+	return &BranchDeltaSet{
+		entries: make([]BranchDeltaEntry, 0, capacity),
+	}
+}
+
+// Add records one labeled branch delta for later validation/application.
+func (s *BranchDeltaSet) Add(label string, delta BranchContextDelta) {
+	if s == nil {
+		return
+	}
+	if s.entries == nil {
+		s.entries = make([]BranchDeltaEntry, 0, 1)
+	}
+	s.entries = append(s.entries, BranchDeltaEntry{Label: label, Delta: delta})
+}
+
+// ApplyTo validates and applies the accumulated branch deltas to the parent context.
+func (s *BranchDeltaSet) ApplyTo(parent *Context) error {
+	if s == nil {
+		return nil
+	}
+	return parent.ApplyBranchDeltaSet(s)
+}
+
+// ApplyBranchDeltas validates and applies mergeable branch state writes while
+// rejecting non-mergeable branch side effects under the default policy.
+func (c *Context) ApplyBranchDeltas(branches map[string]BranchContextDelta) error {
+	if c == nil || len(branches) == 0 {
+		return nil
+	}
+	set := NewBranchDeltaSet(len(branches))
+	for label, delta := range branches {
+		set.Add(label, delta)
+	}
+	return c.ApplyBranchDeltaSet(set)
+}
+
+// ApplyBranchDeltaSet validates and applies mergeable branch state writes while
+// rejecting non-mergeable branch side effects under the default policy.
+func (c *Context) ApplyBranchDeltaSet(set *BranchDeltaSet) error {
+	if c == nil || set == nil || len(set.entries) == 0 {
+		return nil
+	}
+	totalStateWrites := 0
+	seenKeys := make(map[string]string)
+	var hasCollision bool
+	for _, entry := range set.entries {
+		label := entry.Label
+		delta := entry.Delta
+		if len(delta.SideEffects.VariableWrites) > 0 {
+			return fmt.Errorf("parallel branch merge conflict: %s changed context variables outside merge policy", label)
+		}
+		if len(delta.SideEffects.KnowledgeWrites) > 0 {
+			return fmt.Errorf("parallel branch merge conflict: %s changed context knowledge outside merge policy", label)
+		}
+		if delta.SideEffects.HistoryChanged || delta.SideEffects.CompressedChanged || delta.SideEffects.LogChanged || delta.SideEffects.PhaseChanged {
+			return fmt.Errorf("parallel branch merge conflict: %s changed interaction history outside merge policy", label)
+		}
+		totalStateWrites += len(delta.StateWrites)
+		for key := range delta.StateWrites {
+			if existingLabel, ok := seenKeys[key]; ok {
+				hasCollision = true
+				if existingLabel == "" {
+					seenKeys[key] = label
+				}
+				continue
+			}
+			seenKeys[key] = label
+		}
+	}
+	if totalStateWrites == 0 {
+		return nil
+	}
+	if !hasCollision {
+		c.applyMergedBranchStateWrites(set)
+		return nil
+	}
+	stateWrites := make(map[string]branchDeltaEntry, len(seenKeys))
+	for _, entry := range set.entries {
+		label := entry.Label
+		for key, value := range entry.Delta.StateWrites {
+			if existing, ok := stateWrites[key]; ok {
+				if !reflect.DeepEqual(existing.value, value) {
+					return fmt.Errorf("parallel branch merge conflict on state key %q between %s and %s", key, existing.label, label)
+				}
+				continue
+			}
+			stateWrites[key] = branchDeltaEntry{label: label, value: value}
+		}
+	}
+	c.applyMergedStateWrites(stateWrites)
+	return nil
+}
+
+func (c *Context) applyMergedStateWrites(stateWrites map[string]branchDeltaEntry) {
+	if c == nil || len(stateWrites) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ensureStateWritableLocked()
+	for key, entry := range stateWrites {
+		c.state[key] = entry.value
+		c.dirtyState[key] = struct{}{}
+	}
+}
+
+func (c *Context) applyMergedBranchStateWrites(set *BranchDeltaSet) {
+	if c == nil || set == nil || len(set.entries) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ensureStateWritableLocked()
+	for _, entry := range set.entries {
+		for key, value := range entry.Delta.StateWrites {
+			c.state[key] = value
+			c.dirtyState[key] = struct{}{}
+		}
+	}
 }
 
 func (c *Context) resetDirtyTrackingLocked() {
@@ -531,27 +776,21 @@ func (c *Context) resetDirtyTrackingLocked() {
 }
 
 func (c *Context) ensureStateWritableLocked() {
-	if !c.stateShared {
-		return
+	if c.state == nil {
+		c.state = make(map[string]interface{})
 	}
-	c.state = shallowCopyMap(c.state)
-	c.stateShared = false
 }
 
 func (c *Context) ensureVariablesWritableLocked() {
-	if !c.variablesShared {
-		return
+	if c.variables == nil {
+		c.variables = make(map[string]interface{})
 	}
-	c.variables = shallowCopyMap(c.variables)
-	c.variablesShared = false
 }
 
 func (c *Context) ensureKnowledgeWritableLocked() {
-	if !c.knowledgeShared {
-		return
+	if c.knowledge == nil {
+		c.knowledge = make(map[string]interface{})
 	}
-	c.knowledge = shallowCopyMap(c.knowledge)
-	c.knowledgeShared = false
 }
 
 func (c *Context) ensureHistoryWritableLocked() {
@@ -587,6 +826,48 @@ func shallowCopyMap(src map[string]interface{}) map[string]interface{} {
 		dst[k] = v
 	}
 	return dst
+}
+
+func (c *Context) materializedStateLocked() map[string]interface{} {
+	if c.parentState == nil {
+		return c.state
+	}
+	merged := shallowCopyMap(c.parentState)
+	if merged == nil {
+		merged = make(map[string]interface{}, len(c.state))
+	}
+	for key, value := range c.state {
+		merged[key] = value
+	}
+	return merged
+}
+
+func (c *Context) materializedVariablesLocked() map[string]interface{} {
+	if c.parentVariables == nil {
+		return c.variables
+	}
+	merged := shallowCopyMap(c.parentVariables)
+	if merged == nil {
+		merged = make(map[string]interface{}, len(c.variables))
+	}
+	for key, value := range c.variables {
+		merged[key] = value
+	}
+	return merged
+}
+
+func (c *Context) materializedKnowledgeLocked() map[string]interface{} {
+	if c.parentKnowledge == nil {
+		return c.knowledge
+	}
+	merged := shallowCopyMap(c.parentKnowledge)
+	if merged == nil {
+		merged = make(map[string]interface{}, len(c.knowledge))
+	}
+	for key, value := range c.knowledge {
+		merged[key] = value
+	}
+	return merged
 }
 
 func deepCopyMap(src map[string]interface{}) map[string]interface{} {
@@ -631,6 +912,13 @@ func deepCopyValue(value interface{}) interface{} {
 	default:
 		return value
 	}
+}
+
+func branchDeltaValue(value interface{}, detach bool) interface{} {
+	if !detach {
+		return value
+	}
+	return deepCopyValue(value)
 }
 
 // AddInteraction appends to the conversation history.
@@ -700,16 +988,25 @@ func (c *Context) smartTruncateHistoryLocked() {
 func (c *Context) SetKnowledge(key string, value interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.ensureKnowledgeWritableLocked()
 	c.knowledge[key] = value
 	c.dirtyKnowledge[key] = struct{}{}
 }
 
 // GetKnowledge retrieves derived info.
 func (c *Context) GetKnowledge(key string) (interface{}, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	val, ok := c.knowledge[key]
+	if ok {
+		return val, true
+	}
+	if c.parentKnowledge != nil {
+		val, ok = c.parentKnowledge[key]
+		if ok {
+			val = deepCopyValue(val)
+			c.knowledge[key] = val
+		}
+	}
 	return val, ok
 }
 
@@ -836,4 +1133,49 @@ type CompressionStats struct {
 	CompressionEvents           int
 	CurrentHistorySize          int
 	CompressedChunks            int
+}
+
+// recordMergeConflict records a merge conflict for later inspection
+func (c *Context) recordMergeConflict(key string, losingValue, winningValue interface{}, area string) {
+	record := MergeConflictRecord{
+		Key:              key,
+		ConflictArea:     area,
+		LosingValueHash:  hashValue(losingValue),
+		Timestamp:        time.Now().UTC(),
+	}
+	c.mergeConflicts = append(c.mergeConflicts, record)
+}
+
+// MergeConflicts returns all recorded merge conflicts
+func (c *Context) MergeConflicts() []MergeConflictRecord {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if len(c.mergeConflicts) == 0 {
+		return nil
+	}
+	conflicts := make([]MergeConflictRecord, len(c.mergeConflicts))
+	copy(conflicts, c.mergeConflicts)
+	return conflicts
+}
+
+// hashValue computes a simple hash of a value for conflict logging
+func hashValue(v interface{}) string {
+	if v == nil {
+		return "nil"
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("unhashable:%T", v)
+	}
+	// Simple approach: take first 16 chars of JSON representation
+	s := string(data)
+	if len(s) > 16 {
+		return s[:16]
+	}
+	return s
+}
+
+// deepEqual checks if two values are deeply equal
+func deepEqual(a, b interface{}) bool {
+	return reflect.DeepEqual(a, b)
 }

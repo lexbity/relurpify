@@ -7,6 +7,17 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
+// AnchorRef mirrors the retrieval.AnchorRef type to avoid import cycles.
+// This represents a reference to a semantic anchor found to be stale (drifted or superseded).
+type AnchorRef struct {
+	AnchorID   string `json:"anchor_id"`
+	Term       string `json:"term"`
+	Definition string `json:"definition"`
+	Class      string `json:"class"`
+	Active     bool   `json:"active"`
+	CreatedAt  string `json:"created_at"`
+}
+
 // DeclarativeMemoryKind classifies durable fact-like records.
 type DeclarativeMemoryKind string
 
@@ -44,6 +55,7 @@ type DeclarativeMemoryRecord struct {
 	Verified      bool
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	StaleAnchors  []AnchorRef `json:"-"`  // populated on read if bound anchors have drifted/superseded status
 }
 
 // ProceduralMemoryRecord stores reusable executable routines and metadata.
@@ -67,6 +79,7 @@ type ProceduralMemoryRecord struct {
 	ReuseCount              int
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
+	StaleAnchors            []AnchorRef `json:"-"`  // populated on read if bound anchors have drifted/superseded status
 }
 
 // DeclarativeMemoryQuery supports bounded retrieval of fact-like memory.

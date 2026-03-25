@@ -42,6 +42,21 @@ func (s stubRetriever) Retrieve(ctx context.Context, query string, limit int) ([
 	return append([]core.MemoryRecordEnvelope{}, s.results...), nil
 }
 
+type stubPublishedRetriever struct {
+	publication *graph.MemoryRetrievalPublication
+}
+
+func (s stubPublishedRetriever) Retrieve(ctx context.Context, query string, limit int) ([]core.MemoryRecordEnvelope, error) {
+	if s.publication == nil {
+		return nil, nil
+	}
+	return append([]core.MemoryRecordEnvelope{}, s.publication.Results...), nil
+}
+
+func (s stubPublishedRetriever) RetrievePublication(ctx context.Context, query string, limit int) (*graph.MemoryRetrievalPublication, error) {
+	return s.publication, nil
+}
+
 type stubHydrator struct {
 	values map[string]any
 }
@@ -76,7 +91,7 @@ func TestSummarizeContextNodeWritesSummaryAndArtifactReference(t *testing.T) {
 func TestRetrieveDeclarativeMemoryNodeBoundsStructuredResults(t *testing.T) {
 	node := graph.NewRetrieveDeclarativeMemoryNode("retrieve", stubRetriever{
 		results: []core.MemoryRecordEnvelope{
-			{Key: "a", MemoryClass: core.MemoryClassDeclarative, Scope: "project", Summary: "one"},
+			{Key: "a", MemoryClass: core.MemoryClassDeclarative, Scope: "project", Summary: "one", Text: "retrieved one", Source: "retrieval", RecordID: "doc:1", Kind: "document"},
 			{Key: "b", MemoryClass: core.MemoryClassDeclarative, Scope: "project", Summary: "two"},
 			{Key: "c", MemoryClass: core.MemoryClassDeclarative, Scope: "project", Summary: "three"},
 		},
@@ -96,6 +111,23 @@ func TestRetrieveDeclarativeMemoryNodeBoundsStructuredResults(t *testing.T) {
 	results, ok := payload["results"].([]core.MemoryRecordEnvelope)
 	require.True(t, ok)
 	require.Len(t, results, 2)
+
+	rawMixed, ok := state.Get("graph.declarative_memory_payload")
+	require.True(t, ok)
+	mixedPayload, ok := rawMixed.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "find memory", mixedPayload["query"])
+	mixedResults, ok := mixedPayload["results"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, mixedResults, 2)
+	require.Equal(t, "retrieval", mixedResults[0]["source"])
+	require.Equal(t, "doc:1", mixedResults[0]["record_id"])
+	rawRefs, ok := state.Get("graph.declarative_memory_refs")
+	require.True(t, ok)
+	refs, ok := rawRefs.([]core.ContextReference)
+	require.True(t, ok)
+	require.Len(t, refs, 2)
+	require.Equal(t, core.ContextReferenceRetrievalEvidence, refs[0].Kind)
 }
 
 func TestCheckpointNodePersistsCheckpointAndStateReference(t *testing.T) {
@@ -241,7 +273,7 @@ func TestPersistenceWriterNodeSkipsProceduralRoutineWithoutVerification(t *testi
 func TestRetrieveProceduralMemoryNodeBoundsStructuredResults(t *testing.T) {
 	node := graph.NewRetrieveProceduralMemoryNode("retrieve", stubRetriever{
 		results: []core.MemoryRecordEnvelope{
-			{Key: "routine.a", MemoryClass: core.MemoryClassProcedural, Scope: "project", Summary: "one"},
+			{Key: "routine.a", MemoryClass: core.MemoryClassProcedural, Scope: "project", Summary: "one", Text: "routine one", Source: "runtime_memory", RecordID: "routine.a", Kind: "routine"},
 			{Key: "routine.b", MemoryClass: core.MemoryClassProcedural, Scope: "project", Summary: "two"},
 		},
 	})
@@ -260,6 +292,74 @@ func TestRetrieveProceduralMemoryNodeBoundsStructuredResults(t *testing.T) {
 	results, ok := payload["results"].([]core.MemoryRecordEnvelope)
 	require.True(t, ok)
 	require.Len(t, results, 1)
+
+	rawMixed, ok := state.Get("graph.procedural_memory_payload")
+	require.True(t, ok)
+	mixedPayload, ok := rawMixed.(map[string]any)
+	require.True(t, ok)
+	mixedResults, ok := mixedPayload["results"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, mixedResults, 1)
+	require.Equal(t, "runtime_memory", mixedResults[0]["source"])
+	rawRefs, ok := state.Get("graph.procedural_memory_refs")
+	require.True(t, ok)
+	refs, ok := rawRefs.([]core.ContextReference)
+	require.True(t, ok)
+	require.Len(t, refs, 1)
+	require.Equal(t, core.ContextReferenceRuntimeMemory, refs[0].Kind)
+}
+
+func TestRetrieveDeclarativeMemoryNodePrefersPublishedRetrieverShape(t *testing.T) {
+	node := graph.NewRetrieveDeclarativeMemoryNode("retrieve", stubPublishedRetriever{
+		publication: &graph.MemoryRetrievalPublication{
+			Query: "find memory",
+			Results: []core.MemoryRecordEnvelope{{
+				Key:         "fact-1",
+				MemoryClass: core.MemoryClassDeclarative,
+				Scope:       "project",
+				Summary:     "published fact",
+			}},
+			References: []core.MemoryReference{{
+				MemoryClass: core.MemoryClassDeclarative,
+				Scope:       "project",
+				RecordKey:   "fact-1",
+				Summary:     "published fact",
+			}},
+			Payload: map[string]any{
+				"query": "find memory",
+				"results": []map[string]any{{
+					"summary": "published fact",
+					"source":  "published",
+				}},
+			},
+			Refs: []core.ContextReference{{
+				Kind: core.ContextReferenceRuntimeMemory,
+				ID:   "fact-1",
+			}},
+		},
+	})
+	state := core.NewContext()
+	state.Set("task.instruction", "find memory")
+
+	result, err := node.Execute(context.Background(), state)
+	require.NoError(t, err)
+	require.True(t, result.Success)
+
+	rawPayload, ok := state.Get("graph.declarative_memory_payload")
+	require.True(t, ok)
+	payload, ok := rawPayload.(map[string]any)
+	require.True(t, ok)
+	mixedResults, ok := payload["results"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, mixedResults, 1)
+	require.Equal(t, "published", mixedResults[0]["source"])
+
+	rawRefs, ok := state.Get("graph.declarative_memory_refs")
+	require.True(t, ok)
+	refs, ok := rawRefs.([]core.ContextReference)
+	require.True(t, ok)
+	require.Len(t, refs, 1)
+	require.Equal(t, "fact-1", refs[0].ID)
 }
 
 func TestHydrateContextNodeWritesHydratedValues(t *testing.T) {
