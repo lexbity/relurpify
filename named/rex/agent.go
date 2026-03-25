@@ -11,8 +11,8 @@ import (
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/rex/classify"
 	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
 	"github.com/lexcodex/relurpify/named/rex/delegates"
@@ -33,6 +33,7 @@ type Agent struct {
 	RexConfig   rexconfig.Config
 	Delegates   *delegates.Registry
 	Runtime     *rexruntime.Manager
+	Observer    state.ExecutionObserver
 	LastProof   proof.ProofSurface
 }
 
@@ -88,6 +89,7 @@ func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 
 func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Context) (*core.Result, error) {
 	var execErr error
+	var result *core.Result
 	if stateCtx == nil {
 		stateCtx = core.NewContext()
 	}
@@ -99,6 +101,15 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 	stateCtx.Set("rex.workflow_id", identity.WorkflowID)
 	stateCtx.Set("rex.run_id", identity.RunID)
 	stateCtx.Set("rex.route", decision.Family)
+	if a.Observer != nil {
+		if err := a.Observer.BeforeExecute(ctx, identity.WorkflowID, identity.RunID, task, stateCtx); err != nil {
+			execErr = err
+			return nil, err
+		}
+		defer func() {
+			_ = a.Observer.AfterExecute(ctx, identity.WorkflowID, identity.RunID, task, stateCtx, result, execErr)
+		}()
+	}
 	finishRuntime := a.Runtime.BeginExecution(identity.WorkflowID, identity.RunID)
 	defer func() {
 		finishRuntime(execErr)
@@ -138,12 +149,16 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 			}
 		}
 	}
+	if err := enforceCapabilityProjection(stateCtx, decision, task); err != nil {
+		execErr = err
+		return nil, err
+	}
 	delegate, err := a.Delegates.Resolve(execPlan)
 	if err != nil {
 		execErr = err
 		return nil, err
 	}
-	result, err := delegate.Execute(ctx, executionTask, stateCtx)
+	result, err = delegate.Execute(ctx, executionTask, stateCtx)
 	completion := proof.EvaluateCompletion(decision, class, stateCtx)
 	artifactKinds := []string{"rex.proof_surface", "rex.action_log", "rex.completion", "rex.verification_policy", "rex.success_gate"}
 	if verification := proof.VerificationEvidence(stateCtx); verification.EvidencePresent {

@@ -40,7 +40,7 @@ func testEnv(t *testing.T) agentenv.AgentEnvironment {
 		Model:    stubModel{},
 		Registry: capability.NewRegistry(),
 		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
-		Config: &core.Config{Name: "rex-test", Model: "stub", MaxIterations: 1},
+		Config:   &core.Config{Name: "rex-test", Model: "stub", MaxIterations: 1},
 	}
 }
 
@@ -243,5 +243,25 @@ func TestAgentExecutePersistsContextExpansionArtifactWhenWorkflowRetrievalEnable
 	}
 	if !found {
 		t.Fatalf("expected rex.context_expansion artifact, got %+v", artifacts)
+	}
+}
+
+func TestAgentExecuteRejectsCapabilityProjectionThatBlocksRequiredCapability(t *testing.T) {
+	env := testRuntimeEnv(t)
+	agent := New(env)
+	state := core.NewContext()
+	state.Set("fmp.capability_projection", core.CapabilityEnvelope{
+		AllowedCapabilityIDs: []string{string(core.CapabilityExecute)},
+		AllowedTaskClasses:   []string{"agent.run"},
+	})
+
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "task-1",
+		Instruction: "write code",
+		Type:        core.TaskTypeCodeGeneration,
+		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": true},
+	}, state)
+	if err == nil {
+		t.Fatal("Execute() error = nil, want capability projection rejection")
 	}
 }

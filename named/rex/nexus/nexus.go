@@ -21,6 +21,10 @@ type Projection struct {
 	LastProof      proof.ProofSurface `json:"last_proof"`
 	WorkflowID     string             `json:"workflow_id,omitempty"`
 	RunID          string             `json:"run_id,omitempty"`
+	// Phase 7.3: DR metadata for federation health summaries
+	FailoverReady  bool               `json:"failover_ready,omitempty"`
+	RecoveryState  string             `json:"recovery_state,omitempty"`
+	RuntimeVersion string             `json:"runtime_version,omitempty"`
 }
 
 type Registration struct {
@@ -121,7 +125,7 @@ func (a *Adapter) AdminSnapshot(ctx context.Context) (AdminSnapshot, error) {
 // BuildProjection creates a Nexus-managed runtime projection.
 func BuildProjection(manager *runtime.Manager, surface proof.ProofSurface) Projection {
 	details := manager.Details()
-	return Projection{
+	projection := Projection{
 		Health:        details.Health,
 		ActiveWork:    details.ActiveWork,
 		QueueDepth:    details.QueueDepth,
@@ -131,6 +135,13 @@ func BuildProjection(manager *runtime.Manager, surface proof.ProofSurface) Proje
 		WorkflowID:    details.LastWorkflowID,
 		RunID:         details.LastRunID,
 	}
+
+	// Phase 7.3: Include DR metadata for federation health summaries
+	// Mark as failover-ready if active work is running
+	projection.FailoverReady = details.ActiveWork > 0
+	projection.RecoveryState = strings.ToLower(strings.TrimSpace(string(details.Health)))
+
+	return projection
 }
 
 func firstStructuredContent(result *core.ResourceReadResult) map[string]any {
