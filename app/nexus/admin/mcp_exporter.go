@@ -33,8 +33,11 @@ func NewMCPExporter(service AdminService) *MCPExporter {
 			{Name: "nexus.nodes.set_capabilities", Description: "Replace the approved capabilities for an enrolled node", Schema: mustSchema(updateNodeCapabilitiesArgs{}), MinScope: "nexus:admin", Handler: handleUpdateNodeCapabilities},
 			{Name: "nexus.nodes.revoke", Description: "Revoke an enrolled node", Schema: mustSchema(revokeNodeArgs{}), MinScope: "nexus:admin", Handler: handleRevokeNode},
 			{Name: "nexus.gateway.list_events", Description: "List gateway event counts", Schema: mustSchema(listEventsArgs{}), MinScope: "nexus:observer", Handler: handleListEvents},
+			{Name: "nexus.runtime.describe_rex", Description: "Describe the managed Rex runtime", Schema: mustSchema(describeRexRuntimeArgs{}), MinScope: "nexus:observer", Handler: handleDescribeRexRuntime},
+			{Name: "nexus.runtime.read_rex_admin_snapshot", Description: "Read the Rex admin snapshot", Schema: mustSchema(readRexAdminSnapshotArgs{}), MinScope: "nexus:observer", Handler: handleReadRexAdminSnapshot},
 			{Name: "nexus.fmp.list_continuations", Description: "List tenant-scoped FMP continuations", Schema: mustSchema(listFMPContinuationsArgs{}), MinScope: "nexus:observer", Handler: handleListFMPContinuations},
 			{Name: "nexus.fmp.read_audit", Description: "Read tenant-scoped FMP audit events for a lineage", Schema: mustSchema(readFMPContinuationAuditArgs{}), MinScope: "nexus:observer", Handler: handleReadFMPContinuationAudit},
+			{Name: "nexus.fmp.verify_audit", Description: "Verify the tamper-evident FMP audit chain for a lineage", Schema: mustSchema(verifyFMPAuditTrailArgs{}), MinScope: "nexus:observer", Handler: handleVerifyFMPAuditTrail},
 			{Name: "nexus.fmp.list_trust_bundles", Description: "List configured mesh trust bundles", Schema: mustSchema(listFMPTrustBundlesArgs{}), MinScope: "nexus:admin:global", Handler: handleListFMPTrustBundles},
 			{Name: "nexus.fmp.upsert_trust_bundle", Description: "Create or update a mesh trust bundle", Schema: mustSchema(upsertFMPTrustBundleArgs{}), MinScope: "nexus:admin:global", Handler: handleUpsertFMPTrustBundle},
 			{Name: "nexus.fmp.list_boundary_policies", Description: "List configured FMP boundary policies", Schema: mustSchema(listFMPBoundaryPoliciesArgs{}), MinScope: "nexus:admin:global", Handler: handleListFMPBoundaryPolicies},
@@ -52,6 +55,16 @@ func NewMCPExporter(service AdminService) *MCPExporter {
 			{Name: "nexus.tokens.issue", Description: "Issue a bearer token", Schema: mustSchema(issueTokenArgs{}), MinScope: "nexus:admin", Handler: handleIssueToken},
 			{Name: "nexus.tokens.revoke", Description: "Revoke a bearer token", Schema: mustSchema(revokeTokenArgs{}), MinScope: "nexus:admin", Handler: handleRevokeToken},
 			{Name: "nexus.policy.set_rule_enabled", Description: "Enable or disable a policy rule", Schema: mustSchema(setPolicyRuleEnabledArgs{}), MinScope: "nexus:admin", Handler: handleSetPolicyRuleEnabled},
+			// Phase 6.4: Compatibility Window Management
+			{Name: "nexus.fmp.list_compatibility_windows", Description: "List version compatibility windows", Schema: mustSchema(listFMPCompatibilityWindowsArgs{}), MinScope: "nexus:admin:global", Handler: handleListFMPCompatibilityWindows},
+			{Name: "nexus.fmp.set_compatibility_window", Description: "Set a version compatibility window", Schema: mustSchema(setFMPCompatibilityWindowArgs{}), MinScope: "nexus:admin:global", Handler: handleSetFMPCompatibilityWindow},
+			{Name: "nexus.fmp.delete_compatibility_window", Description: "Delete a version compatibility window", Schema: mustSchema(deleteFMPCompatibilityWindowArgs{}), MinScope: "nexus:admin:global", Handler: handleDeleteFMPCompatibilityWindow},
+			// Phase 6.5: Circuit Breaker Management
+			{Name: "nexus.fmp.list_circuit_breakers", Description: "List circuit breaker status per trust domain", Schema: mustSchema(listFMPCircuitBreakersArgs{}), MinScope: "nexus:admin:global", Handler: handleListFMPCircuitBreakers},
+			{Name: "nexus.fmp.set_circuit_breaker_config", Description: "Configure a circuit breaker for a trust domain", Schema: mustSchema(setFMPCircuitBreakerConfigArgs{}), MinScope: "nexus:admin:global", Handler: handleSetFMPCircuitBreakerConfig},
+			{Name: "nexus.fmp.reset_circuit_breaker", Description: "Reset a circuit breaker to closed state", Schema: mustSchema(resetFMPCircuitBreakerArgs{}), MinScope: "nexus:admin:global", Handler: handleResetFMPCircuitBreaker},
+			// Phase 7.2: SLO Signals
+			{Name: "nexus.rex.read_slo_signals", Description: "Read Rex control plane SLO signals", Schema: mustSchema(readRexSLOSignalsArgs{}), MinScope: "nexus:admin:global", Handler: handleReadRexSLOSignals},
 		},
 	}
 }
@@ -116,8 +129,11 @@ func (e *MCPExporter) ListResources(context.Context) ([]protocol.Resource, error
 		{URI: "nexus://tokens/list", Name: "tokens.list", MIMEType: "application/json"},
 		{URI: "nexus://policy/rules", Name: "policy.rules", MIMEType: "application/json"},
 		{URI: "nexus://gateway/events", Name: "gateway.events", MIMEType: "application/json"},
+		{URI: "nexus://runtime/rex", Name: "runtime.rex", MIMEType: "application/json"},
+		{URI: "nexus://runtime/rex_admin_snapshot", Name: "runtime.rex_admin_snapshot", MIMEType: "application/json"},
 		{URI: "nexus://fmp/continuations", Name: "fmp.continuations", MIMEType: "application/json"},
 		{URI: "nexus://fmp/audit", Name: "fmp.audit", MIMEType: "application/json"},
+		{URI: "nexus://fmp/audit_verification", Name: "fmp.audit_verification", MIMEType: "application/json"},
 		{URI: "nexus://fmp/trust_bundles", Name: "fmp.trust_bundles", MIMEType: "application/json"},
 		{URI: "nexus://fmp/boundary_policies", Name: "fmp.boundary_policies", MIMEType: "application/json"},
 		{URI: "nexus://fmp/tenant_exports", Name: "fmp.tenant_exports", MIMEType: "application/json"},
@@ -228,6 +244,22 @@ func (e *MCPExporter) ReadResource(ctx context.Context, uri string) (*protocol.R
 			return nil, normalizeAdminError(err)
 		}
 		return jsonResource(uri, result)
+	case "runtime/rex":
+		result, err := e.service.DescribeRexRuntime(ctx, DescribeRexRuntimeRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "runtime/rex_admin_snapshot":
+		result, err := e.service.ReadRexAdminSnapshot(ctx, ReadRexAdminSnapshotRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
 	case "fmp/continuations":
 		result, err := e.service.ListFMPContinuations(ctx, ListFMPContinuationsRequest{
 			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
@@ -239,6 +271,16 @@ func (e *MCPExporter) ReadResource(ctx context.Context, uri string) (*protocol.R
 		return jsonResource(uri, result)
 	case "fmp/audit":
 		result, err := e.service.ReadFMPContinuationAudit(ctx, ReadFMPContinuationAuditRequest{
+			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
+			LineageID:    strings.TrimSpace(parsed.Query().Get("lineage_id")),
+			Limit:        parseInt(parsed.Query().Get("limit")),
+		})
+		if err != nil {
+			return nil, normalizeAdminError(err)
+		}
+		return jsonResource(uri, result)
+	case "fmp/audit_verification":
+		result, err := e.service.VerifyFMPAuditTrail(ctx, VerifyFMPAuditTrailRequest{
 			AdminRequest: requestEnvelope(principal, APIVersionV1Alpha1, tenantID),
 			LineageID:    strings.TrimSpace(parsed.Query().Get("lineage_id")),
 			Limit:        parseInt(parsed.Query().Get("limit")),

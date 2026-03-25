@@ -52,6 +52,12 @@ type readFMPContinuationAuditArgs struct {
 	Limit      int    `json:"limit,omitempty"`
 }
 
+type verifyFMPAuditTrailArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+	LineageID  string `json:"lineage_id"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
 type listFMPTrustBundlesArgs struct {
 	APIVersion string `json:"api_version,omitempty"`
 	Cursor     string `json:"cursor,omitempty"`
@@ -167,10 +173,64 @@ type revokeTokenArgs struct {
 	TokenID    string `json:"token_id"`
 }
 
+type describeRexRuntimeArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+}
+
+type readRexAdminSnapshotArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+}
+
 type setPolicyRuleEnabledArgs struct {
 	APIVersion string `json:"api_version,omitempty"`
 	RuleID     string `json:"rule_id"`
 	Enabled    bool   `json:"enabled"`
+}
+
+// Phase 6.4: Compatibility Window args
+
+type listFMPCompatibilityWindowsArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+}
+
+type setFMPCompatibilityWindowArgs struct {
+	APIVersion        string  `json:"api_version,omitempty"`
+	ContextClass      string  `json:"context_class"`
+	MinSchemaVersion  string  `json:"min_schema_version,omitempty"`
+	MaxSchemaVersion  string  `json:"max_schema_version,omitempty"`
+	MinRuntimeVersion string  `json:"min_runtime_version,omitempty"`
+	MaxRuntimeVersion string  `json:"max_runtime_version,omitempty"`
+}
+
+type deleteFMPCompatibilityWindowArgs struct {
+	APIVersion   string `json:"api_version,omitempty"`
+	ContextClass string `json:"context_class"`
+}
+
+// Phase 6.5: Circuit Breaker args
+
+type listFMPCircuitBreakersArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
+}
+
+type setFMPCircuitBreakerConfigArgs struct {
+	APIVersion            string  `json:"api_version,omitempty"`
+	TrustDomain           string  `json:"trust_domain"`
+	ErrorThreshold        float64 `json:"error_threshold"`
+	MinRequests           int     `json:"min_requests"`
+	WindowDurationSec     int     `json:"window_duration_sec,omitempty"`
+	RecoveryDurationSec   int     `json:"recovery_duration_sec,omitempty"`
+}
+
+type resetFMPCircuitBreakerArgs struct {
+	APIVersion  string `json:"api_version,omitempty"`
+	TrustDomain string `json:"trust_domain"`
+}
+
+// Phase 7.2: SLO Signals args
+
+type readRexSLOSignalsArgs struct {
+	APIVersion string `json:"api_version,omitempty"`
 }
 
 func handleListPendingPairings(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
@@ -269,6 +329,32 @@ func handleListEvents(ctx context.Context, svc AdminService, principal core.Auth
 	}
 }
 
+func handleDescribeRexRuntime(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, _ map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.DescribeRexRuntime(ctx, DescribeRexRuntimeRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal))})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleReadRexAdminSnapshot(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, _ map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ReadRexAdminSnapshot(ctx, ReadRexAdminSnapshotRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal))})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
 func handleListFMPContinuations(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
 	switch version {
 	case APIVersionV1Alpha1:
@@ -289,6 +375,23 @@ func handleReadFMPContinuationAudit(ctx context.Context, svc AdminService, princ
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.ReadFMPContinuationAudit(ctx, ReadFMPContinuationAuditRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			LineageID:    stringArg(args, "lineage_id", ""),
+			Limit:        intArg(args, "limit", 0),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleVerifyFMPAuditTrail(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.VerifyFMPAuditTrail(ctx, VerifyFMPAuditTrailRequest{
 			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
 			LineageID:    stringArg(args, "lineage_id", ""),
 			Limit:        intArg(args, "limit", 0),
@@ -599,6 +702,131 @@ func handleSetPolicyRuleEnabled(ctx context.Context, svc AdminService, principal
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.SetPolicyRuleEnabled(ctx, SetPolicyRuleEnabledRequest{AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)), RuleID: stringArg(args, "rule_id", ""), Enabled: boolArg(args, "enabled", false)})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+// Phase 6.4: Compatibility Window handlers
+
+func handleListFMPCompatibilityWindows(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ListFMPCompatibilityWindows(ctx, ListFMPCompatibilityWindowsRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleSetFMPCompatibilityWindow(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.SetFMPCompatibilityWindow(ctx, SetFMPCompatibilityWindowRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			Window: FMPCompatibilityWindow{
+				ContextClass:      stringArg(args, "context_class", ""),
+				MinSchemaVersion:  stringArg(args, "min_schema_version", ""),
+				MaxSchemaVersion:  stringArg(args, "max_schema_version", ""),
+				MinRuntimeVersion: stringArg(args, "min_runtime_version", ""),
+				MaxRuntimeVersion: stringArg(args, "max_runtime_version", ""),
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleDeleteFMPCompatibilityWindow(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.DeleteFMPCompatibilityWindow(ctx, DeleteFMPCompatibilityWindowRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			ContextClass: stringArg(args, "context_class", ""),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+// Phase 6.5: Circuit Breaker handlers
+
+func handleListFMPCircuitBreakers(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ListFMPCircuitBreakers(ctx, ListFMPCircuitBreakersRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleSetFMPCircuitBreakerConfig(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.SetFMPCircuitBreakerConfig(ctx, SetFMPCircuitBreakerConfigRequest{
+			AdminRequest:          requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			TrustDomain:           stringArg(args, "trust_domain", ""),
+			ErrorThreshold:        floatArg(args, "error_threshold", 0.5),
+			MinRequests:           intArg(args, "min_requests", 10),
+			WindowDurationSec:     intArg(args, "window_duration_sec", 60),
+			RecoveryDurationSec:   intArg(args, "recovery_duration_sec", 30),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+func handleResetFMPCircuitBreaker(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ResetFMPCircuitBreaker(ctx, ResetFMPCircuitBreakerRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			TrustDomain:  stringArg(args, "trust_domain", ""),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return structuredResult(result)
+	default:
+		return nil, AdminError{Code: AdminErrorInvalidArgument, Message: "unsupported API version", Detail: map[string]any{"api_version": version}}
+	}
+}
+
+// Phase 7.2: SLO Signals handler
+
+func handleReadRexSLOSignals(ctx context.Context, svc AdminService, principal core.AuthenticatedPrincipal, version string, args map[string]any) (*protocol.CallToolResult, error) {
+	switch version {
+	case APIVersionV1Alpha1:
+		result, err := svc.ReadRexSLOSignals(ctx, ReadRexSLOSignalsRequest{
+			AdminRequest: requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+		})
 		if err != nil {
 			return nil, err
 		}

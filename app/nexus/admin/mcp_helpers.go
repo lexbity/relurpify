@@ -246,6 +246,24 @@ func boolArg(args map[string]any, key string, fallback bool) bool {
 	return value
 }
 
+func floatArg(args map[string]any, key string, fallback float64) float64 {
+	if args == nil {
+		return fallback
+	}
+	switch value := args[key].(type) {
+	case float64:
+		return value
+	case float32:
+		return float64(value)
+	case int:
+		return float64(value)
+	case int64:
+		return float64(value)
+	default:
+		return fallback
+	}
+}
+
 func parseInt(value string) int {
 	parsed, _ := strconv.Atoi(strings.TrimSpace(value))
 	return parsed

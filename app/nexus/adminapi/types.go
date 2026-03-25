@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 )
 
 const APIVersionV1Alpha1 = "v1alpha1"
@@ -97,18 +98,35 @@ type FMPContinuationInfo struct {
 
 type HealthResult struct {
 	AdminResult
-	Online           bool                  `json:"online"`
-	PID              int                   `json:"pid"`
-	BindAddr         string                `json:"bind_addr"`
-	UptimeSeconds    int64                 `json:"uptime_seconds"`
-	TenantID         string                `json:"tenant_id"`
-	LastSeq          uint64                `json:"last_seq"`
-	PairedNodes      []core.NodeDescriptor `json:"paired_nodes"`
-	PendingPairings  []PendingPairingInfo  `json:"pending_pairings"`
-	Channels         []ChannelInfo         `json:"channels"`
-	ActiveSessions   []SessionInfo         `json:"active_sessions"`
-	SecurityWarnings []string              `json:"security_warnings"`
-	EventCounts      map[string]uint64     `json:"event_counts"`
+	Online            bool                  `json:"online"`
+	PID               int                   `json:"pid"`
+	BindAddr          string                `json:"bind_addr"`
+	UptimeSeconds     int64                 `json:"uptime_seconds"`
+	TenantID          string                `json:"tenant_id"`
+	LastSeq           uint64                `json:"last_seq"`
+	PairedNodes       []core.NodeDescriptor `json:"paired_nodes"`
+	PendingPairings   []PendingPairingInfo  `json:"pending_pairings"`
+	Channels          []ChannelInfo         `json:"channels"`
+	ActiveSessions    []SessionInfo         `json:"active_sessions"`
+	SecurityWarnings  []string              `json:"security_warnings"`
+	ReadinessWarnings []string              `json:"readiness_warnings,omitempty"`
+	EventCounts       map[string]uint64     `json:"event_counts"`
+	RexRuntime        *rexnexus.Projection  `json:"rex_runtime,omitempty"`
+}
+
+type DescribeRexRuntimeRequest struct{ AdminRequest }
+
+type DescribeRexRuntimeResult struct {
+	AdminResult
+	Registration rexnexus.Registration `json:"registration"`
+	Runtime      rexnexus.Projection   `json:"runtime"`
+}
+
+type ReadRexAdminSnapshotRequest struct{ AdminRequest }
+
+type ReadRexAdminSnapshotResult struct {
+	AdminResult
+	Snapshot rexnexus.AdminSnapshot `json:"snapshot"`
 }
 
 type ListNodesRequest struct {
@@ -407,8 +425,22 @@ type ReadFMPContinuationAuditRequest struct {
 
 type ReadFMPContinuationAuditResult struct {
 	AdminResult
-	Lineage *FMPContinuationInfo  `json:"lineage,omitempty"`
-	Events  []core.FrameworkEvent `json:"events"`
+	Lineage      *FMPContinuationInfo         `json:"lineage,omitempty"`
+	Events       []core.FrameworkEvent        `json:"events"`
+	AuditChain   []core.AuditChainEntry       `json:"audit_chain,omitempty"`
+	Verification *core.AuditChainVerification `json:"verification,omitempty"`
+}
+
+type VerifyFMPAuditTrailRequest struct {
+	AdminRequest
+	LineageID string `json:"lineage_id"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
+type VerifyFMPAuditTrailResult struct {
+	AdminResult
+	Lineage      *FMPContinuationInfo        `json:"lineage,omitempty"`
+	Verification core.AuditChainVerification `json:"verification"`
 }
 
 type ListFMPTrustBundlesRequest struct {
@@ -621,4 +653,104 @@ type ListSessionDelegationsResult struct {
 	AdminResult
 	PageResult
 	Delegations []core.SessionDelegationRecord `json:"delegations"`
+}
+
+// Phase 6.4: Compatibility Window Management
+
+type ListFMPCompatibilityWindowsRequest struct {
+	AdminRequest
+}
+
+type ListFMPCompatibilityWindowsResult struct {
+	AdminResult
+	Windows []FMPCompatibilityWindow `json:"windows"`
+}
+
+type FMPCompatibilityWindow struct {
+	ContextClass         string `json:"context_class"`
+	MinSchemaVersion     string `json:"min_schema_version,omitempty"`
+	MaxSchemaVersion     string `json:"max_schema_version,omitempty"`
+	MinRuntimeVersion    string `json:"min_runtime_version,omitempty"`
+	MaxRuntimeVersion    string `json:"max_runtime_version,omitempty"`
+}
+
+type SetFMPCompatibilityWindowRequest struct {
+	AdminRequest
+	Window FMPCompatibilityWindow `json:"window"`
+}
+
+type SetFMPCompatibilityWindowResult struct {
+	AdminResult
+	Window FMPCompatibilityWindow `json:"window"`
+}
+
+type DeleteFMPCompatibilityWindowRequest struct {
+	AdminRequest
+	ContextClass string `json:"context_class"`
+}
+
+type DeleteFMPCompatibilityWindowResult struct {
+	AdminResult
+	ContextClass string `json:"context_class"`
+}
+
+// Phase 6.5: Circuit Breaker Management
+
+type ListFMPCircuitBreakersRequest struct {
+	AdminRequest
+}
+
+type ListFMPCircuitBreakersResult struct {
+	AdminResult
+	CircuitBreakers []FMPCircuitBreakerStatus `json:"circuit_breakers"`
+}
+
+type FMPCircuitBreakerStatus struct {
+	TrustDomain string    `json:"trust_domain"`
+	State       string    `json:"state"`
+	ErrorRate   float64   `json:"error_rate"`
+	Requests    int       `json:"requests"`
+	TrippedAt   *int64    `json:"tripped_at,omitempty"` // Unix timestamp in ns
+	RecoveryAt  *int64    `json:"recovery_at,omitempty"` // Unix timestamp in ns
+}
+
+type SetFMPCircuitBreakerConfigRequest struct {
+	AdminRequest
+	TrustDomain      string  `json:"trust_domain"`
+	ErrorThreshold   float64 `json:"error_threshold"`
+	MinRequests      int     `json:"min_requests"`
+	WindowDurationSec int     `json:"window_duration_sec"`
+	RecoveryDurationSec int  `json:"recovery_duration_sec"`
+}
+
+type SetFMPCircuitBreakerConfigResult struct {
+	AdminResult
+	TrustDomain string `json:"trust_domain"`
+}
+
+type ResetFMPCircuitBreakerRequest struct {
+	AdminRequest
+	TrustDomain string `json:"trust_domain"`
+}
+
+type ResetFMPCircuitBreakerResult struct {
+	AdminResult
+	TrustDomain string `json:"trust_domain"`
+}
+
+// Phase 7.2: SLO Signals
+
+type ReadRexSLOSignalsRequest struct {
+	AdminRequest
+}
+
+type ReadRexSLOSignalsResult struct {
+	AdminResult
+	TotalWorkflows     int      `json:"total_workflows"`
+	RunningWorkflows   int      `json:"running_workflows"`
+	CompletedWorkflows int      `json:"completed_workflows"`
+	FailedWorkflows    int      `json:"failed_workflows"`
+	RecoverySensitive  int      `json:"recovery_sensitive"`
+	DegradedWorkflows  []string `json:"degraded_workflow_ids,omitempty"`
+	CachedAt           int64    `json:"cached_at"` // Unix timestamp in ns
 }

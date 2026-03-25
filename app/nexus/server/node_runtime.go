@@ -40,7 +40,7 @@ func (c *websocketRPCConn) Close() error {
 	return c.conn.Close()
 }
 
-func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, mesh *fwfmp.Service, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
+func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, mesh *fwfmp.Service, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn, rexRuntime interface{}) error {
 	if manager == nil {
 		return fmt.Errorf("node manager unavailable")
 	}
@@ -59,7 +59,7 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 		},
 	}
 	if mesh != nil && strings.TrimSpace(frame.TransportProfile) != "" {
-		wsConn.FrameHandler = meshTransportFrameHandler(mesh, frame)
+		wsConn.FrameHandler = meshTransportFrameHandler(mesh, frame, rexRuntime)
 	}
 	if err := manager.HandleConnect(ctx, wsConn); err != nil {
 		return err
@@ -77,7 +77,7 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 	return wsConn.ReadLoop(ctx)
 }
 
-func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
+func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo, rexRuntime interface{}) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
 	return func(ctx context.Context, conn *fwnode.WSConnection, frame map[string]json.RawMessage) error {
 		if mesh == nil {
 			return nil
@@ -147,14 +147,24 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			if strings.TrimSpace(req.RuntimeID) == "" {
 				req.RuntimeID = fallbackNodeRuntimeID(conn.Descriptor, connectInfo)
 			}
-			if err := mesh.AdvertiseExport(ctx, core.ExportAdvertisement{
+			exportAd := core.ExportAdvertisement{
 				TrustDomain: req.TrustDomain,
 				RuntimeID:   req.RuntimeID,
 				NodeID:      conn.Descriptor.ID,
 				Export:      req.Export,
 				ExpiresAt:   req.ExpiresAt,
 				Signature:   req.Signature,
-			}); err != nil {
+			}
+
+			// Phase 7.3: Include DR metadata from runtime projection for federation health visibility
+			if rexProvider, ok := rexRuntime.(*RexRuntimeProvider); ok && rexProvider != nil {
+				projection := rexProvider.RuntimeProjection()
+				exportAd.FailoverReady = projection.FailoverReady
+				exportAd.RecoveryState = projection.RecoveryState
+				exportAd.RuntimeVersion = projection.RuntimeVersion
+			}
+
+			if err := mesh.AdvertiseExport(ctx, exportAd); err != nil {
 				return conn.SendJSON(map[string]any{"type": "fmp.export.error", "operation": "advertise", "error": err.Error()})
 			}
 			return conn.SendJSON(map[string]any{"type": "fmp.export.advertised", "runtime_id": req.RuntimeID, "export_name": req.Export.ExportName, "trust_domain": req.TrustDomain})
@@ -266,11 +276,11 @@ func remarshalNodeFrame(input any, out any) error {
 }
 
 func ChunkTransportFrameHandlerForTest(mesh *fwfmp.Service) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
-	return meshTransportFrameHandler(mesh, fwgateway.NodeConnectInfo{})
+	return meshTransportFrameHandler(mesh, fwgateway.NodeConnectInfo{}, nil)
 }
 
 func MeshTransportFrameHandlerForTest(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
-	return meshTransportFrameHandler(mesh, connectInfo)
+	return meshTransportFrameHandler(mesh, connectInfo, nil)
 }
 
 func nodeRPCConnForTransport(principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, base interface {

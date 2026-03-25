@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -27,6 +30,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/identity"
 	memdb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	mcpprotocol "github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
 	mcpserver "github.com/lexcodex/relurpify/framework/middleware/mcp/server"
@@ -139,18 +143,97 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 	if err != nil {
 		return err
 	}
+	ownershipStore, err := fwfmp.NewSQLiteOwnershipStore(filepath.Join(paths.ConfigRoot(), "fmp_ownership.db"))
+	if err != nil {
+		return err
+	}
+	defer ownershipStore.Close()
+	exportStore, err := nexusdb.NewSQLiteFMPExportStore(filepath.Join(paths.ConfigRoot(), "fmp_exports.db"))
+	if err != nil {
+		return err
+	}
+	defer exportStore.Close()
+	federationStore, err := nexusdb.NewSQLiteFMPFederationStore(filepath.Join(paths.ConfigRoot(), "fmp_federation.db"))
+	if err != nil {
+		return err
+	}
+	defer federationStore.Close()
+	trustStore, err := nexusdb.NewSQLiteTrustBundleStore(filepath.Join(paths.ConfigRoot(), "fmp_trust_bundles.db"))
+	if err != nil {
+		return err
+	}
+	defer trustStore.Close()
+	boundaryStore, err := nexusdb.NewSQLiteBoundaryPolicyStore(filepath.Join(paths.ConfigRoot(), "fmp_boundary_policies.db"))
+	if err != nil {
+		return err
+	}
+	defer boundaryStore.Close()
+	operationalLimiter, err := nexusdb.NewSQLiteOperationalLimiter(filepath.Join(paths.ConfigRoot(), "fmp_operational_limits.db"), fwfmp.OperationalLimits{
+		Window:                time.Minute,
+		MaxActiveResumeSlots:  8,
+		MaxResumeBytesWindow:  32 << 20,
+		MaxForwardBytesWindow: 64 << 20,
+		MaxFederatedForwards:  256,
+	})
+	if err != nil {
+		return err
+	}
+	defer operationalLimiter.Close()
+	transportNonceStore, err := nexusdb.NewSQLiteTransportNonceStore(filepath.Join(paths.ConfigRoot(), "gateway_transport_nonces.db"))
+	if err != nil {
+		return err
+	}
+	defer transportNonceStore.Close()
+	transportPolicy := fwgateway.DefaultFMPTransportPolicy(nexuscfg.IsLoopbackBind(cfg.Gateway.Bind))
+	transportPolicy.NonceStore = transportNonceStore
+	fmpSigner, err := loadOrCreateFMPSigner(filepath.Join(paths.ConfigRoot(), "fmp_signing_seed"))
+	if err != nil {
+		return err
+	}
+	fmpVerifier := &fwfmp.Ed25519Verifier{PublicKey: fmpSigner.PublicKey()}
+	auditStore, err := nexusdb.NewSQLiteAuditChainStore(filepath.Join(paths.ConfigRoot(), "fmp_audit_chain.db"), fmpSigner, fmpVerifier)
+	if err != nil {
+		return err
+	}
+	defer auditStore.Close()
+	fmpService := &fwfmp.Service{
+		Ownership:  ownershipStore,
+		Discovery:  &fwfmp.InMemoryDiscoveryStore{},
+		Trust:      trustStore,
+		Boundaries: boundaryStore,
+		Projector:  fwfmp.StrictCapabilityProjector{},
+		Limiter:    operationalLimiter,
+		Log:        eventLog,
+		Partition:  nexusEventPartition,
+		LeaseTTL:   5 * time.Minute,
+		Audit:      auditStore,
+		Signer:     fmpSigner,
+		Nexus: fwfmp.NexusAdapter{
+			Exports:    exportStore,
+			Federation: federationStore,
+			Policies: &fwfmp.AuthorizationPolicyResolver{
+				Rules: policyStore,
+				TTL:   30 * time.Second,
+			},
+		},
+	}
 	handler, err := (&nexusserver.NexusApp{
-		EventLog:          eventLog,
-		SessionStore:      sessionStore,
-		IdentityStore:     identityStore,
-		NodeStore:         nodeStore,
-		TokenStore:        tokenStore,
-		PolicyStore:       policyStore,
-		Config:            cfg,
-		Partition:         nexusEventPartition,
-		StateMaterializer: stateMaterializer,
-		StartedAt:         time.Now().UTC(),
-		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore),
+		EventLog:           eventLog,
+		SessionStore:       sessionStore,
+		IdentityStore:      identityStore,
+		NodeStore:          nodeStore,
+		TokenStore:         tokenStore,
+		PolicyStore:        policyStore,
+		FMPService:         fmpService,
+		FMPExportStore:     exportStore,
+		FMPFederationStore: federationStore,
+		Config:             cfg,
+		Partition:          nexusEventPartition,
+		Workspace:          workspace,
+		StateMaterializer:  stateMaterializer,
+		FMPTransportPolicy: transportPolicy,
+		StartedAt:          time.Now().UTC(),
+		PrincipalResolver:  gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore),
 		VerifyNodeConnection: func(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 			return verifyGatewayNodeChallenge(ctx, store, principal, info, conn)
 		},
@@ -168,6 +251,30 @@ func runStart(ctx context.Context, workspace, configPath string) error {
 		return err
 	}
 	return nil
+}
+
+func loadOrCreateFMPSigner(path string) (*fwfmp.Ed25519Signer, error) {
+	path = filepath.Clean(path)
+	seedText, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		seed, err := base64.RawStdEncoding.DecodeString(strings.TrimSpace(string(seedText)))
+		if err != nil {
+			return nil, err
+		}
+		return fwfmp.NewEd25519SignerFromSeed(seed), nil
+	case os.IsNotExist(err):
+		seed := make([]byte, 32)
+		if _, err := rand.Read(seed); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(path, []byte(base64.RawStdEncoding.EncodeToString(seed)), 0o600); err != nil {
+			return nil, err
+		}
+		return fwfmp.NewEd25519SignerFromSeed(seed), nil
+	default:
+		return nil, err
+	}
 }
 
 func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore, identityStore identity.Store) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {

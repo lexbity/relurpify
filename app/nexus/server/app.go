@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,7 +16,9 @@ import (
 	"github.com/lexcodex/relurpify/app/nexus/adapters/webchat"
 	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
+	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
 	nexusgateway "github.com/lexcodex/relurpify/app/nexus/gateway"
+	relconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/event"
 	"github.com/lexcodex/relurpify/framework/identity"
@@ -42,14 +46,18 @@ type NexusApp struct {
 	FMPFederationStore nexusadmin.TenantFMPFederationPolicyStore
 	Config             nexuscfg.Config
 	Partition          string
+	Workspace          string
 
 	ChannelAdapters []channel.Adapter
 	WebchatAdapter  *webchat.Adapter
+	RexRuntime      *RexRuntimeProvider
+	RexEventBridge  *RexEventBridge
 
 	NodeManager          *fwnode.Manager
 	ChannelManager       *channel.Manager
 	StateMaterializer    *nexusgateway.StateMaterializer
 	FMPService           *fwfmp.Service
+	FMPTransportPolicy   *fwgateway.FMPTransportPolicy
 	StartedAt            time.Time
 	PrincipalResolver    func(context.Context, string) (fwgateway.ConnectionPrincipal, error)
 	VerifyNodeConnection func(context.Context, identity.Store, fwgateway.ConnectionPrincipal, fwgateway.NodeConnectInfo, *websocket.Conn) error
@@ -72,6 +80,12 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		return nil, fmt.Errorf("node store required")
 	}
 	if a.FMPService != nil {
+		if err := a.ensureFMPPersistence(); err != nil {
+			return nil, err
+		}
+		if err := a.ensureFMPTransportPolicy(); err != nil {
+			return nil, err
+		}
 		wireFMPNexusAdapter(a.FMPService, a.IdentityStore, a.SessionStore)
 		if a.FMPService.Nexus.Exports == nil {
 			a.FMPService.Nexus.Exports = a.FMPExportStore
@@ -79,7 +93,70 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		if a.FMPService.Nexus.Federation == nil {
 			a.FMPService.Nexus.Federation = a.FMPFederationStore
 		}
-		_ = EnsureFederatedMeshGateway(a.FMPService)
+		meshGateway := EnsureFederatedMeshGateway(a.FMPService)
+		if meshGateway != nil && meshGateway.Forwarder != nil && len(a.Config.Gateway.Federation.Endpoints) > 0 {
+			meshGateway.Forwarder.Resolver = fwfmp.StaticFederationEndpointResolver(a.Config.Gateway.Federation.Endpoints)
+		}
+		if meshGateway != nil && meshGateway.Forwarder != nil {
+			meshGateway.Forwarder.TransportPolicy = a.fmpTransportPolicy()
+		}
+		if a.PolicyStore != nil && a.FMPService.Nexus.Policies == nil {
+			a.FMPService.Nexus.Policies = &fwfmp.AuthorizationPolicyResolver{
+				Rules: a.PolicyStore,
+				TTL:   30 * time.Second,
+			}
+		}
+		// Start reconciliation scanner for Phase 6.1: lease reconciliation
+		scanner := &ReconciliationScanner{
+			Service:  a.FMPService,
+			Interval: 2 * time.Minute,
+			Log:      a.EventLog,
+		}
+		scanner.Start(ctx)
+		go func() {
+			<-ctx.Done()
+			scanner.Stop()
+		}()
+		// Start GC scanner for Phase 6.6: advertisement TTL enforcement and context object GC
+		gc := &GCScanner{
+			Service:         a.FMPService,
+			DiscoveryExpiry: 5 * time.Minute,
+			ContextGCExpiry: 15 * time.Minute,
+			Log:             a.EventLog,
+		}
+		gc.Start(ctx)
+		go func() {
+			<-ctx.Done()
+			gc.Stop()
+		}()
+	}
+	if a.RexRuntime == nil && strings.TrimSpace(a.Workspace) != "" {
+		rexRuntime, err := NewRexRuntimeProvider(ctx, a.Workspace)
+		if err != nil {
+			return nil, err
+		}
+		a.RexRuntime = rexRuntime
+	}
+	if a.RexEventBridge == nil && a.RexRuntime != nil {
+		bridge, err := NewRexEventBridge(a.EventLog, a.partition(), a.RexRuntime)
+		if err != nil {
+			return nil, err
+		}
+		a.RexEventBridge = bridge
+	}
+	if a.FMPService != nil && a.RexRuntime != nil {
+		a.RexRuntime.AttachFMPService(a.FMPService)
+		if err := a.RexRuntime.PublishFMPTrustBundle(ctx, a.FMPService); err != nil {
+			return nil, err
+		}
+		if a.RexEventBridge != nil && a.RexRuntime.LineageBridge != nil {
+			a.RexEventBridge.Control = a.RexRuntime.LineageBridge.HandleFrameworkEvent
+		}
+	}
+	if a.RexEventBridge != nil {
+		if err := a.RexEventBridge.Start(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	nodeManager := a.NodeManager
@@ -137,9 +214,9 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 	srv := &fwgateway.Server{
 		Log:                a.EventLog,
 		Partition:          a.partition(),
-		FMPTransportPolicy: fwgateway.DefaultFMPTransportPolicy(nexuscfg.IsLoopbackBind(a.Config.Gateway.Bind)),
+		FMPTransportPolicy: a.fmpTransportPolicy(),
 		ListCapabilitiesForPrincipal: func(principal fwgateway.ConnectionPrincipal) []core.CapabilityDescriptor {
-			return ListNodeCapabilities(nodeManager, principal)
+			return listGatewayCapabilities(nodeManager, a.RexRuntime, principal)
 		},
 		PrincipalResolver: a.PrincipalResolver,
 		VerifyNodeConnection: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
@@ -174,7 +251,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 			return true, nil
 		},
 		InvokeCapability: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
-			return InvokeAuthorizedNodeCapability(ctx, router, a.SessionStore, nodeManager, principal, sessionKey, capabilityID, args)
+			return InvokeAuthorizedGatewayCapability(ctx, router, a.SessionStore, nodeManager, a.RexRuntime, principal, sessionKey, capabilityID, args)
 		},
 		HandleOutboundMessage: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionKey, content string) error {
 			boundary, err := a.SessionStore.GetBoundaryBySessionID(ctx, sessionKey)
@@ -196,13 +273,10 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 			return manager.Send(ctx, msg)
 		},
 		HandleNodeConnection: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
-			return HandleGatewayNodeConnection(ctx, nodeManager, a.IdentityStore, a.FMPService, principal, info, conn)
+			return HandleGatewayNodeConnection(ctx, nodeManager, a.IdentityStore, a.FMPService, principal, info, conn, a.RexRuntime)
 		},
 		AdminSnapshot: func(ctx context.Context, principal fwgateway.ConnectionPrincipal) (map[string]any, error) {
-			if a.StateMaterializer == nil {
-				return map[string]any{}, nil
-			}
-			snapshot, err := snapshotForPrincipal(a.StateMaterializer, principal)
+			snapshot, err := snapshotForPrincipal(ctx, a.StateMaterializer, a.RexRuntime, principal)
 			if err != nil {
 				return nil, err
 			}
@@ -226,6 +300,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		Channels:      manager,
 		FMP:           a.FMPService,
 		FMPFederation: a.FMPFederationStore,
+		RexRuntime:    a.RexRuntime,
 		Partition:     a.partition(),
 		Config:        a.Config,
 		StartedAt:     a.StartedAt,
@@ -240,6 +315,9 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle(a.gatewayPath(), srv.Handler())
 	mux.Handle("/admin/mcp", adminAuthMiddleware(a.PrincipalResolver, http.HandlerFunc(adminMCPSvc.ServeHTTP)))
+	if a.FMPService != nil {
+		mux.Handle(fwfmp.DefaultFederationForwardPath, FederationInboundHandler(a.FMPService, a.fmpTransportPolicy()))
+	}
 	if len(a.ChannelAdapters) == 0 {
 		mux.Handle("/webchat", webchatAdapter.Handler())
 	}
@@ -278,28 +356,109 @@ func wireFMPNexusAdapter(mesh *fwfmp.Service, identities identity.Store, session
 	}
 }
 
-func snapshotForPrincipal(materializer *nexusgateway.StateMaterializer, principal fwgateway.ConnectionPrincipal) (map[string]any, error) {
-	if materializer == nil {
-		return map[string]any{}, nil
+func (a *NexusApp) ensureFMPPersistence() error {
+	if a == nil || a.FMPService == nil || strings.TrimSpace(a.Workspace) == "" {
+		return nil
 	}
-	state := materializer.State()
-	if hasGlobalSnapshotScope(principal) {
-		return map[string]any{
-			"last_seq":         state.LastSeq,
-			"active_sessions":  state.ActiveSessions,
-			"channel_activity": state.ChannelActivity,
-			"event_counts":     state.EventTypeCounts,
-		}, nil
+	paths := relconfig.New(a.Workspace)
+	configRoot := paths.ConfigRoot()
+	if err := os.MkdirAll(configRoot, 0o755); err != nil {
+		return err
 	}
-	tenantID := NormalizeTenantID(principal.Actor.TenantID)
-	tenantState := materializer.StateForTenant(tenantID)
-	return map[string]any{
-		"last_seq":         tenantState.LastSeq,
-		"tenant_id":        tenantID,
-		"active_sessions":  tenantState.ActiveSessions,
-		"channel_activity": tenantState.ChannelActivity,
-		"event_counts":     tenantState.EventTypeCounts,
-	}, nil
+	if a.FMPService.Trust == nil {
+		store, err := nexusdb.NewSQLiteTrustBundleStore(filepath.Join(configRoot, "fmp_trust_bundles.db"))
+		if err != nil {
+			return err
+		}
+		a.FMPService.Trust = store
+	}
+	if a.FMPService.Boundaries == nil {
+		store, err := nexusdb.NewSQLiteBoundaryPolicyStore(filepath.Join(configRoot, "fmp_boundary_policies.db"))
+		if err != nil {
+			return err
+		}
+		a.FMPService.Boundaries = store
+	}
+	// Phase 6.4: Compatibility window store
+	if a.FMPService.CompatibilityWindows == nil {
+		store, err := nexusdb.NewSQLiteCompatibilityWindowStore(filepath.Join(configRoot, "fmp_compat_windows.db"))
+		if err != nil {
+			return err
+		}
+		a.FMPService.CompatibilityWindows = store
+	}
+	// Phase 6.5: Circuit breaker store
+	if a.FMPService.CircuitBreakers == nil {
+		store, err := nexusdb.NewSQLiteCircuitBreakerStore(filepath.Join(configRoot, "fmp_circuit_breakers.db"))
+		if err != nil {
+			return err
+		}
+		a.FMPService.CircuitBreakers = store
+	}
+	return nil
+}
+
+func (a *NexusApp) ensureFMPTransportPolicy() error {
+	if a == nil {
+		return nil
+	}
+	policy := a.fmpTransportPolicy()
+	if policy == nil || strings.TrimSpace(a.Workspace) == "" {
+		return nil
+	}
+	if _, ok := policy.NonceStore.(*fwgateway.InMemoryTransportNonceStore); !ok && policy.NonceStore != nil {
+		return nil
+	}
+	paths := relconfig.New(a.Workspace)
+	configRoot := paths.ConfigRoot()
+	if err := os.MkdirAll(configRoot, 0o755); err != nil {
+		return err
+	}
+	store, err := nexusdb.NewSQLiteTransportNonceStore(filepath.Join(configRoot, "gateway_transport_nonces.db"))
+	if err != nil {
+		return err
+	}
+	policy.NonceStore = store
+	return nil
+}
+
+func (a *NexusApp) fmpTransportPolicy() *fwgateway.FMPTransportPolicy {
+	if a == nil {
+		return nil
+	}
+	if a.FMPTransportPolicy == nil {
+		a.FMPTransportPolicy = fwgateway.DefaultFMPTransportPolicy(nexuscfg.IsLoopbackBind(a.Config.Gateway.Bind))
+	}
+	return a.FMPTransportPolicy
+}
+
+func snapshotForPrincipal(ctx context.Context, materializer *nexusgateway.StateMaterializer, rexRuntime *RexRuntimeProvider, principal fwgateway.ConnectionPrincipal) (map[string]any, error) {
+	snapshot := map[string]any{}
+	if materializer != nil {
+		state := materializer.State()
+		if hasGlobalSnapshotScope(principal) {
+			snapshot["last_seq"] = state.LastSeq
+			snapshot["active_sessions"] = state.ActiveSessions
+			snapshot["channel_activity"] = state.ChannelActivity
+			snapshot["event_counts"] = state.EventTypeCounts
+		} else {
+			tenantID := NormalizeTenantID(principal.Actor.TenantID)
+			tenantState := materializer.StateForTenant(tenantID)
+			snapshot["last_seq"] = tenantState.LastSeq
+			snapshot["tenant_id"] = tenantID
+			snapshot["active_sessions"] = tenantState.ActiveSessions
+			snapshot["channel_activity"] = tenantState.ChannelActivity
+			snapshot["event_counts"] = tenantState.EventTypeCounts
+		}
+	}
+	if rexRuntime != nil {
+		rexSnapshot, err := rexRuntime.AdminSnapshot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		snapshot["rex"] = rexSnapshot
+	}
+	return snapshot, nil
 }
 
 func hasGlobalSnapshotScope(principal fwgateway.ConnectionPrincipal) bool {
@@ -313,6 +472,39 @@ func hasGlobalSnapshotScope(principal fwgateway.ConnectionPrincipal) bool {
 		}
 	}
 	return false
+}
+
+func listGatewayCapabilities(manager *fwnode.Manager, rexRuntime *RexRuntimeProvider, principal fwgateway.ConnectionPrincipal) []core.CapabilityDescriptor {
+	capabilities := ListNodeCapabilities(manager, principal)
+	if rexRuntime != nil {
+		capabilities = append(capabilities, rexRuntime.CapabilityDescriptor())
+	}
+	return capabilities
+}
+
+func InvokeAuthorizedGatewayCapability(ctx context.Context, router session.Router, store session.Store, manager *fwnode.Manager, rexRuntime *RexRuntimeProvider, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
+	if capabilityID == rexCapabilityID && rexRuntime != nil {
+		if store == nil {
+			return nil, fmt.Errorf("session store unavailable")
+		}
+		boundary, err := store.GetBoundaryBySessionID(ctx, sessionKey)
+		if err != nil {
+			return nil, err
+		}
+		if router == nil {
+			return nil, fmt.Errorf("session router unavailable")
+		}
+		if err := router.Authorize(ctx, session.AuthorizationRequest{
+			Actor:         principal.Actor,
+			Authenticated: principal.Authenticated,
+			Operation:     core.SessionOperationInvoke,
+			Boundary:      boundary,
+		}); err != nil {
+			return nil, err
+		}
+		return rexRuntime.InvokeCapability(ctx, sessionKey, NormalizeTenantID(principal.Actor.TenantID), args)
+	}
+	return InvokeAuthorizedNodeCapability(ctx, router, store, manager, principal, sessionKey, capabilityID, args)
 }
 
 func channelConfigs(cfg nexuscfg.Config) map[string]json.RawMessage {

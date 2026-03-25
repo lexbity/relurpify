@@ -16,6 +16,7 @@ import (
 	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 	"github.com/lexcodex/relurpify/framework/middleware/session"
+	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 )
 
 const APIVersionV1Alpha1 = adminapi.APIVersionV1Alpha1
@@ -108,6 +109,8 @@ type ListFMPContinuationsRequest = adminapi.ListFMPContinuationsRequest
 type ListFMPContinuationsResult = adminapi.ListFMPContinuationsResult
 type ReadFMPContinuationAuditRequest = adminapi.ReadFMPContinuationAuditRequest
 type ReadFMPContinuationAuditResult = adminapi.ReadFMPContinuationAuditResult
+type VerifyFMPAuditTrailRequest = adminapi.VerifyFMPAuditTrailRequest
+type VerifyFMPAuditTrailResult = adminapi.VerifyFMPAuditTrailResult
 type ListFMPTrustBundlesRequest = adminapi.ListFMPTrustBundlesRequest
 type ListFMPTrustBundlesResult = adminapi.ListFMPTrustBundlesResult
 type UpsertFMPTrustBundleRequest = adminapi.UpsertFMPTrustBundleRequest
@@ -145,6 +148,16 @@ type ListSessionDelegationsRequest = adminapi.ListSessionDelegationsRequest
 type ListSessionDelegationsResult = adminapi.ListSessionDelegationsResult
 type PendingPairingInfo = adminapi.PendingPairingInfo
 type SessionInfo = adminapi.SessionInfo
+type DescribeRexRuntimeRequest = adminapi.DescribeRexRuntimeRequest
+type DescribeRexRuntimeResult = adminapi.DescribeRexRuntimeResult
+type ReadRexAdminSnapshotRequest = adminapi.ReadRexAdminSnapshotRequest
+type ReadRexAdminSnapshotResult = adminapi.ReadRexAdminSnapshotResult
+
+type RexRuntime interface {
+	Registration() rexnexus.Registration
+	RuntimeProjection() rexnexus.Projection
+	AdminSnapshot(context.Context) (rexnexus.AdminSnapshot, error)
+}
 
 type AdminService interface {
 	ListNodes(ctx context.Context, req ListNodesRequest) (ListNodesResult, error)
@@ -175,10 +188,13 @@ type AdminService interface {
 	SetPolicyRuleEnabled(ctx context.Context, req SetPolicyRuleEnabledRequest) (SetPolicyRuleEnabledResult, error)
 
 	Health(ctx context.Context, req HealthRequest) (HealthResult, error)
+	DescribeRexRuntime(ctx context.Context, req DescribeRexRuntimeRequest) (DescribeRexRuntimeResult, error)
+	ReadRexAdminSnapshot(ctx context.Context, req ReadRexAdminSnapshotRequest) (ReadRexAdminSnapshotResult, error)
 	ListEvents(ctx context.Context, req ListEventsRequest) (ListEventsResult, error)
 	ReadEventStream(ctx context.Context, req ReadEventStreamRequest) (ReadEventStreamResult, error)
 	ListFMPContinuations(ctx context.Context, req ListFMPContinuationsRequest) (ListFMPContinuationsResult, error)
 	ReadFMPContinuationAudit(ctx context.Context, req ReadFMPContinuationAuditRequest) (ReadFMPContinuationAuditResult, error)
+	VerifyFMPAuditTrail(ctx context.Context, req VerifyFMPAuditTrailRequest) (VerifyFMPAuditTrailResult, error)
 	ListFMPTrustBundles(ctx context.Context, req ListFMPTrustBundlesRequest) (ListFMPTrustBundlesResult, error)
 	UpsertFMPTrustBundle(ctx context.Context, req UpsertFMPTrustBundleRequest) (UpsertFMPTrustBundleResult, error)
 	ListFMPBoundaryPolicies(ctx context.Context, req ListFMPBoundaryPoliciesRequest) (ListFMPBoundaryPoliciesResult, error)
@@ -197,6 +213,19 @@ type AdminService interface {
 	RevokeNodeEnrollment(ctx context.Context, req RevokeNodeEnrollmentRequest) (RevokeNodeEnrollmentResult, error)
 
 	ListSessionDelegations(ctx context.Context, req ListSessionDelegationsRequest) (ListSessionDelegationsResult, error)
+
+	// Phase 6.4: Compatibility Window Management
+	ListFMPCompatibilityWindows(ctx context.Context, req ListFMPCompatibilityWindowsRequest) (ListFMPCompatibilityWindowsResult, error)
+	SetFMPCompatibilityWindow(ctx context.Context, req SetFMPCompatibilityWindowRequest) (SetFMPCompatibilityWindowResult, error)
+	DeleteFMPCompatibilityWindow(ctx context.Context, req DeleteFMPCompatibilityWindowRequest) (DeleteFMPCompatibilityWindowResult, error)
+
+	// Phase 6.5: Circuit Breaker Management
+	ListFMPCircuitBreakers(ctx context.Context, req ListFMPCircuitBreakersRequest) (ListFMPCircuitBreakersResult, error)
+	SetFMPCircuitBreakerConfig(ctx context.Context, req SetFMPCircuitBreakerConfigRequest) (SetFMPCircuitBreakerConfigResult, error)
+	ResetFMPCircuitBreaker(ctx context.Context, req ResetFMPCircuitBreakerRequest) (ResetFMPCircuitBreakerResult, error)
+
+	// Phase 7.2: SLO Signals
+	ReadRexSLOSignals(ctx context.Context, req ReadRexSLOSignalsRequest) (ReadRexSLOSignalsResult, error)
 }
 
 type ServiceConfig struct {
@@ -216,6 +245,9 @@ type ServiceConfig struct {
 	Config        nexuscfg.Config
 	StartedAt     time.Time
 	PolicyEngine  authorization.PolicyEngine
+	RexRuntime    RexRuntime
+	// Phase 7.2: Rex runtime for SLO signals
+	RexProvider   interface{} // *server.RexRuntimeProvider, kept as interface to avoid circular import
 }
 
 type TokenStore interface {
@@ -240,3 +272,23 @@ type TenantFMPFederationPolicyStore interface {
 	GetTenantFederationPolicy(ctx context.Context, tenantID string) (*core.TenantFederationPolicy, error)
 	SetTenantFederationPolicy(ctx context.Context, policy core.TenantFederationPolicy) error
 }
+
+// Type aliases for Phase 6.4 and 6.5 admin API types
+type ListFMPCompatibilityWindowsRequest = adminapi.ListFMPCompatibilityWindowsRequest
+type ListFMPCompatibilityWindowsResult = adminapi.ListFMPCompatibilityWindowsResult
+type FMPCompatibilityWindow = adminapi.FMPCompatibilityWindow
+type SetFMPCompatibilityWindowRequest = adminapi.SetFMPCompatibilityWindowRequest
+type SetFMPCompatibilityWindowResult = adminapi.SetFMPCompatibilityWindowResult
+type DeleteFMPCompatibilityWindowRequest = adminapi.DeleteFMPCompatibilityWindowRequest
+type DeleteFMPCompatibilityWindowResult = adminapi.DeleteFMPCompatibilityWindowResult
+
+type ListFMPCircuitBreakersRequest = adminapi.ListFMPCircuitBreakersRequest
+type ListFMPCircuitBreakersResult = adminapi.ListFMPCircuitBreakersResult
+type FMPCircuitBreakerStatus = adminapi.FMPCircuitBreakerStatus
+type SetFMPCircuitBreakerConfigRequest = adminapi.SetFMPCircuitBreakerConfigRequest
+type SetFMPCircuitBreakerConfigResult = adminapi.SetFMPCircuitBreakerConfigResult
+type ResetFMPCircuitBreakerRequest = adminapi.ResetFMPCircuitBreakerRequest
+type ResetFMPCircuitBreakerResult = adminapi.ResetFMPCircuitBreakerResult
+
+type ReadRexSLOSignalsRequest = adminapi.ReadRexSLOSignalsRequest
+type ReadRexSLOSignalsResult = adminapi.ReadRexSLOSignalsResult

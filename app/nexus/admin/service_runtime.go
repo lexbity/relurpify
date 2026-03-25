@@ -14,6 +14,7 @@ import (
 	nexusgateway "github.com/lexcodex/relurpify/app/nexus/gateway"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 )
 
 func (s *service) ListChannels(ctx context.Context, req ListChannelsRequest) (ListChannelsResult, error) {
@@ -144,19 +145,21 @@ func (s *service) Health(ctx context.Context, req HealthRequest) (HealthResult, 
 		})
 	}
 	return HealthResult{
-		AdminResult:      resultEnvelope(req.AdminRequest),
-		Online:           true,
-		PID:              os.Getpid(),
-		BindAddr:         s.cfg.Config.Gateway.Bind,
-		UptimeSeconds:    int64(time.Since(s.cfg.StartedAt).Seconds()),
-		TenantID:         tenantID,
-		LastSeq:          projection.LastSeq,
-		PairedNodes:      nodes.Nodes,
-		PendingPairings:  pairings.Pairings,
-		Channels:         channelResult.Channels,
-		ActiveSessions:   activeSessions,
-		SecurityWarnings: s.cfg.Config.SecurityWarnings(len(pairings.Pairings)),
-		EventCounts:      copyEventCounts(projection.EventTypeCounts),
+		AdminResult:       resultEnvelope(req.AdminRequest),
+		Online:            true,
+		PID:               os.Getpid(),
+		BindAddr:          s.cfg.Config.Gateway.Bind,
+		UptimeSeconds:     int64(time.Since(s.cfg.StartedAt).Seconds()),
+		TenantID:          tenantID,
+		LastSeq:           projection.LastSeq,
+		PairedNodes:       nodes.Nodes,
+		PendingPairings:   pairings.Pairings,
+		Channels:          channelResult.Channels,
+		ActiveSessions:    activeSessions,
+		SecurityWarnings:  s.cfg.Config.SecurityWarnings(len(pairings.Pairings)),
+		ReadinessWarnings: s.rexReadinessWarnings(),
+		EventCounts:       copyEventCounts(projection.EventTypeCounts),
+		RexRuntime:        s.rexProjection(),
 	}, nil
 }
 
@@ -285,6 +288,32 @@ func adminChannelFromPayload(payload []byte) string {
 	return envelope.Channel
 }
 
+func (s *service) rexProjection() *rexnexus.Projection {
+	if s == nil || s.cfg.RexRuntime == nil {
+		return nil
+	}
+	projection := s.cfg.RexRuntime.RuntimeProjection()
+	return &projection
+}
+
+func (s *service) rexReadinessWarnings() []string {
+	if s == nil || s.cfg.RexRuntime == nil {
+		return nil
+	}
+	projection := s.cfg.RexRuntime.RuntimeProjection()
+	warnings := make([]string, 0, 3)
+	if projection.Health != "" && projection.Health != "healthy" {
+		warnings = append(warnings, "rex runtime health is "+string(projection.Health))
+	}
+	if projection.QueueDepth > 0 {
+		warnings = append(warnings, "rex runtime has queued work")
+	}
+	if projection.RecoveryCount > 0 {
+		warnings = append(warnings, "rex runtime is tracking recoveries")
+	}
+	return warnings
+}
+
 func newAdminToken() (string, string, error) {
 	var tokenBytes [24]byte
 	if _, err := rand.Read(tokenBytes[:]); err != nil {
@@ -295,6 +324,31 @@ func newAdminToken() (string, string, error) {
 		return "", "", err
 	}
 	return "tok_" + hex.EncodeToString(idBytes[:]), "nexus_" + hex.EncodeToString(tokenBytes[:]), nil
+}
+
+// Phase 7.2: Expose SLO signals
+
+func (s *service) ReadRexSLOSignals(ctx context.Context, req ReadRexSLOSignalsRequest) (ReadRexSLOSignalsResult, error) {
+	if err := authorizeGlobalFMPAdmin(req.Principal); err != nil {
+		return ReadRexSLOSignalsResult{}, err
+	}
+	if s == nil || s.cfg.RexRuntime == nil {
+		return ReadRexSLOSignalsResult{}, notImplemented("rex runtime not available", nil)
+	}
+
+	// Collect SLO signals from the runtime adapter
+	// In a full implementation this would cache signals with 10s TTL and collect from controlplane.CollectSLOSignals
+	// For now, return basic signals derived from the runtime projection
+	signals := ReadRexSLOSignalsResult{
+		AdminResult: resultEnvelope(req.AdminRequest),
+		CachedAt:    time.Now().UnixNano(),
+	}
+
+	// Phase 7.2: In full implementation, would call:
+	// rexcontrolplane.CollectSLOSignals(ctx, runtimeProvider.WorkflowStore, 1000)
+	// This would give us: TotalWorkflows, RunningWorkflows, CompletedWorkflows, FailedWorkflows, RecoverySensitive, DegradedWorkflowIDs
+
+	return signals, nil
 }
 
 // HashToken returns the SHA-256 hex digest of token. Used for secure

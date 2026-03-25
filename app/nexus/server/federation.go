@@ -10,16 +10,16 @@ import (
 
 type FederatedMeshGateway struct {
 	Mesh      *fwfmp.Service
-	Forwarder *fwfmp.LocalGatewayForwarder
+	Forwarder *fwfmp.HTTPGatewayForwarder
 }
 
 func EnsureFederatedMeshGateway(mesh *fwfmp.Service) *FederatedMeshGateway {
 	if mesh == nil {
 		return nil
 	}
-	forwarder, ok := mesh.Forwarder.(*fwfmp.LocalGatewayForwarder)
+	forwarder, ok := mesh.Forwarder.(*fwfmp.HTTPGatewayForwarder)
 	if !ok || forwarder == nil {
-		forwarder = fwfmp.NewLocalGatewayForwarder()
+		forwarder = fwfmp.NewHTTPGatewayForwarder(nil)
 		mesh.Forwarder = forwarder
 	}
 	return &FederatedMeshGateway{

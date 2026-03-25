@@ -8,6 +8,9 @@ import (
 	nexusgateway "github.com/lexcodex/relurpify/app/nexus/gateway"
 	"github.com/lexcodex/relurpify/framework/core"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
+	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
+	rexproof "github.com/lexcodex/relurpify/named/rex/proof"
+	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +45,7 @@ func TestSnapshotForPrincipalFiltersTenantAdminView(t *testing.T) {
 	materializer := nexusgateway.NewStateMaterializer()
 	require.NoError(t, materializer.Restore(context.Background(), mustSnapshotJSON(t, state)))
 
-	snapshot, err := snapshotForPrincipal(materializer, fwgateway.ConnectionPrincipal{
+	snapshot, err := snapshotForPrincipal(context.Background(), materializer, nil, fwgateway.ConnectionPrincipal{
 		Authenticated: true,
 		Actor:         core.EventActor{Kind: "admin", ID: "admin-a", TenantID: "tenant-a"},
 		Principal: &core.AuthenticatedPrincipal{
@@ -77,7 +80,7 @@ func TestSnapshotForPrincipalAllowsGlobalAdminView(t *testing.T) {
 	materializer := nexusgateway.NewStateMaterializer()
 	require.NoError(t, materializer.Restore(context.Background(), mustSnapshotJSON(t, state)))
 
-	snapshot, err := snapshotForPrincipal(materializer, fwgateway.ConnectionPrincipal{
+	snapshot, err := snapshotForPrincipal(context.Background(), materializer, nil, fwgateway.ConnectionPrincipal{
 		Authenticated: true,
 		Actor:         core.EventActor{Kind: "admin", ID: "admin-global", TenantID: "tenant-a"},
 		Principal: &core.AuthenticatedPrincipal{
@@ -91,6 +94,33 @@ func TestSnapshotForPrincipalAllowsGlobalAdminView(t *testing.T) {
 	require.Len(t, activeSessions, 2)
 	require.NotContains(t, snapshot, "tenant_id")
 	require.Equal(t, uint64(5), snapshot["event_counts"].(map[string]uint64)[core.FrameworkEventMessageInbound])
+}
+
+func TestSnapshotForPrincipalIncludesRexSnapshot(t *testing.T) {
+	materializer := nexusgateway.NewStateMaterializer()
+	provider := &RexRuntimeProvider{
+		Adapter: rexnexus.NewAdapter("rex", fakeRexRuntime{}, nil),
+	}
+
+	snapshot, err := snapshotForPrincipal(context.Background(), materializer, provider, fwgateway.ConnectionPrincipal{})
+	require.NoError(t, err)
+	rexSnapshot, ok := snapshot["rex"].(rexnexus.AdminSnapshot)
+	require.True(t, ok)
+	require.Equal(t, rexruntime.HealthHealthy, rexSnapshot.Runtime.Health)
+}
+
+type fakeRexRuntime struct{}
+
+func (fakeRexRuntime) Execute(context.Context, *core.Task, *core.Context) (*core.Result, error) {
+	return &core.Result{Success: true, Data: map[string]any{"ok": true}}, nil
+}
+
+func (fakeRexRuntime) RuntimeProjection() rexnexus.Projection {
+	return rexnexus.Projection{Health: rexruntime.HealthHealthy, LastProof: rexproof.ProofSurface{VerificationStatus: "pass"}}
+}
+
+func (fakeRexRuntime) Capabilities() []core.Capability {
+	return []core.Capability{core.CapabilityExecute}
 }
 
 func mustSnapshotJSON(t *testing.T, snapshot nexusgateway.StateSnapshot) []byte {

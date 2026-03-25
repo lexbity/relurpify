@@ -16,10 +16,15 @@ type Config struct {
 }
 
 type GatewayConfig struct {
-	Bind string            `yaml:"bind"`
-	Path string            `yaml:"path"`
-	Auth GatewayAuthConfig `yaml:"auth,omitempty"`
-	Log  GatewayLogConfig  `yaml:"log,omitempty"`
+	Bind       string                  `yaml:"bind"`
+	Path       string                  `yaml:"path"`
+	Auth       GatewayAuthConfig       `yaml:"auth,omitempty"`
+	Log        GatewayLogConfig        `yaml:"log,omitempty"`
+	Federation GatewayFederationConfig `yaml:"federation,omitempty"`
+}
+
+type GatewayFederationConfig struct {
+	Endpoints map[string]string `yaml:"endpoints,omitempty"`
 }
 
 type GatewayAuthConfig struct {

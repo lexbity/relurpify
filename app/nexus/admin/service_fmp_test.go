@@ -121,6 +121,110 @@ func TestReadFMPContinuationAuditFiltersByLineage(t *testing.T) {
 	require.Equal(t, core.FrameworkEventFMPResumeCommitted, result.Events[0].Type)
 }
 
+func TestReadFMPContinuationAuditIncludesChainVerification(t *testing.T) {
+	t.Parallel()
+
+	signer := fwfmp.NewEd25519SignerFromSeed([]byte("admin-audit-chain"))
+	auditStore, err := db.NewSQLiteAuditChainStore(
+		filepath.Join(t.TempDir(), "audit.db"),
+		signer,
+		&fwfmp.Ed25519Verifier{PublicKey: signer.PublicKey()},
+	)
+	require.NoError(t, err)
+	defer auditStore.Close()
+
+	ownership := &fwfmp.InMemoryOwnershipStore{}
+	mesh := &fwfmp.Service{Ownership: ownership, Audit: auditStore}
+	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+		LineageID:      "lineage-1",
+		TenantID:       "tenant-a",
+		TaskClass:      "agent.run",
+		ContextClass:   "workflow-runtime",
+		Owner:          core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		UpdatedAt:      time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC),
+		LineageVersion: 1,
+	}))
+	require.NoError(t, auditStore.Log(context.Background(), core.AuditRecord{
+		AgentID:    "runtime-a",
+		Action:     "fmp",
+		Type:       core.FrameworkEventFMPHandoffOffered,
+		Permission: "mesh",
+		Result:     "ok",
+		Metadata: map[string]any{
+			"lineage_id": "lineage-1",
+			"offer_id":   "offer-1",
+		},
+	}))
+
+	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
+	result, err := svc.ReadFMPContinuationAudit(context.Background(), ReadFMPContinuationAuditRequest{
+		AdminRequest: AdminRequest{
+			Principal: core.AuthenticatedPrincipal{
+				TenantID:      "tenant-a",
+				Authenticated: true,
+				Scopes:        []string{"nexus:observer"},
+				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+			},
+			TenantID: "tenant-a",
+		},
+		LineageID: "lineage-1",
+	})
+	require.NoError(t, err)
+	require.Len(t, result.AuditChain, 1)
+	require.NotNil(t, result.Verification)
+	require.True(t, result.Verification.Verified)
+}
+
+func TestVerifyFMPAuditTrailReportsIntegrity(t *testing.T) {
+	t.Parallel()
+
+	signer := fwfmp.NewEd25519SignerFromSeed([]byte("admin-audit-verify"))
+	auditStore, err := db.NewSQLiteAuditChainStore(
+		filepath.Join(t.TempDir(), "audit.db"),
+		signer,
+		&fwfmp.Ed25519Verifier{PublicKey: signer.PublicKey()},
+	)
+	require.NoError(t, err)
+	defer auditStore.Close()
+
+	ownership := &fwfmp.InMemoryOwnershipStore{}
+	mesh := &fwfmp.Service{Ownership: ownership, Audit: auditStore}
+	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+		LineageID:      "lineage-1",
+		TenantID:       "tenant-a",
+		TaskClass:      "agent.run",
+		ContextClass:   "workflow-runtime",
+		Owner:          core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		UpdatedAt:      time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC),
+		LineageVersion: 1,
+	}))
+	require.NoError(t, auditStore.Log(context.Background(), core.AuditRecord{
+		AgentID:    "runtime-a",
+		Action:     "fmp",
+		Type:       core.FrameworkEventFMPHandoffOffered,
+		Permission: "mesh",
+		Result:     "ok",
+		Metadata:   map[string]any{"lineage_id": "lineage-1"},
+	}))
+
+	svc := NewService(ServiceConfig{FMP: mesh}).(*service)
+	result, err := svc.VerifyFMPAuditTrail(context.Background(), VerifyFMPAuditTrailRequest{
+		AdminRequest: AdminRequest{
+			Principal: core.AuthenticatedPrincipal{
+				TenantID:      "tenant-a",
+				Authenticated: true,
+				Scopes:        []string{"nexus:observer"},
+				Subject:       core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "admin-a"},
+			},
+			TenantID: "tenant-a",
+		},
+		LineageID: "lineage-1",
+	})
+	require.NoError(t, err)
+	require.True(t, result.Verification.Verified)
+	require.Equal(t, 1, result.Verification.EntryCount)
+}
+
 func TestReadFMPContinuationAuditDeniesCrossTenantAccess(t *testing.T) {
 	t.Parallel()
 
