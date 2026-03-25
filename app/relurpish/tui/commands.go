@@ -48,6 +48,7 @@ func init() {
 		{Name: "rerun", Aliases: []string{"rr"}, Description: "Replay a workflow from a step", Usage: "/rerun <workflow-id> <step-id>", Handler: rootHandleRerun},
 		{Name: "cancelwf", Aliases: []string{"cwf"}, Description: "Mark a workflow canceled", Usage: "/cancelwf <workflow-id>", Handler: rootHandleCancelWorkflow},
 		{Name: "resume", Aliases: []string{"rs"}, Description: "Resume architect execution from a workflow", Usage: "/resume <workflow-id> | /resume latest", Handler: rootHandleResume},
+		{Name: "commit", Aliases: []string{"ci"}, Description: "Commit modified files to git", Usage: "/commit [message]", Handler: rootHandleCommit},
 	} {
 		rootCommandRegistry[cmd.Name] = cmd
 	}

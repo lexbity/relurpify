@@ -207,7 +207,8 @@ func RenderMessage(msg Message, width int, spinnerView string) string {
 }
 
 func renderMsgHeader(msg Message) string {
-	ts := msg.Timestamp.Format("15:04:05")
+	// Format timestamp: show just time for today, date+time for older messages
+	ts := formatMessageTimestamp(msg.Timestamp)
 	icon, role := "💬", "User"
 	switch msg.Role {
 	case RoleUser:
@@ -218,6 +219,20 @@ func renderMsgHeader(msg Message) string {
 		icon, role = "⚙", "System"
 	}
 	return headerStyle.Render(fmt.Sprintf("%s [%s] %s", icon, ts, role))
+}
+
+// formatMessageTimestamp returns a formatted timestamp string.
+// For messages from today, shows "15:04" (HH:MM).
+// For messages from earlier dates, shows "Jan 02 15:04" (Mon DD HH:MM).
+func formatMessageTimestamp(t time.Time) string {
+	now := time.Now()
+	// Check if same day (year, month, day match)
+	sameDay := t.Year() == now.Year() && t.Month() == now.Month() && t.Day() == now.Day()
+
+	if sameDay {
+		return t.Format("15:04")
+	}
+	return t.Format("Jan 02 15:04")
 }
 
 func renderAgentContent(msg Message, width int, spinnerView string) string {

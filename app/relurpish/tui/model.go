@@ -108,11 +108,16 @@ func newRootModel(rt RuntimeAdapter) RootModel {
 
 	notifQ := &NotificationQueue{}
 
+	inputBar := NewInputBar()
+	if info.Workspace != "" {
+		inputBar.SetWorkspace(info.Workspace)
+	}
+
 	m := RootModel{
 		titleBar:     NewTitleBar(info),
 		tabBar:       NewTabBar(TabChat),
 		notifBar:     NewNotificationBar(notifQ),
-		inputBar:     NewInputBar(),
+		inputBar:     inputBar,
 		notifQ:       notifQ,
 		activeTab:    TabChat,
 		titleVisible: true,
@@ -313,6 +318,29 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.eucloEmitter.Resolve(msg.response)
 		}
 		return m, nil
+
+	// Git operations
+	case gitStatusMsg:
+		if msg.Err != nil {
+			m.addSystemMessage(fmt.Sprintf("Error: %v", msg.Err))
+			return m, nil
+		}
+		if len(msg.Modified) == 0 {
+			m.addSystemMessage("nothing to commit")
+			return m, nil
+		}
+		// Show files and prompt for message
+		filesStr := strings.Join(msg.Modified, "\n")
+		m.addSystemMessage(fmt.Sprintf("Modified files:\n%s\n\nUse /commit \"message here\" to commit", filesStr))
+		return m, nil
+
+	case gitCommitMsg:
+		if msg.Err != nil {
+			m.addSystemMessage(fmt.Sprintf("Commit failed: %v", msg.Err))
+			return m, nil
+		}
+		m.addSystemMessage(fmt.Sprintf("✓ committed: %s", msg.Message))
+		return m, nil
 	}
 
 	// Route to active pane + chat (chat always listens for stream/spinner msgs).
@@ -509,14 +537,18 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 			m.chat.feed.SetSearchFilter("")
 		}
 	case "ctrl+z":
-		// Undo: remove the last message from chat feed
+		// Undo: revert to previous feed snapshot
 		if m.chat != nil {
-			m.chat.Undo()
+			if !m.chat.Undo() {
+				m.addSystemMessage("nothing to undo")
+			}
 		}
 	case "ctrl+y":
-		// Redo: restore the last undone message
+		// Redo: restore the next feed snapshot
 		if m.chat != nil {
-			m.chat.Redo()
+			if !m.chat.Redo() {
+				m.addSystemMessage("nothing to redo")
+			}
 		}
 	case "ctrl+u":
 		// Scroll up: scroll the chat feed up

@@ -37,6 +37,13 @@ type InputBar struct {
 	width   int
 	// searchMode suppresses global keys and shows a search placeholder.
 	searchMode bool
+
+	// File picker state
+	pickerActive bool
+	pickerQuery  string
+	pickerResult filePickerResultMsg
+	pickerSel    int
+	workspace    string
 }
 
 // NewInputBar creates a focused InputBar.
@@ -45,6 +52,11 @@ func NewInputBar() *InputBar {
 	ti.Placeholder = "Type a message or /help for commands"
 	ti.Focus()
 	return &InputBar{input: ti}
+}
+
+// SetWorkspace sets the workspace path for file picker globbing.
+func (b *InputBar) SetWorkspace(path string) {
+	b.workspace = path
 }
 
 // SetWidth sets the input width.
@@ -103,6 +115,10 @@ func (b *InputBar) prefix(tab TabID) string {
 // Update processes key input and emits typed messages.
 func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 	switch msg := msg.(type) {
+	case filePickerResultMsg:
+		b.pickerResult = msg
+		return b, nil
+
 	case tea.KeyMsg:
 		// Intercept global navigation keys only when input is empty.
 		if b.input.Value() == "" && !b.palOpen && !b.searchMode {
@@ -119,11 +135,32 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
 
 		case "enter":
+			// File picker: select current file
+			if b.pickerActive && len(b.pickerResult.Results) > 0 && b.pickerSel < len(b.pickerResult.Results) {
+				selectedFile := b.pickerResult.Results[b.pickerSel]
+				// Insert selected file as @path token
+				currentVal := b.input.Value()
+				// Remove the @prefix query
+				atIdx := strings.LastIndex(currentVal, "@")
+				if atIdx >= 0 {
+					beforeAt := currentVal[:atIdx]
+					b.input.SetValue(beforeAt + "@" + selectedFile + " ")
+					b.pickerActive = false
+					b.pickerResult.Results = nil
+					b.pickerSel = 0
+					b.input.CursorEnd()
+					return b, nil
+				}
+			}
+
 			raw := strings.TrimSpace(b.input.Value())
 			b.input.SetValue("")
 			b.palOpen = false
 			b.palette = nil
 			b.palSel = 0
+			b.pickerActive = false
+			b.pickerResult.Results = nil
+			b.pickerSel = 0
 			if raw == "" {
 				return b, nil
 			}
@@ -138,6 +175,12 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			return b, func() tea.Msg { return InputSubmittedMsg{Value: raw} }
 
 		case "esc":
+			if b.pickerActive {
+				b.pickerActive = false
+				b.pickerResult.Results = nil
+				b.pickerSel = 0
+				return b, nil
+			}
 			if b.palOpen {
 				b.palOpen = false
 				b.palette = nil
@@ -150,6 +193,10 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			}
 
 		case "up":
+			if b.pickerActive && b.pickerSel > 0 {
+				b.pickerSel--
+				return b, nil
+			}
 			if b.palOpen && b.palSel > 0 {
 				b.palSel--
 				return b, nil
@@ -162,6 +209,10 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			return b, nil
 
 		case "down":
+			if b.pickerActive && b.pickerSel < len(b.pickerResult.Results)-1 {
+				b.pickerSel++
+				return b, nil
+			}
 			if b.palOpen && b.palSel < len(b.palette)-1 {
 				b.palSel++
 				return b, nil
@@ -172,6 +223,21 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			return b, nil
 
 		case "tab":
+			// File picker: select current file (same as enter)
+			if b.pickerActive && len(b.pickerResult.Results) > 0 && b.pickerSel < len(b.pickerResult.Results) {
+				selectedFile := b.pickerResult.Results[b.pickerSel]
+				currentVal := b.input.Value()
+				atIdx := strings.LastIndex(currentVal, "@")
+				if atIdx >= 0 {
+					beforeAt := currentVal[:atIdx]
+					b.input.SetValue(beforeAt + "@" + selectedFile + " ")
+					b.pickerActive = false
+					b.pickerResult.Results = nil
+					b.pickerSel = 0
+					b.input.CursorEnd()
+					return b, nil
+				}
+			}
 			if b.palOpen && len(b.palette) > 0 {
 				b.autocomplete()
 				b.updatePalette()
@@ -183,14 +249,36 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		var cmd tea.Cmd
 		b.input, cmd = b.input.Update(msg)
 
-		// Check if we should open the command palette.
+		// Check if we should open the command palette or file picker.
 		val := b.input.Value()
 		if strings.HasPrefix(val, "/") {
 			b.palOpen = true
 			b.updatePalette()
+			b.pickerActive = false
+			b.pickerResult.Results = nil
+		} else if strings.Contains(val, "@") {
+			// Find the last @ and get the text after it
+			atIdx := strings.LastIndex(val, "@")
+			if atIdx >= 0 {
+				afterAt := val[atIdx+1:]
+				// Only activate picker if @ is not preceded by another word character
+				isTokenStart := atIdx == 0 || !isWordChar(rune(val[atIdx-1]))
+				if isTokenStart && b.workspace != "" {
+					b.pickerActive = true
+					b.pickerQuery = "@" + afterAt
+					b.pickerSel = 0
+					return b, func() tea.Msg {
+						return filePickerQueryCmd(b.workspace, "@"+afterAt)()
+					}
+				}
+			}
+			b.palOpen = false
+			b.palette = nil
 		} else {
 			b.palOpen = false
 			b.palette = nil
+			b.pickerActive = false
+			b.pickerResult.Results = nil
 		}
 		return b, cmd
 	}
@@ -259,6 +347,8 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	var hint string
 	if streaming {
 		hint = dimStyle.Render(" streaming…  pgup/down scroll | ctrl+c quit")
+	} else if b.pickerActive && len(b.pickerResult.Results) > 0 {
+		hint = dimStyle.Render(" enter select | esc cancel | ↑↓ navigate")
 	} else if b.palOpen && len(b.palette) > 0 {
 		hint = dimStyle.Render(" enter run | esc cancel | tab complete | ↑↓ select")
 	} else if b.searchMode {
@@ -273,10 +363,27 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	}
 	bar := inputBarNewStyle.Width(b.width).Render(content)
 
+	if b.pickerActive && len(b.pickerResult.Results) > 0 {
+		return b.renderPicker() + "\n" + bar
+	}
 	if b.palOpen && len(b.palette) > 0 {
 		return b.renderPalette() + "\n" + bar
 	}
 	return bar
+}
+
+func (b *InputBar) renderPicker() string {
+	lines := []string{panelHeaderStyle.Render("Files")}
+	for i, file := range b.pickerResult.Results {
+		label := file
+		if i == b.pickerSel {
+			label = panelItemActiveStyle.Render(label)
+		} else {
+			label = panelItemStyle.Render(label)
+		}
+		lines = append(lines, label)
+	}
+	return panelStyle.Width(b.width).Render(strings.Join(lines, "\n"))
 }
 
 func (b *InputBar) renderPalette() string {
@@ -300,4 +407,9 @@ func parseSlashCommand(input string) (string, []string) {
 	}
 	name := strings.TrimPrefix(parts[0], "/")
 	return name, parts[1:]
+}
+
+// isWordChar checks if a rune is a word character (letter, digit, or underscore).
+func isWordChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 }

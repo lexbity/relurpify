@@ -36,8 +36,9 @@ type ChatPane struct {
 
 	width, height int
 
-	undoStack []Message
-	redoStack []Message
+	// Feed snapshots for undo/redo: each snapshot is a full copy of message list
+	undoStack [][]Message
+	redoStack [][]Message
 }
 
 // NewChatPane initializes the ChatPane. The feed is created but not sized yet.
@@ -81,35 +82,62 @@ func (p *ChatPane) SetSize(w, h int) {
 	p.feed.SetSize(w, h)
 }
 
-// Undo removes the last message and adds it to the redo stack.
-func (p *ChatPane) Undo() {
-	messages := p.feed.Messages()
-	if len(messages) == 0 {
-		return
+// Undo reverts the feed to the previous snapshot state.
+// Returns true on success, false if undo not possible (active run or empty stack).
+func (p *ChatPane) Undo() bool {
+	// Do not undo if a run is active
+	if p.HasActiveRuns() {
+		return false
 	}
-	lastMsg := messages[len(messages)-1]
-	p.undoStack = append(p.undoStack, lastMsg)
+	if len(p.undoStack) == 0 {
+		return false
+	}
 
-	// Remove the last message from the feed
-	newMessages := make([]Message, 0, len(messages)-1)
-	newMessages = append(newMessages, messages[:len(messages)-1]...)
+	// Save current state to redo stack
+	currentSnapshot := make([]Message, len(p.feed.Messages()))
+	copy(currentSnapshot, p.feed.Messages())
+	p.redoStack = append(p.redoStack, currentSnapshot)
+
+	// Restore previous snapshot
+	lastSnapshot := p.undoStack[len(p.undoStack)-1]
+	p.undoStack = p.undoStack[:len(p.undoStack)-1]
+
+	// Replace feed contents with snapshot
 	p.feed.ClearMessages()
-	for _, msg := range newMessages {
+	for _, msg := range lastSnapshot {
 		p.feed.AppendMessage(msg)
 	}
 
-	// Clear redo stack when undoing
-	p.redoStack = nil
+	return true
 }
 
-// Redo restores the last undone message.
-func (p *ChatPane) Redo() {
-	if len(p.undoStack) == 0 {
-		return
+// Redo restores the feed to the next snapshot state.
+// Returns true on success, false if redo not possible (active run or empty stack).
+func (p *ChatPane) Redo() bool {
+	// Do not redo if a run is active
+	if p.HasActiveRuns() {
+		return false
 	}
-	lastUndone := p.undoStack[len(p.undoStack)-1]
-	p.undoStack = p.undoStack[:len(p.undoStack)-1]
-	p.feed.AppendMessage(lastUndone)
+	if len(p.redoStack) == 0 {
+		return false
+	}
+
+	// Save current state to undo stack
+	currentSnapshot := make([]Message, len(p.feed.Messages()))
+	copy(currentSnapshot, p.feed.Messages())
+	p.undoStack = append(p.undoStack, currentSnapshot)
+
+	// Restore next snapshot
+	nextSnapshot := p.redoStack[len(p.redoStack)-1]
+	p.redoStack = p.redoStack[:len(p.redoStack)-1]
+
+	// Replace feed contents with snapshot
+	p.feed.ClearMessages()
+	for _, msg := range nextSnapshot {
+		p.feed.AppendMessage(msg)
+	}
+
+	return true
 }
 
 // ToggleCompact toggles between normal and compact message display.
@@ -170,7 +198,31 @@ func (p *ChatPane) View() string {
 
 // HandleInputSubmit processes text submitted from the input bar.
 func (p *ChatPane) HandleInputSubmit(value string) tea.Cmd {
-	cmd, _ := p.StartRun(value)
+	// Extract @file tokens and resolve them
+	cleanedValue := value
+	files := extractFileTokens(value)
+	if len(files) > 0 && p.runtime != nil {
+		// Resolve file tokens to actual context files
+		resolution := p.runtime.ResolveContextFiles(context.Background(), files)
+		if len(resolution.Allowed) > 0 {
+			if p.context != nil {
+				p.context.Files = append(p.context.Files, resolution.Allowed...)
+			}
+		}
+		// Remove @tokens from the prompt text
+		cleanedValue = removeFileTokens(value)
+	}
+
+	// Snapshot current feed state for undo before starting the run
+	if len(p.feed.Messages()) > 0 {
+		snapshot := make([]Message, len(p.feed.Messages()))
+		copy(snapshot, p.feed.Messages())
+		p.undoStack = append(p.undoStack, snapshot)
+		// Clear redo stack when taking a new action
+		p.redoStack = nil
+	}
+
+	cmd, _ := p.StartRun(cleanedValue)
 	return cmd
 }
 
@@ -711,4 +763,29 @@ func formatStructuredData(value any) string {
 		return string(data)
 	}
 	return fmt.Sprintf("%v", value)
+}
+
+// extractFileTokens extracts @path tokens from a text string.
+func extractFileTokens(text string) []string {
+	tokens := []string{}
+	words := strings.Fields(text)
+	for _, word := range words {
+		if strings.HasPrefix(word, "@") && len(word) > 1 {
+			path := strings.TrimPrefix(word, "@")
+			tokens = append(tokens, path)
+		}
+	}
+	return tokens
+}
+
+// removeFileTokens removes @path tokens from a text string, preserving other text.
+func removeFileTokens(text string) string {
+	words := strings.Fields(text)
+	var result []string
+	for _, word := range words {
+		if !strings.HasPrefix(word, "@") || len(word) == 1 {
+			result = append(result, word)
+		}
+	}
+	return strings.TrimSpace(strings.Join(result, " "))
 }

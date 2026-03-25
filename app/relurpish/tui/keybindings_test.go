@@ -11,31 +11,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestKeybindingsUndo verifies ctrl+z removes the last message.
+// TestKeybindingsUndo verifies ctrl+z reverts to previous snapshot.
 func TestKeybindingsUndo(t *testing.T) {
 	adapter := newMinimalTestAdapter()
 	m := newRootModel(adapter)
-	m.chat.feed.AppendMessage(Message{
+
+	msg1 := Message{
 		ID:   "msg-1",
 		Role: RoleUser,
 		Content: MessageContent{
 			Text: "Hello",
 		},
 		Timestamp: time.Now(),
-	})
-	m.chat.feed.AppendMessage(Message{
+	}
+	m.chat.feed.AppendMessage(msg1)
+
+	// Snapshot after first message
+	snapshot1 := make([]Message, len(m.chat.feed.Messages()))
+	copy(snapshot1, m.chat.feed.Messages())
+	m.chat.undoStack = append(m.chat.undoStack, snapshot1)
+
+	msg2 := Message{
 		ID:   "msg-2",
 		Role: RoleAgent,
 		Content: MessageContent{
 			Text: "Hi there",
 		},
 		Timestamp: time.Now(),
-	})
+	}
+	m.chat.feed.AppendMessage(msg2)
 
 	// Initially 2 messages
 	require.Len(t, m.chat.feed.Messages(), 2)
 
-	// Undo should remove the last message
+	// Undo should revert to snapshot (1 message)
 	updated, _ := m.handleGlobalKey("ctrl+z")
 	m = updated.(RootModel)
 
@@ -44,11 +53,12 @@ func TestKeybindingsUndo(t *testing.T) {
 	require.Equal(t, "msg-1", m.chat.feed.Messages()[0].ID)
 }
 
-// TestKeybindingsRedo verifies ctrl+y restores the last undone message.
+// TestKeybindingsRedo verifies ctrl+y restores the next snapshot.
 func TestKeybindingsRedo(t *testing.T) {
 	adapter := newMinimalTestAdapter()
 	m := newRootModel(adapter)
-	msg := Message{
+
+	msg1 := Message{
 		ID:   "msg-1",
 		Role: RoleUser,
 		Content: MessageContent{
@@ -56,19 +66,34 @@ func TestKeybindingsRedo(t *testing.T) {
 		},
 		Timestamp: time.Now(),
 	}
-	m.chat.feed.AppendMessage(msg)
+	m.chat.feed.AppendMessage(msg1)
 
-	// Undo to remove the message
+	// Snapshot and add second message
+	snapshot1 := make([]Message, len(m.chat.feed.Messages()))
+	copy(snapshot1, m.chat.feed.Messages())
+	m.chat.undoStack = append(m.chat.undoStack, snapshot1)
+
+	msg2 := Message{
+		ID:   "msg-2",
+		Role: RoleAgent,
+		Content: MessageContent{
+			Text: "Hi there",
+		},
+		Timestamp: time.Now(),
+	}
+	m.chat.feed.AppendMessage(msg2)
+
+	// Undo to go back to 1 message
 	updated, _ := m.handleGlobalKey("ctrl+z")
 	m = updated.(RootModel)
-	require.Len(t, m.chat.feed.Messages(), 0)
+	require.Len(t, m.chat.feed.Messages(), 1)
 
-	// Redo should restore the message
+	// Redo should restore to 2 messages
 	updated, _ = m.handleGlobalKey("ctrl+y")
 	m = updated.(RootModel)
 
-	require.Len(t, m.chat.feed.Messages(), 1)
-	require.Equal(t, "msg-1", m.chat.feed.Messages()[0].ID)
+	require.Len(t, m.chat.feed.Messages(), 2)
+	require.Equal(t, "msg-2", m.chat.feed.Messages()[1].ID)
 }
 
 // TestKeybindingsScrollUp verifies ctrl+u scrolls the feed up.
@@ -237,43 +262,6 @@ func TestFeedScrollMethods(t *testing.T) {
 	require.Greater(t, feed.vp.YOffset, offsetBefore)
 }
 
-// TestChatPaneUndoRedo verifies undo/redo stack management.
-func TestChatPaneUndoRedo(t *testing.T) {
-	pane := NewChatPane(nil, nil, nil, nil)
-	pane.SetSize(80, 20)
-
-	// Add messages
-	msg1 := Message{ID: "msg-1", Role: RoleUser, Content: MessageContent{Text: "First"}, Timestamp: time.Now()}
-	msg2 := Message{ID: "msg-2", Role: RoleAgent, Content: MessageContent{Text: "Second"}, Timestamp: time.Now()}
-	msg3 := Message{ID: "msg-3", Role: RoleUser, Content: MessageContent{Text: "Third"}, Timestamp: time.Now()}
-
-	pane.feed.AppendMessage(msg1)
-	pane.feed.AppendMessage(msg2)
-	pane.feed.AppendMessage(msg3)
-
-	require.Len(t, pane.feed.Messages(), 3)
-
-	// Undo removes last message
-	pane.Undo()
-	require.Len(t, pane.feed.Messages(), 2)
-	require.Len(t, pane.undoStack, 1)
-	require.Equal(t, "msg-3", pane.undoStack[0].ID)
-
-	// Undo again
-	pane.Undo()
-	require.Len(t, pane.feed.Messages(), 1)
-	require.Len(t, pane.undoStack, 2)
-
-	// Redo restores message
-	pane.Redo()
-	require.Len(t, pane.feed.Messages(), 2)
-	require.Len(t, pane.undoStack, 1)
-
-	// Redo again
-	pane.Redo()
-	require.Len(t, pane.feed.Messages(), 3)
-	require.Len(t, pane.undoStack, 0)
-}
 
 // TestChatPaneToggleCompact verifies compact mode cycling.
 func TestChatPaneToggleCompact(t *testing.T) {
