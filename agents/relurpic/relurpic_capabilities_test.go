@@ -17,8 +17,14 @@ import (
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
+	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	"github.com/stretchr/testify/require"
 )
+
+func registerRelurpicReadTool(t *testing.T, registry *capability.Registry, basePath string) {
+	t.Helper()
+	require.NoError(t, registry.Register(&platformfs.ReadFileTool{BasePath: basePath}))
+}
 
 type relurpicCapabilityQueueModel struct {
 	responses []*core.LLMResponse
@@ -50,6 +56,7 @@ func (m *relurpicCapabilityQueueModel) ChatWithTools(context.Context, []core.Mes
 
 func TestRegisterBuiltinRelurpicCapabilitiesRegistersCoordinationTargets(t *testing.T) {
 	registry := capability.NewRegistry()
+	registerRelurpicReadTool(t, registry, ".")
 	require.NoError(t, registry.Register(architectStubTool{}))
 
 	model := &relurpicCapabilityQueueModel{
@@ -107,6 +114,7 @@ func TestRegisterAgentCapabilitiesRegistersAgentNamespaceEntries(t *testing.T) {
 
 func TestPatternDetectorCapabilityReturnsAndPersistsProposals(t *testing.T) {
 	registry := capability.NewRegistry()
+	registerRelurpicReadTool(t, registry, ".")
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
 			{Text: `{"proposals":[{"kind":"boundary","title":"Error wrapping at boundaries","description":"Boundary functions wrap returned errors consistently.","instances":[{"file_path":"","start_line":3,"end_line":7,"excerpt":"func Wrap() error {\n\treturn fmt.Errorf(\"wrap: %w\", err)\n}"}],"confidence":0.87}]}`},
@@ -156,6 +164,7 @@ func TestPatternDetectorCapabilityReturnsAndPersistsProposals(t *testing.T) {
 
 func TestPatternDetectorCapabilityResolvesNamedScopeWithoutGraphOrStore(t *testing.T) {
 	registry := capability.NewRegistry()
+	registerRelurpicReadTool(t, registry, ".")
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
 			{Text: `[{"kind":"structural","title":"Utility helper","description":"A small helper function centralizes formatting.","instances":[{"file_path":"","start_line":3,"end_line":5,"excerpt":"func Wrap() error { return err }"}],"confidence":0.6}]`},
@@ -181,6 +190,7 @@ func TestPatternDetectorCapabilityResolvesNamedScopeWithoutGraphOrStore(t *testi
 
 func TestPatternDetectorCapabilityFiltersKindsAfterModelResponse(t *testing.T) {
 	registry := capability.NewRegistry()
+	registerRelurpicReadTool(t, registry, ".")
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
 			{Text: `{"proposals":[{"kind":"behavioral","title":"Retry loop","description":"Retries on transient failure.","instances":[{"file_path":"","start_line":3,"end_line":5,"excerpt":"func Wrap() error { return err }"}],"confidence":0.8},{"kind":"structural","title":"Helper wrapper","description":"A helper wraps one operation.","instances":[{"file_path":"","start_line":3,"end_line":5,"excerpt":"func Wrap() error { return err }"}],"confidence":0.7}]}`},
@@ -216,7 +226,9 @@ func TestResolveSymbolScopeReturnsTypedErrorForAmbiguousSymbol(t *testing.T) {
 	require.NoError(t, manager.IndexFile(fileA))
 	require.NoError(t, manager.IndexFile(fileB))
 
-	_, err := resolveSymbolScope("Wrap", manager)
+	registry := capability.NewRegistry()
+	registerRelurpicReadTool(t, registry, ".")
+	_, err := resolveSymbolScope(context.Background(), "Wrap", manager, registry)
 	require.Error(t, err)
 	var resolutionErr *ResolutionError
 	require.ErrorAs(t, err, &resolutionErr)
@@ -225,6 +237,7 @@ func TestResolveSymbolScopeReturnsTypedErrorForAmbiguousSymbol(t *testing.T) {
 
 func TestGapDetectorCapabilityRecordsDriftWritesEdgesAndInvalidatesPlan(t *testing.T) {
 	registry := capability.NewRegistry()
+	registerRelurpicReadTool(t, registry, ".")
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
 			{Text: `{"results":[{"severity":"significant","description":"Wrap returns the raw error instead of wrapping it at the boundary.","evidence_lines":[5]}]}`},
@@ -299,6 +312,7 @@ func TestGapDetectorCapabilityRecordsDriftWritesEdgesAndInvalidatesPlan(t *testi
 
 func TestGapDetectorCapabilityAddsDeferralObservationBelowEscalationThreshold(t *testing.T) {
 	registry := capability.NewRegistry()
+	registerRelurpicReadTool(t, registry, ".")
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
 			{Text: `{"results":[{"severity":"minor","description":"Wrap returns raw errors in one branch.","evidence_lines":[5]}]}`},

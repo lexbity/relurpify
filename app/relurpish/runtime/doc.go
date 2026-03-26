@@ -5,7 +5,10 @@
 //
 // Runtime is the central coordinator. It opens the workspace configuration,
 // registers capability providers, wires the permission manager, and launches
-// agents in response to user instructions from the TUI.
+// agents in response to user instructions from the TUI. Agent-executed work is
+// expected to flow through the capability registry and its sandbox/policy
+// enforcement path, while runtime-owned bootstrap and persistence code may
+// still touch local process or filesystem primitives directly.
 //
 // # Providers
 //

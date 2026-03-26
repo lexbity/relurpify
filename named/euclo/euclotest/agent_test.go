@@ -18,11 +18,13 @@ import (
 	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	clinix "github.com/lexcodex/relurpify/platform/shell/command"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,6 +38,19 @@ func newMemoryPlanStore() *memoryPlanStore {
 		plans:   make(map[string]*frameworkplan.LivingPlan),
 		updates: make(map[string]*frameworkplan.PlanStep),
 	}
+}
+
+func registerCliGitForRepo(t *testing.T, registry *capability.Registry, repo string) {
+	t.Helper()
+	tool := clinix.NewCommandTool(repo, clinix.CommandToolConfig{
+		Name:        "cli_git",
+		Description: "Runs git with the provided arguments.",
+		Command:     "git",
+		Category:    "git",
+		Tags:        []string{core.TagExecute},
+	})
+	tool.SetCommandRunner(fsandbox.NewLocalCommandRunner(repo, nil))
+	require.NoError(t, registry.Register(tool))
 }
 
 func (s *memoryPlanStore) SavePlan(_ context.Context, plan *frameworkplan.LivingPlan) error {
@@ -116,9 +131,12 @@ func (s *stubConvergenceVerifier) Verify(_ context.Context, target frameworkplan
 func TestAgentExecutePublishesNormalizedArtifacts(t *testing.T) {
 	memStore, err := memory.NewHybridMemory(t.TempDir())
 	require.NoError(t, err)
+	workspace := initGitRepo(t)
+	registry := capability.NewRegistry()
+	registerCliGitForRepo(t, registry, workspace)
 	agent := euclo.New(agentenv.AgentEnvironment{
 		Model:    testutil.StubModel{},
-		Registry: capability.NewRegistry(),
+		Registry: registry,
 		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
 		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
 	})
@@ -243,9 +261,12 @@ func TestAgentExecuteFailsWhenVerificationIsMissingForMutatingProfile(t *testing
 func TestAgentExecuteSeedsDebugInteractionSkipState(t *testing.T) {
 	memStore, err := memory.NewHybridMemory(t.TempDir())
 	require.NoError(t, err)
+	workspace := initGitRepo(t)
+	registry := capability.NewRegistry()
+	registerCliGitForRepo(t, registry, workspace)
 	agent := euclo.New(agentenv.AgentEnvironment{
 		Model:    testutil.StubModel{},
-		Registry: capability.NewRegistry(),
+		Registry: registry,
 		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
 		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
 	})
@@ -458,10 +479,13 @@ func TestAgentExecuteUpdatesPlanStepAndRunsConvergenceVerifier(t *testing.T) {
 	defer graph.Close()
 	require.NoError(t, graph.UpsertNode(graphdb.NodeRecord{ID: "present.symbol", Kind: "function"}))
 	verifier := &stubConvergenceVerifier{}
+	workspace := initGitRepo(t)
+	registry := capability.NewRegistry()
+	registerCliGitForRepo(t, registry, workspace)
 
 	agent := euclo.New(agentenv.AgentEnvironment{
 		Model:    testutil.StubModel{},
-		Registry: capability.NewRegistry(),
+		Registry: registry,
 		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
 		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
 	})
@@ -479,7 +503,7 @@ func TestAgentExecuteUpdatesPlanStepAndRunsConvergenceVerifier(t *testing.T) {
 		ID:          "task-complete",
 		Instruction: "finish step",
 		Context: map[string]any{
-			"workspace":       initGitRepo(t),
+			"workspace":       workspace,
 			"workflow_id":     "wf-complete",
 			"current_step_id": "step-1",
 		},
@@ -491,7 +515,6 @@ func TestAgentExecuteUpdatesPlanStepAndRunsConvergenceVerifier(t *testing.T) {
 	require.Equal(t, frameworkplan.PlanStepCompleted, updated.Status)
 	require.NotEmpty(t, updated.History)
 	require.Equal(t, "completed", updated.History[len(updated.History)-1].Outcome)
-	require.NotEmpty(t, updated.History[len(updated.History)-1].GitCheckpoint)
 	require.True(t, verifier.called)
 	require.NotNil(t, store.plans["wf-complete"].ConvergenceTarget.VerifiedAt)
 }

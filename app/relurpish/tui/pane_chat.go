@@ -356,12 +356,20 @@ func (p *ChatPane) AddFile(path string) tea.Cmd {
 	if err := p.context.AddFile(path); err != nil {
 		return func() tea.Msg { return chatSystemMsg{Text: fmt.Sprintf("Context error: %v", err)} }
 	}
-	entry, err := fileEntryForPath(p.session.Workspace, path)
-	if err != nil {
+	if p.runtime == nil {
 		return func() tea.Msg { return chatSystemMsg{Text: fmt.Sprintf("Added to context: %s", path)} }
 	}
+	resolution := p.runtime.ResolveContextFiles(context.Background(), []string{path})
+	if len(resolution.Contents) == 0 {
+		return func() tea.Msg { return chatSystemMsg{Text: fmt.Sprintf("Added to context: %s", path)} }
+	}
+	content := resolution.Contents[0].Content
+	size := int64(len(content))
+	if resolution.Contents[0].Truncated {
+		size = contextFileMaxBytes
+	}
 	return func() tea.Msg {
-		return chatSystemMsg{Text: fmt.Sprintf("Added to context: %s (%s)", path, formatSizeToken(entry.SizeBytes, entry.TokenEstimate))}
+		return chatSystemMsg{Text: fmt.Sprintf("Added to context: %s (%s)", path, formatSizeToken(size, estimateTokensFromBytes(size)))}
 	}
 }
 

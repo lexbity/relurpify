@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -15,6 +14,7 @@ import (
 
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/patterns"
@@ -24,6 +24,7 @@ import (
 type patternDetectorDetectCapabilityHandler struct {
 	model        core.LanguageModel
 	config       *core.Config
+	registry     *capability.Registry
 	indexManager *ast.IndexManager
 	graphDB      *graphdb.Engine
 	patternStore patterns.PatternStore
@@ -71,7 +72,7 @@ func (h patternDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *c
 		return nil, fmt.Errorf("corpus_scope required")
 	}
 
-	scope, err := resolveSymbolScope(symbolScope, h.indexManager)
+	scope, err := resolveSymbolScope(ctx, symbolScope, h.indexManager, h.registry)
 	if err != nil {
 		return nil, err
 	}
@@ -202,8 +203,8 @@ func (r resolvedSymbolScope) PrimaryFile() string {
 	return r.FilePaths[0]
 }
 
-func excerptForFile(path string) (resolvedExcerpt, error) {
-	data, err := os.ReadFile(path)
+func excerptForFile(ctx context.Context, registry *capability.Registry, path string) (resolvedExcerpt, error) {
+	data, err := readWorkspaceFile(ctx, registry, path)
 	if err != nil {
 		return resolvedExcerpt{}, err
 	}
@@ -220,8 +221,8 @@ func excerptForFile(path string) (resolvedExcerpt, error) {
 	}, nil
 }
 
-func excerptForLines(path string, startLine, endLine int) (resolvedExcerpt, error) {
-	data, err := os.ReadFile(path)
+func excerptForLines(ctx context.Context, registry *capability.Registry, path string, startLine, endLine int) (resolvedExcerpt, error) {
+	data, err := readWorkspaceFile(ctx, registry, path)
 	if err != nil {
 		return resolvedExcerpt{}, err
 	}
@@ -273,6 +274,31 @@ func appendNodeIDs(base []string, nodes []*ast.Node) []string {
 	}
 	sort.Strings(base)
 	return base
+}
+
+func readWorkspaceFile(ctx context.Context, registry *capability.Registry, path string) ([]byte, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("capability registry required for file access")
+	}
+	result, err := registry.InvokeCapability(ctx, core.NewContext(), "file_read", map[string]any{"path": path})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("file_read returned no result for %s", path)
+	}
+	if !result.Success {
+		msg := strings.TrimSpace(result.Error)
+		if msg == "" {
+			msg = fmt.Sprintf("file_read failed for %s", path)
+		}
+		return nil, fmt.Errorf("%s", msg)
+	}
+	content, _ := result.Data["content"].(string)
+	if content == "" {
+		return nil, fmt.Errorf("file_read returned no content for %s", path)
+	}
+	return []byte(content), nil
 }
 
 func sortedKeys(set map[string]struct{}) []string {

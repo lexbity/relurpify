@@ -1,13 +1,14 @@
 package relurpic
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 )
 
 type ResolutionError struct {
@@ -26,29 +27,29 @@ func (e *ResolutionError) Error() string {
 	return fmt.Sprintf("resolve scope %q: %s (%s)", e.Scope, e.Reason, strings.Join(e.Candidates, ", "))
 }
 
-func resolveSymbolScope(scope string, index *ast.IndexManager) (resolvedSymbolScope, error) {
+func resolveSymbolScope(ctx context.Context, scope string, index *ast.IndexManager, registry *capability.Registry) (resolvedSymbolScope, error) {
 	scope = strings.TrimSpace(scope)
 	if scope == "" {
 		return resolvedSymbolScope{}, fmt.Errorf("scope required")
 	}
-	if info, err := os.Stat(scope); err == nil && !info.IsDir() {
-		return resolveFileScope(scope, index)
+	if resolved, ok := resolveFileScope(ctx, scope, index, registry); ok {
+		return resolved, nil
 	}
 	if index == nil {
 		return resolvedSymbolScope{}, fmt.Errorf("scope %q requires an index manager or an existing file path", scope)
 	}
-	if resolved, ok, err := resolvePackageScope(scope, index); err != nil {
+	if resolved, ok, err := resolvePackageScope(ctx, scope, index, registry); err != nil {
 		return resolvedSymbolScope{}, err
 	} else if ok {
 		return resolved, nil
 	}
-	return resolveNamedSymbolScope(scope, index)
+	return resolveNamedSymbolScope(ctx, scope, index, registry)
 }
 
-func resolveFileScope(path string, index *ast.IndexManager) (resolvedSymbolScope, error) {
-	excerpt, err := excerptForFile(path)
+func resolveFileScope(ctx context.Context, path string, index *ast.IndexManager, registry *capability.Registry) (resolvedSymbolScope, bool) {
+	excerpt, err := excerptForFile(ctx, registry, path)
 	if err != nil {
-		return resolvedSymbolScope{}, err
+		return resolvedSymbolScope{}, false
 	}
 	resolved := resolvedSymbolScope{
 		Input:     path,
@@ -56,21 +57,21 @@ func resolveFileScope(path string, index *ast.IndexManager) (resolvedSymbolScope
 		Excerpts:  []resolvedExcerpt{excerpt},
 	}
 	if index == nil {
-		return resolved, nil
+		return resolved, true
 	}
 	fileMeta, err := index.Store().GetFileByPath(path)
 	if err != nil || fileMeta == nil {
-		return resolved, nil
+		return resolved, true
 	}
 	nodes, err := index.Store().GetNodesByFile(fileMeta.ID)
 	if err != nil {
-		return resolved, nil
+		return resolved, true
 	}
 	resolved.SymbolIDs = appendNodeIDs(nil, nodes)
-	return resolved, nil
+	return resolved, true
 }
 
-func resolvePackageScope(scope string, index *ast.IndexManager) (resolvedSymbolScope, bool, error) {
+func resolvePackageScope(ctx context.Context, scope string, index *ast.IndexManager, registry *capability.Registry) (resolvedSymbolScope, bool, error) {
 	files, err := index.Store().ListFiles("")
 	if err != nil {
 		return resolvedSymbolScope{}, false, err
@@ -99,7 +100,7 @@ func resolvePackageScope(scope string, index *ast.IndexManager) (resolvedSymbolS
 		if err == nil {
 			symbolIDs = appendNodeIDs(symbolIDs, nodes)
 		}
-		excerpt, err := excerptForFile(file.Path)
+		excerpt, err := excerptForFile(ctx, registry, file.Path)
 		if err == nil {
 			excerpts = append(excerpts, excerpt)
 		}
@@ -113,7 +114,7 @@ func resolvePackageScope(scope string, index *ast.IndexManager) (resolvedSymbolS
 	}, true, nil
 }
 
-func resolveNamedSymbolScope(scope string, index *ast.IndexManager) (resolvedSymbolScope, error) {
+func resolveNamedSymbolScope(ctx context.Context, scope string, index *ast.IndexManager, registry *capability.Registry) (resolvedSymbolScope, error) {
 	nodes, err := index.SearchNodes(ast.NodeQuery{NamePattern: scope, Limit: 64})
 	if err != nil {
 		return resolvedSymbolScope{}, err
@@ -167,7 +168,7 @@ func resolveNamedSymbolScope(scope string, index *ast.IndexManager) (resolvedSym
 			continue
 		}
 		symbolSet[node.ID] = struct{}{}
-		excerpt, err := excerptForLines(fileMeta.Path, node.StartLine, node.EndLine)
+		excerpt, err := excerptForLines(ctx, registry, fileMeta.Path, node.StartLine, node.EndLine)
 		if err != nil {
 			continue
 		}

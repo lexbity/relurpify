@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -300,21 +298,28 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 				continue
 			}
 		}
-		info, err := os.Stat(abs)
+		result, err := r.InvokeCapability(ctx, "file_read", map[string]any{"path": abs})
 		if err != nil {
 			res.Denied[path] = err.Error()
 			continue
 		}
-		if info.IsDir() {
-			res.Denied[path] = "path is a directory"
+		if result == nil {
+			res.Denied[path] = "file_read returned no result"
 			continue
 		}
-		data, err := os.ReadFile(abs)
-		if err != nil {
-			res.Denied[path] = err.Error()
+		if !result.Success {
+			msg := strings.TrimSpace(result.Error)
+			if msg == "" {
+				msg = "file_read failed"
+			}
+			res.Denied[path] = msg
 			continue
 		}
-		content := string(data)
+		content, _ := result.Data["content"].(string)
+		if content == "" {
+			res.Denied[path] = "file_read returned no content"
+			continue
+		}
 		truncated := false
 		if len(content) > contextFileMaxBytes {
 			content = content[:contextFileMaxBytes]
@@ -1817,15 +1822,26 @@ func (r *runtimeAdapter) RunTests(pkg string) (DebugTestResultMsg, error) {
 	if r == nil || r.rt == nil {
 		return result, fmt.Errorf("runtime unavailable")
 	}
-	cmd := exec.Command("go", "test", "-json", "-count=1", result.Package)
-	cmd.Dir = r.workspaceRoot()
-	output, err := cmd.CombinedOutput()
+	toolResult, err := r.InvokeCapability(context.Background(), "cli_go", map[string]any{
+		"args":              []string{"test", "-json", "-count=1", result.Package},
+		"working_directory": r.workspaceRoot(),
+	})
+	if err != nil {
+		return result, err
+	}
+	output := combineToolOutput(toolResult)
 	result.Output = splitNonEmptyLines(string(output))
 	parseGoTestJSON(&result, output)
 	if result.Package == "" {
 		result.Package = normalizeGoPackageArg(pkg)
 	}
-	return result, err
+	if toolResult == nil || toolResult.Success {
+		return result, nil
+	}
+	if toolResult.Error != "" {
+		return result, fmt.Errorf("%s", toolResult.Error)
+	}
+	return result, fmt.Errorf("cli_go test failed")
 }
 
 func (r *runtimeAdapter) RunBenchmark(pkg string) (DebugBenchmarkResultMsg, error) {
@@ -1833,12 +1849,22 @@ func (r *runtimeAdapter) RunBenchmark(pkg string) (DebugBenchmarkResultMsg, erro
 	if r == nil || r.rt == nil {
 		return result, fmt.Errorf("runtime unavailable")
 	}
-	cmd := exec.Command("go", "test", result.Package, "-run", "^$", "-bench", ".", "-benchmem", "-count=1")
-	cmd.Dir = r.workspaceRoot()
-	output, err := cmd.CombinedOutput()
-	result.Results = parseBenchmarkOutput(string(output))
+	toolResult, err := r.InvokeCapability(context.Background(), "cli_go", map[string]any{
+		"args":              []string{"test", result.Package, "-run", "^$", "-bench", ".", "-benchmem", "-count=1"},
+		"working_directory": r.workspaceRoot(),
+	})
 	if err != nil {
 		result.Err = err
+		return result, nil
+	}
+	output := combineToolOutput(toolResult)
+	result.Results = parseBenchmarkOutput(string(output))
+	if toolResult != nil && !toolResult.Success {
+		if toolResult.Error != "" {
+			result.Err = fmt.Errorf("%s", toolResult.Error)
+		} else {
+			result.Err = fmt.Errorf("cli_go benchmark failed")
+		}
 	}
 	return result, nil
 }
@@ -1960,6 +1986,22 @@ func parseBenchmarkOutput(raw string) []BenchmarkEntry {
 		})
 	}
 	return results
+}
+
+func combineToolOutput(result *core.ToolResult) []byte {
+	if result == nil {
+		return nil
+	}
+	stdout, _ := result.Data["stdout"].(string)
+	stderr, _ := result.Data["stderr"].(string)
+	switch {
+	case stdout == "":
+		return []byte(stderr)
+	case stderr == "":
+		return []byte(stdout)
+	default:
+		return []byte(stdout + "\n" + stderr)
+	}
 }
 
 func (r *runtimeAdapter) planNotes(workflowID string) map[string][]string {

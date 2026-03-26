@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -84,34 +83,6 @@ func buildFileIndex(root string) ([]FileEntry, error) {
 		return entries[i].DisplayPath < entries[j].DisplayPath
 	})
 	return entries, nil
-}
-
-// fileEntryForPath stats a single path and returns a FileEntry.
-func fileEntryForPath(root, selection string) (FileEntry, error) {
-	path := selection
-	if root != "" && !filepath.IsAbs(path) {
-		path = filepath.Join(root, selection)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return FileEntry{}, err
-	}
-	if info.IsDir() {
-		return FileEntry{}, fmt.Errorf("%s is a directory", selection)
-	}
-	size := info.Size()
-	display := selection
-	if root != "" {
-		if rel, err := filepath.Rel(root, path); err == nil {
-			display = filepath.ToSlash(rel)
-		}
-	}
-	return FileEntry{
-		Path:          path,
-		DisplayPath:   display,
-		SizeBytes:     size,
-		TokenEstimate: estimateTokensFromBytes(size),
-	}, nil
 }
 
 // filterFileEntries returns entries matching query using fuzzy scoring.

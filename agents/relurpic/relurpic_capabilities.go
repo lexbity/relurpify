@@ -14,6 +14,7 @@ import (
 
 type relurpicOptions struct {
 	IndexManager *ast.IndexManager
+	Registry     *capability.Registry
 	GraphDB      *graphdb.Engine
 	PatternStore patterns.PatternStore
 	CommentStore patterns.CommentStore
@@ -84,6 +85,7 @@ func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model co
 		return nil
 	}
 	resolved := applyRelurpicOptions(relurpicOptions{}, opts)
+	resolved.Registry = registry
 
 	handlers := []core.InvocableCapabilityHandler{
 		plannerPlanCapabilityHandler{model: model, registry: registry, config: cfg},
@@ -94,6 +96,7 @@ func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model co
 		patternDetectorDetectCapabilityHandler{
 			model:        model,
 			config:       cfg,
+			registry:     resolved.Registry,
 			indexManager: resolved.IndexManager,
 			graphDB:      resolved.GraphDB,
 			patternStore: resolved.PatternStore,
@@ -102,6 +105,7 @@ func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model co
 		gapDetectorDetectCapabilityHandler{
 			model:        model,
 			config:       cfg,
+			registry:     resolved.Registry,
 			indexManager: resolved.IndexManager,
 			graphDB:      resolved.GraphDB,
 			retrievalDB:  resolved.RetrievalDB,

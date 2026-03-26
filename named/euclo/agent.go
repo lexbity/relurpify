@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -392,7 +391,7 @@ func (a *Agent) finalizeLivingPlan(ctx context.Context, task *core.Task, state *
 		now := time.Now().UTC()
 		attempt := frameworkplan.StepAttempt{
 			AttemptedAt:   now,
-			GitCheckpoint: gitCheckpoint(ctx, task),
+			GitCheckpoint: gitCheckpoint(ctx, task, a.Environment.Registry),
 		}
 		if execErr == nil {
 			step.Status = frameworkplan.PlanStepCompleted
@@ -1007,19 +1006,41 @@ func activeLivingPlanStep(task *core.Task, plan *frameworkplan.LivingPlan) *fram
 	return nil
 }
 
-func gitCheckpoint(ctx context.Context, task *core.Task) string {
+func gitCheckpoint(ctx context.Context, task *core.Task, registry *capability.Registry) string {
 	if task == nil || task.Context == nil {
 		return ""
 	}
 	workspace := strings.TrimSpace(stringValue(task.Context["workspace"]))
-	if workspace == "" {
+	if workspace == "" || registry == nil {
 		return ""
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "HEAD").Output()
-	if err != nil {
+	var result *core.ToolResult
+	for _, capabilityID := range []string{"tool:cli_git", "cli_git"} {
+		candidate, err := registry.InvokeCapability(ctx, core.NewContext(), capabilityID, map[string]any{
+			"args":              []string{"rev-parse", "HEAD"},
+			"working_directory": workspace,
+		})
+		if err == nil && candidate != nil && candidate.Success {
+			result = candidate
+			break
+		}
+	}
+	if result == nil {
+		if tool, ok := registry.Get("cli_git"); ok && tool != nil {
+			candidate, err := tool.Execute(ctx, core.NewContext(), map[string]any{
+				"args":              []string{"rev-parse", "HEAD"},
+				"working_directory": workspace,
+			})
+			if err == nil && candidate != nil && candidate.Success {
+				result = candidate
+			}
+		}
+	}
+	if result == nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	stdout, _ := result.Data["stdout"].(string)
+	return strings.TrimSpace(stdout)
 }
 
 func seedPersistedInteractionState(task *core.Task, state *core.Context) {

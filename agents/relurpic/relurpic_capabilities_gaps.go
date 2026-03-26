@@ -10,6 +10,7 @@ import (
 
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/guidance"
@@ -21,6 +22,7 @@ import (
 type gapDetectorDetectCapabilityHandler struct {
 	model        core.LanguageModel
 	config       *core.Config
+	registry     *capability.Registry
 	indexManager *ast.IndexManager
 	graphDB      *graphdb.Engine
 	retrievalDB  *sql.DB
@@ -70,7 +72,7 @@ func (h gapDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *core.
 		return nil, fmt.Errorf("corpus_scope required")
 	}
 
-	scope, err := resolveSymbolScope(filePath, h.indexManager)
+	scope, err := resolveSymbolScope(ctx, filePath, h.indexManager, h.registry)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +235,7 @@ func (h gapDetectorDetectCapabilityHandler) neighborExcerpts(scope resolvedSymbo
 				continue
 			}
 		}
-		excerpt, err := excerptForLines(node.SourceID, props.StartLine, props.EndLine)
+		excerpt, err := excerptForLines(context.Background(), h.registry, node.SourceID, props.StartLine, props.EndLine)
 		if err != nil {
 			continue
 		}
