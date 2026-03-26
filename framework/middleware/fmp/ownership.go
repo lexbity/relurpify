@@ -3,6 +3,7 @@ package fmp
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,11 +24,23 @@ type OwnershipStore interface {
 	Fence(ctx context.Context, notice core.FenceNotice) error
 }
 
+type HandoffOfferReservation struct {
+	LineageID            string    `json:"lineage_id"`
+	OfferID              string    `json:"offer_id"`
+	LeaseID              string    `json:"lease_id"`
+	SourceAttemptID      string    `json:"source_attempt_id"`
+	FencingEpoch         int64     `json:"fencing_epoch"`
+	ProvisionalAttemptID string    `json:"provisional_attempt_id"`
+	RuntimeID            string    `json:"runtime_id"`
+	CreatedAt            time.Time `json:"created_at"`
+}
+
 type InMemoryOwnershipStore struct {
 	mu             sync.RWMutex
 	lineages       map[string]core.LineageRecord
 	attempts       map[string]core.AttemptRecord
 	leaseByLineage map[string]core.LeaseToken
+	offerByID      map[string]HandoffOfferReservation
 }
 
 func (s *InMemoryOwnershipStore) ListLineages(_ context.Context) ([]core.LineageRecord, error) {
@@ -163,6 +176,11 @@ func (s *InMemoryOwnershipStore) CommitHandoff(_ context.Context, commit core.Re
 	s.attempts[commit.NewAttemptID] = newAttempt
 	if oldAttempt, ok := s.attempts[commit.OldAttemptID]; ok {
 		oldAttempt.State = core.AttemptStateCommittedRemote
+		oldAttempt.Fenced = true
+		if lease, ok := s.leaseByLineage[commit.LineageID]; ok && lease.AttemptID == commit.OldAttemptID {
+			oldAttempt.FencingEpoch = lease.FencingEpoch
+			delete(s.leaseByLineage, commit.LineageID)
+		}
 		s.attempts[commit.OldAttemptID] = oldAttempt
 	}
 	return nil
@@ -180,7 +198,9 @@ func (s *InMemoryOwnershipStore) Fence(_ context.Context, notice core.FenceNotic
 	}
 	attempt.Fenced = true
 	attempt.FencingEpoch = notice.FencingEpoch
-	attempt.State = core.AttemptStateFenced
+	if attempt.State != core.AttemptStateCommittedRemote {
+		attempt.State = core.AttemptStateFenced
+	}
 	s.attempts[notice.AttemptID] = attempt
 	return nil
 }
@@ -201,6 +221,11 @@ type AttemptLister interface {
 // CommitChecker is an optional extension to OwnershipStore for checking commit existence.
 type CommitChecker interface {
 	HasCommitForLineage(ctx context.Context, lineageID string) (bool, error)
+}
+
+// HandoffOfferRegistry stores accepted-offer reservations for idempotency and duplicate rejection.
+type HandoffOfferRegistry interface {
+	ReserveHandoffOffer(ctx context.Context, reservation HandoffOfferReservation) (*HandoffOfferReservation, bool, error)
 }
 
 // HasActiveAttemptForLineage returns true if the lineage has any non-terminal,
@@ -267,4 +292,26 @@ func (s *InMemoryOwnershipStore) HasCommitForLineage(ctx context.Context, lineag
 	}
 	// If both current owner attempt and runtime are set, a commit has happened
 	return lineage.CurrentOwnerAttempt != "" && lineage.CurrentOwnerRuntime != "", nil
+}
+
+func (s *InMemoryOwnershipStore) ReserveHandoffOffer(_ context.Context, reservation HandoffOfferReservation) (*HandoffOfferReservation, bool, error) {
+	if strings.TrimSpace(reservation.OfferID) == "" {
+		return nil, false, fmt.Errorf("offer id required")
+	}
+	if reservation.CreatedAt.IsZero() {
+		reservation.CreatedAt = time.Now().UTC()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.offerByID == nil {
+		s.offerByID = map[string]HandoffOfferReservation{}
+	}
+	key := strings.TrimSpace(reservation.OfferID)
+	if existing, ok := s.offerByID[key]; ok {
+		copy := existing
+		return &copy, false, nil
+	}
+	s.offerByID[key] = reservation
+	copy := reservation
+	return &copy, true, nil
 }

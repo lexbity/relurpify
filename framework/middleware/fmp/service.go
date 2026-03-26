@@ -274,6 +274,56 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 	if err := destination.Validate(); err != nil {
 		return nil, nil, err
 	}
+	provisionalAttemptID := offer.LineageID + ":" + runtimeID + ":resume"
+	if registry, ok := s.Ownership.(HandoffOfferRegistry); ok {
+		reservation := HandoffOfferReservation{
+			LineageID:            offer.LineageID,
+			OfferID:              offer.OfferID,
+			LeaseID:              offer.LeaseToken.LeaseID,
+			SourceAttemptID:      offer.SourceAttemptID,
+			FencingEpoch:         offer.LeaseToken.FencingEpoch,
+			ProvisionalAttemptID: provisionalAttemptID,
+			RuntimeID:            runtimeID,
+			CreatedAt:            s.nowUTC(),
+		}
+		existing, created, err := registry.ReserveHandoffOffer(ctx, reservation)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !created && !matchingOfferReservation(existing, reservation) {
+			return nil, &core.TransferRefusal{
+				Code:    core.RefusalDuplicateHandoff,
+				Message: fmt.Sprintf("offer %s already reserved for runtime %s", offer.OfferID, existing.RuntimeID),
+			}, nil
+		}
+	}
+	if lister, ok := s.Ownership.(AttemptLister); ok {
+		attempts, err := lister.ListActiveAttemptsByLineage(ctx, offer.LineageID)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, attempt := range attempts {
+			if strings.EqualFold(strings.TrimSpace(attempt.AttemptID), strings.TrimSpace(offer.SourceAttemptID)) {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(attempt.AttemptID), strings.TrimSpace(provisionalAttemptID)) {
+				continue
+			}
+			return nil, &core.TransferRefusal{
+				Code:    core.RefusalDuplicateHandoff,
+				Message: fmt.Sprintf("lineage %s already has an active handoff attempt %s", offer.LineageID, attempt.AttemptID),
+			}, nil
+		}
+	} else if checker, ok := s.Ownership.(DuplicateHandoffChecker); ok {
+		if active, err := checker.HasActiveAttemptForLineage(ctx, offer.LineageID); err != nil {
+			return nil, nil, err
+		} else if active {
+			return nil, &core.TransferRefusal{
+				Code:    core.RefusalDuplicateHandoff,
+				Message: fmt.Sprintf("lineage %s already has an active handoff attempt", offer.LineageID),
+			}, nil
+		}
+	}
 	lineage, ok, err := s.Ownership.GetLineage(ctx, offer.LineageID)
 	if err != nil {
 		return nil, nil, err
@@ -350,7 +400,7 @@ func (s *Service) tryAcceptHandoff(ctx context.Context, offer core.HandoffOffer,
 		DestinationRuntimeID:         runtimeID,
 		AcceptedContextClass:         offer.ContextClass,
 		AcceptedCapabilityProjection: projection,
-		ProvisionalAttemptID:         offer.LineageID + ":" + runtimeID + ":resume",
+		ProvisionalAttemptID:         provisionalAttemptID,
 		Expiry:                       s.nowUTC().Add(s.leaseTTL()),
 	}
 	if err := SignHandoffAccept(s.Signer, accept); err != nil {
@@ -622,10 +672,10 @@ func (s *Service) ReconcileAttemptFromOutcome(ctx context.Context, lineageID str
 
 	// Emit reconciliation outcome event
 	s.emit(ctx, core.FrameworkEventFMPReconciliationOutcome, lineage.Owner, map[string]any{
-		"lineage_id":    lineageID,
-		"attempt_id":    attemptID,
-		"outcome_status": outcome.Status,
-		"repair_summary": outcome.RepairSummary,
+		"lineage_id":       lineageID,
+		"attempt_id":       attemptID,
+		"outcome_status":   outcome.Status,
+		"repair_summary":   outcome.RepairSummary,
 		"resolution_notes": outcome.ResolutionNotes,
 	})
 
@@ -942,6 +992,18 @@ func (s *Service) leaseTTL() time.Duration {
 	return 5 * time.Minute
 }
 
+func matchingOfferReservation(existing *HandoffOfferReservation, current HandoffOfferReservation) bool {
+	if existing == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(existing.OfferID), strings.TrimSpace(current.OfferID)) &&
+		strings.EqualFold(strings.TrimSpace(existing.LeaseID), strings.TrimSpace(current.LeaseID)) &&
+		strings.EqualFold(strings.TrimSpace(existing.SourceAttemptID), strings.TrimSpace(current.SourceAttemptID)) &&
+		strings.EqualFold(strings.TrimSpace(existing.ProvisionalAttemptID), strings.TrimSpace(current.ProvisionalAttemptID)) &&
+		strings.EqualFold(strings.TrimSpace(existing.RuntimeID), strings.TrimSpace(current.RuntimeID)) &&
+		existing.FencingEpoch == current.FencingEpoch
+}
+
 func (s *Service) emit(ctx context.Context, eventType string, owner core.SubjectRef, payload map[string]any) {
 	if s == nil {
 		return
@@ -1028,11 +1090,11 @@ func (s *Service) ResolveRoutes(ctx context.Context, req RouteSelectionRequest) 
 	if err := s.Discovery.DeleteExpired(ctx, s.nowUTC()); err != nil {
 		return nil, err
 	}
-	exports, err := s.Discovery.ListExportAdvertisements(ctx)
+	exports, err := s.listLiveExportAds(ctx)
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := s.Discovery.ListRuntimeAdvertisements(ctx)
+	runtimes, err := s.listLiveRuntimeAds(ctx)
 	if err != nil {
 		return nil, err
 	}

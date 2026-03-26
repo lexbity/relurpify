@@ -469,10 +469,15 @@ func (s *SQLiteOwnershipStore) CommitHandoff(ctx context.Context, commit core.Re
 		return err
 	}
 	if commit.OldAttemptID != "" {
+		var fencingEpoch int64
+		_ = tx.QueryRowContext(ctx, `SELECT fencing_epoch FROM fmp_active_leases WHERE lineage_id = ? AND attempt_id = ?`,
+			commit.LineageID, commit.OldAttemptID).Scan(&fencingEpoch)
 		if _, err := tx.ExecContext(ctx, `UPDATE fmp_attempts
-			SET state = ?
+			SET state = ?, fenced = 1, fencing_epoch = CASE WHEN ? > fencing_epoch THEN ? ELSE fencing_epoch END
 			WHERE attempt_id = ?`,
 			string(core.AttemptStateCommittedRemote),
+			fencingEpoch,
+			fencingEpoch,
 			commit.OldAttemptID,
 		); err != nil {
 			return err
@@ -510,11 +515,22 @@ func (s *SQLiteOwnershipStore) Fence(ctx context.Context, notice core.FenceNotic
 	if notice.FencingEpoch < currentEpoch {
 		return fmt.Errorf("fencing epoch %d stale for attempt %s", notice.FencingEpoch, notice.AttemptID)
 	}
+	var currentState string
+	if err := tx.QueryRowContext(ctx, `SELECT state FROM fmp_attempts WHERE attempt_id = ?`, notice.AttemptID).Scan(&currentState); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("attempt %s not found", notice.AttemptID)
+		}
+		return err
+	}
+	nextState := string(core.AttemptStateFenced)
+	if currentState == string(core.AttemptStateCommittedRemote) {
+		nextState = currentState
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE fmp_attempts
 		SET fenced = 1, fencing_epoch = ?, state = ?
 		WHERE attempt_id = ?`,
 		notice.FencingEpoch,
-		string(core.AttemptStateFenced),
+		nextState,
 		notice.AttemptID,
 	); err != nil {
 		return err
@@ -777,6 +793,41 @@ func (s *SQLiteOwnershipStore) HasCommitForLineage(ctx context.Context, lineageI
 		`SELECT 1 FROM fmp_resume_commits WHERE lineage_id = ? LIMIT 1`,
 		lineageID)
 	return recordExists(ctx, row), nil
+}
+
+func (s *SQLiteOwnershipStore) ReserveHandoffOffer(ctx context.Context, reservation HandoffOfferReservation) (*HandoffOfferReservation, bool, error) {
+	if strings.TrimSpace(reservation.OfferID) == "" {
+		return nil, false, fmt.Errorf("offer id required")
+	}
+	if reservation.CreatedAt.IsZero() {
+		reservation.CreatedAt = s.now()
+	}
+	payload := mustMarshalJSON(reservation)
+	key := strings.TrimSpace(reservation.OfferID)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO fmp_idempotency_markers (scope, marker_key, payload_json, created_at)
+		VALUES (?, ?, ?, ?)`,
+		"handoff_offer",
+		key,
+		payload,
+		formatRequiredTime(reservation.CreatedAt),
+	)
+	if err == nil {
+		copy := reservation
+		return &copy, true, nil
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "unique") {
+		return nil, false, err
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT payload_json FROM fmp_idempotency_markers WHERE scope = ? AND marker_key = ?`, "handoff_offer", key)
+	var existingPayload string
+	if err := row.Scan(&existingPayload); err != nil {
+		return nil, false, err
+	}
+	var existing HandoffOfferReservation
+	if err := json.Unmarshal([]byte(existingPayload), &existing); err != nil {
+		return nil, false, err
+	}
+	return &existing, false, nil
 }
 
 func rollback(tx *sql.Tx) {

@@ -16,6 +16,7 @@ import (
 	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 	"github.com/lexcodex/relurpify/framework/middleware/session"
+	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
 	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 )
 
@@ -247,7 +248,11 @@ type ServiceConfig struct {
 	PolicyEngine  authorization.PolicyEngine
 	RexRuntime    RexRuntime
 	// Phase 7.2: Rex runtime for SLO signals
-	RexProvider   interface{} // *server.RexRuntimeProvider, kept as interface to avoid circular import
+	RexProvider RexSLOProvider
+}
+
+type RexSLOProvider interface {
+	ReadSLOSignals(context.Context) (rexcontrolplane.SLOSignals, int64, error)
 }
 
 type TokenStore interface {

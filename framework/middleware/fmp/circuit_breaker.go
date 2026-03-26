@@ -11,7 +11,7 @@ import (
 type CircuitState string
 
 const (
-	CircuitClosed   CircuitState = "closed"   // normal operation
+	CircuitClosed   CircuitState = "closed"    // normal operation
 	CircuitOpen     CircuitState = "open"      // tripped, rejecting traffic
 	CircuitHalfOpen CircuitState = "half_open" // probing for recovery
 )
@@ -48,33 +48,35 @@ type CircuitBreakerStore interface {
 
 // InMemoryCircuitBreakerStore provides in-memory circuit breaker state management.
 type InMemoryCircuitBreakerStore struct {
-	mu       sync.RWMutex
-	states   map[string]*circuitEntry
-	configs  map[string]CircuitBreakerConfig
-	windows  map[string]time.Time // trust domain -> window start time
+	mu      sync.RWMutex
+	states  map[string]*circuitEntry
+	configs map[string]CircuitBreakerConfig
+	windows map[string]time.Time // trust domain -> window start time
 }
 
 type circuitEntry struct {
-	state       CircuitState
-	requests    int
-	failures    int
-	trippedAt   *time.Time
-	recoveryAt  *time.Time
+	state      CircuitState
+	requests   int
+	failures   int
+	trippedAt  *time.Time
+	recoveryAt *time.Time
 }
 
 // GetState returns the current circuit state, automatically transitioning half-open to closed on success probes.
 func (s *InMemoryCircuitBreakerStore) GetState(ctx context.Context, trustDomain string) (CircuitState, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	entry, ok := s.states[trustDomain]
 	if !ok {
 		return CircuitClosed, nil // default state for unknown domain
 	}
+	cfg := s.configs[trustDomain]
+	s.rollWindowLocked(trustDomain, entry, cfg, time.Now().UTC())
 
 	// Auto-transition from open to half-open when recovery window expires
 	if entry.state == CircuitOpen && entry.recoveryAt != nil && time.Now().UTC().After(*entry.recoveryAt) {
-		// Caller should handle half-open state by sending probe requests
+		entry.state = CircuitHalfOpen
 		return CircuitHalfOpen, nil
 	}
 
@@ -87,6 +89,9 @@ func (s *InMemoryCircuitBreakerStore) RecordSuccess(ctx context.Context, trustDo
 	defer s.mu.Unlock()
 
 	entry := s.getOrCreateEntry(trustDomain)
+	cfg := s.configs[trustDomain]
+	s.rollWindowLocked(trustDomain, entry, cfg, now)
+	s.transitionHalfOpenLocked(entry, now)
 
 	// Half-open probe succeeded: reset to closed
 	if entry.state == CircuitHalfOpen {
@@ -110,6 +115,8 @@ func (s *InMemoryCircuitBreakerStore) RecordFailure(ctx context.Context, trustDo
 
 	entry := s.getOrCreateEntry(trustDomain)
 	cfg := s.configs[trustDomain]
+	s.rollWindowLocked(trustDomain, entry, cfg, now)
+	s.transitionHalfOpenLocked(entry, now)
 
 	entry.failures++
 	entry.requests++
@@ -120,7 +127,6 @@ func (s *InMemoryCircuitBreakerStore) RecordFailure(ctx context.Context, trustDo
 		if errorRate >= cfg.ErrorThreshold {
 			// Trip the breaker
 			entry.state = CircuitOpen
-			now := time.Now().UTC()
 			entry.trippedAt = &now
 			recoveryTime := now.Add(cfg.RecoveryDuration)
 			entry.recoveryAt = &recoveryTime
@@ -208,6 +214,12 @@ func (s *InMemoryCircuitBreakerStore) SetConfig(ctx context.Context, cfg Circuit
 		s.configs = map[string]CircuitBreakerConfig{}
 	}
 	s.configs[cfg.TrustDomain] = cfg
+	if s.windows == nil {
+		s.windows = map[string]time.Time{}
+	}
+	if _, ok := s.windows[cfg.TrustDomain]; !ok {
+		s.windows[cfg.TrustDomain] = time.Now().UTC()
+	}
 
 	return nil
 }
@@ -233,6 +245,33 @@ func (s *InMemoryCircuitBreakerStore) getOrCreateEntry(trustDomain string) *circ
 				RecoveryDuration: 30 * time.Second,
 			}
 		}
+		if s.windows == nil {
+			s.windows = map[string]time.Time{}
+		}
+		if _, ok := s.windows[trustDomain]; !ok {
+			s.windows[trustDomain] = time.Now().UTC()
+		}
 	}
 	return entry
+}
+
+func (s *InMemoryCircuitBreakerStore) rollWindowLocked(trustDomain string, entry *circuitEntry, cfg CircuitBreakerConfig, now time.Time) {
+	if cfg.WindowDuration <= 0 {
+		cfg.WindowDuration = time.Minute
+	}
+	if s.windows == nil {
+		s.windows = map[string]time.Time{}
+	}
+	windowStart, ok := s.windows[trustDomain]
+	if !ok || now.Sub(windowStart) >= cfg.WindowDuration {
+		s.windows[trustDomain] = now
+		entry.requests = 0
+		entry.failures = 0
+	}
+}
+
+func (s *InMemoryCircuitBreakerStore) transitionHalfOpenLocked(entry *circuitEntry, now time.Time) {
+	if entry.state == CircuitOpen && entry.recoveryAt != nil && !now.Before(*entry.recoveryAt) {
+		entry.state = CircuitHalfOpen
+	}
 }

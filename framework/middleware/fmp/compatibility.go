@@ -3,8 +3,10 @@ package fmp
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/lexcodex/relurpify/framework/core"
 )
@@ -51,11 +53,11 @@ func ValidateImportedContextCompatibility(runtime core.RuntimeDescriptor, manife
 
 // CompatibilityWindow defines acceptable version ranges per context class.
 type CompatibilityWindow struct {
-	ContextClass         string `json:"context_class" yaml:"context_class"`
-	MinSchemaVersion     string `json:"min_schema_version,omitempty" yaml:"min_schema_version,omitempty"`
-	MaxSchemaVersion     string `json:"max_schema_version,omitempty" yaml:"max_schema_version,omitempty"`
-	MinRuntimeVersion    string `json:"min_runtime_version,omitempty" yaml:"min_runtime_version,omitempty"`
-	MaxRuntimeVersion    string `json:"max_runtime_version,omitempty" yaml:"max_runtime_version,omitempty"`
+	ContextClass      string `json:"context_class" yaml:"context_class"`
+	MinSchemaVersion  string `json:"min_schema_version,omitempty" yaml:"min_schema_version,omitempty"`
+	MaxSchemaVersion  string `json:"max_schema_version,omitempty" yaml:"max_schema_version,omitempty"`
+	MinRuntimeVersion string `json:"min_runtime_version,omitempty" yaml:"min_runtime_version,omitempty"`
+	MaxRuntimeVersion string `json:"max_runtime_version,omitempty" yaml:"max_runtime_version,omitempty"`
 }
 
 // CompatibilityWindowStore manages version compatibility windows per context class.
@@ -70,7 +72,7 @@ type CompatibilityWindowStore interface {
 // Uses lexicographic string comparison (safe for semver vX.Y.Z format).
 func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersion string) *core.TransferRefusal {
 	if schemaVersion != "" && window.MinSchemaVersion != "" {
-		if schemaVersion < window.MinSchemaVersion {
+		if compareNaturalVersion(schemaVersion, window.MinSchemaVersion) < 0 {
 			return &core.TransferRefusal{
 				Code:    core.RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("schema version %s below minimum %s", schemaVersion, window.MinSchemaVersion),
@@ -78,7 +80,7 @@ func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersi
 		}
 	}
 	if schemaVersion != "" && window.MaxSchemaVersion != "" {
-		if schemaVersion > window.MaxSchemaVersion {
+		if compareNaturalVersion(schemaVersion, window.MaxSchemaVersion) > 0 {
 			return &core.TransferRefusal{
 				Code:    core.RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("schema version %s above maximum %s", schemaVersion, window.MaxSchemaVersion),
@@ -86,7 +88,7 @@ func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersi
 		}
 	}
 	if runtimeVersion != "" && window.MinRuntimeVersion != "" {
-		if runtimeVersion < window.MinRuntimeVersion {
+		if compareNaturalVersion(runtimeVersion, window.MinRuntimeVersion) < 0 {
 			return &core.TransferRefusal{
 				Code:    core.RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("runtime version %s below minimum %s", runtimeVersion, window.MinRuntimeVersion),
@@ -94,7 +96,7 @@ func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersi
 		}
 	}
 	if runtimeVersion != "" && window.MaxRuntimeVersion != "" {
-		if runtimeVersion > window.MaxRuntimeVersion {
+		if compareNaturalVersion(runtimeVersion, window.MaxRuntimeVersion) > 0 {
 			return &core.TransferRefusal{
 				Code:    core.RefusalIncompatibleRuntime,
 				Message: fmt.Sprintf("runtime version %s above maximum %s", runtimeVersion, window.MaxRuntimeVersion),
@@ -102,4 +104,99 @@ func ValidateVersionSkew(window CompatibilityWindow, schemaVersion, runtimeVersi
 		}
 	}
 	return nil
+}
+
+func compareNaturalVersion(left, right string) int {
+	leftParts := naturalVersionParts(left)
+	rightParts := naturalVersionParts(right)
+	maxParts := len(leftParts)
+	if len(rightParts) > maxParts {
+		maxParts = len(rightParts)
+	}
+	for i := 0; i < maxParts; i++ {
+		lp, rp := partAt(leftParts, i), partAt(rightParts, i)
+		if lp.numeric && rp.numeric {
+			if lp.number < rp.number {
+				return -1
+			}
+			if lp.number > rp.number {
+				return 1
+			}
+			continue
+		}
+		if lp.numeric != rp.numeric {
+			if lp.numeric {
+				return 1
+			}
+			return -1
+		}
+		if lp.text < rp.text {
+			return -1
+		}
+		if lp.text > rp.text {
+			return 1
+		}
+	}
+	return 0
+}
+
+type naturalVersionPart struct {
+	numeric bool
+	number  int
+	text    string
+}
+
+func naturalVersionParts(value string) []naturalVersionPart {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return nil
+	}
+	parts := make([]naturalVersionPart, 0, 8)
+	var current strings.Builder
+	modeNumeric := false
+	hasMode := false
+	flush := func() {
+		if current.Len() == 0 {
+			return
+		}
+		text := current.String()
+		part := naturalVersionPart{text: text}
+		if modeNumeric {
+			part.numeric = true
+			part.number, _ = strconv.Atoi(text)
+		}
+		parts = append(parts, part)
+		current.Reset()
+	}
+	for _, r := range value {
+		if unicode.IsDigit(r) {
+			if hasMode && !modeNumeric {
+				flush()
+			}
+			modeNumeric = true
+			hasMode = true
+			current.WriteRune(r)
+			continue
+		}
+		if unicode.IsLetter(r) {
+			if hasMode && modeNumeric {
+				flush()
+			}
+			modeNumeric = false
+			hasMode = true
+			current.WriteRune(r)
+			continue
+		}
+		flush()
+		hasMode = false
+	}
+	flush()
+	return parts
+}
+
+func partAt(parts []naturalVersionPart, index int) naturalVersionPart {
+	if index >= len(parts) {
+		return naturalVersionPart{}
+	}
+	return parts[index]
 }

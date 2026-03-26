@@ -19,6 +19,7 @@ import (
 	"github.com/lexcodex/relurpify/named/rex/envelope"
 	"github.com/lexcodex/relurpify/named/rex/nexus"
 	"github.com/lexcodex/relurpify/named/rex/proof"
+	"github.com/lexcodex/relurpify/named/rex/reconcile"
 	"github.com/lexcodex/relurpify/named/rex/retrieval"
 	"github.com/lexcodex/relurpify/named/rex/route"
 	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
@@ -33,6 +34,7 @@ type Agent struct {
 	RexConfig   rexconfig.Config
 	Delegates   *delegates.Registry
 	Runtime     *rexruntime.Manager
+	Reconciler  reconcile.Reconciler
 	Observer    state.ExecutionObserver
 	LastProof   proof.ProofSurface
 }
@@ -54,6 +56,7 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment, workspace s
 	a.Workspace = resolveWorkspaceRoot(workspace)
 	a.Delegates = delegates.NewRegistry(env, a.Workspace)
 	a.Runtime = rexruntime.New(a.RexConfig, env.Memory)
+	a.Reconciler = &reconcile.InMemoryReconciler{}
 	return a.Initialize(env.Config)
 }
 
@@ -226,6 +229,36 @@ func (a *Agent) RuntimeProjection() nexus.Projection {
 func (a *Agent) ManagedAdapter() *nexus.Adapter {
 	surfaces := state.ResolveRuntimeSurfaces(a.Environment.Memory)
 	return nexus.NewAdapter("rex", a, surfaces.Workflow)
+}
+
+func (a *Agent) RecordAmbiguity(workflowID, runID, reason string) reconcile.Record {
+	if a == nil {
+		return reconcile.Record{}
+	}
+	if a.Reconciler == nil {
+		a.Reconciler = &reconcile.InMemoryReconciler{}
+	}
+	return a.Reconciler.RecordAmbiguity(workflowID, runID, reason)
+}
+
+func (a *Agent) ResolveAmbiguity(record reconcile.Record, outcome reconcile.Outcome, notes string) reconcile.Record {
+	if a == nil {
+		return record
+	}
+	if a.Reconciler == nil {
+		a.Reconciler = &reconcile.InMemoryReconciler{}
+	}
+	return a.Reconciler.Resolve(record, outcome, notes)
+}
+
+func (a *Agent) ShouldRetryAmbiguity(record reconcile.Record) bool {
+	if a == nil {
+		return false
+	}
+	if a.Reconciler == nil {
+		a.Reconciler = &reconcile.InMemoryReconciler{}
+	}
+	return a.Reconciler.ShouldRetry(record)
 }
 
 func persistProof(ctx context.Context, store interface {

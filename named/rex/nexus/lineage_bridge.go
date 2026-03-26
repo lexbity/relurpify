@@ -331,6 +331,31 @@ func (b *LineageBridge) ApplyReconciliationOutcome(ctx context.Context, workflow
 	return b.persistBinding(ctx, workflowID, runID, *binding)
 }
 
+func (b *LineageBridge) ResolveReconciliationBinding(ctx context.Context, workflowID, runID string) (*reconcile.Binding, error) {
+	if b == nil || b.Service == nil || b.Service.Ownership == nil {
+		return nil, nil
+	}
+	binding, err := b.bindingFromState(ctx, workflowID, runID, nil)
+	if err != nil || binding == nil {
+		return nil, err
+	}
+	attempt, ok, err := b.Service.Ownership.GetAttempt(ctx, binding.AttemptID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &reconcile.Binding{
+			LineageID: binding.LineageID,
+			AttemptID: binding.AttemptID,
+		}, nil
+	}
+	return &reconcile.Binding{
+		LineageID:    binding.LineageID,
+		AttemptID:    binding.AttemptID,
+		FencingEpoch: attempt.FencingEpoch,
+	}, nil
+}
+
 func (b *LineageBridge) findBindings(ctx context.Context, payload map[string]any) ([]matchedBinding, error) {
 	workflows, err := b.WorkflowStore.ListWorkflows(ctx, 512)
 	if err != nil {

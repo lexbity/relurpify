@@ -2,7 +2,10 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"testing"
+
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 func TestAmbiguityCreatesOperatorReviewAndSuppressesRetry(t *testing.T) {
@@ -86,5 +89,86 @@ func TestInMemoryOutboxAppendsAtomicIntentHistory(t *testing.T) {
 	}
 	if intents[0].Payload["step"] != 1 || intents[1].Payload["step"] != 2 {
 		t.Fatalf("unexpected outbox ordering: %+v", intents)
+	}
+}
+
+func TestFMPBackedReconcilerAnnotatesAmbiguityFromBinding(t *testing.T) {
+	r := &FMPBackedReconciler{
+		Base: &InMemoryReconciler{},
+		ResolveBinding: func(context.Context, string, string) (*Binding, error) {
+			return &Binding{LineageID: "lineage-1", AttemptID: "attempt-1", FencingEpoch: 7}, nil
+		},
+	}
+	record := r.RecordAmbiguity("wf-1", "run-1", "missing ack")
+	if record.LineageID != "lineage-1" || record.AttemptID != "attempt-1" || record.FencingEpoch != 7 {
+		t.Fatalf("record = %+v", record)
+	}
+}
+
+func TestFMPBackedReconcilerShouldRetryUsesOwnershipGroundTruth(t *testing.T) {
+	r := &FMPBackedReconciler{
+		Base: &InMemoryReconciler{},
+		ResolveAttempt: func(context.Context, string, string) (*AttemptView, error) {
+			return &AttemptView{State: core.AttemptStateCommittedRemote, Fenced: true}, nil
+		},
+	}
+	record := Record{
+		WorkflowID:    "wf-1",
+		RunID:         "run-1",
+		LineageID:     "lineage-1",
+		AttemptID:     "attempt-1",
+		Status:        StatusRepaired,
+		SuppressRetry: false,
+	}
+	if r.ShouldRetry(record) {
+		t.Fatalf("expected committed/fenced attempt to suppress retry")
+	}
+}
+
+func TestFMPBackedReconcilerResolveAppliesOutcome(t *testing.T) {
+	called := false
+	r := &FMPBackedReconciler{
+		Base: &InMemoryReconciler{},
+		ApplyOutcome: func(_ context.Context, workflowID, runID string, outcome *Record) error {
+			called = true
+			if workflowID != "wf-1" || runID != "run-1" {
+				t.Fatalf("unexpected workflow/run: %s %s", workflowID, runID)
+			}
+			if outcome.Status != StatusRepaired || outcome.LineageID != "lineage-1" {
+				t.Fatalf("unexpected outcome: %+v", outcome)
+			}
+			return nil
+		},
+	}
+	record := Record{
+		WorkflowID:    "wf-1",
+		RunID:         "run-1",
+		LineageID:     "lineage-1",
+		Status:        StatusOperatorReview,
+		SuppressRetry: true,
+	}
+	resolved := r.Resolve(record, OutcomeRepaired, "confirmed")
+	if !called {
+		t.Fatal("expected ApplyOutcome to be called")
+	}
+	if resolved.Status != StatusRepaired || resolved.RepairSummary != "confirmed" {
+		t.Fatalf("resolved = %+v", resolved)
+	}
+}
+
+func TestFMPBackedReconcilerReportsBindingErrors(t *testing.T) {
+	called := false
+	r := &FMPBackedReconciler{
+		Base: &InMemoryReconciler{},
+		ResolveBinding: func(context.Context, string, string) (*Binding, error) {
+			return nil, errors.New("boom")
+		},
+		ReportError: func(err error) {
+			called = err != nil
+		},
+	}
+	_ = r.RecordAmbiguity("wf-1", "run-1", "missing ack")
+	if !called {
+		t.Fatal("expected ReportError to be called")
 	}
 }

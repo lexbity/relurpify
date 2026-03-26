@@ -266,6 +266,15 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 	if refusal := s.authorizeFederatedForward(ctx, req); refusal != nil {
 		return nil, refusal, nil
 	}
+	if s.CircuitBreakers != nil {
+		if state, err := s.CircuitBreakers.GetState(ctx, req.TrustDomain); err == nil && state == CircuitOpen {
+			return nil, &core.TransferRefusal{
+				Code:    core.RefusalAdmissionClosed,
+				Message: fmt.Sprintf("circuit breaker open for trust domain %s", req.TrustDomain),
+				RetryAt: s.nowUTC().Add(30 * time.Second),
+			}, nil
+		}
+	}
 	if req.MediationRequested {
 		mediated, refusal, err := s.Mediator.MediateForward(ctx, s, req)
 		if err != nil {
@@ -278,6 +287,9 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 	}
 	result, err := s.Forwarder.ForwardSealedContext(ctx, req)
 	if err != nil {
+		if s.CircuitBreakers != nil {
+			_ = s.CircuitBreakers.RecordFailure(ctx, req.TrustDomain, s.nowUTC())
+		}
 		return nil, nil, err
 	}
 	if result == nil {
@@ -296,7 +308,13 @@ func (s *Service) ForwardFederatedContext(ctx context.Context, req core.GatewayF
 		result.Opaque = true
 	}
 	if err := result.Validate(); err != nil {
+		if s.CircuitBreakers != nil {
+			_ = s.CircuitBreakers.RecordFailure(ctx, req.TrustDomain, s.nowUTC())
+		}
 		return nil, nil, err
+	}
+	if s.CircuitBreakers != nil {
+		_ = s.CircuitBreakers.RecordSuccess(ctx, req.TrustDomain, s.nowUTC())
 	}
 	s.emit(ctx, core.FrameworkEventFMPGatewayForwarded, req.GatewayIdentity, map[string]any{
 		"trust_domain":       req.TrustDomain,

@@ -28,7 +28,7 @@ func (s *Service) resolveRegisteredRuntimeAdvertisement(ctx context.Context, tru
 	if s == nil || s.Discovery == nil {
 		return nil, fmt.Errorf("discovery store unavailable")
 	}
-	runtimes, err := s.Discovery.ListRuntimeAdvertisements(ctx)
+	runtimes, err := s.listLiveRuntimeAds(ctx)
 	if err != nil {
 		return nil, err
 	}

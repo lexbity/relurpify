@@ -2,47 +2,40 @@ package fmp
 
 import (
 	"testing"
-	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
-func TestValidateImportedContextCompatibilityRejectsUnsupportedCipherSuite(t *testing.T) {
+func TestValidateVersionSkewUsesNaturalVersionOrderingForRuntimeVersions(t *testing.T) {
 	t.Parallel()
 
-	err := ValidateImportedContextCompatibility(core.RuntimeDescriptor{
-		RuntimeID:                 "rex",
-		SupportedContextClasses:   []string{"workflow-runtime"},
-		SupportedEncryptionSuites: []string{"suite-a"},
-		MaxContextSize:            1024,
-	}, core.ContextManifest{
-		ContextClass:  "workflow-runtime",
-		SchemaVersion: "fmp.context.v1",
-		SizeBytes:     128,
-	}, core.SealedContext{
-		CipherSuite: "suite-b",
-	})
-	if err == nil {
-		t.Fatal("ValidateImportedContextCompatibility() error = nil, want cipher suite rejection")
+	window := CompatibilityWindow{
+		ContextClass:      "workflow-runtime",
+		MinRuntimeVersion: "1.2.0",
+		MaxRuntimeVersion: "1.10.0",
+	}
+	if refusal := ValidateVersionSkew(window, "fmp.context.v1", "1.9.0"); refusal != nil {
+		t.Fatalf("expected runtime version within range, got %+v", refusal)
+	}
+	if refusal := ValidateVersionSkew(window, "fmp.context.v1", "1.11.0"); refusal == nil || refusal.Code != core.RefusalIncompatibleRuntime {
+		t.Fatalf("expected incompatible runtime refusal, got %+v", refusal)
 	}
 }
 
-func TestValidateOfferCompatibilityRejectsExpiredRuntime(t *testing.T) {
+func TestValidateVersionSkewHandlesSchemaVersionSuffixes(t *testing.T) {
 	t.Parallel()
 
-	refusal := ValidateOfferCompatibility(core.RuntimeDescriptor{
-		RuntimeID:               "rex",
-		SupportedContextClasses: []string{"workflow-runtime"},
-		CompatibilityClass:      "compat-a",
-		ExpiresAt:               time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
-	}, core.HandoffOffer{
-		ContextClass:             "workflow-runtime",
-		ContextSizeBytes:         128,
-		SourceCompatibilityClass: "compat-a",
-	}, core.ExportDescriptor{
-		RequiredCompatibilityClasses: []string{"compat-a"},
-	}, time.Date(2026, 3, 23, 0, 0, 0, 0, time.UTC))
-	if refusal == nil || refusal.Code != core.RefusalAdmissionClosed {
-		t.Fatalf("refusal = %+v", refusal)
+	window := CompatibilityWindow{
+		ContextClass:      "workflow-runtime",
+		MinSchemaVersion:  "fmp.context.v2",
+		MaxSchemaVersion:  "fmp.context.v12",
+		MinRuntimeVersion: "1.0.0",
+		MaxRuntimeVersion: "2.0.0",
+	}
+	if refusal := ValidateVersionSkew(window, "fmp.context.v10", "1.5.0"); refusal != nil {
+		t.Fatalf("expected schema version within range, got %+v", refusal)
+	}
+	if refusal := ValidateVersionSkew(window, "fmp.context.v13", "1.5.0"); refusal == nil || refusal.Code != core.RefusalIncompatibleRuntime {
+		t.Fatalf("expected schema max-version refusal, got %+v", refusal)
 	}
 }

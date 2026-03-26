@@ -9,7 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
-func TestSQLiteOwnershipStorePersistsCommitAndFence(t *testing.T) {
+func TestSQLiteOwnershipStorePersistsCommitFencedSource(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -65,14 +65,6 @@ func TestSQLiteOwnershipStorePersistsCommitAndFence(t *testing.T) {
 	if err := store.CommitHandoff(ctx, commit); err != nil {
 		t.Fatalf("CommitHandoff() error = %v", err)
 	}
-	if err := store.Fence(ctx, core.FenceNotice{
-		LineageID:    lineage.LineageID,
-		AttemptID:    source.AttemptID,
-		FencingEpoch: lease.FencingEpoch,
-		Issuer:       "issuer",
-	}); err != nil {
-		t.Fatalf("Fence() error = %v", err)
-	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
@@ -108,8 +100,8 @@ func TestSQLiteOwnershipStorePersistsCommitAndFence(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("GetAttempt(source) error = %v ok=%v", err, ok)
 	}
-	if !gotSource.Fenced || gotSource.State != core.AttemptStateFenced {
-		t.Fatalf("source fenced=%v state=%s, want fenced state", gotSource.Fenced, gotSource.State)
+	if !gotSource.Fenced || gotSource.State != core.AttemptStateCommittedRemote || gotSource.FencingEpoch != lease.FencingEpoch {
+		t.Fatalf("source attempt = %+v", *gotSource)
 	}
 }
 
@@ -242,5 +234,66 @@ func TestSQLiteOwnershipStoreCommitIsIdempotent(t *testing.T) {
 	}
 	if gotLineage.LineageVersion != 1 {
 		t.Fatalf("lineage version = %d, want 1 after idempotent retry", gotLineage.LineageVersion)
+	}
+}
+
+func TestSQLiteOwnershipStoreReserveHandoffOfferPersistsAcrossRestart(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "ownership.db")
+	store, err := NewSQLiteOwnershipStore(path)
+	if err != nil {
+		t.Fatalf("NewSQLiteOwnershipStore() error = %v", err)
+	}
+	reservation := HandoffOfferReservation{
+		LineageID:            "lineage-1",
+		OfferID:              "offer-1",
+		LeaseID:              "lease-1",
+		SourceAttemptID:      "attempt-a",
+		FencingEpoch:         3,
+		ProvisionalAttemptID: "lineage-1:rt-b:resume",
+		RuntimeID:            "rt-b",
+		CreatedAt:            time.Now().UTC(),
+	}
+	got, created, err := store.ReserveHandoffOffer(ctx, reservation)
+	if err != nil {
+		t.Fatalf("ReserveHandoffOffer(first) error = %v", err)
+	}
+	if !created || got == nil || got.RuntimeID != "rt-b" {
+		t.Fatalf("first reserve = %+v created=%v", got, created)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := NewSQLiteOwnershipStore(path)
+	if err != nil {
+		t.Fatalf("reopen NewSQLiteOwnershipStore() error = %v", err)
+	}
+	defer func() {
+		if err := reopened.Close(); err != nil {
+			t.Fatalf("reopened Close() error = %v", err)
+		}
+	}()
+
+	got, created, err = reopened.ReserveHandoffOffer(ctx, HandoffOfferReservation{
+		LineageID:            "lineage-1",
+		OfferID:              "offer-1",
+		LeaseID:              "lease-1",
+		SourceAttemptID:      "attempt-a",
+		FencingEpoch:         3,
+		ProvisionalAttemptID: "lineage-1:rt-c:resume",
+		RuntimeID:            "rt-c",
+		CreatedAt:            time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("ReserveHandoffOffer(second) error = %v", err)
+	}
+	if created {
+		t.Fatal("expected existing reservation after restart")
+	}
+	if got == nil || got.RuntimeID != "rt-b" {
+		t.Fatalf("existing reservation = %+v, want rt-b", got)
 	}
 }

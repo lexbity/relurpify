@@ -36,6 +36,7 @@ type AdmissionController interface {
 }
 
 type FairnessController struct {
+	mu     sync.Mutex
 	Limits map[string]int
 	Usage  map[string]int
 }
@@ -45,6 +46,10 @@ func (f *FairnessController) Admit(req AdmissionRequest) bool {
 }
 
 func (f *FairnessController) Decide(req AdmissionRequest) AdmissionDecision {
+	if f != nil {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+	}
 	tenantID := strings.TrimSpace(req.TenantID)
 	if req.Class == WorkloadCritical {
 		return AdmissionDecision{Allowed: true, Reason: "critical_bypass"}
@@ -66,7 +71,12 @@ func (f *FairnessController) Decide(req AdmissionRequest) AdmissionDecision {
 }
 
 func (f *FairnessController) Release(req AdmissionRequest) {
-	if f == nil || f.Usage == nil {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Usage == nil {
 		return
 	}
 	tenantID := strings.TrimSpace(req.TenantID)
@@ -76,6 +86,7 @@ func (f *FairnessController) Release(req AdmissionRequest) {
 }
 
 type LoadController struct {
+	mu       sync.Mutex
 	Capacity int
 	InFlight int
 	Fairness *FairnessController
@@ -86,6 +97,10 @@ func (c *LoadController) Admit(req AdmissionRequest) bool {
 }
 
 func (c *LoadController) Decide(req AdmissionRequest) AdmissionDecision {
+	if c != nil {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+	}
 	if req.Class == WorkloadCritical {
 		c.InFlight++
 		if c.Fairness != nil {
@@ -111,6 +126,10 @@ func (c *LoadController) Decide(req AdmissionRequest) AdmissionDecision {
 }
 
 func (c *LoadController) Release(req AdmissionRequest) {
+	if c != nil {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+	}
 	if c.InFlight > 0 {
 		c.InFlight--
 	}
@@ -229,12 +248,12 @@ func CollectSLOSignals(ctx context.Context, store WorkflowLister, limit int) (SL
 }
 
 type DRMetadata struct {
-	WorkflowID      string    `json:"workflow_id"`
-	RunID           string    `json:"run_id,omitempty"`
-	FailoverReady   bool      `json:"failover_ready"`
-	RecoveryState   string    `json:"recovery_state,omitempty"`
-	LastCheckpoint  time.Time `json:"last_checkpoint,omitempty"`
-	RuntimeVersion  string    `json:"runtime_version,omitempty"`
+	WorkflowID     string    `json:"workflow_id"`
+	RunID          string    `json:"run_id,omitempty"`
+	FailoverReady  bool      `json:"failover_ready"`
+	RecoveryState  string    `json:"recovery_state,omitempty"`
+	LastCheckpoint time.Time `json:"last_checkpoint,omitempty"`
+	RuntimeVersion string    `json:"runtime_version,omitempty"`
 }
 
 func BuildDRMetadata(workflow memory.WorkflowRecord, run *memory.WorkflowRunRecord) DRMetadata {

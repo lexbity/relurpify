@@ -236,7 +236,7 @@ func testRecipientKeys() StaticRecipientKeyResolver {
 	}
 }
 
-func TestInMemoryOwnershipCommitAndFence(t *testing.T) {
+func TestInMemoryOwnershipCommitFencesSource(t *testing.T) {
 	t.Parallel()
 
 	store := &InMemoryOwnershipStore{}
@@ -276,19 +276,11 @@ func TestInMemoryOwnershipCommitAndFence(t *testing.T) {
 	if err := store.CommitHandoff(context.Background(), commit); err != nil {
 		t.Fatalf("CommitHandoff() error = %v", err)
 	}
-	if err := store.Fence(context.Background(), core.FenceNotice{
-		LineageID:    lineage.LineageID,
-		AttemptID:    source.AttemptID,
-		FencingEpoch: lease.FencingEpoch,
-		Issuer:       "issuer",
-	}); err != nil {
-		t.Fatalf("Fence() error = %v", err)
-	}
 	fenced, ok, err := store.GetAttempt(context.Background(), source.AttemptID)
 	if err != nil || !ok {
 		t.Fatalf("GetAttempt() error = %v ok=%v", err, ok)
 	}
-	if !fenced.Fenced || fenced.State != core.AttemptStateFenced {
+	if !fenced.Fenced || fenced.State != core.AttemptStateCommittedRemote || fenced.FencingEpoch != lease.FencingEpoch {
 		t.Fatalf("fenced attempt = %+v", *fenced)
 	}
 }
@@ -361,6 +353,13 @@ func TestServiceOfferAcceptCommitLifecycle(t *testing.T) {
 	}
 	if current.CurrentOwnerRuntime != "rt-b" || current.CurrentOwnerAttempt != accept.ProvisionalAttemptID {
 		t.Fatalf("lineage owner = %+v", *current)
+	}
+	sourceAttempt, ok, err := store.GetAttempt(context.Background(), source.AttemptID)
+	if err != nil || !ok {
+		t.Fatalf("GetAttempt(source) error = %v ok=%v", err, ok)
+	}
+	if !sourceAttempt.Fenced || sourceAttempt.State != core.AttemptStateCommittedRemote {
+		t.Fatalf("source attempt after commit = %+v", *sourceAttempt)
 	}
 	if len(log.events) < 4 {
 		t.Fatalf("expected audit events, got %d", len(log.events))

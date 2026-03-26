@@ -77,7 +77,7 @@ func (s *Service) resolveDestinationRuntimeRecipient(ctx context.Context, req co
 	if s == nil || s.Discovery == nil {
 		return "", fmt.Errorf("discovery store unavailable")
 	}
-	exports, err := s.Discovery.ListExportAdvertisements(ctx)
+	exports, err := s.listLiveExportAds(ctx)
 	if err != nil {
 		return "", err
 	}

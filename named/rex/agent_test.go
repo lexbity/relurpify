@@ -11,6 +11,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/named/rex/proof"
+	"github.com/lexcodex/relurpify/named/rex/reconcile"
 )
 
 type stubModel struct{}
@@ -72,6 +73,21 @@ func TestAgentImplementsWorkflowExecutor(t *testing.T) {
 		Capabilities() []core.Capability
 	}); !ok {
 		t.Fatalf("agent does not satisfy workflow executor shape")
+	}
+}
+
+func TestAgentUsesReconcilerHelpers(t *testing.T) {
+	agent := New(testEnv(t))
+	record := agent.RecordAmbiguity("wf-1", "run-1", "missing ack")
+	if record.WorkflowID != "wf-1" || record.RunID != "run-1" {
+		t.Fatalf("record = %+v", record)
+	}
+	resolved := agent.ResolveAmbiguity(record, reconcile.OutcomeRepaired, "confirmed")
+	if resolved.Status != reconcile.StatusRepaired {
+		t.Fatalf("resolved = %+v", resolved)
+	}
+	if !agent.ShouldRetryAmbiguity(resolved) {
+		t.Fatalf("expected repaired ambiguity to be retryable")
 	}
 }
 

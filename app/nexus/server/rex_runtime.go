@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	relruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/framework/agentenv"
@@ -19,6 +21,7 @@ import (
 	"github.com/lexcodex/relurpify/named/rex"
 	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
 	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
+	rexreconcile "github.com/lexcodex/relurpify/named/rex/reconcile"
 	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
 )
 
@@ -36,7 +39,13 @@ type RexRuntimeProvider struct {
 	CheckpointStore *memdb.SQLiteCheckpointStore
 	Bundle          *relruntime.CapabilityBundle
 	// Phase 7.1: Admission control for gateway routing
-	Admission rexcontrolplane.AdmissionController
+	Admission         rexcontrolplane.AdmissionController
+	AdmissionAudit    *rexcontrolplane.AuditLog
+	PartitionDetector fwfmp.PartitionDetector
+	sloMu             sync.Mutex
+	sloSignals        rexcontrolplane.SLOSignals
+	sloCachedAt       time.Time
+	sloTTL            time.Duration
 }
 
 func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimeProvider, error) {
@@ -96,6 +105,8 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 				Usage:  map[string]int{},
 			},
 		},
+		AdmissionAudit: &rexcontrolplane.AuditLog{},
+		sloTTL:         10 * time.Second,
 	}
 	go func() {
 		<-ctx.Done()
@@ -133,7 +144,32 @@ func (p *RexRuntimeProvider) RuntimeProjection() rexnexus.Projection {
 	if p == nil || p.Adapter == nil {
 		return rexnexus.Projection{}
 	}
-	return p.Agent.RuntimeProjection()
+	projection := p.Agent.RuntimeProjection()
+	if p.WorkflowStore != nil && strings.TrimSpace(projection.WorkflowID) != "" {
+		ctx := context.Background()
+		workflow, ok, err := p.WorkflowStore.GetWorkflow(ctx, projection.WorkflowID)
+		if err == nil && ok && workflow != nil {
+			var run *memory.WorkflowRunRecord
+			if strings.TrimSpace(projection.RunID) != "" {
+				candidate, ok, err := p.WorkflowStore.GetRun(ctx, projection.RunID)
+				if err == nil && ok {
+					run = candidate
+				}
+			}
+			metadata := rexcontrolplane.BuildDRMetadata(*workflow, run)
+			projection.FailoverReady = metadata.FailoverReady
+			projection.RecoveryState = metadata.RecoveryState
+			projection.RuntimeVersion = metadata.RuntimeVersion
+			projection.LastCheckpoint = metadata.LastCheckpoint
+		}
+	}
+	if p.PartitionDetector != nil && p.PartitionDetector.IsPartitioned() {
+		projection.Health = rexruntime.HealthDegraded
+		if projection.LastError == "" {
+			projection.LastError = "ownership store partitioned"
+		}
+	}
+	return projection
 }
 
 func (p *RexRuntimeProvider) AdminSnapshot(ctx context.Context) (rexnexus.AdminSnapshot, error) {
@@ -146,6 +182,13 @@ func (p *RexRuntimeProvider) AdminSnapshot(ctx context.Context) (rexnexus.AdminS
 func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 	if p == nil || service == nil {
 		return
+	}
+	if service.PartitionDetector == nil {
+		service.PartitionDetector = &fwfmp.AtomicPartitionState{}
+	}
+	p.PartitionDetector = service.PartitionDetector
+	if p.Agent != nil && p.Agent.Runtime != nil {
+		p.Agent.Runtime.SetPartitionDetector(service.PartitionDetector)
 	}
 	recipient := p.runtimeRecipient()
 	key := sha256.Sum256([]byte(recipient))
@@ -177,6 +220,21 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 		RuntimeID:     p.runtimeDescriptor().RuntimeID,
 	}
 	p.Agent.Observer = p.LineageBridge
+	p.Agent.Reconciler = &rexreconcile.FMPBackedReconciler{
+		Base:           &rexreconcile.InMemoryReconciler{},
+		ResolveBinding: p.LineageBridge.ResolveReconciliationBinding,
+		ResolveAttempt: func(ctx context.Context, lineageID, attemptID string) (*rexreconcile.AttemptView, error) {
+			attempt, ok, err := service.Ownership.GetAttempt(ctx, attemptID)
+			if err != nil || !ok || attempt == nil || attempt.LineageID != lineageID {
+				return nil, err
+			}
+			return &rexreconcile.AttemptView{
+				State:  attempt.State,
+				Fenced: attempt.Fenced,
+			}, nil
+		},
+		ApplyOutcome: p.LineageBridge.ApplyReconciliationOutcome,
+	}
 	p.RuntimeEndpoint = &rexnexus.RuntimeEndpoint{
 		DescriptorValue: p.runtimeDescriptor(),
 		Packager:        packager,
@@ -216,6 +274,29 @@ func (p *RexRuntimeProvider) PublishFMPTrustBundle(ctx context.Context, service 
 			Active:    true,
 		},
 	})
+}
+
+func (p *RexRuntimeProvider) ReadSLOSignals(ctx context.Context) (rexcontrolplane.SLOSignals, int64, error) {
+	if p == nil || p.WorkflowStore == nil {
+		return rexcontrolplane.SLOSignals{}, 0, fmt.Errorf("rex workflow store unavailable")
+	}
+	p.sloMu.Lock()
+	defer p.sloMu.Unlock()
+	now := time.Now().UTC()
+	ttl := p.sloTTL
+	if ttl <= 0 {
+		ttl = 10 * time.Second
+	}
+	if !p.sloCachedAt.IsZero() && now.Sub(p.sloCachedAt) < ttl {
+		return p.sloSignals, p.sloCachedAt.UnixNano(), nil
+	}
+	signals, err := rexcontrolplane.CollectSLOSignals(ctx, p.WorkflowStore, 1000)
+	if err != nil {
+		return rexcontrolplane.SLOSignals{}, 0, err
+	}
+	p.sloSignals = signals
+	p.sloCachedAt = now
+	return signals, now.UnixNano(), nil
 }
 
 func (p *RexRuntimeProvider) CapabilityDescriptor() core.CapabilityDescriptor {

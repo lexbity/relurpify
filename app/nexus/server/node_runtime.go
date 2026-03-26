@@ -162,6 +162,7 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 				exportAd.FailoverReady = projection.FailoverReady
 				exportAd.RecoveryState = projection.RecoveryState
 				exportAd.RuntimeVersion = projection.RuntimeVersion
+				exportAd.LastCheckpoint = projection.LastCheckpoint
 			}
 
 			if err := mesh.AdvertiseExport(ctx, exportAd); err != nil {

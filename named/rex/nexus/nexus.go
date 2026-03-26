@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -13,33 +14,34 @@ import (
 
 // Projection is the Nexus-facing runtime snapshot for rex.
 type Projection struct {
-	Health         runtime.Health     `json:"health"`
-	ActiveWork     int                `json:"active_work"`
-	QueueDepth     int                `json:"queue_depth"`
-	RecoveryCount  int                `json:"recovery_count"`
-	LastError      string             `json:"last_error,omitempty"`
-	LastProof      proof.ProofSurface `json:"last_proof"`
-	WorkflowID     string             `json:"workflow_id,omitempty"`
-	RunID          string             `json:"run_id,omitempty"`
+	Health        runtime.Health     `json:"health"`
+	ActiveWork    int                `json:"active_work"`
+	QueueDepth    int                `json:"queue_depth"`
+	RecoveryCount int                `json:"recovery_count"`
+	LastError     string             `json:"last_error,omitempty"`
+	LastProof     proof.ProofSurface `json:"last_proof"`
+	WorkflowID    string             `json:"workflow_id,omitempty"`
+	RunID         string             `json:"run_id,omitempty"`
 	// Phase 7.3: DR metadata for federation health summaries
-	FailoverReady  bool               `json:"failover_ready,omitempty"`
-	RecoveryState  string             `json:"recovery_state,omitempty"`
-	RuntimeVersion string             `json:"runtime_version,omitempty"`
+	FailoverReady  bool      `json:"failover_ready,omitempty"`
+	RecoveryState  string    `json:"recovery_state,omitempty"`
+	RuntimeVersion string    `json:"runtime_version,omitempty"`
+	LastCheckpoint time.Time `json:"last_checkpoint,omitempty"`
 }
 
 type Registration struct {
-	Name            string              `json:"name"`
-	RuntimeType     string              `json:"runtime_type"`
-	Managed         bool                `json:"managed"`
-	Capabilities    []core.Capability   `json:"capabilities,omitempty"`
-	ProjectionTiers []string            `json:"projection_tiers,omitempty"`
+	Name            string            `json:"name"`
+	RuntimeType     string            `json:"runtime_type"`
+	Managed         bool              `json:"managed"`
+	Capabilities    []core.Capability `json:"capabilities,omitempty"`
+	ProjectionTiers []string          `json:"projection_tiers,omitempty"`
 }
 
 type AdminSnapshot struct {
-	Runtime        Projection         `json:"runtime"`
-	WorkflowRefURI []string           `json:"workflow_ref_uri,omitempty"`
-	HotState       map[string]any     `json:"hot_state,omitempty"`
-	WarmState      map[string]any     `json:"warm_state,omitempty"`
+	Runtime        Projection     `json:"runtime"`
+	WorkflowRefURI []string       `json:"workflow_ref_uri,omitempty"`
+	HotState       map[string]any `json:"hot_state,omitempty"`
+	WarmState      map[string]any `json:"warm_state,omitempty"`
 }
 
 // ManagedRuntime is the Nexus-facing contract exposed by rex.

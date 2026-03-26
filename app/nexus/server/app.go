@@ -301,6 +301,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		FMP:           a.FMPService,
 		FMPFederation: a.FMPFederationStore,
 		RexRuntime:    a.RexRuntime,
+		RexProvider:   a.RexRuntime,
 		Partition:     a.partition(),
 		Config:        a.Config,
 		StartedAt:     a.StartedAt,

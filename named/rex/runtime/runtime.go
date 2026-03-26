@@ -29,32 +29,38 @@ type WorkItem struct {
 }
 
 type Details struct {
-	Health         Health                     `json:"health"`
-	ActiveWork     int                        `json:"active_work"`
-	QueueDepth     int                        `json:"queue_depth"`
-	RecoveryCount  int                        `json:"recovery_count"`
-	LastWorkflowID string                     `json:"last_workflow_id,omitempty"`
-	LastRunID      string                     `json:"last_run_id,omitempty"`
-	LastError      string                     `json:"last_error,omitempty"`
-	Recoveries     []state.RecoveryCandidate  `json:"recoveries,omitempty"`
+	Health         Health                    `json:"health"`
+	ActiveWork     int                       `json:"active_work"`
+	QueueDepth     int                       `json:"queue_depth"`
+	RecoveryCount  int                       `json:"recovery_count"`
+	Partitioned    bool                      `json:"partitioned,omitempty"`
+	LastWorkflowID string                    `json:"last_workflow_id,omitempty"`
+	LastRunID      string                    `json:"last_run_id,omitempty"`
+	LastError      string                    `json:"last_error,omitempty"`
+	Recoveries     []state.RecoveryCandidate `json:"recoveries,omitempty"`
+}
+
+type PartitionDetector interface {
+	IsPartitioned() bool
 }
 
 // Manager coordinates long-running Nexus-managed rex work.
 type Manager struct {
-	cfg         config.Config
-	mem         memory.MemoryStore
-	queue       chan WorkItem
-	mu          sync.RWMutex
-	health      Health
-	active      int
-	queueDepth  int
-	cancel      context.CancelFunc
-	recoveries  []state.RecoveryCandidate
-	loopStarted bool
+	cfg            config.Config
+	mem            memory.MemoryStore
+	queue          chan WorkItem
+	mu             sync.RWMutex
+	health         Health
+	active         int
+	queueDepth     int
+	cancel         context.CancelFunc
+	recoveries     []state.RecoveryCandidate
+	loopStarted    bool
 	lastWorkflowID string
 	lastRunID      string
 	lastError      string
 	worker         func(context.Context, WorkItem) error
+	partition      PartitionDetector
 }
 
 func New(cfg config.Config, mem memory.MemoryStore) *Manager {
@@ -107,22 +113,42 @@ func (m *Manager) Enqueue(item WorkItem) bool {
 func (m *Manager) Snapshot() (Health, int, []state.RecoveryCandidate) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.health, m.active, append([]state.RecoveryCandidate{}, m.recoveries...)
+	health := m.health
+	if m.partition != nil && m.partition.IsPartitioned() {
+		health = HealthDegraded
+	}
+	return health, m.active, append([]state.RecoveryCandidate{}, m.recoveries...)
 }
 
 func (m *Manager) Details() Details {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	health := m.health
+	partitioned := m.partition != nil && m.partition.IsPartitioned()
+	lastError := m.lastError
+	if partitioned {
+		health = HealthDegraded
+		if lastError == "" {
+			lastError = "ownership store partitioned"
+		}
+	}
 	return Details{
-		Health:         m.health,
+		Health:         health,
 		ActiveWork:     m.active,
 		QueueDepth:     m.queueDepth,
 		RecoveryCount:  len(m.recoveries),
+		Partitioned:    partitioned,
 		LastWorkflowID: m.lastWorkflowID,
 		LastRunID:      m.lastRunID,
-		LastError:      m.lastError,
+		LastError:      lastError,
 		Recoveries:     append([]state.RecoveryCandidate{}, m.recoveries...),
 	}
+}
+
+func (m *Manager) SetPartitionDetector(detector PartitionDetector) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.partition = detector
 }
 
 func (m *Manager) BeginExecution(workflowID, runID string) func(error) {

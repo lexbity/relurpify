@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,4 +67,59 @@ func TestLineageBridgeHandleFrameworkEventUpdatesBindingAndAppendsWorkflowEvent(
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 	require.Equal(t, core.FrameworkEventFMPResumeCommitted, events[0].EventType)
+}
+
+func TestLineageBridgeResolveReconciliationBindingIncludesFencingEpoch(t *testing.T) {
+	t.Parallel()
+
+	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	ownership := &fwfmp.InMemoryOwnershipStore{}
+	ctx := context.Background()
+	require.NoError(t, ownership.CreateLineage(ctx, core.LineageRecord{
+		LineageID:    "lineage-1",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+	}))
+	require.NoError(t, ownership.UpsertAttempt(ctx, core.AttemptRecord{
+		AttemptID:        "run-1",
+		LineageID:        "lineage-1",
+		RuntimeID:        "rex",
+		State:            core.AttemptStateRunning,
+		FencingEpoch:     9,
+		LastProgressTime: time.Now().UTC(),
+	}))
+	require.NoError(t, store.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-1",
+		TaskID:      "task-1",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "resume",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	require.NoError(t, store.CreateRun(ctx, memory.WorkflowRunRecord{
+		RunID:      "run-1",
+		WorkflowID: "wf-1",
+		Status:     memory.WorkflowRunStatusRunning,
+		StartedAt:  time.Now().UTC(),
+	}))
+
+	bridge := &LineageBridge{
+		WorkflowStore: store,
+		Service:       &fwfmp.Service{Ownership: ownership},
+	}
+	require.NoError(t, bridge.persistBinding(ctx, "wf-1", "run-1", LineageBinding{
+		LineageID: "lineage-1",
+		AttemptID: "run-1",
+		RuntimeID: "rex",
+		UpdatedAt: time.Now().UTC(),
+	}))
+
+	binding, err := bridge.ResolveReconciliationBinding(ctx, "wf-1", "run-1")
+	require.NoError(t, err)
+	require.NotNil(t, binding)
+	require.Equal(t, int64(9), binding.FencingEpoch)
 }

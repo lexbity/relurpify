@@ -14,6 +14,7 @@ import (
 	nexusgateway "github.com/lexcodex/relurpify/app/nexus/gateway"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
 	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 )
 
@@ -332,23 +333,27 @@ func (s *service) ReadRexSLOSignals(ctx context.Context, req ReadRexSLOSignalsRe
 	if err := authorizeGlobalFMPAdmin(req.Principal); err != nil {
 		return ReadRexSLOSignalsResult{}, err
 	}
-	if s == nil || s.cfg.RexRuntime == nil {
+	if s == nil || s.cfg.RexRuntime == nil || s.cfg.RexProvider == nil {
 		return ReadRexSLOSignalsResult{}, notImplemented("rex runtime not available", nil)
 	}
-
-	// Collect SLO signals from the runtime adapter
-	// In a full implementation this would cache signals with 10s TTL and collect from controlplane.CollectSLOSignals
-	// For now, return basic signals derived from the runtime projection
-	signals := ReadRexSLOSignalsResult{
-		AdminResult: resultEnvelope(req.AdminRequest),
-		CachedAt:    time.Now().UnixNano(),
+	signals, cachedAt, err := s.cfg.RexProvider.ReadSLOSignals(ctx)
+	if err != nil {
+		return ReadRexSLOSignalsResult{}, internalError("read rex slo signals failed", err, nil)
 	}
+	return rexSLOSignalsResult(req, signals, cachedAt), nil
+}
 
-	// Phase 7.2: In full implementation, would call:
-	// rexcontrolplane.CollectSLOSignals(ctx, runtimeProvider.WorkflowStore, 1000)
-	// This would give us: TotalWorkflows, RunningWorkflows, CompletedWorkflows, FailedWorkflows, RecoverySensitive, DegradedWorkflowIDs
-
-	return signals, nil
+func rexSLOSignalsResult(req ReadRexSLOSignalsRequest, signals rexcontrolplane.SLOSignals, cachedAt int64) ReadRexSLOSignalsResult {
+	return ReadRexSLOSignalsResult{
+		AdminResult:        resultEnvelope(req.AdminRequest),
+		TotalWorkflows:     signals.TotalWorkflows,
+		RunningWorkflows:   signals.RunningWorkflows,
+		CompletedWorkflows: signals.CompletedWorkflows,
+		FailedWorkflows:    signals.FailedWorkflows,
+		RecoverySensitive:  signals.RecoverySensitive,
+		DegradedWorkflows:  append([]string(nil), signals.DegradedWorkflowIDs...),
+		CachedAt:           cachedAt,
+	}
 }
 
 // HashToken returns the SHA-256 hex digest of token. Used for secure

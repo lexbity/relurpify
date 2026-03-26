@@ -11,10 +11,14 @@ import (
 type fakeGatewayForwarder struct {
 	lastRequest core.GatewayForwardRequest
 	result      *core.GatewayForwardResult
+	err         error
 }
 
 func (f *fakeGatewayForwarder) ForwardSealedContext(_ context.Context, req core.GatewayForwardRequest) (*core.GatewayForwardResult, error) {
 	f.lastRequest = req
+	if f.err != nil {
+		return nil, f.err
+	}
 	if f.result != nil {
 		return f.result, nil
 	}
@@ -24,7 +28,7 @@ func (f *fakeGatewayForwarder) ForwardSealedContext(_ context.Context, req core.
 func TestImportFederatedExportAdvertisementRequiresTrustedGateway(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	svc := &Service{
 		Discovery:  &InMemoryDiscoveryStore{},
 		Trust:      &InMemoryTrustBundleStore{},
@@ -97,7 +101,7 @@ func TestImportFederatedExportAdvertisementRequiresTrustedGateway(t *testing.T) 
 func TestImportFederatedExportAdvertisementRejectsUntrustedMesh(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	svc := &Service{
 		Discovery:  &InMemoryDiscoveryStore{},
 		Trust:      &InMemoryTrustBundleStore{},
@@ -121,7 +125,7 @@ func TestImportFederatedExportAdvertisementRejectsUntrustedMesh(t *testing.T) {
 func TestImportFederatedRuntimeAdvertisementRejectsMissingAttestation(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	svc := &Service{
 		Discovery:  &InMemoryDiscoveryStore{},
 		Trust:      &InMemoryTrustBundleStore{},
@@ -153,7 +157,7 @@ func TestImportFederatedRuntimeAdvertisementRejectsMissingAttestation(t *testing
 func TestImportFederatedExportAdvertisementRequiresRegisteredRuntime(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	svc := &Service{
 		Discovery:  &InMemoryDiscoveryStore{},
 		Trust:      &InMemoryTrustBundleStore{},
@@ -197,7 +201,7 @@ func TestImportFederatedExportAdvertisementRequiresRegisteredRuntime(t *testing.
 func TestForwardFederatedContextDefaultsToOpaqueGatewayPassThrough(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	gateway := core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}
 	forwarder := &fakeGatewayForwarder{}
 	svc := &Service{
@@ -258,7 +262,7 @@ func TestForwardFederatedContextDefaultsToOpaqueGatewayPassThrough(t *testing.T)
 func TestForwardFederatedContextRejectsMediationUnlessAllowed(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	gateway := core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}
 	svc := &Service{
 		Trust:      &InMemoryTrustBundleStore{},
@@ -308,6 +312,150 @@ func TestForwardFederatedContextRejectsMediationUnlessAllowed(t *testing.T) {
 	}
 	if refusal == nil || refusal.Code != core.RefusalUnauthorized {
 		t.Fatalf("expected mediation refusal, got %+v", refusal)
+	}
+}
+
+func TestForwardFederatedContextRecordsCircuitBreakerFailuresAndTrips(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	gateway := core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}
+	forwarder := &fakeGatewayForwarder{err: context.DeadlineExceeded}
+	breakers := &InMemoryCircuitBreakerStore{}
+	if err := breakers.SetConfig(context.Background(), CircuitBreakerConfig{
+		TrustDomain:      "mesh.remote",
+		ErrorThreshold:   0.5,
+		MinRequests:      2,
+		WindowDuration:   time.Minute,
+		RecoveryDuration: 24 * time.Hour,
+	}); err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+	svc := &Service{
+		Trust:           &InMemoryTrustBundleStore{},
+		Boundaries:      &InMemoryBoundaryPolicyStore{},
+		Forwarder:       forwarder,
+		CircuitBreakers: breakers,
+		Now:             func() time.Time { return now },
+	}
+	registerFederatedForwardTrust(t, svc, gateway, now)
+
+	req := core.GatewayForwardRequest{
+		TenantID:           "tenant-1",
+		TrustDomain:        "mesh.remote",
+		SourceDomain:       "mesh.remote",
+		GatewayIdentity:    gateway,
+		DestinationExport:  "mesh://mesh.remote/agent.resume",
+		RouteMode:          core.RouteModeGateway,
+		SizeBytes:          1024,
+		ContextManifestRef: "ctx-1",
+		SealedContext: core.SealedContext{
+			EnvelopeVersion:    "v1",
+			ContextManifestRef: "ctx-1",
+			CipherSuite:        "age",
+			CiphertextChunks:   [][]byte{[]byte("opaque")},
+			IntegrityTag:       "tag-1",
+		},
+	}
+
+	if _, refusal, err := svc.ForwardFederatedContext(context.Background(), req); err == nil || refusal != nil {
+		t.Fatalf("first ForwardFederatedContext() err=%v refusal=%+v", err, refusal)
+	}
+	if _, refusal, err := svc.ForwardFederatedContext(context.Background(), req); err == nil || refusal != nil {
+		t.Fatalf("second ForwardFederatedContext() err=%v refusal=%+v", err, refusal)
+	}
+
+	state, err := breakers.GetState(context.Background(), "mesh.remote")
+	if err != nil {
+		t.Fatalf("GetState() error = %v", err)
+	}
+	if state != CircuitOpen {
+		t.Fatalf("circuit state = %s, want %s", state, CircuitOpen)
+	}
+
+	_, refusal, err := svc.ForwardFederatedContext(context.Background(), req)
+	if err != nil {
+		t.Fatalf("third ForwardFederatedContext() error = %v", err)
+	}
+	if refusal == nil || refusal.Code != core.RefusalAdmissionClosed {
+		t.Fatalf("third ForwardFederatedContext() refusal = %+v", refusal)
+	}
+}
+
+func TestForwardFederatedContextRecordsCircuitBreakerSuccess(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	gateway := core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "gw-1"}
+	breakers := &InMemoryCircuitBreakerStore{}
+	if err := breakers.SetConfig(context.Background(), CircuitBreakerConfig{
+		TrustDomain:      "mesh.remote",
+		ErrorThreshold:   0.5,
+		MinRequests:      2,
+		WindowDuration:   time.Minute,
+		RecoveryDuration: 24 * time.Hour,
+	}); err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+	svc := &Service{
+		Trust:           &InMemoryTrustBundleStore{},
+		Boundaries:      &InMemoryBoundaryPolicyStore{},
+		Forwarder:       &fakeGatewayForwarder{},
+		CircuitBreakers: breakers,
+		Now:             func() time.Time { return now },
+	}
+	registerFederatedForwardTrust(t, svc, gateway, now)
+
+	_, refusal, err := svc.ForwardFederatedContext(context.Background(), core.GatewayForwardRequest{
+		TenantID:           "tenant-1",
+		TrustDomain:        "mesh.remote",
+		SourceDomain:       "mesh.remote",
+		GatewayIdentity:    gateway,
+		DestinationExport:  "mesh://mesh.remote/agent.resume",
+		RouteMode:          core.RouteModeGateway,
+		SizeBytes:          1024,
+		ContextManifestRef: "ctx-1",
+		SealedContext: core.SealedContext{
+			EnvelopeVersion:    "v1",
+			ContextManifestRef: "ctx-1",
+			CipherSuite:        "age",
+			CiphertextChunks:   [][]byte{[]byte("opaque")},
+			IntegrityTag:       "tag-1",
+		},
+	})
+	if err != nil || refusal != nil {
+		t.Fatalf("ForwardFederatedContext() err=%v refusal=%+v", err, refusal)
+	}
+
+	states, err := breakers.ListStates(context.Background())
+	if err != nil {
+		t.Fatalf("ListStates() error = %v", err)
+	}
+	if len(states) != 1 || states[0].Requests != 1 || states[0].ErrorRate != 0 {
+		t.Fatalf("breaker states = %+v", states)
+	}
+}
+
+func registerFederatedForwardTrust(t *testing.T, svc *Service, gateway core.SubjectRef, now time.Time) {
+	t.Helper()
+
+	if err := svc.RegisterTrustBundle(context.Background(), core.TrustBundle{
+		TrustDomain:       "mesh.remote",
+		BundleID:          "bundle-1",
+		GatewayIdentities: []core.SubjectRef{gateway},
+		ExpiresAt:         now.Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("RegisterTrustBundle() error = %v", err)
+	}
+	if err := svc.SetBoundaryPolicy(context.Background(), core.BoundaryPolicy{
+		TrustDomain:                  "mesh.remote",
+		AcceptedSourceDomains:        []string{"mesh.remote"},
+		AcceptedSourceIdentities:     []core.SubjectRef{gateway},
+		AllowedRouteModes:            []core.RouteMode{core.RouteModeGateway},
+		RequireGatewayAuthentication: true,
+		MaxTransferBytes:             4096,
+	}); err != nil {
+		t.Fatalf("SetBoundaryPolicy() error = %v", err)
 	}
 }
 

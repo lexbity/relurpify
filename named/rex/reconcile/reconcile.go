@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 type Status string
@@ -31,6 +33,9 @@ type Record struct {
 	ID              string    `json:"id"`
 	WorkflowID      string    `json:"workflow_id"`
 	RunID           string    `json:"run_id,omitempty"`
+	LineageID       string    `json:"lineage_id,omitempty"`
+	AttemptID       string    `json:"attempt_id,omitempty"`
+	FencingEpoch    int64     `json:"fencing_epoch,omitempty"`
 	Reason          string    `json:"reason"`
 	Status          Status    `json:"status"`
 	Ambiguous       bool      `json:"ambiguous"`
@@ -46,6 +51,26 @@ type Reconciler interface {
 	RecordAmbiguity(workflowID, runID, reason string) Record
 	Resolve(record Record, outcome Outcome, notes string) Record
 	ShouldRetry(record Record) bool
+}
+
+type Binding struct {
+	LineageID    string `json:"lineage_id,omitempty"`
+	AttemptID    string `json:"attempt_id,omitempty"`
+	FencingEpoch int64  `json:"fencing_epoch,omitempty"`
+}
+
+type AttemptView struct {
+	State  core.AttemptState `json:"state"`
+	Fenced bool              `json:"fenced"`
+}
+
+// FMPBackedReconciler augments local Rex reconciliation with FMP ownership ground truth.
+type FMPBackedReconciler struct {
+	Base           Reconciler
+	ResolveBinding func(context.Context, string, string) (*Binding, error)
+	ResolveAttempt func(context.Context, string, string) (*AttemptView, error)
+	ApplyOutcome   func(context.Context, string, string, *Record) error
+	ReportError    func(error)
 }
 
 // InMemoryReconciler provides local semantics for ambiguity handling.
@@ -111,6 +136,55 @@ func (r *InMemoryReconciler) Get(recordID string) (Record, bool) {
 	defer r.mu.RUnlock()
 	record, ok := r.records[recordID]
 	return record, ok
+}
+
+func (r *FMPBackedReconciler) RecordAmbiguity(workflowID, runID, reason string) Record {
+	base := r.base()
+	record := base.RecordAmbiguity(workflowID, runID, reason)
+	if r.ResolveBinding == nil {
+		return record
+	}
+	binding, err := r.ResolveBinding(context.Background(), workflowID, runID)
+	if err != nil {
+		r.report(err)
+		return record
+	}
+	if binding == nil {
+		return record
+	}
+	record.LineageID = binding.LineageID
+	record.AttemptID = binding.AttemptID
+	record.FencingEpoch = binding.FencingEpoch
+	return record
+}
+
+func (r *FMPBackedReconciler) Resolve(record Record, outcome Outcome, notes string) Record {
+	resolved := r.base().Resolve(record, outcome, notes)
+	resolved.LineageID = firstNonEmpty(record.LineageID, resolved.LineageID)
+	resolved.AttemptID = firstNonEmpty(record.AttemptID, resolved.AttemptID)
+	if resolved.FencingEpoch == 0 {
+		resolved.FencingEpoch = record.FencingEpoch
+	}
+	if r.ApplyOutcome != nil && resolved.WorkflowID != "" {
+		if err := r.ApplyOutcome(context.Background(), resolved.WorkflowID, resolved.RunID, &resolved); err != nil {
+			r.report(err)
+		}
+	}
+	return resolved
+}
+
+func (r *FMPBackedReconciler) ShouldRetry(record Record) bool {
+	if record.LineageID != "" && record.AttemptID != "" && r.ResolveAttempt != nil {
+		attempt, err := r.ResolveAttempt(context.Background(), record.LineageID, record.AttemptID)
+		if err != nil {
+			r.report(err)
+			return false
+		}
+		if attempt == nil || !attemptRetryable(*attempt) {
+			return false
+		}
+	}
+	return r.base().ShouldRetry(record)
 }
 
 type ProtectedWrite struct {
@@ -208,6 +282,41 @@ func reconcileID(workflowID, runID, reason string) string {
 
 func normalizeResource(value string) string {
 	return strings.TrimSpace(value)
+}
+
+func (r *FMPBackedReconciler) base() Reconciler {
+	if r != nil && r.Base != nil {
+		return r.Base
+	}
+	return &InMemoryReconciler{}
+}
+
+func (r *FMPBackedReconciler) report(err error) {
+	if err == nil || r == nil || r.ReportError == nil {
+		return
+	}
+	r.ReportError(err)
+}
+
+func attemptRetryable(attempt AttemptView) bool {
+	if attempt.Fenced {
+		return false
+	}
+	switch attempt.State {
+	case core.AttemptStateCompleted, core.AttemptStateFailed, core.AttemptStateOrphaned, core.AttemptStateCommittedRemote, core.AttemptStateFenced:
+		return false
+	default:
+		return true
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (r *InMemoryReconciler) ensure() {

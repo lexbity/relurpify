@@ -7,11 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/framework/core"
 	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
 )
+
+type stubPartitionDetector struct{ partitioned bool }
+
+func (s stubPartitionDetector) IsPartitioned() bool { return s.partitioned }
 
 func TestManagerStartsAndStops(t *testing.T) {
 	memStore, err := memory.NewHybridMemory(t.TempDir())
@@ -172,5 +176,24 @@ func TestManagerWorkerFailureSetsDegradedHealth(t *testing.T) {
 	details := manager.Details()
 	if details.Health != HealthDegraded {
 		t.Fatalf("expected degraded health: %+v", details)
+	}
+}
+
+func TestManagerDetailsDegradeWhenPartitioned(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewHybridMemory: %v", err)
+	}
+	manager := New(rexconfig.Default(), memStore)
+	manager.SetPartitionDetector(stubPartitionDetector{partitioned: true})
+	details := manager.Details()
+	if details.Health != HealthDegraded {
+		t.Fatalf("expected degraded health: %+v", details)
+	}
+	if !details.Partitioned {
+		t.Fatalf("expected partitioned details: %+v", details)
+	}
+	if details.LastError == "" {
+		t.Fatalf("expected partition error: %+v", details)
 	}
 }

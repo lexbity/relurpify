@@ -53,12 +53,19 @@ func (s *SQLiteCircuitBreakerStore) init() error {
 		state TEXT NOT NULL DEFAULT 'closed',
 		requests INTEGER NOT NULL DEFAULT 0,
 		failures INTEGER NOT NULL DEFAULT 0,
+		window_started_at TEXT NOT NULL DEFAULT '',
 		tripped_at TEXT NOT NULL DEFAULT '',
 		recovery_at TEXT NOT NULL DEFAULT '',
 		config_json TEXT NOT NULL DEFAULT '{}'
 	);`
-	_, err := s.db.Exec(stmt)
-	return err
+	if _, err := s.db.Exec(stmt); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`ALTER TABLE fmp_circuit_breakers ADD COLUMN window_started_at TEXT NOT NULL DEFAULT ''`)
+	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return err
+	}
+	return nil
 }
 
 // GetState retrieves the current circuit state for a trust domain.
@@ -68,14 +75,24 @@ func (s *SQLiteCircuitBreakerStore) GetState(ctx context.Context, trustDomain st
 		return "", fmt.Errorf("trust domain required")
 	}
 	row := s.db.QueryRowContext(ctx,
-		`SELECT state FROM fmp_circuit_breakers WHERE trust_domain = ?`,
+		`SELECT state, recovery_at FROM fmp_circuit_breakers WHERE trust_domain = ?`,
 		trustDomain)
-	var state string
-	if err := row.Scan(&state); err != nil {
+	var state, recoveryAt string
+	if err := row.Scan(&state, &recoveryAt); err != nil {
 		if err == sql.ErrNoRows {
 			return fwfmp.CircuitClosed, nil
 		}
 		return "", err
+	}
+	if state == string(fwfmp.CircuitOpen) && recoveryAt != "" {
+		if t, err := time.Parse(time.RFC3339, recoveryAt); err == nil && !time.Now().UTC().Before(t) {
+			if _, err := s.db.ExecContext(ctx,
+				`UPDATE fmp_circuit_breakers SET state = ? WHERE trust_domain = ?`,
+				string(fwfmp.CircuitHalfOpen), trustDomain); err != nil {
+				return "", err
+			}
+			return fwfmp.CircuitHalfOpen, nil
+		}
 	}
 	return fwfmp.CircuitState(state), nil
 }
@@ -95,33 +112,53 @@ func (s *SQLiteCircuitBreakerStore) RecordSuccess(ctx context.Context, trustDoma
 	defer tx.Rollback()
 
 	var state string
-	err = tx.QueryRowContext(ctx, `SELECT state FROM fmp_circuit_breakers WHERE trust_domain = ?`, trustDomain).Scan(&state)
+	var recoveryAt string
+	var configJSON string
+	err = tx.QueryRowContext(ctx, `SELECT state, recovery_at, config_json FROM fmp_circuit_breakers WHERE trust_domain = ?`, trustDomain).Scan(&state, &recoveryAt, &configJSON)
 	if err != nil && err != sql.ErrNoRows {
 		return err
+	}
+	cfg := decodeCircuitBreakerConfig(trustDomain, configJSON)
+	requests, failures, windowStartedAt, err := s.loadAndRollWindow(ctx, tx, trustDomain, cfg, now)
+	if err != nil {
+		return err
+	}
+	_ = requests
+	_ = failures
+	if state == string(fwfmp.CircuitOpen) && recoveryAt != "" {
+		if t, err := time.Parse(time.RFC3339, recoveryAt); err == nil && !now.Before(t) {
+			state = string(fwfmp.CircuitHalfOpen)
+		}
 	}
 
 	// If state is half-open, transition to closed
 	if state == string(fwfmp.CircuitHalfOpen) {
 		_, err := tx.ExecContext(ctx,
-			`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, tripped_at, recovery_at, config_json)
-			 VALUES (?, ?, 0, 0, '', '', '{}')
+			`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, window_started_at, tripped_at, recovery_at, config_json)
+			 VALUES (?, ?, 0, 0, ?, '', '', ?)
 			 ON CONFLICT(trust_domain) DO UPDATE SET
 			   state = 'closed',
 			   requests = 0,
 			   failures = 0,
+			   window_started_at = excluded.window_started_at,
 			   tripped_at = '',
-			   recovery_at = ''`,
-			trustDomain)
+			   recovery_at = '',
+			   config_json = excluded.config_json`,
+			trustDomain, string(fwfmp.CircuitHalfOpen), windowStartedAt.Format(time.RFC3339), encodeCircuitBreakerConfig(cfg))
 		if err != nil {
 			return err
 		}
 	} else if state == string(fwfmp.CircuitClosed) || state == "" {
 		// Increment request count for closed state
 		_, err := tx.ExecContext(ctx,
-			`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, tripped_at, recovery_at, config_json)
-			 VALUES (?, 'closed', 1, 0, '', '', '{}')
-			 ON CONFLICT(trust_domain) DO UPDATE SET requests = requests + 1`,
-			trustDomain)
+			`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, window_started_at, tripped_at, recovery_at, config_json)
+			 VALUES (?, 'closed', 1, 0, ?, '', '', ?)
+			 ON CONFLICT(trust_domain) DO UPDATE SET
+			   state = 'closed',
+			   requests = requests + 1,
+			   window_started_at = excluded.window_started_at,
+			   config_json = excluded.config_json`,
+			trustDomain, windowStartedAt.Format(time.RFC3339), encodeCircuitBreakerConfig(cfg))
 		if err != nil {
 			return err
 		}
@@ -149,48 +186,29 @@ func (s *SQLiteCircuitBreakerStore) RecordFailure(ctx context.Context, trustDoma
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
-
-	var cfg fwfmp.CircuitBreakerConfig
-	if configJSON != "" {
-		if err := json.Unmarshal([]byte(configJSON), &cfg); err == nil {
-			cfg.TrustDomain = trustDomain
-		} else {
-			cfg = fwfmp.CircuitBreakerConfig{
-				TrustDomain:      trustDomain,
-				ErrorThreshold:   0.5,
-				MinRequests:      10,
-				WindowDuration:   1 * time.Minute,
-				RecoveryDuration: 30 * time.Second,
-			}
-		}
-	} else {
-		cfg = fwfmp.CircuitBreakerConfig{
-			TrustDomain:      trustDomain,
-			ErrorThreshold:   0.5,
-			MinRequests:      10,
-			WindowDuration:   1 * time.Minute,
-			RecoveryDuration: 30 * time.Second,
-		}
+	cfg := decodeCircuitBreakerConfig(trustDomain, configJSON)
+	requests, failures, windowStartedAt, err := s.loadAndRollWindow(ctx, tx, trustDomain, cfg, now)
+	if err != nil {
+		return err
 	}
 
 	// Increment failures and requests
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, config_json)
-		 VALUES (?, 'closed', 1, 1, ?)
+		`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, window_started_at, config_json)
+		 VALUES (?, 'closed', 1, 1, ?, ?)
 		 ON CONFLICT(trust_domain) DO UPDATE SET
+		   state = 'closed',
 		   requests = requests + 1,
-		   failures = failures + 1`,
-		trustDomain, configJSON)
+		   failures = failures + 1,
+		   window_started_at = excluded.window_started_at,
+		   config_json = excluded.config_json`,
+		trustDomain, windowStartedAt.Format(time.RFC3339), encodeCircuitBreakerConfig(cfg))
 	if err != nil {
 		return err
 	}
 
-	// Check if threshold exceeded and trip if necessary
-	var requests, failures int
-	err = tx.QueryRowContext(ctx, `SELECT requests, failures FROM fmp_circuit_breakers WHERE trust_domain = ?`, trustDomain).Scan(&requests, &failures)
-	if err != nil {
-		return err
-	}
+	requests++
+	failures++
 
 	if requests >= cfg.MinRequests {
 		errorRate := float64(failures) / float64(requests)
@@ -222,29 +240,20 @@ func (s *SQLiteCircuitBreakerStore) Trip(ctx context.Context, trustDomain string
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
-
-	var cfg fwfmp.CircuitBreakerConfig
-	if configJSON != "" {
-		if err := json.Unmarshal([]byte(configJSON), &cfg); err == nil {
-			cfg.TrustDomain = trustDomain
-		} else {
-			cfg = fwfmp.CircuitBreakerConfig{RecoveryDuration: 30 * time.Second}
-		}
-	} else {
-		cfg = fwfmp.CircuitBreakerConfig{RecoveryDuration: 30 * time.Second}
-	}
+	cfg := decodeCircuitBreakerConfig(trustDomain, configJSON)
 
 	trippedAt := now.Format(time.RFC3339)
 	recoveryAt := now.Add(cfg.RecoveryDuration).Format(time.RFC3339)
 
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO fmp_circuit_breakers (trust_domain, state, tripped_at, recovery_at, config_json)
-		 VALUES (?, 'open', ?, ?, ?)
+		`INSERT INTO fmp_circuit_breakers (trust_domain, state, window_started_at, tripped_at, recovery_at, config_json)
+		 VALUES (?, 'open', ?, ?, ?, ?)
 		 ON CONFLICT(trust_domain) DO UPDATE SET
 		   state = 'open',
+		   window_started_at = ?,
 		   tripped_at = ?,
 		   recovery_at = ?`,
-		trustDomain, trippedAt, recoveryAt, configJSON, trippedAt, recoveryAt)
+		trustDomain, now.Format(time.RFC3339), trippedAt, recoveryAt, encodeCircuitBreakerConfig(cfg), now.Format(time.RFC3339), trippedAt, recoveryAt)
 	return err
 }
 
@@ -256,16 +265,88 @@ func (s *SQLiteCircuitBreakerStore) Reset(ctx context.Context, trustDomain strin
 	}
 
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, tripped_at, recovery_at)
-		 VALUES (?, 'closed', 0, 0, '', '')
+		`INSERT INTO fmp_circuit_breakers (trust_domain, state, requests, failures, window_started_at, tripped_at, recovery_at)
+		 VALUES (?, 'closed', 0, 0, ?, '', '')
 		 ON CONFLICT(trust_domain) DO UPDATE SET
 		   state = 'closed',
 		   requests = 0,
 		   failures = 0,
+		   window_started_at = excluded.window_started_at,
 		   tripped_at = '',
 		   recovery_at = ''`,
-		trustDomain)
+		trustDomain, now.Format(time.RFC3339))
 	return err
+}
+
+func (s *SQLiteCircuitBreakerStore) loadAndRollWindow(ctx context.Context, tx *sql.Tx, trustDomain string, cfg fwfmp.CircuitBreakerConfig, now time.Time) (int, int, time.Time, error) {
+	var requests, failures int
+	var windowStartedAt string
+	err := tx.QueryRowContext(ctx,
+		`SELECT requests, failures, window_started_at FROM fmp_circuit_breakers WHERE trust_domain = ?`,
+		trustDomain,
+	).Scan(&requests, &failures, &windowStartedAt)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, 0, time.Time{}, err
+	}
+	windowStart := now
+	if parsed, ok := parseCircuitBreakerTime(windowStartedAt); ok {
+		windowStart = parsed
+	}
+	if cfg.WindowDuration > 0 && now.Sub(windowStart) >= cfg.WindowDuration {
+		requests = 0
+		failures = 0
+		windowStart = now
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE fmp_circuit_breakers SET requests = 0, failures = 0, window_started_at = ? WHERE trust_domain = ?`,
+			windowStart.Format(time.RFC3339), trustDomain); err != nil {
+			return 0, 0, time.Time{}, err
+		}
+	}
+	return requests, failures, windowStart, nil
+}
+
+func decodeCircuitBreakerConfig(trustDomain, raw string) fwfmp.CircuitBreakerConfig {
+	cfg := fwfmp.CircuitBreakerConfig{
+		TrustDomain:      trustDomain,
+		ErrorThreshold:   0.5,
+		MinRequests:      10,
+		WindowDuration:   time.Minute,
+		RecoveryDuration: 30 * time.Second,
+	}
+	if raw != "" {
+		if err := json.Unmarshal([]byte(raw), &cfg); err == nil {
+			cfg.TrustDomain = trustDomain
+		}
+	}
+	if cfg.MinRequests < 1 {
+		cfg.MinRequests = 10
+	}
+	if cfg.WindowDuration <= 0 {
+		cfg.WindowDuration = time.Minute
+	}
+	if cfg.RecoveryDuration <= 0 {
+		cfg.RecoveryDuration = 30 * time.Second
+	}
+	return cfg
+}
+
+func encodeCircuitBreakerConfig(cfg fwfmp.CircuitBreakerConfig) string {
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		return "{}"
+	}
+	return string(payload)
+}
+
+func parseCircuitBreakerTime(value string) (time.Time, bool) {
+	if strings.TrimSpace(value) == "" {
+		return time.Time{}, false
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed, true
 }
 
 // ListStates returns the status of all circuit breakers.

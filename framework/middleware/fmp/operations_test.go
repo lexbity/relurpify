@@ -132,6 +132,125 @@ func TestTryAcceptHandoffRejectsWhenResumeLimiterFull(t *testing.T) {
 	}
 }
 
+func TestTryAcceptHandoffIsIdempotentForSameOfferAndRuntime(t *testing.T) {
+	t.Parallel()
+
+	store := &InMemoryOwnershipStore{}
+	svc := &Service{Ownership: store}
+	lineage := core.LineageRecord{
+		LineageID:    "lineage-1",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+	}
+	requireAttempt(t, store.CreateLineage(context.Background(), lineage))
+	attempt := core.AttemptRecord{
+		AttemptID: "attempt-a",
+		LineageID: lineage.LineageID,
+		RuntimeID: "rt-a",
+		State:     core.AttemptStateRunning,
+		StartTime: time.Now().UTC(),
+	}
+	requireAttempt(t, store.UpsertAttempt(context.Background(), attempt))
+	lease, err := store.IssueLease(context.Background(), lineage.LineageID, attempt.AttemptID, "issuer", time.Minute)
+	if err != nil {
+		t.Fatalf("IssueLease() error = %v", err)
+	}
+	offer := core.HandoffOffer{
+		OfferID:            lease.LeaseID,
+		LineageID:          lineage.LineageID,
+		SourceAttemptID:    attempt.AttemptID,
+		SourceRuntimeID:    attempt.RuntimeID,
+		DestinationExport:  "agent.resume",
+		ContextManifestRef: "ctx-1",
+		ContextClass:       lineage.ContextClass,
+		ContextSizeBytes:   64,
+		LeaseToken:         *lease,
+		Expiry:             lease.Expiry,
+	}
+	destination := core.ExportDescriptor{
+		ExportName:             "agent.resume",
+		AcceptedContextClasses: []string{"workflow-runtime"},
+		RouteMode:              core.RouteModeGateway,
+		AdmissionSummary:       core.AvailabilitySpec{Available: true},
+	}
+	first, refusal, err := svc.TryAcceptHandoff(context.Background(), offer, destination, "rt-b")
+	if err != nil || refusal != nil {
+		t.Fatalf("first TryAcceptHandoff() err=%v refusal=%+v", err, refusal)
+	}
+	second, refusal, err := svc.TryAcceptHandoff(context.Background(), offer, destination, "rt-b")
+	if err != nil || refusal != nil {
+		t.Fatalf("second TryAcceptHandoff() err=%v refusal=%+v", err, refusal)
+	}
+	if first.ProvisionalAttemptID != second.ProvisionalAttemptID {
+		t.Fatalf("provisional attempt mismatch: %s vs %s", first.ProvisionalAttemptID, second.ProvisionalAttemptID)
+	}
+}
+
+func TestTryAcceptHandoffRejectsConflictingDuplicateOffer(t *testing.T) {
+	t.Parallel()
+
+	store := &InMemoryOwnershipStore{}
+	svc := &Service{Ownership: store}
+	lineage := core.LineageRecord{
+		LineageID:    "lineage-1",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+	}
+	requireAttempt(t, store.CreateLineage(context.Background(), lineage))
+	attempt := core.AttemptRecord{
+		AttemptID: "attempt-a",
+		LineageID: lineage.LineageID,
+		RuntimeID: "rt-a",
+		State:     core.AttemptStateRunning,
+		StartTime: time.Now().UTC(),
+	}
+	requireAttempt(t, store.UpsertAttempt(context.Background(), attempt))
+	lease, err := store.IssueLease(context.Background(), lineage.LineageID, attempt.AttemptID, "issuer", time.Minute)
+	if err != nil {
+		t.Fatalf("IssueLease() error = %v", err)
+	}
+	offer := core.HandoffOffer{
+		OfferID:            lease.LeaseID,
+		LineageID:          lineage.LineageID,
+		SourceAttemptID:    attempt.AttemptID,
+		SourceRuntimeID:    attempt.RuntimeID,
+		DestinationExport:  "agent.resume",
+		ContextManifestRef: "ctx-1",
+		ContextClass:       lineage.ContextClass,
+		ContextSizeBytes:   64,
+		LeaseToken:         *lease,
+		Expiry:             lease.Expiry,
+	}
+	destination := core.ExportDescriptor{
+		ExportName:             "agent.resume",
+		AcceptedContextClasses: []string{"workflow-runtime"},
+		RouteMode:              core.RouteModeGateway,
+		AdmissionSummary:       core.AvailabilitySpec{Available: true},
+	}
+	if _, refusal, err := svc.TryAcceptHandoff(context.Background(), offer, destination, "rt-b"); err != nil || refusal != nil {
+		t.Fatalf("first TryAcceptHandoff() err=%v refusal=%+v", err, refusal)
+	}
+	var refusal *core.TransferRefusal
+	_, refusal, err = svc.TryAcceptHandoff(context.Background(), offer, destination, "rt-c")
+	if err != nil {
+		t.Fatalf("second TryAcceptHandoff() error = %v", err)
+	}
+	if refusal == nil || refusal.Code != core.RefusalDuplicateHandoff {
+		t.Fatalf("expected duplicate handoff refusal, got %+v", refusal)
+	}
+}
+
+func requireAttempt(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestForwardFederatedContextBlockedByForwardBudget(t *testing.T) {
 	t.Parallel()
 
