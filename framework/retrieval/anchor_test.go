@@ -236,6 +236,40 @@ func Test_AnchorDeduplication(t *testing.T) {
 	}
 }
 
+func TestRecordAnchorDriftStoresSeverityDetailAndRequiresExistingAnchor(t *testing.T) {
+	db := setupAnchorTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	record, err := DeclareAnchor(ctx, db, AnchorDeclaration{
+		Term:       "verified",
+		Definition: "human-reviewed and approved",
+		Class:      "policy",
+	}, "workspace", "workspace_trusted")
+	if err != nil {
+		t.Fatalf("declare anchor: %v", err)
+	}
+
+	if err := RecordAnchorDrift(ctx, db, record.AnchorID, "critical", "implementation no longer matches"); err != nil {
+		t.Fatalf("record drift: %v", err)
+	}
+
+	events, err := UnresolvedDrifts(ctx, db, "workspace")
+	if err != nil {
+		t.Fatalf("unresolved drifts: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 drift event, got %d", len(events))
+	}
+	if events[0].Detail != "severity:critical | implementation no longer matches" {
+		t.Fatalf("unexpected detail: %q", events[0].Detail)
+	}
+
+	if err := RecordAnchorDrift(ctx, db, "missing-anchor", "minor", "detail"); err == nil {
+		t.Fatal("expected missing anchor error")
+	}
+}
+
 func Test_AnchorHistory(t *testing.T) {
 	db := setupAnchorTestDB(t)
 	defer db.Close()
@@ -414,7 +448,7 @@ func Test_AnchorsForTerms(t *testing.T) {
 	}
 }
 
-func Test_SchemaMigrationV5(t *testing.T) {
+func Test_SchemaMigrationV6(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
@@ -423,7 +457,7 @@ func Test_SchemaMigrationV5(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Ensure schema (which should create V5 tables)
+	// Ensure schema (which should create the latest anchor tables)
 	err = EnsureSchema(ctx, db)
 	if err != nil {
 		t.Fatalf("failed to ensure schema: %v", err)
@@ -435,8 +469,8 @@ func Test_SchemaMigrationV5(t *testing.T) {
 		t.Fatalf("failed to get schema version: %v", err)
 	}
 
-	if version != 5 {
-		t.Errorf("expected schema version 5, got %d", version)
+	if version != 6 {
+		t.Errorf("expected schema version 6, got %d", version)
 	}
 
 	// Verify anchor tables exist
@@ -449,5 +483,71 @@ func Test_SchemaMigrationV5(t *testing.T) {
 		if !exists {
 			t.Errorf("expected table %s to exist", table)
 		}
+	}
+}
+
+func TestDeclareAnchorPersistsTrustClassAndAllowsLookup(t *testing.T) {
+	db := setupAnchorTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	record, err := DeclareAnchor(ctx, db, AnchorDeclaration{
+		Term:       "ownership",
+		Definition: "human owner of the subsystem",
+		Class:      "identity",
+	}, "workspace", "workspace_trusted")
+	if err != nil {
+		t.Fatalf("declare anchor: %v", err)
+	}
+	if record.TrustClass != "workspace_trusted" {
+		t.Fatalf("expected workspace_trusted, got %s", record.TrustClass)
+	}
+
+	record, err = DeclareAnchor(ctx, db, AnchorDeclaration{
+		Term:       "capability boundary",
+		Definition: "must wrap external errors",
+		Class:      "policy",
+	}, "workspace", "builtin_trusted")
+	if err != nil {
+		t.Fatalf("declare builtin anchor: %v", err)
+	}
+	if record.TrustClass != "builtin_trusted" {
+		t.Fatalf("expected builtin_trusted, got %s", record.TrustClass)
+	}
+
+	refs, err := AnchorsForTerms(ctx, db, []string{"ownership"}, "workspace")
+	if err != nil {
+		t.Fatalf("anchors for terms: %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("expected 1 ref, got %d", len(refs))
+	}
+}
+
+func TestDeclareAnchorDuplicateIsDeterministic(t *testing.T) {
+	db := setupAnchorTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	first, err := DeclareAnchor(ctx, db, AnchorDeclaration{
+		Term:       "ownership",
+		Definition: "human owner of the subsystem",
+		Class:      "identity",
+	}, "workspace", "workspace_trusted")
+	if err != nil {
+		t.Fatalf("first declare: %v", err)
+	}
+	second, err := DeclareAnchor(ctx, db, AnchorDeclaration{
+		Term:       "ownership",
+		Definition: "human owner of the subsystem",
+		Class:      "identity",
+	}, "workspace", "workspace_trusted")
+	if err != nil {
+		t.Fatalf("second declare: %v", err)
+	}
+	if first.AnchorID != second.AnchorID {
+		t.Fatalf("expected deterministic duplicate handling, got %s and %s", first.AnchorID, second.AnchorID)
 	}
 }

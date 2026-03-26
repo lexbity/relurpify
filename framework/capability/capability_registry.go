@@ -3,6 +3,7 @@ package capability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ type CapabilityRegistry struct {
 	capabilityNameIndex map[string][]string
 	localToolNameIndex  map[string]string
 	prechecks           []InvocationPrecheck
+	postchecks          []PostInvocationHook
 	permissionManager   *PermissionManager
 	registeredAgentID   string
 	agentSpec           *AgentRuntimeSpec
@@ -44,6 +46,7 @@ type CapabilityRegistry struct {
 	capabilityPolicies  []core.CapabilityPolicy
 	exposurePolicies    []core.CapabilityExposurePolicy
 	globalPolicies      map[string]AgentPermissionLevel
+	guidanceBroker      RecoveryGuidanceBroker
 	telemetry           Telemetry
 	safety              *runtimeSafetyController
 	policyEngine        authorization.PolicyEngine
@@ -70,6 +73,26 @@ func (r *CapabilityRegistry) AddPrecheck(p InvocationPrecheck) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.prechecks = append(r.prechecks, p)
+}
+
+// AddPostcheck appends a post-invocation hook to the registry.
+func (r *CapabilityRegistry) AddPostcheck(p PostInvocationHook) {
+	if r == nil || p == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.postchecks = append(r.postchecks, p)
+}
+
+// SetGuidanceBroker configures optional guidance routing for recoverable precheck failures.
+func (r *CapabilityRegistry) SetGuidanceBroker(broker RecoveryGuidanceBroker) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.guidanceBroker = broker
 }
 
 func (r *CapabilityRegistry) localToolEntryByNameLocked(name string) (*capabilityEntry, bool) {
@@ -772,7 +795,19 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *Contex
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not invocable", entry.descriptor.ID)
 	}
-	return invocable.Invoke(ctx, state, args)
+	result, err := invocable.Invoke(ctx, state, args)
+	if postErr := r.runPostchecks(entry.descriptor, result); postErr != nil {
+		if result == nil {
+			result = &ToolResult{Success: false, Error: postErr.Error()}
+		} else {
+			result.Success = false
+			result.Error = postErr.Error()
+		}
+		if err == nil {
+			err = postErr
+		}
+	}
+	return result, err
 }
 
 // RenderPrompt executes a runtime-backed prompt capability by capability ID or public name.
@@ -825,7 +860,17 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 		return nil, err
 	}
 	if err := r.runPrechecks(entry.descriptor, args); err != nil {
-		return nil, err
+		var doomErr *DoomLoopError
+		if errors.As(err, &doomErr) {
+			proceed, guideErr := r.handleDoomLoopGuidance(ctx, *doomErr)
+			if guideErr != nil {
+				return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, guideErr)
+			}
+			if proceed {
+				return entry, nil
+			}
+		}
+		return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, err)
 	}
 	return entry, nil
 }
@@ -879,6 +924,51 @@ func (r *CapabilityRegistry) runPrechecks(desc core.CapabilityDescriptor, args m
 		}
 	}
 	return nil
+}
+
+func (r *CapabilityRegistry) runPostchecks(desc core.CapabilityDescriptor, result *ToolResult) error {
+	r.mu.RLock()
+	postchecks := append([]PostInvocationHook{}, r.postchecks...)
+	r.mu.RUnlock()
+	for _, postcheck := range postchecks {
+		if err := postcheck.Record(desc, result); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *CapabilityRegistry) handleDoomLoopGuidance(ctx context.Context, doomErr DoomLoopError) (bool, error) {
+	r.mu.RLock()
+	broker := r.guidanceBroker
+	r.mu.RUnlock()
+	if broker == nil {
+		return false, &doomErr
+	}
+	decision, err := broker.RequestRecovery(ctx, RecoveryGuidanceRequest{
+		Title:       "Execution loop detected",
+		Description: describeLoop(doomErr),
+		Context: map[string]any{
+			"doom_loop_kind": doomErr.Kind,
+			"call_count":     doomErr.CallCount,
+			"evidence":       append([]string(nil), doomErr.Evidence...),
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	switch decision.ChoiceID {
+	case "continue":
+		return true, nil
+	case "skip":
+		return false, fmt.Errorf("doom loop skipped by user")
+	case "replan":
+		return false, fmt.Errorf("doom loop requires replanning")
+	case "stop", "":
+		fallthrough
+	default:
+		return false, &doomErr
+	}
 }
 
 func (r *CapabilityRegistry) capabilityEntry(idOrName string) (*capabilityEntry, error) {

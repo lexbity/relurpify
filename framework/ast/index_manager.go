@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/graphdb"
 )
 
 // IndexConfig configures the IndexManager.
@@ -30,6 +32,7 @@ type IndexManager struct {
 	store            IndexStore
 	parserRegistry   *ParserRegistry
 	languageDetector *LanguageDetector
+	GraphDB          *graphdb.Engine
 	mu               sync.Mutex
 	indexing         map[string]bool
 	config           IndexConfig
@@ -188,7 +191,10 @@ func (im *IndexManager) removeIndexedFile(path string) error {
 	if err != nil || existing == nil {
 		return err
 	}
-	return im.store.DeleteFile(existing.ID)
+	if err := im.store.DeleteFile(existing.ID); err != nil {
+		return err
+	}
+	return im.syncGraphDelete(path)
 }
 
 // StartIndexing launches a background workspace index pass unless one is
@@ -434,14 +440,26 @@ func (im *IndexManager) finishWorkspaceIndex(err error) {
 
 // Close releases any underlying resources owned by the store.
 func (im *IndexManager) Close() error {
-	if im == nil || im.store == nil {
+	if im == nil {
 		return nil
+	}
+	var firstErr error
+	if im.GraphDB != nil {
+		if err := im.GraphDB.Close(); err != nil {
+			firstErr = err
+		}
+	}
+	if im.store == nil {
+		return firstErr
 	}
 	closer, ok := im.store.(io.Closer)
 	if !ok {
-		return nil
+		return firstErr
 	}
-	return closer.Close()
+	if err := closer.Close(); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return firstErr
 }
 
 func (im *IndexManager) indexWithSymbols(path, content, language string, category Category, contentHash string) error {
@@ -573,7 +591,10 @@ func (im *IndexManager) persist(result *ParseResult, contentHash string) error {
 	if err := tx.SaveEdges(result.Edges); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return im.syncGraphResult(result)
 }
 
 // QuerySymbol looks up nodes whose name matches the pattern.
@@ -673,4 +694,67 @@ func (im *IndexManager) LastIndexedAt(path string) (time.Time, error) {
 // Store exposes the underlying IndexStore for advanced queries.
 func (im *IndexManager) Store() IndexStore {
 	return im.store
+}
+
+func (im *IndexManager) syncGraphDelete(path string) error {
+	if im == nil || im.GraphDB == nil || path == "" {
+		return nil
+	}
+	nodes := im.GraphDB.NodesBySource(path)
+	ids := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		ids = append(ids, node.ID)
+	}
+	return im.GraphDB.DeleteNodes(ids)
+}
+
+func (im *IndexManager) syncGraphResult(result *ParseResult) error {
+	if im == nil || im.GraphDB == nil || result == nil || result.Metadata == nil {
+		return nil
+	}
+	sourcePath := result.Metadata.Path
+	if sourcePath == "" {
+		return nil
+	}
+	existing := im.GraphDB.NodesBySource(sourcePath)
+	deleteIDs := make([]string, 0, len(existing))
+	for _, node := range existing {
+		deleteIDs = append(deleteIDs, node.ID)
+	}
+	if err := im.GraphDB.DeleteNodes(deleteIDs); err != nil {
+		return err
+	}
+	nodeBatch := make([]graphdb.NodeRecord, 0, len(result.Nodes))
+	for _, node := range result.Nodes {
+		record, ok := graphNodeRecord(node, sourcePath)
+		if !ok {
+			continue
+		}
+		nodeBatch = append(nodeBatch, record)
+	}
+	if err := im.GraphDB.UpsertNodes(nodeBatch); err != nil {
+		return err
+	}
+	edgeBatch := make([]graphdb.EdgeRecord, 0, len(result.Edges)*2+len(result.Nodes)*2)
+	for _, edge := range result.Edges {
+		kind, inverse, ok := graphEdgeKinds(edge.Type)
+		if !ok {
+			continue
+		}
+		records, err := graphEdgeRecords(edge.SourceID, edge.TargetID, kind, inverse, 1, edge.Attributes)
+		if err != nil {
+			return err
+		}
+		edgeBatch = append(edgeBatch, records...)
+	}
+	for _, node := range result.Nodes {
+		if node == nil || node.ParentID == "" {
+			continue
+		}
+		edgeBatch = append(edgeBatch,
+			graphdb.EdgeRecord{SourceID: node.ParentID, TargetID: node.ID, Kind: EdgeKindContains, Weight: 1},
+			graphdb.EdgeRecord{SourceID: node.ID, TargetID: node.ParentID, Kind: EdgeKindContainedBy, Weight: 1},
+		)
+	}
+	return im.GraphDB.LinkEdges(edgeBatch)
 }

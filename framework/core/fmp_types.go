@@ -317,9 +317,10 @@ type ExportAdvertisement struct {
 	ExpiresAt   time.Time        `json:"expires_at,omitempty" yaml:"expires_at,omitempty"`
 	Signature   string           `json:"signature,omitempty" yaml:"signature,omitempty"`
 	// Phase 7.3: DR metadata for federation health summaries
-	FailoverReady  bool            `json:"failover_ready,omitempty" yaml:"failover_ready,omitempty"`
-	RecoveryState  string          `json:"recovery_state,omitempty" yaml:"recovery_state,omitempty"`
-	RuntimeVersion string          `json:"runtime_version,omitempty" yaml:"runtime_version,omitempty"`
+	FailoverReady  bool      `json:"failover_ready,omitempty" yaml:"failover_ready,omitempty"`
+	RecoveryState  string    `json:"recovery_state,omitempty" yaml:"recovery_state,omitempty"`
+	RuntimeVersion string    `json:"runtime_version,omitempty" yaml:"runtime_version,omitempty"`
+	LastCheckpoint time.Time `json:"last_checkpoint,omitempty" yaml:"last_checkpoint,omitempty"`
 }
 
 type RecipientKeyAdvertisement struct {

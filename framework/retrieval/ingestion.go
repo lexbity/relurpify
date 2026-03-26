@@ -1076,11 +1076,11 @@ func extractAndPersistAnchors(ctx context.Context, db *sql.DB, anchors []AnchorD
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO retrieval_semantic_anchors
 				(anchor_id, term, term_normalized, definition, context_summary, scope,
-				 anchor_class, source_chunk_id, source_version_id, source_doc_id,
+				 anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
 				 corpus_scope, superseded_by, created_at, invalidated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`, anchorID, anchorDecl.Term, termNormalized, newDef, newContextSummary,
-				"workspace", anchorClass, sourceChunkID, versionID, doc.DocID, doc.CorpusScope, nil,
+				"workspace", anchorClass, "builtin_trusted", sourceChunkID, versionID, doc.DocID, doc.CorpusScope, nil,
 				now.Format(time.RFC3339), nil)
 			if err != nil {
 				return err
@@ -1112,11 +1112,11 @@ func extractAndPersistAnchors(ctx context.Context, db *sql.DB, anchors []AnchorD
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO retrieval_semantic_anchors
 				(anchor_id, term, term_normalized, definition, context_summary, scope,
-				 anchor_class, source_chunk_id, source_version_id, source_doc_id,
+				 anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
 				 corpus_scope, superseded_by, created_at, invalidated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`, anchorID, anchorDecl.Term, termNormalized, anchorDecl.Definition, contextSummary,
-				"workspace", anchorClass, sourceChunkID, versionID, doc.DocID, doc.CorpusScope, nil,
+				"workspace", anchorClass, "builtin_trusted", sourceChunkID, versionID, doc.DocID, doc.CorpusScope, nil,
 				now.Format(time.RFC3339), nil)
 			if err != nil {
 				return err

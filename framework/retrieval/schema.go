@@ -13,7 +13,7 @@ import (
 )
 
 // SchemaVersion is the current retrieval schema version.
-const SchemaVersion = 5
+const SchemaVersion = 6
 
 const (
 	schemaMetadataKey           = "retrieval_schema_version"
@@ -61,6 +61,11 @@ func EnsureSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if version < 5 {
 		if err := migrateToSchemaV5(ctx, db); err != nil {
+			return err
+		}
+	}
+	if version < 6 {
+		if err := migrateToSchemaV6(ctx, db); err != nil {
 			return err
 		}
 	}
@@ -340,6 +345,7 @@ func migrateToSchemaV5(ctx context.Context, db *sql.DB) error {
 		context_summary   TEXT,
 		scope             TEXT NOT NULL DEFAULT 'workspace',
 		anchor_class      TEXT NOT NULL DEFAULT 'technical',
+		trust_class       TEXT NOT NULL DEFAULT 'builtin_trusted',
 		source_chunk_id   TEXT,
 		source_version_id TEXT,
 		source_doc_id     TEXT,
@@ -406,6 +412,10 @@ func migrateToSchemaV5(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func migrateToSchemaV6(ctx context.Context, db *sql.DB) error {
+	return ensureColumn(ctx, db, "retrieval_semantic_anchors", "trust_class", `ALTER TABLE retrieval_semantic_anchors ADD COLUMN trust_class TEXT NOT NULL DEFAULT 'builtin_trusted'`)
 }
 
 func createDocumentTablesV2(ctx context.Context, db *sql.DB) error {

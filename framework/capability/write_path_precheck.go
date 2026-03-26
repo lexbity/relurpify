@@ -14,6 +14,11 @@ type InvocationPrecheck interface {
 	Check(descriptor core.CapabilityDescriptor, args map[string]any) error
 }
 
+// PostInvocationHook receives the completed invocation result.
+type PostInvocationHook interface {
+	Record(descriptor core.CapabilityDescriptor, result *core.ToolResult) error
+}
+
 // WritePathPrecheck blocks filesystem-mutating capabilities from writing to
 // paths outside an allowed glob list. Nil globs disable the check.
 type WritePathPrecheck struct {

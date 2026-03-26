@@ -19,21 +19,22 @@ type AnchorDeclaration struct {
 
 // AnchorRecord is the persisted anchor state.
 type AnchorRecord struct {
-	AnchorID        string
-	Term            string
-	TermNormalized  string
-	Definition      string
-	ContextSummary  string
-	Scope           string
-	AnchorClass     string
-	SourceChunkID   string
-	SourceVersionID string
-	SourceDocID     string
-	CorpusScope     string
+	AnchorID         string
+	Term             string
+	TermNormalized   string
+	Definition       string
+	ContextSummary   string
+	Scope            string
+	AnchorClass      string
+	TrustClass       string
+	SourceChunkID    string
+	SourceVersionID  string
+	SourceDocID      string
+	CorpusScope      string
 	PolicySnapshotID *string
-	SupersededBy    *string
-	CreatedAt       time.Time
-	InvalidatedAt   *time.Time
+	SupersededBy     *string
+	CreatedAt        time.Time
+	InvalidatedAt    *time.Time
 }
 
 // AnchorRef is the lightweight reference carried in packed blocks and mixed evidence.
@@ -56,6 +57,14 @@ type AnchorEventRecord struct {
 	NewDefinition   string
 	SimilarityScore float64
 	CreatedAt       time.Time
+}
+
+func assignOptionalString(dest *string, value sql.NullString) {
+	if !value.Valid {
+		*dest = ""
+		return
+	}
+	*dest = value.String
 }
 
 // normalizeTerm normalizes a term for comparison (lowercase, trim, collapse whitespace).
@@ -92,7 +101,7 @@ func ActiveAnchors(ctx context.Context, db *sql.DB, corpusScope string) ([]Ancho
 
 	rows, err := db.QueryContext(ctx, `
 		SELECT anchor_id, term, term_normalized, definition, context_summary, scope,
-		       anchor_class, source_chunk_id, source_version_id, source_doc_id,
+		       anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
 		       corpus_scope, policy_snapshot_id, superseded_by, created_at, invalidated_at
 		FROM retrieval_semantic_anchors
 		WHERE corpus_scope = ? AND invalidated_at IS NULL
@@ -108,12 +117,16 @@ func ActiveAnchors(ctx context.Context, db *sql.DB, corpusScope string) ([]Ancho
 		var r AnchorRecord
 		var createdAt string
 		var invalidatedAt *string
+		var sourceChunkID, sourceVersionID, sourceDocID sql.NullString
 		if err := rows.Scan(&r.AnchorID, &r.Term, &r.TermNormalized, &r.Definition,
-			&r.ContextSummary, &r.Scope, &r.AnchorClass, &r.SourceChunkID,
-			&r.SourceVersionID, &r.SourceDocID, &r.CorpusScope, &r.PolicySnapshotID,
+			&r.ContextSummary, &r.Scope, &r.AnchorClass, &r.TrustClass, &sourceChunkID,
+			&sourceVersionID, &sourceDocID, &r.CorpusScope, &r.PolicySnapshotID,
 			&r.SupersededBy, &createdAt, &invalidatedAt); err != nil {
 			return nil, err
 		}
+		assignOptionalString(&r.SourceChunkID, sourceChunkID)
+		assignOptionalString(&r.SourceVersionID, sourceVersionID)
+		assignOptionalString(&r.SourceDocID, sourceDocID)
 		createdTime, err := time.Parse(time.RFC3339, createdAt)
 		if err != nil {
 			return nil, err
@@ -214,7 +227,7 @@ func AnchorHistory(ctx context.Context, db *sql.DB, termNormalized, corpusScope 
 
 	rows, err := db.QueryContext(ctx, `
 		SELECT anchor_id, term, term_normalized, definition, context_summary, scope,
-		       anchor_class, source_chunk_id, source_version_id, source_doc_id,
+		       anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
 		       corpus_scope, policy_snapshot_id, superseded_by, created_at, invalidated_at
 		FROM retrieval_semantic_anchors
 		WHERE term_normalized = ? AND corpus_scope = ?
@@ -230,12 +243,16 @@ func AnchorHistory(ctx context.Context, db *sql.DB, termNormalized, corpusScope 
 		var r AnchorRecord
 		var createdAt string
 		var invalidatedAt *string
+		var sourceChunkID, sourceVersionID, sourceDocID sql.NullString
 		if err := rows.Scan(&r.AnchorID, &r.Term, &r.TermNormalized, &r.Definition,
-			&r.ContextSummary, &r.Scope, &r.AnchorClass, &r.SourceChunkID,
-			&r.SourceVersionID, &r.SourceDocID, &r.CorpusScope, &r.PolicySnapshotID,
+			&r.ContextSummary, &r.Scope, &r.AnchorClass, &r.TrustClass, &sourceChunkID,
+			&sourceVersionID, &sourceDocID, &r.CorpusScope, &r.PolicySnapshotID,
 			&r.SupersededBy, &createdAt, &invalidatedAt); err != nil {
 			return nil, err
 		}
+		assignOptionalString(&r.SourceChunkID, sourceChunkID)
+		assignOptionalString(&r.SourceVersionID, sourceVersionID)
+		assignOptionalString(&r.SourceDocID, sourceDocID)
 		createdTime, err := time.Parse(time.RFC3339, createdAt)
 		if err != nil {
 			return nil, err
@@ -304,20 +321,24 @@ func SupersedeAnchor(ctx context.Context, db *sql.DB, anchorID string, newDefini
 	var oldAnchor AnchorRecord
 	var createdAt string
 	var invalidatedAt *string
+	var sourceChunkID, sourceVersionID, sourceDocID sql.NullString
 	err = tx.QueryRowContext(ctx, `
 		SELECT anchor_id, term, term_normalized, definition, context_summary, scope,
-		       anchor_class, source_chunk_id, source_version_id, source_doc_id,
+		       anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
 		       corpus_scope, policy_snapshot_id, superseded_by, created_at, invalidated_at
 		FROM retrieval_semantic_anchors
 		WHERE anchor_id = ?
 	`, anchorID).Scan(&oldAnchor.AnchorID, &oldAnchor.Term, &oldAnchor.TermNormalized,
 		&oldAnchor.Definition, &oldAnchor.ContextSummary, &oldAnchor.Scope,
-		&oldAnchor.AnchorClass, &oldAnchor.SourceChunkID, &oldAnchor.SourceVersionID,
-		&oldAnchor.SourceDocID, &oldAnchor.CorpusScope, &oldAnchor.PolicySnapshotID,
+		&oldAnchor.AnchorClass, &oldAnchor.TrustClass, &sourceChunkID, &sourceVersionID,
+		&sourceDocID, &oldAnchor.CorpusScope, &oldAnchor.PolicySnapshotID,
 		&oldAnchor.SupersededBy, &createdAt, &invalidatedAt)
 	if err != nil {
 		return nil, err
 	}
+	assignOptionalString(&oldAnchor.SourceChunkID, sourceChunkID)
+	assignOptionalString(&oldAnchor.SourceVersionID, sourceVersionID)
+	assignOptionalString(&oldAnchor.SourceDocID, sourceDocID)
 
 	createdTime, err := time.Parse(time.RFC3339, createdAt)
 	if err != nil {
@@ -338,33 +359,34 @@ func SupersedeAnchor(ctx context.Context, db *sql.DB, anchorID string, newDefini
 	now := time.Now().UTC()
 
 	newRecord := AnchorRecord{
-		AnchorID:        newAnchorID,
-		Term:            oldAnchor.Term,
-		TermNormalized:  oldAnchor.TermNormalized,
-		Definition:      newDefinition,
-		ContextSummary:  contextSummary,
-		Scope:           oldAnchor.Scope,
-		AnchorClass:     oldAnchor.AnchorClass,
-		SourceChunkID:   oldAnchor.SourceChunkID,
-		SourceVersionID: oldAnchor.SourceVersionID,
-		SourceDocID:     oldAnchor.SourceDocID,
-		CorpusScope:     oldAnchor.CorpusScope,
+		AnchorID:         newAnchorID,
+		Term:             oldAnchor.Term,
+		TermNormalized:   oldAnchor.TermNormalized,
+		Definition:       newDefinition,
+		ContextSummary:   contextSummary,
+		Scope:            oldAnchor.Scope,
+		AnchorClass:      oldAnchor.AnchorClass,
+		TrustClass:       oldAnchor.TrustClass,
+		SourceChunkID:    oldAnchor.SourceChunkID,
+		SourceVersionID:  oldAnchor.SourceVersionID,
+		SourceDocID:      oldAnchor.SourceDocID,
+		CorpusScope:      oldAnchor.CorpusScope,
 		PolicySnapshotID: oldAnchor.PolicySnapshotID,
-		SupersededBy:    nil,
-		CreatedAt:       now,
-		InvalidatedAt:   nil,
+		SupersededBy:     nil,
+		CreatedAt:        now,
+		InvalidatedAt:    nil,
 	}
 
 	// Insert new anchor
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO retrieval_semantic_anchors
 		(anchor_id, term, term_normalized, definition, context_summary, scope,
-		 anchor_class, source_chunk_id, source_version_id, source_doc_id,
+		 anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
 		 corpus_scope, policy_snapshot_id, superseded_by, created_at, invalidated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, newRecord.AnchorID, newRecord.Term, newRecord.TermNormalized, newRecord.Definition,
-		newRecord.ContextSummary, newRecord.Scope, newRecord.AnchorClass,
-		newRecord.SourceChunkID, newRecord.SourceVersionID, newRecord.SourceDocID,
+		newRecord.ContextSummary, newRecord.Scope, newRecord.AnchorClass, newRecord.TrustClass,
+		nullableString(newRecord.SourceChunkID), nullableString(newRecord.SourceVersionID), nullableString(newRecord.SourceDocID),
 		newRecord.CorpusScope, newRecord.PolicySnapshotID, newRecord.SupersededBy,
 		newRecord.CreatedAt.Format(time.RFC3339), nil)
 	if err != nil {
@@ -400,6 +422,137 @@ func SupersedeAnchor(ctx context.Context, db *sql.DB, anchorID string, newDefini
 	return &newRecord, nil
 }
 
+// DeclareAnchor declares or upserts an anchor directly without requiring document ingestion.
+func DeclareAnchor(ctx context.Context, db *sql.DB, decl AnchorDeclaration, corpusScope, trustClass string) (*AnchorRecord, error) {
+	if db == nil {
+		return nil, errors.New("db required")
+	}
+	if strings.TrimSpace(decl.Term) == "" {
+		return nil, errors.New("anchor term required")
+	}
+	if strings.TrimSpace(decl.Definition) == "" {
+		return nil, errors.New("anchor definition required")
+	}
+	if corpusScope == "" {
+		corpusScope = "workspace"
+	}
+	if trustClass == "" {
+		trustClass = "workspace_trusted"
+	}
+	anchorClass := decl.Class
+	if anchorClass == "" {
+		anchorClass = "technical"
+	}
+	switch anchorClass {
+	case "policy", "identity", "commitment", "technical":
+	default:
+		anchorClass = "technical"
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	termNormalized := normalizeTerm(decl.Term)
+	contextSummary := summarizeContext(decl.Context)
+	now := time.Now().UTC()
+
+	var existing AnchorRecord
+	var createdAt string
+	var invalidatedAt sql.NullString
+	var sourceChunkID, sourceVersionID, sourceDocID sql.NullString
+	err = tx.QueryRowContext(ctx, `
+		SELECT anchor_id, term, term_normalized, definition, context_summary, scope,
+		       anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
+		       corpus_scope, policy_snapshot_id, superseded_by, created_at, invalidated_at
+		FROM retrieval_semantic_anchors
+		WHERE term_normalized = ? AND corpus_scope = ? AND invalidated_at IS NULL
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, termNormalized, corpusScope).Scan(
+		&existing.AnchorID, &existing.Term, &existing.TermNormalized, &existing.Definition,
+		&existing.ContextSummary, &existing.Scope, &existing.AnchorClass, &existing.TrustClass,
+		&sourceChunkID, &sourceVersionID, &sourceDocID,
+		&existing.CorpusScope, &existing.PolicySnapshotID, &existing.SupersededBy, &createdAt, &invalidatedAt,
+	)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	if err == nil {
+		assignOptionalString(&existing.SourceChunkID, sourceChunkID)
+		assignOptionalString(&existing.SourceVersionID, sourceVersionID)
+		assignOptionalString(&existing.SourceDocID, sourceDocID)
+		parsed, parseErr := time.Parse(time.RFC3339, createdAt)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		existing.CreatedAt = parsed
+		if existing.Definition == decl.Definition {
+			if existing.TrustClass != trustClass {
+				if _, err := tx.ExecContext(ctx, `UPDATE retrieval_semantic_anchors SET trust_class = ? WHERE anchor_id = ?`, trustClass, existing.AnchorID); err != nil {
+					return nil, err
+				}
+				existing.TrustClass = trustClass
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, err
+			}
+			return &existing, nil
+		}
+	}
+
+	record := AnchorRecord{
+		AnchorID:       generateAnchorID(),
+		Term:           decl.Term,
+		TermNormalized: termNormalized,
+		Definition:     decl.Definition,
+		ContextSummary: contextSummary,
+		Scope:          "workspace",
+		AnchorClass:    anchorClass,
+		TrustClass:     trustClass,
+		CorpusScope:    corpusScope,
+		CreatedAt:      now,
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO retrieval_semantic_anchors
+		(anchor_id, term, term_normalized, definition, context_summary, scope,
+		 anchor_class, trust_class, source_chunk_id, source_version_id, source_doc_id,
+		 corpus_scope, policy_snapshot_id, superseded_by, created_at, invalidated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, record.AnchorID, record.Term, record.TermNormalized, record.Definition, record.ContextSummary,
+		record.Scope, record.AnchorClass, record.TrustClass, nullableString(record.SourceChunkID), nullableString(record.SourceVersionID),
+		nullableString(record.SourceDocID), record.CorpusScope, record.PolicySnapshotID, record.SupersededBy,
+		record.CreatedAt.Format(time.RFC3339), nil); err != nil {
+		return nil, err
+	}
+	if existing.AnchorID != "" {
+		if _, err := tx.ExecContext(ctx, `UPDATE retrieval_semantic_anchors SET superseded_by = ? WHERE anchor_id = ?`, record.AnchorID, existing.AnchorID); err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO retrieval_anchor_events
+			(event_id, anchor_id, event_type, detail, old_definition, new_definition, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, generateAnchorID()+"-evt", existing.AnchorID, "superseded", "declared anchor update", existing.Definition, record.Definition, now.Format(time.RFC3339)); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO retrieval_anchor_events
+			(event_id, anchor_id, event_type, detail, created_at)
+			VALUES (?, ?, ?, ?, ?)
+		`, generateAnchorID()+"-evt", record.AnchorID, "created", "declared anchor", now.Format(time.RFC3339)); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
 // UnresolvedDrifts returns anchor drift events that have not been resolved.
 func UnresolvedDrifts(ctx context.Context, db *sql.DB, corpusScope string) ([]AnchorEventRecord, error) {
 	if db == nil {
@@ -422,10 +575,27 @@ func UnresolvedDrifts(ctx context.Context, db *sql.DB, corpusScope string) ([]An
 	var events []AnchorEventRecord
 	for rows.Next() {
 		var e AnchorEventRecord
+		var oldDef, newDef sql.NullString
+		var similarity sql.NullFloat64
+		var createdAt string
 		if err := rows.Scan(&e.EventID, &e.AnchorID, &e.EventType, &e.Detail,
-			&e.OldDefinition, &e.NewDefinition, &e.SimilarityScore, &e.CreatedAt); err != nil {
+			&oldDef, &newDef, &similarity, &createdAt); err != nil {
 			return nil, err
 		}
+		if oldDef.Valid {
+			e.OldDefinition = oldDef.String
+		}
+		if newDef.Valid {
+			e.NewDefinition = newDef.String
+		}
+		if similarity.Valid {
+			e.SimilarityScore = similarity.Float64
+		}
+		parsed, err := time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			return nil, err
+		}
+		e.CreatedAt = parsed
 		events = append(events, e)
 	}
 	return events, rows.Err()
@@ -458,6 +628,37 @@ func ResolveDrift(ctx context.Context, db *sql.DB, eventID string, resolution st
 	return nil
 }
 
+// RecordAnchorDrift records a new unresolved drift event for an anchor.
+func RecordAnchorDrift(ctx context.Context, db *sql.DB, anchorID, severity, detail string) error {
+	if db == nil {
+		return errors.New("db required")
+	}
+	if strings.TrimSpace(anchorID) == "" {
+		return errors.New("anchor id required")
+	}
+	var exists int
+	if err := db.QueryRowContext(ctx, `SELECT 1 FROM retrieval_semantic_anchors WHERE anchor_id = ?`, anchorID).Scan(&exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("anchor %s not found", anchorID)
+		}
+		return err
+	}
+	severity = strings.TrimSpace(severity)
+	detail = strings.TrimSpace(detail)
+	if detail == "" {
+		detail = "implementation drift detected"
+	}
+	if severity != "" {
+		detail = fmt.Sprintf("severity:%s | %s", severity, detail)
+	}
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO retrieval_anchor_events
+		(event_id, anchor_id, event_type, detail, created_at)
+		VALUES (?, ?, 'drift_detected', ?, ?)
+	`, generateAnchorID()+"-evt", anchorID, detail, time.Now().UTC().Format(time.RFC3339))
+	return err
+}
+
 // DriftedAnchors returns active anchors that have unresolved drift events.
 func DriftedAnchors(ctx context.Context, db *sql.DB, corpusScope string) ([]AnchorRecord, error) {
 	if db == nil {
@@ -485,12 +686,16 @@ func DriftedAnchors(ctx context.Context, db *sql.DB, corpusScope string) ([]Anch
 		var r AnchorRecord
 		var createdAt string
 		var invalidatedAt *string
+		var sourceChunkID, sourceVersionID, sourceDocID sql.NullString
 		if err := rows.Scan(&r.AnchorID, &r.Term, &r.TermNormalized, &r.Definition,
-			&r.ContextSummary, &r.Scope, &r.AnchorClass, &r.SourceChunkID,
-			&r.SourceVersionID, &r.SourceDocID, &r.CorpusScope, &r.PolicySnapshotID,
+			&r.ContextSummary, &r.Scope, &r.AnchorClass, &sourceChunkID,
+			&sourceVersionID, &sourceDocID, &r.CorpusScope, &r.PolicySnapshotID,
 			&r.SupersededBy, &createdAt, &invalidatedAt); err != nil {
 			return nil, err
 		}
+		assignOptionalString(&r.SourceChunkID, sourceChunkID)
+		assignOptionalString(&r.SourceVersionID, sourceVersionID)
+		assignOptionalString(&r.SourceDocID, sourceDocID)
 		createdTime, err := time.Parse(time.RFC3339, createdAt)
 		if err != nil {
 			return nil, err
@@ -506,4 +711,11 @@ func DriftedAnchors(ctx context.Context, db *sql.DB, corpusScope string) ([]Anch
 		records = append(records, r)
 	}
 	return records, rows.Err()
+}
+
+func nullableString(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
 }

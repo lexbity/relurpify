@@ -26,6 +26,7 @@ type ContextPolicyConfig struct {
 	Progressive         *ProgressiveLoader
 	CompressionStrategy core.CompressionStrategy
 	Summarizer          core.Summarizer
+	LanguageModel       core.LanguageModel
 	Preferences         ContextPolicyPreferences
 	IndexManager        *ast.IndexManager
 	SearchEngine        *search.SearchEngine
@@ -70,7 +71,11 @@ func NewContextPolicy(cfg ContextPolicyConfig, spec *core.AgentContextSpec) *Con
 		policy.CompressionStrategy = core.NewSimpleCompressionStrategy()
 	}
 	if policy.Summarizer == nil {
-		policy.Summarizer = &core.SimpleSummarizer{}
+		if cfg.LanguageModel != nil {
+			policy.Summarizer = NewLLMSummarizer(cfg.LanguageModel)
+		} else {
+			policy.Summarizer = &core.SimpleSummarizer{}
+		}
 	}
 	if policy.Strategy == nil {
 		policy.Strategy = NewAdaptiveStrategy()
