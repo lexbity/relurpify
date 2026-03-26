@@ -1,6 +1,8 @@
 package agents
 
 import (
+	"database/sql"
+
 	architectpkg "github.com/lexcodex/relurpify/agents/architect"
 	blackboardpkg "github.com/lexcodex/relurpify/agents/blackboard"
 	chainerpkg "github.com/lexcodex/relurpify/agents/chainer"
@@ -13,9 +15,14 @@ import (
 	relurpicpkg "github.com/lexcodex/relurpify/agents/relurpic"
 	rewoopkg "github.com/lexcodex/relurpify/agents/rewoo"
 	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graphdb"
+	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/patterns"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )
 
 // PlannerAgent re-exports the pattern-based planner so existing callers can
@@ -54,6 +61,7 @@ type AgentInvocationPolicy = core.AgentInvocationPolicy
 
 // SQLitePipelineCheckpointStore re-exports the workflow-backed checkpoint store.
 type SQLitePipelineCheckpointStore = pipelinepkg.SQLitePipelineCheckpointStore
+type RelurpicOption = relurpicpkg.RelurpicOption
 
 var ErrPipelineCheckpointNotFound = pipelinepkg.ErrPipelineCheckpointNotFound
 
@@ -63,6 +71,28 @@ func NewSQLitePipelineCheckpointStore(store *db.SQLiteWorkflowStateStore, workfl
 
 func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model core.LanguageModel, cfg *core.Config) error {
 	return relurpicpkg.RegisterBuiltinRelurpicCapabilities(registry, model, cfg)
+}
+
+func RegisterBuiltinRelurpicCapabilitiesWithOptions(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...relurpicpkg.RelurpicOption) error {
+	return relurpicpkg.RegisterBuiltinRelurpicCapabilities(registry, model, cfg, opts...)
+}
+
+func WithPatternStore(store patterns.PatternStore) RelurpicOption {
+	return relurpicpkg.WithPatternStore(store)
+}
+func WithCommentStore(store patterns.CommentStore) RelurpicOption {
+	return relurpicpkg.WithCommentStore(store)
+}
+func WithIndexManager(manager *ast.IndexManager) RelurpicOption {
+	return relurpicpkg.WithIndexManager(manager)
+}
+func WithGraphDB(engine *graphdb.Engine) RelurpicOption { return relurpicpkg.WithGraphDB(engine) }
+func WithPlanStore(store frameworkplan.PlanStore) RelurpicOption {
+	return relurpicpkg.WithPlanStore(store)
+}
+func WithRetrievalDB(db *sql.DB) RelurpicOption { return relurpicpkg.WithRetrievalDB(db) }
+func WithGuidanceBroker(broker *guidance.GuidanceBroker) RelurpicOption {
+	return relurpicpkg.WithGuidanceBroker(broker)
 }
 
 func RegisterAgentCapabilities(registry *capability.Registry, env agentenv.AgentEnvironment) error {

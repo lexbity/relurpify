@@ -43,6 +43,7 @@ type ReActAgent struct {
 	Config         *core.Config
 	IndexManager   *ast.IndexManager
 	SearchEngine   *frameworksearch.SearchEngine
+	Summarizer     core.Summarizer
 	CheckpointPath string
 	maxIterations  int
 	contextPolicy  *contextmgr.ContextPolicy
@@ -117,10 +118,12 @@ func (a *ReActAgent) Initialize(config *core.Config) error {
 	}
 	if a.contextPolicy == nil {
 		a.contextPolicy = contextmgr.NewContextPolicy(contextmgr.ContextPolicyConfig{
-			Strategy:     strategy,
-			IndexManager: a.IndexManager,
-			SearchEngine: a.SearchEngine,
-			MemoryStore:  a.Memory,
+			Strategy:      strategy,
+			LanguageModel: a.Model,
+			IndexManager:  a.IndexManager,
+			SearchEngine:  a.SearchEngine,
+			MemoryStore:   a.Memory,
+			Summarizer:    a.Summarizer,
 			Preferences: contextmgr.ContextPolicyPreferences{
 				PreferredDetailLevel: a.ModeProfile.Context.PreferredDetailLevel,
 				MinHistorySize:       a.ModeProfile.Context.MinHistorySize,

@@ -2,11 +2,21 @@ package relurpic
 
 import (
 	"context"
+	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graphdb"
+	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/patterns"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,7 +65,7 @@ func TestRegisterBuiltinRelurpicCapabilitiesRegistersCoordinationTargets(t *test
 	}))
 
 	targets := registry.CoordinationTargets()
-	require.Len(t, targets, 5)
+	require.Len(t, targets, 9)
 
 	planner, ok := registry.GetCoordinationTarget("planner.plan")
 	require.True(t, ok)
@@ -95,6 +105,460 @@ func TestRegisterAgentCapabilitiesRegistersAgentNamespaceEntries(t *testing.T) {
 	require.Contains(t, found, "agent:goalcon")
 }
 
+func TestPatternDetectorCapabilityReturnsAndPersistsProposals(t *testing.T) {
+	registry := capability.NewRegistry()
+	model := &relurpicCapabilityQueueModel{
+		responses: []*core.LLMResponse{
+			{Text: `{"proposals":[{"kind":"boundary","title":"Error wrapping at boundaries","description":"Boundary functions wrap returned errors consistently.","instances":[{"file_path":"","start_line":3,"end_line":7,"excerpt":"func Wrap() error {\n\treturn fmt.Errorf(\"wrap: %w\", err)\n}"}],"confidence":0.87}]}`},
+		},
+	}
+	indexManager, graphEngine, patternStore, retrievalDB, sourcePath := newPatternDetectorFixtures(t)
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, model, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithIndexManager(indexManager),
+		WithGraphDB(graphEngine),
+		WithPatternStore(patternStore),
+		WithRetrievalDB(retrievalDB),
+	))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "pattern-detector.detect", map[string]interface{}{
+		"symbol_scope":  sourcePath,
+		"corpus_scope":  "workspace",
+		"max_proposals": 3,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Equal(t, 1, result.Data["count"])
+
+	proposals, ok := result.Data["proposals"].([]any)
+	require.True(t, ok)
+	require.Len(t, proposals, 1)
+	proposal, ok := proposals[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, patterns.PatternKindBoundary, proposal["kind"])
+	instances, ok := proposal["instances"].([]any)
+	require.True(t, ok)
+	require.Len(t, instances, 1)
+	instance, ok := instances[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, sourcePath, instance["file_path"])
+	require.NotEmpty(t, instance["symbol_id"])
+
+	saved, err := patternStore.Load(context.Background(), proposal["id"].(string))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	require.Equal(t, patterns.PatternStatusProposed, saved.Status)
+	require.Len(t, saved.Instances, 1)
+	require.Equal(t, instance["symbol_id"], saved.Instances[0].SymbolID)
+}
+
+func TestPatternDetectorCapabilityResolvesNamedScopeWithoutGraphOrStore(t *testing.T) {
+	registry := capability.NewRegistry()
+	model := &relurpicCapabilityQueueModel{
+		responses: []*core.LLMResponse{
+			{Text: `[{"kind":"structural","title":"Utility helper","description":"A small helper function centralizes formatting.","instances":[{"file_path":"","start_line":3,"end_line":5,"excerpt":"func Wrap() error { return err }"}],"confidence":0.6}]`},
+		},
+	}
+	indexManager, _, _, retrievalDB, _ := newPatternDetectorFixtures(t)
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, model, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithIndexManager(indexManager),
+		WithRetrievalDB(retrievalDB),
+	))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "pattern-detector.detect", map[string]interface{}{
+		"symbol_scope": "Wrap",
+		"corpus_scope": "workspace",
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Equal(t, 1, result.Data["count"])
+}
+
+func TestPatternDetectorCapabilityFiltersKindsAfterModelResponse(t *testing.T) {
+	registry := capability.NewRegistry()
+	model := &relurpicCapabilityQueueModel{
+		responses: []*core.LLMResponse{
+			{Text: `{"proposals":[{"kind":"behavioral","title":"Retry loop","description":"Retries on transient failure.","instances":[{"file_path":"","start_line":3,"end_line":5,"excerpt":"func Wrap() error { return err }"}],"confidence":0.8},{"kind":"structural","title":"Helper wrapper","description":"A helper wraps one operation.","instances":[{"file_path":"","start_line":3,"end_line":5,"excerpt":"func Wrap() error { return err }"}],"confidence":0.7}]}`},
+		},
+	}
+	indexManager, _, _, retrievalDB, sourcePath := newPatternDetectorFixtures(t)
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, model, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithIndexManager(indexManager),
+		WithRetrievalDB(retrievalDB),
+	))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "pattern-detector.detect", map[string]interface{}{
+		"symbol_scope": sourcePath,
+		"corpus_scope": "workspace",
+		"kinds":        []any{"structural"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Data["count"])
+	proposals := result.Data["proposals"].([]any)
+	proposal := proposals[0].(map[string]any)
+	require.Equal(t, patterns.PatternKindStructural, proposal["kind"])
+}
+
+func TestResolveSymbolScopeReturnsTypedErrorForAmbiguousSymbol(t *testing.T) {
+	manager, tmpDir := newTestIndexManager(t)
+	fileA := filepath.Join(tmpDir, "a.go")
+	fileB := filepath.Join(tmpDir, "b.go")
+	require.NoError(t, os.WriteFile(fileA, []byte("package sample\n\nfunc Wrap() error { return nil }\n"), 0o644))
+	require.NoError(t, os.WriteFile(fileB, []byte("package sample\n\nfunc Wrap() error { return nil }\n"), 0o644))
+	require.NoError(t, manager.IndexFile(fileA))
+	require.NoError(t, manager.IndexFile(fileB))
+
+	_, err := resolveSymbolScope("Wrap", manager)
+	require.Error(t, err)
+	var resolutionErr *ResolutionError
+	require.ErrorAs(t, err, &resolutionErr)
+	require.Len(t, resolutionErr.Candidates, 2)
+}
+
+func TestGapDetectorCapabilityRecordsDriftWritesEdgesAndInvalidatesPlan(t *testing.T) {
+	registry := capability.NewRegistry()
+	model := &relurpicCapabilityQueueModel{
+		responses: []*core.LLMResponse{
+			{Text: `{"results":[{"severity":"significant","description":"Wrap returns the raw error instead of wrapping it at the boundary.","evidence_lines":[5]}]}`},
+		},
+	}
+	indexManager, graphEngine, _, retrievalDB, sourcePath := newPatternDetectorFixtures(t)
+	anchor, err := retrieval.DeclareAnchor(context.Background(), retrievalDB, retrieval.AnchorDeclaration{
+		Term:       "error wrapping",
+		Definition: "Boundary functions wrap returned errors.",
+		Class:      "commitment",
+	}, "workspace", string(patterns.TrustClassBuiltinTrusted))
+	require.NoError(t, err)
+
+	planStore := &stubRelurpicPlanStore{
+		plan: &frameworkplan.LivingPlan{
+			ID:         "plan-1",
+			WorkflowID: "wf-1",
+			Title:      "Gap test",
+			Steps: map[string]*frameworkplan.PlanStep{
+				"step-1": {
+					ID:            "step-1",
+					Description:   "Address wrapping drift",
+					Status:        frameworkplan.PlanStepPending,
+					InvalidatedBy: []frameworkplan.InvalidationRule{{Kind: frameworkplan.InvalidationAnchorDrifted, Target: anchor.AnchorID}},
+				},
+			},
+			StepOrder: []string{"step-1"},
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, model, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithIndexManager(indexManager),
+		WithGraphDB(graphEngine),
+		WithRetrievalDB(retrievalDB),
+		WithPlanStore(planStore),
+	))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "gap-detector.detect", map[string]interface{}{
+		"file_path":    sourcePath,
+		"corpus_scope": "workspace",
+		"anchor_ids":   []any{anchor.AnchorID},
+		"workflow_id":  "wf-1",
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Equal(t, 1, result.Data["count"])
+	require.Equal(t, 1, result.Data["anchor_count_checked"])
+
+	gaps, ok := result.Data["gaps"].([]any)
+	require.True(t, ok)
+	require.Len(t, gaps, 1)
+
+	drifted, err := retrieval.DriftedAnchors(context.Background(), retrievalDB, "workspace")
+	require.NoError(t, err)
+	require.Len(t, drifted, 1)
+	require.Equal(t, anchor.AnchorID, drifted[0].AnchorID)
+
+	nodes, err := indexManager.SearchNodes(ast.NodeQuery{NamePattern: "Wrap", Limit: 5})
+	require.NoError(t, err)
+	require.NotEmpty(t, nodes)
+	edges := graphEngine.GetOutEdges(nodes[0].ID, ast.EdgeKindViolatesContract)
+	require.Len(t, edges, 1)
+	require.Equal(t, anchor.AnchorID, edges[0].TargetID)
+
+	require.Len(t, planStore.invalidated, 1)
+	require.Equal(t, "step-1", planStore.invalidated[0])
+}
+
+func TestGapDetectorCapabilityAddsDeferralObservationBelowEscalationThreshold(t *testing.T) {
+	registry := capability.NewRegistry()
+	model := &relurpicCapabilityQueueModel{
+		responses: []*core.LLMResponse{
+			{Text: `{"results":[{"severity":"minor","description":"Wrap returns raw errors in one branch.","evidence_lines":[5]}]}`},
+		},
+	}
+	indexManager, graphEngine, _, retrievalDB, sourcePath := newPatternDetectorFixtures(t)
+	anchor, err := retrieval.DeclareAnchor(context.Background(), retrievalDB, retrieval.AnchorDeclaration{
+		Term:       "error wrapping",
+		Definition: "Boundary functions wrap returned errors.",
+		Class:      "commitment",
+	}, "workspace", string(patterns.TrustClassBuiltinTrusted))
+	require.NoError(t, err)
+	broker := guidance.NewGuidanceBroker(time.Second)
+	deferralPlan := &guidance.DeferralPlan{ID: "dp-1", WorkflowID: "wf-1"}
+	broker.SetDeferralPlan(deferralPlan)
+
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, model, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithIndexManager(indexManager),
+		WithGraphDB(graphEngine),
+		WithRetrievalDB(retrievalDB),
+		WithGuidanceBroker(broker),
+	))
+
+	_, err = registry.InvokeCapability(context.Background(), core.NewContext(), "gap-detector.detect", map[string]interface{}{
+		"file_path":    sourcePath,
+		"corpus_scope": "workspace",
+		"anchor_ids":   []any{anchor.AnchorID},
+	})
+	require.NoError(t, err)
+	require.Empty(t, broker.PendingRequests())
+	observations := deferralPlan.PendingObservations()
+	require.Len(t, observations, 1)
+	require.Equal(t, guidance.GuidanceContradiction, observations[0].GuidanceKind)
+}
+
+func TestProspectiveMatcherReturnsRankedConfirmedPatterns(t *testing.T) {
+	registry := capability.NewRegistry()
+	model := &relurpicCapabilityQueueModel{
+		responses: []*core.LLMResponse{
+			{Text: `[{"pattern_id":"pattern-wrap","relevance":0.9},{"pattern_id":"pattern-cache","relevance":0.2}]`},
+		},
+	}
+	_, _, patternStore, retrievalDB, _ := newPatternDetectorFixtures(t)
+	now := time.Now().UTC()
+	require.NoError(t, patternStore.Save(context.Background(), patterns.PatternRecord{
+		ID:           "pattern-wrap",
+		Kind:         patterns.PatternKindBoundary,
+		Title:        "Error wrapping boundary",
+		Description:  "Boundary functions wrap errors before returning them to callers.",
+		Status:       patterns.PatternStatusConfirmed,
+		CorpusScope:  "workspace",
+		CorpusSource: "workspace",
+		Confidence:   0.9,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}))
+	require.NoError(t, patternStore.Save(context.Background(), patterns.PatternRecord{
+		ID:           "pattern-cache",
+		Kind:         patterns.PatternKindStructural,
+		Title:        "Read-through cache",
+		Description:  "Services use a read-through cache before querying the remote source.",
+		Status:       patterns.PatternStatusConfirmed,
+		CorpusScope:  "workspace",
+		CorpusSource: "external:stdlib",
+		Confidence:   0.8,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}))
+	anchor, err := retrieval.DeclareAnchor(context.Background(), retrievalDB, retrieval.AnchorDeclaration{
+		Term:       "errors",
+		Definition: "Failure values that should be wrapped at boundaries.",
+		Class:      "technical",
+	}, "workspace", string(patterns.TrustClassBuiltinTrusted))
+	require.NoError(t, err)
+
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, model, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithPatternStore(patternStore),
+		WithRetrievalDB(retrievalDB),
+	))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "prospective-matcher.match", map[string]any{
+		"description":  "Add boundary handling so errors are wrapped before returning",
+		"corpus_scope": "workspace",
+		"limit":        5,
+		"min_score":    0.2,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Equal(t, 1, result.Data["count"])
+
+	matches, ok := result.Data["matches"].([]any)
+	require.True(t, ok)
+	require.Len(t, matches, 1)
+	match, ok := matches[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "pattern-wrap", match["pattern_id"])
+	require.Equal(t, "workspace", match["corpus_source"])
+	anchorRefs, ok := match["anchor_refs"].([]string)
+	require.True(t, ok)
+	require.Contains(t, anchorRefs, anchor.AnchorID)
+}
+
+func TestProspectiveMatcherReturnsEmptyResultWhenPatternStoreMissing(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, &relurpicCapabilityQueueModel{}, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	}))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "prospective-matcher.match", map[string]any{
+		"description":  "match something",
+		"corpus_scope": "workspace",
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Equal(t, 0, result.Data["count"])
+	matches, ok := result.Data["matches"].([]any)
+	require.True(t, ok)
+	require.Empty(t, matches)
+}
+
+func TestCommenterAnnotatePersistsCommentAndPromotesAnchor(t *testing.T) {
+	registry := capability.NewRegistry()
+	_, _, patternStore, retrievalDB, _ := newPatternDetectorFixtures(t)
+	now := time.Now().UTC()
+	require.NoError(t, patternStore.Save(context.Background(), patterns.PatternRecord{
+		ID:           "pattern-comment",
+		Kind:         patterns.PatternKindBoundary,
+		Title:        "Boundary wrapper",
+		Description:  "Errors are wrapped at boundaries.",
+		Status:       patterns.PatternStatusConfirmed,
+		CorpusScope:  "workspace",
+		CorpusSource: "workspace",
+		Confidence:   0.8,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}))
+	commentDB, err := patterns.OpenSQLite(filepath.Join(t.TempDir(), "comments.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, commentDB.Close())
+	})
+	commentStore, err := patterns.NewSQLiteCommentStore(commentDB)
+	require.NoError(t, err)
+
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, &relurpicCapabilityQueueModel{}, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithPatternStore(patternStore),
+		WithCommentStore(commentStore),
+		WithRetrievalDB(retrievalDB),
+	))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "commenter.annotate", map[string]any{
+		"pattern_id":   "pattern-comment",
+		"intent_type":  "intentional",
+		"body":         "ErrorWrap: all boundary errors are wrapped before return",
+		"author_kind":  "human",
+		"corpus_scope": "workspace",
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.NotEmpty(t, result.Data["comment_id"])
+	require.NotEmpty(t, result.Data["anchor_ref"])
+
+	savedComment, err := commentStore.Load(context.Background(), result.Data["comment_id"].(string))
+	require.NoError(t, err)
+	require.NotNil(t, savedComment)
+	require.Equal(t, patterns.AuthorKindHuman, savedComment.AuthorKind)
+	require.Equal(t, patterns.TrustClassWorkspaceTrusted, savedComment.TrustClass)
+	require.Equal(t, result.Data["anchor_ref"], savedComment.AnchorRef)
+
+	patternRecord, err := patternStore.Load(context.Background(), "pattern-comment")
+	require.NoError(t, err)
+	require.NotNil(t, patternRecord)
+	require.Contains(t, patternRecord.CommentIDs, savedComment.CommentID)
+	require.Contains(t, patternRecord.AnchorRefs, savedComment.AnchorRef)
+
+	anchors, err := retrieval.ActiveAnchors(context.Background(), retrievalDB, "workspace")
+	require.NoError(t, err)
+	var promoted *retrieval.AnchorRecord
+	for i := range anchors {
+		if anchors[i].AnchorID == savedComment.AnchorRef {
+			promoted = &anchors[i]
+			break
+		}
+	}
+	require.NotNil(t, promoted)
+	require.Equal(t, "commitment", promoted.AnchorClass)
+	require.Equal(t, "workspace_trusted", promoted.TrustClass)
+}
+
+func TestCommenterAnnotateWithoutPromotionStillPersists(t *testing.T) {
+	registry := capability.NewRegistry()
+	commentDB, err := patterns.OpenSQLite(filepath.Join(t.TempDir(), "comments.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, commentDB.Close())
+	})
+	commentStore, err := patterns.NewSQLiteCommentStore(commentDB)
+	require.NoError(t, err)
+
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, &relurpicCapabilityQueueModel{}, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithCommentStore(commentStore),
+	))
+
+	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "commenter.annotate", map[string]any{
+		"file_path":   "/tmp/example.go",
+		"intent_type": "open-question",
+		"body":        "Should this retry on transient failure?",
+		"author_kind": "agent",
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	_, ok := result.Data["anchor_ref"]
+	require.False(t, ok)
+
+	savedComment, err := commentStore.Load(context.Background(), result.Data["comment_id"].(string))
+	require.NoError(t, err)
+	require.NotNil(t, savedComment)
+	require.Equal(t, patterns.TrustClassBuiltinTrusted, savedComment.TrustClass)
+	require.Empty(t, savedComment.AnchorRef)
+}
+
+func TestCommenterAnnotateRequiresTarget(t *testing.T) {
+	registry := capability.NewRegistry()
+	commentDB, err := patterns.OpenSQLite(filepath.Join(t.TempDir(), "comments.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, commentDB.Close())
+	})
+	commentStore, err := patterns.NewSQLiteCommentStore(commentDB)
+	require.NoError(t, err)
+
+	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, &relurpicCapabilityQueueModel{}, &core.Config{
+		Name:  "coding",
+		Model: "stub",
+	},
+		WithCommentStore(commentStore),
+	))
+
+	_, err = registry.InvokeCapability(context.Background(), core.NewContext(), "commenter.annotate", map[string]any{
+		"intent_type": "intentional",
+		"body":        "Term: definition",
+		"author_kind": "human",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "at least one of")
+}
+
 func TestPlannerCapabilityReturnsStructuredPlan(t *testing.T) {
 	registry := capability.NewRegistry()
 	require.NoError(t, registry.Register(architectStubTool{}))
@@ -116,6 +580,89 @@ func TestPlannerCapabilityReturnsStructuredPlan(t *testing.T) {
 	require.True(t, result.Success)
 	require.Equal(t, "Plan work", result.Data["goal"])
 	require.NotEmpty(t, result.Data["steps"])
+}
+
+func newPatternDetectorFixtures(t *testing.T) (*ast.IndexManager, *graphdb.Engine, *patterns.SQLitePatternStore, *sql.DB, string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	store, err := ast.NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	require.NoError(t, err)
+	indexManager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: tmpDir, ParallelWorkers: 1})
+
+	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(tmpDir, "graphdb")))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, graphEngine.Close())
+	})
+	indexManager.GraphDB = graphEngine
+
+	sourcePath := filepath.Join(tmpDir, "sample.go")
+	require.NoError(t, os.WriteFile(sourcePath, []byte(`package sample
+
+func Wrap(err error) error {
+	if err == nil {
+		return nil
+	}
+	return err
+}
+`), 0o644))
+	require.NoError(t, indexManager.IndexFile(sourcePath))
+
+	patternDB, err := patterns.OpenSQLite(filepath.Join(tmpDir, "patterns.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, patternDB.Close())
+	})
+	patternStore, err := patterns.NewSQLitePatternStore(patternDB)
+	require.NoError(t, err)
+
+	retrievalDB, err := patterns.OpenSQLite(filepath.Join(tmpDir, "retrieval.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, retrievalDB.Close())
+	})
+	require.NoError(t, retrieval.EnsureSchema(context.Background(), retrievalDB))
+
+	return indexManager, graphEngine, patternStore, retrievalDB, sourcePath
+}
+
+func newTestIndexManager(t *testing.T) (*ast.IndexManager, string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	store, err := ast.NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	require.NoError(t, err)
+	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: tmpDir, ParallelWorkers: 1})
+	return manager, tmpDir
+}
+
+type stubRelurpicPlanStore struct {
+	plan        *frameworkplan.LivingPlan
+	invalidated []string
+}
+
+func (s *stubRelurpicPlanStore) SavePlan(context.Context, *frameworkplan.LivingPlan) error {
+	return nil
+}
+func (s *stubRelurpicPlanStore) LoadPlan(context.Context, string) (*frameworkplan.LivingPlan, error) {
+	return s.plan, nil
+}
+func (s *stubRelurpicPlanStore) LoadPlanByWorkflow(_ context.Context, workflowID string) (*frameworkplan.LivingPlan, error) {
+	if s.plan == nil || s.plan.WorkflowID != workflowID {
+		return nil, nil
+	}
+	return s.plan, nil
+}
+func (s *stubRelurpicPlanStore) UpdateStep(context.Context, string, string, *frameworkplan.PlanStep) error {
+	return nil
+}
+func (s *stubRelurpicPlanStore) InvalidateStep(_ context.Context, _ string, stepID string, _ frameworkplan.InvalidationRule) error {
+	s.invalidated = append(s.invalidated, stepID)
+	return nil
+}
+func (s *stubRelurpicPlanStore) DeletePlan(context.Context, string) error { return nil }
+func (s *stubRelurpicPlanStore) ListPlans(context.Context) ([]frameworkplan.PlanSummary, error) {
+	return nil, nil
 }
 
 func TestReviewerAndVerifierCapabilitiesReturnStructuredOutputs(t *testing.T) {

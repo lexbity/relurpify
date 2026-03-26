@@ -71,6 +71,7 @@ func (a *ArchitectAgent) Initialize(cfg *core.Config) error {
 		Config:         cfg,
 		IndexManager:   a.IndexManager,
 		SearchEngine:   a.SearchEngine,
+		Summarizer:     &core.SimpleSummarizer{},
 		CheckpointPath: a.CheckpointPath,
 		Mode:           "code",
 	}
@@ -1231,12 +1232,40 @@ func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *d
 		if !found || rawObs == nil {
 			return
 		}
-		observations, typed := rawObs.([]reactpkg.ToolObservation)
-		if !typed || len(observations) == 0 {
-			return
-		}
-		last := observations[len(observations)-1]
-		if strings.TrimSpace(last.Tool) == "" {
+		var metadata map[string]any
+		var toolName string
+		var message string
+		switch observations := rawObs.(type) {
+		case []reactpkg.ToolObservation:
+			if len(observations) == 0 {
+				return
+			}
+			last := observations[len(observations)-1]
+			toolName = strings.TrimSpace(last.Tool)
+			if toolName == "" {
+				return
+			}
+			message = fmt.Sprintf("Capability %s invoked during workflow step execution.", last.Tool)
+			metadata = map[string]any{
+				"capability_id": "tool:" + last.Tool,
+				"capability":    last.Tool,
+				"phase":         last.Phase,
+				"success":       last.Success,
+			}
+		case map[string]any:
+			toolName = strings.TrimSpace(fmt.Sprint(observations["last_tool"]))
+			if toolName == "" || toolName == "<nil>" {
+				return
+			}
+			message = fmt.Sprintf("Capability %s invoked during workflow step execution.", toolName)
+			metadata = map[string]any{
+				"capability_id": "tool:" + toolName,
+				"capability":    toolName,
+			}
+			if success, exists := observations["last_success"]; exists {
+				metadata["success"] = success
+			}
+		default:
 			return
 		}
 		_ = store.AppendEvent(ctx, memory.WorkflowEventRecord{
@@ -1245,13 +1274,8 @@ func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *d
 			RunID:      runID,
 			StepID:     stepID,
 			EventType:  "security.capability_invoked",
-			Message:    fmt.Sprintf("Capability %s invoked during workflow step execution.", last.Tool),
-			Metadata: map[string]any{
-				"capability_id": "tool:" + last.Tool,
-				"capability":    last.Tool,
-				"phase":         last.Phase,
-				"success":       last.Success,
-			},
+			Message:    message,
+			Metadata:   metadata,
 			CreatedAt: createdAt,
 		})
 		return

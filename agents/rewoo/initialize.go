@@ -104,11 +104,12 @@ func (a *RewooAgent) initializeContextPolicy(cfg *core.Config) error {
 
 	// Create the policy
 	policy := contextmgr.NewContextPolicy(contextmgr.ContextPolicyConfig{
-		Strategy:     strategy,
-		MemoryStore:  a.Memory,
-		IndexManager: a.IndexManager,
-		SearchEngine: a.SearchEngine,
-		Preferences:  preferences,
+		Strategy:      strategy,
+		LanguageModel: a.Model,
+		MemoryStore:   a.Memory,
+		IndexManager:  a.IndexManager,
+		SearchEngine:  a.SearchEngine,
+		Preferences:   preferences,
 	}, spec)
 
 	// Set budget reservations
