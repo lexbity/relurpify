@@ -14,8 +14,32 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
-// chatSystemMsg is an internal message to add a system line to the chat feed.
-type chatSystemMsg struct{ text string }
+// ChatSystemMsg is a message to add a system line to the chat feed.
+// Exported so euclotui can emit this message type.
+type ChatSystemMsg struct{ Text string }
+
+// chatSystemMsg is the package-internal name for ChatSystemMsg.
+// It exists so that existing tui code can continue to use the lower-case
+// constructor syntax: chatSystemMsg{Text: "..."}
+type chatSystemMsg = ChatSystemMsg
+
+// ChatSubTabPolicy declares the execution behaviour for a specific chat subtab.
+type ChatSubTabPolicy struct {
+	// ModeHint is passed as "mode" metadata to guide the agent's execution style.
+	ModeHint string
+	// EditEnabled controls whether write-path capabilities are active.
+	EditEnabled bool
+	// OnlineToolsEnabled controls whether network-fetching tools are active.
+	OnlineToolsEnabled bool
+}
+
+// chatSubTabPolicies maps each chat subtab to its execution policy.
+var chatSubTabPolicies = map[SubTabID]ChatSubTabPolicy{
+	SubTabChatLocalRead:   {ModeHint: "review", EditEnabled: false, OnlineToolsEnabled: false},
+	SubTabChatLocalEdit:   {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: false},
+	SubTabChatOnlineRead:  {ModeHint: "research", EditEnabled: false, OnlineToolsEnabled: true},
+	SubTabChatOnlineEdit:  {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: true},
+}
 
 // ChatPane owns the message feed and run management.
 // It is always held by pointer so mutations survive tea.Model value copies.
@@ -33,12 +57,17 @@ type ChatPane struct {
 
 	allowParallel bool
 	expandTarget  string
+	activeSubTab  SubTabID
 
 	width, height int
 
 	// Feed snapshots for undo/redo: each snapshot is a full copy of message list
 	undoStack [][]Message
 	redoStack [][]Message
+
+	// compact run tracking: set by rootHandleCompact, cleared on completion
+	compactRunID    string
+	compactMsgCount int
 }
 
 // NewChatPane initializes the ChatPane. The feed is created but not sized yet.
@@ -60,6 +89,14 @@ func NewChatPane(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *No
 		expandTarget: "thinking",
 	}
 }
+
+// SetSubTab updates the active chat subtab and adjusts execution policy.
+func (p *ChatPane) SetSubTab(id SubTabID) {
+	p.activeSubTab = id
+}
+
+// ActiveSubTab returns the current chat subtab.
+func (p *ChatPane) ActiveSubTab() SubTabID { return p.activeSubTab }
 
 // Init starts the spinner.
 func (p *ChatPane) Init() tea.Cmd {
@@ -160,7 +197,8 @@ func (p *ChatPane) HasActiveRuns() bool {
 }
 
 // Update dispatches tea messages relevant to the chat pane.
-func (p *ChatPane) Update(msg tea.Msg) (*ChatPane, tea.Cmd) {
+// Returns (ChatPaner, tea.Cmd) to satisfy the ChatPaner interface.
+func (p *ChatPane) Update(msg tea.Msg) (ChatPaner, tea.Cmd) {
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
 		p.spinner, _ = p.spinner.Update(msg)
@@ -180,7 +218,7 @@ func (p *ChatPane) Update(msg tea.Msg) (*ChatPane, tea.Cmd) {
 		return p.handleUpdateTask(msg)
 
 	case chatSystemMsg:
-		p.addSystemMessage(msg.text)
+		p.addSystemMessage(msg.Text)
 		return p, nil
 
 	case tea.MouseMsg:
@@ -232,6 +270,41 @@ func (p *ChatPane) StartRun(prompt string) (tea.Cmd, string) {
 	return p.StartRunWithMetadata(prompt, nil)
 }
 
+// StartRunSilent begins an agent run without appending a user message to the feed.
+// Used by /compact so the summarisation prompt is not visible in the chat.
+// The caller is responsible for setting p.compactRunID = runID after this returns.
+func (p *ChatPane) StartRunSilent(prompt string) (tea.Cmd, string) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return nil, ""
+	}
+	if p.runtime == nil {
+		p.addSystemMessage("Runtime unavailable: cannot start run")
+		return nil, ""
+	}
+	if p.HasActiveRuns() {
+		p.addSystemMessage("Run already in progress.")
+		return nil, ""
+	}
+	runID := generateID()
+	ch := make(chan tea.Msg, 256)
+	builder := NewMessageBuilder(runID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	run := &RunState{
+		ID:      runID,
+		Prompt:  prompt,
+		Started: time.Now(),
+		Builder: builder,
+		Ch:      ch,
+		Cancel:  cancel,
+	}
+	p.runStates[runID] = run
+	metadata := p.buildMetadata(ctx)
+	metadata["compact"] = true
+	go p.runStream(ctx, run, metadata)
+	return listenToStream(ch), runID
+}
+
 // StartRunWithMetadata begins an agent run with additional task metadata.
 func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (tea.Cmd, string) {
 	prompt = strings.TrimSpace(prompt)
@@ -281,21 +354,21 @@ func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (te
 // AddFile adds a file to the agent context.
 func (p *ChatPane) AddFile(path string) tea.Cmd {
 	if err := p.context.AddFile(path); err != nil {
-		return func() tea.Msg { return chatSystemMsg{text: fmt.Sprintf("Context error: %v", err)} }
+		return func() tea.Msg { return chatSystemMsg{Text: fmt.Sprintf("Context error: %v", err)} }
 	}
 	entry, err := fileEntryForPath(p.session.Workspace, path)
 	if err != nil {
-		return func() tea.Msg { return chatSystemMsg{text: fmt.Sprintf("Added to context: %s", path)} }
+		return func() tea.Msg { return chatSystemMsg{Text: fmt.Sprintf("Added to context: %s", path)} }
 	}
 	return func() tea.Msg {
-		return chatSystemMsg{text: fmt.Sprintf("Added to context: %s (%s)", path, formatSizeToken(entry.SizeBytes, entry.TokenEstimate))}
+		return chatSystemMsg{Text: fmt.Sprintf("Added to context: %s (%s)", path, formatSizeToken(entry.SizeBytes, entry.TokenEstimate))}
 	}
 }
 
 // StopLatestRun cancels the most recently started run.
 func (p *ChatPane) StopLatestRun() tea.Cmd {
 	if len(p.runStates) == 0 {
-		return func() tea.Msg { return chatSystemMsg{text: "No active run to stop."} }
+		return func() tea.Msg { return chatSystemMsg{Text: "No active run to stop."} }
 	}
 	var latest *RunState
 	for _, run := range p.runStates {
@@ -304,16 +377,16 @@ func (p *ChatPane) StopLatestRun() tea.Cmd {
 		}
 	}
 	if latest == nil || latest.Cancel == nil {
-		return func() tea.Msg { return chatSystemMsg{text: "No active run to stop."} }
+		return func() tea.Msg { return chatSystemMsg{Text: "No active run to stop."} }
 	}
 	latest.Cancel()
-	return func() tea.Msg { return chatSystemMsg{text: fmt.Sprintf("Stopping run %s", latest.ID)} }
+	return func() tea.Msg { return chatSystemMsg{Text: fmt.Sprintf("Stopping run %s", latest.ID)} }
 }
 
 // RetryLastRun restarts the most recent prompt.
 func (p *ChatPane) RetryLastRun() tea.Cmd {
 	if strings.TrimSpace(p.lastPrompt) == "" {
-		return func() tea.Msg { return chatSystemMsg{text: "No prior prompt to retry."} }
+		return func() tea.Msg { return chatSystemMsg{Text: "No prior prompt to retry."} }
 	}
 	cmd, _ := p.StartRun(p.lastPrompt)
 	return cmd
@@ -389,6 +462,81 @@ func (p *ChatPane) addSystemMessage(text string) {
 	p.feed.AppendMessage(msg)
 }
 
+// ──────────────────────────────────────────────────────────────
+// ChatPaner interface implementation
+// ──────────────────────────────────────────────────────────────
+
+// AddSystemMessage is the exported form of addSystemMessage, required by ChatPaner.
+func (p *ChatPane) AddSystemMessage(text string) { p.addSystemMessage(text) }
+
+// AppendMessage adds a message to the chat feed.
+func (p *ChatPane) AppendMessage(msg Message) { p.feed.AppendMessage(msg) }
+
+// ClearMessages clears the chat feed.
+func (p *ChatPane) ClearMessages() { p.feed.ClearMessages() }
+
+// Messages returns the current message list.
+func (p *ChatPane) Messages() []Message { return p.feed.Messages() }
+
+// SetSearchFilter sets the feed search filter.
+func (p *ChatPane) SetSearchFilter(filter string) { p.feed.SetSearchFilter(filter) }
+
+// ScrollUp scrolls the feed up by one line.
+func (p *ChatPane) ScrollUp() { p.feed.ScrollUp() }
+
+// PageDown scrolls the feed down by one page.
+func (p *ChatPane) PageDown() { p.feed.PageDown() }
+
+// PageUp scrolls the feed up by one page.
+func (p *ChatPane) PageUp() { p.feed.PageUp() }
+
+// RollbackLastUndo removes the top undo snapshot (called on compact failure).
+func (p *ChatPane) RollbackLastUndo() {
+	if len(p.undoStack) > 0 {
+		p.undoStack = p.undoStack[:len(p.undoStack)-1]
+	}
+}
+
+// HITLService returns the underlying HITL service.
+func (p *ChatPane) HITLService() HITLServiceIface { return p.hitlSvc }
+
+// AllowParallel returns whether parallel runs are enabled.
+func (p *ChatPane) AllowParallel() bool { return p.allowParallel }
+
+// SetAllowParallel sets the parallel run mode.
+func (p *ChatPane) SetAllowParallel(v bool) { p.allowParallel = v }
+
+// LastPrompt returns the last submitted prompt text.
+func (p *ChatPane) LastPrompt() string { return p.lastPrompt }
+
+// MutateMessages calls fn with a mutable slice of all messages, then refreshes.
+// fn may modify message fields in-place (e.g. toggling Expanded on a FileChange).
+func (p *ChatPane) MutateMessages(fn func(msgs []Message)) {
+	fn(p.feed.messages)
+	p.feed.refresh()
+}
+
+// SetCompactRunID records the run ID and original message count for the
+// in-flight compact operation. handleStreamComplete uses it to intercept the
+// compact result and rebuild the feed.
+func (p *ChatPane) SetCompactRunID(runID string, msgCount int) {
+	p.compactRunID = runID
+	p.compactMsgCount = msgCount
+}
+
+// PushUndoSnapshot appends a snapshot of the current messages to the undo
+// stack and clears the redo stack. Called before destructive operations like
+// /compact so that ctrl+z can restore the previous state.
+func (p *ChatPane) PushUndoSnapshot(msgs []Message) {
+	snapshot := make([]Message, len(msgs))
+	copy(snapshot, msgs)
+	p.undoStack = append(p.undoStack, snapshot)
+	p.redoStack = nil
+}
+
+// Verify that *ChatPane satisfies ChatPaner at compile time.
+var _ ChatPaner = (*ChatPane)(nil)
+
 func (p *ChatPane) buildMetadata(ctx context.Context) map[string]any {
 	meta := map[string]any{"source": "relurpish"}
 	if p.context != nil && p.runtime != nil {
@@ -409,6 +557,16 @@ func (p *ChatPane) buildMetadata(ctx context.Context) map[string]any {
 		}
 		if p.session.Strategy != "" {
 			meta["strategy"] = p.session.Strategy
+		}
+	}
+	// Apply subtab policy hints (override session mode when set).
+	if p.activeSubTab != "" {
+		if policy, ok := chatSubTabPolicies[p.activeSubTab]; ok {
+			if policy.ModeHint != "" {
+				meta["mode"] = policy.ModeHint
+			}
+			meta["edit_enabled"] = policy.EditEnabled
+			meta["online_tools_enabled"] = policy.OnlineToolsEnabled
 		}
 	}
 	return meta
@@ -446,7 +604,7 @@ func (p *ChatPane) runStream(ctx context.Context, run *RunState, metadata map[st
 	close(run.Ch)
 }
 
-func (p *ChatPane) handleStreamToken(msg StreamTokenMsg) (*ChatPane, tea.Cmd) {
+func (p *ChatPane) handleStreamToken(msg StreamTokenMsg) (ChatPaner, tea.Cmd) {
 	run, ok := p.runStates[msg.RunID]
 	if !ok || run.Builder == nil {
 		return p, nil
@@ -457,13 +615,32 @@ func (p *ChatPane) handleStreamToken(msg StreamTokenMsg) (*ChatPane, tea.Cmd) {
 	return p, listenToStream(run.Ch)
 }
 
-func (p *ChatPane) handleStreamComplete(msg StreamCompleteMsg) (*ChatPane, tea.Cmd) {
+func (p *ChatPane) handleStreamComplete(msg StreamCompleteMsg) (ChatPaner, tea.Cmd) {
 	run, ok := p.runStates[msg.RunID]
 	if !ok || run.Builder == nil {
 		return p, nil
 	}
 	run.Builder.SetResult(structuredResultFromCore(msg.Result))
 	final := run.Builder.Build(msg.Duration, msg.TokensUsed)
+
+	// Compact run: don't append to feed; emit compactResultMsg instead.
+	if p.compactRunID != "" && msg.RunID == p.compactRunID {
+		count := p.compactMsgCount
+		p.compactRunID = ""
+		p.compactMsgCount = 0
+		delete(p.runStates, msg.RunID)
+		summary := strings.TrimSpace(final.Content.Text)
+		if summary == "" {
+			summary = extractCompactSummary(msg.Result)
+		}
+		return p, func() tea.Msg {
+			if summary == "" {
+				return compactResultMsg{err: fmt.Errorf("model returned empty summary"), originalCount: count}
+			}
+			return compactResultMsg{summary: summary, originalCount: count}
+		}
+	}
+
 	p.feed.UpdateMessage(final)
 	if p.session != nil {
 		p.session.TotalTokens += msg.TokensUsed
@@ -476,8 +653,19 @@ func (p *ChatPane) handleStreamComplete(msg StreamCompleteMsg) (*ChatPane, tea.C
 	return p, streamCompletedCmd(msg)
 }
 
-func (p *ChatPane) handleStreamError(msg StreamErrorMsg) (*ChatPane, tea.Cmd) {
+func (p *ChatPane) handleStreamError(msg StreamErrorMsg) (ChatPaner, tea.Cmd) {
 	delete(p.runStates, msg.RunID)
+
+	// Compact run error: emit compactResultMsg so model.go can roll back the undo snapshot.
+	if p.compactRunID != "" && msg.RunID == p.compactRunID {
+		count := p.compactMsgCount
+		p.compactRunID = ""
+		p.compactMsgCount = 0
+		return p, func() tea.Msg {
+			return compactResultMsg{err: msg.Error, originalCount: count}
+		}
+	}
+
 	if msg.Error != nil && errors.Is(msg.Error, context.Canceled) {
 		p.addSystemMessage(fmt.Sprintf("Run %s canceled", msg.RunID))
 	} else {
@@ -486,7 +674,7 @@ func (p *ChatPane) handleStreamError(msg StreamErrorMsg) (*ChatPane, tea.Cmd) {
 	return p, nil
 }
 
-func (p *ChatPane) handleUpdateTask(msg UpdateTaskMsg) (*ChatPane, tea.Cmd) {
+func (p *ChatPane) handleUpdateTask(msg UpdateTaskMsg) (ChatPaner, tea.Cmd) {
 	messages := p.feed.messages
 	for i := len(messages) - 1; i >= 0; i-- {
 		content := &messages[i].Content

@@ -9,15 +9,22 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	relurpic "github.com/lexcodex/relurpify/agents/relurpic"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/config"
 	contract "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graphdb"
+	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/patterns"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	frameworksearch "github.com/lexcodex/relurpify/framework/search"
+	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -128,6 +135,7 @@ func TestBuildCapabilityRegistryDoesNotRegisterGenericExecutionToolsByDefault(t 
 	searchEngine := capabilities.SearchEngine
 	require.NotNil(t, registry)
 	require.NotNil(t, indexManager)
+	require.NotNil(t, indexManager.GraphDB)
 	require.NotNil(t, searchEngine)
 
 	_, ok := registry.Get("exec_run_tests")
@@ -179,6 +187,7 @@ func TestBuildCapabilityRegistryContinuesWhenBootstrapContextCanceled(t *testing
 	require.NotNil(t, capabilities)
 	require.NotNil(t, capabilities.Registry)
 	require.NotNil(t, capabilities.IndexManager)
+	require.NotNil(t, capabilities.IndexManager.GraphDB)
 	require.NotNil(t, capabilities.SearchEngine)
 }
 
@@ -203,6 +212,7 @@ func TestBuildCapabilityRegistrySkipASTIndexSkipsSemanticBootstrap(t *testing.T)
 	require.NoError(t, err)
 	require.NotNil(t, capabilities)
 	require.NotNil(t, capabilities.IndexManager)
+	require.NotNil(t, capabilities.IndexManager.GraphDB)
 	require.NotNil(t, capabilities.SearchEngine)
 	require.Zero(t, embedCalls.Load())
 
@@ -214,6 +224,60 @@ func TestBuildCapabilityRegistrySkipASTIndexSkipsSemanticBootstrap(t *testing.T)
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 	require.Contains(t, results[0].File, "match.go")
+}
+
+func TestWireRuntimeAgentDependenciesConfiguresEucloAgent(t *testing.T) {
+	dir := t.TempDir()
+	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(dir, "graphdb")))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, graphEngine.Close())
+	})
+
+	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, workflowStore.Close())
+		require.NoError(t, patternDB.Close())
+	})
+
+	rt := &Runtime{
+		GraphDB:        graphEngine,
+		PlanStore:      planStore,
+		PatternStore:   patternStore,
+		CommentStore:   commentStore,
+		WorkflowStore:  workflowStore,
+		GuidanceBroker: guidance.NewGuidanceBroker(time.Second),
+	}
+	agent := &euclo.Agent{}
+
+	rt.wireRuntimeAgentDependencies(agent)
+
+	require.Same(t, graphEngine, agent.GraphDB)
+	require.Same(t, workflowStore.DB(), agent.RetrievalDB)
+	require.Same(t, planStore, agent.PlanStore)
+	require.Same(t, patternStore, agent.PatternStore)
+	require.Same(t, commentStore, agent.CommentStore)
+	require.Same(t, rt.GuidanceBroker, agent.GuidanceBroker)
+	require.Equal(t, guidance.DefaultDeferralPolicy(), agent.DeferralPolicy)
+	require.IsType(t, &relurpic.PatternCoherenceVerifier{}, agent.ConvVerifier)
+}
+
+func TestOpenRuntimeStoresReturnsSharedPersistenceSurfaces(t *testing.T) {
+	dir := t.TempDir()
+
+	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, workflowStore.Close())
+		require.NoError(t, patternDB.Close())
+	})
+
+	require.NotNil(t, workflowStore)
+	require.NotNil(t, workflowStore.DB())
+	require.Implements(t, (*frameworkplan.PlanStore)(nil), planStore)
+	require.Implements(t, (*patterns.PatternStore)(nil), patternStore)
+	require.Implements(t, (*patterns.CommentStore)(nil), commentStore)
 }
 
 func TestReloadEffectiveContractRefreshesDefinitionOverlay(t *testing.T) {

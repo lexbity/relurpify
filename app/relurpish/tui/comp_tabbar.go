@@ -5,10 +5,11 @@ import (
 	"strings"
 )
 
-// TabBar renders the bottom tab strip.
+// TabBar renders the bottom tab strip from the registered tab set.
 type TabBar struct {
-	active TabID
-	width  int
+	active   TabID
+	registry *TabRegistry
+	width    int
 }
 
 // NewTabBar creates a TabBar with the given active tab.
@@ -19,25 +20,18 @@ func NewTabBar(active TabID) TabBar {
 // SetActive updates the active tab.
 func (tb *TabBar) SetActive(id TabID) { tb.active = id }
 
+// SetRegistry wires the tab bar to a registry for rendering.
+func (tb *TabBar) SetRegistry(r *TabRegistry) { tb.registry = r }
+
 // SetWidth propagates terminal width.
 func (tb *TabBar) SetWidth(w int) { tb.width = w }
 
 // View renders the tab bar.
 func (tb TabBar) View() string {
-	tabs := []struct {
-		id    TabID
-		label string
-	}{
-		{TabChat, "1 Chat"},
-		{TabTasks, "2 Tasks"},
-		{TabSession, "3 Session"},
-		{TabSettings, "4 Settings"},
-		{TabTools, "5 Tools"},
-	}
-	parts := make([]string, 0, len(tabs))
-	for _, t := range tabs {
-		label := fmt.Sprintf("[%s]", t.label)
-		if t.id == tb.active {
+	var parts []string
+	for i, t := range tb.registry.All() {
+		label := fmt.Sprintf("[%d %s]", i+1, t.Label)
+		if t.ID == tb.active {
 			parts = append(parts, tabActiveStyle.Render(label))
 		} else {
 			parts = append(parts, tabInactiveStyle.Render(label))

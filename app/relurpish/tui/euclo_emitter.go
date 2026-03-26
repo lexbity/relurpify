@@ -1,92 +1,12 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
-
-// TUIFrameEmitter implements interaction.FrameEmitter by rendering frames
-// into the TUI feed and collecting user responses via Bubble Tea messages.
-type TUIFrameEmitter struct {
-	program    *tea.Program
-	responseCh chan interaction.UserResponse
-	frames     []interaction.InteractionFrame
-}
-
-// NewTUIFrameEmitter creates a FrameEmitter wired to the given tea.Program.
-func NewTUIFrameEmitter(program *tea.Program) *TUIFrameEmitter {
-	return &TUIFrameEmitter{
-		program:    program,
-		responseCh: make(chan interaction.UserResponse, 1),
-	}
-}
-
-// Emit renders the interaction frame into the TUI feed and pushes an
-// interaction notification with the frame's action slots.
-func (e *TUIFrameEmitter) Emit(_ context.Context, frame interaction.InteractionFrame) error {
-	e.frames = append(e.frames, frame)
-
-	// Render frame into a feed message.
-	msg := RenderInteractionFrame(frame)
-	if e.program != nil {
-		e.program.Send(eucloFrameMsg{message: msg, frame: frame})
-	}
-	return nil
-}
-
-// AwaitResponse blocks until the user responds to the current interaction
-// notification. Returns the selected action or freetext input.
-func (e *TUIFrameEmitter) AwaitResponse(ctx context.Context) (interaction.UserResponse, error) {
-	select {
-	case <-ctx.Done():
-		return interaction.UserResponse{}, ctx.Err()
-	case resp := <-e.responseCh:
-		return resp, nil
-	}
-}
-
-// Resolve sends a user response to the emitter (called by the notification bar
-// or input bar when the user selects an action).
-func (e *TUIFrameEmitter) Resolve(resp interaction.UserResponse) {
-	select {
-	case e.responseCh <- resp:
-	default:
-		// Drop if no one is waiting — shouldn't happen in normal flow.
-	}
-}
-
-// Frames returns the recorded frames (useful for testing).
-func (e *TUIFrameEmitter) Frames() []interaction.InteractionFrame {
-	return e.frames
-}
-
-// ──────────────────────────────────────────────────────────────
-// Bubble Tea messages for euclo interaction
-// ──────────────────────────────────────────────────────────────
-
-// eucloFrameMsg is sent to the TUI when an interaction frame should be rendered.
-type eucloFrameMsg struct {
-	message Message
-	frame   interaction.InteractionFrame
-}
-
-// eucloResponseMsg is sent when the user responds to an interaction notification.
-type eucloResponseMsg struct {
-	response interaction.UserResponse
-}
-
-// eucloPhaseProgressMsg updates the phase progress indicator.
-type eucloPhaseProgressMsg struct {
-	mode       string
-	phaseIndex int
-	phaseCount int
-	labels     []interaction.PhaseInfo
-}
 
 // ──────────────────────────────────────────────────────────────
 // Interaction notification kind
@@ -97,13 +17,29 @@ const NotifKindInteraction NotificationKind = "interaction"
 // PushInteraction pushes an interaction notification with the frame's actions.
 func (q *NotificationQueue) PushInteraction(frame interaction.InteractionFrame) string {
 	id := generateID()
+	q.Push(notificationItemFromFrame(id, NotifKindInteraction, frame, nil))
+	return id
+}
+
+func notificationItemFromFrame(id string, kind NotificationKind, frame interaction.InteractionFrame, extra map[string]string) NotificationItem {
+	itemExtra := serializeFrameActions(frame)
+	for key, value := range extra {
+		itemExtra[key] = value
+	}
+	return NotificationItem{
+		ID:    id,
+		Kind:  kind,
+		Msg:   fmt.Sprintf("[%s/%s] %s", frame.Mode, frame.Phase, frameLabel(frame)),
+		Extra: itemExtra,
+	}
+}
+
+func serializeFrameActions(frame interaction.InteractionFrame) map[string]string {
 	extra := map[string]string{
 		"mode":  frame.Mode,
 		"phase": frame.Phase,
 		"kind":  string(frame.Kind),
 	}
-
-	// Serialize action slots into extra for the notification bar.
 	for i, a := range frame.Actions {
 		prefix := fmt.Sprintf("action_%d", i)
 		extra[prefix+"_id"] = a.ID
@@ -116,16 +52,7 @@ func (q *NotificationQueue) PushInteraction(frame interaction.InteractionFrame) 
 		}
 	}
 	extra["action_count"] = fmt.Sprintf("%d", len(frame.Actions))
-
-	msg := fmt.Sprintf("[%s/%s] %s", frame.Mode, frame.Phase, frameLabel(frame))
-
-	q.Push(NotificationItem{
-		ID:   id,
-		Kind: NotifKindInteraction,
-		Msg:  msg,
-		Extra: extra,
-	})
-	return id
+	return extra
 }
 
 func frameLabel(frame interaction.InteractionFrame) string {
@@ -195,6 +122,16 @@ func ResolveInteractionKey(item NotificationItem, key string) (interaction.UserR
 	}
 
 	return interaction.UserResponse{}, false
+}
+
+func notificationAllowsFreetext(item NotificationItem) bool {
+	count, _ := strconv.Atoi(item.Extra["action_count"])
+	for i := 0; i < count; i++ {
+		if item.Extra[fmt.Sprintf("action_%d_kind", i)] == string(interaction.ActionFreetext) {
+			return true
+		}
+	}
+	return false
 }
 
 // RenderInteractionNotification renders the notification bar for an

@@ -27,7 +27,7 @@ var (
 				Bold(true)
 
 	eucloPhaseCompletedStyle = lipgloss.NewStyle().
-				Foreground(colorSuccess)
+					Foreground(colorSuccess)
 
 	eucloPhasePendingStyle = lipgloss.NewStyle().
 				Foreground(colorDim)
@@ -37,7 +37,7 @@ var (
 					Bold(true)
 
 	eucloFindingWarningStyle = lipgloss.NewStyle().
-				Foreground(colorWarning)
+					Foreground(colorWarning)
 
 	eucloFindingInfoStyle = lipgloss.NewStyle().
 				Foreground(colorDim)
@@ -147,6 +147,9 @@ func renderQuestion(frame interaction.InteractionFrame) string {
 	var b strings.Builder
 	b.WriteString(sectionHeaderStyle.Render("Question") + "\n")
 	b.WriteString(content.Question + "\n")
+	if content.Description != "" {
+		b.WriteString(dimStyle.Render(content.Description) + "\n")
+	}
 	for i, opt := range content.Options {
 		b.WriteString(fmt.Sprintf("  %s %s\n",
 			headerStyle.Render(fmt.Sprintf("[%d]", i+1)),

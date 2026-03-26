@@ -11,27 +11,37 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/guidance"
 )
 
-// Run bootstraps the TUI. This is the public entrypoint called by cmd/start.go.
+// Run bootstraps the TUI without a euclo plugin. This is the public entrypoint
+// called by cmd/start.go when no agent-specific plugin is provided.
 func Run(ctx context.Context, rt *runtimesvc.Runtime) error {
+	return RunWithEuclo(ctx, rt, nil)
+}
+
+// RunWithEuclo bootstraps the TUI with an optional EucloPlugin that injects
+// euclo-specific panes, tabs, and an interaction emitter.
+func RunWithEuclo(ctx context.Context, rt *runtimesvc.Runtime, plugin *EucloPlugin) error {
 	if rt == nil {
 		return fmt.Errorf("runtime is required")
 	}
-	m := newRootModel(newRuntimeAdapter(rt))
+	adapter := newRuntimeAdapter(rt)
+	m := newRootModel(adapter, plugin)
 	program := tea.NewProgram(
 		m,
 		tea.WithContext(ctx),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
-	// Inject the interaction emitter into the euclo agent after program is created
-	emitter := NewTUIFrameEmitter(program)
-	if m.runtime != nil {
-		m.runtime.SetInteractionEmitter(emitter)
+	// Inject the interaction emitter into the euclo agent after program is created.
+	if plugin != nil && plugin.NewEmitter != nil {
+		emitter := plugin.NewEmitter(program)
+		m.eucloEmitter = emitter
+		if adapter != nil {
+			adapter.SetInteractionEmitter(emitter)
+		}
 	}
-	m.eucloEmitter = emitter
-
 	final, err := program.Run()
 	if rm, ok := final.(RootModel); ok {
 		rm.cleanup()
@@ -43,19 +53,29 @@ func Run(ctx context.Context, rt *runtimesvc.Runtime) error {
 // messages to focused panes.  Panes are held by pointer so mutations survive
 // the value-semantics copy that Bubble Tea makes on every Update call.
 type RootModel struct {
+	// Layout and tab registry (Phase A infrastructure).
+	layout    ChromeLayout
+	tabs      *TabRegistry
+	subTabBar SubTabBar
+
 	// Components (value types — cheap to copy)
-	titleBar TitleBar
-	tabBar   TabBar
-	notifBar *NotificationBar
-	inputBar *InputBar
-	notifQ   *NotificationQueue
+	titleBar   TitleBar
+	tabBar     TabBar
+	notifBar   *NotificationBar
+	inputBar   *InputBar
+	cmdPalette *CommandPalette
+	notifQ     *NotificationQueue
 
 	// Panes (pointer types — mutations survive tea.Model value copies)
-	chat     *ChatPane
-	tasks    *TasksPane
-	session  *SessionPane
-	settings *SettingsPane
-	tools    *ToolsPane
+	// chat, planner, debug use interfaces so the euclo plugin can inject
+	// its implementations; the concrete *ChatPane/*PlannerPane/*DebugPane still
+	// live in this package and are the default implementations.
+	chat    ChatPaner
+	tasks   *TasksPane
+	session *SessionPane
+	planner PlannerPaner
+	debug   DebugPaner
+	config  *ConfigPane
 
 	// Shared state
 	activeTab    TabID
@@ -74,17 +94,47 @@ type RootModel struct {
 	store      *SessionStore
 
 	// Interaction emitter for euclo agent
-	eucloEmitter *TUIFrameEmitter
+	eucloEmitter EucloEmitter
 
 	// HITL subscription
 	hitlCh    <-chan fauthorization.HITLEvent
 	hitlUnsub func()
 
+	guidanceCh    <-chan guidance.GuidanceEvent
+	guidanceUnsub func()
+
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
+
+	// Guidance panel (Phase B): renders above input bar when open.
+	hitlPanel GuidancePanel
+
+	// Phase G: instance-based command registry and corpus scope.
+	cmdReg *CommandRegistry
+	scope  string
 }
 
-func newRootModel(rt RuntimeAdapter) RootModel {
+type plannerDataRuntime interface {
+	QueryPatternProposals(scope string) ([]PatternProposalInfo, error)
+	QueryConfirmedPatterns(scope string) ([]PatternRecordInfo, error)
+	QueryIntentGaps(filePath, scope string) ([]IntentGapInfo, error)
+	QueryTensions(scope string) ([]TensionInfo, error)
+	LoadActivePlan(workflowID string) (*LivePlanInfo, error)
+	AddPlanNote(stepRef string, body string) error
+	GetPlanDiff(workflowID string) (PlanDiffInfo, error)
+	GetLatestTrace() (TraceInfo, error)
+}
+
+type debugExecRuntime interface {
+	RunTests(pkg string) (DebugTestResultMsg, error)
+	RunBenchmark(pkg string) (DebugBenchmarkResultMsg, error)
+}
+
+func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
+	var plugin *EucloPlugin
+	if len(plugins) > 0 {
+		plugin = plugins[0]
+	}
 	info := SessionInfo{MaxTokens: 100000}
 	if rt != nil {
 		info = rt.SessionInfo()
@@ -112,12 +162,48 @@ func newRootModel(rt RuntimeAdapter) RootModel {
 	if info.Workspace != "" {
 		inputBar.SetWorkspace(info.Workspace)
 	}
+	if rt != nil {
+		inputBar.SetRuntime(rt)
+	}
+	inputBar.SetCommandRegistry(rootCommandRegistry)
+	inputBar.SetContext(TabChat, SubTabChatLocalEdit)
+
+	// Build tab registry: euclo tabs (if plugin provided) + universal config + session tabs.
+	tabs := NewTabRegistry()
+	if plugin != nil && plugin.SetupTabs != nil {
+		plugin.SetupTabs(tabs)
+	} else {
+		registerEucloTabs(tabs)
+	}
+	tabs.Register(TabDefinition{
+		ID:    TabConfig,
+		Label: "config",
+	})
+	tabs.Register(TabDefinition{
+		ID:    TabSession,
+		Label: "session",
+		SubTabs: []SubTabDefinition{
+			{SubTabSessionLive, "live"},
+			{SubTabSessionTasks, "tasks"},
+			{SubTabSessionSettings, "settings"},
+		},
+	})
+	tabs.SetActive(TabChat)
+	tabs.SetSubActive(TabChat, SubTabChatLocalEdit)
+	tabs.SetSubActive(TabSession, SubTabSessionLive)
+
+	tabBar := NewTabBar(TabChat)
+	tabBar.SetRegistry(tabs)
 
 	m := RootModel{
+		tabs:         tabs,
+		subTabBar:    NewSubTabBar(tabs.ActiveTab()),
+		hitlPanel:    newGuidancePanel(),
 		titleBar:     NewTitleBar(info),
-		tabBar:       NewTabBar(TabChat),
+		tabBar:       tabBar,
 		notifBar:     NewNotificationBar(notifQ),
 		inputBar:     inputBar,
+		cmdPalette:   NewCommandPalette(),
 		notifQ:       notifQ,
 		activeTab:    TabChat,
 		titleVisible: true,
@@ -125,6 +211,8 @@ func newRootModel(rt RuntimeAdapter) RootModel {
 		sharedCtx:    ctx,
 		runtime:      rt,
 		taskRunIDs:   make(map[string]bool),
+		cmdReg:       rootCommandRegistry,
+		scope:        info.Workspace,
 	}
 
 	var store *SessionStore
@@ -133,13 +221,127 @@ func newRootModel(rt RuntimeAdapter) RootModel {
 	}
 	m.store = store
 
-	m.chat = NewChatPane(rt, ctx, sess, notifQ)
+	if plugin != nil && plugin.NewChat != nil {
+		m.chat = plugin.NewChat(rt, ctx, sess, notifQ)
+	} else {
+		m.chat = NewChatPane(rt, ctx, sess, notifQ)
+	}
 	m.tasks = NewTasksPane(rt, notifQ)
 	m.session = NewSessionPane(ctx, sess, rt)
-	m.settings = NewSettingsPane(rt, store)
-	m.tools = NewToolsPane(rt)
+	m.session.SyncQueuedTasks(m.tasks.Items())
+	if plugin != nil && plugin.NewPlanner != nil {
+		m.planner = plugin.NewPlanner()
+	} else {
+		m.planner = NewPlannerPane()
+	}
+	if plugin != nil && plugin.NewDebug != nil {
+		m.debug = plugin.NewDebug()
+	} else {
+		m.debug = NewDebugPane()
+	}
+	m.config = NewConfigPane(rt)
 
 	return m
+}
+
+func (m *RootModel) syncCommandPalette() {
+	if m.inputBar == nil || m.cmdPalette == nil {
+		return
+	}
+	open, items, sel := m.inputBar.PaletteState()
+	m.cmdPalette.Sync(open, items, sel, m.width)
+}
+
+func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
+	loader, ok := m.runtime.(plannerDataRuntime)
+	if !ok {
+		if m.activeTab == TabSession && m.tabs.ActiveSubTab() == SubTabSessionLive && m.runtime != nil {
+			return func() tea.Msg {
+				workflows, _ := m.runtime.ListWorkflows(3)
+				return SessionLiveSnapshotMsg{
+					Info:      m.runtime.Diagnostics(),
+					Workflows: workflows,
+					Providers: m.runtime.ListLiveProviders(),
+					Approvals: m.runtime.ListApprovals(),
+				}
+			}
+		}
+		return nil
+	}
+	switch m.activeTab {
+	case TabPlanner:
+		switch m.tabs.ActiveSubTab() {
+		case SubTabPlannerExplore:
+			return func() tea.Msg {
+				records, err := loader.QueryConfirmedPatterns(m.scope)
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("planner load failed: %v", err)}
+				}
+				proposals, err := loader.QueryPatternProposals(m.scope)
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("planner load failed: %v", err)}
+				}
+				return PlannerPatternsMsg{Records: records, Proposals: proposals}
+			}
+		case SubTabPlannerAnalyze:
+			return func() tea.Msg {
+				tensions, err := loader.QueryTensions(m.scope)
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("analysis load failed: %v", err)}
+				}
+				gaps, err := loader.QueryIntentGaps("", m.scope)
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("analysis load failed: %v", err)}
+				}
+				return PlannerTensionsMsg{Tensions: tensions, Gaps: gaps}
+			}
+		case SubTabPlannerFinalize:
+			return func() tea.Msg {
+				plan, err := loader.LoadActivePlan("")
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("plan load failed: %v", err)}
+				}
+				if plan == nil {
+					return PlannerPlanMsg{}
+				}
+				return PlannerPlanMsg{Plan: *plan}
+			}
+		}
+	case TabDebug:
+		switch m.tabs.ActiveSubTab() {
+		case SubTabDebugTest, SubTabDebugBenchmark:
+			return nil
+		case SubTabDebugTrace:
+			return func() tea.Msg {
+				trace, err := loader.GetLatestTrace()
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("trace load failed: %v", err)}
+				}
+				return DebugTraceMsg{Trace: trace}
+			}
+		case SubTabDebugPlanDiff:
+			return func() tea.Msg {
+				diff, err := loader.GetPlanDiff("")
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("plan diff load failed: %v", err)}
+				}
+				return DebugPlanDiffMsg{Diff: diff}
+			}
+		}
+	case TabSession:
+		if m.tabs.ActiveSubTab() == SubTabSessionLive && m.runtime != nil {
+			return func() tea.Msg {
+				workflows, _ := m.runtime.ListWorkflows(3)
+				return SessionLiveSnapshotMsg{
+					Info:      m.runtime.Diagnostics(),
+					Workflows: workflows,
+					Providers: m.runtime.ListLiveProviders(),
+					Approvals: m.runtime.ListApprovals(),
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // sessionFoundMsg carries the latest persisted session found at startup.
@@ -157,9 +359,9 @@ func (m RootModel) Init() tea.Cmd {
 		textinput.Blink,
 		m.chat.Init(),
 		m.session.Init(),
-		m.settings.Init(),
 		m.restorePromptCmd(),
 		m.subscribeHITLCmd(),
+		m.subscribeGuidanceCmd(),
 	)
 }
 
@@ -190,6 +392,17 @@ func (m RootModel) subscribeHITLCmd() tea.Cmd {
 	}
 }
 
+func (m RootModel) subscribeGuidanceCmd() tea.Cmd {
+	rt := m.runtime
+	return func() tea.Msg {
+		if rt == nil {
+			return nil
+		}
+		ch, unsub := rt.SubscribeGuidance()
+		return guidanceSubscribedMsg{ch: ch, unsub: unsub}
+	}
+}
+
 // Update is the central message router.
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -201,13 +414,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGlobalKey(msg.Key)
 
 	case tea.KeyMsg:
-		// Quit shortcuts bypass the input bar.
+		// Quit shortcuts bypass everything.
 		switch msg.String() {
 		case "ctrl+c", "ctrl+d":
 			return m, tea.Batch(func() tea.Msg { m.cleanup(); return nil }, tea.Quit)
 		}
-		// Notification bar captures keys when active.
-		if m.notifBar.Active() {
+		// Guidance panel captures all keys when open.
+		if m.hitlPanel.IsOpen() {
+			panel, cmd := m.hitlPanel.Update(msg)
+			m.hitlPanel = panel
+			return m, cmd
+		}
+		// Notification bar captures keys when active unless the current guidance
+		// request expects freetext input through the input bar.
+		if m.notifBar.Active() && !m.shouldRouteNotificationKeyToInput(msg) {
 			nb, cmd := m.notifBar.Update(msg)
 			m.notifBar = nb
 			return m, cmd
@@ -215,29 +435,47 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Route to input bar first.
 		ib, ibCmd := m.inputBar.Update(msg, m.activeTab)
 		m.inputBar = ib
+		m.syncCommandPalette()
 		return m, ibCmd
 
 	case InputSubmittedMsg:
+		if m.cmdPalette != nil {
+			m.cmdPalette.Close()
+		}
 		return m.handleInputSubmitted(msg.Value)
 
 	case CommandInvokedMsg:
+		if m.cmdPalette != nil {
+			m.cmdPalette.Close()
+		}
 		nm, cmd := executeCommand(&m, msg.Name, msg.Args)
 		return *nm, cmd
 
 	// Notification responses
 	case NotifHITLApproveMsg:
-		cmds := []tea.Cmd{approveHITLRootCmd(m.chat.hitlSvc, msg.ID, msg.Scope)}
+		var hitlSvc hitlService
+		if m.chat != nil {
+			hitlSvc = m.chat.HITLService()
+		}
+		cmds := []tea.Cmd{approveHITLRootCmd(hitlSvc, msg.ID, msg.Scope)}
 		if msg.Scope == fauthorization.GrantScopePersistent {
 			cmds = append(cmds, savePolicyCmd(m.runtime, msg.Action))
 		}
 		return m, tea.Batch(cmds...)
 	case NotifHITLDenyMsg:
-		return m, denyHITLRootCmd(m.chat.hitlSvc, msg.ID)
+		var hitlSvc hitlService
+		if m.chat != nil {
+			hitlSvc = m.chat.HITLService()
+		}
+		return m, denyHITLRootCmd(hitlSvc, msg.ID)
 	case NotifDismissMsg:
 		m.notifQ.Resolve(msg.ID)
+		m.syncCommandPalette()
 		return m, nil
 	case NotifRestoreSessionMsg:
 		return m.handleRestoreSession(msg.ID)
+	case NotifReviewDeferredMsg:
+		return rootHandleDeferred(&m, nil)
 
 	// Stream events — always routed to chat pane regardless of active tab.
 	case streamDoneMsg:
@@ -246,6 +484,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.session.SyncContext(m.sharedCtx)
 		if m.taskRunIDs[msg.RunID] {
 			m.tasks.MarkComplete(msg.RunID)
+			m.session.SyncQueuedTasks(m.tasks.Items())
 			delete(m.taskRunIDs, msg.RunID)
 		}
 		return m, m.dequeueNextTask()
@@ -270,17 +509,52 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// Settings pane models.
-	case settingsModelsMsg:
-		sp, cmd := m.settings.Update(msg)
-		m.settings = sp
+	case guidanceSubscribedMsg:
+		m.guidanceCh = msg.ch
+		m.guidanceUnsub = msg.unsub
+		if m.guidanceCh != nil {
+			return m, listenGuidanceEvents(m.guidanceCh)
+		}
+		return m, nil
+
+	// Diagnostics snapshot — route to session pane regardless of active tab.
+	case DiagnosticsUpdatedMsg:
+		if m.session != nil {
+			m.session.SetDiagnostics(msg.Info)
+		}
+		return m, nil
+	case SessionLiveSnapshotMsg:
+		if m.session != nil {
+			m.session.SetLiveSnapshot(msg.Info, msg.Workflows, msg.Providers, msg.Approvals)
+		}
+		return m, nil
+
+	// Config refresh — forward to config pane regardless of active tab.
+	case configRefreshMsg:
+		cp, cmd := m.config.Update(msg)
+		m.config = cp
 		return m, cmd
 
-	// Settings pane sessions.
-	case settingsSessionsMsg:
-		sp, cmd := m.settings.Update(msg)
-		m.settings = sp
+	// Debug data messages — route to debug pane regardless of active tab.
+	case DebugTestResultMsg, DebugBenchmarkResultMsg, DebugTraceMsg, DebugPlanDiffMsg:
+		dp, cmd := m.debug.Update(msg)
+		m.debug = dp
 		return m, cmd
+
+	// Planner data messages — route to planner regardless of active tab.
+	case PlannerPatternsMsg, PlannerTensionsMsg, PlannerPlanMsg:
+		pp, cmd := m.planner.Update(msg)
+		m.planner = pp
+		return m, cmd
+	case plannerNoteAddedMsg:
+		if loader, ok := m.runtime.(plannerDataRuntime); ok {
+			if err := loader.AddPlanNote(msg.stepID, msg.note); err != nil {
+				m.addSystemMessage(fmt.Sprintf("plan note save failed: %v", err))
+			}
+		}
+		pp, cmd := m.planner.Update(msg)
+		m.planner = pp
+		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
 
 	// File index for session pane.
 	case fileIndexMsg:
@@ -299,23 +573,46 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleHITLEvent(msg)
 	case hitlResolvedMsg:
 		return m.handleHITLResolved(msg)
+	case guidanceEventMsg:
+		return m.handleGuidanceEvent(msg)
+	case guidanceResolvedMsg:
+		return m.handleGuidanceResolved(msg)
+	case NotifGuidanceResolveMsg:
+		return m, guidanceRequestCmd(m.runtime, msg.RequestID, msg.ChoiceID, msg.Freetext)
+
+	// Guidance panel responses.
+	case GuidancePanelSubmitMsg:
+		m.syncCommandPalette()
+		return m, guidanceRequestCmd(m.runtime, msg.RequestID, "", msg.Response)
+	case GuidancePanelDeferMsg:
+		// Defer: resolve with empty choice (system records as deferred observation).
+		m.syncCommandPalette()
+		return m, guidanceRequestCmd(m.runtime, msg.RequestID, "defer", "")
+	case GuidancePanelAnnotateMsg:
+		// Annotation saved; panel stays open — no further model action needed here.
+		return m, nil
+	case GuidancePanelJumpExploreMsg:
+		// Jump to planner/explore at the relevant pattern.
+		m.setActiveTab(TabPlanner)
+		m.setActiveSubTab(SubTabPlannerExplore)
+		return m, m.refreshActiveSurfaceCmd()
 
 	// Euclo interaction frame handling.
-	case eucloFrameMsg:
-		// Push the frame as an interactive notification
+	case EucloFrameMsg:
+		// Push the frame as an interactive notification.
 		if m.notifQ != nil {
-			m.notifQ.PushInteraction(msg.frame)
+			m.notifQ.PushInteraction(msg.Frame)
 		}
-		// Add the rendered frame to the chat feed
-		if m.chat != nil && m.chat.feed != nil {
-			m.chat.feed.AppendMessage(msg.message)
+		// Add the rendered frame to the chat feed.
+		if m.chat != nil {
+			m.chat.AppendMessage(msg.Msg)
 		}
 		return m, nil
 
 	// Euclo interaction response handling.
-	case eucloResponseMsg:
+	case EucloResponseMsg:
 		if m.eucloEmitter != nil {
-			m.eucloEmitter.Resolve(msg.response)
+			m.eucloEmitter.Resolve(msg.Response)
 		}
 		return m, nil
 
@@ -341,6 +638,42 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.addSystemMessage(fmt.Sprintf("✓ committed: %s", msg.Message))
 		return m, nil
+
+	case gitDiffStatMsg:
+		if msg.Err != nil {
+			m.addSystemMessage(fmt.Sprintf("Review failed: %v", msg.Err))
+			return m, nil
+		}
+		if msg.Output == "" {
+			m.addSystemMessage("no changes since last commit")
+			return m, nil
+		}
+		m.addSystemMessage(fmt.Sprintf("Changes since last commit:\n\n%s", msg.Output))
+		return m, nil
+
+	case compactResultMsg:
+		if msg.err != nil {
+			// Roll back the undo snapshot we pushed before the call.
+			if m.chat != nil {
+				m.chat.RollbackLastUndo()
+			}
+			m.addSystemMessage(fmt.Sprintf("Compact failed: %v", msg.err))
+			return m, nil
+		}
+		if m.chat != nil {
+			m.chat.ClearMessages()
+			m.chat.AddSystemMessage(fmt.Sprintf(
+				"Session compacted — %d messages → 1 summary. [ctrl+z to undo]",
+				msg.originalCount,
+			))
+			m.chat.AppendMessage(Message{
+				ID:        fmt.Sprintf("compact-%d", time.Now().UnixNano()),
+				Role:      RoleAgent,
+				Timestamp: time.Now(),
+				Content:   MessageContent{Text: msg.summary},
+			})
+		}
+		return m, nil
 	}
 
 	// Route to active pane + chat (chat always listens for stream/spinner msgs).
@@ -359,27 +692,27 @@ func (m RootModel) routeToActivePanes(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.activeTab {
-	case TabTasks:
-		tp, cmd := m.tasks.Update(msg)
-		m.tasks = tp
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
 	case TabSession:
 		sp, cmd := m.session.Update(msg)
 		m.session = sp
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case TabSettings:
-		sp, cmd := m.settings.Update(msg)
-		m.settings = sp
+	case TabPlanner:
+		pp, cmd := m.planner.Update(msg)
+		m.planner = pp
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case TabTools:
-		tp, cmd := m.tools.Update(msg)
-		m.tools = tp
+	case TabDebug:
+		dp, cmd := m.debug.Update(msg)
+		m.debug = dp
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	case TabConfig:
+		cp, cmd := m.config.Update(msg)
+		m.config = cp
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -400,12 +733,34 @@ func (m RootModel) View() string {
 		parts = append(parts, m.titleBar.View())
 	}
 
+	// Subtab bar (always present; renders empty row when no subtabs).
+	parts = append(parts, m.subTabBar.View())
+
 	// Active pane content.
 	parts = append(parts, m.activePaneView())
 
-	// Notification banner (conditional).
-	if m.notifBar.Active() {
-		parts = append(parts, m.notifBar.View())
+	overlay := overlayPanelView(
+		func() string {
+			if m.notifBar != nil && m.notifBar.Active() {
+				return m.notifBar.View()
+			}
+			return ""
+		}(),
+		func() string {
+			if m.cmdPalette != nil && m.cmdPalette.IsOpen() {
+				return m.cmdPalette.View()
+			}
+			return ""
+		}(),
+		func() string {
+			if m.hitlPanel.IsOpen() {
+				return m.hitlPanel.View()
+			}
+			return ""
+		}(),
+	)
+	if overlay != "" {
+		parts = append(parts, overlay)
 	}
 
 	// Input bar (always).
@@ -414,6 +769,7 @@ func (m RootModel) View() string {
 
 	// Tab bar (always).
 	parts = append(parts, m.tabBar.View())
+	parts = append(parts, m.renderStatusBar())
 
 	base := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
@@ -426,14 +782,14 @@ func (m RootModel) View() string {
 
 func (m RootModel) activePaneView() string {
 	switch m.activeTab {
-	case TabTasks:
-		return m.tasks.View()
 	case TabSession:
 		return m.session.View()
-	case TabSettings:
-		return m.settings.View()
-	case TabTools:
-		return m.tools.View()
+	case TabPlanner:
+		return m.planner.View()
+	case TabDebug:
+		return m.debug.View()
+	case TabConfig:
+		return m.config.View()
 	default:
 		return m.chat.View()
 	}
@@ -445,24 +801,27 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.height = msg.Height
 	m.ready = true
 
-	_, paneH, _, _ := m.layoutHeights()
+	m.layout.Recalculate(msg.Width, msg.Height)
+	paneH := m.layout.MainPaneHeight(0)
 
 	m.titleBar.SetWidth(msg.Width)
+	m.subTabBar.SetWidth(msg.Width)
 	m.tabBar.SetWidth(msg.Width)
 	m.notifBar.SetWidth(msg.Width)
 	m.inputBar.SetWidth(msg.Width)
 	m.help.SetSize(msg.Width, msg.Height)
 
 	m.chat.SetSize(msg.Width, paneH)
-	m.tasks.SetSize(msg.Width, paneH)
 	m.session.SetSize(msg.Width, paneH)
-	m.settings.SetSize(msg.Width, paneH)
-	m.tools.SetSize(msg.Width, paneH)
+	m.planner.SetSize(msg.Width, paneH)
+	m.debug.SetSize(msg.Width, paneH)
+	m.config.SetSize(msg.Width, paneH)
 
 	return m, nil
 }
 
 // layoutHeights computes component heights for the current terminal size.
+// It remains as a small compatibility wrapper around ChromeLayout.
 func (m RootModel) layoutHeights() (title, pane, input, tab int) {
 	title = 0
 	if m.titleVisible {
@@ -481,48 +840,94 @@ func (m RootModel) layoutHeights() (title, pane, input, tab int) {
 	return
 }
 
+// setActiveTab updates activeTab on the model, the tab bar, the tab registry,
+// and the subtab bar consistently.
+func (m *RootModel) setActiveTab(id TabID) {
+	m.activeTab = id
+	m.tabBar.SetActive(id)
+	m.tabs.SetActive(id)
+	m.subTabBar.SetSubTabs(m.tabs.ActiveTab())
+	sub := m.tabs.ActiveSubTab()
+	m.inputBar.SetContext(id, sub)
+	m.syncCommandPalette()
+	if id == TabChat && m.chat != nil {
+		m.chat.SetSubTab(sub)
+	}
+	if id == TabPlanner && m.planner != nil {
+		m.planner.SetSubTab(sub)
+	}
+	if id == TabDebug && m.debug != nil {
+		m.debug.SetSubTab(sub)
+	}
+	if id == TabSession && m.session != nil {
+		m.session.SetSubTab(sub)
+	}
+}
+
+// setActiveSubTab changes the active subtab for the current main tab and
+// notifies panes that care about subtab changes.
+func (m *RootModel) setActiveSubTab(sub SubTabID) {
+	m.tabs.SetSubActive(m.activeTab, sub)
+	m.subTabBar.SetActive(sub)
+	m.inputBar.SetContext(m.activeTab, sub)
+	m.syncCommandPalette()
+	if m.activeTab == TabChat && m.chat != nil {
+		m.chat.SetSubTab(sub)
+	}
+	if m.activeTab == TabPlanner && m.planner != nil {
+		m.planner.SetSubTab(sub)
+	}
+	if m.activeTab == TabDebug && m.debug != nil {
+		m.debug.SetSubTab(sub)
+	}
+	if m.activeTab == TabSession && m.session != nil {
+		m.session.SetSubTab(sub)
+	}
+}
+
 // handleGlobalKey processes navigation keys emitted by InputBar when the
 // input field is empty.
 func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "ctrl+c", "ctrl+d":
 		return m, tea.Batch(func() tea.Msg { m.cleanup(); return nil }, tea.Quit)
-	case "1":
-		m.activeTab = TabChat
-		m.tabBar.SetActive(TabChat)
-	case "2":
-		m.activeTab = TabTasks
-		m.tabBar.SetActive(TabTasks)
-	case "3":
-		m.activeTab = TabSession
-		m.tabBar.SetActive(TabSession)
-	case "4":
-		m.activeTab = TabSettings
-		m.tabBar.SetActive(TabSettings)
-	case "5":
-		m.activeTab = TabTools
-		m.tabBar.SetActive(TabTools)
+	case "1", "2", "3", "4", "5", "6":
+		idx := int(key[0]-'0') - 1
+		id := m.tabs.TabAtIndex(idx)
+		if id != "" {
+			m.setActiveTab(id)
+			return m, m.refreshActiveSurfaceCmd()
+		}
 	case "tab":
-		next := TabID(int(m.activeTab)%5 + 1)
-		m.activeTab = next
-		m.tabBar.SetActive(next)
+		m.setActiveTab(m.tabs.CycleNext())
+		return m, m.refreshActiveSurfaceCmd()
 	case "shift+tab":
-		prev := TabID((int(m.activeTab)-2+5)%5 + 1)
-		m.activeTab = prev
-		m.tabBar.SetActive(prev)
+		m.setActiveTab(m.tabs.CyclePrev())
+		return m, m.refreshActiveSurfaceCmd()
+	case "]":
+		m.setActiveSubTab(m.tabs.CycleSubNext())
+		return m, m.refreshActiveSurfaceCmd()
+	case "[":
+		m.setActiveSubTab(m.tabs.CycleSubPrev())
+		return m, m.refreshActiveSurfaceCmd()
 	case "ctrl+t":
 		m.titleVisible = !m.titleVisible
-		_, paneH, _, _ := m.layoutHeights()
+		if m.titleVisible {
+			m.layout.TitleHeight = 1
+		} else {
+			m.layout.TitleHeight = 0
+		}
+		paneH := m.layout.MainPaneHeight(0)
 		m.chat.SetSize(m.width, paneH)
-		m.tasks.SetSize(m.width, paneH)
 		m.session.SetSize(m.width, paneH)
-		m.settings.SetSize(m.width, paneH)
-		m.tools.SetSize(m.width, paneH)
+		m.planner.SetSize(m.width, paneH)
+		m.debug.SetSize(m.width, paneH)
+		m.config.SetSize(m.width, paneH)
 	case "ctrl+f":
 		m.searchActive = !m.searchActive
 		m.inputBar.SetSearchMode(m.searchActive)
 		if !m.searchActive && m.chat != nil {
-			m.chat.feed.SetSearchFilter("")
+			m.chat.SetSearchFilter("")
 		}
 	case "?":
 		m.showHelp = !m.showHelp
@@ -534,7 +939,7 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 		m.searchActive = false
 		m.inputBar.SetSearchMode(false)
 		if m.chat != nil {
-			m.chat.feed.SetSearchFilter("")
+			m.chat.SetSearchFilter("")
 		}
 	case "ctrl+z":
 		// Undo: revert to previous feed snapshot
@@ -553,17 +958,17 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 	case "ctrl+u":
 		// Scroll up: scroll the chat feed up
 		if m.chat != nil && m.activeTab == TabChat {
-			m.chat.feed.ScrollUp()
+			m.chat.ScrollUp()
 		}
 	case "pagedown":
 		// Page down: scroll the chat feed down by page
 		if m.chat != nil && m.activeTab == TabChat {
-			m.chat.feed.PageDown()
+			m.chat.PageDown()
 		}
 	case "pageup":
 		// Page up: scroll the chat feed up by page
 		if m.chat != nil && m.activeTab == TabChat {
-			m.chat.feed.PageUp()
+			m.chat.PageUp()
 		}
 	case "@":
 		// File picker: enable file selection mode in input
@@ -581,21 +986,61 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 func (m RootModel) handleInputSubmitted(value string) (tea.Model, tea.Cmd) {
 	value = strings.TrimSpace(value)
 	if value == "" {
+		if m.cmdPalette != nil {
+			m.cmdPalette.Close()
+		}
 		return m, nil
+	}
+	if requestID, ok := m.activeGuidanceFreetextRequestID(); ok && !strings.HasPrefix(value, "/") {
+		if m.notifQ != nil {
+			m.notifQ.Resolve(requestID)
+		}
+		return m, guidanceRequestCmd(m.runtime, requestID, "", value)
 	}
 	// Search mode: filter the chat feed instead of submitting a prompt.
 	if m.searchActive && m.chat != nil {
-		m.chat.feed.SetSearchFilter(value)
+		m.chat.SetSearchFilter(value)
 		return m, nil
 	}
 	switch m.activeTab {
-	case TabTasks:
-		cmd := m.tasks.HandleInputSubmit(value)
-		dequeueCmd := m.dequeueNextTask()
-		return m, tea.Batch(cmd, dequeueCmd)
 	case TabSession:
 		m.session.HandleFilterInput(value)
 		return m, nil
+	case TabPlanner:
+		cmd := m.planner.HandleInputSubmit(value)
+		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
+	case TabDebug:
+		cmd := m.debug.HandleInputSubmit(value)
+		if runner, ok := m.runtime.(debugExecRuntime); ok {
+			switch m.tabs.ActiveSubTab() {
+			case SubTabDebugTest:
+				return m, tea.Batch(cmd, func() tea.Msg {
+					result, err := runner.RunTests(value)
+					if result.Package == "" {
+						result.Package = strings.TrimSpace(value)
+					}
+					if err != nil {
+						result.Err = err
+					}
+					return result
+				})
+			case SubTabDebugBenchmark:
+				return m, tea.Batch(cmd, func() tea.Msg {
+					result, err := runner.RunBenchmark(value)
+					if result.Package == "" {
+						result.Package = strings.TrimSpace(value)
+					}
+					if err != nil {
+						result.Err = err
+					}
+					return result
+				})
+			}
+		}
+		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
+	case TabConfig:
+		// Config pane input: trigger refresh (any non-empty text acts as refresh).
+		return m, func() tea.Msg { return configRefreshMsg{} }
 	default:
 		cmd := m.chat.HandleInputSubmit(value)
 		return m, cmd
@@ -614,7 +1059,7 @@ func (m RootModel) handleRestoreSession(id string) (tea.Model, tea.Cmd) {
 	}
 	m.notifQ.Resolve(id)
 	for _, msg := range rec.Messages {
-		m.chat.feed.AppendMessage(msg)
+		m.chat.AppendMessage(msg)
 	}
 	if rec.Context != nil {
 		m.sharedCtx.Files = rec.Context.Files
@@ -626,7 +1071,7 @@ func (m RootModel) handleRestoreSession(id string) (tea.Model, tea.Cmd) {
 // addSystemMessage adds a system line to the chat feed.
 func (m *RootModel) addSystemMessage(text string) {
 	if m.chat != nil {
-		m.chat.addSystemMessage(text)
+		m.chat.AddSystemMessage(text)
 	}
 }
 
@@ -642,7 +1087,7 @@ func (m RootModel) autoSave() {
 			Workspace: m.sharedSess.Workspace,
 			UpdatedAt: time.Now(),
 		},
-		Messages: m.chat.feed.Messages(),
+		Messages: m.chat.Messages(),
 		Context:  m.sharedCtx,
 	}
 	_ = m.store.Save(rec) // fire-and-forget; errors are silently dropped
@@ -653,6 +1098,9 @@ func (m RootModel) cleanup() {
 	if m.hitlUnsub != nil {
 		m.hitlUnsub()
 	}
+	if m.guidanceUnsub != nil {
+		m.guidanceUnsub()
+	}
 	if m.chat != nil {
 		m.chat.Cleanup()
 	}
@@ -661,8 +1109,10 @@ func (m RootModel) cleanup() {
 // handleHITLEvent processes HITL events from the subscription.
 func (m RootModel) handleHITLEvent(msg hitlEventMsg) (RootModel, tea.Cmd) {
 	var pending []*fauthorization.PermissionRequest
-	if m.chat != nil && m.chat.hitlSvc != nil {
-		pending = m.chat.hitlSvc.PendingHITL()
+	if m.chat != nil {
+		if svc := m.chat.HITLService(); svc != nil {
+			pending = svc.PendingHITL()
+		}
 	}
 	switch msg.event.Type {
 	case fauthorization.HITLEventRequested:
@@ -705,6 +1155,104 @@ func (m RootModel) handleHITLResolved(msg hitlResolvedMsg) (RootModel, tea.Cmd) 
 	return m, listenHITLEvents(m.hitlCh)
 }
 
+func (m RootModel) handleGuidanceEvent(msg guidanceEventMsg) (RootModel, tea.Cmd) {
+	switch msg.event.Type {
+	case guidance.GuidanceEventRequested:
+		if msg.event.Request != nil {
+			req := msg.event.Request
+			m.hitlPanel.Open(guidanceKindToTrigger(req.Kind), req.ID, req.Title, req.Description, nil, "", "")
+		}
+	case guidance.GuidanceEventResolved, guidance.GuidanceEventExpired:
+		if msg.event.Request != nil {
+			if m.hitlPanel.IsOpen() && m.hitlPanel.RequestID() == msg.event.Request.ID {
+				m.hitlPanel.Close()
+			}
+			if m.notifQ != nil {
+				m.notifQ.Resolve(msg.event.Request.ID)
+			}
+		}
+	case guidance.GuidanceEventDeferred:
+		if msg.event.Request != nil {
+			if m.hitlPanel.IsOpen() && m.hitlPanel.RequestID() == msg.event.Request.ID {
+				m.hitlPanel.Close()
+			}
+			if m.notifQ != nil {
+				m.notifQ.Resolve(msg.event.Request.ID)
+			}
+		}
+		if m.runtime != nil && m.notifQ != nil {
+			pending := m.runtime.PendingDeferrals()
+			if len(pending) > 0 {
+				m.notifQ.Push(NotificationItem{
+					Kind: NotifKindDeferred,
+					ID:   generateID(),
+					Msg:  fmt.Sprintf("%d deferred guidance items pending review", len(pending)),
+				})
+			}
+		}
+	}
+	return m, listenGuidanceEvents(m.guidanceCh)
+}
+
+// guidanceKindToTrigger maps a guidance.GuidanceKind to the TUI GuidanceTriggerKind.
+func guidanceKindToTrigger(k guidance.GuidanceKind) GuidanceTriggerKind {
+	switch k {
+	case guidance.GuidanceAmbiguity, guidance.GuidanceContradiction:
+		return GuidanceTriggerAmbiguity
+	case guidance.GuidanceApproach, guidance.GuidanceScopeExpansion:
+		return GuidanceTriggerLearning
+	case guidance.GuidanceRecovery:
+		return GuidanceTriggerDeferred
+	default:
+		return GuidanceTriggerAmbiguity
+	}
+}
+
+func (m RootModel) handleGuidanceResolved(msg guidanceResolvedMsg) (RootModel, tea.Cmd) {
+	if m.notifQ != nil {
+		m.notifQ.Resolve(msg.requestID)
+	}
+	if msg.err != nil {
+		m.addSystemMessage(fmt.Sprintf("Guidance %s failed: %v", msg.requestID, msg.err))
+	} else {
+		m.addSystemMessage(fmt.Sprintf("Guidance resolved: %s", msg.requestID))
+	}
+	return m, nil
+}
+
+func (m RootModel) shouldRouteNotificationKeyToInput(msg tea.KeyMsg) bool {
+	if !m.notifBar.Active() {
+		return false
+	}
+	item, ok := m.notifQ.Current()
+	if !ok || item.Kind != NotifKindGuidance || !notificationAllowsFreetext(item) {
+		return false
+	}
+	switch msg.String() {
+	case "d", "esc", "enter":
+		return false
+	}
+	if _, handled := ResolveInteractionKey(item, msg.String()); handled {
+		return false
+	}
+	return true
+}
+
+func (m RootModel) activeGuidanceFreetextRequestID() (string, bool) {
+	if m.notifQ == nil {
+		return "", false
+	}
+	item, ok := m.notifQ.Current()
+	if !ok || item.Kind != NotifKindGuidance || !notificationAllowsFreetext(item) {
+		return "", false
+	}
+	requestID := strings.TrimSpace(item.Extra["guidance_request_id"])
+	if requestID == "" {
+		return "", false
+	}
+	return requestID, true
+}
+
 // dequeueNextTask starts the next pending task from the task queue, if any.
 // It is a no-op when a run is already active.
 func (m *RootModel) dequeueNextTask() tea.Cmd {
@@ -720,6 +1268,7 @@ func (m *RootModel) dequeueNextTask() tea.Cmd {
 		return cmd
 	}
 	m.tasks.MarkInProgress(item.ID, runID)
+	m.session.SyncQueuedTasks(m.tasks.Items())
 	if m.taskRunIDs == nil {
 		m.taskRunIDs = make(map[string]bool)
 	}
@@ -732,7 +1281,7 @@ func (m RootModel) latestChanges() []FileChange {
 	if m.chat == nil {
 		return nil
 	}
-	msgs := m.chat.feed.Messages()
+	msgs := m.chat.Messages()
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Role == RoleAgent && len(msgs[i].Content.Changes) > 0 {
 			return append([]FileChange(nil), msgs[i].Content.Changes...)

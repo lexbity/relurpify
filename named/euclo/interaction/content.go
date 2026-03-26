@@ -12,6 +12,7 @@ type ProposalContent struct {
 // QuestionContent is the typed payload for FrameQuestion frames.
 type QuestionContent struct {
 	Question      string           `json:"question"`
+	Description   string           `json:"description,omitempty"`
 	Options       []QuestionOption `json:"options,omitempty"`
 	AllowFreetext bool             `json:"allow_freetext"`
 }

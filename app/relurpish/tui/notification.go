@@ -19,6 +19,7 @@ type NotifHITLApproveMsg struct {
 type NotifHITLDenyMsg struct{ ID string }
 type NotifDismissMsg struct{ ID string }
 type NotifReviewTaskMsg struct{ ID string }
+type NotifReviewDeferredMsg struct{}
 type NotifRunTestsMsg struct{}
 type NotifRestoreSessionMsg struct{ ID string }
 
@@ -132,7 +133,7 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 		return nb, nil
 	}
 	// Handle interaction notifications with dynamic action slots.
-	if current.Kind == NotifKindInteraction {
+	if current.Kind == NotifKindInteraction || current.Kind == NotifKindGuidance {
 		key := kMsg.String()
 		if key == "d" || key == "esc" {
 			id := current.ID
@@ -143,7 +144,15 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 		if ok {
 			id := current.ID
 			nb.queue.Resolve(id)
-			return nb, func() tea.Msg { return eucloResponseMsg{response: resp} }
+			if current.Kind == NotifKindGuidance {
+				return nb, func() tea.Msg {
+					return NotifGuidanceResolveMsg{
+						RequestID: current.Extra["guidance_request_id"],
+						ChoiceID:  resp.ActionID,
+					}
+				}
+			}
+			return nb, func() tea.Msg { return EucloResponseMsg{Response: resp} }
 		}
 		return nb, nil
 	}
@@ -179,6 +188,11 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 			id := current.ID
 			return nb, func() tea.Msg { return NotifRestoreSessionMsg{ID: id} }
 		}
+		if current.Kind == NotifKindDeferred {
+			id := current.ID
+			nb.queue.Resolve(id)
+			return nb, func() tea.Msg { return NotifReviewDeferredMsg{} }
+		}
 		if current.Kind == NotifKindTaskDone {
 			id := current.ID
 			return nb, func() tea.Msg { return NotifReviewTaskMsg{ID: id} }
@@ -206,7 +220,9 @@ func (nb *NotificationBar) View() string {
 		hint = dimStyle.Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
 	case NotifKindRestore:
 		hint = dimStyle.Render("  [enter] restore  [d] dismiss")
-	case NotifKindInteraction:
+	case NotifKindDeferred:
+		hint = dimStyle.Render("  [enter] review  [d] dismiss")
+	case NotifKindInteraction, NotifKindGuidance:
 		rendered := RenderInteractionNotification(current)
 		if nb.queue.Len() > 1 {
 			rendered += dimStyle.Render(fmt.Sprintf("  (+%d more)", nb.queue.Len()-1))
@@ -231,6 +247,8 @@ func (nb *NotificationBar) View() string {
 		rendered = notifErrorStyle.Render(label)
 	case NotifKindTaskDone:
 		rendered = notifSuccessStyle.Render(label)
+	case NotifKindDeferred:
+		rendered = notifInfoStyle.Render(label)
 	default:
 		rendered = notifInfoStyle.Render(label)
 	}

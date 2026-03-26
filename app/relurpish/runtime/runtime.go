@@ -15,10 +15,9 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents"
-	"github.com/lexcodex/relurpify/app/nexus/db"
+	relurpic "github.com/lexcodex/relurpify/agents/relurpic"
+	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
 	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/named/euclo"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/capabilityplan"
@@ -26,14 +25,22 @@ import (
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/framework/graphdb"
+	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/memory"
+	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	"github.com/lexcodex/relurpify/framework/patterns"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/policybundle"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 	"github.com/lexcodex/relurpify/framework/telemetry"
+	"github.com/lexcodex/relurpify/named/euclo"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	eucloplan "github.com/lexcodex/relurpify/named/euclo/plan"
 	platformast "github.com/lexcodex/relurpify/platform/ast"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	platformgit "github.com/lexcodex/relurpify/platform/git"
@@ -53,7 +60,13 @@ type Runtime struct {
 	Agent                graph.Agent
 	Model                core.LanguageModel
 	IndexManager         *ast.IndexManager
+	GraphDB              *graphdb.Engine
 	SearchEngine         *search.SearchEngine
+	WorkflowStore        *memorydb.SQLiteWorkflowStateStore
+	PlanStore            frameworkplan.PlanStore
+	PatternStore         patterns.PatternStore
+	CommentStore         patterns.CommentStore
+	GuidanceBroker       *guidance.GuidanceBroker
 	Registration         *fauthorization.AgentRegistration
 	Delegations          *fauthorization.DelegationManager
 	AgentSpec            *core.AgentRuntimeSpec
@@ -67,8 +80,9 @@ type Runtime struct {
 	NexusNodeProvider    core.NodeProvider
 	NexusClient          *NexusClient
 
-	logFile  io.Closer
-	eventLog io.Closer
+	logFile   io.Closer
+	eventLog  io.Closer
+	patternDB io.Closer
 
 	hitlCancel  func()
 	nexusCancel func()
@@ -174,7 +188,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	var eventTelemetry telemetry.EventTelemetry
 	if cfg.EventsPath != "" {
 		if err := os.MkdirAll(filepath.Dir(cfg.EventsPath), 0o755); err == nil {
-			if eventLog, err := db.NewSQLiteEventLog(cfg.EventsPath); err == nil {
+			if eventLog, err := nexusdb.NewSQLiteEventLog(cfg.EventsPath); err == nil {
 				eventTelemetry = telemetry.EventTelemetry{
 					Log:       eventLog,
 					Partition: "local",
@@ -216,6 +230,13 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	modelClient := llm.NewClient(cfg.OllamaEndpoint, cfg.OllamaModel)
 	modelClient.SetDebugLogging(logLLM)
 	model := llm.NewInstrumentedModel(modelClient, telemetry, logLLM)
+	guidanceBroker := guidance.NewGuidanceBroker(0)
+
+	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(cfg.Workspace)
+	if err != nil {
+		logFile.Close()
+		return nil, err
+	}
 
 	if cfg.AgentName == "" {
 		cfg.AgentName = registration.Manifest.Metadata.Name
@@ -237,8 +258,15 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		MaxIterations:       8,
 		AllowedCapabilities: allowedCapabilities,
 		DebugLLM:            logLLM,
+		PatternStore:        patternStore,
+		CommentStore:        commentStore,
+		RetrievalDB:         workflowStore.DB(),
+		PlanStore:           planStore,
+		GuidanceBroker:      guidanceBroker,
 	})
 	if err != nil {
+		patternDB.Close()
+		workflowStore.Close()
 		logFile.Close()
 		return nil, err
 	}
@@ -268,7 +296,6 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 	registration.Policy = compiledPolicy.Engine
 	registry.SetPolicyEngine(compiledPolicy.Engine)
-
 	rt := &Runtime{
 		Config:               cfg,
 		Tools:                registry,
@@ -276,10 +303,17 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		Context:              core.NewContext(),
 		Model:                model,
 		IndexManager:         indexManager,
+		GraphDB:              indexManager.GraphDB,
 		SearchEngine:         searchEngine,
+		WorkflowStore:        workflowStore,
+		PlanStore:            planStore,
+		PatternStore:         patternStore,
+		CommentStore:         commentStore,
+		GuidanceBroker:       guidanceBroker,
 		Logger:               logger,
 		logFile:              logFile,
 		eventLog:             io.Closer(nil),
+		patternDB:            patternDB,
 		Workspace:            workspaceCfg,
 		Registration:         registration,
 		Delegations:          fauthorization.NewDelegationManager(),
@@ -312,7 +346,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		rt.Context.Set(fmt.Sprintf("skill.%s.path", skill.Name), skill.Paths.Root)
 	}
 	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
-		logFile.Close()
+		_ = rt.Close()
 		return nil, fmt.Errorf("register builtin providers: %w", err)
 	}
 	if err := registerNexusGatewayProvider(ctx, rt); err != nil {
@@ -325,6 +359,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 
 	agent := instantiateAgent(cfg, agentEnv, agentDefs)
+	rt.wireRuntimeAgentDependencies(agent)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
 	if agentCfg.AgentSpec != nil {
@@ -361,6 +396,18 @@ func (r *Runtime) Close() error {
 		if err := r.Context.Registry().CloseAll(); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	if r.WorkflowStore != nil {
+		if err := r.WorkflowStore.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.WorkflowStore = nil
+	}
+	if r.patternDB != nil {
+		if err := r.patternDB.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.patternDB = nil
 	}
 	if r.IndexManager != nil {
 		if err := r.IndexManager.Close(); err != nil {
@@ -504,6 +551,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contra
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)
 	}
+	r.wireRuntimeAgentDependencies(agent)
 	r.Tools.UseAgentSpec(r.Registration.ID, effectiveContract.AgentSpec)
 	r.Tools.SetPolicyEngine(compiledPolicy.Engine)
 	r.Registration.Policy = compiledPolicy.Engine
@@ -613,6 +661,12 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		WorkspacePath:   workspace,
 		ParallelWorkers: 4,
 	})
+	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(paths.MemoryDir(), "graphdb")))
+	if err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	manager.GraphDB = graphEngine
 	if cfg.PermissionManager != nil {
 		manager.SetPathFilter(func(path string, isDir bool) bool {
 			action := core.FileSystemRead
@@ -692,6 +746,46 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		IndexManager: manager,
 		SearchEngine: searchEngine,
 	}, nil
+}
+
+func openRuntimeStores(workspace string) (*memorydb.SQLiteWorkflowStateStore, frameworkplan.PlanStore, patterns.PatternStore, patterns.CommentStore, io.Closer, error) {
+	paths := config.New(workspace)
+	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("create sessions directory: %w", err)
+	}
+	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("create memory directory: %w", err)
+	}
+
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(paths.WorkflowStateFile())
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("open workflow state store: %w", err)
+	}
+	planStore, err := eucloplan.NewSQLitePlanStore(workflowStore.DB())
+	if err != nil {
+		_ = workflowStore.Close()
+		return nil, nil, nil, nil, nil, fmt.Errorf("open living plan store: %w", err)
+	}
+
+	patternDBPath := filepath.Join(paths.ConfigRoot(), "patterns.db")
+	patternDB, err := patterns.OpenSQLite(patternDBPath)
+	if err != nil {
+		_ = workflowStore.Close()
+		return nil, nil, nil, nil, nil, fmt.Errorf("open patterns store: %w", err)
+	}
+	patternStore, err := patterns.NewSQLitePatternStore(patternDB)
+	if err != nil {
+		_ = patternDB.Close()
+		_ = workflowStore.Close()
+		return nil, nil, nil, nil, nil, fmt.Errorf("open pattern catalog: %w", err)
+	}
+	commentStore, err := patterns.NewSQLiteCommentStore(patternDB)
+	if err != nil {
+		_ = patternDB.Close()
+		_ = workflowStore.Close()
+		return nil, nil, nil, nil, nil, fmt.Errorf("open comment catalog: %w", err)
+	}
+	return workflowStore, planStore, patternStore, commentStore, patternDB, nil
 }
 
 func shouldIgnoreBootstrapIndexError(err error) bool {
@@ -880,6 +974,42 @@ func configureBuiltAgent(agent graph.Agent, paths config.Paths) graph.Agent {
 	return agent
 }
 
+func (r *Runtime) wireRuntimeAgentDependencies(agent graph.Agent) {
+	if r == nil || agent == nil {
+		return
+	}
+	eucloAgent, ok := agent.(*euclo.Agent)
+	if !ok {
+		return
+	}
+	if eucloAgent.GraphDB == nil {
+		eucloAgent.GraphDB = r.GraphDB
+	}
+	if eucloAgent.RetrievalDB == nil && r.WorkflowStore != nil {
+		eucloAgent.RetrievalDB = r.WorkflowStore.DB()
+	}
+	if eucloAgent.PlanStore == nil {
+		eucloAgent.PlanStore = r.PlanStore
+	}
+	if eucloAgent.PatternStore == nil {
+		eucloAgent.PatternStore = r.PatternStore
+	}
+	if eucloAgent.CommentStore == nil {
+		eucloAgent.CommentStore = r.CommentStore
+	}
+	if eucloAgent.ConvVerifier == nil && r.PatternStore != nil {
+		eucloAgent.ConvVerifier = &relurpic.PatternCoherenceVerifier{
+			PatternStore: r.PatternStore,
+		}
+	}
+	if eucloAgent.GuidanceBroker == nil {
+		eucloAgent.GuidanceBroker = r.GuidanceBroker
+	}
+	if eucloAgent.DeferralPolicy.MaxBlastRadiusForDefer == 0 && len(eucloAgent.DeferralPolicy.DeferrableKinds) == 0 {
+		eucloAgent.DeferralPolicy = guidance.DefaultDeferralPolicy()
+	}
+}
+
 // RunTask executes a task against the configured agent while preserving shared
 // context state for future status screens.
 func (r *Runtime) RunTask(ctx context.Context, task *core.Task) (*core.Result, error) {
@@ -1027,6 +1157,60 @@ func (r *Runtime) DenyHITL(requestID, reason string) error {
 		return errors.New("hitl broker unavailable")
 	}
 	return r.Registration.HITL.Deny(requestID, reason)
+}
+
+func (r *Runtime) PendingGuidance() []*guidance.GuidanceRequest {
+	if r == nil || r.GuidanceBroker == nil {
+		return nil
+	}
+	return r.GuidanceBroker.PendingRequests()
+}
+
+func (r *Runtime) ResolveGuidance(requestID, choiceID, freetext string) error {
+	if r == nil || r.GuidanceBroker == nil {
+		return errors.New("guidance broker unavailable")
+	}
+	return r.GuidanceBroker.Resolve(guidance.GuidanceDecision{
+		RequestID: requestID,
+		ChoiceID:  choiceID,
+		Freetext:  freetext,
+		DecidedBy: "tui",
+		DecidedAt: time.Now().UTC(),
+	})
+}
+
+func (r *Runtime) SubscribeGuidance() (<-chan guidance.GuidanceEvent, func()) {
+	if r == nil || r.GuidanceBroker == nil {
+		ch := make(chan guidance.GuidanceEvent)
+		close(ch)
+		return ch, func() {}
+	}
+	return r.GuidanceBroker.Subscribe(32)
+}
+
+func (r *Runtime) PendingDeferrals() []guidance.EngineeringObservation {
+	eucloAgent, ok := r.currentEucloAgent()
+	if !ok || eucloAgent.DeferralPlan == nil {
+		return nil
+	}
+	return eucloAgent.DeferralPlan.PendingObservations()
+}
+
+func (r *Runtime) ResolveDeferral(observationID string) error {
+	eucloAgent, ok := r.currentEucloAgent()
+	if !ok || eucloAgent.DeferralPlan == nil {
+		return errors.New("deferral plan unavailable")
+	}
+	eucloAgent.DeferralPlan.ResolveObservation(observationID)
+	return nil
+}
+
+func (r *Runtime) currentEucloAgent() (*euclo.Agent, bool) {
+	if r == nil || r.Agent == nil {
+		return nil, false
+	}
+	eucloAgent, ok := r.Agent.(*euclo.Agent)
+	return eucloAgent, ok
 }
 
 func (r *Runtime) SetMCPElicitationHandler(handler MCPElicitationHandler) {

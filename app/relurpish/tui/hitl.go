@@ -8,12 +8,18 @@ import (
 	"github.com/lexcodex/relurpify/framework/authorization"
 )
 
-type hitlService interface {
+// HITLServiceIface is the interface for the HITL approval service.
+// It is exported so that euclotui can reference it in the ChatPaner interface.
+type HITLServiceIface interface {
 	PendingHITL() []*authorization.PermissionRequest
 	ApproveHITL(requestID, approver string, scope authorization.GrantScope, duration time.Duration) error
 	DenyHITL(requestID, reason string) error
 	SubscribeHITL() (<-chan authorization.HITLEvent, func())
 }
+
+// hitlService is a package-internal alias kept for backward compatibility with
+// existing usages that reference the unexported name.
+type hitlService = HITLServiceIface
 
 type hitlEventMsg struct{ event authorization.HITLEvent }
 

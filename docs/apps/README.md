@@ -31,15 +31,15 @@ capability provider system.
 | Pane | Key | Purpose |
 |------|-----|---------|
 | Chat | `1` | Conversational agent interaction with streaming output |
-| Tasks | `2` | Active and completed task list with status |
-| Session | `3` | Conversation history, context usage, export |
-| Settings | `4` | Workspace config, model selection, agent switching |
-| Tools | `5` | Live capability policies and HITL approval history |
+| Planner | `2` | Euclo plan exploration, analysis, and finalize views |
+| Debug | `3` | Tests, benchmarks, traces, and plan diff inspection |
+| Config | `4` | Agent-specific policies, capabilities, prompts, tools, and contract views |
+| Session | `5` | Workspace files, queued tasks, changes, live workflows, providers, approvals |
 
 ### HITL approval
 
 When an agent requests a capability not explicitly permitted by the manifest,
-the chat pane shows an inline approval prompt. The operator responds:
+relurpish shows an approval overlay in the active shell. The operator responds:
 
 | Key | Effect |
 |-----|--------|

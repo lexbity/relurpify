@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
@@ -44,6 +43,12 @@ type InputBar struct {
 	pickerResult filePickerResultMsg
 	pickerSel    int
 	workspace    string
+	runtime      RuntimeAdapter
+
+	// Context-aware command registry.
+	cmdReg *CommandRegistry
+	ctxTab TabID
+	ctxSub SubTabID
 }
 
 // NewInputBar creates a focused InputBar.
@@ -57,6 +62,34 @@ func NewInputBar() *InputBar {
 // SetWorkspace sets the workspace path for file picker globbing.
 func (b *InputBar) SetWorkspace(path string) {
 	b.workspace = path
+}
+
+// SetRuntime sets the runtime adapter used to invoke capabilities for the file picker.
+func (b *InputBar) SetRuntime(rt RuntimeAdapter) {
+	b.runtime = rt
+}
+
+// SetCommandRegistry sets the registry used for context-aware palette matching.
+func (b *InputBar) SetCommandRegistry(reg *CommandRegistry) {
+	b.cmdReg = reg
+}
+
+// SetContext updates the active tab/subtab used for palette filtering.
+func (b *InputBar) SetContext(tab TabID, sub SubTabID) {
+	b.ctxTab = tab
+	b.ctxSub = sub
+}
+
+// PaletteState exposes the current command palette state so RootModel can
+// render it as a first-class overlay.
+func (b *InputBar) PaletteState() (bool, []commandItem, int) {
+	items := append([]commandItem(nil), b.palette...)
+	return b.palOpen && len(items) > 0, items, b.palSel
+}
+
+// IsFilePickerActive reports whether the file picker overlay is active.
+func (b *InputBar) IsFilePickerActive() bool {
+	return b.pickerActive && len(b.pickerResult.Results) > 0
 }
 
 // SetWidth sets the input width.
@@ -98,15 +131,17 @@ func (b *InputBar) SetFilePickerMode(on bool) {
 // prefix returns the prompt prefix for the current context.
 func (b *InputBar) prefix(tab TabID) string {
 	if b.searchMode {
-		return "🔍 "
+		return "/ "
 	}
 	switch tab {
 	case TabSession:
 		return "@ "
-	case TabTasks:
-		return "+ "
-	case TabSettings:
+	case TabConfig:
 		return "? "
+	case TabPlanner:
+		return "✎ "
+	case TabDebug:
+		return "! "
 	default:
 		return "> "
 	}
@@ -123,9 +158,11 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		// Intercept global navigation keys only when input is empty.
 		if b.input.Value() == "" && !b.palOpen && !b.searchMode {
 			switch msg.String() {
-			case "1", "2", "3", "4", "?", "ctrl+t", "ctrl+f":
+			case "1", "2", "3", "4", "5", "6", "?", "ctrl+t", "ctrl+f":
 				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
 			case "tab", "shift+tab":
+				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
+			case "[", "]":
 				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
 			}
 		}
@@ -263,13 +300,11 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 				afterAt := val[atIdx+1:]
 				// Only activate picker if @ is not preceded by another word character
 				isTokenStart := atIdx == 0 || !isWordChar(rune(val[atIdx-1]))
-				if isTokenStart && b.workspace != "" {
+				if isTokenStart && b.workspace != "" && b.runtime != nil {
 					b.pickerActive = true
 					b.pickerQuery = "@" + afterAt
 					b.pickerSel = 0
-					return b, func() tea.Msg {
-						return filePickerQueryCmd(b.workspace, "@"+afterAt)()
-					}
+					return b, filePickerQueryCmd(b.runtime, b.workspace, "@"+afterAt)
 				}
 			}
 			b.palOpen = false
@@ -310,8 +345,17 @@ func (b *InputBar) updatePalette() {
 	if f := strings.Fields(query); len(f) > 0 {
 		query = f[0]
 	}
+
+	// Get candidate commands: use registry for context-aware filtering if available.
+	var candidates []Command
+	if b.cmdReg != nil && b.ctxTab != "" {
+		candidates = b.cmdReg.Match("", b.ctxTab, b.ctxSub)
+	} else {
+		candidates = listCommandsSorted()
+	}
+
 	var items []commandItem
-	for _, cmd := range listCommandsSorted() {
+	for _, cmd := range candidates {
 		score := 0
 		if query != "" {
 			ok, s := fuzzyMatchScore(query, cmd.Name)
@@ -366,9 +410,6 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	if b.pickerActive && len(b.pickerResult.Results) > 0 {
 		return b.renderPicker() + "\n" + bar
 	}
-	if b.palOpen && len(b.palette) > 0 {
-		return b.renderPalette() + "\n" + bar
-	}
 	return bar
 }
 
@@ -377,20 +418,6 @@ func (b *InputBar) renderPicker() string {
 	for i, file := range b.pickerResult.Results {
 		label := file
 		if i == b.pickerSel {
-			label = panelItemActiveStyle.Render(label)
-		} else {
-			label = panelItemStyle.Render(label)
-		}
-		lines = append(lines, label)
-	}
-	return panelStyle.Width(b.width).Render(strings.Join(lines, "\n"))
-}
-
-func (b *InputBar) renderPalette() string {
-	lines := []string{panelHeaderStyle.Render("Commands")}
-	for i, item := range b.palette {
-		label := fmt.Sprintf("%s  %s", item.Usage, dimStyle.Render(item.Description))
-		if i == b.palSel {
 			label = panelItemActiveStyle.Render(label)
 		} else {
 			label = panelItemStyle.Render(label)

@@ -11,6 +11,12 @@ func generateID() string {
 	return fmt.Sprintf("msg-%d", time.Now().UnixNano())
 }
 
+// GenerateID is the exported version of generateID, for use by the euclotui
+// package which cannot import unexported symbols.
+func GenerateID() string {
+	return generateID()
+}
+
 // max helper avoids importing math for a single use.
 func max(a, b int) int {
 	if a > b {

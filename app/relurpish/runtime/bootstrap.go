@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 
@@ -12,8 +13,12 @@ import (
 	"github.com/lexcodex/relurpify/framework/capabilityplan"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graphdb"
+	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/patterns"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/policybundle"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
@@ -40,6 +45,11 @@ type AgentBootstrapOptions struct {
 	AllowedCapabilities []core.CapabilitySelector
 	DebugLLM            bool
 	DebugAgent          bool
+	PatternStore        patterns.PatternStore
+	CommentStore        patterns.CommentStore
+	RetrievalDB         *sql.DB
+	PlanStore           frameworkplan.PlanStore
+	GuidanceBroker      *guidance.GuidanceBroker
 }
 
 type BootstrappedAgentRuntime struct {
@@ -157,7 +167,18 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if err != nil {
 		return nil, fmt.Errorf("admit skill capabilities: %w", err)
 	}
-	if err := agents.RegisterBuiltinRelurpicCapabilities(registry, opts.Model, agentCfg); err != nil {
+	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
+		registry,
+		opts.Model,
+		agentCfg,
+		agents.WithIndexManager(indexManager),
+		agents.WithGraphDB(graphDBFromIndexManager(indexManager)),
+		agents.WithPatternStore(opts.PatternStore),
+		agents.WithCommentStore(opts.CommentStore),
+		agents.WithRetrievalDB(opts.RetrievalDB),
+		agents.WithPlanStore(opts.PlanStore),
+		agents.WithGuidanceBroker(opts.GuidanceBroker),
+	); err != nil {
 		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
 	}
 	env := agents.AgentEnvironment{
@@ -189,6 +210,13 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Contract:             effectiveContract,
 		CompiledPolicy:       compiledPolicy,
 	}, nil
+}
+
+func graphDBFromIndexManager(indexManager *ast.IndexManager) *graphdb.Engine {
+	if indexManager == nil {
+		return nil
+	}
+	return indexManager.GraphDB
 }
 
 func selectedAgentDefinitionOverlays(agentName string, defs map[string]*core.AgentDefinition) []core.AgentSpecOverlay {

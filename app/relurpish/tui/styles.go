@@ -164,4 +164,30 @@ var (
 				BorderForeground(lipgloss.Color("62")).
 				Padding(1, 2).
 				Background(lipgloss.Color("236"))
+
+	// Subtab bar styles (layout.go SubTabBar).
+	subtabBarStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("235")).
+			Padding(0, 1)
+
+	subtabBarEmptyStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("235")).
+				Height(1)
+
+	subtabActiveStyle = lipgloss.NewStyle().
+				Foreground(colorSecondary).
+				Bold(true).
+				Background(lipgloss.Color("237")).
+				Padding(0, 1)
+
+	subtabInactiveStyle = lipgloss.NewStyle().
+				Foreground(colorDim).
+				Padding(0, 1)
+
+	// Guidance panel (comp_hitl_guidance.go).
+	guidancePanelStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorWarning).
+				Padding(0, 1)
+
 )

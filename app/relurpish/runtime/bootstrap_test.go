@@ -1,22 +1,45 @@
 package runtime
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"gopkg.in/yaml.v3"
 )
+
+type bootstrapQueueModel struct{}
+
+func (bootstrapQueueModel) Generate(context.Context, string, *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{Text: `{"ok":true}`}, nil
+}
+
+func (bootstrapQueueModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
+	ch := make(chan string)
+	close(ch)
+	return ch, nil
+}
+
+func (bootstrapQueueModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{}, nil
+}
+
+func (bootstrapQueueModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
+	return &core.LLMResponse{}, nil
+}
 
 func TestBootstrapAgentRuntimeUsesManifestModelAndRegistersAgentCapabilities(t *testing.T) {
 	workspace := t.TempDir()
@@ -75,6 +98,47 @@ func TestBootstrapAgentRuntimeUsesManifestModelAndRegistersAgentCapabilities(t *
 	}
 	if !boot.Registry.HasCapability("agent:planner") {
 		t.Fatal("expected shared agent capabilities to be registered")
+	}
+}
+
+func TestBootstrapAgentRuntimeRegistersRelurpicCapabilitiesWithRuntimeDependencies(t *testing.T) {
+	workspace := t.TempDir()
+	store, err := memory.NewHybridMemory(t.TempDir())
+	requireNoError(t, err)
+	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(workspace)
+	requireNoError(t, err)
+	t.Cleanup(func() {
+		requireNoError(t, workflowStore.Close())
+		requireNoError(t, patternDB.Close())
+	})
+
+	boot, err := BootstrapAgentRuntime(workspace, AgentBootstrapOptions{
+		AgentID:        "coding",
+		AgentName:      "coding",
+		ConfigName:     "coding",
+		Manifest:       &manifest.AgentManifest{Metadata: manifest.ManifestMetadata{Name: "coding"}, Spec: manifest.ManifestSpec{Agent: &core.AgentRuntimeSpec{Model: core.AgentModelConfig{Name: "stub"}}}},
+		Runner:         fsandbox.NewLocalCommandRunner(workspace, nil),
+		Memory:         store,
+		Model:          bootstrapQueueModel{},
+		SkipASTIndex:   true,
+		PatternStore:   patternStore,
+		CommentStore:   commentStore,
+		RetrievalDB:    workflowStore.DB(),
+		PlanStore:      planStore,
+		GuidanceBroker: guidance.NewGuidanceBroker(time.Second),
+	})
+	requireNoError(t, err)
+	if !boot.Registry.HasCapability("relurpic:pattern-detector.detect") {
+		t.Fatal("expected pattern-detector capability to be registered")
+	}
+	if !boot.Registry.HasCapability("relurpic:gap-detector.detect") {
+		t.Fatal("expected gap-detector capability to be registered")
+	}
+	if !boot.Registry.HasCapability("relurpic:prospective-matcher.match") {
+		t.Fatal("expected prospective-matcher capability to be registered")
+	}
+	if !boot.Registry.HasCapability("relurpic:commenter.annotate") {
+		t.Fatal("expected commenter capability to be registered")
 	}
 }
 

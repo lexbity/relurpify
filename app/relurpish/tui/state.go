@@ -117,7 +117,7 @@ type ApprovalInfo struct {
 	Metadata       map[string]string
 }
 
-// CapabilityDetail is the richer capability inspection model used by the Tasks pane.
+// CapabilityDetail is the richer capability inspection model used by the config pane.
 type CapabilityDetail struct {
 	Meta                  InspectableMeta
 	Description           string
@@ -417,4 +417,194 @@ func normalizePaths(paths []string) []string {
 		out = append(out, clean)
 	}
 	return out
+}
+
+// ─── TUI-safe data types added for the rework (Part 10 / plan-06) ────────────
+
+// CommentRef is a lightweight reference to a pattern comment surfaced in the
+// guidance panel alongside ambiguity questions.
+type CommentRef struct {
+	PatternTitle string
+	IntentType   string
+	Body         string
+	CreatedAt    string
+}
+
+// PatternRef is a compact reference to a known pattern.
+type PatternRef struct {
+	ID    string
+	Title string
+	Scope string
+}
+
+// AnchorRef is a compact reference to an anchor dependency on a plan step.
+type AnchorRef struct {
+	Name   string
+	Class  string // commitment | policy | technical
+	Status string // active | drifted | proposed
+}
+
+// SymbolChange describes a symbol modification within a simulation or plan diff.
+type SymbolChange struct {
+	SymbolID   string
+	FilePath   string
+	ChangeKind string // add | modify | remove
+}
+
+// TensionSite describes one location where two patterns conflict.
+type TensionSite struct {
+	FilePath string
+	Line     int
+	PatternA string // how pattern A manifests here
+	PatternB string // how pattern B manifests here
+}
+
+// TensionInfo describes a structural tension between two confirmed patterns.
+type TensionInfo struct {
+	ID                 string
+	PatternAID         string
+	PatternBID         string
+	TitleA             string
+	TitleB             string
+	Sites              []TensionSite
+	ResolutionPatterns []PatternRef
+}
+
+// SimulationResult captures the blast radius of adopting a pattern.
+type SimulationResult struct {
+	PatternID        string
+	DirectImpact     int
+	IndirectImpact   int
+	FilesAffected    int
+	SymbolChanges    []SymbolChange
+	PatternsAdapting []PatternRef
+}
+
+// PlanStepInfo describes one step in the living plan.
+type PlanStepInfo struct {
+	ID          string
+	Title       string
+	Status      string // ready | blocked | running | done | failed | pending
+	SymbolScope []string
+	Anchors     []AnchorRef
+	DependsOn   []string
+	Notes       []string
+	Attempts    int
+}
+
+// LivePlanInfo is the TUI-safe representation of the persisted living plan.
+type LivePlanInfo struct {
+	WorkflowID string
+	Title      string
+	Confidence float64
+	Steps      []PlanStepInfo
+	ModifiedAt time.Time
+}
+
+// DiagnosticsInfo is a snapshot of runtime resource and agent state for the
+// session → live subtab.
+type DiagnosticsInfo struct {
+	ContextTokensUsed int
+	ContextTokensMax  int
+	ActiveWorkflows   int
+	PatternEntries    int
+	ActiveProfile     string
+	ActiveMode        string
+	ActivePhase       string
+	DoomLoopState     string
+	CapabilitiesTotal int
+	PendingApprovals  int
+	LiveProviders     int
+	ContextStrategy   string
+	PruningEvents     int
+}
+
+// MapNodeInfo describes a node in the symbol graph (explore → structure subtab).
+type MapNodeInfo struct {
+	ID       string
+	Label    string
+	FilePath string
+	Line     int
+	Kind     string // func | method | type | var | const
+}
+
+// MapEdgeInfo describes an edge in the symbol graph.
+type MapEdgeInfo struct {
+	FromID   string
+	ToID     string
+	EdgeKind string // calls | implements | embeds | references
+}
+
+// PatternProposalInfo is a proposed pattern surfaced by relurpic gap detection.
+type PatternProposalInfo struct {
+	ID          string
+	Title       string
+	Scope       string
+	Description string
+	Confidence  float64
+	CreatedAt   time.Time
+}
+
+// PatternRecordInfo is a confirmed pattern stored in the pattern registry.
+type PatternRecordInfo struct {
+	ID          string
+	Title       string
+	Scope       string
+	Description string
+	IntentType  string
+	CreatedAt   time.Time
+	ModifiedAt  time.Time
+}
+
+// IntentGapInfo describes a detected gap between stated intent and
+// implementation.
+type IntentGapInfo struct {
+	FilePath    string
+	Line        int
+	AnchorName  string
+	AnchorClass string
+	Description string
+	Severity    string
+}
+
+// PatternMatchInfo describes a prospective pattern match result.
+type PatternMatchInfo struct {
+	PatternID   string
+	Title       string
+	Score       float64
+	Description string
+	Scope       string
+}
+
+// TraceInfo holds a parsed execution trace for the debug pane.
+type TraceInfo struct {
+	Description string
+	Frames      []TraceFrame
+}
+
+// TraceFrame is one entry in an execution trace.
+type TraceFrame struct {
+	FuncName string
+	FilePath string
+	Line     int
+	Duration string
+	IsError  bool
+	ErrorMsg string
+	Children []TraceFrame
+}
+
+// PlanDiffInfo holds divergence between the living plan and current
+// implementation state.
+type PlanDiffInfo struct {
+	WorkflowID   string
+	Steps        []PlanStepInfo
+	AnchorDrifts []AnchorDriftInfo
+}
+
+// AnchorDriftInfo describes a single anchor drift event.
+type AnchorDriftInfo struct {
+	AnchorName string
+	FilePath   string
+	Line       int
+	Reason     string
 }

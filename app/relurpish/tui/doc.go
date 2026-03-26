@@ -2,28 +2,28 @@
 //
 // # Panes
 //
-// The TUI is organised into five primary panes, each accessible via a tab bar:
+// The TUI is organised around five primary panes exposed by the root tab bar:
 //
-//   - Chat: conversational agent interaction with streaming output.
-//   - Tasks: list of current and past tasks with status and progress.
-//   - Session: session history, context usage, and conversation export.
-//   - Settings: workspace and model configuration.
-//   - Tools: live view of capability policies and HITL approval history.
+//   - Chat: conversational agent interaction and streamed execution output.
+//   - Planner: exploration, analysis, and living-plan review for euclo.
+//   - Debug: tests, benchmarks, trace inspection, and plan-diff views.
+//   - Config: agent-specific policies, capabilities, prompts, tools, and contract data.
+//   - Session: workspace files, pending changes, live runtime state, and queued tasks.
 //
-// # HITL approval
+// # Guidance and HITL
 //
-// When the agent requests a capability that requires human approval, hitl.go
-// displays an inline prompt in the chat pane. The operator responds with:
-// [y] approve once, [s] approve for the session, [a] always allow, [n] deny.
+// Guidance requests, approvals, and deferred observations are surfaced through
+// the shared overlay and notification flow. Operators can approve once, approve
+// for the session, persist policy when applicable, or deny.
 //
 // # Streaming
 //
 // streaming.go drives incremental display of LLM output as it arrives,
-// updating the chat pane without blocking the event loop.
+// updating the active shell without blocking the event loop.
 //
-// # Background tasks
+// # Background work
 //
-// When a task is explicitly delegated to the background (via Nexus), the
-// notification bar receives live status updates and the Tasks pane shows
-// in-progress background work.
+// Background and queued tasks are surfaced through the session pane and
+// notification bar, while runtime workflow and provider state remain available
+// from the session live views.
 package tui

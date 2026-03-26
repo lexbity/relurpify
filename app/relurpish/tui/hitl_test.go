@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
@@ -90,6 +91,13 @@ func (m *minimalHITLRuntimeAdapter) ApproveHITL(requestID, approver string, scop
 func (m *minimalHITLRuntimeAdapter) DenyHITL(requestID, reason string) error {
 	return m.hitlSvc.DenyHITL(requestID, reason)
 }
+func (m *minimalHITLRuntimeAdapter) PendingGuidance() []*guidance.GuidanceRequest { return nil }
+func (m *minimalHITLRuntimeAdapter) ResolveGuidance(string, string, string) error { return nil }
+func (m *minimalHITLRuntimeAdapter) SubscribeGuidance() (<-chan guidance.GuidanceEvent, func()) {
+	return nil, func() {}
+}
+func (m *minimalHITLRuntimeAdapter) PendingDeferrals() []guidance.EngineeringObservation { return nil }
+func (m *minimalHITLRuntimeAdapter) ResolveDeferral(string) error                        { return nil }
 func (m *minimalHITLRuntimeAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {
 	// no-op
 }
@@ -117,13 +125,13 @@ func (m *minimalHITLRuntimeAdapter) CapabilityAdmissions() []CapabilityAdmission
 func (m *minimalHITLRuntimeAdapter) SaveToolPolicy(string, core.AgentPermissionLevel) error {
 	return nil
 }
-func (m *minimalHITLRuntimeAdapter) ListToolsInfo() []ToolInfo          { return nil }
-func (m *minimalHITLRuntimeAdapter) ListCapabilities() []CapabilityInfo { return nil }
-func (m *minimalHITLRuntimeAdapter) ListPrompts() []PromptInfo          { return nil }
-func (m *minimalHITLRuntimeAdapter) ListResources([]string) []ResourceInfo { return nil }
-func (m *minimalHITLRuntimeAdapter) ListLiveProviders() []LiveProviderInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) ListToolsInfo() []ToolInfo                   { return nil }
+func (m *minimalHITLRuntimeAdapter) ListCapabilities() []CapabilityInfo          { return nil }
+func (m *minimalHITLRuntimeAdapter) ListPrompts() []PromptInfo                   { return nil }
+func (m *minimalHITLRuntimeAdapter) ListResources([]string) []ResourceInfo       { return nil }
+func (m *minimalHITLRuntimeAdapter) ListLiveProviders() []LiveProviderInfo       { return nil }
 func (m *minimalHITLRuntimeAdapter) ListLiveSessions() []LiveProviderSessionInfo { return nil }
-func (m *minimalHITLRuntimeAdapter) ListApprovals() []ApprovalInfo { return nil }
+func (m *minimalHITLRuntimeAdapter) ListApprovals() []ApprovalInfo               { return nil }
 func (m *minimalHITLRuntimeAdapter) GetCapabilityDetail(string) (*CapabilityDetail, error) {
 	return nil, nil
 }
@@ -143,11 +151,16 @@ func (m *minimalHITLRuntimeAdapter) GetApprovalDetail(string) (*ApprovalDetail, 
 func (m *minimalHITLRuntimeAdapter) GetClassPolicies() map[string]core.AgentPermissionLevel {
 	return nil
 }
-func (m *minimalHITLRuntimeAdapter) SetToolPolicyLive(string, core.AgentPermissionLevel) {}
+func (m *minimalHITLRuntimeAdapter) SetToolPolicyLive(string, core.AgentPermissionLevel)  {}
 func (m *minimalHITLRuntimeAdapter) SetClassPolicyLive(string, core.AgentPermissionLevel) {}
-func (m *minimalHITLRuntimeAdapter) ListWorkflows(int) ([]WorkflowInfo, error) { return nil, nil }
-func (m *minimalHITLRuntimeAdapter) GetWorkflow(string) (*WorkflowDetails, error) { return nil, nil }
-func (m *minimalHITLRuntimeAdapter) CancelWorkflow(string) error                 { return nil }
+func (m *minimalHITLRuntimeAdapter) ListWorkflows(int) ([]WorkflowInfo, error)            { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) GetWorkflow(string) (*WorkflowDetails, error)         { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) CancelWorkflow(string) error                          { return nil }
+func (m *minimalHITLRuntimeAdapter) InvokeCapability(context.Context, string, map[string]any) (*core.ToolResult, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) Diagnostics() DiagnosticsInfo   { return DiagnosticsInfo{} }
+func (m *minimalHITLRuntimeAdapter) ApplyChatPolicy(SubTabID) error { return nil }
 
 // TestHITLEventPushesNotification verifies that a HITLEventRequested event
 // causes the notification queue to receive a HITL item via RootModel (after Gap 2).
