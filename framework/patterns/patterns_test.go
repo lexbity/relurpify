@@ -112,6 +112,7 @@ func TestSQLiteCommentStoreRoundTripAndQueries(t *testing.T) {
 		CommentID:  "comment-2",
 		PatternID:  "pattern-2",
 		AnchorID:   "anchor-2",
+		TensionID:  "tension-2",
 		SymbolID:   "pkg.Other",
 		IntentType: CommentDeferred,
 		Body:       "later",
@@ -138,6 +139,11 @@ func TestSQLiteCommentStoreRoundTripAndQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, forAnchor, 1)
 	require.Equal(t, "comment-1", forAnchor[0].CommentID)
+
+	forTension, err := comments.ListForTension(ctx, "tension-2")
+	require.NoError(t, err)
+	require.Len(t, forTension, 1)
+	require.Equal(t, "comment-2", forTension[0].CommentID)
 
 	forSymbol, err := comments.ListForSymbol(ctx, "pkg.Func")
 	require.NoError(t, err)

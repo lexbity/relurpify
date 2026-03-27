@@ -109,6 +109,7 @@ type CommentRecord struct {
 	CommentID   string            `json:"comment_id"`
 	PatternID   string            `json:"pattern_id,omitempty"`
 	AnchorID    string            `json:"anchor_id,omitempty"`
+	TensionID   string            `json:"tension_id,omitempty"`
 	FilePath    string            `json:"file_path,omitempty"`
 	SymbolID    string            `json:"symbol_id,omitempty"`
 	IntentType  CommentIntentType `json:"intent_type"`

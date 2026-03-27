@@ -16,5 +16,6 @@ type CommentStore interface {
 	Load(ctx context.Context, id string) (*CommentRecord, error)
 	ListForPattern(ctx context.Context, patternID string) ([]CommentRecord, error)
 	ListForAnchor(ctx context.Context, anchorID string) ([]CommentRecord, error)
+	ListForTension(ctx context.Context, tensionID string) ([]CommentRecord, error)
 	ListForSymbol(ctx context.Context, symbolID string) ([]CommentRecord, error)
 }

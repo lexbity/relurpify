@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -68,6 +69,7 @@ func ensureSchema(ctx context.Context, db *sql.DB) error {
 			comment_id TEXT PRIMARY KEY,
 			pattern_id TEXT NOT NULL DEFAULT '',
 			anchor_id TEXT NOT NULL DEFAULT '',
+			tension_id TEXT NOT NULL DEFAULT '',
 			file_path TEXT NOT NULL DEFAULT '',
 			symbol_id TEXT NOT NULL DEFAULT '',
 			intent_type TEXT NOT NULL,
@@ -81,12 +83,19 @@ func ensureSchema(ctx context.Context, db *sql.DB) error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_comment_records_pattern ON comment_records(pattern_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_comment_records_anchor ON comment_records(anchor_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_comment_records_tension ON comment_records(tension_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_comment_records_symbol ON comment_records(symbol_id);`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return err
 		}
+	}
+	if _, err := db.ExecContext(ctx, `ALTER TABLE comment_records ADD COLUMN tension_id TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_comment_records_tension ON comment_records(tension_id);`); err != nil {
+		return err
 	}
 	return nil
 }
@@ -254,12 +263,13 @@ func (s *SQLiteCommentStore) Save(ctx context.Context, record CommentRecord) err
 		record.UpdatedAt = now
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO comment_records (
-		comment_id, pattern_id, anchor_id, file_path, symbol_id, intent_type, body,
+		comment_id, pattern_id, anchor_id, tension_id, file_path, symbol_id, intent_type, body,
 		author_kind, trust_class, anchor_ref, corpus_scope, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(comment_id) DO UPDATE SET
 		pattern_id = excluded.pattern_id,
 		anchor_id = excluded.anchor_id,
+		tension_id = excluded.tension_id,
 		file_path = excluded.file_path,
 		symbol_id = excluded.symbol_id,
 		intent_type = excluded.intent_type,
@@ -270,7 +280,7 @@ func (s *SQLiteCommentStore) Save(ctx context.Context, record CommentRecord) err
 		corpus_scope = excluded.corpus_scope,
 		created_at = excluded.created_at,
 		updated_at = excluded.updated_at`,
-		record.CommentID, record.PatternID, record.AnchorID, record.FilePath, record.SymbolID,
+		record.CommentID, record.PatternID, record.AnchorID, record.TensionID, record.FilePath, record.SymbolID,
 		record.IntentType, record.Body, record.AuthorKind, record.TrustClass, record.AnchorRef,
 		record.CorpusScope, record.CreatedAt.UTC().Format(time.RFC3339Nano), record.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	)
@@ -278,14 +288,14 @@ func (s *SQLiteCommentStore) Save(ctx context.Context, record CommentRecord) err
 }
 
 func (s *SQLiteCommentStore) Load(ctx context.Context, id string) (*CommentRecord, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT comment_id, pattern_id, anchor_id, file_path, symbol_id,
+	row := s.db.QueryRowContext(ctx, `SELECT comment_id, pattern_id, anchor_id, tension_id, file_path, symbol_id,
 		intent_type, body, author_kind, trust_class, anchor_ref, corpus_scope, created_at, updated_at
 		FROM comment_records WHERE comment_id = ?`, id)
 	return scanCommentRecord(row)
 }
 
 func (s *SQLiteCommentStore) ListForPattern(ctx context.Context, patternID string) ([]CommentRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT comment_id, pattern_id, anchor_id, file_path, symbol_id,
+	rows, err := s.db.QueryContext(ctx, `SELECT comment_id, pattern_id, anchor_id, tension_id, file_path, symbol_id,
 		intent_type, body, author_kind, trust_class, anchor_ref, corpus_scope, created_at, updated_at
 		FROM comment_records WHERE pattern_id = ? ORDER BY created_at ASC`, patternID)
 	if err != nil {
@@ -296,7 +306,7 @@ func (s *SQLiteCommentStore) ListForPattern(ctx context.Context, patternID strin
 }
 
 func (s *SQLiteCommentStore) ListForAnchor(ctx context.Context, anchorID string) ([]CommentRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT comment_id, pattern_id, anchor_id, file_path, symbol_id,
+	rows, err := s.db.QueryContext(ctx, `SELECT comment_id, pattern_id, anchor_id, tension_id, file_path, symbol_id,
 		intent_type, body, author_kind, trust_class, anchor_ref, corpus_scope, created_at, updated_at
 		FROM comment_records WHERE anchor_id = ? ORDER BY created_at ASC`, anchorID)
 	if err != nil {
@@ -306,8 +316,19 @@ func (s *SQLiteCommentStore) ListForAnchor(ctx context.Context, anchorID string)
 	return scanCommentRecords(rows)
 }
 
+func (s *SQLiteCommentStore) ListForTension(ctx context.Context, tensionID string) ([]CommentRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT comment_id, pattern_id, anchor_id, tension_id, file_path, symbol_id,
+		intent_type, body, author_kind, trust_class, anchor_ref, corpus_scope, created_at, updated_at
+		FROM comment_records WHERE tension_id = ? ORDER BY created_at ASC`, tensionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanCommentRecords(rows)
+}
+
 func (s *SQLiteCommentStore) ListForSymbol(ctx context.Context, symbolID string) ([]CommentRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT comment_id, pattern_id, anchor_id, file_path, symbol_id,
+	rows, err := s.db.QueryContext(ctx, `SELECT comment_id, pattern_id, anchor_id, tension_id, file_path, symbol_id,
 		intent_type, body, author_kind, trust_class, anchor_ref, corpus_scope, created_at, updated_at
 		FROM comment_records WHERE symbol_id = ? ORDER BY created_at ASC`, symbolID)
 	if err != nil {
@@ -390,7 +411,7 @@ type commentScanner interface {
 func scanCommentRecord(row commentScanner) (*CommentRecord, error) {
 	var record CommentRecord
 	var createdAtRaw, updatedAtRaw string
-	if err := row.Scan(&record.CommentID, &record.PatternID, &record.AnchorID, &record.FilePath, &record.SymbolID,
+	if err := row.Scan(&record.CommentID, &record.PatternID, &record.AnchorID, &record.TensionID, &record.FilePath, &record.SymbolID,
 		&record.IntentType, &record.Body, &record.AuthorKind, &record.TrustClass, &record.AnchorRef,
 		&record.CorpusScope, &createdAtRaw, &updatedAtRaw); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

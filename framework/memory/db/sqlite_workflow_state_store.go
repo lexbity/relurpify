@@ -37,8 +37,8 @@ func NewSQLiteWorkflowStateStore(dbPath string) (*SQLiteWorkflowStateStore, erro
 
 // SQLiteWorkflowRetrievalOptions controls retrieval-service wiring for the workflow store.
 type SQLiteWorkflowRetrievalOptions struct {
-	Embedder retrieval.Embedder
-	Telemetry core.Telemetry
+	Embedder       retrieval.Embedder
+	Telemetry      core.Telemetry
 	ServiceOptions retrieval.ServiceOptions
 }
 
@@ -350,6 +350,7 @@ func (s *SQLiteWorkflowStateStore) init() error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_step_runs_attempt ON step_runs(workflow_id, step_id, attempt);`,
 		`CREATE INDEX IF NOT EXISTS idx_step_runs_workflow_step ON step_runs(workflow_id, step_id, attempt DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_artifacts_scope ON workflow_artifacts(workflow_id, run_id, created_at ASC);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_artifacts_kind ON workflow_artifacts(workflow_id, kind, created_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_scope ON workflow_stage_results(workflow_id, run_id, stage_index ASC, retry_attempt ASC, finished_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_valid ON workflow_stage_results(workflow_id, run_id, stage_name, validation_ok, retry_attempt DESC, finished_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_pipeline_checkpoints_task_created ON pipeline_checkpoints(task_id, created_at DESC);`,
@@ -935,6 +936,48 @@ func (s *SQLiteWorkflowStateStore) ListWorkflowArtifacts(ctx context.Context, wo
 	return out, rows.Err()
 }
 
+func (s *SQLiteWorkflowStateStore) ListWorkflowArtifactsByKind(ctx context.Context, workflowID, runID, kind string) ([]memory.WorkflowArtifactRecord, error) {
+	query := `SELECT artifact_id, workflow_id, run_id, kind, content_type, storage_kind, summary_text, summary_metadata_json, inline_raw_text, raw_ref, raw_size_bytes, compression_method, created_at
+		FROM workflow_artifacts WHERE workflow_id = ? AND kind = ?`
+	args := []any{workflowID, kind}
+	if strings.TrimSpace(runID) != "" {
+		query += ` AND run_id = ?`
+		args = append(args, runID)
+	}
+	query += ` ORDER BY created_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []memory.WorkflowArtifactRecord
+	for rows.Next() {
+		record, err := scanWorkflowArtifactRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) WorkflowArtifactByID(ctx context.Context, artifactID string) (*memory.WorkflowArtifactRecord, bool, error) {
+	artifactID = strings.TrimSpace(artifactID)
+	if artifactID == "" {
+		return nil, false, nil
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT artifact_id, workflow_id, run_id, kind, content_type, storage_kind, summary_text, summary_metadata_json, inline_raw_text, raw_ref, raw_size_bytes, compression_method, created_at
+		FROM workflow_artifacts WHERE artifact_id = ?`, artifactID)
+	record, err := scanWorkflowArtifactRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return record, true, nil
+}
+
 func (s *SQLiteWorkflowStateStore) SaveStageResult(ctx context.Context, record memory.WorkflowStageResultRecord) error {
 	if record.ResultID == "" || record.WorkflowID == "" || record.RunID == "" || record.StageName == "" {
 		return errors.New("stage result requires ids and stage name")
@@ -1178,6 +1221,54 @@ func (s *SQLiteWorkflowStateStore) ListEvents(ctx context.Context, workflowID st
 		out = append(out, *record)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) LatestEvent(ctx context.Context, workflowID string) (*memory.WorkflowEventRecord, bool, error) {
+	query := `SELECT event_id, workflow_id, run_id, step_id, event_type, message, metadata_json, created_at
+		FROM workflow_events WHERE workflow_id = ?
+		ORDER BY rowid DESC LIMIT 1`
+	row := s.db.QueryRowContext(ctx, query, workflowID)
+	record, err := scanEventRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return record, true, nil
+}
+
+func (s *SQLiteWorkflowStateStore) LatestEventByTypes(ctx context.Context, workflowID string, eventTypes ...string) (*memory.WorkflowEventRecord, bool, error) {
+	workflowID = strings.TrimSpace(workflowID)
+	if workflowID == "" || len(eventTypes) == 0 {
+		return nil, false, nil
+	}
+	placeholders := make([]string, 0, len(eventTypes))
+	args := make([]any, 0, len(eventTypes)+1)
+	args = append(args, workflowID)
+	for _, eventType := range eventTypes {
+		eventType = strings.TrimSpace(eventType)
+		if eventType == "" {
+			continue
+		}
+		placeholders = append(placeholders, "?")
+		args = append(args, eventType)
+	}
+	if len(placeholders) == 0 {
+		return nil, false, nil
+	}
+	query := fmt.Sprintf(`SELECT event_id, workflow_id, run_id, step_id, event_type, message, metadata_json, created_at
+		FROM workflow_events WHERE workflow_id = ? AND event_type IN (%s)
+		ORDER BY rowid DESC LIMIT 1`, strings.Join(placeholders, ","))
+	row := s.db.QueryRowContext(ctx, query, args...)
+	record, err := scanEventRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return record, true, nil
 }
 
 func (s *SQLiteWorkflowStateStore) ReplaceProviderSnapshots(ctx context.Context, workflowID, runID string, snapshots []memory.WorkflowProviderSnapshotRecord) error {
@@ -1597,6 +1688,21 @@ func scanWorkflowArtifactRows(rows *sql.Rows) (*memory.WorkflowArtifactRecord, e
 	return &record, nil
 }
 
+func scanWorkflowArtifactRow(row *sql.Row) (*memory.WorkflowArtifactRecord, error) {
+	var record memory.WorkflowArtifactRecord
+	var runID sql.NullString
+	var summaryMetadataJSON string
+	var createdAt string
+	err := row.Scan(&record.ArtifactID, &record.WorkflowID, &runID, &record.Kind, &record.ContentType, &record.StorageKind, &record.SummaryText, &summaryMetadataJSON, &record.InlineRawText, &record.RawRef, &record.RawSizeBytes, &record.CompressionMethod, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	record.RunID = runID.String
+	record.SummaryMetadata = decodeJSONMap(summaryMetadataJSON)
+	record.CreatedAt = parseTime(createdAt)
+	return &record, nil
+}
+
 func scanWorkflowStageResult(row interface{ Scan(dest ...any) error }) (*memory.WorkflowStageResultRecord, bool, error) {
 	record, err := scanWorkflowStageResultCommon(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1666,6 +1772,19 @@ func scanEventRows(rows *sql.Rows) (*memory.WorkflowEventRecord, error) {
 	var metadataJSON string
 	var createdAt string
 	err := rows.Scan(&record.EventID, &record.WorkflowID, &record.RunID, &record.StepID, &record.EventType, &record.Message, &metadataJSON, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	record.Metadata = decodeJSONMap(metadataJSON)
+	record.CreatedAt = parseTime(createdAt)
+	return &record, nil
+}
+
+func scanEventRow(row *sql.Row) (*memory.WorkflowEventRecord, error) {
+	var record memory.WorkflowEventRecord
+	var metadataJSON string
+	var createdAt string
+	err := row.Scan(&record.EventID, &record.WorkflowID, &record.RunID, &record.StepID, &record.EventType, &record.Message, &metadataJSON, &createdAt)
 	if err != nil {
 		return nil, err
 	}

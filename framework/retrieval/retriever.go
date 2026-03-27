@@ -120,7 +120,7 @@ func (m *MetadataPrefilter) Prefilter(ctx context.Context, q RetrievalQuery) (*P
 		return nil, err
 	}
 
-	base := `SELECT c.chunk_id, c.doc_id
+	base := `SELECT c.chunk_id, c.doc_id, c.active_version_id, d.canonical_uri, d.source_type, d.corpus_scope, cv.structural_key, d.source_updated_at
 			FROM retrieval_chunks c
 			JOIN retrieval_documents d
 				ON d.doc_id = c.doc_id
@@ -185,8 +185,25 @@ func (m *MetadataPrefilter) Prefilter(ctx context.Context, q RetrievalQuery) (*P
 	}
 	for rows.Next() {
 		var chunk PrefilterChunk
-		if err := rows.Scan(&chunk.ChunkID, &chunk.DocID); err != nil {
+		var sourceUpdatedAt string
+		if err := rows.Scan(
+			&chunk.ChunkID,
+			&chunk.DocID,
+			&chunk.VersionID,
+			&chunk.CanonicalURI,
+			&chunk.SourceType,
+			&chunk.CorpusScope,
+			&chunk.StructuralKey,
+			&sourceUpdatedAt,
+		); err != nil {
 			return nil, err
+		}
+		if strings.TrimSpace(sourceUpdatedAt) != "" {
+			parsed, err := time.Parse(time.RFC3339Nano, sourceUpdatedAt)
+			if err != nil {
+				return nil, err
+			}
+			chunk.SourceUpdatedAt = parsed
 		}
 		result.AllowChunkIDs = append(result.AllowChunkIDs, chunk.ChunkID)
 		result.Chunks = append(result.Chunks, chunk)
