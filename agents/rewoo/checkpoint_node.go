@@ -12,10 +12,10 @@ import (
 // CheckpointNode is a graph node that saves and restores execution state.
 // It serves as a recovery point within the workflow.
 type CheckpointNode struct {
-	id       string
-	phase    string
-	store    *RewooCheckpointStore
-	Debugf   func(string, ...interface{})
+	id     string
+	phase  string
+	store  *RewooCheckpointStore
+	Debugf func(string, ...interface{})
 }
 
 // NewCheckpointNode creates a new checkpoint node.

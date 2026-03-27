@@ -10,12 +10,12 @@ import (
 func TestLinkDecodeError(t *testing.T) {
 	cause := errors.New("parse failed")
 	err := &chainererrors.LinkDecodeError{
-		LinkName:    "analyze",
+		LinkName:     "analyze",
 		ResponseText: "invalid json",
-		Cause:       cause,
-		RetryCount:  2,
-		MaxRetries:  3,
-		LastAttempt: "retry 2",
+		Cause:        cause,
+		RetryCount:   2,
+		MaxRetries:   3,
+		LastAttempt:  "retry 2",
 	}
 
 	if err.Error() == "" {

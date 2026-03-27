@@ -13,7 +13,7 @@ import (
 
 // mockTool for testing
 type mockTool struct {
-	name      string
+	name       string
 	shouldFail bool
 }
 

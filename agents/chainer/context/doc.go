@@ -21,13 +21,13 @@
 //
 // Enable budget tracking in ChainerAgent:
 //
-//   budget := context.NewBudgetManager(4096)  // 4K token limit
-//   agent.BudgetManager = budget
-//   agent.CompressionListener = context.NewCompressionListener()
+//	budget := context.NewBudgetManager(4096)  // 4K token limit
+//	agent.BudgetManager = budget
+//	agent.CompressionListener = context.NewCompressionListener()
 //
 // On execution, BudgetManager automatically:
-//   1. Tracks token usage per stage
-//   2. Emits warnings at threshold (e.g., 80%)
-//   3. Compresses context on warning
-//   4. Halts on critical overflow
+//  1. Tracks token usage per stage
+//  2. Emits warnings at threshold (e.g., 80%)
+//  3. Compresses context on warning
+//  4. Halts on critical overflow
 package context

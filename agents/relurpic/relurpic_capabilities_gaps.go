@@ -9,25 +9,29 @@ import (
 	"time"
 
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
 type gapDetectorDetectCapabilityHandler struct {
-	model        core.LanguageModel
-	config       *core.Config
-	registry     *capability.Registry
-	indexManager *ast.IndexManager
-	graphDB      *graphdb.Engine
-	retrievalDB  *sql.DB
-	planStore    frameworkplan.PlanStore
-	guidance     *guidance.GuidanceBroker
+	model         core.LanguageModel
+	config        *core.Config
+	registry      *capability.Registry
+	indexManager  *ast.IndexManager
+	graphDB       *graphdb.Engine
+	retrievalDB   *sql.DB
+	planStore     frameworkplan.PlanStore
+	guidance      *guidance.GuidanceBroker
+	workflowStore memory.WorkflowStateStore
 }
 
 func (h gapDetectorDetectCapabilityHandler) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
@@ -40,10 +44,13 @@ func (h gapDetectorDetectCapabilityHandler) Descriptor(context.Context, *core.Co
 		[]string{"analyze", "gap-detect"},
 		[]core.CoordinationExecutionMode{core.CoordinationExecutionModeSync},
 		structuredObjectSchema(map[string]*core.Schema{
-			"file_path":    {Type: "string"},
-			"corpus_scope": {Type: "string"},
-			"anchor_ids":   {Type: "array", Items: &core.Schema{Type: "string"}},
-			"workflow_id":  {Type: "string"},
+			"file_path":               {Type: "string"},
+			"corpus_scope":            {Type: "string"},
+			"anchor_ids":              {Type: "array", Items: &core.Schema{Type: "string"}},
+			"workflow_id":             {Type: "string"},
+			"exploration_id":          {Type: "string"},
+			"exploration_snapshot_id": {Type: "string"},
+			"based_on_revision":       {Type: "string"},
 		}, "file_path", "corpus_scope"),
 		structuredObjectSchema(map[string]*core.Schema{
 			"gaps": {
@@ -93,7 +100,14 @@ func (h gapDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *core.
 	}
 
 	workflowID := stringArg(args["workflow_id"])
+	explorationID := stringArg(args["exploration_id"])
+	snapshotID := stringArg(args["exploration_snapshot_id"])
+	basedOnRevision := stringArg(args["based_on_revision"])
 	for _, gap := range gaps {
+		invalidatedStepIDs, err := invalidatePlanStepsForAnchor(ctx, h.planStore, workflowID, gap.AnchorID)
+		if err != nil {
+			return nil, err
+		}
 		if h.retrievalDB != nil && gap.AnchorID != "" {
 			if err := retrieval.RecordAnchorDrift(ctx, h.retrievalDB, gap.AnchorID, string(gap.Severity), gap.Description); err != nil {
 				return nil, err
@@ -117,7 +131,7 @@ func (h gapDetectorDetectCapabilityHandler) Invoke(ctx context.Context, _ *core.
 			}
 			h.maybeEscalateGap(gap)
 		}
-		if err := invalidatePlanStepsForAnchor(ctx, h.planStore, workflowID, gap.AnchorID); err != nil {
+		if err := h.persistTension(ctx, workflowID, explorationID, snapshotID, basedOnRevision, gap, invalidatedStepIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -446,13 +460,45 @@ func stringSliceArg(raw any) []string {
 	return out
 }
 
-func invalidatePlanStepsForAnchor(ctx context.Context, store frameworkplan.PlanStore, workflowID, anchorID string) error {
-	if store == nil || strings.TrimSpace(workflowID) == "" || strings.TrimSpace(anchorID) == "" {
+func (h gapDetectorDetectCapabilityHandler) persistTension(ctx context.Context, workflowID, explorationID, snapshotID, basedOnRevision string, gap patterns.IntentGap, relatedStepIDs []string) error {
+	if h.workflowStore == nil || strings.TrimSpace(workflowID) == "" {
 		return nil
+	}
+	service := archaeotensions.Service{Store: h.workflowStore}
+	status := archaeodomain.TensionInferred
+	if gap.Severity == patterns.GapSeverityCritical || gap.Severity == patterns.GapSeveritySignificant {
+		status = archaeodomain.TensionUnresolved
+	}
+	var blastRadius []string
+	if h.graphDB != nil && gap.SymbolID != "" {
+		impact := h.graphDB.ImpactSet([]string{gap.SymbolID}, []graphdb.EdgeKind{ast.EdgeKindViolatesContract, ast.EdgeKindDriftsFrom, ast.EdgeKindCalledBy}, 3)
+		blastRadius = append(blastRadius, impact.Affected...)
+	}
+	_, err := service.CreateOrUpdate(ctx, archaeotensions.CreateInput{
+		WorkflowID:         workflowID,
+		ExplorationID:      explorationID,
+		SnapshotID:         snapshotID,
+		SourceRef:          gap.GapID,
+		AnchorRefs:         nonEmptyStrings(gap.AnchorID),
+		SymbolScope:        nonEmptyStrings(gap.SymbolID),
+		Kind:               "intent_gap",
+		Description:        gap.Description,
+		Severity:           string(gap.Severity),
+		Status:             status,
+		BlastRadiusNodeIDs: blastRadius,
+		RelatedPlanStepIDs: relatedStepIDs,
+		BasedOnRevision:    basedOnRevision,
+	})
+	return err
+}
+
+func invalidatePlanStepsForAnchor(ctx context.Context, store frameworkplan.PlanStore, workflowID, anchorID string) ([]string, error) {
+	if store == nil || strings.TrimSpace(workflowID) == "" || strings.TrimSpace(anchorID) == "" {
+		return nil, nil
 	}
 	livingPlan, err := store.LoadPlanByWorkflow(ctx, workflowID)
 	if err != nil || livingPlan == nil {
-		return err
+		return nil, err
 	}
 	event := frameworkplan.InvalidationEvent{
 		Kind:   frameworkplan.InvalidationAnchorDrifted,
@@ -463,8 +509,19 @@ func invalidatePlanStepsForAnchor(ctx context.Context, store frameworkplan.PlanS
 	rule := frameworkplan.InvalidationRule{Kind: frameworkplan.InvalidationAnchorDrifted, Target: anchorID}
 	for _, stepID := range invalidated {
 		if err := store.InvalidateStep(ctx, livingPlan.ID, stepID, rule); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return invalidated, nil
+}
+
+func nonEmptyStrings(values ...string) []string {
+	var out []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }

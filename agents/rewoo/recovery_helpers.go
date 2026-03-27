@@ -69,9 +69,9 @@ func DiagnoseStepFailure(ctx context.Context, state *core.Context, results []Rew
 			SuggestedAction: "retry",
 			RiskLevel:       "low",
 			Metadata: map[string]interface{}{
-				"failed_count":   failedCount,
-				"total_count":    len(results),
-				"failure_ratio":  failureRatio,
+				"failed_count":  failedCount,
+				"total_count":   len(results),
+				"failure_ratio": failureRatio,
 			},
 		})
 		diagnosis.RecommendedID = "retry_failed_steps"
@@ -119,9 +119,9 @@ func DiagnoseStepFailure(ctx context.Context, state *core.Context, results []Rew
 			SuggestedAction: "synthesize_from_results",
 			RiskLevel:       "high",
 			Metadata: map[string]interface{}{
-				"failed_count":   failedCount,
-				"total_count":    len(results),
-				"failure_ratio":  failureRatio,
+				"failed_count":    failedCount,
+				"total_count":     len(results),
+				"failure_ratio":   failureRatio,
 				"partial_results": countPartialResults(results),
 			},
 		})

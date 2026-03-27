@@ -15,24 +15,25 @@ import (
 // If a checkpoint store is provided, checkpoint nodes are inserted at major phase boundaries.
 //
 // Topology (with checkpoints):
-//   plan_node
-//       ↓
-//   checkpoint_post_plan (Phase 7)
-//       ↓
-//   [step nodes inserted here dynamically]
-//       ↓
-//   aggregate_node
-//       ↓
-//   checkpoint_post_execute (Phase 7)
-//       ↓
-//   replan_node ──→ [replan: loops to plan_node]
-//       ├→ [synthesize: proceeds]
-//       ↓
-//   synthesis_node
-//       ↓
-//   checkpoint_post_synthesis (Phase 7)
-//       ↓
-//   done_node
+//
+//	plan_node
+//	    ↓
+//	checkpoint_post_plan (Phase 7)
+//	    ↓
+//	[step nodes inserted here dynamically]
+//	    ↓
+//	aggregate_node
+//	    ↓
+//	checkpoint_post_execute (Phase 7)
+//	    ↓
+//	replan_node ──→ [replan: loops to plan_node]
+//	    ├→ [synthesize: proceeds]
+//	    ↓
+//	synthesis_node
+//	    ↓
+//	checkpoint_post_synthesis (Phase 7)
+//	    ↓
+//	done_node
 func BuildStaticGraph(
 	model core.LanguageModel,
 	registry *capability.Registry,

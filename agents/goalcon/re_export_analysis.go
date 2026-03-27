@@ -21,14 +21,14 @@ type GoalCache = analysis.GoalCache
 
 // Re-exported constructors and functions
 var (
-	NewAmbiguityAnalyzer      = analysis.NewAmbiguityAnalyzer
-	NewGoalClarifier          = analysis.NewGoalClarifier
-	NewGoalDecomposer         = analysis.NewGoalDecomposer
-	NewGoalCache              = analysis.NewGoalCache
-	DefaultClassifierConfig   = analysis.DefaultClassifierConfig
-	ClassifyGoal              = analysis.ClassifyGoal
-	ClassifyGoalWithLLM       = analysis.ClassifyGoalWithLLM
-	ClassifyGoalWithContext   = analysis.ClassifyGoalWithContext
+	NewAmbiguityAnalyzer    = analysis.NewAmbiguityAnalyzer
+	NewGoalClarifier        = analysis.NewGoalClarifier
+	NewGoalDecomposer       = analysis.NewGoalDecomposer
+	NewGoalCache            = analysis.NewGoalCache
+	DefaultClassifierConfig = analysis.DefaultClassifierConfig
+	ClassifyGoal            = analysis.ClassifyGoal
+	ClassifyGoalWithLLM     = analysis.ClassifyGoalWithLLM
+	ClassifyGoalWithContext = analysis.ClassifyGoalWithContext
 )
 
 const (

@@ -32,8 +32,8 @@ const (
 // NewCompressionListener creates a listener with adaptive compression.
 func NewCompressionListener() *CompressionListener {
 	return &CompressionListener{
-		strategy:    StrategyAdaptive,
-		lastWarning: 0,
+		strategy:     StrategyAdaptive,
+		lastWarning:  0,
 		warningCount: 0,
 	}
 }
@@ -41,8 +41,8 @@ func NewCompressionListener() *CompressionListener {
 // NewCompressionListenerWithStrategy creates a listener with specified strategy.
 func NewCompressionListenerWithStrategy(strategy CompressionStrategy) *CompressionListener {
 	return &CompressionListener{
-		strategy:    strategy,
-		lastWarning: 0,
+		strategy:     strategy,
+		lastWarning:  0,
 		warningCount: 0,
 	}
 }

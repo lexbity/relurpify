@@ -12,6 +12,6 @@ type Operator = types.Operator
 type OperatorRegistry = types.OperatorRegistry
 
 var (
-	NewWorldState = types.NewWorldState
+	NewWorldState       = types.NewWorldState
 	NewOperatorRegistry = types.NewOperatorRegistry
 )

@@ -6,12 +6,12 @@ import (
 
 // LinkDecodeError is returned when a link's LLM response cannot be parsed.
 type LinkDecodeError struct {
-	LinkName       string
-	ResponseText   string
-	Cause          error
-	RetryCount     int
-	MaxRetries     int
-	LastAttempt    string
+	LinkName     string
+	ResponseText string
+	Cause        error
+	RetryCount   int
+	MaxRetries   int
+	LastAttempt  string
 }
 
 func (e *LinkDecodeError) Error() string {
@@ -33,13 +33,13 @@ func (e *LinkDecodeError) Unwrap() error {
 
 // LinkValidationError is returned when a link's parsed output doesn't match its schema.
 type LinkValidationError struct {
-	LinkName        string
-	OutputKey       string
-	ParsedOutput    any
-	ExpectedSchema  string
-	ValidationErr   error
-	RetryCount      int
-	MaxRetries      int
+	LinkName       string
+	OutputKey      string
+	ParsedOutput   any
+	ExpectedSchema string
+	ValidationErr  error
+	RetryCount     int
+	MaxRetries     int
 }
 
 func (e *LinkValidationError) Error() string {

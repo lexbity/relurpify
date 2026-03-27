@@ -12,10 +12,10 @@ import (
 // CodeIndexSnapshot represents a point-in-time snapshot of the code index.
 type CodeIndexSnapshot struct {
 	// Metadata
-	SnapshotID   string
-	TaskID       string
-	Timestamp    time.Time
-	LinkName     string // Last link executed when snapshot taken
+	SnapshotID string
+	TaskID     string
+	Timestamp  time.Time
+	LinkName   string // Last link executed when snapshot taken
 
 	// Indexed snippets
 	Snippets []*IndexedCodeSnippet
@@ -137,10 +137,10 @@ func (s *PersistedCodeIndexStore) DeleteSnapshot(taskID, snapshotID string) erro
 // Phase 8: Bridges CodeIndex and PersistedCodeIndexStore, enabling transparent
 // snapshot creation at checkpoint boundaries and recovery from persisted snapshots.
 type PersistenceManager struct {
-	index      *CodeIndex
-	store      *PersistedCodeIndexStore
-	taskID     string
-	lastSnap   string
+	index    *CodeIndex
+	store    *PersistedCodeIndexStore
+	taskID   string
+	lastSnap string
 }
 
 // NewPersistenceManager creates a manager that bridges indexing and persistence.

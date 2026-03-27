@@ -17,8 +17,8 @@ type PlanningResult struct {
 type Solver struct {
 	Operators       *types.OperatorRegistry
 	MaxDepth        int
-	Recorder        *audit.MetricsRecorder               // Optional metrics recorder for quality-based operator ranking
-	FailedOperators map[string]int                // Phase 6: Track failed operators and their failure counts
+	Recorder        *audit.MetricsRecorder // Optional metrics recorder for quality-based operator ranking
+	FailedOperators map[string]int         // Phase 6: Track failed operators and their failure counts
 }
 
 // Solve resolves the goal against the world state.

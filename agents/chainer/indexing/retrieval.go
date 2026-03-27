@@ -12,7 +12,7 @@ type RetrievalQuery struct {
 	SymbolNames []string
 
 	// Path-based retrieval
-	FilePath string
+	FilePath        string
 	FilePathPattern string
 
 	// Content-based retrieval
@@ -28,7 +28,7 @@ type RetrievalQuery struct {
 	Since time.Time
 
 	// Filters
-	Language string
+	Language      string
 	ExcludeErrors bool
 
 	// Limits
@@ -132,15 +132,15 @@ func (r *Retriever) RetrieveRecent(duration time.Duration, limit int) []*Indexed
 
 // Statistics returns statistics about indexed code.
 type Statistics struct {
-	TotalSnippets    int
-	UniqueLanguages  int
-	UniquePaths      int
-	UniqueSymbols    int
-	ErrorSnippets    int
-	SuccessSnippets  int
-	Languages        map[string]int
-	TopSymbols       map[string]int
-	TopFiles         map[string]int
+	TotalSnippets   int
+	UniqueLanguages int
+	UniquePaths     int
+	UniqueSymbols   int
+	ErrorSnippets   int
+	SuccessSnippets int
+	Languages       map[string]int
+	TopSymbols      map[string]int
+	TopFiles        map[string]int
 }
 
 // Stats generates statistics about the index.

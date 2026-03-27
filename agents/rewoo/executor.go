@@ -13,11 +13,11 @@ import (
 var rewooErrReplanRequired = errors.New("rewoo: replan required")
 
 type rewooExecutor struct {
-	Registry              *capability.Registry
-	PermissionManager     *authorization.PermissionManager
-	OnFailure             StepOnFailure
-	MaxSteps              int
-	OnPermissionDenied    StepOnFailure // How to handle denied permissions (default: abort)
+	Registry           *capability.Registry
+	PermissionManager  *authorization.PermissionManager
+	OnFailure          StepOnFailure
+	MaxSteps           int
+	OnPermissionDenied StepOnFailure // How to handle denied permissions (default: abort)
 }
 
 func (e *rewooExecutor) Execute(ctx context.Context, plan *RewooPlan, state *core.Context) ([]RewooStepResult, error) {

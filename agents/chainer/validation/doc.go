@@ -9,10 +9,10 @@
 // # Validation Flow
 //
 // LinkStage.Validate() uses Validator to check LLM output:
-//   1. Check if schema defined (skip if not)
-//   2. Attempt parse (JSON decode for JSONSchema mode)
-//   3. Run schema validation rules
-//   4. Return ValidationError on failure (triggers retry)
+//  1. Check if schema defined (skip if not)
+//  2. Attempt parse (JSON decode for JSONSchema mode)
+//  3. Run schema validation rules
+//  4. Return ValidationError on failure (triggers retry)
 //
 // # Usage Example
 //

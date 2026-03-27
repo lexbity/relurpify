@@ -167,9 +167,9 @@ func TestFailureDetector_ShouldRetry(t *testing.T) {
 	detector := NewFailureDetector(nil, nil)
 
 	tests := []struct {
-		name       string
-		fc         *FailureContext
-		policy     *RetryPolicy
+		name        string
+		fc          *FailureContext
+		policy      *RetryPolicy
 		shouldRetry bool
 	}{
 		{
@@ -211,10 +211,10 @@ func TestFailureDetector_ShouldRetry(t *testing.T) {
 // TestFailureCategory_String tests string representation.
 func TestFailureCategory_String(t *testing.T) {
 	tests := map[FailureCategory]string{
-		FailureCategoryTransientError:    "transient_error",
-		FailureCategoryPermanentFailure:  "permanent_failure",
+		FailureCategoryTransientError:      "transient_error",
+		FailureCategoryPermanentFailure:    "permanent_failure",
 		FailureCategoryInsufficientContext: "insufficient_context",
-		FailureCategoryUnexpectedOutput:  "unexpected_output",
+		FailureCategoryUnexpectedOutput:    "unexpected_output",
 	}
 
 	for category, expectedStr := range tests {

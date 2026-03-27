@@ -17,11 +17,11 @@ type ExecutionEvent struct {
 
 // ExecutionTrace tracks all events during a plan execution.
 type ExecutionTrace struct {
-	PlanGoal      string
-	StartTime     time.Time
-	EndTime       time.Time
-	Events        []ExecutionEvent
-	StepResults   map[string]*StepExecutionResult
+	PlanGoal    string
+	StartTime   time.Time
+	EndTime     time.Time
+	Events      []ExecutionEvent
+	StepResults map[string]*StepExecutionResult
 }
 
 // NewExecutionTrace creates a new execution trace.
@@ -57,9 +57,9 @@ func (t *ExecutionTrace) RecordPlanComplete(success bool, stepCount int) {
 	t.recordEvent(ExecutionEvent{
 		EventType: "plan_complete",
 		Data: map[string]any{
-			"success":        success,
-			"step_count":     stepCount,
-			"duration":       t.EndTime.Sub(t.StartTime).String(),
+			"success":    success,
+			"step_count": stepCount,
+			"duration":   t.EndTime.Sub(t.StartTime).String(),
 		},
 	})
 }
@@ -94,12 +94,12 @@ func (t *ExecutionTrace) RecordStepComplete(result *StepExecutionResult) {
 		StepID:    result.StepID,
 		ToolName:  result.ToolName,
 		Data: map[string]any{
-			"step_id":   result.StepID,
-			"tool":      result.ToolName,
-			"success":   result.Success,
-			"duration":  result.Duration.String(),
-			"output":    result.Output,
-			"retries":   result.Retries,
+			"step_id":  result.StepID,
+			"tool":     result.ToolName,
+			"success":  result.Success,
+			"duration": result.Duration.String(),
+			"output":   result.Output,
+			"retries":  result.Retries,
 		},
 	}
 

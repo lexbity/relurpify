@@ -20,6 +20,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
@@ -93,6 +94,9 @@ func WithPlanStore(store frameworkplan.PlanStore) RelurpicOption {
 func WithRetrievalDB(db *sql.DB) RelurpicOption { return relurpicpkg.WithRetrievalDB(db) }
 func WithGuidanceBroker(broker *guidance.GuidanceBroker) RelurpicOption {
 	return relurpicpkg.WithGuidanceBroker(broker)
+}
+func WithWorkflowStore(store memory.WorkflowStateStore) RelurpicOption {
+	return relurpicpkg.WithWorkflowStore(store)
 }
 
 func RegisterAgentCapabilities(registry *capability.Registry, env agentenv.AgentEnvironment) error {

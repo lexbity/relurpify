@@ -16,12 +16,12 @@ import (
 //   - Listener notifications for budget events
 //   - Integration hooks for compression
 type SimpleBudgetTracker struct {
-	mu             sync.RWMutex
-	totalTokens    int
-	usedTokens     int
-	categories     map[string]int // category name → tokens used
-	warningPercent int             // e.g., 80 (80% = warning threshold)
-	listeners      []BudgetListener
+	mu               sync.RWMutex
+	totalTokens      int
+	usedTokens       int
+	categories       map[string]int // category name → tokens used
+	warningPercent   int            // e.g., 80 (80% = warning threshold)
+	listeners        []BudgetListener
 	warningTriggered bool
 }
 
@@ -51,10 +51,10 @@ func (m *SimpleBudgetTracker) Budget() map[string]interface{} {
 	defer m.mu.RUnlock()
 
 	return map[string]interface{}{
-		"total": m.totalTokens,
-		"used":  m.usedTokens,
+		"total":     m.totalTokens,
+		"used":      m.usedTokens,
 		"remaining": m.totalTokens - m.usedTokens,
-		"percent": (m.usedTokens * 100) / m.totalTokens,
+		"percent":   (m.usedTokens * 100) / m.totalTokens,
 	}
 }
 

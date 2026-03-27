@@ -12,11 +12,11 @@ import (
 
 // StepExecutionRequest encapsulates parameters for executing a single plan step.
 type StepExecutionRequest struct {
-	Step             core.PlanStep
-	Context          *core.Context
+	Step               core.PlanStep
+	Context            *core.Context
 	CapabilityRegistry *capability.Registry
-	Timeout          time.Duration
-	OnFailure        FailureMode // How to handle step failure
+	Timeout            time.Duration
+	OnFailure          FailureMode // How to handle step failure
 }
 
 // FailureMode determines behavior when a step fails.
@@ -24,29 +24,29 @@ type FailureMode int
 
 const (
 	FailureModeAbort    FailureMode = iota // Stop execution immediately
-	FailureModeContinue                      // Log error and continue
-	FailureModeRetry                         // Retry with backoff
+	FailureModeContinue                    // Log error and continue
+	FailureModeRetry                       // Retry with backoff
 )
 
 // StepExecutionResult captures the outcome of executing a step.
 type StepExecutionResult struct {
-	StepID        string
-	Success       bool
-	Duration      time.Duration
-	ToolName      string
-	Error         error
-	Output        map[string]any
-	ExecutedAt    time.Time
-	Retries       int
-	CapabilityID  string
+	StepID       string
+	Success      bool
+	Duration     time.Duration
+	ToolName     string
+	Error        error
+	Output       map[string]any
+	ExecutedAt   time.Time
+	Retries      int
+	CapabilityID string
 }
 
 // StepExecutor executes individual plan steps via capability invocation.
 type StepExecutor struct {
 	registry   *capability.Registry
 	timeout    time.Duration
-	metrics    *audit.MetricsRecorder          // Optional metrics recording
-	auditTrail *audit.CapabilityAuditTrail     // Optional audit trail (Phase 5)
+	metrics    *audit.MetricsRecorder      // Optional metrics recording
+	auditTrail *audit.CapabilityAuditTrail // Optional audit trail (Phase 5)
 }
 
 // NewStepExecutor creates a new step executor.
@@ -190,11 +190,11 @@ func (e *StepExecutor) executeToolStep(
 	return &core.Result{
 		Success: true,
 		Data: map[string]any{
-			"step_id":      step.ID,
-			"tool":         step.Tool,
-			"capability":   cap.Name,
-			"executed":     true,
-			"placeholder":  true, // Indicates this is not a real execution
+			"step_id":     step.ID,
+			"tool":        step.Tool,
+			"capability":  cap.Name,
+			"executed":    true,
+			"placeholder": true, // Indicates this is not a real execution
 		},
 	}, nil
 }
@@ -264,9 +264,9 @@ func (e *StepExecutor) recordMetrics(result *StepExecutionResult) {
 
 // ExecutorChain allows sequential execution of multiple steps with error handling.
 type ExecutorChain struct {
-	executor  *StepExecutor
+	executor    *StepExecutor
 	failureMode FailureMode
-	results   []*StepExecutionResult
+	results     []*StepExecutionResult
 }
 
 // NewExecutorChain creates a new execution chain.

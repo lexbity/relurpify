@@ -43,21 +43,21 @@ type FileFocus struct {
 type CostClass string
 
 const (
-	CostClassFast   CostClass = "fast"      // < 1 second expected
-	CostClassMedium CostClass = "medium"    // 1-10 seconds expected
-	CostClassSlow   CostClass = "slow"      // > 10 seconds expected
-	CostClassUnknown CostClass = "unknown"  // Unknown cost
+	CostClassFast    CostClass = "fast"    // < 1 second expected
+	CostClassMedium  CostClass = "medium"  // 1-10 seconds expected
+	CostClassSlow    CostClass = "slow"    // > 10 seconds expected
+	CostClassUnknown CostClass = "unknown" // Unknown cost
 )
 
 // RetryClass categorizes when and how a step can be retried.
 type RetryClass string
 
 const (
-	RetryClassNone        RetryClass = "none"        // Never retry
-	RetryClassIdempotent  RetryClass = "idempotent"  // Safe to retry unconditionally
-	RetryClassStateless   RetryClass = "stateless"   // Retry after state reset
-	RetryClassProbed      RetryClass = "probed"      // Retry after probe/validation
-	RetryClassUnknown     RetryClass = "unknown"     // Unknown retry semantics
+	RetryClassNone       RetryClass = "none"       // Never retry
+	RetryClassIdempotent RetryClass = "idempotent" // Safe to retry unconditionally
+	RetryClassStateless  RetryClass = "stateless"  // Retry after state reset
+	RetryClassProbed     RetryClass = "probed"     // Retry after probe/validation
+	RetryClassUnknown    RetryClass = "unknown"    // Unknown retry semantics
 )
 
 // EnhancedSubtaskSpec extends SubtaskSpec with Phase 8 runtime hints.

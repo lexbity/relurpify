@@ -8,19 +8,21 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )
 
 type relurpicOptions struct {
-	IndexManager *ast.IndexManager
-	Registry     *capability.Registry
-	GraphDB      *graphdb.Engine
-	PatternStore patterns.PatternStore
-	CommentStore patterns.CommentStore
-	RetrievalDB  *sql.DB
-	PlanStore    frameworkplan.PlanStore
-	Guidance     *guidance.GuidanceBroker
+	IndexManager  *ast.IndexManager
+	Registry      *capability.Registry
+	GraphDB       *graphdb.Engine
+	PatternStore  patterns.PatternStore
+	CommentStore  patterns.CommentStore
+	RetrievalDB   *sql.DB
+	PlanStore     frameworkplan.PlanStore
+	Guidance      *guidance.GuidanceBroker
+	WorkflowStore memory.WorkflowStateStore
 }
 
 type RelurpicOption func(*relurpicOptions)
@@ -67,6 +69,12 @@ func WithGuidanceBroker(broker *guidance.GuidanceBroker) RelurpicOption {
 	}
 }
 
+func WithWorkflowStore(store memory.WorkflowStateStore) RelurpicOption {
+	return func(opts *relurpicOptions) {
+		opts.WorkflowStore = store
+	}
+}
+
 func applyRelurpicOptions(base relurpicOptions, opts []RelurpicOption) relurpicOptions {
 	resolved := base
 	for _, opt := range opts {
@@ -103,14 +111,15 @@ func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model co
 			retrievalDB:  resolved.RetrievalDB,
 		},
 		gapDetectorDetectCapabilityHandler{
-			model:        model,
-			config:       cfg,
-			registry:     resolved.Registry,
-			indexManager: resolved.IndexManager,
-			graphDB:      resolved.GraphDB,
-			retrievalDB:  resolved.RetrievalDB,
-			planStore:    resolved.PlanStore,
-			guidance:     resolved.Guidance,
+			model:         model,
+			config:        cfg,
+			registry:      resolved.Registry,
+			indexManager:  resolved.IndexManager,
+			graphDB:       resolved.GraphDB,
+			retrievalDB:   resolved.RetrievalDB,
+			planStore:     resolved.PlanStore,
+			guidance:      resolved.Guidance,
+			workflowStore: resolved.WorkflowStore,
 		},
 		prospectiveMatcherMatchCapabilityHandler{
 			model:        model,

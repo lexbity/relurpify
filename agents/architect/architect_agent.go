@@ -1276,7 +1276,7 @@ func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *d
 			EventType:  "security.capability_invoked",
 			Message:    message,
 			Metadata:   metadata,
-			CreatedAt: createdAt,
+			CreatedAt:  createdAt,
 		})
 		return
 	}

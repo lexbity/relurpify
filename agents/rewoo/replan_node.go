@@ -12,11 +12,11 @@ import (
 // - If any steps failed with OnFailure=replan → go to "replan"
 // - Otherwise → go to "synthesize"
 type ReplanNode struct {
-	id                  string
-	MaxReplanAttempts   int
-	CurrentAttempt      int
-	ReplanThreshold     float64 // e.g. 0.5 = replan if 50%+ steps failed
-	Debugf              func(string, ...interface{})
+	id                string
+	MaxReplanAttempts int
+	CurrentAttempt    int
+	ReplanThreshold   float64 // e.g. 0.5 = replan if 50%+ steps failed
+	Debugf            func(string, ...interface{})
 }
 
 // NewReplanNode creates a new replan decision node.
@@ -102,9 +102,9 @@ func (n *ReplanNode) Execute(ctx context.Context, state *core.Context) (*core.Re
 		return &core.Result{
 			Success: true,
 			Data: map[string]interface{}{
-				"next_node":       "plan",
-				"replan_attempt":  n.CurrentAttempt + 1,
-				"failure_ratio":   failureRatio,
+				"next_node":      "plan",
+				"replan_attempt": n.CurrentAttempt + 1,
+				"failure_ratio":  failureRatio,
 			},
 		}, nil
 	}

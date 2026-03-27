@@ -18,8 +18,8 @@ const (
 // Validator validates output according to a schema.
 type Validator struct {
 	Mode   SchemaMode
-	Schema string                                              // JSON Schema as string
-	Custom func(parsed any) error                             // Custom validation function
+	Schema string                 // JSON Schema as string
+	Custom func(parsed any) error // Custom validation function
 }
 
 // Validate checks parsed output against the schema.

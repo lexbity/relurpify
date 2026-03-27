@@ -105,7 +105,7 @@ func (c OperatorMetricsCollection) Snapshot() MetricsSnapshot {
 
 // MetricsSnapshot is a read-only snapshot of collected metrics.
 type MetricsSnapshot struct {
-	Operators map[string]OperatorMetrics
+	Operators    map[string]OperatorMetrics
 	SnapshotTime time.Time
 }
 

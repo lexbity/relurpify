@@ -329,14 +329,14 @@ func compactHTNCheckpointState(state *core.Context) {
 
 func compactHTNCheckpoint(checkpoint runtime.CheckpointState) map[string]any {
 	return map[string]any{
-		"checkpoint_id":    checkpoint.CheckpointID,
-		"stage_name":       checkpoint.StageName,
-		"stage_index":      checkpoint.StageIndex,
-		"workflow_id":      checkpoint.WorkflowID,
-		"run_id":           checkpoint.RunID,
-		"completed_steps":  len(checkpoint.CompletedSteps),
-		"has_snapshot":     checkpoint.Snapshot != nil,
-		"schema_version":   checkpoint.SchemaVersion,
+		"checkpoint_id":   checkpoint.CheckpointID,
+		"stage_name":      checkpoint.StageName,
+		"stage_index":     checkpoint.StageIndex,
+		"workflow_id":     checkpoint.WorkflowID,
+		"run_id":          checkpoint.RunID,
+		"completed_steps": len(checkpoint.CompletedSteps),
+		"has_snapshot":    checkpoint.Snapshot != nil,
+		"schema_version":  checkpoint.SchemaVersion,
 	}
 }
 

@@ -62,10 +62,10 @@ func TestOperatorMetrics_SuccessRateOrDefault(t *testing.T) {
 		{
 			name: "with executions",
 			metrics: &audit.OperatorMetrics{
-				Name:           "op",
-				SuccessfulCount:   8,
+				Name:            "op",
+				SuccessfulCount: 8,
 				TotalExecutions: 10,
-				SuccessRate:    0.8,
+				SuccessRate:     0.8,
 			},
 			defaultRate: 0.5,
 			expected:    0.8,
@@ -309,8 +309,8 @@ func TestSaveAndLoadMetricsFromMemory(t *testing.T) {
 func TestMetricsJSON_Marshaling(t *testing.T) {
 	m := &audit.OperatorMetrics{
 		Name:            "TestOp",
-		SuccessfulCount:    5,
-		FailedCount:    2,
+		SuccessfulCount: 5,
+		FailedCount:     2,
 		TotalExecutions: 7,
 		AvgDuration:     100 * time.Millisecond,
 		SuccessRate:     5.0 / 7.0,

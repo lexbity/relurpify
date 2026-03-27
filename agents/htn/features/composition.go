@@ -73,18 +73,18 @@ type CompositionComponent struct {
 
 // PerformanceMetrics tracks method effectiveness over time.
 type PerformanceMetrics struct {
-	MethodName         string
-	TaskType           core.TaskType
-	TotalExecutions    int
-	SuccessfulRuns     int
-	FailedRuns         int
-	SkippedRuns        int
-	SuccessRate        float64
-	AverageDuration    int // seconds
-	AverageCost        string
-	TrendDirection     string // "improving", "stable", "degrading"
-	LastExecutionTime  time.Time
-	RecommendedRating  float64 // 0.0 to 1.0
+	MethodName        string
+	TaskType          core.TaskType
+	TotalExecutions   int
+	SuccessfulRuns    int
+	FailedRuns        int
+	SkippedRuns       int
+	SuccessRate       float64
+	AverageDuration   int // seconds
+	AverageCost       string
+	TrendDirection    string // "improving", "stable", "degrading"
+	LastExecutionTime time.Time
+	RecommendedRating float64 // 0.0 to 1.0
 }
 
 // MethodPerformanceTracker analyzes method effectiveness.
@@ -364,9 +364,9 @@ func (c *RecursiveDecompositionContext) GetDecompositionPath() string {
 
 // ComposableSubtaskSpec wraps a subtask with composition info.
 type ComposableSubtaskSpec struct {
-	Subtask      runtime.SubtaskSpec
+	Subtask       runtime.SubtaskSpec
 	IsComposition bool
-	ComposedName string // Name of composed method if IsComposition is true
+	ComposedName  string // Name of composed method if IsComposition is true
 }
 
 // MethodCompositionAnalyzer analyzes method composition patterns.
@@ -408,14 +408,14 @@ func (a *MethodCompositionAnalyzer) FindCompositionCycles() [][]string {
 
 // ComputeCompositionMetrics analyzes composition characteristics.
 type CompositionMetrics struct {
-	MethodName            string
-	IsComposed            bool
-	CompositionDepth      int
-	ComponentCount        int
-	ParallelizableCount   int
-	SequentialCount       int
-	EstimatedDuration     int
-	EstimatedComplexity   string // "simple", "moderate", "complex"
+	MethodName          string
+	IsComposed          bool
+	CompositionDepth    int
+	ComponentCount      int
+	ParallelizableCount int
+	SequentialCount     int
+	EstimatedDuration   int
+	EstimatedComplexity string // "simple", "moderate", "complex"
 }
 
 // AnalyzeComposition returns metrics about a method.
@@ -453,11 +453,11 @@ func (a *MethodCompositionAnalyzer) AnalyzeComposition(methodName string) *Compo
 
 // MethodLibrarySnapshot captures library state at a point in time.
 type MethodLibrarySnapshot struct {
-	Timestamp      time.Time
-	MethodCount    int
-	TaskTypes      map[string]int // count by task type
+	Timestamp       time.Time
+	MethodCount     int
+	TaskTypes       map[string]int // count by task type
 	AveragePriority float64
-	Metadata       map[string]any
+	Metadata        map[string]any
 }
 
 // CaptureSnapshot creates a snapshot of the library.

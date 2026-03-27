@@ -14,9 +14,9 @@ import (
 // only those tools are available to the stage. Otherwise, all tools are available
 // (backward compatible behavior).
 type ScopedLinkStage struct {
-	stage        pipeline.Stage        // Underlying LinkStage
-	link         *chainer.Link         // Link definition (for tool restrictions)
-	evaluator    *PolicyEvaluator      // Evaluates tool access policies
+	stage     pipeline.Stage   // Underlying LinkStage
+	link      *chainer.Link    // Link definition (for tool restrictions)
+	evaluator *PolicyEvaluator // Evaluates tool access policies
 }
 
 // NewScopedLinkStage wraps a LinkStage with tool scoping capability.

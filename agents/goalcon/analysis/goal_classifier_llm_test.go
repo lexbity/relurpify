@@ -185,8 +185,8 @@ func TestClassifyGoalWithLLM_Caching(t *testing.T) {
 }
 
 type callTrackingModel struct {
-	baseModel  *mockLLMModel
-	callCount  *int
+	baseModel *mockLLMModel
+	callCount *int
 }
 
 func (m *callTrackingModel) Generate(ctx context.Context, prompt string, opts *core.LLMOptions) (*core.LLMResponse, error) {
@@ -264,8 +264,8 @@ func TestClassificationPrompt_Parsing(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "json with markdown",
-			raw: "```json\n{\n  \"predicates\": [\"x\"],\n  \"confidence\": 0.9,\n  \"reasoning\": \"test\"\n}\n```",
+			name:    "json with markdown",
+			raw:     "```json\n{\n  \"predicates\": [\"x\"],\n  \"confidence\": 0.9,\n  \"reasoning\": \"test\"\n}\n```",
 			wantErr: false,
 		},
 		{

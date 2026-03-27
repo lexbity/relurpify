@@ -45,7 +45,6 @@ func TestBudgetManager_Track(t *testing.T) {
 	}
 }
 
-
 func TestBudgetManager_WarningThreshold(t *testing.T) {
 	manager := context.NewBudgetManager(1000)
 	listener := &testBudgetListener{warningsCaught: 0}

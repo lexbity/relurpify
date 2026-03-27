@@ -12,9 +12,9 @@ import (
 // registry policies, trust classes, and link configurations.
 //
 // Phase 6 stub: Basic evaluator that checks:
-//   1. Tool presence in registry
-//   2. Tool trust class (trusted vs untrusted)
-//   3. Link AllowedTools/RequiredTools constraints
+//  1. Tool presence in registry
+//  2. Tool trust class (trusted vs untrusted)
+//  3. Link AllowedTools/RequiredTools constraints
 //
 // Phase 6+ will add: user approval tracking, risk class evaluation, audit logging
 type PolicyEvaluator struct {
@@ -31,11 +31,11 @@ func NewPolicyEvaluator(registry *capability.Registry) *PolicyEvaluator {
 // CanInvoke determines if a link can invoke a specific tool.
 //
 // Evaluation logic:
-//   1. Check link AllowedTools whitelist (always enforced)
-//   2. Check link RequiredTools constraints
-//   3. Check tool exists in registry (if registry present)
-//   4. Check tool trust class (if registry present)
-//   5. Return decision
+//  1. Check link AllowedTools whitelist (always enforced)
+//  2. Check link RequiredTools constraints
+//  3. Check tool exists in registry (if registry present)
+//  4. Check tool trust class (if registry present)
+//  5. Return decision
 func (e *PolicyEvaluator) CanInvoke(link *chainer.Link, toolID string) bool {
 	if link == nil {
 		return true // No link constraints, allow by default

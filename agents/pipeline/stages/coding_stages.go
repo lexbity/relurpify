@@ -220,7 +220,7 @@ func (s *CodeStage) Contract() pipeline.ContractDescriptor {
 func (s *CodeStage) BuildPrompt(ctx *core.Context) (string, error) {
 	raw, _ := ctx.Get("pipeline.plan")
 	return buildStagePrompt("code", s.Task, ctx, "Fix plan", map[string]any{
-		"fix_plan": raw,
+		"fix_plan":     raw,
 		"instructions": "Return requested edit intents only. Do not mutate files in this stage. For every update action, content must be the complete final file contents, not a partial snippet. Use file_read first if you need the current file.",
 	}, s.AllowedToolNames(), `{
   "edits":[{"path":"...","action":"create|update|delete","content":"...","summary":"..."}],

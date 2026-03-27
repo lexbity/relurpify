@@ -31,9 +31,9 @@ func appendBlackboardAudit(state *core.Context, message string, metadata map[str
 		return
 	}
 	entry := map[string]any{
-		"message":    strings.TrimSpace(message),
-		"timestamp":  time.Now().UTC(),
-		"metadata":   cloneTelemetryMetadata(metadata),
+		"message":   strings.TrimSpace(message),
+		"timestamp": time.Now().UTC(),
+		"metadata":  cloneTelemetryMetadata(metadata),
 	}
 	raw, _ := state.Get(contextKeyAuditTrail)
 	existing, _ := raw.([]map[string]any)

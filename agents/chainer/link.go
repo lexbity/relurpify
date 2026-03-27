@@ -43,11 +43,11 @@ type Link struct {
 	OnFailure    FailurePolicy
 	MaxRetries   int
 	// Phase 5: Validation & Transitions
-	Schema     string          // JSON Schema for output validation (optional)
-	Transition TransitionKind  // How to continue after this link
-	SkipTo     string          // Link name to skip to on error (if Transition == SkipOnError)
+	Schema     string         // JSON Schema for output validation (optional)
+	Transition TransitionKind // How to continue after this link
+	SkipTo     string         // Link name to skip to on error (if Transition == SkipOnError)
 	// Phase 6: Tool Integration & Capabilities
-	AllowedTools []string // Restrict which tools this link can access (optional; empty = all allowed)
+	AllowedTools  []string // Restrict which tools this link can access (optional; empty = all allowed)
 	RequiredTools []string // Tools this link must have access to (optional)
 }
 

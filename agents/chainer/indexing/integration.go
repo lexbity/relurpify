@@ -13,10 +13,10 @@ import (
 // Extracts symbols and metadata from evaluation results to support context-aware
 // tool invocations in subsequent links.
 type IndexingListener struct {
-	index      *CodeIndex
-	retriever  *Retriever
-	taskID     string
-	idCounter  int
+	index     *CodeIndex
+	retriever *Retriever
+	taskID    string
+	idCounter int
 }
 
 // NewIndexingListener creates a listener that will index code into the given index.

@@ -25,9 +25,9 @@
 //
 // # Integration Flow
 //
-//   1. LinkStage declares AllowedTools/RequiredTools
-//   2. pipeline.Runner queries AllowedToolNames()
-//   3. Policy evaluator checks each tool access
-//   4. Tool result wrapped in CapabilityResultEnvelope
-//   5. Provenance tracked in context and telemetry
+//  1. LinkStage declares AllowedTools/RequiredTools
+//  2. pipeline.Runner queries AllowedToolNames()
+//  3. Policy evaluator checks each tool access
+//  4. Tool result wrapped in CapabilityResultEnvelope
+//  5. Provenance tracked in context and telemetry
 package capabilities

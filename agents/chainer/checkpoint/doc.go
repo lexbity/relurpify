@@ -19,18 +19,18 @@
 //
 // Create a checkpoint store:
 //
-//   store := checkpoint.NewSQLiteStore(dbPath)
+//	store := checkpoint.NewSQLiteStore(dbPath)
 //
 // Enable checkpointing in ChainerAgent:
 //
-//   agent.CheckpointStore = store
-//   agent.CheckpointAfterStage = true
+//	agent.CheckpointStore = store
+//	agent.CheckpointAfterStage = true
 //
 // On interruption, recovering is automatic:
 //
-//   manager := checkpoint.NewRecoveryManager(store)
-//   resumeCP, err := manager.FindLastCheckpoint(taskID)
-//   if resumeCP != nil {
-//       // Pipeline runner will resume from resumeCP
-//   }
+//	manager := checkpoint.NewRecoveryManager(store)
+//	resumeCP, err := manager.FindLastCheckpoint(taskID)
+//	if resumeCP != nil {
+//	    // Pipeline runner will resume from resumeCP
+//	}
 package checkpoint

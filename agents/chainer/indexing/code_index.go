@@ -15,15 +15,15 @@ type IndexedCodeSnippet struct {
 	Timestamp time.Time // When indexed
 
 	// Content
-	Source       string // Original source code
-	FilePath     string // File path (if known)
-	Language     string // Programming language
-	StartLine    int    // Start line in source (if applicable)
-	EndLine      int    // End line in source (if applicable)
+	Source    string // Original source code
+	FilePath  string // File path (if known)
+	Language  string // Programming language
+	StartLine int    // Start line in source (if applicable)
+	EndLine   int    // End line in source (if applicable)
 
 	// Extracted Symbols
-	Symbols     []string // Function/type/constant names found
-	Imports     []string // Package/module imports
+	Symbols      []string // Function/type/constant names found
+	Imports      []string // Package/module imports
 	Dependencies []string // Referenced symbols from other sources
 
 	// Metadata

@@ -11,10 +11,10 @@ import (
 type FailureCategory int
 
 const (
-	FailureCategoryTransientError    FailureCategory = iota // Retry candidate (timeout, rate-limit, network)
-	FailureCategoryPermanentFailure                         // No retry (capability missing, invalid params)
-	FailureCategoryInsufficientContext                       // Need world state update
-	FailureCategoryUnexpectedOutput                          // Result contradicts expectations
+	FailureCategoryTransientError      FailureCategory = iota // Retry candidate (timeout, rate-limit, network)
+	FailureCategoryPermanentFailure                           // No retry (capability missing, invalid params)
+	FailureCategoryInsufficientContext                        // Need world state update
+	FailureCategoryUnexpectedOutput                           // Result contradicts expectations
 )
 
 // String returns the string representation of a FailureCategory.
@@ -35,26 +35,26 @@ func (fc FailureCategory) String() string {
 
 // FailureContext provides detailed information about a step failure.
 type FailureContext struct {
-	StepID        string
-	ToolName      string
-	CapabilityID  string
-	Error         error
-	Category      FailureCategory
-	SuccessRate   float64   // Historical success rate of this operator (0.0-1.0)
-	RetryCount    int       // Attempts so far
-	LastError     string    // Previous error message
-	Suggestion    string    // Recovery suggestion
-	Timestamp     time.Time
+	StepID       string
+	ToolName     string
+	CapabilityID string
+	Error        error
+	Category     FailureCategory
+	SuccessRate  float64 // Historical success rate of this operator (0.0-1.0)
+	RetryCount   int     // Attempts so far
+	LastError    string  // Previous error message
+	Suggestion   string  // Recovery suggestion
+	Timestamp    time.Time
 }
 
 // RecoveryStrategy determines how to recover from a failure.
 type RecoveryStrategy int
 
 const (
-	RecoveryStrategyRetry   RecoveryStrategy = iota // Retry the step
-	RecoveryStrategyReplan                          // Re-plan without this operator
-	RecoveryStrategyAbort                           // Give up, operator failed permanently
-	RecoveryStrategyHITL                            // Escalate to human
+	RecoveryStrategyRetry  RecoveryStrategy = iota // Retry the step
+	RecoveryStrategyReplan                         // Re-plan without this operator
+	RecoveryStrategyAbort                          // Give up, operator failed permanently
+	RecoveryStrategyHITL                           // Escalate to human
 )
 
 // String returns the string representation of a RecoveryStrategy.
@@ -94,12 +94,12 @@ func (fd *FailureDetector) AnalyzeStepFailure(result *StepExecutionResult) *Fail
 	}
 
 	fc := &FailureContext{
-		StepID:      result.StepID,
-		ToolName:    result.ToolName,
+		StepID:       result.StepID,
+		ToolName:     result.ToolName,
 		CapabilityID: result.CapabilityID,
-		Error:       result.Error,
-		RetryCount:  result.Retries,
-		Timestamp:   result.ExecutedAt,
+		Error:        result.Error,
+		RetryCount:   result.Retries,
+		Timestamp:    result.ExecutedAt,
 	}
 
 	// Get historical success rate from metrics
@@ -288,6 +288,6 @@ func formatPercent(value float64) string {
 	case percent >= 100:
 		return "100"
 	default:
-		return string(rune('0' + percent/10)) + string(rune('0'+(percent%10)))
+		return string(rune('0'+percent/10)) + string(rune('0'+(percent%10)))
 	}
 }

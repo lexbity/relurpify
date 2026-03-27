@@ -193,12 +193,12 @@ func TestPersistenceManager_RestoreSnapshot(t *testing.T) {
 
 	// Create and save a snapshot
 	idx.Index(&indexing.IndexedCodeSnippet{
-		ID:       "snippet-1",
-		Source:   "code1",
+		ID:     "snippet-1",
+		Source: "code1",
 	})
 	idx.Index(&indexing.IndexedCodeSnippet{
-		ID:       "snippet-2",
-		Source:   "code2",
+		ID:     "snippet-2",
+		Source: "code2",
 	})
 
 	snapID, _ := pm.CreateSnapshot("link-1")
@@ -406,14 +406,14 @@ func TestSnapshotErrorTracking(t *testing.T) {
 
 	// Add success and error snippets
 	idx.Index(&indexing.IndexedCodeSnippet{
-		ID:       "snippet-1",
-		Source:   "good code",
-		IsError:  false,
+		ID:      "snippet-1",
+		Source:  "good code",
+		IsError: false,
 	})
 	idx.Index(&indexing.IndexedCodeSnippet{
-		ID:          "snippet-2",
-		Source:      "bad code",
-		IsError:     true,
+		ID:           "snippet-2",
+		Source:       "bad code",
+		IsError:      true,
 		ErrorMessage: "syntax error",
 	})
 

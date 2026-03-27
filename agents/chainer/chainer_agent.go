@@ -30,19 +30,19 @@ import (
 //   - Automatic input isolation via Stage contracts
 //   - Optional telemetry and context budget management (later phases)
 type ChainerAgent struct {
-	Model                 core.LanguageModel
-	Tools                 *capability.Registry
-	Memory                memory.MemoryStore
-	Config                *core.Config
-	Chain                 *Chain
-	ChainBuilder          func(*core.Task) (*Chain, error)
-	CheckpointStore       pipeline.CheckpointStore // Phase 2: Optional checkpoint store
-	CheckpointAfterStage  bool                      // Phase 2: Save checkpoint after each stage
-	RecoveryManager       *checkpoint.RecoveryManager // Phase 2: Manages resumption
-	BudgetManager         *chainctx.SimpleBudgetTracker // Phase 3: Optional token budget tracking
-	CompressionListener   *chainctx.CompressionListener // Phase 3: Reacts to budget events
-	EventRecorder         *telemetry.EventRecorder // Phase 4: Optional telemetry recording
-	initialised           bool
+	Model                core.LanguageModel
+	Tools                *capability.Registry
+	Memory               memory.MemoryStore
+	Config               *core.Config
+	Chain                *Chain
+	ChainBuilder         func(*core.Task) (*Chain, error)
+	CheckpointStore      pipeline.CheckpointStore      // Phase 2: Optional checkpoint store
+	CheckpointAfterStage bool                          // Phase 2: Save checkpoint after each stage
+	RecoveryManager      *checkpoint.RecoveryManager   // Phase 2: Manages resumption
+	BudgetManager        *chainctx.SimpleBudgetTracker // Phase 3: Optional token budget tracking
+	CompressionListener  *chainctx.CompressionListener // Phase 3: Reacts to budget events
+	EventRecorder        *telemetry.EventRecorder      // Phase 4: Optional telemetry recording
+	initialised          bool
 }
 
 func (a *ChainerAgent) Initialize(cfg *core.Config) error {
@@ -252,14 +252,13 @@ func (a *ChainerAgent) resolveChain(task *core.Task) (*Chain, error) {
 	}
 }
 
-
 type chainerLinkNode struct {
 	id   string
 	name string
 }
 
-func (n *chainerLinkNode) ID() string                { return n.id }
-func (n *chainerLinkNode) Type() graph.NodeType      { return graph.NodeTypeSystem }
+func (n *chainerLinkNode) ID() string           { return n.id }
+func (n *chainerLinkNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 func (n *chainerLinkNode) Execute(_ context.Context, state *core.Context) (*core.Result, error) {
 	if state != nil {
 		state.Set("chainer.inspect_link", n.name)

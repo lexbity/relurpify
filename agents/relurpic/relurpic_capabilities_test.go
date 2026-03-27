@@ -8,12 +8,16 @@ import (
 	"testing"
 	"time"
 
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/memory"
+	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
@@ -269,6 +273,18 @@ func TestGapDetectorCapabilityRecordsDriftWritesEdgesAndInvalidatesPlan(t *testi
 			UpdatedAt: time.Now().UTC(),
 		},
 	}
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, workflowStore.Close())
+	})
+	require.NoError(t, workflowStore.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf-1",
+		TaskID:      "task-gap",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "detect gap",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
 	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, model, &core.Config{
 		Name:  "coding",
 		Model: "stub",
@@ -277,6 +293,7 @@ func TestGapDetectorCapabilityRecordsDriftWritesEdgesAndInvalidatesPlan(t *testi
 		WithGraphDB(graphEngine),
 		WithRetrievalDB(retrievalDB),
 		WithPlanStore(planStore),
+		WithWorkflowStore(workflowStore),
 	))
 
 	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "gap-detector.detect", map[string]interface{}{
@@ -308,6 +325,13 @@ func TestGapDetectorCapabilityRecordsDriftWritesEdgesAndInvalidatesPlan(t *testi
 
 	require.Len(t, planStore.invalidated, 1)
 	require.Equal(t, "step-1", planStore.invalidated[0])
+
+	tensions, err := (archaeotensions.Service{Store: workflowStore}).ListByWorkflow(context.Background(), "wf-1")
+	require.NoError(t, err)
+	require.Len(t, tensions, 1)
+	require.Equal(t, archaeodomain.TensionUnresolved, tensions[0].Status)
+	require.Equal(t, []string{anchor.AnchorID}, tensions[0].AnchorRefs)
+	require.Equal(t, []string{"step-1"}, tensions[0].RelatedPlanStepIDs)
 }
 
 func TestGapDetectorCapabilityAddsDeferralObservationBelowEscalationThreshold(t *testing.T) {

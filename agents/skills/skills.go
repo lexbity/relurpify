@@ -2,9 +2,9 @@ package skills
 
 import (
 	"github.com/lexcodex/relurpify/framework/capability"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
 )
 
 const skillManifestName = "skill.manifest.yaml"

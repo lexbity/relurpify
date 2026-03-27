@@ -13,22 +13,22 @@ import (
 // Phase 6: Lightweight tracking of which tools were used and how their results
 // were presented. Wraps results in CapabilityResultEnvelope for insertion decisions.
 type ProvenanceTracker struct {
-	mu              sync.RWMutex
-	records         []ProvenanceRecord
-	taskID          string
+	mu      sync.RWMutex
+	records []ProvenanceRecord
+	taskID  string
 }
 
 // ProvenanceRecord documents a single tool invocation.
 type ProvenanceRecord struct {
-	Timestamp        time.Time
-	TaskID           string
-	LinkName         string
-	ToolID           string
-	InsertionAction  core.InsertionAction
-	TrustClass       core.TrustClass
-	ApprovedBy       string // User/system identifier (if approval required)
-	PolicySnapshot   string // Policy ID or description
-	ResultSummary    string // Brief description of result
+	Timestamp       time.Time
+	TaskID          string
+	LinkName        string
+	ToolID          string
+	InsertionAction core.InsertionAction
+	TrustClass      core.TrustClass
+	ApprovedBy      string // User/system identifier (if approval required)
+	PolicySnapshot  string // Policy ID or description
+	ResultSummary   string // Brief description of result
 }
 
 // NewProvenanceTracker creates a tracker for a task.

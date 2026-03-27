@@ -20,9 +20,9 @@ import (
 // - stages imports chainer for the Link type, so LinkStage must be in chainer
 // - chainer_agent.go can import LinkStage without creating a cycle
 type LinkStage struct {
-	Link            *Link
-	Model           core.LanguageModel
-	LLMOptions      *core.LLMOptions
+	Link             *Link
+	Model            core.LanguageModel
+	LLMOptions       *core.LLMOptions
 	linkNameOverride string // optional: override link name for debugging
 }
 

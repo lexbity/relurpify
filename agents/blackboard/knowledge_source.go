@@ -111,9 +111,9 @@ func hasStateBoundaryPolicy(policy core.StateBoundaryPolicy) bool {
 
 func defaultKnowledgeSourceContract() graph.NodeContract {
 	return graph.NodeContract{
-		SideEffectClass: graph.SideEffectContext,
-		Idempotency:     graph.IdempotencyReplaySafe,
-		Recoverability:  graph.NodeRecoverabilityInProcess,
+		SideEffectClass:  graph.SideEffectContext,
+		Idempotency:      graph.IdempotencyReplaySafe,
+		Recoverability:   graph.NodeRecoverabilityInProcess,
 		CheckpointPolicy: graph.CheckpointPolicyPreferred,
 		ContextPolicy: core.StateBoundaryPolicy{
 			ReadKeys:                 []string{"task.*", "blackboard.*"},

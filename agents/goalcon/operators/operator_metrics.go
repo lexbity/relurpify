@@ -10,14 +10,14 @@ import (
 
 // OperatorMetrics tracks execution statistics for a single operator.
 type OperatorMetrics struct {
-	Name           string        `json:"name"`
-	SuccessCount   int           `json:"success_count"`
-	FailureCount   int           `json:"failure_count"`
-	TotalExecutions int          `json:"total_executions"`
-	TotalDuration  time.Duration `json:"total_duration"`
-	AvgDuration    time.Duration `json:"avg_duration"`
-	SuccessRate    float64       `json:"success_rate"`
-	LastExecuted   time.Time     `json:"last_executed,omitempty"`
+	Name            string        `json:"name"`
+	SuccessCount    int           `json:"success_count"`
+	FailureCount    int           `json:"failure_count"`
+	TotalExecutions int           `json:"total_executions"`
+	TotalDuration   time.Duration `json:"total_duration"`
+	AvgDuration     time.Duration `json:"avg_duration"`
+	SuccessRate     float64       `json:"success_rate"`
+	LastExecuted    time.Time     `json:"last_executed,omitempty"`
 }
 
 // OperatorMetricsCollection maps operator names to their metrics.
@@ -113,8 +113,8 @@ func SaveMetricsToMemory(store memory.MemoryStore, metrics OperatorMetricsCollec
 
 // MetricsSnapshot provides a read-only view of metrics at a point in time.
 type MetricsSnapshot struct {
-	TotalOperators   int
-	TotalExecutions  int
+	TotalOperators     int
+	TotalExecutions    int
 	AverageSuccessRate float64
 	MetricsPerOperator map[string]*OperatorMetrics
 }
@@ -126,7 +126,7 @@ func (c OperatorMetricsCollection) Snapshot() MetricsSnapshot {
 	}
 
 	snap := MetricsSnapshot{
-		TotalOperators:   len(c),
+		TotalOperators:     len(c),
 		MetricsPerOperator: make(map[string]*OperatorMetrics),
 	}
 

@@ -71,8 +71,8 @@ func TestNewOperatorRegistryFromConfig_FromMap(t *testing.T) {
 				"effects":     []any{"stateA"},
 			},
 			{
-				"name":        "OpB",
-				"description": "types.Operator B",
+				"name":          "OpB",
+				"description":   "types.Operator B",
 				"preconditions": []any{"stateA"},
 				"effects":       []any{"stateB"},
 			},

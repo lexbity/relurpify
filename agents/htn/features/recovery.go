@@ -46,16 +46,16 @@ type VerificationHint struct {
 
 // OperatorMetadata encapsulates operator execution metrics and metadata.
 type OperatorMetadata struct {
-	Name              string
-	Duration          int
-	Success           bool
-	Retried           bool
-	RetryClass        RetryClass
-	CostClass         authoring.CostClass
-	BranchSafe        bool
-	VerificationHint  VerificationHint
-	FileFocus         FileFocus
-	ExpectedOutput    string
+	Name             string
+	Duration         int
+	Success          bool
+	Retried          bool
+	RetryClass       RetryClass
+	CostClass        authoring.CostClass
+	BranchSafe       bool
+	VerificationHint VerificationHint
+	FileFocus        FileFocus
+	ExpectedOutput   string
 }
 
 // RecoveryStrategy defines how to recover from a failed step.
@@ -384,7 +384,7 @@ func (b *RecoveryContextBuilder) BuildRecoveryContext(
 	attemptCount int,
 ) map[string]any {
 	recoveryContext := map[string]any{
-		"step_id":        stepID,
+		"step_id":       stepID,
 		"operator_name": operatorName,
 		"attempt_count": attemptCount,
 		"last_error":    lastError.Error(),

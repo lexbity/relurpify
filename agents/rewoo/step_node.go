@@ -12,13 +12,13 @@ import (
 
 // StepNode is a graph node that executes a single plan step.
 type StepNode struct {
-	id                string
-	Step              RewooStep
-	Registry          *capability.Registry
-	PermissionManager interface{} // *authorization.PermissionManager (avoid import)
-	OnFailure         StepOnFailure
+	id                 string
+	Step               RewooStep
+	Registry           *capability.Registry
+	PermissionManager  interface{} // *authorization.PermissionManager (avoid import)
+	OnFailure          StepOnFailure
 	OnPermissionDenied StepOnFailure
-	Debugf            func(string, ...interface{})
+	Debugf             func(string, ...interface{})
 }
 
 // NewStepNode creates a new step execution node.
@@ -29,10 +29,10 @@ func NewStepNode(
 	onFailure StepOnFailure,
 ) *StepNode {
 	return &StepNode{
-		id:               id,
-		Step:             step,
-		Registry:         registry,
-		OnFailure:        onFailure,
+		id:                 id,
+		Step:               step,
+		Registry:           registry,
+		OnFailure:          onFailure,
 		OnPermissionDenied: StepOnFailureAbort,
 	}
 }

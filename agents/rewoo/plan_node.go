@@ -21,10 +21,10 @@ type PlanNode struct {
 	ContextPolicy     *contextmgr.ContextPolicy
 	SharedContext     *core.SharedContext
 	State             *core.Context
-	Graph             *graph.Graph                      // For step materialization after planning
-	Registry          *capability.Registry              // For step node creation
-	PermissionManager interface{}                       // *authorization.PermissionManager
-	Options           RewooOptions                      // For step execution options
+	Graph             *graph.Graph         // For step materialization after planning
+	Registry          *capability.Registry // For step node creation
+	PermissionManager interface{}          // *authorization.PermissionManager
+	Options           RewooOptions         // For step execution options
 	Debugf            func(string, ...interface{})
 }
 

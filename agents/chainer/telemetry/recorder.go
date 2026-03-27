@@ -138,18 +138,18 @@ func (r *EventRecorder) Clear() {
 
 // ExecutionSummary provides a high-level overview of task execution.
 type ExecutionSummary struct {
-	TaskID              string
-	TotalEvents         int
-	TotalLinks          int
-	SuccessfulLinks     int
-	FailedLinks         int
-	ErrorCount          int
-	RetryCount          int
-	CompressionCount    int
-	ResumeCount         int
-	TotalDuration       time.Duration
-	StartTime           time.Time
-	EndTime             time.Time
+	TaskID           string
+	TotalEvents      int
+	TotalLinks       int
+	SuccessfulLinks  int
+	FailedLinks      int
+	ErrorCount       int
+	RetryCount       int
+	CompressionCount int
+	ResumeCount      int
+	TotalDuration    time.Duration
+	StartTime        time.Time
+	EndTime          time.Time
 }
 
 // Summary generates an ExecutionSummary for a task.

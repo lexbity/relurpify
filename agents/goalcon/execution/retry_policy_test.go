@@ -43,15 +43,15 @@ func TestBackoffCalculator_ExponentialGrowth(t *testing.T) {
 	calc := NewBackoffCalculator(policy)
 
 	tests := []struct {
-		attemptNum      int
-		expectedMinMs   int64
-		expectedMaxMs   int64
+		attemptNum    int
+		expectedMinMs int64
+		expectedMaxMs int64
 	}{
-		{1, 100, 100},      // 100ms * 2^0 = 100ms
-		{2, 200, 200},      // 100ms * 2^1 = 200ms
-		{3, 400, 400},      // 100ms * 2^2 = 400ms
-		{4, 800, 800},      // 100ms * 2^3 = 800ms
-		{5, 1600, 1600},    // 100ms * 2^4 = 1600ms
+		{1, 100, 100},   // 100ms * 2^0 = 100ms
+		{2, 200, 200},   // 100ms * 2^1 = 200ms
+		{3, 400, 400},   // 100ms * 2^2 = 400ms
+		{4, 800, 800},   // 100ms * 2^3 = 800ms
+		{5, 1600, 1600}, // 100ms * 2^4 = 1600ms
 	}
 
 	for _, test := range tests {
@@ -99,7 +99,7 @@ func TestBackoffCalculator_WithJitter(t *testing.T) {
 		InitialBackoff:    1000 * time.Millisecond,
 		MaxBackoff:        10 * time.Second,
 		BackoffMultiplier: 1.0, // No multiplication
-		JitterFraction:    0.1,  // 10% jitter
+		JitterFraction:    0.1, // 10% jitter
 	}
 
 	calc := NewBackoffCalculator(policy)
@@ -219,7 +219,7 @@ func TestPolicyForOperator_CustomPolicy(t *testing.T) {
 func TestOperatorRetryPolicies_MultipleOperators(t *testing.T) {
 	policies := OperatorRetryPolicies{
 		"file-read": {MaxAttempts: 5},
-		"api-call": {MaxAttempts: 3},
+		"api-call":  {MaxAttempts: 3},
 		"llm-query": {MaxAttempts: 2},
 	}
 
@@ -300,16 +300,16 @@ func TestBackoffCalculator_ZeroJitter(t *testing.T) {
 // TestIsFileIOOperator tests file I/O pattern matching.
 func TestIsFileIOOperator(t *testing.T) {
 	tests := map[string]bool{
-		"read-file":     true,
-		"write-config":  true,
-		"mkdir-temp":    true,
-		"copy-file":     true,
-		"remove-old":    true,
-		"list-files":    true,
-		"cat-file":      true,
-		"api-fetch":     false,
-		"llm-classify":  false,
-		"unknown":       false,
+		"read-file":    true,
+		"write-config": true,
+		"mkdir-temp":   true,
+		"copy-file":    true,
+		"remove-old":   true,
+		"list-files":   true,
+		"cat-file":     true,
+		"api-fetch":    false,
+		"llm-classify": false,
+		"unknown":      false,
 	}
 
 	for operatorName, expected := range tests {

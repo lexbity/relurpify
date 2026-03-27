@@ -62,10 +62,10 @@ func TestStore_SaveMissingTaskID(t *testing.T) {
 	cp := &pipeline.Checkpoint{
 		CheckpointID: "test_cp_1",
 		// TaskID missing
-		StageName: "stage_1",
+		StageName:  "stage_1",
 		StageIndex: 0,
-		CreatedAt: time.Now(),
-		Context:   core.NewContext(),
+		CreatedAt:  time.Now(),
+		Context:    core.NewContext(),
 	}
 	err := store.Save(cp)
 	if err == nil {

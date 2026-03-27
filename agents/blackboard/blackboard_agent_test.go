@@ -1099,7 +1099,6 @@ func TestBlackboardAgent_ExecuteHydratesFromRuntimeMemoryRetrieval(t *testing.T)
 	}
 }
 
-
 func TestBlackboardAgent_ExecutePersistsStructuredMemory(t *testing.T) {
 	store, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
 	if err != nil {

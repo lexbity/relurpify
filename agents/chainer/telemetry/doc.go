@@ -21,11 +21,11 @@
 // # Integration
 //
 // Events flow through the execution pipeline:
-//   1. LinkStage.BuildPrompt() → LinkStart
-//   2. LinkStage.Decode() → ParsingFailure (on parse error)
-//   3. Recovery resumption → ResumeEvent
-//   4. Compression trigger → CompressionEvent
-//   5. LinkStage.Apply() → LinkFinish or LinkError
+//  1. LinkStage.BuildPrompt() → LinkStart
+//  2. LinkStage.Decode() → ParsingFailure (on parse error)
+//  3. Recovery resumption → ResumeEvent
+//  4. Compression trigger → CompressionEvent
+//  5. LinkStage.Apply() → LinkFinish or LinkError
 //
 // EventRecorder delegates to framework/core.Telemetry if available,
 // enabling integration with observability infrastructure.

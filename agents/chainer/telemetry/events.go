@@ -8,13 +8,13 @@ import (
 type ChainerEventKind string
 
 const (
-	KindLinkStart       ChainerEventKind = "link_start"
-	KindLinkFinish      ChainerEventKind = "link_finish"
-	KindLinkError       ChainerEventKind = "link_error"
-	KindParsingFailure  ChainerEventKind = "parsing_failure"
-	KindRetryAttempt    ChainerEventKind = "retry_attempt"
+	KindLinkStart        ChainerEventKind = "link_start"
+	KindLinkFinish       ChainerEventKind = "link_finish"
+	KindLinkError        ChainerEventKind = "link_error"
+	KindParsingFailure   ChainerEventKind = "parsing_failure"
+	KindRetryAttempt     ChainerEventKind = "retry_attempt"
 	KindCompressionEvent ChainerEventKind = "compression_event"
-	KindResumeEvent     ChainerEventKind = "resume_event"
+	KindResumeEvent      ChainerEventKind = "resume_event"
 )
 
 // ChainerEvent represents a significant moment during ChainerAgent execution.
@@ -38,18 +38,18 @@ type ChainerEvent struct {
 	ChainStep int    // Index in chain (0-based)
 
 	// Execution metadata
-	InputKeys   []string `json:"input_keys,omitempty"`   // Input keys declared for stage
-	OutputKey   string   `json:"output_key,omitempty"`   // Output key produced by stage
-	ResponseText string  `json:"response_text,omitempty"` // LLM response (truncated if long)
+	InputKeys    []string `json:"input_keys,omitempty"`    // Input keys declared for stage
+	OutputKey    string   `json:"output_key,omitempty"`    // Output key produced by stage
+	ResponseText string   `json:"response_text,omitempty"` // LLM response (truncated if long)
 
 	// Error context (for failures)
 	ErrorMessage string `json:"error_message,omitempty"`
 	ErrorType    string `json:"error_type,omitempty"`
 
 	// Retry context
-	AttemptNumber int       `json:"attempt_number,omitempty"` // 1-based attempt count
-	MaxRetries    int       `json:"max_retries,omitempty"`    // Max allowed retries
-	RetryReason   string    `json:"retry_reason,omitempty"`   // Why retry triggered
+	AttemptNumber int    `json:"attempt_number,omitempty"` // 1-based attempt count
+	MaxRetries    int    `json:"max_retries,omitempty"`    // Max allowed retries
+	RetryReason   string `json:"retry_reason,omitempty"`   // Why retry triggered
 
 	// Compression context
 	BudgetRemaining int    `json:"budget_remaining,omitempty"` // Tokens remaining
@@ -63,13 +63,13 @@ type ChainerEvent struct {
 // LinkStartEvent creates a LinkStart event for stage beginning.
 func LinkStartEvent(taskID, linkName string, stepIndex int, inputKeys []string, outputKey string) *ChainerEvent {
 	return &ChainerEvent{
-		Timestamp:  time.Now(),
-		Kind:       KindLinkStart,
-		TaskID:     taskID,
-		LinkName:   linkName,
-		ChainStep:  stepIndex,
-		InputKeys:  inputKeys,
-		OutputKey:  outputKey,
+		Timestamp: time.Now(),
+		Kind:      KindLinkStart,
+		TaskID:    taskID,
+		LinkName:  linkName,
+		ChainStep: stepIndex,
+		InputKeys: inputKeys,
+		OutputKey: outputKey,
 	}
 }
 
@@ -129,12 +129,12 @@ func RetryAttemptEvent(taskID, linkName string, stepIndex int, attempt, maxRetri
 // CompressionEventCreate creates a CompressionEvent when budget compression triggered.
 func CompressionEvent(taskID string, budgetRemaining, budgetLimit int, mode string) *ChainerEvent {
 	return &ChainerEvent{
-		Timestamp:         time.Now(),
-		Kind:              KindCompressionEvent,
-		TaskID:            taskID,
-		BudgetRemaining:   budgetRemaining,
-		BudgetLimit:       budgetLimit,
-		CompressionMode:   mode,
+		Timestamp:       time.Now(),
+		Kind:            KindCompressionEvent,
+		TaskID:          taskID,
+		BudgetRemaining: budgetRemaining,
+		BudgetLimit:     budgetLimit,
+		CompressionMode: mode,
 	}
 }
 

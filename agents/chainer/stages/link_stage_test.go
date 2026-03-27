@@ -48,24 +48,24 @@ func TestLinkStageImplementsStage(t *testing.T) {
 // TestLinkStageContract verifies contract declaration.
 func TestLinkStageContract(t *testing.T) {
 	tests := []struct {
-		name               string
-		link               chainer.Link
-		expectedIn         string
-		expectedOut        string
-		expectedFailFast   bool
+		name             string
+		link             chainer.Link
+		expectedIn       string
+		expectedOut      string
+		expectedFailFast bool
 	}{
 		{
-			name:            "no input keys (uses default)",
-			link:            chainer.NewLink("step1", "prompt", nil, "out1", nil),
-			expectedIn:      "__chainer_instruction",
-			expectedOut:     "out1",
+			name:             "no input keys (uses default)",
+			link:             chainer.NewLink("step1", "prompt", nil, "out1", nil),
+			expectedIn:       "__chainer_instruction",
+			expectedOut:      "out1",
 			expectedFailFast: false,
 		},
 		{
-			name:            "single input key",
-			link:            chainer.NewLink("step2", "prompt", []string{"in1"}, "out2", nil),
-			expectedIn:      "in1",
-			expectedOut:     "out2",
+			name:             "single input key",
+			link:             chainer.NewLink("step2", "prompt", []string{"in1"}, "out2", nil),
+			expectedIn:       "in1",
+			expectedOut:      "out2",
 			expectedFailFast: false,
 		},
 		{

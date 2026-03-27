@@ -42,21 +42,21 @@ type OperatorMetricsSnapshot struct {
 
 // OutputValidationSchema defines expected output structure.
 type OutputValidationSchema struct {
-	ExpectedKeys    []string
-	OptionalKeys    []string
-	Schema          map[string]any
-	MinOutputSize   int
-	MaxOutputSize   int
+	ExpectedKeys  []string
+	OptionalKeys  []string
+	Schema        map[string]any
+	MinOutputSize int
+	MaxOutputSize int
 }
 
 // SchedulingHint provides recommendations for step ordering and parallelization.
 type SchedulingHint struct {
-	StepID           string
-	RecommendedOrder int // Lower = execute first
-	CanParallelize   bool
+	StepID            string
+	RecommendedOrder  int // Lower = execute first
+	CanParallelize    bool
 	EstimatedDuration int // seconds
-	DependsOn        []string
-	CostOptimization string // "fast_first", "slow_first", "parallel"
+	DependsOn         []string
+	CostOptimization  string // "fast_first", "slow_first", "parallel"
 }
 
 // AggregateHistoricalMetrics retrieves and analyzes metrics for an operator from workflow artifacts.
@@ -380,12 +380,12 @@ func ShouldRetryStep(stepID string, retryClass authoring.RetryClass, lastError e
 
 // BuildKnowledgeQuery creates a structured query for retrieving relevant past executions.
 type KnowledgeQuery struct {
-	MethodName       string
-	TaskType         core.TaskType
-	OperatorName     string
-	SuccessOnly      bool
-	SinceTime        time.Time
-	MaxResults       int
+	MethodName   string
+	TaskType     core.TaskType
+	OperatorName string
+	SuccessOnly  bool
+	SinceTime    time.Time
+	MaxResults   int
 }
 
 // RetrieveRelevantKnowledge queries the knowledge base for relevant past executions.

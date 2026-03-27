@@ -15,12 +15,12 @@ import (
 
 // OperatorConfig represents the YAML/JSON configuration for a single operator.
 type OperatorConfig struct {
-	Name           string            `json:"name" yaml:"name"`
-	Description    string            `json:"description" yaml:"description"`
-	Preconditions  []string          `json:"preconditions" yaml:"preconditions"`
-	Effects        []string          `json:"effects" yaml:"effects"`
-	DefaultParams  map[string]any    `json:"default_params" yaml:"default_params"`
-	Tags           []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Name          string         `json:"name" yaml:"name"`
+	Description   string         `json:"description" yaml:"description"`
+	Preconditions []string       `json:"preconditions" yaml:"preconditions"`
+	Effects       []string       `json:"effects" yaml:"effects"`
+	DefaultParams map[string]any `json:"default_params" yaml:"default_params"`
+	Tags          []string       `json:"tags,omitempty" yaml:"tags,omitempty"`
 }
 
 // OperatorsConfigSection represents the top-level operators configuration section.
@@ -196,9 +196,9 @@ func addOperatorFromConfig(registry *types.OperatorRegistry, opConfig OperatorCo
 
 // OperatorVariant allows specialization of operators per domain/context.
 type OperatorVariant struct {
-	Name        string // e.g., "ReadFile:large_files" or "SearchCode:fast"
+	Name         string // e.g., "ReadFile:large_files" or "SearchCode:fast"
 	BaseOperator string // Reference to base operator
-	Description string
+	Description  string
 	// Override specific aspects
 	Preconditions *[]types.Predicate
 	Effects       *[]types.Predicate
@@ -207,8 +207,8 @@ type OperatorVariant struct {
 
 // OperatorLibrary manages operator collections with versioning support.
 type OperatorLibrary struct {
-	Name     string
-	Version  string
+	Name      string
+	Version   string
 	Operators []*types.Operator
 }
 

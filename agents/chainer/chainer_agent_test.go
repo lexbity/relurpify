@@ -324,7 +324,7 @@ func TestChainerAgent_BudgetListenerWiredUp(t *testing.T) {
 	listener := chainctx.NewCompressionListener()
 
 	agent := &chainer.ChainerAgent{
-		BudgetManager:      budgetManager,
+		BudgetManager:       budgetManager,
 		CompressionListener: listener,
 	}
 
