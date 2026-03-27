@@ -13,8 +13,8 @@ import (
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
 	archaeoproj "github.com/lexcodex/relurpify/archaeo/projections"
 	"github.com/lexcodex/relurpify/archaeo/providers"
-	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
+	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
@@ -132,7 +132,8 @@ func BenchmarkArchaeologyProviderLifecycle(b *testing.B) {
 					ProspectiveAnalyzer: benchProspectiveAnalyzer{records: prospectivePatterns},
 					ConvergenceReviewer: benchConvergenceReviewer{},
 				},
-				PersistPhase: func(context.Context, *core.Task, *core.Context, archaeodomain.EucloPhase, string, *frameworkplan.PlanStep) {},
+				PersistPhase: func(context.Context, *core.Task, *core.Context, archaeodomain.EucloPhase, string, *frameworkplan.PlanStep) {
+				},
 				EvaluateGate: func(context.Context, *core.Task, *core.Context, *frameworkplan.LivingPlan, *frameworkplan.PlanStep) (archaeoexec.PreflightOutcome, error) {
 					return archaeoexec.PreflightOutcome{}, nil
 				},

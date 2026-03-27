@@ -10,6 +10,7 @@ import (
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
+	"github.com/lexcodex/relurpify/archaeo/internal/keylock"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	"github.com/lexcodex/relurpify/framework/memory"
 )
@@ -38,108 +39,133 @@ type SessionView struct {
 	TensionSummary *archaeodomain.TensionSummary
 }
 
+var explorationMutationLocks keylock.Locker
+
 func (s Service) EnsureExplorationSession(ctx context.Context, workflowID, workspaceID, basedOnRevision string) (*archaeodomain.ExplorationSession, error) {
-	store := s.workflowStore()
-	workflowID = strings.TrimSpace(workflowID)
-	workspaceID = strings.TrimSpace(workspaceID)
-	if store == nil || workflowID == "" || workspaceID == "" {
-		return nil, nil
-	}
-	session, persistedWorkflowID, err := s.findSessionByWorkspace(ctx, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	now := s.now()
-	if session != nil {
-		if revisionChanged(session.BasedOnRevision, basedOnRevision) {
-			session.Status = archaeodomain.ExplorationStatusStale
-			session.RecomputeRequired = true
-			session.StaleReason = fmt.Sprintf("revision changed: %s -> %s", strings.TrimSpace(session.BasedOnRevision), strings.TrimSpace(basedOnRevision))
-		} else {
-			session.Status = archaeodomain.ExplorationStatusActive
-			session.RecomputeRequired = false
-			session.StaleReason = ""
+	var (
+		session *archaeodomain.ExplorationSession
+		err     error
+	)
+	err = explorationMutationLocks.With("workspace:"+strings.TrimSpace(workspaceID), func() error {
+		store := s.workflowStore()
+		workflowID = strings.TrimSpace(workflowID)
+		workspaceID = strings.TrimSpace(workspaceID)
+		if store == nil || workflowID == "" || workspaceID == "" {
+			return nil
 		}
-		if strings.TrimSpace(basedOnRevision) != "" {
-			session.BasedOnRevision = strings.TrimSpace(basedOnRevision)
+		var persistedWorkflowID string
+		session, persistedWorkflowID, err = s.findSessionByWorkspace(ctx, workspaceID)
+		if err != nil {
+			return err
 		}
-		session.UpdatedAt = now
-		return session, s.saveSession(ctx, persistedWorkflowID, workflowID, session)
-	}
-	session = &archaeodomain.ExplorationSession{
-		ID:              s.newID("explore"),
-		WorkspaceID:     workspaceID,
-		Status:          archaeodomain.ExplorationStatusActive,
-		BasedOnRevision: strings.TrimSpace(basedOnRevision),
-		CreatedAt:       now,
-		UpdatedAt:       now,
-	}
-	return session, s.saveSession(ctx, workflowID, workflowID, session)
+		now := s.now()
+		if session != nil {
+			if revisionChanged(session.BasedOnRevision, basedOnRevision) {
+				session.Status = archaeodomain.ExplorationStatusStale
+				session.RecomputeRequired = true
+				session.StaleReason = fmt.Sprintf("revision changed: %s -> %s", strings.TrimSpace(session.BasedOnRevision), strings.TrimSpace(basedOnRevision))
+			} else {
+				session.Status = archaeodomain.ExplorationStatusActive
+				session.RecomputeRequired = false
+				session.StaleReason = ""
+			}
+			if strings.TrimSpace(basedOnRevision) != "" {
+				session.BasedOnRevision = strings.TrimSpace(basedOnRevision)
+			}
+			session.UpdatedAt = now
+			return s.saveSession(ctx, persistedWorkflowID, workflowID, session)
+		}
+		session = &archaeodomain.ExplorationSession{
+			ID:              s.newID("explore"),
+			WorkspaceID:     workspaceID,
+			Status:          archaeodomain.ExplorationStatusActive,
+			BasedOnRevision: strings.TrimSpace(basedOnRevision),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		return s.saveSession(ctx, workflowID, workflowID, session)
+	})
+	return session, err
 }
 
 func (s Service) CreateExplorationSnapshot(ctx context.Context, session *archaeodomain.ExplorationSession, input SnapshotInput) (*archaeodomain.ExplorationSnapshot, error) {
-	store := s.workflowStore()
-	if store == nil || session == nil {
-		return nil, nil
+	var (
+		snapshot *archaeodomain.ExplorationSnapshot
+		err      error
+	)
+	lockKey := "workflow:" + strings.TrimSpace(input.WorkflowID)
+	if session != nil && strings.TrimSpace(session.WorkspaceID) != "" {
+		lockKey = "workspace:" + strings.TrimSpace(session.WorkspaceID)
 	}
-	workflowID := strings.TrimSpace(input.WorkflowID)
-	if workflowID == "" {
-		return nil, fmt.Errorf("workflow id required")
-	}
-	persistedWorkflowID := workflowID
-	if _, ownerWorkflowID, err := s.findSessionByID(ctx, session.ID); err != nil {
-		return nil, err
-	} else if strings.TrimSpace(ownerWorkflowID) != "" {
-		persistedWorkflowID = ownerWorkflowID
-	}
-	now := s.now()
-	snapshot := &archaeodomain.ExplorationSnapshot{
-		ID:                   s.newID("snapshot"),
-		ExplorationID:        session.ID,
-		WorkspaceID:          firstNonEmpty(strings.TrimSpace(input.WorkspaceID), session.WorkspaceID),
-		WorkflowID:           workflowID,
-		SnapshotKey:          snapshotKey(now, session.ID),
-		BasedOnRevision:      strings.TrimSpace(input.BasedOnRevision),
-		SemanticSnapshotRef:  strings.TrimSpace(input.SemanticSnapshotRef),
-		CandidatePatternRefs: append([]string(nil), input.CandidatePatternRefs...),
-		CandidateAnchorRefs:  append([]string(nil), input.CandidateAnchorRefs...),
-		TensionIDs:           append([]string(nil), input.TensionIDs...),
-		OpenLearningIDs:      append([]string(nil), input.OpenLearningIDs...),
-		Summary:              strings.TrimSpace(input.Summary),
-		CreatedAt:            now,
-		UpdatedAt:            now,
-	}
-	if err := s.saveSnapshot(ctx, snapshot); err != nil {
-		return nil, err
-	}
-	session.Status = archaeodomain.ExplorationStatusActive
-	session.LatestSnapshotID = snapshot.ID
-	session.SnapshotIDs = appendUnique(session.SnapshotIDs, snapshot.ID)
-	session.BasedOnRevision = firstNonEmpty(snapshot.BasedOnRevision, session.BasedOnRevision)
-	session.RecomputeRequired = false
-	session.StaleReason = ""
-	session.UpdatedAt = now
-	if err := s.saveSession(ctx, persistedWorkflowID, workflowID, session); err != nil {
-		return nil, err
-	}
-	return snapshot, nil
+	err = explorationMutationLocks.With(lockKey, func() error {
+		store := s.workflowStore()
+		if store == nil || session == nil {
+			return nil
+		}
+		workflowID := strings.TrimSpace(input.WorkflowID)
+		if workflowID == "" {
+			return fmt.Errorf("workflow id required")
+		}
+		persistedWorkflowID := workflowID
+		if _, ownerWorkflowID, err := s.findSessionByID(ctx, session.ID); err != nil {
+			return err
+		} else if strings.TrimSpace(ownerWorkflowID) != "" {
+			persistedWorkflowID = ownerWorkflowID
+		}
+		now := s.now()
+		snapshot = &archaeodomain.ExplorationSnapshot{
+			ID:                   s.newID("snapshot"),
+			ExplorationID:        session.ID,
+			WorkspaceID:          firstNonEmpty(strings.TrimSpace(input.WorkspaceID), session.WorkspaceID),
+			WorkflowID:           workflowID,
+			SnapshotKey:          snapshotKey(now, session.ID),
+			BasedOnRevision:      strings.TrimSpace(input.BasedOnRevision),
+			SemanticSnapshotRef:  strings.TrimSpace(input.SemanticSnapshotRef),
+			CandidatePatternRefs: append([]string(nil), input.CandidatePatternRefs...),
+			CandidateAnchorRefs:  append([]string(nil), input.CandidateAnchorRefs...),
+			TensionIDs:           append([]string(nil), input.TensionIDs...),
+			OpenLearningIDs:      append([]string(nil), input.OpenLearningIDs...),
+			Summary:              strings.TrimSpace(input.Summary),
+			CreatedAt:            now,
+			UpdatedAt:            now,
+		}
+		if err := s.saveSnapshot(ctx, snapshot); err != nil {
+			return err
+		}
+		session.Status = archaeodomain.ExplorationStatusActive
+		session.LatestSnapshotID = snapshot.ID
+		session.SnapshotIDs = appendUnique(session.SnapshotIDs, snapshot.ID)
+		session.BasedOnRevision = firstNonEmpty(snapshot.BasedOnRevision, session.BasedOnRevision)
+		session.RecomputeRequired = false
+		session.StaleReason = ""
+		session.UpdatedAt = now
+		if err := s.saveSession(ctx, persistedWorkflowID, workflowID, session); err != nil {
+			return err
+		}
+		return nil
+	})
+	return snapshot, err
 }
 
 func (s Service) UpdateExplorationSnapshot(ctx context.Context, snapshot *archaeodomain.ExplorationSnapshot, input SnapshotInput) (*archaeodomain.ExplorationSnapshot, error) {
+	var err error
 	if snapshot == nil {
 		return nil, nil
 	}
-	snapshot.BasedOnRevision = firstNonEmpty(strings.TrimSpace(input.BasedOnRevision), snapshot.BasedOnRevision)
-	snapshot.SemanticSnapshotRef = firstNonEmpty(strings.TrimSpace(input.SemanticSnapshotRef), snapshot.SemanticSnapshotRef)
-	snapshot.CandidatePatternRefs = append([]string(nil), input.CandidatePatternRefs...)
-	snapshot.CandidateAnchorRefs = append([]string(nil), input.CandidateAnchorRefs...)
-	snapshot.TensionIDs = append([]string(nil), input.TensionIDs...)
-	snapshot.OpenLearningIDs = append([]string(nil), input.OpenLearningIDs...)
-	if summary := strings.TrimSpace(input.Summary); summary != "" {
-		snapshot.Summary = summary
-	}
-	snapshot.UpdatedAt = s.now()
-	return snapshot, s.saveSnapshot(ctx, snapshot)
+	err = explorationMutationLocks.With("workflow:"+strings.TrimSpace(snapshot.WorkflowID), func() error {
+		snapshot.BasedOnRevision = firstNonEmpty(strings.TrimSpace(input.BasedOnRevision), snapshot.BasedOnRevision)
+		snapshot.SemanticSnapshotRef = firstNonEmpty(strings.TrimSpace(input.SemanticSnapshotRef), snapshot.SemanticSnapshotRef)
+		snapshot.CandidatePatternRefs = append([]string(nil), input.CandidatePatternRefs...)
+		snapshot.CandidateAnchorRefs = append([]string(nil), input.CandidateAnchorRefs...)
+		snapshot.TensionIDs = append([]string(nil), input.TensionIDs...)
+		snapshot.OpenLearningIDs = append([]string(nil), input.OpenLearningIDs...)
+		if summary := strings.TrimSpace(input.Summary); summary != "" {
+			snapshot.Summary = summary
+		}
+		snapshot.UpdatedAt = s.now()
+		return s.saveSnapshot(ctx, snapshot)
+	})
+	return snapshot, err
 }
 
 func (s Service) MarkExplorationStale(ctx context.Context, explorationID, reason string) (*archaeodomain.ExplorationSession, error) {

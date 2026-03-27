@@ -4,6 +4,9 @@ import (
 	"context"
 
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
+	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
+	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
+	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
@@ -65,6 +68,18 @@ func (r Runtime) TensionService() archaeotensions.Service {
 
 func (r Runtime) ProjectionService() *archaeoprojections.Service {
 	return &archaeoprojections.Service{Store: r.WorkflowStore}
+}
+
+func (r Runtime) DeferredDraftService() archaeodeferred.Service {
+	return archaeodeferred.Service{Store: r.WorkflowStore}
+}
+
+func (r Runtime) ConvergenceService() archaeoconvergence.Service {
+	return archaeoconvergence.Service{Store: r.WorkflowStore}
+}
+
+func (r Runtime) DecisionService() archaeodecisions.Service {
+	return archaeodecisions.Service{Store: r.WorkflowStore}
 }
 
 func (r Runtime) ActiveExploration(ctx context.Context, workspaceID string) (*archaeoarch.SessionView, error) {
@@ -141,4 +156,32 @@ func (r Runtime) ActivePlanVersion(ctx context.Context, workflowID string) (*arc
 
 func (r Runtime) ComparePlanVersions(ctx context.Context, workflowID string, fromVersion, toVersion int) (map[string]any, error) {
 	return r.PlanService().CompareVersions(ctx, workflowID, fromVersion, toVersion)
+}
+
+func (r Runtime) DeferredDrafts(ctx context.Context, workspaceID string) (*archaeoprojections.DeferredDraftProjection, error) {
+	return r.ProjectionService().DeferredDrafts(ctx, workspaceID)
+}
+
+func (r Runtime) ConvergenceHistory(ctx context.Context, workspaceID string) (*archaeodomain.WorkspaceConvergenceProjection, error) {
+	return r.ProjectionService().ConvergenceHistory(ctx, workspaceID)
+}
+
+func (r Runtime) DecisionTrail(ctx context.Context, workspaceID string) (*archaeoprojections.DecisionTrailProjection, error) {
+	return r.ProjectionService().DecisionTrail(ctx, workspaceID)
+}
+
+func (r Runtime) CreateConvergenceRecord(ctx context.Context, input archaeoconvergence.CreateInput) (*archaeodomain.ConvergenceRecord, error) {
+	return r.ConvergenceService().Create(ctx, input)
+}
+
+func (r Runtime) ResolveConvergenceRecord(ctx context.Context, input archaeoconvergence.ResolveInput) (*archaeodomain.ConvergenceRecord, error) {
+	return r.ConvergenceService().Resolve(ctx, input)
+}
+
+func (r Runtime) CreateDecisionRecord(ctx context.Context, input archaeodecisions.CreateInput) (*archaeodomain.DecisionRecord, error) {
+	return r.DecisionService().Create(ctx, input)
+}
+
+func (r Runtime) ResolveDecisionRecord(ctx context.Context, input archaeodecisions.ResolveInput) (*archaeodomain.DecisionRecord, error) {
+	return r.DecisionService().Resolve(ctx, input)
 }

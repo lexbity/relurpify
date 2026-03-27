@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
+	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
@@ -45,20 +47,25 @@ func (c LiveMutationCoordinator) CheckpointExecutionAt(ctx context.Context, chec
 		}
 		return eval, nil
 	case archaeodomain.DispositionPauseForGuidance:
+		c.createDeferredDraftRequest(ctx, task, state, plan, step, eval)
 		return eval, c.resolveGuidanceMutation(ctx, step, eval)
 	case archaeodomain.DispositionInvalidateStep:
+		c.createDeferredDraftRequest(ctx, task, state, plan, step, eval)
 		c.Plans.RecordBlockedStep(plan, step, liveMutationReason(step, eval, "step invalidated by archaeology mutation"), true)
 		_ = c.Plans.PersistStep(ctx, plan, step.ID)
 		return eval, fmt.Errorf("living plan step %s invalidated by execution-time archaeology mutation", step.ID)
 	case archaeodomain.DispositionPauseForLearning:
+		c.createDeferredDraftRequest(ctx, task, state, plan, step, eval)
 		c.Plans.RecordBlockedStep(plan, step, liveMutationReason(step, eval, "paused for learning"), false)
 		_ = c.Plans.PersistStep(ctx, plan, step.ID)
 		return eval, fmt.Errorf("living plan step %s paused for learning due to execution-time archaeology mutation", step.ID)
 	case archaeodomain.DispositionBlockExecution:
+		c.createDeferredDraftRequest(ctx, task, state, plan, step, eval)
 		c.Plans.RecordBlockedStep(plan, step, liveMutationReason(step, eval, "execution blocked"), false)
 		_ = c.Plans.PersistStep(ctx, plan, step.ID)
 		return eval, fmt.Errorf("living plan step %s blocked by execution-time archaeology mutation", step.ID)
 	case archaeodomain.DispositionRequireReplan:
+		c.createDeferredDraftRequest(ctx, task, state, plan, step, eval)
 		if state != nil {
 			state.Set("euclo.execution_requires_replan", true)
 		}
@@ -68,6 +75,96 @@ func (c LiveMutationCoordinator) CheckpointExecutionAt(ctx context.Context, chec
 	default:
 		return eval, nil
 	}
+}
+
+func (c LiveMutationCoordinator) createDeferredDraftRequest(ctx context.Context, task *core.Task, state *core.Context, plan *frameworkplan.LivingPlan, step *frameworkplan.PlanStep, eval *MutationEvaluation) {
+	if c.Service.WorkflowStore == nil || plan == nil || step == nil || eval == nil {
+		return
+	}
+	workspaceID := strings.TrimSpace(workspaceIDForTaskState(task, state))
+	workflowID := workflowIDForPlanTaskState(plan, task, state)
+	if workspaceID == "" || workflowID == "" {
+		return
+	}
+	ambiguityKey := deferredAmbiguityKey(step, eval)
+	request, err := (archaeorequests.Service{Store: c.Service.WorkflowStore}).Create(ctx, archaeorequests.CreateInput{
+		WorkflowID:     workflowID,
+		PlanID:         plan.ID,
+		PlanVersion:    planVersionPtr(plan.Version),
+		Kind:           archaeodomain.RequestPlanReformation,
+		Title:          "Deferred draft requested from execution ambiguity",
+		Description:    liveMutationReason(step, eval, "execution ambiguity requires deferred draft"),
+		RequestedBy:    "archaeo.execution.live",
+		CorrelationID:  fmt.Sprintf("deferred:%s:%s", workflowID, ambiguityKey),
+		IdempotencyKey: fmt.Sprintf("deferred:%s:%d:%s", workflowID, plan.Version, ambiguityKey),
+		SubjectRefs:    append([]string{step.ID}, mutationIDs(eval.RelevantMutations)...),
+		Input: map[string]any{
+			"workspace_id":   workspaceID,
+			"step_id":        step.ID,
+			"ambiguity_key":  ambiguityKey,
+			"mutation_ids":   mutationIDs(eval.RelevantMutations),
+			"disposition":    string(eval.Disposition),
+			"highest_impact": string(eval.HighestImpact),
+		},
+		BasedOnRevision: stateValue(state, "euclo.based_on_revision"),
+	})
+	if err != nil || request == nil {
+		return
+	}
+	_, _ = (archaeodeferred.Service{Store: c.Service.WorkflowStore}).CreateOrUpdate(ctx, archaeodeferred.CreateInput{
+		WorkspaceID:  workspaceID,
+		WorkflowID:   workflowID,
+		PlanID:       plan.ID,
+		PlanVersion:  planVersionPtr(plan.Version),
+		RequestID:    request.ID,
+		AmbiguityKey: ambiguityKey,
+		Title:        "Deferred draft pending review",
+		Description:  liveMutationReason(step, eval, "long-running execution discovered ambiguity"),
+		Metadata: map[string]any{
+			"step_id":        step.ID,
+			"mutation_ids":   mutationIDs(eval.RelevantMutations),
+			"disposition":    string(eval.Disposition),
+			"highest_impact": string(eval.HighestImpact),
+		},
+	})
+}
+
+func deferredAmbiguityKey(step *frameworkplan.PlanStep, eval *MutationEvaluation) string {
+	if step == nil {
+		return "execution-ambiguity"
+	}
+	parts := []string{strings.TrimSpace(step.ID), string(eval.Disposition)}
+	parts = append(parts, mutationIDs(eval.RelevantMutations)...)
+	return strings.Join(parts, ":")
+}
+
+func workspaceIDForTaskState(task *core.Task, state *core.Context) string {
+	if state != nil {
+		if value := strings.TrimSpace(state.GetString("euclo.workspace")); value != "" {
+			return value
+		}
+	}
+	if task != nil && task.Context != nil {
+		if value := strings.TrimSpace(fmt.Sprint(task.Context["workspace"])); value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
+}
+
+func stateValue(state *core.Context, key string) string {
+	if state == nil {
+		return ""
+	}
+	return strings.TrimSpace(state.GetString(key))
+}
+
+func planVersionPtr(version int) *int {
+	if version <= 0 {
+		return nil
+	}
+	copy := version
+	return &copy
 }
 
 func (c LiveMutationCoordinator) resolveGuidanceMutation(ctx context.Context, step *frameworkplan.PlanStep, eval *MutationEvaluation) error {

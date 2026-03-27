@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
+	"github.com/lexcodex/relurpify/archaeo/internal/keylock"
 	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
 	"github.com/lexcodex/relurpify/framework/memory"
 )
@@ -48,6 +50,13 @@ type ClaimInput struct {
 	Metadata   map[string]any
 }
 
+type RenewInput struct {
+	WorkflowID string
+	RequestID  string
+	LeaseTTL   time.Duration
+	Metadata   map[string]any
+}
+
 type ApplyFulfillmentInput struct {
 	WorkflowID        string
 	RequestID         string
@@ -63,55 +72,66 @@ type Service struct {
 	NewID func(prefix string) string
 }
 
+var requestMutationLocks keylock.Locker
+
 func (s Service) Create(ctx context.Context, input CreateInput) (*archaeodomain.RequestRecord, error) {
-	if s.Store == nil {
-		return nil, errors.New("workflow state store required")
-	}
-	if strings.TrimSpace(input.WorkflowID) == "" {
-		return nil, errors.New("workflow id required")
-	}
-	if input.Kind == "" {
-		return nil, errors.New("request kind required")
-	}
-	if strings.TrimSpace(input.Title) == "" {
-		return nil, errors.New("request title required")
-	}
-	if _, ok, err := s.Store.GetWorkflow(ctx, input.WorkflowID); err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, fmt.Errorf("workflow %s not found", input.WorkflowID)
-	}
-	now := s.now()
-	if existing := s.findExisting(ctx, input); existing != nil {
-		return existing, nil
-	}
-	record := &archaeodomain.RequestRecord{
-		ID:              s.newID("request"),
-		WorkflowID:      strings.TrimSpace(input.WorkflowID),
-		ExplorationID:   strings.TrimSpace(input.ExplorationID),
-		SnapshotID:      strings.TrimSpace(input.SnapshotID),
-		PlanID:          strings.TrimSpace(input.PlanID),
-		PlanVersion:     cloneInt(input.PlanVersion),
-		Kind:            input.Kind,
-		Status:          archaeodomain.RequestStatusPending,
-		Title:           strings.TrimSpace(input.Title),
-		Description:     strings.TrimSpace(input.Description),
-		RequestedBy:     strings.TrimSpace(input.RequestedBy),
-		CorrelationID:   strings.TrimSpace(input.CorrelationID),
-		IdempotencyKey:  strings.TrimSpace(input.IdempotencyKey),
-		SubjectRefs:     cloneStrings(input.SubjectRefs),
-		Input:           cloneMap(input.Input),
-		BasedOnRevision: strings.TrimSpace(input.BasedOnRevision),
-		RequestedAt:     now,
-		UpdatedAt:       now,
-	}
-	if err := s.save(ctx, record); err != nil {
-		return nil, err
-	}
-	if err := archaeoevents.AppendRequestEvent(ctx, s.Store, *record, archaeoevents.EventRequestCreated, record.Title, nil, now); err != nil {
-		return nil, err
-	}
-	return record, nil
+	var (
+		record *archaeodomain.RequestRecord
+		err    error
+	)
+	lockKey := "workflow:" + strings.TrimSpace(input.WorkflowID)
+	err = requestMutationLocks.With(lockKey, func() error {
+		if s.Store == nil {
+			return errors.New("workflow state store required")
+		}
+		if strings.TrimSpace(input.WorkflowID) == "" {
+			return errors.New("workflow id required")
+		}
+		if input.Kind == "" {
+			return errors.New("request kind required")
+		}
+		if strings.TrimSpace(input.Title) == "" {
+			return errors.New("request title required")
+		}
+		if _, ok, err := s.Store.GetWorkflow(ctx, input.WorkflowID); err != nil {
+			return err
+		} else if !ok {
+			return fmt.Errorf("workflow %s not found", input.WorkflowID)
+		}
+		now := s.now()
+		if existing := s.findExisting(ctx, input); existing != nil {
+			record = existing
+			return nil
+		}
+		record = &archaeodomain.RequestRecord{
+			ID:              s.newID("request"),
+			WorkflowID:      strings.TrimSpace(input.WorkflowID),
+			ExplorationID:   strings.TrimSpace(input.ExplorationID),
+			SnapshotID:      strings.TrimSpace(input.SnapshotID),
+			PlanID:          strings.TrimSpace(input.PlanID),
+			PlanVersion:     cloneInt(input.PlanVersion),
+			Kind:            input.Kind,
+			Status:          archaeodomain.RequestStatusPending,
+			Title:           strings.TrimSpace(input.Title),
+			Description:     strings.TrimSpace(input.Description),
+			RequestedBy:     strings.TrimSpace(input.RequestedBy),
+			CorrelationID:   strings.TrimSpace(input.CorrelationID),
+			IdempotencyKey:  strings.TrimSpace(input.IdempotencyKey),
+			SubjectRefs:     cloneStrings(input.SubjectRefs),
+			Input:           cloneMap(input.Input),
+			BasedOnRevision: strings.TrimSpace(input.BasedOnRevision),
+			RequestedAt:     now,
+			UpdatedAt:       now,
+		}
+		if err := s.save(ctx, record); err != nil {
+			return err
+		}
+		if err := archaeoevents.AppendRequestEvent(ctx, s.Store, *record, archaeoevents.EventRequestCreated, record.Title, nil, now); err != nil {
+			return err
+		}
+		return nil
+	})
+	return record, err
 }
 
 func (s Service) Load(ctx context.Context, workflowID, requestID string) (*archaeodomain.RequestRecord, bool, error) {
@@ -179,107 +199,248 @@ func (s Service) Pending(ctx context.Context, workflowID string) ([]archaeodomai
 	return out, nil
 }
 
+func (s Service) ExpireClaims(ctx context.Context, workflowID string) ([]archaeodomain.RequestRecord, error) {
+	var (
+		out []archaeodomain.RequestRecord
+		err error
+	)
+	err = requestMutationLocks.With("workflow:"+strings.TrimSpace(workflowID), func() error {
+		all, err := s.ListByWorkflow(ctx, workflowID)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		out = make([]archaeodomain.RequestRecord, 0)
+		for i := range all {
+			record := all[i]
+			if record.Status != archaeodomain.RequestStatusRunning || record.LeaseExpiresAt == nil || record.LeaseExpiresAt.After(now) {
+				continue
+			}
+			record.ClaimedBy = ""
+			record.ClaimedAt = nil
+			record.LeaseExpiresAt = nil
+			updated, err := s.transitionWithRecord(ctx, &record, archaeodomain.RequestStatusDispatched, map[string]any{"claim_expired": true}, "claim expired", nil, false)
+			if err != nil {
+				return err
+			}
+			if updated != nil {
+				out = append(out, *updated)
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
 func (s Service) Claim(ctx context.Context, input ClaimInput) (*archaeodomain.RequestRecord, error) {
-	record, ok, err := s.Load(ctx, input.WorkflowID, input.RequestID)
-	if err != nil || !ok {
-		return record, err
-	}
-	now := s.now()
-	record.ClaimedBy = strings.TrimSpace(input.ClaimedBy)
-	record.ClaimedAt = &now
-	if input.LeaseTTL > 0 {
-		expiry := now.Add(input.LeaseTTL)
-		record.LeaseExpiresAt = &expiry
-	}
-	record.Attempt++
-	return s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusRunning, input.Metadata, "", nil, false)
+	var (
+		record *archaeodomain.RequestRecord
+		err    error
+		ok     bool
+	)
+	err = requestMutationLocks.With(requestLockKey(input.WorkflowID, input.RequestID), func() error {
+		record, ok, err = s.Load(ctx, input.WorkflowID, input.RequestID)
+		if err != nil || !ok {
+			return err
+		}
+		if record.Status != archaeodomain.RequestStatusPending && record.Status != archaeodomain.RequestStatusDispatched {
+			return nil
+		}
+		if record.Status == archaeodomain.RequestStatusRunning && strings.TrimSpace(record.ClaimedBy) != "" && strings.TrimSpace(record.ClaimedBy) != strings.TrimSpace(input.ClaimedBy) {
+			return nil
+		}
+		now := s.now()
+		record.ClaimedBy = strings.TrimSpace(input.ClaimedBy)
+		record.ClaimedAt = &now
+		if input.LeaseTTL > 0 {
+			expiry := now.Add(input.LeaseTTL)
+			record.LeaseExpiresAt = &expiry
+		}
+		record.Attempt++
+		record, err = s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusRunning, input.Metadata, "", nil, false)
+		return err
+	})
+	return record, err
 }
 
 func (s Service) Release(ctx context.Context, workflowID, requestID string) (*archaeodomain.RequestRecord, error) {
-	record, ok, err := s.Load(ctx, workflowID, requestID)
-	if err != nil || !ok {
-		return record, err
-	}
-	record.ClaimedBy = ""
-	record.ClaimedAt = nil
-	record.LeaseExpiresAt = nil
-	return s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusDispatched, nil, "", nil, false)
-}
-
-func (s Service) Invalidate(ctx context.Context, workflowID, requestID, reason string, conflictingRefs []string) (*archaeodomain.RequestRecord, error) {
-	record, ok, err := s.Load(ctx, workflowID, requestID)
-	if err != nil || !ok {
-		return record, err
-	}
-	now := s.now()
-	record.InvalidatedAt = &now
-	record.InvalidationReason = strings.TrimSpace(reason)
-	if record.Fulfillment == nil {
-		record.Fulfillment = &archaeodomain.RequestFulfillment{}
-	}
-	record.Fulfillment.Validity = archaeodomain.RequestValidityInvalidated
-	record.Fulfillment.RejectedReason = strings.TrimSpace(reason)
-	record.Fulfillment.Metadata = mergeMap(record.Fulfillment.Metadata, map[string]any{"conflicting_ref_ids": cloneStrings(conflictingRefs)})
-	return s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusInvalidated, nil, reason, nil, false)
-}
-
-func (s Service) Supersede(ctx context.Context, workflowID, requestID, successorID, reason string) (*archaeodomain.RequestRecord, error) {
-	record, ok, err := s.Load(ctx, workflowID, requestID)
-	if err != nil || !ok {
-		return record, err
-	}
-	now := s.now()
-	record.SupersedesRequestID = strings.TrimSpace(successorID)
-	record.InvalidatedAt = &now
-	record.InvalidationReason = strings.TrimSpace(reason)
-	if record.Fulfillment == nil {
-		record.Fulfillment = &archaeodomain.RequestFulfillment{}
-	}
-	record.Fulfillment.Validity = archaeodomain.RequestValiditySuperseded
-	record.Fulfillment.RejectedReason = strings.TrimSpace(reason)
-	return s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusSuperseded, nil, reason, nil, false)
-}
-
-func (s Service) ApplyFulfillment(ctx context.Context, input ApplyFulfillmentInput) (*archaeodomain.RequestRecord, archaeodomain.RequestValidity, error) {
-	record, ok, err := s.Load(ctx, input.WorkflowID, input.RequestID)
-	if err != nil || !ok {
-		return record, "", err
-	}
-	validity, invalidation := EvaluateValidity(record, input.CurrentRevision, input.CurrentSnapshotID, input.ConflictingRefIDs)
-	now := s.now()
-	fulfillment := input.Fulfillment
-	fulfillment.Validity = validity
-	if validity == archaeodomain.RequestValidityValid || validity == archaeodomain.RequestValidityPartial {
-		fulfillment.Applied = true
-		fulfillment.AppliedAt = &now
-		record.Result = &archaeodomain.RequestResult{
-			Kind:     strings.TrimSpace(fulfillment.Kind),
-			RefID:    strings.TrimSpace(fulfillment.RefID),
-			Summary:  strings.TrimSpace(fulfillment.Summary),
-			Metadata: cloneMap(fulfillment.Metadata),
+	var (
+		record *archaeodomain.RequestRecord
+		err    error
+		ok     bool
+	)
+	err = requestMutationLocks.With(requestLockKey(workflowID, requestID), func() error {
+		record, ok, err = s.Load(ctx, workflowID, requestID)
+		if err != nil || !ok {
+			return err
 		}
-		record.FulfillmentRef = strings.TrimSpace(fulfillment.RefID)
-		record.Fulfillment = &fulfillment
 		record.ClaimedBy = ""
 		record.ClaimedAt = nil
 		record.LeaseExpiresAt = nil
-		updated, err := s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusCompleted, nil, "", record.Result, false)
-		return updated, validity, err
-	}
-	record.Fulfillment = &fulfillment
-	if invalidation != nil {
-		record.InvalidatedAt = &invalidation.At
-		record.InvalidationReason = invalidation.Reason
-		if invalidation.SupersededBy != "" {
-			record.SupersedesRequestID = invalidation.SupersededBy
+		record, err = s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusDispatched, nil, "", nil, false)
+		return err
+	})
+	return record, err
+}
+
+func (s Service) Renew(ctx context.Context, input RenewInput) (*archaeodomain.RequestRecord, error) {
+	var (
+		record *archaeodomain.RequestRecord
+		err    error
+		ok     bool
+	)
+	err = requestMutationLocks.With(requestLockKey(input.WorkflowID, input.RequestID), func() error {
+		record, ok, err = s.Load(ctx, input.WorkflowID, input.RequestID)
+		if err != nil || !ok {
+			return err
 		}
-	}
-	status := archaeodomain.RequestStatusInvalidated
-	if validity == archaeodomain.RequestValiditySuperseded {
-		status = archaeodomain.RequestStatusSuperseded
-	}
-	updated, err := s.transitionWithRecord(ctx, record, status, nil, fulfillment.RejectedReason, nil, false)
-	return updated, validity, err
+		if record.Status != archaeodomain.RequestStatusRunning {
+			return nil
+		}
+		now := s.now()
+		if input.LeaseTTL > 0 {
+			expiry := now.Add(input.LeaseTTL)
+			record.LeaseExpiresAt = &expiry
+		}
+		if len(input.Metadata) > 0 {
+			record.DispatchMetadata = mergeMap(record.DispatchMetadata, input.Metadata)
+		}
+		record.UpdatedAt = now
+		if err := s.save(ctx, record); err != nil {
+			return err
+		}
+		if err := archaeoevents.AppendRequestEvent(ctx, s.Store, *record, archaeoevents.EventRequestStarted, lifecycleMessage(record), input.Metadata, now); err != nil {
+			return err
+		}
+		return nil
+	})
+	return record, err
+}
+
+func (s Service) Invalidate(ctx context.Context, workflowID, requestID, reason string, conflictingRefs []string) (*archaeodomain.RequestRecord, error) {
+	var (
+		record *archaeodomain.RequestRecord
+		err    error
+		ok     bool
+	)
+	err = requestMutationLocks.With(requestLockKey(workflowID, requestID), func() error {
+		record, ok, err = s.Load(ctx, workflowID, requestID)
+		if err != nil || !ok {
+			return err
+		}
+		now := s.now()
+		record.InvalidatedAt = &now
+		record.InvalidationReason = strings.TrimSpace(reason)
+		if record.Fulfillment == nil {
+			record.Fulfillment = &archaeodomain.RequestFulfillment{}
+		}
+		record.Fulfillment.Validity = archaeodomain.RequestValidityInvalidated
+		record.Fulfillment.RejectedReason = strings.TrimSpace(reason)
+		record.Fulfillment.Metadata = mergeMap(record.Fulfillment.Metadata, map[string]any{"conflicting_ref_ids": cloneStrings(conflictingRefs)})
+		record, err = s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusInvalidated, nil, reason, nil, false)
+		return err
+	})
+	return record, err
+}
+
+func (s Service) Supersede(ctx context.Context, workflowID, requestID, successorID, reason string) (*archaeodomain.RequestRecord, error) {
+	var (
+		record *archaeodomain.RequestRecord
+		err    error
+		ok     bool
+	)
+	err = requestMutationLocks.With(requestLockKey(workflowID, requestID), func() error {
+		record, ok, err = s.Load(ctx, workflowID, requestID)
+		if err != nil || !ok {
+			return err
+		}
+		now := s.now()
+		record.SupersedesRequestID = strings.TrimSpace(successorID)
+		record.InvalidatedAt = &now
+		record.InvalidationReason = strings.TrimSpace(reason)
+		if record.Fulfillment == nil {
+			record.Fulfillment = &archaeodomain.RequestFulfillment{}
+		}
+		record.Fulfillment.Validity = archaeodomain.RequestValiditySuperseded
+		record.Fulfillment.RejectedReason = strings.TrimSpace(reason)
+		record, err = s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusSuperseded, nil, reason, nil, false)
+		return err
+	})
+	return record, err
+}
+
+func (s Service) ApplyFulfillment(ctx context.Context, input ApplyFulfillmentInput) (*archaeodomain.RequestRecord, archaeodomain.RequestValidity, error) {
+	var (
+		record   *archaeodomain.RequestRecord
+		validity archaeodomain.RequestValidity
+		err      error
+		ok       bool
+	)
+	err = requestMutationLocks.With(requestLockKey(input.WorkflowID, input.RequestID), func() error {
+		record, ok, err = s.Load(ctx, input.WorkflowID, input.RequestID)
+		if err != nil || !ok {
+			return err
+		}
+		var invalidation *archaeodomain.RequestInvalidation
+		validity, invalidation = EvaluateValidity(record, input.CurrentRevision, input.CurrentSnapshotID, input.ConflictingRefIDs)
+		now := s.now()
+		fulfillment := input.Fulfillment
+		fulfillment.Validity = validity
+		if validity == archaeodomain.RequestValidityValid || validity == archaeodomain.RequestValidityPartial {
+			fulfillment.Applied = true
+			fulfillment.AppliedAt = &now
+			record.Result = &archaeodomain.RequestResult{
+				Kind:     strings.TrimSpace(fulfillment.Kind),
+				RefID:    strings.TrimSpace(fulfillment.RefID),
+				Summary:  strings.TrimSpace(fulfillment.Summary),
+				Metadata: cloneMap(fulfillment.Metadata),
+			}
+			record.FulfillmentRef = strings.TrimSpace(fulfillment.RefID)
+			record.Fulfillment = &fulfillment
+			record.ClaimedBy = ""
+			record.ClaimedAt = nil
+			record.LeaseExpiresAt = nil
+			record, err = s.transitionWithRecord(ctx, record, archaeodomain.RequestStatusCompleted, nil, "", record.Result, false)
+			return err
+		}
+		record.Fulfillment = &fulfillment
+		if invalidation != nil {
+			record.InvalidatedAt = &invalidation.At
+			record.InvalidationReason = invalidation.Reason
+			if invalidation.SupersededBy != "" {
+				record.SupersedesRequestID = invalidation.SupersededBy
+			}
+		}
+		status := archaeodomain.RequestStatusInvalidated
+		if validity == archaeodomain.RequestValiditySuperseded {
+			status = archaeodomain.RequestStatusSuperseded
+		}
+		record, err = s.transitionWithRecord(ctx, record, status, nil, fulfillment.RejectedReason, nil, false)
+		if err == nil && record != nil {
+			workspaceID := workspaceIDForRequest(record)
+			if workspaceID != "" {
+				_, _ = (archaeodecisions.Service{Store: s.Store, Now: s.Now, NewID: s.NewID}).Create(ctx, archaeodecisions.CreateInput{
+					WorkspaceID:        workspaceID,
+					WorkflowID:         record.WorkflowID,
+					Kind:               archaeodomain.DecisionKindStaleResult,
+					RelatedRequestID:   record.ID,
+					RelatedPlanID:      record.PlanID,
+					RelatedPlanVersion: cloneInt(record.PlanVersion),
+					Validity:           validity,
+					Title:              firstNonEmpty(record.Title, "stale result requires decision"),
+					Summary:            firstNonEmpty(fulfillment.RejectedReason, record.InvalidationReason, "request fulfillment requires user decision"),
+					Metadata: map[string]any{
+						"request_kind":        string(record.Kind),
+						"conflicting_ref_ids": cloneStrings(input.ConflictingRefIDs),
+						"current_revision":    strings.TrimSpace(input.CurrentRevision),
+						"current_snapshot_id": strings.TrimSpace(input.CurrentSnapshotID),
+					},
+				})
+			}
+		}
+		return err
+	})
+	return record, validity, err
 }
 
 func (s Service) Dispatch(ctx context.Context, workflowID, requestID string, metadata map[string]any) (*archaeodomain.RequestRecord, error) {
@@ -303,11 +464,20 @@ func (s Service) Cancel(ctx context.Context, workflowID, requestID, reason strin
 }
 
 func (s Service) transition(ctx context.Context, workflowID, requestID string, status archaeodomain.RequestStatus, metadata map[string]any, errorText string, result *archaeodomain.RequestResult, retry bool) (*archaeodomain.RequestRecord, error) {
-	record, ok, err := s.Load(ctx, workflowID, requestID)
-	if err != nil || !ok {
-		return record, err
-	}
-	return s.transitionWithRecord(ctx, record, status, metadata, errorText, result, retry)
+	var (
+		record *archaeodomain.RequestRecord
+		err    error
+		ok     bool
+	)
+	err = requestMutationLocks.With(requestLockKey(workflowID, requestID), func() error {
+		record, ok, err = s.Load(ctx, workflowID, requestID)
+		if err != nil || !ok {
+			return err
+		}
+		record, err = s.transitionWithRecord(ctx, record, status, metadata, errorText, result, retry)
+		return err
+	})
+	return record, err
 }
 
 func (s Service) transitionWithRecord(ctx context.Context, record *archaeodomain.RequestRecord, status archaeodomain.RequestStatus, metadata map[string]any, errorText string, result *archaeodomain.RequestResult, retry bool) (*archaeodomain.RequestRecord, error) {
@@ -515,6 +685,25 @@ func mergeMap(existing, update map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+func workspaceIDForRequest(record *archaeodomain.RequestRecord) string {
+	if record == nil {
+		return ""
+	}
+	for _, source := range []map[string]any{record.Input, record.DispatchMetadata} {
+		if value, ok := source["workspace_id"]; ok {
+			if typed, ok := value.(string); ok && strings.TrimSpace(typed) != "" {
+				return strings.TrimSpace(typed)
+			}
+		}
+	}
+	return ""
+}
+
+func requestLockKey(workflowID, requestID string) string {
+	_ = requestID
+	return "workflow:" + strings.TrimSpace(workflowID)
 }
 
 func firstNonEmpty(values ...string) string {

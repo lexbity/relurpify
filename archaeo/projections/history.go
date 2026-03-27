@@ -5,6 +5,9 @@ import (
 	"strings"
 
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
+	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
+	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
+	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
@@ -52,6 +55,30 @@ func (s *Service) Provenance(ctx context.Context, workflowID string) (*Provenanc
 		return nil, nil
 	}
 	return buildProvenanceProjection(ctx, s.Store, workflowID)
+}
+
+func (s *Service) DeferredDrafts(ctx context.Context, workspaceID string) (*DeferredDraftProjection, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if s == nil || s.Store == nil || workspaceID == "" {
+		return nil, nil
+	}
+	return buildDeferredDraftProjection(ctx, s.Store, workspaceID)
+}
+
+func (s *Service) ConvergenceHistory(ctx context.Context, workspaceID string) (*archaeodomain.WorkspaceConvergenceProjection, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if s == nil || s.Store == nil || workspaceID == "" {
+		return nil, nil
+	}
+	return (archaeoconvergence.Service{Store: s.Store}).CurrentByWorkspace(ctx, workspaceID)
+}
+
+func (s *Service) DecisionTrail(ctx context.Context, workspaceID string) (*DecisionTrailProjection, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if s == nil || s.Store == nil || workspaceID == "" {
+		return nil, nil
+	}
+	return buildDecisionTrailProjection(ctx, s.Store, workspaceID)
 }
 
 func buildMutationHistoryProjection(ctx context.Context, store memory.WorkflowStateStore, workflowID string) (*MutationHistoryProjection, error) {
@@ -221,15 +248,52 @@ func buildProvenanceProjection(ctx context.Context, store memory.WorkflowStateSt
 		planVersions = append(planVersions, PlanVersionProvenance(item))
 	}
 	return &ProvenanceProjection{
-		WorkflowID:     record.WorkflowID,
-		Learning:       learning,
-		Tensions:       tensions,
-		PlanVersions:   planVersions,
-		Requests:       append([]archaeodomain.RequestProvenance(nil), record.Requests...),
-		Mutations:      append([]archaeodomain.MutationProvenance(nil), record.Mutations...),
-		LastMutationAt: record.LastMutationAt,
-		LastRequestAt:  record.LastRequestAt,
+		WorkflowID:        record.WorkflowID,
+		Learning:          learning,
+		Tensions:          tensions,
+		PlanVersions:      planVersions,
+		Requests:          append([]archaeodomain.RequestProvenance(nil), record.Requests...),
+		Mutations:         append([]archaeodomain.MutationProvenance(nil), record.Mutations...),
+		DeferredDraftRefs: append([]string(nil), record.DeferredDraftRefs...),
+		ConvergenceRefs:   append([]string(nil), record.ConvergenceRefs...),
+		DecisionRefs:      append([]string(nil), record.DecisionRefs...),
+		LastMutationAt:    record.LastMutationAt,
+		LastRequestAt:     record.LastRequestAt,
 	}, nil
+}
+
+func buildDeferredDraftProjection(ctx context.Context, store memory.WorkflowStateStore, workspaceID string) (*DeferredDraftProjection, error) {
+	records, err := (archaeodeferred.Service{Store: store}).ListByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	proj := &DeferredDraftProjection{WorkspaceID: workspaceID, Records: append([]archaeodomain.DeferredDraftRecord(nil), records...)}
+	for _, record := range records {
+		switch record.Status {
+		case archaeodomain.DeferredDraftPending:
+			proj.OpenCount++
+		case archaeodomain.DeferredDraftFormed:
+			proj.FormedCount++
+		}
+	}
+	return proj, nil
+}
+
+func buildDecisionTrailProjection(ctx context.Context, store memory.WorkflowStateStore, workspaceID string) (*DecisionTrailProjection, error) {
+	records, err := (archaeodecisions.Service{Store: store}).ListByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	proj := &DecisionTrailProjection{WorkspaceID: workspaceID, Records: append([]archaeodomain.DecisionRecord(nil), records...)}
+	for _, record := range records {
+		switch record.Status {
+		case archaeodomain.DecisionStatusOpen:
+			proj.OpenCount++
+		case archaeodomain.DecisionStatusResolved:
+			proj.Resolved++
+		}
+	}
+	return proj, nil
 }
 
 func explorationActivityRelevant(entry archaeodomain.TimelineEvent, explorationID string) bool {

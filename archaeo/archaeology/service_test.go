@@ -13,8 +13,8 @@ import (
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
 	"github.com/lexcodex/relurpify/archaeo/providers"
-	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
+	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -619,7 +619,7 @@ func TestPrepareLivingPlanAllowsNonBlockingLearningToSurface(t *testing.T) {
 	require.Empty(t, raw.([]string))
 }
 
-func TestPrepareLivingPlanUsesProviderLifecycleAndCompletesRequests(t *testing.T) {
+func TestPrepareLivingPlanUsesProviderLifecycleAndCreatesPendingRequests(t *testing.T) {
 	now := time.Now().UTC()
 	store := &stubPlanStore{
 		plan: &frameworkplan.LivingPlan{
@@ -670,11 +670,11 @@ func TestPrepareLivingPlanUsesProviderLifecycleAndCompletesRequests(t *testing.T
 				UpdatedAt:    now,
 			}}},
 			TensionAnalyzer: stubTensionAnalyzer{records: []archaeodomain.Tension{{
-				ID:              "provider-tension",
-				SourceRef:       "gap-provider",
-				Kind:            "intent_gap",
-				Description:     "provider detected tension",
-				Status:          archaeodomain.TensionUnresolved,
+				ID:                 "provider-tension",
+				SourceRef:          "gap-provider",
+				Kind:               "intent_gap",
+				Description:        "provider detected tension",
+				Status:             archaeodomain.TensionUnresolved,
 				RelatedPlanStepIDs: []string{"resolve_tensions"},
 			}}},
 			ProspectiveAnalyzer: stubProspectiveAnalyzer{records: []patterns.PatternRecord{{
@@ -693,7 +693,8 @@ func TestPrepareLivingPlanUsesProviderLifecycleAndCompletesRequests(t *testing.T
 				UnresolvedTensions: []string{"provider-tension"},
 			}},
 		},
-		PersistPhase: func(context.Context, *core.Task, *core.Context, archaeodomain.EucloPhase, string, *frameworkplan.PlanStep) {},
+		PersistPhase: func(context.Context, *core.Task, *core.Context, archaeodomain.EucloPhase, string, *frameworkplan.PlanStep) {
+		},
 		EvaluateGate: func(context.Context, *core.Task, *core.Context, *frameworkplan.LivingPlan, *frameworkplan.PlanStep) (archaeoexec.PreflightOutcome, error) {
 			return archaeoexec.PreflightOutcome{}, nil
 		},
@@ -715,35 +716,26 @@ func TestPrepareLivingPlanUsesProviderLifecycleAndCompletesRequests(t *testing.T
 	requests, err := requestsSvc.ListByWorkflow(context.Background(), "wf-1")
 	require.NoError(t, err)
 	require.Len(t, requests, 4)
+	require.ElementsMatch(t, []archaeodomain.RequestKind{
+		archaeodomain.RequestPatternSurfacing,
+		archaeodomain.RequestTensionAnalysis,
+		archaeodomain.RequestProspectiveAnalysis,
+		archaeodomain.RequestConvergenceReview,
+	}, []archaeodomain.RequestKind{requests[0].Kind, requests[1].Kind, requests[2].Kind, requests[3].Kind})
 	for _, record := range requests {
-		require.Equal(t, archaeodomain.RequestStatusCompleted, record.Status)
-		require.NotNil(t, record.Result)
+		require.Equal(t, archaeodomain.RequestStatusPending, record.Status)
+		require.Nil(t, record.Result)
 	}
 
 	queueRaw, ok := state.Get("euclo.learning_queue")
 	require.True(t, ok)
 	queue := queueRaw.([]archaeolearning.Interaction)
 	require.NotEmpty(t, queue)
-	patternRefsRaw, ok := state.Get("euclo.exploration_candidate_pattern_refs")
-	require.True(t, ok)
-	patternRefs := patternRefsRaw.([]string)
-	require.Contains(t, patternRefs, "pattern-provider")
-	require.Contains(t, patternRefs, "pattern-prospective")
-	tensionRefsRaw, ok := state.Get("euclo.exploration_tension_refs")
-	require.True(t, ok)
-	tensionRefs := tensionRefsRaw.([]string)
-	require.Len(t, tensionRefs, 1)
 	tensions, err := (archaeotensions.Service{Store: workflowStore}).ListByWorkflow(context.Background(), "wf-1")
 	require.NoError(t, err)
-	require.Len(t, tensions, 1)
-	require.Equal(t, "gap-provider", tensions[0].SourceRef)
-	require.Contains(t, tensionRefs, tensions[0].ID)
-
-	failureRaw, ok := state.Get("euclo.plan_formation_convergence_failure")
-	require.True(t, ok)
-	failure, ok := failureRaw.(frameworkplan.ConvergenceFailure)
-	require.True(t, ok)
-	require.Equal(t, "draft still has unresolved tensions", failure.Description)
+	require.Empty(t, tensions)
+	_, ok = state.Get("euclo.plan_formation_convergence_failure")
+	require.False(t, ok)
 }
 
 func TestPrepareLivingPlanCreatesPendingRequestsWithoutProviders(t *testing.T) {
@@ -771,7 +763,8 @@ func TestPrepareLivingPlanCreatesPendingRequestsWithoutProviders(t *testing.T) {
 		Plans:    archaeoplans.Service{Store: store, WorkflowStore: workflowStore},
 		Learning: archaeolearning.Service{Store: workflowStore},
 		Requests: archaeorequests.Service{Store: workflowStore},
-		PersistPhase: func(context.Context, *core.Task, *core.Context, archaeodomain.EucloPhase, string, *frameworkplan.PlanStep) {},
+		PersistPhase: func(context.Context, *core.Task, *core.Context, archaeodomain.EucloPhase, string, *frameworkplan.PlanStep) {
+		},
 		EvaluateGate: func(context.Context, *core.Task, *core.Context, *frameworkplan.LivingPlan, *frameworkplan.PlanStep) (archaeoexec.PreflightOutcome, error) {
 			return archaeoexec.PreflightOutcome{}, nil
 		},

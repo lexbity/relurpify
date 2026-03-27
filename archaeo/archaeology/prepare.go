@@ -3,10 +3,12 @@ package archaeology
 import (
 	"context"
 	"log"
+	"strings"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
 	"github.com/lexcodex/relurpify/framework/core"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )
 
 func (s Service) PrepareLivingPlan(ctx context.Context, task *core.Task, state *core.Context, workflowID string) PrepareResult {
@@ -23,13 +25,18 @@ func (s Service) PrepareLivingPlan(ctx context.Context, task *core.Task, state *
 		return PrepareResult{Err: err}
 	}
 	plan := active.Plan
-	if version, err := s.Plans.EnsureActiveVersion(ctx, workflowID, plan, archaeoplans.DraftVersionInput{
-		WorkflowID:             workflowID,
-		DerivedFromExploration: state.GetString("euclo.active_exploration_id"),
-		BasedOnRevision:        basedOnRevisionFromTask(task, state),
-		SemanticSnapshotRef:    state.GetString("euclo.active_exploration_snapshot_id"),
-	}); err == nil && version != nil {
+	version, err := cachedActiveVersion(state, workflowID, plan)
+	if err == nil && version == nil {
+		version, err = s.Plans.EnsureActiveVersion(ctx, workflowID, plan, archaeoplans.DraftVersionInput{
+			WorkflowID:             workflowID,
+			DerivedFromExploration: state.GetString("euclo.active_exploration_id"),
+			BasedOnRevision:        basedOnRevisionFromTask(task, state),
+			SemanticSnapshotRef:    state.GetString("euclo.active_exploration_snapshot_id"),
+		})
+	}
+	if err == nil && version != nil {
 		state.Set("euclo.active_plan_version", version.Version)
+		state.Set("euclo.preloaded_active_plan_version", version)
 		plan.Version = version.Version
 	} else if err != nil {
 		s.persistPhase(ctx, task, state, archaeodomain.PhaseBlocked, err.Error(), nil)
@@ -91,6 +98,27 @@ func (s Service) PrepareLivingPlan(ctx context.Context, task *core.Task, state *
 	return PrepareResult{Plan: plan, Step: step}
 }
 
+func cachedActiveVersion(state *core.Context, workflowID string, plan *frameworkplan.LivingPlan) (*archaeodomain.VersionedLivingPlan, error) {
+	if state == nil || plan == nil || strings.TrimSpace(workflowID) == "" {
+		return nil, nil
+	}
+	raw, ok := state.Get("euclo.preloaded_active_plan_version")
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	version, ok := raw.(*archaeodomain.VersionedLivingPlan)
+	if !ok || version == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(version.WorkflowID) != strings.TrimSpace(workflowID) {
+		return nil, nil
+	}
+	if strings.TrimSpace(version.Plan.ID) != strings.TrimSpace(plan.ID) || version.Version != plan.Version {
+		return nil, nil
+	}
+	return version, nil
+}
+
 func (s Service) loadActiveContext(ctx context.Context, task *core.Task, state *core.Context, workflowID string) (*archaeoplans.ActiveContext, error) {
 	if state != nil {
 		if raw, ok := state.Get("euclo.preloaded_active_plan_version"); ok && raw != nil {
@@ -122,18 +150,61 @@ func (s Service) prepareExploration(ctx context.Context, task *core.Task, state 
 	if session.StaleReason != "" {
 		state.Set("euclo.exploration_stale_reason", session.StaleReason)
 	}
-	snapshot, err := s.CreateExplorationSnapshot(ctx, session, SnapshotInput{
+	snapshotInput := SnapshotInput{
 		WorkflowID:          workflowID,
 		WorkspaceID:         workspaceID,
 		BasedOnRevision:     basedOnRevisionFromTask(task, state),
 		OpenLearningIDs:     stringSliceFromState(state, "euclo.pending_learning_ids"),
 		Summary:             taskInstruction(task),
 		SemanticSnapshotRef: state.GetString("euclo.semantic_snapshot_ref"),
-	})
+	}
+	snapshot, err := s.ensurePreparedSnapshot(ctx, workflowID, session, snapshotInput)
 	if err != nil || snapshot == nil {
 		return err
 	}
 	state.Set("euclo.active_exploration_snapshot_id", snapshot.ID)
 	state.Set("euclo.based_on_revision", snapshot.BasedOnRevision)
 	return nil
+}
+
+func (s Service) ensurePreparedSnapshot(ctx context.Context, workflowID string, session *archaeodomain.ExplorationSession, input SnapshotInput) (*archaeodomain.ExplorationSnapshot, error) {
+	if session == nil {
+		return nil, nil
+	}
+	if snapshot := s.reusablePreparedSnapshot(ctx, workflowID, session, input); snapshot != nil {
+		return snapshot, nil
+	}
+	return s.CreateExplorationSnapshot(ctx, session, input)
+}
+
+func (s Service) reusablePreparedSnapshot(ctx context.Context, workflowID string, session *archaeodomain.ExplorationSession, input SnapshotInput) *archaeodomain.ExplorationSnapshot {
+	if session == nil || strings.TrimSpace(session.LatestSnapshotID) == "" {
+		return nil
+	}
+	snapshot, err := s.LoadExplorationSnapshotByWorkflow(ctx, workflowID, session.LatestSnapshotID)
+	if err != nil || snapshot == nil {
+		return nil
+	}
+	if strings.TrimSpace(snapshot.ExplorationID) != strings.TrimSpace(session.ID) {
+		return nil
+	}
+	if strings.TrimSpace(snapshot.WorkspaceID) != strings.TrimSpace(firstNonEmpty(strings.TrimSpace(input.WorkspaceID), session.WorkspaceID)) {
+		return nil
+	}
+	if strings.TrimSpace(snapshot.BasedOnRevision) != strings.TrimSpace(input.BasedOnRevision) {
+		return nil
+	}
+	if strings.TrimSpace(snapshot.SemanticSnapshotRef) != strings.TrimSpace(input.SemanticSnapshotRef) {
+		return nil
+	}
+	if strings.TrimSpace(snapshot.Summary) != strings.TrimSpace(input.Summary) {
+		return nil
+	}
+	if !sameStringSet(snapshot.OpenLearningIDs, input.OpenLearningIDs) {
+		return nil
+	}
+	if len(snapshot.CandidatePatternRefs) > 0 || len(snapshot.CandidateAnchorRefs) > 0 || len(snapshot.TensionIDs) > 0 {
+		return nil
+	}
+	return snapshot
 }

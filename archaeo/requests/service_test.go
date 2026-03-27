@@ -2,10 +2,14 @@ package requests
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -115,6 +119,180 @@ func TestServiceFailAndPending(t *testing.T) {
 	pending, err = svc.Pending(ctx, record.WorkflowID)
 	require.NoError(t, err)
 	require.Empty(t, pending)
+}
+
+func TestExpireClaimsAndCreateStaleDecision(t *testing.T) {
+	ctx := context.Background()
+	store := openWorkflowStore(t, "wf-requests-expire")
+	now := time.Date(2026, 3, 27, 20, 0, 0, 0, time.UTC)
+	svc := Service{
+		Store: store,
+		Now:   func() time.Time { return now },
+		NewID: func(prefix string) string { return prefix + "-1" },
+	}
+
+	record, err := svc.Create(ctx, CreateInput{
+		WorkflowID:      "wf-requests-expire",
+		Kind:            archaeodomain.RequestPatternSurfacing,
+		Title:           "Surface patterns",
+		CorrelationID:   "req-1",
+		IdempotencyKey:  "req-1",
+		Input:           map[string]any{"workspace_id": "/workspace/req"},
+		BasedOnRevision: "rev-1",
+	})
+	require.NoError(t, err)
+	record, err = svc.Dispatch(ctx, record.WorkflowID, record.ID, nil)
+	require.NoError(t, err)
+	record, err = svc.Claim(ctx, ClaimInput{
+		WorkflowID: record.WorkflowID,
+		RequestID:  record.ID,
+		ClaimedBy:  "executor-1",
+		LeaseTTL:   time.Minute,
+	})
+	require.NoError(t, err)
+
+	svc.Now = func() time.Time { return now.Add(2 * time.Minute) }
+	expired, err := svc.ExpireClaims(ctx, record.WorkflowID)
+	require.NoError(t, err)
+	require.Len(t, expired, 1)
+	require.Equal(t, archaeodomain.RequestStatusDispatched, expired[0].Status)
+
+	record, validity, err := svc.ApplyFulfillment(ctx, ApplyFulfillmentInput{
+		WorkflowID:      expired[0].WorkflowID,
+		RequestID:       expired[0].ID,
+		CurrentRevision: "rev-2",
+		Fulfillment: archaeodomain.RequestFulfillment{
+			Kind:        "pattern_records",
+			RefID:       "pattern-1",
+			Summary:     "stale",
+			ExecutorRef: "euclo-run-1",
+			SessionRef:  "session-1",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, archaeodomain.RequestValidityInvalidated, validity)
+	require.Equal(t, archaeodomain.RequestStatusInvalidated, record.Status)
+
+	decisions, err := (archaeodecisions.Service{Store: store}).ListByWorkspace(ctx, "/workspace/req")
+	require.NoError(t, err)
+	require.Len(t, decisions, 1)
+	require.Equal(t, archaeodomain.DecisionKindStaleResult, decisions[0].Kind)
+	require.Equal(t, record.ID, decisions[0].RelatedRequestID)
+}
+
+func TestConcurrentClaimSingleWinner(t *testing.T) {
+	ctx := context.Background()
+	store := openWorkflowStore(t, "wf-requests-concurrent-claim")
+	now := time.Date(2026, 3, 27, 20, 30, 0, 0, time.UTC)
+	svc := Service{
+		Store: store,
+		Now:   func() time.Time { return now },
+		NewID: func(prefix string) string { return prefix + "-1" },
+	}
+
+	record, err := svc.Create(ctx, CreateInput{
+		WorkflowID: "wf-requests-concurrent-claim",
+		Kind:       archaeodomain.RequestPatternSurfacing,
+		Title:      "Concurrent claim",
+	})
+	require.NoError(t, err)
+	record, err = svc.Dispatch(ctx, record.WorkflowID, record.ID, nil)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	results := make(chan *archaeodomain.RequestRecord, 2)
+	for _, claimer := range []string{"executor-a", "executor-b"} {
+		wg.Add(1)
+		go func(claimer string) {
+			defer wg.Done()
+			updated, err := svc.Claim(ctx, ClaimInput{
+				WorkflowID: record.WorkflowID,
+				RequestID:  record.ID,
+				ClaimedBy:  claimer,
+				LeaseTTL:   time.Minute,
+			})
+			require.NoError(t, err)
+			results <- updated
+		}(claimer)
+	}
+	wg.Wait()
+	close(results)
+
+	final, ok, err := svc.Load(ctx, record.WorkflowID, record.ID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, archaeodomain.RequestStatusRunning, final.Status)
+	require.NotEmpty(t, final.ClaimedBy)
+	require.Equal(t, 1, final.Attempt)
+	for updated := range results {
+		require.NotNil(t, updated)
+		require.Equal(t, final.ClaimedBy, updated.ClaimedBy)
+	}
+}
+
+func TestConcurrentApplyIndependentFulfillments(t *testing.T) {
+	ctx := context.Background()
+	store := openWorkflowStore(t, "wf-requests-concurrent-apply")
+	now := time.Date(2026, 3, 27, 21, 0, 0, 0, time.UTC)
+	var seq atomic.Int64
+	svc := Service{
+		Store: store,
+		Now:   func() time.Time { return now },
+		NewID: func(prefix string) string { return fmt.Sprintf("%s-%d", prefix, seq.Add(1)) },
+	}
+
+	requestIDs := make([]string, 0, 8)
+	for i := 0; i < 8; i++ {
+		record, err := svc.Create(ctx, CreateInput{
+			WorkflowID:      "wf-requests-concurrent-apply",
+			Kind:            archaeodomain.RequestProspectiveAnalysis,
+			Title:           "Concurrent apply",
+			IdempotencyKey:  "apply-" + string(rune('a'+i)),
+			Input:           map[string]any{"ordinal": i},
+			BasedOnRevision: "rev-1",
+		})
+		require.NoError(t, err)
+		record, err = svc.Dispatch(ctx, record.WorkflowID, record.ID, nil)
+		require.NoError(t, err)
+		record, err = svc.Claim(ctx, ClaimInput{
+			WorkflowID: record.WorkflowID,
+			RequestID:  record.ID,
+			ClaimedBy:  "executor",
+			LeaseTTL:   time.Minute,
+		})
+		require.NoError(t, err)
+		requestIDs = append(requestIDs, record.ID)
+	}
+
+	var wg sync.WaitGroup
+	for i, requestID := range requestIDs {
+		wg.Add(1)
+		go func(i int, requestID string) {
+			defer wg.Done()
+			updated, validity, err := svc.ApplyFulfillment(ctx, ApplyFulfillmentInput{
+				WorkflowID:      "wf-requests-concurrent-apply",
+				RequestID:       requestID,
+				CurrentRevision: "rev-1",
+				Fulfillment: archaeodomain.RequestFulfillment{
+					Kind:        "result",
+					RefID:       "result-" + string(rune('a'+i)),
+					Summary:     "fulfilled",
+					ExecutorRef: "executor",
+				},
+			})
+			require.NoError(t, err)
+			require.Equal(t, archaeodomain.RequestValidityValid, validity)
+			require.Equal(t, archaeodomain.RequestStatusCompleted, updated.Status)
+		}(i, requestID)
+	}
+	wg.Wait()
+
+	all, err := svc.ListByWorkflow(ctx, "wf-requests-concurrent-apply")
+	require.NoError(t, err)
+	require.Len(t, all, len(requestIDs))
+	for _, record := range all {
+		require.Equal(t, archaeodomain.RequestStatusCompleted, record.Status)
+	}
 }
 
 func openWorkflowStore(t *testing.T, workflowID string) *memorydb.SQLiteWorkflowStateStore {

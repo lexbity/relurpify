@@ -62,6 +62,20 @@ type PlanLineageProjection struct {
 	RecomputePending bool                                `json:"recompute_pending"`
 }
 
+type DeferredDraftProjection struct {
+	WorkspaceID string                              `json:"workspace_id"`
+	Records     []archaeodomain.DeferredDraftRecord `json:"records,omitempty"`
+	OpenCount   int                                 `json:"open_count"`
+	FormedCount int                                 `json:"formed_count"`
+}
+
+type DecisionTrailProjection struct {
+	WorkspaceID string                         `json:"workspace_id"`
+	Records     []archaeodomain.DecisionRecord `json:"records,omitempty"`
+	OpenCount   int                            `json:"open_count"`
+	Resolved    int                            `json:"resolved"`
+}
+
 type ExplorationActivityProjection struct {
 	WorkflowID         string                        `json:"workflow_id"`
 	ExplorationID      string                        `json:"exploration_id,omitempty"`
@@ -113,14 +127,17 @@ type PlanVersionProvenance struct {
 }
 
 type ProvenanceProjection struct {
-	WorkflowID     string                             `json:"workflow_id"`
-	Learning       []LearningOutcomeProvenance        `json:"learning,omitempty"`
-	Tensions       []TensionProvenance                `json:"tensions,omitempty"`
-	PlanVersions   []PlanVersionProvenance            `json:"plan_versions,omitempty"`
-	Requests       []archaeodomain.RequestProvenance  `json:"requests,omitempty"`
-	Mutations      []archaeodomain.MutationProvenance `json:"mutations,omitempty"`
-	LastMutationAt *time.Time                         `json:"last_mutation_at,omitempty"`
-	LastRequestAt  *time.Time                         `json:"last_request_at,omitempty"`
+	WorkflowID        string                             `json:"workflow_id"`
+	Learning          []LearningOutcomeProvenance        `json:"learning,omitempty"`
+	Tensions          []TensionProvenance                `json:"tensions,omitempty"`
+	PlanVersions      []PlanVersionProvenance            `json:"plan_versions,omitempty"`
+	Requests          []archaeodomain.RequestProvenance  `json:"requests,omitempty"`
+	Mutations         []archaeodomain.MutationProvenance `json:"mutations,omitempty"`
+	DeferredDraftRefs []string                           `json:"deferred_draft_refs,omitempty"`
+	ConvergenceRefs   []string                           `json:"convergence_refs,omitempty"`
+	DecisionRefs      []string                           `json:"decision_refs,omitempty"`
+	LastMutationAt    *time.Time                         `json:"last_mutation_at,omitempty"`
+	LastRequestAt     *time.Time                         `json:"last_request_at,omitempty"`
 }
 
 type CoherenceProjection struct {

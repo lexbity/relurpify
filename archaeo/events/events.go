@@ -46,6 +46,9 @@ const (
 	EventRequestCompleted             = "archaeo.request_completed"
 	EventRequestFailed                = "archaeo.request_failed"
 	EventRequestCanceled              = "archaeo.request_canceled"
+	EventDeferredDraftUpserted        = "archaeo.deferred_draft_upserted"
+	EventConvergenceRecordUpserted    = "archaeo.convergence_record_upserted"
+	EventDecisionRecordUpserted       = "archaeo.decision_record_upserted"
 
 	projectionSnapshotArtifactKind = "archaeo_projection_snapshot"
 	projectionSnapshotArtifactID   = "archaeo-projection-snapshot"
@@ -159,6 +162,8 @@ func AppendRequestEvent(ctx context.Context, store memory.WorkflowStateStore, re
 		payload["fulfillment_validity"] = string(request.Fulfillment.Validity)
 		payload["fulfillment_applied"] = request.Fulfillment.Applied
 		payload["fulfillment_rejected_reason"] = strings.TrimSpace(request.Fulfillment.RejectedReason)
+		payload["fulfillment_executor"] = strings.TrimSpace(request.Fulfillment.ExecutorRef)
+		payload["fulfillment_session"] = strings.TrimSpace(request.Fulfillment.SessionRef)
 	}
 	return AppendWorkflowEvent(ctx, store, workflowID, eventType, strings.TrimSpace(message), payload, now)
 }

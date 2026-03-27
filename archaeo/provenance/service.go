@@ -4,8 +4,12 @@ import (
 	"context"
 	"strings"
 
+	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
+	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
+	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
+	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
 	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
@@ -21,6 +25,15 @@ func (s Service) Build(ctx context.Context, workflowID string) (*archaeodomain.P
 	workflowID = strings.TrimSpace(workflowID)
 	if s.Store == nil || workflowID == "" {
 		return nil, nil
+	}
+	if snapshot, err := loadSnapshot(ctx, s.Store, workflowID); err != nil {
+		return nil, err
+	} else if snapshot != nil {
+		if fresh, err := snapshotFresh(ctx, s.Store, workflowID, snapshot); err != nil {
+			return nil, err
+		} else if fresh && snapshot.Record != nil {
+			return snapshot.Record, nil
+		}
 	}
 	learningItems, err := (archaeolearning.Service{Store: s.Store}).ListByWorkflow(ctx, workflowID)
 	if err != nil {
@@ -88,6 +101,7 @@ func (s Service) Build(ctx context.Context, workflowID string) (*archaeodomain.P
 			})
 		}
 	}
+	workspaceID := ""
 	for _, request := range requests {
 		entry := archaeodomain.RequestProvenance{
 			RequestID:           request.ID,
@@ -110,6 +124,8 @@ func (s Service) Build(ctx context.Context, workflowID string) (*archaeodomain.P
 		}
 		if request.Fulfillment != nil {
 			entry.FulfillmentValidity = request.Fulfillment.Validity
+			entry.FulfillmentExecutor = request.Fulfillment.ExecutorRef
+			entry.FulfillmentSession = request.Fulfillment.SessionRef
 		}
 		record.Requests = append(record.Requests, entry)
 		if !request.RequestedAt.IsZero() && (record.LastRequestAt == nil || record.LastRequestAt.Before(request.RequestedAt)) {
@@ -136,7 +152,51 @@ func (s Service) Build(ctx context.Context, workflowID string) (*archaeodomain.P
 			record.LastMutationAt = &value
 		}
 	}
+	if artifact, ok, err := storeutil.LatestWorkflowArtifactByKind(ctx, s.Store, workflowID, "", explorationSessionArtifactKind); err == nil && ok && artifact != nil {
+		workspaceID = strings.TrimSpace(metadataString(artifact.SummaryMetadata, "workspace_id"))
+	}
+	if workspaceID != "" {
+		if ids, err := (archaeodeferred.Service{Store: s.Store}).IDsByWorkspace(ctx, workspaceID); err == nil {
+			record.DeferredDraftRefs = append(record.DeferredDraftRefs, ids...)
+		}
+		if ids, err := (archaeoconvergence.Service{Store: s.Store}).IDsByWorkspace(ctx, workspaceID); err == nil {
+			record.ConvergenceRefs = append(record.ConvergenceRefs, ids...)
+		}
+		if ids, err := (archaeodecisions.Service{Store: s.Store}).IDsByWorkspace(ctx, workspaceID); err == nil {
+			record.DecisionRefs = append(record.DecisionRefs, ids...)
+		}
+	}
+	activePlanVersion := (*int)(nil)
+	if lineage != nil && lineage.ActiveVersion != nil {
+		activePlanVersion = intPointerClone(&lineage.ActiveVersion.Version)
+	}
+	if envelope, err := buildSnapshotEnvelope(ctx, s.Store, workflowID, workspaceID, activePlanVersion, record); err == nil {
+		_ = saveSnapshot(ctx, s.Store, workflowID, envelope)
+	} else {
+		return nil, err
+	}
 	return record, nil
+}
+
+func (s Service) Current(ctx context.Context, workflowID string) (*archaeodomain.ProvenanceRecord, bool, error) {
+	workflowID = strings.TrimSpace(workflowID)
+	if s.Store == nil || workflowID == "" {
+		return nil, false, nil
+	}
+	snapshot, err := loadSnapshot(ctx, s.Store, workflowID)
+	if err != nil || snapshot == nil || snapshot.Record == nil {
+		return nil, false, err
+	}
+	if fresh, err := snapshotFresh(ctx, s.Store, workflowID, snapshot); err != nil {
+		return nil, false, err
+	} else if fresh {
+		return snapshot.Record, true, nil
+	}
+	return nil, false, nil
+}
+
+func (s Service) RebuildSnapshot(ctx context.Context, workflowID string) (*archaeodomain.ProvenanceRecord, error) {
+	return s.Build(ctx, workflowID)
 }
 
 func learningCommentRef(interaction archaeolearning.Interaction) string {
@@ -207,6 +267,16 @@ func formationProvenanceRefs(version archaeodomain.VersionedLivingPlan) []string
 func stringValue(raw any) string {
 	if typed, ok := raw.(string); ok {
 		return typed
+	}
+	return ""
+}
+
+func metadataString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	if value, ok := metadata[key].(string); ok {
+		return strings.TrimSpace(value)
 	}
 	return ""
 }

@@ -7,6 +7,9 @@ import (
 	"time"
 
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
+	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
+	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
+	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
@@ -374,6 +377,47 @@ func TestHistoryAndCoherenceReadModels(t *testing.T) {
 	require.NotNil(t, coherence.ActivePlanVersion)
 	require.Len(t, coherence.DraftPlanVersions, 1)
 	require.NotEmpty(t, coherence.ConfidenceAffectingMutations)
+}
+
+func TestWorkspaceDeferredDecisionAndConvergenceProjections(t *testing.T) {
+	ctx := context.Background()
+	store, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	require.NoError(t, store.CreateWorkflow(ctx, testWorkflowRecord("wf-workspace-proj")))
+
+	_, err = (archaeodeferred.Service{Store: store}).CreateOrUpdate(ctx, archaeodeferred.CreateInput{
+		WorkspaceID:  "/workspace/proj2",
+		WorkflowID:   "wf-workspace-proj",
+		AmbiguityKey: "step-1:type",
+		Title:        "Need type choice",
+	})
+	require.NoError(t, err)
+	conv, err := (archaeoconvergence.Service{Store: store}).Create(ctx, archaeoconvergence.CreateInput{
+		WorkspaceID: "/workspace/proj2",
+		WorkflowID:  "wf-workspace-proj",
+		Question:    "Can execution proceed?",
+	})
+	require.NoError(t, err)
+	_, err = (archaeodecisions.Service{Store: store}).Create(ctx, archaeodecisions.CreateInput{
+		WorkspaceID:          "/workspace/proj2",
+		WorkflowID:           "wf-workspace-proj",
+		Kind:                 archaeodomain.DecisionKindConvergence,
+		RelatedConvergenceID: conv.ID,
+		Title:                "Need convergence decision",
+	})
+	require.NoError(t, err)
+
+	svc := Service{Store: store}
+	deferredProj, err := svc.DeferredDrafts(ctx, "/workspace/proj2")
+	require.NoError(t, err)
+	require.Len(t, deferredProj.Records, 1)
+	convergenceProj, err := svc.ConvergenceHistory(ctx, "/workspace/proj2")
+	require.NoError(t, err)
+	require.NotNil(t, convergenceProj.Current)
+	decisionProj, err := svc.DecisionTrail(ctx, "/workspace/proj2")
+	require.NoError(t, err)
+	require.Len(t, decisionProj.Records, 1)
 }
 
 func anyPlanVersionHasCommentRefs(values []PlanVersionProvenance) bool {

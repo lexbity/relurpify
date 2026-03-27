@@ -39,36 +39,50 @@ type ExplorationAlignmentInput struct {
 }
 
 func (s Service) ArchiveVersion(ctx context.Context, workflowID string, version int, reason string) (*archaeodomain.VersionedLivingPlan, error) {
-	record, err := s.LoadVersion(ctx, workflowID, version)
-	if err != nil || record == nil {
-		return record, err
-	}
-	now := s.now()
-	record.Status = archaeodomain.LivingPlanVersionArchived
-	record.RecomputeRequired = true
-	record.StaleReason = strings.TrimSpace(reason)
-	record.UpdatedAt = now
-	if err := s.saveVersion(ctx, record); err != nil {
-		return nil, err
-	}
-	return record, nil
+	var (
+		record *archaeodomain.VersionedLivingPlan
+		err    error
+	)
+	err = planMutationLocks.With("workflow:"+strings.TrimSpace(workflowID), func() error {
+		record, err = s.LoadVersion(ctx, workflowID, version)
+		if err != nil || record == nil {
+			return err
+		}
+		now := s.now()
+		record.Status = archaeodomain.LivingPlanVersionArchived
+		record.RecomputeRequired = true
+		record.StaleReason = strings.TrimSpace(reason)
+		record.UpdatedAt = now
+		if err := s.saveVersion(ctx, record); err != nil {
+			return err
+		}
+		return nil
+	})
+	return record, err
 }
 
 func (s Service) MarkVersionStale(ctx context.Context, workflowID string, version int, reason string) (*archaeodomain.VersionedLivingPlan, error) {
-	record, err := s.LoadVersion(ctx, workflowID, version)
-	if err != nil || record == nil {
-		return record, err
-	}
-	record.RecomputeRequired = true
-	record.StaleReason = strings.TrimSpace(reason)
-	record.UpdatedAt = s.now()
-	if err := s.saveVersion(ctx, record); err != nil {
-		return nil, err
-	}
-	if err := s.appendPlanStalenessMutation(ctx, record, strings.TrimSpace(reason)); err != nil {
-		return nil, err
-	}
-	return record, nil
+	var (
+		record *archaeodomain.VersionedLivingPlan
+		err    error
+	)
+	err = planMutationLocks.With("workflow:"+strings.TrimSpace(workflowID), func() error {
+		record, err = s.LoadVersion(ctx, workflowID, version)
+		if err != nil || record == nil {
+			return err
+		}
+		record.RecomputeRequired = true
+		record.StaleReason = strings.TrimSpace(reason)
+		record.UpdatedAt = s.now()
+		if err := s.saveVersion(ctx, record); err != nil {
+			return err
+		}
+		if err := s.appendPlanStalenessMutation(ctx, record, strings.TrimSpace(reason)); err != nil {
+			return err
+		}
+		return nil
+	})
+	return record, err
 }
 
 func (s Service) EnsureDraftSuccessor(ctx context.Context, workflowID string, baseVersion int, reason string) (*archaeodomain.VersionedLivingPlan, error) {
@@ -126,94 +140,113 @@ func (s Service) SyncActiveVersionWithExploration(ctx context.Context, workflowI
 }
 
 func (s Service) DraftVersion(ctx context.Context, plan *frameworkplan.LivingPlan, input DraftVersionInput) (*archaeodomain.VersionedLivingPlan, error) {
-	if s.Store == nil || s.workflowStore() == nil || plan == nil {
-		return nil, nil
-	}
-	workflowID := firstNonEmpty(strings.TrimSpace(input.WorkflowID), plan.WorkflowID)
-	if workflowID == "" {
-		return nil, fmt.Errorf("workflow id required")
-	}
-	versions, err := s.ListVersions(ctx, workflowID)
-	if err != nil {
-		return nil, err
-	}
-	now := s.now()
-	nextVersion := 1
-	var parentVersion *int
-	if len(versions) > 0 {
-		latest := versions[len(versions)-1]
-		nextVersion = latest.Version + 1
-		parentVersion = &latest.Version
-	}
-	plan.WorkflowID = workflowID
-	plan.Version = nextVersion
-	if plan.CreatedAt.IsZero() {
-		plan.CreatedAt = now
-	}
-	plan.UpdatedAt = now
-	record := archaeodomain.VersionedLivingPlan{
-		ID:                      firstNonEmpty(strings.TrimSpace(plan.ID), fmt.Sprintf("plan-%s-v%d", workflowID, nextVersion)),
-		WorkflowID:              workflowID,
-		Version:                 nextVersion,
-		ParentVersion:           parentVersion,
-		DerivedFromExploration:  strings.TrimSpace(input.DerivedFromExploration),
-		BasedOnRevision:         strings.TrimSpace(input.BasedOnRevision),
-		SemanticSnapshotRef:     strings.TrimSpace(input.SemanticSnapshotRef),
-		Status:                  archaeodomain.LivingPlanVersionDraft,
-		ComputedAt:              now,
-		Plan:                    *plan,
-		CommentRefs:             append([]string(nil), input.CommentRefs...),
-		TensionRefs:             append([]string(nil), input.TensionRefs...),
-		PatternRefs:             append([]string(nil), input.PatternRefs...),
-		AnchorRefs:              append([]string(nil), input.AnchorRefs...),
-		FormationResultRef:      strings.TrimSpace(input.FormationResultRef),
-		FormationProvenanceRefs: append([]string(nil), input.FormationProvenanceRefs...),
-		CreatedAt:               now,
-		UpdatedAt:               now,
-	}
-	if strings.TrimSpace(plan.ID) == "" {
-		plan.ID = record.ID
-		record.Plan.ID = record.ID
-	}
-	if err := s.Store.SavePlan(ctx, plan); err != nil {
-		return nil, err
-	}
-	if err := s.saveVersion(ctx, &record); err != nil {
-		return nil, err
-	}
-	return &record, nil
+	var (
+		record *archaeodomain.VersionedLivingPlan
+		err    error
+	)
+	workflowID := firstNonEmpty(strings.TrimSpace(input.WorkflowID), func() string {
+		if plan == nil {
+			return ""
+		}
+		return plan.WorkflowID
+	}())
+	err = planMutationLocks.With("workflow:"+workflowID, func() error {
+		if s.Store == nil || s.workflowStore() == nil || plan == nil {
+			return nil
+		}
+		if workflowID == "" {
+			return fmt.Errorf("workflow id required")
+		}
+		versions, err := s.ListVersions(ctx, workflowID)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		nextVersion := 1
+		var parentVersion *int
+		if len(versions) > 0 {
+			latest := versions[len(versions)-1]
+			nextVersion = latest.Version + 1
+			parentVersion = &latest.Version
+		}
+		plan.WorkflowID = workflowID
+		plan.Version = nextVersion
+		if plan.CreatedAt.IsZero() {
+			plan.CreatedAt = now
+		}
+		plan.UpdatedAt = now
+		tmp := archaeodomain.VersionedLivingPlan{
+			ID:                      firstNonEmpty(strings.TrimSpace(plan.ID), fmt.Sprintf("plan-%s-v%d", workflowID, nextVersion)),
+			WorkflowID:              workflowID,
+			Version:                 nextVersion,
+			ParentVersion:           parentVersion,
+			DerivedFromExploration:  strings.TrimSpace(input.DerivedFromExploration),
+			BasedOnRevision:         strings.TrimSpace(input.BasedOnRevision),
+			SemanticSnapshotRef:     strings.TrimSpace(input.SemanticSnapshotRef),
+			Status:                  archaeodomain.LivingPlanVersionDraft,
+			ComputedAt:              now,
+			Plan:                    *plan,
+			CommentRefs:             append([]string(nil), input.CommentRefs...),
+			TensionRefs:             append([]string(nil), input.TensionRefs...),
+			PatternRefs:             append([]string(nil), input.PatternRefs...),
+			AnchorRefs:              append([]string(nil), input.AnchorRefs...),
+			FormationResultRef:      strings.TrimSpace(input.FormationResultRef),
+			FormationProvenanceRefs: append([]string(nil), input.FormationProvenanceRefs...),
+			CreatedAt:               now,
+			UpdatedAt:               now,
+		}
+		if strings.TrimSpace(plan.ID) == "" {
+			plan.ID = tmp.ID
+			tmp.Plan.ID = tmp.ID
+		}
+		if err := s.Store.SavePlan(ctx, plan); err != nil {
+			return err
+		}
+		record = &tmp
+		if err := s.saveVersion(ctx, record); err != nil {
+			return err
+		}
+		return nil
+	})
+	return record, err
 }
 
 func (s Service) ActivateVersion(ctx context.Context, workflowID string, version int) (*archaeodomain.VersionedLivingPlan, error) {
-	if s.workflowStore() == nil || strings.TrimSpace(workflowID) == "" || version <= 0 {
-		return nil, nil
-	}
-	versions, err := s.ListVersions(ctx, workflowID)
-	if err != nil {
-		return nil, err
-	}
-	now := s.now()
-	var active *archaeodomain.VersionedLivingPlan
-	for i := range versions {
-		record := versions[i]
-		if record.Version == version {
-			record.Status = archaeodomain.LivingPlanVersionActive
-			record.ActivatedAt = &now
-			record.UpdatedAt = now
-			active = &record
-		} else if record.Status == archaeodomain.LivingPlanVersionActive {
-			record.Status = archaeodomain.LivingPlanVersionSuperseded
-			record.SupersededAt = &now
-			record.UpdatedAt = now
+	var (
+		active *archaeodomain.VersionedLivingPlan
+		err    error
+	)
+	err = planMutationLocks.With("workflow:"+strings.TrimSpace(workflowID), func() error {
+		if s.workflowStore() == nil || strings.TrimSpace(workflowID) == "" || version <= 0 {
+			return nil
 		}
-		if err := s.saveVersion(ctx, &record); err != nil {
-			return nil, err
+		versions, err := s.ListVersions(ctx, workflowID)
+		if err != nil {
+			return err
 		}
-	}
-	if active == nil {
-		return nil, fmt.Errorf("plan version %d not found", version)
-	}
-	return active, nil
+		now := s.now()
+		for i := range versions {
+			record := versions[i]
+			if record.Version == version {
+				record.Status = archaeodomain.LivingPlanVersionActive
+				record.ActivatedAt = &now
+				record.UpdatedAt = now
+				active = &record
+			} else if record.Status == archaeodomain.LivingPlanVersionActive {
+				record.Status = archaeodomain.LivingPlanVersionSuperseded
+				record.SupersededAt = &now
+				record.UpdatedAt = now
+			}
+			if err := s.saveVersion(ctx, &record); err != nil {
+				return err
+			}
+		}
+		if active == nil {
+			return fmt.Errorf("plan version %d not found", version)
+		}
+		return nil
+	})
+	return active, err
 }
 
 func (s Service) EnsureActiveVersion(ctx context.Context, workflowID string, plan *frameworkplan.LivingPlan, input DraftVersionInput) (*archaeodomain.VersionedLivingPlan, error) {

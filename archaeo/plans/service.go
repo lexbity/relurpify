@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/lexcodex/relurpify/archaeo/internal/keylock"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
@@ -22,6 +23,8 @@ type Service struct {
 	WorkflowStore memory.WorkflowStateStore
 	Now           func() time.Time
 }
+
+var planMutationLocks keylock.Locker
 
 func (s Service) ApplyInvalidation(plan *frameworkplan.LivingPlan, event frameworkplan.InvalidationEvent, excludeStepID string) []string {
 	if plan == nil {

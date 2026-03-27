@@ -198,6 +198,73 @@ func (s Service) BlockingPending(ctx context.Context, workflowID string) ([]Inte
 	return out, nil
 }
 
+func (s Service) SyncAll(ctx context.Context, workflowID, explorationID, snapshotID, corpusScope, basedOnRevision string) ([]Interaction, []Interaction, error) {
+	workflowID = strings.TrimSpace(workflowID)
+	explorationID = strings.TrimSpace(explorationID)
+	corpusScope = strings.TrimSpace(corpusScope)
+	if s.Store == nil || workflowID == "" || explorationID == "" {
+		return nil, nil, nil
+	}
+	existing, err := s.ListByWorkflow(ctx, workflowID)
+	if err != nil {
+		return nil, nil, err
+	}
+	idx := buildInteractionIndex(existing)
+	createdAny := false
+	if s.PatternStore != nil && corpusScope != "" {
+		proposed, err := s.PatternStore.ListByStatus(ctx, patterns.PatternStatusProposed, corpusScope)
+		if err != nil {
+			return nil, nil, err
+		}
+		created, err := s.syncPatternProposalsWithIndex(ctx, workflowID, explorationID, basedOnRevision, proposed, &idx)
+		if err != nil {
+			return nil, nil, err
+		}
+		createdAny = createdAny || len(created) > 0
+	}
+	if s.Retrieval != nil && corpusScope != "" {
+		driftedAnchors, err := s.Retrieval.DriftedAnchors(ctx, corpusScope)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(driftedAnchors) > 0 {
+			driftEvents, err := s.Retrieval.UnresolvedDrifts(ctx, corpusScope)
+			if err != nil {
+				return nil, nil, err
+			}
+			latestByAnchor := make(map[string]frameworkretrieval.AnchorEventRecord, len(driftEvents))
+			for _, event := range driftEvents {
+				current, ok := latestByAnchor[event.AnchorID]
+				if !ok || current.CreatedAt.Before(event.CreatedAt) {
+					latestByAnchor[event.AnchorID] = event
+				}
+			}
+			created, err := s.syncAnchorDriftsWithIndex(ctx, workflowID, explorationID, basedOnRevision, driftedAnchors, latestByAnchor, &idx)
+			if err != nil {
+				return nil, nil, err
+			}
+			createdAny = createdAny || len(created) > 0
+		}
+	}
+	active, err := (tensions.Service{Store: s.Store, Now: s.Now, NewID: s.NewID}).ActiveByWorkflow(ctx, workflowID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(active) > 0 {
+		created, err := s.syncTensionsWithIndex(ctx, workflowID, explorationID, snapshotID, basedOnRevision, active, &idx)
+		if err != nil {
+			return nil, nil, err
+		}
+		createdAny = createdAny || len(created) > 0
+	}
+	if createdAny {
+		if err := s.syncPendingLearningFromInteractions(ctx, workflowID, idx.pending); err != nil {
+			return nil, nil, err
+		}
+	}
+	return append([]Interaction(nil), idx.pending...), append([]Interaction(nil), idx.blocking...), nil
+}
+
 type interactionIndex struct {
 	all              []Interaction
 	pending          []Interaction
@@ -920,11 +987,18 @@ func (s Service) syncPendingLearning(ctx context.Context, workflowID string) err
 	if err != nil {
 		return err
 	}
+	return s.syncPendingLearningFromInteractions(ctx, workflowID, pending)
+}
+
+func (s Service) syncPendingLearningFromInteractions(ctx context.Context, workflowID string, pending []Interaction) error {
+	if s.Phases == nil || strings.TrimSpace(workflowID) == "" {
+		return nil
+	}
 	ids := make([]string, 0, len(pending))
 	for _, interaction := range pending {
 		ids = append(ids, interaction.ID)
 	}
-	_, err = s.Phases.SyncPendingLearning(ctx, workflowID, ids)
+	_, err := s.Phases.SyncPendingLearning(ctx, workflowID, ids)
 	return err
 }
 

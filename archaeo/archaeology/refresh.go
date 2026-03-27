@@ -3,10 +3,12 @@ package archaeology
 import (
 	"context"
 	"strings"
+	"sync"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
+	archaeoprovenance "github.com/lexcodex/relurpify/archaeo/provenance"
 	"github.com/lexcodex/relurpify/archaeo/providers"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -109,28 +111,93 @@ func (s Service) preloadLearning(ctx context.Context, task *core.Task, state *co
 }
 
 func (s Service) preloadRefresh(ctx context.Context, task *core.Task, state *core.Context, workflowID string) (*refreshBundle, error) {
-	learning, err := s.preloadLearning(ctx, task, state, workflowID)
-	if err != nil {
-		return nil, err
-	}
-	bundle := &refreshBundle{learning: learning}
-	if s.Requests.Store != nil && strings.TrimSpace(workflowID) != "" {
-		requests, err := s.Requests.Pending(ctx, workflowID)
-		if err != nil {
-			return nil, err
-		}
-		bundle.pendingRequests = append([]archaeodomain.RequestRecord(nil), requests...)
-	}
+	bundle := &refreshBundle{}
 	snapshotID := ""
 	if state != nil {
 		snapshotID = strings.TrimSpace(state.GetString("euclo.active_exploration_snapshot_id"))
+		if raw, ok := state.Get("euclo.preloaded_pending_requests"); ok && raw != nil {
+			if requests, ok := raw.([]archaeodomain.RequestRecord); ok {
+				bundle.pendingRequests = append([]archaeodomain.RequestRecord(nil), requests...)
+			}
+		}
+	}
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		errs []error
+	)
+	run := func(fn func() error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := fn(); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+		}()
+	}
+	run(func() error {
+		learning, err := s.preloadLearning(ctx, task, state, workflowID)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		bundle.learning = learning
+		mu.Unlock()
+		return nil
+	})
+	if bundle.pendingRequests == nil && s.Requests.Store != nil && strings.TrimSpace(workflowID) != "" {
+		run(func() error {
+			requests, err := s.Requests.Pending(ctx, workflowID)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			bundle.pendingRequests = append([]archaeodomain.RequestRecord(nil), requests...)
+			mu.Unlock()
+			return nil
+		})
 	}
 	if s.Store != nil && strings.TrimSpace(workflowID) != "" && snapshotID != "" {
-		snapshot, err := s.LoadExplorationSnapshotByWorkflow(ctx, workflowID, snapshotID)
-		if err != nil {
-			return nil, err
-		}
-		bundle.snapshot = snapshot
+		run(func() error {
+			snapshot, err := s.LoadExplorationSnapshotByWorkflow(ctx, workflowID, snapshotID)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			bundle.snapshot = snapshot
+			mu.Unlock()
+			return nil
+		})
+	}
+	if s.Plans.WorkflowStore != nil && strings.TrimSpace(workflowID) != "" {
+		run(func() error {
+			_, err := s.Plans.LoadLineage(ctx, workflowID)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	if s.Store != nil && strings.TrimSpace(workflowID) != "" {
+		run(func() error {
+			_, _, err := (archaeoprovenance.Service{Store: s.Store}).Current(ctx, workflowID)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	wg.Wait()
+	if len(errs) > 0 {
+		return nil, errs[0]
+	}
+	if state != nil {
+		state.Set("euclo.preloaded_pending_requests", append([]archaeodomain.RequestRecord(nil), bundle.pendingRequests...))
+	}
+	if bundle.learning == nil {
+		bundle.learning = &learningPreload{}
 	}
 	return bundle, nil
 }
@@ -152,37 +219,20 @@ func (s Service) syncLearning(ctx context.Context, task *core.Task, state *core.
 		preload = refreshLearningPreload(refresh)
 	}
 	if len(preload.patterns) == 0 && len(preload.anchors) == 0 && len(preload.tensions) == 0 && preload.pending != nil {
-		state.Set("euclo.learning_queue", append([]archaeolearning.Interaction(nil), preload.pending...))
-		ids := make([]string, 0, len(preload.pending))
-		for _, interaction := range preload.pending {
-			ids = append(ids, interaction.ID)
-		}
-		state.Set("euclo.pending_learning_ids", ids)
-		blockingIDs := make([]string, 0, len(preload.blocking))
-		for _, interaction := range preload.blocking {
-			blockingIDs = append(blockingIDs, interaction.ID)
-		}
-		state.Set("euclo.blocking_learning_ids", blockingIDs)
+		cacheLearningState(state, preload.pending, preload.blocking)
+		_ = s.refreshExplorationSnapshot(ctx, workflowID, state, corpusScope, refresh, preload.pending)
+		return len(preload.blocking), len(preload.pending), nil
+	}
+	signature := learningSyncSignature(workflowID, explorationID, state.GetString("euclo.active_exploration_snapshot_id"), revision, preload)
+	if !s.hasDynamicLearningProviders() && refreshLearningCanReuse(state, signature, preload) {
+		cacheLearningState(state, preload.pending, preload.blocking)
 		_ = s.refreshExplorationSnapshot(ctx, workflowID, state, corpusScope, refresh, preload.pending)
 		return len(preload.blocking), len(preload.pending), nil
 	}
 	if err := s.runProviderLifecycle(ctx, task, state, workflowID, explorationID, refresh); err != nil {
 		return 0, 0, err
 	}
-	if _, err := s.Learning.SyncPatternProposals(ctx, workflowID, explorationID, corpusScope, revision); err != nil {
-		return 0, 0, err
-	}
-	if _, err := s.Learning.SyncAnchorDrifts(ctx, workflowID, explorationID, corpusScope, revision); err != nil {
-		return 0, 0, err
-	}
-	if _, err := s.Learning.SyncTensions(ctx, workflowID, explorationID, state.GetString("euclo.active_exploration_snapshot_id"), revision); err != nil {
-		return 0, 0, err
-	}
-	pending, err := s.Learning.Pending(ctx, workflowID)
-	if err != nil {
-		return 0, 0, err
-	}
-	blocking, err := s.Learning.BlockingPending(ctx, workflowID)
+	pending, blocking, err := s.Learning.SyncAll(ctx, workflowID, explorationID, state.GetString("euclo.active_exploration_snapshot_id"), corpusScope, revision)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -201,8 +251,61 @@ func (s Service) syncLearning(ctx context.Context, task *core.Task, state *core.
 		refresh.learning.pending = append([]archaeolearning.Interaction(nil), pending...)
 		refresh.learning.blocking = append([]archaeolearning.Interaction(nil), blocking...)
 	}
+	if state != nil && refresh != nil {
+		state.Set("euclo.preloaded_pending_requests", append([]archaeodomain.RequestRecord(nil), refresh.pendingRequests...))
+	}
+	cacheLearningState(state, pending, blocking)
+	if state != nil {
+		state.Set("euclo.learning_sync_signature", signature)
+	}
 	_ = s.refreshExplorationSnapshot(ctx, workflowID, state, corpusScope, refresh, pending)
 	return len(blocking), len(pending), nil
+}
+
+func (s Service) hasDynamicLearningProviders() bool {
+	return s.Providers.PatternSurfacer != nil || s.Providers.TensionAnalyzer != nil || s.Providers.ProspectiveAnalyzer != nil
+}
+
+func refreshLearningCanReuse(state *core.Context, signature string, preload *learningPreload) bool {
+	if state == nil || preload == nil || strings.TrimSpace(signature) == "" || preload.pending == nil {
+		return false
+	}
+	return strings.TrimSpace(state.GetString("euclo.learning_sync_signature")) == strings.TrimSpace(signature)
+}
+
+func cacheLearningState(state *core.Context, pending, blocking []archaeolearning.Interaction) {
+	if state == nil {
+		return
+	}
+	state.Set("euclo.learning_queue", append([]archaeolearning.Interaction(nil), pending...))
+	state.Set("euclo.preloaded_pending_learning", append([]archaeolearning.Interaction(nil), pending...))
+	ids := make([]string, 0, len(pending))
+	for _, interaction := range pending {
+		ids = append(ids, interaction.ID)
+	}
+	state.Set("euclo.pending_learning_ids", ids)
+	blockingIDs := make([]string, 0, len(blocking))
+	for _, interaction := range blocking {
+		blockingIDs = append(blockingIDs, interaction.ID)
+	}
+	state.Set("euclo.blocking_learning_ids", blockingIDs)
+	state.Set("euclo.preloaded_blocking_learning_ids", append([]string(nil), blockingIDs...))
+}
+
+func learningSyncSignature(workflowID, explorationID, snapshotID, revision string, preload *learningPreload) string {
+	if preload == nil {
+		return ""
+	}
+	parts := []string{
+		strings.TrimSpace(workflowID),
+		strings.TrimSpace(explorationID),
+		strings.TrimSpace(snapshotID),
+		strings.TrimSpace(revision),
+		strings.Join(uniqueStrings(preload.patternIDs), ","),
+		strings.Join(uniqueStrings(preload.anchorIDs), ","),
+		strings.Join(uniqueStrings(preload.tensionIDs), ","),
+	}
+	return strings.Join(parts, "|")
 }
 
 func (s Service) refreshExplorationSnapshot(ctx context.Context, workflowID string, state *core.Context, corpusScope string, refresh *refreshBundle, pending []archaeolearning.Interaction) error {
@@ -223,9 +326,17 @@ func (s Service) refreshExplorationSnapshot(ctx context.Context, workflowID stri
 	for _, interaction := range pending {
 		openLearningIDs = append(openLearningIDs, interaction.ID)
 	}
+	basedOnRevision := state.GetString("euclo.based_on_revision")
+	semanticSnapshotRef := state.GetString("euclo.semantic_snapshot_ref")
+	if explorationSnapshotMatchesRefresh(snapshot, basedOnRevision, semanticSnapshotRef, patternRefs, anchorRefs, tensionRefs, openLearningIDs) {
+		state.Set("euclo.exploration_candidate_pattern_refs", append([]string(nil), snapshot.CandidatePatternRefs...))
+		state.Set("euclo.exploration_candidate_anchor_refs", append([]string(nil), snapshot.CandidateAnchorRefs...))
+		state.Set("euclo.exploration_tension_refs", append([]string(nil), snapshot.TensionIDs...))
+		return nil
+	}
 	updated, err := s.UpdateExplorationSnapshot(ctx, snapshot, SnapshotInput{
-		BasedOnRevision:      state.GetString("euclo.based_on_revision"),
-		SemanticSnapshotRef:  state.GetString("euclo.semantic_snapshot_ref"),
+		BasedOnRevision:      basedOnRevision,
+		SemanticSnapshotRef:  semanticSnapshotRef,
 		CandidatePatternRefs: patternRefs,
 		CandidateAnchorRefs:  anchorRefs,
 		TensionIDs:           tensionRefs,
@@ -272,6 +383,28 @@ func (s Service) refreshExplorationSnapshot(ctx context.Context, workflowID stri
 		return err
 	}
 	return nil
+}
+
+func explorationSnapshotMatchesRefresh(snapshot *archaeodomain.ExplorationSnapshot, basedOnRevision, semanticSnapshotRef string, patternRefs, anchorRefs, tensionRefs, openLearningIDs []string) bool {
+	if snapshot == nil {
+		return false
+	}
+	if strings.TrimSpace(snapshot.BasedOnRevision) != strings.TrimSpace(basedOnRevision) {
+		return false
+	}
+	if strings.TrimSpace(snapshot.SemanticSnapshotRef) != strings.TrimSpace(semanticSnapshotRef) {
+		return false
+	}
+	if !sameStringSet(snapshot.CandidatePatternRefs, patternRefs) {
+		return false
+	}
+	if !sameStringSet(snapshot.CandidateAnchorRefs, anchorRefs) {
+		return false
+	}
+	if !sameStringSet(snapshot.TensionIDs, tensionRefs) {
+		return false
+	}
+	return sameStringSet(snapshot.OpenLearningIDs, openLearningIDs)
 }
 
 func preloadAnchorIDs(preload *learningPreload) []string {

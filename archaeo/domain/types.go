@@ -205,6 +205,127 @@ type ConvergenceState struct {
 	UpdatedAt            time.Time         `json:"updated_at"`
 }
 
+type DeferredDraftStatus string
+
+const (
+	DeferredDraftPending    DeferredDraftStatus = "pending"
+	DeferredDraftFormed     DeferredDraftStatus = "formed"
+	DeferredDraftFinalized  DeferredDraftStatus = "finalized"
+	DeferredDraftCanceled   DeferredDraftStatus = "canceled"
+	DeferredDraftSuperseded DeferredDraftStatus = "superseded"
+)
+
+type DeferredDraftRecord struct {
+	ID                 string              `json:"id"`
+	WorkspaceID        string              `json:"workspace_id"`
+	WorkflowID         string              `json:"workflow_id,omitempty"`
+	ExplorationID      string              `json:"exploration_id,omitempty"`
+	PlanID             string              `json:"plan_id,omitempty"`
+	PlanVersion        *int                `json:"plan_version,omitempty"`
+	RequestID          string              `json:"request_id,omitempty"`
+	AmbiguityKey       string              `json:"ambiguity_key"`
+	Title              string              `json:"title,omitempty"`
+	Description        string              `json:"description,omitempty"`
+	Status             DeferredDraftStatus `json:"status"`
+	LinkedDraftVersion *int                `json:"linked_draft_version,omitempty"`
+	LinkedDraftPlanID  string              `json:"linked_draft_plan_id,omitempty"`
+	CommentRefs        []string            `json:"comment_refs,omitempty"`
+	Metadata           map[string]any      `json:"metadata,omitempty"`
+	SupersededByID     string              `json:"superseded_by_id,omitempty"`
+	CreatedAt          time.Time           `json:"created_at"`
+	UpdatedAt          time.Time           `json:"updated_at"`
+	FinalizedAt        *time.Time          `json:"finalized_at,omitempty"`
+}
+
+type ConvergenceResolutionStatus string
+
+const (
+	ConvergenceResolutionOpen       ConvergenceResolutionStatus = "open"
+	ConvergenceResolutionResolved   ConvergenceResolutionStatus = "resolved"
+	ConvergenceResolutionDeferred   ConvergenceResolutionStatus = "deferred"
+	ConvergenceResolutionSuperseded ConvergenceResolutionStatus = "superseded"
+)
+
+type ConvergenceResolution struct {
+	Status         ConvergenceResolutionStatus `json:"status"`
+	AcceptedDebt   []string                    `json:"accepted_debt,omitempty"`
+	DeferredIssues []string                    `json:"deferred_issues,omitempty"`
+	ChosenOption   string                      `json:"chosen_option,omitempty"`
+	Summary        string                      `json:"summary,omitempty"`
+	CommentRefs    []string                    `json:"comment_refs,omitempty"`
+	Metadata       map[string]any              `json:"metadata,omitempty"`
+	ResolvedAt     *time.Time                  `json:"resolved_at,omitempty"`
+}
+
+type ConvergenceRecord struct {
+	ID                 string                      `json:"id"`
+	WorkspaceID        string                      `json:"workspace_id"`
+	WorkflowID         string                      `json:"workflow_id,omitempty"`
+	ExplorationID      string                      `json:"exploration_id,omitempty"`
+	PlanID             string                      `json:"plan_id,omitempty"`
+	PlanVersion        *int                        `json:"plan_version,omitempty"`
+	Status             ConvergenceResolutionStatus `json:"status"`
+	Question           string                      `json:"question,omitempty"`
+	Title              string                      `json:"title,omitempty"`
+	RelevantTensionIDs []string                    `json:"relevant_tension_ids,omitempty"`
+	PendingLearningIDs []string                    `json:"pending_learning_ids,omitempty"`
+	AcceptedDebt       []string                    `json:"accepted_debt,omitempty"`
+	DeferredDraftIDs   []string                    `json:"deferred_draft_ids,omitempty"`
+	ProvenanceRefs     []string                    `json:"provenance_refs,omitempty"`
+	CommentRefs        []string                    `json:"comment_refs,omitempty"`
+	Metadata           map[string]any              `json:"metadata,omitempty"`
+	Resolution         *ConvergenceResolution      `json:"resolution,omitempty"`
+	CreatedAt          time.Time                   `json:"created_at"`
+	UpdatedAt          time.Time                   `json:"updated_at"`
+}
+
+type WorkspaceConvergenceProjection struct {
+	WorkspaceID   string              `json:"workspace_id"`
+	Current       *ConvergenceRecord  `json:"current,omitempty"`
+	History       []ConvergenceRecord `json:"history,omitempty"`
+	OpenCount     int                 `json:"open_count"`
+	ResolvedCount int                 `json:"resolved_count"`
+	DeferredCount int                 `json:"deferred_count"`
+}
+
+type DecisionStatus string
+
+const (
+	DecisionStatusOpen       DecisionStatus = "open"
+	DecisionStatusResolved   DecisionStatus = "resolved"
+	DecisionStatusDismissed  DecisionStatus = "dismissed"
+	DecisionStatusSuperseded DecisionStatus = "superseded"
+)
+
+type DecisionKind string
+
+const (
+	DecisionKindStaleResult   DecisionKind = "stale_result"
+	DecisionKindConvergence   DecisionKind = "convergence"
+	DecisionKindDeferredDraft DecisionKind = "deferred_draft"
+)
+
+type DecisionRecord struct {
+	ID                     string          `json:"id"`
+	WorkspaceID            string          `json:"workspace_id"`
+	WorkflowID             string          `json:"workflow_id,omitempty"`
+	Kind                   DecisionKind    `json:"kind"`
+	Status                 DecisionStatus  `json:"status"`
+	RelatedRequestID       string          `json:"related_request_id,omitempty"`
+	RelatedConvergenceID   string          `json:"related_convergence_id,omitempty"`
+	RelatedDeferredDraftID string          `json:"related_deferred_draft_id,omitempty"`
+	RelatedPlanID          string          `json:"related_plan_id,omitempty"`
+	RelatedPlanVersion     *int            `json:"related_plan_version,omitempty"`
+	Validity               RequestValidity `json:"validity,omitempty"`
+	Title                  string          `json:"title,omitempty"`
+	Summary                string          `json:"summary,omitempty"`
+	CommentRefs            []string        `json:"comment_refs,omitempty"`
+	Metadata               map[string]any  `json:"metadata,omitempty"`
+	CreatedAt              time.Time       `json:"created_at"`
+	UpdatedAt              time.Time       `json:"updated_at"`
+	ResolvedAt             *time.Time      `json:"resolved_at,omitempty"`
+}
+
 type MutationCategory string
 
 const (
@@ -368,6 +489,8 @@ type RequestFulfillment struct {
 	RefID          string          `json:"ref_id,omitempty"`
 	Summary        string          `json:"summary,omitempty"`
 	Metadata       map[string]any  `json:"metadata,omitempty"`
+	ExecutorRef    string          `json:"executor_ref,omitempty"`
+	SessionRef     string          `json:"session_ref,omitempty"`
 	Validity       RequestValidity `json:"validity"`
 	Applied        bool            `json:"applied"`
 	AppliedAt      *time.Time      `json:"applied_at,omitempty"`
@@ -425,6 +548,8 @@ type RequestProvenance struct {
 	SubjectRefs         []string        `json:"subject_refs,omitempty"`
 	FulfillmentRef      string          `json:"fulfillment_ref,omitempty"`
 	FulfillmentValidity RequestValidity `json:"fulfillment_validity,omitempty"`
+	FulfillmentExecutor string          `json:"fulfillment_executor,omitempty"`
+	FulfillmentSession  string          `json:"fulfillment_session,omitempty"`
 	SupersedesRequestID string          `json:"supersedes_request_id,omitempty"`
 	InvalidationReason  string          `json:"invalidation_reason,omitempty"`
 	RequestedAt         time.Time       `json:"requested_at"`
@@ -475,14 +600,17 @@ type FormationResult struct {
 }
 
 type ProvenanceRecord struct {
-	WorkflowID     string                      `json:"workflow_id"`
-	Learning       []LearningOutcomeProvenance `json:"learning,omitempty"`
-	Tensions       []TensionProvenance         `json:"tensions,omitempty"`
-	PlanVersions   []PlanVersionProvenance     `json:"plan_versions,omitempty"`
-	Requests       []RequestProvenance         `json:"requests,omitempty"`
-	Mutations      []MutationProvenance        `json:"mutations,omitempty"`
-	LastMutationAt *time.Time                  `json:"last_mutation_at,omitempty"`
-	LastRequestAt  *time.Time                  `json:"last_request_at,omitempty"`
+	WorkflowID        string                      `json:"workflow_id"`
+	Learning          []LearningOutcomeProvenance `json:"learning,omitempty"`
+	Tensions          []TensionProvenance         `json:"tensions,omitempty"`
+	PlanVersions      []PlanVersionProvenance     `json:"plan_versions,omitempty"`
+	Requests          []RequestProvenance         `json:"requests,omitempty"`
+	Mutations         []MutationProvenance        `json:"mutations,omitempty"`
+	DeferredDraftRefs []string                    `json:"deferred_draft_refs,omitempty"`
+	ConvergenceRefs   []string                    `json:"convergence_refs,omitempty"`
+	DecisionRefs      []string                    `json:"decision_refs,omitempty"`
+	LastMutationAt    *time.Time                  `json:"last_mutation_at,omitempty"`
+	LastRequestAt     *time.Time                  `json:"last_request_at,omitempty"`
 }
 
 type LearningOutcomeProvenance struct {
