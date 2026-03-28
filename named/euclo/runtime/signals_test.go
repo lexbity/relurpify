@@ -8,8 +8,8 @@ import (
 
 func TestCollectSignals_Keywords(t *testing.T) {
 	signals := CollectSignals(TaskEnvelope{
-		Instruction:    "debug this failing test",
-		EditPermitted:  true,
+		Instruction:        "debug this failing test",
+		EditPermitted:      true,
 		CapabilitySnapshot: euclotypes.CapabilitySnapshot{HasWriteTools: true},
 	})
 

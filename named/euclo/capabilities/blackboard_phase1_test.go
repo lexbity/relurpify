@@ -7,7 +7,7 @@ import (
 	"github.com/lexcodex/relurpify/agents/blackboard"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
+	"github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
 

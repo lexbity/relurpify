@@ -158,9 +158,9 @@ func buildVerifyActions(result interaction.ResultContent, failCount int) []inter
 		}
 	} else {
 		actions = append(actions, interaction.ActionSlot{
-			ID:   "debug",
+			ID:    "debug",
 			Label: "Debug this",
-			Kind: interaction.ActionTransition,
+			Kind:  interaction.ActionTransition,
 		})
 	}
 

@@ -517,8 +517,8 @@ func TestRegisterCodeTriggers(t *testing.T) {
 	}
 
 	tests := []struct {
-		text    string
-		wantOK  bool
+		text     string
+		wantOK   bool
 		wantDesc string
 	}{
 		{"verify", true, "Re-run verification"},

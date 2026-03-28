@@ -23,7 +23,7 @@ func TestAgencyResolver_ExactMatch(t *testing.T) {
 func TestAgencyResolver_CaseInsensitive(t *testing.T) {
 	r := NewAgencyResolver()
 	r.RegisterTrigger("code", AgencyTrigger{
-		Phrases:  []string{"debug this"},
+		Phrases:   []string{"debug this"},
 		PhaseJump: "debug",
 	})
 
@@ -55,11 +55,11 @@ func TestAgencyResolver_FuzzyContains(t *testing.T) {
 func TestAgencyResolver_ModeFiltering(t *testing.T) {
 	r := NewAgencyResolver()
 	r.RegisterTrigger("code", AgencyTrigger{
-		Phrases:  []string{"verify"},
+		Phrases:   []string{"verify"},
 		PhaseJump: "verify",
 	})
 	r.RegisterTrigger("debug", AgencyTrigger{
-		Phrases:  []string{"investigate"},
+		Phrases:   []string{"investigate"},
 		PhaseJump: "localize",
 	})
 

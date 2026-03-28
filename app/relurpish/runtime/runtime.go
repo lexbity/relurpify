@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,13 @@ import (
 	"github.com/lexcodex/relurpify/agents"
 	relurpic "github.com/lexcodex/relurpify/agents/relurpic"
 	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
+	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
+	relurpishbindings "github.com/lexcodex/relurpify/archaeo/bindings/relurpish"
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
+	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
+	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
+	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -67,6 +75,7 @@ type Runtime struct {
 	PatternStore         patterns.PatternStore
 	CommentStore         patterns.CommentStore
 	GuidanceBroker       *guidance.GuidanceBroker
+	LearningBroker       *archaeolearning.Broker
 	Registration         *fauthorization.AgentRegistration
 	Delegations          *fauthorization.DelegationManager
 	AgentSpec            *core.AgentRuntimeSpec
@@ -231,6 +240,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	modelClient.SetDebugLogging(logLLM)
 	model := llm.NewInstrumentedModel(modelClient, telemetry, logLLM)
 	guidanceBroker := guidance.NewGuidanceBroker(0)
+	learningBroker := archaeolearning.NewBroker(0)
 
 	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(cfg.Workspace)
 	if err != nil {
@@ -263,6 +273,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		RetrievalDB:         workflowStore.DB(),
 		PlanStore:           planStore,
 		GuidanceBroker:      guidanceBroker,
+		WorkflowStore:       workflowStore,
 	})
 	if err != nil {
 		patternDB.Close()
@@ -310,6 +321,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		PatternStore:         patternStore,
 		CommentStore:         commentStore,
 		GuidanceBroker:       guidanceBroker,
+		LearningBroker:       learningBroker,
 		Logger:               logger,
 		logFile:              logFile,
 		eventLog:             io.Closer(nil),
@@ -991,6 +1003,9 @@ func (r *Runtime) wireRuntimeAgentDependencies(agent graph.Agent) {
 	if eucloAgent.PlanStore == nil {
 		eucloAgent.PlanStore = r.PlanStore
 	}
+	if eucloAgent.WorkflowStore == nil {
+		eucloAgent.WorkflowStore = r.WorkflowStore
+	}
 	if eucloAgent.PatternStore == nil {
 		eucloAgent.PatternStore = r.PatternStore
 	}
@@ -998,12 +1013,20 @@ func (r *Runtime) wireRuntimeAgentDependencies(agent graph.Agent) {
 		eucloAgent.CommentStore = r.CommentStore
 	}
 	if eucloAgent.ConvVerifier == nil && r.PatternStore != nil {
+		var tensionDetector relurpic.TensionDetector
+		if r.WorkflowStore != nil {
+			tensionDetector = archaeotensions.Service{Store: r.WorkflowStore}
+		}
 		eucloAgent.ConvVerifier = &relurpic.PatternCoherenceVerifier{
-			PatternStore: r.PatternStore,
+			PatternStore:    r.PatternStore,
+			TensionDetector: tensionDetector,
 		}
 	}
 	if eucloAgent.GuidanceBroker == nil {
 		eucloAgent.GuidanceBroker = r.GuidanceBroker
+	}
+	if eucloAgent.LearningBroker == nil {
+		eucloAgent.LearningBroker = r.LearningBroker
 	}
 	if eucloAgent.DeferralPolicy.MaxBlastRadiusForDefer == 0 && len(eucloAgent.DeferralPolicy.DeferrableKinds) == 0 {
 		eucloAgent.DeferralPolicy = guidance.DefaultDeferralPolicy()
@@ -1186,6 +1209,118 @@ func (r *Runtime) SubscribeGuidance() (<-chan guidance.GuidanceEvent, func()) {
 		return ch, func() {}
 	}
 	return r.GuidanceBroker.Subscribe(32)
+}
+
+func (r *Runtime) PendingLearning() []archaeolearning.Interaction {
+	if r == nil || r.LearningBroker == nil {
+		return nil
+	}
+	return r.LearningBroker.PendingInteractions()
+}
+
+func (r *Runtime) relurpishBinding() relurpishbindings.Runtime {
+	if r == nil {
+		return relurpishbindings.Runtime{}
+	}
+	return relurpishbindings.Runtime{
+		WorkflowStore:  r.WorkflowStore,
+		PlanStore:      r.PlanStore,
+		PatternStore:   r.PatternStore,
+		CommentStore:   r.CommentStore,
+		Retrieval:      archaeoretrieval.NewSQLStore(workflowDB(r.WorkflowStore)),
+		LearningBroker: r.LearningBroker,
+	}
+}
+
+func workflowDB(store *memorydb.SQLiteWorkflowStateStore) *sql.DB {
+	if store == nil {
+		return nil
+	}
+	return store.DB()
+}
+
+func (r *Runtime) ActiveExploration(workspaceID string) (*archaeoarch.SessionView, error) {
+	return r.relurpishBinding().ActiveExploration(context.Background(), workspaceID)
+}
+
+func (r *Runtime) ExplorationView(explorationID string) (*archaeoarch.SessionView, error) {
+	return r.relurpishBinding().ExplorationView(context.Background(), explorationID)
+}
+
+func (r *Runtime) PlanVersions(workflowID string) ([]archaeodomain.VersionedLivingPlan, error) {
+	return r.relurpishBinding().PlanVersions(context.Background(), workflowID)
+}
+
+func (r *Runtime) ActivePlanVersion(workflowID string) (*archaeodomain.VersionedLivingPlan, error) {
+	return r.relurpishBinding().ActivePlanVersion(context.Background(), workflowID)
+}
+
+func (r *Runtime) ComparePlanVersions(workflowID string, fromVersion, toVersion int) (map[string]any, error) {
+	return r.relurpishBinding().ComparePlanVersions(context.Background(), workflowID, fromVersion, toVersion)
+}
+
+func (r *Runtime) TensionsByWorkflow(workflowID string) ([]archaeodomain.Tension, error) {
+	return r.relurpishBinding().TensionsByWorkflow(context.Background(), workflowID)
+}
+
+func (r *Runtime) TensionsByExploration(explorationID string) ([]archaeodomain.Tension, error) {
+	return r.relurpishBinding().TensionsByExploration(context.Background(), explorationID)
+}
+
+func (r *Runtime) UpdateTensionStatus(workflowID, tensionID string, status archaeodomain.TensionStatus, commentRefs []string) (*archaeodomain.Tension, error) {
+	return r.relurpishBinding().UpdateTensionStatus(context.Background(), workflowID, tensionID, status, commentRefs)
+}
+
+func (r *Runtime) TensionSummaryByWorkflow(workflowID string) (*archaeodomain.TensionSummary, error) {
+	return r.relurpishBinding().TensionSummaryByWorkflow(context.Background(), workflowID)
+}
+
+func (r *Runtime) TensionSummaryByExploration(explorationID string) (*archaeodomain.TensionSummary, error) {
+	return r.relurpishBinding().TensionSummaryByExploration(context.Background(), explorationID)
+}
+
+func (r *Runtime) WorkflowProjection(workflowID string) (*archaeoprojections.WorkflowReadModel, error) {
+	return r.relurpishBinding().WorkflowProjection(context.Background(), workflowID)
+}
+
+func (r *Runtime) ExplorationProjection(workflowID string) (*archaeoprojections.ExplorationProjection, error) {
+	return r.relurpishBinding().ExplorationProjection(context.Background(), workflowID)
+}
+
+func (r *Runtime) LearningQueueProjection(workflowID string) (*archaeoprojections.LearningQueueProjection, error) {
+	return r.relurpishBinding().LearningQueueProjection(context.Background(), workflowID)
+}
+
+func (r *Runtime) ActivePlanProjection(workflowID string) (*archaeoprojections.ActivePlanProjection, error) {
+	return r.relurpishBinding().ActivePlanProjection(context.Background(), workflowID)
+}
+
+func (r *Runtime) WorkflowTimeline(workflowID string) ([]archaeodomain.TimelineEvent, error) {
+	return r.relurpishBinding().WorkflowTimeline(context.Background(), workflowID)
+}
+
+func (r *Runtime) SubscribeWorkflowProjection(workflowID string) (<-chan archaeoprojections.ProjectionEvent, func()) {
+	return r.relurpishBinding().SubscribeWorkflowProjection(workflowID, 16)
+}
+
+func (r *Runtime) ResolveLearning(workflowID string, input archaeolearning.ResolveInput) error {
+	if strings.TrimSpace(input.WorkflowID) == "" {
+		input.WorkflowID = workflowID
+	}
+	if strings.TrimSpace(input.WorkflowID) == "" {
+		return errors.New("workflow id required")
+	}
+	_, err := r.relurpishBinding().ResolveLearning(context.Background(), input)
+	return err
+}
+
+func (r *Runtime) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	if r == nil || r.LearningBroker == nil {
+		ch := make(chan archaeolearning.Event)
+		close(ch)
+		return ch, func() {}
+	}
+	return r.LearningBroker.Subscribe(32)
 }
 
 func (r *Runtime) PendingDeferrals() []guidance.EngineeringObservation {

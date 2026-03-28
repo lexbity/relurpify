@@ -3,8 +3,8 @@ package gate
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEvaluateGatePassesWithAllArtifacts(t *testing.T) {

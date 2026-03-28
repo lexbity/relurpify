@@ -3,14 +3,23 @@ package euclo
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
+	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
+	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
+	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
+	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
+	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
+	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
+	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
+	archaeoverification "github.com/lexcodex/relurpify/archaeo/verification"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -18,9 +27,9 @@ import (
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/memory"
+	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/gate"
@@ -43,8 +52,10 @@ type Agent struct {
 	PlanStore      frameworkplan.PlanStore
 	PatternStore   patterns.PatternStore
 	CommentStore   patterns.CommentStore
+	WorkflowStore  memory.WorkflowStateStore
 	ConvVerifier   frameworkplan.ConvergenceVerifier
 	GuidanceBroker *guidance.GuidanceBroker
+	LearningBroker *archaeolearning.Broker
 	DeferralPlan   *guidance.DeferralPlan
 	DeferralPolicy guidance.DeferralPolicy
 	DoomLoop       *capability.DoomLoopDetector
@@ -57,6 +68,22 @@ type Agent struct {
 	ProfileCtrl         *orchestrate.ProfileController
 	RecoveryCtrl        *orchestrate.RecoveryController
 	Emitter             interaction.FrameEmitter // live emitter from TUI; nil means use task-scoped emitter
+}
+
+type executionPreparation struct {
+	workflowID      string
+	readBundle      *executionReadBundle
+	livingPlan      *frameworkplan.LivingPlan
+	activeStep      *frameworkplan.PlanStep
+	preflightResult *core.Result
+	err             error
+	summaryFastPath bool
+}
+
+type executionReadBundle struct {
+	workflowID    string
+	learningQueue *archaeoprojections.LearningQueueProjection
+	activePlan    *archaeoprojections.ActivePlanProjection
 }
 
 func New(env agentenv.AgentEnvironment) *Agent {
@@ -187,147 +214,143 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	state.Set("euclo.mode", mode.ModeID)
 	state.Set("euclo.execution_profile", profile.ProfileID)
 	a.ensureDeferralPlan(task, state)
-	livingPlan, activeStep, preflightResult, planErr := a.prepareLivingPlan(ctx, task, state)
-	if planErr != nil {
-		if preflightResult != nil {
-			return preflightResult, planErr
-		}
-		return &core.Result{Success: false, Error: planErr}, planErr
+	a.ensureWorkflowRun(ctx, task, state)
+	if err := a.applyLearningResolution(ctx, task, state); err != nil {
+		return &core.Result{Success: false, Error: err}, err
 	}
-	if preflightResult != nil {
+	prep := a.prepareExecution(ctx, task, state, classification, profile)
+	if handledResult, handledErr, handled := a.phaseDriver().HandlePreparationOutcome(ctx, task, state, prep.preflightResult, prep.err, a.DeferralPlan); handled {
+		return handledResult, handledErr
+	}
+	if prep.activeStep == nil && shouldShortCircuitExecution(prep, state) {
+		short := a.shortCircuitResult(state, prep)
+		sessionOutput := a.executionSession().ShortCircuit(ctx, archaeoexec.ShortCircuitInput{
+			Task:            task,
+			State:           state,
+			Mode:            mode,
+			Profile:         profile,
+			Telemetry:       a.ConfigTelemetry(),
+			Result:          short,
+			SkipSuccessGate: true,
+		})
 		if a.DeferralPlan != nil && !a.DeferralPlan.IsEmpty() {
 			state.Set("euclo.deferral_plan", a.DeferralPlan)
 		}
-		return preflightResult, planErr
+		a.phaseDriver().EnterSurfacing(ctx, task, state, nil, sessionOutput.Err)
+		a.phaseDriver().Complete(ctx, task, state, nil, sessionOutput.Err)
+		return sessionOutput.Result, sessionOutput.Err
 	}
-	a.hydratePersistedArtifacts(ctx, task, state)
-	var err error
-	retrievalPolicy := eucloruntime.ResolveRetrievalPolicy(mode, profile)
-	state.Set("euclo.retrieval_policy", retrievalPolicy)
+	if prep.activeStep != nil {
+		a.phaseDriver().EnterExecution(ctx, task, state, prep.activeStep)
+	}
+	if !prep.summaryFastPath && shouldHydratePersistedArtifacts(task, state, envelope) {
+		a.hydratePersistedArtifacts(ctx, task, state)
+	}
 	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
 	state.Set("euclo.capability_family_routing", routing)
 	executionTask := a.eucloTask(task, envelope, classification, mode, profile)
-	if surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory); surfaces.Workflow != nil {
-		workflowID := state.GetString("euclo.workflow_id")
-		if workflowID == "" && task != nil && task.Context != nil {
-			if value, ok := task.Context["workflow_id"]; ok {
-				workflowID = stringValue(value)
-			}
-		}
-		if expansion, expandErr := eucloruntime.ExpandContext(ctx, surfaces.Workflow, workflowID, executionTask, state, retrievalPolicy); expandErr == nil {
-			executionTask = eucloruntime.ApplyContextExpansion(state, executionTask, expansion)
-		} else {
-			err = expandErr
-		}
-	}
-	var result *core.Result
-	var execErr error
-	execEnvelope := eucloruntime.BuildExecutionEnvelope(
-		executionTask, state, mode, profile, a.Environment,
-		nil, "", "", a.ConfigTelemetry(),
-	)
-	seedInteractionPrepass(state, executionTask, classification, mode)
-	if a.InteractionRegistry != nil {
-		var emitter interaction.FrameEmitter
-		var withTransitions bool
-		if a.Emitter != nil {
-			// Live emitter from TUI: use it directly without state transitions
-			emitter = a.Emitter
-			withTransitions = false
-		} else {
-			// Task-scoped emitter: check for test script or use NoopEmitter
-			emitter, withTransitions = interactionEmitterForTask(executionTask)
-		}
-		var interactionErr error
-		if withTransitions {
-			_, _, interactionErr = a.ProfileCtrl.ExecuteInteractiveWithTransitions(
-				ctx,
-				a.InteractionRegistry,
-				mode,
-				execEnvelope,
-				emitter,
-				interactionMaxTransitions(executionTask),
-			)
-		} else {
-			_, _, interactionErr = a.ProfileCtrl.ExecuteInteractive(
-				ctx,
-				a.InteractionRegistry,
-				mode,
-				execEnvelope,
-				emitter,
-			)
-		}
-		if interactionErr != nil && err == nil {
-			err = interactionErr
-		}
-	}
-	result, _, execErr = a.ProfileCtrl.ExecuteProfile(ctx, profile, mode, execEnvelope)
-	if err == nil {
-		err = execErr
-	}
-	policy := eucloruntime.ResolveVerificationPolicy(mode, profile)
-	state.Set("euclo.verification_policy", policy)
-	if err == nil && profile.MutationAllowed {
-		if _, applyErr := eucloruntime.ApplyEditIntentArtifacts(ctx, a.CapabilityRegistry(), state); applyErr != nil {
-			err = applyErr
-		}
-	}
-	evidence := eucloruntime.NormalizeVerificationEvidence(state)
-	state.Set("euclo.verification", evidence)
-	var editRecord *eucloruntime.EditExecutionRecord
-	if raw, ok := state.Get("euclo.edit_execution"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.EditExecutionRecord); ok {
-			editRecord = &typed
-		}
-	}
-	successGate := eucloruntime.EvaluateSuccessGate(policy, evidence, editRecord)
-	state.Set("euclo.success_gate", successGate)
-	if result != nil {
-		if result.Data == nil {
-			result.Data = map[string]any{}
-		}
-		result.Data["verification"] = evidence
-		result.Data["success_gate"] = successGate
-	}
-	if err == nil && !successGate.Allowed {
-		err = fmt.Errorf("euclo success gate blocked completion: %s", successGate.Reason)
-	}
-	if result != nil {
-		result.Success = err == nil && successGate.Allowed && result.Success
-		if err != nil {
-			result.Error = err
-		}
-	}
-	artifacts := euclotypes.CollectArtifactsFromState(state)
-	actionLog := eucloruntime.BuildActionLog(state, artifacts)
-	state.Set("euclo.action_log", actionLog)
-	proofSurface := eucloruntime.BuildProofSurface(state, artifacts)
-	state.Set("euclo.proof_surface", proofSurface)
-	artifacts = euclotypes.CollectArtifactsFromState(state)
-	state.Set("euclo.artifacts", artifacts)
-	if persistErr := a.persistArtifacts(ctx, task, state, artifacts); persistErr != nil && err == nil {
-		err = persistErr
-		if result != nil {
-			result.Success = false
-			result.Error = err
-		}
-	}
-	finalReport := euclotypes.AssembleFinalReport(artifacts)
-	state.Set("euclo.final_report", finalReport)
-	eucloruntime.EmitObservabilityTelemetry(a.ConfigTelemetry(), task, actionLog, proofSurface)
-	if result != nil {
-		if result.Data == nil {
-			result.Data = map[string]any{}
-		}
-		result.Data["final_report"] = finalReport
-		result.Data["action_log"] = actionLog
-		result.Data["proof_surface"] = proofSurface
-	}
-	a.finalizeLivingPlan(ctx, task, state, livingPlan, activeStep, result, err)
+	sessionOutput := a.executionSession().Execute(ctx, archaeoexec.SessionInput{
+		Task:           task,
+		ExecutionTask:  executionTask,
+		State:          state,
+		Classification: classification,
+		Mode:           mode,
+		Profile:        profile,
+		Telemetry:      a.ConfigTelemetry(),
+	})
+	result := sessionOutput.Result
+	err := sessionOutput.Err
+	a.phaseDriver().EnterVerification(ctx, task, state, prep.activeStep, err)
+	a.executionFinalizer().FinalizeLivingPlan(ctx, task, state, prep.livingPlan, prep.activeStep, result, err)
+	a.phaseDriver().EnterSurfacing(ctx, task, state, prep.activeStep, err)
 	if a.DeferralPlan != nil && !a.DeferralPlan.IsEmpty() {
 		state.Set("euclo.deferral_plan", a.DeferralPlan)
 	}
+	a.phaseDriver().Complete(ctx, task, state, prep.activeStep, err)
 	return result, err
+}
+
+func (a *Agent) shortCircuitResult(state *core.Context, prep executionPreparation) *core.Result {
+	data := map[string]any{}
+	if state != nil {
+		if raw, ok := state.Get("euclo.learning_queue"); ok && raw != nil {
+			data["learning_queue"] = raw
+		}
+		if raw, ok := state.Get("euclo.pending_learning_ids"); ok && raw != nil {
+			data["pending_learning_ids"] = raw
+		}
+		if raw, ok := state.Get("euclo.pending_guidance_ids"); ok && raw != nil {
+			data["pending_guidance_ids"] = raw
+		}
+		if raw, ok := state.Get("euclo.phase_state"); ok && raw != nil {
+			data["phase_state"] = raw
+		} else if raw, ok := state.Get("euclo.archaeo_phase_state"); ok && raw != nil {
+			data["phase_state"] = raw
+		}
+	}
+	message := "no active plan step"
+	if ids, ok := data["pending_learning_ids"]; ok && ids != nil {
+		message = "pending learning requires review before execution"
+	}
+	if prep.summaryFastPath {
+		message = "summary/status request completed without active execution step"
+	}
+	return &core.Result{
+		Success: true,
+		Data:    data,
+		Metadata: map[string]any{
+			"summary": message,
+		},
+	}
+}
+
+func shouldShortCircuitExecution(prep executionPreparation, state *core.Context) bool {
+	if prep.summaryFastPath {
+		return true
+	}
+	if state == nil {
+		return false
+	}
+	raw, ok := state.Get("euclo.archaeo_phase_state")
+	if !ok || raw == nil {
+		return false
+	}
+	phaseState, ok := raw.(*archaeodomain.WorkflowPhaseState)
+	if !ok || phaseState == nil {
+		if typed, ok := raw.(archaeodomain.WorkflowPhaseState); ok {
+			phaseState = &typed
+		} else {
+			return false
+		}
+	}
+	switch phaseState.CurrentPhase {
+	case archaeodomain.PhaseIntentElicitation, archaeodomain.PhaseSurfacing:
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *Agent) prepareExecution(ctx context.Context, task *core.Task, state *core.Context, classification eucloruntime.TaskClassification, profile euclotypes.ExecutionProfileSelection) executionPreparation {
+	prep := executionPreparation{
+		workflowID: workflowIDFromTaskState(task, state),
+	}
+	if a.shouldUseSummaryStatusFastPath(task, classification, profile) {
+		if !taskHasExplicitWorkflow(task) {
+			prep.summaryFastPath = true
+			return prep
+		}
+		if bundle, ok := a.loadExecutionReadBundle(ctx, prep.workflowID); ok {
+			prep.readBundle = bundle
+			a.seedExecutionReadBundleState(state, bundle)
+			if !bundleHasBlockingWork(task, bundle) {
+				prep.summaryFastPath = true
+				return prep
+			}
+		}
+	}
+	prep.livingPlan, prep.activeStep, prep.preflightResult, prep.err = a.prepareLivingPlan(ctx, task, state)
+	return prep
 }
 
 func (a *Agent) prepareLivingPlan(ctx context.Context, task *core.Task, state *core.Context) (*frameworkplan.LivingPlan, *frameworkplan.PlanStep, *core.Result, error) {
@@ -338,237 +361,481 @@ func (a *Agent) prepareLivingPlan(ctx context.Context, task *core.Task, state *c
 	if workflowID == "" {
 		return nil, nil, nil, nil
 	}
-	plan, err := a.PlanStore.LoadPlanByWorkflow(ctx, workflowID)
-	if err != nil || plan == nil {
-		return plan, nil, nil, err
-	}
-	state.Set("euclo.living_plan", plan)
-	step := activeLivingPlanStep(task, plan)
-	if step == nil {
-		return plan, nil, nil, nil
-	}
-	if a.DoomLoop != nil {
-		a.DoomLoop.Reset()
-	}
-	gateState, gateErr := a.evaluatePlanStepGate(ctx, task, state, plan, step)
-	if gateErr != nil {
-		log.Printf("euclo: blocking plan step %s: %v", step.ID, gateErr)
-		step.History = append(step.History, frameworkplan.StepAttempt{
-			AttemptedAt:   time.Now().UTC(),
-			Outcome:       "blocked",
-			FailureReason: gateErr.Error(),
-		})
-		if gateState.shouldInvalidate {
-			step.Status = frameworkplan.PlanStepInvalidated
-		}
-		step.UpdatedAt = time.Now().UTC()
-		state.Set("euclo.living_plan", plan)
-		_ = a.PlanStore.UpdateStep(ctx, plan.ID, step.ID, step)
-		if len(gateState.invalidatedStepIDs) > 0 {
-			a.persistPlanStepUpdates(ctx, plan)
-		}
-		return plan, nil, &core.Result{Success: false, Error: gateErr, Data: map[string]any{"plan_step_status": "blocked"}}, gateErr
-	}
-	if gateState.result != nil {
-		state.Set("euclo.living_plan", plan)
-		_ = a.PlanStore.UpdateStep(ctx, plan.ID, step.ID, step)
-		return plan, nil, gateState.result, gateState.err
-	}
-	if gateState.confidenceUpdated {
-		step.UpdatedAt = time.Now().UTC()
-		state.Set("euclo.living_plan", plan)
-		_ = a.PlanStore.UpdateStep(ctx, plan.ID, step.ID, step)
-	}
-	state.Set("euclo.current_plan_step_id", step.ID)
-	return plan, step, nil, nil
+	result := a.archaeologyService().PrepareLivingPlan(ctx, task, state, workflowID)
+	return result.Plan, result.Step, result.Result, result.Err
 }
 
-func (a *Agent) finalizeLivingPlan(ctx context.Context, task *core.Task, state *core.Context, plan *frameworkplan.LivingPlan, step *frameworkplan.PlanStep, result *core.Result, execErr error) {
-	if a == nil || a.PlanStore == nil || plan == nil {
+func (a *Agent) shouldUseSummaryStatusFastPath(task *core.Task, classification eucloruntime.TaskClassification, profile euclotypes.ExecutionProfileSelection) bool {
+	if task == nil {
+		return false
+	}
+	if profile.ProfileID != "plan_stage_execute" {
+		return false
+	}
+	if classification.RequiresEvidenceBeforeMutation {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimSpace(task.Instruction))
+	for _, token := range []string{"summary", "summarize", "status", "status update", "current status", "report status"} {
+		if strings.Contains(lower, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *Agent) loadExecutionReadBundle(ctx context.Context, workflowID string) (*executionReadBundle, bool) {
+	if a == nil || strings.TrimSpace(workflowID) == "" || a.WorkflowStore == nil {
+		return nil, false
+	}
+	svc := a.projectionService()
+	if svc == nil || svc.Store == nil {
+		return nil, false
+	}
+	learningQueue, err := svc.LearningQueue(ctx, workflowID)
+	if err != nil {
+		return nil, false
+	}
+	activePlan, err := svc.ActivePlan(ctx, workflowID)
+	if err != nil {
+		return nil, false
+	}
+	return &executionReadBundle{
+		workflowID:    workflowID,
+		learningQueue: learningQueue,
+		activePlan:    activePlan,
+	}, true
+}
+
+func (a *Agent) seedExecutionReadBundleState(state *core.Context, bundle *executionReadBundle) {
+	if state == nil || bundle == nil {
 		return
 	}
-	if step != nil {
-		now := time.Now().UTC()
-		attempt := frameworkplan.StepAttempt{
-			AttemptedAt:   now,
-			GitCheckpoint: gitCheckpoint(ctx, task, a.Environment.Registry),
+	state.Set("euclo.execution_read_bundle", bundle)
+	if bundle.activePlan != nil {
+		if bundle.activePlan.PhaseState != nil {
+			state.Set("euclo.phase_state", bundle.activePlan.PhaseState)
 		}
-		if execErr == nil {
-			step.Status = frameworkplan.PlanStepCompleted
-			attempt.Outcome = "completed"
-		} else {
-			step.Status = frameworkplan.PlanStepFailed
-			attempt.Outcome = "failed"
-			if execErr != nil {
-				attempt.FailureReason = execErr.Error()
-			} else if result != nil && result.Error != nil {
-				attempt.FailureReason = result.Error.Error()
-			}
+		if bundle.activePlan.ActivePlanVersion != nil {
+			state.Set("euclo.active_plan_version", bundle.activePlan.ActivePlanVersion)
+			state.Set("euclo.preloaded_active_plan_version", bundle.activePlan.ActivePlanVersion)
+			state.Set("euclo.living_plan", &bundle.activePlan.ActivePlanVersion.Plan)
 		}
-		step.History = append(step.History, attempt)
-		step.UpdatedAt = now
-		if execErr == nil {
-			a.propagateScopeInvalidations(ctx, plan, step)
-		}
-		state.Set("euclo.living_plan", plan)
-		_ = a.PlanStore.UpdateStep(ctx, plan.ID, step.ID, step)
 	}
-	if execErr == nil && a.ConvVerifier != nil && plan.ConvergenceTarget != nil {
-		failure, err := a.ConvVerifier.Verify(ctx, *plan.ConvergenceTarget)
-		if err != nil {
-			log.Printf("euclo: convergence verifier failed: %v", err)
-		} else if failure == nil {
-			now := time.Now().UTC()
-			plan.ConvergenceTarget.VerifiedAt = &now
-			plan.UpdatedAt = now
-			state.Set("euclo.living_plan", plan)
-			_ = a.PlanStore.SavePlan(ctx, plan)
-		} else {
-			log.Printf("euclo: convergence target unmet: %s", failure.Description)
-			state.Set("euclo.convergence_failure", *failure)
-			if result != nil {
-				if result.Data == nil {
-					result.Data = map[string]any{}
-				}
-				result.Data["convergence_failure"] = failure
-			}
+	if bundle.learningQueue != nil && len(bundle.learningQueue.PendingLearning) > 0 {
+		state.Set("euclo.learning_queue", bundle.learningQueue.PendingLearning)
+		state.Set("euclo.preloaded_pending_learning", bundle.learningQueue.PendingLearning)
+		ids := make([]string, 0, len(bundle.learningQueue.PendingLearning))
+		for _, interaction := range bundle.learningQueue.PendingLearning {
+			ids = append(ids, interaction.ID)
 		}
+		state.Set("euclo.pending_learning_ids", ids)
+		state.Set("euclo.blocking_learning_ids", append([]string(nil), bundle.learningQueue.BlockingLearning...))
+		state.Set("euclo.preloaded_blocking_learning_ids", append([]string(nil), bundle.learningQueue.BlockingLearning...))
+	}
+	if bundle.learningQueue != nil && len(bundle.learningQueue.PendingGuidanceIDs) > 0 {
+		state.Set("euclo.pending_guidance_ids", append([]string(nil), bundle.learningQueue.PendingGuidanceIDs...))
 	}
 }
 
-func (a *Agent) requiredSymbolsPresent(step *frameworkplan.PlanStep) bool {
-	if step == nil || step.EvidenceGate == nil || len(step.EvidenceGate.RequiredSymbols) == 0 {
+func bundleHasBlockingWork(task *core.Task, bundle *executionReadBundle) bool {
+	if bundle == nil {
+		return false
+	}
+	if bundle.learningQueue != nil && len(bundle.learningQueue.PendingGuidanceIDs) > 0 {
 		return true
 	}
-	if a == nil || a.GraphDB == nil {
+	if bundle.learningQueue != nil && len(bundle.learningQueue.BlockingLearning) > 0 {
 		return true
 	}
-	for _, symbolID := range step.EvidenceGate.RequiredSymbols {
-		if _, ok := a.GraphDB.GetNode(symbolID); !ok {
-			return false
-		}
+	if bundle.activePlan == nil || bundle.activePlan.ActivePlanVersion == nil {
+		return false
 	}
-	return true
+	return archaeoplans.ActiveStep(task, &bundle.activePlan.ActivePlanVersion.Plan) != nil
 }
 
-type planStepGateState struct {
-	confidenceUpdated  bool
-	invalidatedStepIDs []string
-	shouldInvalidate   bool
-	result             *core.Result
-	err                error
+func taskHasExplicitWorkflow(task *core.Task) bool {
+	if task == nil || task.Context == nil {
+		return false
+	}
+	return strings.TrimSpace(stringValue(task.Context["workflow_id"])) != ""
 }
 
-func (a *Agent) evaluatePlanStepGate(ctx context.Context, task *core.Task, state *core.Context, plan *frameworkplan.LivingPlan, step *frameworkplan.PlanStep) (planStepGateState, error) {
-	var gateState planStepGateState
-	if step == nil {
-		return gateState, nil
+func shouldHydratePersistedArtifacts(task *core.Task, state *core.Context, envelope eucloruntime.TaskEnvelope) bool {
+	if len(envelope.PreviousArtifactKinds) > 0 {
+		return true
 	}
-	missingSymbols := a.missingPlanSymbols(step)
-	if len(missingSymbols) > 0 {
-		for _, symbolID := range missingSymbols {
-			gateState.invalidatedStepIDs = append(gateState.invalidatedStepIDs, a.applyInvalidationEvent(plan, frameworkplan.InvalidationEvent{
-				Kind:   frameworkplan.InvalidationSymbolChanged,
-				Target: symbolID,
-				At:     time.Now().UTC(),
-			}, step.ID)...)
+	if state != nil {
+		if strings.TrimSpace(state.GetString("euclo.run_id")) != "" {
+			return true
 		}
-		gateState.invalidatedStepIDs = uniqueStrings(gateState.invalidatedStepIDs)
-		gateState.shouldInvalidate = true
-		if len(gateState.invalidatedStepIDs) > 0 {
-			_ = a.persistPlanStepUpdates(ctx, plan)
-		}
-		return gateState, fmt.Errorf("living plan step %s blocked by missing required symbols: %s", step.ID, strings.Join(missingSymbols, ", "))
 	}
+	if task == nil || task.Context == nil {
+		return false
+	}
+	if strings.TrimSpace(stringValue(task.Context["run_id"])) != "" {
+		return true
+	}
+	if _, ok := task.Context["euclo.interaction_state"]; ok {
+		return true
+	}
+	return false
+}
 
-	activeAnchors, driftedAnchors, err := a.anchorGateState(ctx, task)
+func (a *Agent) applyLearningResolution(ctx context.Context, task *core.Task, state *core.Context) error {
+	if a == nil || state == nil {
+		return nil
+	}
+	workflowID := workflowIDFromTaskState(task, state)
+	if workflowID == "" {
+		return nil
+	}
+	raw, ok := learningResolutionPayload(task, state)
+	if !ok || raw == nil {
+		return nil
+	}
+	input := archaeolearning.ResolveInput{
+		WorkflowID:      workflowID,
+		InteractionID:   strings.TrimSpace(stringValue(raw["interaction_id"])),
+		ExpectedStatus:  archaeolearning.InteractionStatus(strings.TrimSpace(stringValue(raw["expected_status"]))),
+		Kind:            archaeolearning.ResolutionKind(strings.TrimSpace(stringValue(raw["resolution_kind"]))),
+		ChoiceID:        strings.TrimSpace(stringValue(raw["choice_id"])),
+		RefinedPayload:  mapValue(raw["refined_payload"]),
+		ResolvedBy:      strings.TrimSpace(stringValue(raw["resolved_by"])),
+		BasedOnRevision: strings.TrimSpace(stringValue(raw["based_on_revision"])),
+	}
+	if comment := commentInputValue(raw["comment"]); comment != nil {
+		input.Comment = comment
+	}
+	if input.InteractionID == "" || input.Kind == "" {
+		return nil
+	}
+	resolved, err := a.learningService().Resolve(ctx, input)
 	if err != nil {
-		return gateState, err
+		return err
 	}
-	driftedDeps := intersectStrings(step.AnchorDependencies, driftedAnchors)
-	if len(driftedDeps) > 0 {
-		for _, anchorID := range driftedDeps {
-			gateState.invalidatedStepIDs = append(gateState.invalidatedStepIDs, a.applyInvalidationEvent(plan, frameworkplan.InvalidationEvent{
-				Kind:   frameworkplan.InvalidationAnchorDrifted,
-				Target: anchorID,
-				At:     time.Now().UTC(),
-			}, step.ID)...)
-		}
-		gateState.invalidatedStepIDs = uniqueStrings(gateState.invalidatedStepIDs)
-		gateState.shouldInvalidate = true
+	state.Set("euclo.last_learning_resolution", resolved)
+	pending, err := a.learningService().Pending(ctx, workflowID)
+	if err != nil {
+		return err
 	}
+	state.Set("euclo.learning_queue", pending)
+	ids := make([]string, 0, len(pending))
+	for _, interaction := range pending {
+		ids = append(ids, interaction.ID)
+	}
+	state.Set("euclo.pending_learning_ids", ids)
+	return nil
+}
 
-	confidence := frameworkplan.RecalculateConfidence(step, driftedDeps, missingSymbols, frameworkplan.DefaultConfidenceDegradation())
-	if confidence != step.ConfidenceScore {
-		step.ConfidenceScore = confidence
-		gateState.confidenceUpdated = true
+func (a *Agent) ensureWorkflowRun(ctx context.Context, task *core.Task, state *core.Context) {
+	if a == nil || state == nil {
+		return
 	}
-	if confidence < frameworkplan.DefaultConfidenceDegradation().Threshold {
-		decision := a.requestGuidance(ctx, guidance.GuidanceRequest{
-			Kind:        guidance.GuidanceConfidence,
-			Title:       "Low confidence on plan step",
-			Description: fmt.Sprintf("Step %q has confidence %.2f (threshold %.2f).", step.ID, confidence, frameworkplan.DefaultConfidenceDegradation().Threshold),
-			Choices: []guidance.GuidanceChoice{
-				{ID: "proceed", Label: "Proceed", IsDefault: true},
-				{ID: "skip", Label: "Skip this step"},
-				{ID: "replan", Label: "Re-plan this step"},
-			},
-			TimeoutBehavior: a.guidanceTimeoutBehavior(guidance.GuidanceConfidence, len(step.Scope)),
-			Context: map[string]any{
-				"confidence":      confidence,
-				"threshold":       frameworkplan.DefaultConfidenceDegradation().Threshold,
-				"drifted_anchors": driftedDeps,
-				"missing_symbols": missingSymbols,
-			},
-		}, "proceed")
-		if shortCircuitResult, shortCircuitErr, handled := a.applyGuidanceDecision(plan, step, decision, "low confidence on plan step"); handled {
-			gateState.result = shortCircuitResult
-			gateState.err = shortCircuitErr
-			return gateState, nil
-		}
+	store := a.workflowStore()
+	if store == nil {
+		return
 	}
-	if a.shouldCheckBlastRadius(step) {
-		impact := a.GraphDB.ImpactSet(step.Scope, nil, 3)
-		expected := len(step.Scope)
-		actual := len(impact.Affected)
-		if expected > 0 && actual > blastRadiusExpansionThreshold(expected) {
-			decision := a.requestGuidance(ctx, guidance.GuidanceRequest{
-				Kind:        guidance.GuidanceScopeExpansion,
-				Title:       "Larger blast radius than planned",
-				Description: fmt.Sprintf("Step %q affects %d symbols, above the planned scope of %d.", step.ID, actual, expected),
-				Choices: []guidance.GuidanceChoice{
-					{ID: "proceed", Label: "Proceed", IsDefault: true},
-					{ID: "skip", Label: "Skip this step"},
-					{ID: "replan", Label: "Re-plan this step"},
-				},
-				TimeoutBehavior: a.guidanceTimeoutBehavior(guidance.GuidanceScopeExpansion, actual),
-				Context: map[string]any{
-					"expected_symbols": expected,
-					"actual_symbols":   actual,
-					"affected":         truncateStrings(impact.Affected, 20),
-				},
-			}, "proceed")
-			if shortCircuitResult, shortCircuitErr, handled := a.applyGuidanceDecision(plan, step, decision, "blast radius larger than planned"); handled {
-				gateState.result = shortCircuitResult
-				gateState.err = shortCircuitErr
-				return gateState, nil
+	_, _, _ = eucloruntime.EnsureWorkflowRun(ctx, store, task, state)
+}
+
+func (a *Agent) workflowStore() *memorydb.SQLiteWorkflowStateStore {
+	if a == nil {
+		return nil
+	}
+	if typed, ok := a.WorkflowStore.(*memorydb.SQLiteWorkflowStateStore); ok {
+		return typed
+	}
+	surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory)
+	return surfaces.Workflow
+}
+
+func (a *Agent) phaseService() archaeophases.Service {
+	return a.archaeoBinding().PhaseService()
+}
+
+func (a *Agent) archaeologyService() archaeoarch.Service {
+	return a.archaeoBinding().ArchaeologyService(archaeobindings.ArchaeologyConfig{
+		PersistPhase: func(ctx context.Context, task *core.Task, state *core.Context, phase archaeodomain.EucloPhase, blockedReason string, step *frameworkplan.PlanStep) {
+			_, _ = a.phaseService().RecordState(ctx, task, state, a.GuidanceBroker, phase, blockedReason, step)
+		},
+		EvaluateGate: a.evaluatePlanStepGate,
+		ResetDoom: func() {
+			if a != nil && a.DoomLoop != nil {
+				a.DoomLoop.Reset()
 			}
-		}
-	}
+		},
+	})
+}
 
-	evidence, hasEvidence := mixedEvidenceForStep(state, step)
-	if !hasEvidence && step.EvidenceGate != nil && step.EvidenceGate.MaxTotalLoss > 0 {
-		return gateState, fmt.Errorf("living plan step %s blocked by missing grounding evidence", step.ID)
+func (a *Agent) learningService() archaeolearning.Service {
+	return a.archaeoBinding().LearningService()
+}
+
+func (a *Agent) ActiveExploration(ctx context.Context, workspaceID string) (*archaeoarch.SessionView, error) {
+	if a == nil {
+		return nil, nil
 	}
-	if step.EvidenceGate != nil && !frameworkplan.EvidenceGateAllows(step.EvidenceGate, evidence, activeAnchors, availableSymbolMap(step, a.GraphDB)) {
-		if len(step.EvidenceGate.RequiredAnchors) > 0 {
-			return gateState, fmt.Errorf("living plan step %s blocked by inactive required anchors", step.ID)
-		}
-		if step.EvidenceGate.MaxTotalLoss > 0 {
-			return gateState, fmt.Errorf("living plan step %s blocked by evidence derivation loss", step.ID)
-		}
+	return a.archaeoBinding().ActiveExploration(ctx, workspaceID)
+}
+
+func (a *Agent) ExplorationView(ctx context.Context, explorationID string) (*archaeoarch.SessionView, error) {
+	if a == nil {
+		return nil, nil
 	}
-	return gateState, nil
+	return a.archaeoBinding().ExplorationView(ctx, explorationID)
+}
+
+func (a *Agent) PendingLearning(ctx context.Context, workflowID string) ([]archaeolearning.Interaction, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().PendingLearning(ctx, workflowID)
+}
+
+func (a *Agent) ResolveLearning(ctx context.Context, input archaeolearning.ResolveInput) (*archaeolearning.Interaction, error) {
+	if a == nil {
+		return nil, fmt.Errorf("euclo agent unavailable")
+	}
+	return a.archaeoBinding().ResolveLearning(ctx, input)
+}
+
+func (a *Agent) PlanVersions(ctx context.Context, workflowID string) ([]archaeodomain.VersionedLivingPlan, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().PlanVersions(ctx, workflowID)
+}
+
+func (a *Agent) ActivePlanVersion(ctx context.Context, workflowID string) (*archaeodomain.VersionedLivingPlan, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().ActivePlanVersion(ctx, workflowID)
+}
+
+func (a *Agent) ComparePlanVersions(ctx context.Context, workflowID string, fromVersion, toVersion int) (map[string]any, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().ComparePlanVersions(ctx, workflowID, fromVersion, toVersion)
+}
+
+func (a *Agent) TensionsByWorkflow(ctx context.Context, workflowID string) ([]archaeodomain.Tension, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().TensionsByWorkflow(ctx, workflowID)
+}
+
+func (a *Agent) TensionsByExploration(ctx context.Context, explorationID string) ([]archaeodomain.Tension, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().TensionsByExploration(ctx, explorationID)
+}
+
+func (a *Agent) UpdateTensionStatus(ctx context.Context, workflowID, tensionID string, status archaeodomain.TensionStatus, commentRefs []string) (*archaeodomain.Tension, error) {
+	if a == nil {
+		return nil, fmt.Errorf("euclo agent unavailable")
+	}
+	return a.archaeoBinding().UpdateTensionStatus(ctx, workflowID, tensionID, status, commentRefs)
+}
+
+func (a *Agent) TensionSummaryByWorkflow(ctx context.Context, workflowID string) (*archaeodomain.TensionSummary, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().TensionSummaryByWorkflow(ctx, workflowID)
+}
+
+func (a *Agent) TensionSummaryByExploration(ctx context.Context, explorationID string) (*archaeodomain.TensionSummary, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().TensionSummaryByExploration(ctx, explorationID)
+}
+
+func (a *Agent) planService() archaeoplans.Service {
+	return a.archaeoBinding().PlanService()
+}
+
+func (a *Agent) tensionService() archaeotensions.Service {
+	return a.archaeoBinding().TensionService()
+}
+
+func (a *Agent) verificationService() archaeoverification.Service {
+	return a.archaeoBinding().VerificationService()
+}
+
+func (a *Agent) projectionService() *archaeoprojections.Service {
+	return a.archaeoBinding().ProjectionService()
+}
+
+func (a *Agent) WorkflowProjection(ctx context.Context, workflowID string) (*archaeoprojections.WorkflowReadModel, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().WorkflowProjection(ctx, workflowID)
+}
+
+func (a *Agent) ExplorationProjection(ctx context.Context, workflowID string) (*archaeoprojections.ExplorationProjection, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().ExplorationProjection(ctx, workflowID)
+}
+
+func (a *Agent) LearningQueueProjection(ctx context.Context, workflowID string) (*archaeoprojections.LearningQueueProjection, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().LearningQueueProjection(ctx, workflowID)
+}
+
+func (a *Agent) ActivePlanProjection(ctx context.Context, workflowID string) (*archaeoprojections.ActivePlanProjection, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().ActivePlanProjection(ctx, workflowID)
+}
+
+func (a *Agent) WorkflowTimeline(ctx context.Context, workflowID string) ([]archaeodomain.TimelineEvent, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return a.archaeoBinding().WorkflowTimeline(ctx, workflowID)
+}
+
+func (a *Agent) SubscribeWorkflowProjection(workflowID string, buffer int) (<-chan archaeoprojections.ProjectionEvent, func()) {
+	if a == nil {
+		ch := make(chan archaeoprojections.ProjectionEvent)
+		close(ch)
+		return ch, func() {}
+	}
+	return a.archaeoBinding().SubscribeWorkflowProjection(workflowID, buffer)
+}
+
+func (a *Agent) executionService() archaeoexec.Service {
+	return a.archaeoBinding().ExecutionService()
+}
+
+func (a *Agent) executionHandoffRecorder() archaeoexec.HandoffRecorder {
+	return a.archaeoBinding().ExecutionHandoffRecorder()
+}
+
+func (a *Agent) preflightCoordinator() archaeoexec.PreflightCoordinator {
+	return a.archaeoBinding().PreflightCoordinator(archaeobindings.PreflightConfig{
+		RequestGuidance: a.requestGuidance,
+	})
+}
+
+func (a *Agent) executionFinalizer() archaeoexec.Finalizer {
+	return a.archaeoBinding().ExecutionFinalizer(archaeobindings.FinalizerConfig{
+		GitCheckpoint: func(ctx context.Context, task *core.Task) string {
+			return gitCheckpoint(ctx, task, a.Environment.Registry)
+		},
+	})
+}
+
+func (a *Agent) executionSession() archaeoexec.SessionService {
+	return archaeoexec.SessionService{
+		Memory:              a.Memory,
+		Environment:         a.Environment,
+		ProfileCtrl:         a.ProfileCtrl,
+		InteractionRegistry: a.InteractionRegistry,
+		Emitter:             a.Emitter,
+		ResolveEmitter: func(task *core.Task, live interaction.FrameEmitter) (interaction.FrameEmitter, bool, int) {
+			if live != nil {
+				return live, false, 0
+			}
+			emitter, withTransitions := interactionEmitterForTask(task)
+			return emitter, withTransitions, interactionMaxTransitions(task)
+		},
+		SeedInteraction:  seedInteractionPrepass,
+		PersistArtifacts: a.persistArtifacts,
+		Checkpoint: func(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
+			return a.liveMutationCheckpoint(ctx, checkpoint, task, state)
+		},
+	}
+}
+
+func (a *Agent) liveMutationCoordinator() archaeoexec.LiveMutationCoordinator {
+	return archaeoexec.LiveMutationCoordinator{
+		Service:         a.executionService(),
+		Plans:           a.planService(),
+		RequestGuidance: a.requestGuidance,
+	}
+}
+
+func (a *Agent) liveMutationCheckpoint(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
+	if state == nil {
+		return nil
+	}
+	rawPlan, ok := state.Get("euclo.living_plan")
+	if !ok || rawPlan == nil {
+		return nil
+	}
+	plan, ok := rawPlan.(*frameworkplan.LivingPlan)
+	if !ok || plan == nil {
+		return nil
+	}
+	stepID := strings.TrimSpace(state.GetString("euclo.current_plan_step_id"))
+	if stepID == "" {
+		return nil
+	}
+	step := plan.Steps[stepID]
+	if step == nil {
+		return nil
+	}
+	_, err := a.liveMutationCoordinator().CheckpointExecutionAt(ctx, checkpoint, task, state, plan, step)
+	return err
+}
+
+func (a *Agent) phaseDriver() archaeophases.Driver {
+	return a.archaeoBinding().PhaseDriver(archaeobindings.DriverConfig{
+		Handoff: func(ctx context.Context, task *core.Task, state *core.Context, step *frameworkplan.PlanStep) error {
+			planRaw, ok := state.Get("euclo.living_plan")
+			if !ok || planRaw == nil {
+				return nil
+			}
+			plan, ok := planRaw.(*frameworkplan.LivingPlan)
+			if !ok || plan == nil {
+				return nil
+			}
+			_, err := a.executionHandoffRecorder().Record(ctx, task, state, plan, step)
+			return err
+		},
+	})
+}
+
+func (a *Agent) archaeoBinding() archaeobindings.Runtime {
+	var workflowStore memory.WorkflowStateStore
+	if store := a.workflowStore(); store != nil {
+		workflowStore = store
+	}
+	return archaeobindings.Runtime{
+		WorkflowStore:  workflowStore,
+		PlanStore:      a.PlanStore,
+		PatternStore:   a.PatternStore,
+		CommentStore:   a.CommentStore,
+		Retrieval:      archaeoretrieval.NewSQLStore(a.RetrievalDB),
+		ConvVerifier:   a.ConvVerifier,
+		GuidanceBroker: a.GuidanceBroker,
+		LearningBroker: a.LearningBroker,
+		DeferralPolicy: a.DeferralPolicy,
+	}
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func (a *Agent) evaluatePlanStepGate(ctx context.Context, task *core.Task, state *core.Context, plan *frameworkplan.LivingPlan, step *frameworkplan.PlanStep) (archaeoexec.PreflightOutcome, error) {
+	return a.preflightCoordinator().EvaluatePlanStepGate(ctx, task, state, plan, step, a.GraphDB)
 }
 
 func (a *Agent) ensureGuidanceWiring() {
@@ -606,120 +873,8 @@ func (a *Agent) ensureDeferralPlan(task *core.Task, state *core.Context) {
 	a.GuidanceBroker.SetDeferralPlan(a.DeferralPlan)
 }
 
-func (a *Agent) guidanceTimeoutBehavior(kind guidance.GuidanceKind, blastRadius int) guidance.GuidanceTimeoutBehavior {
-	policy := a.DeferralPolicy
-	if policy.MaxBlastRadiusForDefer == 0 && len(policy.DeferrableKinds) == 0 {
-		policy = guidance.DefaultDeferralPolicy()
-	}
-	if kind == guidance.GuidanceRecovery {
-		return guidance.GuidanceTimeoutFail
-	}
-	if blastRadius > policy.MaxBlastRadiusForDefer {
-		return guidance.GuidanceTimeoutFail
-	}
-	for _, allowed := range policy.DeferrableKinds {
-		if allowed == kind {
-			return guidance.GuidanceTimeoutDefer
-		}
-	}
-	return guidance.GuidanceTimeoutFail
-}
-
 func (a *Agent) requestGuidance(ctx context.Context, req guidance.GuidanceRequest, fallbackChoice string) guidance.GuidanceDecision {
-	if a == nil || a.GuidanceBroker == nil {
-		log.Printf("euclo: guidance broker unavailable for %s; proceeding with %s", req.Kind, fallbackChoice)
-		return guidance.GuidanceDecision{
-			RequestID: req.ID,
-			ChoiceID:  fallbackChoice,
-			DecidedBy: "no-broker",
-			DecidedAt: time.Now().UTC(),
-		}
-	}
-	decision, err := a.GuidanceBroker.Request(ctx, req)
-	if err != nil || decision == nil {
-		log.Printf("euclo: guidance request failed for %s: %v", req.Kind, err)
-		return guidance.GuidanceDecision{
-			RequestID: req.ID,
-			ChoiceID:  fallbackChoice,
-			DecidedBy: "guidance-error",
-			DecidedAt: time.Now().UTC(),
-		}
-	}
-	return *decision
-}
-
-func (a *Agent) applyGuidanceDecision(plan *frameworkplan.LivingPlan, step *frameworkplan.PlanStep, decision guidance.GuidanceDecision, reason string) (*core.Result, error, bool) {
-	if plan == nil || step == nil {
-		return nil, nil, false
-	}
-	now := time.Now().UTC()
-	switch decision.ChoiceID {
-	case "skip":
-		step.Status = frameworkplan.PlanStepSkipped
-		step.History = append(step.History, frameworkplan.StepAttempt{
-			AttemptedAt:   now,
-			Outcome:       "skipped",
-			FailureReason: reason,
-		})
-		step.UpdatedAt = now
-		return &core.Result{
-			Success: true,
-			Data: map[string]any{
-				"plan_step_status": "skipped",
-				"guidance_decision": map[string]any{
-					"choice_id":  decision.ChoiceID,
-					"decided_by": decision.DecidedBy,
-				},
-			},
-		}, nil, true
-	case "replan":
-		replanErr := fmt.Errorf("replan requested for step %s", step.ID)
-		step.Status = frameworkplan.PlanStepFailed
-		step.History = append(step.History, frameworkplan.StepAttempt{
-			AttemptedAt:   now,
-			Outcome:       "failed",
-			FailureReason: replanErr.Error(),
-		})
-		step.UpdatedAt = now
-		return &core.Result{
-			Success: false,
-			Error:   replanErr,
-			Data: map[string]any{
-				"plan_step_status": "failed",
-				"guidance_decision": map[string]any{
-					"choice_id":  decision.ChoiceID,
-					"decided_by": decision.DecidedBy,
-				},
-			},
-		}, replanErr, true
-	default:
-		return nil, nil, false
-	}
-}
-
-func (a *Agent) shouldCheckBlastRadius(step *frameworkplan.PlanStep) bool {
-	return a != nil && a.GraphDB != nil && step != nil && len(step.Scope) > 0
-}
-
-func blastRadiusExpansionThreshold(expected int) int {
-	if expected <= 0 {
-		return 0
-	}
-	return maxInt(expected*2, expected+5)
-}
-
-func truncateStrings(values []string, limit int) []string {
-	if len(values) <= limit {
-		return append([]string(nil), values...)
-	}
-	return append([]string(nil), values[:limit]...)
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
+	return a.executionService().RequestGuidance(ctx, req, fallbackChoice)
 }
 
 type guidanceRecoveryAdapter struct {
@@ -749,237 +904,6 @@ func (a guidanceRecoveryAdapter) RequestRecovery(ctx context.Context, req capabi
 	return &capability.RecoveryGuidanceDecision{ChoiceID: decision.ChoiceID}, nil
 }
 
-func (a *Agent) missingPlanSymbols(step *frameworkplan.PlanStep) []string {
-	if step == nil || a == nil || a.GraphDB == nil {
-		return nil
-	}
-	seen := make(map[string]struct{})
-	out := make([]string, 0)
-	for _, symbolID := range append(append([]string{}, step.Scope...), requiredSymbols(step)...) {
-		if strings.TrimSpace(symbolID) == "" {
-			continue
-		}
-		if _, ok := seen[symbolID]; ok {
-			continue
-		}
-		seen[symbolID] = struct{}{}
-		if _, ok := a.GraphDB.GetNode(symbolID); !ok {
-			out = append(out, symbolID)
-		}
-	}
-	return out
-}
-
-func (a *Agent) anchorGateState(ctx context.Context, task *core.Task) (map[string]bool, map[string]struct{}, error) {
-	active := make(map[string]bool)
-	drifted := make(map[string]struct{})
-	if a == nil || a.RetrievalDB == nil {
-		return active, drifted, nil
-	}
-	corpusScope := corpusScopeForTask(task)
-	driftedRecords, err := retrieval.DriftedAnchors(ctx, a.RetrievalDB, corpusScope)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, record := range driftedRecords {
-		drifted[record.AnchorID] = struct{}{}
-	}
-	activeRecords, err := retrieval.ActiveAnchors(ctx, a.RetrievalDB, corpusScope)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, record := range activeRecords {
-		if record.SupersededBy != nil {
-			continue
-		}
-		if _, blocked := drifted[record.AnchorID]; blocked {
-			continue
-		}
-		active[record.AnchorID] = true
-	}
-	return active, drifted, nil
-}
-
-func corpusScopeForTask(task *core.Task) string {
-	if task != nil && task.Context != nil {
-		if value := strings.TrimSpace(stringValue(task.Context["corpus_scope"])); value != "" {
-			return value
-		}
-	}
-	return "workspace"
-}
-
-func mixedEvidenceForStep(state *core.Context, step *frameworkplan.PlanStep) (retrieval.MixedEvidenceResult, bool) {
-	if state == nil || step == nil {
-		return retrieval.MixedEvidenceResult{}, false
-	}
-	raw, ok := state.Get("pipeline.workflow_retrieval")
-	if !ok || raw == nil {
-		return retrieval.MixedEvidenceResult{}, false
-	}
-	payload, ok := raw.(map[string]any)
-	if !ok {
-		return retrieval.MixedEvidenceResult{}, false
-	}
-	rawResults, ok := payload["results"].([]any)
-	if !ok {
-		if typed, ok := payload["results"].([]map[string]any); ok {
-			rawResults = make([]any, 0, len(typed))
-			for _, item := range typed {
-				rawResults = append(rawResults, item)
-			}
-		} else {
-			return retrieval.MixedEvidenceResult{}, false
-		}
-	}
-	results := make([]retrieval.MixedEvidenceResult, 0, len(rawResults))
-	for _, item := range rawResults {
-		itemMap, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		data, err := json.Marshal(itemMap)
-		if err != nil {
-			continue
-		}
-		var result retrieval.MixedEvidenceResult
-		if err := json.Unmarshal(data, &result); err != nil {
-			continue
-		}
-		results = append(results, result)
-	}
-	if len(results) == 0 {
-		return retrieval.MixedEvidenceResult{}, false
-	}
-	requiredAnchorSet := make(map[string]struct{})
-	for _, anchorID := range step.AnchorDependencies {
-		requiredAnchorSet[anchorID] = struct{}{}
-	}
-	if step.EvidenceGate != nil {
-		for _, anchorID := range step.EvidenceGate.RequiredAnchors {
-			requiredAnchorSet[anchorID] = struct{}{}
-		}
-	}
-	for _, result := range results {
-		for _, anchor := range result.Anchors {
-			if _, ok := requiredAnchorSet[anchor.AnchorID]; ok {
-				return result, true
-			}
-		}
-	}
-	return results[0], true
-}
-
-func availableSymbolMap(step *frameworkplan.PlanStep, graph *graphdb.Engine) map[string]bool {
-	symbols := make(map[string]bool)
-	if step == nil {
-		return symbols
-	}
-	for _, symbolID := range append(append([]string{}, step.Scope...), requiredSymbols(step)...) {
-		if strings.TrimSpace(symbolID) == "" {
-			continue
-		}
-		if graph == nil {
-			symbols[symbolID] = true
-			continue
-		}
-		_, ok := graph.GetNode(symbolID)
-		symbols[symbolID] = ok
-	}
-	return symbols
-}
-
-func requiredSymbols(step *frameworkplan.PlanStep) []string {
-	if step == nil || step.EvidenceGate == nil {
-		return nil
-	}
-	return step.EvidenceGate.RequiredSymbols
-}
-
-func (a *Agent) applyInvalidationEvent(plan *frameworkplan.LivingPlan, event frameworkplan.InvalidationEvent, excludeStepID string) []string {
-	invalidated := frameworkplan.PropagateInvalidation(plan, event)
-	if excludeStepID == "" {
-		return invalidated
-	}
-	out := make([]string, 0, len(invalidated))
-	for _, stepID := range invalidated {
-		if stepID == excludeStepID {
-			continue
-		}
-		out = append(out, stepID)
-	}
-	return out
-}
-
-func (a *Agent) persistPlanStepUpdates(ctx context.Context, plan *frameworkplan.LivingPlan) error {
-	if a == nil || a.PlanStore == nil || plan == nil {
-		return nil
-	}
-	for stepID, step := range plan.Steps {
-		if step == nil {
-			continue
-		}
-		if err := a.PlanStore.UpdateStep(ctx, plan.ID, stepID, step); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (a *Agent) propagateScopeInvalidations(ctx context.Context, plan *frameworkplan.LivingPlan, step *frameworkplan.PlanStep) {
-	if a == nil || plan == nil || step == nil || len(step.Scope) == 0 {
-		return
-	}
-	changed := make([]string, 0)
-	for _, symbolID := range step.Scope {
-		changed = append(changed, a.applyInvalidationEvent(plan, frameworkplan.InvalidationEvent{
-			Kind:   frameworkplan.InvalidationSymbolChanged,
-			Target: symbolID,
-			At:     time.Now().UTC(),
-		}, step.ID)...)
-	}
-	if len(changed) == 0 {
-		return
-	}
-	plan.UpdatedAt = time.Now().UTC()
-	_ = a.persistPlanStepUpdates(ctx, plan)
-}
-
-func intersectStrings(values []string, allowed map[string]struct{}) []string {
-	if len(values) == 0 || len(allowed) == 0 {
-		return nil
-	}
-	out := make([]string, 0)
-	seen := make(map[string]struct{})
-	for _, value := range values {
-		if _, ok := allowed[value]; !ok {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
-}
-
-func uniqueStrings(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(values))
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
-}
-
 func workflowIDFromTaskState(task *core.Task, state *core.Context) string {
 	if state != nil {
 		if workflowID := strings.TrimSpace(state.GetString("euclo.workflow_id")); workflowID != "" {
@@ -994,16 +918,46 @@ func workflowIDFromTaskState(task *core.Task, state *core.Context) string {
 	return ""
 }
 
-func activeLivingPlanStep(task *core.Task, plan *frameworkplan.LivingPlan) *frameworkplan.PlanStep {
-	if task == nil || task.Context == nil || plan == nil {
-		return nil
-	}
-	if raw, ok := task.Context["current_step_id"]; ok {
-		if stepID := strings.TrimSpace(stringValue(raw)); stepID != "" {
-			return plan.Steps[stepID]
+func learningResolutionPayload(task *core.Task, state *core.Context) (map[string]any, bool) {
+	if state != nil {
+		if raw, ok := state.Get("euclo.learning_resolution"); ok {
+			if payload, ok := raw.(map[string]any); ok {
+				return payload, true
+			}
 		}
 	}
+	if task != nil && task.Context != nil {
+		if raw, ok := task.Context["euclo.learning_resolution"]; ok {
+			if payload, ok := raw.(map[string]any); ok {
+				return payload, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func mapValue(raw any) map[string]any {
+	if raw == nil {
+		return nil
+	}
+	if typed, ok := raw.(map[string]any); ok {
+		return typed
+	}
 	return nil
+}
+
+func commentInputValue(raw any) *archaeolearning.CommentInput {
+	payload, ok := raw.(map[string]any)
+	if !ok || payload == nil {
+		return nil
+	}
+	return &archaeolearning.CommentInput{
+		IntentType:  strings.TrimSpace(stringValue(payload["intent_type"])),
+		AuthorKind:  strings.TrimSpace(stringValue(payload["author_kind"])),
+		Body:        strings.TrimSpace(stringValue(payload["body"])),
+		TrustClass:  strings.TrimSpace(stringValue(payload["trust_class"])),
+		CorpusScope: strings.TrimSpace(stringValue(payload["corpus_scope"])),
+	}
 }
 
 func gitCheckpoint(ctx context.Context, task *core.Task, registry *capability.Registry) string {

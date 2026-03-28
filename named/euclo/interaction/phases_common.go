@@ -15,9 +15,9 @@ func (p *ConfirmationPhase) Execute(ctx context.Context, mc PhaseMachineContext)
 	content := p.BuildProposal(mc)
 
 	frame := InteractionFrame{
-		Kind:  FrameProposal,
-		Mode:  mc.Mode,
-		Phase: mc.Phase,
+		Kind:    FrameProposal,
+		Mode:    mc.Mode,
+		Phase:   mc.Phase,
 		Content: content,
 		Actions: []ActionSlot{
 			{ID: "confirm", Label: "Confirm", Shortcut: "y", Kind: ActionConfirm, Default: true},
@@ -42,8 +42,8 @@ func (p *ConfirmationPhase) Execute(ctx context.Context, mc PhaseMachineContext)
 	}
 
 	updates := map[string]any{
-		mc.Phase + ".response":     resp.ActionID,
-		mc.Phase + ".proposal":     content,
+		mc.Phase + ".response": resp.ActionID,
+		mc.Phase + ".proposal": content,
 	}
 
 	switch resp.ActionID {

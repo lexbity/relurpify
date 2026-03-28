@@ -50,6 +50,10 @@ const (
 	ArtifactKindRootCause               ArtifactKind = "euclo.root_cause"
 	ArtifactKindRootCauseCandidates     ArtifactKind = "euclo.root_cause_candidates"
 	ArtifactKindRegressionAnalysis      ArtifactKind = "euclo.regression_analysis"
+	ArtifactKindCompiledExecution       ArtifactKind = "euclo.compiled_execution"
+	ArtifactKindExecutionStatus         ArtifactKind = "euclo.execution_status"
+	ArtifactKindDeferredExecutionIssues ArtifactKind = "euclo.deferred_execution_issues"
+	ArtifactKindContextCompaction       ArtifactKind = "euclo.context_compaction"
 	ArtifactKindFinalReport             ArtifactKind = "euclo.final_report"
 	ArtifactKindRecoveryTrace           ArtifactKind = "euclo.recovery_trace"
 )
@@ -115,6 +119,10 @@ func CollectArtifactsFromState(state *core.Context) []Artifact {
 		{Key: "euclo.root_cause", Kind: ArtifactKindRootCause},
 		{Key: "euclo.root_cause_candidates", Kind: ArtifactKindRootCauseCandidates},
 		{Key: "euclo.regression_analysis", Kind: ArtifactKindRegressionAnalysis},
+		{Key: "euclo.compiled_execution", Kind: ArtifactKindCompiledExecution},
+		{Key: "euclo.execution_status", Kind: ArtifactKindExecutionStatus},
+		{Key: "euclo.deferred_execution_issues", Kind: ArtifactKindDeferredExecutionIssues},
+		{Key: "euclo.context_compaction", Kind: ArtifactKindContextCompaction},
 		{Key: "pipeline.final_output", Kind: ArtifactKindFinalReport},
 	}
 
@@ -272,6 +280,10 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 		ArtifactKindRootCause,
 		ArtifactKindRootCauseCandidates,
 		ArtifactKindRegressionAnalysis,
+		ArtifactKindCompiledExecution,
+		ArtifactKindExecutionStatus,
+		ArtifactKindDeferredExecutionIssues,
+		ArtifactKindContextCompaction,
 		ArtifactKindSuccessGate,
 		ArtifactKindFinalReport,
 	}
@@ -328,6 +340,14 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 				report["root_cause_candidates"] = artifact.Payload
 			case ArtifactKindRegressionAnalysis:
 				report["regression_analysis"] = artifact.Payload
+			case ArtifactKindCompiledExecution:
+				report["compiled_execution"] = artifact.Payload
+			case ArtifactKindExecutionStatus:
+				report["execution_status"] = artifact.Payload
+			case ArtifactKindDeferredExecutionIssues:
+				report["deferred_execution_issues"] = artifact.Payload
+			case ArtifactKindContextCompaction:
+				report["context_compaction"] = artifact.Payload
 			case ArtifactKindSuccessGate:
 				report["success_gate"] = artifact.Payload
 			case ArtifactKindFinalReport:
@@ -1053,6 +1073,14 @@ func StateKeyForArtifactKind(kind ArtifactKind) string {
 		return "euclo.root_cause_candidates"
 	case ArtifactKindRegressionAnalysis:
 		return "euclo.regression_analysis"
+	case ArtifactKindCompiledExecution:
+		return "euclo.compiled_execution"
+	case ArtifactKindExecutionStatus:
+		return "euclo.execution_status"
+	case ArtifactKindDeferredExecutionIssues:
+		return "euclo.deferred_execution_issues"
+	case ArtifactKindContextCompaction:
+		return "euclo.context_compaction"
 	case ArtifactKindFinalReport:
 		return "pipeline.final_output"
 	case ArtifactKindRecoveryTrace:

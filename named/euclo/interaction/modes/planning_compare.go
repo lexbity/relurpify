@@ -81,7 +81,7 @@ func (p *ComparePhase) Execute(ctx context.Context, mc interaction.PhaseMachineC
 	}
 
 	updates := map[string]any{
-		"compare.response": resp.ActionID,
+		"compare.response":  resp.ActionID,
 		"generate.selected": selected,
 	}
 

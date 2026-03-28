@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -16,21 +18,23 @@ import (
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/memory"
 	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	clinix "github.com/lexcodex/relurpify/platform/shell/command"
+	"github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
 
 type memoryPlanStore struct {
-	plans   map[string]*frameworkplan.LivingPlan
-	updates map[string]*frameworkplan.PlanStep
+	plans               map[string]*frameworkplan.LivingPlan
+	updates             map[string]*frameworkplan.PlanStep
+	loadByWorkflowCount int
 }
 
 func newMemoryPlanStore() *memoryPlanStore {
@@ -68,6 +72,7 @@ func (s *memoryPlanStore) LoadPlan(_ context.Context, planID string) (*framework
 }
 
 func (s *memoryPlanStore) LoadPlanByWorkflow(_ context.Context, workflowID string) (*frameworkplan.LivingPlan, error) {
+	s.loadByWorkflowCount++
 	return s.plans[workflowID], nil
 }
 
@@ -400,6 +405,193 @@ func TestAgentExecuteLoadsLivingPlanIntoState(t *testing.T) {
 	require.Equal(t, "plan-1", loaded.ID)
 }
 
+func TestAgentExecuteSummaryFastPathSkipsPlanPreparationWhenNothingIsBlocking(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	workflowStore := openRetrievalWorkflowStore(t)
+	require.NoError(t, workflowStore.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf-fast",
+		TaskID:      "task-fast",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "summarize current status",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	store := newMemoryPlanStore()
+	now := time.Now().UTC()
+	store.plans["wf-blocking"] = &frameworkplan.LivingPlan{
+		ID:         "plan-blocking",
+		WorkflowID: "wf-blocking",
+		Title:      "blocking plan",
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", Status: frameworkplan.PlanStepPending, CreatedAt: now, UpdatedAt: now},
+		},
+		StepOrder: []string{"step-1"},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: capability.NewRegistry(),
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+	agent.WorkflowStore = workflowStore
+	agent.PlanStore = store
+
+	state := core.NewContext()
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-fast",
+		Instruction: "summarize current status",
+		Context: map[string]any{
+			"workspace": "/tmp/ws",
+		},
+	}, state)
+	require.NoError(t, err)
+	require.Zero(t, store.loadByWorkflowCount)
+}
+
+func TestAgentExecuteSummaryFastPathDoesNotSkipBlockingLearning(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	workflowStore := openRetrievalWorkflowStore(t)
+	require.NoError(t, workflowStore.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf-blocking",
+		TaskID:      "task-blocking",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "summarize current status",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	learnSvc := archaeolearning.Service{Store: workflowStore}
+	_, err = learnSvc.Create(context.Background(), archaeolearning.CreateInput{
+		WorkflowID:    "wf-blocking",
+		ExplorationID: "exp-blocking",
+		Kind:          archaeolearning.InteractionPatternProposal,
+		SubjectType:   archaeolearning.SubjectPattern,
+		SubjectID:     "pattern-blocking",
+		Title:         "Confirm pattern",
+		Blocking:      true,
+	})
+	require.NoError(t, err)
+
+	store := newMemoryPlanStore()
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: capability.NewRegistry(),
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+	agent.WorkflowStore = workflowStore
+	agent.PlanStore = store
+
+	state := core.NewContext()
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-blocking",
+		Instruction: "summarize current status",
+		Context: map[string]any{
+			"workspace":   "/tmp/ws",
+			"workflow_id": "wf-blocking",
+		},
+	}, state)
+	require.NoError(t, err)
+	require.Greater(t, store.loadByWorkflowCount, 0)
+}
+
+func TestAgentExecuteAppliesLearningResolutionThroughService(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(testutil.FileWriteTool{}))
+	workflowStore := openRetrievalWorkflowStore(t)
+	require.NoError(t, workflowStore.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf-learning",
+		TaskID:      "task-learning",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "learn",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	patternStore, commentStore := openPatternStores(t)
+	require.NoError(t, patternStore.Save(context.Background(), patterns.PatternRecord{
+		ID:           "pattern-1",
+		Kind:         patterns.PatternKindStructural,
+		Title:        "Adapter",
+		Description:  "Use adapters",
+		Status:       patterns.PatternStatusProposed,
+		CorpusScope:  "workspace",
+		CorpusSource: "workspace",
+		CreatedAt:    time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
+	}))
+	learnSvc := archaeolearning.Service{
+		Store:        workflowStore,
+		PatternStore: patternStore,
+		CommentStore: commentStore,
+	}
+	interaction, err := learnSvc.Create(context.Background(), archaeolearning.CreateInput{
+		WorkflowID:    "wf-learning",
+		ExplorationID: "explore-1",
+		Kind:          archaeolearning.InteractionPatternProposal,
+		SubjectType:   archaeolearning.SubjectPattern,
+		SubjectID:     "pattern-1",
+		Title:         "Confirm pattern",
+	})
+	require.NoError(t, err)
+
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: registry,
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+	agent.WorkflowStore = workflowStore
+	agent.PatternStore = patternStore
+	agent.CommentStore = commentStore
+
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status":  "pass",
+		"summary": "verification passed",
+		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
+	})
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-learning-resolve",
+		Instruction: "summarize status",
+		Context: map[string]any{
+			"workspace":    "/tmp/ws",
+			"workflow_id":  "wf-learning",
+			"corpus_scope": "workspace",
+			"euclo.learning_resolution": map[string]any{
+				"interaction_id":  interaction.ID,
+				"resolution_kind": "confirm",
+				"choice_id":       "confirm",
+				"resolved_by":     "human",
+				"comment": map[string]any{
+					"intent_type": "intentional",
+					"author_kind": "human",
+					"body":        "Confirmed during archaeology review.",
+				},
+			},
+		},
+	}, state)
+	require.NoError(t, err)
+
+	record, err := patternStore.Load(context.Background(), "pattern-1")
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	require.Equal(t, patterns.PatternStatusConfirmed, record.Status)
+
+	raw, ok := state.Get("euclo.last_learning_resolution")
+	require.True(t, ok)
+	resolved, ok := raw.(*archaeolearning.Interaction)
+	require.True(t, ok)
+	require.Equal(t, archaeolearning.StatusResolved, resolved.Status)
+
+	raw, ok = state.Get("euclo.learning_queue")
+	require.True(t, ok)
+	queue, ok := raw.([]archaeolearning.Interaction)
+	require.True(t, ok)
+	require.Empty(t, queue)
+}
+
 func TestAgentExecuteBlocksWhenRequiredSymbolsAreMissing(t *testing.T) {
 	memStore, err := memory.NewHybridMemory(t.TempDir())
 	require.NoError(t, err)
@@ -517,6 +709,77 @@ func TestAgentExecuteUpdatesPlanStepAndRunsConvergenceVerifier(t *testing.T) {
 	require.Equal(t, "completed", updated.History[len(updated.History)-1].Outcome)
 	require.True(t, verifier.called)
 	require.NotNil(t, store.plans["wf-complete"].ConvergenceTarget.VerifiedAt)
+}
+
+func TestAgentExecutePersistsArchaeoPhaseState(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	require.NoError(t, err)
+	workflowStore := openRetrievalWorkflowStore(t)
+	store := newMemoryPlanStore()
+	now := time.Now().UTC()
+	store.plans["wf-phase"] = &frameworkplan.LivingPlan{
+		ID:         "plan-phase",
+		WorkflowID: "wf-phase",
+		Version:    2,
+		Title:      "phase plan",
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", Status: frameworkplan.PlanStepPending, CreatedAt: now, UpdatedAt: now},
+		},
+		StepOrder: []string{"step-1"},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	workspace := initGitRepo(t)
+	registry := capability.NewRegistry()
+	registerCliGitForRepo(t, registry, workspace)
+
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: registry,
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "euclo-test", Model: "stub", MaxIterations: 1},
+	})
+	agent.PlanStore = store
+	agent.WorkflowStore = workflowStore
+
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status":  "pass",
+		"summary": "verification passed",
+		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
+	})
+	_, err = agent.Execute(context.Background(), &core.Task{
+		ID:          "task-phase",
+		Instruction: "finish step",
+		Context: map[string]any{
+			"workspace":       workspace,
+			"workflow_id":     "wf-phase",
+			"current_step_id": "step-1",
+		},
+	}, state)
+	require.NoError(t, err)
+
+	raw, ok := state.Get("euclo.archaeo_phase_state")
+	require.True(t, ok)
+	phaseState, ok := raw.(*archaeodomain.WorkflowPhaseState)
+	require.True(t, ok)
+	require.Equal(t, archaeodomain.PhaseCompleted, phaseState.CurrentPhase)
+	require.Equal(t, "plan-phase", phaseState.ActivePlanID)
+	require.NotNil(t, phaseState.ActivePlanVersion)
+	require.Equal(t, 1, *phaseState.ActivePlanVersion)
+	require.Equal(t, "plan-phase:v1", state.GetString("euclo.execution_handoff_ref"))
+
+	artifacts, err := workflowStore.ListWorkflowArtifacts(context.Background(), "wf-phase", "")
+	require.NoError(t, err)
+	require.NotEmpty(t, artifacts)
+	foundPhaseState := false
+	for _, artifact := range artifacts {
+		if artifact.Kind == "archaeo_phase_state" {
+			foundPhaseState = true
+			break
+		}
+	}
+	require.True(t, foundPhaseState)
 }
 
 func TestAgentExecuteMarksPlanStepFailedOnExecutionFailure(t *testing.T) {
@@ -1156,6 +1419,18 @@ func openRetrievalWorkflowStore(t *testing.T) *memorydb.SQLiteWorkflowStateStore
 		require.NoError(t, store.Close())
 	})
 	return store
+}
+
+func openPatternStores(t *testing.T) (*patterns.SQLitePatternStore, *patterns.SQLiteCommentStore) {
+	t.Helper()
+	db, err := patterns.OpenSQLite(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	patternStore, err := patterns.NewSQLitePatternStore(db)
+	require.NoError(t, err)
+	commentStore, err := patterns.NewSQLiteCommentStore(db)
+	require.NoError(t, err)
+	return patternStore, commentStore
 }
 
 func insertAnchorDriftEvent(t *testing.T, db *memorydb.SQLiteWorkflowStateStore, anchorID string) {

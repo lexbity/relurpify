@@ -50,6 +50,7 @@ type AgentBootstrapOptions struct {
 	RetrievalDB         *sql.DB
 	PlanStore           frameworkplan.PlanStore
 	GuidanceBroker      *guidance.GuidanceBroker
+	WorkflowStore       memory.WorkflowStateStore
 }
 
 type BootstrappedAgentRuntime struct {
@@ -178,6 +179,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		agents.WithRetrievalDB(opts.RetrievalDB),
 		agents.WithPlanStore(opts.PlanStore),
 		agents.WithGuidanceBroker(opts.GuidanceBroker),
+		agents.WithWorkflowStore(opts.WorkflowStore),
 	); err != nil {
 		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
 	}

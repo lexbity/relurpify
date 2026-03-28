@@ -342,3 +342,13 @@ func TestProfileForCodeMode_CrossCutting(t *testing.T) {
 		t.Errorf("got %q, want plan_stage_execute (cross-cutting)", profile)
 	}
 }
+
+func TestProfileForCodeMode_SummaryOnly(t *testing.T) {
+	profile := profileForCodeMode(
+		TaskEnvelope{EditPermitted: true, Instruction: "summarize current status"},
+		TaskClassification{Scope: "local"},
+	)
+	if profile != "plan_stage_execute" {
+		t.Errorf("got %q, want plan_stage_execute (summary-only)", profile)
+	}
+}

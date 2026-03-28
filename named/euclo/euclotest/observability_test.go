@@ -10,8 +10,8 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
 

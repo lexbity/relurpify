@@ -63,9 +63,9 @@ func RegisterCodeTriggers(resolver *interaction.AgencyResolver) {
 		return
 	}
 	resolver.RegisterTrigger("code", interaction.AgencyTrigger{
-		Phrases:      []string{"verify", "verify this"},
-		PhaseJump:    "verify",
-		Description:  "Re-run verification",
+		Phrases:     []string{"verify", "verify this"},
+		PhaseJump:   "verify",
+		Description: "Re-run verification",
 	})
 	resolver.RegisterTrigger("code", interaction.AgencyTrigger{
 		Phrases:      []string{"try different approach", "different approach"},

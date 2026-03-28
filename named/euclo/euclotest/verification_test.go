@@ -52,6 +52,15 @@ func TestEvaluateSuccessGateRejectsManualVerificationForCodeProfile(t *testing.T
 	require.Equal(t, "verification_status_rejected", result.Reason)
 }
 
+func TestResolveVerificationPolicy_DebugDoesNotRequireVerification(t *testing.T) {
+	policy := eucloruntime.ResolveVerificationPolicy(
+		euclotypes.ModeResolution{ModeID: "debug"},
+		euclotypes.ExecutionProfileSelection{ProfileID: "reproduce_localize_patch", VerificationRequired: true},
+	)
+	require.False(t, policy.RequiresVerification)
+	require.False(t, policy.RequiresExecutedCheck)
+}
+
 // TestEvaluateSuccessGateAcceptsPassingVerificationWithCheck tests passing verification
 // Note: VerificationCheckRecord is a type that needs to be defined
 // This test is commented out pending type definition

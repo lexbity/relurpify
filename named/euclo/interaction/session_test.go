@@ -19,10 +19,10 @@ func TestExtractSessionResume_NoState(t *testing.T) {
 func TestExtractSessionResume_FromInteractionState(t *testing.T) {
 	state := core.NewContext()
 	state.Set("euclo.interaction_state", InteractionState{
-		Mode:         "code",
-		CurrentPhase: "propose",
-		PhaseStates:  map[string]any{"scope.confirmed": true},
-		Selections:   map[string]string{"intent": "fix"},
+		Mode:          "code",
+		CurrentPhase:  "propose",
+		PhaseStates:   map[string]any{"scope.confirmed": true},
+		Selections:    map[string]string{"intent": "fix"},
 		SkippedPhases: []string{"clarify"},
 	})
 
@@ -47,12 +47,12 @@ func TestExtractSessionResume_FromInteractionState(t *testing.T) {
 func TestExtractSessionResume_FromMapAny(t *testing.T) {
 	state := core.NewContext()
 	state.Set("euclo.interaction_state", map[string]any{
-		"mode":           "debug",
-		"current_phase":  "localize",
-		"phase_states":   map[string]any{"intake.done": true},
-		"selections":     map[string]any{"strategy": "trace"},
+		"mode":            "debug",
+		"current_phase":   "localize",
+		"phase_states":    map[string]any{"intake.done": true},
+		"selections":      map[string]any{"strategy": "trace"},
 		"phases_executed": []any{"intake", "reproduce"},
-		"skipped_phases": []any{"reproduce"},
+		"skipped_phases":  []any{"reproduce"},
 	})
 
 	resume := ExtractSessionResume(state)

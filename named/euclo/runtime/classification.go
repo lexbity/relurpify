@@ -258,6 +258,10 @@ func profileForCodeMode(envelope TaskEnvelope, classification TaskClassification
 		return "plan_stage_execute"
 	}
 
+	if looksLikeSummaryOnlyTask(envelope.Instruction) {
+		return "plan_stage_execute"
+	}
+
 	// Evidence-first: debug signals or explicit verification → investigate first.
 	if classification.RequiresEvidenceBeforeMutation {
 		return "reproduce_localize_patch"
@@ -283,6 +287,28 @@ func profileForCodeMode(envelope TaskEnvelope, classification TaskClassification
 	}
 
 	return "edit_verify_repair"
+}
+
+func looksLikeSummaryOnlyTask(instruction string) bool {
+	lower := strings.ToLower(strings.TrimSpace(instruction))
+	if lower == "" {
+		return false
+	}
+	hasSummaryIntent := strings.Contains(lower, "summarize") ||
+		strings.Contains(lower, "summary") ||
+		strings.Contains(lower, "current status") ||
+		strings.Contains(lower, "status update") ||
+		strings.Contains(lower, "report status")
+	if !hasSummaryIntent {
+		return false
+	}
+	mutationSignals := []string{"implement", "fix", "change", "refactor", "patch", "update", "add", "rename", "edit"}
+	for _, signal := range mutationSignals {
+		if strings.Contains(lower, signal) {
+			return false
+		}
+	}
+	return true
 }
 
 func SnapshotCapabilities(registry *capability.Registry) euclotypes.CapabilitySnapshot {

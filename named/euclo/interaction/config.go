@@ -11,9 +11,9 @@ type InteractionConfig struct {
 
 // InteractionBudgetConfig defines budget limits.
 type InteractionBudgetConfig struct {
-	MaxQuestions    int `yaml:"max_questions,omitempty" json:"max_questions,omitempty"`       // per phase
-	MaxTransitions  int `yaml:"max_transitions,omitempty" json:"max_transitions,omitempty"`
-	MaxFrames       int `yaml:"max_frames,omitempty" json:"max_frames,omitempty"`
+	MaxQuestions   int `yaml:"max_questions,omitempty" json:"max_questions,omitempty"` // per phase
+	MaxTransitions int `yaml:"max_transitions,omitempty" json:"max_transitions,omitempty"`
+	MaxFrames      int `yaml:"max_frames,omitempty" json:"max_frames,omitempty"`
 }
 
 // InteractionDefaults defines default behaviors.
@@ -33,8 +33,8 @@ func DefaultInteractionConfig() InteractionConfig {
 	return InteractionConfig{
 		Enabled: true,
 		Budget: InteractionBudgetConfig{
-			MaxQuestions:    3,
-			MaxTransitions:  3,
+			MaxQuestions:   3,
+			MaxTransitions: 3,
 		},
 		Defaults: InteractionDefaults{
 			AutoPlanThreshold:      5,

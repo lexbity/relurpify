@@ -12,7 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/internal/testutil"
+	"github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
 

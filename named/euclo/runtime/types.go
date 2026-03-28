@@ -11,17 +11,17 @@ import (
 // TaskEnvelope is the typed Euclo intake shape used to normalize coding
 // requests before routing deeper into the runtime.
 type TaskEnvelope struct {
-	TaskID                string                         `json:"task_id,omitempty"`
-	Instruction           string                         `json:"instruction,omitempty"`
-	Workspace             string                         `json:"workspace,omitempty"`
-	ModeHint              string                         `json:"mode_hint,omitempty"`
-	ResumedMode           string                         `json:"resumed_mode,omitempty"`
-	ExplicitVerification  string                         `json:"explicit_verification,omitempty"`
-	EditPermitted         bool                           `json:"edit_permitted"`
-	CapabilitySnapshot    euclotypes.CapabilitySnapshot  `json:"capability_snapshot"`
-	PreviousArtifactKinds []string                       `json:"previous_artifact_kinds,omitempty"`
-	ResolvedMode          string                         `json:"resolved_mode,omitempty"`
-	ExecutionProfile      string                         `json:"execution_profile,omitempty"`
+	TaskID                string                        `json:"task_id,omitempty"`
+	Instruction           string                        `json:"instruction,omitempty"`
+	Workspace             string                        `json:"workspace,omitempty"`
+	ModeHint              string                        `json:"mode_hint,omitempty"`
+	ResumedMode           string                        `json:"resumed_mode,omitempty"`
+	ExplicitVerification  string                        `json:"explicit_verification,omitempty"`
+	EditPermitted         bool                          `json:"edit_permitted"`
+	CapabilitySnapshot    euclotypes.CapabilitySnapshot `json:"capability_snapshot"`
+	PreviousArtifactKinds []string                      `json:"previous_artifact_kinds,omitempty"`
+	ResolvedMode          string                        `json:"resolved_mode,omitempty"`
+	ExecutionProfile      string                        `json:"execution_profile,omitempty"`
 }
 
 type TaskClassification struct {
@@ -38,11 +38,11 @@ type TaskClassification struct {
 
 // Re-export commonly used types from euclotypes for convenience
 type (
-	ModeResolution              = euclotypes.ModeResolution
-	ExecutionProfileSelection   = euclotypes.ExecutionProfileSelection
-	ModeRegistry                = euclotypes.ModeRegistry
-	ExecutionProfileRegistry    = euclotypes.ExecutionProfileRegistry
-	Artifact                    = euclotypes.Artifact
+	ModeResolution            = euclotypes.ModeResolution
+	ExecutionProfileSelection = euclotypes.ExecutionProfileSelection
+	ModeRegistry              = euclotypes.ModeRegistry
+	ExecutionProfileRegistry  = euclotypes.ExecutionProfileRegistry
+	Artifact                  = euclotypes.Artifact
 )
 
 type RetrievalPolicy struct {

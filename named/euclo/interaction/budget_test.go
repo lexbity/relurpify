@@ -102,9 +102,9 @@ func TestBudget_NilSafe(t *testing.T) {
 func TestNewBudgetFromConfig(t *testing.T) {
 	cfg := InteractionConfig{
 		Budget: InteractionBudgetConfig{
-			MaxQuestions:    5,
-			MaxTransitions:  10,
-			MaxFrames:       50,
+			MaxQuestions:   5,
+			MaxTransitions: 10,
+			MaxFrames:      50,
 		},
 	}
 	b := NewBudget(cfg)

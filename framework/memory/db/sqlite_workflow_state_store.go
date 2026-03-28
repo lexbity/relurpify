@@ -351,6 +351,8 @@ func (s *SQLiteWorkflowStateStore) init() error {
 		`CREATE INDEX IF NOT EXISTS idx_step_runs_workflow_step ON step_runs(workflow_id, step_id, attempt DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_artifacts_scope ON workflow_artifacts(workflow_id, run_id, created_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_artifacts_kind ON workflow_artifacts(workflow_id, kind, created_at ASC);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_artifacts_kind_workspace ON workflow_artifacts(workflow_id, kind, json_extract(summary_metadata_json, '$.workspace_id'), created_at ASC);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_artifacts_workspace_kind ON workflow_artifacts(kind, json_extract(summary_metadata_json, '$.workspace_id'), created_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_scope ON workflow_stage_results(workflow_id, run_id, stage_index ASC, retry_attempt ASC, finished_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_stage_results_valid ON workflow_stage_results(workflow_id, run_id, stage_name, validation_ok, retry_attempt DESC, finished_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_pipeline_checkpoints_task_created ON pipeline_checkpoints(task_id, created_at DESC);`,
@@ -959,6 +961,79 @@ func (s *SQLiteWorkflowStateStore) ListWorkflowArtifactsByKind(ctx context.Conte
 		out = append(out, *record)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) ListWorkflowArtifactsByKindAndWorkspace(ctx context.Context, workflowID, runID, kind, workspaceID string) ([]memory.WorkflowArtifactRecord, error) {
+	query := `SELECT artifact_id, workflow_id, run_id, kind, content_type, storage_kind, summary_text, summary_metadata_json, inline_raw_text, raw_ref, raw_size_bytes, compression_method, created_at
+		FROM workflow_artifacts WHERE kind = ? AND json_extract(summary_metadata_json, '$.workspace_id') = ?`
+	args := []any{kind, workspaceID}
+	if strings.TrimSpace(workflowID) != "" {
+		query += ` AND workflow_id = ?`
+		args = append(args, workflowID)
+	}
+	if strings.TrimSpace(runID) != "" {
+		query += ` AND run_id = ?`
+		args = append(args, runID)
+	}
+	query += ` ORDER BY created_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []memory.WorkflowArtifactRecord
+	for rows.Next() {
+		record, err := scanWorkflowArtifactRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) LatestWorkflowArtifactByKind(ctx context.Context, workflowID, runID, kind string) (*memory.WorkflowArtifactRecord, bool, error) {
+	query := `SELECT artifact_id, workflow_id, run_id, kind, content_type, storage_kind, summary_text, summary_metadata_json, inline_raw_text, raw_ref, raw_size_bytes, compression_method, created_at
+		FROM workflow_artifacts WHERE workflow_id = ? AND kind = ?`
+	args := []any{workflowID, kind}
+	if strings.TrimSpace(runID) != "" {
+		query += ` AND run_id = ?`
+		args = append(args, runID)
+	}
+	query += ` ORDER BY created_at DESC LIMIT 1`
+	row := s.db.QueryRowContext(ctx, query, args...)
+	record, err := scanWorkflowArtifactRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return record, true, nil
+}
+
+func (s *SQLiteWorkflowStateStore) LatestWorkflowArtifactByKindAndWorkspace(ctx context.Context, workflowID, runID, kind, workspaceID string) (*memory.WorkflowArtifactRecord, bool, error) {
+	query := `SELECT artifact_id, workflow_id, run_id, kind, content_type, storage_kind, summary_text, summary_metadata_json, inline_raw_text, raw_ref, raw_size_bytes, compression_method, created_at
+		FROM workflow_artifacts WHERE kind = ? AND json_extract(summary_metadata_json, '$.workspace_id') = ?`
+	args := []any{kind, workspaceID}
+	if strings.TrimSpace(workflowID) != "" {
+		query += ` AND workflow_id = ?`
+		args = append(args, workflowID)
+	}
+	if strings.TrimSpace(runID) != "" {
+		query += ` AND run_id = ?`
+		args = append(args, runID)
+	}
+	query += ` ORDER BY created_at DESC LIMIT 1`
+	row := s.db.QueryRowContext(ctx, query, args...)
+	record, err := scanWorkflowArtifactRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return record, true, nil
 }
 
 func (s *SQLiteWorkflowStateStore) WorkflowArtifactByID(ctx context.Context, artifactID string) (*memory.WorkflowArtifactRecord, bool, error) {

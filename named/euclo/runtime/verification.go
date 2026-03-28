@@ -21,6 +21,8 @@ func ResolveVerificationPolicy(mode ModeResolution, profile ExecutionProfileSele
 		policy.RequiresVerification = false
 		policy.RequiresExecutedCheck = false
 	case "debug":
+		policy.RequiresVerification = false
+		policy.RequiresExecutedCheck = false
 		policy.ManualOutcomeAllowed = false
 	case "code", "tdd":
 		policy.ManualOutcomeAllowed = false
