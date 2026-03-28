@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/gate"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	"github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
@@ -102,4 +103,28 @@ func TestAgentPublishesCapabilityRoutingArtifact(t *testing.T) {
 	routing, ok := raw.(eucloruntime.CapabilityFamilyRouting)
 	require.True(t, ok)
 	require.Equal(t, "review", routing.PrimaryFamilyID)
+}
+
+func TestPhaseGatesAcceptCapabilityFamilyArtifacts(t *testing.T) {
+	gates := gate.DefaultPhaseGates()
+
+	migrationEval := gate.EvaluateGate(gates["plan_stage_execute"][0], "planning", euclotypes.NewArtifactState([]euclotypes.Artifact{
+		{Kind: euclotypes.ArtifactKindMigrationPlan, Payload: map[string]any{"steps": []any{map[string]any{"id": "m1"}}}},
+	}))
+	require.True(t, migrationEval.Passed)
+
+	traceEval := gate.EvaluateGate(gates["trace_execute_analyze"][0], "debug", euclotypes.NewArtifactState([]euclotypes.Artifact{
+		{Kind: euclotypes.ArtifactKindTrace, Payload: map[string]any{"frames": []any{map[string]any{"function": "Run"}}}},
+	}))
+	require.True(t, traceEval.Passed)
+
+	reviewEval := gate.EvaluateGate(gates["review_suggest_implement"][0], "review", euclotypes.NewArtifactState([]euclotypes.Artifact{
+		{Kind: euclotypes.ArtifactKindReviewFindings, Payload: map[string]any{"findings": []any{map[string]any{"severity": "warning"}}}},
+	}))
+	require.True(t, reviewEval.Passed)
+
+	regressionEval := gate.EvaluateGate(gates["reproduce_localize_patch"][1], "debug", euclotypes.NewArtifactState([]euclotypes.Artifact{
+		{Kind: euclotypes.ArtifactKindRegressionAnalysis, Payload: map[string]any{"summary": "narrowed suspect window"}},
+	}))
+	require.True(t, regressionEval.Passed)
 }

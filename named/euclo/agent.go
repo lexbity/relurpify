@@ -38,9 +38,7 @@ import (
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
-// Agent is the named coding-runtime boundary. The initial implementation keeps
-// the public surface narrow while delegating execution to generic agent
-// machinery underneath.
+// Agent is the named coding-runtime boundary for software-engineering work.
 type Agent struct {
 	Config         *core.Config
 	Delegate       *reactpkg.ReActAgent
@@ -99,10 +97,34 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 	if env.IndexManager != nil && env.IndexManager.GraphDB != nil {
 		a.GraphDB = env.IndexManager.GraphDB
 	}
-	if a.Delegate == nil {
-		a.Delegate = reactpkg.New(env)
-	} else if err := a.Delegate.InitializeEnvironment(env); err != nil {
-		return err
+	if a.Delegate != nil {
+		if err := a.Delegate.InitializeEnvironment(env); err != nil {
+			return err
+		}
+	}
+	if a.Environment.Registry == nil && a.Delegate != nil {
+		a.Environment.Registry = a.Delegate.Tools
+	}
+	if a.Environment.Registry == nil {
+		a.Environment.Registry = env.Registry
+	}
+	if a.Environment.Registry == nil {
+		delegate := reactpkg.New(env)
+		a.Delegate = delegate
+		a.Environment.Registry = delegate.Tools
+	} else if a.Delegate != nil && a.Delegate.Tools == nil {
+		a.Delegate.Tools = a.Environment.Registry
+	}
+	if a.Delegate != nil && a.Delegate.Tools == nil {
+		a.Delegate.Tools = a.Environment.Registry
+	}
+	if a.Delegate != nil && a.CheckpointPath != "" {
+		a.Delegate.CheckpointPath = a.CheckpointPath
+	}
+	if a.Delegate != nil && a.Config != nil && a.Environment.Registry == nil {
+		if err := a.Delegate.Initialize(a.Config); err != nil {
+			return err
+		}
 	}
 	if a.ModeRegistry == nil {
 		a.ModeRegistry = euclotypes.DefaultModeRegistry()
@@ -151,53 +173,78 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 
 func (a *Agent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
-	if a.Delegate == nil {
-		a.Delegate = &reactpkg.ReActAgent{}
-	}
 	if a.ModeRegistry == nil {
 		a.ModeRegistry = euclotypes.DefaultModeRegistry()
 	}
 	if a.ProfileRegistry == nil {
 		a.ProfileRegistry = euclotypes.DefaultExecutionProfileRegistry()
 	}
-	if a.CheckpointPath != "" {
-		a.Delegate.CheckpointPath = a.CheckpointPath
+	if a.Delegate != nil {
+		if a.CheckpointPath != "" {
+			a.Delegate.CheckpointPath = a.CheckpointPath
+		}
+		return a.Delegate.Initialize(cfg)
 	}
-	return a.Delegate.Initialize(cfg)
+	return nil
 }
 
 func (a *Agent) Capabilities() []core.Capability {
-	if a == nil || a.Delegate == nil {
-		return nil
+	return []core.Capability{
+		core.CapabilityCode,
+		core.CapabilityPlan,
+		core.CapabilityExecute,
+		core.CapabilityReview,
+		core.CapabilityExplain,
 	}
-	return a.Delegate.Capabilities()
 }
 
 func (a *Agent) CapabilityRegistry() *capability.Registry {
-	if a == nil || a.Delegate == nil {
+	if a == nil {
 		return nil
 	}
-	return a.Delegate.Tools
+	if a.Environment.Registry != nil {
+		return a.Environment.Registry
+	}
+	if a.Delegate != nil {
+		return a.Delegate.Tools
+	}
+	return nil
 }
 
 func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {
-	if a.Delegate == nil {
-		if err := a.Initialize(a.Config); err != nil {
-			return nil, err
-		}
-	}
-	env, classification, mode, profile := a.runtimeState(task, nil)
-	return a.Delegate.BuildGraph(a.eucloTask(task, env, classification, mode, profile))
+	env, classification, mode, profile, work := a.runtimeState(task, nil)
+	executor := a.selectExecutor(work)
+	return executor.BuildGraph(&executorContext{
+		Task:           task,
+		Envelope:       env,
+		Classification: classification,
+		Mode:           mode,
+		Profile:        profile,
+		Work:           work,
+	})
 }
 
 func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
-	if a.Delegate == nil {
-		if err := a.Initialize(a.Config); err != nil {
-			return nil, err
-		}
-	}
 	if state == nil {
 		state = core.NewContext()
+	}
+	envelope, classification, mode, profile, work := a.runtimeState(task, state)
+	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
+	executor := a.selectExecutor(work)
+	return executor.Execute(ctx, &executorContext{
+		Task:           task,
+		State:          state,
+		Envelope:       envelope,
+		Classification: classification,
+		Mode:           mode,
+		Profile:        profile,
+		Work:           work,
+	})
+}
+
+func (a *Agent) executeWithCurrentFlow(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+	if err := a.ensureReactDelegate(); err != nil {
+		return nil, err
 	}
 	a.ensureGuidanceWiring()
 	seedPersistedInteractionState(task, state)
@@ -206,15 +253,19 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	if scopeErr := enforceSessionScoping(state, sessionID); scopeErr != nil {
 		return &core.Result{Success: false, Error: scopeErr}, scopeErr
 	}
-	envelope, classification, mode, profile := a.runtimeState(task, state)
-	state.Set("euclo.envelope", envelope)
-	state.Set("euclo.classification", classification)
-	state.Set("euclo.mode_resolution", mode)
-	state.Set("euclo.execution_profile_selection", profile)
-	state.Set("euclo.mode", mode.ModeID)
-	state.Set("euclo.execution_profile", profile.ProfileID)
+	envelope, classification, mode, profile, work := a.runtimeState(task, state)
+	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
 	a.ensureDeferralPlan(task, state)
 	a.ensureWorkflowRun(ctx, task, state)
+	if restoreErr := a.restoreExecutionContinuity(ctx, task, state, envelope, work); restoreErr != nil {
+		work = eucloruntime.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
+		a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, eucloruntime.ExecutionStatusRestoreFailed, restoreErr)
+		result := &core.Result{Success: false, Error: restoreErr}
+		a.applyRuntimeResultMetadata(result, state)
+		return result, restoreErr
+	}
+	envelope, classification, mode, profile, work = a.runtimeState(task, state)
+	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
 	if err := a.applyLearningResolution(ctx, task, state); err != nil {
 		return &core.Result{Success: false, Error: err}, err
 	}
@@ -222,7 +273,13 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	if handledResult, handledErr, handled := a.phaseDriver().HandlePreparationOutcome(ctx, task, state, prep.preflightResult, prep.err, a.DeferralPlan); handled {
 		return handledResult, handledErr
 	}
+	work = eucloruntime.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
+	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
 	if prep.activeStep == nil && shouldShortCircuitExecution(prep, state) {
+		work.Status = eucloruntime.UnitOfWorkStatusCompleted
+		work.ResultClass = eucloruntime.ResultClassForOutcome(eucloruntime.ExecutionStatusCompleted, work.DeferredIssueIDs, nil)
+		state.Set("euclo.unit_of_work", work)
+		eucloruntime.SeedCompiledExecutionState(state, work, eucloruntime.BuildRuntimeExecutionStatus(work, eucloruntime.ExecutionStatusCompleted, work.ResultClass, time.Now().UTC()))
 		short := a.shortCircuitResult(state, prep)
 		sessionOutput := a.executionSession().ShortCircuit(ctx, archaeoexec.ShortCircuitInput{
 			Task:            task,
@@ -238,6 +295,8 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		}
 		a.phaseDriver().EnterSurfacing(ctx, task, state, nil, sessionOutput.Err)
 		a.phaseDriver().Complete(ctx, task, state, nil, sessionOutput.Err)
+		a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, eucloruntime.ExecutionStatusCompleted, sessionOutput.Err)
+		a.applyRuntimeResultMetadata(sessionOutput.Result, state)
 		return sessionOutput.Result, sessionOutput.Err
 	}
 	if prep.activeStep != nil {
@@ -248,7 +307,10 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	}
 	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
 	state.Set("euclo.capability_family_routing", routing)
-	executionTask := a.eucloTask(task, envelope, classification, mode, profile)
+	work.Status = eucloruntime.UnitOfWorkStatusExecuting
+	state.Set("euclo.unit_of_work", work)
+	eucloruntime.SeedCompiledExecutionState(state, work, eucloruntime.BuildRuntimeExecutionStatus(work, eucloruntime.ExecutionStatusExecuting, "", time.Now().UTC()))
+	executionTask := a.eucloTask(task, envelope, classification, mode, profile, work)
 	sessionOutput := a.executionSession().Execute(ctx, archaeoexec.SessionInput{
 		Task:           task,
 		ExecutionTask:  executionTask,
@@ -267,6 +329,65 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		state.Set("euclo.deferral_plan", a.DeferralPlan)
 	}
 	a.phaseDriver().Complete(ctx, task, state, prep.activeStep, err)
+	finalStatus := eucloruntime.ExecutionStatusCompleted
+	if err != nil {
+		finalStatus = eucloruntime.ExecutionStatusFailed
+	}
+	a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, finalStatus, err)
+	a.applyRuntimeResultMetadata(result, state)
+	return result, err
+}
+
+func (a *Agent) executeWithWorkflowExecutor(ctx context.Context, exec *executorContext, executor graph.WorkflowExecutor) (*core.Result, error) {
+	if exec == nil || executor == nil {
+		return &core.Result{Success: false, Error: fmt.Errorf("executor context unavailable")}, fmt.Errorf("executor context unavailable")
+	}
+	task := exec.Task
+	state := exec.State
+	if state == nil {
+		state = core.NewContext()
+	}
+	if err := executor.Initialize(a.Config); err != nil {
+		return &core.Result{Success: false, Error: err}, err
+	}
+	a.ensureGuidanceWiring()
+	seedPersistedInteractionState(task, state)
+	sessionID := generateSessionID()
+	if scopeErr := enforceSessionScoping(state, sessionID); scopeErr != nil {
+		return &core.Result{Success: false, Error: scopeErr}, scopeErr
+	}
+	envelope, classification, mode, profile, work := a.runtimeState(task, state)
+	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
+	a.ensureDeferralPlan(task, state)
+	a.ensureWorkflowRun(ctx, task, state)
+	if restoreErr := a.restoreExecutionContinuity(ctx, task, state, envelope, work); restoreErr != nil {
+		work = eucloruntime.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
+		a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, eucloruntime.ExecutionStatusRestoreFailed, restoreErr)
+		result := &core.Result{Success: false, Error: restoreErr}
+		a.applyRuntimeResultMetadata(result, state)
+		return result, restoreErr
+	}
+	envelope, classification, mode, profile, work = a.runtimeState(task, state)
+	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
+	if err := a.applyLearningResolution(ctx, task, state); err != nil {
+		return &core.Result{Success: false, Error: err}, err
+	}
+	if shouldHydratePersistedArtifacts(task, state, envelope) {
+		a.hydratePersistedArtifacts(ctx, task, state)
+	}
+	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
+	state.Set("euclo.capability_family_routing", routing)
+	work.Status = eucloruntime.UnitOfWorkStatusExecuting
+	state.Set("euclo.unit_of_work", work)
+	eucloruntime.SeedCompiledExecutionState(state, work, eucloruntime.BuildRuntimeExecutionStatus(work, eucloruntime.ExecutionStatusExecuting, "", time.Now().UTC()))
+	executionTask := a.eucloTask(task, envelope, classification, mode, profile, work)
+	result, err := executor.Execute(ctx, executionTask, state)
+	finalStatus := eucloruntime.ExecutionStatusCompleted
+	if err != nil {
+		finalStatus = eucloruntime.ExecutionStatusFailed
+	}
+	a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, finalStatus, err)
+	a.applyRuntimeResultMetadata(result, state)
 	return result, err
 }
 
@@ -672,6 +793,44 @@ func (a *Agent) projectionService() *archaeoprojections.Service {
 	return a.archaeoBinding().ProjectionService()
 }
 
+func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode euclotypes.ModeResolution) eucloruntime.SemanticInputBundle {
+	if a == nil {
+		return eucloruntime.SemanticInputBundle{}
+	}
+	if mode.ModeID != "planning" && mode.ModeID != "debug" {
+		if existing, ok := state.Get("euclo.semantic_inputs"); ok && existing != nil {
+			if typed, ok := existing.(eucloruntime.SemanticInputBundle); ok {
+				return typed
+			}
+		}
+		return eucloruntime.SemanticInputBundle{}
+	}
+	workflowID := workflowIDFromTaskState(task, state)
+	if workflowID == "" {
+		return eucloruntime.SemanticInputBundle{}
+	}
+	ctx := context.Background()
+	var activePlan *archaeodomain.VersionedLivingPlan
+	if projection, err := a.ActivePlanProjection(ctx, workflowID); err == nil && projection != nil {
+		activePlan = projection.ActivePlanVersion
+	}
+	requests, _ := a.projectionService().RequestHistory(ctx, workflowID)
+	provenance, _ := a.projectionService().Provenance(ctx, workflowID)
+	learning, _ := a.LearningQueueProjection(ctx, workflowID)
+	var convergence *archaeodomain.WorkspaceConvergenceProjection
+	if workspaceID := workspaceIDFromTask(task, state); workspaceID != "" {
+		convergence, _ = a.archaeoBinding().ConvergenceHistory(ctx, workspaceID)
+	}
+	return eucloruntime.SemanticInputBundleFromSources(
+		workflowID,
+		activePlan,
+		adaptSemanticRequestHistory(requests),
+		adaptSemanticProvenance(provenance),
+		adaptSemanticLearningQueue(learning),
+		convergence,
+	)
+}
+
 func (a *Agent) WorkflowProjection(ctx context.Context, workflowID string) (*archaeoprojections.WorkflowReadModel, error) {
 	if a == nil {
 		return nil, nil
@@ -825,6 +984,76 @@ func (a *Agent) archaeoBinding() archaeobindings.Runtime {
 		LearningBroker: a.LearningBroker,
 		DeferralPolicy: a.DeferralPolicy,
 	}
+}
+
+func workspaceIDFromTask(task *core.Task, state *core.Context) string {
+	if state != nil {
+		if value := strings.TrimSpace(state.GetString("workspace")); value != "" {
+			return value
+		}
+		if value := strings.TrimSpace(state.GetString("euclo.workspace")); value != "" {
+			return value
+		}
+	}
+	if task != nil && task.Context != nil {
+		if value := strings.TrimSpace(stringValue(task.Context["workspace"])); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func adaptSemanticRequestHistory(history *archaeoprojections.RequestHistoryProjection) *eucloruntime.SemanticRequestHistory {
+	if history == nil {
+		return nil
+	}
+	return &eucloruntime.SemanticRequestHistory{
+		Requests: append([]archaeodomain.RequestRecord(nil), history.Requests...),
+	}
+}
+
+func adaptSemanticProvenance(provenance *archaeoprojections.ProvenanceProjection) *eucloruntime.SemanticProvenance {
+	if provenance == nil {
+		return nil
+	}
+	out := &eucloruntime.SemanticProvenance{
+		ConvergenceRefs: append([]string(nil), provenance.ConvergenceRefs...),
+		DecisionRefs:    append([]string(nil), provenance.DecisionRefs...),
+	}
+	for _, request := range provenance.Requests {
+		out.Requests = append(out.Requests, eucloruntime.SemanticRequestProvenanceRef{RequestID: request.RequestID})
+	}
+	for _, learning := range provenance.Learning {
+		out.Learning = append(out.Learning, eucloruntime.SemanticLearningRef{InteractionID: learning.InteractionID})
+	}
+	for _, tension := range provenance.Tensions {
+		out.Tensions = append(out.Tensions, eucloruntime.SemanticTensionRef{
+			TensionID:  tension.TensionID,
+			PatternIDs: append([]string(nil), tension.PatternIDs...),
+			AnchorRefs: append([]string(nil), tension.AnchorRefs...),
+		})
+	}
+	for _, planVersion := range provenance.PlanVersions {
+		out.PlanVersions = append(out.PlanVersions, eucloruntime.SemanticPlanVersionRef{
+			PatternRefs:             append([]string(nil), planVersion.PatternRefs...),
+			TensionRefs:             append([]string(nil), planVersion.TensionRefs...),
+			FormationProvenanceRefs: append([]string(nil), planVersion.FormationProvenanceRefs...),
+			FormationResultRef:      planVersion.FormationResultRef,
+			SemanticSnapshotRef:     planVersion.SemanticSnapshotRef,
+		})
+	}
+	return out
+}
+
+func adaptSemanticLearningQueue(queue *archaeoprojections.LearningQueueProjection) *eucloruntime.SemanticLearningQueue {
+	if queue == nil {
+		return nil
+	}
+	out := &eucloruntime.SemanticLearningQueue{}
+	for _, interaction := range queue.PendingLearning {
+		out.PendingLearning = append(out.PendingLearning, eucloruntime.SemanticLearningRef{InteractionID: interaction.ID})
+	}
+	return out
 }
 
 func errorString(err error) string {
@@ -1008,17 +1237,61 @@ func seedPersistedInteractionState(task *core.Task, state *core.Context) {
 	}
 }
 
-func (a *Agent) runtimeState(task *core.Task, state *core.Context) (eucloruntime.TaskEnvelope, eucloruntime.TaskClassification, euclotypes.ModeResolution, euclotypes.ExecutionProfileSelection) {
+func (a *Agent) seedRuntimeState(state *core.Context, envelope eucloruntime.TaskEnvelope, classification eucloruntime.TaskClassification, mode euclotypes.ModeResolution, profile euclotypes.ExecutionProfileSelection, work eucloruntime.UnitOfWork) {
+	if state == nil {
+		return
+	}
+	state.Set("euclo.envelope", envelope)
+	state.Set("euclo.classification", classification)
+	state.Set("euclo.mode_resolution", mode)
+	state.Set("euclo.execution_profile_selection", profile)
+	state.Set("euclo.mode", mode.ModeID)
+	state.Set("euclo.execution_profile", profile.ProfileID)
+	state.Set("euclo.semantic_inputs", work.SemanticInputs)
+	state.Set("euclo.resolved_execution_policy", work.ResolvedPolicy)
+	state.Set("euclo.executor_descriptor", work.ExecutorDescriptor)
+	state.Set("euclo.unit_of_work", work)
+	state.Set("euclo.unit_of_work_id", work.ID)
+}
+
+func (a *Agent) ensureReactDelegate() error {
+	if a == nil {
+		return nil
+	}
+	if a.Delegate == nil {
+		env := a.Environment
+		if env.Registry == nil {
+			env.Registry = capability.NewRegistry()
+			a.Environment.Registry = env.Registry
+		}
+		a.Delegate = reactpkg.New(env)
+	}
+	if a.Delegate.Tools == nil {
+		a.Delegate.Tools = a.CapabilityRegistry()
+	}
+	if a.CheckpointPath != "" {
+		a.Delegate.CheckpointPath = a.CheckpointPath
+	}
+	if a.Config != nil {
+		return a.Delegate.Initialize(a.Config)
+	}
+	return nil
+}
+
+func (a *Agent) runtimeState(task *core.Task, state *core.Context) (eucloruntime.TaskEnvelope, eucloruntime.TaskClassification, euclotypes.ModeResolution, euclotypes.ExecutionProfileSelection, eucloruntime.UnitOfWork) {
 	envelope := eucloruntime.NormalizeTaskEnvelope(task, state, a.CapabilityRegistry())
 	classification := eucloruntime.ClassifyTask(envelope)
 	mode := eucloruntime.ResolveMode(envelope, classification, a.ModeRegistry)
 	profile := eucloruntime.SelectExecutionProfile(envelope, classification, mode, a.ProfileRegistry)
 	envelope.ResolvedMode = mode.ModeID
 	envelope.ExecutionProfile = profile.ProfileID
-	return envelope, classification, mode, profile
+	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), mode, profile)
+	semanticInputs := a.semanticInputBundle(task, state, mode)
+	work := eucloruntime.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, semanticInputs, skillPolicy, eucloruntime.WorkUnitExecutorDescriptor{})
+	return envelope, classification, mode, profile, work
 }
 
-func (a *Agent) eucloTask(task *core.Task, envelope eucloruntime.TaskEnvelope, classification eucloruntime.TaskClassification, mode euclotypes.ModeResolution, profile euclotypes.ExecutionProfileSelection) *core.Task {
+func (a *Agent) eucloTask(task *core.Task, envelope eucloruntime.TaskEnvelope, classification eucloruntime.TaskClassification, mode euclotypes.ModeResolution, profile euclotypes.ExecutionProfileSelection, work eucloruntime.UnitOfWork) *core.Task {
 	cloned := core.CloneTask(task)
 	if cloned == nil {
 		cloned = &core.Task{}
@@ -1031,6 +1304,7 @@ func (a *Agent) eucloTask(task *core.Task, envelope eucloruntime.TaskEnvelope, c
 	cloned.Context["euclo.execution_profile"] = profile.ProfileID
 	cloned.Context["euclo.envelope"] = envelope
 	cloned.Context["euclo.classification"] = eucloruntime.ClassificationContextPayload(classification)
+	cloned.Context["euclo.unit_of_work"] = eucloruntime.UnitOfWorkContextPayload(work)
 	return cloned
 }
 
@@ -1150,16 +1424,16 @@ func interactionMaxTransitions(task *core.Task) int {
 	return 5
 }
 
-func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, state *core.Context) {
+func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, state *core.Context) bool {
 	if state == nil {
-		return
+		return false
 	}
 	if raw, ok := state.Get("euclo.artifacts"); ok && raw != nil {
-		return
+		return false
 	}
 	surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory)
 	if surfaces.Workflow == nil {
-		return
+		return false
 	}
 	workflowID := state.GetString("euclo.workflow_id")
 	if workflowID == "" && task != nil && task.Context != nil {
@@ -1168,7 +1442,7 @@ func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, 
 		}
 	}
 	if workflowID == "" {
-		return
+		return false
 	}
 	runID := state.GetString("euclo.run_id")
 	if runID == "" && task != nil && task.Context != nil {
@@ -1178,10 +1452,75 @@ func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, 
 	}
 	artifacts, err := euclotypes.LoadPersistedArtifacts(ctx, surfaces.Workflow, workflowID, runID)
 	if err != nil || len(artifacts) == 0 {
-		return
+		return false
 	}
 	state.Set("euclo.artifacts", artifacts)
 	euclotypes.RestoreStateFromArtifacts(state, artifacts)
+	return true
+}
+
+func (a *Agent) restoreExecutionContinuity(ctx context.Context, task *core.Task, state *core.Context, envelope eucloruntime.TaskEnvelope, work eucloruntime.UnitOfWork) error {
+	if state == nil {
+		return nil
+	}
+	explicitRestore := eucloruntime.RestoreRequested(task, state)
+	if !explicitRestore && !shouldHydratePersistedArtifacts(task, state, envelope) {
+		return nil
+	}
+	hadCompiled := false
+	if _, ok := eucloruntime.CompiledExecutionFromState(state); ok {
+		hadCompiled = true
+	}
+	eucloruntime.MarkContextLifecycleRestoring(state, time.Now().UTC())
+	hydrated := a.hydratePersistedArtifacts(ctx, task, state)
+	compiled, ok := eucloruntime.CompiledExecutionFromState(state)
+	if !ok {
+		if explicitRestore || hydrated {
+			lifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
+			lifecycle = eucloruntime.BuildContextLifecycleState(work, lifecycle, eucloruntime.ExecutionStatusRestoreFailed, nil, time.Now().UTC())
+			state.Set("euclo.context_compaction", lifecycle)
+			return fmt.Errorf("euclo restore failed for workflow %s run %s", work.WorkflowID, work.RunID)
+		}
+		return nil
+	}
+	if !hadCompiled || explicitRestore || hydrated {
+		if restoredWork, ok := eucloruntime.ReconstructUnitOfWorkFromCompiledExecution(state); ok {
+			state.Set("euclo.unit_of_work", restoredWork)
+			state.Set("euclo.unit_of_work_id", restoredWork.ID)
+			work = restoredWork
+		}
+		artifactKinds := make([]string, 0)
+		if raw, ok := state.Get("euclo.artifacts"); ok && raw != nil {
+			if artifacts, ok := raw.([]euclotypes.Artifact); ok {
+				for _, artifact := range artifacts {
+					artifactKinds = append(artifactKinds, string(artifact.Kind))
+				}
+			}
+		}
+		lifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
+		if strings.TrimSpace(work.WorkflowID) == "" {
+			work.WorkflowID = strings.TrimSpace(compiled.WorkflowID)
+		}
+		if strings.TrimSpace(work.RunID) == "" {
+			work.RunID = strings.TrimSpace(compiled.RunID)
+		}
+		if strings.TrimSpace(work.ExecutionID) == "" {
+			work.ExecutionID = strings.TrimSpace(compiled.ExecutionID)
+		}
+		lifecycle = eucloruntime.BuildContextLifecycleState(work, lifecycle, eucloruntime.ExecutionStatusReady, artifactKinds, time.Now().UTC())
+		state.Set("euclo.context_compaction", lifecycle)
+	}
+	if compiled.WorkflowID != "" && compiled.RunID != "" {
+		restoreState, err := eucloruntime.RestoreProviderSnapshotState(ctx, a.workflowStore(), compiled.WorkflowID, compiled.RunID, state)
+		if err == nil {
+			if current, ok := eucloruntime.CompiledExecutionFromState(state); ok {
+				current.ProviderSnapshotRefs = append([]string(nil), restoreState.ProviderSnapshotRefs...)
+				current.ProviderSessionSnapshotRefs = append([]string(nil), restoreState.SessionSnapshotRefs...)
+				state.Set("euclo.compiled_execution", current)
+			}
+		}
+	}
+	return nil
 }
 
 func (a *Agent) persistArtifacts(ctx context.Context, task *core.Task, state *core.Context, artifacts []euclotypes.Artifact) error {
@@ -1197,6 +1536,149 @@ func (a *Agent) persistArtifacts(ctx context.Context, task *core.Task, state *co
 		return nil
 	}
 	return euclotypes.PersistWorkflowArtifacts(ctx, surfaces.Workflow, workflowID, runID, artifacts)
+}
+
+func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core.Task, state *core.Context, work eucloruntime.UnitOfWork, status eucloruntime.ExecutionStatus, execErr error) {
+	if state == nil {
+		return
+	}
+	issues := eucloruntime.BuildDeferredExecutionIssues(a.DeferralPlan, work, state, time.Now().UTC())
+	issues = eucloruntime.PersistDeferredExecutionIssuesToWorkspace(task, state, issues)
+	eucloruntime.SeedDeferredIssueState(state, issues)
+	work.DeferredIssueIDs = deferredIssueIDsFromState(state, work.DeferredIssueIDs)
+	work.ResultClass = eucloruntime.ResultClassForOutcome(status, work.DeferredIssueIDs, execErr)
+	status = eucloruntime.StatusForResultClass(status, work.ResultClass)
+	switch work.ResultClass {
+	case eucloruntime.ExecutionResultClassCompletedWithDeferrals:
+		work.Status = eucloruntime.UnitOfWorkStatusCompletedWithDeferrals
+	case eucloruntime.ExecutionResultClassCompleted:
+		work.Status = eucloruntime.UnitOfWorkStatusCompleted
+	case eucloruntime.ExecutionResultClassBlocked:
+		work.Status = eucloruntime.UnitOfWorkStatusBlocked
+	case eucloruntime.ExecutionResultClassCanceled:
+		work.Status = eucloruntime.UnitOfWorkStatusCanceled
+	default:
+		work.Status = eucloruntime.UnitOfWorkStatusFailed
+	}
+	work.UpdatedAt = time.Now().UTC()
+	state.Set("euclo.unit_of_work", work)
+	statusRecord := eucloruntime.BuildRuntimeExecutionStatus(work, status, work.ResultClass, work.UpdatedAt)
+	eucloruntime.SeedCompiledExecutionState(state, work, statusRecord)
+	if work.WorkflowID != "" && work.RunID != "" {
+		taskID := ""
+		if task != nil {
+			taskID = task.ID
+		}
+		restoreState, restoreErr := eucloruntime.PersistProviderSnapshotState(ctx, a.workflowStore(), work.WorkflowID, work.RunID, state, taskID)
+		if restoreErr != nil {
+			state.Set("euclo.provider_restore_error", restoreErr.Error())
+		} else if current, ok := eucloruntime.CompiledExecutionFromState(state); ok {
+			current.ProviderSnapshotRefs = append([]string(nil), restoreState.ProviderSnapshotRefs...)
+			current.ProviderSessionSnapshotRefs = append([]string(nil), restoreState.SessionSnapshotRefs...)
+			state.Set("euclo.compiled_execution", current)
+		}
+	}
+	priorLifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
+	artifactKinds := collectArtifactKindsFromState(state)
+	state.Set("euclo.context_compaction", eucloruntime.BuildContextLifecycleState(work, priorLifecycle, status, artifactKinds, work.UpdatedAt))
+	artifacts := euclotypes.CollectArtifactsFromState(state)
+	actionLog := eucloruntime.BuildActionLog(state, artifacts)
+	proofSurface := eucloruntime.BuildProofSurface(state, artifacts)
+	state.Set("euclo.action_log", actionLog)
+	state.Set("euclo.proof_surface", proofSurface)
+	eucloruntime.EmitObservabilityTelemetry(a.ConfigTelemetry(), task, actionLog, proofSurface)
+	artifacts = euclotypes.CollectArtifactsFromState(state)
+	report := euclotypes.AssembleFinalReport(artifacts)
+	state.Set("pipeline.final_output", report)
+	artifacts = euclotypes.CollectArtifactsFromState(state)
+	state.Set("euclo.artifacts", artifacts)
+	if persistErr := a.persistArtifacts(ctx, task, state, artifacts); persistErr != nil {
+		state.Set("euclo.runtime_persist_error", persistErr.Error())
+	}
+}
+
+func collectArtifactKindsFromState(state *core.Context) []string {
+	if state == nil {
+		return nil
+	}
+	raw, ok := state.Get("euclo.artifacts")
+	if !ok || raw == nil {
+		return nil
+	}
+	artifacts, ok := raw.([]euclotypes.Artifact)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		out = append(out, string(artifact.Kind))
+	}
+	return out
+}
+
+func (a *Agent) applyRuntimeResultMetadata(result *core.Result, state *core.Context) {
+	if result == nil || state == nil {
+		return
+	}
+	if result.Metadata == nil {
+		result.Metadata = map[string]any{}
+	}
+	if result.Data == nil {
+		result.Data = map[string]any{}
+	}
+	if raw, ok := state.Get("euclo.execution_status"); ok && raw != nil {
+		result.Metadata["execution_status"] = raw
+	}
+	if raw, ok := state.Get("euclo.compiled_execution"); ok && raw != nil {
+		result.Metadata["compiled_execution"] = raw
+	}
+	if raw, ok := state.Get("euclo.context_compaction"); ok && raw != nil {
+		result.Metadata["context_compaction"] = raw
+	}
+	if raw, ok := state.Get("euclo.deferred_issue_ids"); ok && raw != nil {
+		result.Metadata["deferred_issue_ids"] = raw
+	}
+	if raw, ok := state.Get("pipeline.final_output"); ok && raw != nil {
+		result.Data["final_output"] = raw
+		if payload, ok := raw.(map[string]any); ok {
+			if value := strings.TrimSpace(fmt.Sprint(payload["result_class"])); value != "" && value != "<nil>" {
+				result.Metadata["result_class"] = value
+			}
+		}
+	}
+}
+
+func deferredIssueIDsFromState(state *core.Context, existing []string) []string {
+	out := append([]string(nil), existing...)
+	if state == nil {
+		return out
+	}
+	if raw, ok := state.Get("euclo.deferred_issue_ids"); ok && raw != nil {
+		switch typed := raw.(type) {
+		case []string:
+			out = append(out, typed...)
+		case []any:
+			for _, item := range typed {
+				if value := strings.TrimSpace(fmt.Sprint(item)); value != "" && value != "<nil>" {
+					out = append(out, value)
+				}
+			}
+		}
+	}
+	seen := make(map[string]struct{}, len(out))
+	deduped := make([]string, 0, len(out))
+	for _, id := range out {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		deduped = append(deduped, id)
+	}
+	return deduped
 }
 
 func (a *Agent) ConfigTelemetry() core.Telemetry {

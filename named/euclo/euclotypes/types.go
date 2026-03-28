@@ -342,6 +342,42 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 				report["regression_analysis"] = artifact.Payload
 			case ArtifactKindCompiledExecution:
 				report["compiled_execution"] = artifact.Payload
+				switch typed := artifact.Payload.(type) {
+				case map[string]any:
+					if raw, ok := typed["semantic_inputs"]; ok {
+						report["semantic_inputs"] = raw
+					}
+					if raw, ok := typed["resolved_execution_policy"]; ok {
+						report["resolved_execution_policy"] = raw
+					}
+					if raw, ok := typed["executor_descriptor"]; ok {
+						report["executor_descriptor"] = raw
+					}
+					if raw, ok := typed["provider_snapshot_refs"]; ok {
+						report["provider_snapshot_refs"] = raw
+					}
+					if raw, ok := typed["provider_session_snapshot_refs"]; ok {
+						report["provider_session_snapshot_refs"] = raw
+					}
+				default:
+					if blob, ok := normalizeRuntimeCompiledExecution(typed); ok {
+						if raw, ok := blob["semantic_inputs"]; ok {
+							report["semantic_inputs"] = raw
+						}
+						if raw, ok := blob["resolved_execution_policy"]; ok {
+							report["resolved_execution_policy"] = raw
+						}
+						if raw, ok := blob["executor_descriptor"]; ok {
+							report["executor_descriptor"] = raw
+						}
+						if raw, ok := blob["provider_snapshot_refs"]; ok {
+							report["provider_snapshot_refs"] = raw
+						}
+						if raw, ok := blob["provider_session_snapshot_refs"]; ok {
+							report["provider_session_snapshot_refs"] = raw
+						}
+					}
+				}
 			case ArtifactKindExecutionStatus:
 				report["execution_status"] = artifact.Payload
 			case ArtifactKindDeferredExecutionIssues:
@@ -359,6 +395,12 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 			}
 		}
 	}
+	if resultClass := executionResultClassFromReport(report); resultClass != "" {
+		report["result_class"] = resultClass
+	}
+	if deferredRefs := deferredIssueIDsFromReport(report); len(deferredRefs) > 0 {
+		report["deferred_issue_ids"] = deferredRefs
+	}
 	summaries := make([]map[string]any, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		summaries = append(summaries, map[string]any{
@@ -368,6 +410,53 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 	}
 	report["artifact_summaries"] = summaries
 	return report
+}
+
+func executionResultClassFromReport(report map[string]any) string {
+	for _, key := range []string{"execution_status", "compiled_execution"} {
+		payload := payloadMap(report[key])
+		if payload == nil {
+			continue
+		}
+		if value := strings.TrimSpace(fmt.Sprint(payload["result_class"])); value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
+}
+
+func deferredIssueIDsFromReport(report map[string]any) []string {
+	for _, key := range []string{"execution_status", "compiled_execution"} {
+		payload := payloadMap(report[key])
+		if payload == nil {
+			continue
+		}
+		if values := stringSlice(payload["deferred_issue_ids"]); len(values) > 0 {
+			return values
+		}
+	}
+	if values := stringSlice(report["deferred_execution_issues"]); len(values) > 0 {
+		return values
+	}
+	if payload := payloadMap(report["deferred_execution_issues"]); payload != nil {
+		if values := stringSlice(payload["deferred_issue_ids"]); len(values) > 0 {
+			return values
+		}
+	}
+	if raw, ok := report["deferred_execution_issues"].([]any); ok {
+		out := make([]string, 0, len(raw))
+		for _, item := range raw {
+			if payload := payloadMap(item); payload != nil {
+				if id := strings.TrimSpace(fmt.Sprint(payload["issue_id"])); id != "" && id != "<nil>" {
+					out = append(out, id)
+				}
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return nil
 }
 
 // ValidateArtifactProvenance checks that all "produced" artifacts have a
@@ -946,6 +1035,62 @@ func normalizeEditIntent(raw any) (any, map[string]any) {
 		}
 	}
 	return payload, metadata
+}
+
+func payloadMap(raw any) map[string]any {
+	if raw == nil {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case map[string]any:
+		return typed
+	case map[string]string:
+		out := make(map[string]any, len(typed))
+		for key, value := range typed {
+			out[key] = value
+		}
+		return out
+	default:
+		blob, err := json.Marshal(raw)
+		if err != nil {
+			return nil
+		}
+		var out map[string]any
+		if err := json.Unmarshal(blob, &out); err != nil {
+			return nil
+		}
+		return out
+	}
+}
+
+func normalizeRuntimeCompiledExecution(raw any) (map[string]any, bool) {
+	value := payloadMap(raw)
+	if len(value) == 0 {
+		return nil, false
+	}
+	if value["workflow_id"] == nil && value["execution_id"] == nil && value["unit_of_work_id"] == nil {
+		return nil, false
+	}
+	return value, true
+}
+
+func stringSlice(raw any) []string {
+	switch typed := raw.(type) {
+	case []string:
+		return append([]string(nil), typed...)
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			value := strings.TrimSpace(fmt.Sprint(item))
+			if value == "" || value == "<nil>" {
+				continue
+			}
+			out = append(out, value)
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func artifactSummary(raw any) string {

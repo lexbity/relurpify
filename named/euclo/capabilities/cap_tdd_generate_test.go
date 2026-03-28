@@ -54,7 +54,7 @@ func TestTDDGenerateIneligibleWithoutVerificationTools(t *testing.T) {
 	require.Contains(t, result.Reason, "verification tools")
 }
 
-func TestTDDGenerateExecuteHTNToPipelineToReActFlow(t *testing.T) {
+func TestTDDGenerateExecuteProducesPlanEditAndVerificationArtifacts(t *testing.T) {
 	env := testEnv(t)
 	cap := &tddGenerateCapability{env: env}
 	state := core.NewContext()

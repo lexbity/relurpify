@@ -9,6 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/gate"
 	"github.com/lexcodex/relurpify/named/euclo/orchestrate"
+	"github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -177,6 +178,84 @@ func TestRecoveryParadigmSwitchNoSuggestedParadigm(t *testing.T) {
 	assert.Equal(t, euclotypes.ExecutionStatusFailed, recovered.Status)
 	assert.Len(t, stack.Attempts, 1)
 	assert.False(t, stack.Attempts[0].Success)
+}
+
+func TestRecoveryControllerUsesFallbackChainsAndPreferredProfiles(t *testing.T) {
+	reg := capabilities.NewEucloCapabilityRegistry()
+	require.NoError(t, reg.Register(&stubProfileCapability{
+		id:       "euclo:first_fallback",
+		profiles: []string{"edit_verify_repair"},
+		eligible: false,
+	}))
+	second := &stubProfileCapability{
+		id:       "euclo:second_fallback",
+		profiles: []string{"edit_verify_repair"},
+		eligible: true,
+		executeResult: euclotypes.ExecutionResult{
+			Status:  euclotypes.ExecutionStatusCompleted,
+			Summary: "second fallback succeeded",
+		},
+	}
+	require.NoError(t, reg.Register(second))
+	preferredProfileCap := &stubProfileCapability{
+		id:       "euclo:preferred_profile_cap",
+		profiles: []string{"plan_stage_execute"},
+		eligible: true,
+		executeResult: euclotypes.ExecutionResult{
+			Status:  euclotypes.ExecutionStatusCompleted,
+			Summary: "preferred profile succeeded",
+		},
+	}
+	require.NoError(t, reg.Register(preferredProfileCap))
+
+	profiles := euclotypes.NewExecutionProfileRegistry()
+	require.NoError(t, profiles.Register(euclotypes.ExecutionProfileDescriptor{
+		ProfileID:            "custom_primary",
+		SupportedModes:       []string{"code"},
+		PhaseRoutes:          map[string]string{"explore": "react"},
+		FallbackProfiles:     []string{"reproduce_localize_patch", "plan_stage_execute"},
+		VerificationRequired: true,
+	}))
+	require.NoError(t, profiles.Register(euclotypes.ExecutionProfileDescriptor{
+		ProfileID:      "plan_stage_execute",
+		SupportedModes: []string{"code"},
+		PhaseRoutes:    map[string]string{"plan": "planner"},
+	}))
+	require.NoError(t, profiles.Register(euclotypes.ExecutionProfileDescriptor{
+		ProfileID:      "reproduce_localize_patch",
+		SupportedModes: []string{"code"},
+		PhaseRoutes:    map[string]string{"reproduce": "react"},
+	}))
+
+	env := testEnv(t)
+	require.NoError(t, env.Registry.Register(profileReadTool{}))
+	require.NoError(t, env.Registry.Register(testutil.FileWriteTool{}))
+	require.NoError(t, env.Registry.Register(profileTestRunnerTool{}))
+	rc := orchestrate.NewRecoveryController(orchestrate.AdaptCapabilityRegistry(reg), profiles, euclotypes.DefaultModeRegistry(), env)
+
+	state := core.NewContext()
+	state.Set("euclo.artifacts", []euclotypes.Artifact{{Kind: euclotypes.ArtifactKindIntake, Payload: map[string]any{"instruction": "debug this"}}})
+	envelope := testEnvelope(state)
+	envelope.Registry = env.Registry
+	envelope.Memory = env.Memory
+	envelope.Environment = env
+
+	fallbackRecovered := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+		Strategy:            euclotypes.RecoveryStrategyCapabilityFallback,
+		SuggestedCapability: "euclo:first_fallback",
+		Context:             map[string]any{"fallback_capabilities": []string{"euclo:first_fallback", "euclo:second_fallback"}},
+	}, euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}, envelope, orchestrate.NewRecoveryStack())
+	require.Equal(t, euclotypes.ExecutionStatusCompleted, fallbackRecovered.Status)
+	require.True(t, second.executeCalled)
+
+	profileEnvelope := envelope
+	profileEnvelope.Profile = euclotypes.ExecutionProfileSelection{ProfileID: "custom_primary"}
+	profileRecovered := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+		Strategy: euclotypes.RecoveryStrategyProfileEscalation,
+		Context:  map[string]any{"preferred_profile": "plan_stage_execute"},
+	}, euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}, profileEnvelope, orchestrate.NewRecoveryStack())
+	require.Equal(t, euclotypes.ExecutionStatusCompleted, profileRecovered.Status)
+	require.True(t, preferredProfileCap.executeCalled)
 }
 
 func TestRecoveryParadigmSwitchCapabilityNotFound(t *testing.T) {

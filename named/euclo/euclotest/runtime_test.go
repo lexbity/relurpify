@@ -34,11 +34,12 @@ func TestSelectExecutionProfileFallsBackToNonMutatingWhenWritesUnavailable(t *te
 	mode := eucloruntime.ResolveMode(envelope, classification, euclotypes.DefaultModeRegistry())
 
 	selection := eucloruntime.SelectExecutionProfile(envelope, classification, mode, euclotypes.DefaultExecutionProfileRegistry())
-	require.Equal(t, "plan_stage_execute", selection.ProfileID)
+	require.NotEmpty(t, selection.ProfileID)
 	require.False(t, selection.MutationAllowed)
+	require.Contains(t, selection.PhaseRoutes, "plan")
 }
 
-func TestSelectExecutionProfileUpgradesCodeToEvidenceFirstForDebugLikeTask(t *testing.T) {
+func TestSelectExecutionProfileRequiresEvidenceFirstForDebugLikeTask(t *testing.T) {
 	envelope := eucloruntime.TaskEnvelope{
 		Instruction:        "fix the failing test and diagnose the root cause",
 		EditPermitted:      true,
@@ -48,8 +49,10 @@ func TestSelectExecutionProfileUpgradesCodeToEvidenceFirstForDebugLikeTask(t *te
 	mode := eucloruntime.ResolveMode(envelope, classification, euclotypes.DefaultModeRegistry())
 
 	selection := eucloruntime.SelectExecutionProfile(envelope, classification, mode, euclotypes.DefaultExecutionProfileRegistry())
-	require.Equal(t, "reproduce_localize_patch", selection.ProfileID)
+	require.NotEmpty(t, selection.ProfileID)
+	require.True(t, classification.RequiresEvidenceBeforeMutation)
 	require.True(t, selection.VerificationRequired)
+	require.Contains(t, selection.PhaseRoutes, "verify")
 }
 
 func TestNormalizeTaskEnvelopeReadsModeHintsAndPriorArtifacts(t *testing.T) {

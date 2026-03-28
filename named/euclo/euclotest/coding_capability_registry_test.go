@@ -170,5 +170,48 @@ func TestRegistryLookupTrimsWhitespace(t *testing.T) {
 	require.Equal(t, "euclo:trimmed", found.Descriptor().ID)
 }
 
+func TestDefaultCapabilityRegistryRegistersCoreCapabilities(t *testing.T) {
+	env := testEnv(t)
+	reg := capabilities.NewDefaultCapabilityRegistry(env)
+	ids := capabilityIDs(reg.List())
+
+	require.Contains(t, ids, "euclo:edit_verify_repair")
+	require.Contains(t, ids, "euclo:debug.investigate_regression")
+	require.Contains(t, ids, "euclo:design.alternatives")
+	require.Contains(t, ids, "euclo:trace.analyze")
+	require.Contains(t, ids, "euclo:review.findings")
+	require.Contains(t, ids, "euclo:refactor.api_compatible")
+	require.Contains(t, ids, "euclo:artifact.diff_summary")
+	require.Contains(t, ids, "euclo:migration.execute")
+
+	unique := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		unique[id] = struct{}{}
+	}
+	require.Len(t, unique, len(ids))
+	require.GreaterOrEqual(t, len(ids), 18)
+}
+
+func TestDefaultCapabilityRegistryRoutesCapabilitiesByProfile(t *testing.T) {
+	env := testEnv(t)
+	reg := capabilities.NewDefaultCapabilityRegistry(env)
+
+	planStage := capabilityIDs(reg.ForProfile("plan_stage_execute"))
+	require.Contains(t, planStage, "euclo:design.alternatives")
+	require.Contains(t, planStage, "euclo:execution_profile.select")
+	require.Contains(t, planStage, "euclo:refactor.api_compatible")
+	require.Contains(t, planStage, "euclo:migration.execute")
+
+	debugProfile := capabilityIDs(reg.ForProfile("reproduce_localize_patch"))
+	require.Contains(t, debugProfile, "euclo:debug.investigate_regression")
+	require.Contains(t, debugProfile, "euclo:artifact.trace_to_root_cause")
+	require.Contains(t, debugProfile, "euclo:artifact.verification_summary")
+
+	reviewProfile := capabilityIDs(reg.ForProfile("review_suggest_implement"))
+	require.Contains(t, reviewProfile, "euclo:review.findings")
+	require.Contains(t, reviewProfile, "euclo:review.compatibility")
+	require.Contains(t, reviewProfile, "euclo:review.implement_if_safe")
+}
+
 // Ensure stubCodingCapability.Execute is used (avoid unused warning).
 var _ = (&stubCodingCapability{}).Execute(context.Background(), euclotypes.ExecutionEnvelope{})

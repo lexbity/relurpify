@@ -3,6 +3,7 @@ package runtime
 import (
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
@@ -34,6 +35,357 @@ type TaskClassification struct {
 	Scope                          string   `json:"scope,omitempty"`
 	RiskLevel                      string   `json:"risk_level,omitempty"`
 	ReasonCodes                    []string `json:"reason_codes,omitempty"`
+}
+
+// ExecutionResultClass is Euclo's top-level runtime classification for a work
+// unit or run. It is intentionally separate from euclotypes.ExecutionStatus,
+// which remains the capability-level outcome type.
+type ExecutionResultClass string
+
+const (
+	ExecutionResultClassCompleted              ExecutionResultClass = "completed"
+	ExecutionResultClassCompletedWithDeferrals ExecutionResultClass = "completed_with_deferrals"
+	ExecutionResultClassBlocked                ExecutionResultClass = "blocked"
+	ExecutionResultClassFailed                 ExecutionResultClass = "failed"
+	ExecutionResultClassCanceled               ExecutionResultClass = "canceled"
+	ExecutionResultClassRestoreFailed          ExecutionResultClass = "restore_failed"
+)
+
+// ExecutionStatus is Euclo's runtime execution-state type. It models the
+// current lifecycle of a work unit rather than a single capability outcome.
+type ExecutionStatus string
+
+const (
+	ExecutionStatusPreparing              ExecutionStatus = "preparing"
+	ExecutionStatusReady                  ExecutionStatus = "ready"
+	ExecutionStatusExecuting              ExecutionStatus = "executing"
+	ExecutionStatusVerifying              ExecutionStatus = "verifying"
+	ExecutionStatusSurfacing              ExecutionStatus = "surfacing"
+	ExecutionStatusCompacted              ExecutionStatus = "compacted"
+	ExecutionStatusRestoring              ExecutionStatus = "restoring"
+	ExecutionStatusCompleted              ExecutionStatus = "completed"
+	ExecutionStatusCompletedWithDeferrals ExecutionStatus = "completed_with_deferrals"
+	ExecutionStatusBlocked                ExecutionStatus = "blocked"
+	ExecutionStatusFailed                 ExecutionStatus = "failed"
+	ExecutionStatusCanceled               ExecutionStatus = "canceled"
+	ExecutionStatusRestoreFailed          ExecutionStatus = "restore_failed"
+)
+
+type DeferredIssueKind string
+
+const (
+	DeferredIssueAmbiguity           DeferredIssueKind = "ambiguity"
+	DeferredIssueStaleAssumption     DeferredIssueKind = "stale_assumption"
+	DeferredIssuePatternTension      DeferredIssueKind = "pattern_tension"
+	DeferredIssueNonfatalFailure     DeferredIssueKind = "nonfatal_failure"
+	DeferredIssueVerificationConcern DeferredIssueKind = "verification_concern"
+	DeferredIssueProviderConstraint  DeferredIssueKind = "provider_constraint"
+)
+
+type DeferredIssueSeverity string
+
+const (
+	DeferredIssueSeverityLow      DeferredIssueSeverity = "low"
+	DeferredIssueSeverityMedium   DeferredIssueSeverity = "medium"
+	DeferredIssueSeverityHigh     DeferredIssueSeverity = "high"
+	DeferredIssueSeverityCritical DeferredIssueSeverity = "critical"
+)
+
+type DeferredIssueStatus string
+
+const (
+	DeferredIssueStatusOpen                 DeferredIssueStatus = "open"
+	DeferredIssueStatusAcknowledged         DeferredIssueStatus = "acknowledged"
+	DeferredIssueStatusResolved             DeferredIssueStatus = "resolved"
+	DeferredIssueStatusIgnored              DeferredIssueStatus = "ignored"
+	DeferredIssueStatusSuperseded           DeferredIssueStatus = "superseded"
+	DeferredIssueStatusReenteredArchaeology DeferredIssueStatus = "reentered_archaeology"
+)
+
+type UnitOfWorkStatus string
+
+const (
+	UnitOfWorkStatusAssembling             UnitOfWorkStatus = "assembling"
+	UnitOfWorkStatusReady                  UnitOfWorkStatus = "ready"
+	UnitOfWorkStatusExecuting              UnitOfWorkStatus = "executing"
+	UnitOfWorkStatusVerifying              UnitOfWorkStatus = "verifying"
+	UnitOfWorkStatusCompacted              UnitOfWorkStatus = "compacted"
+	UnitOfWorkStatusRestoring              UnitOfWorkStatus = "restoring"
+	UnitOfWorkStatusCompleted              UnitOfWorkStatus = "completed"
+	UnitOfWorkStatusCompletedWithDeferrals UnitOfWorkStatus = "completed_with_deferrals"
+	UnitOfWorkStatusBlocked                UnitOfWorkStatus = "blocked"
+	UnitOfWorkStatusFailed                 UnitOfWorkStatus = "failed"
+	UnitOfWorkStatusCanceled               UnitOfWorkStatus = "canceled"
+)
+
+type ContextLifecycleStage string
+
+const (
+	ContextLifecycleStageActive        ContextLifecycleStage = "active"
+	ContextLifecycleStageCompacted     ContextLifecycleStage = "compacted"
+	ContextLifecycleStageRestoring     ContextLifecycleStage = "restoring"
+	ContextLifecycleStageRestored      ContextLifecycleStage = "restored"
+	ContextLifecycleStageRestoreFailed ContextLifecycleStage = "restore_failed"
+)
+
+type ExecutorFamily string
+
+const (
+	ExecutorFamilyReact      ExecutorFamily = "react_executor"
+	ExecutorFamilyPlanner    ExecutorFamily = "planner_executor"
+	ExecutorFamilyHTN        ExecutorFamily = "htn_executor"
+	ExecutorFamilyRewoo      ExecutorFamily = "rewoo_executor"
+	ExecutorFamilyReflection ExecutorFamily = "reflection_executor"
+)
+
+type SemanticRequestRef struct {
+	RequestID string `json:"request_id,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Title     string `json:"title,omitempty"`
+}
+
+type SemanticInputBundle struct {
+	WorkflowID              string               `json:"workflow_id,omitempty"`
+	ExplorationID           string               `json:"exploration_id,omitempty"`
+	BasedOnRevision         string               `json:"based_on_revision,omitempty"`
+	PendingRequests         []SemanticRequestRef `json:"pending_requests,omitempty"`
+	CompletedRequests       []SemanticRequestRef `json:"completed_requests,omitempty"`
+	PatternRefs             []string             `json:"pattern_refs,omitempty"`
+	TensionRefs             []string             `json:"tension_refs,omitempty"`
+	ProspectiveRefs         []string             `json:"prospective_refs,omitempty"`
+	ConvergenceRefs         []string             `json:"convergence_refs,omitempty"`
+	LearningInteractionRefs []string             `json:"learning_interaction_refs,omitempty"`
+	RequestProvenanceRefs   []string             `json:"request_provenance_refs,omitempty"`
+	ProvenanceRefs          []string             `json:"provenance_refs,omitempty"`
+	Source                  string               `json:"source,omitempty"`
+}
+
+type ContextPolicySummary struct {
+	MaxTokens           int      `json:"max_tokens,omitempty"`
+	CompressionStrategy string   `json:"compression_strategy,omitempty"`
+	ProgressiveLoading  bool     `json:"progressive_loading"`
+	PreferredDetail     string   `json:"preferred_detail,omitempty"`
+	ProtectPatterns     []string `json:"protect_patterns,omitempty"`
+}
+
+type ResolvedExecutionPolicy struct {
+	ModeID                          string                        `json:"mode_id,omitempty"`
+	ProfileID                       string                        `json:"profile_id,omitempty"`
+	PhaseCapabilityConstraints      map[string][]string           `json:"phase_capability_constraints,omitempty"`
+	PreferredPlanningCapabilities   []string                      `json:"preferred_planning_capabilities,omitempty"`
+	PreferredVerifyCapabilities     []string                      `json:"preferred_verify_capabilities,omitempty"`
+	RecoveryProbeCapabilities       []string                      `json:"recovery_probe_capabilities,omitempty"`
+	VerificationSuccessCapabilities []string                      `json:"verification_success_capabilities,omitempty"`
+	PlanningStepTemplates           []core.SkillStepTemplate      `json:"planning_step_templates,omitempty"`
+	RequireVerificationStep         bool                          `json:"require_verification_step"`
+	ReviewCriteria                  []string                      `json:"review_criteria,omitempty"`
+	ReviewFocusTags                 []string                      `json:"review_focus_tags,omitempty"`
+	ReviewApprovalRules             core.AgentReviewApprovalRules `json:"review_approval_rules,omitempty"`
+	ContextPolicy                   ContextPolicySummary          `json:"context_policy,omitempty"`
+	ResolvedFromSkillPolicy         bool                          `json:"resolved_from_skill_policy"`
+}
+
+type WorkUnitExecutorDescriptor struct {
+	ExecutorID    string         `json:"executor_id,omitempty"`
+	Family        ExecutorFamily `json:"family,omitempty"`
+	Reason        string         `json:"reason,omitempty"`
+	Compatibility bool           `json:"compatibility"`
+}
+
+type UnitOfWork struct {
+	ID          string `json:"id,omitempty"`
+	WorkflowID  string `json:"workflow_id,omitempty"`
+	RunID       string `json:"run_id,omitempty"`
+	ExecutionID string `json:"execution_id,omitempty"`
+
+	ModeID            string `json:"mode_id,omitempty"`
+	ObjectiveKind     string `json:"objective_kind,omitempty"`
+	BehaviorFamily    string `json:"behavior_family,omitempty"`
+	ContextStrategyID string `json:"context_strategy_id,omitempty"`
+
+	VerificationPolicyID string `json:"verification_policy_id,omitempty"`
+	DeferralPolicyID     string `json:"deferral_policy_id,omitempty"`
+	CheckpointPolicyID   string `json:"checkpoint_policy_id,omitempty"`
+
+	SemanticInputs     SemanticInputBundle           `json:"semantic_inputs,omitempty"`
+	ResolvedPolicy     ResolvedExecutionPolicy       `json:"resolved_execution_policy,omitempty"`
+	ExecutorDescriptor WorkUnitExecutorDescriptor    `json:"executor_descriptor,omitempty"`
+	PlanBinding        *UnitOfWorkPlanBinding        `json:"plan_binding,omitempty"`
+	ContextBundle      UnitOfWorkContextBundle       `json:"context_bundle,omitempty"`
+	RoutineBindings    []UnitOfWorkRoutineBinding    `json:"routine_bindings,omitempty"`
+	SkillBindings      []UnitOfWorkSkillBinding      `json:"skill_bindings,omitempty"`
+	ToolBindings       []UnitOfWorkToolBinding       `json:"tool_bindings,omitempty"`
+	CapabilityBindings []UnitOfWorkCapabilityBinding `json:"capability_bindings,omitempty"`
+
+	Status           UnitOfWorkStatus     `json:"status,omitempty"`
+	ResultClass      ExecutionResultClass `json:"result_class,omitempty"`
+	DeferredIssueIDs []string             `json:"deferred_issue_ids,omitempty"`
+	CreatedAt        time.Time            `json:"created_at,omitempty"`
+	UpdatedAt        time.Time            `json:"updated_at,omitempty"`
+}
+
+type ContextLifecycleState struct {
+	WorkflowID         string                `json:"workflow_id,omitempty"`
+	RunID              string                `json:"run_id,omitempty"`
+	ExecutionID        string                `json:"execution_id,omitempty"`
+	UnitOfWorkID       string                `json:"unit_of_work_id,omitempty"`
+	Stage              ContextLifecycleStage `json:"stage,omitempty"`
+	CompactionEligible bool                  `json:"compaction_eligible"`
+	RestoreRequired    bool                  `json:"restore_required"`
+	CompactionCount    int                   `json:"compaction_count,omitempty"`
+	RestoreCount       int                   `json:"restore_count,omitempty"`
+	LastCompactedAt    time.Time             `json:"last_compacted_at,omitempty"`
+	LastRestoredAt     time.Time             `json:"last_restored_at,omitempty"`
+	LastRestoreStatus  string                `json:"last_restore_status,omitempty"`
+	RestoreSource      string                `json:"restore_source,omitempty"`
+	Summary            string                `json:"summary,omitempty"`
+	ActivePlanID       string                `json:"active_plan_id,omitempty"`
+	ActivePlanVersion  int                   `json:"active_plan_version,omitempty"`
+	DeferredIssueIDs   []string              `json:"deferred_issue_ids,omitempty"`
+	PreservedArtifacts []string              `json:"preserved_artifact_kinds,omitempty"`
+}
+
+type UnitOfWorkPlanBinding struct {
+	WorkflowID    string              `json:"workflow_id,omitempty"`
+	PlanID        string              `json:"plan_id,omitempty"`
+	PlanVersion   int                 `json:"plan_version,omitempty"`
+	ActiveStepID  string              `json:"active_step_id,omitempty"`
+	StepIDs       []string            `json:"step_ids,omitempty"`
+	IsPlanBacked  bool                `json:"is_plan_backed"`
+	IsLongRunning bool                `json:"is_long_running"`
+	ArchaeoRefs   map[string][]string `json:"archaeo_refs,omitempty"`
+}
+
+type UnitOfWorkContextSource struct {
+	Kind    string `json:"kind,omitempty"`
+	Ref     string `json:"ref,omitempty"`
+	Summary string `json:"summary,omitempty"`
+}
+
+type UnitOfWorkContextBundle struct {
+	Sources            []UnitOfWorkContextSource `json:"sources,omitempty"`
+	WorkspacePaths     []string                  `json:"workspace_paths,omitempty"`
+	RetrievalRefs      []string                  `json:"retrieval_refs,omitempty"`
+	ArtifactKinds      []string                  `json:"artifact_kinds,omitempty"`
+	PatternRefs        []string                  `json:"pattern_refs,omitempty"`
+	TensionRefs        []string                  `json:"tension_refs,omitempty"`
+	ProvenanceRefs     []string                  `json:"provenance_refs,omitempty"`
+	LearningRefs       []string                  `json:"learning_refs,omitempty"`
+	ContextBudgetClass string                    `json:"context_budget_class,omitempty"`
+	CompactionEligible bool                      `json:"compaction_eligible"`
+	RestoreRequired    bool                      `json:"restore_required"`
+}
+
+type UnitOfWorkRoutineBinding struct {
+	RoutineID string `json:"routine_id,omitempty"`
+	Family    string `json:"family,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Priority  int    `json:"priority,omitempty"`
+	Required  bool   `json:"required"`
+}
+
+type UnitOfWorkSkillBinding struct {
+	SkillID  string `json:"skill_id,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+	Required bool   `json:"required"`
+}
+
+type UnitOfWorkToolBinding struct {
+	ToolID  string `json:"tool_id,omitempty"`
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+type UnitOfWorkCapabilityBinding struct {
+	CapabilityID string `json:"capability_id,omitempty"`
+	Family       string `json:"family,omitempty"`
+	Required     bool   `json:"required"`
+}
+
+type CompiledExecution struct {
+	WorkflowID     string    `json:"workflow_id,omitempty"`
+	RunID          string    `json:"run_id,omitempty"`
+	ExecutionID    string    `json:"execution_id,omitempty"`
+	UnitOfWorkID   string    `json:"unit_of_work_id,omitempty"`
+	CompiledAt     time.Time `json:"compiled_at,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at,omitempty"`
+	ModeID         string    `json:"mode_id,omitempty"`
+	ObjectiveKind  string    `json:"objective_kind,omitempty"`
+	BehaviorFamily string    `json:"behavior_family,omitempty"`
+
+	ContextStrategyID    string `json:"context_strategy_id,omitempty"`
+	VerificationPolicyID string `json:"verification_policy_id,omitempty"`
+	DeferralPolicyID     string `json:"deferral_policy_id,omitempty"`
+	CheckpointPolicyID   string `json:"checkpoint_policy_id,omitempty"`
+
+	SemanticInputs     SemanticInputBundle           `json:"semantic_inputs,omitempty"`
+	ResolvedPolicy     ResolvedExecutionPolicy       `json:"resolved_execution_policy,omitempty"`
+	ExecutorDescriptor WorkUnitExecutorDescriptor    `json:"executor_descriptor,omitempty"`
+	PlanBinding        *UnitOfWorkPlanBinding        `json:"plan_binding,omitempty"`
+	ContextBundle      UnitOfWorkContextBundle       `json:"context_bundle,omitempty"`
+	RoutineBindings    []UnitOfWorkRoutineBinding    `json:"routine_bindings,omitempty"`
+	SkillBindings      []UnitOfWorkSkillBinding      `json:"skill_bindings,omitempty"`
+	ToolBindings       []UnitOfWorkToolBinding       `json:"tool_bindings,omitempty"`
+	CapabilityBindings []UnitOfWorkCapabilityBinding `json:"capability_bindings,omitempty"`
+
+	Status                      ExecutionStatus      `json:"status,omitempty"`
+	ResultClass                 ExecutionResultClass `json:"result_class,omitempty"`
+	DeferredIssueIDs            []string             `json:"deferred_issue_ids,omitempty"`
+	ArchaeoRefs                 map[string][]string  `json:"archaeo_refs,omitempty"`
+	ProviderSnapshotRefs        []string             `json:"provider_snapshot_refs,omitempty"`
+	ProviderSessionSnapshotRefs []string             `json:"provider_session_snapshot_refs,omitempty"`
+}
+
+type RuntimeExecutionStatus struct {
+	WorkflowID        string               `json:"workflow_id,omitempty"`
+	RunID             string               `json:"run_id,omitempty"`
+	ExecutionID       string               `json:"execution_id,omitempty"`
+	UnitOfWorkID      string               `json:"unit_of_work_id,omitempty"`
+	Status            ExecutionStatus      `json:"status,omitempty"`
+	ResultClass       ExecutionResultClass `json:"result_class,omitempty"`
+	ActivePlanID      string               `json:"active_plan_id,omitempty"`
+	ActivePlanVersion int                  `json:"active_plan_version,omitempty"`
+	ActiveStepID      string               `json:"active_step_id,omitempty"`
+	DeferredIssueIDs  []string             `json:"deferred_issue_ids,omitempty"`
+	UpdatedAt         time.Time            `json:"updated_at,omitempty"`
+}
+
+type DeferredExecutionIssue struct {
+	IssueID               string                    `json:"issue_id,omitempty"`
+	WorkflowID            string                    `json:"workflow_id,omitempty"`
+	RunID                 string                    `json:"run_id,omitempty"`
+	ExecutionID           string                    `json:"execution_id,omitempty"`
+	ActivePlanID          string                    `json:"active_plan_id,omitempty"`
+	ActivePlanVersion     int                       `json:"active_plan_version,omitempty"`
+	StepID                string                    `json:"step_id,omitempty"`
+	RelatedStepIDs        []string                  `json:"related_step_ids,omitempty"`
+	Kind                  DeferredIssueKind         `json:"kind,omitempty"`
+	Severity              DeferredIssueSeverity     `json:"severity,omitempty"`
+	Status                DeferredIssueStatus       `json:"status,omitempty"`
+	Title                 string                    `json:"title,omitempty"`
+	Summary               string                    `json:"summary,omitempty"`
+	WhyNotResolvedInline  string                    `json:"why_not_resolved_inline,omitempty"`
+	RecommendedReentry    string                    `json:"recommended_reentry,omitempty"`
+	RecommendedNextAction string                    `json:"recommended_next_action,omitempty"`
+	WorkspaceArtifactPath string                    `json:"workspace_artifact_path,omitempty"`
+	Evidence              DeferredExecutionEvidence `json:"evidence,omitempty"`
+	ArchaeoRefs           map[string][]string       `json:"archaeo_refs,omitempty"`
+	CreatedAt             time.Time                 `json:"created_at,omitempty"`
+	UpdatedAt             time.Time                 `json:"updated_at,omitempty"`
+}
+
+type DeferredExecutionEvidence struct {
+	TouchedSymbols         []string       `json:"touched_symbols,omitempty"`
+	RelevantPatternRefs    []string       `json:"relevant_pattern_refs,omitempty"`
+	RelevantTensionRefs    []string       `json:"relevant_tension_refs,omitempty"`
+	RelevantAnchorRefs     []string       `json:"relevant_anchor_refs,omitempty"`
+	RelevantProvenanceRefs []string       `json:"relevant_provenance_refs,omitempty"`
+	RelevantRequestRefs    []string       `json:"relevant_request_refs,omitempty"`
+	VerificationRefs       []string       `json:"verification_refs,omitempty"`
+	CheckpointRefs         []string       `json:"checkpoint_refs,omitempty"`
+	ProviderStateSnapshot  map[string]any `json:"provider_state_snapshot,omitempty"`
+	ShortReasoningSummary  string         `json:"short_reasoning_summary,omitempty"`
 }
 
 // Re-export commonly used types from euclotypes for convenience

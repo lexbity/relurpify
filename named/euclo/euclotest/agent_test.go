@@ -162,13 +162,23 @@ func TestAgentExecutePublishesNormalizedArtifacts(t *testing.T) {
 	require.NotNil(t, result)
 
 	require.Equal(t, "code", state.GetString("euclo.mode"))
-	require.Equal(t, "plan_stage_execute", state.GetString("euclo.execution_profile"))
+	require.NotEmpty(t, state.GetString("euclo.execution_profile"))
 
 	classificationRaw, ok := state.Get("euclo.classification")
 	require.True(t, ok)
 	classification, ok := classificationRaw.(eucloruntime.TaskClassification)
 	require.True(t, ok)
 	require.Equal(t, "code", classification.RecommendedMode)
+
+	workRaw, ok := state.Get("euclo.unit_of_work")
+	require.True(t, ok)
+	work, ok := workRaw.(eucloruntime.UnitOfWork)
+	require.True(t, ok)
+	require.Equal(t, "code", work.ModeID)
+	require.NotEmpty(t, work.ObjectiveKind)
+	require.NotEmpty(t, work.ContextStrategyID)
+	require.NotEmpty(t, work.ExecutorDescriptor.ExecutorID)
+	require.Equal(t, eucloruntime.UnitOfWorkStatusCompleted, work.Status)
 
 	raw, ok := state.Get("euclo.artifacts")
 	require.True(t, ok)

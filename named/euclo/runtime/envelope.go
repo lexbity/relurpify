@@ -46,3 +46,29 @@ func ClassificationContextPayload(classification TaskClassification) map[string]
 		"reason_codes":                      append([]string{}, classification.ReasonCodes...),
 	}
 }
+
+// UnitOfWorkContextPayload converts a UnitOfWork to a compact task-context map.
+func UnitOfWorkContextPayload(uow UnitOfWork) map[string]any {
+	return map[string]any{
+		"id":                  uow.ID,
+		"workflow_id":         uow.WorkflowID,
+		"run_id":              uow.RunID,
+		"execution_id":        uow.ExecutionID,
+		"mode_id":             uow.ModeID,
+		"objective_kind":      uow.ObjectiveKind,
+		"behavior_family":     uow.BehaviorFamily,
+		"context_strategy_id": uow.ContextStrategyID,
+		"semantic_inputs": map[string]any{
+			"pattern_refs":              append([]string{}, uow.SemanticInputs.PatternRefs...),
+			"tension_refs":              append([]string{}, uow.SemanticInputs.TensionRefs...),
+			"prospective_refs":          append([]string{}, uow.SemanticInputs.ProspectiveRefs...),
+			"convergence_refs":          append([]string{}, uow.SemanticInputs.ConvergenceRefs...),
+			"learning_interaction_refs": append([]string{}, uow.SemanticInputs.LearningInteractionRefs...),
+		},
+		"executor":           uow.ExecutorDescriptor,
+		"resolved_policy":    uow.ResolvedPolicy,
+		"result_class":       uow.ResultClass,
+		"status":             uow.Status,
+		"deferred_issue_ids": append([]string{}, uow.DeferredIssueIDs...),
+	}
+}

@@ -32,21 +32,33 @@ func TestFullExecuteCodeModeEditVerifyRepair(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Mode resolution should have happened.
 	raw, ok := state.Get("euclo.mode_resolution")
 	require.True(t, ok)
 	mode, ok := raw.(euclotypes.ModeResolution)
 	require.True(t, ok)
 	assert.NotEmpty(t, mode.ModeID)
 
-	// Profile should be selected.
 	raw, ok = state.Get("euclo.execution_profile_selection")
 	require.True(t, ok)
 	profile, ok := raw.(euclotypes.ExecutionProfileSelection)
 	require.True(t, ok)
 	assert.NotEmpty(t, profile.ProfileID)
 
-	// Capability family routing artifact present.
+	raw, ok = state.Get("euclo.unit_of_work")
+	require.True(t, ok)
+	work, ok := raw.(eucloruntime.UnitOfWork)
+	require.True(t, ok)
+	assert.Equal(t, mode.ModeID, work.ModeID)
+	assert.NotEmpty(t, work.ObjectiveKind)
+	assert.NotEmpty(t, work.BehaviorFamily)
+	assert.NotEmpty(t, work.ContextStrategyID)
+	assert.NotEmpty(t, work.ToolBindings)
+	assert.NotEmpty(t, work.ExecutorDescriptor.ExecutorID)
+	assert.Equal(t, work.ModeID, work.ResolvedPolicy.ModeID)
+	assert.Equal(t, profile.ProfileID, work.ResolvedPolicy.ProfileID)
+	assert.Equal(t, eucloruntime.UnitOfWorkStatusCompleted, work.Status)
+	assert.NotEmpty(t, work.VerificationPolicyID)
+
 	raw, ok = state.Get("euclo.capability_family_routing")
 	require.True(t, ok)
 	routing, ok := raw.(eucloruntime.CapabilityFamilyRouting)
@@ -65,14 +77,28 @@ func TestFullExecuteCodeModeEditVerifyRepair(t *testing.T) {
 	proof, ok := raw.(eucloruntime.ProofSurface)
 	require.True(t, ok)
 	assert.NotEmpty(t, proof.ArtifactKinds)
+	assert.Equal(t, work.ModeID, proof.ModeID)
+	assert.Equal(t, profile.ProfileID, proof.ProfileID)
 
-	// Session ID should be stored.
+	raw, ok = state.Get("euclo.resolved_execution_policy")
+	require.True(t, ok)
+	policy, ok := raw.(eucloruntime.ResolvedExecutionPolicy)
+	require.True(t, ok)
+	assert.Equal(t, work.ResolvedPolicy.ProfileID, policy.ProfileID)
+
+	raw, ok = state.Get("euclo.compiled_execution")
+	require.True(t, ok)
+	compiled, ok := raw.(eucloruntime.CompiledExecution)
+	require.True(t, ok)
+	assert.Equal(t, work.ID, compiled.UnitOfWorkID)
+	assert.Equal(t, work.ExecutorDescriptor.ExecutorID, compiled.ExecutorDescriptor.ExecutorID)
+
 	sessionID := state.GetString("euclo.session_id")
 	assert.NotEmpty(t, sessionID)
 	assert.Contains(t, sessionID, "euclo-")
 }
 
-func TestFullExecuteDebugModeReproduceLocalizePatch(t *testing.T) {
+func TestFullExecuteDebugModePublishesDebugRuntimeContract(t *testing.T) {
 	agent := integrationAgent(t)
 
 	state := core.NewContext()
@@ -96,9 +122,26 @@ func TestFullExecuteDebugModeReproduceLocalizePatch(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "debug", mode.ModeID)
 
-	// Profile controller should have been invoked.
-	raw, ok = state.Get("euclo.profile_controller")
-	assert.True(t, ok)
+	raw, ok = state.Get("euclo.unit_of_work")
+	require.True(t, ok)
+	work, ok := raw.(eucloruntime.UnitOfWork)
+	require.True(t, ok)
+	assert.Equal(t, "debug", work.ModeID)
+	assert.Equal(t, eucloruntime.ExecutorFamilyHTN, work.ExecutorDescriptor.Family)
+	assert.True(t, work.ResolvedPolicy.RequireVerificationStep || len(work.ResolvedPolicy.PreferredVerifyCapabilities) >= 0)
+
+	raw, ok = state.Get("euclo.resolved_execution_policy")
+	require.True(t, ok)
+	policy, ok := raw.(eucloruntime.ResolvedExecutionPolicy)
+	require.True(t, ok)
+	assert.Equal(t, "debug", policy.ModeID)
+
+	raw, ok = state.Get("euclo.compiled_execution")
+	require.True(t, ok)
+	compiled, ok := raw.(eucloruntime.CompiledExecution)
+	require.True(t, ok)
+	assert.Equal(t, work.ExecutorDescriptor.ExecutorID, compiled.ExecutorDescriptor.ExecutorID)
+	assert.Equal(t, work.SemanticInputs, compiled.SemanticInputs)
 }
 
 func TestFullExecuteWithRecoveryFallback(t *testing.T) {

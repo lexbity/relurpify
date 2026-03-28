@@ -92,6 +92,14 @@ func testProfileController(caps *capabilities.EucloCapabilityRegistry) *orchestr
 	)
 }
 
+func capabilityIDs(caps []euclotypes.EucloCodingCapability) []string {
+	out := make([]string, 0, len(caps))
+	for _, cap := range caps {
+		out = append(out, cap.Descriptor().ID)
+	}
+	return out
+}
+
 // --- From coding_capability_registry_test.go ---
 
 // stubCodingCapability is a test helper implementing EucloCodingCapability
