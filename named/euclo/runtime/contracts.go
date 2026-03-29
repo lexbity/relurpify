@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
 
 func BuildCapabilityContractRuntimeState(work UnitOfWork, state *core.Context, now time.Time) CapabilityContractRuntimeState {

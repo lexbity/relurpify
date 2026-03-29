@@ -10,9 +10,13 @@ import (
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	"github.com/lexcodex/relurpify/named/euclo/orchestrate"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
+	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
+	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
+	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 )
 
 type EmitterResolver func(*core.Task, interaction.FrameEmitter) (interaction.FrameEmitter, bool, int)
@@ -25,6 +29,7 @@ type SessionService struct {
 	Memory              memory.MemoryStore
 	Environment         agentenv.AgentEnvironment
 	ProfileCtrl         *orchestrate.ProfileController
+	BehaviorService     *orchestrate.Service
 	InteractionRegistry *interaction.ModeMachineRegistry
 	Emitter             interaction.FrameEmitter
 	ResolveEmitter      EmitterResolver
@@ -43,6 +48,7 @@ type SessionInput struct {
 	Mode             euclotypes.ModeResolution
 	Profile          euclotypes.ExecutionProfileSelection
 	Telemetry        core.Telemetry
+	Work             eucloruntime.UnitOfWork
 }
 
 type SessionOutput struct {
@@ -70,8 +76,8 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 	if in.State == nil {
 		return out
 	}
-	if s.ProfileCtrl == nil {
-		out.Err = fmt.Errorf("profile controller unavailable")
+	if s.BehaviorService == nil {
+		out.Err = fmt.Errorf("relurpic behavior service unavailable")
 		out.Result = &core.Result{Success: false, Error: out.Err}
 		return out
 	}
@@ -79,15 +85,17 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 	if expandErr != nil {
 		out.Err = expandErr
 	}
-	execEnvelope := eucloruntime.BuildExecutionEnvelope(
-		executionTask, in.State, in.Mode, in.Profile, s.Environment,
-		nil, "", "", in.Telemetry,
-	)
 	if s.SeedInteraction != nil {
 		s.SeedInteraction(in.State, executionTask, in.Classification, in.Mode)
 	}
-	if interactionErr := s.runInteractive(ctx, executionTask, execEnvelope, in.Mode); interactionErr != nil && out.Err == nil {
-		out.Err = interactionErr
+	if s.ProfileCtrl != nil && s.InteractionRegistry != nil {
+		execEnvelope := eucloruntime.BuildExecutionEnvelope(
+			executionTask, in.State, in.Mode, in.Profile, s.Environment,
+			nil, "", "", in.Telemetry,
+		)
+		if interactionErr := s.runInteractive(ctx, executionTask, execEnvelope, in.Mode); interactionErr != nil && out.Err == nil {
+			out.Err = interactionErr
+		}
 	}
 	if out.Err == nil {
 		if checkpointErr := s.runCheckpoint(ctx, archaeodomain.MutationCheckpointPreDispatch, in.Task, in.State); checkpointErr != nil {
@@ -98,10 +106,23 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 		result  *core.Result
 		execErr error
 	)
-	if in.WorkflowExecutor != nil {
+	if s.BehaviorService != nil && in.Work.PrimaryRelurpicCapabilityID != "" {
+		result, execErr = s.BehaviorService.Execute(ctx, eucloexec.ExecuteInput{
+			Task:             in.Task,
+			ExecutionTask:    executionTask,
+			State:            in.State,
+			Mode:             in.Mode,
+			Profile:          in.Profile,
+			Work:             in.Work,
+			Environment:      s.Environment,
+			WorkflowExecutor: in.WorkflowExecutor,
+			Telemetry:        in.Telemetry,
+		})
+	} else if in.WorkflowExecutor != nil {
 		result, execErr = in.WorkflowExecutor.Execute(ctx, executionTask, in.State)
 	} else {
-		result, _, execErr = s.ProfileCtrl.ExecuteProfile(ctx, in.Profile, in.Mode, execEnvelope)
+		execErr = fmt.Errorf("workflow executor unavailable for primary relurpic capability %q", in.Work.PrimaryRelurpicCapabilityID)
+		result = &core.Result{Success: false, Error: execErr}
 	}
 	if out.Err == nil {
 		out.Err = execErr
@@ -138,12 +159,12 @@ func (s SessionService) ShortCircuit(ctx context.Context, in ShortCircuitInput) 
 	if out.Result.Data == nil {
 		out.Result.Data = map[string]any{}
 	}
-	policy := eucloruntime.ResolveVerificationPolicy(in.Mode, in.Profile)
+	policy := euclopolicy.ResolveVerificationPolicy(in.Mode, in.Profile)
 	in.State.Set("euclo.verification_policy", policy)
 	artifacts := euclotypes.CollectArtifactsFromState(in.State)
-	actionLog := eucloruntime.BuildActionLog(in.State, artifacts)
+	actionLog := eucloreporting.BuildActionLog(in.State, artifacts)
 	in.State.Set("euclo.action_log", actionLog)
-	proofSurface := eucloruntime.BuildProofSurface(in.State, artifacts)
+	proofSurface := eucloreporting.BuildProofSurface(in.State, artifacts)
 	in.State.Set("euclo.proof_surface", proofSurface)
 	artifacts = euclotypes.CollectArtifactsFromState(in.State)
 	in.State.Set("euclo.artifacts", artifacts)
@@ -168,7 +189,7 @@ func (s SessionService) ShortCircuit(ctx context.Context, in ShortCircuitInput) 
 		finalReport["shared_context_runtime"] = raw
 	}
 	in.State.Set("euclo.final_report", finalReport)
-	eucloruntime.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
+	eucloreporting.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
 	out.Result.Data["final_report"] = finalReport
 	out.Result.Data["action_log"] = actionLog
 	out.Result.Data["proof_surface"] = proofSurface
@@ -190,7 +211,7 @@ func (s SessionService) expandContext(ctx context.Context, in SessionInput) (*co
 	if executionTask == nil {
 		executionTask = in.Task
 	}
-	surfaces := eucloruntime.ResolveRuntimeSurfaces(s.Memory)
+	surfaces := euclorestore.ResolveRuntimeSurfaces(s.Memory)
 	if surfaces.Workflow == nil {
 		return executionTask, nil
 	}
@@ -202,7 +223,7 @@ func (s SessionService) expandContext(ctx context.Context, in SessionInput) (*co
 			}
 		}
 	}
-	policy := eucloruntime.ResolveRetrievalPolicy(in.Mode, in.Profile)
+	policy := euclopolicy.ResolveRetrievalPolicy(in.Mode, in.Profile)
 	in.State.Set("euclo.retrieval_policy", policy)
 	if expansion, err := eucloruntime.ExpandContext(ctx, surfaces.Workflow, workflowID, executionTask, in.State, policy); err != nil {
 		return executionTask, err
@@ -235,7 +256,7 @@ func (s SessionService) resolveEmitter(task *core.Task) (interaction.FrameEmitte
 }
 
 func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in SessionInput, out *SessionOutput) {
-	policy := eucloruntime.ResolveVerificationPolicy(in.Mode, in.Profile)
+	policy := euclopolicy.ResolveVerificationPolicy(in.Mode, in.Profile)
 	in.State.Set("euclo.verification_policy", policy)
 	if out.Err == nil && in.Profile.MutationAllowed {
 		if _, applyErr := eucloruntime.ApplyEditIntentArtifacts(ctx, s.Environment.Registry, in.State); applyErr != nil {
@@ -274,9 +295,9 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 		}
 	}
 	artifacts := euclotypes.CollectArtifactsFromState(in.State)
-	actionLog := eucloruntime.BuildActionLog(in.State, artifacts)
+	actionLog := eucloreporting.BuildActionLog(in.State, artifacts)
 	in.State.Set("euclo.action_log", actionLog)
-	proofSurface := eucloruntime.BuildProofSurface(in.State, artifacts)
+	proofSurface := eucloreporting.BuildProofSurface(in.State, artifacts)
 	in.State.Set("euclo.proof_surface", proofSurface)
 	artifacts = euclotypes.CollectArtifactsFromState(in.State)
 	in.State.Set("euclo.artifacts", artifacts)
@@ -291,7 +312,7 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 	}
 	finalReport := euclotypes.AssembleFinalReport(artifacts)
 	in.State.Set("euclo.final_report", finalReport)
-	eucloruntime.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
+	eucloreporting.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
 	if out.Result != nil {
 		if out.Result.Data == nil {
 			out.Result.Data = map[string]any{}

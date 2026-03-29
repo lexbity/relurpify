@@ -8,7 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
 
 func BuildResolvedExecutionPolicy(task *core.Task, cfg *core.Config, registry *capability.Registry, mode ModeResolution, profile ExecutionProfileSelection) ResolvedExecutionPolicy {

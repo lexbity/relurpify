@@ -1,0 +1,77 @@
+package work
+
+import (
+	"time"
+
+	frameworkcore "github.com/lexcodex/relurpify/framework/core"
+	euclotypespkg "github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+)
+
+type TaskEnvelope = runtimepkg.TaskEnvelope
+type SemanticRequestRef = runtimepkg.SemanticRequestRef
+type SemanticFindingSummary = runtimepkg.SemanticFindingSummary
+type PatternProposalSummary = runtimepkg.PatternProposalSummary
+type TensionClusterSummary = runtimepkg.TensionClusterSummary
+type CoherenceSuggestion = runtimepkg.CoherenceSuggestion
+type ProspectivePairingSummary = runtimepkg.ProspectivePairingSummary
+type SemanticInputBundle = runtimepkg.SemanticInputBundle
+type UnitOfWorkStatus = runtimepkg.UnitOfWorkStatus
+type UnitOfWorkTransitionState = runtimepkg.UnitOfWorkTransitionState
+type UnitOfWorkHistoryEntry = runtimepkg.UnitOfWorkHistoryEntry
+type UnitOfWork = runtimepkg.UnitOfWork
+type UnitOfWorkPlanBinding = runtimepkg.UnitOfWorkPlanBinding
+type UnitOfWorkContextSource = runtimepkg.UnitOfWorkContextSource
+type UnitOfWorkContextBundle = runtimepkg.UnitOfWorkContextBundle
+type UnitOfWorkRoutineBinding = runtimepkg.UnitOfWorkRoutineBinding
+type UnitOfWorkSkillBinding = runtimepkg.UnitOfWorkSkillBinding
+type UnitOfWorkToolBinding = runtimepkg.UnitOfWorkToolBinding
+type UnitOfWorkCapabilityBinding = runtimepkg.UnitOfWorkCapabilityBinding
+type CompiledExecution = runtimepkg.CompiledExecution
+type RuntimeExecutionStatus = runtimepkg.RuntimeExecutionStatus
+type EditExecutionRecord = runtimepkg.EditExecutionRecord
+type ExecutionEnvelope = euclotypespkg.ExecutionEnvelope
+
+const (
+	UnitOfWorkStatusAssembling             = runtimepkg.UnitOfWorkStatusAssembling
+	UnitOfWorkStatusReady                  = runtimepkg.UnitOfWorkStatusReady
+	UnitOfWorkStatusExecuting              = runtimepkg.UnitOfWorkStatusExecuting
+	UnitOfWorkStatusVerifying              = runtimepkg.UnitOfWorkStatusVerifying
+	UnitOfWorkStatusCompacted              = runtimepkg.UnitOfWorkStatusCompacted
+	UnitOfWorkStatusRestoring              = runtimepkg.UnitOfWorkStatusRestoring
+	UnitOfWorkStatusCompleted              = runtimepkg.UnitOfWorkStatusCompleted
+	UnitOfWorkStatusCompletedWithDeferrals = runtimepkg.UnitOfWorkStatusCompletedWithDeferrals
+	UnitOfWorkStatusBlocked                = runtimepkg.UnitOfWorkStatusBlocked
+	UnitOfWorkStatusFailed                 = runtimepkg.UnitOfWorkStatusFailed
+	UnitOfWorkStatusCanceled               = runtimepkg.UnitOfWorkStatusCanceled
+)
+
+func BuildUnitOfWork(
+	task *frameworkcore.Task,
+	state *frameworkcore.Context,
+	envelope TaskEnvelope,
+	classification runtimepkg.TaskClassification,
+	mode runtimepkg.ModeResolution,
+	profile runtimepkg.ExecutionProfileSelection,
+	modeRegistry *runtimepkg.ModeRegistry,
+	semanticInputs SemanticInputBundle,
+	resolvedPolicy runtimepkg.ResolvedExecutionPolicy,
+	executor runtimepkg.WorkUnitExecutorDescriptor,
+) UnitOfWork {
+	return runtimepkg.BuildUnitOfWork(
+		task,
+		state,
+		envelope,
+		classification,
+		mode,
+		profile,
+		modeRegistry,
+		semanticInputs,
+		resolvedPolicy,
+		executor,
+	)
+}
+
+func BuildCompiledExecution(uow UnitOfWork, status RuntimeExecutionStatus, compiledAt time.Time) CompiledExecution {
+	return runtimepkg.BuildCompiledExecution(uow, status, compiledAt)
+}

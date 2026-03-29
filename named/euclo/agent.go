@@ -32,10 +32,15 @@ import (
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/gate"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	"github.com/lexcodex/relurpify/named/euclo/orchestrate"
+	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
+	euclocontext "github.com/lexcodex/relurpify/named/euclo/runtime/context"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
+	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
+	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
+	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 )
 
 // Agent is the named coding-runtime boundary for software-engineering work.
@@ -66,6 +71,7 @@ type Agent struct {
 	CodingCapabilities  *capabilities.EucloCapabilityRegistry
 	ProfileCtrl         *orchestrate.ProfileController
 	RecoveryCtrl        *orchestrate.RecoveryController
+	BehaviorService     *orchestrate.Service
 	Emitter             interaction.FrameEmitter // live emitter from TUI; nil means use task-scoped emitter
 	RuntimeProviders    []core.Provider
 }
@@ -163,6 +169,9 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 			a.ProfileRegistry,
 			a.RecoveryCtrl,
 		)
+	}
+	if a.BehaviorService == nil {
+		a.BehaviorService = orchestrate.NewService()
 	}
 	return a.Initialize(env.Config)
 }
@@ -291,7 +300,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	if err := a.applyLearningResolution(ctx, task, state); err != nil {
 		return &core.Result{Success: false, Error: err}, err
 	}
-	contextRuntime := eucloruntime.BuildContextRuntime(task, eucloruntime.ContextRuntimeConfig{
+	contextRuntime := euclocontext.BuildContextRuntime(task, euclocontext.ContextRuntimeConfig{
 		Config:       a.Config,
 		Model:        a.Environment.Model,
 		MemoryStore:  a.Memory,
@@ -300,15 +309,15 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	}, mode, work)
 	if contextRuntime != nil {
 		contextRuntime.Activate(task, state, a.Environment.Model)
-		state.Set("euclo.shared_context_runtime", eucloruntime.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
+		state.Set("euclo.shared_context_runtime", euclopolicy.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
 	}
-	securityRuntime := eucloruntime.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work)
+	securityRuntime := euclopolicy.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work)
 	state.Set("euclo.security_runtime", securityRuntime)
 	contractRuntime := eucloruntime.BuildCapabilityContractRuntimeState(work, state, time.Now().UTC())
 	state.Set("euclo.capability_contract_runtime", contractRuntime)
-	state.Set("euclo.archaeology_capability_runtime", eucloruntime.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.debug_capability_runtime", eucloruntime.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.chat_capability_runtime", eucloruntime.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
+	state.Set("euclo.archaeology_capability_runtime", eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC()))
+	state.Set("euclo.debug_capability_runtime", eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
+	state.Set("euclo.chat_capability_runtime", eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
 	if contractErr := eucloruntime.EnforcePreExecutionCapabilityContracts(work); contractErr != nil {
 		work.Status = eucloruntime.UnitOfWorkStatusBlocked
 		work.ResultClass = eucloruntime.ExecutionResultClassBlocked
@@ -344,7 +353,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 		}
 		if contextRuntime != nil {
 			contextRuntime.HandleResult(state, a.Environment.Model, sessionOutput.Result)
-			state.Set("euclo.shared_context_runtime", eucloruntime.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
+			state.Set("euclo.shared_context_runtime", euclopolicy.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
 		}
 		a.phaseDriver().EnterSurfacing(ctx, task, state, nil, sessionOutput.Err)
 		a.phaseDriver().Complete(ctx, task, state, nil, sessionOutput.Err)
@@ -373,12 +382,13 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 		Mode:             mode,
 		Profile:          profile,
 		Telemetry:        a.ConfigTelemetry(),
+		Work:             work,
 	})
 	result := sessionOutput.Result
 	err := sessionOutput.Err
 	if contextRuntime != nil {
 		contextRuntime.HandleResult(state, a.Environment.Model, result)
-		state.Set("euclo.shared_context_runtime", eucloruntime.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
+		state.Set("euclo.shared_context_runtime", euclopolicy.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
 	}
 	a.phaseDriver().EnterVerification(ctx, task, state, prep.activeStep, err)
 	a.executionFinalizer().FinalizeLivingPlan(ctx, task, state, prep.livingPlan, prep.activeStep, result, err)
@@ -389,9 +399,9 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	a.phaseDriver().Complete(ctx, task, state, prep.activeStep, err)
 	postContractRuntime, contractErr := eucloruntime.EvaluatePostExecutionCapabilityContracts(work, state, time.Now().UTC())
 	state.Set("euclo.capability_contract_runtime", postContractRuntime)
-	state.Set("euclo.archaeology_capability_runtime", eucloruntime.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.debug_capability_runtime", eucloruntime.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.chat_capability_runtime", eucloruntime.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
+	state.Set("euclo.archaeology_capability_runtime", eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC()))
+	state.Set("euclo.debug_capability_runtime", eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
+	state.Set("euclo.chat_capability_runtime", eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
 	if err == nil && contractErr != nil {
 		err = contractErr
 	}
@@ -670,7 +680,7 @@ func (a *Agent) ensureWorkflowRun(ctx context.Context, task *core.Task, state *c
 	if store == nil {
 		return
 	}
-	_, _, _ = eucloruntime.EnsureWorkflowRun(ctx, store, task, state)
+	_, _, _ = euclorestore.EnsureWorkflowRun(ctx, store, task, state)
 }
 
 func (a *Agent) workflowStore() *memorydb.SQLiteWorkflowStateStore {
@@ -680,7 +690,7 @@ func (a *Agent) workflowStore() *memorydb.SQLiteWorkflowStateStore {
 	if typed, ok := a.WorkflowStore.(*memorydb.SQLiteWorkflowStateStore); ok {
 		return typed
 	}
-	surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory)
+	surfaces := euclorestore.ResolveRuntimeSurfaces(a.Memory)
 	return surfaces.Workflow
 }
 
@@ -927,6 +937,7 @@ func (a *Agent) executionSession() archaeoexec.SessionService {
 		Memory:              a.Memory,
 		Environment:         a.Environment,
 		ProfileCtrl:         a.ProfileCtrl,
+		BehaviorService:     a.BehaviorService,
 		InteractionRegistry: a.InteractionRegistry,
 		Emitter:             a.Emitter,
 		ResolveEmitter: func(task *core.Task, live interaction.FrameEmitter) (interaction.FrameEmitter, bool, int) {
@@ -1476,7 +1487,7 @@ func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, 
 	if raw, ok := state.Get("euclo.artifacts"); ok && raw != nil {
 		return false
 	}
-	surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory)
+	surfaces := euclorestore.ResolveRuntimeSurfaces(a.Memory)
 	if surfaces.Workflow == nil {
 		return false
 	}
@@ -1556,9 +1567,9 @@ func (a *Agent) restoreExecutionContinuity(ctx context.Context, task *core.Task,
 		state.Set("euclo.context_compaction", lifecycle)
 	}
 	if compiled.WorkflowID != "" && compiled.RunID != "" {
-		restoreState, err := eucloruntime.RestoreProviderSnapshotState(ctx, a.workflowStore(), compiled.WorkflowID, compiled.RunID, state)
+		restoreState, err := euclorestore.RestoreProviderSnapshotState(ctx, a.workflowStore(), compiled.WorkflowID, compiled.RunID, state)
 		if err == nil {
-			restoreState, err = eucloruntime.ApplyProviderRuntimeRestore(ctx, a.runtimeProviders(state), state)
+			restoreState, err = euclorestore.ApplyProviderRuntimeRestore(ctx, a.runtimeProviders(state), state)
 		}
 		if err == nil {
 			if current, ok := eucloruntime.CompiledExecutionFromState(state); ok {
@@ -1577,11 +1588,11 @@ func (a *Agent) restoreExecutionContinuity(ctx context.Context, task *core.Task,
 }
 
 func (a *Agent) persistArtifacts(ctx context.Context, task *core.Task, state *core.Context, artifacts []euclotypes.Artifact) error {
-	surfaces := eucloruntime.ResolveRuntimeSurfaces(a.Memory)
+	surfaces := euclorestore.ResolveRuntimeSurfaces(a.Memory)
 	if surfaces.Workflow == nil || len(artifacts) == 0 {
 		return nil
 	}
-	workflowID, runID, err := eucloruntime.EnsureWorkflowRun(ctx, surfaces.Workflow, task, state)
+	workflowID, runID, err := euclorestore.EnsureWorkflowRun(ctx, surfaces.Workflow, task, state)
 	if err != nil {
 		return err
 	}
@@ -1622,12 +1633,12 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	statusRecord := eucloruntime.BuildRuntimeExecutionStatus(work, status, work.ResultClass, work.UpdatedAt)
 	eucloruntime.SeedCompiledExecutionState(state, work, statusRecord)
 	if work.WorkflowID != "" && work.RunID != "" {
-		eucloruntime.CaptureProviderRuntimeState(ctx, a.runtimeProviders(state), state)
+		euclorestore.CaptureProviderRuntimeState(ctx, a.runtimeProviders(state), state)
 		taskID := ""
 		if task != nil {
 			taskID = task.ID
 		}
-		restoreState, restoreErr := eucloruntime.PersistProviderSnapshotState(ctx, a.workflowStore(), work.WorkflowID, work.RunID, state, taskID)
+		restoreState, restoreErr := euclorestore.PersistProviderSnapshotState(ctx, a.workflowStore(), work.WorkflowID, work.RunID, state, taskID)
 		if restoreErr != nil {
 			state.Set("euclo.provider_restore_error", restoreErr.Error())
 		} else if current, ok := eucloruntime.CompiledExecutionFromState(state); ok {
@@ -1636,18 +1647,18 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 			state.Set("euclo.compiled_execution", current)
 		}
 	}
-	state.Set("euclo.security_runtime", eucloruntime.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work))
+	state.Set("euclo.security_runtime", euclopolicy.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work))
 	priorLifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
 	artifactKinds := collectArtifactKindsFromState(state)
 	state.Set("euclo.context_compaction", eucloruntime.BuildContextLifecycleState(work, priorLifecycle, status, artifactKinds, work.UpdatedAt))
 	artifacts := euclotypes.CollectArtifactsFromState(state)
-	actionLog := eucloruntime.BuildActionLog(state, artifacts)
-	proofSurface := eucloruntime.BuildProofSurface(state, artifacts)
+	actionLog := eucloreporting.BuildActionLog(state, artifacts)
+	proofSurface := eucloreporting.BuildProofSurface(state, artifacts)
 	state.Set("euclo.action_log", actionLog)
 	state.Set("euclo.proof_surface", proofSurface)
-	state.Set("euclo.debug_capability_runtime", eucloruntime.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.chat_capability_runtime", eucloruntime.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
-	eucloruntime.EmitObservabilityTelemetry(a.ConfigTelemetry(), task, actionLog, proofSurface)
+	state.Set("euclo.debug_capability_runtime", eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
+	state.Set("euclo.chat_capability_runtime", eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
+	eucloreporting.EmitObservabilityTelemetry(a.ConfigTelemetry(), task, actionLog, proofSurface)
 	artifacts = euclotypes.CollectArtifactsFromState(state)
 	report := euclotypes.AssembleFinalReport(artifacts)
 	if raw, ok := state.Get("euclo.provider_restore"); ok && raw != nil {

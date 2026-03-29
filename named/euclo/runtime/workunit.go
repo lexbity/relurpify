@@ -7,7 +7,7 @@ import (
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/core"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
 
 // BuildUnitOfWork assembles Euclo's active execution bundle from intake,

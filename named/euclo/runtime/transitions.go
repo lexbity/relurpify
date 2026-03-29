@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
 
 func ApplyUnitOfWorkTransition(existing UnitOfWork, next *UnitOfWork, now time.Time) UnitOfWorkTransitionState {

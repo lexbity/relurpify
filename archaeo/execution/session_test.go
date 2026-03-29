@@ -6,12 +6,32 @@ import (
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	"github.com/lexcodex/relurpify/named/euclo/orchestrate"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
+	euclobehavior "github.com/lexcodex/relurpify/named/euclo/relurpic/behavior"
+	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSessionExecuteFailsWithoutProfileController(t *testing.T) {
+type stubWorkflowExecutor struct{}
+
+func (stubWorkflowExecutor) Initialize(_ *core.Config) error { return nil }
+func (stubWorkflowExecutor) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*core.Result, error) {
+	return &core.Result{Success: true, Data: map[string]any{"summary": "ok"}}, nil
+}
+func (stubWorkflowExecutor) Capabilities() []core.Capability { return nil }
+func (stubWorkflowExecutor) BuildGraph(_ *core.Task) (*graph.Graph, error) {
+	return nil, nil
+}
+
+func sessionBehaviorInput() (euclobehavior.Service, eucloruntime.UnitOfWork, graph.WorkflowExecutor) {
+	return *euclobehavior.NewService(), eucloruntime.UnitOfWork{
+		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk,
+	}, stubWorkflowExecutor{}
+}
+
+func TestSessionExecuteFailsWithoutBehaviorService(t *testing.T) {
 	svc := SessionService{}
 	out := svc.Execute(context.Background(), SessionInput{
 		State: core.NewContext(),
@@ -31,33 +51,39 @@ func TestSessionResolveEmitterDefaults(t *testing.T) {
 }
 
 func TestSessionExecuteStopsBeforeVerificationWhenCheckpointFails(t *testing.T) {
+	behaviorService, work, executor := sessionBehaviorInput()
 	svc := SessionService{
-		ProfileCtrl: &orchestrate.ProfileController{},
+		BehaviorService: &behaviorService,
 		BeforeVerification: func(context.Context, *core.Task, *core.Context) error {
 			return context.Canceled
 		},
 	}
 	out := svc.Execute(context.Background(), SessionInput{
-		Task:          &core.Task{},
-		ExecutionTask: &core.Task{},
-		State:         core.NewContext(),
+		Task:             &core.Task{},
+		ExecutionTask:    &core.Task{},
+		WorkflowExecutor: executor,
+		State:            core.NewContext(),
+		Work:             work,
 	})
 	require.Error(t, out.Err)
 }
 
 func TestSessionExecuteRunsMutationCheckpointsInOrder(t *testing.T) {
 	var seen []archaeodomain.MutationCheckpoint
+	behaviorService, work, executor := sessionBehaviorInput()
 	svc := SessionService{
-		ProfileCtrl: &orchestrate.ProfileController{},
+		BehaviorService: &behaviorService,
 		Checkpoint: func(_ context.Context, checkpoint archaeodomain.MutationCheckpoint, _ *core.Task, state *core.Context) error {
 			seen = append(seen, checkpoint)
 			return nil
 		},
 	}
 	out := svc.Execute(context.Background(), SessionInput{
-		Task:          &core.Task{},
-		ExecutionTask: &core.Task{},
-		State:         core.NewContext(),
+		Task:             &core.Task{},
+		ExecutionTask:    &core.Task{},
+		WorkflowExecutor: executor,
+		State:            core.NewContext(),
+		Work:             work,
 	})
 	require.NoError(t, out.Err)
 	require.Equal(t, []archaeodomain.MutationCheckpoint{
@@ -70,8 +96,9 @@ func TestSessionExecuteRunsMutationCheckpointsInOrder(t *testing.T) {
 
 func TestSessionExecuteStopsAtCheckpointFailure(t *testing.T) {
 	var seen []archaeodomain.MutationCheckpoint
+	behaviorService, work, executor := sessionBehaviorInput()
 	svc := SessionService{
-		ProfileCtrl: &orchestrate.ProfileController{},
+		BehaviorService: &behaviorService,
 		Checkpoint: func(_ context.Context, checkpoint archaeodomain.MutationCheckpoint, _ *core.Task, _ *core.Context) error {
 			seen = append(seen, checkpoint)
 			if checkpoint == archaeodomain.MutationCheckpointPostExecution {
@@ -81,9 +108,11 @@ func TestSessionExecuteStopsAtCheckpointFailure(t *testing.T) {
 		},
 	}
 	out := svc.Execute(context.Background(), SessionInput{
-		Task:          &core.Task{},
-		ExecutionTask: &core.Task{},
-		State:         core.NewContext(),
+		Task:             &core.Task{},
+		ExecutionTask:    &core.Task{},
+		WorkflowExecutor: executor,
+		State:            core.NewContext(),
+		Work:             work,
 	})
 	require.Error(t, out.Err)
 	require.Equal(t, []archaeodomain.MutationCheckpoint{
