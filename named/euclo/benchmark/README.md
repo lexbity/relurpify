@@ -1,7 +1,6 @@
 # Euclo Benchmarks
 
-This package provides deterministic performance benchmarks for `named/euclo`
-and `archaeo`.
+This package provides deterministic performance benchmarks for `named/euclo`.
 
 It is intentionally non-LLM-dependent:
 - uses `testutil/euclotestutil.StubModel`
@@ -11,8 +10,9 @@ It is intentionally non-LLM-dependent:
 ## Goals
 
 - measure orchestration cost without live-model variance
-- separate agent, archaeology, and projection surfaces
+- separate agent, runtime, archaeology-backed, and projection surfaces
 - make performance audits reproducible in CI and locally
+- measure relurpic capability-owner workload overhead without live-model variance
 
 ## Benchmark Groups
 
@@ -39,6 +39,15 @@ It is intentionally non-LLM-dependent:
 - `BenchmarkDedicatedProjections`
 - `BenchmarkWorkflowProjectionSubscription`
   - read-model rebuild and subscription polling costs
+
+- `BenchmarkEucloWorkloadScenarios`
+  - workload-oriented runs tied to Euclo's capability-owner model
+  - includes:
+    - `failing_test_to_fix`
+    - `multi_step_living_plan`
+    - `compatibility_preserving_refactor`
+    - `long_running_migration`
+    - `restore_after_compaction`
 
 ## Scale Presets
 
@@ -104,5 +113,5 @@ them at the top-level `Agent.Execute` layer.
 
 - Projection subscription benchmarks measure the current polling-based design.
   Do not interpret them as RPC latency.
-- These benchmarks are for euclo and archaeo-server internals, not relurpish UI
-  rendering or live-model behavior.
+- These benchmarks are for Euclo runtime internals, not relurpish UI rendering
+  or live-model behavior.

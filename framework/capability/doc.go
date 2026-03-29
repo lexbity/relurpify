@@ -17,6 +17,19 @@
 //   - KindPrompt: LLM prompt templates injected into context.
 //   - KindResource: structured data resources attached to context.
 //
+// Capability kind is distinct from capability runtime family. The framework
+// currently recognizes runtime families such as:
+//
+//   - local-tool: local callable tools and tool-like capability execution.
+//   - provider: provider-backed capability execution.
+//   - relurpic: opinionated higher-order execution behavior composed from
+//     capabilities, skills, sub-agents, or multiple execution paradigms.
+//
+// Relurpic capabilities are therefore part of the canonical capability model,
+// not a separate side system layered around tools. They are selected,
+// authorized, and admitted through the same registry and policy machinery as
+// other capabilities, while carrying a distinct runtime-family classification.
+//
 // # Policy evaluation
 //
 // Dispatch is gated by CapabilityPolicy and ProviderPolicy (defined in

@@ -2,175 +2,263 @@
 
 ## Synopsis
 
-Euclo is the primary coding agent in Relurpify. When a manifest sets
-`spec.agent.implementation` to `coding` or `euclo`, the runtime instantiates
-Euclo. It is a named agent (`named/euclo/`) that transforms user instructions
-into structured, multi-phase coding workflows before delegating actual execution
-to the ReAct agent paradigm.
+Euclo is Relurpify's named coding runtime in `named/euclo/`.
 
-Euclo exists because small local models benefit from structured decomposition.
-Rather than dropping a raw instruction into a reasoning loop and hoping the model
-figures it out, Euclo classifies the task, selects an appropriate execution
-profile, and gates progress between phases with evidence requirements. The model
-still does the reasoning — Euclo constrains and sequences it.
+It is not just a generic coding wrapper. Euclo is a modal runtime for software
+development and data-oriented code investigation that:
+
+- assembles a `UnitOfWork`
+- selects a Euclo-owned relurpic capability owner
+- composes execution paradigms from `/agents`
+- uses `/framework` for capability, skill, context, restore, and policy
+- uses `/archaeo` for memory, provenance, living-plan state, and knowledge relationships
+
+Euclo is UX-agnostic. The same runtime can be driven from a chat surface, a
+research/planning UI, a CLI, or a programmatic integration.
 
 ---
 
-## How It Works
+## Runtime Model
 
-A task flows through Euclo in this order:
+Euclo executes around a `UnitOfWork`.
 
+A `UnitOfWork` binds:
+
+- mode
+- execution objective
+- context strategy
+- semantic inputs
+- resolved execution policy
+- primary relurpic capability owner
+- supporting relurpic capabilities
+- executor recipe
+- verification, checkpoint, and deferral policy
+
+Euclo then runs that `UnitOfWork` under shared runtime guarantees:
+
+- framework policy remains authoritative
+- context and restore are tracked explicitly
+- deferred issues are durable artifacts
+- compiled execution continuity is persisted
+- plan-backed execution stays bound to one compiled plan per run
+
+---
+
+## Modes
+
+Euclo currently treats modes as software-development execution paradigms rather
+than UX labels.
+
+### `chat`
+
+Broad collect-context plus toolbox execution.
+
+This is the general coding surface for:
+
+- asking engineering questions
+- implementing changes
+- inspecting code and current behavior
+
+The quality of `chat` depends heavily on model quality, so Euclo constrains and
+structures behavior rather than assuming a strong model.
+
+### `planning`
+
+Archaeo-backed living-plan exploration and compilation.
+
+This is the data-oriented mode for:
+
+- codebase exploration
+- pattern surfacing
+- prospective architectural assessment
+- plan compilation
+- plan-backed implementation
+
+It uses Archaeo as the memory/provenance substrate and is designed for wider
+scope exploration and longer context.
+
+### `debug`
+
+Mixed investigation mode between `chat` and `planning`.
+
+This mode combines:
+
+- drill-down debugging
+- tool-output exposition
+- root-cause and localization behavior
+- Archaeo-backed semantic memory when useful
+- controlled escalation into implementation when repair is required
+
+Context, memory, and session continuity may be shared across modes. Some mode
+transitions preserve the same `UnitOfWork`; others rebind to a successor work
+unit when the runtime contract changes materially.
+
+---
+
+## Euclo-Owned Relurpic Capabilities
+
+Relurpic capability is a framework primitive through
+`CapabilityRuntimeFamilyRelurpic`.
+
+Euclo owns the coding-specific relurpic capability catalog in
+`named/euclo/relurpic`.
+
+### Primary-capable endpoints
+
+Chat:
+
+- `euclo:chat.ask`
+- `euclo:chat.implement`
+- `euclo:chat.inspect`
+
+Planning:
+
+- `euclo:archaeology.explore`
+- `euclo:archaeology.compile-plan`
+- `euclo:archaeology.implement-plan`
+
+Debug:
+
+- `euclo:debug.investigate`
+
+### Supporting capabilities
+
+Supporting capabilities are explicit runtime bindings under a primary owner.
+Examples include:
+
+- `euclo:chat.direct-edit-execution`
+- `euclo:chat.local-review`
+- `euclo:chat.targeted-verification-repair`
+- `euclo:archaeology.pattern-surface`
+- `euclo:archaeology.prospective-assess`
+- `euclo:archaeology.convergence-guard`
+- `euclo:debug.root-cause`
+- `euclo:debug.localization`
+- `euclo:debug.verification-repair`
+
+Some relurpic capabilities are Archaeo-associated by design. Others are
+Euclo-local and rely only on framework facilities.
+
+---
+
+## Execution Ownership
+
+Euclo owns orchestration.
+
+Relurpic capabilities own coding-specific behavior assemblies.
+
+`/agents` provides reusable execution paradigms such as:
+
+- ReAct-style iterative tool use
+- planner-style structured decomposition
+- HTN-style drill-down execution
+- Rewoo-style long-running execution
+- reflection-style review/correction
+
+Euclo composes those paradigms under relurpic capability ownership instead of
+treating one paradigm as its identity.
+
+This means executor choice is subordinate to behavior choice:
+
+`mode -> UnitOfWork -> relurpic capability owner -> executor recipe`
+
+---
+
+## Relationship To Framework And Archaeo
+
+Euclo is layered on top of `/framework`, `/agents`, and `/archaeo`.
+
+### Framework
+
+Framework owns:
+
+- capabilities and relurpic capabilities as primitives
+- skill policy
+- capability and tool admission
+- sandbox and permission enforcement
+- context management
+- provider snapshot and restore interfaces
+
+Euclo consumes framework policy and reports compatibility against the
+framework-admitted execution catalog. Euclo does not act as the permission
+authority.
+
+### Archaeo
+
+Archaeo owns:
+
+- memory
+- provenance
+- living-plan state
+- request/evaluation history
+- knowledge relationships
+
+Euclo executes against that state but does not push Euclo-specific runtime
+semantics down into Archaeo.
+
+---
+
+## Plans, Deferrals, And Continuity
+
+For plan-backed execution:
+
+- one run binds to one fully compiled plan
+- Euclo does not create successor plans during execution
+- unresolved issues become deferred execution artifacts
+- the developer can later revisit those deferrals and re-enter archaeology
+
+Euclo persists:
+
+- `UnitOfWork`
+- compiled execution
+- runtime execution status
+- deferred execution issues
+- context lifecycle state
+- final report output
+
+Restore can rebuild continuity from persisted Euclo artifacts and framework
+provider/session snapshot state.
+
+---
+
+## Runtime Reporting
+
+Euclo publishes runtime surfaces for local testing, persistence, and UX
+integration, including:
+
+- `euclo.compiled_execution`
+- `euclo.execution_status`
+- `euclo.semantic_inputs`
+- `euclo.context_runtime`
+- `euclo.security_runtime`
+- `euclo.chat_capability_runtime`
+- `euclo.debug_capability_runtime`
+- `euclo.archaeology_capability_runtime`
+- `euclo.unit_of_work_transition`
+- `euclo.unit_of_work_history`
+- `euclo.shared_context_runtime`
+
+These runtime objects are the main contract for local engineering tests. The
+full live-model end-to-end suite remains separate in `/testsuite`.
+
+---
+
+## Package Structure
+
+```text
+named/euclo/
+├── agent.go
+├── executors.go
+├── relurpic/          # Euclo-owned relurpic capability catalog
+├── runtime/           # UnitOfWork, semantic inputs, restore, runtime state
+├── capabilities/      # capability implementations and registry support
+├── orchestrate/       # profile/recovery/controller support
+├── interaction/       # interaction machinery and mode-facing flow
+├── gate/              # evidence and success gating
+├── euclotypes/        # shared Euclo value types and artifacts
+├── benchmark/         # deterministic local benchmarks
+└── euclotest/         # local runtime and integration tests
 ```
-Instruction arrives
-        │
-        ▼
-Session Scoping ── prevent recursive Euclo invocations
-        │
-        ▼
-Task Intake ── normalize instruction + context into TaskEnvelope
-        │
-        ▼
-Classification ── signal-based scoring: keywords, error text, context hints
-        │
-        ▼
-Mode Resolution ── choose mode: code, debug, planning, review, tdd
-        │
-        ▼
-Profile Selection ── choose execution profile: which phases, capabilities, gates
-        │
-        ▼
-Phase Machine ── execute mode-specific phases with evidence gates
-        │
-        ▼
-Verification ── collect evidence (tests, compilation), evaluate success gate
-        │
-        ▼
-Result ── artifact normalization, persistence, final report
-```
-
-### Classification
-
-Euclo classifies every incoming task using signal-based scoring:
-
-- **Keyword signals** — words like "test", "fix", "refactor", "debug", "plan"
-  contribute to intent families
-- **Error text signals** — stack traces, panics, and runtime errors push toward
-  debug mode
-- **Task structure** — test-related patterns push toward tdd mode
-- **Context hints** — explicit `mode` or `mode_hint` values in `task.Context`
-  take priority
-
-Classification produces a `TaskClassification` with intent families, evidence
-requirements, risk level, and a confidence score.
-
-### Modes
-
-Each mode defines a different phase structure:
-
-| Mode | Purpose | Phases |
-|------|---------|--------|
-| **code** | Standard edit/implement task | 5 phases |
-| **debug** | Debugging and reproduction | 6 phases |
-| **planning** | Strategic planning | 6 phases |
-| **review** | Code review | Defined, phases TBD |
-| **tdd** | Test-driven development | Defined, phases TBD |
-
-Mode resolution follows a priority order: explicit hint in task context →
-constraint-based selection → resumed mode → classifier recommendation.
-
-### Execution Profiles
-
-An execution profile defines which phases to run, which capabilities are
-eligible, and what evidence gates must pass between phases. Examples:
-
-- **edit_verify_repair** (default) — explore → plan → edit → verify
-- **reproduce_localize_patch** (debug-focused) — reproduce → localize → patch → verify
-- **plan_stage_execute** — planning-centric with staged execution
-
-Profile selection considers mode, edit permissions, evidence requirements, and
-risk level.
-
-### Phase Machine
-
-Each mode has a `PhaseMachine` — a state machine where each phase is handled by
-a `PhaseHandler`. Phases emit `InteractionFrame` objects to communicate with the
-UX layer:
-
-- **Proposals** — suggested actions for user confirmation
-- **Questions** — requests for user input
-- **Drafts** — intermediate results for review
-- **Results** — completed phase output
-- **Transitions** — phase boundary notifications
-
-Between phases, evidence gates validate that required artifacts exist and meet
-criteria before the next phase can begin. If a gate fails, the phase machine can
-retry, ask for input, or abort.
-
-### Verification and Success Gate
-
-After execution, Euclo applies a verification policy:
-
-- Collects verification evidence (test results, compilation output, execution logs)
-- Evaluates the success gate against collected evidence
-- Decides whether changes are approved for mutation
-
-The verification policy can be `required`, `optional`, or `none` depending on
-the profile and risk level.
-
----
-
-## Artifact Model
-
-Euclo records structured artifacts at every stage for auditability and
-resumability:
-
-- **Intake** — normalized task envelope
-- **Classification** — intent, confidence, evidence requirements
-- **Mode/Profile** — resolution decisions and rationale
-- **Retrieval** — context gathered from codebase
-- **Routing** — capability dispatch decisions
-- **Edits** — file modifications
-- **Verification** — test and compilation evidence
-- **Reports** — final summary with action log and proof surface
-
-All artifacts are typed with `ArtifactKind` and persisted to a
-`WorkflowArtifactStore` (SQLite) when configured. This enables multi-session
-resumption — Euclo can detect a resumed session from a previous invocation and
-continue from where it left off.
-
----
-
-## Relationship to Other Layers
-
-Euclo is a **named agent** in `named/euclo/`. It composes rather than
-reimplements:
-
-- **Delegates to** `agents/react.ReActAgent` for actual LLM reasoning and tool
-  execution
-- **Uses** `framework/capability.Registry` for capability admission and policy
-- **Uses** `framework/graph` for the underlying execution graph
-- **Uses** `framework/memory` for artifact persistence
-
-The key difference from using ReAct directly is that Euclo adds classification,
-mode selection, phased execution, evidence gating, and structured artifact
-tracking on top. A raw ReAct agent receives an instruction and reasons freely;
-Euclo constrains the reasoning into a structured workflow that small models can
-follow reliably.
-
----
-
-## Interaction Model
-
-Euclo is UX-agnostic. It communicates with the application layer through
-`InteractionFrame` objects:
-
-- The TUI (`app/relurpish`) renders frames as user-facing prompts and collects
-  responses
-- Batch or headless execution can use a `NoopEmitter` that auto-approves
-- An `AgencyResolver` maps user phrases to capability triggers or phase jumps
-
-This means Euclo's orchestration logic works identically whether invoked from the
-TUI, the dev-agent CLI, or programmatically.
 
 ---
 
@@ -181,29 +269,7 @@ Euclo is selected via manifest:
 ```yaml
 spec:
   agent:
-    implementation: coding   # or: euclo
+    implementation: coding
 ```
 
-Both `coding` and `euclo` resolve to the same runtime. The factory
-(`named/factory/factory.go`) instantiates Euclo and wires it with the
-`AgentEnvironment`.
-
----
-
-## Package Structure
-
-```
-named/euclo/
-├── agent.go                 # Root Agent type and Execute entry point
-├── session_scoping.go       # Recursion prevention
-├── interaction_registry.go  # Mode machine registration
-├── euclotypes/              # Core types: modes, profiles, artifacts, registries
-├── interaction/             # Phase machine, frame emitter, agency resolver
-│   └── modes/               # Mode implementations (code, debug, planning, review, tdd)
-├── orchestrate/             # Profile controller, recovery, interactive bridge
-├── gate/                    # Evidence gate definitions and evaluation
-├── runtime/                 # Classification, routing, verification
-├── capabilities/            # Coding capability registry and implementations
-├── internal/                # Internal helpers
-└── euclotest/               # Test utilities
-```
+`coding` and `euclo` resolve to the same named runtime.

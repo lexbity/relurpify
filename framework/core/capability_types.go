@@ -29,8 +29,14 @@ const (
 type CapabilityRuntimeFamily string
 
 const (
+	// CapabilityRuntimeFamilyLocalTool identifies local callable tool execution.
 	CapabilityRuntimeFamilyLocalTool CapabilityRuntimeFamily = "local-tool"
+	// CapabilityRuntimeFamilyProvider identifies provider-backed capability execution.
 	CapabilityRuntimeFamilyProvider  CapabilityRuntimeFamily = "provider"
+	// CapabilityRuntimeFamilyRelurpic identifies higher-order execution behavior
+	// composed from capabilities, skills, sub-agents, or multiple execution
+	// paradigms. Relurpic is a runtime-family classification inside the canonical
+	// capability model, not a separate capability system.
 	CapabilityRuntimeFamilyRelurpic  CapabilityRuntimeFamily = "relurpic"
 )
 

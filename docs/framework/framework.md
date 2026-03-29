@@ -96,6 +96,11 @@ framework/
 
 `framework/capability` is the runtime container for already admitted capabilities. It owns descriptor lookup, wrapper/runtime-policy bindings, and common invocation gating across tools, prompt capabilities, and resource capabilities.
 
+Runtime family is distinct from capability kind. In addition to local-tool and
+provider-backed capabilities, the framework also supports the `relurpic`
+runtime family for opinionated higher-order execution behaviors. See
+[relurpic-capabilities.md](relurpic-capabilities.md).
+
 **CapabilityRegistry** is the authoritative source for what an agent may call. It distinguishes:
 - `KindTool` — local-native tools, subject to gVisor sandboxing.
 - `KindPrompt` — LLM prompt templates injected into context.
