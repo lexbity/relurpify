@@ -145,20 +145,80 @@ type SemanticRequestRef struct {
 	Title     string `json:"title,omitempty"`
 }
 
+type SemanticFindingSummary struct {
+	RefID       string   `json:"ref_id,omitempty"`
+	Kind        string   `json:"kind,omitempty"`
+	Status      string   `json:"status,omitempty"`
+	Title       string   `json:"title,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	RelatedRefs []string `json:"related_refs,omitempty"`
+}
+
+type PatternProposalSummary struct {
+	ProposalID          string   `json:"proposal_id,omitempty"`
+	Title               string   `json:"title,omitempty"`
+	Summary             string   `json:"summary,omitempty"`
+	PatternRefs         []string `json:"pattern_refs,omitempty"`
+	RelatedTensionRefs  []string `json:"related_tension_refs,omitempty"`
+	SupportingRefs      []string `json:"supporting_refs,omitempty"`
+	RecommendedFollowup string   `json:"recommended_followup,omitempty"`
+}
+
+type TensionClusterSummary struct {
+	ClusterID          string   `json:"cluster_id,omitempty"`
+	Title              string   `json:"title,omitempty"`
+	Summary            string   `json:"summary,omitempty"`
+	Severity           string   `json:"severity,omitempty"`
+	TensionRefs        []string `json:"tension_refs,omitempty"`
+	PatternRefs        []string `json:"pattern_refs,omitempty"`
+	ProvenanceRefs     []string `json:"provenance_refs,omitempty"`
+	RelatedRequestRefs []string `json:"related_request_refs,omitempty"`
+}
+
+type CoherenceSuggestion struct {
+	SuggestionID        string   `json:"suggestion_id,omitempty"`
+	Title               string   `json:"title,omitempty"`
+	Summary             string   `json:"summary,omitempty"`
+	SuggestedAction     string   `json:"suggested_action,omitempty"`
+	TouchedSymbols      []string `json:"touched_symbols,omitempty"`
+	PatternRefs         []string `json:"pattern_refs,omitempty"`
+	TensionRefs         []string `json:"tension_refs,omitempty"`
+	RelevantRequestRefs []string `json:"relevant_request_refs,omitempty"`
+}
+
+type ProspectivePairingSummary struct {
+	PairingID       string   `json:"pairing_id,omitempty"`
+	Title           string   `json:"title,omitempty"`
+	Summary         string   `json:"summary,omitempty"`
+	ProspectiveRef  string   `json:"prospective_ref,omitempty"`
+	PatternRefs     []string `json:"pattern_refs,omitempty"`
+	ConvergenceRefs []string `json:"convergence_refs,omitempty"`
+	CandidateRefs   []string `json:"candidate_refs,omitempty"`
+}
+
 type SemanticInputBundle struct {
-	WorkflowID              string               `json:"workflow_id,omitempty"`
-	ExplorationID           string               `json:"exploration_id,omitempty"`
-	BasedOnRevision         string               `json:"based_on_revision,omitempty"`
-	PendingRequests         []SemanticRequestRef `json:"pending_requests,omitempty"`
-	CompletedRequests       []SemanticRequestRef `json:"completed_requests,omitempty"`
-	PatternRefs             []string             `json:"pattern_refs,omitempty"`
-	TensionRefs             []string             `json:"tension_refs,omitempty"`
-	ProspectiveRefs         []string             `json:"prospective_refs,omitempty"`
-	ConvergenceRefs         []string             `json:"convergence_refs,omitempty"`
-	LearningInteractionRefs []string             `json:"learning_interaction_refs,omitempty"`
-	RequestProvenanceRefs   []string             `json:"request_provenance_refs,omitempty"`
-	ProvenanceRefs          []string             `json:"provenance_refs,omitempty"`
-	Source                  string               `json:"source,omitempty"`
+	WorkflowID              string                      `json:"workflow_id,omitempty"`
+	ExplorationID           string                      `json:"exploration_id,omitempty"`
+	BasedOnRevision         string                      `json:"based_on_revision,omitempty"`
+	PendingRequests         []SemanticRequestRef        `json:"pending_requests,omitempty"`
+	CompletedRequests       []SemanticRequestRef        `json:"completed_requests,omitempty"`
+	PatternRefs             []string                    `json:"pattern_refs,omitempty"`
+	TensionRefs             []string                    `json:"tension_refs,omitempty"`
+	ProspectiveRefs         []string                    `json:"prospective_refs,omitempty"`
+	ConvergenceRefs         []string                    `json:"convergence_refs,omitempty"`
+	LearningInteractionRefs []string                    `json:"learning_interaction_refs,omitempty"`
+	RequestProvenanceRefs   []string                    `json:"request_provenance_refs,omitempty"`
+	ProvenanceRefs          []string                    `json:"provenance_refs,omitempty"`
+	PatternFindings         []SemanticFindingSummary    `json:"pattern_findings,omitempty"`
+	TensionFindings         []SemanticFindingSummary    `json:"tension_findings,omitempty"`
+	ProspectiveFindings     []SemanticFindingSummary    `json:"prospective_findings,omitempty"`
+	ConvergenceFindings     []SemanticFindingSummary    `json:"convergence_findings,omitempty"`
+	LearningFindings        []SemanticFindingSummary    `json:"learning_findings,omitempty"`
+	PatternProposals        []PatternProposalSummary    `json:"pattern_proposals,omitempty"`
+	TensionClusters         []TensionClusterSummary     `json:"tension_clusters,omitempty"`
+	CoherenceSuggestions    []CoherenceSuggestion       `json:"coherence_suggestions,omitempty"`
+	ProspectivePairings     []ProspectivePairingSummary `json:"prospective_pairings,omitempty"`
+	Source                  string                      `json:"source,omitempty"`
 }
 
 type ContextPolicySummary struct {
@@ -167,6 +227,171 @@ type ContextPolicySummary struct {
 	ProgressiveLoading  bool     `json:"progressive_loading"`
 	PreferredDetail     string   `json:"preferred_detail,omitempty"`
 	ProtectPatterns     []string `json:"protect_patterns,omitempty"`
+}
+
+type ContextRuntimeState struct {
+	ModeID                 string         `json:"mode_id,omitempty"`
+	ExecutorFamily         ExecutorFamily `json:"executor_family,omitempty"`
+	StrategyName           string         `json:"strategy_name,omitempty"`
+	PreferredDetail        string         `json:"preferred_detail,omitempty"`
+	ProgressiveEnabled     bool           `json:"progressive_enabled"`
+	BudgetMaxTokens        int            `json:"budget_max_tokens,omitempty"`
+	AvailableContextTokens int            `json:"available_context_tokens,omitempty"`
+	BudgetState            string         `json:"budget_state,omitempty"`
+	ContextTokens          int            `json:"context_tokens,omitempty"`
+	ContextUsagePercent    float64        `json:"context_usage_percent,omitempty"`
+	MinHistorySize         int            `json:"min_history_size,omitempty"`
+	CompressionThreshold   float64        `json:"compression_threshold,omitempty"`
+	InitialLoadAttempted   bool           `json:"initial_load_attempted"`
+	InitialLoadCompleted   bool           `json:"initial_load_completed"`
+	SignalsHandled         bool           `json:"signals_handled"`
+	CompactionEligible     bool           `json:"compaction_eligible"`
+	RestoreRequired        bool           `json:"restore_required"`
+	CompactionObserved     bool           `json:"compaction_observed"`
+	DemotionObserved       bool           `json:"demotion_observed"`
+	PruningObserved        bool           `json:"pruning_observed"`
+	ProtectedPaths         []string       `json:"protected_paths,omitempty"`
+	LastInitialLoadError   string         `json:"last_initial_load_error,omitempty"`
+	DebugMessages          []string       `json:"debug_messages,omitempty"`
+	UpdatedAt              time.Time      `json:"updated_at,omitempty"`
+}
+
+type SecurityDiagnostic struct {
+	Kind     string   `json:"kind,omitempty"`
+	Subject  string   `json:"subject,omitempty"`
+	Severity string   `json:"severity,omitempty"`
+	Summary  string   `json:"summary,omitempty"`
+	Refs     []string `json:"refs,omitempty"`
+}
+
+type CapabilityContractRuntimeState struct {
+	PrimaryCapabilityID              string    `json:"primary_capability_id,omitempty"`
+	InspectFirst                     bool      `json:"inspect_first"`
+	NonMutating                      bool      `json:"non_mutating"`
+	RequiresCompiledPlan             bool      `json:"requires_compiled_plan"`
+	HasCompiledPlan                  bool      `json:"has_compiled_plan"`
+	LazySemanticAcquisitionEligible  bool      `json:"lazy_semantic_acquisition_eligible"`
+	LazySemanticAcquisitionTriggered bool      `json:"lazy_semantic_acquisition_triggered"`
+	DebugEscalationTarget            string    `json:"debug_escalation_target,omitempty"`
+	DebugEscalationTriggered         bool      `json:"debug_escalation_triggered"`
+	Blocked                          bool      `json:"blocked"`
+	ViolationReason                  string    `json:"violation_reason,omitempty"`
+	Diagnostics                      []string  `json:"diagnostics,omitempty"`
+	UpdatedAt                        time.Time `json:"updated_at,omitempty"`
+}
+
+type ArchaeologyCapabilityRuntimeState struct {
+	PrimaryCapabilityID         string    `json:"primary_capability_id,omitempty"`
+	PrimaryOperation            string    `json:"primary_operation,omitempty"`
+	PrimaryLLMDependent         bool      `json:"primary_llm_dependent"`
+	PrimaryArchaeoAssociated    bool      `json:"primary_archaeo_associated"`
+	PolicySnapshotID            string    `json:"policy_snapshot_id,omitempty"`
+	AdmittedCapabilityIDs       []string  `json:"admitted_capability_ids,omitempty"`
+	AdmittedModelTools          []string  `json:"admitted_model_tools,omitempty"`
+	SupportingCapabilityIDs     []string  `json:"supporting_capability_ids,omitempty"`
+	SupportingOperations        []string  `json:"supporting_operations,omitempty"`
+	SupportingLLMDependentCount int       `json:"supporting_llm_dependent_count,omitempty"`
+	WorkflowID                  string    `json:"workflow_id,omitempty"`
+	ExplorationID               string    `json:"exploration_id,omitempty"`
+	PlanID                      string    `json:"plan_id,omitempty"`
+	PlanVersion                 int       `json:"plan_version,omitempty"`
+	HasCompiledPlan             bool      `json:"has_compiled_plan"`
+	PendingRequestCount         int       `json:"pending_request_count,omitempty"`
+	CompletedRequestCount       int       `json:"completed_request_count,omitempty"`
+	PatternRefCount             int       `json:"pattern_ref_count,omitempty"`
+	TensionRefCount             int       `json:"tension_ref_count,omitempty"`
+	ProspectiveRefCount         int       `json:"prospective_ref_count,omitempty"`
+	ConvergenceRefCount         int       `json:"convergence_ref_count,omitempty"`
+	LearningRefCount            int       `json:"learning_ref_count,omitempty"`
+	PlanBound                   bool      `json:"plan_bound"`
+	LongRunning                 bool      `json:"long_running"`
+	Summary                     string    `json:"summary,omitempty"`
+	UpdatedAt                   time.Time `json:"updated_at,omitempty"`
+}
+
+type DebugCapabilityRuntimeState struct {
+	PrimaryCapabilityID        string    `json:"primary_capability_id,omitempty"`
+	SupportingCapabilityIDs    []string  `json:"supporting_capability_ids,omitempty"`
+	PolicySnapshotID           string    `json:"policy_snapshot_id,omitempty"`
+	AdmittedCapabilityIDs      []string  `json:"admitted_capability_ids,omitempty"`
+	AdmittedModelTools         []string  `json:"admitted_model_tools,omitempty"`
+	RootCauseActive            bool      `json:"root_cause_active"`
+	HypothesisRefinementActive bool      `json:"hypothesis_refinement_active"`
+	LocalizationActive         bool      `json:"localization_active"`
+	FlawSurfacingActive        bool      `json:"flaw_surfacing_active"`
+	VerificationRepairActive   bool      `json:"verification_repair_active"`
+	ToolExpositionFacet        bool      `json:"tool_exposition_facet"`
+	ToolAccessConstrained      bool      `json:"tool_access_constrained"`
+	ToolCapabilityIDs          []string  `json:"tool_capability_ids,omitempty"`
+	ToolOutputSources          []string  `json:"tool_output_sources,omitempty"`
+	VerificationStatus         string    `json:"verification_status,omitempty"`
+	VerificationCheckCount     int       `json:"verification_check_count,omitempty"`
+	ArchaeoAssociated          bool      `json:"archaeo_associated"`
+	PatternRefCount            int       `json:"pattern_ref_count,omitempty"`
+	TensionRefCount            int       `json:"tension_ref_count,omitempty"`
+	MutationObserved           bool      `json:"mutation_observed"`
+	EscalationTarget           string    `json:"escalation_target,omitempty"`
+	EscalationTriggered        bool      `json:"escalation_triggered"`
+	DeniedToolUsage            []string  `json:"denied_tool_usage,omitempty"`
+	Diagnostics                []string  `json:"diagnostics,omitempty"`
+	Summary                    string    `json:"summary,omitempty"`
+	UpdatedAt                  time.Time `json:"updated_at,omitempty"`
+}
+
+type ChatCapabilityRuntimeState struct {
+	PrimaryCapabilityID              string    `json:"primary_capability_id,omitempty"`
+	SupportingCapabilityIDs          []string  `json:"supporting_capability_ids,omitempty"`
+	PolicySnapshotID                 string    `json:"policy_snapshot_id,omitempty"`
+	AdmittedCapabilityIDs            []string  `json:"admitted_capability_ids,omitempty"`
+	AdmittedModelTools               []string  `json:"admitted_model_tools,omitempty"`
+	AskActive                        bool      `json:"ask_active"`
+	InspectActive                    bool      `json:"inspect_active"`
+	ImplementActive                  bool      `json:"implement_active"`
+	NonMutating                      bool      `json:"non_mutating"`
+	InspectFirst                     bool      `json:"inspect_first"`
+	LazySemanticAcquisitionEligible  bool      `json:"lazy_semantic_acquisition_eligible"`
+	LazySemanticAcquisitionTriggered bool      `json:"lazy_semantic_acquisition_triggered"`
+	DirectEditExecutionActive        bool      `json:"direct_edit_execution_active"`
+	LocalReviewActive                bool      `json:"local_review_active"`
+	TargetedVerificationRepairActive bool      `json:"targeted_verification_repair_active"`
+	ArchaeoSupportActive             bool      `json:"archaeo_support_active"`
+	ArchaeoSupportTriggered          bool      `json:"archaeo_support_triggered"`
+	MutationObserved                 bool      `json:"mutation_observed"`
+	VerificationStatus               string    `json:"verification_status,omitempty"`
+	VerificationCheckCount           int       `json:"verification_check_count,omitempty"`
+	ToolCapabilityIDs                []string  `json:"tool_capability_ids,omitempty"`
+	SharedContextEnabled             bool      `json:"shared_context_enabled"`
+	SharedContextRecentMutationCount int       `json:"shared_context_recent_mutation_count,omitempty"`
+	Diagnostics                      []string  `json:"diagnostics,omitempty"`
+	Summary                          string    `json:"summary,omitempty"`
+	UpdatedAt                        time.Time `json:"updated_at,omitempty"`
+}
+
+type SecurityRuntimeState struct {
+	ModeID                     string               `json:"mode_id,omitempty"`
+	ExecutorFamily             ExecutorFamily       `json:"executor_family,omitempty"`
+	AllowedSelectorsConfigured bool                 `json:"allowed_selectors_configured"`
+	ExecutionCatalogSnapshotID string               `json:"execution_catalog_snapshot_id,omitempty"`
+	PolicySnapshotID           string               `json:"policy_snapshot_id,omitempty"`
+	AdmittedCallableCaps       []string             `json:"admitted_callable_capabilities,omitempty"`
+	AdmittedInspectableCaps    []string             `json:"admitted_inspectable_capabilities,omitempty"`
+	AdmittedModelTools         []string             `json:"admitted_model_tools,omitempty"`
+	Blocked                    bool                 `json:"blocked"`
+	DeniedCapabilityUsage      []string             `json:"denied_capability_usage,omitempty"`
+	DeniedToolUsage            []string             `json:"denied_tool_usage,omitempty"`
+	Diagnostics                []SecurityDiagnostic `json:"diagnostics,omitempty"`
+	UpdatedAt                  time.Time            `json:"updated_at,omitempty"`
+}
+
+type SharedContextRuntimeState struct {
+	Enabled             bool           `json:"enabled"`
+	ExecutorFamily      ExecutorFamily `json:"executor_family,omitempty"`
+	BehaviorFamily      string         `json:"behavior_family,omitempty"`
+	Participants        []string       `json:"participants,omitempty"`
+	WorkingSetRefs      []string       `json:"working_set_refs,omitempty"`
+	RecentMutationKeys  []string       `json:"recent_mutation_keys,omitempty"`
+	RecentMutationCount int            `json:"recent_mutation_count,omitempty"`
+	UpdatedAt           time.Time      `json:"updated_at,omitempty"`
 }
 
 type ResolvedExecutionPolicy struct {
@@ -189,8 +414,45 @@ type ResolvedExecutionPolicy struct {
 type WorkUnitExecutorDescriptor struct {
 	ExecutorID    string         `json:"executor_id,omitempty"`
 	Family        ExecutorFamily `json:"family,omitempty"`
+	RecipeID      string         `json:"recipe_id,omitempty"`
 	Reason        string         `json:"reason,omitempty"`
 	Compatibility bool           `json:"compatibility"`
+}
+
+type ExecutorRuntimeState struct {
+	ExecutorID string         `json:"executor_id,omitempty"`
+	Family     ExecutorFamily `json:"family,omitempty"`
+	Path       string         `json:"path,omitempty"`
+	Reason     string         `json:"reason,omitempty"`
+}
+
+type UnitOfWorkTransitionState struct {
+	PreviousUnitOfWorkID        string    `json:"previous_unit_of_work_id,omitempty"`
+	CurrentUnitOfWorkID         string    `json:"current_unit_of_work_id,omitempty"`
+	RootUnitOfWorkID            string    `json:"root_unit_of_work_id,omitempty"`
+	PreviousModeID              string    `json:"previous_mode_id,omitempty"`
+	CurrentModeID               string    `json:"current_mode_id,omitempty"`
+	PreviousPrimaryCapabilityID string    `json:"previous_primary_capability_id,omitempty"`
+	CurrentPrimaryCapabilityID  string    `json:"current_primary_capability_id,omitempty"`
+	Preserved                   bool      `json:"preserved"`
+	Rebound                     bool      `json:"rebound"`
+	Reason                      string    `json:"reason,omitempty"`
+	PreviousArchaeoContext      bool      `json:"previous_archaeo_context"`
+	CurrentArchaeoContext       bool      `json:"current_archaeo_context"`
+	TransitionCompatibilityOK   bool      `json:"transition_compatibility_ok"`
+	UpdatedAt                   time.Time `json:"updated_at,omitempty"`
+}
+
+type UnitOfWorkHistoryEntry struct {
+	UnitOfWorkID                string    `json:"unit_of_work_id,omitempty"`
+	RootUnitOfWorkID            string    `json:"root_unit_of_work_id,omitempty"`
+	PredecessorUnitOfWorkID     string    `json:"predecessor_unit_of_work_id,omitempty"`
+	ModeID                      string    `json:"mode_id,omitempty"`
+	PrimaryRelurpicCapabilityID string    `json:"primary_relurpic_capability_id,omitempty"`
+	TransitionReason            string    `json:"transition_reason,omitempty"`
+	Rebound                     bool      `json:"rebound"`
+	Preserved                   bool      `json:"preserved"`
+	UpdatedAt                   time.Time `json:"updated_at,omitempty"`
 }
 
 type UnitOfWork struct {
@@ -198,15 +460,18 @@ type UnitOfWork struct {
 	WorkflowID  string `json:"workflow_id,omitempty"`
 	RunID       string `json:"run_id,omitempty"`
 	ExecutionID string `json:"execution_id,omitempty"`
+	RootID      string `json:"root_id,omitempty"`
 
 	ModeID            string `json:"mode_id,omitempty"`
 	ObjectiveKind     string `json:"objective_kind,omitempty"`
 	BehaviorFamily    string `json:"behavior_family,omitempty"`
 	ContextStrategyID string `json:"context_strategy_id,omitempty"`
 
-	VerificationPolicyID string `json:"verification_policy_id,omitempty"`
-	DeferralPolicyID     string `json:"deferral_policy_id,omitempty"`
-	CheckpointPolicyID   string `json:"checkpoint_policy_id,omitempty"`
+	VerificationPolicyID            string   `json:"verification_policy_id,omitempty"`
+	DeferralPolicyID                string   `json:"deferral_policy_id,omitempty"`
+	CheckpointPolicyID              string   `json:"checkpoint_policy_id,omitempty"`
+	PrimaryRelurpicCapabilityID     string   `json:"primary_relurpic_capability_id,omitempty"`
+	SupportingRelurpicCapabilityIDs []string `json:"supporting_relurpic_capability_ids,omitempty"`
 
 	SemanticInputs     SemanticInputBundle           `json:"semantic_inputs,omitempty"`
 	ResolvedPolicy     ResolvedExecutionPolicy       `json:"resolved_execution_policy,omitempty"`
@@ -218,11 +483,14 @@ type UnitOfWork struct {
 	ToolBindings       []UnitOfWorkToolBinding       `json:"tool_bindings,omitempty"`
 	CapabilityBindings []UnitOfWorkCapabilityBinding `json:"capability_bindings,omitempty"`
 
-	Status           UnitOfWorkStatus     `json:"status,omitempty"`
-	ResultClass      ExecutionResultClass `json:"result_class,omitempty"`
-	DeferredIssueIDs []string             `json:"deferred_issue_ids,omitempty"`
-	CreatedAt        time.Time            `json:"created_at,omitempty"`
-	UpdatedAt        time.Time            `json:"updated_at,omitempty"`
+	PredecessorUnitOfWorkID string                    `json:"predecessor_unit_of_work_id,omitempty"`
+	TransitionReason        string                    `json:"transition_reason,omitempty"`
+	TransitionState         UnitOfWorkTransitionState `json:"transition_state,omitempty"`
+	Status                  UnitOfWorkStatus          `json:"status,omitempty"`
+	ResultClass             ExecutionResultClass      `json:"result_class,omitempty"`
+	DeferredIssueIDs        []string                  `json:"deferred_issue_ids,omitempty"`
+	CreatedAt               time.Time                 `json:"created_at,omitempty"`
+	UpdatedAt               time.Time                 `json:"updated_at,omitempty"`
 }
 
 type ContextLifecycleState struct {
@@ -304,20 +572,23 @@ type UnitOfWorkCapabilityBinding struct {
 }
 
 type CompiledExecution struct {
-	WorkflowID     string    `json:"workflow_id,omitempty"`
-	RunID          string    `json:"run_id,omitempty"`
-	ExecutionID    string    `json:"execution_id,omitempty"`
-	UnitOfWorkID   string    `json:"unit_of_work_id,omitempty"`
-	CompiledAt     time.Time `json:"compiled_at,omitempty"`
-	UpdatedAt      time.Time `json:"updated_at,omitempty"`
-	ModeID         string    `json:"mode_id,omitempty"`
-	ObjectiveKind  string    `json:"objective_kind,omitempty"`
-	BehaviorFamily string    `json:"behavior_family,omitempty"`
+	WorkflowID       string    `json:"workflow_id,omitempty"`
+	RunID            string    `json:"run_id,omitempty"`
+	ExecutionID      string    `json:"execution_id,omitempty"`
+	UnitOfWorkID     string    `json:"unit_of_work_id,omitempty"`
+	RootUnitOfWorkID string    `json:"root_unit_of_work_id,omitempty"`
+	CompiledAt       time.Time `json:"compiled_at,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at,omitempty"`
+	ModeID           string    `json:"mode_id,omitempty"`
+	ObjectiveKind    string    `json:"objective_kind,omitempty"`
+	BehaviorFamily   string    `json:"behavior_family,omitempty"`
 
-	ContextStrategyID    string `json:"context_strategy_id,omitempty"`
-	VerificationPolicyID string `json:"verification_policy_id,omitempty"`
-	DeferralPolicyID     string `json:"deferral_policy_id,omitempty"`
-	CheckpointPolicyID   string `json:"checkpoint_policy_id,omitempty"`
+	ContextStrategyID               string   `json:"context_strategy_id,omitempty"`
+	VerificationPolicyID            string   `json:"verification_policy_id,omitempty"`
+	DeferralPolicyID                string   `json:"deferral_policy_id,omitempty"`
+	CheckpointPolicyID              string   `json:"checkpoint_policy_id,omitempty"`
+	PrimaryRelurpicCapabilityID     string   `json:"primary_relurpic_capability_id,omitempty"`
+	SupportingRelurpicCapabilityIDs []string `json:"supporting_relurpic_capability_ids,omitempty"`
 
 	SemanticInputs     SemanticInputBundle           `json:"semantic_inputs,omitempty"`
 	ResolvedPolicy     ResolvedExecutionPolicy       `json:"resolved_execution_policy,omitempty"`
@@ -329,12 +600,15 @@ type CompiledExecution struct {
 	ToolBindings       []UnitOfWorkToolBinding       `json:"tool_bindings,omitempty"`
 	CapabilityBindings []UnitOfWorkCapabilityBinding `json:"capability_bindings,omitempty"`
 
-	Status                      ExecutionStatus      `json:"status,omitempty"`
-	ResultClass                 ExecutionResultClass `json:"result_class,omitempty"`
-	DeferredIssueIDs            []string             `json:"deferred_issue_ids,omitempty"`
-	ArchaeoRefs                 map[string][]string  `json:"archaeo_refs,omitempty"`
-	ProviderSnapshotRefs        []string             `json:"provider_snapshot_refs,omitempty"`
-	ProviderSessionSnapshotRefs []string             `json:"provider_session_snapshot_refs,omitempty"`
+	PredecessorUnitOfWorkID     string                    `json:"predecessor_unit_of_work_id,omitempty"`
+	TransitionReason            string                    `json:"transition_reason,omitempty"`
+	TransitionState             UnitOfWorkTransitionState `json:"transition_state,omitempty"`
+	Status                      ExecutionStatus           `json:"status,omitempty"`
+	ResultClass                 ExecutionResultClass      `json:"result_class,omitempty"`
+	DeferredIssueIDs            []string                  `json:"deferred_issue_ids,omitempty"`
+	ArchaeoRefs                 map[string][]string       `json:"archaeo_refs,omitempty"`
+	ProviderSnapshotRefs        []string                  `json:"provider_snapshot_refs,omitempty"`
+	ProviderSessionSnapshotRefs []string                  `json:"provider_session_snapshot_refs,omitempty"`
 }
 
 type RuntimeExecutionStatus struct {

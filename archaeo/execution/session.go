@@ -7,6 +7,7 @@ import (
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
@@ -34,13 +35,14 @@ type SessionService struct {
 }
 
 type SessionInput struct {
-	Task           *core.Task
-	ExecutionTask  *core.Task
-	State          *core.Context
-	Classification eucloruntime.TaskClassification
-	Mode           euclotypes.ModeResolution
-	Profile        euclotypes.ExecutionProfileSelection
-	Telemetry      core.Telemetry
+	Task             *core.Task
+	ExecutionTask    *core.Task
+	WorkflowExecutor graph.WorkflowExecutor
+	State            *core.Context
+	Classification   eucloruntime.TaskClassification
+	Mode             euclotypes.ModeResolution
+	Profile          euclotypes.ExecutionProfileSelection
+	Telemetry        core.Telemetry
 }
 
 type SessionOutput struct {
@@ -92,7 +94,15 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 			out.Err = checkpointErr
 		}
 	}
-	result, _, execErr := s.ProfileCtrl.ExecuteProfile(ctx, in.Profile, in.Mode, execEnvelope)
+	var (
+		result  *core.Result
+		execErr error
+	)
+	if in.WorkflowExecutor != nil {
+		result, execErr = in.WorkflowExecutor.Execute(ctx, executionTask, in.State)
+	} else {
+		result, _, execErr = s.ProfileCtrl.ExecuteProfile(ctx, in.Profile, in.Mode, execEnvelope)
+	}
 	if out.Err == nil {
 		out.Err = execErr
 	}
@@ -145,6 +155,18 @@ func (s SessionService) ShortCircuit(ctx context.Context, in ShortCircuitInput) 
 		}
 	}
 	finalReport := euclotypes.AssembleFinalReport(artifacts)
+	if raw, ok := in.State.Get("euclo.provider_restore"); ok && raw != nil {
+		finalReport["provider_restore"] = raw
+	}
+	if raw, ok := in.State.Get("euclo.context_runtime"); ok && raw != nil {
+		finalReport["context_runtime"] = raw
+	}
+	if raw, ok := in.State.Get("euclo.security_runtime"); ok && raw != nil {
+		finalReport["security_runtime"] = raw
+	}
+	if raw, ok := in.State.Get("euclo.shared_context_runtime"); ok && raw != nil {
+		finalReport["shared_context_runtime"] = raw
+	}
 	in.State.Set("euclo.final_report", finalReport)
 	eucloruntime.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
 	out.Result.Data["final_report"] = finalReport

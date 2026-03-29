@@ -82,36 +82,36 @@ func (r Runtime) Bundle() providers.Bundle {
 	prospectiveDeps := r.prospectiveAnalysisDeps()
 	convergenceDeps := r.convergenceReviewDeps()
 	return providers.Bundle{
-		PatternSurfacer: relurpic.PatternSurfacingProvider{
-			Model:        patternDeps.Model,
-			Config:       patternDeps.Config,
-			Registry:     patternDeps.Registry,
-			IndexManager: patternDeps.IndexManager,
-			GraphDB:      patternDeps.GraphDB,
-			PatternStore: patternDeps.PatternStore,
-			RetrievalDB:  archaeoretrieval.SQLDB(patternDeps.Retrieval),
-		},
-		TensionAnalyzer: relurpic.TensionAnalysisProvider{
-			Model:         tensionDeps.Model,
-			Config:        tensionDeps.Config,
-			Registry:      tensionDeps.Registry,
-			IndexManager:  tensionDeps.IndexManager,
-			GraphDB:       tensionDeps.GraphDB,
-			RetrievalDB:   archaeoretrieval.SQLDB(tensionDeps.Retrieval),
-			PlanStore:     tensionDeps.PlanStore,
-			Guidance:      tensionDeps.Guidance,
-			WorkflowStore: tensionDeps.WorkflowStore,
-		},
-		ProspectiveAnalyzer: relurpic.ProspectiveAnalysisProvider{
-			Model:        prospectiveDeps.Model,
-			Config:       prospectiveDeps.Config,
-			PatternStore: prospectiveDeps.PatternStore,
-			RetrievalDB:  archaeoretrieval.SQLDB(prospectiveDeps.Retrieval),
-		},
-		ConvergenceReviewer: relurpic.ConvergenceReviewProvider{
-			PatternStore: convergenceDeps.PatternStore,
-			TensionStore: convergenceDeps.TensionStore,
-		},
+		PatternSurfacer: relurpic.NewPatternSurfacingProvider(
+			patternDeps.Model,
+			patternDeps.Config,
+			patternDeps.Registry,
+			patternDeps.IndexManager,
+			patternDeps.GraphDB,
+			patternDeps.PatternStore,
+			archaeoretrieval.SQLDB(patternDeps.Retrieval),
+		),
+		TensionAnalyzer: relurpic.NewTensionAnalysisProvider(
+			tensionDeps.Model,
+			tensionDeps.Config,
+			tensionDeps.Registry,
+			tensionDeps.IndexManager,
+			tensionDeps.GraphDB,
+			archaeoretrieval.SQLDB(tensionDeps.Retrieval),
+			tensionDeps.PlanStore,
+			tensionDeps.Guidance,
+			tensionDeps.WorkflowStore,
+		),
+		ProspectiveAnalyzer: relurpic.NewProspectiveAnalysisProvider(
+			prospectiveDeps.Model,
+			prospectiveDeps.Config,
+			prospectiveDeps.PatternStore,
+			archaeoretrieval.SQLDB(prospectiveDeps.Retrieval),
+		),
+		ConvergenceReviewer: relurpic.NewConvergenceReviewProvider(
+			convergenceDeps.PatternStore,
+			convergenceDeps.TensionStore,
+		),
 	}
 }
 

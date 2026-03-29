@@ -1,12 +1,14 @@
 package runtime
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
 )
 
 func BuildResolvedExecutionPolicy(task *core.Task, cfg *core.Config, registry *capability.Registry, mode ModeResolution, profile ExecutionProfileSelection) ResolvedExecutionPolicy {
@@ -61,19 +63,58 @@ func contextPolicySummary(spec *core.AgentRuntimeSpec) ContextPolicySummary {
 	return summary
 }
 
-func SelectExecutorDescriptor(mode ModeResolution, profile ExecutionProfileSelection, classification TaskClassification, policy ResolvedExecutionPolicy, planBinding *UnitOfWorkPlanBinding) WorkUnitExecutorDescriptor {
+func SelectExecutorDescriptor(mode ModeResolution, profile ExecutionProfileSelection, classification TaskClassification, policy ResolvedExecutionPolicy, planBinding *UnitOfWorkPlanBinding, primaryCapabilityID string, supportingCapabilityIDs []string) WorkUnitExecutorDescriptor {
+	reg := euclorelurpic.DefaultRegistry()
+	primary, _ := reg.Lookup(primaryCapabilityID)
+	recipeID := strings.TrimSpace(primary.ExecutorRecipe)
+	reason := fmt.Sprintf("executor recipe derived from primary relurpic capability %s", primaryCapabilityID)
+
 	switch {
+	case primaryCapabilityID == euclorelurpic.CapabilityChatAsk:
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
+	case primaryCapabilityID == euclorelurpic.CapabilityChatInspect && mode.ModeID == "review":
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.reflection", Family: ExecutorFamilyReflection, RecipeID: "review.chat-inspect.reflection", Reason: reason}
+	case primaryCapabilityID == euclorelurpic.CapabilityChatInspect:
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
+	case primaryCapabilityID == euclorelurpic.CapabilityChatImplement:
+		if classification.RequiresDeterministicStages || policy.RequireVerificationStep {
+			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.htn", Family: ExecutorFamilyHTN, RecipeID: recipeID, Reason: reason}
+		}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
+	case primaryCapabilityID == euclorelurpic.CapabilityArchaeologyExplore:
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
+	case primaryCapabilityID == euclorelurpic.CapabilityArchaeologyCompilePlan:
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
+	case primaryCapabilityID == euclorelurpic.CapabilityArchaeologyImplement:
+		if planBinding != nil && planBinding.IsLongRunning {
+			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.rewoo", Family: ExecutorFamilyRewoo, RecipeID: recipeID, Reason: reason}
+		}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
+	case primaryCapabilityID == euclorelurpic.CapabilityDebugInvestigate:
+		if classification.RequiresDeterministicStages || policy.RequireVerificationStep {
+			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.htn", Family: ExecutorFamilyHTN, RecipeID: recipeID, Reason: reason}
+		}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
 	case mode.ModeID == "review":
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.reflection", Family: ExecutorFamilyReflection, Reason: "review mode requires reflective correction", Compatibility: true}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.reflection", Family: ExecutorFamilyReflection, RecipeID: "review.fallback.reflection", Reason: "review mode fallback executor recipe"}
 	case planBinding != nil && planBinding.IsLongRunning:
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.rewoo", Family: ExecutorFamilyRewoo, Reason: "long-running plan-backed execution prefers checkpointed context management", Compatibility: true}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.rewoo", Family: ExecutorFamilyRewoo, RecipeID: "planning.fallback.rewoo", Reason: "fallback long-running plan-backed execution"}
 	case mode.ModeID == "planning" || profile.ProfileID == "plan_stage_execute":
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, Reason: "planning execution prefers explicit plan-first orchestration", Compatibility: true}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: "planning.fallback.planner", Reason: "fallback planning execution"}
 	case classification.RequiresDeterministicStages || policy.RequireVerificationStep:
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.htn", Family: ExecutorFamilyHTN, Reason: "deterministic stages require structured decomposition", Compatibility: true}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.htn", Family: ExecutorFamilyHTN, RecipeID: "code.fallback.htn", Reason: "fallback deterministic decomposition"}
 	default:
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, Reason: "focused direct execution defaults to react-style orchestration", Compatibility: true}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: "code.fallback.react", Reason: "fallback react-style execution"}
 	}
+}
+
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func cloneStringSliceMap(input map[string][]string) map[string][]string {

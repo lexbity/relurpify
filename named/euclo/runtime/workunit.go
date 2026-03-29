@@ -7,6 +7,7 @@ import (
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/core"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
 )
 
 // BuildUnitOfWork assembles Euclo's active execution bundle from intake,
@@ -31,35 +32,43 @@ func BuildUnitOfWork(
 			planBinding.IsLongRunning = true
 		}
 	}
+	primaryCapabilityID := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	if primaryCapabilityID == euclorelurpic.CapabilityArchaeologyImplement && (planBinding == nil || !planBinding.IsPlanBacked) {
+		primaryCapabilityID = euclorelurpic.CapabilityArchaeologyCompilePlan
+	}
+	supportingCapabilityIDs := supportingRelurpicCapabilitiesForPrimary(primaryCapabilityID, envelope, classification, mode, profile)
 	if executor.ExecutorID == "" {
-		executor = SelectExecutorDescriptor(mode, profile, classification, resolvedPolicy, planBinding)
+		executor = SelectExecutorDescriptor(mode, profile, classification, resolvedPolicy, planBinding, primaryCapabilityID, supportingCapabilityIDs)
 	}
 	uow := UnitOfWork{
-		ID:                   firstNonEmpty(stateString(state, "euclo.unit_of_work_id"), envelope.TaskID),
-		WorkflowID:           workflowIDFromTaskState(task, state),
-		RunID:                runIDFromTaskState(task, state),
-		ExecutionID:          executionID(task, state),
-		ModeID:               mode.ModeID,
-		ObjectiveKind:        objectiveKindForWork(mode, profile, classification),
-		BehaviorFamily:       behaviorFamilyForWork(mode, profile, classification, resolvedPolicy),
-		ContextStrategyID:    contextStrategyForWork(mode, modeRegistry),
-		VerificationPolicyID: verificationPolicyForWork(mode, profile, resolvedPolicy),
-		DeferralPolicyID:     deferralPolicyForWork(mode, profile, classification),
-		CheckpointPolicyID:   checkpointPolicyForWork(mode, profile, resolvedPolicy),
-		SemanticInputs:       semanticInputs,
-		ResolvedPolicy:       resolvedPolicy,
-		ExecutorDescriptor:   executor,
-		PlanBinding:          planBinding,
-		ContextBundle:        contextBundleFromState(task, state, envelope, semanticInputs),
-		RoutineBindings:      routineBindingsForWork(mode, profile, classification, resolvedPolicy),
-		SkillBindings:        skillBindingsForWork(task, state, resolvedPolicy),
-		ToolBindings:         toolBindingsForWork(envelope),
-		CapabilityBindings:   capabilityBindingsForWork(profile, resolvedPolicy),
-		Status:               UnitOfWorkStatusReady,
-		ResultClass:          "",
-		DeferredIssueIDs:     deferredIssueIDsFromState(state),
-		CreatedAt:            now,
-		UpdatedAt:            now,
+		ID:                              firstNonEmpty(stateString(state, "euclo.unit_of_work_id"), envelope.TaskID),
+		WorkflowID:                      workflowIDFromTaskState(task, state),
+		RunID:                           runIDFromTaskState(task, state),
+		ExecutionID:                     executionID(task, state),
+		RootID:                          stateString(state, "euclo.root_unit_of_work_id"),
+		ModeID:                          mode.ModeID,
+		ObjectiveKind:                   objectiveKindForWork(mode, profile, classification),
+		BehaviorFamily:                  behaviorFamilyForWork(mode, profile, classification, resolvedPolicy),
+		ContextStrategyID:               contextStrategyForWork(mode, modeRegistry),
+		VerificationPolicyID:            verificationPolicyForWork(mode, profile, resolvedPolicy),
+		DeferralPolicyID:                deferralPolicyForWork(mode, profile, classification),
+		CheckpointPolicyID:              checkpointPolicyForWork(mode, profile, resolvedPolicy),
+		PrimaryRelurpicCapabilityID:     primaryCapabilityID,
+		SupportingRelurpicCapabilityIDs: supportingCapabilityIDs,
+		SemanticInputs:                  semanticInputs,
+		ResolvedPolicy:                  resolvedPolicy,
+		ExecutorDescriptor:              executor,
+		PlanBinding:                     planBinding,
+		ContextBundle:                   contextBundleFromState(task, state, envelope, semanticInputs),
+		RoutineBindings:                 routineBindingsForWork(mode, profile, classification, resolvedPolicy),
+		SkillBindings:                   skillBindingsForWork(task, state, resolvedPolicy),
+		ToolBindings:                    toolBindingsForWork(envelope),
+		CapabilityBindings:              capabilityBindingsForWork(profile, resolvedPolicy),
+		Status:                          UnitOfWorkStatusReady,
+		ResultClass:                     "",
+		DeferredIssueIDs:                deferredIssueIDsFromState(state),
+		CreatedAt:                       now,
+		UpdatedAt:                       now,
 	}
 	if existing, ok := existingUnitOfWork(state); ok {
 		if !existing.CreatedAt.IsZero() {
@@ -68,10 +77,14 @@ func BuildUnitOfWork(
 		if strings.TrimSpace(existing.ID) != "" {
 			uow.ID = existing.ID
 		}
+		if strings.TrimSpace(uow.RootID) == "" && strings.TrimSpace(existing.RootID) != "" {
+			uow.RootID = existing.RootID
+		}
 		if uow.PlanBinding == nil && existing.PlanBinding != nil {
 			uow.PlanBinding = clonePlanBinding(existing.PlanBinding)
 		}
-		if len(uow.SemanticInputs.PatternRefs) == 0 && len(existing.SemanticInputs.PatternRefs) > 0 {
+		if len(uow.SemanticInputs.PatternRefs) == 0 && len(existing.SemanticInputs.PatternRefs) > 0 &&
+			(workUnitUsesArchaeoContext(uow) || uow.PrimaryRelurpicCapabilityID == existing.PrimaryRelurpicCapabilityID) {
 			uow.SemanticInputs = existing.SemanticInputs
 		}
 		if !uow.ResolvedPolicy.ResolvedFromSkillPolicy && existing.ResolvedPolicy.ResolvedFromSkillPolicy {
@@ -98,11 +111,158 @@ func BuildUnitOfWork(
 		if len(uow.DeferredIssueIDs) == 0 && len(existing.DeferredIssueIDs) > 0 {
 			uow.DeferredIssueIDs = append([]string(nil), existing.DeferredIssueIDs...)
 		}
+		if strings.TrimSpace(uow.PredecessorUnitOfWorkID) == "" && strings.TrimSpace(existing.PredecessorUnitOfWorkID) != "" {
+			uow.PredecessorUnitOfWorkID = existing.PredecessorUnitOfWorkID
+		}
+		if strings.TrimSpace(uow.PrimaryRelurpicCapabilityID) == "" && strings.TrimSpace(existing.PrimaryRelurpicCapabilityID) != "" {
+			uow.PrimaryRelurpicCapabilityID = existing.PrimaryRelurpicCapabilityID
+		}
+		if len(uow.SupportingRelurpicCapabilityIDs) == 0 && len(existing.SupportingRelurpicCapabilityIDs) > 0 {
+			uow.SupportingRelurpicCapabilityIDs = append([]string(nil), existing.SupportingRelurpicCapabilityIDs...)
+		}
+	}
+	if existing, ok := existingUnitOfWork(state); ok {
+		ApplyUnitOfWorkTransition(existing, &uow, now)
 	}
 	if uow.ID == "" {
 		uow.ID = firstNonEmpty(uow.ExecutionID, uow.RunID, uow.WorkflowID, "euclo-work")
 	}
+	if uow.RootID == "" {
+		uow.RootID = uow.ID
+	}
 	return uow
+}
+
+func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) string {
+	lower := strings.ToLower(strings.TrimSpace(envelope.Instruction))
+	switch mode.ModeID {
+	case "planning":
+		switch {
+		case planningCompileIntent(lower):
+			return euclorelurpic.CapabilityArchaeologyCompilePlan
+		case planningImplementIntent(lower) || profile.ProfileID == "plan_stage_execute":
+			return euclorelurpic.CapabilityArchaeologyImplement
+		default:
+			return euclorelurpic.CapabilityArchaeologyExplore
+		}
+	case "debug":
+		return euclorelurpic.CapabilityDebugInvestigate
+	case "review":
+		return euclorelurpic.CapabilityChatInspect
+	default:
+		if chatAskIntent(lower, classification, envelope) {
+			return euclorelurpic.CapabilityChatAsk
+		}
+		if chatInspectIntent(lower, classification) {
+			return euclorelurpic.CapabilityChatInspect
+		}
+		if mode.ModeID == "code" {
+			return euclorelurpic.CapabilityChatImplement
+		}
+		if envelope.EditPermitted || profile.ProfileID == "edit_verify_repair" || profile.ProfileID == "test_driven_generation" {
+			return euclorelurpic.CapabilityChatImplement
+		}
+		if !classification.EditPermitted && len(classification.IntentFamilies) == 0 {
+			return euclorelurpic.CapabilityChatAsk
+		}
+		return euclorelurpic.CapabilityChatInspect
+	}
+}
+
+func supportingRelurpicCapabilitiesForWork(envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) []string {
+	return supportingRelurpicCapabilitiesForPrimary(primaryRelurpicCapabilityForWork(envelope, classification, mode, profile), envelope, classification, mode, profile)
+}
+
+func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) []string {
+	reg := euclorelurpic.DefaultRegistry()
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" || id == primaryID {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	for _, id := range reg.SupportingForPrimary(primaryID) {
+		add(id)
+	}
+	switch primaryID {
+	case euclorelurpic.CapabilityChatImplement:
+		if classification.RequiresEvidenceBeforeMutation {
+			add(euclorelurpic.CapabilityDebugInvestigate)
+		}
+		if classification.Scope == "cross_cutting" {
+			add(euclorelurpic.CapabilityArchaeologyExplore)
+		}
+	case euclorelurpic.CapabilityArchaeologyExplore:
+		add(euclorelurpic.CapabilityArchaeologyCompilePlan)
+	case euclorelurpic.CapabilityArchaeologyImplement:
+		add(euclorelurpic.CapabilityArchaeologyCompilePlan)
+		add(euclorelurpic.CapabilityArchaeologyExplore)
+	case euclorelurpic.CapabilityDebugInvestigate:
+		if planningCompileIntent(strings.ToLower(strings.TrimSpace(envelope.Instruction))) {
+			add(euclorelurpic.CapabilityArchaeologyCompilePlan)
+		}
+	}
+	return out
+}
+
+func chatAskIntent(lower string, classification TaskClassification, envelope TaskEnvelope) bool {
+	if strings.Contains(lower, "?") {
+		return true
+	}
+	if hasAnyPhrase(lower, "how ", "what ", "why ", "explain ", "summarize ", "describe ", "tell me ", "help me understand") {
+		return true
+	}
+	if !classification.EditPermitted && !containsIntent(classification.IntentFamilies, "review") && !containsIntent(classification.IntentFamilies, "debug") {
+		return true
+	}
+	if !envelope.EditPermitted && hasAnyPhrase(lower, "what is", "how does", "why does") {
+		return true
+	}
+	return false
+}
+
+func chatInspectIntent(lower string, classification TaskClassification) bool {
+	if containsIntent(classification.IntentFamilies, "review") {
+		return true
+	}
+	return hasAnyPhrase(lower, "inspect", "review", "audit", "look at", "check", "analyze", "examine")
+}
+
+func planningCompileIntent(lower string) bool {
+	return hasAnyPhrase(lower,
+		"compile the plan",
+		"compile plan",
+		"finalize the plan",
+		"finalize plan",
+		"produce the plan",
+		"create the plan",
+		"write the plan",
+	)
+}
+
+func planningImplementIntent(lower string) bool {
+	return hasAnyPhrase(lower,
+		"implement the plan",
+		"execute the plan",
+		"carry out the plan",
+		"stage and execute",
+	)
+}
+
+func hasAnyPhrase(lower string, phrases ...string) bool {
+	for _, phrase := range phrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func existingUnitOfWork(state *core.Context) (UnitOfWork, bool) {
@@ -187,7 +347,13 @@ func objectiveKindForWork(mode ModeResolution, profile ExecutionProfileSelection
 }
 
 func behaviorFamilyForWork(mode ModeResolution, profile ExecutionProfileSelection, classification TaskClassification, policy ResolvedExecutionPolicy) string {
-	if len(policy.ReviewCriteria) > 0 && mode.ModeID == "review" {
+	if mode.ModeID == "review" {
+		if policy.ReviewApprovalRules.RequireVerificationEvidence || policy.ReviewApprovalRules.RejectOnUnresolvedErrors {
+			return "approval_assessment"
+		}
+		if len(policy.ReviewCriteria) > 0 || len(policy.ReviewFocusTags) > 0 {
+			return "coherence_assessment"
+		}
 		return "tension_assessment"
 	}
 	if len(policy.PreferredPlanningCapabilities) > 0 && (mode.ModeID == "planning" || profile.ProfileID == "plan_stage_execute") {
@@ -423,8 +589,18 @@ func routineBindingsForWork(mode ModeResolution, profile ExecutionProfileSelecti
 		Priority:  100,
 		Required:  true,
 	}}
+	addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
+		RoutineID: family,
+		Family:    family,
+		Reason:    "primary execution behavior",
+		Priority:  100,
+		Required:  true,
+	})
+	for _, binding := range modeScopedRoutineBindings(mode, profile, classification, policy) {
+		addRoutineBinding(&bindings, binding)
+	}
 	if classification.RequiresEvidenceBeforeMutation && family != "stale_assumption_detection" {
-		bindings = append(bindings, UnitOfWorkRoutineBinding{
+		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
 			RoutineID: "stale_assumption_detection",
 			Family:    "stale_assumption_detection",
 			Reason:    "evidence-first classification",
@@ -433,7 +609,7 @@ func routineBindingsForWork(mode ModeResolution, profile ExecutionProfileSelecti
 		})
 	}
 	if profile.VerificationRequired && family != "verification_repair" {
-		bindings = append(bindings, UnitOfWorkRoutineBinding{
+		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
 			RoutineID: "verification_repair",
 			Family:    "verification_repair",
 			Reason:    "profile requires verification",
@@ -442,7 +618,7 @@ func routineBindingsForWork(mode ModeResolution, profile ExecutionProfileSelecti
 		})
 	}
 	for _, capabilityID := range policy.PreferredPlanningCapabilities {
-		bindings = append(bindings, UnitOfWorkRoutineBinding{
+		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
 			RoutineID: capabilityID,
 			Family:    "planning_capability",
 			Reason:    "skill policy planning preference",
@@ -451,7 +627,7 @@ func routineBindingsForWork(mode ModeResolution, profile ExecutionProfileSelecti
 		})
 	}
 	for _, capabilityID := range policy.PreferredVerifyCapabilities {
-		bindings = append(bindings, UnitOfWorkRoutineBinding{
+		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
 			RoutineID: capabilityID,
 			Family:    "verification_capability",
 			Reason:    "skill policy verification preference",
@@ -460,6 +636,72 @@ func routineBindingsForWork(mode ModeResolution, profile ExecutionProfileSelecti
 		})
 	}
 	return bindings
+}
+
+func modeScopedRoutineBindings(mode ModeResolution, profile ExecutionProfileSelection, classification TaskClassification, policy ResolvedExecutionPolicy) []UnitOfWorkRoutineBinding {
+	var bindings []UnitOfWorkRoutineBinding
+	switch mode.ModeID {
+	case "planning":
+		bindings = append(bindings,
+			UnitOfWorkRoutineBinding{RoutineID: "pattern_surface_and_confirm", Family: "pattern_surface_and_confirm", Reason: "planning mode requires pattern grounding", Priority: 95, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "prospective_structure_assessment", Family: "prospective_structure_assessment", Reason: "planning mode explores likely structure", Priority: 90, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "convergence_guard", Family: "convergence_guard", Reason: "planning mode protects living-plan convergence", Priority: 88, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "coherence_assessment", Family: "coherence_assessment", Reason: "planning mode checks semantic coherence", Priority: 84, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "scope_expansion_assessment", Family: "scope_expansion_assessment", Reason: "planning mode detects scope growth", Priority: 80, Required: false},
+		)
+	case "debug":
+		bindings = append(bindings,
+			UnitOfWorkRoutineBinding{RoutineID: "tension_assessment", Family: "tension_assessment", Reason: "debug mode analyzes contradictions and tensions", Priority: 92, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "stale_assumption_detection", Family: "stale_assumption_detection", Reason: "debug mode checks stale assumptions", Priority: 90, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "verification_repair", Family: "verification_repair", Reason: "debug mode verifies and repairs", Priority: 88, Required: false},
+		)
+	case "review":
+		bindings = append(bindings,
+			UnitOfWorkRoutineBinding{RoutineID: "tension_assessment", Family: "tension_assessment", Reason: "review mode highlights tensions", Priority: 92, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "coherence_assessment", Family: "coherence_assessment", Reason: "review mode checks coherence", Priority: 90, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "compatibility_assessment", Family: "compatibility_assessment", Reason: "review mode checks compatibility impact", Priority: 86, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "approval_assessment", Family: "approval_assessment", Reason: "review mode applies approval rules", Priority: 82, Required: false},
+		)
+	default:
+		bindings = append(bindings,
+			UnitOfWorkRoutineBinding{RoutineID: "gap_analysis", Family: "gap_analysis", Reason: "direct collect-context execution may need targeted gap analysis", Priority: 76, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "verification_repair", Family: "verification_repair", Reason: "direct collect-context execution may need verification repair", Priority: 74, Required: false},
+		)
+	}
+	if profile.ProfileID == "reproduce_localize_patch" {
+		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
+			RoutineID: "tension_assessment",
+			Family:    "tension_assessment",
+			Reason:    "reproduce/localize flows benefit from tension analysis",
+			Priority:  89,
+			Required:  false,
+		})
+	}
+	if classification.RequiresDeterministicStages && mode.ModeID != "planning" {
+		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
+			RoutineID: "scope_expansion_assessment",
+			Family:    "scope_expansion_assessment",
+			Reason:    "deterministic execution monitors scope drift",
+			Priority:  72,
+			Required:  false,
+		})
+	}
+	return bindings
+}
+
+func addRoutineBinding(bindings *[]UnitOfWorkRoutineBinding, candidate UnitOfWorkRoutineBinding) {
+	if bindings == nil {
+		return
+	}
+	if candidate.RoutineID == "" && candidate.Family == "" {
+		return
+	}
+	for _, existing := range *bindings {
+		if existing.RoutineID == candidate.RoutineID && existing.Family == candidate.Family {
+			return
+		}
+	}
+	*bindings = append(*bindings, candidate)
 }
 
 func skillBindingsForWork(task *core.Task, state *core.Context, policy ResolvedExecutionPolicy) []UnitOfWorkSkillBinding {

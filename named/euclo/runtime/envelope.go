@@ -50,20 +50,30 @@ func ClassificationContextPayload(classification TaskClassification) map[string]
 // UnitOfWorkContextPayload converts a UnitOfWork to a compact task-context map.
 func UnitOfWorkContextPayload(uow UnitOfWork) map[string]any {
 	return map[string]any{
-		"id":                  uow.ID,
-		"workflow_id":         uow.WorkflowID,
-		"run_id":              uow.RunID,
-		"execution_id":        uow.ExecutionID,
-		"mode_id":             uow.ModeID,
-		"objective_kind":      uow.ObjectiveKind,
-		"behavior_family":     uow.BehaviorFamily,
-		"context_strategy_id": uow.ContextStrategyID,
+		"id":                                 uow.ID,
+		"workflow_id":                        uow.WorkflowID,
+		"run_id":                             uow.RunID,
+		"execution_id":                       uow.ExecutionID,
+		"root_unit_of_work_id":               uow.RootID,
+		"mode_id":                            uow.ModeID,
+		"objective_kind":                     uow.ObjectiveKind,
+		"behavior_family":                    uow.BehaviorFamily,
+		"context_strategy_id":                uow.ContextStrategyID,
+		"primary_relurpic_capability_id":     uow.PrimaryRelurpicCapabilityID,
+		"supporting_relurpic_capability_ids": append([]string{}, uow.SupportingRelurpicCapabilityIDs...),
+		"predecessor_unit_of_work_id":        uow.PredecessorUnitOfWorkID,
+		"transition_reason":                  uow.TransitionReason,
+		"transition_state":                   uow.TransitionState,
 		"semantic_inputs": map[string]any{
 			"pattern_refs":              append([]string{}, uow.SemanticInputs.PatternRefs...),
 			"tension_refs":              append([]string{}, uow.SemanticInputs.TensionRefs...),
 			"prospective_refs":          append([]string{}, uow.SemanticInputs.ProspectiveRefs...),
 			"convergence_refs":          append([]string{}, uow.SemanticInputs.ConvergenceRefs...),
 			"learning_interaction_refs": append([]string{}, uow.SemanticInputs.LearningInteractionRefs...),
+			"pattern_proposals":         patternProposalPayload(uow.SemanticInputs.PatternProposals),
+			"tension_clusters":          tensionClusterPayload(uow.SemanticInputs.TensionClusters),
+			"coherence_suggestions":     coherenceSuggestionPayload(uow.SemanticInputs.CoherenceSuggestions),
+			"prospective_pairings":      prospectivePairingPayload(uow.SemanticInputs.ProspectivePairings),
 		},
 		"executor":           uow.ExecutorDescriptor,
 		"resolved_policy":    uow.ResolvedPolicy,
@@ -71,4 +81,72 @@ func UnitOfWorkContextPayload(uow UnitOfWork) map[string]any {
 		"status":             uow.Status,
 		"deferred_issue_ids": append([]string{}, uow.DeferredIssueIDs...),
 	}
+}
+
+func patternProposalPayload(input []PatternProposalSummary) []map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(input))
+	for _, item := range input {
+		out = append(out, map[string]any{
+			"id":                   item.ProposalID,
+			"title":                item.Title,
+			"pattern_refs":         append([]string{}, item.PatternRefs...),
+			"related_tension_refs": append([]string{}, item.RelatedTensionRefs...),
+		})
+	}
+	return out
+}
+
+func tensionClusterPayload(input []TensionClusterSummary) []map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(input))
+	for _, item := range input {
+		out = append(out, map[string]any{
+			"id":           item.ClusterID,
+			"title":        item.Title,
+			"severity":     item.Severity,
+			"tension_refs": append([]string{}, item.TensionRefs...),
+			"pattern_refs": append([]string{}, item.PatternRefs...),
+		})
+	}
+	return out
+}
+
+func coherenceSuggestionPayload(input []CoherenceSuggestion) []map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(input))
+	for _, item := range input {
+		out = append(out, map[string]any{
+			"id":               item.SuggestionID,
+			"title":            item.Title,
+			"suggested_action": item.SuggestedAction,
+			"touched_symbols":  append([]string{}, item.TouchedSymbols...),
+			"pattern_refs":     append([]string{}, item.PatternRefs...),
+			"tension_refs":     append([]string{}, item.TensionRefs...),
+		})
+	}
+	return out
+}
+
+func prospectivePairingPayload(input []ProspectivePairingSummary) []map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(input))
+	for _, item := range input {
+		out = append(out, map[string]any{
+			"id":               item.PairingID,
+			"title":            item.Title,
+			"prospective_ref":  item.ProspectiveRef,
+			"pattern_refs":     append([]string{}, item.PatternRefs...),
+			"convergence_refs": append([]string{}, item.ConvergenceRefs...),
+		})
+	}
+	return out
 }

@@ -11,17 +11,19 @@ import (
 func TestUnitOfWorkJSONRoundTrip(t *testing.T) {
 	now := time.Unix(123, 0).UTC()
 	original := UnitOfWork{
-		ID:                   "uow-1",
-		WorkflowID:           "wf-1",
-		RunID:                "run-1",
-		ExecutionID:          "exec-1",
-		ModeID:               "plan",
-		ObjectiveKind:        "plan_execution",
-		BehaviorFamily:       "gap_analysis",
-		ContextStrategyID:    "workflow_heavy",
-		VerificationPolicyID: "verify-policy",
-		DeferralPolicyID:     "defer-policy",
-		CheckpointPolicyID:   "checkpoint-policy",
+		ID:                              "uow-1",
+		WorkflowID:                      "wf-1",
+		RunID:                           "run-1",
+		ExecutionID:                     "exec-1",
+		ModeID:                          "plan",
+		ObjectiveKind:                   "plan_execution",
+		BehaviorFamily:                  "gap_analysis",
+		ContextStrategyID:               "workflow_heavy",
+		VerificationPolicyID:            "verify-policy",
+		DeferralPolicyID:                "defer-policy",
+		CheckpointPolicyID:              "checkpoint-policy",
+		PrimaryRelurpicCapabilityID:     "euclo:archaeology.implement-plan",
+		SupportingRelurpicCapabilityIDs: []string{"euclo:archaeology.compile-plan", "euclo:archaeology.explore"},
 		PlanBinding: &UnitOfWorkPlanBinding{
 			WorkflowID:    "wf-1",
 			PlanID:        "plan-1",
@@ -98,6 +100,12 @@ func TestUnitOfWorkJSONRoundTrip(t *testing.T) {
 	}
 	if decoded.ResultClass != ExecutionResultClassCompletedWithDeferrals {
 		t.Fatalf("got result class %q", decoded.ResultClass)
+	}
+	if decoded.PrimaryRelurpicCapabilityID != "euclo:archaeology.implement-plan" {
+		t.Fatalf("primary relurpic capability lost in round-trip: %#v", decoded)
+	}
+	if len(decoded.SupportingRelurpicCapabilityIDs) != 2 {
+		t.Fatalf("supporting relurpic capabilities lost in round-trip: %#v", decoded.SupportingRelurpicCapabilityIDs)
 	}
 	if len(decoded.RoutineBindings) != 1 || decoded.RoutineBindings[0].Family != "gap_analysis" {
 		t.Fatalf("routine bindings lost in round-trip: %#v", decoded.RoutineBindings)

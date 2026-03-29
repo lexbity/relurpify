@@ -2,7 +2,9 @@ package euclotest
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
@@ -19,6 +21,48 @@ import (
 	"github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
+
+type providerRestoreHarness struct {
+	desc             core.ProviderDescriptor
+	providerSnapshot *core.ProviderSnapshot
+	sessionSnapshots []core.ProviderSessionSnapshot
+	restoredProvider []core.ProviderSnapshot
+	restoredSession  []core.ProviderSessionSnapshot
+	restoreErr       error
+}
+
+func (p *providerRestoreHarness) Descriptor() core.ProviderDescriptor { return p.desc }
+func (p *providerRestoreHarness) Initialize(context.Context, core.ProviderRuntime) error {
+	return nil
+}
+func (p *providerRestoreHarness) RegisterCapabilities(context.Context, core.CapabilityRegistrar) error {
+	return nil
+}
+func (p *providerRestoreHarness) ListSessions(context.Context) ([]core.ProviderSession, error) {
+	return nil, nil
+}
+func (p *providerRestoreHarness) HealthSnapshot(context.Context) (core.ProviderHealthSnapshot, error) {
+	return core.ProviderHealthSnapshot{}, nil
+}
+func (p *providerRestoreHarness) Close(context.Context) error { return nil }
+func (p *providerRestoreHarness) SnapshotProvider(context.Context) (*core.ProviderSnapshot, error) {
+	if p.providerSnapshot == nil {
+		return nil, nil
+	}
+	snapshot := *p.providerSnapshot
+	return &snapshot, nil
+}
+func (p *providerRestoreHarness) SnapshotSessions(context.Context) ([]core.ProviderSessionSnapshot, error) {
+	return append([]core.ProviderSessionSnapshot(nil), p.sessionSnapshots...), nil
+}
+func (p *providerRestoreHarness) RestoreProvider(_ context.Context, snapshot core.ProviderSnapshot) error {
+	p.restoredProvider = append(p.restoredProvider, snapshot)
+	return p.restoreErr
+}
+func (p *providerRestoreHarness) RestoreSession(_ context.Context, snapshot core.ProviderSessionSnapshot) error {
+	p.restoredSession = append(p.restoredSession, snapshot)
+	return p.restoreErr
+}
 
 func TestAgentExecutePersistsArtifactsToWorkflowStore(t *testing.T) {
 	ctx := context.Background()
@@ -69,6 +113,37 @@ func TestAgentExecutePersistsArtifactsToWorkflowStore(t *testing.T) {
 	require.Contains(t, kinds, string(euclotypes.ArtifactKindCompiledExecution))
 	require.Contains(t, kinds, string(euclotypes.ArtifactKindExecutionStatus))
 	require.Contains(t, kinds, string(euclotypes.ArtifactKindFinalReport))
+	rawReport, ok := state.Get("pipeline.final_output")
+	require.True(t, ok)
+	report, ok := rawReport.(map[string]any)
+	require.True(t, ok)
+	require.Contains(t, report, "context_runtime")
+	require.Contains(t, report, "security_runtime")
+	require.Contains(t, report, "archaeology_capability_runtime")
+	require.Contains(t, report, "debug_capability_runtime")
+	require.Contains(t, report, "chat_capability_runtime")
+	require.Contains(t, report, "unit_of_work_transition")
+	require.Contains(t, report, "unit_of_work_history")
+	require.Contains(t, report, "shared_context_runtime")
+	securityRuntime, ok := report["security_runtime"].(eucloruntime.SecurityRuntimeState)
+	require.True(t, ok)
+	require.NotEmpty(t, securityRuntime.ExecutionCatalogSnapshotID)
+	require.NotEmpty(t, securityRuntime.PolicySnapshotID)
+	archRuntime, ok := report["archaeology_capability_runtime"].(eucloruntime.ArchaeologyCapabilityRuntimeState)
+	require.True(t, ok)
+	if archRuntime.PrimaryCapabilityID != "" {
+		require.NotEmpty(t, archRuntime.PolicySnapshotID)
+	}
+	chatRuntime, ok := report["chat_capability_runtime"].(eucloruntime.ChatCapabilityRuntimeState)
+	require.True(t, ok)
+	if chatRuntime.PrimaryCapabilityID != "" {
+		require.NotEmpty(t, chatRuntime.PolicySnapshotID)
+	}
+	debugRuntime, ok := report["debug_capability_runtime"].(eucloruntime.DebugCapabilityRuntimeState)
+	require.True(t, ok)
+	if strings.HasPrefix(debugRuntime.PrimaryCapabilityID, "euclo:debug.") {
+		require.NotEmpty(t, debugRuntime.PolicySnapshotID)
+	}
 	providers, err := workflowStore.ListProviderSnapshots(ctx, workflowID, runID)
 	require.NoError(t, err)
 	require.Empty(t, providers)
@@ -185,6 +260,21 @@ func TestLoadPersistedArtifactsRestoresStateAndFinalReport(t *testing.T) {
 func TestAssembleFinalReportIncludesRuntimeResultClass(t *testing.T) {
 	artifacts := []euclotypes.Artifact{
 		{
+			ID:      "compiled",
+			Kind:    euclotypes.ArtifactKindCompiledExecution,
+			Summary: "compiled execution",
+			Payload: eucloruntime.CompiledExecution{
+				WorkflowID: "wf-1",
+				RunID:      "run-1",
+				SemanticInputs: eucloruntime.SemanticInputBundle{
+					PatternProposals:     []eucloruntime.PatternProposalSummary{{ProposalID: "pattern-a"}},
+					TensionClusters:      []eucloruntime.TensionClusterSummary{{ClusterID: "tension-a"}},
+					CoherenceSuggestions: []eucloruntime.CoherenceSuggestion{{SuggestionID: "coherence-a"}},
+					ProspectivePairings:  []eucloruntime.ProspectivePairingSummary{{PairingID: "pair-1"}},
+				},
+			},
+		},
+		{
 			ID:      "exec_status",
 			Kind:    euclotypes.ArtifactKindExecutionStatus,
 			Summary: "completed with deferrals",
@@ -210,6 +300,12 @@ func TestAssembleFinalReportIncludesRuntimeResultClass(t *testing.T) {
 	report := euclotypes.AssembleFinalReport(artifacts)
 	require.Equal(t, "completed_with_deferrals", report["result_class"])
 	require.Equal(t, []string{"defer-1", "defer-2"}, report["deferred_issue_ids"])
+	semanticInputs, ok := report["semantic_inputs"].(map[string]any)
+	require.True(t, ok)
+	require.Contains(t, semanticInputs, "pattern_proposals")
+	require.Contains(t, semanticInputs, "tension_clusters")
+	require.Contains(t, semanticInputs, "coherence_suggestions")
+	require.Contains(t, semanticInputs, "prospective_pairings")
 }
 
 func TestAgentExecuteRestoresContinuityAfterCompaction(t *testing.T) {
@@ -331,6 +427,32 @@ func TestAgentExecutePersistsAndRestoresProviderSnapshots(t *testing.T) {
 		Memory:   store,
 		Config:   &core.Config{Name: "euclo-provider-restore", Model: "stub", MaxIterations: 1},
 	})
+	provider := &providerRestoreHarness{
+		desc: core.ProviderDescriptor{
+			ID:                 "provider-1",
+			Kind:               core.ProviderKindBuiltin,
+			RecoverabilityMode: core.RecoverabilityPersistedRestore,
+		},
+		providerSnapshot: &core.ProviderSnapshot{
+			ProviderID:     "provider-1",
+			Recoverability: core.RecoverabilityPersistedRestore,
+			Descriptor: core.ProviderDescriptor{
+				ID:                 "provider-1",
+				Kind:               core.ProviderKindBuiltin,
+				RecoverabilityMode: core.RecoverabilityPersistedRestore,
+			},
+			CapturedAt: "2026-03-28T00:00:00Z",
+		},
+		sessionSnapshots: []core.ProviderSessionSnapshot{{
+			Session: core.ProviderSession{
+				ID:             "session-1",
+				ProviderID:     "provider-1",
+				Recoverability: core.RecoverabilityPersistedRestore,
+			},
+			CapturedAt: "2026-03-28T00:00:01Z",
+		}},
+	}
+	agent.RuntimeProviders = []core.Provider{provider}
 
 	state := core.NewContext()
 	state.Set("pipeline.verify", map[string]any{
@@ -338,15 +460,6 @@ func TestAgentExecutePersistsAndRestoresProviderSnapshots(t *testing.T) {
 		"summary": "verification passed",
 		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
 	})
-	state.Set("euclo.provider_snapshots", []core.ProviderSnapshot{{
-		ProviderID: "provider-1",
-		Descriptor: core.ProviderDescriptor{ID: "provider-1", Kind: core.ProviderKindBuiltin},
-		CapturedAt: "2026-03-28T00:00:00Z",
-	}})
-	state.Set("euclo.provider_session_snapshots", []core.ProviderSessionSnapshot{{
-		Session:    core.ProviderSession{ID: "session-1", ProviderID: "provider-1"},
-		CapturedAt: "2026-03-28T00:00:01Z",
-	}})
 
 	_, err = agent.Execute(ctx, &core.Task{
 		ID:          "task-provider-restore",
@@ -390,6 +503,95 @@ func TestAgentExecutePersistsAndRestoresProviderSnapshots(t *testing.T) {
 	restoredProviders, ok := raw.([]core.ProviderSnapshot)
 	require.True(t, ok)
 	require.Len(t, restoredProviders, 1)
+	require.Len(t, provider.restoredProvider, 1)
+	require.Len(t, provider.restoredSession, 1)
+	require.Equal(t, "provider-1", provider.restoredProvider[0].ProviderID)
+	require.Equal(t, "session-1", provider.restoredSession[0].Session.ID)
+	raw, ok = resumeState.Get("euclo.provider_restore")
+	require.True(t, ok)
+	restoreState, ok := raw.(eucloruntime.ProviderRestoreState)
+	require.True(t, ok)
+	require.Contains(t, restoreState.RestoredProviders, "provider-1")
+	require.Contains(t, restoreState.RestoredSessions, "session-1")
+	require.NotEmpty(t, restoreState.Outcomes)
+}
+
+func TestAgentExecuteProviderRestoreFailureClassifiesRunWhenPersistedRestoreIsRequired(t *testing.T) {
+	ctx := context.Background()
+	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
+	require.NoError(t, err)
+	defer runtimeStore.Close()
+
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(testutil.FileWriteTool{}))
+	store := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, nil)
+	agent := euclo.New(agentenv.AgentEnvironment{
+		Model:    testutil.StubModel{},
+		Registry: registry,
+		Memory:   store,
+		Config:   &core.Config{Name: "euclo-provider-restore-fail", Model: "stub", MaxIterations: 1},
+	})
+	provider := &providerRestoreHarness{
+		desc: core.ProviderDescriptor{
+			ID:                 "provider-1",
+			Kind:               core.ProviderKindBuiltin,
+			RecoverabilityMode: core.RecoverabilityPersistedRestore,
+		},
+		providerSnapshot: &core.ProviderSnapshot{
+			ProviderID:     "provider-1",
+			Recoverability: core.RecoverabilityPersistedRestore,
+			Descriptor: core.ProviderDescriptor{
+				ID:                 "provider-1",
+				Kind:               core.ProviderKindBuiltin,
+				RecoverabilityMode: core.RecoverabilityPersistedRestore,
+			},
+			CapturedAt: "2026-03-28T00:00:00Z",
+		},
+		restoreErr: errors.New("restore boom"),
+	}
+	agent.RuntimeProviders = []core.Provider{provider}
+
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status":  "pass",
+		"summary": "verification passed",
+		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
+	})
+	_, err = agent.Execute(ctx, &core.Task{
+		ID:          "task-provider-restore-prime",
+		Instruction: "summarize current status",
+		Context:     map[string]any{"workspace": t.TempDir()},
+	}, state)
+	require.NoError(t, err)
+
+	workflowID := state.GetString("euclo.workflow_id")
+	runID := state.GetString("euclo.run_id")
+	require.NotEmpty(t, workflowID)
+	require.NotEmpty(t, runID)
+
+	resumeState := core.NewContext()
+	result, err := agent.Execute(ctx, &core.Task{
+		ID:          "task-provider-restore-fail-resume",
+		Instruction: "summarize current status",
+		Context: map[string]any{
+			"workspace":                t.TempDir(),
+			"workflow_id":              workflowID,
+			"run_id":                   runID,
+			"euclo.restore_continuity": true,
+		},
+	}, resumeState)
+	require.Error(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "restore_failed", result.Metadata["result_class"])
+
+	raw, ok := resumeState.Get("euclo.provider_restore")
+	require.True(t, ok)
+	restoreState, ok := raw.(eucloruntime.ProviderRestoreState)
+	require.True(t, ok)
+	require.Contains(t, restoreState.FailedProviders, "provider-1")
 }
 
 func TestAgentExecuteRestoreFailureClassifiesRun(t *testing.T) {

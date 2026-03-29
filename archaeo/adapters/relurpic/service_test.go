@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/lexcodex/relurpify/agents/relurpic"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/archaeo/providers"
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
@@ -71,6 +72,12 @@ func TestRuntimeBundleBuildsRelurpicBackedProviders(t *testing.T) {
 	require.NotNil(t, bundle.TensionAnalyzer)
 	require.NotNil(t, bundle.ProspectiveAnalyzer)
 	require.NotNil(t, bundle.ConvergenceReviewer)
+	patternProvider, ok := bundle.PatternSurfacer.(relurpic.PatternSurfacingProvider)
+	require.True(t, ok)
+	require.NotNil(t, patternProvider.Service)
+	tensionProvider, ok := bundle.TensionAnalyzer.(relurpic.TensionAnalysisProvider)
+	require.True(t, ok)
+	require.NotNil(t, tensionProvider.Service)
 }
 
 func TestServiceSurfacePatternsAndSyncLearningCreatesInteractions(t *testing.T) {

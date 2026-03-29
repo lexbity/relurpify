@@ -50,6 +50,15 @@ func TestBuildUnitOfWorkDirectExecution(t *testing.T) {
 	if uow.ObjectiveKind != "direct_execution" {
 		t.Fatalf("got objective kind %q", uow.ObjectiveKind)
 	}
+	if uow.PrimaryRelurpicCapabilityID != "euclo:chat.implement" {
+		t.Fatalf("got primary relurpic capability %q", uow.PrimaryRelurpicCapabilityID)
+	}
+	if len(uow.SupportingRelurpicCapabilityIDs) == 0 {
+		t.Fatal("expected supporting relurpic capability ids")
+	}
+	if !containsStringSlice(uow.SupportingRelurpicCapabilityIDs, "euclo:chat.inspect") {
+		t.Fatalf("expected chat inspect support, got %#v", uow.SupportingRelurpicCapabilityIDs)
+	}
 	if uow.BehaviorFamily != "verification_repair" {
 		t.Fatalf("got behavior family %q", uow.BehaviorFamily)
 	}
@@ -129,6 +138,15 @@ func TestBuildUnitOfWorkPlanBackedExecution(t *testing.T) {
 	if uow.ObjectiveKind != "plan_execution" {
 		t.Fatalf("got objective kind %q", uow.ObjectiveKind)
 	}
+	if uow.PrimaryRelurpicCapabilityID != "euclo:archaeology.implement-plan" {
+		t.Fatalf("got primary relurpic capability %q", uow.PrimaryRelurpicCapabilityID)
+	}
+	if !containsStringSlice(uow.SupportingRelurpicCapabilityIDs, "euclo:archaeology.compile-plan") {
+		t.Fatalf("expected archaeology compile-plan support, got %#v", uow.SupportingRelurpicCapabilityIDs)
+	}
+	if !containsStringSlice(uow.SupportingRelurpicCapabilityIDs, "euclo:archaeology.explore") {
+		t.Fatalf("expected archaeology explore support, got %#v", uow.SupportingRelurpicCapabilityIDs)
+	}
 	if uow.BehaviorFamily != "gap_analysis" {
 		t.Fatalf("got behavior family %q", uow.BehaviorFamily)
 	}
@@ -163,17 +181,46 @@ func TestBuildUnitOfWorkPlanBackedExecution(t *testing.T) {
 
 func TestUnitOfWorkContextPayload(t *testing.T) {
 	payload := UnitOfWorkContextPayload(UnitOfWork{
-		ID:                "uow-1",
-		WorkflowID:        "wf-1",
-		RunID:             "run-1",
-		ExecutionID:       "exec-1",
-		ModeID:            "planning",
-		ObjectiveKind:     "plan_execution",
-		BehaviorFamily:    "gap_analysis",
-		ContextStrategyID: "narrow_to_wide",
-		ResultClass:       ExecutionResultClassCompletedWithDeferrals,
-		Status:            UnitOfWorkStatusCompletedWithDeferrals,
-		DeferredIssueIDs:  []string{"defer-1"},
+		ID:                              "uow-1",
+		WorkflowID:                      "wf-1",
+		RunID:                           "run-1",
+		ExecutionID:                     "exec-1",
+		ModeID:                          "planning",
+		ObjectiveKind:                   "plan_execution",
+		BehaviorFamily:                  "gap_analysis",
+		ContextStrategyID:               "narrow_to_wide",
+		PrimaryRelurpicCapabilityID:     "euclo:archaeology.implement-plan",
+		SupportingRelurpicCapabilityIDs: []string{"euclo:archaeology.compile-plan", "euclo:archaeology.explore"},
+		ResultClass:                     ExecutionResultClassCompletedWithDeferrals,
+		Status:                          UnitOfWorkStatusCompletedWithDeferrals,
+		DeferredIssueIDs:                []string{"defer-1"},
+		SemanticInputs: SemanticInputBundle{
+			PatternRefs: []string{"pattern-a"},
+			TensionRefs: []string{"tension-a"},
+			PatternProposals: []PatternProposalSummary{{
+				ProposalID:         "proposal-a",
+				Title:              "Pattern proposal",
+				PatternRefs:        []string{"pattern-a"},
+				RelatedTensionRefs: []string{"tension-a"},
+			}},
+			TensionClusters: []TensionClusterSummary{{
+				ClusterID:   "cluster-a",
+				Title:       "Tension cluster",
+				Severity:    "medium",
+				TensionRefs: []string{"tension-a"},
+			}},
+			CoherenceSuggestions: []CoherenceSuggestion{{
+				SuggestionID:    "coherence-a",
+				Title:           "Check touched symbols",
+				SuggestedAction: "re-verify the changed files",
+				TouchedSymbols:  []string{"pkg/service.go"},
+			}},
+			ProspectivePairings: []ProspectivePairingSummary{{
+				PairingID:      "pair-a",
+				Title:          "Prospective pairing",
+				ProspectiveRef: "req-prospect",
+			}},
+		},
 	})
 	if payload["id"] != "uow-1" {
 		t.Fatalf("unexpected payload: %#v", payload)
@@ -181,6 +228,262 @@ func TestUnitOfWorkContextPayload(t *testing.T) {
 	if payload["behavior_family"] != "gap_analysis" {
 		t.Fatalf("unexpected payload family: %#v", payload)
 	}
+	if payload["primary_relurpic_capability_id"] != "euclo:archaeology.implement-plan" {
+		t.Fatalf("unexpected primary relurpic capability payload: %#v", payload)
+	}
+	if ids, ok := payload["supporting_relurpic_capability_ids"].([]string); !ok || len(ids) != 2 {
+		t.Fatalf("unexpected supporting relurpic payload: %#v", payload["supporting_relurpic_capability_ids"])
+	}
+	semanticInputs, ok := payload["semantic_inputs"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected semantic inputs payload: %#v", payload)
+	}
+	if _, ok := semanticInputs["pattern_proposals"]; !ok {
+		t.Fatalf("expected pattern proposals in semantic payload: %#v", semanticInputs)
+	}
+	if _, ok := semanticInputs["tension_clusters"]; !ok {
+		t.Fatalf("expected tension clusters in semantic payload: %#v", semanticInputs)
+	}
+	if _, ok := semanticInputs["coherence_suggestions"]; !ok {
+		t.Fatalf("expected coherence suggestions in semantic payload: %#v", semanticInputs)
+	}
+	if _, ok := semanticInputs["prospective_pairings"]; !ok {
+		t.Fatalf("expected prospective pairings in semantic payload: %#v", semanticInputs)
+	}
+}
+
+func TestBuildUnitOfWorkDebugModeAddsDebugReasoningFamilies(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-debug",
+		Instruction: "reproduce and fix the failing test",
+		Context: map[string]any{
+			"workspace": "/workspace",
+			"mode":      "debug",
+		},
+	}
+	state := core.NewContext()
+	envelope := TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "reproduce_localize_patch",
+	}
+	classification := TaskClassification{
+		RecommendedMode:                "debug",
+		RequiresEvidenceBeforeMutation: true,
+	}
+	mode := euclotypes.ModeResolution{ModeID: "debug"}
+	profile := euclotypes.ExecutionProfileSelection{
+		ProfileID:            "reproduce_localize_patch",
+		VerificationRequired: true,
+	}
+	uow := BuildUnitOfWork(task, state, envelope, classification, mode, profile, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{}, WorkUnitExecutorDescriptor{})
+	requireRoutineFamily(t, uow.RoutineBindings, "tension_assessment")
+	requireRoutineFamily(t, uow.RoutineBindings, "stale_assumption_detection")
+	requireRoutineFamily(t, uow.RoutineBindings, "verification_repair")
+}
+
+func TestBuildUnitOfWorkReviewModeAddsReviewReasoningFamilies(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-review",
+		Instruction: "review the proposed change",
+		Context:     map[string]any{"workspace": "/workspace", "mode": "review"},
+	}
+	uow := BuildUnitOfWork(task, core.NewContext(), TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "review_suggest_implement",
+	}, TaskClassification{RecommendedMode: "review"}, euclotypes.ModeResolution{ModeID: "review"}, euclotypes.ExecutionProfileSelection{
+		ProfileID: "review_suggest_implement",
+	}, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{
+		ModeID:         "review",
+		ProfileID:      "review_suggest_implement",
+		ReviewCriteria: []string{"backward_compatibility"},
+	}, WorkUnitExecutorDescriptor{})
+	requireRoutineFamily(t, uow.RoutineBindings, "tension_assessment")
+	requireRoutineFamily(t, uow.RoutineBindings, "coherence_assessment")
+	requireRoutineFamily(t, uow.RoutineBindings, "compatibility_assessment")
+	requireRoutineFamily(t, uow.RoutineBindings, "approval_assessment")
+}
+
+func TestBuildUnitOfWorkPlanningModeAddsPlanningReasoningFamilies(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-planning-routines",
+		Instruction: "plan the migration",
+		Context:     map[string]any{"workspace": "/workspace", "mode": "planning"},
+	}
+	uow := BuildUnitOfWork(task, core.NewContext(), TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "plan_stage_execute",
+	}, TaskClassification{RecommendedMode: "planning"}, euclotypes.ModeResolution{ModeID: "planning"}, euclotypes.ExecutionProfileSelection{
+		ProfileID: "plan_stage_execute",
+	}, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{
+		ModeID:                        "planning",
+		ProfileID:                     "plan_stage_execute",
+		PreferredPlanningCapabilities: []string{"planner.capability"},
+	}, WorkUnitExecutorDescriptor{})
+	requireRoutineFamily(t, uow.RoutineBindings, "pattern_surface_and_confirm")
+	requireRoutineFamily(t, uow.RoutineBindings, "prospective_structure_assessment")
+	requireRoutineFamily(t, uow.RoutineBindings, "convergence_guard")
+	requireRoutineFamily(t, uow.RoutineBindings, "coherence_assessment")
+	requireRoutineFamily(t, uow.RoutineBindings, "scope_expansion_assessment")
+}
+
+func TestBuildUnitOfWorkSelectsChatAskCapability(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-ask",
+		Instruction: "how does the auth middleware work?",
+		Context:     map[string]any{"workspace": "/workspace"},
+	}
+	uow := BuildUnitOfWork(task, core.NewContext(), TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "edit_verify_repair",
+		EditPermitted:    true,
+	}, TaskClassification{
+		RecommendedMode: "code",
+		IntentFamilies:  []string{"code"},
+		EditPermitted:   true,
+	}, euclotypes.ModeResolution{ModeID: "code"}, euclotypes.ExecutionProfileSelection{
+		ProfileID: "edit_verify_repair",
+	}, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{}, WorkUnitExecutorDescriptor{})
+	if uow.PrimaryRelurpicCapabilityID != "euclo:chat.ask" {
+		t.Fatalf("got primary relurpic capability %q", uow.PrimaryRelurpicCapabilityID)
+	}
+}
+
+func TestBuildUnitOfWorkSelectsChatInspectCapability(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-inspect",
+		Instruction: "inspect the parser error handling",
+		Context:     map[string]any{"workspace": "/workspace"},
+	}
+	uow := BuildUnitOfWork(task, core.NewContext(), TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "edit_verify_repair",
+		EditPermitted:    true,
+	}, TaskClassification{
+		RecommendedMode: "code",
+		IntentFamilies:  []string{"review", "code"},
+		EditPermitted:   true,
+	}, euclotypes.ModeResolution{ModeID: "code"}, euclotypes.ExecutionProfileSelection{
+		ProfileID: "edit_verify_repair",
+	}, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{}, WorkUnitExecutorDescriptor{})
+	if uow.PrimaryRelurpicCapabilityID != "euclo:chat.inspect" {
+		t.Fatalf("got primary relurpic capability %q", uow.PrimaryRelurpicCapabilityID)
+	}
+}
+
+func TestBuildUnitOfWorkSelectsArchaeologyCompilePlanCapability(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-compile-plan",
+		Instruction: "finalize the plan for the migration",
+		Context:     map[string]any{"workspace": "/workspace", "mode": "planning"},
+	}
+	uow := BuildUnitOfWork(task, core.NewContext(), TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "plan_stage_execute",
+	}, TaskClassification{
+		RecommendedMode: "planning",
+		IntentFamilies:  []string{"planning"},
+	}, euclotypes.ModeResolution{ModeID: "planning"}, euclotypes.ExecutionProfileSelection{
+		ProfileID: "plan_stage_execute",
+	}, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{}, WorkUnitExecutorDescriptor{})
+	if uow.PrimaryRelurpicCapabilityID != "euclo:archaeology.compile-plan" {
+		t.Fatalf("got primary relurpic capability %q", uow.PrimaryRelurpicCapabilityID)
+	}
+	if !containsStringSlice(uow.SupportingRelurpicCapabilityIDs, "euclo:archaeology.pattern-surface") {
+		t.Fatalf("expected archaeology pattern surface support, got %#v", uow.SupportingRelurpicCapabilityIDs)
+	}
+	if !containsStringSlice(uow.SupportingRelurpicCapabilityIDs, "euclo:archaeology.convergence-guard") {
+		t.Fatalf("expected archaeology convergence support, got %#v", uow.SupportingRelurpicCapabilityIDs)
+	}
+}
+
+func TestBuildUnitOfWorkSelectsDebugSupportingCapabilities(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-debug-support",
+		Instruction: "debug the failing login flow and localize the bug",
+		Context:     map[string]any{"workspace": "/workspace", "mode": "debug"},
+	}
+	uow := BuildUnitOfWork(task, core.NewContext(), TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "reproduce_localize_patch",
+	}, TaskClassification{
+		RecommendedMode:                "debug",
+		IntentFamilies:                 []string{"debug", "code"},
+		RequiresEvidenceBeforeMutation: true,
+	}, euclotypes.ModeResolution{ModeID: "debug"}, euclotypes.ExecutionProfileSelection{
+		ProfileID: "reproduce_localize_patch",
+	}, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{}, WorkUnitExecutorDescriptor{})
+	if uow.PrimaryRelurpicCapabilityID != "euclo:debug.investigate" {
+		t.Fatalf("got primary relurpic capability %q", uow.PrimaryRelurpicCapabilityID)
+	}
+	for _, id := range []string{
+		"euclo:debug.root-cause",
+		"euclo:debug.hypothesis-refine",
+		"euclo:debug.localization",
+		"euclo:debug.flaw-surface",
+		"euclo:debug.verification-repair",
+	} {
+		if !containsStringSlice(uow.SupportingRelurpicCapabilityIDs, id) {
+			t.Fatalf("missing supporting relurpic capability %q in %#v", id, uow.SupportingRelurpicCapabilityIDs)
+		}
+	}
+}
+
+func TestBuildUnitOfWorkAddsLazyArchaeologySupportForCrossCuttingChatImplement(t *testing.T) {
+	task := &core.Task{
+		ID:          "task-cross-cutting-implement",
+		Instruction: "implement the auth redesign across multiple handlers",
+		Context:     map[string]any{"workspace": "/workspace"},
+	}
+	uow := BuildUnitOfWork(task, core.NewContext(), TaskEnvelope{
+		TaskID:           task.ID,
+		Instruction:      task.Instruction,
+		Workspace:        "/workspace",
+		ExecutionProfile: "edit_verify_repair",
+		EditPermitted:    true,
+	}, TaskClassification{
+		RecommendedMode: "code",
+		IntentFamilies:  []string{"code", "planning"},
+		EditPermitted:   true,
+		Scope:           "cross_cutting",
+	}, euclotypes.ModeResolution{ModeID: "code"}, euclotypes.ExecutionProfileSelection{
+		ProfileID: "edit_verify_repair",
+	}, euclotypes.DefaultModeRegistry(), SemanticInputBundle{}, ResolvedExecutionPolicy{}, WorkUnitExecutorDescriptor{})
+	if !containsStringSlice(uow.SupportingRelurpicCapabilityIDs, "euclo:archaeology.explore") {
+		t.Fatalf("expected lazy archaeology support, got %#v", uow.SupportingRelurpicCapabilityIDs)
+	}
+}
+
+func requireRoutineFamily(t *testing.T, bindings []UnitOfWorkRoutineBinding, family string) {
+	t.Helper()
+	for _, binding := range bindings {
+		if binding.Family == family {
+			return
+		}
+	}
+	t.Fatalf("missing routine family %q in %#v", family, bindings)
+}
+
+func containsStringSlice(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func planFixture() frameworkplan.LivingPlan {

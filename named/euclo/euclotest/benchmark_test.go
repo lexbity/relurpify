@@ -17,8 +17,20 @@ func BenchmarkAgentExecuteModalWorkloads(b *testing.B) {
 		seedVerify  bool
 	}{
 		{
-			name:        "direct_collect_context",
+			name:        "chat_ask_collect_context",
 			instruction: "summarize the current implementation status",
+			context:     map[string]any{"workspace": "/tmp/ws"},
+			seedVerify:  true,
+		},
+		{
+			name:        "chat_inspect_local_review",
+			instruction: "inspect the authentication middleware and review the current flow",
+			context:     map[string]any{"workspace": "/tmp/ws"},
+			seedVerify:  true,
+		},
+		{
+			name:        "chat_implement_direct_edit",
+			instruction: "implement the requested change in pkg/foo",
 			context:     map[string]any{"workspace": "/tmp/ws"},
 			seedVerify:  true,
 		},

@@ -163,3 +163,46 @@ func TestPersistDeferredExecutionIssuesToWorkspaceWritesMarkdownArtifact(t *test
 		}
 	}
 }
+
+func TestSemanticReasoningAugmentsArtifactedDeferrals(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.touched_symbols", []string{"pkg/service.go"})
+	issues := []DeferredExecutionIssue{{
+		IssueID: "tension-1",
+		Kind:    DeferredIssuePatternTension,
+		Title:   "Pattern tension remained open",
+		Evidence: DeferredExecutionEvidence{
+			ShortReasoningSummary: "Scope widened during execution.",
+		},
+	}}
+	bundle := SemanticInputBundle{
+		PatternProposals: []PatternProposalSummary{{
+			ProposalID:  "pattern-a",
+			PatternRefs: []string{"pattern-a"},
+		}},
+		TensionClusters: []TensionClusterSummary{{
+			ClusterID:   "tension-a",
+			TensionRefs: []string{"tension-a"},
+		}},
+		CoherenceSuggestions: []CoherenceSuggestion{{
+			SuggestionID:   "coherence-a",
+			PatternRefs:    []string{"pattern-a"},
+			TensionRefs:    []string{"tension-a"},
+			TouchedSymbols: []string{"pkg/service.go"},
+		}},
+	}
+
+	issues = ApplySemanticReasoningToDeferredIssues(issues, bundle, state)
+	if len(issues[0].Evidence.RelevantPatternRefs) == 0 {
+		t.Fatalf("expected pattern reasoning in deferral evidence: %#v", issues[0].Evidence)
+	}
+	if len(issues[0].Evidence.RelevantTensionRefs) == 0 {
+		t.Fatalf("expected tension reasoning in deferral evidence: %#v", issues[0].Evidence)
+	}
+	if len(issues[0].Evidence.TouchedSymbols) == 0 {
+		t.Fatalf("expected touched symbols in deferral evidence: %#v", issues[0].Evidence)
+	}
+	if !strings.Contains(issues[0].Evidence.ShortReasoningSummary, "Pattern and tension reasoning") {
+		t.Fatalf("expected enriched reasoning summary: %#v", issues[0].Evidence.ShortReasoningSummary)
+	}
+}

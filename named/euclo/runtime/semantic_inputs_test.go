@@ -43,16 +43,28 @@ func TestSemanticInputBundleFromSources(t *testing.T) {
 	if len(bundle.PatternRefs) == 0 || bundle.PatternRefs[0] != "pattern-a" {
 		t.Fatalf("unexpected pattern refs: %#v", bundle.PatternRefs)
 	}
+	if len(bundle.PatternFindings) == 0 {
+		t.Fatalf("expected pattern findings: %#v", bundle)
+	}
 	if len(bundle.PendingRequests) != 1 || bundle.PendingRequests[0].RequestID != "req-pattern" {
 		t.Fatalf("unexpected pending requests: %#v", bundle.PendingRequests)
 	}
 	if len(bundle.ProspectiveRefs) != 1 || bundle.ProspectiveRefs[0] != "req-prospective" {
 		t.Fatalf("unexpected prospective refs: %#v", bundle.ProspectiveRefs)
 	}
+	if len(bundle.ProspectiveFindings) != 1 || bundle.ProspectiveFindings[0].RefID != "req-prospective" {
+		t.Fatalf("unexpected prospective findings: %#v", bundle.ProspectiveFindings)
+	}
 	if len(bundle.ConvergenceRefs) < 2 {
 		t.Fatalf("expected convergence refs from provenance and current projection: %#v", bundle.ConvergenceRefs)
 	}
+	if len(bundle.ConvergenceFindings) < 1 {
+		t.Fatalf("expected convergence findings: %#v", bundle.ConvergenceFindings)
+	}
 	if len(bundle.LearningInteractionRefs) != 2 {
 		t.Fatalf("unexpected learning refs: %#v", bundle.LearningInteractionRefs)
+	}
+	if len(bundle.LearningFindings) != 2 {
+		t.Fatalf("unexpected learning findings: %#v", bundle.LearningFindings)
 	}
 }
