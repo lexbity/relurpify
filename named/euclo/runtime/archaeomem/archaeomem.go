@@ -6,6 +6,7 @@ import (
 	"time"
 
 	frameworkcore "github.com/lexcodex/relurpify/framework/core"
+	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -54,6 +55,13 @@ func BuildArchaeologyCapabilityRuntimeState(work eucloruntime.UnitOfWork, state 
 		}
 	}
 	if state != nil {
+		if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
+			if trace, ok := raw.(eucloexec.Trace); ok {
+				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
+				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
+				rt.BehaviorPath = strings.TrimSpace(trace.Path)
+			}
+		}
 		if raw, ok := state.Get("euclo.security_runtime"); ok && raw != nil {
 			if security, ok := raw.(eucloruntime.SecurityRuntimeState); ok {
 				rt.PolicySnapshotID = strings.TrimSpace(security.PolicySnapshotID)
@@ -74,6 +82,8 @@ func BuildArchaeologyCapabilityRuntimeState(work eucloruntime.UnitOfWork, state 
 	}
 	rt.SupportingCapabilityIDs = uniqueStrings(rt.SupportingCapabilityIDs)
 	rt.SupportingOperations = uniqueStrings(rt.SupportingOperations)
+	rt.ExecutedRecipeIDs = uniqueStrings(rt.ExecutedRecipeIDs)
+	rt.SpecializedCapabilityIDs = uniqueStrings(rt.SpecializedCapabilityIDs)
 	rt.AdmittedCapabilityIDs = uniqueStrings(rt.AdmittedCapabilityIDs)
 	rt.AdmittedModelTools = uniqueStrings(rt.AdmittedModelTools)
 	rt.Summary = archaeologyRuntimeSummary(rt)

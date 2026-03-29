@@ -9,7 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	reactexec "github.com/lexcodex/relurpify/named/euclo/execution/react"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 )
 
 type refactorAPICompatibleCapability struct {
@@ -103,10 +103,10 @@ func (c *refactorAPICompatibleCapability) Execute(ctx context.Context, env euclo
 				},
 			}
 		}
-		agent := reactexec.New(c.env)
 		stepTask := &core.Task{ID: fmt.Sprintf("%s-step-%d", task.ID, index+1), Instruction: step.Description, Type: core.TaskTypeCodeModification, Context: refactorStepContext(env, step, index+1, len(plan.Steps), methodName)}
-		state := env.State.Clone()
-		result, err := agent.Execute(ctx, stepTask, state)
+		stepEnv := env
+		stepEnv.Task = stepTask
+		result, state, err := execution.ExecuteEnvelopeRecipe(ctx, stepEnv, execution.RecipeChatImplementEdit, stepTask.ID, step.Description)
 		if err != nil || result == nil || !result.Success {
 			mergeStateArtifactsToContext(env.State, artifacts)
 			return euclotypes.ExecutionResult{
@@ -122,6 +122,7 @@ func (c *refactorAPICompatibleCapability) Execute(ctx context.Context, env euclo
 				},
 			}
 		}
+		execution.PropagateBehaviorTrace(env.State, state)
 		editPayload := result.Data
 		if editPayload == nil {
 			editPayload = map[string]any{"summary": resultSummary(result), "step_id": step.ID}

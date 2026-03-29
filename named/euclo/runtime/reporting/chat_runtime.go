@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -38,6 +39,13 @@ func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGetter
 	rt.ArchaeoSupportActive = containsString(work.SupportingRelurpicCapabilityIDs, euclorelurpic.CapabilityArchaeologyExplore)
 	rt.MutationObserved = debugMutationObserved(state)
 	if state != nil {
+		if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
+			if trace, ok := raw.(eucloexec.Trace); ok {
+				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
+				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
+				rt.BehaviorPath = strings.TrimSpace(trace.Path)
+			}
+		}
 		if raw, ok := state.Get("euclo.capability_contract_runtime"); ok && raw != nil {
 			if contract, ok := raw.(runtimepkg.CapabilityContractRuntimeState); ok {
 				rt.LazySemanticAcquisitionEligible = contract.LazySemanticAcquisitionEligible
@@ -77,6 +85,8 @@ func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGetter
 	}
 	rt.ArchaeoSupportTriggered = rt.ArchaeoSupportActive && semanticBundleMaterial(work.SemanticInputs)
 	rt.ToolCapabilityIDs = uniqueStrings(rt.ToolCapabilityIDs)
+	rt.ExecutedRecipeIDs = uniqueStrings(rt.ExecutedRecipeIDs)
+	rt.SpecializedCapabilityIDs = uniqueStrings(rt.SpecializedCapabilityIDs)
 	rt.AdmittedCapabilityIDs = uniqueStrings(rt.AdmittedCapabilityIDs)
 	rt.AdmittedModelTools = uniqueStrings(rt.AdmittedModelTools)
 	if rt.ImplementActive && !rt.DirectEditExecutionActive {

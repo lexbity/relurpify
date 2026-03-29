@@ -10,7 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	reactexec "github.com/lexcodex/relurpify/named/euclo/execution/react"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 )
 
 type reviewFindingsCapability struct{ env agentenv.AgentEnvironment }
@@ -154,15 +154,15 @@ func (c *reviewImplementIfSafeCapability) Execute(ctx context.Context, env euclo
 	if intValue(stats["warning_count"]) == 0 && intValue(stats["info_count"]) > 0 {
 		return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "info-only findings; no automatic implementation needed", Artifacts: artifacts}
 	}
-	agent := reactexec.New(c.env)
 	task := &core.Task{
 		ID:          firstNonEmpty(env.Task.ID, "review-implement") + "-implement-if-safe",
 		Instruction: buildFixInstruction(payload),
 		Type:        core.TaskTypeCodeModification,
 		Context:     env.Task.Context,
 	}
-	state := env.State.Clone()
-	result, err := agent.Execute(ctx, task, state)
+	stepEnv := env
+	stepEnv.Task = task
+	result, state, err := execution.ExecuteEnvelopeRecipe(ctx, stepEnv, execution.RecipeChatImplementEdit, task.ID, task.Instruction)
 	if err != nil || result == nil || !result.Success {
 		return euclotypes.ExecutionResult{
 			Status:    euclotypes.ExecutionStatusPartial,
@@ -177,6 +177,7 @@ func (c *reviewImplementIfSafeCapability) Execute(ctx context.Context, env euclo
 			},
 		}
 	}
+	execution.PropagateBehaviorTrace(env.State, state)
 	editPayload := result.Data
 	verifyPayload := map[string]any{"status": "pass", "summary": "review-guided implementation completed"}
 	if existing, ok := state.Get("pipeline.verify"); ok && existing != nil {

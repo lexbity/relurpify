@@ -1,75 +1,148 @@
 # Euclo
 
-Euclo is the named coding runtime built on top of `/agents`, `/archaeo`, and `/framework`.
+Euclo is the named coding runtime built on top of `/framework`, `/archaeo`, and `/agents`.
 
-It is organized around a few explicit layers:
+The code is organized around four Euclo-owned layers.
 
-- `core`
-  Stable Euclo-owned contracts, IDs, mode/profile descriptors, artifact helpers, and relurpic capability metadata that other Euclo packages share.
+## Directory Structure
 
-- `runtime`
-  Execution lifecycle, `UnitOfWork` assembly, policy resolution, context/restore/reporting state, transitions, and orchestration support.
+### `core`
 
-  Current subfolders:
-  - `runtime/work`: `UnitOfWork`, compiled execution, envelopes, lifecycle, deferrals, and edit execution support.
-  - `runtime/policy`: classification, routing, verification/security policy, and shared-context policy summaries.
-  - `runtime/context`: context-management runtime and context lifecycle support.
-  - `runtime/restore`: workflow/runtime surfaces plus provider/session snapshot persistence and restore.
-  - `runtime/reporting`: observability, chat/debug runtime reporting, and final-report helpers.
-  - `runtime/transitions`: `UnitOfWork` transition state and history.
-  - `runtime/archaeomem`: Archaeo-associated semantic inputs, archaeology runtime state, and semantic reasoning helpers.
-  - `runtime/orchestrate`: controller, recovery, and session-dispatch glue.
+Stable Euclo definitions shared across the runtime:
+- mode and artifact aliases
+- capability and runtime IDs
+- cross-package type aliases and small contracts
 
-  The root `runtime` package still holds shared types plus a small number of cross-cutting runtime helpers that have not yet been split further. It is no longer the place where relurpic behavior lives.
+### `runtime`
 
-- `execution`
-  Euclo-side execution-paradigm adapters over `/agents` primitives such as React, Planner, HTN, and Reflection. These are substrate-level runners, not Euclo behavior definitions.
+Runtime ownership and lifecycle:
+- `UnitOfWork`
+- policy, classification, and contract state
+- context and restore lifecycle
+- transitions and continuity
+- runtime reporting
+- session and behavior dispatch
 
-- `relurpicabilities`
-  Euclo-owned relurpic capability definitions and concrete mode-scoped behaviors.
+Current runtime subpackages:
+- `runtime/work`
+- `runtime/policy`
+- `runtime/context`
+- `runtime/restore`
+- `runtime/reporting`
+- `runtime/transitions`
+- `runtime/archaeomem`
+- `runtime/orchestrate`
 
-  Current mode groups:
-  - `relurpicabilities/chat`
-  - `relurpicabilities/debug`
-  - `relurpicabilities/archaeology`
+The root `runtime` package still holds shared runtime types and some cross-cutting helpers used by those subpackages.
 
-  This package owns:
-  - capability IDs and descriptors
-  - supporting-capability relationships
-  - mode-scoped concrete relurpic behavior
-  - the primary behavior implementations for:
-    - `chat.ask`
-    - `chat.inspect`
-    - `chat.implement`
-    - `debug.investigate`
-    - `archaeology.explore`
-    - `archaeology.compile-plan`
-    - `archaeology.implement-plan`
+### `execution`
 
-## Relurpic Capability Behavior
+Euclo-side execution substrate over `/agents`.
 
-Euclo’s concrete relurpic behavior is implemented in the mode packages:
+This layer owns:
+- paradigm adapters for `react`, `planner`, `htn`, `reflection`, `architect`, `pipeline`, `chainer`, `rewoo`, and `blackboard`
+- named recipe execution used by Euclo relurpic behavior
+- shared behavior trace, artifact merge, routine execution, and verification helpers
 
+Boundary:
+- `/agents` owns the generic paradigms
+- `named/euclo/execution` owns Euclo’s recipe-level use of those paradigms
+
+### `relurpicabilities`
+
+Euclo-owned relurpic capability catalog and behavior implementation.
+
+Mode groups:
+- `relurpicabilities/chat`
+- `relurpicabilities/debug`
+- `relurpicabilities/archaeology`
+- `relurpicabilities/local`
+
+Ownership split:
+- `chat`, `debug`, and `archaeology` own primary mode behavior
+- `local` holds reusable subordinate relurpic capabilities that can stay separate while also being invoked under a primary owner
+
+## Primary Relurpic Owners
+
+Primary behavior ownership lives in:
 - `relurpicabilities/chat/behavior.go`
 - `relurpicabilities/debug/behavior.go`
 - `relurpicabilities/archaeology/behavior.go`
 
-The separation is:
-- `relurpicabilities/*` defines and implements Euclo’s mode-owned relurpic behavior.
-- `runtime/orchestrate/behavior_service.go` is only the dispatcher that resolves a `UnitOfWork` primary owner to the correct mode behavior.
-- `execution/*` provides reusable execution-paradigm adapters and shared behavior helpers over `/agents`.
+Current primary owners:
+- `euclo:chat.ask`
+- `euclo:chat.inspect`
+- `euclo:chat.implement`
+- `euclo:debug.investigate`
+- `euclo:archaeology.explore`
+- `euclo:archaeology.compile-plan`
+- `euclo:archaeology.implement-plan`
 
-That keeps capability vocabulary, behavior ownership, and paradigm execution separate.
+These owners:
+- execute supporting routines explicitly
+- compose `/agents` paradigms through `named/euclo/execution`
+- record recipe and subordinate-capability execution in the Euclo behavior trace
+- publish runtime and reporting state through the runtime layer
 
-## Directory Intent
+## Supporting And Local Relurpic Capabilities
 
-The intended ownership model is:
+Supporting relurpic capabilities are implemented as explicit routines plus reusable local capabilities.
 
-- `/framework` owns capability primitives, policy, sandbox/security enforcement, provider interfaces, and shared runtime substrate.
+Examples:
+- chat local review and targeted verification routines
+- debug root-cause, localization, flaw-surface, and verification-repair routines
+- archaeology pattern, prospective, convergence, and coherence routines
+- reusable local capabilities such as:
+  - `euclo:design.alternatives`
+  - `euclo:trace.analyze`
+  - `euclo:refactor.api_compatible`
+  - `euclo:review.implement_if_safe`
+  - migration and artifact-transform capabilities
+
+Those local capabilities remain separate where that separation is useful, but they run through the same recipe layer and can be composed under a primary owner.
+
+Examples of local capability substrate use:
+- `euclo:migration.execute` now runs staged execution through `execution/pipe` over `/agents/pipeline`
+- trace and regression investigation use `execution/blackboard`
+- `euclo:debug.investigate` uses `execution/pipe` for deterministic investigation-summary and repair-readiness postpasses
+- `euclo:chat.inspect` uses `execution/chainer` for deterministic inspect-summary and compatibility-summary postpasses
+- `euclo:chat.implement` now attempts staged Architect execution for broad cross-cutting work before falling back to the standard implement flow
+- `euclo:archaeology.implement-plan` now attempts plan-bound execution through `execution/rewoo` before falling back to manual step execution
+- API-compatible refactor and review-guided implementation use the shared recipe layer
+
+## Behavior Dispatch And Execution
+
+`runtime/orchestrate/behavior_service.go` dispatches from `UnitOfWork` to the correct primary relurpic owner.
+
+It is not where the behavior is implemented.
+
+The ownership model is:
+- `runtime` selects and manages work
+- `relurpicabilities/*` owns concrete Euclo behavior
+- `execution/*` runs named recipes over `/agents`
+
+The main behavior trace is carried in `euclo.relurpic_behavior_trace` and now records:
+- supporting routine execution
+- executed recipe IDs
+- specialized subordinate capability IDs
+- behavior path metadata
+
+## External Ownership Boundary
+
+- `/framework` owns capability primitives, policy resolution, sandbox and permission enforcement, provider interfaces, and shared runtime substrate.
 - `/archaeo` owns memory, provenance, living-plan state, and knowledge relationships.
 - `/agents` owns generic execution paradigms.
-- `named/euclo` owns coding-runtime orchestration, modal behavior, `UnitOfWork`, and Euclo-specific relurpic capabilities.
+- `named/euclo` owns coding-runtime orchestration and Euclo-specific relurpic behavior.
 
-## Migration Note
+## Current State
 
-This tree replaces the old Euclo package layout. The runtime split is underway; several files have already been moved into `policy`, `reporting`, and `restore`, and the remaining root `runtime` files are the next cleanup target rather than the intended long-term shape.
+Euclo now has:
+- explicit supporting routines
+- concrete chat/debug/archaeology primary owners
+- archaeology exploration, compile, and implement behavior that no longer collapse into thin workflow wrappers
+- recipe-level execution reporting that reflects the actual behavior path
+
+The main remaining work is cleanup:
+- continue sorting root `runtime` files into the runtime subpackages
+- reduce remaining duplicated helpers
+- rewrite tests and benchmarks around the new tree rather than the old Euclo layout

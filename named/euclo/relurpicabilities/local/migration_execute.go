@@ -9,8 +9,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	pipeexec "github.com/lexcodex/relurpify/named/euclo/execution/pipe"
 )
 
 type migrationExecuteCapability struct {
@@ -82,19 +82,16 @@ func (c *migrationExecuteCapability) Execute(ctx context.Context, env euclotypes
 		stepID := stringValue(step["id"])
 		stateClone := env.State.Clone()
 		stateClone.Set("migration.step", step)
-		runner := &frameworkpipeline.Runner{Options: frameworkpipeline.RunnerOptions{
-			Model:     env.Environment.Model,
-			ModelName: migrationModelName(env),
-		}}
 		stepTask := &core.Task{
 			ID:          fmt.Sprintf("%s-migration-step-%d", task.ID, idx+1),
 			Instruction: fmt.Sprintf("Execute migration step %s: %s", stepID, stringValue(step["description"])),
 			Type:        core.TaskTypeCodeModification,
 			Context:     task.Context,
 		}
-		results, err := runner.Execute(ctx, stepTask, stateClone, newMigrationStages(step))
+		result, err := pipeexec.ExecuteStages(ctx, env.Environment, stepTask, stateClone, newMigrationStages(step))
 		postCheck, _ := stateClone.Get("migration.postcheck_result")
 		execOutput, _ := stateClone.Get("migration.step_changes")
+		results, _ := stateClone.Get("pipeline.results")
 		if execRecord, ok := execOutput.(map[string]any); ok {
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         stepID + "_edit_intent",
@@ -145,6 +142,9 @@ func (c *migrationExecuteCapability) Execute(ctx context.Context, env euclotypes
 				},
 				RecoveryHint: &euclotypes.RecoveryHint{Strategy: euclotypes.RecoveryStrategyProfileEscalation, Context: map[string]any{"failed_step": stepID, "rollback_result": rollback}},
 			}
+		}
+		if result != nil && result.Data != nil {
+			step["pipeline_final_output"] = result.Data["final_output"]
 		}
 		step["status"] = "completed"
 		step["stage_results"] = results

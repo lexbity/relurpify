@@ -285,6 +285,9 @@ type ArchaeologyCapabilityRuntimeState struct {
 	PrimaryOperation            string    `json:"primary_operation,omitempty"`
 	PrimaryLLMDependent         bool      `json:"primary_llm_dependent"`
 	PrimaryArchaeoAssociated    bool      `json:"primary_archaeo_associated"`
+	ExecutedRecipeIDs           []string  `json:"executed_recipe_ids,omitempty"`
+	SpecializedCapabilityIDs    []string  `json:"specialized_capability_ids,omitempty"`
+	BehaviorPath                string    `json:"behavior_path,omitempty"`
 	PolicySnapshotID            string    `json:"policy_snapshot_id,omitempty"`
 	AdmittedCapabilityIDs       []string  `json:"admitted_capability_ids,omitempty"`
 	AdmittedModelTools          []string  `json:"admitted_model_tools,omitempty"`
@@ -312,6 +315,9 @@ type ArchaeologyCapabilityRuntimeState struct {
 type DebugCapabilityRuntimeState struct {
 	PrimaryCapabilityID        string    `json:"primary_capability_id,omitempty"`
 	SupportingCapabilityIDs    []string  `json:"supporting_capability_ids,omitempty"`
+	ExecutedRecipeIDs          []string  `json:"executed_recipe_ids,omitempty"`
+	SpecializedCapabilityIDs   []string  `json:"specialized_capability_ids,omitempty"`
+	BehaviorPath               string    `json:"behavior_path,omitempty"`
 	PolicySnapshotID           string    `json:"policy_snapshot_id,omitempty"`
 	AdmittedCapabilityIDs      []string  `json:"admitted_capability_ids,omitempty"`
 	AdmittedModelTools         []string  `json:"admitted_model_tools,omitempty"`
@@ -341,6 +347,9 @@ type DebugCapabilityRuntimeState struct {
 type ChatCapabilityRuntimeState struct {
 	PrimaryCapabilityID              string    `json:"primary_capability_id,omitempty"`
 	SupportingCapabilityIDs          []string  `json:"supporting_capability_ids,omitempty"`
+	ExecutedRecipeIDs                []string  `json:"executed_recipe_ids,omitempty"`
+	SpecializedCapabilityIDs         []string  `json:"specialized_capability_ids,omitempty"`
+	BehaviorPath                     string    `json:"behavior_path,omitempty"`
 	PolicySnapshotID                 string    `json:"policy_snapshot_id,omitempty"`
 	AdmittedCapabilityIDs            []string  `json:"admitted_capability_ids,omitempty"`
 	AdmittedModelTools               []string  `json:"admitted_model_tools,omitempty"`

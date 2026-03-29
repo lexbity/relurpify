@@ -11,6 +11,8 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	architectexec "github.com/lexcodex/relurpify/named/euclo/execution/architect"
+	htnexec "github.com/lexcodex/relurpify/named/euclo/execution/htn"
 	plannerexec "github.com/lexcodex/relurpify/named/euclo/execution/planner"
 	reactexec "github.com/lexcodex/relurpify/named/euclo/execution/react"
 	reflectionexec "github.com/lexcodex/relurpify/named/euclo/execution/reflection"
@@ -18,15 +20,16 @@ import (
 )
 
 type ExecuteInput struct {
-	Task             *core.Task
-	ExecutionTask    *core.Task
-	State            *core.Context
-	Mode             euclotypes.ModeResolution
-	Profile          euclotypes.ExecutionProfileSelection
-	Work             eucloruntime.UnitOfWork
-	Environment      agentenv.AgentEnvironment
-	WorkflowExecutor graph.WorkflowExecutor
-	Telemetry        core.Telemetry
+	Task                 *core.Task
+	ExecutionTask        *core.Task
+	State                *core.Context
+	Mode                 euclotypes.ModeResolution
+	Profile              euclotypes.ExecutionProfileSelection
+	Work                 eucloruntime.UnitOfWork
+	Environment          agentenv.AgentEnvironment
+	WorkflowExecutor     graph.WorkflowExecutor
+	Telemetry            core.Telemetry
+	RunSupportingRoutine func(context.Context, string, *core.Task, *core.Context, eucloruntime.UnitOfWork, agentenv.AgentEnvironment) ([]euclotypes.Artifact, error)
 }
 
 type Behavior interface {
@@ -35,22 +38,101 @@ type Behavior interface {
 }
 
 type Trace struct {
-	PrimaryCapabilityID string   `json:"primary_capability_id,omitempty"`
-	SupportingRoutines  []string `json:"supporting_routines,omitempty"`
-	ExecutorFamily      string   `json:"executor_family,omitempty"`
-	Path                string   `json:"path,omitempty"`
+	PrimaryCapabilityID      string   `json:"primary_capability_id,omitempty"`
+	SupportingRoutines       []string `json:"supporting_routines,omitempty"`
+	RecipeIDs                []string `json:"recipe_ids,omitempty"`
+	SpecializedCapabilityIDs []string `json:"specialized_capability_ids,omitempty"`
+	ExecutorFamily           string   `json:"executor_family,omitempty"`
+	Path                     string   `json:"path,omitempty"`
+}
+
+type RecipeID string
+
+type RecipeSpec struct {
+	Family   string
+	TaskType core.TaskType
+}
+
+const (
+	RecipeChatAskInquiry                 RecipeID = "chat.ask.inquiry"
+	RecipeChatAskOptions                 RecipeID = "chat.ask.options"
+	RecipeChatAskReview                  RecipeID = "chat.ask.review"
+	RecipeChatInspectCollect             RecipeID = "chat.inspect.collect"
+	RecipeChatInspectReview              RecipeID = "chat.inspect.review"
+	RecipeChatImplementArchitect         RecipeID = "chat.implement.architect"
+	RecipeChatImplementExplore           RecipeID = "chat.implement.explore"
+	RecipeChatImplementEdit              RecipeID = "chat.implement.edit"
+	RecipeChatImplementVerify            RecipeID = "chat.implement.verify"
+	RecipeDebugInvestigateReproduce      RecipeID = "debug.investigate.reproduce"
+	RecipeDebugInvestigateLocalize       RecipeID = "debug.investigate.localize"
+	RecipeDebugInvestigatePatch          RecipeID = "debug.investigate.patch"
+	RecipeDebugInvestigateReview         RecipeID = "debug.investigate.review"
+	RecipeArchaeologyExploreShape        RecipeID = "archaeology.explore.shape"
+	RecipeArchaeologyExploreReview       RecipeID = "archaeology.explore.review"
+	RecipeArchaeologyCompileReconcile    RecipeID = "archaeology.compile.reconcile"
+	RecipeArchaeologyCompileShape        RecipeID = "archaeology.compile.shape"
+	RecipeArchaeologyCompileReview       RecipeID = "archaeology.compile.review"
+	RecipeArchaeologyImplementStep       RecipeID = "archaeology.implement.step"
+	RecipeArchaeologyImplementCheckpoint RecipeID = "archaeology.implement.checkpoint"
+)
+
+var recipeSpecs = map[RecipeID]RecipeSpec{
+	RecipeChatAskInquiry:                 {Family: "react", TaskType: core.TaskTypeAnalysis},
+	RecipeChatAskOptions:                 {Family: "planner", TaskType: core.TaskTypeAnalysis},
+	RecipeChatAskReview:                  {Family: "reflection", TaskType: core.TaskTypeAnalysis},
+	RecipeChatInspectCollect:             {Family: "react", TaskType: core.TaskTypeAnalysis},
+	RecipeChatInspectReview:              {Family: "reflection", TaskType: core.TaskTypeAnalysis},
+	RecipeChatImplementArchitect:         {Family: "architect", TaskType: core.TaskTypeCodeModification},
+	RecipeChatImplementExplore:           {Family: "react", TaskType: core.TaskTypeAnalysis},
+	RecipeChatImplementEdit:              {Family: "react", TaskType: core.TaskTypeCodeModification},
+	RecipeChatImplementVerify:            {Family: "react", TaskType: core.TaskTypeAnalysis},
+	RecipeDebugInvestigateReproduce:      {Family: "react", TaskType: core.TaskTypeAnalysis},
+	RecipeDebugInvestigateLocalize:       {Family: "htn", TaskType: core.TaskTypeAnalysis},
+	RecipeDebugInvestigatePatch:          {Family: "react", TaskType: core.TaskTypeCodeModification},
+	RecipeDebugInvestigateReview:         {Family: "reflection", TaskType: core.TaskTypeAnalysis},
+	RecipeArchaeologyExploreShape:        {Family: "planner", TaskType: core.TaskTypeAnalysis},
+	RecipeArchaeologyExploreReview:       {Family: "reflection", TaskType: core.TaskTypeAnalysis},
+	RecipeArchaeologyCompileReconcile:    {Family: "planner", TaskType: core.TaskTypeAnalysis},
+	RecipeArchaeologyCompileShape:        {Family: "planner", TaskType: core.TaskTypeAnalysis},
+	RecipeArchaeologyCompileReview:       {Family: "reflection", TaskType: core.TaskTypeAnalysis},
+	RecipeArchaeologyImplementStep:       {Family: "react", TaskType: core.TaskTypeCodeModification},
+	RecipeArchaeologyImplementCheckpoint: {Family: "reflection", TaskType: core.TaskTypeAnalysis},
 }
 
 func SetBehaviorTrace(state *core.Context, work eucloruntime.UnitOfWork, routines []string) {
 	if state == nil {
 		return
 	}
-	state.Set("euclo.relurpic_behavior_trace", Trace{
-		PrimaryCapabilityID: work.PrimaryRelurpicCapabilityID,
-		SupportingRoutines:  append([]string(nil), routines...),
-		ExecutorFamily:      string(work.ExecutorDescriptor.Family),
-		Path:                "unit_of_work_behavior",
-	})
+	trace := readBehaviorTrace(state)
+	trace.PrimaryCapabilityID = work.PrimaryRelurpicCapabilityID
+	trace.SupportingRoutines = append([]string(nil), routines...)
+	trace.ExecutorFamily = string(work.ExecutorDescriptor.Family)
+	trace.Path = "unit_of_work_behavior"
+	if strings.TrimSpace(work.ExecutorDescriptor.RecipeID) != "" {
+		trace.RecipeIDs = UniqueStrings(append(trace.RecipeIDs, strings.TrimSpace(work.ExecutorDescriptor.RecipeID)))
+	}
+	state.Set("euclo.relurpic_behavior_trace", trace)
+}
+
+func AddSpecializedCapabilityTrace(state *core.Context, capabilityID string) {
+	if state == nil || strings.TrimSpace(capabilityID) == "" {
+		return
+	}
+	trace := readBehaviorTrace(state)
+	trace.SpecializedCapabilityIDs = UniqueStrings(append(trace.SpecializedCapabilityIDs, strings.TrimSpace(capabilityID)))
+	state.Set("euclo.relurpic_behavior_trace", trace)
+}
+
+func readBehaviorTrace(state *core.Context) Trace {
+	if state == nil {
+		return Trace{}
+	}
+	if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
+		if trace, ok := raw.(Trace); ok {
+			return trace
+		}
+	}
+	return Trace{}
 }
 
 func ExecuteWorkflow(ctx context.Context, in ExecuteInput) (*core.Result, error) {
@@ -180,6 +262,37 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 	}
 }
 
+func ExecuteSupportingRoutines(ctx context.Context, in ExecuteInput, routineIDs []string) ([]euclotypes.Artifact, []string, error) {
+	if len(routineIDs) == 0 {
+		return nil, nil, nil
+	}
+	var artifacts []euclotypes.Artifact
+	var executed []string
+	for _, routineID := range routineIDs {
+		routineID = strings.TrimSpace(routineID)
+		if routineID == "" {
+			continue
+		}
+		if in.RunSupportingRoutine == nil {
+			EnsureRoutineArtifacts(in.State, routineID, in.Work)
+			executed = append(executed, routineID)
+			continue
+		}
+		routineArtifacts, err := in.RunSupportingRoutine(ctx, routineID, in.Task, in.State, in.Work, in.Environment)
+		if err != nil {
+			return artifacts, executed, err
+		}
+		if len(routineArtifacts) == 0 {
+			EnsureRoutineArtifacts(in.State, routineID, in.Work)
+		} else {
+			MergeStateArtifactsToContext(in.State, routineArtifacts)
+			artifacts = append(artifacts, routineArtifacts...)
+		}
+		executed = append(executed, routineID)
+	}
+	return artifacts, UniqueStrings(executed), nil
+}
+
 func CapabilityTaskInstruction(task *core.Task) string {
 	if task == nil || strings.TrimSpace(task.Instruction) == "" {
 		return "the requested change"
@@ -212,6 +325,17 @@ func ExecuteReactTask(ctx context.Context, in ExecuteInput, taskID, instruction 
 	return result, state, err
 }
 
+func ExecuteHTNTask(ctx context.Context, in ExecuteInput, taskID, instruction string, taskType core.TaskType) (*core.Result, *core.Context, error) {
+	state := in.State.Clone()
+	agent := htnexec.New(in.Environment)
+	task := &core.Task{ID: taskID, Instruction: instruction, Type: taskType, Context: taskContextFromInput(in)}
+	result, err := agent.Execute(ctx, task, state)
+	if err == nil {
+		mergeStateArtifacts(in.State, state)
+	}
+	return result, state, err
+}
+
 func ExecutePlannerTask(ctx context.Context, in ExecuteInput, taskID, instruction string) (*core.Result, *core.Context, error) {
 	state := in.State.Clone()
 	agent := plannerexec.New(in.Environment)
@@ -232,6 +356,82 @@ func ExecuteReflectionTask(ctx context.Context, in ExecuteInput, taskID, instruc
 		mergeStateArtifacts(in.State, state)
 	}
 	return result, state, err
+}
+
+func ExecuteArchitectTask(ctx context.Context, in ExecuteInput, taskID, instruction string, taskType core.TaskType) (*core.Result, *core.Context, error) {
+	state := in.State.Clone()
+	task := &core.Task{ID: taskID, Instruction: instruction, Type: taskType, Context: taskContextFromInput(in)}
+	result, err := architectexec.ExecuteArchitect(ctx, in.Environment, task, state)
+	if err == nil {
+		mergeStateArtifacts(in.State, state)
+	}
+	return result, state, err
+}
+
+func ExecuteRecipe(ctx context.Context, in ExecuteInput, recipeID RecipeID, taskID, instruction string) (*core.Result, *core.Context, error) {
+	spec, ok := recipeSpecs[recipeID]
+	if !ok {
+		err := fmt.Errorf("unknown execution recipe %s", string(recipeID))
+		return &core.Result{Success: false, Error: err}, nil, err
+	}
+	appendRecipeTrace(in.State, recipeID)
+	switch spec.Family {
+	case "react":
+		return ExecuteReactTask(ctx, in, taskID, instruction, spec.TaskType)
+	case "planner":
+		return ExecutePlannerTask(ctx, in, taskID, instruction)
+	case "reflection":
+		return ExecuteReflectionTask(ctx, in, taskID, instruction)
+	case "htn":
+		return ExecuteHTNTask(ctx, in, taskID, instruction, spec.TaskType)
+	case "architect":
+		return ExecuteArchitectTask(ctx, in, taskID, instruction, spec.TaskType)
+	default:
+		err := fmt.Errorf("unsupported execution family %s for recipe %s", spec.Family, string(recipeID))
+		return &core.Result{Success: false, Error: err}, nil, err
+	}
+}
+
+func ExecuteEnvelopeRecipe(ctx context.Context, env euclotypes.ExecutionEnvelope, recipeID RecipeID, taskID, instruction string) (*core.Result, *core.Context, error) {
+	in := ExecuteInput{
+		Task:        env.Task,
+		State:       env.State,
+		Mode:        env.Mode,
+		Profile:     env.Profile,
+		Environment: env.Environment,
+		Telemetry:   env.Telemetry,
+	}
+	if in.State == nil {
+		in.State = core.NewContext()
+	}
+	if in.Task == nil {
+		in.Task = &core.Task{}
+	}
+	if in.Task.Context == nil {
+		in.Task.Context = map[string]any{}
+	}
+	if _, ok := in.Task.Context["workspace"]; !ok && env.Task != nil && env.Task.Context != nil {
+		in.Task.Context["workspace"] = env.Task.Context["workspace"]
+	}
+	return ExecuteRecipe(ctx, in, recipeID, taskID, instruction)
+}
+
+func PropagateBehaviorTrace(dst, src *core.Context) {
+	if dst == nil || src == nil {
+		return
+	}
+	if raw, ok := src.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
+		dst.Set("euclo.relurpic_behavior_trace", raw)
+	}
+}
+
+func appendRecipeTrace(state *core.Context, recipeID RecipeID) {
+	if state == nil || strings.TrimSpace(string(recipeID)) == "" {
+		return
+	}
+	trace := readBehaviorTrace(state)
+	trace.RecipeIDs = UniqueStrings(append(trace.RecipeIDs, strings.TrimSpace(string(recipeID))))
+	state.Set("euclo.relurpic_behavior_trace", trace)
 }
 
 func ResultSummary(result *core.Result) string {

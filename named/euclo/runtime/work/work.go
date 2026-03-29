@@ -29,21 +29,42 @@ type UnitOfWorkToolBinding = runtimepkg.UnitOfWorkToolBinding
 type UnitOfWorkCapabilityBinding = runtimepkg.UnitOfWorkCapabilityBinding
 type CompiledExecution = runtimepkg.CompiledExecution
 type RuntimeExecutionStatus = runtimepkg.RuntimeExecutionStatus
+type ExecutionResultClass = runtimepkg.ExecutionResultClass
+type ExecutionStatus = runtimepkg.ExecutionStatus
 type EditExecutionRecord = runtimepkg.EditExecutionRecord
 type ExecutionEnvelope = euclotypespkg.ExecutionEnvelope
 
 const (
-	UnitOfWorkStatusAssembling             = runtimepkg.UnitOfWorkStatusAssembling
-	UnitOfWorkStatusReady                  = runtimepkg.UnitOfWorkStatusReady
-	UnitOfWorkStatusExecuting              = runtimepkg.UnitOfWorkStatusExecuting
-	UnitOfWorkStatusVerifying              = runtimepkg.UnitOfWorkStatusVerifying
-	UnitOfWorkStatusCompacted              = runtimepkg.UnitOfWorkStatusCompacted
-	UnitOfWorkStatusRestoring              = runtimepkg.UnitOfWorkStatusRestoring
-	UnitOfWorkStatusCompleted              = runtimepkg.UnitOfWorkStatusCompleted
-	UnitOfWorkStatusCompletedWithDeferrals = runtimepkg.UnitOfWorkStatusCompletedWithDeferrals
-	UnitOfWorkStatusBlocked                = runtimepkg.UnitOfWorkStatusBlocked
-	UnitOfWorkStatusFailed                 = runtimepkg.UnitOfWorkStatusFailed
-	UnitOfWorkStatusCanceled               = runtimepkg.UnitOfWorkStatusCanceled
+	ExecutionResultClassCompleted              = runtimepkg.ExecutionResultClassCompleted
+	ExecutionResultClassCompletedWithDeferrals = runtimepkg.ExecutionResultClassCompletedWithDeferrals
+	ExecutionResultClassBlocked                = runtimepkg.ExecutionResultClassBlocked
+	ExecutionResultClassFailed                 = runtimepkg.ExecutionResultClassFailed
+	ExecutionResultClassCanceled               = runtimepkg.ExecutionResultClassCanceled
+	ExecutionResultClassRestoreFailed          = runtimepkg.ExecutionResultClassRestoreFailed
+	ExecutionStatusPreparing                   = runtimepkg.ExecutionStatusPreparing
+	ExecutionStatusReady                       = runtimepkg.ExecutionStatusReady
+	ExecutionStatusExecuting                   = runtimepkg.ExecutionStatusExecuting
+	ExecutionStatusVerifying                   = runtimepkg.ExecutionStatusVerifying
+	ExecutionStatusSurfacing                   = runtimepkg.ExecutionStatusSurfacing
+	ExecutionStatusCompacted                   = runtimepkg.ExecutionStatusCompacted
+	ExecutionStatusRestoring                   = runtimepkg.ExecutionStatusRestoring
+	ExecutionStatusCompleted                   = runtimepkg.ExecutionStatusCompleted
+	ExecutionStatusCompletedWithDeferrals      = runtimepkg.ExecutionStatusCompletedWithDeferrals
+	ExecutionStatusBlocked                     = runtimepkg.ExecutionStatusBlocked
+	ExecutionStatusFailed                      = runtimepkg.ExecutionStatusFailed
+	ExecutionStatusCanceled                    = runtimepkg.ExecutionStatusCanceled
+	ExecutionStatusRestoreFailed               = runtimepkg.ExecutionStatusRestoreFailed
+	UnitOfWorkStatusAssembling                 = runtimepkg.UnitOfWorkStatusAssembling
+	UnitOfWorkStatusReady                      = runtimepkg.UnitOfWorkStatusReady
+	UnitOfWorkStatusExecuting                  = runtimepkg.UnitOfWorkStatusExecuting
+	UnitOfWorkStatusVerifying                  = runtimepkg.UnitOfWorkStatusVerifying
+	UnitOfWorkStatusCompacted                  = runtimepkg.UnitOfWorkStatusCompacted
+	UnitOfWorkStatusRestoring                  = runtimepkg.UnitOfWorkStatusRestoring
+	UnitOfWorkStatusCompleted                  = runtimepkg.UnitOfWorkStatusCompleted
+	UnitOfWorkStatusCompletedWithDeferrals     = runtimepkg.UnitOfWorkStatusCompletedWithDeferrals
+	UnitOfWorkStatusBlocked                    = runtimepkg.UnitOfWorkStatusBlocked
+	UnitOfWorkStatusFailed                     = runtimepkg.UnitOfWorkStatusFailed
+	UnitOfWorkStatusCanceled                   = runtimepkg.UnitOfWorkStatusCanceled
 )
 
 func BuildUnitOfWork(
@@ -74,4 +95,20 @@ func BuildUnitOfWork(
 
 func BuildCompiledExecution(uow UnitOfWork, status RuntimeExecutionStatus, compiledAt time.Time) CompiledExecution {
 	return runtimepkg.BuildCompiledExecution(uow, status, compiledAt)
+}
+
+func BuildRuntimeExecutionStatus(uow UnitOfWork, status ExecutionStatus, resultClass ExecutionResultClass, updatedAt time.Time) RuntimeExecutionStatus {
+	return runtimepkg.BuildRuntimeExecutionStatus(uow, status, resultClass, updatedAt)
+}
+
+func SeedCompiledExecutionState(stateSetter interface{ Set(string, any) }, uow UnitOfWork, status RuntimeExecutionStatus) {
+	runtimepkg.SeedCompiledExecutionState(stateSetter, uow, status)
+}
+
+func ResultClassForOutcome(status ExecutionStatus, deferredIssueIDs []string, err error) ExecutionResultClass {
+	return runtimepkg.ResultClassForOutcome(status, deferredIssueIDs, err)
+}
+
+func StatusForResultClass(status ExecutionStatus, resultClass ExecutionResultClass) ExecutionStatus {
+	return runtimepkg.StatusForResultClass(status, resultClass)
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -32,6 +33,13 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 	rt.TensionRefCount = len(work.SemanticInputs.TensionRefs)
 	rt.MutationObserved = debugMutationObserved(state)
 	if state != nil {
+		if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
+			if trace, ok := raw.(eucloexec.Trace); ok {
+				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
+				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
+				rt.BehaviorPath = strings.TrimSpace(trace.Path)
+			}
+		}
 		if raw, ok := state.Get("euclo.capability_contract_runtime"); ok && raw != nil {
 			if contract, ok := raw.(runtimepkg.CapabilityContractRuntimeState); ok {
 				rt.EscalationTarget = contract.DebugEscalationTarget
@@ -74,6 +82,8 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 	}
 	rt.ToolCapabilityIDs = uniqueStrings(rt.ToolCapabilityIDs)
 	rt.ToolOutputSources = uniqueStrings(rt.ToolOutputSources)
+	rt.ExecutedRecipeIDs = uniqueStrings(rt.ExecutedRecipeIDs)
+	rt.SpecializedCapabilityIDs = uniqueStrings(rt.SpecializedCapabilityIDs)
 	rt.AdmittedCapabilityIDs = uniqueStrings(rt.AdmittedCapabilityIDs)
 	rt.AdmittedModelTools = uniqueStrings(rt.AdmittedModelTools)
 	rt.DeniedToolUsage = uniqueStrings(rt.DeniedToolUsage)

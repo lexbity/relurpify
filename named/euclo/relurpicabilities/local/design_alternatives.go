@@ -9,7 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	plannerexec "github.com/lexcodex/relurpify/named/euclo/execution/planner"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 )
 
 type designAlternativesCapability struct {
@@ -57,18 +57,11 @@ func (c *designAlternativesCapability) Eligible(artifacts euclotypes.ArtifactSta
 }
 
 func (c *designAlternativesCapability) Execute(ctx context.Context, env euclotypes.ExecutionEnvelope) euclotypes.ExecutionResult {
-	agent := plannerexec.New(c.env)
 	producerID := "euclo:design.alternatives"
 	candidates := make([]map[string]any, 0, len(alternativePrompts()))
 	for idx, prompt := range alternativePrompts() {
-		task := &core.Task{
-			ID:          fmt.Sprintf("%s-alt-%d", firstNonEmpty(env.Task.ID, "design-alternatives"), idx+1),
-			Instruction: prompt + "\n\nRequest: " + taskInstruction(env.Task),
-			Type:        core.TaskTypeAnalysis,
-			Context:     taskContextFromEnvelope(env),
-		}
-		state := env.State.Clone()
-		result, err := agent.Execute(ctx, task, state)
+		taskID := fmt.Sprintf("%s-alt-%d", firstNonEmpty(env.Task.ID, "design-alternatives"), idx+1)
+		result, state, err := execution.ExecuteEnvelopeRecipe(ctx, env, execution.RecipeChatAskOptions, taskID, prompt+"\n\nRequest: "+taskInstruction(env.Task))
 		if err != nil || result == nil || !result.Success {
 			return euclotypes.ExecutionResult{
 				Status:  euclotypes.ExecutionStatusFailed,
@@ -82,6 +75,7 @@ func (c *designAlternativesCapability) Execute(ctx context.Context, env euclotyp
 				},
 			}
 		}
+		execution.PropagateBehaviorTrace(env.State, state)
 		candidates = append(candidates, buildPlanCandidate(idx+1, prompt, result))
 	}
 	comparison := comparePlanCandidates(candidates)

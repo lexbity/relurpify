@@ -41,6 +41,7 @@ import (
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
 // Agent is the named coding-runtime boundary for software-engineering work.
@@ -288,7 +289,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	a.ensureDeferralPlan(task, state)
 	a.ensureWorkflowRun(ctx, task, state)
 	if restoreErr := a.restoreExecutionContinuity(ctx, task, state, envelope, work); restoreErr != nil {
-		work = eucloruntime.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
+		work = euclowork.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
 		a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, eucloruntime.ExecutionStatusRestoreFailed, restoreErr)
 		result := &core.Result{Success: false, Error: restoreErr}
 		result.Metadata = map[string]any{"result_class": string(eucloruntime.ExecutionResultClassRestoreFailed)}
@@ -331,13 +332,13 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	if handledResult, handledErr, handled := a.phaseDriver().HandlePreparationOutcome(ctx, task, state, prep.preflightResult, prep.err, a.DeferralPlan); handled {
 		return handledResult, handledErr
 	}
-	work = eucloruntime.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
+	work = euclowork.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
 	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
 	if prep.activeStep == nil && shouldShortCircuitExecution(prep, state) {
 		work.Status = eucloruntime.UnitOfWorkStatusCompleted
-		work.ResultClass = eucloruntime.ResultClassForOutcome(eucloruntime.ExecutionStatusCompleted, work.DeferredIssueIDs, nil)
+		work.ResultClass = euclowork.ResultClassForOutcome(euclowork.ExecutionStatusCompleted, work.DeferredIssueIDs, nil)
 		state.Set("euclo.unit_of_work", work)
-		eucloruntime.SeedCompiledExecutionState(state, work, eucloruntime.BuildRuntimeExecutionStatus(work, eucloruntime.ExecutionStatusCompleted, work.ResultClass, time.Now().UTC()))
+		euclowork.SeedCompiledExecutionState(state, work, euclowork.BuildRuntimeExecutionStatus(work, euclowork.ExecutionStatusCompleted, work.ResultClass, time.Now().UTC()))
 		short := a.shortCircuitResult(state, prep)
 		sessionOutput := a.executionSession().ShortCircuit(ctx, archaeoexec.ShortCircuitInput{
 			Task:            task,
@@ -371,7 +372,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	state.Set("euclo.capability_family_routing", routing)
 	work.Status = eucloruntime.UnitOfWorkStatusExecuting
 	state.Set("euclo.unit_of_work", work)
-	eucloruntime.SeedCompiledExecutionState(state, work, eucloruntime.BuildRuntimeExecutionStatus(work, eucloruntime.ExecutionStatusExecuting, "", time.Now().UTC()))
+	euclowork.SeedCompiledExecutionState(state, work, euclowork.BuildRuntimeExecutionStatus(work, euclowork.ExecutionStatusExecuting, "", time.Now().UTC()))
 	executionTask := a.eucloTask(task, envelope, classification, mode, profile, work)
 	sessionOutput := a.executionSession().Execute(ctx, archaeoexec.SessionInput{
 		Task:             task,
@@ -844,7 +845,7 @@ func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode e
 	if workspaceID := workspaceIDFromTask(task, state); workspaceID != "" {
 		convergence, _ = a.archaeoBinding().ConvergenceHistory(ctx, workspaceID)
 	}
-	bundle := eucloruntime.SemanticInputBundleFromSources(
+	bundle := eucloarchaeomem.SemanticInputBundleFromSources(
 		workflowID,
 		activePlan,
 		adaptSemanticRequestHistory(requests),
@@ -863,7 +864,7 @@ func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode e
 	case "review":
 		bundle.Source = bundle.Source + "+review_prepass"
 	}
-	return eucloruntime.EnrichSemanticInputBundle(bundle, state, eucloruntime.UnitOfWork{}, nil)
+	return eucloarchaeomem.EnrichSemanticInputBundle(bundle, state, eucloruntime.UnitOfWork{}, nil)
 }
 
 func (a *Agent) WorkflowProjection(ctx context.Context, workflowID string) (*archaeoprojections.WorkflowReadModel, error) {
@@ -1343,7 +1344,7 @@ func (a *Agent) runtimeState(task *core.Task, state *core.Context) (eucloruntime
 	envelope.ExecutionProfile = profile.ProfileID
 	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), mode, profile)
 	semanticInputs := a.semanticInputBundle(task, state, mode)
-	work := eucloruntime.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, semanticInputs, skillPolicy, eucloruntime.WorkUnitExecutorDescriptor{})
+	work := euclowork.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, semanticInputs, skillPolicy, eucloruntime.WorkUnitExecutorDescriptor{})
 	return envelope, classification, mode, profile, work
 }
 
@@ -1608,13 +1609,13 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	}
 	issues := eucloruntime.BuildDeferredExecutionIssues(a.DeferralPlan, work, state, time.Now().UTC())
 	issues = append(issues, eucloruntime.BuildCapabilityContractDeferredIssues(work, state, time.Now().UTC())...)
-	work.SemanticInputs = eucloruntime.EnrichSemanticInputBundle(work.SemanticInputs, state, work, issues)
-	issues = eucloruntime.ApplySemanticReasoningToDeferredIssues(issues, work.SemanticInputs, state)
+	work.SemanticInputs = eucloarchaeomem.EnrichSemanticInputBundle(work.SemanticInputs, state, work, issues)
+	issues = eucloarchaeomem.ApplySemanticReasoningToDeferredIssues(issues, work.SemanticInputs, state)
 	issues = eucloruntime.PersistDeferredExecutionIssuesToWorkspace(task, state, issues)
 	eucloruntime.SeedDeferredIssueState(state, issues)
 	work.DeferredIssueIDs = deferredIssueIDsFromState(state, work.DeferredIssueIDs)
-	work.ResultClass = eucloruntime.ResultClassForOutcome(status, work.DeferredIssueIDs, execErr)
-	status = eucloruntime.StatusForResultClass(status, work.ResultClass)
+	work.ResultClass = euclowork.ResultClassForOutcome(status, work.DeferredIssueIDs, execErr)
+	status = euclowork.StatusForResultClass(status, work.ResultClass)
 	switch work.ResultClass {
 	case eucloruntime.ExecutionResultClassCompletedWithDeferrals:
 		work.Status = eucloruntime.UnitOfWorkStatusCompletedWithDeferrals
@@ -1630,8 +1631,8 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	work.UpdatedAt = time.Now().UTC()
 	state.Set("euclo.semantic_inputs", work.SemanticInputs)
 	state.Set("euclo.unit_of_work", work)
-	statusRecord := eucloruntime.BuildRuntimeExecutionStatus(work, status, work.ResultClass, work.UpdatedAt)
-	eucloruntime.SeedCompiledExecutionState(state, work, statusRecord)
+	statusRecord := euclowork.BuildRuntimeExecutionStatus(work, status, work.ResultClass, work.UpdatedAt)
+	euclowork.SeedCompiledExecutionState(state, work, statusRecord)
 	if work.WorkflowID != "" && work.RunID != "" {
 		euclorestore.CaptureProviderRuntimeState(ctx, a.runtimeProviders(state), state)
 		taskID := ""
