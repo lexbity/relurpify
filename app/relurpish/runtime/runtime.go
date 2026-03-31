@@ -48,7 +48,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	eucloplan "github.com/lexcodex/relurpify/named/euclo/plan"
 	platformast "github.com/lexcodex/relurpify/platform/ast"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	platformgit "github.com/lexcodex/relurpify/platform/git"
@@ -773,7 +772,7 @@ func openRuntimeStores(workspace string) (*memorydb.SQLiteWorkflowStateStore, fr
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("open workflow state store: %w", err)
 	}
-	planStore, err := eucloplan.NewSQLitePlanStore(workflowStore.DB())
+	planStore, err := frameworkplan.NewSQLitePlanStore(workflowStore.DB())
 	if err != nil {
 		_ = workflowStore.Close()
 		return nil, nil, nil, nil, nil, fmt.Errorf("open living plan store: %w", err)

@@ -19,10 +19,11 @@ type WorkContext struct {
 }
 
 type RoutineInput struct {
-	Task        *core.Task
-	State       *core.Context
-	Work        WorkContext
-	Environment agentenv.AgentEnvironment
+	Task          *core.Task
+	State         *core.Context
+	Work          WorkContext
+	Environment   agentenv.AgentEnvironment
+	ServiceBundle any
 }
 
 type SupportingRoutine interface {

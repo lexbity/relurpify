@@ -21,7 +21,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
-	eucloplan "github.com/lexcodex/relurpify/named/euclo/plan"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 )
@@ -229,9 +228,9 @@ func TestServiceSyncAnchorDriftsCreatesAnchorLearningInteractions(t *testing.T) 
 	svc := learning.Service{
 		Store:     store,
 		Retrieval: archaeoretrieval.NewSQLStore(retrievalDB),
-		Phases:      &phaseSvc,
-		Now:         func() time.Time { return time.Date(2026, 3, 26, 10, 45, 0, 0, time.UTC) },
-		NewID:       newSequenceID(),
+		Phases:    &phaseSvc,
+		Now:       func() time.Time { return time.Date(2026, 3, 26, 10, 45, 0, 0, time.UTC) },
+		NewID:     newSequenceID(),
 	}
 
 	created, err := svc.SyncAnchorDrifts(ctx, "wf-drift", "explore-1", "workspace", "rev-drift")
@@ -484,8 +483,8 @@ func TestServiceResolveAnchorAdjustsPlanConfidence(t *testing.T) {
 		Store:     store,
 		Retrieval: archaeoretrieval.NewSQLStore(retrievalDB),
 		PlanStore: planStore,
-		Now:         func() time.Time { return time.Date(2026, 3, 26, 11, 20, 0, 0, time.UTC) },
-		NewID:       newSequenceID(),
+		Now:       func() time.Time { return time.Date(2026, 3, 26, 11, 20, 0, 0, time.UTC) },
+		NewID:     newSequenceID(),
 	}
 	interaction, err := svc.Create(ctx, learning.CreateInput{
 		WorkflowID:    "wf-anchor-confidence",
@@ -587,8 +586,8 @@ func TestServiceResolveAnchorInteractionsMutateRetrieval(t *testing.T) {
 	svc := learning.Service{
 		Store:     store,
 		Retrieval: archaeoretrieval.NewSQLStore(retrievalDB),
-		Now:         func() time.Time { return time.Date(2026, 3, 26, 13, 0, 0, 0, time.UTC) },
-		NewID:       newSequenceID(),
+		Now:       func() time.Time { return time.Date(2026, 3, 26, 13, 0, 0, 0, time.UTC) },
+		NewID:     newSequenceID(),
 	}
 
 	create, err := svc.Create(ctx, learning.CreateInput{
@@ -789,7 +788,7 @@ func TestServiceResolveMarksActivePlanVersionStaleForReferencedPattern(t *testin
 		Instruction: "learn",
 		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	planStore, err := eucloplan.NewSQLitePlanStore(store.DB())
+	planStore, err := frameworkplan.NewSQLitePlanStore(store.DB())
 	require.NoError(t, err)
 	patternStore, _ := openPatternStores(t)
 	require.NoError(t, patternStore.Save(ctx, patterns.PatternRecord{
@@ -885,7 +884,7 @@ func TestServiceResolveTensionAcceptsWithoutStalingVersion(t *testing.T) {
 		Instruction: "learn",
 		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	planStore, err := eucloplan.NewSQLitePlanStore(store.DB())
+	planStore, err := frameworkplan.NewSQLitePlanStore(store.DB())
 	require.NoError(t, err)
 	versionSvc := plans.Service{
 		Store:         planStore,
@@ -985,7 +984,7 @@ func TestServiceResolveTensionUnresolvedStalesVersionAndAdjustsConfidence(t *tes
 		Instruction: "learn",
 		Status:      memory.WorkflowRunStatusRunning,
 	}))
-	planStore, err := eucloplan.NewSQLitePlanStore(store.DB())
+	planStore, err := frameworkplan.NewSQLitePlanStore(store.DB())
 	require.NoError(t, err)
 	versionSvc := plans.Service{
 		Store:         planStore,

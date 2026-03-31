@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
@@ -91,7 +92,14 @@ func (r *recordingAdapter) SubscribeGuidance() (<-chan guidance.GuidanceEvent, f
 }
 func (r *recordingAdapter) PendingDeferrals() []guidance.EngineeringObservation { return nil }
 func (r *recordingAdapter) ResolveDeferral(string) error                        { return nil }
-func (r *recordingAdapter) SetInteractionEmitter(interaction.FrameEmitter)      {}
+func (r *recordingAdapter) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	return nil, func() {}
+}
+func (r *recordingAdapter) PendingLearning() []archaeolearning.Interaction { return nil }
+func (r *recordingAdapter) ResolveLearning(string, archaeolearning.ResolveInput) error {
+	return nil
+}
+func (r *recordingAdapter) SetInteractionEmitter(interaction.FrameEmitter) {}
 func (r *recordingAdapter) Diagnostics() DiagnosticsInfo                        { return DiagnosticsInfo{} }
 func (r *recordingAdapter) ApplyChatPolicy(SubTabID) error                      { return nil }
 
@@ -295,6 +303,13 @@ func (m *minimalCommitTestAdapter) SubscribeGuidance() (<-chan guidance.Guidance
 }
 func (m *minimalCommitTestAdapter) PendingDeferrals() []guidance.EngineeringObservation { return nil }
 func (m *minimalCommitTestAdapter) ResolveDeferral(string) error                        { return nil }
+func (m *minimalCommitTestAdapter) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	return nil, func() {}
+}
+func (m *minimalCommitTestAdapter) PendingLearning() []archaeolearning.Interaction { return nil }
+func (m *minimalCommitTestAdapter) ResolveLearning(string, archaeolearning.ResolveInput) error {
+	return nil
+}
 func (m *minimalCommitTestAdapter) InvokeCapability(context.Context, string, map[string]any) (*core.ToolResult, error) {
 	return nil, nil
 }

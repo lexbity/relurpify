@@ -1,10 +1,11 @@
-package execution
+package session
 
 import (
 	"context"
 	"fmt"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -49,6 +50,7 @@ type SessionInput struct {
 	Profile          euclotypes.ExecutionProfileSelection
 	Telemetry        core.Telemetry
 	Work             eucloruntime.UnitOfWork
+	ServiceBundle    eucloexec.ServiceBundle
 }
 
 type SessionOutput struct {
@@ -115,6 +117,7 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 			Profile:          in.Profile,
 			Work:             in.Work,
 			Environment:      s.Environment,
+			ServiceBundle:    in.ServiceBundle,
 			WorkflowExecutor: in.WorkflowExecutor,
 			Telemetry:        in.Telemetry,
 		})
@@ -144,7 +147,7 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 		}
 	}
 	s.applyVerificationAndArtifacts(ctx, in, &out)
-	out.MutationCheckpoints = executionMutationCheckpointSummaries(in.State)
+	out.MutationCheckpoints = archaeoexec.MutationCheckpointSummaries(in.State)
 	return out
 }
 
@@ -197,7 +200,7 @@ func (s SessionService) ShortCircuit(ctx context.Context, in ShortCircuitInput) 
 	out.ActionLog = actionLog
 	out.ProofSurface = proofSurface
 	out.FinalReport = finalReport
-	out.MutationCheckpoints = executionMutationCheckpointSummaries(in.State)
+	out.MutationCheckpoints = archaeoexec.MutationCheckpointSummaries(in.State)
 	if !in.SkipSuccessGate {
 		if out.Result.Success && out.Err == nil {
 			out.Result.Success = true
@@ -325,7 +328,7 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 	out.ActionLog = actionLog
 	out.ProofSurface = proofSurface
 	out.FinalReport = finalReport
-	out.MutationCheckpoints = executionMutationCheckpointSummaries(in.State)
+	out.MutationCheckpoints = archaeoexec.MutationCheckpointSummaries(in.State)
 }
 
 func (s SessionService) runCheckpoint(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {

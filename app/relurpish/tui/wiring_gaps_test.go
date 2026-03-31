@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
@@ -631,6 +632,13 @@ func (f *fakeRuntimeAdapter) PendingDeferrals() []guidance.EngineeringObservatio
 	return append([]guidance.EngineeringObservation(nil), f.deferrals...)
 }
 func (f *fakeRuntimeAdapter) ResolveDeferral(string) error { return nil }
+func (f *fakeRuntimeAdapter) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	return nil, func() {}
+}
+func (f *fakeRuntimeAdapter) PendingLearning() []archaeolearning.Interaction { return nil }
+func (f *fakeRuntimeAdapter) ResolveLearning(string, archaeolearning.ResolveInput) error {
+	return nil
+}
 
 func (f *fakeRuntimeAdapter) InvokeCapability(context.Context, string, map[string]any) (*core.ToolResult, error) {
 	return nil, nil
@@ -841,6 +849,13 @@ func (f *fakeRuntimeAdapterWithHITL) SubscribeGuidance() (<-chan guidance.Guidan
 }
 func (f *fakeRuntimeAdapterWithHITL) PendingDeferrals() []guidance.EngineeringObservation { return nil }
 func (f *fakeRuntimeAdapterWithHITL) ResolveDeferral(string) error                        { return nil }
+func (f *fakeRuntimeAdapterWithHITL) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	return nil, func() {}
+}
+func (f *fakeRuntimeAdapterWithHITL) PendingLearning() []archaeolearning.Interaction { return nil }
+func (f *fakeRuntimeAdapterWithHITL) ResolveLearning(string, archaeolearning.ResolveInput) error {
+	return nil
+}
 
 func (f *fakeRuntimeAdapterWithHITL) InvokeCapability(context.Context, string, map[string]any) (*core.ToolResult, error) {
 	return nil, nil

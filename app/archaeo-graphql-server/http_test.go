@@ -26,7 +26,6 @@ import (
 	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	eucloplan "github.com/lexcodex/relurpify/named/euclo/plan"
 	"github.com/stretchr/testify/require"
 )
 
@@ -236,7 +235,7 @@ func newGraphQLFixture(t *testing.T) graphQLFixture {
 	require.NoError(t, err)
 	commentStore, err := patterns.NewSQLiteCommentStore(patternDB)
 	require.NoError(t, err)
-	planStore, err := eucloplan.NewSQLitePlanStore(workflowStore.DB())
+	planStore, err := frameworkplan.NewSQLitePlanStore(workflowStore.DB())
 	require.NoError(t, err)
 
 	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{

@@ -29,7 +29,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/named/euclo"
-	eucloplan "github.com/lexcodex/relurpify/named/euclo/plan"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	clinix "github.com/lexcodex/relurpify/platform/shell/command"
@@ -56,7 +55,7 @@ type benchmarkFixture struct {
 	baseDir       string
 	workspace     string
 	workflowStore *memorydb.SQLiteWorkflowStateStore
-	planStore     *eucloplan.SQLitePlanStore
+	planStore     *frameworkplan.SQLitePlanStore
 	patternStore  *patterns.SQLitePatternStore
 	commentStore  *patterns.SQLiteCommentStore
 	memoryStore   *memory.HybridMemory
@@ -78,12 +77,12 @@ func newBenchmarkFixture(b *testing.B, name string) *benchmarkFixture {
 		b.Fatalf("open workflow store: %v", err)
 	}
 	b.Cleanup(func() { _ = workflowStore.Close() })
-	planDB, err := eucloplan.OpenSQLite(filepath.Join(baseDir, "plans.db"))
+	planDB, err := frameworkplan.OpenSQLite(filepath.Join(baseDir, "plans.db"))
 	if err != nil {
 		b.Fatalf("open plan db: %v", err)
 	}
 	b.Cleanup(func() { _ = planDB.Close() })
-	planStore, err := eucloplan.NewSQLitePlanStore(planDB)
+	planStore, err := frameworkplan.NewSQLitePlanStore(planDB)
 	if err != nil {
 		b.Fatalf("open plan store: %v", err)
 	}

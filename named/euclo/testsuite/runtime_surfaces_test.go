@@ -1,16 +1,51 @@
 package testsuite
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
+	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"github.com/stretchr/testify/require"
 )
+
+func TestAgentExecuteDispatchesThroughBehaviorService(t *testing.T) {
+	agent := euclo.New(testutil.Env(t))
+	task := &core.Task{
+		ID:          "task-chat-ask",
+		Type:        core.TaskTypeAnalysis,
+		Instruction: "What does this code do?",
+		Context: map[string]any{
+			"workspace": t.TempDir(),
+		},
+	}
+	state := core.NewContext()
+	result, err := agent.Execute(context.Background(), task, state)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+
+	rawTrace, ok := state.Get("euclo.relurpic_behavior_trace")
+	require.True(t, ok)
+	trace, ok := rawTrace.(execution.Trace)
+	require.True(t, ok)
+	require.Equal(t, euclorelurpic.CapabilityChatAsk, trace.PrimaryCapabilityID)
+	require.Contains(t, trace.RecipeIDs, string(execution.RecipeChatAskInquiry))
+	require.Equal(t, "unit_of_work_behavior", trace.Path)
+
+	rawAnalyze, ok := state.Get("pipeline.analyze")
+	require.True(t, ok)
+	analyze, ok := rawAnalyze.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "chat.ask", analyze["mode"])
+}
 
 func TestChatRuntimeCarriesBehaviorTrace(t *testing.T) {
 	work := eucloruntime.UnitOfWork{
@@ -67,22 +102,22 @@ func TestArchaeologyRuntimeCarriesPolicyAndTrace(t *testing.T) {
 			euclorelurpic.CapabilityArchaeologyConvergenceGuard,
 		},
 		PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{
-			PlanID:       "plan-1",
-			PlanVersion:  3,
-			IsPlanBacked: true,
+			PlanID:        "plan-1",
+			PlanVersion:   3,
+			IsPlanBacked:  true,
 			IsLongRunning: true,
 		},
 	}
 	state := core.NewContext()
 	state.Set("euclo.relurpic_behavior_trace", execution.Trace{
-		Path:      "unit_of_work_behavior",
-		RecipeIDs: []string{"archaeology.implement-plan.rewoo"},
+		Path:                     "unit_of_work_behavior",
+		RecipeIDs:                []string{"archaeology.implement-plan.rewoo"},
 		SpecializedCapabilityIDs: []string{"euclo.execution.rewoo"},
 	})
 	state.Set("euclo.security_runtime", eucloruntime.SecurityRuntimeState{
-		PolicySnapshotID:    "policy-1",
+		PolicySnapshotID:     "policy-1",
 		AdmittedCallableCaps: []string{"file_read", "file_write"},
-		AdmittedModelTools:  []string{"file_read", "file_write"},
+		AdmittedModelTools:   []string{"file_read", "file_write"},
 	})
 	rt := eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC())
 	if !rt.PlanBound || !rt.HasCompiledPlan {

@@ -220,7 +220,7 @@ func recordLiveMutationState(state *core.Context, checkpoint archaeodomain.Mutat
 	}
 	state.Set("euclo.execution_mutation_latest_checkpoint", string(checkpoint))
 	state.Set("euclo.execution_mutation_checkpoint_summary", summary)
-	history := executionMutationCheckpointSummaries(state)
+	history := MutationCheckpointSummaries(state)
 	history = append(history, summary)
 	state.Set("euclo.execution_mutation_checkpoints", history)
 }
@@ -247,7 +247,7 @@ func mutationCheckpointSummary(checkpoint archaeodomain.MutationCheckpoint, eval
 	return summary
 }
 
-func executionMutationCheckpointSummaries(state *core.Context) []archaeodomain.MutationCheckpointSummary {
+func MutationCheckpointSummaries(state *core.Context) []archaeodomain.MutationCheckpointSummary {
 	if state == nil {
 		return nil
 	}

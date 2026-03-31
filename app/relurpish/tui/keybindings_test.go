@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
@@ -384,6 +385,13 @@ func (m *minimalKeybindingTestAdapter) PendingDeferrals() []guidance.Engineering
 	return nil
 }
 func (m *minimalKeybindingTestAdapter) ResolveDeferral(string) error { return nil }
+func (m *minimalKeybindingTestAdapter) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	return nil, func() {}
+}
+func (m *minimalKeybindingTestAdapter) PendingLearning() []archaeolearning.Interaction { return nil }
+func (m *minimalKeybindingTestAdapter) ResolveLearning(string, archaeolearning.ResolveInput) error {
+	return nil
+}
 func (m *minimalKeybindingTestAdapter) InvokeCapability(context.Context, string, map[string]any) (*core.ToolResult, error) {
 	return nil, nil
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/guidance"
 )
 
@@ -14,6 +15,32 @@ type guidanceService interface {
 	SubscribeGuidance() (<-chan guidance.GuidanceEvent, func())
 	PendingDeferrals() []guidance.EngineeringObservation
 	ResolveDeferral(observationID string) error
+}
+
+type learningService interface {
+	SubscribeLearning() (<-chan archaeolearning.Event, func())
+	PendingLearning() []archaeolearning.Interaction
+	ResolveLearning(workflowID string, input archaeolearning.ResolveInput) error
+}
+
+type learningEventMsg struct{ event archaeolearning.Event }
+
+type learningSubscribedMsg struct {
+	ch    <-chan archaeolearning.Event
+	unsub func()
+}
+
+func listenLearningEvents(ch <-chan archaeolearning.Event) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return learningEventMsg{event: ev}
+	}
 }
 
 type guidanceEventMsg struct{ event guidance.GuidanceEvent }

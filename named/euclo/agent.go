@@ -13,6 +13,7 @@ import (
 	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
+	eucloses "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
@@ -32,6 +33,7 @@ import (
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
@@ -44,6 +46,34 @@ import (
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
+// Dispatch model:
+//
+//	Agent.Execute
+//	  -> runtimeState(...)
+//	  -> selectExecutor(...)
+//	  -> nativeExecutor.Execute(...)
+//	  -> executeWithWorkflowExecutor(...)
+//	  -> executeManagedFlow(...)
+//	  -> named/euclo/runtime/session.SessionService.Execute(...)
+//	  -> BehaviorService.Execute(...)
+//	  -> execution.ExecuteRecipe(...)
+//	  -> /agents paradigm runner (react / planner / htn / reflection / architect / rewoo)
+//
+// ProfileController is not the primary coding execution path. It is invoked
+// during executeManagedFlow only for interactive mode-machine work when the
+// interaction registry is active. The primary run path dispatches through
+// BehaviorService and the relurpic capability owners.
+//
+// ExecuteInput.Environment carries the framework agent substrate
+// (model/registry/index/search/memory/config). Euclo-owned runtime services
+// that are not part of the framework environment are injected separately via a
+// Euclo ServiceBundle at behavior dispatch time.
+//
+// ExecuteInput.WorkflowExecutor is the selected executor family instance built
+// by the native executor selected from the UnitOfWork's ExecutorDescriptor.
+// BehaviorService receives both the executor and the UnitOfWork-derived
+// execution context.
+//
 // Agent is the named coding-runtime boundary for software-engineering work.
 type Agent struct {
 	Config         *core.Config
@@ -266,6 +296,7 @@ func (a *Agent) executeWithWorkflowExecutor(ctx context.Context, exec *executorC
 }
 
 func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *core.Context, workflowExecutor graph.WorkflowExecutor) (*core.Result, error) {
+	// ── Setup ────────────────────────────────────────────────────────────────
 	if state == nil {
 		state = core.NewContext()
 	}
@@ -284,6 +315,8 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	if scopeErr := enforceSessionScoping(state, sessionID); scopeErr != nil {
 		return &core.Result{Success: false, Error: scopeErr}, scopeErr
 	}
+	// First runtimeState: build initial mode/profile/work from raw task + state
+	// before any restore or learning resolution has run.
 	envelope, classification, mode, profile, work := a.runtimeState(task, state)
 	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
 	a.ensureDeferralPlan(task, state)
@@ -296,8 +329,12 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 		a.applyRuntimeResultMetadata(result, state)
 		return result, restoreErr
 	}
+	// Second runtimeState: re-derive mode/profile/work after restoreExecutionContinuity
+	// has potentially written restored workflow state (step position, prior artifacts,
+	// continuation context) into state — those changes must be reflected in UnitOfWork.
 	envelope, classification, mode, profile, work = a.runtimeState(task, state)
 	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
+	// ── Pre-execution ────────────────────────────────────────────────────────
 	if err := a.applyLearningResolution(ctx, task, state); err != nil {
 		return &core.Result{Success: false, Error: err}, err
 	}
@@ -332,6 +369,10 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	if handledResult, handledErr, handled := a.phaseDriver().HandlePreparationOutcome(ctx, task, state, prep.preflightResult, prep.err, a.DeferralPlan); handled {
 		return handledResult, handledErr
 	}
+	// Third work rebuild: re-assemble UnitOfWork after preflight has resolved the active
+	// plan step, learning anchors, and deferral decisions — those outputs (activeStep,
+	// livingPlan, resolvedPolicy) are written into state by prepareExecution and must be
+	// reflected in UnitOfWork before dispatch.
 	work = euclowork.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
 	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
 	if prep.activeStep == nil && shouldShortCircuitExecution(prep, state) {
@@ -340,7 +381,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 		state.Set("euclo.unit_of_work", work)
 		euclowork.SeedCompiledExecutionState(state, work, euclowork.BuildRuntimeExecutionStatus(work, euclowork.ExecutionStatusCompleted, work.ResultClass, time.Now().UTC()))
 		short := a.shortCircuitResult(state, prep)
-		sessionOutput := a.executionSession().ShortCircuit(ctx, archaeoexec.ShortCircuitInput{
+		sessionOutput := a.executionSession().ShortCircuit(ctx, eucloses.ShortCircuitInput{
 			Task:            task,
 			State:           state,
 			Mode:            mode,
@@ -362,6 +403,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 		a.applyRuntimeResultMetadata(sessionOutput.Result, state)
 		return sessionOutput.Result, sessionOutput.Err
 	}
+	// ── Dispatch ─────────────────────────────────────────────────────────────
 	if prep.activeStep != nil {
 		a.phaseDriver().EnterExecution(ctx, task, state, prep.activeStep)
 	}
@@ -374,7 +416,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	state.Set("euclo.unit_of_work", work)
 	euclowork.SeedCompiledExecutionState(state, work, euclowork.BuildRuntimeExecutionStatus(work, euclowork.ExecutionStatusExecuting, "", time.Now().UTC()))
 	executionTask := a.eucloTask(task, envelope, classification, mode, profile, work)
-	sessionOutput := a.executionSession().Execute(ctx, archaeoexec.SessionInput{
+	sessionOutput := a.executionSession().Execute(ctx, eucloses.SessionInput{
 		Task:             task,
 		ExecutionTask:    executionTask,
 		WorkflowExecutor: workflowExecutor,
@@ -384,7 +426,9 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 		Profile:          profile,
 		Telemetry:        a.ConfigTelemetry(),
 		Work:             work,
+		ServiceBundle:    a.serviceBundle(),
 	})
+	// ── Post-execution ───────────────────────────────────────────────────────
 	result := sessionOutput.Result
 	err := sessionOutput.Err
 	if contextRuntime != nil {
@@ -413,6 +457,240 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, finalStatus, err)
 	a.applyRuntimeResultMetadata(result, state)
 	return result, err
+}
+
+func (a *Agent) serviceBundle() eucloexec.ServiceBundle {
+	return eucloexec.ServiceBundle{
+		Archaeo:        agentArchaeoAccess{agent: a},
+		GraphDB:        a.GraphDB,
+		RetrievalDB:    a.RetrievalDB,
+		PlanStore:      a.PlanStore,
+		PatternStore:   a.PatternStore,
+		CommentStore:   a.CommentStore,
+		WorkflowStore:  a.WorkflowStore,
+		GuidanceBroker: a.GuidanceBroker,
+		LearningBroker: a.LearningBroker,
+		DeferralPlan:   a.DeferralPlan,
+	}
+}
+
+type agentArchaeoAccess struct {
+	agent *Agent
+}
+
+func (a agentArchaeoAccess) RequestHistory(ctx context.Context, workflowID string) (*eucloexec.RequestHistoryView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	history, err := a.agent.projectionService().RequestHistory(ctx, workflowID)
+	if err != nil || history == nil {
+		return nil, err
+	}
+	view := &eucloexec.RequestHistoryView{
+		WorkflowID: history.WorkflowID,
+		Pending:    history.Pending,
+		Running:    history.Running,
+		Completed:  history.Completed,
+		Failed:     history.Failed,
+		Canceled:   history.Canceled,
+		Requests:   make([]eucloexec.RequestRecordView, 0, len(history.Requests)),
+	}
+	for _, request := range history.Requests {
+		view.Requests = append(view.Requests, eucloexec.RequestRecordView{
+			ID:        request.ID,
+			Kind:      string(request.Kind),
+			Scope:     strings.Join(request.SubjectRefs, ","),
+			Status:    string(request.Status),
+			Summary:   firstNonEmptyStringValue(strings.TrimSpace(request.Title), strings.TrimSpace(request.Description)),
+			CreatedAt: request.RequestedAt,
+			UpdatedAt: request.UpdatedAt,
+		})
+	}
+	return view, nil
+}
+
+func (a agentArchaeoAccess) ActivePlan(ctx context.Context, workflowID string) (*eucloexec.ActivePlanView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	proj, err := a.agent.ActivePlanProjection(ctx, workflowID)
+	if err != nil || proj == nil {
+		return nil, err
+	}
+	view := &eucloexec.ActivePlanView{WorkflowID: proj.WorkflowID}
+	if proj.PhaseState != nil {
+		view.Phase = string(proj.PhaseState.CurrentPhase)
+	}
+	if proj.ActivePlanVersion != nil {
+		view.ActivePlan = versionedPlanView(*proj.ActivePlanVersion)
+		for _, stepID := range proj.ActivePlanVersion.Plan.StepOrder {
+			if step := proj.ActivePlanVersion.Plan.Steps[stepID]; step != nil && step.Status == frameworkplan.PlanStepInProgress {
+				view.ActiveStepID = stepID
+				break
+			}
+		}
+	}
+	return view, nil
+}
+
+func (a agentArchaeoAccess) LearningQueue(ctx context.Context, workflowID string) (*eucloexec.LearningQueueView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	queue, err := a.agent.LearningQueueProjection(ctx, workflowID)
+	if err != nil || queue == nil {
+		return nil, err
+	}
+	view := &eucloexec.LearningQueueView{
+		WorkflowID:         queue.WorkflowID,
+		PendingGuidanceIDs: append([]string(nil), queue.PendingGuidanceIDs...),
+		BlockingLearning:   append([]string(nil), queue.BlockingLearning...),
+		PendingLearning:    make([]eucloexec.LearningInteractionView, 0, len(queue.PendingLearning)),
+	}
+	for _, item := range queue.PendingLearning {
+		evidence := make([]string, 0, len(item.Evidence))
+		for _, ref := range item.Evidence {
+			evidence = append(evidence, strings.TrimSpace(ref.RefID))
+		}
+		view.PendingLearning = append(view.PendingLearning, eucloexec.LearningInteractionView{
+			ID:        item.ID,
+			Status:    string(item.Status),
+			Blocking:  item.Blocking,
+			Prompt:    firstNonEmptyStringValue(strings.TrimSpace(item.Title), strings.TrimSpace(item.Description)),
+			SubjectID: item.SubjectID,
+			Evidence:  evidence,
+		})
+	}
+	return view, nil
+}
+
+func (a agentArchaeoAccess) TensionsByWorkflow(ctx context.Context, workflowID string) ([]eucloexec.TensionView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	tensions, err := a.agent.TensionsByWorkflow(ctx, workflowID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]eucloexec.TensionView, 0, len(tensions))
+	for _, tension := range tensions {
+		out = append(out, eucloexec.TensionView{
+			ID:                 tension.ID,
+			Kind:               tension.Kind,
+			Description:        tension.Description,
+			Severity:           tension.Severity,
+			Status:             string(tension.Status),
+			PatternIDs:         append([]string(nil), tension.PatternIDs...),
+			AnchorRefs:         append([]string(nil), tension.AnchorRefs...),
+			SymbolScope:        append([]string(nil), tension.SymbolScope...),
+			RelatedPlanStepIDs: append([]string(nil), tension.RelatedPlanStepIDs...),
+			BasedOnRevision:    tension.BasedOnRevision,
+		})
+	}
+	return out, nil
+}
+
+func (a agentArchaeoAccess) TensionSummaryByWorkflow(ctx context.Context, workflowID string) (*eucloexec.TensionSummaryView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	summary, err := a.agent.TensionSummaryByWorkflow(ctx, workflowID)
+	if err != nil || summary == nil {
+		return nil, err
+	}
+	return &eucloexec.TensionSummaryView{
+		WorkflowID: summary.WorkflowID,
+		Total:      summary.Total,
+		Active:     summary.Active,
+		Accepted:   summary.Accepted,
+		Resolved:   summary.Resolved,
+		Unresolved: summary.Unresolved,
+	}, nil
+}
+
+func (a agentArchaeoAccess) PlanVersions(ctx context.Context, workflowID string) ([]eucloexec.VersionedPlanView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	versions, err := a.agent.PlanVersions(ctx, workflowID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]eucloexec.VersionedPlanView, 0, len(versions))
+	for _, version := range versions {
+		out = append(out, *versionedPlanView(version))
+	}
+	return out, nil
+}
+
+func (a agentArchaeoAccess) ActivePlanVersion(ctx context.Context, workflowID string) (*eucloexec.VersionedPlanView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	version, err := a.agent.ActivePlanVersion(ctx, workflowID)
+	if err != nil || version == nil {
+		return nil, err
+	}
+	return versionedPlanView(*version), nil
+}
+
+func (a agentArchaeoAccess) DraftPlanVersion(ctx context.Context, plan *frameworkplan.LivingPlan, input eucloexec.DraftPlanInput) (*eucloexec.VersionedPlanView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	version, err := a.agent.planService().DraftVersion(ctx, plan, archaeoplans.DraftVersionInput{
+		WorkflowID:              input.WorkflowID,
+		DerivedFromExploration:  input.DerivedFromExploration,
+		BasedOnRevision:         input.BasedOnRevision,
+		SemanticSnapshotRef:     input.SemanticSnapshotRef,
+		CommentRefs:             append([]string(nil), input.CommentRefs...),
+		TensionRefs:             append([]string(nil), input.TensionRefs...),
+		PatternRefs:             append([]string(nil), input.PatternRefs...),
+		AnchorRefs:              append([]string(nil), input.AnchorRefs...),
+		FormationResultRef:      input.FormationResultRef,
+		FormationProvenanceRefs: append([]string(nil), input.FormationProvenanceRefs...),
+	})
+	if err != nil || version == nil {
+		return nil, err
+	}
+	return versionedPlanView(*version), nil
+}
+
+func (a agentArchaeoAccess) ActivatePlanVersion(ctx context.Context, workflowID string, version int) (*eucloexec.VersionedPlanView, error) {
+	if a.agent == nil {
+		return nil, nil
+	}
+	versioned, err := a.agent.planService().ActivateVersion(ctx, workflowID, version)
+	if err != nil || versioned == nil {
+		return nil, err
+	}
+	return versionedPlanView(*versioned), nil
+}
+
+func versionedPlanView(version archaeodomain.VersionedLivingPlan) *eucloexec.VersionedPlanView {
+	return &eucloexec.VersionedPlanView{
+		ID:                     version.ID,
+		WorkflowID:             version.WorkflowID,
+		PlanID:                 version.Plan.ID,
+		Version:                version.Version,
+		Status:                 string(version.Status),
+		DerivedFromExploration: version.DerivedFromExploration,
+		BasedOnRevision:        version.BasedOnRevision,
+		SemanticSnapshotRef:    version.SemanticSnapshotRef,
+		PatternRefs:            append([]string(nil), version.PatternRefs...),
+		AnchorRefs:             append([]string(nil), version.AnchorRefs...),
+		TensionRefs:            append([]string(nil), version.TensionRefs...),
+		Plan:                   version.Plan,
+	}
+}
+
+func firstNonEmptyStringValue(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (a *Agent) shortCircuitResult(state *core.Context, prep executionPreparation) *core.Result {
@@ -933,8 +1211,8 @@ func (a *Agent) executionFinalizer() archaeoexec.Finalizer {
 	})
 }
 
-func (a *Agent) executionSession() archaeoexec.SessionService {
-	return archaeoexec.SessionService{
+func (a *Agent) executionSession() eucloses.SessionService {
+	return eucloses.SessionService{
 		Memory:              a.Memory,
 		Environment:         a.Environment,
 		ProfileCtrl:         a.ProfileCtrl,

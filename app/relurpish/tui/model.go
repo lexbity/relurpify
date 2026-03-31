@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/guidance"
 )
@@ -102,6 +103,9 @@ type RootModel struct {
 
 	guidanceCh    <-chan guidance.GuidanceEvent
 	guidanceUnsub func()
+
+	learningCh    <-chan archaeolearning.Event
+	learningUnsub func()
 
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
@@ -362,6 +366,7 @@ func (m RootModel) Init() tea.Cmd {
 		m.restorePromptCmd(),
 		m.subscribeHITLCmd(),
 		m.subscribeGuidanceCmd(),
+		m.subscribeLearningCmd(),
 	)
 }
 
@@ -400,6 +405,17 @@ func (m RootModel) subscribeGuidanceCmd() tea.Cmd {
 		}
 		ch, unsub := rt.SubscribeGuidance()
 		return guidanceSubscribedMsg{ch: ch, unsub: unsub}
+	}
+}
+
+func (m RootModel) subscribeLearningCmd() tea.Cmd {
+	rt := m.runtime
+	return func() tea.Msg {
+		if rt == nil {
+			return nil
+		}
+		ch, unsub := rt.SubscribeLearning()
+		return learningSubscribedMsg{ch: ch, unsub: unsub}
 	}
 }
 
@@ -516,6 +532,17 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, listenGuidanceEvents(m.guidanceCh)
 		}
 		return m, nil
+
+	case learningSubscribedMsg:
+		m.learningCh = msg.ch
+		m.learningUnsub = msg.unsub
+		if m.learningCh != nil {
+			return m, listenLearningEvents(m.learningCh)
+		}
+		return m, nil
+
+	case learningEventMsg:
+		return m.handleLearningEvent(msg)
 
 	// Diagnostics snapshot — route to session pane regardless of active tab.
 	case DiagnosticsUpdatedMsg:
@@ -1218,6 +1245,46 @@ func (m RootModel) handleGuidanceResolved(msg guidanceResolvedMsg) (RootModel, t
 		m.addSystemMessage(fmt.Sprintf("Guidance resolved: %s", msg.requestID))
 	}
 	return m, nil
+}
+
+// handleLearningEvent routes learning broker events to the notification queue.
+// Blocking interactions also open the guidance panel so the operator can
+// confirm or defer before plan execution resumes.
+func (m RootModel) handleLearningEvent(msg learningEventMsg) (RootModel, tea.Cmd) {
+	switch msg.event.Type {
+	case archaeolearning.EventRequested:
+		if msg.event.Interaction != nil {
+			interaction := msg.event.Interaction
+			if m.notifQ != nil {
+				m.notifQ.Push(NotificationItem{
+					Kind: NotifKindGuidance,
+					ID:   interaction.ID,
+					Msg:  fmt.Sprintf("Learning: %s", interaction.Title),
+					Extra: map[string]string{
+						"interaction_id": interaction.ID,
+						"workflow_id":    interaction.WorkflowID,
+						"kind":           string(interaction.Kind),
+					},
+				})
+			}
+			// Blocking interactions open the guidance panel so the operator must
+			// respond before execution can continue.
+			if interaction.Blocking {
+				m.hitlPanel.Open(GuidanceTriggerLearning, interaction.ID, interaction.Title, interaction.Description, nil, "", "")
+			}
+		}
+	case archaeolearning.EventResolved, archaeolearning.EventExpired, archaeolearning.EventDeferred:
+		if msg.event.Interaction != nil {
+			id := msg.event.Interaction.ID
+			if m.hitlPanel.IsOpen() && m.hitlPanel.RequestID() == id {
+				m.hitlPanel.Close()
+			}
+			if m.notifQ != nil {
+				m.notifQ.Resolve(id)
+			}
+		}
+	}
+	return m, listenLearningEvents(m.learningCh)
 }
 
 func (m RootModel) shouldRouteNotificationKeyToInput(msg tea.KeyMsg) bool {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
@@ -98,6 +99,13 @@ func (m *minimalHITLRuntimeAdapter) SubscribeGuidance() (<-chan guidance.Guidanc
 }
 func (m *minimalHITLRuntimeAdapter) PendingDeferrals() []guidance.EngineeringObservation { return nil }
 func (m *minimalHITLRuntimeAdapter) ResolveDeferral(string) error                        { return nil }
+func (m *minimalHITLRuntimeAdapter) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	return nil, func() {}
+}
+func (m *minimalHITLRuntimeAdapter) PendingLearning() []archaeolearning.Interaction { return nil }
+func (m *minimalHITLRuntimeAdapter) ResolveLearning(string, archaeolearning.ResolveInput) error {
+	return nil
+}
 func (m *minimalHITLRuntimeAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {
 	// no-op
 }

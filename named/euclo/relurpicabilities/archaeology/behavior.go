@@ -8,7 +8,11 @@ import (
 	"time"
 
 	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/guidance"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"github.com/lexcodex/relurpify/framework/patterns"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclobb "github.com/lexcodex/relurpify/named/euclo/execution/blackboard"
@@ -20,6 +24,22 @@ import (
 type exploreBehavior struct{}
 type compilePlanBehavior struct{}
 type implementPlanBehavior struct{}
+
+type enrichedArchaeoInput struct {
+	requestHistory      *execution.RequestHistoryView
+	activePlan          *execution.ActivePlanView
+	learningQueue       *execution.LearningQueueView
+	tensions            []execution.TensionView
+	tensionSummary      *execution.TensionSummaryView
+	patternRefs         []string
+	tensionIDs          []string
+	requestRefs         []string
+	learningRefs        []string
+	anchorRefs          []string
+	basedOnRevision     string
+	semanticSnapshotRef string
+	explorationID       string
+}
 
 func NewExploreBehavior() execution.Behavior       { return exploreBehavior{} }
 func NewCompilePlanBehavior() execution.Behavior   { return compilePlanBehavior{} }
@@ -36,13 +56,25 @@ func (exploreBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 	execution.AppendDiagnostic(in.State, "euclo.plan_candidates", "archaeology exploration behavior executed with archaeology-backed semantic inputs")
 	execution.SetBehaviorTrace(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
+	enriched := enrichArchaeoExecutionInput(ctx, in)
+	if len(enriched.patternRefs) > 0 || len(enriched.tensionIDs) > 0 || len(enriched.learningRefs) > 0 {
+		artifacts = append(artifacts, euclotypes.Artifact{
+			ID:         "archaeology_explore_archaeo_context",
+			Kind:       euclotypes.ArtifactKindExplore,
+			Summary:    enriched.summary(),
+			Payload:    enriched.payload(),
+			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
+			Status:     "produced",
+		})
+	}
 
-	explorationArtifacts, err := executeExplorationPasses(ctx, in)
+	explorationArtifacts, err := executeExplorationPasses(ctx, withEnrichedSemanticInput(in, enriched))
 	if err != nil {
 		execution.MergeStateArtifactsToContext(in.State, artifacts)
 		return &core.Result{Success: false, Error: err}, err
 	}
 	artifacts = append(artifacts, explorationArtifacts...)
+	persistExplorationPatterns(ctx, in, explorationArtifacts)
 
 	alternativeArtifacts, err := executeDesignAlternativesIfEligible(ctx, in)
 	if err != nil {
@@ -66,8 +98,9 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 	}
 	execution.SetBehaviorTrace(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
+	enriched := enrichArchaeoExecutionInput(ctx, in)
 
-	evidencePayload := compileEvidencePayload(in)
+	evidencePayload := compileEvidencePayload(withEnrichedSemanticInput(in, enriched))
 	artifacts = append(artifacts, euclotypes.Artifact{
 		ID:         "archaeology_compile_evidence",
 		Kind:       euclotypes.ArtifactKindAnalyze,
@@ -99,7 +132,7 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		})
 	}
 
-	shapeResult, _, shapeErr := execution.ExecuteRecipe(ctx, in, execution.RecipeArchaeologyCompileShape, "archaeology-compile-shape",
+	shapeResult, _, shapeErr := execution.ExecuteRecipe(ctx, withEnrichedSemanticInput(in, enriched), execution.RecipeArchaeologyCompileShape, "archaeology-compile-shape",
 		"Shape a full executable implementation plan from the compiled exploration evidence for: "+execution.CapabilityTaskInstruction(in.Task))
 	if shapeErr == nil && shapeResult != nil && shapeResult.Success {
 		draftPayload := map[string]any{
@@ -161,6 +194,24 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 			"artifacts": artifacts,
 		}}, err
 	}
+	if persisted, err := persistCompiledPlan(ctx, in, payload, enriched); err == nil && persisted != nil {
+		if in.State != nil {
+			in.State.Set("euclo.active_plan_version", persisted)
+			in.State.Set("euclo.living_plan", &persisted.Plan)
+		}
+		// GuidanceBroker notification: if the plan review surfaced open
+		// questions, submit a non-blocking guidance request so the TUI/operator
+		// layer can surface them for acknowledgement. Errors are swallowed —
+		// guidance notification must not block plan activation.
+		submitPlanReviewGuidance(in, persisted.Plan.ID, reviewResult)
+		payload["plan_id"] = persisted.Plan.ID
+		payload["plan_version"] = persisted.Version
+		payload["workflow_id"] = persisted.WorkflowID
+		persistPlanReviewComment(ctx, in, persisted.Plan.ID, reviewResult)
+	} else if err != nil {
+		execution.MergeStateArtifactsToContext(in.State, artifacts)
+		return &core.Result{Success: false, Error: err}, err
+	}
 
 	if in.State != nil {
 		in.State.Set("pipeline.plan", payload)
@@ -188,7 +239,65 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 	execution.AppendDiagnostic(in.State, "pipeline.plan", "archaeology implement-plan executing against a compiled plan")
 	execution.SetBehaviorTrace(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
+	// Blocking learning gate: if the convergence-guard routine found unresolved
+	// blocking learning interactions, halt before any plan step executes. These
+	// represent prior learning items (anchor drift, pattern proposals, tension
+	// reviews) that must be resolved before execution is safe to proceed.
+	if blockingIDs := blockingLearningIDsFromRoutineArtifacts(routineArtifacts); len(blockingIDs) > 0 {
+		now := time.Now().UTC()
+		issue := eucloruntime.DeferredExecutionIssue{
+			IssueID:               fmt.Sprintf("blocking-learning-gate-%d", now.UnixNano()),
+			WorkflowID:            in.Work.WorkflowID,
+			RunID:                 in.Work.RunID,
+			ExecutionID:           in.Work.ExecutionID,
+			ActivePlanID:          activePlanID(in.Work),
+			ActivePlanVersion:     activePlanVersion(in.Work),
+			Kind:                  eucloruntime.DeferredIssueStaleAssumption,
+			Severity:              eucloruntime.DeferredIssueSeverityHigh,
+			Status:                eucloruntime.DeferredIssueStatusOpen,
+			Title:                 fmt.Sprintf("Implement-plan blocked: %d unresolved learning interaction(s)", len(blockingIDs)),
+			Summary:               fmt.Sprintf("Execution halted: %d blocking learning interaction(s) must be resolved before plan execution can proceed.", len(blockingIDs)),
+			WhyNotResolvedInline:  "blocking learning interactions must be resolved by the operator before plan execution resumes",
+			RecommendedReentry:    "archaeology",
+			RecommendedNextAction: "review and resolve pending learning interactions, then retry plan execution",
+			Evidence: eucloruntime.DeferredExecutionEvidence{
+				RelevantPatternRefs: append([]string(nil), in.Work.SemanticInputs.PatternRefs...),
+				RelevantTensionRefs: append([]string(nil), in.Work.SemanticInputs.TensionRefs...),
+				CheckpointRefs:      append([]string(nil), blockingIDs...),
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if in.State != nil {
+			in.State.Set("euclo.deferred_execution_issues", []eucloruntime.DeferredExecutionIssue{issue})
+			in.State.Set("euclo.deferred_issue_ids", []string{issue.IssueID})
+		}
+		artifacts = append(artifacts, euclotypes.Artifact{
+			ID:         "archaeology_blocking_learning_gate",
+			Kind:       euclotypes.ArtifactKindDeferredExecutionIssues,
+			Summary:    issue.Summary,
+			Payload:    []eucloruntime.DeferredExecutionIssue{issue},
+			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
+			Status:     "produced",
+		})
+		execution.MergeStateArtifactsToContext(in.State, artifacts)
+		gateErr := fmt.Errorf("archaeology implement-plan blocked by unresolved learning interactions: %v", blockingIDs)
+		return &core.Result{Success: false, Error: gateErr, Data: map[string]any{
+			"summary":   issue.Summary,
+			"artifacts": artifacts,
+		}}, gateErr
+	}
 	planPayload := planArtifactFromState(in.State)
+	if planPayload == nil {
+		if active, err := loadBoundPlan(ctx, in); err == nil && active != nil {
+			planPayload = versionedPlanPayload(active)
+			if in.State != nil {
+				in.State.Set("euclo.active_plan_version", active)
+				in.State.Set("euclo.living_plan", &active.Plan)
+				in.State.Set("pipeline.plan", planPayload)
+			}
+		}
+	}
 	steps := compiledPlanSteps(planPayload)
 	if len(steps) == 0 {
 		err := fmt.Errorf("archaeology implement-plan requires executable plan steps")
@@ -221,10 +330,68 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 			})
 		}
 
+		blastRadius := queryStepBlastRadius(in, stringSlice(step["scope"]))
+		if in.State != nil && blastRadius != nil {
+			in.State.Set("euclo.current_step_blast_radius", blastRadius)
+		}
+		// Confidence gate: skip steps whose confidence has degraded below the
+		// acceptable threshold. They are deferred as stale-assumption issues so
+		// the operator can decide whether to accept the risk or re-plan.
+		if planStep := livingPlanStepFromState(in.State, stepID); planStep != nil &&
+			planStep.ConfidenceScore > 0 &&
+			planStep.ConfidenceScore < frameworkplan.DefaultConfidenceDegradation().Threshold {
+			now := time.Now().UTC()
+			issue := eucloruntime.DeferredExecutionIssue{
+				IssueID:               fmt.Sprintf("confidence-gate-%s-%d", stepID, now.UnixNano()),
+				WorkflowID:            in.Work.WorkflowID,
+				RunID:                 in.Work.RunID,
+				ExecutionID:           in.Work.ExecutionID,
+				ActivePlanID:          activePlanID(in.Work),
+				ActivePlanVersion:     activePlanVersion(in.Work),
+				StepID:                stepID,
+				Kind:                  eucloruntime.DeferredIssueStaleAssumption,
+				Severity:              eucloruntime.DeferredIssueSeverityHigh,
+				Status:                eucloruntime.DeferredIssueStatusOpen,
+				Title:                 fmt.Sprintf("Step %s skipped: confidence below threshold (%.2f)", stepID, planStep.ConfidenceScore),
+				Summary:               fmt.Sprintf("Plan step %q has confidence %.2f below required threshold %.2f — execution deferred.", stepID, planStep.ConfidenceScore, frameworkplan.DefaultConfidenceDegradation().Threshold),
+				WhyNotResolvedInline:  "confidence degradation requires operator acknowledgment before execution can continue",
+				RecommendedReentry:    "archaeology",
+				RecommendedNextAction: "review anchor dependencies, update plan step assumptions, and re-run compile-plan",
+				Evidence: eucloruntime.DeferredExecutionEvidence{
+					RelevantPatternRefs: append([]string(nil), in.Work.SemanticInputs.PatternRefs...),
+					RelevantTensionRefs: append([]string(nil), in.Work.SemanticInputs.TensionRefs...),
+				},
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if in.State != nil {
+				in.State.Set("euclo.deferred_execution_issues", append(deferredIssuesFromState(in.State), issue))
+				in.State.Set("euclo.deferred_issue_ids", []string{issue.IssueID})
+			}
+			artifacts = append(artifacts, euclotypes.Artifact{
+				ID:         "archaeology_confidence_gate_" + stepID,
+				Kind:       euclotypes.ArtifactKindDeferredExecutionIssues,
+				Summary:    issue.Summary,
+				Payload:    []eucloruntime.DeferredExecutionIssue{issue},
+				ProducerID: in.Work.PrimaryRelurpicCapabilityID,
+				Status:     "produced",
+			})
+			execution.MergeStateArtifactsToContext(in.State, artifacts)
+			gateErr := fmt.Errorf("archaeology implement-plan deferred at %s: confidence gate", stepID)
+			return &core.Result{Success: false, Error: gateErr, Data: map[string]any{
+				"summary":   issue.Summary,
+				"artifacts": artifacts,
+			}}, gateErr
+		}
 		implementResult, _, stepErr := execution.ExecuteRecipe(ctx, in, execution.RecipeArchaeologyImplementStep, "archaeology-implement-step-"+stepID,
-			buildImplementStepInstruction(stepTitle, step, idx, len(steps), in),
+			buildImplementStepInstruction(stepTitle, step, idx, len(steps), in, blastRadius),
 		)
 		if stepErr != nil || implementResult == nil || !implementResult.Success {
+			failureReason := strings.TrimSpace(execution.ErrorMessage(stepErr, implementResult))
+			if failureReason == "" {
+				failureReason = "step execution did not complete successfully"
+			}
+			recordStepAttempt(ctx, in, stepID, "failed", failureReason, "")
 			issue := buildImplementPlanDeferredIssue(in, stepID, stepTitle, completedSteps, checkpointRefs, stepErr, implementResult)
 			if in.State != nil {
 				in.State.Set("euclo.deferred_execution_issues", []eucloruntime.DeferredExecutionIssue{issue})
@@ -254,6 +421,7 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 			"description":      stringValue(step["description"]),
 			"implementation":   implementResult.Data,
 			"completed_before": append([]string(nil), completedSteps...),
+			"blast_radius":     blastRadius,
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_implement_step_" + stepID,
@@ -288,6 +456,41 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
 			Status:     "produced",
 		})
+		// Gap detection: check implementation against anchor commitments for this
+		// step's symbol scope. Gaps become DeferredExecutionIssues but do not halt
+		// execution unless the step is also missing a git checkpoint.
+		gapStatus := "skipped"
+		if gapArtifact, gapIssues := performStepGapDetection(ctx, in, stepID, stepTitle, step); gapArtifact != nil {
+			artifacts = append(artifacts, *gapArtifact)
+			gapStatus = stringValue(gapArtifact.Payload.(map[string]any)["gap_status"])
+			for _, issue := range gapIssues {
+				in.State.Set("euclo.deferred_execution_issues", append(
+					deferredIssuesFromState(in.State), issue,
+				))
+			}
+		}
+		// Semantic git checkpoint: emit a commit with structured YAML metadata
+		// binding this step to its plan, blast radius, and gap detection outcome.
+		gitRef := emitSemanticGitCheckpoint(ctx, in, stepID, stepTitle, blastRadius, gapStatus)
+		if gitRef != "" {
+			checkpointRefs = append(checkpointRefs, gitRef)
+		}
+		recordStepAttempt(ctx, in, stepID, "completed", "", gitRef)
+		// Confidence recalculation: if gap detection surfaced anchor drift,
+		// degrade and persist the step's confidence score so downstream steps
+		// can observe the updated signal.
+		if gapStatus == "warning" || gapStatus == "critical" {
+			if planStep := livingPlanStepFromState(in.State, stepID); planStep != nil {
+				driftedAnchors := stringSlice(step["anchor_deps"])
+				newScore := frameworkplan.RecalculateConfidence(planStep, driftedAnchors, nil, frameworkplan.DefaultConfidenceDegradation())
+				planStep.ConfidenceScore = newScore
+				planStep.UpdatedAt = time.Now().UTC()
+				planID := activePlanID(in.Work)
+				if in.ServiceBundle.PlanStore != nil && planID != "" {
+					_ = in.ServiceBundle.PlanStore.UpdateStep(ctx, planID, stepID, planStep)
+				}
+			}
+		}
 		completedSteps = append(completedSteps, stepID)
 	}
 
@@ -605,6 +808,261 @@ func executeDesignAlternativesIfEligible(ctx context.Context, in execution.Execu
 	return result.Artifacts, nil
 }
 
+func enrichArchaeoExecutionInput(ctx context.Context, in execution.ExecuteInput) enrichedArchaeoInput {
+	var enriched enrichedArchaeoInput
+	if in.ServiceBundle.Archaeo == nil || strings.TrimSpace(in.Work.WorkflowID) == "" {
+		return enriched
+	}
+	workflowID := strings.TrimSpace(in.Work.WorkflowID)
+	if history, err := in.ServiceBundle.Archaeo.RequestHistory(ctx, workflowID); err == nil && history != nil {
+		enriched.requestHistory = history
+		for _, request := range history.Requests {
+			if strings.TrimSpace(request.ID) != "" {
+				enriched.requestRefs = append(enriched.requestRefs, strings.TrimSpace(request.ID))
+			}
+		}
+	}
+	if activePlan, err := in.ServiceBundle.Archaeo.ActivePlan(ctx, workflowID); err == nil && activePlan != nil {
+		enriched.activePlan = activePlan
+		if activePlan.ActivePlan != nil {
+			enriched.patternRefs = append(enriched.patternRefs, activePlan.ActivePlan.PatternRefs...)
+			enriched.anchorRefs = append(enriched.anchorRefs, activePlan.ActivePlan.AnchorRefs...)
+			enriched.tensionIDs = append(enriched.tensionIDs, activePlan.ActivePlan.TensionRefs...)
+			enriched.basedOnRevision = strings.TrimSpace(activePlan.ActivePlan.BasedOnRevision)
+			enriched.semanticSnapshotRef = strings.TrimSpace(activePlan.ActivePlan.SemanticSnapshotRef)
+			enriched.explorationID = strings.TrimSpace(activePlan.ActivePlan.DerivedFromExploration)
+		}
+	}
+	if queue, err := in.ServiceBundle.Archaeo.LearningQueue(ctx, workflowID); err == nil && queue != nil {
+		enriched.learningQueue = queue
+		for _, item := range queue.PendingLearning {
+			if strings.TrimSpace(item.ID) != "" {
+				enriched.learningRefs = append(enriched.learningRefs, strings.TrimSpace(item.ID))
+			}
+		}
+	}
+	if tensions, err := in.ServiceBundle.Archaeo.TensionsByWorkflow(ctx, workflowID); err == nil && len(tensions) > 0 {
+		enriched.tensions = append([]execution.TensionView(nil), tensions...)
+		for _, tension := range tensions {
+			if strings.TrimSpace(tension.ID) != "" {
+				enriched.tensionIDs = append(enriched.tensionIDs, strings.TrimSpace(tension.ID))
+			}
+			enriched.patternRefs = append(enriched.patternRefs, tension.PatternIDs...)
+			enriched.anchorRefs = append(enriched.anchorRefs, tension.AnchorRefs...)
+			if enriched.basedOnRevision == "" {
+				enriched.basedOnRevision = strings.TrimSpace(tension.BasedOnRevision)
+			}
+		}
+	}
+	if summary, err := in.ServiceBundle.Archaeo.TensionSummaryByWorkflow(ctx, workflowID); err == nil && summary != nil {
+		enriched.tensionSummary = summary
+	}
+	enriched.patternRefs = execution.UniqueStrings(enriched.patternRefs)
+	enriched.tensionIDs = execution.UniqueStrings(enriched.tensionIDs)
+	enriched.requestRefs = execution.UniqueStrings(enriched.requestRefs)
+	enriched.learningRefs = execution.UniqueStrings(enriched.learningRefs)
+	enriched.anchorRefs = execution.UniqueStrings(enriched.anchorRefs)
+	return enriched
+}
+
+func (e enrichedArchaeoInput) summary() string {
+	parts := []string{}
+	if len(e.patternRefs) > 0 {
+		parts = append(parts, fmt.Sprintf("%d pattern refs", len(e.patternRefs)))
+	}
+	if len(e.tensionIDs) > 0 {
+		parts = append(parts, fmt.Sprintf("%d tensions", len(e.tensionIDs)))
+	}
+	if len(e.learningRefs) > 0 {
+		parts = append(parts, fmt.Sprintf("%d pending learning items", len(e.learningRefs)))
+	}
+	if e.activePlan != nil && e.activePlan.ActivePlan != nil {
+		parts = append(parts, fmt.Sprintf("active plan v%d", e.activePlan.ActivePlan.Version))
+	}
+	if len(parts) == 0 {
+		return "no archaeology service context available"
+	}
+	return "archaeology service context: " + strings.Join(parts, ", ")
+}
+
+func (e enrichedArchaeoInput) payload() map[string]any {
+	payload := map[string]any{
+		"pattern_refs":      append([]string(nil), e.patternRefs...),
+		"tension_refs":      append([]string(nil), e.tensionIDs...),
+		"request_refs":      append([]string(nil), e.requestRefs...),
+		"learning_refs":     append([]string(nil), e.learningRefs...),
+		"anchor_refs":       append([]string(nil), e.anchorRefs...),
+		"based_on_revision": e.basedOnRevision,
+		"snapshot_ref":      e.semanticSnapshotRef,
+		"exploration_id":    e.explorationID,
+	}
+	if e.requestHistory != nil {
+		payload["request_history"] = e.requestHistory
+	}
+	if e.activePlan != nil {
+		payload["active_plan"] = e.activePlan
+	}
+	if e.learningQueue != nil {
+		payload["learning_queue"] = e.learningQueue
+	}
+	if len(e.tensions) > 0 {
+		payload["tensions"] = append([]execution.TensionView(nil), e.tensions...)
+	}
+	if e.tensionSummary != nil {
+		payload["tension_summary"] = e.tensionSummary
+	}
+	payload["summary"] = e.summary()
+	return payload
+}
+
+func withEnrichedSemanticInput(in execution.ExecuteInput, enriched enrichedArchaeoInput) execution.ExecuteInput {
+	out := in
+	out.Work.SemanticInputs.PatternRefs = execution.UniqueStrings(append(append([]string(nil), out.Work.SemanticInputs.PatternRefs...), enriched.patternRefs...))
+	out.Work.SemanticInputs.TensionRefs = execution.UniqueStrings(append(append([]string(nil), out.Work.SemanticInputs.TensionRefs...), enriched.tensionIDs...))
+	out.Work.SemanticInputs.RequestProvenanceRefs = execution.UniqueStrings(append(append([]string(nil), out.Work.SemanticInputs.RequestProvenanceRefs...), enriched.requestRefs...))
+	out.Work.SemanticInputs.LearningInteractionRefs = execution.UniqueStrings(append(append([]string(nil), out.Work.SemanticInputs.LearningInteractionRefs...), enriched.learningRefs...))
+	if strings.TrimSpace(out.Work.SemanticInputs.ExplorationID) == "" {
+		out.Work.SemanticInputs.ExplorationID = enriched.explorationID
+	}
+	return out
+}
+
+func persistCompiledPlan(ctx context.Context, in execution.ExecuteInput, payload map[string]any, enriched enrichedArchaeoInput) (*execution.VersionedPlanView, error) {
+	if in.ServiceBundle.Archaeo == nil {
+		return nil, nil
+	}
+	plan := livingPlanFromPayload(payload, in, enriched)
+	if plan == nil {
+		return nil, nil
+	}
+	derived := strings.TrimSpace(in.Work.SemanticInputs.ExplorationID)
+	if derived == "" {
+		derived = enriched.explorationID
+	}
+	drafted, err := in.ServiceBundle.Archaeo.DraftPlanVersion(ctx, plan, execution.DraftPlanInput{
+		WorkflowID:             in.Work.WorkflowID,
+		DerivedFromExploration: derived,
+		BasedOnRevision:        firstNonEmptyString(enriched.basedOnRevision, stringValue(payload["based_on_revision"])),
+		SemanticSnapshotRef:    firstNonEmptyString(enriched.semanticSnapshotRef, stringValue(payload["snapshot_ref"])),
+		PatternRefs:            execution.UniqueStrings(append(append([]string(nil), in.Work.SemanticInputs.PatternRefs...), enriched.patternRefs...)),
+		TensionRefs:            execution.UniqueStrings(append(append([]string(nil), in.Work.SemanticInputs.TensionRefs...), enriched.tensionIDs...)),
+		AnchorRefs:             append([]string(nil), enriched.anchorRefs...),
+		FormationResultRef:     stringValue(payload["formation_result_ref"]),
+	})
+	if err != nil || drafted == nil {
+		return nil, err
+	}
+	return in.ServiceBundle.Archaeo.ActivatePlanVersion(ctx, drafted.WorkflowID, drafted.Version)
+}
+
+func loadBoundPlan(ctx context.Context, in execution.ExecuteInput) (*execution.VersionedPlanView, error) {
+	if in.ServiceBundle.Archaeo == nil {
+		if in.State == nil {
+			return nil, nil
+		}
+		if raw, ok := in.State.Get("euclo.active_plan_version"); ok {
+			switch typed := raw.(type) {
+			case *execution.VersionedPlanView:
+				return typed, nil
+			case execution.VersionedPlanView:
+				return &typed, nil
+			}
+		}
+		return nil, nil
+	}
+	if in.Work.PlanBinding != nil && strings.TrimSpace(in.Work.PlanBinding.WorkflowID) != "" {
+		return in.ServiceBundle.Archaeo.ActivePlanVersion(ctx, in.Work.PlanBinding.WorkflowID)
+	}
+	if strings.TrimSpace(in.Work.WorkflowID) != "" {
+		return in.ServiceBundle.Archaeo.ActivePlanVersion(ctx, in.Work.WorkflowID)
+	}
+	return nil, nil
+}
+
+func versionedPlanPayload(active *execution.VersionedPlanView) map[string]any {
+	if active == nil {
+		return nil
+	}
+	steps := make([]map[string]any, 0, len(active.Plan.StepOrder))
+	for _, stepID := range active.Plan.StepOrder {
+		step := active.Plan.Steps[stepID]
+		if step == nil {
+			continue
+		}
+		record := map[string]any{
+			"id":               step.ID,
+			"description":      step.Description,
+			"scope":            append([]string(nil), step.Scope...),
+			"anchor_deps":      append([]string(nil), step.AnchorDependencies...),
+			"confidence_score": step.ConfidenceScore,
+			"depends_on":       append([]string(nil), step.DependsOn...),
+			"status":           step.Status,
+		}
+		steps = append(steps, record)
+	}
+	return map[string]any{
+		"plan_id":               active.PlanID,
+		"plan_version":          active.Version,
+		"title":                 active.Plan.Title,
+		"workflow_id":           active.WorkflowID,
+		"derived_exploration":   active.DerivedFromExploration,
+		"based_on_revision":     active.BasedOnRevision,
+		"semantic_snapshot_ref": active.SemanticSnapshotRef,
+		"pattern_refs":          append([]string(nil), active.PatternRefs...),
+		"tension_refs":          append([]string(nil), active.TensionRefs...),
+		"steps":                 steps,
+		"summary":               firstNonEmptyString(active.Plan.Title, fmt.Sprintf("plan v%d", active.Version)),
+	}
+}
+
+func livingPlanFromPayload(payload map[string]any, in execution.ExecuteInput, enriched enrichedArchaeoInput) *frameworkplan.LivingPlan {
+	if !compiledPlanReady(payload) {
+		return nil
+	}
+	now := time.Now().UTC()
+	planID := firstNonEmptyString(stringValue(payload["plan_id"]), activePlanID(in.Work))
+	if planID == "" {
+		planID = fmt.Sprintf("plan-%s-%d", firstNonEmptyString(in.Work.WorkflowID, "euclo"), now.Unix())
+	}
+	title := firstNonEmptyString(stringValue(payload["title"]), stringValue(payload["summary"]), "Euclo compiled plan")
+	plan := &frameworkplan.LivingPlan{
+		ID:         planID,
+		WorkflowID: in.Work.WorkflowID,
+		Title:      title,
+		Steps:      map[string]*frameworkplan.PlanStep{},
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	for idx, item := range compiledPlanSteps(payload) {
+		stepID := firstNonEmptyString(stringValue(item["id"]), fmt.Sprintf("step-%d", idx+1))
+		description := firstNonEmptyString(stringValue(item["description"]), stringValue(item["title"]), fmt.Sprintf("step %d", idx+1))
+		scope := stringSlice(item["scope"])
+		if len(scope) == 0 {
+			scope = stringSlice(item["symbol_scope"])
+		}
+		step := &frameworkplan.PlanStep{
+			ID:                 stepID,
+			Description:        description,
+			Scope:              scope,
+			AnchorDependencies: execution.UniqueStrings(append(stringSlice(item["anchor_dependencies"]), enriched.anchorRefs...)),
+			ConfidenceScore:    floatValue(item["confidence_score"], 0.7),
+			DependsOn:          stringSlice(item["depends_on"]),
+			Status:             frameworkplan.PlanStepPending,
+			CreatedAt:          now,
+			UpdatedAt:          now,
+		}
+		if gate := stringValue(item["evidence_gate"]); gate != "" {
+			step.EvidenceGate = &frameworkplan.EvidenceGate{RequiredSymbols: []string{gate}}
+		}
+		plan.Steps[stepID] = step
+		plan.StepOrder = append(plan.StepOrder, stepID)
+	}
+	if plan.Version <= 0 {
+		plan.Version = 1
+	}
+	return plan
+}
+
 func archaeologyExecutionEnvelope(in execution.ExecuteInput) euclotypes.ExecutionEnvelope {
 	return euclotypes.ExecutionEnvelope{
 		Task:        in.Task,
@@ -881,7 +1339,7 @@ func mapSlice(raw any) []map[string]any {
 	}
 }
 
-func buildImplementStepInstruction(stepTitle string, step map[string]any, index, total int, in execution.ExecuteInput) string {
+func buildImplementStepInstruction(stepTitle string, step map[string]any, index, total int, in execution.ExecuteInput, blastRadius map[string]any) string {
 	parts := []string{
 		fmt.Sprintf("Execute plan step %d/%d: %s.", index+1, total, stepTitle),
 	}
@@ -890,6 +1348,11 @@ func buildImplementStepInstruction(stepTitle string, step map[string]any, index,
 	}
 	if expected := strings.TrimSpace(stringValue(step["expected"])); expected != "" {
 		parts = append(parts, "Expected outcome: "+expected)
+	}
+	if blastRadius != nil {
+		if count, ok := blastRadius["affected_count"].(int); ok && count > 0 {
+			parts = append(parts, fmt.Sprintf("Blast radius: %d symbols affected — proceed with care.", count))
+		}
 	}
 	parts = append(parts, "Overall plan objective: "+execution.CapabilityTaskInstruction(in.Task))
 	return strings.Join(parts, " ")
@@ -954,4 +1417,433 @@ func firstNonEmptyString(values ...string) string {
 
 func stringValue(raw any) string {
 	return strings.TrimSpace(fmt.Sprint(raw))
+}
+
+func stringSlice(raw any) []string {
+	switch typed := raw.(type) {
+	case []string:
+		return append([]string(nil), typed...)
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if value := strings.TrimSpace(fmt.Sprint(item)); value != "" {
+				out = append(out, value)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+// deferredIssuesFromState reads the current deferred issues slice from state.
+func deferredIssuesFromState(state *core.Context) []eucloruntime.DeferredExecutionIssue {
+	if state == nil {
+		return nil
+	}
+	raw, ok := state.Get("euclo.deferred_execution_issues")
+	if !ok || raw == nil {
+		return nil
+	}
+	if typed, ok := raw.([]eucloruntime.DeferredExecutionIssue); ok {
+		return append([]eucloruntime.DeferredExecutionIssue(nil), typed...)
+	}
+	return nil
+}
+
+// performStepGapDetection runs the gap-detect recipe for the given plan step.
+// It returns a verification artifact and any deferred issues raised for intent
+// drift or anchor violations. Both return values are nil when the recipe
+// produces no useful signal or the registry is unavailable.
+func performStepGapDetection(ctx context.Context, in execution.ExecuteInput, stepID, stepTitle string, step map[string]any) (*euclotypes.Artifact, []eucloruntime.DeferredExecutionIssue) {
+	scope := stringSlice(step["scope"])
+	anchorDeps := stringSlice(step["anchor_deps"])
+	instruction := fmt.Sprintf(
+		"Gap detection for plan step %q (%s). Symbol scope: %v. Anchor dependencies: %v. "+
+			"Examine the step implementation in state and report any intent drift, behavioral gaps, "+
+			"or anchor violations. State gap_status as 'clean', 'warning', or 'critical'.",
+		stepID, stepTitle, scope, anchorDeps,
+	)
+	result, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeArchaeologyImplementGapDetect,
+		"archaeology-gap-detect-"+stepID, instruction)
+	if err != nil || result == nil {
+		return nil, nil
+	}
+	gapStatus := "clean"
+	if result.Data != nil {
+		if s := strings.TrimSpace(stringValue(result.Data["gap_status"])); s != "" {
+			gapStatus = s
+		}
+	}
+	now := time.Now().UTC()
+	payload := map[string]any{
+		"step_id":      stepID,
+		"step_title":   stepTitle,
+		"scope":        append([]string(nil), scope...),
+		"anchor_deps":  append([]string(nil), anchorDeps...),
+		"gap_status":   gapStatus,
+		"gap_findings": result.Data,
+		"summary":      execution.ResultSummary(result),
+	}
+	artifact := &euclotypes.Artifact{
+		ID:         "archaeology_gap_detect_" + stepID,
+		Kind:       euclotypes.ArtifactKindVerification,
+		Summary:    fmt.Sprintf("gap detection %s for step %s", gapStatus, stepID),
+		Payload:    payload,
+		ProducerID: in.Work.PrimaryRelurpicCapabilityID,
+		Status:     "produced",
+	}
+	var issues []eucloruntime.DeferredExecutionIssue
+	if gapStatus == "warning" || gapStatus == "critical" {
+		issue := eucloruntime.DeferredExecutionIssue{
+			IssueID:               fmt.Sprintf("gap-detect-%s-%d", stepID, now.UnixNano()),
+			WorkflowID:            in.Work.WorkflowID,
+			RunID:                 in.Work.RunID,
+			ExecutionID:           in.Work.ExecutionID,
+			ActivePlanID:          activePlanID(in.Work),
+			ActivePlanVersion:     activePlanVersion(in.Work),
+			StepID:                stepID,
+			Kind:                  eucloruntime.DeferredIssuePatternTension,
+			Severity:              deferredIssueSeverityFromGap(gapStatus),
+			Status:                eucloruntime.DeferredIssueStatusOpen,
+			Title:                 fmt.Sprintf("Intent drift detected at step %s", stepID),
+			Summary:               execution.ResultSummary(result),
+			WhyNotResolvedInline:  "gap detection surfaced intent drift — surfaced as deferred issue for archaeology review",
+			RecommendedReentry:    "archaeology",
+			RecommendedNextAction: "review gap findings, update anchor dependencies or revise plan step scope",
+			Evidence: eucloruntime.DeferredExecutionEvidence{
+				RelevantPatternRefs: append([]string(nil), in.Work.SemanticInputs.PatternRefs...),
+				RelevantTensionRefs: append([]string(nil), in.Work.SemanticInputs.TensionRefs...),
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		issues = append(issues, issue)
+	}
+	return artifact, issues
+}
+
+func deferredIssueSeverityFromGap(gapStatus string) eucloruntime.DeferredIssueSeverity {
+	if gapStatus == "critical" {
+		return eucloruntime.DeferredIssueSeverityHigh
+	}
+	return eucloruntime.DeferredIssueSeverityMedium
+}
+
+// emitSemanticGitCheckpoint writes a git commit carrying structured YAML
+// metadata that binds the commit to its plan step, blast radius, and gap
+// detection outcome. Returns the short commit hash on success, empty string
+// on failure or missing tooling. Failures are swallowed — git checkpoint is
+// best-effort and must not block plan execution.
+func emitSemanticGitCheckpoint(ctx context.Context, in execution.ExecuteInput, stepID, stepTitle string, blastRadius map[string]any, gapStatus string) string {
+	if in.Environment.Registry == nil || in.Task == nil || in.Task.Context == nil {
+		return ""
+	}
+	workspace := strings.TrimSpace(fmt.Sprint(in.Task.Context["workspace"]))
+	if workspace == "" {
+		return ""
+	}
+	blastCount := 0
+	if blastRadius != nil {
+		blastCount, _ = blastRadius["affected_count"].(int)
+	}
+	planID := strings.TrimSpace(activePlanID(in.Work))
+	planVersion := activePlanVersion(in.Work)
+	msg := fmt.Sprintf("euclo: step %s — %s\n\n---\nstep_id: %s\nplan_id: %s\nplan_version: %d\nblast_radius: %d\ngap_status: %s\nworkflow_id: %s\n",
+		stepID, stepTitle,
+		stepID, planID, planVersion,
+		blastCount, gapStatus,
+		strings.TrimSpace(in.Work.WorkflowID),
+	)
+	var commitResult *core.ToolResult
+	for _, capID := range []string{"tool:cli_git", "cli_git"} {
+		candidate, err := in.Environment.Registry.InvokeCapability(ctx, core.NewContext(), capID, map[string]any{
+			"args":              []string{"commit", "--allow-empty", "-m", msg},
+			"working_directory": workspace,
+		})
+		if err == nil && candidate != nil && candidate.Success {
+			commitResult = candidate
+			break
+		}
+	}
+	if commitResult == nil {
+		if tool, ok := in.Environment.Registry.Get("cli_git"); ok && tool != nil {
+			candidate, err := tool.Execute(ctx, core.NewContext(), map[string]any{
+				"args":              []string{"commit", "--allow-empty", "-m", msg},
+				"working_directory": workspace,
+			})
+			if err == nil && candidate != nil && candidate.Success {
+				commitResult = candidate
+			}
+		}
+	}
+	if commitResult == nil {
+		return ""
+	}
+	// Retrieve the new HEAD hash to use as the checkpoint reference.
+	for _, capID := range []string{"tool:cli_git", "cli_git"} {
+		candidate, err := in.Environment.Registry.InvokeCapability(ctx, core.NewContext(), capID, map[string]any{
+			"args":              []string{"rev-parse", "--short", "HEAD"},
+			"working_directory": workspace,
+		})
+		if err == nil && candidate != nil && candidate.Success {
+			if hash := strings.TrimSpace(fmt.Sprint(candidate.Data["stdout"])); hash != "" {
+				return "git:" + hash
+			}
+		}
+	}
+	return "git:committed"
+}
+
+// queryStepBlastRadius runs ImpactSet from the step's symbol scope against the
+// GraphDB. Returns nil when GraphDB is unavailable or scope is empty.
+func queryStepBlastRadius(in execution.ExecuteInput, scope []string) map[string]any {
+	if in.ServiceBundle.GraphDB == nil || len(scope) == 0 {
+		return nil
+	}
+	// Pass nil edgeKinds to traverse all edge kinds (GraphDB semantics: empty
+	// allowed set matches everything).
+	result := in.ServiceBundle.GraphDB.ImpactSet(scope, nil, 3)
+	return map[string]any{
+		"origin_ids":     append([]string(nil), result.OriginIDs...),
+		"affected_ids":   append([]string(nil), result.Affected...),
+		"affected_count": len(result.Affected),
+	}
+}
+
+// persistExplorationPatterns writes newly discovered patterns from the
+// exploration artifact set to PatternStore with status "proposed". Errors are
+// swallowed — pattern persistence is best-effort and must not fail the
+// exploration.
+func persistExplorationPatterns(ctx context.Context, in execution.ExecuteInput, artifacts []euclotypes.Artifact) {
+	if in.ServiceBundle.PatternStore == nil {
+		return
+	}
+	corpusScope := strings.TrimSpace(in.Work.WorkflowID)
+	for _, artifact := range artifacts {
+		if artifact.Kind != euclotypes.ArtifactKindExplore {
+			continue
+		}
+		payload, ok := artifact.Payload.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, rawPattern := range anySlice(payload["patterns"]) {
+			p, ok := rawPattern.(map[string]any)
+			if !ok {
+				continue
+			}
+			title := strings.TrimSpace(stringValue(p["title"]))
+			description := strings.TrimSpace(stringValue(p["description"]))
+			if title == "" || description == "" {
+				continue
+			}
+			kind := patterns.PatternKindStructural
+			if k := strings.TrimSpace(stringValue(p["kind"])); k != "" {
+				kind = patterns.PatternKind(k)
+			}
+			now := time.Now().UTC()
+			record := patterns.PatternRecord{
+				ID:           fmt.Sprintf("pattern-%s-%d", strings.ReplaceAll(title, " ", "-"), now.UnixNano()),
+				Kind:         kind,
+				Title:        title,
+				Description:  description,
+				Status:       patterns.PatternStatusProposed,
+				Confidence:   floatValue(p["confidence"], 0.5),
+				CorpusScope:  corpusScope,
+				CorpusSource: in.Work.PrimaryRelurpicCapabilityID,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}
+			if err := in.ServiceBundle.PatternStore.Save(ctx, record); err == nil && in.ServiceBundle.LearningBroker != nil {
+				// Notify the LearningBroker so the TUI/operator layer can surface
+				// this pattern proposal for review. Non-blocking: errors swallowed.
+				interaction := archaeolearning.Interaction{
+					ID:          fmt.Sprintf("broker-pattern-%s-%d", record.ID, now.UnixNano()),
+					WorkflowID:  corpusScope,
+					Kind:        archaeolearning.InteractionPatternProposal,
+					SubjectType: archaeolearning.SubjectPattern,
+					SubjectID:   record.ID,
+					Title:       "New pattern proposal: " + title,
+					Description: description,
+					Status:      archaeolearning.StatusPending,
+					Blocking:    false,
+					CreatedAt:   now,
+					UpdatedAt:   now,
+				}
+				_ = in.ServiceBundle.LearningBroker.SubmitAsync(interaction)
+			}
+		}
+	}
+}
+
+// persistPlanReviewComment writes the compile-plan review findings to
+// CommentStore as an open-question comment tied to the plan. Errors are
+// swallowed — comment persistence must not fail plan activation.
+func persistPlanReviewComment(ctx context.Context, in execution.ExecuteInput, planID string, reviewResult *core.Result) {
+	if in.ServiceBundle.CommentStore == nil || strings.TrimSpace(planID) == "" {
+		return
+	}
+	body := strings.TrimSpace(execution.ResultSummary(reviewResult))
+	if body == "" {
+		return
+	}
+	now := time.Now().UTC()
+	record := patterns.CommentRecord{
+		CommentID:   fmt.Sprintf("plan-review-%s-%d", planID, now.UnixNano()),
+		PatternID:   planID,
+		IntentType:  patterns.CommentOpenQuestion,
+		Body:        body,
+		AuthorKind:  patterns.AuthorKindAgent,
+		TrustClass:  patterns.TrustClassBuiltinTrusted,
+		CorpusScope: strings.TrimSpace(in.Work.WorkflowID),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	_ = in.ServiceBundle.CommentStore.Save(ctx, record)
+}
+
+// livingPlanStepFromState returns the PlanStep for stepID from the living plan
+// stored in state under "euclo.living_plan". Returns nil when the state or
+// plan is unavailable, or the step is not present.
+func livingPlanStepFromState(state *core.Context, stepID string) *frameworkplan.PlanStep {
+	if state == nil || strings.TrimSpace(stepID) == "" {
+		return nil
+	}
+	raw, ok := state.Get("euclo.living_plan")
+	if !ok || raw == nil {
+		return nil
+	}
+	var plan *frameworkplan.LivingPlan
+	switch typed := raw.(type) {
+	case *frameworkplan.LivingPlan:
+		plan = typed
+	case frameworkplan.LivingPlan:
+		plan = &typed
+	default:
+		return nil
+	}
+	if plan == nil || plan.Steps == nil {
+		return nil
+	}
+	return plan.Steps[strings.TrimSpace(stepID)]
+}
+
+// recordStepAttempt appends a StepAttempt to the step's History and persists
+// the updated PlanStep via PlanStore. It also advances the step status to
+// completed or failed. Errors are swallowed — attempt recording is
+// best-effort and must not block plan execution.
+func recordStepAttempt(ctx context.Context, in execution.ExecuteInput, stepID, outcome, failureReason, gitCheckpoint string) {
+	planID := activePlanID(in.Work)
+	if in.ServiceBundle.PlanStore == nil || planID == "" || strings.TrimSpace(stepID) == "" {
+		return
+	}
+	planStep := livingPlanStepFromState(in.State, stepID)
+	if planStep == nil {
+		planStep = &frameworkplan.PlanStep{
+			ID:        stepID,
+			CreatedAt: time.Now().UTC(),
+		}
+	}
+	attempt := frameworkplan.StepAttempt{
+		AttemptedAt:   time.Now().UTC(),
+		Outcome:       outcome,
+		FailureReason: failureReason,
+		GitCheckpoint: gitCheckpoint,
+	}
+	planStep.History = append(planStep.History, attempt)
+	planStep.UpdatedAt = time.Now().UTC()
+	switch outcome {
+	case "completed":
+		planStep.Status = frameworkplan.PlanStepCompleted
+	case "failed":
+		planStep.Status = frameworkplan.PlanStepFailed
+	}
+	_ = in.ServiceBundle.PlanStore.UpdateStep(ctx, planID, stepID, planStep)
+}
+
+// blockingLearningIDsFromRoutineArtifacts extracts blocking learning
+// interaction IDs from the convergence-guard routine artifact payload. Returns
+// nil when no blocking items are present.
+func blockingLearningIDsFromRoutineArtifacts(artifacts []euclotypes.Artifact) []string {
+	for _, artifact := range artifacts {
+		if artifact.ProducerID != ConvergenceGuard {
+			continue
+		}
+		payload, ok := artifact.Payload.(map[string]any)
+		if !ok {
+			continue
+		}
+		queue, ok := payload["learning_queue"].(map[string]any)
+		if !ok {
+			continue
+		}
+		blocking := stringSlice(queue["blocking"])
+		if len(blocking) > 0 {
+			return blocking
+		}
+	}
+	return nil
+}
+
+// submitPlanReviewGuidance posts a non-blocking GuidanceAmbiguity request to
+// the GuidanceBroker when the compile-plan review surfaced open questions.
+// Errors are swallowed — guidance notification must not block plan activation.
+func submitPlanReviewGuidance(in execution.ExecuteInput, planID string, reviewResult *core.Result) {
+	if in.ServiceBundle.GuidanceBroker == nil {
+		return
+	}
+	if reviewResult == nil || !reviewResult.Success {
+		return
+	}
+	openQuestions := stringSlice(reviewResult.Data["open_questions"])
+	if len(openQuestions) == 0 {
+		return
+	}
+	summary := strings.TrimSpace(execution.ResultSummary(reviewResult))
+	if summary == "" {
+		summary = fmt.Sprintf("Plan %s compilation review found %d open question(s)", planID, len(openQuestions))
+	}
+	req := guidance.GuidanceRequest{
+		ID:          fmt.Sprintf("plan-review-%s-%d", planID, time.Now().UnixNano()),
+		Kind:        guidance.GuidanceAmbiguity,
+		Title:       "Plan compilation: open questions require acknowledgement",
+		Description: summary,
+		Choices: []guidance.GuidanceChoice{
+			{ID: "proceed", Label: "Proceed with plan as-is", IsDefault: true},
+			{ID: "refine", Label: "Refine plan before execution"},
+			{ID: "defer", Label: "Defer execution"},
+		},
+		TimeoutBehavior: guidance.GuidanceTimeoutDefer,
+		Context: map[string]any{
+			"plan_id":        planID,
+			"workflow_id":    in.Work.WorkflowID,
+			"open_questions": openQuestions,
+		},
+	}
+	_, _ = in.ServiceBundle.GuidanceBroker.SubmitAsync(req)
+}
+
+func floatValue(raw any, fallback float64) float64 {
+	switch typed := raw.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case json.Number:
+		if value, err := typed.Float64(); err == nil {
+			return value
+		}
+	case string:
+		if typed = strings.TrimSpace(typed); typed != "" {
+			if value, err := json.Number(typed).Float64(); err == nil {
+				return value
+			}
+		}
+	}
+	return fallback
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -65,6 +66,7 @@ type CapabilityInfo struct {
 type RuntimeAdapter interface {
 	hitlService
 	guidanceService
+	learningService
 	ExecuteInstruction(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any) (*core.Result, error)
 	ExecuteInstructionStream(ctx context.Context, instruction string, taskType core.TaskType, metadata map[string]any, callback func(string)) (*core.Result, error)
 	AvailableAgents() []string
@@ -1510,6 +1512,29 @@ func (r *runtimeAdapter) ResolveDeferral(observationID string) error {
 		return fmt.Errorf("runtime unavailable")
 	}
 	return r.rt.ResolveDeferral(observationID)
+}
+
+func (r *runtimeAdapter) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
+	if r == nil || r.rt == nil {
+		ch := make(chan archaeolearning.Event)
+		close(ch)
+		return ch, func() {}
+	}
+	return r.rt.SubscribeLearning()
+}
+
+func (r *runtimeAdapter) PendingLearning() []archaeolearning.Interaction {
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	return r.rt.PendingLearning()
+}
+
+func (r *runtimeAdapter) ResolveLearning(workflowID string, input archaeolearning.ResolveInput) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	return r.rt.ResolveLearning(workflowID, input)
 }
 
 func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {

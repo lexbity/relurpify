@@ -53,7 +53,7 @@ func (s *Service) Execute(ctx context.Context, in execution.ExecuteInput) (*core
 	return behavior.Execute(ctx, in)
 }
 
-func (s *Service) ExecuteRoutine(ctx context.Context, routineID string, task *core.Task, state *core.Context, work runtimepkg.UnitOfWork, env agentenv.AgentEnvironment) ([]euclotypes.Artifact, error) {
+func (s *Service) ExecuteRoutine(ctx context.Context, routineID string, task *core.Task, state *core.Context, work runtimepkg.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
 	if s == nil {
 		return nil, fmt.Errorf("relurpic behavior service unavailable")
 	}
@@ -74,6 +74,7 @@ func (s *Service) ExecuteRoutine(ctx context.Context, routineID string, task *co
 			ConvergenceRefs:                 append([]string(nil), work.SemanticInputs.ConvergenceRefs...),
 			RequestProvenanceRefs:           append([]string(nil), work.SemanticInputs.RequestProvenanceRefs...),
 		},
-		Environment: env,
+		Environment:   env,
+		ServiceBundle: bundle,
 	})
 }

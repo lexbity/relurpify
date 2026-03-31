@@ -1,4 +1,4 @@
-package execution
+package session
 
 import (
 	"context"
@@ -8,9 +8,10 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpic"
-	euclobehavior "github.com/lexcodex/relurpify/named/euclo/relurpic/behavior"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclobehavior "github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
+	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,6 +54,7 @@ func TestSessionResolveEmitterDefaults(t *testing.T) {
 func TestSessionExecuteStopsBeforeVerificationWhenCheckpointFails(t *testing.T) {
 	behaviorService, work, executor := sessionBehaviorInput()
 	svc := SessionService{
+		Environment:     testutil.Env(t),
 		BehaviorService: &behaviorService,
 		BeforeVerification: func(context.Context, *core.Task, *core.Context) error {
 			return context.Canceled
@@ -72,6 +74,7 @@ func TestSessionExecuteRunsMutationCheckpointsInOrder(t *testing.T) {
 	var seen []archaeodomain.MutationCheckpoint
 	behaviorService, work, executor := sessionBehaviorInput()
 	svc := SessionService{
+		Environment:     testutil.Env(t),
 		BehaviorService: &behaviorService,
 		Checkpoint: func(_ context.Context, checkpoint archaeodomain.MutationCheckpoint, _ *core.Task, state *core.Context) error {
 			seen = append(seen, checkpoint)
@@ -98,6 +101,7 @@ func TestSessionExecuteStopsAtCheckpointFailure(t *testing.T) {
 	var seen []archaeodomain.MutationCheckpoint
 	behaviorService, work, executor := sessionBehaviorInput()
 	svc := SessionService{
+		Environment:     testutil.Env(t),
 		BehaviorService: &behaviorService,
 		Checkpoint: func(_ context.Context, checkpoint archaeodomain.MutationCheckpoint, _ *core.Task, _ *core.Context) error {
 			seen = append(seen, checkpoint)

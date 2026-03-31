@@ -27,9 +27,10 @@ type ExecuteInput struct {
 	Profile              euclotypes.ExecutionProfileSelection
 	Work                 eucloruntime.UnitOfWork
 	Environment          agentenv.AgentEnvironment
+	ServiceBundle        ServiceBundle
 	WorkflowExecutor     graph.WorkflowExecutor
 	Telemetry            core.Telemetry
-	RunSupportingRoutine func(context.Context, string, *core.Task, *core.Context, eucloruntime.UnitOfWork, agentenv.AgentEnvironment) ([]euclotypes.Artifact, error)
+	RunSupportingRoutine func(context.Context, string, *core.Task, *core.Context, eucloruntime.UnitOfWork, agentenv.AgentEnvironment, ServiceBundle) ([]euclotypes.Artifact, error)
 }
 
 type Behavior interface {
@@ -72,8 +73,9 @@ const (
 	RecipeArchaeologyCompileReconcile    RecipeID = "archaeology.compile.reconcile"
 	RecipeArchaeologyCompileShape        RecipeID = "archaeology.compile.shape"
 	RecipeArchaeologyCompileReview       RecipeID = "archaeology.compile.review"
-	RecipeArchaeologyImplementStep       RecipeID = "archaeology.implement.step"
-	RecipeArchaeologyImplementCheckpoint RecipeID = "archaeology.implement.checkpoint"
+	RecipeArchaeologyImplementStep        RecipeID = "archaeology.implement.step"
+	RecipeArchaeologyImplementCheckpoint  RecipeID = "archaeology.implement.checkpoint"
+	RecipeArchaeologyImplementGapDetect   RecipeID = "archaeology.implement.gap-detect"
 )
 
 var recipeSpecs = map[RecipeID]RecipeSpec{
@@ -97,6 +99,7 @@ var recipeSpecs = map[RecipeID]RecipeSpec{
 	RecipeArchaeologyCompileReview:       {Family: "reflection", TaskType: core.TaskTypeAnalysis},
 	RecipeArchaeologyImplementStep:       {Family: "react", TaskType: core.TaskTypeCodeModification},
 	RecipeArchaeologyImplementCheckpoint: {Family: "reflection", TaskType: core.TaskTypeAnalysis},
+	RecipeArchaeologyImplementGapDetect:  {Family: "reflection", TaskType: core.TaskTypeAnalysis},
 }
 
 func SetBehaviorTrace(state *core.Context, work eucloruntime.UnitOfWork, routines []string) {
@@ -278,7 +281,7 @@ func ExecuteSupportingRoutines(ctx context.Context, in ExecuteInput, routineIDs 
 			executed = append(executed, routineID)
 			continue
 		}
-		routineArtifacts, err := in.RunSupportingRoutine(ctx, routineID, in.Task, in.State, in.Work, in.Environment)
+		routineArtifacts, err := in.RunSupportingRoutine(ctx, routineID, in.Task, in.State, in.Work, in.Environment, in.ServiceBundle)
 		if err != nil {
 			return artifacts, executed, err
 		}
