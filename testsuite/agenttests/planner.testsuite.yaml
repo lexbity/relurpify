@@ -37,3 +37,86 @@ spec:
           - (?i)relurpify
         tool_calls_must_include:
           - file_read
+    - name: plan_then_edit
+      tags: [smoke, plan-execute]
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/planner_edit_target.txt
+            content: "placeholder text\n"
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+          - name: file_write
+            kind: tool
+      prompt: >
+        Emit a short plan (one or two steps) describing how to replace the content of
+        testsuite/agenttest_fixtures/planner_edit_target.txt with the text "PLANNED EDIT".
+        Then execute the plan using file_write. Do not modify any other files.
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/planner_edit_target.txt
+        tool_calls_must_include:
+          - file_write
+    - name: multi_file_plan
+      tags: [stable, multi-file]
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/planner_multi_a.txt
+            content: "version: 1\n"
+          - path: testsuite/agenttest_fixtures/planner_multi_b.txt
+            content: "version: 1\n"
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+          - name: file_write
+            kind: tool
+      prompt: >
+        Create a plan to update both testsuite/agenttest_fixtures/planner_multi_a.txt and
+        testsuite/agenttest_fixtures/planner_multi_b.txt so each contains "version: 2".
+        Execute the plan and verify both files have been updated.
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/planner_multi_a.txt
+          - testsuite/agenttest_fixtures/planner_multi_b.txt
+        tool_calls_must_include:
+          - file_write
+    - name: plan_step_recovery
+      tags: [stable, error-recovery]
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Plan two steps: step 1 — read testsuite/agenttest_fixtures/nonexistent_plan_file.txt
+        (this file does not exist; the step should fail gracefully). Step 2 — read README.md
+        and summarize the project in 2 bullets. Execute both steps. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)relurpify
+    - name: read_only_plan
+      tags: [smoke, analysis]
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Create a read-only analysis plan for README.md: one step to read it and one step to
+        summarize the project goals. Execute the plan and return the summary. Do not modify
+        any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)relurpify
+        tool_calls_must_include:
+          - file_read

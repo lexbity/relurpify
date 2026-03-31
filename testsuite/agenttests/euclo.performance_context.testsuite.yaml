@@ -28,7 +28,7 @@ spec:
   cases:
     - name: code_mode_large_context_walk
       description: "Exercise multi-phase execution with a larger code context to establish a performance baseline."
-      tags: [performance-baseline, long-running, context-heavy]
+      tags: [performance-baseline, long-running, context-heavy, level:2]
       task_type: analysis
       timeout: 180s
       setup:
@@ -66,7 +66,7 @@ spec:
 
     - name: resume_from_saved_phase_with_context_pressure
       description: "Exercise session resume and continued phase execution for a performance baseline."
-      tags: [performance-baseline, long-running, resume]
+      tags: [performance-baseline, long-running, resume, level:3]
       task_type: analysis
       timeout: 180s
       prompt: "Plan and explain a bounded retrieval strategy for large workflows."
@@ -94,3 +94,138 @@ spec:
             - commit
           frame_kinds_emitted:
             - session_resume
+
+    - name: performance_large_file_navigation
+      description: "5.3 performance: navigate a multi-function file, patch one target function — baseline: ≤2 context rescans."
+      task_type: code_modification
+      tags: [performance-baseline, long-running, level:2]
+      timeout: 180s
+      setup:
+        files:
+          - path: testsuite/fixtures/nav_pkg/routes.go
+            content: |
+              package navpkg
+
+              func RouteHome() string   { return "/home" }
+              func RouteLogin() string  { return "/login" }
+              func RouteLogout() string { return "/logout" }
+              func RouteProfile() string { return "/profile" }
+              func RouteSettings() string { return "/settings" }
+              func RouteAdmin() string  { return "/admin" }
+              func RouteHealth() string { return "/health" }
+              func RouteMetrics() string { return "/metrics" }
+              func RouteDebug() string  { return "/debug" }
+              func RouteVersion() string { return "v0.0.0" }
+              func RouteAPIV1() string  { return "/api/v1" }
+              func RouteAPIV2() string  { return "/api/v2" }
+              func RouteStatic() string { return "/static" }
+              func RouteMedia() string  { return "/media" }
+              func RouteDownload() string { return "/download" }
+              func RouteUpload() string { return "/upload" }
+              func RouteWebhook() string { return "/webhook" }
+              func RouteCallback() string { return "/callback" }
+              func RouteOAuth() string  { return "/oauth" }
+              func RouteSearch() string { return "/search" }
+      overrides:
+        max_iterations: 6
+      prompt: >
+        In testsuite/fixtures/nav_pkg/routes.go, update RouteVersion to return "v1.0.0"
+        instead of "v0.0.0". Only modify that function.
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/nav_pkg/routes.go
+            content: |
+              package navpkg
+
+              func RouteHome() string   { return "/home" }
+              func RouteLogin() string  { return "/login" }
+              func RouteLogout() string { return "/logout" }
+              func RouteProfile() string { return "/profile" }
+              func RouteSettings() string { return "/settings" }
+              func RouteAdmin() string  { return "/admin" }
+              func RouteHealth() string { return "/health" }
+              func RouteMetrics() string { return "/metrics" }
+              func RouteDebug() string  { return "/debug" }
+              func RouteVersion() string { return "v0.0.0" }
+              func RouteAPIV1() string  { return "/api/v1" }
+              func RouteAPIV2() string  { return "/api/v2" }
+              func RouteStatic() string { return "/static" }
+              func RouteMedia() string  { return "/media" }
+              func RouteDownload() string { return "/download" }
+              func RouteUpload() string { return "/upload" }
+              func RouteWebhook() string { return "/webhook" }
+              func RouteCallback() string { return "/callback" }
+              func RouteOAuth() string  { return "/oauth" }
+              func RouteSearch() string { return "/search" }
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/nav_pkg/routes.go
+        files_contain:
+          - path: testsuite/fixtures/nav_pkg/routes.go
+            contains:
+              - v1.0.0
+        euclo:
+          mode: code
+
+    - name: performance_multi_file_coordination
+      description: "5.3 performance: consistent change across 5 files — baseline: single exploration pass, ≤5 progressive file reads."
+      task_type: code_modification
+      tags: [performance-baseline, long-running, level:3]
+      timeout: 180s
+      setup:
+        files:
+          - path: testsuite/fixtures/multi_coord/svc_a.go
+            content: |
+              package multicoord
+
+              const ServiceAVersion = "0.9.0"
+
+              func ServiceAName() string { return "svc-a" }
+          - path: testsuite/fixtures/multi_coord/svc_b.go
+            content: |
+              package multicoord
+
+              const ServiceBVersion = "0.9.0"
+
+              func ServiceBName() string { return "svc-b" }
+          - path: testsuite/fixtures/multi_coord/svc_c.go
+            content: |
+              package multicoord
+
+              const ServiceCVersion = "0.9.0"
+
+              func ServiceCName() string { return "svc-c" }
+          - path: testsuite/fixtures/multi_coord/svc_d.go
+            content: |
+              package multicoord
+
+              const ServiceDVersion = "0.9.0"
+
+              func ServiceDName() string { return "svc-d" }
+          - path: testsuite/fixtures/multi_coord/svc_e.go
+            content: |
+              package multicoord
+
+              const ServiceEVersion = "0.9.0"
+
+              func ServiceEName() string { return "svc-e" }
+      overrides:
+        max_iterations: 10
+      prompt: >
+        All five service files in testsuite/fixtures/multi_coord/ share a Version constant
+        currently set to "0.9.0". Update every ServiceXVersion constant to "1.0.0".
+        Apply the change consistently across all five files.
+      context:
+        euclo.mode: code
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/multi_coord/svc_a.go
+          - testsuite/fixtures/multi_coord/svc_b.go
+          - testsuite/fixtures/multi_coord/svc_c.go
+          - testsuite/fixtures/multi_coord/svc_d.go
+          - testsuite/fixtures/multi_coord/svc_e.go
+        euclo:
+          mode: code

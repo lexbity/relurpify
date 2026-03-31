@@ -55,5 +55,7 @@ spec:
               kind: tool
             - name: testfu:list_suites
               kind: tool
+            - name: testfu:run_agent_suites
+              kind: tool
     skills:
         - system

@@ -57,3 +57,72 @@ spec:
           - (?i)(correct|passes|ok)
         tool_calls_must_include:
           - cli_go
+    - name: reflection_self_corrects
+      tags: [stable, self-correction]
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/reflection_buggy.txt
+            content: "Result: 2 + 2 = 5\n"
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/reflection_buggy.txt
+            content: "Result: 2 + 2 = 5\n"
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+          - name: file_write
+            kind: tool
+      prompt: >
+        Read testsuite/agenttest_fixtures/reflection_buggy.txt. The file contains an arithmetic
+        error. Identify the mistake through reflection, then correct the file so it contains the
+        right answer using file_write.
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/agenttest_fixtures/reflection_buggy.txt
+        output_regex:
+          - (?i)(correct|fix|wrong|error|4)
+        tool_calls_must_include:
+          - file_write
+    - name: reflection_no_regression
+      tags: [stable, no-regression]
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+            content: |
+              package mathutil
+
+              func Add(a, b int) int {
+              	return a + b
+              }
+          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+            content: |
+              package mathutil
+
+              import "testing"
+
+              func TestAdd(t *testing.T) {
+              	if Add(2, 2) != 4 {
+              		t.Fatalf("expected Add(2,2)=4")
+              	}
+              }
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+          - name: cli_go
+            kind: tool
+      prompt: >
+        Review the Go package at testsuite/agenttest_fixtures/gosuite/mathutil/. Use reflection
+        to assess whether the implementation is correct. Run the tests with cli_go and confirm
+        the output. Do not modify any files — the implementation is already correct.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(correct|passes|ok|no.change)
+        tool_calls_must_include:
+          - cli_go

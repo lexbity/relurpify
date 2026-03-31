@@ -29,7 +29,7 @@ spec:
     - name: failing_test_investigation
       description: "Debug mode for a failing test — investigate then fix."
       task_type: code_modification
-      tags: [coverage-matrix, debug, reproduce_localize_patch]
+      tags: [coverage-matrix, debug, reproduce_localize_patch, level:1]
       setup:
         files:
           - path: testsuite/fixtures/calc.go
@@ -84,6 +84,7 @@ spec:
 
     - name: error_with_stacktrace
       description: "Debug auto-classified from error text in instruction."
+      tags: [level:1]
       task_type: code_modification
       setup:
         files:
@@ -118,3 +119,42 @@ spec:
           mode: debug
           frame_kinds_emitted:
             - result
+
+    - name: debug_from_incident_log
+      description: "4.3 artifact-mediated: simulate log output + stack trace inline — no clean repro steps."
+      task_type: code_modification
+      tags: [stable, debug, artifact-mediated, level:3]
+      setup:
+        files:
+          - path: testsuite/fixtures/panic_handler.go
+            content: |
+              package main
+
+              func ProcessItems(items []string) string {
+                return items[0]
+              }
+      prompt: |
+        Incident log from production (2026-03-31 02:14:07 UTC):
+        goroutine 1 [running]:
+        panic: runtime error: index out of range [0] with length 0
+        github.com/example/app.ProcessItems(...)
+          testsuite/fixtures/panic_handler.go:4
+        Customers reported intermittent "500 Internal Server Error" responses.
+        The function is called with the result of a database query that can return an empty slice.
+        Fix the root cause in testsuite/fixtures/panic_handler.go.
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/panic_handler.go
+            content: |
+              package main
+
+              func ProcessItems(items []string) string {
+                return items[0]
+              }
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/panic_handler.go
+        euclo:
+          mode: debug

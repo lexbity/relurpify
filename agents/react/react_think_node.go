@@ -124,10 +124,16 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, state *core.Cont
 	}
 	repaired, repairErr := n.repairDecision(ctx, tools, resp.Text, useToolCalling)
 	if repairErr != nil {
+		if textSuggestsPendingToolCall(resp.Text) {
+			return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
+		}
 		return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	parsed, err = parseDecision(repaired)
 	if err != nil {
+		if textSuggestsPendingToolCall(resp.Text) {
+			return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
+		}
 		return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	if parsed.Tool != "" {
@@ -150,6 +156,28 @@ func (n *reactThinkNode) repairDecision(ctx context.Context, tools []core.Tool, 
 	}
 	_ = useToolCalling
 	return resp.Text, nil
+}
+
+// textSuggestsPendingToolCall returns true when the raw LLM response text looks
+// like it was attempting to call a tool but the JSON could not be parsed.
+// Used as a last-resort fallback before declaring the iteration complete so that
+// embedded tool calls are not silently dropped when repair also fails.
+func textSuggestsPendingToolCall(text string) bool {
+	lower := strings.ToLower(text)
+	if !strings.Contains(lower, `"tool"`) {
+		return false
+	}
+	if strings.Contains(lower, `"complete":true`) || strings.Contains(lower, `"action":"complete"`) {
+		return false
+	}
+	// Confirm the "tool" key has a non-empty quoted value.
+	idx := strings.Index(lower, `"tool"`)
+	after := strings.TrimSpace(lower[idx+6:])
+	if !strings.HasPrefix(after, ":") {
+		return false
+	}
+	val := strings.TrimSpace(after[1:])
+	return strings.HasPrefix(val, `"`) && !strings.HasPrefix(val, `""`)
 }
 
 func filterToolCalls(calls []core.ToolCall) []core.ToolCall {

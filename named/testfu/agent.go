@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -91,6 +92,9 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		state = core.NewContext()
 	}
 	request := parseRequest(task)
+	if request.Action == actionRunAgent {
+		return a.executeRunAgent(ctx, request, state)
+	}
 	report, allPassed, err := a.executeRequest(ctx, request)
 	if err != nil {
 		return nil, err
@@ -107,6 +111,96 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 			"failed_cases": failedCases,
 		},
 	}, nil
+}
+
+func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, state *core.Context) (*core.Result, error) {
+	suiteReports, allPassed, err := a.runAgentSuites(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var totalPassed, totalFailed, totalSkipped int
+	for _, r := range suiteReports {
+		totalPassed += r.PassedCases
+		totalFailed += r.FailedCases
+		totalSkipped += r.SkippedCases
+	}
+	reportMap := map[string]any{"suites": suiteReports}
+	failedCases := failedCaseNames(reportMap)
+	state.Set("testfu.agent_suites_report", suiteReports)
+	state.Set("testfu.passed", allPassed)
+	state.Set("testfu.total_passed", totalPassed)
+	state.Set("testfu.total_failed", totalFailed)
+	state.Set("testfu.total_skipped", totalSkipped)
+	state.Set("testfu.failed_cases", failedCases)
+	return &core.Result{
+		Success: allPassed,
+		Data: map[string]any{
+			"report":        suiteReports,
+			"passed":        allPassed,
+			"total_passed":  totalPassed,
+			"total_failed":  totalFailed,
+			"total_skipped": totalSkipped,
+			"failed_cases":  failedCases,
+		},
+	}, nil
+}
+
+// runAgentSuites globs all suite files matching the agent name, applies tag
+// filtering, distributes the context deadline budget across runs, and marks
+// remaining suites as skipped when the budget is exhausted.
+func (a *Agent) runAgentSuites(ctx context.Context, req runRequest) (map[string]*runnerpkg.SuiteReport, bool, error) {
+	seen := map[string]struct{}{}
+	var paths []string
+	for _, pattern := range []string{
+		filepath.Join(req.Workspace, "testsuite", "agenttests", req.AgentName+".testsuite.yaml"),
+		filepath.Join(req.Workspace, "testsuite", "agenttests", req.AgentName+".*.testsuite.yaml"),
+	} {
+		matches, _ := filepath.Glob(pattern)
+		sort.Strings(matches)
+		for _, m := range matches {
+			if _, ok := seen[m]; !ok {
+				seen[m] = struct{}{}
+				paths = append(paths, m)
+			}
+		}
+	}
+	results := make(map[string]*runnerpkg.SuiteReport, len(paths))
+	deadline, hasDeadline := ctx.Deadline()
+	for i, suitePath := range paths {
+		if hasDeadline && time.Until(deadline) <= 0 {
+			for _, remaining := range paths[i:] {
+				results[filepath.Base(remaining)] = &runnerpkg.SuiteReport{SkippedCases: 1}
+			}
+			break
+		}
+		suite, err := runnerpkg.LoadSuite(suitePath)
+		if err != nil {
+			return results, false, err
+		}
+		if len(req.Tags) > 0 {
+			suite = runnerpkg.FilterSuiteCasesByTags(suite, req.Tags)
+		}
+		if len(suite.Spec.Cases) == 0 {
+			continue
+		}
+		opts := req.RunOptions()
+		if hasDeadline {
+			opts.Timeout = runnerpkg.BudgetedTimeout(time.Until(deadline), len(paths)-i, 30*time.Second)
+		}
+		report, err := a.Runner.RunSuite(ctx, suite, opts)
+		if err != nil {
+			return results, false, err
+		}
+		results[filepath.Base(suitePath)] = report
+	}
+	allPassed := true
+	for _, r := range results {
+		if !suitePassed(r) {
+			allPassed = false
+			break
+		}
+	}
+	return results, allPassed, nil
 }
 
 func (a *Agent) CapabilityRegistry() *capability.Registry {
@@ -209,6 +303,7 @@ const (
 	actionRunSuite   action = "run_suite"
 	actionRunCase    action = "run_case"
 	actionListSuites action = "list_suites"
+	actionRunAgent   action = "run_agent"
 )
 
 type runRequest struct {
@@ -216,6 +311,9 @@ type runRequest struct {
 	Workspace string
 	SuitePath string
 	CaseName  string
+	AgentName string // for actionRunAgent
+	Tags      []string
+	Lane      string
 	Model     string
 	Endpoint  string
 	Timeout   time.Duration
@@ -231,5 +329,6 @@ func (r runRequest) RunOptions() runnerpkg.RunOptions {
 		Timeout:          timeout,
 		ModelOverride:    strings.TrimSpace(r.Model),
 		EndpointOverride: strings.TrimSpace(r.Endpoint),
+		Lane:             strings.TrimSpace(r.Lane),
 	}
 }

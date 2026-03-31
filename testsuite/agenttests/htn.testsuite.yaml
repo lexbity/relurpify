@@ -132,3 +132,48 @@ spec:
           - (?i)relurpify
         tool_calls_must_include:
           - file_read
+    - name: htn_primitive_fallback
+      tags: [stable, fallback]
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Decompose this task into primitives: first try reading
+        testsuite/agenttest_fixtures/htn_nonexistent_primary.txt (it does not exist and will
+        fail). On failure, fall back to reading README.md and summarize the project in 2
+        bullets. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)relurpify
+        tool_calls_must_include:
+          - file_read
+    - name: htn_multi_method_selection
+      tags: [stable, method-selection]
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/htn_method_context.txt
+            content: "preferred_method: summary\n"
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/htn_method_context.txt
+            content: "preferred_method: summary\n"
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        The context file testsuite/agenttest_fixtures/htn_method_context.txt indicates the
+        preferred_method is "summary". Select the summary decomposition method: read README.md
+        and produce a 3-bullet summary. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)relurpify
+        tool_calls_must_include:
+          - file_read

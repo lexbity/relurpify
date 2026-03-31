@@ -799,6 +799,12 @@ func (a *ReActAgent) toolAllowedByExecutionContext(state *core.Context, task *co
 	if tool == nil {
 		return false
 	}
+	if strings.EqualFold(a.Mode, "docs") {
+		name := strings.ToLower(strings.TrimSpace(tool.Name()))
+		if name == "file_write" || name == "file_create" || name == "file_delete" {
+			return false
+		}
+	}
 	if requested := explicitlyRequestedToolNames(task); len(requested) > 0 && !taskNeedsEditing(task) && phase != contextmgrPhaseEdit {
 		if _, ok := requested[strings.ToLower(strings.TrimSpace(tool.Name()))]; !ok {
 			return false

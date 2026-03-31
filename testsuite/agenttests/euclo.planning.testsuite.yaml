@@ -29,7 +29,7 @@ spec:
     - name: plan_with_alternatives
       description: "Planning mode generates a plan with alternatives."
       task_type: analysis
-      tags: [coverage-matrix, planning, plan_stage_execute]
+      tags: [coverage-matrix, planning, plan_stage_execute, level:2]
       prompt: "How should we redesign the authentication system to support OAuth2 in addition to password login?"
       context:
         euclo.mode: planning
@@ -45,6 +45,7 @@ spec:
 
     - name: plan_auto_classified
       description: "Planning mode auto-classified from instruction structure."
+      tags: [level:2]
       task_type: analysis
       prompt: "How should we migrate the database from PostgreSQL to CockroachDB while maintaining zero downtime?"
       expect:
@@ -54,6 +55,7 @@ spec:
 
     - name: plan_cross_cutting
       description: "Planning mode for cross-cutting changes across multiple packages."
+      tags: [level:4]
       task_type: analysis
       prompt: "Plan the approach for adding structured logging across all HTTP handlers and database operations."
       context:
@@ -63,3 +65,40 @@ spec:
         euclo:
           mode: planning
           profile: plan_stage_execute
+
+    - name: planning_from_partial_adr
+      description: "4.3 artifact-mediated: incomplete ADR with TODOs — euclo plan must respect implied constraints."
+      task_type: analysis
+      tags: [stable, planning, artifact-mediated, level:3]
+      prompt: |
+        Partial ADR (Architecture Decision Record) — Status: Draft:
+
+        Title: Replace in-memory cache with Redis
+
+        Context:
+          The current in-memory LRU cache does not survive process restarts.
+          Multiple replicas cannot share cache state.
+          TODO: decide on eviction policy
+          TODO: decide on maximum key TTL
+
+        Decision:
+          Use Redis as the shared cache backend.
+          TODO: specify connection pooling approach
+          TODO: define fallback behavior when Redis is unavailable
+
+        Consequences:
+          Positive: shared cache state across replicas.
+          Negative: operational dependency on Redis.
+          TODO: list migration steps from in-memory to Redis
+
+        Create a planning document that fills in the TODOs and produces a structured
+        migration plan respecting the constraints implied by this ADR.
+      context:
+        euclo.mode: planning
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(redis|eviction|ttl|fallback|migration|pool)
+        euclo:
+          mode: planning

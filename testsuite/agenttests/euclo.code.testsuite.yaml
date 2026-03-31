@@ -29,7 +29,7 @@ spec:
     - name: basic_edit_task
       description: "Full code mode interaction flow for a simple edit."
       task_type: code_modification
-      tags: [coverage-matrix, code, edit_verify_repair]
+      tags: [coverage-matrix, code, edit_verify_repair, level:1]
       setup:
         files:
           - path: testsuite/fixtures/hello.go
@@ -66,7 +66,7 @@ spec:
     - name: code_evidence_first_upgrade
       description: "Code mode should upgrade into the evidence-first profile when failing-test evidence is present."
       task_type: code_modification
-      tags: [coverage-matrix, code, reproduce_localize_patch]
+      tags: [coverage-matrix, code, reproduce_localize_patch, level:1]
       setup:
         files:
           - path: testsuite/fixtures/calculator.go
@@ -121,6 +121,7 @@ spec:
 
     - name: edit_with_verification
       description: "Code mode with verification step."
+      tags: [level:1]
       task_type: code_modification
       setup:
         files:
@@ -177,6 +178,7 @@ spec:
 
     - name: code_no_mode_hint
       description: "Code mode auto-classified from instruction keywords."
+      tags: [level:1]
       task_type: code_modification
       setup:
         files:
@@ -200,5 +202,46 @@ spec:
       expect:
         must_succeed: true
         files_changed: ["testsuite/fixtures/greet.go"]
+        euclo:
+          mode: code
+
+    - name: code_from_messy_context
+      description: "4.3 artifact-mediated: conflicting bug report + partial spec + buggy code — euclo must recover correct intent."
+      task_type: code_modification
+      tags: [stable, code, artifact-mediated, level:3]
+      setup:
+        files:
+          - path: testsuite/fixtures/messy_calc.go
+            content: |
+              package main
+
+              // Divides a by b. Returns 0 on error.
+              func Divide(a, b float64) float64 {
+                return a * b
+              }
+      prompt: >
+        Context: Bug report #42 says "Divide returns wrong results". The spec says
+        "Divide should return a/b and handle b=0 by returning 0". The code comment
+        says "Divides a by b" but the body multiplies. Fix the implementation so
+        it correctly divides and returns 0 when b is zero.
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/messy_calc.go
+            content: |
+              package main
+
+              // Divides a by b. Returns 0 on error.
+              func Divide(a, b float64) float64 {
+                return a * b
+              }
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/messy_calc.go
+        files_contain:
+          - path: testsuite/fixtures/messy_calc.go
+            contains:
+              - "a / b"
         euclo:
           mode: code

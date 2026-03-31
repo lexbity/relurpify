@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/agents/react"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
@@ -416,6 +417,60 @@ spec:
 	}
 	if rt.CompiledPolicy == nil || rt.CompiledPolicy.Engine == nil {
 		t.Fatal("expected compiled policy after switch")
+	}
+}
+
+// TestBootstrapAgentRuntimeIndexManagerReachesReActAgent verifies the full
+// wiring chain: bootstrap → AgentEnvironment.IndexManager → ReActAgent.IndexManager.
+func TestBootstrapAgentRuntimeIndexManagerReachesReActAgent(t *testing.T) {
+	workspace := t.TempDir()
+	store, err := memory.NewHybridMemory(t.TempDir())
+	requireNoError(t, err)
+
+	// Provide a minimal embed server so the AST index initialises without Ollama.
+	embedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/embed" {
+			http.NotFound(w, r)
+			return
+		}
+		var req struct{ Input []string `json:"input"` }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		embeddings := make([][]float32, 0, len(req.Input))
+		for range req.Input {
+			embeddings = append(embeddings, []float32{1, 2})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"embeddings": embeddings})
+	}))
+	defer embedServer.Close()
+
+	boot, err := BootstrapAgentRuntime(workspace, AgentBootstrapOptions{
+		AgentID:    "coding",
+		AgentName:  "coding",
+		ConfigName: "coding",
+		Manifest: &manifest.AgentManifest{
+			Metadata: manifest.ManifestMetadata{Name: "coding"},
+			Spec: manifest.ManifestSpec{
+				Agent: &core.AgentRuntimeSpec{
+					Model: core.AgentModelConfig{Name: "test-model"},
+				},
+			},
+		},
+		Runner:         fsandbox.NewLocalCommandRunner(workspace, nil),
+		Memory:         store,
+		OllamaEndpoint: embedServer.URL,
+	})
+	requireNoError(t, err)
+
+	if boot.Environment.IndexManager == nil {
+		t.Fatal("expected non-nil IndexManager in bootstrapped AgentEnvironment")
+	}
+
+	agent := react.New(boot.Environment)
+	if agent.IndexManager == nil {
+		t.Fatal("expected IndexManager to propagate from AgentEnvironment to ReActAgent")
 	}
 }
 

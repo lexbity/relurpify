@@ -39,6 +39,8 @@ type RunOptions struct {
 	OllamaService      string   // default: ollama
 	OllamaResetOn      []string // regexes matched against error to trigger reset+retry
 	OllamaResetBetween bool     // reset before each case
+
+	Lane string // optional tag-lane filter for multi-suite runs
 }
 
 type SuiteReport struct {

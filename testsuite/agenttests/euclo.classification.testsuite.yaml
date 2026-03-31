@@ -28,6 +28,7 @@ spec:
   cases:
     - name: ambiguous_debug_or_code
       description: "Regression language should dominate generic code-edit language."
+      tags: [level:1]
       task_type: analysis
       prompt: "this test used to pass but now it doesn't after I changed the handler"
       expect:
@@ -37,6 +38,7 @@ spec:
 
     - name: ambiguous_review_or_code
       description: "Mixed inspection-plus-fix language should remain stable under ambiguity."
+      tags: [level:1]
       task_type: code_modification
       setup:
         files:
@@ -62,6 +64,7 @@ spec:
 
     - name: ambiguous_tdd_or_code
       description: "Test-oriented implementation requests should surface TDD signals without failing E2E."
+      tags: [level:1]
       task_type: code_modification
       setup:
         files:
@@ -87,6 +90,7 @@ spec:
 
     - name: pure_question_no_mode
       description: "A plain explanatory question should fall back to code mode."
+      tags: [level:1]
       task_type: analysis
       prompt: "how does the parser work?"
       expect:
@@ -96,6 +100,7 @@ spec:
 
     - name: explicit_mode_overrides_classification
       description: "An explicit mode override should beat review-like keywords."
+      tags: [level:1]
       task_type: code_modification
       setup:
         files:
@@ -117,6 +122,60 @@ spec:
               func Handle() string {
                 return "ok"
               }
+      expect:
+        must_succeed: true
+        euclo:
+          mode: code
+
+    - name: classify_debug_from_error
+      description: "4.4: panic/error prompt without explicit mode should auto-classify to debug."
+      tags: [stable, classification, level:1]
+      task_type: analysis
+      prompt: "Getting panic: nil pointer dereference at runtime/panic.go:1038 after the latest deploy to staging."
+      expect:
+        must_succeed: true
+        euclo:
+          mode: debug
+
+    - name: classify_review_from_pr_request
+      description: "4.4: PR-style review request without explicit mode should auto-classify to review."
+      tags: [stable, classification, level:1]
+      task_type: analysis
+      prompt: "Please review my changes to pkg/auth — I refactored the token validation logic."
+      expect:
+        must_succeed: true
+        euclo:
+          mode: review
+
+    - name: classify_planning_from_scope
+      description: "4.4: broad scope migration prompt without explicit mode should auto-classify to planning."
+      tags: [stable, classification, level:2]
+      task_type: analysis
+      prompt: "We need to migrate from PostgreSQL to CockroachDB — where do we start and what are the risks?"
+      expect:
+        must_succeed: true
+        euclo:
+          mode: planning
+
+    - name: classify_code_from_imperative
+      description: "4.4: direct imperative edit prompt without explicit mode should auto-classify to code."
+      tags: [stable, classification, level:1]
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/classify_target.go
+            content: |
+              package main
+
+              func Run() {}
+      prompt: "Add a method called Stop to the Run function's package that returns an error."
+      context:
+        context_file_contents:
+          - path: testsuite/fixtures/classify_target.go
+            content: |
+              package main
+
+              func Run() {}
       expect:
         must_succeed: true
         euclo:

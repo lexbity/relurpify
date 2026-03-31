@@ -2177,6 +2177,59 @@ func TestVerificationSummaryWithoutEditsUsesVerificationOutput(t *testing.T) {
 	assert.Contains(t, summary, "ok")
 }
 
+// TestNormalizeDecisionRepairFailDoesNotSilentlyDropEmbeddedToolCall verifies
+// that when repairDecision fails and the original response text contains a
+// tool-like JSON fragment, the iteration is NOT silently marked complete.
+// TestDocsModeDeniesWriteToolsViaToolAllowedByExecutionContext verifies that
+// when Mode is "docs", file_write / file_create / file_delete are blocked at
+// the tool-filter level regardless of phase.
+func TestDocsModeDeniesWriteToolsViaToolAllowedByExecutionContext(t *testing.T) {
+	agent := &ReActAgent{Mode: "docs"}
+	assert.NoError(t, agent.Initialize(&core.Config{Name: "docs-test"}))
+	state := core.NewContext()
+	task := &core.Task{Instruction: "Update the package documentation."}
+
+	for _, writeName := range []string{"file_write", "file_create", "file_delete"} {
+		assert.False(t,
+			agent.toolAllowedByExecutionContext(state, task, contextmgrPhaseEdit, stubTool{name: writeName, tags: []string{core.TagDestructive}}),
+			"docs mode must block %s", writeName,
+		)
+	}
+	// Read-only tools must still be allowed.
+	assert.True(t,
+		agent.toolAllowedByExecutionContext(state, task, contextmgrPhaseExplore, stubTool{name: "file_read", tags: []string{core.TagReadOnly}}),
+		"docs mode must not block file_read",
+	)
+}
+
+func TestNormalizeDecisionRepairFailDoesNotSilentlyDropEmbeddedToolCall(t *testing.T) {
+	// stubLLM with empty queue → Generate returns error, simulating repair failure.
+	agent := &ReActAgent{
+		Model:  &stubLLM{responses: []*core.LLMResponse{}},
+		Config: &core.Config{Model: "test"},
+		Tools:  capability.NewRegistry(),
+	}
+	node := &reactThinkNode{id: "think", agent: agent, task: &core.Task{Instruction: "Read and report."}}
+
+	// Broken JSON (unquoted key) so both ParseToolCallsFromText and parseDecision fail,
+	// but the text clearly contains a "tool" key with a non-empty value.
+	brokenToolJSON := `Thinking... {"tool": "file_read", arguments: {path: "main.go"}, complete: false}`
+	resp := &core.LLMResponse{Text: brokenToolJSON}
+
+	decision, _, err := node.normalizeDecision(context.Background(), core.NewContext(), resp, false, nil)
+
+	assert.NoError(t, err)
+	assert.False(t, decision.Complete, "tool call embedded in prose must not be silently dropped when repair fails")
+}
+
+func TestTextSuggestsPendingToolCallDetectsEmbeddedToolIntent(t *testing.T) {
+	assert.True(t, textSuggestsPendingToolCall(`{"tool": "file_read", arguments: {path: "foo.go"}}`))
+	assert.False(t, textSuggestsPendingToolCall(`{"tool": "", "complete": true}`))
+	assert.False(t, textSuggestsPendingToolCall(`{"action":"complete","tool":"","complete":true}`))
+	assert.False(t, textSuggestsPendingToolCall(`No JSON here, just prose.`))
+	assert.True(t, textSuggestsPendingToolCall(`I will call {"tool": "file_write", "action":"tool"}`))
+}
+
 func TestIsLanguageExecutionToolAllowsExplicitSQLiteTool(t *testing.T) {
 	task := &core.Task{
 		Instruction: "Verify by running cli_sqlite3 args [\":memory:\"]",

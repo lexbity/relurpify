@@ -1,0 +1,124 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: testfu.euclo
+  description: "testfu-driven euclo suite execution: code, debug, review smoke cases."
+  owner: agent-platform
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: testfu
+  manifest: relurpify_cfg/agents/testfu.yaml
+  execution:
+    profile: ci-live
+    strict: false
+    # Inner euclo cases are expensive (up to 90s each). Suite-level timeout
+    # is set generously; per-case outer timeouts are set on each case below.
+    timeout: "300s"
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  cases:
+    - name: euclo_code_smoke
+      tags: [stable, euclo]
+      task_type: analysis
+      # Runs euclo.code.testsuite.yaml. Inner euclo cases: up to 90s each.
+      # Outer timeout covers suite load + all cases + overhead.
+      timeout: "600s"
+      prompt: "Run the euclo code test suite."
+      context:
+        action: run_suite
+        suite_path: testsuite/agenttests/euclo.code.testsuite.yaml
+        timeout: 90s
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - testfu.report
+          - testfu.passed
+
+    - name: euclo_debug_smoke
+      tags: [stable, euclo]
+      task_type: analysis
+      timeout: "600s"
+      prompt: "Run the euclo debug test suite."
+      context:
+        action: run_suite
+        suite_path: testsuite/agenttests/euclo.debug.testsuite.yaml
+        timeout: 90s
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - testfu.report
+          - testfu.passed
+
+    - name: euclo_review_smoke
+      tags: [stable, euclo]
+      task_type: analysis
+      timeout: "600s"
+      prompt: "Run the euclo review test suite."
+      context:
+        action: run_suite
+        suite_path: testsuite/agenttests/euclo.review.testsuite.yaml
+        timeout: 90s
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - testfu.report
+          - testfu.passed
+
+    - name: euclo_chat_smoke
+      tags: [stable, euclo]
+      task_type: analysis
+      timeout: "600s"
+      prompt: "Run the euclo chat test suite."
+      context:
+        action: run_suite
+        suite_path: testsuite/agenttests/euclo.chat.testsuite.yaml
+        timeout: 90s
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - testfu.report
+          - testfu.passed
+
+    - name: euclo_archaeology_smoke
+      tags: [stable, euclo]
+      task_type: analysis
+      timeout: "600s"
+      prompt: "Run the euclo archaeology test suite."
+      context:
+        action: run_suite
+        suite_path: testsuite/agenttests/euclo.archaeology.testsuite.yaml
+        timeout: 90s
+      expect:
+        must_succeed: true
+        no_file_changes: false
+        state_keys_must_exist:
+          - testfu.report
+          - testfu.passed
+
+    - name: euclo_intent_fidelity_smoke
+      tags: [stable, euclo]
+      task_type: analysis
+      timeout: "600s"
+      prompt: "Run the euclo intent fidelity test suite."
+      context:
+        action: run_suite
+        suite_path: testsuite/agenttests/euclo.intent_fidelity.testsuite.yaml
+        timeout: 90s
+      expect:
+        must_succeed: true
+        state_keys_must_exist:
+          - testfu.report
+          - testfu.passed

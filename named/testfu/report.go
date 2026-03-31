@@ -23,6 +23,19 @@ func suitePassed(report *runnerpkg.SuiteReport) bool {
 }
 
 func failedCaseNames(report map[string]any) []string {
+	// Multi-suite result from actionRunAgent.
+	if suites, ok := report["suites"].(map[string]*runnerpkg.SuiteReport); ok {
+		var out []string
+		for _, sr := range suites {
+			for _, c := range sr.Cases {
+				if !c.Success && !c.Skipped {
+					out = append(out, c.Name)
+				}
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
 	switch typed := report["suite"].(type) {
 	case *runnerpkg.SuiteReport:
 		out := make([]string, 0)

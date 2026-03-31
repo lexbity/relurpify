@@ -131,3 +131,50 @@ spec:
         state_keys_must_exist:
           - rewoo.synthesis
           - rewoo.tool_results
+    - name: rewoo_reason_before_act
+      tags: [stable, plan-first]
+      task_type: analysis
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Before calling any tool, emit a written plan describing what you will do to summarize
+        README.md in 3 bullets. Then execute the plan using file_read. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - rewoo.plan
+          - rewoo.tool_results
+        tool_calls_must_include:
+          - file_read
+    - name: rewoo_observation_integration
+      tags: [stable, observation]
+      task_type: analysis
+      setup:
+        files:
+          - path: testsuite/agenttest_fixtures/rewoo_observation_source.txt
+            content: "key_fact: the project uses Ollama for local inference\n"
+      context:
+        context_file_contents:
+          - path: testsuite/agenttest_fixtures/rewoo_observation_source.txt
+            content: "key_fact: the project uses Ollama for local inference\n"
+      overrides:
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      prompt: >
+        Read testsuite/agenttest_fixtures/rewoo_observation_source.txt. Use the fact you observe
+        in that file to answer: "What inference backend does this project use?" Then confirm your
+        answer by reading README.md. Do not modify any files.
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)ollama
+        state_keys_must_exist:
+          - rewoo.synthesis
+          - rewoo.tool_results
+        tool_calls_must_include:
+          - file_read

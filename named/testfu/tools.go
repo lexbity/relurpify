@@ -15,6 +15,7 @@ func (a *Agent) registerTools() {
 		&agentTool{agent: a, name: "testfu:run_suite", description: "Run an agenttest suite."},
 		&agentTool{agent: a, name: "testfu:run_case", description: "Run a single case from an agenttest suite."},
 		&agentTool{agent: a, name: "testfu:list_suites", description: "List available agenttest suites."},
+		&agentTool{agent: a, name: "testfu:run_agent_suites", description: "Run all testsuite YAML files matching an agent name."},
 		&assertPassedTool{},
 	} {
 		if _, ok := a.Tools.Get(tool.Name()); ok {
@@ -34,6 +35,14 @@ func (t *agentTool) Name() string        { return t.name }
 func (t *agentTool) Description() string { return t.description }
 func (t *agentTool) Category() string    { return "test" }
 func (t *agentTool) Parameters() []core.ToolParameter {
+	if t.name == "testfu:run_agent_suites" {
+		return []core.ToolParameter{
+			{Name: "agent_name", Type: "string", Description: "Agent name to match suite files (e.g. 'react').", Required: true},
+			{Name: "tags", Type: "string", Description: "Comma-separated tag filter applied before running.", Required: false},
+			{Name: "lane", Type: "string", Description: "Optional lane name passed to RunOptions.", Required: false},
+			{Name: "timeout", Type: "string", Description: "Optional per-suite timeout duration.", Required: false},
+		}
+	}
 	return []core.ToolParameter{
 		{Name: "suite_path", Type: "string", Description: "Path to the testsuite YAML.", Required: t.name != "testfu:list_suites"},
 		{Name: "case_name", Type: "string", Description: "Specific case name to run.", Required: false},
@@ -50,6 +59,13 @@ func (t *agentTool) Execute(ctx context.Context, state *core.Context, args map[s
 	switch t.name {
 	case "testfu:list_suites":
 		task.Instruction = "list_suites"
+	case "testfu:run_agent_suites":
+		task.Context["agent_name"] = args["agent_name"]
+		task.Context["tags"] = args["tags"]
+		task.Context["lane"] = args["lane"]
+		task.Context["timeout"] = args["timeout"]
+		task.Context["workspace"] = t.agent.Workspace
+		task.Context["action"] = string(actionRunAgent)
 	default:
 		task.Context["suite_path"] = args["suite_path"]
 		task.Context["case_name"] = args["case_name"]

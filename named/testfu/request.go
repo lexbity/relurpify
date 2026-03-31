@@ -16,7 +16,7 @@ func parseRequest(task *core.Task) runRequest {
 	}
 	values := map[string]string{}
 	if task != nil && task.Context != nil {
-		for _, key := range []string{"action", "suite_path", "case_name", "model", "endpoint", "timeout", "workspace"} {
+		for _, key := range []string{"action", "suite_path", "case_name", "agent_name", "tags", "lane", "model", "endpoint", "timeout", "workspace"} {
 			if value := strings.TrimSpace(fmt.Sprint(task.Context[key])); value != "" && value != "<nil>" {
 				values[key] = value
 			}
@@ -34,7 +34,7 @@ func parseRequest(task *core.Task) runRequest {
 				continue
 			}
 			switch key {
-			case "action", "suite", "suite_path", "case", "case_name", "model", "endpoint", "timeout", "workspace":
+			case "action", "suite", "suite_path", "case", "case_name", "agent_name", "tags", "lane", "model", "endpoint", "timeout", "workspace":
 				if key == "suite" {
 					key = "suite_path"
 				}
@@ -61,6 +61,20 @@ func parseRequest(task *core.Task) runRequest {
 		req.CaseName = value
 		req.Action = actionRunCase
 	}
+	if value := strings.TrimSpace(values["agent_name"]); value != "" {
+		req.AgentName = value
+		if req.Action == actionRunSuite || req.Action == "" {
+			req.Action = actionRunAgent
+		}
+	}
+	if value := strings.TrimSpace(values["tags"]); value != "" {
+		for _, tag := range strings.Split(value, ",") {
+			if t := strings.TrimSpace(tag); t != "" {
+				req.Tags = append(req.Tags, t)
+			}
+		}
+	}
+	req.Lane = strings.TrimSpace(values["lane"])
 	req.Model = values["model"]
 	req.Endpoint = values["endpoint"]
 	if value := strings.TrimSpace(values["timeout"]); value != "" {

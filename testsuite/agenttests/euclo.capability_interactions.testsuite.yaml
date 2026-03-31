@@ -28,6 +28,7 @@ spec:
   cases:
     - name: regression_to_fix_flow
       description: "Regression investigation should compose with follow-on fix behavior."
+      tags: [level:1]
       task_type: code_modification
       setup:
         files:
@@ -56,6 +57,7 @@ spec:
 
     - name: review_then_safe_implement
       description: "Review findings should flow into implement-if-safe behavior."
+      tags: [level:2]
       task_type: code_modification
       setup:
         files:
@@ -79,3 +81,68 @@ spec:
         must_succeed: true
         euclo:
           mode: review
+
+    - name: contract_pre_execution_guard_fires
+      description: "4.5: write capability not in admitted set — pre-execution contract guard blocks execution, not crash."
+      tags: [stable, capability-contract, level:2]
+      task_type: code_modification
+      setup:
+        files:
+          - path: testsuite/fixtures/contract_target.go
+            content: |
+              package main
+
+              func Noop() {}
+      prompt: "Add a Shutdown function to testsuite/fixtures/contract_target.go."
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/contract_target.go
+            content: |
+              package main
+
+              func Noop() {}
+      overrides:
+        # Deny write capabilities — only file_read is permitted.
+        # The pre-execution contract guard should block or degrade gracefully.
+        allowed_capabilities:
+          - name: file_read
+            kind: tool
+      expect:
+        # Agent must not crash. Graceful denial or partial completion is acceptable.
+        must_succeed: false
+        no_file_changes: true
+
+    - name: contract_lazy_semantic_acquisition
+      description: "4.5: capability acquired lazily mid-execution — state key records LazySemanticAcquisitionTriggered."
+      task_type: code_modification
+      tags: [stable, capability-contract, level:2]
+      setup:
+        files:
+          - path: testsuite/fixtures/contract_lazy.go
+            content: |
+              package main
+
+              func Load() string {
+                return "loaded"
+              }
+      prompt: >
+        Inspect testsuite/fixtures/contract_lazy.go to understand its structure, then add
+        an Unload function that returns "unloaded". Use file_read first to explore, then
+        file_write to apply the change.
+      context:
+        euclo.mode: code
+        context_file_contents:
+          - path: testsuite/fixtures/contract_lazy.go
+            content: |
+              package main
+
+              func Load() string {
+                return "loaded"
+              }
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/contract_lazy.go
+        euclo:
+          mode: code
