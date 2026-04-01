@@ -76,7 +76,7 @@ type ToolObservation struct {
 func (a *ReActAgent) Initialize(config *core.Config) error {
 	a.Config = config
 	if config.MaxIterations <= 0 {
-		a.maxIterations = 8
+		a.maxIterations = defaultIterationsForMode(a.Mode)
 	} else {
 		a.maxIterations = config.MaxIterations
 	}
@@ -226,12 +226,19 @@ func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, state *core.C
 		compactReactLoopState(state)
 		mirrorReactCheckpointReference(state)
 		if reason := strings.TrimSpace(state.GetString("react.incomplete_reason")); reason != "" {
-			result.Success = false
-			result.Error = fmt.Errorf("%s", reason)
 			if result.Data == nil {
 				result.Data = map[string]any{}
 			}
 			result.Data["incomplete_reason"] = reason
+			// For non-editing tasks that produced observations, degrade rather than
+			// hard-fail — partial analysis output is still useful to the caller.
+			if !taskNeedsEditing(task) && len(getToolObservations(state)) > 0 {
+				result.Success = true
+				result.Data["degraded"] = true
+			} else {
+				result.Success = false
+				result.Error = fmt.Errorf("%s", reason)
+			}
 		}
 	}
 	return result, err
@@ -251,6 +258,19 @@ func mirrorReactFinalOutputReference(state *core.Context) {
 	}
 	if summary := strings.TrimSpace(state.GetString("graph.summary")); summary != "" {
 		state.Set("react.final_output_summary", summary)
+	}
+}
+
+func defaultIterationsForMode(mode string) int {
+	switch strings.ToLower(mode) {
+	case "code", "tdd":
+		return 16
+	case "debug":
+		return 20
+	case "review":
+		return 12
+	default:
+		return 8
 	}
 }
 

@@ -202,9 +202,11 @@ func (n *reactActNode) latchVerificationSuccess(state *core.Context, toolName st
 	if state == nil || n == nil || n.agent == nil || n.task == nil || res == nil || !res.Success {
 		return
 	}
-	if !taskNeedsEditing(n.task) || !verificationStopAllowed(n.agent, n.task) || !hasEditObservation(state) {
+	if !taskNeedsEditing(n.task) || !verificationStopAllowed(n.agent, n.task) {
 		return
 	}
+	// Allow the latch even when no prior file edit was observed — the agent
+	// may be verifying already-correct code (verify-only pass, no edits needed).
 	if !verificationToolMatches(toolName, n.agent.verificationSuccessTools(n.task)) {
 		return
 	}

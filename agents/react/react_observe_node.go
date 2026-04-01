@@ -162,7 +162,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *core.Context) (*c
 		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 		return result, nil
 	}
-	repeated, repeatReason := detectRepeatedToolLoop(state)
+	repeated, repeatReason := detectRepeatedToolLoop(state, n.task)
 	completed := decision.Complete
 	if res, ok := state.Get("react.tool_calls"); ok {
 		if calls, ok := res.([]core.ToolCall); ok && len(calls) > 0 {
@@ -435,7 +435,7 @@ func taskNeedsEditing(task *core.Task) bool {
 	return false
 }
 
-func detectRepeatedToolLoop(state *core.Context) (bool, string) {
+func detectRepeatedToolLoop(state *core.Context, task *core.Task) (bool, string) {
 	observations := getToolObservations(state)
 	if len(observations) == 0 {
 		return false, ""
@@ -450,11 +450,21 @@ func detectRepeatedToolLoop(state *core.Context) (bool, string) {
 	}
 	state.Set("react.repeat_signature", current)
 	state.Set("react.repeat_count", count)
-	if count < 3 {
+	if count < stallThresholdForTask(task) {
 		return false, ""
 	}
 	last := observations[len(observations)-1]
 	return true, fmt.Sprintf("stuck repeating %s with the same inputs/results", last.Tool)
+}
+
+func stallThresholdForTask(task *core.Task) int {
+	if task == nil {
+		return 3
+	}
+	if task.Type == core.TaskTypeAnalysis {
+		return 6 // analysis tasks legitimately re-read the same files before converging
+	}
+	return 3
 }
 
 func repeatedReadTarget(state *core.Context) string {

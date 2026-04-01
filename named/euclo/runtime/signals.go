@@ -38,6 +38,7 @@ const AmbiguityThreshold = 0.15
 const (
 	WeightContextHint    = 1.0
 	WeightKeyword        = 0.3
+	WeightKeywordReview  = 0.45 // review signals need to beat the code default baseline
 	WeightFilePattern    = 0.4
 	WeightTaskStructure  = 0.5
 	WeightErrorText      = 0.6
@@ -91,13 +92,14 @@ func collectKeywordSignals(instruction string) []ClassificationSignal {
 	type keywordGroup struct {
 		patterns []string
 		mode     string
+		weight   float64
 	}
 	groups := []keywordGroup{
-		{[]string{"review", "audit", "inspect", "look at"}, "review"},
-		{[]string{"debug", "diagnose", "root cause", "failing", "failure", "trace"}, "debug"},
-		{[]string{"plan", "design", "architecture", "approach"}, "planning"},
-		{[]string{"test first", "tdd", "write tests", "add tests", "make sure it's tested", "ensure it's tested"}, "tdd"},
-		{[]string{"implement", "fix", "change", "refactor", "patch", "update", "add"}, "code"},
+		{[]string{"review", "audit", "inspect", "look at", "pr", "pull request", "pull-request", "code review", "lgtm"}, "review", WeightKeywordReview},
+		{[]string{"debug", "diagnose", "root cause", "failing", "failure", "trace"}, "debug", WeightKeyword},
+		{[]string{"plan", "design", "architecture", "approach"}, "planning", WeightKeyword},
+		{[]string{"test first", "tdd", "write tests", "add tests", "make sure it's tested", "ensure it's tested"}, "tdd", WeightKeyword},
+		{[]string{"implement", "fix", "change", "refactor", "patch", "update", "add"}, "code", WeightKeyword},
 	}
 
 	for _, g := range groups {
@@ -106,7 +108,7 @@ func collectKeywordSignals(instruction string) []ClassificationSignal {
 				signals = append(signals, ClassificationSignal{
 					Kind:   "keyword",
 					Value:  p,
-					Weight: WeightKeyword,
+					Weight: g.weight,
 					Mode:   g.mode,
 				})
 			}

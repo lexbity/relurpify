@@ -57,6 +57,12 @@ func EvaluateSuccessGate(policy VerificationPolicy, evidence VerificationEvidenc
 		result.Reason = "verification_not_required"
 		return result
 	}
+	// No mutations were requested or executed — nothing to verify.
+	// Gate only applies when the agent actually attempted file changes.
+	if editRecord == nil || (len(editRecord.Requested) == 0 && len(editRecord.Executed) == 0) {
+		result.Reason = "verification_skipped_no_mutations"
+		return result
+	}
 	if !evidence.EvidencePresent {
 		return SuccessGateResult{
 			Allowed: false,

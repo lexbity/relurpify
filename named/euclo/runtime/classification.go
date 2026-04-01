@@ -87,14 +87,22 @@ func ClassifyTaskScored(envelope TaskEnvelope) ScoredClassification {
 	}
 
 	// Default to code if no keyword/task_structure/error_text signals fired.
+	// Skip baseline injection when a review signal is already present — the
+	// review keywords carry enough weight to win without the code default competing.
 	hasStrongSignal := false
+	hasReviewSignal := false
 	for _, s := range signals {
 		if s.Kind == "keyword" || s.Kind == "task_structure" || s.Kind == "error_text" || s.Kind == "context_hint" {
 			hasStrongSignal = true
-			break
+		}
+		// Only suppress the code baseline for explicit review signals (keyword,
+		// context_hint, task_structure) — not workspace_state "read_only" which
+		// fires for any empty registry and should not be strong enough to win alone.
+		if s.Mode == "review" && (s.Kind == "keyword" || s.Kind == "context_hint" || s.Kind == "task_structure") {
+			hasReviewSignal = true
 		}
 	}
-	if !hasStrongSignal {
+	if !hasStrongSignal && !hasReviewSignal {
 		// Inject a baseline code signal so it wins over weak workspace signals.
 		signals = append(signals, ClassificationSignal{
 			Kind: "default", Value: "code", Weight: WeightDefault, Mode: "code",
