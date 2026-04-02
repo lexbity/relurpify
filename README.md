@@ -1,17 +1,36 @@
-# Relurpify
+# <div align="center">Relurpify</div>
 
-Relurpify is a local-first agent framework and terminal runtime for code-oriented workflows. The main entry point is `relurpish`, a Bubble Tea TUI backed by local manifests, sandboxed tool execution, and Ollama-based models.
+<div align="center">
+  <img src="./logo.png" alt="Relurpify logo" width="240" />
+</div>
 
-## What You Run
+<div align="center">
+  Local-first agentic software work with a security-first runtime.
+</div>
 
-- `relurpish` in app/relurpish for interactive local use
-- `dev-agent` in app/dev-agent-cli for developer workflows, agent tests, and manifest/skill utilities
-- `nexus` in app/nexus for distributed coordination
-- `nexusish` in app/nexusish for Nexus administration
+## What Is Relurpify?
+
+To the day it rewrites itself 
+
+Relurpify is a fullstack Agent framework 
+- generic execution Agent library 
+- LLM oriented memory/context/graph/sandbox management framework 
+- (Rex) event agent, Federated Mesh - distributed coordination fabric , protocol platform 
+- archaeology provenance memory system 
+- (Euclo) coding agent 
+- TUI interfaces 
+
+
+## Currently Available
+
+### Relurpish Agent TUI
+
+- Default Agent TUI 
+- Euclo coding agent access 
 
 ## Requirements
 
-- Go 1.25+
+- Go `1.25+`
 - Docker or another supported container runtime
 - gVisor `runsc`
 - Ollama
@@ -23,7 +42,41 @@ export GOMODCACHE=$PWD/.gomodcache
 export GOCACHE=$PWD/.gocache
 ```
 
-## First Run
+## Install
+
+### Build from source
+
+```bash
+go build ./app/relurpish
+```
+
+### Optional: build all project binaries
+
+```bash
+go build ./...
+```
+
+## Setup
+
+Run the doctor command before starting Relurpify:
+
+```bash
+go run ./app/relurpish doctor
+```
+
+`doctor` checks the local environment, verifies required dependencies, and initializes `relurpify_cfg/` for the current workspace when needed.
+
+## Run Euclo in Relurpish
+
+Start the terminal app with:
+
+```bash
+go run ./app/relurpish chat
+```
+
+This launches `relurpish` and starts the default Euclo coding workflow in the current workspace.
+
+For a typical first-use flow:
 
 ```bash
 go build ./app/relurpish
@@ -31,14 +84,22 @@ go run ./app/relurpish doctor
 go run ./app/relurpish chat
 ```
 
-`doctor` checks local dependencies and initializes `relurpify_cfg/` when needed. After that, `chat` starts the TUI in the current workspace.
+## Future Features
 
-## Common Commands
+The repository already contains broader platform work that is planned for later release maturity, including:
+
+- `nexus`, the distributed coordination layer
+- `nexusish`, the administration interface for Nexus
+- `Rex`, the distributed runtime / agent path
+- expanded Archaeo user experiences for planning, memory, provenance, and long-horizon workflow support
+
+These areas are part of the project direction, but the primary first-release workflow remains local `relurpish` usage with Euclo.
+
+## Additional Tools
+
+Relurpify also includes developer tooling for internal workflows and testing:
 
 ```bash
-# Build everything
-go build ./...
-
 # List discovered agents
 go run ./app/dev-agent-cli agents list
 
@@ -54,4 +115,4 @@ go run ./app/dev-agent-cli skill validate my-skill
 
 ## Documentation
 
-The repository documentation lives under `docs/`.
+Project documentation lives under `docs/`.

@@ -2,7 +2,8 @@
 
 ## Synopsis
 
-Relurpify ships four application binaries, each serving a distinct role:
+Relurpify ships four application binaries that operate different parts of the
+same system:
 
 | Binary | Package | Audience |
 |--------|---------|---------|
