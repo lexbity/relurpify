@@ -539,6 +539,7 @@ func BenchmarkRequestConcurrentApplyIndependentFulfillments(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				var wg sync.WaitGroup
+				errCh := make(chan error, len(requestIDs))
 				for idx, requestID := range requestIDs {
 					wg.Add(1)
 					go func(idx int, requestID string) {
@@ -554,11 +555,17 @@ func BenchmarkRequestConcurrentApplyIndependentFulfillments(b *testing.B) {
 								ExecutorRef: "bench-executor",
 							},
 						}); err != nil {
-							b.Fatalf("apply fulfillment: %v", err)
+							errCh <- err
 						}
 					}(idx, requestID)
 				}
 				wg.Wait()
+				close(errCh)
+				for err := range errCh {
+					if err != nil {
+						b.Fatalf("apply fulfillment: %v", err)
+					}
+				}
 			}
 		})
 	}

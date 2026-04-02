@@ -2,6 +2,7 @@ package euclobindings
 
 import (
 	"context"
+	"time"
 
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
@@ -13,6 +14,8 @@ import (
 	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
 	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
+	archaeoproviders "github.com/lexcodex/relurpify/archaeo/providers"
+	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	archaeoverification "github.com/lexcodex/relurpify/archaeo/verification"
@@ -36,6 +39,9 @@ type Runtime struct {
 	LearningBroker *archaeolearning.Broker
 	DeferralPolicy guidance.DeferralPolicy
 	MutationPolicy archaeoexec.MutationPolicy
+	Providers      archaeoproviders.Bundle
+	Now            func() time.Time
+	NewID          func(string) string
 }
 
 type ArchaeologyConfig struct {
@@ -68,6 +74,10 @@ func (r Runtime) ArchaeologyService(cfg ArchaeologyConfig) archaeoarch.Service {
 		EvaluateGate: cfg.EvaluateGate,
 		ResetDoom:    cfg.ResetDoom,
 		Learning:     r.LearningService(),
+		Providers:    r.Providers,
+		Requests:     r.RequestService(),
+		Now:          r.Now,
+		NewID:        r.NewID,
 	}
 }
 
@@ -88,11 +98,15 @@ func (r Runtime) LearningService() archaeolearning.Service {
 }
 
 func (r Runtime) PlanService() archaeoplans.Service {
-	return archaeoplans.Service{Store: r.PlanStore, WorkflowStore: r.WorkflowStore}
+	return archaeoplans.Service{Store: r.PlanStore, WorkflowStore: r.WorkflowStore, Now: r.Now}
 }
 
 func (r Runtime) TensionService() archaeotensions.Service {
-	return archaeotensions.Service{Store: r.WorkflowStore}
+	return archaeotensions.Service{Store: r.WorkflowStore, Now: r.Now, NewID: r.NewID}
+}
+
+func (r Runtime) RequestService() archaeorequests.Service {
+	return archaeorequests.Service{Store: r.WorkflowStore, Now: r.Now, NewID: r.NewID}
 }
 
 func (r Runtime) VerificationService() archaeoverification.Service {
@@ -109,15 +123,15 @@ func (r Runtime) ProjectionService() *archaeoprojections.Service {
 }
 
 func (r Runtime) DeferredDraftService() archaeodeferred.Service {
-	return archaeodeferred.Service{Store: r.WorkflowStore}
+	return archaeodeferred.Service{Store: r.WorkflowStore, Now: r.Now, NewID: r.NewID}
 }
 
 func (r Runtime) ConvergenceService() archaeoconvergence.Service {
-	return archaeoconvergence.Service{Store: r.WorkflowStore}
+	return archaeoconvergence.Service{Store: r.WorkflowStore, Now: r.Now, NewID: r.NewID}
 }
 
 func (r Runtime) DecisionService() archaeodecisions.Service {
-	return archaeodecisions.Service{Store: r.WorkflowStore}
+	return archaeodecisions.Service{Store: r.WorkflowStore, Now: r.Now, NewID: r.NewID}
 }
 
 func (r Runtime) ExecutionService() archaeoexec.Service {
@@ -127,11 +141,12 @@ func (r Runtime) ExecutionService() archaeoexec.Service {
 		WorkflowStore:  r.WorkflowStore,
 		Retrieval:      r.Retrieval,
 		MutationPolicy: r.MutationPolicy,
+		Now:            r.Now,
 	}
 }
 
 func (r Runtime) ExecutionHandoffRecorder() archaeoexec.HandoffRecorder {
-	return archaeoexec.HandoffRecorder{Store: r.WorkflowStore}
+	return archaeoexec.HandoffRecorder{Store: r.WorkflowStore, Now: r.Now, NewID: r.NewID}
 }
 
 func (r Runtime) PreflightCoordinator(cfg PreflightConfig) archaeoexec.PreflightCoordinator {
