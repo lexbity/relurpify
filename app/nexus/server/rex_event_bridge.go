@@ -82,7 +82,8 @@ func (b *RexEventBridge) loop(ctx context.Context, afterSeq uint64) {
 				continue
 			}
 			afterSeq = frameworkEvent.Seq
-			_ = b.Cursor.Save(ctx, afterSeq)
+			// Persist successful progress even if shutdown has already canceled the loop context.
+			_ = b.Cursor.Save(context.WithoutCancel(ctx), afterSeq)
 		}
 	}
 }

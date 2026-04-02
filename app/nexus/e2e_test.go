@@ -1356,13 +1356,23 @@ func TestNodeRejectedWithBadSignature(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	require.NoError(t, conn.WriteJSON(map[string]any{
-		"type":          "connect",
-		"version":       "1.0",
-		"role":          "node",
-		"last_seen_seq": 0,
-		"node_id":       "node-a",
-		"node_name":     "Node A",
-		"node_platform": string(core.NodePlatformLinux),
+		"type":                      "connect",
+		"version":                   "1.0",
+		"role":                      "node",
+		"last_seen_seq":             0,
+		"node_id":                   "node-a",
+		"node_name":                 "Node A",
+		"node_platform":             string(core.NodePlatformLinux),
+		"trust_domain":              "local",
+		"runtime_id":                "node-a-runtime",
+		"runtime_version":           "test",
+		"compatibility_class":       "test",
+		"supported_context_classes": []string{"workflow-runtime"},
+		"transport_profile":         fwgateway.TransportProfileWebSocketLoopback,
+		"session_nonce":             "nonce-node-a",
+		"session_issued_at":         time.Now().UTC(),
+		"session_expires_at":        time.Now().UTC().Add(5 * time.Minute),
+		"peer_key_id":               "node-a-peer",
 	}))
 
 	var connected map[string]any
@@ -1391,13 +1401,23 @@ func TestNodeRejectedWithMissingEnrollment(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	require.NoError(t, conn.WriteJSON(map[string]any{
-		"type":          "connect",
-		"version":       "1.0",
-		"role":          "node",
-		"last_seen_seq": 0,
-		"node_id":       "node-missing",
-		"node_name":     "Missing Node",
-		"node_platform": string(core.NodePlatformLinux),
+		"type":                      "connect",
+		"version":                   "1.0",
+		"role":                      "node",
+		"last_seen_seq":             0,
+		"node_id":                   "node-missing",
+		"node_name":                 "Missing Node",
+		"node_platform":             string(core.NodePlatformLinux),
+		"trust_domain":              "local",
+		"runtime_id":                "node-missing-runtime",
+		"runtime_version":           "test",
+		"compatibility_class":       "test",
+		"supported_context_classes": []string{"workflow-runtime"},
+		"transport_profile":         fwgateway.TransportProfileWebSocketLoopback,
+		"session_nonce":             "nonce-node-missing",
+		"session_issued_at":         time.Now().UTC(),
+		"session_expires_at":        time.Now().UTC().Add(5 * time.Minute),
+		"peer_key_id":               "node-missing-peer",
 	}))
 
 	var connected map[string]any

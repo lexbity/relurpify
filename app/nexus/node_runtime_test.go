@@ -543,16 +543,17 @@ func TestMeshTransportFrameHandlerExecutesTenantBoundResume(t *testing.T) {
 		AuthMethod:     core.AuthMethodNodeChallenge,
 	}))
 	require.NoError(t, sessionStore.UpsertBoundary(context.Background(), "tenant-1:webchat:conv-1", &core.SessionBoundary{
-		SessionID:  "sess-1",
-		RoutingKey: "tenant-1:webchat:conv-1",
-		TenantID:   "tenant-1",
-		Partition:  "local",
-		Scope:      core.SessionScopePerChannelPeer,
-		ChannelID:  "webchat",
-		PeerID:     "conv-1",
-		Owner:      core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
-		TrustClass: core.TrustClassRemoteApproved,
-		CreatedAt:  now,
+		SessionID:      "sess-1",
+		RoutingKey:     "tenant-1:webchat:conv-1",
+		TenantID:       "tenant-1",
+		Partition:      "local",
+		Scope:          core.SessionScopePerChannelPeer,
+		ChannelID:      "webchat",
+		PeerID:         "conv-1",
+		Owner:          core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		TrustClass:     core.TrustClassRemoteApproved,
+		CreatedAt:      time.Now().UTC(),
+		LastActivityAt: time.Now().UTC(),
 	}))
 	require.NoError(t, sessionStore.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
 		SessionID:  "sess-1",

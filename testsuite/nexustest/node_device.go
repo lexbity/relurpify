@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/lexcodex/relurpify/framework/core"
+	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 )
 
@@ -102,15 +104,26 @@ func (d *TestNodeDevice) Connect(ctx context.Context, addr, token, nodeName stri
 	if err != nil {
 		return err
 	}
+	issuedAt := time.Now().UTC()
 	connect := map[string]any{
-		"type":          "connect",
-		"version":       "1.0",
-		"role":          "node",
-		"last_seen_seq": 0,
-		"node_id":       d.DeviceID(),
-		"node_name":     firstNonEmpty(nodeName, d.DeviceID()),
-		"node_platform": firstNonEmpty(string(platform), string(core.NodePlatformHeadless)),
-		"capabilities":  d.OfferedCapabilities(),
+		"type":                      "connect",
+		"version":                   "1.0",
+		"role":                      "node",
+		"last_seen_seq":             0,
+		"node_id":                   d.DeviceID(),
+		"node_name":                 firstNonEmpty(nodeName, d.DeviceID()),
+		"node_platform":             firstNonEmpty(string(platform), string(core.NodePlatformHeadless)),
+		"trust_domain":              "local",
+		"runtime_id":                d.DeviceID() + "-runtime",
+		"runtime_version":           "test",
+		"compatibility_class":       "test",
+		"supported_context_classes": []string{"workflow-runtime"},
+		"transport_profile":         fwgateway.TransportProfileWebSocketLoopback,
+		"session_nonce":             base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s-%d", d.DeviceID(), issuedAt.UnixNano()))),
+		"session_issued_at":         issuedAt,
+		"session_expires_at":        issuedAt.Add(5 * time.Minute),
+		"peer_key_id":               d.DeviceID() + "-peer",
+		"capabilities":              d.OfferedCapabilities(),
 	}
 	if err := conn.WriteJSON(connect); err != nil {
 		_ = conn.Close()
@@ -192,6 +205,19 @@ func (d *TestNodeDevice) readLoop() {
 		}
 		if err := json.Unmarshal(data, &envelope); err != nil {
 			continue
+		}
+		if envelope.Type == fwnode.TransportFrameType {
+			var transport struct {
+				Type    string          `json:"type"`
+				Payload json.RawMessage `json:"payload"`
+			}
+			if err := json.Unmarshal(data, &transport); err != nil {
+				continue
+			}
+			data = transport.Payload
+			if err := json.Unmarshal(data, &envelope); err != nil {
+				continue
+			}
 		}
 		if envelope.Type != "capability.invoke" {
 			continue
