@@ -158,12 +158,12 @@ func mapSessionMessageToRex(frameworkEvent core.FrameworkEvent) (rexevents.Canon
 		ConversationID string `json:"conversation_id"`
 		ThreadID       string `json:"thread_id"`
 		SenderID       string `json:"sender_id"`
-		Content        string `json:"content"`
+		Content        json.RawMessage `json:"content"`
 	}
 	if err := json.Unmarshal(frameworkEvent.Payload, &payload); err != nil {
 		return rexevents.CanonicalEvent{}, err
 	}
-	instruction := strings.TrimSpace(payload.Content)
+	instruction := extractSessionMessageInstruction(payload.Content)
 	if instruction == "" {
 		return rexevents.CanonicalEvent{}, fmt.Errorf("session message content required")
 	}
@@ -190,6 +190,23 @@ func mapSessionMessageToRex(frameworkEvent core.FrameworkEvent) (rexevents.Canon
 		TrustClass:     rexevents.TrustInternal,
 		Source:         "framework.session",
 	})
+}
+
+func extractSessionMessageInstruction(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return strings.TrimSpace(text)
+	}
+	var structured struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &structured); err == nil {
+		return strings.TrimSpace(structured.Text)
+	}
+	return ""
 }
 
 type sqliteRexEventCursorStore struct {

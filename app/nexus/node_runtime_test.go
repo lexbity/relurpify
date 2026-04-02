@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -679,11 +680,193 @@ func TestMeshTransportFrameHandlerExecutesTenantBoundResume(t *testing.T) {
 	require.NoError(t, handler(context.Background(), ws, resumeFrame))
 	require.Len(t, rpc.writes, 1)
 	resp := rpc.writes[0].(map[string]any)
-	require.Equal(t, "fmp.resume.executed", resp["type"])
+	if resp["type"] != "fmp.resume.executed" {
+		t.Fatalf("unexpected resume response: %+v", resp)
+	}
 	authz := resp["authorized"].(map[string]any)
 	require.Equal(t, true, authz["Delegated"])
 	commit := resp["commit"].(map[string]any)
 	require.Equal(t, "lineage-1", commit["lineage_id"])
+}
+
+func TestMeshTransportFrameHandlerResumePersistsImportedRexWorkflow(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	liveNow := time.Now().UTC()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	identityStore, err := db.NewSQLiteIdentityStore(filepath.Join(t.TempDir(), "identities.db"))
+	require.NoError(t, err)
+	defer identityStore.Close()
+
+	sessionStore, err := db.NewSQLiteSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	require.NoError(t, err)
+	defer sessionStore.Close()
+
+	require.NoError(t, identityStore.UpsertTenant(context.Background(), core.TenantRecord{ID: "tenant-1", CreatedAt: now}))
+	require.NoError(t, identityStore.UpsertSubject(context.Background(), core.SubjectRecord{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1", CreatedAt: now}))
+	require.NoError(t, identityStore.UpsertSubject(context.Background(), core.SubjectRecord{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "delegate-1", CreatedAt: now}))
+	require.NoError(t, identityStore.UpsertNodeEnrollment(context.Background(), core.NodeEnrollment{
+		TenantID:       "tenant-1",
+		NodeID:         "node-1",
+		Owner:          core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindNode, ID: "node-1"},
+		TrustClass:     core.TrustClassRemoteApproved,
+		PublicKey:      []byte("pk"),
+		PairedAt:       now,
+		LastVerifiedAt: now,
+		AuthMethod:     core.AuthMethodNodeChallenge,
+	}))
+	require.NoError(t, sessionStore.UpsertBoundary(context.Background(), "tenant-1:webchat:conv-1", &core.SessionBoundary{
+		SessionID:      "sess-1",
+		RoutingKey:     "tenant-1:webchat:conv-1",
+		TenantID:       "tenant-1",
+		Partition:      "local",
+		Scope:          core.SessionScopePerChannelPeer,
+		ChannelID:      "webchat",
+		PeerID:         "conv-1",
+		Owner:          core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		TrustClass:     core.TrustClassRemoteApproved,
+		CreatedAt:      liveNow,
+		LastActivityAt: liveNow,
+	}))
+	require.NoError(t, sessionStore.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
+		SessionID:  "sess-1",
+		TenantID:   "tenant-1",
+		Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "delegate-1"},
+		Operations: []core.SessionOperation{core.SessionOperationResume},
+		CreatedAt:  liveNow,
+	}))
+
+	ownership := &fwfmp.InMemoryOwnershipStore{}
+	signer := fwfmp.NewEd25519SignerFromSeed([]byte("node-runtime-real-rex-resume"))
+	rexProvider, err := nexusserver.NewRexRuntimeProvider(ctx, t.TempDir())
+	require.NoError(t, err)
+	defer rexProvider.Close()
+
+	mesh := &fwfmp.Service{
+		Ownership: ownership,
+		Trust:     &fwfmp.InMemoryTrustBundleStore{},
+		Signer:    signer,
+		Nexus: fwfmp.NexusAdapter{
+			Tenants:  identityStore,
+			Subjects: identityStore,
+			Nodes:    identityStore,
+			Sessions: sessionStore,
+		},
+		Now: func() time.Time { return now },
+	}
+	rexProvider.AttachFMPService(mesh)
+
+	runtimeRecipient := "runtime://local/rex"
+	runtimeKey := sha256.Sum256([]byte(runtimeRecipient))
+	sourceSvc := &fwfmp.Service{
+		Ownership: ownership,
+		Packager: fwfmp.JSONPackager{
+			RuntimeStore: richerWorkflowRuntimeStore{},
+			KeyResolver: &fwfmp.TrustBundleRecipientKeyResolver{
+				Static: map[string][][]byte{
+					runtimeRecipient: {runtimeKey[:]},
+				},
+			},
+			DefaultRecipients: []string{runtimeRecipient},
+			LocalRecipient:    "runtime://mesh-a/source/rt-a",
+		},
+		Signer: signer,
+		Now:    func() time.Time { return now },
+	}
+	lineage := core.LineageRecord{
+		LineageID:    "lineage-real",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		SessionID:    "sess-1",
+		TrustClass:   core.TrustClassRemoteApproved,
+		Delegations: []core.SessionDelegationRecord{{
+			SessionID:  "sess-1",
+			TenantID:   "tenant-1",
+			Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "delegate-1"},
+			Operations: []core.SessionOperation{core.SessionOperationResume},
+			CreatedAt:  liveNow,
+		}},
+	}
+	require.NoError(t, sourceSvc.CreateLineage(context.Background(), lineage))
+	sourceAttempt := core.AttemptRecord{
+		AttemptID: "attempt-real",
+		LineageID: lineage.LineageID,
+		RuntimeID: "rt-source",
+		State:     core.AttemptStateRunning,
+		StartTime: now,
+	}
+	require.NoError(t, ownership.UpsertAttempt(context.Background(), sourceAttempt))
+	offer, pkg, sealed, err := sourceSvc.OfferHandoff(context.Background(), lineage.LineageID, sourceAttempt.AttemptID, "exp.run", "issuer", fwfmp.RuntimeQuery{WorkflowID: "wf-import", RunID: "run-import"})
+	require.NoError(t, err)
+
+	executed, commit, authorized, refusal, err := mesh.ResumeHandoffForNode(context.Background(), *offer, core.ExportDescriptor{
+		ExportName:             "exp.run",
+		AcceptedContextClasses: []string{"workflow-runtime"},
+		RouteMode:              core.RouteModeGateway,
+	}, "rex", "", core.SubjectRef{
+		TenantID: "tenant-1",
+		Kind:     core.SubjectKindServiceAccount,
+		ID:       "delegate-1",
+	}, pkg.Manifest, *sealed)
+	require.NoError(t, err)
+	require.Nil(t, refusal)
+	require.NotNil(t, authorized)
+	require.True(t, authorized.Delegated)
+	require.NotNil(t, executed)
+	require.NotNil(t, commit)
+	require.Equal(t, "lineage-real", commit.LineageID)
+	require.Equal(t, "lineage-real:rex:resume", commit.NewAttemptID)
+
+	require.Eventually(t, func() bool {
+		workflow, ok, err := rexProvider.WorkflowStore.GetWorkflow(context.Background(), "wf-import")
+		require.NoError(t, err)
+		if !ok || workflow == nil {
+			return false
+		}
+		run, ok, err := rexProvider.WorkflowStore.GetRun(context.Background(), "lineage-real:rex:resume")
+		require.NoError(t, err)
+		if !ok || run == nil {
+			return false
+		}
+		return run.WorkflowID == "wf-import"
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		artifacts, err := rexProvider.WorkflowStore.ListWorkflowArtifacts(context.Background(), "wf-import", "lineage-real:rex:resume")
+		require.NoError(t, err)
+		kinds := map[string]bool{}
+		for _, artifact := range artifacts {
+			kinds[artifact.Kind] = true
+		}
+		return kinds["rex.fmp_import"] && kinds["rex.fmp_lineage"] && kinds["rex.task_request"]
+	}, 5*time.Second, 20*time.Millisecond)
+
+	attempt, ok, err := ownership.GetAttempt(context.Background(), "lineage-real:rex:resume")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, attempt)
+	require.Contains(t, []core.AttemptState{core.AttemptStateRunning, core.AttemptStateCompleted}, attempt.State)
+
+	source, ok, err := ownership.GetAttempt(context.Background(), "attempt-real")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, source)
+	require.Equal(t, core.AttemptStateCommittedRemote, source.State)
+	require.True(t, source.Fenced)
+
+	lineageRecord, ok, err := ownership.GetLineage(context.Background(), "lineage-real")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "lineage-real:rex:resume", lineageRecord.CurrentOwnerAttempt)
+
+	events, err := rexProvider.WorkflowStore.ListEvents(context.Background(), "wf-import", 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, events)
 }
 
 type nexusserverTestRPCConn struct {
@@ -704,6 +887,33 @@ func (fakeWorkflowRuntimeStore) QueryWorkflowRuntime(context.Context, string, st
 		"workflow_id": "wf-1",
 		"run_id":      "run-1",
 		"events":      []string{"checkpointed"},
+	}, nil
+}
+
+type richerWorkflowRuntimeStore struct{}
+
+func (richerWorkflowRuntimeStore) QueryWorkflowRuntime(context.Context, string, string) (map[string]any, error) {
+	return map[string]any{
+		"workflow_id": "wf-import",
+		"run_id":      "run-import",
+		"task": map[string]any{
+			"id":          "task-import",
+			"type":        string(core.TaskTypeAnalysis),
+			"instruction": "inspect imported workflow state",
+			"context": map[string]any{
+				"workflow_id":      "wf-import",
+				"gateway.session_id": "sess-1",
+			},
+			"metadata": map[string]any{
+				"origin": "fmp-test",
+			},
+		},
+		"state": map[string]any{
+			"workflow_id":        "wf-import",
+			"run_id":             "run-import",
+			"gateway.session_id": "sess-1",
+		},
+		"events": []string{"checkpointed"},
 	}, nil
 }
 

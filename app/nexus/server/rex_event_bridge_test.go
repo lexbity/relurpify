@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -16,9 +17,11 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	memdb "github.com/lexcodex/relurpify/framework/memory/db"
 	rexpkg "github.com/lexcodex/relurpify/named/rex"
+	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
 	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
 	rexevents "github.com/lexcodex/relurpify/named/rex/events"
 	rexgateway "github.com/lexcodex/relurpify/named/rex/gateway"
+	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
 	"github.com/stretchr/testify/require"
 )
 
@@ -177,6 +180,111 @@ func TestMapSessionMessageToRex(t *testing.T) {
 	require.Equal(t, "rex-session:sess-1", canonicalEvent.Payload["workflow_id"])
 }
 
+func TestMapSessionMessageToRexAcceptsStructuredContent(t *testing.T) {
+	t.Parallel()
+
+	canonicalEvent, err := mapSessionMessageToRex(core.FrameworkEvent{
+		Seq:       7,
+		Type:      core.FrameworkEventSessionMessage,
+		Partition: "local",
+		Actor:     core.EventActor{Kind: "session", ID: "sess-7"},
+		Payload: mustJSON(t, map[string]any{
+			"session_key": "sess-7",
+			"channel":     "webchat",
+			"content": map[string]any{
+				"text": "summarize the issue",
+			},
+		}),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "summarize the issue", canonicalEvent.Payload["instruction"])
+}
+
+func TestRexEventBridgeRetriesEventAfterHandlerFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	eventLog, err := nexusdb.NewSQLiteEventLog(filepath.Join(dir, "events.db"))
+	require.NoError(t, err)
+	defer eventLog.Close()
+
+	workflowStore, err := memdb.NewSQLiteWorkflowStateStore(filepath.Join(dir, "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+
+	cursor := newSQLiteRexEventCursorStore(workflowStore.DB(), "local", "test-retry")
+	firstAttempt := make(chan struct{}, 1)
+	var attempts atomic.Int32
+	firstBridge := &RexEventBridge{
+		Log:       eventLog,
+		Partition: "local",
+		Cursor:    cursor,
+		Gateway: fakeRexEventGateway{
+			decision: rexgateway.Decision{Decision: rexgateway.SignalDecisionStart, WorkflowID: "wf-retry", RunID: "wf-retry:run"},
+		},
+		Handle: func(ctx context.Context, _ rexgateway.Decision, event rexevents.CanonicalEvent) error {
+			attempts.Add(1)
+			select {
+			case firstAttempt <- struct{}{}:
+			default:
+			}
+			<-ctx.Done()
+			return fmt.Errorf("transient failure for %s", event.ID)
+		},
+	}
+
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	require.NoError(t, firstBridge.Start(ctx1))
+	appendRexFrameworkEvent(t, eventLog, core.FrameworkEvent{
+		Type:      rexevents.TypeTaskRequested,
+		Actor:     core.EventActor{Kind: "service", ID: "test"},
+		Partition: "local",
+		Payload:   mustJSON(t, map[string]any{"task_id": "task-retry", "instruction": "retry me"}),
+	})
+
+	select {
+	case <-firstAttempt:
+	case <-time.After(time.Second):
+		t.Fatal("first handler attempt did not start")
+	}
+	seq, err := cursor.Load(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), seq)
+	cancel1()
+
+	secondAttempt := make(chan struct{}, 1)
+	secondBridge := &RexEventBridge{
+		Log:       eventLog,
+		Partition: "local",
+		Cursor:    cursor,
+		Gateway: fakeRexEventGateway{
+			decision: rexgateway.Decision{Decision: rexgateway.SignalDecisionStart, WorkflowID: "wf-retry", RunID: "wf-retry:run"},
+		},
+		Handle: func(_ context.Context, _ rexgateway.Decision, _ rexevents.CanonicalEvent) error {
+			attempts.Add(1)
+			select {
+			case secondAttempt <- struct{}{}:
+			default:
+			}
+			return nil
+		},
+	}
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	require.NoError(t, secondBridge.Start(ctx2))
+
+	select {
+	case <-secondAttempt:
+	case <-time.After(time.Second):
+		t.Fatal("second bridge did not replay failed event")
+	}
+	require.Eventually(t, func() bool {
+		seq, err := cursor.Load(context.Background())
+		require.NoError(t, err)
+		return seq == 1
+	}, time.Second, 20*time.Millisecond)
+}
+
 func TestRexEventBridgeAdmissionRejectsOnceAndAudits(t *testing.T) {
 	t.Parallel()
 
@@ -295,6 +403,43 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return controller.releaseCalls.Load() == 1
 	}, 2*time.Second, 20*time.Millisecond)
+}
+
+func TestHandleEventDecisionReleasesAdmissionWhenQueueIsFull(t *testing.T) {
+	t.Parallel()
+
+	agent := &rexpkg.Agent{
+		Runtime: rexruntime.New(rexconfig.Config{QueueCapacity: 1}, nil),
+	}
+	require.True(t, agent.Runtime.Enqueue(rexruntime.WorkItem{WorkflowID: "wf-block", RunID: "wf-block:run"}))
+
+	controller := &countingAdmissionController{
+		decision: rexcontrolplane.AdmissionDecision{Allowed: true, Reason: "capacity_available"},
+	}
+	provider := &RexRuntimeProvider{
+		Agent:          agent,
+		Admission:      controller,
+		AdmissionAudit: &rexcontrolplane.AuditLog{},
+	}
+
+	err := provider.handleEventDecision(context.Background(), rexgateway.Decision{
+		Decision:   rexgateway.SignalDecisionStart,
+		WorkflowID: "wf-queue",
+		RunID:      "wf-queue:run",
+	}, rexevents.CanonicalEvent{
+		ID:         "evt-queue",
+		Type:       rexevents.TypeTaskRequested,
+		Partition:  "local",
+		TrustClass: rexevents.TrustInternal,
+		Payload: map[string]any{
+			"task_id":                 "task-queue",
+			"instruction":             "queue should reject",
+			"rex.admission_tenant_id": "tenant-a",
+			"rex.workload_class":      string(rexcontrolplane.WorkloadImportant),
+		},
+	})
+	require.EqualError(t, err, "rex runtime queue full")
+	require.Equal(t, int32(1), controller.releaseCalls.Load())
 }
 
 type fakeRexEventGateway struct {

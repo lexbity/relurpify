@@ -119,13 +119,17 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 	}()
 
 	surfaces := state.ResolveRuntimeSurfaces(a.Environment.Memory)
+	eventSuffix := stateCtx.GetString("rex.event_id")
+	if eventSuffix == "" {
+		eventSuffix = "runtime"
+	}
 	if surfaces.Workflow != nil {
 		if err := state.EnsureWorkflowRun(ctx, surfaces.Workflow, identity, task, decision.Mode); err != nil {
 			execErr = err
 			return nil, err
 		}
 		_ = surfaces.Workflow.AppendEvent(ctx, memory.WorkflowEventRecord{
-			EventID:    identity.RunID + ":start",
+			EventID:    identity.RunID + ":" + eventSuffix + ":start",
 			WorkflowID: identity.WorkflowID,
 			RunID:      identity.RunID,
 			EventType:  "rex.run.started",
@@ -199,7 +203,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 		_ = surfaces.Workflow.UpdateRunStatus(ctx, identity.RunID, status, finishedAt)
 		_, _ = surfaces.Workflow.UpdateWorkflowStatus(ctx, identity.WorkflowID, 0, status, "")
 		_ = surfaces.Workflow.AppendEvent(ctx, memory.WorkflowEventRecord{
-			EventID:    identity.RunID + ":finish",
+			EventID:    identity.RunID + ":" + eventSuffix + ":finish",
 			WorkflowID: identity.WorkflowID,
 			RunID:      identity.RunID,
 			EventType:  "rex.run.finished",

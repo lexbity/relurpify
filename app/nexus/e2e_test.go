@@ -17,6 +17,7 @@ import (
 	nexusserver "github.com/lexcodex/relurpify/app/nexus/server"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/identity"
+	"github.com/lexcodex/relurpify/framework/memory"
 	memdb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
@@ -31,6 +32,7 @@ type nexusHarness struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	server        *httptest.Server
+	workspace     string
 	eventLog      *nexusdb.SQLiteEventLog
 	sessionStore  *nexusdb.SQLiteSessionStore
 	identityStore *nexusdb.SQLiteIdentityStore
@@ -39,12 +41,25 @@ type nexusHarness struct {
 	policyStore   *memdb.FilePolicyRuleStore
 	policyFile    string
 	adapter       *channel.TestChannelAdapter
+	rexRuntime    *nexusserver.RexRuntimeProvider
+}
+
+type nexusHarnessOptions struct {
+	enableRex bool
 }
 
 func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
+	return newNexusHarnessWithOptions(t, cfg, nexusHarnessOptions{})
+}
+
+func newNexusHarnessWithOptions(t *testing.T, cfg nexuscfg.Config, opts nexusHarnessOptions) *nexusHarness {
 	t.Helper()
 
 	dir := t.TempDir()
+	workspace := ""
+	if opts.enableRex {
+		workspace = filepath.Join(dir, "workspace")
+	}
 	eventLog, err := nexusdb.NewSQLiteEventLog(filepath.Join(dir, "events.db"))
 	require.NoError(t, err)
 	sessionStore, err := nexusdb.NewSQLiteSessionStore(filepath.Join(dir, "sessions.db"))
@@ -61,6 +76,11 @@ func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter := channel.NewTestChannelAdapter("webchat")
+	var rexRuntime *nexusserver.RexRuntimeProvider
+	if opts.enableRex {
+		rexRuntime, err = nexusserver.NewRexRuntimeProvider(ctx, workspace)
+		require.NoError(t, err)
+	}
 	handler, err := (&nexusserver.NexusApp{
 		EventLog:          eventLog,
 		SessionStore:      sessionStore,
@@ -70,7 +90,9 @@ func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
 		PolicyStore:       policyStore,
 		Config:            cfg,
 		Partition:         nexusEventPartition,
+		Workspace:         workspace,
 		ChannelAdapters:   []channel.Adapter{adapter},
+		RexRuntime:        rexRuntime,
 		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore),
 		VerifyNodeConnection: func(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 			return verifyGatewayNodeChallenge(ctx, store, principal, info, conn)
@@ -84,6 +106,7 @@ func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
 		ctx:           ctx,
 		cancel:        cancel,
 		server:        server,
+		workspace:     workspace,
 		eventLog:      eventLog,
 		sessionStore:  sessionStore,
 		identityStore: identityStore,
@@ -92,10 +115,14 @@ func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
 		policyStore:   policyStore,
 		policyFile:    policyFile,
 		adapter:       adapter,
+		rexRuntime:    rexRuntime,
 	}
 	t.Cleanup(func() {
 		server.Close()
 		cancel()
+		if rexRuntime != nil {
+			rexRuntime.Close()
+		}
 		require.NoError(t, nodeStore.Close())
 		require.NoError(t, tokenStore.Close())
 		require.NoError(t, identityStore.Close())
@@ -267,6 +294,42 @@ func (h *nexusHarness) collectEvents(t *testing.T, client *nexustest.TestGateway
 			return out
 		}
 	}
+}
+
+func (h *nexusHarness) waitForRexWorkflow(t *testing.T, workflowID string) (*memory.WorkflowRecord, *memory.WorkflowRunRecord) {
+	t.Helper()
+	require.NotNil(t, h.rexRuntime)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		workflow, workflowOK, err := h.rexRuntime.WorkflowStore.GetWorkflow(context.Background(), workflowID)
+		require.NoError(t, err)
+		run, runOK, err := h.rexRuntime.WorkflowStore.GetRun(context.Background(), workflowID+":run")
+		require.NoError(t, err)
+		if workflowOK && runOK {
+			return workflow, run
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for rex workflow %s", workflowID)
+	return nil, nil
+}
+
+func (h *nexusHarness) waitForRexArtifact(t *testing.T, workflowID, runID, kind string) memory.WorkflowArtifactRecord {
+	t.Helper()
+	require.NotNil(t, h.rexRuntime)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		artifacts, err := h.rexRuntime.WorkflowStore.ListWorkflowArtifacts(context.Background(), workflowID, runID)
+		require.NoError(t, err)
+		for _, artifact := range artifacts {
+			if artifact.Kind == kind {
+				return artifact
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for rex artifact %s for workflow %s", kind, workflowID)
+	return memory.WorkflowArtifactRecord{}
 }
 
 func (h *nexusHarness) waitForCapabilities(t *testing.T, tenantID string, expected int) []core.CapabilityDescriptor {
@@ -1204,6 +1267,121 @@ func TestInboundMessageRoutesToExistingSession(t *testing.T) {
 	boundaries, err := h.sessionStore.ListBoundaries(context.Background(), nexusEventPartition)
 	require.NoError(t, err)
 	require.Len(t, boundaries, 1)
+}
+
+func TestInboundMessageStartsRexWorkflow(t *testing.T) {
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{enableRex: true})
+
+	require.NoError(t, h.identityStore.UpsertExternalIdentity(context.Background(), core.ExternalIdentity{
+		TenantID:   "local",
+		Provider:   core.ExternalProviderWebchat,
+		AccountID:  "workspace-a",
+		ExternalID: "peer-rex-1",
+		Subject: core.SubjectRef{
+			TenantID: "local",
+			Kind:     core.SubjectKindUser,
+			ID:       "user-rex-1",
+		},
+	}))
+
+	require.NoError(t, h.adapter.SendInbound(context.Background(), channel.InboundMessage{
+		Channel: "webchat",
+		Account: "workspace-a",
+		Sender: channel.Identity{
+			ChannelID: "peer-rex-1",
+		},
+		Conversation: channel.Conversation{
+			Kind: "dm",
+			ID:   "conv-rex-1",
+		},
+		Content: channel.MessageContent{Text: "draft a deployment plan"},
+	}))
+
+	boundary := h.waitForBoundary(t, func(boundary core.SessionBoundary) bool {
+		return boundary.ChannelID == "webchat" && boundary.PeerID == "conv-rex-1"
+	})
+	workflowID := "rex-session:" + boundary.SessionID
+	workflow, run := h.waitForRexWorkflow(t, workflowID)
+
+	require.Equal(t, workflowID, workflow.WorkflowID)
+	require.True(t, strings.HasPrefix(workflow.TaskID, "session:"+boundary.SessionID+":"), "task id = %q", workflow.TaskID)
+	require.Equal(t, core.TaskTypeAnalysis, workflow.TaskType)
+	require.Equal(t, "draft a deployment plan", workflow.Instruction)
+	require.Equal(t, workflowID+":run", run.RunID)
+	require.Equal(t, workflowID, run.WorkflowID)
+
+	require.Eventually(t, func() bool {
+		events, err := h.rexRuntime.WorkflowStore.ListEvents(context.Background(), workflowID, 10)
+		require.NoError(t, err)
+		return len(events) >= 2
+	}, 3*time.Second, 20*time.Millisecond)
+}
+
+func TestInboundMessagesReuseExistingRexWorkflow(t *testing.T) {
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{enableRex: true})
+
+	require.NoError(t, h.identityStore.UpsertExternalIdentity(context.Background(), core.ExternalIdentity{
+		TenantID:   "local",
+		Provider:   core.ExternalProviderWebchat,
+		AccountID:  "workspace-a",
+		ExternalID: "peer-rex-2",
+		Subject: core.SubjectRef{
+			TenantID: "local",
+			Kind:     core.SubjectKindUser,
+			ID:       "user-rex-2",
+		},
+	}))
+
+	sendInbound := func(text string) {
+		t.Helper()
+		require.NoError(t, h.adapter.SendInbound(context.Background(), channel.InboundMessage{
+			Channel: "webchat",
+			Account: "workspace-a",
+			Sender: channel.Identity{
+				ChannelID: "peer-rex-2",
+			},
+			Conversation: channel.Conversation{
+				Kind: "dm",
+				ID:   "conv-rex-2",
+			},
+			Content: channel.MessageContent{Text: text},
+		}))
+	}
+
+	sendInbound("first rex message")
+	firstBoundary := h.waitForBoundary(t, func(boundary core.SessionBoundary) bool {
+		return boundary.ChannelID == "webchat" && boundary.PeerID == "conv-rex-2"
+	})
+	workflowID := "rex-session:" + firstBoundary.SessionID
+	_, _ = h.waitForRexWorkflow(t, workflowID)
+
+	sendInbound("second rex message")
+	secondSessionMessage := h.waitForLoggedEvent(t, core.FrameworkEventSessionMessage, func(ev core.FrameworkEvent) bool {
+		var payload struct {
+			SessionKey string `json:"session_key"`
+			Content    struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		}
+		return json.Unmarshal(ev.Payload, &payload) == nil &&
+			payload.SessionKey == firstBoundary.SessionID &&
+			payload.Content.Text == "second rex message"
+	})
+	require.Equal(t, firstBoundary.SessionID, secondSessionMessage.Actor.ID)
+
+	require.Eventually(t, func() bool {
+		workflows, err := h.rexRuntime.WorkflowStore.ListWorkflows(context.Background(), 10)
+		require.NoError(t, err)
+		if len(workflows) != 1 {
+			return false
+		}
+		if workflows[0].WorkflowID != workflowID {
+			return false
+		}
+		events, err := h.rexRuntime.WorkflowStore.ListEvents(context.Background(), workflowID, 10)
+		require.NoError(t, err)
+		return len(events) >= 4
+	}, 3*time.Second, 20*time.Millisecond)
 }
 
 func TestUnresolvedExternalIdentityGetsIsolatedTenant(t *testing.T) {
