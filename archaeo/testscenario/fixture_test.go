@@ -1,6 +1,7 @@
 package testscenario
 
 import (
+	"os/exec"
 	"testing"
 	"time"
 
@@ -8,13 +9,24 @@ import (
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
+	archaeoproviders "github.com/lexcodex/relurpify/archaeo/providers"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )
 
 func TestNewFixtureSeedsStoresAndServices(t *testing.T) {
 	start := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
-	f := NewFixture(t, WithClock(fixedSequenceClock(start)))
+	f := New(t, WithClock(fixedSequenceClock(start)))
+
+	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	cmd.Dir = f.Workspace
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected git workspace: %v\n%s", err, string(output))
+	}
+	if string(output) != "true\n" {
+		t.Fatalf("expected git workspace, got %q", string(output))
+	}
 
 	f.SeedWorkflow("wf-1", "test workflow")
 	_, snapshot := f.SeedExploration("wf-1", "", "rev-1", SnapshotInput("wf-1", "rev-1"))
@@ -33,6 +45,16 @@ func TestNewFixtureSeedsStoresAndServices(t *testing.T) {
 	active := f.SeedActivePlan(plan, DraftInput("wf-1", "rev-1"))
 	if active == nil || active.Version != 1 {
 		t.Fatalf("expected active version 1, got %#v", active)
+	}
+
+	records := SeedPatterns(t, f.PatternStore, "workspace", 2)
+	realistic := &RealisticPatternSurfacer{Store: f.PatternStore}
+	surfaced, err := realistic.SurfacePatterns(f.Context(), archaeoproviders.PatternSurfacingRequest{CorpusScope: "workspace"})
+	if err != nil {
+		t.Fatalf("surface patterns: %v", err)
+	}
+	if len(surfaced) != len(records) {
+		t.Fatalf("expected %d surfaced patterns, got %d", len(records), len(surfaced))
 	}
 }
 

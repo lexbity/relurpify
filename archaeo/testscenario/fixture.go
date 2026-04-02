@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -19,9 +20,9 @@ import (
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoproviders "github.com/lexcodex/relurpify/archaeo/providers"
 	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
 	archaeoprovenance "github.com/lexcodex/relurpify/archaeo/provenance"
+	archaeoproviders "github.com/lexcodex/relurpify/archaeo/providers"
 	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
@@ -105,7 +106,7 @@ func NewFixture(t testing.TB, opts ...Option) *Fixture {
 		opt(f)
 	}
 
-	mustMkdirAll(t, f.Workspace)
+	mustInitGitWorkspace(t, f.Workspace)
 	f.WorkflowStore = mustWorkflowStore(t, filepath.Join(baseDir, "workflow.db"))
 	f.PlanDB = mustPlanDB(t, filepath.Join(baseDir, "plans.db"))
 	f.PlanStore = mustPlanStore(t, f.PlanDB)
@@ -121,6 +122,11 @@ func NewFixture(t testing.TB, opts ...Option) *Fixture {
 		ConvergenceReviewer: &ConvergenceReviewerStub{},
 	}
 	return f
+}
+
+func New(t *testing.T, opts ...Option) *Fixture {
+	t.Helper()
+	return NewFixture(t, opts...)
 }
 
 func (f *Fixture) Now() time.Time {
@@ -411,6 +417,28 @@ func mustMkdirAll(tb testing.TB, dir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		tb.Fatalf("mkdir %s: %v", dir, err)
 	}
+}
+
+func mustInitGitWorkspace(tb testing.TB, dir string) {
+	tb.Helper()
+	mustMkdirAll(tb, dir)
+	run := func(args ...string) {
+		tb.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if output, err := cmd.CombinedOutput(); err != nil {
+			tb.Fatalf("git %v failed: %v\n%s", args, err, string(output))
+		}
+	}
+	run("init")
+	run("config", "user.email", "testscenario@example.com")
+	run("config", "user.name", "Archaeo Test Fixture")
+	readme := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(readme, []byte("test scenario fixture\n"), 0o644); err != nil {
+		tb.Fatalf("write workspace seed: %v", err)
+	}
+	run("add", "README.md")
+	run("commit", "-m", "init")
 }
 
 func mustWorkflowStore(tb testing.TB, path string) *memorydb.SQLiteWorkflowStateStore {
