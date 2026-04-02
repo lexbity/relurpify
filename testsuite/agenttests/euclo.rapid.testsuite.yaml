@@ -1,0 +1,173 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.rapid
+  description: "Rapid live-model validation for Euclo bug hunting across debug and archaeology paths."
+  owner: agent-platform
+  tier: live-flaky
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 75s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: rapid_debug_single_bug
+      description: "Fast debug path: repair a single obvious logic bug."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, debug, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_debug/math.go
+            content: |
+              package rapiddebug
+
+              func Divide(a, b int) int {
+                if b == 0 {
+                  return 0
+                }
+                return a * b
+              }
+          - path: testsuite/fixtures/rapid_debug/math_test.go
+            content: |
+              package rapiddebug
+
+              import "testing"
+
+              func TestDivide(t *testing.T) {
+                if Divide(12, 3) != 4 {
+                  t.Fatalf("got %d, want 4", Divide(12, 3))
+                }
+              }
+      prompt: "Debug the failing Divide behavior in testsuite/fixtures/rapid_debug and fix the implementation."
+      context:
+        euclo.mode: debug
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_debug/math.go
+        files_contain:
+          - path: testsuite/fixtures/rapid_debug/math.go
+            contains: ["return a / b"]
+        euclo:
+          mode: debug
+          profile: reproduce_localize_patch
+
+    - name: rapid_archaeology_seeded_fix
+      description: "Fast Archaeo-backed plan execution using seeded workflow knowledge through planning mode."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, archaeology, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch/handler.go
+            content: |
+              package rapidarch
+
+              func NormalizeName(name string) string {
+                if name == "" {
+                  return ""
+                }
+                return name
+              }
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch
+              task_type: code_modification
+              instruction: Normalize names by trimming whitespace before validation
+              status: running
+            runs:
+              - run_id: rapid-arch-plan
+                status: running
+            knowledge:
+              - record_id: rapid-arch-plan-result
+                kind: fact
+                title: Compiled plan
+                content: >
+                  Plan: update testsuite/fixtures/rapid_arch/handler.go so NormalizeName
+                  trims leading and trailing whitespace before checking for empty input,
+                  then returns the trimmed value. Add the strings import if needed.
+                status: accepted
+      prompt: >
+        Execute the plan from workflow knowledge to update
+        testsuite/fixtures/rapid_arch/handler.go. Keep the change minimal.
+      overrides:
+        max_iterations: 5
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_arch/handler.go
+        state_key_not_empty:
+          - euclo.active_exploration_id
+          - euclo.active_exploration_snapshot_id
+        files_contain:
+          - path: testsuite/fixtures/rapid_arch/handler.go
+            contains: ['import "strings"', "strings.TrimSpace(name)"]
+        euclo:
+          mode: planning
+
+    - name: rapid_archaeology_tension_scan
+      description: "Fast Archaeo-backed analysis path that should surface at least one unresolved workflow tension."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, archaeology, tensions, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch-tension
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch_tension/handler.go
+            content: |
+              package rapidarchtension
+
+              func NormalizeDisplayName(name string) string {
+                if name == "" {
+                  return ""
+                }
+                return name
+              }
+          - path: testsuite/fixtures/rapid_arch_tension/notes.txt
+            content: |
+              Requirement A: preserve user-visible spacing exactly as entered.
+              Requirement B: trim leading and trailing whitespace before validation.
+              Requirement C: empty-or-whitespace-only names must be rejected.
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch-tension
+              task_type: analysis
+              instruction: Identify contradictions and unresolved implementation tensions in NormalizeDisplayName
+              status: running
+      prompt: >
+        Analyze testsuite/fixtures/rapid_arch_tension for contradictions and unresolved
+        implementation assumptions. Surface the tensions in workflow state. Do not modify files.
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_key_not_empty:
+          - euclo.active_exploration_id
+          - euclo.active_exploration_snapshot_id
+        workflow_has_tensions:
+          - wf-rapid-arch-tension
+        euclo:
+          mode: planning

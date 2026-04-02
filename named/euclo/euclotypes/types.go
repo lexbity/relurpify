@@ -935,6 +935,16 @@ func DefaultExecutionProfileRegistry() *ExecutionProfileRegistry {
 			MutationPolicy:       "disallowed",
 			VerificationRequired: false,
 		},
+		{
+			ProfileID:            "chat_ask_respond",
+			SupportedModes:       []string{"chat"},
+			FallbackProfiles:     []string{"plan_stage_execute"},
+			RequiredArtifacts:    []string{"euclo.intake", "euclo.classification"},
+			CompletionContract:   "conversational_response_produced",
+			PhaseRoutes:          map[string]string{"answer": "react", "summarize": "react"},
+			MutationPolicy:       "disallowed",
+			VerificationRequired: false,
+		},
 	} {
 		_ = registry.Register(descriptor)
 	}

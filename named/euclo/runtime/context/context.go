@@ -17,4 +17,4 @@ type ProofSurface = runtimepkg.ProofSurface
 var ResolveRuntimeSurfaces = euclorestore.ResolveRuntimeSurfaces
 var BuildContextLifecycleState = runtimepkg.BuildContextLifecycleState
 
-func ApplyEditIntentArtifacts(ctx frameworkcore.Context, state *frameworkcore.Context) {}
+func ApplyEditIntentArtifacts(ctx *frameworkcore.Context, state *frameworkcore.Context) {}

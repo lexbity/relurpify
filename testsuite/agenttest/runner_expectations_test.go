@@ -1,10 +1,18 @@
 package agenttest
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/memory"
+	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 func TestEvaluateEucloExpectationsRequiresRecoveryTrace(t *testing.T) {
@@ -150,5 +158,81 @@ func TestEvaluateEucloExpectationsReportsMissingArtifactChainContent(t *testing.
 	}
 	if !strings.Contains(strings.Join(failures, "; "), `missing "validation"`) {
 		t.Fatalf("expected missing content failure, got %v", failures)
+	}
+}
+
+func TestContextSnapshotKeyNotEmpty(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"plain":   "value",
+			"empty":   "",
+			"nested":  map[string]any{"items": []any{"x"}},
+			"missing": nil,
+		},
+	}
+
+	if !contextSnapshotKeyNotEmpty(snapshot, "plain") {
+		t.Fatal("expected plain key to be non-empty")
+	}
+	if !contextSnapshotKeyNotEmpty(snapshot, "nested.items") {
+		t.Fatal("expected nested items to be non-empty")
+	}
+	if contextSnapshotKeyNotEmpty(snapshot, "empty") {
+		t.Fatal("expected empty string to be treated as empty")
+	}
+	if contextSnapshotKeyNotEmpty(snapshot, "missing") {
+		t.Fatal("expected nil value to be treated as empty")
+	}
+}
+
+func TestEvaluateExpectationsWorkflowHasTensions(t *testing.T) {
+	workspace := t.TempDir()
+	paths := config.New(workspace)
+	if err := os.MkdirAll(filepath.Dir(paths.WorkflowStateFile()), 0o755); err != nil {
+		t.Fatalf("mkdir workflow state dir: %v", err)
+	}
+	store, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Clean(paths.WorkflowStateFile()))
+	if err != nil {
+		t.Fatalf("open workflow store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := store.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  "wf-tensions",
+		TaskID:      "task-wf-tensions",
+		TaskType:    core.TaskTypeAnalysis,
+		Instruction: "seed tensions",
+		Status:      memory.WorkflowRunStatusRunning,
+	}); err != nil {
+		t.Fatalf("create workflow: %v", err)
+	}
+	if _, err := (archaeotensions.Service{Store: store}).CreateOrUpdate(context.Background(), archaeotensions.CreateInput{
+		WorkflowID:  "wf-tensions",
+		Kind:        "semantic_gap",
+		Description: "seeded active tension",
+		Status:      archaeodomain.TensionUnresolved,
+	}); err != nil {
+		t.Fatalf("seed tension: %v", err)
+	}
+
+	err = evaluateExpectations(ExpectSpec{
+		WorkflowHasTensions: []string{"wf-tensions"},
+	}, workspace, "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, &core.ContextSnapshot{})
+	if err != nil {
+		t.Fatalf("expected workflow_has_tensions to pass, got %v", err)
+	}
+}
+
+func TestEvaluateExpectationsStateKeyNotEmpty(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.active_exploration_id": "exploration-1",
+		},
+	}
+
+	err := evaluateExpectations(ExpectSpec{
+		StateKeysNotEmpty: []string{"euclo.active_exploration_id"},
+	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, snapshot)
+	if err != nil {
+		t.Fatalf("expected state_key_not_empty to pass, got %v", err)
 	}
 }

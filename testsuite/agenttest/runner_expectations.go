@@ -1,6 +1,7 @@
 package agenttest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +10,10 @@ import (
 	"regexp"
 	"strings"
 
+	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
+	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 )
 
 func evaluateExpectations(expect ExpectSpec, workspace, output string, changed []string, toolCalls map[string]int, events []core.Event, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, snapshot *core.ContextSnapshot) error {
@@ -119,6 +123,15 @@ func evaluateExpectations(expect ExpectSpec, workspace, output string, changed [
 			failures = append(failures, fmt.Sprintf("expected state key %s", key))
 		}
 	}
+	for _, key := range expect.StateKeysNotEmpty {
+		if !contextSnapshotKeyNotEmpty(snapshot, key) {
+			failures = append(failures, fmt.Sprintf("expected non-empty state key %s", key))
+		}
+	}
+	if len(expect.WorkflowHasTensions) > 0 {
+		workflowFailures := evaluateWorkflowTensionExpectations(workspace, expect.WorkflowHasTensions)
+		failures = append(failures, workflowFailures...)
+	}
 
 	// Euclo-specific expectations.
 	if expect.Euclo != nil {
@@ -194,6 +207,102 @@ func nestedMapHasPath(root map[string]any, path string) bool {
 		current = next
 	}
 	return true
+}
+
+func contextSnapshotKeyNotEmpty(snapshot *core.ContextSnapshot, key string) bool {
+	if snapshot == nil || strings.TrimSpace(key) == "" {
+		return false
+	}
+	value, ok := contextSnapshotValue(snapshot, key)
+	if !ok {
+		return false
+	}
+	return valueNotEmpty(value)
+}
+
+func contextSnapshotValue(snapshot *core.ContextSnapshot, key string) (any, bool) {
+	if snapshot == nil || strings.TrimSpace(key) == "" {
+		return nil, false
+	}
+	if value, ok := snapshot.State[key]; ok {
+		return value, true
+	}
+	if strings.HasPrefix(key, "state.") {
+		key = strings.TrimPrefix(key, "state.")
+		if value, ok := snapshot.State[key]; ok {
+			return value, true
+		}
+	}
+	return nestedMapValue(snapshot.State, key)
+}
+
+func nestedMapValue(root map[string]any, path string) (any, bool) {
+	if len(root) == 0 || strings.TrimSpace(path) == "" {
+		return nil, false
+	}
+	current := any(root)
+	for _, part := range strings.Split(path, ".") {
+		typed, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		next, ok := typed[part]
+		if !ok {
+			return nil, false
+		}
+		current = next
+	}
+	return current, true
+}
+
+func valueNotEmpty(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case []string:
+		return len(typed) > 0
+	case []any:
+		return len(typed) > 0
+	case map[string]any:
+		return len(typed) > 0
+	case bool:
+		return typed
+	default:
+		return fmt.Sprint(value) != ""
+	}
+}
+
+func evaluateWorkflowTensionExpectations(workspace string, workflowIDs []string) []string {
+	var failures []string
+	if strings.TrimSpace(workspace) == "" {
+		return []string{"workflow tension expectations require workspace"}
+	}
+	storePath := config.New(workspace).WorkflowStateFile()
+	store, err := memorydb.NewSQLiteWorkflowStateStore(storePath)
+	if err != nil {
+		return []string{fmt.Sprintf("workflow tension expectations: open workflow store: %v", err)}
+	}
+	defer store.Close()
+
+	svc := archaeotensions.Service{Store: store}
+	for _, workflowID := range workflowIDs {
+		workflowID = strings.TrimSpace(workflowID)
+		if workflowID == "" {
+			failures = append(failures, "workflow_has_tensions requires workflow id")
+			continue
+		}
+		tensions, err := svc.ActiveByWorkflow(context.Background(), workflowID)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("workflow %s active tensions: %v", workflowID, err))
+			continue
+		}
+		if len(tensions) == 0 {
+			failures = append(failures, fmt.Sprintf("expected workflow %s to have active tensions", workflowID))
+		}
+	}
+	return failures
 }
 
 func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSnapshot) []string {

@@ -60,7 +60,7 @@ spec:
           mode: code
           profile: edit_verify_repair
           phases_executed:
-            - intent
+            - understand
             - propose
 
     - name: code_evidence_first_upgrade

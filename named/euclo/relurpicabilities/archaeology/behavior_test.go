@@ -5,12 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
 
 // mockPlanStore is an in-memory PlanStore used for unit tests.
@@ -465,5 +467,268 @@ func TestPersistCompiledPlanPersistsActivatedVersion(t *testing.T) {
 	}
 	if len(versioned.Plan.StepOrder) != 2 {
 		t.Fatalf("expected two plan steps, got %#v", versioned.Plan.StepOrder)
+	}
+}
+
+func TestCompilePlanBehaviorExecutesOfflineWithScenarioStubModel(t *testing.T) {
+	model := testutil.NewScenarioStubModel(
+		testutil.ScenarioModelTurn{
+			Method:         "generate",
+			PromptContains: []string{"Reconcile surfaced patterns"},
+			Response:       &core.LLMResponse{Text: `{"goal":"reconcile","steps":[],"dependencies":{},"files":[]}`},
+		},
+		testutil.ScenarioModelTurn{
+			Method:         "generate",
+			PromptContains: []string{"Shape a full executable implementation plan"},
+			Response:       &core.LLMResponse{Text: `{"goal":"shape","steps":[{"id":"step-1","description":"Implement the compiled direction","tool":"file_read","params":{"path":"README.md"},"expected":"implementation plan drafted","verification":"review the draft","files":["README.md"]}],"dependencies":{},"files":["README.md"]}`},
+		},
+		testutil.ScenarioModelTurn{
+			Response: &core.LLMResponse{Text: `{"thought":"done","action":"complete","tool":"","arguments":{},"complete":true,"summary":"review delegate finished"}`},
+		},
+		testutil.ScenarioModelTurn{
+			Method:         "generate",
+			PromptContains: []string{"Respond JSON"},
+			Response:       &core.LLMResponse{Text: `{"issues":[],"approve":true}`},
+		},
+	)
+
+	env := testutil.Env(t)
+	env.Model = model
+	env.Config.Model = "scenario-stub"
+	env.Config.MaxIterations = 1
+
+	mock := &mockArchaeoAccess{}
+	state := core.NewContext()
+	state.Set("pipeline.plan", map[string]any{
+		"title":   "Compiled archaeology plan",
+		"summary": "compiled executable plan",
+		"steps": []map[string]any{
+			{"id": "step-1", "description": "Implement the compiled direction", "scope": []string{"pkg/service.go"}},
+		},
+	})
+
+	in := execution.ExecuteInput{
+		Task: &core.Task{
+			ID:          "task-phase4-compile",
+			Instruction: "Compile an archaeology-grounded implementation plan",
+			Context: map[string]any{
+				"workspace": ".",
+			},
+		},
+		State:       state,
+		Environment: env,
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                  "wf-phase4-compile",
+			PrimaryRelurpicCapabilityID: CompilePlan,
+			SemanticInputs: eucloruntime.SemanticInputBundle{
+				ExplorationID: "explore-1",
+				PatternRefs:   []string{"pattern:a"},
+				TensionRefs:   []string{"tension:a"},
+			},
+		},
+		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
+	}
+
+	result, err := NewCompilePlanBehavior().Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("compile-plan behavior returned error: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected successful compile-plan result, got %+v", result)
+	}
+	if mock.activated == nil || mock.activated.Status != "active" {
+		t.Fatalf("expected activated plan version, got %#v", mock.activated)
+	}
+	raw, ok := state.Get("euclo.active_plan_version")
+	if !ok || raw == nil {
+		t.Fatalf("expected active plan version in state")
+	}
+	payload := planArtifactFromState(state)
+	if !compiledPlanReady(payload) {
+		t.Fatalf("expected compiled plan payload in state, got %#v", payload)
+	}
+	model.AssertExhausted(t)
+}
+
+func TestExploreBehaviorExecutesOfflineWithScenarioStubModel(t *testing.T) {
+	model := testutil.NewScenarioStubModel(
+		testutil.ScenarioModelTurn{
+			Response: &core.LLMResponse{Text: `{"facts":[{"key":"archaeology:patterns","value":[{"name":"Adapter","summary":"wraps external behavior","files":["pkg/service.go"],"relevance":0.8}]}]}`},
+		},
+		testutil.ScenarioModelTurn{
+			Response: &core.LLMResponse{Text: `{"facts":[{"key":"archaeology:prospectives","value":[{"title":"Split transport boundary","summary":"separate transport and domain coordination","tradeoffs":["more files"],"confidence":0.7}]}]}`},
+		},
+		testutil.ScenarioModelTurn{
+			Response: &core.LLMResponse{Text: `{"facts":[{"key":"archaeology:coherence_assessment","value":{"status":"coherent","notes":["patterns align"],"risks":["migration cost"]}}]}`},
+		},
+		testutil.ScenarioModelTurn{
+			Response: &core.LLMResponse{Text: `{"facts":[{"key":"archaeology:convergence_assessment","value":{"status":"ready","recommended_direction":"split transport boundary","open_questions":["How to migrate callers?"]}}]}`},
+		},
+		testutil.ScenarioModelTurn{
+			Method:         "generate",
+			PromptContains: []string{"Shape the exploration findings into candidate engineering directions"},
+			Response:       &core.LLMResponse{Text: `{"goal":"explore","steps":[{"id":"step-1","description":"Investigate migration seams","tool":"file_read","params":{"path":"pkg/service.go"},"expected":"candidate direction identified","verification":"review the candidate","files":["pkg/service.go"]}],"dependencies":{},"files":["pkg/service.go"]}`},
+		},
+		testutil.ScenarioModelTurn{
+			Response: &core.LLMResponse{Text: `{"thought":"done","action":"complete","tool":"","arguments":{},"complete":true,"summary":"review delegate finished"}`},
+		},
+		testutil.ScenarioModelTurn{
+			Method:         "generate",
+			PromptContains: []string{"Respond JSON"},
+			Response:       &core.LLMResponse{Text: `{"issues":[],"approve":true}`},
+		},
+	)
+
+	env := testutil.Env(t)
+	env.Model = model
+	env.Config.Model = "scenario-stub"
+	env.Config.MaxIterations = 1
+
+	mock := &mockArchaeoAccess{
+		requests: &execution.RequestHistoryView{
+			WorkflowID: "wf-phase4-explore",
+			Requests:   []execution.RequestRecordView{{ID: "req-1"}},
+		},
+		active: &execution.ActivePlanView{
+			WorkflowID: "wf-phase4-explore",
+			ActivePlan: &execution.VersionedPlanView{
+				PlanID:                 "plan-1",
+				Version:                2,
+				PatternRefs:            []string{"pattern:a"},
+				TensionRefs:            []string{"tension:a"},
+				BasedOnRevision:        "rev-1",
+				SemanticSnapshotRef:    "snapshot-1",
+				DerivedFromExploration: "explore-1",
+			},
+		},
+		learning: &execution.LearningQueueView{
+			WorkflowID:      "wf-phase4-explore",
+			PendingLearning: []execution.LearningInteractionView{{ID: "learn-1"}},
+		},
+		tensions: []execution.TensionView{
+			{ID: "tension-1", PatternIDs: []string{"pattern:b"}, Description: "boundary mismatch", Status: "unresolved"},
+		},
+		summary: &execution.TensionSummaryView{WorkflowID: "wf-phase4-explore", Total: 1, Active: 1, Unresolved: 1},
+	}
+
+	state := core.NewContext()
+	in := execution.ExecuteInput{
+		Task: &core.Task{
+			ID:          "task-phase4-explore",
+			Instruction: "Explore archaeology-grounded candidate directions",
+			Context: map[string]any{
+				"workspace":    ".",
+				"workflow_id":  "wf-phase4-explore",
+				"corpus_scope": "workspace",
+			},
+		},
+		State:       state,
+		Environment: env,
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                      "wf-phase4-explore",
+			PrimaryRelurpicCapabilityID:     Explore,
+			SupportingRelurpicCapabilityIDs: []string{PatternSurface, ProspectiveAssess, ConvergenceGuard, CoherenceAssess},
+			SemanticInputs: eucloruntime.SemanticInputBundle{
+				WorkflowID:            "wf-phase4-explore",
+				ExplorationID:         "explore-1",
+				PatternRefs:           []string{"pattern:a"},
+				TensionRefs:           []string{"tension:a"},
+				RequestProvenanceRefs: []string{"req-1"},
+			},
+		},
+		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
+	}
+
+	result, err := NewExploreBehavior().Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("explore behavior returned error: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected successful explore result, got %+v", result)
+	}
+	if _, ok := state.Get("pipeline.explore"); !ok {
+		t.Fatalf("expected pipeline.explore in state")
+	}
+	if _, ok := state.Get("euclo.plan_candidates"); !ok {
+		t.Fatalf("expected euclo.plan_candidates in state")
+	}
+	artifacts := euclotypes.ArtifactStateFromContext(state).All()
+	if len(artifacts) == 0 {
+		t.Fatalf("expected produced artifacts in state")
+	}
+	model.AssertExhausted(t)
+}
+
+func TestImplementPlanBehaviorBlocksOnLearningGateOffline(t *testing.T) {
+	env := testutil.Env(t)
+	state := core.NewContext()
+	state.Set("pipeline.plan", map[string]any{
+		"title":   "Compiled archaeology plan",
+		"summary": "compiled executable plan",
+		"steps": []map[string]any{
+			{"id": "step-1", "description": "Implement the compiled direction", "scope": []string{"pkg/service.go"}},
+		},
+	})
+
+	in := execution.ExecuteInput{
+		Task: &core.Task{
+			ID:          "task-phase4-implement",
+			Instruction: "Implement an archaeology-grounded plan",
+			Context: map[string]any{
+				"workspace":    ".",
+				"workflow_id":  "wf-phase4-implement",
+				"corpus_scope": "workspace",
+			},
+		},
+		State:       state,
+		Environment: env,
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                      "wf-phase4-implement",
+			PrimaryRelurpicCapabilityID:     ImplementPlan,
+			SupportingRelurpicCapabilityIDs: []string{ConvergenceGuard},
+			SemanticInputs: eucloruntime.SemanticInputBundle{
+				WorkflowID:    "wf-phase4-implement",
+				ExplorationID: "explore-1",
+				PatternRefs:   []string{"pattern:a"},
+				TensionRefs:   []string{"tension:a"},
+			},
+		},
+		RunSupportingRoutine: func(ctx context.Context, routineID string, task *core.Task, state *core.Context, work eucloruntime.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
+			if routineID != ConvergenceGuard {
+				return nil, nil
+			}
+			return []euclotypes.Artifact{{
+				ID:         "archaeology_convergence_guard",
+				Kind:       euclotypes.ArtifactKindPlanCandidates,
+				Summary:    "blocking learning present",
+				ProducerID: ConvergenceGuard,
+				Status:     "produced",
+				Payload: map[string]any{
+					"learning_queue": map[string]any{
+						"blocking": []string{"learn-1", "learn-2"},
+						"count":    2,
+					},
+				},
+			}}, nil
+		},
+	}
+
+	result, err := NewImplementPlanBehavior().Execute(context.Background(), in)
+	if err == nil {
+		t.Fatalf("expected blocking learning gate error")
+	}
+	if result == nil || result.Success {
+		t.Fatalf("expected failed implement-plan result, got %+v", result)
+	}
+	raw, ok := state.Get("euclo.deferred_execution_issues")
+	if !ok || raw == nil {
+		t.Fatalf("expected deferred execution issues in state")
+	}
+	issues, ok := raw.([]eucloruntime.DeferredExecutionIssue)
+	if !ok || len(issues) != 1 {
+		t.Fatalf("expected one deferred execution issue, got %#v", raw)
+	}
+	if issues[0].RecommendedReentry != "archaeology" {
+		t.Fatalf("expected archaeology reentry, got %q", issues[0].RecommendedReentry)
 	}
 }

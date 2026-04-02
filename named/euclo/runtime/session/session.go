@@ -38,6 +38,7 @@ type SessionService struct {
 	PersistArtifacts    ArtifactPersister
 	BeforeVerification  BeforeVerificationHook
 	Checkpoint          MutationCheckpointHook
+	ResetDoomLoop       func()
 }
 
 type SessionInput struct {
@@ -97,6 +98,9 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 		)
 		if interactionErr := s.runInteractive(ctx, executionTask, execEnvelope, in.Mode); interactionErr != nil && out.Err == nil {
 			out.Err = interactionErr
+		}
+		if s.ResetDoomLoop != nil {
+			s.ResetDoomLoop()
 		}
 	}
 	if out.Err == nil {

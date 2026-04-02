@@ -307,6 +307,15 @@ func applyCaseControlFlowOverride(_ graph.Agent, c CaseSpec) error {
 
 func defaultAgenttestAllowedCapabilities() []core.CapabilitySelector {
 	return []core.CapabilitySelector{
+		{ID: "agent:architect", Kind: core.CapabilityKindTool},
+		{ID: "agent:blackboard", Kind: core.CapabilityKindTool},
+		{ID: "agent:chainer", Kind: core.CapabilityKindTool},
+		{ID: "agent:htn", Kind: core.CapabilityKindTool},
+		{ID: "agent:pipeline", Kind: core.CapabilityKindTool},
+		{ID: "agent:planner", Kind: core.CapabilityKindTool},
+		{ID: "agent:react", Kind: core.CapabilityKindTool},
+		{ID: "agent:reflection", Kind: core.CapabilityKindTool},
+		{ID: "agent:rewoo", Kind: core.CapabilityKindTool},
 		{Name: "browser", Kind: core.CapabilityKindTool},
 		{Name: "exec_run_build", Kind: core.CapabilityKindTool},
 		{Name: "exec_run_code", Kind: core.CapabilityKindTool},

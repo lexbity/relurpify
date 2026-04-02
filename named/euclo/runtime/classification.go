@@ -252,6 +252,8 @@ func primaryProfileForMode(modeID string, envelope TaskEnvelope, classification 
 		return "review_suggest_implement"
 	case "planning":
 		return "plan_stage_execute"
+	case "chat":
+		return "chat_ask_respond"
 	case "code":
 		return profileForCodeMode(envelope, classification)
 	default:

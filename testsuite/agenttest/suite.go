@@ -139,6 +139,8 @@ type ExpectSpec struct {
 	MemoryRecordsCreated int      `yaml:"memory_records_created,omitempty"`
 	WorkflowStateUpdated bool     `yaml:"workflow_state_updated,omitempty"`
 	StateKeysMustExist   []string `yaml:"state_keys_must_exist,omitempty"`
+	StateKeysNotEmpty    []string `yaml:"state_key_not_empty,omitempty"`
+	WorkflowHasTensions  []string `yaml:"workflow_has_tensions,omitempty"`
 
 	Euclo *EucloExpectSpec `yaml:"euclo,omitempty"`
 }

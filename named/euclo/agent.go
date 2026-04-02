@@ -560,6 +560,11 @@ func (a *Agent) executionSession() eucloses.SessionService {
 		Checkpoint: func(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
 			return a.liveMutationCheckpoint(ctx, checkpoint, task, state)
 		},
+		ResetDoomLoop: func() {
+			if a.DoomLoop != nil {
+				a.DoomLoop.Reset()
+			}
+		},
 	}
 }
 

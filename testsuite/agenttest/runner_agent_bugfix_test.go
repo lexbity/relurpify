@@ -238,11 +238,35 @@ func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 
 func TestDefaultAgenttestAllowlistIncludesExecutionAndVerificationTools(t *testing.T) {
 	allowed := defaultAgenttestAllowedCapabilities()
+	ids := make([]string, 0, len(allowed))
 	names := make([]string, 0, len(allowed))
 	for _, selector := range allowed {
+		ids = append(ids, selector.ID)
 		names = append(names, selector.Name)
 	}
-	for _, required := range []string{"exec_run_build", "exec_run_code", "exec_run_linter", "exec_run_tests", "go_build", "go_test"} {
+	for _, required := range []string{
+		"agent:architect",
+		"agent:blackboard",
+		"agent:chainer",
+		"agent:htn",
+		"agent:pipeline",
+		"agent:planner",
+		"agent:react",
+		"agent:reflection",
+		"agent:rewoo",
+	} {
+		if !slices.Contains(ids, required) {
+			t.Fatalf("expected allowlist to include agent selector %s, got ids=%v", required, ids)
+		}
+	}
+	for _, required := range []string{
+		"exec_run_build",
+		"exec_run_code",
+		"exec_run_linter",
+		"exec_run_tests",
+		"go_build",
+		"go_test",
+	} {
 		if !slices.Contains(names, required) {
 			t.Fatalf("expected allowlist to include %s, got %v", required, names)
 		}
