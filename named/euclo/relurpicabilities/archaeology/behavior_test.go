@@ -2,12 +2,15 @@ package archaeology
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/patterns"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
@@ -467,6 +470,112 @@ func TestPersistCompiledPlanPersistsActivatedVersion(t *testing.T) {
 	}
 	if len(versioned.Plan.StepOrder) != 2 {
 		t.Fatalf("expected two plan steps, got %#v", versioned.Plan.StepOrder)
+	}
+}
+
+func TestPersistExplorationPatternsSavesRecordsAndQueuesLearning(t *testing.T) {
+	db, err := patterns.OpenSQLite(filepath.Join(t.TempDir(), "patterns.db"))
+	if err != nil {
+		t.Fatalf("open pattern db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	patternStore, err := patterns.NewSQLitePatternStore(db)
+	if err != nil {
+		t.Fatalf("new pattern store: %v", err)
+	}
+	broker := archaeolearning.NewBroker(time.Minute)
+	in := execution.ExecuteInput{
+		ServiceBundle: execution.ServiceBundle{
+			PatternStore:   patternStore,
+			LearningBroker: broker,
+		},
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                  "wf-patterns",
+			PrimaryRelurpicCapabilityID: Explore,
+		},
+	}
+	artifacts := []euclotypes.Artifact{{
+		ID:   "explore-artifact",
+		Kind: euclotypes.ArtifactKindExplore,
+		Payload: map[string]any{
+			"patterns": []any{
+				map[string]any{
+					"name":      "Service Layer",
+					"summary":   "Services coordinate storage and providers.",
+					"relevance": 0.82,
+					"files":     []any{"service.go", "runtime.go"},
+					"kind":      "architectural",
+				},
+			},
+		},
+	}}
+
+	persistExplorationPatterns(context.Background(), in, artifacts)
+
+	records, err := patternStore.ListByStatus(context.Background(), patterns.PatternStatusProposed, "wf-patterns")
+	if err != nil {
+		t.Fatalf("list proposed patterns: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected one proposed pattern, got %d", len(records))
+	}
+	if records[0].Title != "Service Layer" {
+		t.Fatalf("expected persisted title from pattern name, got %q", records[0].Title)
+	}
+	if len(records[0].Instances) != 2 {
+		t.Fatalf("expected file instances to persist, got %#v", records[0].Instances)
+	}
+	pending := broker.PendingInteractions()
+	if len(pending) != 1 || pending[0].SubjectID != records[0].ID {
+		t.Fatalf("expected learning interaction for persisted pattern, got %#v", pending)
+	}
+}
+
+func TestCompilePlanReviewPersistsCommentAndGuidance(t *testing.T) {
+	db, err := patterns.OpenSQLite(filepath.Join(t.TempDir(), "comments.db"))
+	if err != nil {
+		t.Fatalf("open comment db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	commentStore, err := patterns.NewSQLiteCommentStore(db)
+	if err != nil {
+		t.Fatalf("new comment store: %v", err)
+	}
+	guidanceBroker := guidance.NewGuidanceBroker(time.Minute)
+	in := execution.ExecuteInput{
+		ServiceBundle: execution.ServiceBundle{
+			CommentStore:   commentStore,
+			GuidanceBroker: guidanceBroker,
+		},
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                  "wf-review",
+			PrimaryRelurpicCapabilityID: CompilePlan,
+		},
+	}
+	reviewResult := &core.Result{
+		Success: true,
+		Data: map[string]any{
+			"open_questions": []any{"Should the migration be staged?"},
+		},
+	}
+	reviewResult.Data["summary"] = "compile review surfaced one open question"
+
+	persistPlanReviewComment(context.Background(), in, "plan-review-1", reviewResult)
+	comments, err := commentStore.ListForPattern(context.Background(), "plan-review-1")
+	if err != nil {
+		t.Fatalf("list plan comments: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected one plan review comment, got %d", len(comments))
+	}
+
+	submitPlanReviewGuidance(in, "plan-review-1", reviewResult)
+	pending := guidanceBroker.PendingRequests()
+	if len(pending) != 1 {
+		t.Fatalf("expected one pending guidance request, got %d", len(pending))
+	}
+	if pending[0].Kind != guidance.GuidanceAmbiguity {
+		t.Fatalf("expected ambiguity guidance, got %q", pending[0].Kind)
 	}
 }
 

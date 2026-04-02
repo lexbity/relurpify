@@ -2,6 +2,7 @@ package euclobindings_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
 	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
 	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
@@ -16,6 +18,15 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )
+
+type bindingStubVerifier struct {
+	failure *frameworkplan.ConvergenceFailure
+	err     error
+}
+
+func (s bindingStubVerifier) Verify(context.Context, frameworkplan.ConvergenceTarget) (*frameworkplan.ConvergenceFailure, error) {
+	return s.failure, s.err
+}
 
 func TestRuntimeArchaeologyServicePersistsPhaseState(t *testing.T) {
 	f := testscenario.NewFixture(t)
@@ -90,6 +101,325 @@ func TestRuntimeArchaeologyServiceUsesProviderBackedRequests(t *testing.T) {
 		if !kinds[kind] {
 			t.Fatalf("expected pending request kind %s, got %+v", kind, kinds)
 		}
+	}
+}
+
+func TestScenario_Binding_FullMutationEvaluationWithComplexPolicy(t *testing.T) {
+	f := testscenario.New(t)
+	f.SeedWorkflow("wf-binding-mutations", "aggregate archaeology mutations through euclo binding")
+
+	plan := bindingPlan("plan-binding-mutations", "wf-binding-mutations")
+	active := f.SeedActivePlan(plan, draftInput("wf-binding-mutations", "rev-1"))
+	step := active.Plan.Steps["inspect"]
+
+	f.SeedMutation(archaeodomain.MutationEvent{
+		WorkflowID:  "wf-binding-mutations",
+		PlanID:      active.Plan.ID,
+		PlanVersion: intPtr(active.Version),
+		StepID:      step.ID,
+		Category:    archaeodomain.MutationObservation,
+		SourceKind:  "observer",
+		SourceRef:   "obs-1",
+		Description: "non-blocking observation",
+		Impact:      archaeodomain.ImpactInformational,
+		Disposition: archaeodomain.DispositionContinue,
+		BlastRadius: archaeodomain.BlastRadius{
+			Scope:           archaeodomain.BlastRadiusStep,
+			AffectedStepIDs: []string{step.ID},
+		},
+	})
+	f.SeedMutation(archaeodomain.MutationEvent{
+		WorkflowID:  "wf-binding-mutations",
+		PlanID:      active.Plan.ID,
+		PlanVersion: intPtr(active.Version),
+		StepID:      step.ID,
+		Category:    archaeodomain.MutationConfidenceChange,
+		SourceKind:  "analyzer",
+		SourceRef:   "confidence-1",
+		Description: "confidence degraded",
+		Impact:      archaeodomain.ImpactAdvisory,
+		Disposition: archaeodomain.DispositionContinue,
+		BlastRadius: archaeodomain.BlastRadius{
+			Scope:           archaeodomain.BlastRadiusStep,
+			AffectedStepIDs: []string{step.ID},
+		},
+	})
+	f.SeedMutation(archaeodomain.MutationEvent{
+		WorkflowID:  "wf-binding-mutations",
+		PlanID:      active.Plan.ID,
+		PlanVersion: intPtr(active.Version),
+		StepID:      step.ID,
+		Category:    archaeodomain.MutationStepInvalidation,
+		SourceKind:  "executor",
+		SourceRef:   "invalidate-1",
+		Description: "step invalidated by new evidence",
+		Impact:      archaeodomain.ImpactLocalBlocking,
+		Disposition: archaeodomain.DispositionInvalidateStep,
+		BlastRadius: archaeodomain.BlastRadius{
+			Scope:           archaeodomain.BlastRadiusStep,
+			AffectedStepIDs: []string{step.ID},
+		},
+	})
+
+	runtime := bindingRuntime(f)
+	eval, err := runtime.EvaluateExecutionMutations(context.Background(), "wf-binding-mutations", nil, &active.Plan, step)
+	if err != nil {
+		t.Fatalf("EvaluateExecutionMutations: %v", err)
+	}
+	if eval == nil {
+		t.Fatal("expected mutation evaluation")
+	}
+	if len(eval.RelevantMutations) != 3 {
+		t.Fatalf("expected 3 relevant mutations, got %d", len(eval.RelevantMutations))
+	}
+	if eval.HighestImpact != archaeodomain.ImpactLocalBlocking {
+		t.Fatalf("expected highest impact %q, got %q", archaeodomain.ImpactLocalBlocking, eval.HighestImpact)
+	}
+	if eval.Disposition != archaeodomain.DispositionInvalidateStep {
+		t.Fatalf("expected invalidate_step disposition, got %q", eval.Disposition)
+	}
+	if !eval.Blocking {
+		t.Fatalf("expected blocking evaluation, got %+v", eval)
+	}
+}
+
+func TestScenario_Binding_PhasePersistenceRoundTrip(t *testing.T) {
+	f := testscenario.New(t)
+	f.SeedWorkflow("wf-binding-phases", "persist euclo binding phase transitions end-to-end")
+	active := f.SeedActivePlan(bindingPlan("plan-binding-phases", "wf-binding-phases"), draftInput("wf-binding-phases", "rev-1"))
+
+	runtime := bindingRuntime(f)
+	task := f.Task("wf-binding-phases", "persist euclo binding phase transitions end-to-end", nil)
+	state := f.NewState()
+	state.Set("euclo.living_plan", &active.Plan)
+
+	if _, err := runtime.PhaseService().RecordState(context.Background(), task, state, nil, archaeodomain.PhaseArchaeology, "", nil); err != nil {
+		t.Fatalf("RecordState archaeology: %v", err)
+	}
+	if _, err := runtime.PhaseService().RecordState(context.Background(), task, state, nil, archaeodomain.PhasePlanFormation, "", nil); err != nil {
+		t.Fatalf("RecordState plan formation: %v", err)
+	}
+
+	driver := runtime.PhaseDriver(euclobindings.DriverConfig{})
+	driver.EnterExecution(context.Background(), task, state, active.Plan.Steps["inspect"])
+	driver.EnterVerification(context.Background(), task, state, active.Plan.Steps["inspect"], nil)
+	driver.Complete(context.Background(), task, state, active.Plan.Steps["inspect"], nil)
+
+	testscenario.AssertPhase(t, f, "wf-binding-phases", archaeodomain.PhaseCompleted)
+
+	timeline, err := runtime.WorkflowTimeline(context.Background(), "wf-binding-phases")
+	if err != nil {
+		t.Fatalf("WorkflowTimeline: %v", err)
+	}
+	phases := make([]string, 0, len(timeline))
+	for _, event := range timeline {
+		if event.EventType != archaeoevents.EventWorkflowPhaseTransitioned {
+			continue
+		}
+		phase, _ := event.Metadata["phase"].(string)
+		if phase != "" {
+			phases = append(phases, phase)
+		}
+	}
+	want := []string{
+		string(archaeodomain.PhaseArchaeology),
+		string(archaeodomain.PhasePlanFormation),
+		string(archaeodomain.PhaseExecution),
+		string(archaeodomain.PhaseVerification),
+		string(archaeodomain.PhaseCompleted),
+	}
+	if len(phases) < len(want) || !slices.Equal(phases[len(phases)-len(want):], want) {
+		t.Fatalf("expected trailing phase sequence %v, got %v", want, phases)
+	}
+}
+
+func TestScenario_Binding_ArchaeologyService_ProviderBackedRefresh(t *testing.T) {
+	TestRuntimeArchaeologyServiceUsesProviderBackedRequests(t)
+}
+
+func TestRuntimeArchaeologyLoop_PlanExecutionFeedsBackIntoArchaeo(t *testing.T) {
+	f := testscenario.NewFixture(t)
+	f.SeedWorkflow("wf-euclo-loop", "prove archaeology plan execution feedback loop")
+
+	tension := f.SeedTension(archaeotensions.CreateInput{
+		WorkflowID:      "wf-euclo-loop",
+		ExplorationID:   "explore-loop",
+		SourceRef:       "gap-loop",
+		Kind:            "boundary_mismatch",
+		Description:     "execution must resolve an archaeology-tracked boundary mismatch",
+		Severity:        "significant",
+		Status:          archaeodomain.TensionUnresolved,
+		BasedOnRevision: "rev-loop-1",
+	})
+
+	plan := bindingPlan("plan-euclo-loop", "wf-euclo-loop")
+	plan.StepOrder = []string{"inspect", "implement"}
+	plan.Steps["inspect"].AnchorDependencies = []string{"anchor:boundary"}
+	plan.Steps["implement"] = &frameworkplan.PlanStep{
+		ID:                 "implement",
+		Description:        "Apply the verified boundary fix",
+		Scope:              []string{"symbol.implement"},
+		DependsOn:          []string{"inspect"},
+		AnchorDependencies: []string{"anchor:boundary"},
+		ConfidenceScore:    0.92,
+		Status:             frameworkplan.PlanStepPending,
+		CreatedAt:          f.Now(),
+		UpdatedAt:          f.Now(),
+	}
+	plan.ConvergenceTarget = &frameworkplan.ConvergenceTarget{
+		TensionIDs: []string{tension.ID},
+		PatternIDs: []string{"pattern:boundary-wrapper"},
+	}
+
+	runtime := bindingRuntime(f)
+	runtime.ConvVerifier = bindingStubVerifier{}
+
+	versioned, err := runtime.PlanService().DraftVersion(context.Background(), plan, archaeoplans.DraftVersionInput{
+		WorkflowID:             "wf-euclo-loop",
+		DerivedFromExploration: "explore-loop",
+		BasedOnRevision:        "rev-loop-1",
+		SemanticSnapshotRef:    "snapshot-loop-1",
+		TensionRefs:            []string{tension.ID},
+		PatternRefs:            []string{"pattern:boundary-wrapper"},
+		AnchorRefs:             []string{"anchor:boundary"},
+	})
+	if err != nil {
+		t.Fatalf("DraftVersion: %v", err)
+	}
+
+	active, err := runtime.PlanService().ActivateVersion(context.Background(), "wf-euclo-loop", versioned.Version)
+	if err != nil {
+		t.Fatalf("ActivateVersion: %v", err)
+	}
+	if active == nil {
+		t.Fatal("expected active plan version")
+	}
+	if active.Status != archaeodomain.LivingPlanVersionActive {
+		t.Fatalf("expected active plan status, got %q", active.Status)
+	}
+	if active.WorkflowID != "wf-euclo-loop" || active.Plan.ID != "plan-euclo-loop" || active.Version != versioned.Version {
+		t.Fatalf("unexpected active plan version: %+v", active)
+	}
+	if active.DerivedFromExploration != "explore-loop" || active.BasedOnRevision != "rev-loop-1" || active.SemanticSnapshotRef != "snapshot-loop-1" {
+		t.Fatalf("expected archaeology provenance on active plan, got %+v", active)
+	}
+	if len(active.TensionRefs) != 1 || active.TensionRefs[0] != tension.ID {
+		t.Fatalf("expected tension refs to persist, got %+v", active.TensionRefs)
+	}
+	if len(active.PatternRefs) != 1 || active.PatternRefs[0] != "pattern:boundary-wrapper" {
+		t.Fatalf("expected pattern refs to persist, got %+v", active.PatternRefs)
+	}
+
+	handoff, err := runtime.ExecutionHandoffRecorder().Record(context.Background(), f.Task("wf-euclo-loop", "handoff active archaeology plan into execution", map[string]any{
+		"based_on_revision": "rev-loop-1",
+	}), f.NewState(), &active.Plan, active.Plan.Steps["inspect"])
+	if err != nil {
+		t.Fatalf("Record handoff: %v", err)
+	}
+	if handoff == nil {
+		t.Fatal("expected execution handoff")
+	}
+	if handoff.PlanID != active.Plan.ID || handoff.PlanVersion != active.Version || handoff.StepID != "inspect" {
+		t.Fatalf("unexpected handoff: %+v", handoff)
+	}
+
+	f.SeedMutation(archaeodomain.MutationEvent{
+		WorkflowID:  "wf-euclo-loop",
+		PlanID:      active.Plan.ID,
+		PlanVersion: intPtr(active.Version),
+		StepID:      "inspect",
+		Category:    archaeodomain.MutationObservation,
+		SourceKind:  "verification",
+		SourceRef:   "checkpoint-inspect",
+		Description: "execution checkpoint observed no blocking divergence",
+		BlastRadius: archaeodomain.BlastRadius{
+			Scope:           archaeodomain.BlastRadiusStep,
+			AffectedStepIDs: []string{"inspect"},
+		},
+		Impact:      archaeodomain.ImpactInformational,
+		Disposition: archaeodomain.DispositionContinue,
+		CreatedAt:   f.Now(),
+	})
+
+	eval, err := runtime.EvaluateExecutionMutations(context.Background(), "wf-euclo-loop", handoff, &active.Plan, active.Plan.Steps["inspect"])
+	if err != nil {
+		t.Fatalf("EvaluateExecutionMutations: %v", err)
+	}
+	if eval == nil {
+		t.Fatal("expected mutation evaluation")
+	}
+	if eval.Blocking {
+		t.Fatalf("expected non-blocking execution mutation evaluation, got %+v", eval)
+	}
+	if eval.Disposition != archaeodomain.DispositionContinue {
+		t.Fatalf("expected continue disposition, got %+v", eval)
+	}
+
+	updatedTension, err := runtime.UpdateTensionStatus(context.Background(), "wf-euclo-loop", tension.ID, archaeodomain.TensionResolved, nil)
+	if err != nil {
+		t.Fatalf("UpdateTensionStatus: %v", err)
+	}
+	if updatedTension == nil || updatedTension.Status != archaeodomain.TensionResolved {
+		t.Fatalf("expected resolved tension after execution feedback, got %+v", updatedTension)
+	}
+
+	result := &core.Result{Success: true, Data: map[string]any{"completed_steps": []string{"inspect", "implement"}}}
+	failure, err := runtime.VerificationService().FinalizeConvergence(context.Background(), &active.Plan, result)
+	if err != nil {
+		t.Fatalf("FinalizeConvergence: %v", err)
+	}
+	if failure != nil {
+		t.Fatalf("expected verification success, got %+v", failure)
+	}
+	if active.Plan.ConvergenceTarget == nil || active.Plan.ConvergenceTarget.VerifiedAt == nil {
+		t.Fatalf("expected convergence target to be marked verified, got %+v", active.Plan.ConvergenceTarget)
+	}
+
+	tensions, err := runtime.TensionsByWorkflow(context.Background(), "wf-euclo-loop")
+	if err != nil {
+		t.Fatalf("TensionsByWorkflow: %v", err)
+	}
+	if len(tensions) != 1 || tensions[0].ID != tension.ID || tensions[0].Status != archaeodomain.TensionResolved {
+		t.Fatalf("expected resolved tension in runtime view, got %+v", tensions)
+	}
+
+	timeline, err := runtime.WorkflowTimeline(context.Background(), "wf-euclo-loop")
+	if err != nil {
+		t.Fatalf("WorkflowTimeline: %v", err)
+	}
+	var sawHandoff, sawVerified bool
+	for _, entry := range timeline {
+		switch entry.EventType {
+		case archaeoevents.EventExecutionHandoffRecorded:
+			sawHandoff = true
+		case archaeoevents.EventConvergenceVerified:
+			sawVerified = true
+		}
+	}
+	if !sawHandoff || !sawVerified {
+		t.Fatalf("expected handoff and convergence verification events in timeline, got %+v", timeline)
+	}
+
+	activeProj, err := runtime.ActivePlanProjection(context.Background(), "wf-euclo-loop")
+	if err != nil {
+		t.Fatalf("ActivePlanProjection: %v", err)
+	}
+	if activeProj == nil || activeProj.ActivePlanVersion == nil || activeProj.ActivePlanVersion.Version != active.Version {
+		t.Fatalf("expected active plan projection to reflect version %d, got %+v", active.Version, activeProj)
+	}
+	if activeProj.ConvergenceState == nil || activeProj.ConvergenceState.Status != archaeodomain.ConvergenceStatusVerified {
+		t.Fatalf("expected resolved convergence state in active plan projection, got %+v", activeProj)
+	}
+
+	summary, err := runtime.TensionSummaryByWorkflow(context.Background(), "wf-euclo-loop")
+	if err != nil {
+		t.Fatalf("TensionSummaryByWorkflow: %v", err)
+	}
+	if summary == nil {
+		t.Fatal("expected workflow tension summary")
+	}
+	if summary.Active != 0 || summary.Resolved != 1 {
+		t.Fatalf("expected resolved tension summary after feedback, got %+v", summary)
 	}
 }
 
@@ -262,7 +592,7 @@ func TestRuntimeConvergenceRecord_CreateAndResolve(t *testing.T) {
 		WorkflowID: "wf-conv-rt",
 		RecordID:   record.ID,
 		Resolution: archaeodomain.ConvergenceResolution{
-			Status:      archaeodomain.ConvergenceResolutionResolved,
+			Status:       archaeodomain.ConvergenceResolutionResolved,
 			ChosenOption: "split transport and domain into separate packages",
 		},
 	})

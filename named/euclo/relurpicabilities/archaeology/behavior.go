@@ -11,8 +11,8 @@ import (
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/patterns"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclobb "github.com/lexcodex/relurpify/named/euclo/execution/blackboard"
@@ -1416,6 +1416,9 @@ func firstNonEmptyString(values ...string) string {
 }
 
 func stringValue(raw any) string {
+	if raw == nil {
+		return ""
+	}
 	return strings.TrimSpace(fmt.Sprint(raw))
 }
 
@@ -1633,8 +1636,14 @@ func persistExplorationPatterns(ctx context.Context, in execution.ExecuteInput, 
 			if !ok {
 				continue
 			}
-			title := strings.TrimSpace(stringValue(p["title"]))
-			description := strings.TrimSpace(stringValue(p["description"]))
+			title := firstNonEmptyString(
+				strings.TrimSpace(stringValue(p["title"])),
+				strings.TrimSpace(stringValue(p["name"])),
+			)
+			description := firstNonEmptyString(
+				strings.TrimSpace(stringValue(p["description"])),
+				strings.TrimSpace(stringValue(p["summary"])),
+			)
 			if title == "" || description == "" {
 				continue
 			}
@@ -1650,6 +1659,7 @@ func persistExplorationPatterns(ctx context.Context, in execution.ExecuteInput, 
 				Description:  description,
 				Status:       patterns.PatternStatusProposed,
 				Confidence:   floatValue(p["confidence"], 0.5),
+				Instances:    patternInstances(p),
 				CorpusScope:  corpusScope,
 				CorpusSource: in.Work.PrimaryRelurpicCapabilityID,
 				CreatedAt:    now,
@@ -1822,6 +1832,22 @@ func submitPlanReviewGuidance(in execution.ExecuteInput, planID string, reviewRe
 		},
 	}
 	_, _ = in.ServiceBundle.GuidanceBroker.SubmitAsync(req)
+}
+
+func patternInstances(payload map[string]any) []patterns.PatternInstance {
+	files := stringSlice(payload["files"])
+	if len(files) == 0 {
+		files = stringSlice(payload["instances"])
+	}
+	out := make([]patterns.PatternInstance, 0, len(files))
+	for _, file := range files {
+		file = strings.TrimSpace(file)
+		if file == "" {
+			continue
+		}
+		out = append(out, patterns.PatternInstance{FilePath: file})
+	}
+	return out
 }
 
 func floatValue(raw any, fallback float64) float64 {
