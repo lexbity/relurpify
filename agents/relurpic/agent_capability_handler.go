@@ -51,6 +51,7 @@ func (h *AgentCapabilityHandler) Invoke(ctx context.Context, state *core.Context
 		return nil, err
 	}
 	task := taskFromArgs(h.agentType, args)
+	seedTaskState(childState, task)
 	result, err := agent.Execute(ctx, task, childState)
 	if err != nil {
 		return nil, err
@@ -187,6 +188,9 @@ func taskFromArgs(agentType string, args map[string]interface{}) *core.Task {
 	if strings.EqualFold(agentType, "planner") {
 		taskType = core.TaskTypeAnalysis
 	}
+	if raw := strings.TrimSpace(fmt.Sprint(args["task_type"])); raw != "" {
+		taskType = core.TaskType(raw)
+	}
 	task := &core.Task{
 		ID:          strings.TrimSpace(fmt.Sprint(args["task_id"])),
 		Instruction: strings.TrimSpace(fmt.Sprint(args["instruction"])),
@@ -209,6 +213,21 @@ func taskFromArgs(agentType string, args map[string]interface{}) *core.Task {
 	return task
 }
 
+func seedTaskState(state *core.Context, task *core.Task) {
+	if state == nil || task == nil {
+		return
+	}
+	if task.ID != "" {
+		state.Set("task.id", task.ID)
+	}
+	if task.Instruction != "" {
+		state.Set("task.instruction", task.Instruction)
+	}
+	if task.Type != "" {
+		state.Set("task.type", string(task.Type))
+	}
+}
+
 func toToolResult(result *core.Result) *core.CapabilityExecutionResult {
 	payload := map[string]any{}
 	if result != nil && result.Data != nil {
@@ -225,8 +244,20 @@ func toToolResult(result *core.Result) *core.CapabilityExecutionResult {
 			payload["error"] = result.Error.Error()
 		}
 	}
-	return &core.CapabilityExecutionResult{
+	out := &core.CapabilityExecutionResult{
 		Success: result == nil || result.Success,
 		Data:    payload,
 	}
+	if result != nil {
+		if len(result.Metadata) > 0 {
+			out.Metadata = make(map[string]any, len(result.Metadata))
+			for key, value := range result.Metadata {
+				out.Metadata[key] = value
+			}
+		}
+		if result.Error != nil {
+			out.Error = result.Error.Error()
+		}
+	}
+	return out
 }

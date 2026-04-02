@@ -1436,6 +1436,7 @@ func TestBlackboardAgent_ResumeCheckpointDoesNotReplayCompletedDelegatedAction(t
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	task := &core.Task{ID: "blackboard-no-replay", Instruction: "resume without replay"}
 	state := core.NewContext()
 	if _, err := a.Execute(ctx, task, state); err == nil {

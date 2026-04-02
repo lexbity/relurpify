@@ -501,6 +501,8 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, state *core.Context) (
 	var stepResults []map[string]interface{}
 	var skippedTools []map[string]string
 	for _, step := range plan.Steps {
+		step.Params = resolvePlannerStepParams(state, step.Params)
+		step, _, _ = repairPlannerStep(n.agent.Tools, step)
 		if step.Tool == "" {
 			continue
 		}
@@ -558,12 +560,13 @@ func normalizePlannerStepParams(registry *capability.Registry, toolName string, 
 		if name == "" {
 			continue
 		}
-		if _, ok := normalized[name]; ok {
+		if value, ok := normalized[name]; ok {
+			normalized[name] = normalizePlannerParamValue(name, name, value)
 			continue
 		}
 		for _, alias := range plannerParamAliases(name) {
 			if value, ok := normalized[alias]; ok {
-				normalized[name] = value
+				normalized[name] = normalizePlannerParamValue(name, alias, value)
 				break
 			}
 		}
@@ -571,10 +574,26 @@ func normalizePlannerStepParams(registry *capability.Registry, toolName string, 
 	return normalized
 }
 
+func normalizePlannerParamValue(name, alias string, value interface{}) interface{} {
+	switch name {
+	case "path":
+		if path := plannerFirstStepPath(value); path != "" {
+			return path
+		}
+	case "directory":
+		if path := plannerFirstStepPath(value); path != "" {
+			return path
+		}
+	}
+	return value
+}
+
 func plannerParamAliases(name string) []string {
 	switch name {
 	case "path":
-		return []string{"file", "file_path", "target_path", "manifest_path", "database_path"}
+		return []string{"file", "file_path", "target_path", "manifest_path", "database_path", "files", "paths"}
+	case "directory":
+		return []string{"path", "dir", "working_directory", "workdir", "cwd"}
 	case "working_directory":
 		return []string{"workdir", "directory", "cwd"}
 	default:
@@ -704,20 +723,21 @@ func normalizePlannerPlan(agent *PlannerAgent, task *core.Task, plan core.Plan) 
 	if agent == nil {
 		return ensurePlannerPlanDefaults(plan), nil
 	}
+	plan = ensurePlannerPlanDefaults(plan)
+	var adjustments []string
+	if added := assignMissingPlanStepIDs(&plan); added > 0 {
+		adjustments = append(adjustments, fmt.Sprintf("assigned ids to %d plan steps", added))
+	}
+	repairPlannerSteps(agent.Tools, &plan, &adjustments)
 	var fallback *core.AgentRuntimeSpec
 	if agent.Config != nil {
 		fallback = agent.Config.AgentSpec
 	}
 	effective := frameworkskills.ResolveEffectiveSkillPolicy(task, fallback, agent.Tools)
 	if effective.Spec == nil {
-		return ensurePlannerPlanDefaults(plan), nil
+		return plan, adjustments
 	}
 	policy := effective.Policy
-	plan = ensurePlannerPlanDefaults(plan)
-	var adjustments []string
-	if added := assignMissingPlanStepIDs(&plan); added > 0 {
-		adjustments = append(adjustments, fmt.Sprintf("assigned ids to %d plan steps", added))
-	}
 	firstEdit := firstPlannerEditStepIndex(plan.Steps, policy)
 	insertAt := 0
 	for _, toolName := range policy.Planning.RequiredBeforeEdit {
@@ -1061,6 +1081,218 @@ func insertPlannerStep(steps []core.PlanStep, index int, step core.PlanStep) []c
 	copy(steps[index+1:], steps[index:])
 	steps[index] = step
 	return steps
+}
+
+func repairPlannerSteps(registry *capability.Registry, plan *core.Plan, adjustments *[]string) {
+	if registry == nil || plan == nil {
+		return
+	}
+	for i := range plan.Steps {
+		repaired, changed, note := repairPlannerStep(registry, plan.Steps[i])
+		if !changed {
+			continue
+		}
+		plan.Steps[i] = repaired
+		if adjustments != nil && strings.TrimSpace(note) != "" {
+			*adjustments = append(*adjustments, note)
+		}
+	}
+}
+
+func repairPlannerStep(registry *capability.Registry, step core.PlanStep) (core.PlanStep, bool, string) {
+	switch strings.TrimSpace(step.Tool) {
+	case "file_search":
+		if _, hasPattern := step.Params["pattern"]; hasPattern {
+			return step, false, ""
+		}
+		if path := plannerStepParamString(step.Params, "path", "file", "file_path", "target_path", "manifest_path"); path != "" && registry.HasCapability("file_read") {
+			step.Tool = "file_read"
+			step.Params = map[string]interface{}{"path": path}
+			return step, true, fmt.Sprintf("rewrote step %s from file_search to file_read using path", plannerStepID(step))
+		}
+		if dir := plannerStepParamString(step.Params, "directory", "path", "dir", "working_directory", "workdir", "cwd"); dir != "" && registry.HasCapability("file_list") {
+			step.Tool = "file_list"
+			step.Params = map[string]interface{}{"directory": dir}
+			return step, true, fmt.Sprintf("rewrote step %s from file_search to file_list using directory", plannerStepID(step))
+		}
+	case "code_analysis":
+		if path := plannerStepParamString(step.Params, "path", "file", "file_path", "target_path"); path != "" && registry.HasCapability("file_read") {
+			step.Tool = "file_read"
+			step.Params = map[string]interface{}{"path": path}
+			return step, true, fmt.Sprintf("rewrote step %s from code_analysis to file_read using path", plannerStepID(step))
+		}
+		if path := plannerFirstStepPath(step.Params["files"]); path != "" && registry.HasCapability("file_read") {
+			step.Tool = "file_read"
+			step.Params = map[string]interface{}{"path": path}
+			return step, true, fmt.Sprintf("rewrote step %s from code_analysis to file_read using files", plannerStepID(step))
+		}
+	case "file_read":
+		if _, ok := step.Params["path"]; ok {
+			return step, false, ""
+		}
+		if path := plannerStepParamString(step.Params, "file", "file_path", "target_path", "manifest_path"); path != "" {
+			if step.Params == nil {
+				step.Params = map[string]interface{}{}
+			}
+			step.Params["path"] = path
+			return step, true, fmt.Sprintf("normalized step %s file_read path alias", plannerStepID(step))
+		}
+		if path := plannerFirstStepPath(step.Params["files"]); path != "" {
+			if step.Params == nil {
+				step.Params = map[string]interface{}{}
+			}
+			step.Params["path"] = path
+			return step, true, fmt.Sprintf("normalized step %s file_read files -> path", plannerStepID(step))
+		}
+	}
+	return step, false, ""
+}
+
+func plannerStepParamString(params map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(fmt.Sprint(params[key])); value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
+}
+
+func plannerFirstStepPath(raw interface{}) string {
+	switch typed := raw.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case []string:
+		if len(typed) > 0 {
+			return strings.TrimSpace(typed[0])
+		}
+	case []interface{}:
+		if len(typed) > 0 {
+			return plannerFirstStepPath(typed[0])
+		}
+	case map[string]any:
+		if files, ok := typed["files"]; ok {
+			return plannerFirstStepPath(files)
+		}
+		if path, ok := typed["path"]; ok {
+			return plannerFirstStepPath(path)
+		}
+	}
+	return ""
+}
+
+func resolvePlannerStepParams(state *core.Context, params map[string]interface{}) map[string]interface{} {
+	if len(params) == 0 {
+		return params
+	}
+	resolved := make(map[string]interface{}, len(params))
+	for key, value := range params {
+		resolved[key] = resolvePlannerParamValue(state, value)
+	}
+	return resolved
+}
+
+func resolvePlannerParamValue(state *core.Context, value interface{}) interface{} {
+	switch typed := value.(type) {
+	case string:
+		return resolvePlannerParamTemplate(state, typed)
+	case []interface{}:
+		out := make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, resolvePlannerParamValue(state, item))
+		}
+		return compactPlannerResolvedValue(out)
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(typed))
+		for key, item := range typed {
+			out[key] = resolvePlannerParamValue(state, item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func compactPlannerResolvedValue(value interface{}) interface{} {
+	items, ok := value.([]interface{})
+	if !ok {
+		return value
+	}
+	if len(items) == 1 {
+		switch nested := items[0].(type) {
+		case []interface{}:
+			return compactPlannerResolvedValue(nested)
+		case []string:
+			out := make([]interface{}, 0, len(nested))
+			for _, item := range nested {
+				out = append(out, item)
+			}
+			return compactPlannerResolvedValue(out)
+		}
+	}
+	return items
+}
+
+func resolvePlannerParamTemplate(state *core.Context, raw string) interface{} {
+	text := strings.TrimSpace(raw)
+	if state == nil || text == "" {
+		return raw
+	}
+	if strings.HasPrefix(text, "${") && strings.HasSuffix(text, "}") {
+		if value, ok := resolvePlannerOutputReference(state, strings.TrimSuffix(strings.TrimPrefix(text, "${"), "}")); ok {
+			return value
+		}
+	}
+	if strings.HasPrefix(text, "{{") && strings.HasSuffix(text, "}}") {
+		if value, ok := resolvePlannerOutputReference(state, strings.TrimSuffix(strings.TrimPrefix(text, "{{"), "}}")); ok {
+			return value
+		}
+	}
+	return raw
+}
+
+func resolvePlannerOutputReference(state *core.Context, ref string) (interface{}, bool) {
+	if state == nil {
+		return nil, false
+	}
+	ref = strings.TrimSpace(ref)
+	parts := strings.Split(ref, ".")
+	if len(parts) < 2 {
+		return nil, false
+	}
+	stepID := strings.TrimSpace(parts[0])
+	if stepID == "" {
+		return nil, false
+	}
+	value, ok := state.Get("planner.step." + stepID)
+	if !ok {
+		return nil, false
+	}
+	if len(parts) == 2 && parts[1] == "output" {
+		return value, true
+	}
+	current := value
+	for _, part := range parts[1:] {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "output" {
+			continue
+		}
+		typed, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = typed[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+func plannerStepID(step core.PlanStep) string {
+	if id := strings.TrimSpace(step.ID); id != "" {
+		return id
+	}
+	return "<unknown>"
 }
 
 func toolInSet(toolName string, tools []string) bool {

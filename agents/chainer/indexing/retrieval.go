@@ -56,7 +56,7 @@ func (r *Retriever) Retrieve(query *RetrievalQuery) []*IndexedCodeSnippet {
 
 	candidates := r.index.AllSnippets()
 	if len(candidates) == 0 {
-		return nil
+		return []*IndexedCodeSnippet{}
 	}
 
 	// Apply filters
@@ -76,6 +76,9 @@ func (r *Retriever) Retrieve(query *RetrievalQuery) []*IndexedCodeSnippet {
 
 	if query.Limit > 0 && len(candidates) > query.Limit {
 		candidates = candidates[:query.Limit]
+	}
+	if candidates == nil {
+		return []*IndexedCodeSnippet{}
 	}
 
 	return candidates

@@ -128,12 +128,21 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, state *core.
 		decision.Mode = "capability"
 		return &core.Result{Success: true, Data: map[string]any{}}, decision, true, nil
 	}
+	var execErr error
+	if result.Error != "" {
+		execErr = fmt.Errorf("%s", result.Error)
+	}
 	decision.Mode = "capability"
-	return &core.Result{
+	coreResult := &core.Result{
 		Success:  result.Success,
 		Data:     cloneAnyMap(result.Data),
 		Metadata: cloneAnyMap(result.Metadata),
-	}, decision, true, nil
+		Error:    execErr,
+	}
+	if execErr != nil && !result.Success {
+		return coreResult, decision, true, execErr
+	}
+	return coreResult, decision, true, nil
 }
 
 func recordDispatch(state *core.Context, decision dispatchDecision) {

@@ -17,6 +17,8 @@ import (
 )
 
 type plannerPathEchoTool struct{}
+type plannerDirEchoTool struct{}
+type plannerFileListEchoTool struct{}
 
 type recordingPlannerLLM struct{ prompt string }
 
@@ -49,6 +51,32 @@ func (plannerPathEchoTool) Execute(ctx context.Context, state *core.Context, arg
 func (plannerPathEchoTool) IsAvailable(context.Context, *core.Context) bool { return true }
 func (plannerPathEchoTool) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
 func (plannerPathEchoTool) Tags() []string                                  { return nil }
+
+func (plannerDirEchoTool) Name() string        { return "file_list" }
+func (plannerDirEchoTool) Description() string { return "echo directory" }
+func (plannerDirEchoTool) Category() string    { return "test" }
+func (plannerDirEchoTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "directory", Type: "string", Required: false, Default: "."}}
+}
+func (plannerDirEchoTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true, Data: map[string]any{"directory": args["directory"]}}, nil
+}
+func (plannerDirEchoTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (plannerDirEchoTool) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
+func (plannerDirEchoTool) Tags() []string                                  { return nil }
+
+func (plannerFileListEchoTool) Name() string        { return "file_list" }
+func (plannerFileListEchoTool) Description() string { return "echo file list" }
+func (plannerFileListEchoTool) Category() string    { return "test" }
+func (plannerFileListEchoTool) Parameters() []core.ToolParameter {
+	return []core.ToolParameter{{Name: "directory", Type: "string", Required: false, Default: "."}}
+}
+func (plannerFileListEchoTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true, Data: map[string]any{"files": []any{"fixtures/a.go", "fixtures/b.go"}}}, nil
+}
+func (plannerFileListEchoTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (plannerFileListEchoTool) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
+func (plannerFileListEchoTool) Tags() []string                                  { return nil }
 
 func TestNormalizePlannerPlanInsertsRequiredDiscoveryBeforeEdit(t *testing.T) {
 	registry := capability.NewRegistry()
@@ -215,6 +243,161 @@ func TestPlannerExecuteNormalizesPathAliases(t *testing.T) {
 		output, _ := value.(map[string]any)
 		assert.Equal(t, "README.md", output["path"])
 	}
+}
+
+func TestNormalizePlannerPlanRepairsFileSearchPathToFileRead(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(plannerPathEchoTool{}))
+	agent := &PlannerAgent{Tools: registry, Config: &core.Config{AgentSpec: &core.AgentRuntimeSpec{}}}
+	plan := core.Plan{
+		Steps: []core.PlanStep{{
+			ID:     "discover",
+			Tool:   "file_search",
+			Params: map[string]any{"path": "testsuite/fixtures/rapid_arch/handler.go"},
+		}},
+	}
+
+	normalized, adjustments := normalizePlannerPlan(agent, &core.Task{}, plan)
+
+	require.Len(t, normalized.Steps, 1)
+	assert.Equal(t, "file_read", normalized.Steps[0].Tool)
+	assert.Equal(t, "testsuite/fixtures/rapid_arch/handler.go", normalized.Steps[0].Params["path"])
+	assert.Contains(t, adjustments, "rewrote step discover from file_search to file_read using path")
+}
+
+func TestNormalizePlannerPlanRepairsFileSearchDirectoryToFileList(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(plannerDirEchoTool{}))
+	agent := &PlannerAgent{Tools: registry, Config: &core.Config{AgentSpec: &core.AgentRuntimeSpec{}}}
+	plan := core.Plan{
+		Steps: []core.PlanStep{{
+			ID:     "discover",
+			Tool:   "file_search",
+			Params: map[string]any{"directory": "testsuite/fixtures/rapid_arch_tension"},
+		}},
+	}
+
+	normalized, adjustments := normalizePlannerPlan(agent, &core.Task{}, plan)
+
+	require.Len(t, normalized.Steps, 1)
+	assert.Equal(t, "file_list", normalized.Steps[0].Tool)
+	assert.Equal(t, "testsuite/fixtures/rapid_arch_tension", normalized.Steps[0].Params["directory"])
+	assert.Contains(t, adjustments, "rewrote step discover from file_search to file_list using directory")
+}
+
+func TestNormalizePlannerPlanRepairsCodeAnalysisToFileRead(t *testing.T) {
+	registry := capability.NewRegistry()
+	assert.NoError(t, registry.Register(plannerPathEchoTool{}))
+	agent := &PlannerAgent{Tools: registry, Config: &core.Config{AgentSpec: &core.AgentRuntimeSpec{}}}
+	plan := core.Plan{
+		Steps: []core.PlanStep{{
+			ID:     "analyze",
+			Tool:   "code_analysis",
+			Params: map[string]any{"file_path": "testsuite/fixtures/rapid_arch/handler.go"},
+		}},
+	}
+
+	normalized, adjustments := normalizePlannerPlan(agent, &core.Task{}, plan)
+
+	require.Len(t, normalized.Steps, 1)
+	assert.Equal(t, "file_read", normalized.Steps[0].Tool)
+	assert.Equal(t, "testsuite/fixtures/rapid_arch/handler.go", normalized.Steps[0].Params["path"])
+	assert.Contains(t, adjustments, "rewrote step analyze from code_analysis to file_read using path")
+}
+
+func TestPlannerExecuteResolvesPriorStepOutputIntoFileReadPath(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(plannerFileListEchoTool{}))
+	require.NoError(t, registry.Register(plannerPathEchoTool{}))
+	agent := &PlannerAgent{Tools: registry}
+	node := &plannerExecuteNode{id: "planner_execute", agent: agent}
+	state := core.NewContext()
+	state.Set("planner.plan", core.Plan{
+		Steps: []core.PlanStep{
+			{
+				ID:     "step1",
+				Tool:   "file_list",
+				Params: map[string]any{"directory": "fixtures"},
+			},
+			{
+				ID:     "step2",
+				Tool:   "file_read",
+				Params: map[string]any{"files": "${step1.output}"},
+			},
+		},
+	})
+	result, err := node.Execute(context.Background(), state)
+	require.NoError(t, err)
+	require.True(t, result.Success)
+
+	value, ok := state.Get("planner.step.step2")
+	require.True(t, ok)
+	output, ok := value.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "fixtures/a.go", output["path"])
+}
+
+func TestPlannerExecuteCoercesExistingArrayPathToString(t *testing.T) {
+	registry := capability.NewRegistry()
+	require.NoError(t, registry.Register(plannerFileListEchoTool{}))
+	require.NoError(t, registry.Register(plannerPathEchoTool{}))
+	agent := &PlannerAgent{Tools: registry}
+	node := &plannerExecuteNode{id: "planner_execute", agent: agent}
+	state := core.NewContext()
+	state.Set("planner.plan", core.Plan{
+		Steps: []core.PlanStep{
+			{
+				ID:     "step1",
+				Tool:   "file_list",
+				Params: map[string]any{"directory": "fixtures"},
+			},
+			{
+				ID:   "step2",
+				Tool: "file_read",
+				Params: map[string]any{
+					"path": []any{"{{step1.files}}"},
+				},
+			},
+		},
+	})
+
+	result, err := node.Execute(context.Background(), state)
+	require.NoError(t, err)
+	require.True(t, result.Success)
+
+	value, ok := state.Get("planner.step.step2")
+	require.True(t, ok)
+	output, ok := value.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "fixtures/a.go", output["path"])
+}
+
+func TestResolvePlannerOutputReferenceSupportsNestedFields(t *testing.T) {
+	state := core.NewContext()
+	state.Set("planner.step.step1", map[string]any{
+		"files": []any{"fixtures/a.go", "fixtures/b.go"},
+		"nested": map[string]any{
+			"path": "fixtures/c.go",
+		},
+	})
+
+	value, ok := resolvePlannerOutputReference(state, "step1.files")
+	require.True(t, ok)
+	assert.Equal(t, []any{"fixtures/a.go", "fixtures/b.go"}, value)
+
+	value, ok = resolvePlannerOutputReference(state, "step1.nested.path")
+	require.True(t, ok)
+	assert.Equal(t, "fixtures/c.go", value)
+}
+
+func TestResolvePlannerParamValueCompactsNestedSingleElementArrays(t *testing.T) {
+	state := core.NewContext()
+	state.Set("planner.step.step1", map[string]any{
+		"files": []any{"fixtures/a.go", "fixtures/b.go"},
+	})
+
+	value := resolvePlannerParamValue(state, []any{"{{step1.files}}"})
+	assert.Equal(t, []any{"fixtures/a.go", "fixtures/b.go"}, value)
 }
 
 func TestFormatPlannerWorkflowRetrievalUsesReferenceAwareEvidence(t *testing.T) {

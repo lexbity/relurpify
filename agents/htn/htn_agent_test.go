@@ -427,6 +427,37 @@ func TestHTNAgent_ExecuteRoutesPrimitiveStepsThroughCapabilities(t *testing.T) {
 	}
 }
 
+func TestHTNAgent_ExecutePropagatesCapabilityResultErrors(t *testing.T) {
+	registry := capability.NewRegistry()
+	requireNoErr(t, registry.RegisterInvocableCapability(&stubInvocableCapability{
+		desc: capabilityDescriptor("agent:react"),
+		invoke: func(_ context.Context, _ *core.Context, _ map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+			return &core.CapabilityExecutionResult{
+				Success: false,
+				Error:   "delegated step incomplete",
+			}, nil
+		},
+	}))
+
+	agent := &htn.HTNAgent{
+		Tools:  registry,
+		Config: &core.Config{MaxIterations: 8},
+	}
+	requireNoErr(t, agent.Initialize(agent.Config))
+
+	_, err := agent.Execute(context.Background(), &core.Task{
+		ID:          "htn-capability-error",
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "implement feature",
+	}, core.NewContext())
+	if err == nil {
+		t.Fatal("expected delegated capability failure")
+	}
+	if !strings.Contains(err.Error(), "delegated step incomplete") {
+		t.Fatalf("expected propagated capability error, got %v", err)
+	}
+}
+
 func TestHTNAgent_ExecuteBindsOperatorMetadataOntoStepTask(t *testing.T) {
 	var seenTypes []core.TaskType
 	var seenOperatorTypes []string

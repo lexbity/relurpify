@@ -22,6 +22,7 @@ import (
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
+	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,7 +62,7 @@ func (m *relurpicCapabilityQueueModel) ChatWithTools(context.Context, []core.Mes
 func TestRegisterBuiltinRelurpicCapabilitiesRegistersCoordinationTargets(t *testing.T) {
 	registry := capability.NewRegistry()
 	registerRelurpicReadTool(t, registry, ".")
-	require.NoError(t, registry.Register(architectStubTool{}))
+	require.NoError(t, registry.Register(testutil.EchoTool{}))
 
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
@@ -599,7 +600,7 @@ func TestCommenterAnnotateRequiresTarget(t *testing.T) {
 
 func TestPlannerCapabilityReturnsStructuredPlan(t *testing.T) {
 	registry := capability.NewRegistry()
-	require.NoError(t, registry.Register(architectStubTool{}))
+	require.NoError(t, registry.Register(testutil.EchoTool{}))
 
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
@@ -737,7 +738,7 @@ func TestReviewerAndVerifierCapabilitiesReturnStructuredOutputs(t *testing.T) {
 
 func TestArchitectExecuteCapabilityUsesArchitectWorkflow(t *testing.T) {
 	registry := capability.NewRegistry()
-	require.NoError(t, registry.Register(architectStubTool{}))
+	require.NoError(t, registry.Register(testutil.EchoTool{}))
 
 	model := &relurpicCapabilityQueueModel{
 		responses: []*core.LLMResponse{
@@ -768,7 +769,7 @@ func TestArchitectExecuteCapabilityUsesArchitectWorkflow(t *testing.T) {
 
 func TestExecutorInvokeCapabilityExecutesNonCoordinationCapability(t *testing.T) {
 	registry := capability.NewRegistry()
-	require.NoError(t, registry.Register(architectStubTool{}))
+	require.NoError(t, registry.Register(testutil.EchoTool{}))
 	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, &relurpicCapabilityQueueModel{}, &core.Config{
 		Name:  "coding",
 		Model: "stub",
@@ -788,7 +789,7 @@ func TestExecutorInvokeCapabilityExecutesNonCoordinationCapability(t *testing.T)
 
 func TestExecutorInvokeCapabilityRejectsCoordinationTargets(t *testing.T) {
 	registry := capability.NewRegistry()
-	require.NoError(t, registry.Register(architectStubTool{}))
+	require.NoError(t, registry.Register(testutil.EchoTool{}))
 	require.NoError(t, RegisterBuiltinRelurpicCapabilities(registry, &relurpicCapabilityQueueModel{}, &core.Config{
 		Name:  "coding",
 		Model: "stub",

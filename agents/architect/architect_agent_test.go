@@ -12,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
+	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
 
 type architectStubLLM struct {
@@ -108,10 +109,10 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 	}
 	plannerTools := capability.NewRegistry()
 	executorTools := capability.NewRegistry()
-	if err := plannerTools.Register(architectStubTool{}); err != nil {
+	if err := plannerTools.Register(testutil.EchoTool{}); err != nil {
 		t.Fatalf("register planner tool: %v", err)
 	}
-	if err := executorTools.Register(architectStubTool{}); err != nil {
+	if err := executorTools.Register(testutil.EchoTool{}); err != nil {
 		t.Fatalf("register executor tool: %v", err)
 	}
 	agent := &ArchitectAgent{
@@ -231,10 +232,10 @@ func TestArchitectAgentLegacyExecutionCompactsPlanResultState(t *testing.T) {
 	}
 	plannerTools := capability.NewRegistry()
 	executorTools := capability.NewRegistry()
-	if err := plannerTools.Register(architectStubTool{}); err != nil {
+	if err := plannerTools.Register(testutil.EchoTool{}); err != nil {
 		t.Fatalf("register planner tool: %v", err)
 	}
-	if err := executorTools.Register(architectStubTool{}); err != nil {
+	if err := executorTools.Register(testutil.EchoTool{}); err != nil {
 		t.Fatalf("register executor tool: %v", err)
 	}
 	agent := &ArchitectAgent{
@@ -317,8 +318,8 @@ func TestArchitectAgentResumesLatestWorkflow(t *testing.T) {
 	}
 	plannerTools := capability.NewRegistry()
 	executorTools := capability.NewRegistry()
-	_ = plannerTools.Register(architectStubTool{})
-	_ = executorTools.Register(architectStubTool{})
+	_ = plannerTools.Register(testutil.EchoTool{})
+	_ = executorTools.Register(testutil.EchoTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
 	agent := &ArchitectAgent{
 		Model:             llm,
@@ -625,8 +626,8 @@ func TestArchitectAgentResumesWorkflowAcrossNewTaskID(t *testing.T) {
 	}
 	plannerTools := capability.NewRegistry()
 	executorTools := capability.NewRegistry()
-	_ = plannerTools.Register(architectStubTool{})
-	_ = executorTools.Register(architectStubTool{})
+	_ = plannerTools.Register(testutil.EchoTool{})
+	_ = executorTools.Register(testutil.EchoTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
 	agent := &ArchitectAgent{
 		Model:             llm,
@@ -828,8 +829,8 @@ func TestArchitectAgentRerunFromStepInvalidatesDependentsAndReplays(t *testing.T
 	}
 	plannerTools := capability.NewRegistry()
 	executorTools := capability.NewRegistry()
-	_ = plannerTools.Register(architectStubTool{})
-	_ = executorTools.Register(architectStubTool{})
+	_ = plannerTools.Register(testutil.EchoTool{})
+	_ = executorTools.Register(testutil.EchoTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
 	agent := &ArchitectAgent{
 		Model:             llm,
@@ -936,7 +937,7 @@ func TestArchitectAgentMarksWorkflowNeedsReplanAfterRepeatedFailures(t *testing.
 	}
 	plannerTools := capability.NewRegistry()
 	executorTools := capability.NewRegistry()
-	_ = plannerTools.Register(architectStubTool{})
+	_ = plannerTools.Register(testutil.EchoTool{})
 	_ = executorTools.Register(architectFailTool{})
 	workflowStatePath := filepath.Join(t.TempDir(), "workflow_state.db")
 	agent := &ArchitectAgent{

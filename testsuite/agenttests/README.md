@@ -5,7 +5,7 @@ Runs now execute inside derived temporary workspaces under `relurpify_cfg/test_r
 Suites in this directory are the canonical source. Run them directly:
 
 ```
-go build ./cmd/dev-agent
+go build -o dev-agent ./app/dev-agent-cli
 ./dev-agent agenttest run
 ./dev-agent agenttest run --agent coding
 ./dev-agent agenttest run --suite testsuite/agenttests/coding.go.testsuite.yaml
@@ -27,7 +27,7 @@ spec:
 
 Optional (keep deps local to avoid host cache permission issues):
 ```
-GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache go build ./cmd/dev-agent
+GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache go build -o dev-agent ./app/dev-agent-cli
 GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache ./dev-agent agenttest run --agent coding
 ```
 
@@ -87,6 +87,18 @@ Coverage-matrix cases use the `coverage-matrix` tag so they can be run as a focu
 
 ```
 ./dev-agent agenttest run --tag coverage-matrix
+```
+
+For a quick live-model Euclo bug-hunting pass, run the dedicated rapid suite:
+
+```
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.testsuite.yaml --tier live-flaky
+```
+
+Or filter the same lightweight cases by tag:
+
+```
+./dev-agent agenttest run --agent euclo --tag rapid-iteration --tier live-flaky
 ```
 
 Performance-baseline cases use the `performance-baseline` tag so package-level benchmark work can be paired with end-to-end agent regression checks:
