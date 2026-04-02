@@ -44,6 +44,7 @@ func BuildCompiledExecution(uow UnitOfWork, status RuntimeExecutionStatus, compi
 		TransitionState:                 uow.TransitionState,
 		Status:                          status.Status,
 		ResultClass:                     status.ResultClass,
+		AssuranceClass:                  status.AssuranceClass,
 		DeferredIssueIDs:                append([]string(nil), status.DeferredIssueIDs...),
 		ArchaeoRefs:                     archaeoRefsForCompiledExecution(uow),
 	}
@@ -60,6 +61,7 @@ func BuildRuntimeExecutionStatus(uow UnitOfWork, status ExecutionStatus, resultC
 		UnitOfWorkID:     uow.ID,
 		Status:           status,
 		ResultClass:      resultClass,
+		AssuranceClass:   uow.AssuranceClass,
 		DeferredIssueIDs: append([]string(nil), uow.DeferredIssueIDs...),
 		UpdatedAt:        updatedAt,
 	}

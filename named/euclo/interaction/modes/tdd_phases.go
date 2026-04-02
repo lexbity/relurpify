@@ -3,6 +3,7 @@ package modes
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
@@ -143,12 +144,7 @@ func (p *TestResultPhase) Execute(ctx context.Context, mc interaction.PhaseMachi
 			return interaction.PhaseOutcome{}, err
 		}
 	} else {
-		result = interaction.ResultContent{
-			Status: "all_red",
-			Evidence: []interaction.EvidenceItem{
-				{Kind: "test_correlation", Detail: "All tests fail as expected (TDD red phase)"},
-			},
-		}
+		result = tddRedResultFromState(mc.State)
 	}
 
 	// In TDD, "all_red" is normal — label is "Implement", not "Fix".
@@ -182,6 +178,7 @@ func (p *TestResultPhase) Execute(ctx context.Context, mc interaction.PhaseMachi
 	updates := map[string]any{
 		"review_tests.response": resp.ActionID,
 		"review_tests.result":   result,
+		"tdd.phase":             "red",
 	}
 
 	switch resp.ActionID {
@@ -233,10 +230,10 @@ func (p *GreenStatusPhase) Execute(ctx context.Context, mc interaction.PhaseMach
 			return interaction.PhaseOutcome{}, err
 		}
 	} else {
-		result = interaction.ResultContent{Status: "passed"}
+		result = tddGreenResultFromState(mc.State)
 	}
 
-	actions := buildGreenActions(result)
+	actions := buildGreenActions(mc.State, result)
 
 	resultFrame := interaction.InteractionFrame{
 		Kind:    interaction.FrameResult,
@@ -262,6 +259,7 @@ func (p *GreenStatusPhase) Execute(ctx context.Context, mc interaction.PhaseMach
 	updates := map[string]any{
 		"green.response": resp.ActionID,
 		"green.result":   result,
+		"tdd.phase":      "green",
 	}
 
 	switch resp.ActionID {
@@ -279,9 +277,10 @@ func (p *GreenStatusPhase) Execute(ctx context.Context, mc interaction.PhaseMach
 		}, nil
 	case "refactor":
 		updates["green.refactor_constraint"] = "tests must stay green"
+		updates["tdd.refactor_requested"] = true
 		return interaction.PhaseOutcome{
 			Advance:      true,
-			Transition:   "code",
+			JumpTo:       "implement",
 			StateUpdates: updates,
 		}, nil
 	}
@@ -289,20 +288,149 @@ func (p *GreenStatusPhase) Execute(ctx context.Context, mc interaction.PhaseMach
 	return interaction.PhaseOutcome{Advance: true, StateUpdates: updates}, nil
 }
 
-func buildGreenActions(result interaction.ResultContent) []interaction.ActionSlot {
+func buildGreenActions(state map[string]any, result interaction.ResultContent) []interaction.ActionSlot {
+	refactorRequested, _ := state["tdd.refactor_requested"].(bool)
 	if result.Status == "passed" {
-		return []interaction.ActionSlot{
+		actions := []interaction.ActionSlot{
 			{ID: "done", Label: "Done", Shortcut: "y", Kind: interaction.ActionConfirm, Default: true},
 			{ID: "add_tests", Label: "Add more tests", Kind: interaction.ActionConfirm, TargetPhase: "specify"},
-			{ID: "refactor", Label: "Refactor", Kind: interaction.ActionTransition},
 		}
+		if !refactorRequested {
+			actions = append(actions, interaction.ActionSlot{ID: "refactor", Label: "Refactor", Kind: interaction.ActionConfirm})
+		}
+		return actions
 	}
 
 	// Some tests still failing.
-	return []interaction.ActionSlot{
+	actions := []interaction.ActionSlot{
 		{ID: "fix", Label: "Fix failing tests", Kind: interaction.ActionConfirm, Default: true},
 		{ID: "add_tests", Label: "Add more tests", Kind: interaction.ActionConfirm, TargetPhase: "specify"},
-		{ID: "refactor", Label: "Refactor", Kind: interaction.ActionTransition},
 		{ID: "done", Label: "Accept partial", Kind: interaction.ActionConfirm},
 	}
+	if !refactorRequested {
+		actions = append(actions, interaction.ActionSlot{ID: "refactor", Label: "Refactor", Kind: interaction.ActionConfirm})
+	}
+	return actions
+}
+
+func tddRedResultFromState(state map[string]any) interaction.ResultContent {
+	payload := tddStateRecord(state, "euclo.tdd.red_evidence")
+	if len(payload) == 0 {
+		return interaction.ResultContent{
+			Status: "all_red",
+			Evidence: []interaction.EvidenceItem{
+				{Kind: "test_correlation", Detail: "All tests fail as expected (TDD red phase)"},
+			},
+		}
+	}
+	status := strings.TrimSpace(strings.ToLower(fmt.Sprint(payload["status"])))
+	result := interaction.ResultContent{
+		Status: redResultStatus(status),
+	}
+	result.Evidence = append(result.Evidence, verificationEvidenceItems(payload)...)
+	if summary := strings.TrimSpace(fmt.Sprint(payload["summary"])); summary != "" && len(result.Evidence) == 0 {
+		result.Evidence = append(result.Evidence, interaction.EvidenceItem{Kind: "verification", Detail: summary})
+	}
+	return result
+}
+
+func tddGreenResultFromState(state map[string]any) interaction.ResultContent {
+	payload := tddStateRecord(state, "euclo.tdd.green_evidence")
+	if len(payload) == 0 {
+		payload = tddStateRecord(state, "euclo.tdd.refactor_evidence")
+	}
+	if len(payload) == 0 {
+		return interaction.ResultContent{Status: "passed"}
+	}
+	status := strings.TrimSpace(strings.ToLower(fmt.Sprint(payload["status"])))
+	result := interaction.ResultContent{
+		Status: greenResultStatus(status),
+	}
+	result.Evidence = append(result.Evidence, verificationEvidenceItems(payload)...)
+	if summary := strings.TrimSpace(fmt.Sprint(payload["summary"])); summary != "" && len(result.Evidence) == 0 {
+		result.Evidence = append(result.Evidence, interaction.EvidenceItem{Kind: "verification", Detail: summary})
+	}
+	return result
+}
+
+func tddStateRecord(state map[string]any, key string) map[string]any {
+	if state == nil {
+		return nil
+	}
+	raw, ok := state[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	record, _ := raw.(map[string]any)
+	return record
+}
+
+func verificationEvidenceItems(payload map[string]any) []interaction.EvidenceItem {
+	rawChecks, ok := payload["checks"]
+	if !ok || rawChecks == nil {
+		return nil
+	}
+	items := []interaction.EvidenceItem{}
+	switch typed := rawChecks.(type) {
+	case []any:
+		for _, item := range typed {
+			record, _ := item.(map[string]any)
+			if len(record) == 0 {
+				continue
+			}
+			detail := strings.TrimSpace(fmt.Sprint(record["details"]))
+			if detail == "" {
+				detail = strings.TrimSpace(fmt.Sprint(record["name"]))
+			}
+			items = append(items, interaction.EvidenceItem{
+				Kind:     "verification",
+				Detail:   firstNonEmpty(detail, strings.TrimSpace(fmt.Sprint(record["status"]))),
+				Location: strings.TrimSpace(fmt.Sprint(record["working_directory"])),
+			})
+		}
+	case []map[string]any:
+		for _, record := range typed {
+			detail := strings.TrimSpace(fmt.Sprint(record["details"]))
+			if detail == "" {
+				detail = strings.TrimSpace(fmt.Sprint(record["name"]))
+			}
+			items = append(items, interaction.EvidenceItem{
+				Kind:     "verification",
+				Detail:   firstNonEmpty(detail, strings.TrimSpace(fmt.Sprint(record["status"]))),
+				Location: strings.TrimSpace(fmt.Sprint(record["working_directory"])),
+			})
+		}
+	}
+	return items
+}
+
+func redResultStatus(status string) string {
+	switch status {
+	case "fail", "failed":
+		return "all_red"
+	case "pass", "passed":
+		return "passed"
+	default:
+		return "all_red"
+	}
+}
+
+func greenResultStatus(status string) string {
+	switch status {
+	case "pass", "passed":
+		return "passed"
+	case "fail", "failed":
+		return "failed"
+	default:
+		return "partial"
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

@@ -338,7 +338,7 @@ func objectiveKindForWork(mode ModeResolution, profile ExecutionProfileSelection
 	case mode.ModeID == "review":
 		return "review"
 	case profile.ProfileID == "test_driven_generation":
-		return "verification_repair"
+		return "tdd_execution"
 	case classification.RequiresEvidenceBeforeMutation:
 		return "investigation"
 	default:
@@ -360,7 +360,7 @@ func behaviorFamilyForWork(mode ModeResolution, profile ExecutionProfileSelectio
 		return "gap_analysis"
 	}
 	if len(policy.PreferredVerifyCapabilities) > 0 && profile.VerificationRequired {
-		return "verification_repair"
+		return "failed_verification_repair"
 	}
 	switch profile.ProfileID {
 	case "edit_verify_repair":
@@ -368,7 +368,7 @@ func behaviorFamilyForWork(mode ModeResolution, profile ExecutionProfileSelectio
 	case "reproduce_localize_patch":
 		return "stale_assumption_detection"
 	case "test_driven_generation":
-		return "verification_repair"
+		return "tdd_red_green_refactor"
 	case "review_suggest_implement":
 		return "tension_assessment"
 	case "plan_stage_execute":
@@ -608,15 +608,19 @@ func routineBindingsForWork(mode ModeResolution, profile ExecutionProfileSelecti
 			Required:  false,
 		})
 	}
-	if profile.VerificationRequired && family != "verification_repair" {
+	if profile.VerificationRequired && family != "failed_verification_repair" {
+		if family == "tdd_red_green_refactor" {
+			goto preferredPlanning
+		}
 		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
 			RoutineID: "verification_repair",
-			Family:    "verification_repair",
-			Reason:    "profile requires verification",
+			Family:    "failed_verification_repair",
+			Reason:    "profile requires executed verification and bounded repair on failure",
 			Priority:  70,
 			Required:  false,
 		})
 	}
+preferredPlanning:
 	for _, capabilityID := range policy.PreferredPlanningCapabilities {
 		addRoutineBinding(&bindings, UnitOfWorkRoutineBinding{
 			RoutineID: capabilityID,
@@ -653,7 +657,7 @@ func modeScopedRoutineBindings(mode ModeResolution, profile ExecutionProfileSele
 		bindings = append(bindings,
 			UnitOfWorkRoutineBinding{RoutineID: "tension_assessment", Family: "tension_assessment", Reason: "debug mode analyzes contradictions and tensions", Priority: 92, Required: false},
 			UnitOfWorkRoutineBinding{RoutineID: "stale_assumption_detection", Family: "stale_assumption_detection", Reason: "debug mode checks stale assumptions", Priority: 90, Required: false},
-			UnitOfWorkRoutineBinding{RoutineID: "verification_repair", Family: "verification_repair", Reason: "debug mode verifies and repairs", Priority: 88, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "verification_repair", Family: "failed_verification_repair", Reason: "debug mode verifies fixes and performs bounded repair on failure", Priority: 88, Required: false},
 		)
 	case "review":
 		bindings = append(bindings,
@@ -662,10 +666,14 @@ func modeScopedRoutineBindings(mode ModeResolution, profile ExecutionProfileSele
 			UnitOfWorkRoutineBinding{RoutineID: "compatibility_assessment", Family: "compatibility_assessment", Reason: "review mode checks compatibility impact", Priority: 86, Required: false},
 			UnitOfWorkRoutineBinding{RoutineID: "approval_assessment", Family: "approval_assessment", Reason: "review mode applies approval rules", Priority: 82, Required: false},
 		)
+	case "tdd":
+		bindings = append(bindings,
+			UnitOfWorkRoutineBinding{RoutineID: "tdd_red_green_refactor", Family: "tdd_red_green_refactor", Reason: "tdd mode executes red/green contract", Priority: 96, Required: false},
+		)
 	default:
 		bindings = append(bindings,
 			UnitOfWorkRoutineBinding{RoutineID: "gap_analysis", Family: "gap_analysis", Reason: "direct collect-context execution may need targeted gap analysis", Priority: 76, Required: false},
-			UnitOfWorkRoutineBinding{RoutineID: "verification_repair", Family: "verification_repair", Reason: "direct collect-context execution may need verification repair", Priority: 74, Required: false},
+			UnitOfWorkRoutineBinding{RoutineID: "verification_repair", Family: "failed_verification_repair", Reason: "direct collect-context execution may need bounded failed-verification repair", Priority: 74, Required: false},
 		)
 	}
 	if profile.ProfileID == "reproduce_localize_patch" {

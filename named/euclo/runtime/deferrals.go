@@ -13,17 +13,18 @@ import (
 )
 
 func BuildDeferredExecutionIssues(plan *guidance.DeferralPlan, uow UnitOfWork, state *core.Context, now time.Time) []DeferredExecutionIssue {
-	if plan == nil {
-		return nil
-	}
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	issues := buildWaiverDeferredExecutionIssues(uow, state, now)
+	if plan == nil {
+		return issues
+	}
 	pending := plan.PendingObservations()
 	if len(pending) == 0 {
-		return nil
+		return issues
 	}
-	issues := make([]DeferredExecutionIssue, 0, len(pending))
+	issues = append(issues, make([]DeferredExecutionIssue, 0, len(pending))...)
 	for _, obs := range pending {
 		issue := DeferredExecutionIssue{
 			IssueID:               firstNonEmpty(strings.TrimSpace(obs.ID), fmt.Sprintf("defer-%d", now.UnixNano())),
@@ -53,6 +54,74 @@ func BuildDeferredExecutionIssues(plan *guidance.DeferralPlan, uow UnitOfWork, s
 		issues = append(issues, issue)
 	}
 	return issues
+}
+
+func buildWaiverDeferredExecutionIssues(uow UnitOfWork, state *core.Context, now time.Time) []DeferredExecutionIssue {
+	if state == nil {
+		return nil
+	}
+	raw, ok := state.Get("euclo.execution_waiver")
+	if !ok || raw == nil {
+		return nil
+	}
+	waiver, ok := raw.(ExecutionWaiver)
+	if !ok {
+		return nil
+	}
+	issueID := strings.TrimSpace(waiver.WaiverID)
+	if issueID == "" {
+		issueID = fmt.Sprintf("waiver-%d", now.UnixNano())
+	}
+	title := "Operator waiver applied"
+	if strings.TrimSpace(string(waiver.Kind)) != "" {
+		title = "Operator waiver applied: " + strings.ReplaceAll(string(waiver.Kind), "_", " ")
+	}
+	summary := strings.TrimSpace(waiver.Reason)
+	if summary == "" {
+		summary = "Execution completed under an explicit operator waiver."
+	}
+	issue := DeferredExecutionIssue{
+		IssueID:               issueID,
+		WorkflowID:            uow.WorkflowID,
+		RunID:                 firstNonEmpty(strings.TrimSpace(waiver.RunID), uow.RunID),
+		ExecutionID:           uow.ExecutionID,
+		ActivePlanID:          activePlanIDForIssue(uow),
+		ActivePlanVersion:     activePlanVersionForIssue(uow),
+		StepID:                activeStepIDForIssue(uow, state),
+		RelatedStepIDs:        relatedStepIDsForIssue(uow, state),
+		Kind:                  DeferredIssueWaiver,
+		Severity:              DeferredIssueSeverityMedium,
+		Status:                DeferredIssueStatusAcknowledged,
+		Title:                 title,
+		Summary:               summary,
+		WhyNotResolvedInline:  "operator explicitly accepted downgraded assurance for this run",
+		RecommendedReentry:    "archaeology",
+		RecommendedNextAction: "revisit the waived verification or review gap in a follow-up run without the waiver",
+		ArchaeoRefs:           waiverArchaeoRefs(waiver),
+		Evidence: DeferredExecutionEvidence{
+			RelevantProvenanceRefs: waiverProvenanceRefs(waiver),
+			ShortReasoningSummary:  summary,
+		},
+		CreatedAt: nonZeroTime(waiver.CreatedAt, now),
+		UpdatedAt: now,
+	}
+	return []DeferredExecutionIssue{issue}
+}
+
+func waiverArchaeoRefs(waiver ExecutionWaiver) map[string][]string {
+	if strings.TrimSpace(waiver.ArchaeoRef) == "" {
+		return nil
+	}
+	return map[string][]string{
+		"waiver": {strings.TrimSpace(waiver.ArchaeoRef)},
+	}
+}
+
+func waiverProvenanceRefs(waiver ExecutionWaiver) []string {
+	if strings.TrimSpace(waiver.ArchaeoRef) == "" {
+		return nil
+	}
+	return []string{strings.TrimSpace(waiver.ArchaeoRef)}
 }
 
 func PersistDeferredExecutionIssuesToWorkspace(task *core.Task, state *core.Context, issues []DeferredExecutionIssue) []DeferredExecutionIssue {

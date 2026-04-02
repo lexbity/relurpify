@@ -67,10 +67,30 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 		if raw, ok := state.Get("pipeline.verify"); ok && raw != nil {
 			if payload, ok := raw.(map[string]any); ok {
 				rt.VerificationStatus = strings.TrimSpace(stringValue(payload["status"]))
+				if rt.VerificationStatus == "" {
+					rt.VerificationStatus = strings.TrimSpace(stringValue(payload["overall_status"]))
+				}
 				if checks, ok := payload["checks"].([]any); ok {
 					rt.VerificationCheckCount = len(checks)
 				}
 				rt.ToolOutputSources = append(rt.ToolOutputSources, "pipeline.verify")
+			}
+		}
+		if raw, ok := state.Get("euclo.verification_plan"); ok && raw != nil {
+			if record, ok := raw.(map[string]any); ok {
+				rt.VerificationPlanScope = strings.TrimSpace(stringValue(record["scope_kind"]))
+				rt.VerificationPlanSource = strings.TrimSpace(stringValue(record["source"]))
+				rt.VerificationPlanFiles = uniqueStrings(stringSlice(record["files"]))
+				rt.VerificationPlanTestFiles = uniqueStrings(stringSlice(record["test_files"]))
+				rt.VerificationPlanCommands = uniqueStrings(verificationCommandNames(record["commands"]))
+				rt.VerificationPlanPlannerID = strings.TrimSpace(stringValue(record["planner_id"]))
+				rt.VerificationPlanRationale = strings.TrimSpace(stringValue(record["rationale"]))
+				rt.VerificationPlanAuditTrail = uniqueStrings(stringSlice(record["audit_trail"]))
+				rt.VerificationPlanCompatibilitySensitive = boolValue(record["compatibility_sensitive"])
+				rt.VerificationPlanSelectionInputs = uniqueStrings(stringSlice(record["selection_inputs"]))
+				rt.VerificationPlanPolicyPreferences = uniqueStrings(append(stringSlice(record["policy_preferred_capabilities"]), stringSlice(record["policy_success_capabilities"])...))
+				rt.VerificationPlanPolicyRequiresVerification = boolValue(record["policy_requires_verification"])
+				rt.ToolOutputSources = append(rt.ToolOutputSources, "euclo.verification_plan")
 			}
 		}
 		if raw, ok := state.Get("euclo.trace"); ok && raw != nil {
@@ -120,6 +140,15 @@ func debugRuntimeSummary(rt runtimepkg.DebugCapabilityRuntimeState) string {
 	}
 	if rt.VerificationStatus != "" {
 		parts = append(parts, fmt.Sprintf("verification=%s", rt.VerificationStatus))
+	}
+	if rt.VerificationPlanScope != "" {
+		parts = append(parts, fmt.Sprintf("verification_scope=%s", rt.VerificationPlanScope))
+	}
+	if len(rt.VerificationPlanPolicyPreferences) > 0 {
+		parts = append(parts, "verification_policy=skill_guided")
+	}
+	if rt.VerificationPlanPlannerID != "" {
+		parts = append(parts, "verification_planner="+rt.VerificationPlanPlannerID)
 	}
 	if len(rt.ToolOutputSources) > 0 {
 		parts = append(parts, fmt.Sprintf("tool_output=%s", strings.Join(rt.ToolOutputSources, ",")))

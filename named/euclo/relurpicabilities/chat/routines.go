@@ -24,9 +24,14 @@ func (localReviewRoutine) ID() string { return LocalReview }
 func (localReviewRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	payload := map[string]any{
 		"primary_capability_id": in.Work.PrimaryCapabilityID,
+		"review_source":         LocalReview,
 		"focus":                 chatFocusLens(in.Task),
-		"scope":                 taskFiles(in.Task),
-		"summary":               "local review routine prepared inspection findings",
+		"scope": map[string]any{
+			"files":      taskFiles(in.Task),
+			"focus_lens": chatFocusLens(in.Task),
+		},
+		"findings": []map[string]any{},
+		"summary":  "local review routine prepared inspection findings",
 	}
 	return []euclotypes.Artifact{{
 		ID:         "chat_local_review",
@@ -56,10 +61,11 @@ func (targetedVerificationRoutine) Execute(_ context.Context, in euclorelurpic.R
 		}
 	}
 	payload := map[string]any{
-		"status":     status,
-		"checks":     checks,
-		"repairable": true,
-		"summary":    "targeted verification repair routine evaluated local verification posture",
+		"overall_status": status,
+		"checks":         checks,
+		"repairable":     true,
+		"provenance":     verificationProvenance(in.State),
+		"summary":        "targeted verification repair routine evaluated local verification posture",
 	}
 	return []euclotypes.Artifact{{
 		ID:         "chat_targeted_verification",
@@ -69,6 +75,21 @@ func (targetedVerificationRoutine) Execute(_ context.Context, in euclorelurpic.R
 		ProducerID: TargetedVerification,
 		Status:     "produced",
 	}}, nil
+}
+
+func verificationProvenance(state *core.Context) string {
+	if state == nil {
+		return "absent"
+	}
+	if raw, ok := state.Get("pipeline.verify"); ok && raw != nil {
+		if record, ok := raw.(map[string]any); ok {
+			if value, ok := record["provenance"].(string); ok && strings.TrimSpace(value) != "" {
+				return strings.TrimSpace(value)
+			}
+		}
+		return "executed"
+	}
+	return "absent"
 }
 
 func chatFocusLens(task *core.Task) string {

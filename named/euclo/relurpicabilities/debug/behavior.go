@@ -75,6 +75,15 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		Status:     "produced",
 	})
 
+	if !debugHasConcreteReproduction(in.State) && debugShouldSynthesizeReproducer(in.Task) {
+		synthResult := localbehavior.NewRegressionSynthesizeCapability(in.Environment).Execute(ctx, debugExecutionEnvelope(in))
+		if synthResult.Status == euclotypes.ExecutionStatusCompleted && len(synthResult.Artifacts) > 0 {
+			artifacts = append(artifacts, synthResult.Artifacts...)
+			execution.MergeStateArtifactsToContext(in.State, synthResult.Artifacts)
+			execution.AppendDiagnostic(in.State, "euclo.regression_analysis", "debug investigate synthesized a regression reproducer before patching")
+		}
+	}
+
 	patchResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigatePatch, "debug-investigate-patch",
 		"Generate a patch to fix the localized issue: "+execution.CapabilityTaskInstruction(in.Task),
 	)
@@ -93,35 +102,52 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 
 	reviewResult, _, reviewErr := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateReview, "debug-investigate-review",
 		"Review the patch and verify it addresses the root cause.")
-	if reviewErr == nil && reviewResult != nil && reviewResult.Success {
-		verifyPayload := map[string]any{
-			"status":  "pass",
-			"summary": execution.ResultSummary(reviewResult),
-			"checks":  []any{map[string]any{"name": "reflection_review", "status": "pass"}},
-		}
-		if in.State != nil {
-			in.State.Set("pipeline.verify", verifyPayload)
-			in.State.Set("react.verification_latched_summary", execution.ResultSummary(reviewResult))
-		}
+	if reviewErr == nil && reviewResult != nil && reviewResult.Success && in.State != nil {
+		reviewPayload := debugReviewPayload(execution.ResultSummary(reviewResult), reviewResult.Data)
+		in.State.Set("euclo.review_findings", reviewPayload)
 		artifacts = append(artifacts, euclotypes.Artifact{
-			ID:         "debug_investigate_verification",
-			Kind:       euclotypes.ArtifactKindVerification,
+			ID:         "debug_investigate_review",
+			Kind:       euclotypes.ArtifactKindReviewFindings,
 			Summary:    execution.ResultSummary(reviewResult),
-			Payload:    verifyPayload,
+			Payload:    reviewPayload,
 			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
 			Status:     "produced",
 		})
-	} else if in.State != nil {
 		if existing, ok := in.State.Get("pipeline.verify"); ok && existing != nil {
-			in.State.Set("react.verification_latched_summary", "reused existing verification evidence")
-			artifacts = append(artifacts, euclotypes.Artifact{
-				ID:         "debug_investigate_verification",
-				Kind:       euclotypes.ArtifactKindVerification,
-				Summary:    "reused existing verification evidence",
-				Payload:    existing,
-				ProducerID: in.Work.PrimaryRelurpicCapabilityID,
-				Status:     "produced",
-			})
+			if verifyPayload, ok := existing.(map[string]any); ok {
+				if _, ok := verifyPayload["provenance"]; !ok {
+					verifyPayload["provenance"] = "executed"
+				}
+				if _, ok := verifyPayload["run_id"]; !ok {
+					verifyPayload["run_id"] = strings.TrimSpace(in.Work.RunID)
+				}
+				in.State.Set("pipeline.verify", verifyPayload)
+				artifacts = append(artifacts, euclotypes.Artifact{
+					ID:         "debug_investigate_verification",
+					Kind:       euclotypes.ArtifactKindVerification,
+					Summary:    strings.TrimSpace(fmt.Sprint(verifyPayload["summary"])),
+					Payload:    verifyPayload,
+					ProducerID: in.Work.PrimaryRelurpicCapabilityID,
+					Status:     "produced",
+				})
+			}
+		}
+	}
+	if verificationArtifacts, executed, execErr := localbehavior.ExecuteVerificationFlow(ctx, debugExecutionEnvelope(in), eucloruntime.SnapshotCapabilities(in.Environment.Registry)); execErr != nil {
+		execution.MergeStateArtifactsToContext(in.State, artifacts)
+		return &core.Result{Success: false, Error: execErr}, execErr
+	} else if executed {
+		artifacts = append(artifacts, verificationArtifacts...)
+		if rawVerify, ok := in.State.Get("pipeline.verify"); ok && rawVerify != nil {
+			if verifyPayload, ok := rawVerify.(map[string]any); ok && localbehavior.VerificationPayloadFailed(verifyPayload) {
+				repairResult := localbehavior.NewFailedVerificationRepairCapability(in.Environment).Execute(ctx, debugExecutionEnvelope(in))
+				artifacts = append(artifacts, repairResult.Artifacts...)
+				execution.MergeStateArtifactsToContext(in.State, artifacts)
+				if repairResult.Status == euclotypes.ExecutionStatusFailed {
+					err := fmt.Errorf("%s", firstNonEmptyDebug(strings.TrimSpace(repairResult.Summary), "verification repair failed"))
+					return &core.Result{Success: false, Error: err, Data: map[string]any{"artifacts": artifacts}}, err
+				}
+			}
 		}
 	}
 
@@ -221,10 +247,73 @@ func executeDebugPipelinePostpass(ctx context.Context, in execution.ExecuteInput
 			ID:         "debug_repair_readiness",
 			Kind:       euclotypes.ArtifactKindReviewFindings,
 			Summary:    strings.TrimSpace(fmt.Sprint(raw)),
-			Payload:    map[string]any{"summary": strings.TrimSpace(fmt.Sprint(raw))},
+			Payload:    debugReviewPayload(strings.TrimSpace(fmt.Sprint(raw)), map[string]any{"summary": strings.TrimSpace(fmt.Sprint(raw))}),
 			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
 			Status:     "produced",
 		})
 	}
 	return artifacts
+}
+
+func debugReviewPayload(summary string, reviewData any) map[string]any {
+	payload := map[string]any{
+		"mode":          "debug.investigate",
+		"review_source": "debug.investigate.review",
+		"summary":       summary,
+		"review":        reviewData,
+		"findings": []map[string]any{{
+			"severity":         "info",
+			"description":      firstNonEmptyDebug(summary, "debug review completed"),
+			"rationale":        "debug review summarized the patch and repair readiness",
+			"category":         "correctness",
+			"confidence":       0.5,
+			"impacted_files":   []string{},
+			"impacted_symbols": []string{},
+			"review_source":    "debug.investigate.review",
+			"traceability": map[string]any{
+				"source": "reflection_review",
+			},
+		}},
+	}
+	return payload
+}
+
+func firstNonEmptyDebug(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func debugHasConcreteReproduction(state *core.Context) bool {
+	if state == nil {
+		return false
+	}
+	raw, ok := state.Get("euclo.reproduction")
+	if !ok || raw == nil {
+		return false
+	}
+	record, ok := raw.(map[string]any)
+	if !ok {
+		return false
+	}
+	if synthesized, ok := record["synthesized"].(bool); ok && synthesized {
+		return false
+	}
+	return len(record) > 0
+}
+
+func debugShouldSynthesizeReproducer(task *core.Task) bool {
+	text := strings.ToLower(strings.TrimSpace(execution.CapabilityTaskInstruction(task)))
+	for _, token := range []string{
+		"bug", "bugfix", "fix", "broken", "fails", "failing", "failure", "regression",
+		"stopped working", "no longer", "error", "panic", "incorrect", "wrong", "issue",
+	} {
+		if strings.Contains(text, token) {
+			return true
+		}
+	}
+	return false
 }

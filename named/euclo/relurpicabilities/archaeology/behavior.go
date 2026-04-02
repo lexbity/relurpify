@@ -153,12 +153,9 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 
 	reviewResult, _, reviewErr := execution.ExecuteRecipe(ctx, in, execution.RecipeArchaeologyCompileReview, "archaeology-compile-review",
 		"Review the compiled plan draft for completeness, coherence, execution readiness, and missing constraints.")
-	reviewPayload := map[string]any{
-		"source": "euclo:archaeology.compile-plan",
-	}
+	reviewPayload := archaeologyReviewPayload("euclo:archaeology.compile-plan", "", nil)
 	if reviewErr == nil && reviewResult != nil && reviewResult.Success {
-		reviewPayload["review"] = reviewResult.Data
-		reviewPayload["summary"] = execution.ResultSummary(reviewResult)
+		reviewPayload = archaeologyReviewPayload("euclo:archaeology.compile-plan", execution.ResultSummary(reviewResult), reviewResult.Data)
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_compile_plan_review",
 			Kind:       euclotypes.ArtifactKindReviewFindings,
@@ -1872,4 +1869,25 @@ func floatValue(raw any, fallback float64) float64 {
 		}
 	}
 	return fallback
+}
+
+func archaeologyReviewPayload(source, summary string, reviewData any) map[string]any {
+	return map[string]any{
+		"review_source": source,
+		"summary":       summary,
+		"review":        reviewData,
+		"findings": []map[string]any{{
+			"severity":         "info",
+			"description":      firstNonEmptyString(summary, "archaeology review completed"),
+			"rationale":        "archaeology review summarized plan completeness and execution readiness",
+			"category":         "planning",
+			"confidence":       0.5,
+			"impacted_files":   []string{},
+			"impacted_symbols": []string{},
+			"review_source":    source,
+			"traceability": map[string]any{
+				"source": "reflection_review",
+			},
+		}},
+	}
 }

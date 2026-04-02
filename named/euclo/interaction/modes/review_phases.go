@@ -119,11 +119,14 @@ func (p *ReviewSweepPhase) Execute(ctx context.Context, mc interaction.PhaseMach
 			return interaction.PhaseOutcome{}, err
 		}
 	} else {
-		findings = interaction.FindingsContent{}
+		findings = findingsFromSemanticState(mc.State)
 	}
 
 	updates := map[string]any{
 		"sweep.findings": findings,
+	}
+	if approval := approvalStatusFromSemanticState(mc.State); approval != "" {
+		updates["sweep.approval_status"] = approval
 	}
 
 	return interaction.PhaseOutcome{Advance: true, StateUpdates: updates}, nil
@@ -137,6 +140,7 @@ func (p *TriagePhase) Execute(ctx context.Context, mc interaction.PhaseMachineCo
 	findings, _ := mc.State["sweep.findings"].(interaction.FindingsContent)
 
 	totalFindings := len(findings.Critical) + len(findings.Warning) + len(findings.Info)
+	approvalStatus, _ := mc.State["sweep.approval_status"].(string)
 	if totalFindings == 0 {
 		// No findings — emit summary and mark no fixes needed.
 		frame := interaction.InteractionFrame{
@@ -161,9 +165,13 @@ func (p *TriagePhase) Execute(ctx context.Context, mc interaction.PhaseMachineCo
 		if _, err := mc.Emitter.AwaitResponse(ctx); err != nil {
 			return interaction.PhaseOutcome{}, err
 		}
+		updates := map[string]any{"triage.no_fixes": true}
+		if approvalStatus != "" {
+			updates["triage.approval_status"] = approvalStatus
+		}
 		return interaction.PhaseOutcome{
 			Advance:      true,
-			StateUpdates: map[string]any{"triage.no_fixes": true},
+			StateUpdates: updates,
 		}, nil
 	}
 
@@ -194,6 +202,9 @@ func (p *TriagePhase) Execute(ctx context.Context, mc interaction.PhaseMachineCo
 		"triage.response": resp.ActionID,
 		"triage.findings": findings,
 	}
+	if approvalStatus != "" {
+		updates["triage.approval_status"] = approvalStatus
+	}
 
 	switch resp.ActionID {
 	case "no_fixes":
@@ -208,6 +219,70 @@ func (p *TriagePhase) Execute(ctx context.Context, mc interaction.PhaseMachineCo
 	}
 
 	return interaction.PhaseOutcome{Advance: true, StateUpdates: updates}, nil
+}
+
+func findingsFromSemanticState(state map[string]any) interaction.FindingsContent {
+	record := semanticReviewRecord(state)
+	findings := normalizeReviewFindings(record["findings"])
+	content := interaction.FindingsContent{}
+	for _, finding := range findings {
+		entry := interaction.Finding{
+			Location:    stringValueMap(finding, "location"),
+			Description: stringValueMap(finding, "description"),
+			Suggestion:  stringValueMap(finding, "suggestion"),
+		}
+		switch stringValueMap(finding, "severity") {
+		case "critical":
+			content.Critical = append(content.Critical, entry)
+		case "warning":
+			content.Warning = append(content.Warning, entry)
+		default:
+			content.Info = append(content.Info, entry)
+		}
+	}
+	return content
+}
+
+func approvalStatusFromSemanticState(state map[string]any) string {
+	record := semanticReviewRecord(state)
+	approval, _ := record["approval_decision"].(map[string]any)
+	return stringValueMap(approval, "status")
+}
+
+func semanticReviewRecord(state map[string]any) map[string]any {
+	if state == nil {
+		return nil
+	}
+	raw := state["euclo.review_findings"]
+	record, _ := raw.(map[string]any)
+	return record
+}
+
+func normalizeReviewFindings(raw any) []map[string]any {
+	switch typed := raw.(type) {
+	case []map[string]any:
+		return typed
+	case []any:
+		out := make([]map[string]any, 0, len(typed))
+		for _, item := range typed {
+			if record, ok := item.(map[string]any); ok {
+				out = append(out, record)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func stringValueMap(record map[string]any, key string) string {
+	if record == nil {
+		return ""
+	}
+	if value, ok := record[key].(string); ok {
+		return value
+	}
+	return fmt.Sprint(record[key])
 }
 
 func buildTriageActions(findings interaction.FindingsContent) []interaction.ActionSlot {

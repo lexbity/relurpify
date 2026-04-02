@@ -51,6 +51,18 @@ const (
 	ExecutionResultClassRestoreFailed          ExecutionResultClass = "restore_failed"
 )
 
+type AssuranceClass string
+
+const (
+	AssuranceClassVerifiedSuccess   AssuranceClass = "verified_success"
+	AssuranceClassPartiallyVerified AssuranceClass = "partially_verified"
+	AssuranceClassUnverifiedSuccess AssuranceClass = "unverified_success"
+	AssuranceClassReviewBlocked     AssuranceClass = "review_blocked"
+	AssuranceClassRepairExhausted   AssuranceClass = "repair_exhausted"
+	AssuranceClassTDDIncomplete     AssuranceClass = "tdd_incomplete"
+	AssuranceClassOperatorDeferred  AssuranceClass = "operator_deferred"
+)
+
 // ExecutionStatus is Euclo's runtime execution-state type. It models the
 // current lifecycle of a work unit rather than a single capability outcome.
 type ExecutionStatus string
@@ -80,6 +92,8 @@ const (
 	DeferredIssueNonfatalFailure     DeferredIssueKind = "nonfatal_failure"
 	DeferredIssueVerificationConcern DeferredIssueKind = "verification_concern"
 	DeferredIssueProviderConstraint  DeferredIssueKind = "provider_constraint"
+	DeferredIssueOperatorDeferred    DeferredIssueKind = "operator_deferred"
+	DeferredIssueWaiver              DeferredIssueKind = "waiver"
 )
 
 type DeferredIssueSeverity string
@@ -313,67 +327,91 @@ type ArchaeologyCapabilityRuntimeState struct {
 }
 
 type DebugCapabilityRuntimeState struct {
-	PrimaryCapabilityID        string    `json:"primary_capability_id,omitempty"`
-	SupportingCapabilityIDs    []string  `json:"supporting_capability_ids,omitempty"`
-	ExecutedRecipeIDs          []string  `json:"executed_recipe_ids,omitempty"`
-	SpecializedCapabilityIDs   []string  `json:"specialized_capability_ids,omitempty"`
-	BehaviorPath               string    `json:"behavior_path,omitempty"`
-	PolicySnapshotID           string    `json:"policy_snapshot_id,omitempty"`
-	AdmittedCapabilityIDs      []string  `json:"admitted_capability_ids,omitempty"`
-	AdmittedModelTools         []string  `json:"admitted_model_tools,omitempty"`
-	RootCauseActive            bool      `json:"root_cause_active"`
-	HypothesisRefinementActive bool      `json:"hypothesis_refinement_active"`
-	LocalizationActive         bool      `json:"localization_active"`
-	FlawSurfacingActive        bool      `json:"flaw_surfacing_active"`
-	VerificationRepairActive   bool      `json:"verification_repair_active"`
-	ToolExpositionFacet        bool      `json:"tool_exposition_facet"`
-	ToolAccessConstrained      bool      `json:"tool_access_constrained"`
-	ToolCapabilityIDs          []string  `json:"tool_capability_ids,omitempty"`
-	ToolOutputSources          []string  `json:"tool_output_sources,omitempty"`
-	VerificationStatus         string    `json:"verification_status,omitempty"`
-	VerificationCheckCount     int       `json:"verification_check_count,omitempty"`
-	ArchaeoAssociated          bool      `json:"archaeo_associated"`
-	PatternRefCount            int       `json:"pattern_ref_count,omitempty"`
-	TensionRefCount            int       `json:"tension_ref_count,omitempty"`
-	MutationObserved           bool      `json:"mutation_observed"`
-	EscalationTarget           string    `json:"escalation_target,omitempty"`
-	EscalationTriggered        bool      `json:"escalation_triggered"`
-	DeniedToolUsage            []string  `json:"denied_tool_usage,omitempty"`
-	Diagnostics                []string  `json:"diagnostics,omitempty"`
-	Summary                    string    `json:"summary,omitempty"`
-	UpdatedAt                  time.Time `json:"updated_at,omitempty"`
+	PrimaryCapabilityID                        string    `json:"primary_capability_id,omitempty"`
+	SupportingCapabilityIDs                    []string  `json:"supporting_capability_ids,omitempty"`
+	ExecutedRecipeIDs                          []string  `json:"executed_recipe_ids,omitempty"`
+	SpecializedCapabilityIDs                   []string  `json:"specialized_capability_ids,omitempty"`
+	BehaviorPath                               string    `json:"behavior_path,omitempty"`
+	PolicySnapshotID                           string    `json:"policy_snapshot_id,omitempty"`
+	AdmittedCapabilityIDs                      []string  `json:"admitted_capability_ids,omitempty"`
+	AdmittedModelTools                         []string  `json:"admitted_model_tools,omitempty"`
+	RootCauseActive                            bool      `json:"root_cause_active"`
+	HypothesisRefinementActive                 bool      `json:"hypothesis_refinement_active"`
+	LocalizationActive                         bool      `json:"localization_active"`
+	FlawSurfacingActive                        bool      `json:"flaw_surfacing_active"`
+	VerificationRepairActive                   bool      `json:"verification_repair_active"`
+	ToolExpositionFacet                        bool      `json:"tool_exposition_facet"`
+	ToolAccessConstrained                      bool      `json:"tool_access_constrained"`
+	ToolCapabilityIDs                          []string  `json:"tool_capability_ids,omitempty"`
+	ToolOutputSources                          []string  `json:"tool_output_sources,omitempty"`
+	VerificationPlanScope                      string    `json:"verification_plan_scope,omitempty"`
+	VerificationPlanSource                     string    `json:"verification_plan_source,omitempty"`
+	VerificationPlanCommands                   []string  `json:"verification_plan_commands,omitempty"`
+	VerificationPlanFiles                      []string  `json:"verification_plan_files,omitempty"`
+	VerificationPlanTestFiles                  []string  `json:"verification_plan_test_files,omitempty"`
+	VerificationPlanPlannerID                  string    `json:"verification_plan_planner_id,omitempty"`
+	VerificationPlanRationale                  string    `json:"verification_plan_rationale,omitempty"`
+	VerificationPlanAuditTrail                 []string  `json:"verification_plan_audit_trail,omitempty"`
+	VerificationPlanCompatibilitySensitive     bool      `json:"verification_plan_compatibility_sensitive"`
+	VerificationPlanSelectionInputs            []string  `json:"verification_plan_selection_inputs,omitempty"`
+	VerificationPlanPolicyPreferences          []string  `json:"verification_plan_policy_preferences,omitempty"`
+	VerificationPlanPolicyRequiresVerification bool      `json:"verification_plan_policy_requires_verification"`
+	VerificationStatus                         string    `json:"verification_status,omitempty"`
+	VerificationCheckCount                     int       `json:"verification_check_count,omitempty"`
+	ArchaeoAssociated                          bool      `json:"archaeo_associated"`
+	PatternRefCount                            int       `json:"pattern_ref_count,omitempty"`
+	TensionRefCount                            int       `json:"tension_ref_count,omitempty"`
+	MutationObserved                           bool      `json:"mutation_observed"`
+	EscalationTarget                           string    `json:"escalation_target,omitempty"`
+	EscalationTriggered                        bool      `json:"escalation_triggered"`
+	DeniedToolUsage                            []string  `json:"denied_tool_usage,omitempty"`
+	Diagnostics                                []string  `json:"diagnostics,omitempty"`
+	Summary                                    string    `json:"summary,omitempty"`
+	UpdatedAt                                  time.Time `json:"updated_at,omitempty"`
 }
 
 type ChatCapabilityRuntimeState struct {
-	PrimaryCapabilityID              string    `json:"primary_capability_id,omitempty"`
-	SupportingCapabilityIDs          []string  `json:"supporting_capability_ids,omitempty"`
-	ExecutedRecipeIDs                []string  `json:"executed_recipe_ids,omitempty"`
-	SpecializedCapabilityIDs         []string  `json:"specialized_capability_ids,omitempty"`
-	BehaviorPath                     string    `json:"behavior_path,omitempty"`
-	PolicySnapshotID                 string    `json:"policy_snapshot_id,omitempty"`
-	AdmittedCapabilityIDs            []string  `json:"admitted_capability_ids,omitempty"`
-	AdmittedModelTools               []string  `json:"admitted_model_tools,omitempty"`
-	AskActive                        bool      `json:"ask_active"`
-	InspectActive                    bool      `json:"inspect_active"`
-	ImplementActive                  bool      `json:"implement_active"`
-	NonMutating                      bool      `json:"non_mutating"`
-	InspectFirst                     bool      `json:"inspect_first"`
-	LazySemanticAcquisitionEligible  bool      `json:"lazy_semantic_acquisition_eligible"`
-	LazySemanticAcquisitionTriggered bool      `json:"lazy_semantic_acquisition_triggered"`
-	DirectEditExecutionActive        bool      `json:"direct_edit_execution_active"`
-	LocalReviewActive                bool      `json:"local_review_active"`
-	TargetedVerificationRepairActive bool      `json:"targeted_verification_repair_active"`
-	ArchaeoSupportActive             bool      `json:"archaeo_support_active"`
-	ArchaeoSupportTriggered          bool      `json:"archaeo_support_triggered"`
-	MutationObserved                 bool      `json:"mutation_observed"`
-	VerificationStatus               string    `json:"verification_status,omitempty"`
-	VerificationCheckCount           int       `json:"verification_check_count,omitempty"`
-	ToolCapabilityIDs                []string  `json:"tool_capability_ids,omitempty"`
-	SharedContextEnabled             bool      `json:"shared_context_enabled"`
-	SharedContextRecentMutationCount int       `json:"shared_context_recent_mutation_count,omitempty"`
-	Diagnostics                      []string  `json:"diagnostics,omitempty"`
-	Summary                          string    `json:"summary,omitempty"`
-	UpdatedAt                        time.Time `json:"updated_at,omitempty"`
+	PrimaryCapabilityID                        string    `json:"primary_capability_id,omitempty"`
+	SupportingCapabilityIDs                    []string  `json:"supporting_capability_ids,omitempty"`
+	ExecutedRecipeIDs                          []string  `json:"executed_recipe_ids,omitempty"`
+	SpecializedCapabilityIDs                   []string  `json:"specialized_capability_ids,omitempty"`
+	BehaviorPath                               string    `json:"behavior_path,omitempty"`
+	PolicySnapshotID                           string    `json:"policy_snapshot_id,omitempty"`
+	AdmittedCapabilityIDs                      []string  `json:"admitted_capability_ids,omitempty"`
+	AdmittedModelTools                         []string  `json:"admitted_model_tools,omitempty"`
+	AskActive                                  bool      `json:"ask_active"`
+	InspectActive                              bool      `json:"inspect_active"`
+	ImplementActive                            bool      `json:"implement_active"`
+	NonMutating                                bool      `json:"non_mutating"`
+	InspectFirst                               bool      `json:"inspect_first"`
+	LazySemanticAcquisitionEligible            bool      `json:"lazy_semantic_acquisition_eligible"`
+	LazySemanticAcquisitionTriggered           bool      `json:"lazy_semantic_acquisition_triggered"`
+	DirectEditExecutionActive                  bool      `json:"direct_edit_execution_active"`
+	LocalReviewActive                          bool      `json:"local_review_active"`
+	TargetedVerificationRepairActive           bool      `json:"targeted_verification_repair_active"`
+	ArchaeoSupportActive                       bool      `json:"archaeo_support_active"`
+	ArchaeoSupportTriggered                    bool      `json:"archaeo_support_triggered"`
+	MutationObserved                           bool      `json:"mutation_observed"`
+	VerificationPlanScope                      string    `json:"verification_plan_scope,omitempty"`
+	VerificationPlanSource                     string    `json:"verification_plan_source,omitempty"`
+	VerificationPlanCommands                   []string  `json:"verification_plan_commands,omitempty"`
+	VerificationPlanFiles                      []string  `json:"verification_plan_files,omitempty"`
+	VerificationPlanTestFiles                  []string  `json:"verification_plan_test_files,omitempty"`
+	VerificationPlanPlannerID                  string    `json:"verification_plan_planner_id,omitempty"`
+	VerificationPlanRationale                  string    `json:"verification_plan_rationale,omitempty"`
+	VerificationPlanAuditTrail                 []string  `json:"verification_plan_audit_trail,omitempty"`
+	VerificationPlanCompatibilitySensitive     bool      `json:"verification_plan_compatibility_sensitive"`
+	VerificationPlanSelectionInputs            []string  `json:"verification_plan_selection_inputs,omitempty"`
+	VerificationPlanPolicyPreferences          []string  `json:"verification_plan_policy_preferences,omitempty"`
+	VerificationPlanPolicyRequiresVerification bool      `json:"verification_plan_policy_requires_verification"`
+	VerificationStatus                         string    `json:"verification_status,omitempty"`
+	VerificationCheckCount                     int       `json:"verification_check_count,omitempty"`
+	ToolCapabilityIDs                          []string  `json:"tool_capability_ids,omitempty"`
+	SharedContextEnabled                       bool      `json:"shared_context_enabled"`
+	SharedContextRecentMutationCount           int       `json:"shared_context_recent_mutation_count,omitempty"`
+	Diagnostics                                []string  `json:"diagnostics,omitempty"`
+	Summary                                    string    `json:"summary,omitempty"`
+	UpdatedAt                                  time.Time `json:"updated_at,omitempty"`
 }
 
 type SecurityRuntimeState struct {
@@ -497,6 +535,7 @@ type UnitOfWork struct {
 	TransitionState         UnitOfWorkTransitionState `json:"transition_state,omitempty"`
 	Status                  UnitOfWorkStatus          `json:"status,omitempty"`
 	ResultClass             ExecutionResultClass      `json:"result_class,omitempty"`
+	AssuranceClass          AssuranceClass            `json:"assurance_class,omitempty"`
 	DeferredIssueIDs        []string                  `json:"deferred_issue_ids,omitempty"`
 	CreatedAt               time.Time                 `json:"created_at,omitempty"`
 	UpdatedAt               time.Time                 `json:"updated_at,omitempty"`
@@ -614,6 +653,7 @@ type CompiledExecution struct {
 	TransitionState             UnitOfWorkTransitionState `json:"transition_state,omitempty"`
 	Status                      ExecutionStatus           `json:"status,omitempty"`
 	ResultClass                 ExecutionResultClass      `json:"result_class,omitempty"`
+	AssuranceClass              AssuranceClass            `json:"assurance_class,omitempty"`
 	DeferredIssueIDs            []string                  `json:"deferred_issue_ids,omitempty"`
 	ArchaeoRefs                 map[string][]string       `json:"archaeo_refs,omitempty"`
 	ProviderSnapshotRefs        []string                  `json:"provider_snapshot_refs,omitempty"`
@@ -627,6 +667,7 @@ type RuntimeExecutionStatus struct {
 	UnitOfWorkID      string               `json:"unit_of_work_id,omitempty"`
 	Status            ExecutionStatus      `json:"status,omitempty"`
 	ResultClass       ExecutionResultClass `json:"result_class,omitempty"`
+	AssuranceClass    AssuranceClass       `json:"assurance_class,omitempty"`
 	ActivePlanID      string               `json:"active_plan_id,omitempty"`
 	ActivePlanVersion int                  `json:"active_plan_version,omitempty"`
 	ActiveStepID      string               `json:"active_step_id,omitempty"`
@@ -709,25 +750,72 @@ type VerificationPolicy struct {
 	ManualOutcomeAllowed  bool     `json:"manual_outcome_allowed"`
 }
 
+type VerificationProvenanceClass string
+
+const (
+	VerificationProvenanceExecuted VerificationProvenanceClass = "executed"
+	VerificationProvenanceReused   VerificationProvenanceClass = "reused"
+	VerificationProvenanceFallback VerificationProvenanceClass = "fallback"
+	VerificationProvenanceManual   VerificationProvenanceClass = "manual"
+	VerificationProvenanceAbsent   VerificationProvenanceClass = "absent"
+)
+
 type VerificationCheckRecord struct {
-	Name    string `json:"name,omitempty"`
-	Command string `json:"command,omitempty"`
-	Status  string `json:"status,omitempty"`
-	Details string `json:"details,omitempty"`
+	Name                  string                      `json:"name,omitempty"`
+	Command               string                      `json:"command,omitempty"`
+	Args                  []string                    `json:"args,omitempty"`
+	WorkingDirectory      string                      `json:"working_directory,omitempty"`
+	Status                string                      `json:"status,omitempty"`
+	ExitStatus            int                         `json:"exit_status,omitempty"`
+	DurationMillis        int64                       `json:"duration_millis,omitempty"`
+	FilesUnderCheck       []string                    `json:"files_under_check,omitempty"`
+	ScopeKind             string                      `json:"scope_kind,omitempty"`
+	OriginatingCapability string                      `json:"originating_capability,omitempty"`
+	RunID                 string                      `json:"run_id,omitempty"`
+	Timestamp             time.Time                   `json:"timestamp,omitempty"`
+	Provenance            VerificationProvenanceClass `json:"provenance,omitempty"`
+	Details               string                      `json:"details,omitempty"`
 }
 
 type VerificationEvidence struct {
-	Status          string                    `json:"status"`
-	Summary         string                    `json:"summary,omitempty"`
-	Checks          []VerificationCheckRecord `json:"checks,omitempty"`
-	Source          string                    `json:"source,omitempty"`
-	EvidencePresent bool                      `json:"evidence_present"`
+	Status          string                      `json:"status"`
+	Summary         string                      `json:"summary,omitempty"`
+	Checks          []VerificationCheckRecord   `json:"checks,omitempty"`
+	Source          string                      `json:"source,omitempty"`
+	Provenance      VerificationProvenanceClass `json:"provenance,omitempty"`
+	RunID           string                      `json:"run_id,omitempty"`
+	Timestamp       time.Time                   `json:"timestamp,omitempty"`
+	EvidencePresent bool                        `json:"evidence_present"`
 }
 
 type SuccessGateResult struct {
-	Allowed bool     `json:"allowed"`
-	Reason  string   `json:"reason,omitempty"`
-	Details []string `json:"details,omitempty"`
+	Allowed        bool           `json:"allowed"`
+	Reason         string         `json:"reason,omitempty"`
+	Details        []string       `json:"details,omitempty"`
+	AssuranceClass AssuranceClass `json:"assurance_class,omitempty"`
+	WaiverApplied  bool           `json:"waiver_applied"`
+}
+
+type WaiverKind string
+
+const (
+	WaiverKindVerification  WaiverKind = "verification"
+	WaiverKindTDDRedPhase   WaiverKind = "tdd_red_phase"
+	WaiverKindReviewBlock   WaiverKind = "review_block"
+	WaiverKindCompatibility WaiverKind = "compatibility_check"
+)
+
+type ExecutionWaiver struct {
+	WaiverID   string         `json:"waiver_id,omitempty"`
+	Kind       WaiverKind     `json:"kind,omitempty"`
+	Scope      map[string]any `json:"scope,omitempty"`
+	Reason     string         `json:"reason,omitempty"`
+	GrantedBy  string         `json:"granted_by,omitempty"`
+	RunID      string         `json:"run_id,omitempty"`
+	CreatedAt  time.Time      `json:"created_at,omitempty"`
+	ExpiresAt  time.Time      `json:"expires_at,omitempty"`
+	ArchaeoRef string         `json:"archaeo_ref,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
 type EditIntent struct {
@@ -779,17 +867,21 @@ type ActionLogEntry struct {
 }
 
 type ProofSurface struct {
-	ModeID                string   `json:"mode_id,omitempty"`
-	ProfileID             string   `json:"profile_id,omitempty"`
-	PrimaryFamilyID       string   `json:"primary_family_id,omitempty"`
-	VerificationStatus    string   `json:"verification_status,omitempty"`
-	SuccessGateReason     string   `json:"success_gate_reason,omitempty"`
-	ArtifactKinds         []string `json:"artifact_kinds,omitempty"`
-	WorkflowRetrievalUsed bool     `json:"workflow_retrieval_used"`
-	CapabilityIDs         []string `json:"capability_ids,omitempty"`
-	GateEvalsCount        int      `json:"gate_evals_count,omitempty"`
-	PhasesExecuted        []string `json:"phases_executed,omitempty"`
-	RecoveryAttempts      int      `json:"recovery_attempts,omitempty"`
+	ModeID                 string   `json:"mode_id,omitempty"`
+	ProfileID              string   `json:"profile_id,omitempty"`
+	PrimaryFamilyID        string   `json:"primary_family_id,omitempty"`
+	VerificationStatus     string   `json:"verification_status,omitempty"`
+	VerificationProvenance string   `json:"verification_provenance,omitempty"`
+	RecoveryStatus         string   `json:"recovery_status,omitempty"`
+	SuccessGateReason      string   `json:"success_gate_reason,omitempty"`
+	AssuranceClass         string   `json:"assurance_class,omitempty"`
+	ArtifactKinds          []string `json:"artifact_kinds,omitempty"`
+	WorkflowRetrievalUsed  bool     `json:"workflow_retrieval_used"`
+	CapabilityIDs          []string `json:"capability_ids,omitempty"`
+	GateEvalsCount         int      `json:"gate_evals_count,omitempty"`
+	PhasesExecuted         []string `json:"phases_executed,omitempty"`
+	RecoveryAttempts       int      `json:"recovery_attempts,omitempty"`
+	WaiverApplied          bool     `json:"waiver_applied"`
 }
 
 // RuntimeSurfaces abstracts access to workflow and runtime stores

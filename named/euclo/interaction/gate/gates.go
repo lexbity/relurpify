@@ -411,14 +411,16 @@ func testDrivenGenerationGates() []PhaseGate {
 			From: PhasePlanTests,
 			To:   PhaseImplement,
 			DefaultGate: ArtifactGate{
-				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindPlan},
+				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindPlan, euclotypes.ArtifactKindTDDLifecycle},
 			},
 			ModeGates: map[string]ArtifactGate{
 				"tdd": {
-					RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindPlan},
+					RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindPlan, euclotypes.ArtifactKindTDDLifecycle},
 					Validators: []ArtifactValidator{
 						{Kind: euclotypes.ArtifactKindPlan, Check: ValidatorCheckNotEmpty},
 						{Kind: euclotypes.ArtifactKindPlan, Field: "steps", Check: ValidatorCheckMinCount, Value: 1},
+						{Kind: euclotypes.ArtifactKindTDDLifecycle, Check: ValidatorCheckNotEmpty},
+						{Kind: euclotypes.ArtifactKindTDDLifecycle, Field: "phase_history", Check: ValidatorCheckMinCount, Value: 2},
 					},
 				},
 			},
@@ -428,7 +430,12 @@ func testDrivenGenerationGates() []PhaseGate {
 			From: PhaseImplement,
 			To:   PhaseVerify,
 			DefaultGate: ArtifactGate{
-				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindEditIntent},
+				RequiredKinds: []euclotypes.ArtifactKind{euclotypes.ArtifactKindEditIntent, euclotypes.ArtifactKindVerification, euclotypes.ArtifactKindTDDLifecycle},
+				Validators: []ArtifactValidator{
+					{Kind: euclotypes.ArtifactKindTDDLifecycle, Field: "current_phase", Check: ValidatorCheckEquals, Value: "complete"},
+					{Kind: euclotypes.ArtifactKindTDDLifecycle, Field: "status", Check: ValidatorCheckEquals, Value: "completed"},
+					{Kind: euclotypes.ArtifactKindTDDLifecycle, Field: "phase_history", Check: ValidatorCheckMinCount, Value: 4},
+				},
 			},
 			OnFail: GateFailBlock,
 		},

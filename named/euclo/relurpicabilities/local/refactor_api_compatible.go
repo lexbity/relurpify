@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
+	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
 type refactorAPICompatibleCapability struct {
@@ -138,15 +139,50 @@ func (c *refactorAPICompatibleCapability) Execute(ctx context.Context, env euclo
 	}
 	verifyArtifact := (&reviewCompatibilityCapability{env: c.env}).Execute(ctx, env)
 	artifacts = append(artifacts, verifyArtifact.Artifacts...)
-	verification := map[string]any{"status": "pass", "summary": "API-compatible refactor completed", "method": methodName, "step_count": len(plan.Steps)}
-	artifacts = append(artifacts, euclotypes.Artifact{
-		ID:         "refactor_verification",
-		Kind:       euclotypes.ArtifactKindVerification,
-		Summary:    "API-compatible refactor verified",
-		Payload:    verification,
-		ProducerID: producerID,
-		Status:     "produced",
-	})
+	mergeStateArtifactsToContext(env.State, artifacts)
+	if verificationArtifacts, executed, execErr := ExecuteVerificationFlow(ctx, env, eucloruntime.SnapshotCapabilities(env.Registry)); execErr != nil {
+		return euclotypes.ExecutionResult{
+			Status:    euclotypes.ExecutionStatusFailed,
+			Summary:   "API-compatible refactor failed verification",
+			Artifacts: artifacts,
+			FailureInfo: &euclotypes.CapabilityFailure{
+				Code:         "refactor_api_compatible_verification_failed",
+				Message:      execErr.Error(),
+				Recoverable:  true,
+				FailedPhase:  "verify",
+				ParadigmUsed: "react",
+			},
+		}
+	} else if executed {
+		artifacts = append(artifacts, verificationArtifacts...)
+		if verifyPayload, ok := verificationPayloadFromState(env.State); ok && verificationPayloadFailed(verifyPayload) {
+			repairResult := NewFailedVerificationRepairCapability(c.env).Execute(ctx, env)
+			artifacts = append(artifacts, repairResult.Artifacts...)
+			if repairResult.Status == euclotypes.ExecutionStatusFailed {
+				return repairResult
+			}
+			mergeStateArtifactsToContext(env.State, artifacts)
+			return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "API-compatible refactor repaired failing verification", Artifacts: artifacts}
+		}
+	} else if existing, ok := env.State.Get("pipeline.verify"); ok && existing != nil {
+		artifacts = append(artifacts, euclotypes.Artifact{
+			ID:         "refactor_verification",
+			Kind:       euclotypes.ArtifactKindVerification,
+			Summary:    "API-compatible refactor verification recorded",
+			Payload:    existing,
+			ProducerID: producerID,
+			Status:     "produced",
+		})
+		if verifyPayload, ok := existing.(map[string]any); ok && verificationPayloadFailed(verifyPayload) {
+			repairResult := NewFailedVerificationRepairCapability(c.env).Execute(ctx, env)
+			artifacts = append(artifacts, repairResult.Artifacts...)
+			if repairResult.Status == euclotypes.ExecutionStatusFailed {
+				return repairResult
+			}
+			mergeStateArtifactsToContext(env.State, artifacts)
+			return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "API-compatible refactor repaired failing verification", Artifacts: artifacts}
+		}
+	}
 	mergeStateArtifactsToContext(env.State, artifacts)
 	return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "API-compatible refactor completed", Artifacts: artifacts}
 }
@@ -233,7 +269,7 @@ func compatibilityPassed(artifact euclotypes.Artifact) bool {
 }
 
 func projectedRefactorSurface(env euclotypes.ExecutionEnvelope, instruction string) map[string]any {
-	before := extractAPISurface(reviewScopeFiles(env))
+	before := extractAPISurfaceWithEnv(env.Environment, instruction, reviewScopeFiles(env))
 	after := normalizeSurface(before)
 	if after == nil {
 		after = map[string]any{"functions": []map[string]any{}, "types": []map[string]any{}}

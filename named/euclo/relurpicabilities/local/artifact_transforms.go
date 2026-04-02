@@ -292,18 +292,39 @@ func buildVerificationSummaryPayload(verificationArtifacts []euclotypes.Artifact
 	var gaps []string
 	overallStatus := "pass"
 	confidence := 0.9
+	provenance := "absent"
+	runID := ""
+	executedCount := 0
+	reusedCount := 0
+	fallbackCount := 0
 	for _, artifact := range verificationArtifacts {
 		record, ok := artifact.Payload.(map[string]any)
 		if !ok {
 			continue
 		}
+		if current := stringValue(record["provenance"]); current != "" {
+			provenance = current
+			switch current {
+			case "executed":
+				executedCount++
+			case "reused":
+				reusedCount++
+			case "fallback":
+				fallbackCount++
+			}
+		}
+		if runID == "" {
+			runID = stringValue(record["run_id"])
+		}
 		if summary := firstNonEmpty(stringValue(record["summary"]), artifact.Summary); summary != "" {
 			status := classifyVerificationStatus(summary)
 			checks = append(checks, map[string]any{
-				"kind":     classifyVerificationKind(summary),
-				"status":   status,
-				"detail":   summary,
-				"duration": stringValue(record["duration"]),
+				"kind":       classifyVerificationKind(summary),
+				"status":     status,
+				"detail":     summary,
+				"duration":   stringValue(record["duration"]),
+				"provenance": firstNonEmpty(stringValue(record["provenance"]), provenance),
+				"run_id":     stringValue(record["run_id"]),
 			})
 			switch status {
 			case "fail":
@@ -331,10 +352,12 @@ func buildVerificationSummaryPayload(verificationArtifacts []euclotypes.Artifact
 	}
 	if len(checks) == 0 {
 		checks = append(checks, map[string]any{
-			"kind":     "verification",
-			"status":   "partial",
-			"detail":   "No structured verification checks were available",
-			"duration": "",
+			"kind":       "verification",
+			"status":     "partial",
+			"detail":     "No structured verification checks were available",
+			"duration":   "",
+			"provenance": provenance,
+			"run_id":     runID,
 		})
 		overallStatus = "partial"
 		confidence = 0.4
@@ -343,11 +366,16 @@ func buildVerificationSummaryPayload(verificationArtifacts []euclotypes.Artifact
 		gaps = append(gaps, "verification output did not identify which checks were skipped")
 	}
 	return map[string]any{
-		"overall_status": overallStatus,
-		"checks":         checks,
-		"gaps":           uniqueStrings(gaps),
-		"confidence":     confidence,
-		"recommendation": verificationRecommendation(overallStatus),
+		"overall_status":       overallStatus,
+		"provenance":           provenance,
+		"run_id":               runID,
+		"checks":               checks,
+		"gaps":                 uniqueStrings(gaps),
+		"confidence":           confidence,
+		"executed_check_count": executedCount,
+		"reused_check_count":   reusedCount,
+		"fallback_check_count": fallbackCount,
+		"recommendation":       verificationRecommendation(overallStatus),
 	}
 }
 

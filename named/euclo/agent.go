@@ -13,7 +13,6 @@ import (
 	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
-	eucloses "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
@@ -40,7 +39,12 @@ import (
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	eucloses "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
+	golangpkg "github.com/lexcodex/relurpify/platform/lang/go"
+	jspkg "github.com/lexcodex/relurpify/platform/lang/js"
+	pythonpkg "github.com/lexcodex/relurpify/platform/lang/python"
+	rustpkg "github.com/lexcodex/relurpify/platform/lang/rust"
 )
 
 // Dispatch model:
@@ -104,7 +108,6 @@ type Agent struct {
 	RuntimeProviders    []core.Provider
 }
 
-
 func New(env agentenv.AgentEnvironment) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env)
@@ -115,12 +118,28 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 	a.Config = env.Config
 	a.Memory = env.Memory
 	a.Environment = env
+	if a.Environment.VerificationPlanner == nil {
+		a.Environment.VerificationPlanner = frameworkplan.NewVerificationScopePlanner(
+			golangpkg.NewVerificationResolver(),
+			pythonpkg.NewVerificationResolver(),
+			rustpkg.NewVerificationResolver(),
+			jspkg.NewVerificationResolver(),
+		)
+	}
+	if a.Environment.CompatibilitySurfaceExtractor == nil {
+		a.Environment.CompatibilitySurfaceExtractor = frameworkplan.NewCompatibilitySurfacePlanner(
+			golangpkg.NewCompatibilitySurfaceResolver(),
+			pythonpkg.NewCompatibilitySurfaceResolver(),
+			rustpkg.NewCompatibilitySurfaceResolver(),
+			jspkg.NewCompatibilitySurfaceResolver(),
+		)
+	}
 	if env.IndexManager != nil && env.IndexManager.GraphDB != nil {
 		a.GraphDB = env.IndexManager.GraphDB
 	}
 	if a.Delegate != nil {
 		a.reactReady = false
-		if err := a.Delegate.InitializeEnvironment(env); err != nil {
+		if err := a.Delegate.InitializeEnvironment(a.Environment); err != nil {
 			return err
 		}
 	}
@@ -151,7 +170,7 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 		a.InteractionRegistry = defaultInteractionRegistry()
 	}
 	if a.CodingCapabilities == nil {
-		a.CodingCapabilities = capabilities.NewDefaultCapabilityRegistry(env)
+		a.CodingCapabilities = capabilities.NewDefaultCapabilityRegistry(a.Environment)
 	}
 	if a.DoomLoop == nil {
 		a.DoomLoop = capability.NewDoomLoopDetector(capability.DefaultDoomLoopConfig())
@@ -171,14 +190,14 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 			orchestrate.AdaptCapabilityRegistry(a.CodingCapabilities),
 			a.ProfileRegistry,
 			a.ModeRegistry,
-			env,
+			a.Environment,
 		)
 	}
 	if a.ProfileCtrl == nil {
 		a.ProfileCtrl = orchestrate.NewProfileController(
 			orchestrate.AdaptCapabilityRegistry(a.CodingCapabilities),
 			gate.DefaultPhaseGates(),
-			env,
+			a.Environment,
 			a.ProfileRegistry,
 			a.RecoveryCtrl,
 		)
@@ -186,7 +205,7 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 	if a.BehaviorService == nil {
 		a.BehaviorService = orchestrate.NewService()
 	}
-	return a.Initialize(env.Config)
+	return a.Initialize(a.Environment.Config)
 }
 
 func (a *Agent) Initialize(cfg *core.Config) error {
@@ -1226,7 +1245,20 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	issues = eucloruntime.PersistDeferredExecutionIssuesToWorkspace(task, state, issues)
 	eucloruntime.SeedDeferredIssueState(state, issues)
 	work.DeferredIssueIDs = deferredIssueIDsFromState(state, work.DeferredIssueIDs)
+	if raw, ok := state.Get("euclo.assurance_class"); ok && raw != nil {
+		if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" && value != "<nil>" {
+			work.AssuranceClass = eucloruntime.AssuranceClass(value)
+		}
+	}
 	work.ResultClass = euclowork.ResultClassForOutcome(status, work.DeferredIssueIDs, execErr)
+	switch work.AssuranceClass {
+	case eucloruntime.AssuranceClassRepairExhausted:
+		work.ResultClass = eucloruntime.ExecutionResultClassFailed
+		status = eucloruntime.ExecutionStatusFailed
+	case eucloruntime.AssuranceClassReviewBlocked:
+		work.ResultClass = eucloruntime.ExecutionResultClassBlocked
+		status = eucloruntime.ExecutionStatusBlocked
+	}
 	status = euclowork.StatusForResultClass(status, work.ResultClass)
 	switch work.ResultClass {
 	case eucloruntime.ExecutionResultClassCompletedWithDeferrals:
@@ -1390,12 +1422,20 @@ func (a *Agent) applyRuntimeResultMetadata(result *core.Result, state *core.Cont
 	if raw, ok := state.Get("euclo.deferred_issue_ids"); ok && raw != nil {
 		result.Metadata["deferred_issue_ids"] = raw
 	}
+	if raw, ok := state.Get("euclo.assurance_class"); ok && raw != nil {
+		result.Metadata["assurance_class"] = raw
+	}
 	if raw, ok := state.Get("pipeline.final_output"); ok && raw != nil {
 		result.Data["final_output"] = raw
 		if payload, ok := raw.(map[string]any); ok {
 			if _, exists := result.Metadata["result_class"]; !exists {
 				if value := strings.TrimSpace(fmt.Sprint(payload["result_class"])); value != "" && value != "<nil>" {
 					result.Metadata["result_class"] = value
+				}
+			}
+			if _, exists := result.Metadata["assurance_class"]; !exists {
+				if value := strings.TrimSpace(fmt.Sprint(payload["assurance_class"])); value != "" && value != "<nil>" {
+					result.Metadata["assurance_class"] = value
 				}
 			}
 		}

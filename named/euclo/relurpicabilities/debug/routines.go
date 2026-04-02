@@ -2,7 +2,10 @@ package debug
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
@@ -82,9 +85,26 @@ func (flawSurfaceRoutine) ID() string { return FlawSurface }
 
 func (flawSurfaceRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	payload := map[string]any{
-		"category":     "flaw_surface",
-		"pattern_refs": append([]string(nil), in.Work.PatternRefs...),
-		"summary":      "flaw-surface routine exposed suspicious design or implementation patterns",
+		"review_source": "euclo:debug.flaw-surface",
+		"category":      "flaw_surface",
+		"pattern_refs":  append([]string(nil), in.Work.PatternRefs...),
+		"findings": []map[string]any{
+			{
+				"severity":         "warning",
+				"description":      "flaw-surface routine exposed suspicious design or implementation patterns",
+				"rationale":        "debug investigation identified suspicious implementation patterns worth review",
+				"category":         "correctness",
+				"confidence":       0.6,
+				"impacted_files":   []string{},
+				"impacted_symbols": append([]string(nil), in.Work.RequestProvenanceRefs...),
+				"review_source":    "euclo:debug.flaw-surface",
+				"traceability": map[string]any{
+					"source":       "debug_pattern_context",
+					"pattern_refs": append([]string(nil), in.Work.PatternRefs...),
+				},
+			},
+		},
+		"summary": "flaw-surface routine exposed suspicious design or implementation patterns",
 	}
 	return []euclotypes.Artifact{{
 		ID:         "debug_flaw_surface",
@@ -100,6 +120,8 @@ func (verificationRepairRoutine) ID() string { return VerificationRepair }
 
 func (verificationRepairRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	status := "partial"
+	recoveryStatus := ""
+	attemptCount := 0
 	if in.State != nil {
 		if raw, ok := in.State.Get("pipeline.verify"); ok && raw != nil {
 			if record, ok := raw.(map[string]any); ok {
@@ -108,18 +130,67 @@ func (verificationRepairRoutine) Execute(_ context.Context, in euclorelurpic.Rou
 				}
 			}
 		}
+		if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
+			if record, ok := raw.(map[string]any); ok {
+				recoveryStatus = strings.TrimSpace(stringValueAny(record["status"]))
+				switch typed := record["attempt_count"].(type) {
+				case int:
+					attemptCount = typed
+				case float64:
+					attemptCount = int(typed)
+				}
+			}
+		}
 	}
 	payload := map[string]any{
-		"status":      status,
-		"repair_path": "bounded_debug_repair",
-		"summary":     "verification-repair routine prepared bounded repair guidance for debug work",
+		"overall_status":  status,
+		"repair_path":     "bounded_debug_repair",
+		"provenance":      verificationProvenance(in.State),
+		"recovery_status": recoveryStatus,
+		"attempt_count":   attemptCount,
+		"summary":         "verification-repair routine prepared bounded repair guidance for debug work",
 	}
-	return []euclotypes.Artifact{{
+	artifacts := []euclotypes.Artifact{{
 		ID:         "debug_verification_repair",
 		Kind:       euclotypes.ArtifactKindVerificationSummary,
 		Summary:    "verification-repair routine prepared bounded repair guidance for debug work",
 		Payload:    payload,
 		ProducerID: VerificationRepair,
 		Status:     "produced",
-	}}, nil
+	}}
+	if in.State != nil {
+		if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
+			artifacts = append(artifacts, euclotypes.Artifact{
+				ID:         "debug_verification_recovery_trace",
+				Kind:       euclotypes.ArtifactKindRecoveryTrace,
+				Summary:    firstNonEmptyDebug(recoveryStatus, "verification repair recovery trace"),
+				Payload:    raw,
+				ProducerID: VerificationRepair,
+				Status:     "produced",
+			})
+		}
+	}
+	return artifacts, nil
+}
+
+func verificationProvenance(state *core.Context) string {
+	if state == nil {
+		return "absent"
+	}
+	if raw, ok := state.Get("pipeline.verify"); ok && raw != nil {
+		if record, ok := raw.(map[string]any); ok {
+			if value, ok := record["provenance"].(string); ok && strings.TrimSpace(value) != "" {
+				return strings.TrimSpace(value)
+			}
+		}
+		return "executed"
+	}
+	return "absent"
+}
+
+func stringValueAny(v any) string {
+	if value, ok := v.(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return strings.TrimSpace(fmt.Sprint(v))
 }

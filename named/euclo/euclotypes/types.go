@@ -42,7 +42,10 @@ const (
 	ArtifactKindPlanCandidates          ArtifactKind = "euclo.plan_candidates"
 	ArtifactKindEditIntent              ArtifactKind = "euclo.edit_intent"
 	ArtifactKindEditExecution           ArtifactKind = "euclo.edit_execution"
+	ArtifactKindVerificationPlan        ArtifactKind = "euclo.verification_plan"
 	ArtifactKindVerification            ArtifactKind = "euclo.verification"
+	ArtifactKindTDDLifecycle            ArtifactKind = "euclo.tdd_lifecycle"
+	ArtifactKindWaiver                  ArtifactKind = "euclo.waiver"
 	ArtifactKindDiffSummary             ArtifactKind = "euclo.diff_summary"
 	ArtifactKindVerificationSummary     ArtifactKind = "euclo.verification_summary"
 	ArtifactKindProfileSelection        ArtifactKind = "euclo.profile_selection"
@@ -111,7 +114,10 @@ func CollectArtifactsFromState(state *core.Context) []Artifact {
 		{Key: "euclo.plan_candidates", Kind: ArtifactKindPlanCandidates},
 		{Key: "pipeline.code", Kind: ArtifactKindEditIntent, Normalize: normalizeEditIntent},
 		{Key: "euclo.edit_execution", Kind: ArtifactKindEditExecution},
+		{Key: "euclo.verification_plan", Kind: ArtifactKindVerificationPlan},
 		{Key: "pipeline.verify", Kind: ArtifactKindVerification},
+		{Key: "euclo.tdd.lifecycle", Kind: ArtifactKindTDDLifecycle},
+		{Key: "euclo.waiver", Kind: ArtifactKindWaiver},
 		{Key: "euclo.diff_summary", Kind: ArtifactKindDiffSummary},
 		{Key: "euclo.verification_summary", Kind: ArtifactKindVerificationSummary},
 		{Key: "euclo.profile_selection", Kind: ArtifactKindProfileSelection},
@@ -272,7 +278,10 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 		ArtifactKindPlanCandidates,
 		ArtifactKindEditIntent,
 		ArtifactKindEditExecution,
+		ArtifactKindVerificationPlan,
 		ArtifactKindVerification,
+		ArtifactKindTDDLifecycle,
+		ArtifactKindWaiver,
 		ArtifactKindDiffSummary,
 		ArtifactKindVerificationSummary,
 		ArtifactKindProfileSelection,
@@ -324,8 +333,14 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 				report["edit_intent"] = artifact.Payload
 			case ArtifactKindEditExecution:
 				report["edit_execution"] = artifact.Payload
+			case ArtifactKindVerificationPlan:
+				report["verification_plan"] = artifact.Payload
 			case ArtifactKindVerification:
 				report["verification"] = artifact.Payload
+			case ArtifactKindTDDLifecycle:
+				report["tdd_lifecycle"] = artifact.Payload
+			case ArtifactKindWaiver:
+				report["waiver"] = artifact.Payload
 			case ArtifactKindDiffSummary:
 				report["diff_summary"] = artifact.Payload
 			case ArtifactKindVerificationSummary:
@@ -398,6 +413,9 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 	if resultClass := executionResultClassFromReport(report); resultClass != "" {
 		report["result_class"] = resultClass
 	}
+	if assuranceClass := assuranceClassFromReport(report); assuranceClass != "" {
+		report["assurance_class"] = assuranceClass
+	}
 	if deferredRefs := deferredIssueIDsFromReport(report); len(deferredRefs) > 0 {
 		report["deferred_issue_ids"] = deferredRefs
 	}
@@ -419,6 +437,19 @@ func executionResultClassFromReport(report map[string]any) string {
 			continue
 		}
 		if value := strings.TrimSpace(fmt.Sprint(payload["result_class"])); value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
+}
+
+func assuranceClassFromReport(report map[string]any) string {
+	for _, key := range []string{"success_gate", "execution_status", "compiled_execution", "proof_surface"} {
+		payload := payloadMap(report[key])
+		if payload == nil {
+			continue
+		}
+		if value := strings.TrimSpace(fmt.Sprint(payload["assurance_class"])); value != "" && value != "<nil>" {
 			return value
 		}
 	}
@@ -1212,8 +1243,14 @@ func StateKeyForArtifactKind(kind ArtifactKind) string {
 		return "pipeline.code"
 	case ArtifactKindEditExecution:
 		return "euclo.edit_execution"
+	case ArtifactKindVerificationPlan:
+		return "euclo.verification_plan"
 	case ArtifactKindVerification:
 		return "pipeline.verify"
+	case ArtifactKindTDDLifecycle:
+		return "euclo.tdd.lifecycle"
+	case ArtifactKindWaiver:
+		return "euclo.waiver"
 	case ArtifactKindDiffSummary:
 		return "euclo.diff_summary"
 	case ArtifactKindVerificationSummary:

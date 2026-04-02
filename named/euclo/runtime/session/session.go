@@ -278,14 +278,43 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 			editRecord = &typed
 		}
 	}
-	successGate := eucloruntime.EvaluateSuccessGate(policy, evidence, editRecord)
+	successGate := eucloruntime.EvaluateSuccessGate(policy, evidence, editRecord, in.State)
+	if raw, ok := in.State.Get("euclo.execution_waiver"); ok && raw != nil {
+		successGate.WaiverApplied = true
+		if successGate.AssuranceClass == "" || successGate.AssuranceClass == eucloruntime.AssuranceClassVerifiedSuccess {
+			successGate.AssuranceClass = eucloruntime.AssuranceClassOperatorDeferred
+		}
+	}
+	if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
+		if trace, ok := raw.(map[string]any); ok {
+			switch fmt.Sprint(trace["status"]) {
+			case "repair_exhausted":
+				successGate.AssuranceClass = eucloruntime.AssuranceClassRepairExhausted
+				if successGate.Reason == "" || successGate.Reason == "verification_status_rejected" {
+					successGate.Reason = "repair_exhausted"
+				}
+				if attempts, ok := trace["attempt_count"]; ok {
+					successGate.Details = append(successGate.Details, fmt.Sprintf("repair_attempt_count=%v", attempts))
+				}
+			case "repaired":
+				if attempts, ok := trace["attempt_count"]; ok {
+					successGate.Details = append(successGate.Details, fmt.Sprintf("repair_attempt_count=%v", attempts))
+				}
+			}
+		}
+	}
 	in.State.Set("euclo.success_gate", successGate)
+	in.State.Set("euclo.assurance_class", successGate.AssuranceClass)
+	if raw, ok := in.State.Get("euclo.execution_waiver"); ok && raw != nil {
+		in.State.Set("euclo.waiver", raw)
+	}
 	if out.Result != nil {
 		if out.Result.Data == nil {
 			out.Result.Data = map[string]any{}
 		}
 		out.Result.Data["verification"] = evidence
 		out.Result.Data["success_gate"] = successGate
+		out.Result.Data["assurance_class"] = successGate.AssuranceClass
 	}
 	if out.Err == nil && !successGate.Allowed {
 		out.Err = fmt.Errorf("euclo success gate blocked completion: %s", successGate.Reason)
@@ -318,6 +347,12 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 		}
 	}
 	finalReport := euclotypes.AssembleFinalReport(artifacts)
+	if raw, ok := in.State.Get("euclo.assurance_class"); ok && raw != nil {
+		finalReport["assurance_class"] = raw
+	}
+	if raw, ok := in.State.Get("euclo.waiver"); ok && raw != nil {
+		finalReport["waiver"] = raw
+	}
 	in.State.Set("euclo.final_report", finalReport)
 	eucloreporting.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
 	if out.Result != nil {

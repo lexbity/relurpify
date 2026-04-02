@@ -76,11 +76,14 @@ func BuildProofSurface(state *core.Context, artifacts []euclotypes.Artifact) euc
 	if raw, ok := state.Get("euclo.verification"); ok && raw != nil {
 		if typed, ok := raw.(eucloruntime.VerificationEvidence); ok {
 			proof.VerificationStatus = typed.Status
+			proof.VerificationProvenance = string(typed.Provenance)
 		}
 	}
 	if raw, ok := state.Get("euclo.success_gate"); ok && raw != nil {
 		if typed, ok := raw.(eucloruntime.SuccessGateResult); ok {
 			proof.SuccessGateReason = typed.Reason
+			proof.AssuranceClass = string(typed.AssuranceClass)
+			proof.WaiverApplied = typed.WaiverApplied
 		}
 	}
 	if raw, ok := state.Get("euclo.profile_controller"); ok && raw != nil {
@@ -96,6 +99,18 @@ func BuildProofSurface(state *core.Context, artifacts []euclotypes.Artifact) euc
 			}
 			if count, ok := typed["recovery_attempts"].(int); ok {
 				proof.RecoveryAttempts = count
+			}
+		}
+	}
+	if raw, ok := state.Get("euclo.recovery_trace"); ok && raw != nil {
+		if typed, ok := raw.(map[string]any); ok {
+			proof.RecoveryStatus = proofStringValue(typed["status"])
+			if count, ok := typed["attempt_count"].(int); ok {
+				proof.RecoveryAttempts = count
+			} else if attempts, ok := typed["attempts"].([]map[string]any); ok {
+				proof.RecoveryAttempts = len(attempts)
+			} else if attempts, ok := typed["attempts"].([]any); ok {
+				proof.RecoveryAttempts = len(attempts)
 			}
 		}
 	}
@@ -139,9 +154,20 @@ func EmitObservabilityTelemetry(telemetry core.Telemetry, task *core.Task, log [
 			"profile_id":              proof.ProfileID,
 			"primary_family_id":       proof.PrimaryFamilyID,
 			"verification_status":     proof.VerificationStatus,
+			"verification_provenance": proof.VerificationProvenance,
+			"recovery_status":         proof.RecoveryStatus,
 			"success_gate_reason":     proof.SuccessGateReason,
+			"assurance_class":         proof.AssuranceClass,
+			"waiver_applied":          proof.WaiverApplied,
 			"artifact_kinds":          proof.ArtifactKinds,
 			"workflow_retrieval_used": proof.WorkflowRetrievalUsed,
 		},
 	})
+}
+
+func proofStringValue(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }

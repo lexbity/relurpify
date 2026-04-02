@@ -7,6 +7,7 @@ import (
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
@@ -123,4 +124,85 @@ func TestSessionExecuteStopsAtCheckpointFailure(t *testing.T) {
 		archaeodomain.MutationCheckpointPreDispatch,
 		archaeodomain.MutationCheckpointPostExecution,
 	}, seen)
+}
+
+func TestSessionExecuteReportsAssuranceForMissingVerificationOnMutation(t *testing.T) {
+	behaviorService, work, executor := sessionBehaviorInput()
+	work.PrimaryRelurpicCapabilityID = euclorelurpic.CapabilityChatImplement
+	state := core.NewContext()
+	state.Set("euclo.edit_execution", eucloruntime.EditExecutionRecord{
+		Executed: []eucloruntime.EditOperationRecord{{Path: "main.go", Status: "applied"}},
+	})
+	svc := SessionService{
+		Environment:     testutil.Env(t),
+		BehaviorService: &behaviorService,
+	}
+
+	out := svc.Execute(context.Background(), SessionInput{
+		Task:             &core.Task{},
+		ExecutionTask:    &core.Task{},
+		WorkflowExecutor: executor,
+		State:            state,
+		Mode:             euclotypes.ModeResolution{ModeID: "code"},
+		Profile: euclotypes.ExecutionProfileSelection{
+			ProfileID:            "edit_verify_repair",
+			VerificationRequired: true,
+			MutationAllowed:      true,
+		},
+		Work: work,
+	})
+
+	require.Error(t, out.Err)
+	require.NotNil(t, out.Result)
+	require.False(t, out.Result.Success)
+	require.Equal(t, eucloruntime.AssuranceClassUnverifiedSuccess, out.Result.Data["assurance_class"])
+	require.Equal(t, eucloruntime.AssuranceClassUnverifiedSuccess, out.FinalReport["assurance_class"])
+}
+
+func TestSessionExecuteReportsRepairExhaustedAssurance(t *testing.T) {
+	behaviorService, work, executor := sessionBehaviorInput()
+	work.PrimaryRelurpicCapabilityID = euclorelurpic.CapabilityChatImplement
+	state := core.NewContext()
+	state.Set("euclo.edit_execution", eucloruntime.EditExecutionRecord{
+		Executed: []eucloruntime.EditOperationRecord{{Path: "main.go", Status: "applied"}},
+	})
+	state.Set("pipeline.verify", map[string]any{
+		"status":     "fail",
+		"provenance": "executed",
+		"checks": []map[string]any{{
+			"name":       "go_test",
+			"status":     "fail",
+			"provenance": "executed",
+		}},
+	})
+	state.Set("euclo.recovery_trace", map[string]any{
+		"status":        "repair_exhausted",
+		"attempt_count": 2,
+	})
+	svc := SessionService{
+		Environment:     testutil.Env(t),
+		BehaviorService: &behaviorService,
+	}
+
+	out := svc.Execute(context.Background(), SessionInput{
+		Task:             &core.Task{},
+		ExecutionTask:    &core.Task{},
+		WorkflowExecutor: executor,
+		State:            state,
+		Mode:             euclotypes.ModeResolution{ModeID: "code"},
+		Profile: euclotypes.ExecutionProfileSelection{
+			ProfileID:            "edit_verify_repair",
+			VerificationRequired: true,
+			MutationAllowed:      true,
+		},
+		Work: work,
+	})
+
+	require.Error(t, out.Err)
+	require.NotNil(t, out.Result)
+	require.False(t, out.Result.Success)
+	require.Equal(t, eucloruntime.AssuranceClassRepairExhausted, out.Result.Data["assurance_class"])
+	require.Equal(t, eucloruntime.AssuranceClassRepairExhausted, out.FinalReport["assurance_class"])
+	require.Equal(t, "repair_exhausted", out.ProofSurface.RecoveryStatus)
+	require.Equal(t, 2, out.ProofSurface.RecoveryAttempts)
 }

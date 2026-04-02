@@ -42,11 +42,11 @@ func TestObjectiveKindReview(t *testing.T) {
 	require.Equal(t, "review", objectiveKindForWork(mode, profile, class))
 }
 
-func TestObjectiveKindVerificationRepair(t *testing.T) {
+func TestObjectiveKindTDDExecution(t *testing.T) {
 	mode := ModeResolution{ModeID: "code"}
 	profile := ExecutionProfileSelection{ProfileID: "test_driven_generation"}
 	class := TaskClassification{}
-	require.Equal(t, "verification_repair", objectiveKindForWork(mode, profile, class))
+	require.Equal(t, "tdd_execution", objectiveKindForWork(mode, profile, class))
 }
 
 func TestObjectiveKindInvestigationViaClassification(t *testing.T) {
@@ -101,6 +101,14 @@ func TestBehaviorFamilyGapAnalysisPlanning(t *testing.T) {
 	require.Equal(t, "gap_analysis", behaviorFamilyForWork(mode, profile, class, policy))
 }
 
+func TestBehaviorFamilyFailedVerificationRepairForVerifyPolicy(t *testing.T) {
+	mode := ModeResolution{ModeID: "code"}
+	profile := ExecutionProfileSelection{ProfileID: "edit_verify_repair", VerificationRequired: true}
+	class := TaskClassification{}
+	policy := ResolvedExecutionPolicy{PreferredVerifyCapabilities: []string{"go_test"}}
+	require.Equal(t, "failed_verification_repair", behaviorFamilyForWork(mode, profile, class, policy))
+}
+
 func TestBehaviorFamilyDirectChangeExecution(t *testing.T) {
 	mode := ModeResolution{ModeID: "code"}
 	profile := ExecutionProfileSelection{ProfileID: "edit_verify_repair"}
@@ -117,12 +125,29 @@ func TestBehaviorFamilyStaleAssumptionDetection(t *testing.T) {
 	require.Equal(t, "stale_assumption_detection", behaviorFamilyForWork(mode, profile, class, policy))
 }
 
-func TestBehaviorFamilyVerificationRepair(t *testing.T) {
+func TestBehaviorFamilyTDDRedGreenRefactor(t *testing.T) {
 	mode := ModeResolution{ModeID: "code"}
 	profile := ExecutionProfileSelection{ProfileID: "test_driven_generation"}
 	class := TaskClassification{}
 	policy := ResolvedExecutionPolicy{}
-	require.Equal(t, "verification_repair", behaviorFamilyForWork(mode, profile, class, policy))
+	require.Equal(t, "tdd_red_green_refactor", behaviorFamilyForWork(mode, profile, class, policy))
+}
+
+func TestRoutineBindingsUseFailedVerificationRepairFamily(t *testing.T) {
+	mode := ModeResolution{ModeID: "debug"}
+	profile := ExecutionProfileSelection{ProfileID: "reproduce_localize_patch", VerificationRequired: true}
+	class := TaskClassification{}
+	policy := ResolvedExecutionPolicy{}
+	bindings := routineBindingsForWork(mode, profile, class, policy)
+	found := false
+	for _, binding := range bindings {
+		if binding.RoutineID == "verification_repair" {
+			found = true
+			require.Equal(t, "failed_verification_repair", binding.Family)
+			break
+		}
+	}
+	require.True(t, found)
 }
 
 func TestBehaviorFamilyGapAnalysisPlanProfile(t *testing.T) {
@@ -238,7 +263,7 @@ func buildTestUnitOfWork() UnitOfWork {
 			"euclo.archaeology.explore",
 		},
 		PredecessorUnitOfWorkID: "uow-0",
-		TransitionReason: "step_advance",
+		TransitionReason:        "step_advance",
 		DeferredIssueIDs:        []string{"di-1"},
 		Status:                  UnitOfWorkStatusReady,
 		CreatedAt:               now,

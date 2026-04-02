@@ -35,7 +35,10 @@ const (
 	ArtifactKindPlanCandidates          = euclotypes.ArtifactKindPlanCandidates
 	ArtifactKindEditIntent              = euclotypes.ArtifactKindEditIntent
 	ArtifactKindEditExecution           = euclotypes.ArtifactKindEditExecution
+	ArtifactKindVerificationPlan        = euclotypes.ArtifactKindVerificationPlan
 	ArtifactKindVerification            = euclotypes.ArtifactKindVerification
+	ArtifactKindTDDLifecycle            = euclotypes.ArtifactKindTDDLifecycle
+	ArtifactKindWaiver                  = euclotypes.ArtifactKindWaiver
 	ArtifactKindDiffSummary             = euclotypes.ArtifactKindDiffSummary
 	ArtifactKindVerificationSummary     = euclotypes.ArtifactKindVerificationSummary
 	ArtifactKindProfileSelection        = euclotypes.ArtifactKindProfileSelection

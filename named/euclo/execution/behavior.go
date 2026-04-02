@@ -73,9 +73,9 @@ const (
 	RecipeArchaeologyCompileReconcile    RecipeID = "archaeology.compile.reconcile"
 	RecipeArchaeologyCompileShape        RecipeID = "archaeology.compile.shape"
 	RecipeArchaeologyCompileReview       RecipeID = "archaeology.compile.review"
-	RecipeArchaeologyImplementStep        RecipeID = "archaeology.implement.step"
-	RecipeArchaeologyImplementCheckpoint  RecipeID = "archaeology.implement.checkpoint"
-	RecipeArchaeologyImplementGapDetect   RecipeID = "archaeology.implement.gap-detect"
+	RecipeArchaeologyImplementStep       RecipeID = "archaeology.implement.step"
+	RecipeArchaeologyImplementCheckpoint RecipeID = "archaeology.implement.checkpoint"
+	RecipeArchaeologyImplementGapDetect  RecipeID = "archaeology.implement.gap-detect"
 )
 
 var recipeSpecs = map[RecipeID]RecipeSpec{
@@ -199,16 +199,18 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 	case "euclo:chat.local-review":
 		if _, ok := state.Get("euclo.review_findings"); !ok {
 			state.Set("euclo.review_findings", map[string]any{
-				"source":                routineID,
+				"review_source":         routineID,
 				"primary_capability_id": work.PrimaryRelurpicCapabilityID,
 				"summary":               "local review routine prepared inspection context",
+				"findings":              []map[string]any{},
 			})
 		}
 	case "euclo:chat.targeted-verification-repair":
 		if _, ok := state.Get("euclo.verification_summary"); !ok {
 			state.Set("euclo.verification_summary", map[string]any{
-				"source":  routineID,
-				"summary": "targeted verification repair routine activated",
+				"source":     routineID,
+				"summary":    "targeted verification repair routine activated",
+				"provenance": "absent",
 			})
 		}
 	case "euclo:debug.root-cause":
