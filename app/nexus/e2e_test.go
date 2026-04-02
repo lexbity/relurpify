@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
 	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
 	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
 	nexusserver "github.com/lexcodex/relurpify/app/nexus/server"
@@ -20,32 +21,49 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	memdb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	mcpprotocol "github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
 	mcpserver "github.com/lexcodex/relurpify/framework/middleware/mcp/server"
+	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
+	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
+	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
+	rexreconcile "github.com/lexcodex/relurpify/named/rex/reconcile"
 	"github.com/lexcodex/relurpify/testsuite/nexustest"
 	"github.com/stretchr/testify/require"
 )
 
 type nexusHarness struct {
-	t             *testing.T
-	ctx           context.Context
-	cancel        context.CancelFunc
-	server        *httptest.Server
-	workspace     string
-	eventLog      *nexusdb.SQLiteEventLog
-	sessionStore  *nexusdb.SQLiteSessionStore
-	identityStore *nexusdb.SQLiteIdentityStore
-	nodeStore     *nexusdb.SQLiteNodeStore
-	tokenStore    *nexusdb.SQLiteAdminTokenStore
-	policyStore   *memdb.FilePolicyRuleStore
-	policyFile    string
-	adapter       *channel.TestChannelAdapter
-	rexRuntime    *nexusserver.RexRuntimeProvider
+	t              *testing.T
+	ctx            context.Context
+	cancel         context.CancelFunc
+	server         *httptest.Server
+	workspace      string
+	eventLog       *nexusdb.SQLiteEventLog
+	sessionStore   *nexusdb.SQLiteSessionStore
+	identityStore  *nexusdb.SQLiteIdentityStore
+	nodeStore      *nexusdb.SQLiteNodeStore
+	tokenStore     *nexusdb.SQLiteAdminTokenStore
+	policyStore    *memdb.FilePolicyRuleStore
+	policyFile     string
+	adapter        *channel.TestChannelAdapter
+	app            *nexusserver.NexusApp
+	rexRuntime     *nexusserver.RexRuntimeProvider
+	rexEventBridge *nexusserver.RexEventBridge
+	fmpService     *fwfmp.Service
+	fmpExportStore nexusadmin.TenantFMPExportStore
 }
 
 type nexusHarnessOptions struct {
-	enableRex bool
+	enableRex       bool
+	rexRuntime      *nexusserver.RexRuntimeProvider
+	rexEventBridge  *nexusserver.RexEventBridge
+	fmpService      *fwfmp.Service
+	fmpExportStore  nexusadmin.TenantFMPExportStore
+	nodeManager     *fwnode.Manager
+	channelManager  *channel.Manager
+	channelAdapters []channel.Adapter
+	startedAt       time.Time
 }
 
 func newNexusHarness(t *testing.T, cfg nexuscfg.Config) *nexusHarness {
@@ -76,12 +94,18 @@ func newNexusHarnessWithOptions(t *testing.T, cfg nexuscfg.Config, opts nexusHar
 
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter := channel.NewTestChannelAdapter("webchat")
-	var rexRuntime *nexusserver.RexRuntimeProvider
-	if opts.enableRex {
+	channelAdapters := opts.channelAdapters
+	if len(channelAdapters) == 0 {
+		channelAdapters = []channel.Adapter{adapter}
+	}
+	rexRuntime := opts.rexRuntime
+	ownsRexRuntime := false
+	if rexRuntime == nil && opts.enableRex {
 		rexRuntime, err = nexusserver.NewRexRuntimeProvider(ctx, workspace)
 		require.NoError(t, err)
+		ownsRexRuntime = true
 	}
-	handler, err := (&nexusserver.NexusApp{
+	app := &nexusserver.NexusApp{
 		EventLog:          eventLog,
 		SessionStore:      sessionStore,
 		IdentityStore:     identityStore,
@@ -91,36 +115,47 @@ func newNexusHarnessWithOptions(t *testing.T, cfg nexuscfg.Config, opts nexusHar
 		Config:            cfg,
 		Partition:         nexusEventPartition,
 		Workspace:         workspace,
-		ChannelAdapters:   []channel.Adapter{adapter},
+		ChannelAdapters:   channelAdapters,
 		RexRuntime:        rexRuntime,
+		RexEventBridge:    opts.rexEventBridge,
+		NodeManager:       opts.nodeManager,
+		ChannelManager:    opts.channelManager,
+		FMPService:        opts.fmpService,
+		FMPExportStore:    opts.fmpExportStore,
+		StartedAt:         opts.startedAt,
 		PrincipalResolver: gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore),
 		VerifyNodeConnection: func(ctx context.Context, store identity.Store, principal fwgateway.ConnectionPrincipal, info fwgateway.NodeConnectInfo, conn *websocket.Conn) error {
 			return verifyGatewayNodeChallenge(ctx, store, principal, info, conn)
 		},
-	}).Handler(ctx)
+	}
+	handler, err := app.Handler(ctx)
 	require.NoError(t, err)
 
 	server := httptest.NewServer(handler)
 	h := &nexusHarness{
-		t:             t,
-		ctx:           ctx,
-		cancel:        cancel,
-		server:        server,
-		workspace:     workspace,
-		eventLog:      eventLog,
-		sessionStore:  sessionStore,
-		identityStore: identityStore,
-		nodeStore:     nodeStore,
-		tokenStore:    tokenStore,
-		policyStore:   policyStore,
-		policyFile:    policyFile,
-		adapter:       adapter,
-		rexRuntime:    rexRuntime,
+		t:              t,
+		ctx:            ctx,
+		cancel:         cancel,
+		server:         server,
+		workspace:      workspace,
+		eventLog:       eventLog,
+		sessionStore:   sessionStore,
+		identityStore:  identityStore,
+		nodeStore:      nodeStore,
+		tokenStore:     tokenStore,
+		policyStore:    policyStore,
+		policyFile:     policyFile,
+		adapter:        adapter,
+		app:            app,
+		rexRuntime:     rexRuntime,
+		rexEventBridge: app.RexEventBridge,
+		fmpService:     app.FMPService,
+		fmpExportStore: app.FMPExportStore,
 	}
 	t.Cleanup(func() {
 		server.Close()
 		cancel()
-		if rexRuntime != nil {
+		if ownsRexRuntime && rexRuntime != nil {
 			rexRuntime.Close()
 		}
 		require.NoError(t, nodeStore.Close())
@@ -130,6 +165,18 @@ func newNexusHarnessWithOptions(t *testing.T, cfg nexuscfg.Config, opts nexusHar
 		require.NoError(t, eventLog.Close())
 	})
 	return h
+}
+
+type lineageLister interface {
+	ListLineages(context.Context) ([]core.LineageRecord, error)
+}
+
+type trustBundleLister interface {
+	ListTrustBundles(context.Context) ([]core.TrustBundle, error)
+}
+
+type activeAttemptLister interface {
+	ListActiveAttemptsByLineage(context.Context, string) ([]core.AttemptRecord, error)
 }
 
 func (h *nexusHarness) gatewayURL() string {
@@ -332,6 +379,124 @@ func (h *nexusHarness) waitForRexArtifact(t *testing.T, workflowID, runID, kind 
 	return memory.WorkflowArtifactRecord{}
 }
 
+func (h *nexusHarness) listRexWorkflows(t *testing.T, limit int) []memory.WorkflowRecord {
+	t.Helper()
+	require.NotNil(t, h.rexRuntime)
+	workflows, err := h.rexRuntime.WorkflowStore.ListWorkflows(context.Background(), limit)
+	require.NoError(t, err)
+	return workflows
+}
+
+func (h *nexusHarness) listRexEvents(t *testing.T, workflowID string, limit int) []memory.WorkflowEventRecord {
+	t.Helper()
+	require.NotNil(t, h.rexRuntime)
+	events, err := h.rexRuntime.WorkflowStore.ListEvents(context.Background(), workflowID, limit)
+	require.NoError(t, err)
+	return events
+}
+
+func (h *nexusHarness) listRexArtifacts(t *testing.T, workflowID, runID string) []memory.WorkflowArtifactRecord {
+	t.Helper()
+	require.NotNil(t, h.rexRuntime)
+	artifacts, err := h.rexRuntime.WorkflowStore.ListWorkflowArtifacts(context.Background(), workflowID, runID)
+	require.NoError(t, err)
+	return artifacts
+}
+
+func (h *nexusHarness) findLoggedEvents(t *testing.T, eventType string, predicate func(core.FrameworkEvent) bool) []core.FrameworkEvent {
+	t.Helper()
+	events, err := h.eventLog.Read(context.Background(), nexusEventPartition, 0, 256, false)
+	require.NoError(t, err)
+	var matched []core.FrameworkEvent
+	for _, ev := range events {
+		if ev.Type != eventType {
+			continue
+		}
+		if predicate == nil || predicate(ev) {
+			matched = append(matched, ev)
+		}
+	}
+	return matched
+}
+
+func (h *nexusHarness) listFMPLineages(t *testing.T) []core.LineageRecord {
+	t.Helper()
+	require.NotNil(t, h.fmpService)
+	lister, ok := h.fmpService.Ownership.(lineageLister)
+	require.True(t, ok, "fmp ownership store does not support ListLineages")
+	lineages, err := lister.ListLineages(context.Background())
+	require.NoError(t, err)
+	return lineages
+}
+
+func (h *nexusHarness) getFMPAttempt(t *testing.T, attemptID string) *core.AttemptRecord {
+	t.Helper()
+	require.NotNil(t, h.fmpService)
+	attempt, ok, err := h.fmpService.Ownership.GetAttempt(context.Background(), attemptID)
+	require.NoError(t, err)
+	require.True(t, ok, "attempt %s not found", attemptID)
+	return attempt
+}
+
+func (h *nexusHarness) getFMPLineage(t *testing.T, lineageID string) *core.LineageRecord {
+	t.Helper()
+	require.NotNil(t, h.fmpService)
+	lineage, ok, err := h.fmpService.Ownership.GetLineage(context.Background(), lineageID)
+	require.NoError(t, err)
+	require.True(t, ok, "lineage %s not found", lineageID)
+	return lineage
+}
+
+func (h *nexusHarness) listFMPActiveAttempts(t *testing.T, lineageID string) []core.AttemptRecord {
+	t.Helper()
+	require.NotNil(t, h.fmpService)
+	lister, ok := h.fmpService.Ownership.(activeAttemptLister)
+	require.True(t, ok, "fmp ownership store does not support ListActiveAttemptsByLineage")
+	attempts, err := lister.ListActiveAttemptsByLineage(context.Background(), lineageID)
+	require.NoError(t, err)
+	return attempts
+}
+
+func (h *nexusHarness) listFMPTrustBundles(t *testing.T) []core.TrustBundle {
+	t.Helper()
+	require.NotNil(t, h.fmpService)
+	lister, ok := h.fmpService.Trust.(trustBundleLister)
+	require.True(t, ok, "fmp trust store does not support ListTrustBundles")
+	bundles, err := lister.ListTrustBundles(context.Background())
+	require.NoError(t, err)
+	return bundles
+}
+
+func (h *nexusHarness) listTenantFMPExports(t *testing.T, tenantID string) []nexusadmin.TenantFMPExportInfo {
+	t.Helper()
+	require.NotNil(t, h.fmpExportStore)
+	exports, err := h.fmpExportStore.ListTenantExports(context.Background(), tenantID)
+	require.NoError(t, err)
+	return exports
+}
+
+func (h *nexusHarness) admissionAuditRecords() []rexcontrolplane.AuditRecord {
+	if h == nil || h.rexRuntime == nil || h.rexRuntime.AdmissionAudit == nil {
+		return nil
+	}
+	return h.rexRuntime.AdmissionAudit.Records()
+}
+
+func (h *nexusHarness) waitForAdmissionAudit(t *testing.T, predicate func(rexcontrolplane.AuditRecord) bool) rexcontrolplane.AuditRecord {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, record := range h.admissionAuditRecords() {
+			if predicate == nil || predicate(record) {
+				return record
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for admission audit record")
+	return rexcontrolplane.AuditRecord{}
+}
+
 func (h *nexusHarness) waitForCapabilities(t *testing.T, tenantID string, expected int) []core.CapabilityDescriptor {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -347,6 +512,76 @@ func (h *nexusHarness) waitForCapabilities(t *testing.T, tenantID string, expect
 	}
 	t.Fatalf("timed out waiting for %d capabilities for tenant %s", expected, tenantID)
 	return nil
+}
+
+func requireOneWorkflowOnly(t *testing.T, workflows []memory.WorkflowRecord, workflowID string) {
+	t.Helper()
+	require.Len(t, workflows, 1)
+	require.Equal(t, workflowID, workflows[0].WorkflowID)
+}
+
+func requireCursorAdvanced(t *testing.T, before, after uint64) {
+	t.Helper()
+	require.Greater(t, after, before, "expected cursor to advance")
+}
+
+func requireNoDuplicateAttempt(t *testing.T, attempts []core.AttemptRecord, attemptID string) {
+	t.Helper()
+	count := 0
+	for _, attempt := range attempts {
+		if attempt.AttemptID == attemptID {
+			count++
+		}
+	}
+	require.Equal(t, 1, count, "expected exactly one attempt %s", attemptID)
+}
+
+func requireSameTenantSessionPropagated(t *testing.T, tenantID, sessionID string, values map[string]any) {
+	t.Helper()
+	candidates := []string{
+		valueAtPath(values, "tenant_id"),
+		valueAtPath(values, "gateway.tenant_id"),
+		valueAtPath(values, "gateway.session_tenant_id"),
+	}
+	require.Contains(t, candidates, tenantID, "tenant id not propagated in %+v", values)
+	sessionCandidates := []string{
+		valueAtPath(values, "session_id"),
+		valueAtPath(values, "gateway.session_id"),
+		valueAtPath(values, "session_key"),
+	}
+	require.Contains(t, sessionCandidates, sessionID, "session id not propagated in %+v", values)
+}
+
+func valueAtPath(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	if raw, ok := values[key]; ok {
+		if text, ok := raw.(string); ok {
+			return strings.TrimSpace(text)
+		}
+	}
+	if !strings.Contains(key, ".") {
+		return ""
+	}
+	parts := strings.Split(key, ".")
+	current := values
+	for i, part := range parts {
+		raw, ok := current[part]
+		if !ok {
+			return ""
+		}
+		if i == len(parts)-1 {
+			text, _ := raw.(string)
+			return strings.TrimSpace(text)
+		}
+		next, ok := raw.(map[string]any)
+		if !ok {
+			return ""
+		}
+		current = next
+	}
+	return ""
 }
 
 func (h *nexusHarness) seedBoundary(t *testing.T, boundary *core.SessionBoundary) {
@@ -1384,6 +1619,485 @@ func TestInboundMessagesReuseExistingRexWorkflow(t *testing.T) {
 	}, 3*time.Second, 20*time.Millisecond)
 }
 
+func TestFMPResumeIntoRexUsesFullAppHarness(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	ownership := &fwfmp.InMemoryOwnershipStore{}
+	signer := fwfmp.NewEd25519SignerFromSeed([]byte("e2e-full-app-fmp-rex"))
+	exportStore, err := nexusdb.NewSQLiteFMPExportStore(filepath.Join(t.TempDir(), "tenant_exports.db"))
+	require.NoError(t, err)
+	defer exportStore.Close()
+	require.NoError(t, exportStore.SetTenantExportEnabled(context.Background(), "tenant-1", "exp.run", true))
+
+	mesh := &fwfmp.Service{
+		Ownership: ownership,
+		Signer:    signer,
+		Now:       func() time.Time { return now },
+	}
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{
+		enableRex:      true,
+		fmpService:     mesh,
+		fmpExportStore: exportStore,
+	})
+
+	require.NoError(t, h.identityStore.UpsertTenant(context.Background(), core.TenantRecord{ID: "tenant-1", CreatedAt: now}))
+	require.NoError(t, h.identityStore.UpsertSubject(context.Background(), core.SubjectRecord{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1", CreatedAt: now}))
+	require.NoError(t, h.identityStore.UpsertSubject(context.Background(), core.SubjectRecord{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "delegate-1", CreatedAt: now}))
+
+	liveNow := now
+	h.seedBoundary(t, &core.SessionBoundary{
+		SessionID:      "sess-import-1",
+		RoutingKey:     "tenant-1:webchat:conv-import-1",
+		TenantID:       "tenant-1",
+		Partition:      nexusEventPartition,
+		Scope:          core.SessionScopePerChannelPeer,
+		ChannelID:      "webchat",
+		PeerID:         "conv-import-1",
+		Owner:          core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		TrustClass:     core.TrustClassRemoteApproved,
+		CreatedAt:      liveNow,
+		LastActivityAt: liveNow,
+	})
+	require.NoError(t, h.sessionStore.UpsertDelegation(context.Background(), core.SessionDelegationRecord{
+		SessionID:  "sess-import-1",
+		TenantID:   "tenant-1",
+		Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "delegate-1"},
+		Operations: []core.SessionOperation{core.SessionOperationResume},
+		CreatedAt:  liveNow,
+	}))
+
+	require.Eventually(t, func() bool {
+		exports := h.listTenantFMPExports(t, "tenant-1")
+		return len(exports) == 1 && exports[0].ExportName == "exp.run" && exports[0].Enabled
+	}, 2*time.Second, 20*time.Millisecond)
+	require.Eventually(t, func() bool {
+		bundles := h.listFMPTrustBundles(t)
+		for _, bundle := range bundles {
+			if bundle.TrustDomain == "local" {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 20*time.Millisecond)
+
+	sourceSvc := &fwfmp.Service{
+		Ownership: ownership,
+		Packager: fwfmp.JSONPackager{
+			RuntimeStore: importedWorkflowRuntimeStore{},
+			KeyResolver: &fwfmp.TrustBundleRecipientKeyResolver{
+				Trust: h.fmpService.Trust,
+			},
+			DefaultRecipients: []string{"runtime://local/rex"},
+			LocalRecipient:    "runtime://mesh-a/source/rt-a",
+		},
+		Signer: signer,
+		Now:    func() time.Time { return now },
+	}
+
+	lineage := core.LineageRecord{
+		LineageID:    "lineage-e2e",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+		SessionID:    "sess-import-1",
+		TrustClass:   core.TrustClassRemoteApproved,
+		Delegations: []core.SessionDelegationRecord{{
+			SessionID:  "sess-import-1",
+			TenantID:   "tenant-1",
+			Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "delegate-1"},
+			Operations: []core.SessionOperation{core.SessionOperationResume},
+			CreatedAt:  liveNow,
+		}},
+	}
+	require.NoError(t, sourceSvc.CreateLineage(context.Background(), lineage))
+	require.NoError(t, ownership.UpsertAttempt(context.Background(), core.AttemptRecord{
+		AttemptID: "attempt-source-e2e",
+		LineageID: lineage.LineageID,
+		RuntimeID: "rt-source",
+		State:     core.AttemptStateRunning,
+		StartTime: now,
+	}))
+
+	offer, pkg, sealed, err := sourceSvc.OfferHandoff(context.Background(), lineage.LineageID, "attempt-source-e2e", "exp.run", "issuer", fwfmp.RuntimeQuery{WorkflowID: "wf-import", RunID: "run-import"})
+	require.NoError(t, err)
+
+	executed, commit, authorized, refusal, err := h.fmpService.ResumeHandoffForNode(context.Background(), *offer, core.ExportDescriptor{
+		ExportName:             "exp.run",
+		AcceptedContextClasses: []string{"workflow-runtime"},
+		RouteMode:              core.RouteModeGateway,
+	}, "rex", "", core.SubjectRef{
+		TenantID: "tenant-1",
+		Kind:     core.SubjectKindServiceAccount,
+		ID:       "delegate-1",
+	}, pkg.Manifest, *sealed)
+	require.NoError(t, err)
+	require.Nil(t, refusal)
+	require.NotNil(t, authorized)
+	require.True(t, authorized.Delegated)
+	require.NotNil(t, executed)
+	require.NotNil(t, commit)
+	require.Equal(t, "lineage-e2e", commit.LineageID)
+	require.Equal(t, "lineage-e2e:rex:resume", commit.NewAttemptID)
+
+	require.Eventually(t, func() bool {
+		workflow, ok, err := h.rexRuntime.WorkflowStore.GetWorkflow(context.Background(), "wf-import")
+		require.NoError(t, err)
+		if !ok || workflow == nil {
+			return false
+		}
+		run, ok, err := h.rexRuntime.WorkflowStore.GetRun(context.Background(), commit.NewAttemptID)
+		require.NoError(t, err)
+		return ok && run != nil && run.WorkflowID == workflow.WorkflowID
+	}, 5*time.Second, 20*time.Millisecond)
+
+	var artifacts []memory.WorkflowArtifactRecord
+	require.Eventually(t, func() bool {
+		artifacts = h.listRexArtifacts(t, "wf-import", commit.NewAttemptID)
+		kinds := map[string]bool{}
+		for _, artifact := range artifacts {
+			kinds[artifact.Kind] = true
+		}
+		return kinds["rex.fmp_import"] && kinds["rex.fmp_lineage"] && kinds["rex.task_request"]
+	}, 5*time.Second, 20*time.Millisecond)
+	importArtifact := requireArtifactKind(t, artifacts, "rex.fmp_import")
+	lineageArtifact := requireArtifactKind(t, artifacts, "rex.fmp_lineage")
+	taskArtifact := requireArtifactKind(t, artifacts, "rex.task_request")
+
+	var imported map[string]any
+	require.NoError(t, json.Unmarshal([]byte(importArtifact.InlineRawText), &imported))
+	require.Equal(t, commit.NewAttemptID, imported["attempt_id"])
+
+	var binding rexnexus.LineageBinding
+	require.NoError(t, json.Unmarshal([]byte(lineageArtifact.InlineRawText), &binding))
+	require.Equal(t, "lineage-e2e", binding.LineageID)
+	require.Equal(t, commit.NewAttemptID, binding.AttemptID)
+
+	var taskPayload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(taskArtifact.InlineRawText), &taskPayload))
+	stateMap, _ := taskPayload["state"].(map[string]any)
+	taskMap, _ := taskPayload["task"].(map[string]any)
+	taskContext, _ := taskMap["context"].(map[string]any)
+	requireSameTenantSessionPropagated(t, "tenant-1", "sess-import-1", stateMap)
+	requireSameTenantSessionPropagated(t, "tenant-1", "sess-import-1", taskContext)
+
+	resumeAttempt := h.getFMPAttempt(t, commit.NewAttemptID)
+	require.Contains(t, []core.AttemptState{core.AttemptStateRunning, core.AttemptStateCompleted, core.AttemptStateFailed}, resumeAttempt.State)
+	sourceAttempt := h.getFMPAttempt(t, "attempt-source-e2e")
+	require.Equal(t, core.AttemptStateCommittedRemote, sourceAttempt.State)
+	require.True(t, sourceAttempt.Fenced)
+	lineageRecord := h.getFMPLineage(t, "lineage-e2e")
+	require.Equal(t, commit.NewAttemptID, lineageRecord.CurrentOwnerAttempt)
+
+	events := h.listRexEvents(t, "wf-import", 10)
+	require.NotEmpty(t, events)
+}
+
+func TestFMPControlPlaneEventsUpdateRexBindingThroughAppBridge(t *testing.T) {
+	now := time.Date(2026, 4, 2, 20, 0, 0, 0, time.UTC)
+	mesh := &fwfmp.Service{
+		Ownership: &fwfmp.InMemoryOwnershipStore{},
+		Signer:    fwfmp.NewEd25519SignerFromSeed([]byte("e2e-full-app-control-plane")),
+		Now:       func() time.Time { return now },
+	}
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{
+		enableRex:  true,
+		fmpService: mesh,
+	})
+
+	seedRexBinding(t, h, "wf-control", "attempt-control", rexnexus.LineageBinding{
+		LineageID: "lineage-control",
+		AttemptID: "attempt-control",
+		RuntimeID: "rex",
+		State:     string(core.AttemptStateRunning),
+		UpdatedAt: now.Add(-1 * time.Minute),
+	})
+	seedRexBinding(t, h, "wf-other", "attempt-other", rexnexus.LineageBinding{
+		LineageID: "lineage-other",
+		AttemptID: "attempt-other",
+		RuntimeID: "rex",
+		State:     string(core.AttemptStateRunning),
+		UpdatedAt: now.Add(-1 * time.Minute),
+	})
+
+	h.appendEvents(t,
+		core.FrameworkEvent{
+			Type:      core.FrameworkEventFMPHandoffAccepted,
+			Partition: nexusEventPartition,
+			Timestamp: now,
+			Payload: mustJSONPayload(t, map[string]any{
+				"lineage_id": "lineage-control",
+				"attempt_id": "attempt-control",
+			}),
+		},
+		core.FrameworkEvent{
+			Type:      core.FrameworkEventFMPResumeCommitted,
+			Partition: nexusEventPartition,
+			Timestamp: now.Add(1 * time.Second),
+			Payload: mustJSONPayload(t, map[string]any{
+				"lineage_id":  "lineage-control",
+				"old_attempt": "attempt-control",
+				"new_attempt": "attempt-next",
+			}),
+		},
+		core.FrameworkEvent{
+			Type:      core.FrameworkEventFMPFenceIssued,
+			Partition: nexusEventPartition,
+			Timestamp: now.Add(2 * time.Second),
+			Payload: mustJSONPayload(t, map[string]any{
+				"lineage_id": "lineage-control",
+				"attempt_id": "attempt-control",
+			}),
+		},
+	)
+
+	var controlBinding rexnexus.LineageBinding
+	require.Eventually(t, func() bool {
+		artifact, ok := findArtifactKind(h.listRexArtifacts(t, "wf-control", "attempt-control"), "rex.fmp_lineage")
+		if !ok {
+			return false
+		}
+		if err := json.Unmarshal([]byte(artifact.InlineRawText), &controlBinding); err != nil {
+			return false
+		}
+		return controlBinding.State == string(core.AttemptStateFenced)
+	}, 5*time.Second, 20*time.Millisecond)
+
+	var controlEvents []memory.WorkflowEventRecord
+	require.Eventually(t, func() bool {
+		controlEvents = h.listRexEvents(t, "wf-control", 10)
+		return len(controlEvents) == 3
+	}, 5*time.Second, 20*time.Millisecond)
+	controlEventTypes := []string{controlEvents[0].EventType, controlEvents[1].EventType, controlEvents[2].EventType}
+	require.ElementsMatch(t, []string{
+		core.FrameworkEventFMPHandoffAccepted,
+		core.FrameworkEventFMPResumeCommitted,
+		core.FrameworkEventFMPFenceIssued,
+	}, controlEventTypes)
+
+	var otherBinding rexnexus.LineageBinding
+	otherArtifact := h.waitForRexArtifact(t, "wf-other", "attempt-other", "rex.fmp_lineage")
+	require.NoError(t, json.Unmarshal([]byte(otherArtifact.InlineRawText), &otherBinding))
+	require.Equal(t, string(core.AttemptStateRunning), otherBinding.State)
+	otherEvents := h.listRexEvents(t, "wf-other", 10)
+	require.Empty(t, otherEvents)
+}
+
+func TestFMPFenceEventIsStateIdempotentThroughAppBridge(t *testing.T) {
+	now := time.Date(2026, 4, 2, 21, 0, 0, 0, time.UTC)
+	mesh := &fwfmp.Service{
+		Ownership: &fwfmp.InMemoryOwnershipStore{},
+		Signer:    fwfmp.NewEd25519SignerFromSeed([]byte("e2e-full-app-fence-idempotent")),
+		Now:       func() time.Time { return now },
+	}
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{
+		enableRex:  true,
+		fmpService: mesh,
+	})
+
+	seedRexBinding(t, h, "wf-fence", "attempt-fence", rexnexus.LineageBinding{
+		LineageID: "lineage-fence",
+		AttemptID: "attempt-fence",
+		RuntimeID: "rex",
+		State:     string(core.AttemptStateRunning),
+		UpdatedAt: now.Add(-1 * time.Minute),
+	})
+
+	h.appendEvents(t,
+		core.FrameworkEvent{
+			Type:      core.FrameworkEventFMPFenceIssued,
+			Partition: nexusEventPartition,
+			Timestamp: now,
+			Payload: mustJSONPayload(t, map[string]any{
+				"lineage_id": "lineage-fence",
+				"attempt_id": "attempt-fence",
+			}),
+		},
+		core.FrameworkEvent{
+			Type:      core.FrameworkEventFMPFenceIssued,
+			Partition: nexusEventPartition,
+			Timestamp: now.Add(1 * time.Second),
+			Payload: mustJSONPayload(t, map[string]any{
+				"lineage_id": "lineage-fence",
+				"attempt_id": "attempt-fence",
+			}),
+		},
+	)
+
+	var binding rexnexus.LineageBinding
+	require.Eventually(t, func() bool {
+		var ok bool
+		binding, ok = readRexBinding(t, h, "wf-fence", "attempt-fence")
+		return ok && binding.State == string(core.AttemptStateFenced)
+	}, 5*time.Second, 20*time.Millisecond)
+	require.False(t, binding.UpdatedAt.Before(now))
+
+	var events []memory.WorkflowEventRecord
+	require.Eventually(t, func() bool {
+		events = h.listRexEvents(t, "wf-fence", 10)
+		return len(events) == 2
+	}, 5*time.Second, 20*time.Millisecond)
+	for _, event := range events {
+		require.Equal(t, core.FrameworkEventFMPFenceIssued, event.EventType)
+	}
+}
+
+func TestFMPControlPlaneEventWithMismatchedBindingDoesNotMutateWorkflow(t *testing.T) {
+	now := time.Date(2026, 4, 2, 21, 30, 0, 0, time.UTC)
+	mesh := &fwfmp.Service{
+		Ownership: &fwfmp.InMemoryOwnershipStore{},
+		Signer:    fwfmp.NewEd25519SignerFromSeed([]byte("e2e-full-app-control-mismatch")),
+		Now:       func() time.Time { return now },
+	}
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{
+		enableRex:  true,
+		fmpService: mesh,
+	})
+
+	initial := rexnexus.LineageBinding{
+		LineageID: "lineage-bound",
+		AttemptID: "attempt-bound",
+		RuntimeID: "rex",
+		State:     string(core.AttemptStateRunning),
+		UpdatedAt: now.Add(-1 * time.Minute),
+	}
+	seedRexBinding(t, h, "wf-mismatch", "attempt-bound", initial)
+
+	h.appendEvents(t, core.FrameworkEvent{
+		Type:      core.FrameworkEventFMPResumeCommitted,
+		Partition: nexusEventPartition,
+		Timestamp: now,
+		Payload: mustJSONPayload(t, map[string]any{
+			"lineage_id":  "lineage-unrelated",
+			"old_attempt": "attempt-unrelated",
+			"new_attempt": "attempt-new",
+		}),
+	})
+
+	require.Never(t, func() bool {
+		events := h.listRexEvents(t, "wf-mismatch", 10)
+		if len(events) != 0 {
+			return true
+		}
+		binding, ok := readRexBinding(t, h, "wf-mismatch", "attempt-bound")
+		if !ok {
+			return true
+		}
+		return binding.State != initial.State || !binding.UpdatedAt.Equal(initial.UpdatedAt)
+	}, 250*time.Millisecond, 20*time.Millisecond)
+
+	binding, ok := readRexBinding(t, h, "wf-mismatch", "attempt-bound")
+	require.True(t, ok)
+	require.Equal(t, initial.LineageID, binding.LineageID)
+	require.Equal(t, initial.AttemptID, binding.AttemptID)
+	require.Equal(t, initial.State, binding.State)
+	require.Equal(t, initial.UpdatedAt, binding.UpdatedAt)
+	require.Empty(t, h.listRexEvents(t, "wf-mismatch", 10))
+}
+
+func TestFMPAuthoritativeReconcilerSuppressesRetryForStaleRexBinding(t *testing.T) {
+	now := time.Date(2026, 4, 2, 22, 0, 0, 0, time.UTC)
+	ownership := &fwfmp.InMemoryOwnershipStore{}
+	mesh := &fwfmp.Service{
+		Ownership: ownership,
+		Signer:    fwfmp.NewEd25519SignerFromSeed([]byte("e2e-full-app-reconcile-authority")),
+		Now:       func() time.Time { return now },
+	}
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{
+		enableRex:  true,
+		fmpService: mesh,
+	})
+	h.fmpService.Log = h.eventLog
+
+	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+		LineageID:    "lineage-reconcile",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+	}))
+	require.NoError(t, ownership.UpsertAttempt(context.Background(), core.AttemptRecord{
+		AttemptID:        "attempt-reconcile",
+		LineageID:        "lineage-reconcile",
+		RuntimeID:        "rex",
+		State:            core.AttemptStateFailed,
+		Fenced:           true,
+		FencingEpoch:     7,
+		StartTime:        now.Add(-2 * time.Minute),
+		LastProgressTime: now.Add(-1 * time.Minute),
+	}))
+
+	seedRexBinding(t, h, "wf-reconcile", "attempt-reconcile", rexnexus.LineageBinding{
+		LineageID: "lineage-reconcile",
+		AttemptID: "attempt-reconcile",
+		RuntimeID: "rex",
+		State:     string(core.AttemptStateRunning),
+		UpdatedAt: now.Add(-3 * time.Minute),
+	})
+
+	record := h.rexRuntime.Agent.RecordAmbiguity("wf-reconcile", "attempt-reconcile", "binding-disagrees-with-fmp")
+	require.Equal(t, "lineage-reconcile", record.LineageID)
+	require.Equal(t, "attempt-reconcile", record.AttemptID)
+	require.Equal(t, int64(7), record.FencingEpoch)
+	require.False(t, h.rexRuntime.Agent.ShouldRetryAmbiguity(record))
+
+	binding, ok := readRexBinding(t, h, "wf-reconcile", "attempt-reconcile")
+	require.True(t, ok)
+	require.Equal(t, string(core.AttemptStateRunning), binding.State)
+	require.Empty(t, h.listRexEvents(t, "wf-reconcile", 10))
+}
+
+func TestFMPReconciliationOutcomeUpdatesBindingAndOwnership(t *testing.T) {
+	now := time.Date(2026, 4, 2, 22, 30, 0, 0, time.UTC)
+	ownership := &fwfmp.InMemoryOwnershipStore{}
+	mesh := &fwfmp.Service{
+		Ownership: ownership,
+		Signer:    fwfmp.NewEd25519SignerFromSeed([]byte("e2e-full-app-reconcile-outcome")),
+		Now:       func() time.Time { return now },
+	}
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{
+		enableRex:  true,
+		fmpService: mesh,
+	})
+
+	require.NoError(t, ownership.CreateLineage(context.Background(), core.LineageRecord{
+		LineageID:    "lineage-outcome",
+		TenantID:     "tenant-1",
+		TaskClass:    "agent.run",
+		ContextClass: "workflow-runtime",
+		Owner:        core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "svc-1"},
+	}))
+	require.NoError(t, ownership.UpsertAttempt(context.Background(), core.AttemptRecord{
+		AttemptID:        "attempt-outcome",
+		LineageID:        "lineage-outcome",
+		RuntimeID:        "rex",
+		State:            core.AttemptStateRunning,
+		StartTime:        now.Add(-2 * time.Minute),
+		LastProgressTime: now.Add(-1 * time.Minute),
+	}))
+
+	seedRexBinding(t, h, "wf-outcome", "attempt-outcome", rexnexus.LineageBinding{
+		LineageID: "lineage-outcome",
+		AttemptID: "attempt-outcome",
+		RuntimeID: "rex",
+		State:     string(core.AttemptStateRunning),
+		UpdatedAt: now.Add(-3 * time.Minute),
+	})
+
+	record := h.rexRuntime.Agent.RecordAmbiguity("wf-outcome", "attempt-outcome", "operator-confirmed-terminal")
+	resolved := h.rexRuntime.Agent.ResolveAmbiguity(record, rexreconcile.OutcomeTerminal, "authoritative FMP terminal")
+	require.Equal(t, rexreconcile.StatusTerminal, resolved.Status)
+	require.False(t, h.rexRuntime.Agent.ShouldRetryAmbiguity(resolved))
+
+	require.Eventually(t, func() bool {
+		attempt := h.getFMPAttempt(t, "attempt-outcome")
+		if attempt.State != core.AttemptStateFailed {
+			return false
+		}
+		binding, ok := readRexBinding(t, h, "wf-outcome", "attempt-outcome")
+		return ok && binding.State == string(core.AttemptStateFailed)
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
 func TestUnresolvedExternalIdentityGetsIsolatedTenant(t *testing.T) {
 	h := newNexusHarness(t, testGatewayConfig())
 
@@ -1411,6 +2125,109 @@ func TestUnresolvedExternalIdentityGetsIsolatedTenant(t *testing.T) {
 		return ev.Actor.ID == boundary.SessionID
 	})
 	require.Equal(t, "__relurpify_unresolved_external__", routed.Actor.TenantID)
+}
+
+func requireArtifactKind(t *testing.T, artifacts []memory.WorkflowArtifactRecord, kind string) memory.WorkflowArtifactRecord {
+	t.Helper()
+	if artifact, ok := findArtifactKind(artifacts, kind); ok {
+		return artifact
+	}
+	t.Fatalf("artifact kind %s not found", kind)
+	return memory.WorkflowArtifactRecord{}
+}
+
+func findArtifactKind(artifacts []memory.WorkflowArtifactRecord, kind string) (memory.WorkflowArtifactRecord, bool) {
+	for _, artifact := range artifacts {
+		if artifact.Kind == kind {
+			return artifact, true
+		}
+	}
+	return memory.WorkflowArtifactRecord{}, false
+}
+
+func readRexBinding(t *testing.T, h *nexusHarness, workflowID, runID string) (rexnexus.LineageBinding, bool) {
+	t.Helper()
+	artifact, ok := findArtifactKind(h.listRexArtifacts(t, workflowID, runID), "rex.fmp_lineage")
+	if !ok {
+		return rexnexus.LineageBinding{}, false
+	}
+	var binding rexnexus.LineageBinding
+	require.NoError(t, json.Unmarshal([]byte(artifact.InlineRawText), &binding))
+	return binding, true
+}
+
+func seedRexBinding(t *testing.T, h *nexusHarness, workflowID, runID string, binding rexnexus.LineageBinding) {
+	t.Helper()
+	require.NotNil(t, h.rexRuntime)
+	require.NoError(t, h.rexRuntime.WorkflowStore.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  workflowID,
+		TaskID:      "task:" + runID,
+		TaskType:    core.TaskTypeAnalysis,
+		Instruction: "seeded workflow",
+		Status:      memory.WorkflowRunStatusRunning,
+		CreatedAt:   binding.UpdatedAt,
+		UpdatedAt:   binding.UpdatedAt,
+	}))
+	require.NoError(t, h.rexRuntime.WorkflowStore.CreateRun(context.Background(), memory.WorkflowRunRecord{
+		RunID:      runID,
+		WorkflowID: workflowID,
+		Status:     memory.WorkflowRunStatusRunning,
+		StartedAt:  binding.UpdatedAt,
+	}))
+	raw, err := json.Marshal(binding)
+	require.NoError(t, err)
+	require.NoError(t, h.rexRuntime.WorkflowStore.UpsertWorkflowArtifact(context.Background(), memory.WorkflowArtifactRecord{
+		ArtifactID:      runID + ":fmp-lineage",
+		WorkflowID:      workflowID,
+		RunID:           runID,
+		Kind:            "rex.fmp_lineage",
+		ContentType:     "application/json",
+		StorageKind:     memory.ArtifactStorageInline,
+		SummaryText:     "rex fmp lineage binding",
+		InlineRawText:   string(raw),
+		SummaryMetadata: map[string]any{"lineage_id": binding.LineageID, "attempt_id": binding.AttemptID, "state": binding.State},
+		CreatedAt:       binding.UpdatedAt,
+	}))
+}
+
+func mustJSONPayload(t *testing.T, payload map[string]any) []byte {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+	return data
+}
+
+type importedWorkflowRuntimeStore struct{}
+
+func (importedWorkflowRuntimeStore) QueryWorkflowRuntime(context.Context, string, string) (map[string]any, error) {
+	return map[string]any{
+		"workflow_id": "wf-import",
+		"run_id":      "run-import",
+		"task": map[string]any{
+			"id":          "task-import",
+			"type":        string(core.TaskTypeAnalysis),
+			"instruction": "inspect imported workflow state",
+			"context": map[string]any{
+				"workflow_id":        "wf-import",
+				"gateway.session_id": "sess-import-1",
+				"gateway.tenant_id":  "tenant-1",
+				"session_id":         "sess-import-1",
+				"tenant_id":          "tenant-1",
+			},
+			"metadata": map[string]any{
+				"origin": "fmp-test",
+			},
+		},
+		"state": map[string]any{
+			"workflow_id":        "wf-import",
+			"run_id":             "run-import",
+			"gateway.session_id": "sess-import-1",
+			"gateway.tenant_id":  "tenant-1",
+			"session_id":         "sess-import-1",
+			"tenant_id":          "tenant-1",
+		},
+		"events": []string{"checkpointed"},
+	}, nil
 }
 
 func TestNodeConnectsAndRegistersCapabilities(t *testing.T) {

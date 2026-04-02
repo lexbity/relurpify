@@ -215,6 +215,7 @@ func TestRexEventBridgeRetriesEventAfterHandlerFailure(t *testing.T) {
 	cursor := newSQLiteRexEventCursorStore(workflowStore.DB(), "local", "test-retry")
 	firstAttempt := make(chan struct{}, 1)
 	var attempts atomic.Int32
+	firstHandler := &bridgeHandlerDouble{failuresRemaining: 1, blockUntilContextDone: true}
 	firstBridge := &RexEventBridge{
 		Log:       eventLog,
 		Partition: "local",
@@ -228,8 +229,7 @@ func TestRexEventBridgeRetriesEventAfterHandlerFailure(t *testing.T) {
 			case firstAttempt <- struct{}{}:
 			default:
 			}
-			<-ctx.Done()
-			return fmt.Errorf("transient failure for %s", event.ID)
+			return firstHandler.Handle(ctx, event)
 		},
 	}
 
@@ -253,6 +253,7 @@ func TestRexEventBridgeRetriesEventAfterHandlerFailure(t *testing.T) {
 	cancel1()
 
 	secondAttempt := make(chan struct{}, 1)
+	secondHandler := &bridgeHandlerDouble{}
 	secondBridge := &RexEventBridge{
 		Log:       eventLog,
 		Partition: "local",
@@ -260,13 +261,13 @@ func TestRexEventBridgeRetriesEventAfterHandlerFailure(t *testing.T) {
 		Gateway: fakeRexEventGateway{
 			decision: rexgateway.Decision{Decision: rexgateway.SignalDecisionStart, WorkflowID: "wf-retry", RunID: "wf-retry:run"},
 		},
-		Handle: func(_ context.Context, _ rexgateway.Decision, _ rexevents.CanonicalEvent) error {
+		Handle: func(ctx context.Context, _ rexgateway.Decision, event rexevents.CanonicalEvent) error {
 			attempts.Add(1)
 			select {
 			case secondAttempt <- struct{}{}:
 			default:
 			}
-			return nil
+			return secondHandler.Handle(ctx, event)
 		},
 	}
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -297,14 +298,16 @@ func TestRexEventBridgeAdmissionRejectsOnceAndAudits(t *testing.T) {
 	defer workflowStore.Close()
 
 	controller := &countingAdmissionController{
-		decision: rexcontrolplane.AdmissionDecision{Allowed: false, Reason: "over_capacity"},
+		decisions: []rexcontrolplane.AdmissionDecision{{Allowed: false, Reason: "over_capacity"}},
 	}
 	audit := &rexcontrolplane.AuditLog{}
+	clock := newManualClock(time.Date(2026, 4, 2, 18, 0, 0, 0, time.UTC))
 	bridge := &RexEventBridge{
 		Log:            eventLog,
 		Partition:      "local",
 		Cursor:         newSQLiteRexEventCursorStore(workflowStore.DB(), "local", "test-admission"),
 		Gateway:        fakeRexEventGateway{},
+		Now:            clock.Now,
 		Admission:      controller,
 		AdmissionAudit: audit,
 		Handle: func(_ context.Context, _ rexgateway.Decision, _ rexevents.CanonicalEvent) error {
@@ -329,13 +332,17 @@ func TestRexEventBridgeAdmissionRejectsOnceAndAudits(t *testing.T) {
 	})
 
 	require.Eventually(t, func() bool {
-		return controller.decideCalls.Load() == 1
+		return controller.DecideCount() == 1
 	}, time.Second, 20*time.Millisecond)
-	require.Equal(t, int32(0), controller.releaseCalls.Load())
+	require.Equal(t, 0, controller.ReleaseCount())
+	require.Len(t, controller.decideRequests, 1)
+	require.Equal(t, "tenant-a", controller.decideRequests[0].TenantID)
+	require.Equal(t, rexcontrolplane.WorkloadImportant, controller.decideRequests[0].Class)
 	records := audit.Records()
 	require.Len(t, records, 1)
 	require.False(t, records[0].Allowed)
 	require.Equal(t, "over_capacity", records[0].Reason)
+	require.Equal(t, clock.Now(), records[0].Timestamp)
 
 	events, err := eventLog.Read(context.Background(), "local", 0, 10, true)
 	require.NoError(t, err)
@@ -373,7 +380,7 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 	agent.Runtime.Start(ctx)
 
 	controller := &countingAdmissionController{
-		decision: rexcontrolplane.AdmissionDecision{Allowed: true, Reason: "capacity_available"},
+		decisions: []rexcontrolplane.AdmissionDecision{{Allowed: true, Reason: "capacity_available"}},
 	}
 	provider := &RexRuntimeProvider{
 		Agent:          agent,
@@ -401,7 +408,7 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
-		return controller.releaseCalls.Load() == 1
+		return controller.ReleaseCount() == 1
 	}, 2*time.Second, 20*time.Millisecond)
 }
 
@@ -414,7 +421,7 @@ func TestHandleEventDecisionReleasesAdmissionWhenQueueIsFull(t *testing.T) {
 	require.True(t, agent.Runtime.Enqueue(rexruntime.WorkItem{WorkflowID: "wf-block", RunID: "wf-block:run"}))
 
 	controller := &countingAdmissionController{
-		decision: rexcontrolplane.AdmissionDecision{Allowed: true, Reason: "capacity_available"},
+		decisions: []rexcontrolplane.AdmissionDecision{{Allowed: true, Reason: "capacity_available"}},
 	}
 	provider := &RexRuntimeProvider{
 		Agent:          agent,
@@ -439,7 +446,7 @@ func TestHandleEventDecisionReleasesAdmissionWhenQueueIsFull(t *testing.T) {
 		},
 	})
 	require.EqualError(t, err, "rex runtime queue full")
-	require.Equal(t, int32(1), controller.releaseCalls.Load())
+	require.Equal(t, 1, controller.ReleaseCount())
 }
 
 type fakeRexEventGateway struct {
@@ -465,9 +472,12 @@ func mustJSON(t *testing.T, payload map[string]any) []byte {
 }
 
 type countingAdmissionController struct {
-	decision     rexcontrolplane.AdmissionDecision
-	decideCalls  atomic.Int32
-	releaseCalls atomic.Int32
+	mu              sync.Mutex
+	decisions       []rexcontrolplane.AdmissionDecision
+	decideRequests  []rexcontrolplane.AdmissionRequest
+	releaseRequests []rexcontrolplane.AdmissionRequest
+	decideCalls     atomic.Int32
+	releaseCalls    atomic.Int32
 }
 
 func (c *countingAdmissionController) Admit(req rexcontrolplane.AdmissionRequest) bool {
@@ -475,14 +485,73 @@ func (c *countingAdmissionController) Admit(req rexcontrolplane.AdmissionRequest
 }
 
 func (c *countingAdmissionController) Decide(req rexcontrolplane.AdmissionRequest) rexcontrolplane.AdmissionDecision {
-	_ = req
+	c.mu.Lock()
+	c.decideRequests = append(c.decideRequests, req)
+	var decision rexcontrolplane.AdmissionDecision
+	if len(c.decisions) > 0 {
+		decision = c.decisions[0]
+		if len(c.decisions) > 1 {
+			c.decisions = c.decisions[1:]
+		}
+	}
+	c.mu.Unlock()
 	c.decideCalls.Add(1)
-	return c.decision
+	return decision
 }
 
 func (c *countingAdmissionController) Release(req rexcontrolplane.AdmissionRequest) {
-	_ = req
+	c.mu.Lock()
+	c.releaseRequests = append(c.releaseRequests, req)
+	c.mu.Unlock()
 	c.releaseCalls.Add(1)
+}
+
+func (c *countingAdmissionController) DecideCount() int {
+	return int(c.decideCalls.Load())
+}
+
+func (c *countingAdmissionController) ReleaseCount() int {
+	return int(c.releaseCalls.Load())
+}
+
+type bridgeHandlerDouble struct {
+	mu                    sync.Mutex
+	failuresRemaining     int
+	blockUntilContextDone bool
+	calls                 []string
+}
+
+func (h *bridgeHandlerDouble) Handle(ctx context.Context, event rexevents.CanonicalEvent) error {
+	h.mu.Lock()
+	h.calls = append(h.calls, event.ID)
+	fail := h.failuresRemaining > 0
+	if fail {
+		h.failuresRemaining--
+	}
+	block := h.blockUntilContextDone
+	h.mu.Unlock()
+	if block {
+		<-ctx.Done()
+	}
+	if fail {
+		return fmt.Errorf("transient failure for %s", event.ID)
+	}
+	return nil
+}
+
+type manualClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newManualClock(now time.Time) *manualClock {
+	return &manualClock{now: now.UTC()}
+}
+
+func (c *manualClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
 }
 
 type stubModel struct{}

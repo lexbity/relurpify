@@ -65,7 +65,7 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 		return err
 	}
 	if mesh != nil {
-		if err := AdvertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame); err != nil {
+		if err := advertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame, rexRuntime); err != nil {
 			return err
 		}
 	}
@@ -284,6 +284,10 @@ func MeshTransportFrameHandlerForTest(mesh *fwfmp.Service, connectInfo fwgateway
 	return meshTransportFrameHandler(mesh, connectInfo, nil)
 }
 
+func MeshTransportFrameHandlerWithRuntimeForTest(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo, rexRuntime interface{}) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
+	return meshTransportFrameHandler(mesh, connectInfo, rexRuntime)
+}
+
 func nodeRPCConnForTransport(principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, base interface {
 	WriteJSON(v any) error
 	ReadJSON(v any) error
@@ -319,39 +323,71 @@ func NodeRPCConnForTransportForTest(principal fwgateway.ConnectionPrincipal, fra
 }
 
 func AdvertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) error {
+	return advertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame, nil)
+}
+
+func advertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime interface{}) error {
 	if mesh == nil {
 		return nil
 	}
-	trustDomain := strings.TrimSpace(frame.TrustDomain)
+	runtime := advertisedRuntimeDescriptor(nodeDesc, frame, rexRuntime)
+	trustDomain := runtime.TrustDomain
 	if trustDomain == "" {
 		trustDomain = "local"
+		runtime.TrustDomain = trustDomain
 	}
 	expiresAt := time.Now().UTC().Add(5 * time.Minute)
+	signature := runtimeRegistrationSignatureFromValues(nodeDesc.ID, runtime.RuntimeID, runtime.RuntimeVersion, strings.TrimSpace(frame.PeerKeyID), strings.TrimSpace(frame.TransportProfile))
+	runtime.ExpiresAt = expiresAt
+	runtime.Signature = signature
 	return mesh.RegisterRuntime(ctx, fwfmp.RuntimeRegistrationRequest{
 		TrustDomain: trustDomain,
 		Node:        nodeDesc,
 		ExpiresAt:   expiresAt,
-		Signature:   runtimeRegistrationSignature(nodeDesc, frame),
-		Runtime: core.RuntimeDescriptor{
-			RuntimeID:               fallbackNodeRuntimeID(nodeDesc, frame),
-			NodeID:                  nodeDesc.ID,
-			TrustDomain:             trustDomain,
-			RuntimeVersion:          fallbackRuntimeVersion(frame),
-			SupportedContextClasses: append([]string(nil), frame.SupportedContextClasses...),
-			CompatibilityClass:      fallbackCompatibilityClass(frame),
-			AttestationProfile:      "nexus.node_enrollment.v1",
-			AttestationClaims: map[string]string{
-				"node_id":         nodeDesc.ID,
-				"tenant_id":       nodeDesc.TenantID,
-				"trust_class":     string(nodeDesc.TrustClass),
-				"peer_key_id":     strings.TrimSpace(frame.PeerKeyID),
-				"transport":       strings.TrimSpace(frame.TransportProfile),
-				"runtime_version": fallbackRuntimeVersion(frame),
-			},
-			ExpiresAt: expiresAt,
-			Signature: runtimeRegistrationSignature(nodeDesc, frame),
-		},
+		Signature:   signature,
+		Runtime:     runtime,
 	})
+}
+
+func advertisedRuntimeDescriptor(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime interface{}) core.RuntimeDescriptor {
+	runtime := core.RuntimeDescriptor{
+		RuntimeID:               fallbackNodeRuntimeID(nodeDesc, frame),
+		NodeID:                  nodeDesc.ID,
+		TrustDomain:             strings.TrimSpace(frame.TrustDomain),
+		RuntimeVersion:          fallbackRuntimeVersion(frame),
+		SupportedContextClasses: append([]string(nil), frame.SupportedContextClasses...),
+		CompatibilityClass:      fallbackCompatibilityClass(frame),
+		AttestationProfile:      "nexus.node_enrollment.v1",
+		AttestationClaims: map[string]string{
+			"node_id":         nodeDesc.ID,
+			"tenant_id":       nodeDesc.TenantID,
+			"trust_class":     string(nodeDesc.TrustClass),
+			"peer_key_id":     strings.TrimSpace(frame.PeerKeyID),
+			"transport":       strings.TrimSpace(frame.TransportProfile),
+			"runtime_version": fallbackRuntimeVersion(frame),
+		},
+	}
+	if rexProvider, ok := rexRuntime.(*RexRuntimeProvider); ok && rexProvider != nil && rexProvider.RuntimeEndpoint != nil {
+		if descriptor, err := rexProvider.RuntimeEndpoint.Descriptor(context.Background()); err == nil {
+			if strings.TrimSpace(descriptor.RuntimeID) != "" {
+				runtime.RuntimeID = strings.TrimSpace(descriptor.RuntimeID)
+			}
+			if strings.TrimSpace(descriptor.TrustDomain) != "" {
+				runtime.TrustDomain = strings.TrimSpace(descriptor.TrustDomain)
+			}
+			if strings.TrimSpace(descriptor.RuntimeVersion) != "" {
+				runtime.RuntimeVersion = strings.TrimSpace(descriptor.RuntimeVersion)
+			}
+			if len(descriptor.SupportedContextClasses) > 0 {
+				runtime.SupportedContextClasses = append([]string(nil), descriptor.SupportedContextClasses...)
+			}
+			if strings.TrimSpace(descriptor.CompatibilityClass) != "" {
+				runtime.CompatibilityClass = strings.TrimSpace(descriptor.CompatibilityClass)
+			}
+			runtime.AttestationClaims["runtime_version"] = runtime.RuntimeVersion
+		}
+	}
+	return runtime
 }
 
 func fallbackNodeRuntimeID(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
@@ -376,13 +412,17 @@ func fallbackCompatibilityClass(frame fwgateway.NodeConnectInfo) string {
 }
 
 func runtimeRegistrationSignature(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo) string {
+	return runtimeRegistrationSignatureFromValues(nodeDesc.ID, strings.TrimSpace(frame.RuntimeID), strings.TrimSpace(frame.RuntimeVersion), strings.TrimSpace(frame.PeerKeyID), strings.TrimSpace(frame.TransportProfile))
+}
+
+func runtimeRegistrationSignatureFromValues(nodeID, runtimeID, runtimeVersion, peerKeyID, transportProfile string) string {
 	parts := []string{
 		"nexus-register",
-		nodeDesc.ID,
-		strings.TrimSpace(frame.RuntimeID),
-		strings.TrimSpace(frame.RuntimeVersion),
-		strings.TrimSpace(frame.PeerKeyID),
-		strings.TrimSpace(frame.TransportProfile),
+		nodeID,
+		runtimeID,
+		runtimeVersion,
+		peerKeyID,
+		transportProfile,
 	}
 	return strings.Join(parts, ":")
 }
@@ -444,6 +484,10 @@ func ConnectedNodeDescriptorForTest(ctx context.Context, manager *fwnode.Manager
 
 func ConnectedNodeCapabilitiesForTest(ctx context.Context, manager *fwnode.Manager, nodeID string) []core.CapabilityDescriptor {
 	return connectedNodeCapabilities(ctx, manager, nodeID)
+}
+
+func AdvertiseConnectedNodeToFMPWithRuntimeForTest(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime interface{}) error {
+	return advertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame, rexRuntime)
 }
 
 func copyNodeTags(in map[string]string) map[string]string {

@@ -35,6 +35,7 @@ type RexEventBridge struct {
 	Control    func(context.Context, core.FrameworkEvent) error
 	Handle     func(context.Context, rexgateway.Decision, rexevents.CanonicalEvent) error
 	PollPeriod time.Duration
+	Now        func() time.Time
 	// Phase 7.1: Admission control for gateway routing
 	Admission      rexcontrolplane.AdmissionController
 	AdmissionAudit *rexcontrolplane.AuditLog
@@ -111,7 +112,7 @@ func (b *RexEventBridge) processEvent(ctx context.Context, frameworkEvent core.F
 			Class:    workloadClass,
 		}
 		admissionDecision := b.Admission.Decide(admissionReq)
-		recordAdmissionDecision(b.AdmissionAudit, admissionReq, admissionDecision)
+		recordAdmissionDecision(b.AdmissionAudit, admissionReq, admissionDecision, b.nowUTC())
 		if !admissionDecision.Allowed {
 			emitAdmissionRejection(ctx, b.Log, frameworkEvent, admissionDecision)
 			return nil
@@ -138,6 +139,13 @@ func isRexControlPlaneEvent(eventType string) bool {
 	}
 }
 
+func (b *RexEventBridge) nowUTC() time.Time {
+	if b != nil && b.Now != nil {
+		return b.Now().UTC()
+	}
+	return time.Now().UTC()
+}
+
 func mapFrameworkEventToRex(frameworkEvent core.FrameworkEvent) (rexevents.CanonicalEvent, bool, error) {
 	switch strings.TrimSpace(frameworkEvent.Type) {
 	case rexevents.TypeTaskRequested, rexevents.TypeWorkflowResume, rexevents.TypeWorkflowSignal, rexevents.TypeCallbackReceived:
@@ -153,11 +161,11 @@ func mapFrameworkEventToRex(frameworkEvent core.FrameworkEvent) (rexevents.Canon
 
 func mapSessionMessageToRex(frameworkEvent core.FrameworkEvent) (rexevents.CanonicalEvent, error) {
 	var payload struct {
-		SessionKey     string `json:"session_key"`
-		Channel        string `json:"channel"`
-		ConversationID string `json:"conversation_id"`
-		ThreadID       string `json:"thread_id"`
-		SenderID       string `json:"sender_id"`
+		SessionKey     string          `json:"session_key"`
+		Channel        string          `json:"channel"`
+		ConversationID string          `json:"conversation_id"`
+		ThreadID       string          `json:"thread_id"`
+		SenderID       string          `json:"sender_id"`
 		Content        json.RawMessage `json:"content"`
 	}
 	if err := json.Unmarshal(frameworkEvent.Payload, &payload); err != nil {
@@ -349,7 +357,7 @@ func annotateAdmissionContext(event *rexevents.CanonicalEvent, req rexcontrolpla
 	event.Payload["rex.workload_class"] = string(req.Class)
 }
 
-func recordAdmissionDecision(audit *rexcontrolplane.AuditLog, req rexcontrolplane.AdmissionRequest, decision rexcontrolplane.AdmissionDecision) {
+func recordAdmissionDecision(audit *rexcontrolplane.AuditLog, req rexcontrolplane.AdmissionRequest, decision rexcontrolplane.AdmissionDecision, now time.Time) {
 	if audit == nil {
 		return
 	}
@@ -359,7 +367,7 @@ func recordAdmissionDecision(audit *rexcontrolplane.AuditLog, req rexcontrolplan
 		TenantID:  strings.TrimSpace(req.TenantID),
 		Allowed:   decision.Allowed,
 		Reason:    decision.Reason,
-		Timestamp: time.Now().UTC(),
+		Timestamp: now.UTC(),
 	})
 }
 
