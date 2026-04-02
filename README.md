@@ -85,9 +85,10 @@ go run ./app/relurpish doctor
 go run ./app/relurpish chat
 ```
 
-## Future Features
+## Broader Platform Surface
 
-The repository already contains broader platform work that is planned for later release maturity, including:
+The repository already contains broader platform work beyond the primary local
+coding flow, including:
 
 - `nexus`, the distributed coordination layer
 - `nexusish`, the administration interface for Nexus

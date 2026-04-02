@@ -41,7 +41,7 @@ This directory is organized by codebase boundary and audience.
 | apps/README.md | Overview of all application binaries |
 | apps/relurpish.md | relurpish TUI guide |
 | apps/dev-agent.md | dev-agent CLI guide |
-| apps/nexus.md | Nexus gateway overview |
+| nexus/nexus.md | Nexus gateway overview |
 | apps/nexusish.md | nexusish admin TUI overview |
 
 ## Nexus

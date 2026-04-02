@@ -16,7 +16,7 @@ same system:
 
 - relurpish.md
 - dev-agent.md
-- nexus.md
+- ../nexus/nexus.md
 - nexusish.md
 
 ---
