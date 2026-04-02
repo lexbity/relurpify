@@ -2,7 +2,9 @@
 
 ## Synopsis
 
-Relurpify is a local-first AI agent framework. It gives a language model the ability to read, write, and execute code inside a sandboxed environment — with every action governed by a security contract you define. No cloud services, no telemetry leaving your machine, no ambiguity about what the agent is allowed to do.
+Relurpify is a full-stack local-first system for agentic software work. It includes an agent framework and skill runtime, an event-driven distributed coordination fabric, a protocol platform, an archaeology and provenance system, and a coding agent. These are cooperating parts of one system, not separate product stories. The long-term goal is for the system to recursively improve and eventually rewrite itself.
+
+In practical terms, Relurpify gives a language model the ability to read, write, and execute code inside a sandboxed environment, coordinate work across runtimes, preserve provenance and exploration history, and expose or consume protocol-based capabilities. No cloud services, no telemetry leaving your machine, no ambiguity about what the agent is allowed to do.
 
 ---
 
@@ -21,7 +23,8 @@ The result is an agent you can trust to run on a real codebase.
 
 ## Mental Model
 
-Think of Relurpify in six layers, each building on the one below:
+Think of Relurpify as one system with six implementation layers. Archaeology
+and provenance cut across those layers rather than replacing one of them:
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -67,10 +70,9 @@ Think of Relurpify in six layers, each building on the one below:
 **Named agent layer** — top-level specialized agents that own their complete
 control scheme, configuration, and domain logic. Named agents are UX-agnostic
 and compose generic paradigms from the agent implementation layer. Euclo is the
-primary coding agent — it classifies tasks, selects execution modes, and gates
-progress with evidence requirements before delegating to ReAct. Rex is the
-Nexus-managed distributed runtime. See the [named agents](../agents/) section
-for details.
+primary coding agent. Rex is the Nexus-managed distributed runtime. This is
+where the system's agent identities become concrete. See the
+[named agents](../agents/) section for details.
 
 **Agent implementation layer** — generic execution paradigms as reusable API.
 These are the building blocks that named agents compose: ReAct
@@ -78,8 +80,9 @@ These are the building blocks that named agents compose: ReAct
 (typed stage sequences), and others. They implement `WorkflowExecutor` and
 receive their dependencies via `AgentEnvironment`.
 
-**Framework layer** — the infrastructure agents sit on top of. The graph
-runtime executes workflows as deterministic state machines; every node declares
+**Framework layer** — the infrastructure agents sit on top of. This is the
+agent framework and skill runtime. The graph runtime executes workflows as
+deterministic state machines; every node declares
 a contract (side-effect class, idempotency, placement, checkpoint policy,
 state boundaries) and the runtime validates those contracts before execution.
 Tool calls at node boundaries route through the capability registry with policy
@@ -97,12 +100,19 @@ that final resolved state. The context manager compresses token usage for small
 local models. Memory is separated into working, declarative (facts,
 decisions), and procedural (routines) lanes backed by SQLite.
 
-**Middleware layer** — transport and protocol. The MCP client/server
+**Middleware layer** — transport, coordination, and protocol. This is the
+distributed coordination fabric and protocol platform. The MCP client/server
 implementation (versions 2025-06-18 and 2025-11-25) allows Relurpify to both
 consume capabilities from external MCP servers and expose its own capabilities
 to MCP clients. The Nexus transport layer (WebSocket) connects remote
 relurpish instances to the gateway. Session routing and channel management keep
 concurrent sessions isolated.
+
+**Archaeology and provenance** — these concerns cut across the framework,
+named agents, and applications rather than living in one layer box. The system
+preserves exploration state, findings, plan evolution, and execution history so
+work can be resumed, audited, and eventually fed back into self-improvement
+loops.
 
 **Platform / Execution layer** — where work actually happens. LLM reasoning
 via Ollama on the host. Tool execution (tests, edits, git) inside a

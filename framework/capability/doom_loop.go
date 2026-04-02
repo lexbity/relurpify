@@ -58,7 +58,7 @@ func DefaultDoomLoopConfig() DoomLoopConfig {
 		IdenticalCallThreshold: 3,
 		OscillationWindowSize:  6,
 		ErrorFixationThreshold: 4,
-		ProgressStallThreshold: 8,
+		ProgressStallThreshold: 30,
 	}
 }
 
@@ -173,6 +173,8 @@ func (d *DoomLoopDetector) RecordResult(desc core.CapabilityDescriptor, result *
 			d.modifiedPaths[record.modifiedPath] = struct{}{}
 			d.noProgressCount = 0
 		}
+	} else if successfulCoordinationProgress(desc, result) {
+		d.noProgressCount = 0
 	} else {
 		d.noProgressCount++
 	}
@@ -310,6 +312,22 @@ func extractModifiedPath(result *core.ToolResult) string {
 		}
 	}
 	return ""
+}
+
+func successfulCoordinationProgress(desc core.CapabilityDescriptor, result *core.ToolResult) bool {
+	if result == nil || strings.TrimSpace(result.Error) != "" {
+		return false
+	}
+	if desc.Coordination == nil || !desc.Coordination.Target {
+		return false
+	}
+	if len(result.Data) > 0 {
+		return true
+	}
+	if len(result.Metadata) > 0 {
+		return true
+	}
+	return false
 }
 
 func extractStringFromMap(m map[string]interface{}, key string) (string, bool) {

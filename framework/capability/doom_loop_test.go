@@ -113,6 +113,28 @@ func TestDoomLoopDetectorProgressStall(t *testing.T) {
 	require.Equal(t, DoomLoopProgressStall, doomErr.Kind)
 }
 
+func TestDoomLoopDetectorSuccessfulCoordinationCallCountsAsProgress(t *testing.T) {
+	cfg := DefaultDoomLoopConfig()
+	cfg.ProgressStallThreshold = 3
+	detector := NewDoomLoopDetector(cfg)
+	desc := core.CapabilityDescriptor{
+		ID:   "agent:react",
+		Name: "agent.react",
+		Kind: core.CapabilityKindTool,
+		Coordination: &core.CoordinationTargetMetadata{
+			Target: true,
+		},
+	}
+
+	for i := 0; i < 6; i++ {
+		require.NoError(t, detector.Check(desc, map[string]any{"step": i}))
+		require.NoError(t, detector.RecordResult(desc, &core.ToolResult{
+			Success: false,
+			Data:    map[string]any{"summary": "analysis complete"},
+		}))
+	}
+}
+
 func TestDoomLoopDetectorReset(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	desc := core.CapabilityDescriptor{ID: "tool:write"}
