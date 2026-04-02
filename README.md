@@ -15,8 +15,9 @@ To the day it rewrites itself
 Relurpify is a fullstack Agent framework 
 - generic execution Agent library 
 - LLM oriented memory/context/graph/sandbox management framework 
-- (Rex) event agent, Federated Mesh - distributed coordination fabric , protocol platform 
+- (Rex) event agent, distributed coordination fabric , protocol platform 
 - archaeology provenance memory system 
+- extensive testsuite
 - (Euclo) coding agent 
 - TUI interfaces 
 
@@ -91,9 +92,6 @@ The repository already contains broader platform work that is planned for later 
 - `nexus`, the distributed coordination layer
 - `nexusish`, the administration interface for Nexus
 - `Rex`, the distributed runtime / agent path
-- expanded Archaeo user experiences for planning, memory, provenance, and long-horizon workflow support
-
-These areas are part of the project direction, but the primary first-release workflow remains local `relurpish` usage with Euclo.
 
 ## Additional Tools
 
