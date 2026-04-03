@@ -1,10 +1,12 @@
 package reporting
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -108,5 +110,47 @@ func TestBuildDebugCapabilityRuntimeState_CapturesVerificationPlan(t *testing.T)
 	}
 	if len(rt.ToolOutputSources) == 0 || rt.ToolOutputSources[0] != "euclo.verification_plan" {
 		t.Fatalf("expected verification plan tool output source, got %#v", rt.ToolOutputSources)
+	}
+}
+
+func TestBuildChatCapabilityRuntimeState_AskModeCapturesBehaviorTrace(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.relurpic_behavior_trace", execution.Trace{
+		RecipeIDs: []string{"chat.ask.inquiry", "chat.ask.review"},
+		Path:      "ask",
+	})
+	rt := BuildChatCapabilityRuntimeState(eucloruntime.UnitOfWork{
+		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk,
+		SupportingRelurpicCapabilityIDs: []string{
+			euclorelurpic.CapabilityChatLocalReview,
+			euclorelurpic.CapabilityArchaeologyExplore,
+		},
+	}, state, time.Now().UTC())
+
+	if !rt.AskActive || !rt.NonMutating || !rt.LocalReviewActive {
+		t.Fatalf("expected ask/local review flags, got ask=%v nonmut=%v local=%v", rt.AskActive, rt.NonMutating, rt.LocalReviewActive)
+	}
+	if len(rt.ExecutedRecipeIDs) != 2 || rt.BehaviorPath != "ask" {
+		t.Fatalf("unexpected trace projection: recipes=%v path=%q", rt.ExecutedRecipeIDs, rt.BehaviorPath)
+	}
+	if !strings.Contains(rt.Summary, "ask=true") {
+		t.Fatalf("expected ask summary segment, got %q", rt.Summary)
+	}
+}
+
+func TestBuildDebugCapabilityRuntimeState_IncludesEscalationInSummary(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.capability_contract_runtime", eucloruntime.CapabilityContractRuntimeState{
+		DebugEscalationTarget:    euclorelurpic.CapabilityChatImplement,
+		DebugEscalationTriggered: true,
+	})
+	rt := BuildDebugCapabilityRuntimeState(eucloruntime.UnitOfWork{
+		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigate,
+	}, state, time.Now().UTC())
+	if !strings.Contains(rt.Summary, "escalated="+euclorelurpic.CapabilityChatImplement) {
+		t.Fatalf("expected escalation in summary, got %q", rt.Summary)
+	}
+	if len(rt.Diagnostics) == 0 {
+		t.Fatalf("expected diagnostics when escalation triggers, got %#v", rt.Diagnostics)
 	}
 }

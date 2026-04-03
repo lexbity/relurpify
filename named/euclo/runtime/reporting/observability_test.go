@@ -52,3 +52,7 @@ func TestBuildProofSurface_CarriesAssuranceAndWaiver(t *testing.T) {
 		t.Fatalf("expected recovery attempts, got %d", proof.RecoveryAttempts)
 	}
 }
+
+func TestEmitObservabilityTelemetry_NilTelemetryIsSafe(t *testing.T) {
+	EmitObservabilityTelemetry(nil, &core.Task{ID: "nil-tel"}, nil, eucloruntime.ProofSurface{})
+}

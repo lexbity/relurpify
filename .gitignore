@@ -13,7 +13,7 @@ relurpify/
 /relurpify_cfg/logs/
 /relurpify_cfg/sessions/
 /relurpify_cfg/telemetry.jsonl
-kektordb-graphdb-ref
+
 # Build artifacts from test fixtures
 testsuite/agenttest_fixtures/**/target/
 testsuite/agenttest_fixtures/**/__pycache__/
@@ -21,3 +21,4 @@ testsuite/agenttest_fixtures/**/*.pyc
 #temp
 /docs/website/
 /docs/specs_new_tmp/
+.aider*

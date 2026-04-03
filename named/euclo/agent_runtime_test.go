@@ -152,3 +152,33 @@ func TestRefreshRuntimeExecutionArtifacts_TDDIncompleteForcesFailedExecutionStat
 		t.Fatalf("expected failed status, got %q", status.Status)
 	}
 }
+
+func TestRefreshRuntimeExecutionArtifacts_NoAssuranceClassKeepsCompletedStatus(t *testing.T) {
+	agent := &Agent{}
+	state := core.NewContext()
+	work := eucloruntime.UnitOfWork{
+		ID:             "uow-plain",
+		ExecutionID:    "exec-plain",
+		ModeID:         "code",
+		Status:         eucloruntime.UnitOfWorkStatusExecuting,
+		ResultClass:    eucloruntime.ExecutionResultClassCompleted,
+		AssuranceClass: "",
+	}
+
+	agent.refreshRuntimeExecutionArtifacts(context.Background(), &core.Task{ID: "task-plain"}, state, work, eucloruntime.ExecutionStatusCompleted, nil)
+
+	rawStatus, ok := state.Get("euclo.execution_status")
+	if !ok || rawStatus == nil {
+		t.Fatal("expected execution status in state")
+	}
+	status, ok := rawStatus.(eucloruntime.RuntimeExecutionStatus)
+	if !ok {
+		t.Fatalf("expected typed execution status, got %#v", rawStatus)
+	}
+	if status.Status != eucloruntime.ExecutionStatusCompleted {
+		t.Fatalf("expected completed status without assurance override, got %q", status.Status)
+	}
+	if status.ResultClass != eucloruntime.ExecutionResultClassCompleted {
+		t.Fatalf("expected completed result class, got %q", status.ResultClass)
+	}
+}

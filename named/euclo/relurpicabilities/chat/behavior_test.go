@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
@@ -248,4 +249,126 @@ func hasArtifactProducer(artifacts []euclotypes.Artifact, producer string, kind 
 		}
 	}
 	return false
+}
+
+func TestSupportingRoutinesLocalReviewEmitsReviewArtifact(t *testing.T) {
+	routines := NewSupportingRoutines()
+	if len(routines) < 1 {
+		t.Fatal("expected supporting routines")
+	}
+	state := core.NewContext()
+	in := euclorelurpic.RoutineInput{
+		Task: &core.Task{
+			Instruction: "inspect security posture of the handler",
+			Context: map[string]any{
+				"context_file_contents": []map[string]any{{"path": "handler.go", "content": "package api"}},
+			},
+		},
+		State: state,
+		Work:  euclorelurpic.WorkContext{PrimaryCapabilityID: Ask},
+	}
+	artifacts, err := routines[0].Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("local review routine: %v", err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Kind != euclotypes.ArtifactKindReviewFindings {
+		t.Fatalf("expected review findings artifact, got %#v", artifacts)
+	}
+	payload, _ := artifacts[0].Payload.(map[string]any)
+	if payload == nil || payload["review_source"] != LocalReview {
+		t.Fatalf("unexpected payload %#v", artifacts[0].Payload)
+	}
+}
+
+func TestSupportingRoutinesTargetedVerificationReadsPipelineVerify(t *testing.T) {
+	routines := NewSupportingRoutines()
+	if len(routines) < 2 {
+		t.Fatal("expected targeted verification routine")
+	}
+	state := core.NewContext()
+	state.Set("pipeline.verify", map[string]any{
+		"status": "fail",
+		"checks": []any{map[string]any{"name": "go_test", "status": "fail"}},
+	})
+	in := euclorelurpic.RoutineInput{
+		Task:  &core.Task{Instruction: "repair verification"},
+		State: state,
+		Work:  euclorelurpic.WorkContext{PrimaryCapabilityID: Implement},
+	}
+	artifacts, err := routines[1].Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("targeted verification routine: %v", err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Kind != euclotypes.ArtifactKindVerificationSummary {
+		t.Fatalf("expected verification summary artifact, got %#v", artifacts)
+	}
+	payload, _ := artifacts[0].Payload.(map[string]any)
+	if payload == nil || payload["overall_status"] != "fail" {
+		t.Fatalf("expected failed status in payload, got %#v", payload)
+	}
+}
+
+func TestAskBehaviorCompletesWithStubModel(t *testing.T) {
+	env := testutil.Env(t)
+	env.Config.MaxIterations = 2
+	state := core.NewContext()
+	in := execution.ExecuteInput{
+		Task: &core.Task{
+			ID:          "ask-stub",
+			Instruction: "why does the handler reject unsigned requests?",
+			Context:     map[string]any{"workspace": "."},
+		},
+		State:       state,
+		Environment: env,
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                  "wf-ask-stub",
+			RunID:                       "run-ask-stub",
+			PrimaryRelurpicCapabilityID: Ask,
+		},
+	}
+	result, err := NewAskBehavior().Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("ask behavior: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected success, got %+v", result)
+	}
+	arts := artifactsFromResultData(result)
+	if !hasArtifactID(arts, "chat_ask_answer") {
+		t.Fatalf("expected chat_ask_answer artifact, got %#v", arts)
+	}
+	if _, ok := state.Get("pipeline.analyze"); !ok {
+		t.Fatal("expected pipeline.analyze")
+	}
+}
+
+func TestAskBehaviorOptionsPathAppendsPlanCandidatesWhenInstructionRequestsComparison(t *testing.T) {
+	env := testutil.Env(t)
+	env.Config.MaxIterations = 2
+	state := core.NewContext()
+	in := execution.ExecuteInput{
+		Task: &core.Task{
+			ID:          "ask-options",
+			Instruction: "Compare options for caching strategy and tradeoffs",
+			Context:     map[string]any{"workspace": "."},
+		},
+		State:       state,
+		Environment: env,
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                  "wf-ask-options",
+			RunID:                       "run-ask-options",
+			PrimaryRelurpicCapabilityID: Ask,
+		},
+	}
+	result, err := NewAskBehavior().Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("ask behavior: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected success, got %+v", result)
+	}
+	arts := artifactsFromResultData(result)
+	if !hasArtifactID(arts, "chat_ask_plan_candidates") {
+		t.Fatalf("expected plan candidates artifact for options-style ask, got %#v", arts)
+	}
 }

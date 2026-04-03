@@ -50,9 +50,13 @@ func (t EchoTool) Parameters() []core.ToolParameter {
 
 func (t EchoTool) Execute(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	var echo interface{}
-	for _, value := range args {
+	if value, ok := args["value"]; ok {
 		echo = value
-		break
+	} else {
+		for _, value := range args {
+			echo = value
+			break
+		}
 	}
 	if echo == nil {
 		echo = ""

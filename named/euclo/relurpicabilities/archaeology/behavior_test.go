@@ -15,6 +15,7 @@ import (
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
@@ -858,5 +859,82 @@ func TestImplementPlanBehaviorBlocksOnLearningGateOffline(t *testing.T) {
 	}
 	if got := strings.TrimSpace(state.GetString("euclo.active_exploration_snapshot_id")); got == "" {
 		t.Fatal("expected active exploration snapshot id to be seeded")
+	}
+}
+
+func TestEnrichedArchaeoInputPayloadCapturesTensionsAndSummary(t *testing.T) {
+	e := enrichedArchaeoInput{
+		patternRefs: []string{"p-a", "p-b"},
+		tensionIDs:  []string{"t-1", "t-2"},
+		tensions: []execution.TensionView{
+			{ID: "t-1", Description: "API drift", PatternIDs: []string{"p-a"}, AnchorRefs: []string{"a1"}},
+			{ID: "t-2", Description: "Conflicting module boundaries", PatternIDs: []string{"p-b"}},
+		},
+		tensionSummary: &execution.TensionSummaryView{WorkflowID: "wf-x", Total: 2, Active: 2, Unresolved: 1},
+		explorationID:  "ex-1",
+	}
+	payload := e.payload()
+	if payload["tension_summary"] == nil {
+		t.Fatal("expected tension_summary in payload")
+	}
+	tensions, ok := payload["tensions"].([]execution.TensionView)
+	if !ok || len(tensions) != 2 {
+		t.Fatalf("expected tension views, got %#v", payload["tensions"])
+	}
+	summary := e.summary()
+	if !strings.Contains(summary, "tension") || !strings.Contains(summary, "pattern") {
+		t.Fatalf("expected summary to reference patterns and tensions, got %q", summary)
+	}
+}
+
+func TestPersistCompiledPlanMergesConflictingTensionRefsUniquely(t *testing.T) {
+	mock := &mockArchaeoAccess{}
+	in := execution.ExecuteInput{
+		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID: "wf-merge",
+			SemanticInputs: eucloruntime.SemanticInputBundle{
+				TensionRefs: []string{"t-user", "t-shared"},
+			},
+		},
+	}
+	payload := map[string]any{
+		"title": "Plan", "summary": "s",
+		"steps": []map[string]any{{"id": "step-1", "description": "do work", "scope": []string{"pkg/x"}}},
+	}
+	enr := enrichedArchaeoInput{
+		tensionIDs: []string{"t-shared", "t-archaeo-only"},
+	}
+	versioned, err := persistCompiledPlan(context.Background(), in, payload, enr)
+	if err != nil {
+		t.Fatalf("persistCompiledPlan: %v", err)
+	}
+	if versioned == nil || mock.drafted == nil {
+		t.Fatalf("expected drafted plan, got versioned=%v drafted=%v", versioned, mock.drafted)
+	}
+	refs := mock.drafted.TensionRefs
+	if len(refs) != 3 {
+		t.Fatalf("expected 3 unique tension refs merged from work+enriched, got %#v", refs)
+	}
+}
+
+func TestScopeExpansionRoutineProducesContextExpansionArtifact(t *testing.T) {
+	r := scopeExpandRoutine{}
+	artifacts, err := r.Execute(context.Background(), euclorelurpic.RoutineInput{
+		Task:  &core.Task{Context: map[string]any{"workflow_id": "wf-scope"}},
+		State: core.NewContext(),
+		Work: euclorelurpic.WorkContext{
+			PatternRefs: []string{"pattern:auth", "pattern:data"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("scope expansion routine: %v", err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Kind != euclotypes.ArtifactKindContextExpansion {
+		t.Fatalf("unexpected artifacts: %#v", artifacts)
+	}
+	payload, _ := artifacts[0].Payload.(map[string]any)
+	if payload == nil || payload["operation"] != ScopeExpansionAssess {
+		t.Fatalf("unexpected payload %#v", artifacts[0].Payload)
 	}
 }

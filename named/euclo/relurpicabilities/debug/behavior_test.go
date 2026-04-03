@@ -94,3 +94,59 @@ func findArtifactByKind(artifacts []euclotypes.Artifact, kind euclotypes.Artifac
 	}
 	return nil
 }
+
+func TestInvestigationSummaryStageContract(t *testing.T) {
+	stage := &investigationSummaryStage{task: &core.Task{Instruction: "debug flaky test"}}
+	if stage.Name() != "debug_investigation_summary" {
+		t.Fatalf("name: %s", stage.Name())
+	}
+	contract := stage.Contract()
+	if contract.Metadata.OutputKey != "euclo.debug_investigation_summary" || contract.Metadata.InputKey != "pipeline.analyze" {
+		t.Fatalf("unexpected contract metadata: %#v", contract.Metadata)
+	}
+}
+
+func TestRepairReadinessStageContract(t *testing.T) {
+	stage := &repairReadinessStage{task: &core.Task{Instruction: "debug flaky test"}}
+	if stage.Name() != "debug_repair_readiness" {
+		t.Fatalf("name: %s", stage.Name())
+	}
+	contract := stage.Contract()
+	if contract.Metadata.OutputKey != "euclo.debug_repair_readiness" || contract.Metadata.InputKey != "euclo.debug_investigation_summary" {
+		t.Fatalf("unexpected contract metadata: %#v", contract.Metadata)
+	}
+}
+
+func TestInvestigateBehaviorSkipsRegressionSynthesisWhenReproductionConcrete(t *testing.T) {
+	env := testutil.Env(t)
+	state := core.NewContext()
+	state.Set("euclo.reproduction", map[string]any{"method": "go test", "concrete": true})
+	in := execution.ExecuteInput{
+		Task: &core.Task{
+			ID:          "debug-no-synth",
+			Instruction: "fix the failing regression in the request parser",
+			Context:     map[string]any{"workspace": "."},
+		},
+		State:       state,
+		Environment: env,
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                  "wf-debug-no-synth",
+			RunID:                       "run-debug-no-synth",
+			PrimaryRelurpicCapabilityID: Investigate,
+		},
+	}
+
+	result, err := NewInvestigateBehavior().Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("debug investigate returned error: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected successful result, got %+v", result)
+	}
+	artifacts := debugArtifactsFromResult(result)
+	for _, a := range artifacts {
+		if a.ProducerID == "euclo:test.regression_synthesize" {
+			t.Fatalf("did not expect regression synthesis artifact when reproduction is concrete, got %#v", a)
+		}
+	}
+}

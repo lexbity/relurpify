@@ -466,3 +466,57 @@ func TestAssuranceApplyVerificationAndArtifacts_TreatsFinalOutputFileWriteAsMuta
 	require.Equal(t, "verification_missing", successGate.Reason)
 	require.Equal(t, eucloruntime.AssuranceClassUnverifiedSuccess, successGate.AssuranceClass)
 }
+
+func TestAssuranceShortCircuitAssemblesReportAndObservability(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.artifacts", []euclotypes.Artifact{{
+		ID:         "p1",
+		Kind:       euclotypes.ArtifactKindPlan,
+		Summary:    "partial plan",
+		Status:     "produced",
+		ProducerID: "euclo:test",
+	}})
+	rec := &testutil.TelemetryRecorder{}
+	out := ShortCircuit(Runtime{}, context.Background(), ShortCircuitInput{
+		Task:      &core.Task{ID: "early-exit"},
+		State:     state,
+		Mode:      euclotypes.ModeResolution{ModeID: "code"},
+		Profile:   euclotypes.ExecutionProfileSelection{ProfileID: "edit_verify_repair"},
+		Telemetry: rec,
+		Result:    &core.Result{Success: true, Data: map[string]any{"summary": "shortcut"}},
+	})
+	require.NoError(t, out.Err)
+	require.NotEmpty(t, out.FinalReport)
+	require.NotEmpty(t, out.ActionLog)
+	require.NotNil(t, out.ProofSurface)
+	require.NotEmpty(t, rec.Events)
+}
+
+func TestAssuranceBeforeVerificationHookRunsAfterPreVerificationCheckpoint(t *testing.T) {
+	var seen []archaeodomain.MutationCheckpoint
+	var beforeRan bool
+	behaviorService, work, executor := assuranceBehaviorInput()
+	svc := Runtime{
+		Environment:        testutil.Env(t),
+		BehaviorDispatcher: &behaviorService,
+		Checkpoint: func(_ context.Context, cp archaeodomain.MutationCheckpoint, _ *core.Task, _ *core.Context) error {
+			seen = append(seen, cp)
+			return nil
+		},
+		BeforeVerification: func(context.Context, *core.Task, *core.Context) error {
+			require.Equal(t, archaeodomain.MutationCheckpointPreVerification, seen[len(seen)-1])
+			beforeRan = true
+			return nil
+		},
+	}
+	out := svc.Execute(context.Background(), Input{
+		Task:             &core.Task{},
+		ExecutionTask:    &core.Task{},
+		WorkflowExecutor: executor,
+		State:            core.NewContext(),
+		Work:             work,
+	})
+	require.NoError(t, out.Err)
+	require.True(t, beforeRan)
+	require.Equal(t, archaeodomain.MutationCheckpointPreFinalization, seen[len(seen)-1])
+}
