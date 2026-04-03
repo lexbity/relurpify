@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/archaeo/execution"
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	"github.com/lexcodex/relurpify/framework/core"

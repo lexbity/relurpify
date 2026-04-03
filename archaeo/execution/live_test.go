@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var _ *memorydb.SQLiteWorkflowStateStore
+
 func TestLiveMutationCoordinatorContinuesOnObservation(t *testing.T) {
 	ctx := context.Background()
 	store := newMutationWorkflowStore(t, "wf-live-observation")
