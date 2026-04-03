@@ -447,12 +447,12 @@ func TestApplySessionResume_NilLastPhaseNoJump(t *testing.T) {
 // Helper types
 // ---------------------------------------------------------------------------
 
-// recordingHandler is used in tests
-type recordingHandler struct {
+// gapsRecordingHandler is used in tests in this file
+type gapsRecordingHandler struct {
 	executed *[]string
 }
 
-func (h *recordingHandler) Execute(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+func (h *gapsRecordingHandler) Execute(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
 	if h.executed != nil {
 		*h.executed = append(*h.executed, mc.Phase)
 	}
@@ -471,21 +471,21 @@ func (h *artifactProducingHandler) Execute(_ context.Context, _ interaction.Phas
 	}, nil
 }
 
-// transitionHandler is used in tests
-type transitionHandler struct {
+// gapsTransitionHandler is used in tests in this file
+type gapsTransitionHandler struct {
 	toMode string
 }
 
-func (h *transitionHandler) Execute(_ context.Context, _ interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+func (h *gapsTransitionHandler) Execute(_ context.Context, _ interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
 	return interaction.PhaseOutcome{JumpTo: h.toMode}, nil
 }
 
-// stubHandler is used in tests
-type stubHandler struct {
+// gapsStubHandler is used in tests in this file
+type gapsStubHandler struct {
 	outcome interaction.PhaseOutcome
 }
 
-func (h *stubHandler) Execute(_ context.Context, _ interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+func (h *gapsStubHandler) Execute(_ context.Context, _ interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
 	return h.outcome, nil
 }
 

@@ -892,7 +892,7 @@ func TestPhaseMachine_CanceledContextStopsRun(t *testing.T) {
 	cancel() // cancel immediately
 
 	phases := []interaction.PhaseDefinition{
-		{ID: "p1", Handler: &stubHandler{outcome: interaction.PhaseOutcome{Advance: true}}},
+		{ID: "p1", Handler: &stubHandler{outcome: interaction.PhaseOutcome{Advance: true}, err: nil}},
 	}
 	m := interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
 		Mode:    "chat",
