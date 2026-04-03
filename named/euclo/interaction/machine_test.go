@@ -3,7 +3,6 @@ package interaction
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )

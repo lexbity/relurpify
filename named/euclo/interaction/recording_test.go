@@ -252,12 +252,3 @@ func (m *mockFrameEmitter) Emit(ctx context.Context, frame InteractionFrame) err
 func (m *mockFrameEmitter) AwaitResponse(ctx context.Context) (UserResponse, error) {
 	return m.response, m.err
 }
-
-// Define FrameKind constants if they're not defined elsewhere
-const (
-	FrameProposal FrameKind = "proposal"
-	FrameStatus   FrameKind = "status"
-	FrameResult   FrameKind = "result"
-	FrameSummary  FrameKind = "summary"
-	FrameHelp     FrameKind = "help"
-)

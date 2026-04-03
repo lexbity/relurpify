@@ -2,7 +2,6 @@ package interaction
 
 import (
 	"testing"
-	"time"
 )
 
 func TestDefaultBudget(t *testing.T) {
@@ -27,7 +26,7 @@ func TestDefaultBudget(t *testing.T) {
 
 func TestNewBudget(t *testing.T) {
 	cfg := InteractionConfig{
-		Budget: BudgetConfig{
+		Budget: InteractionBudgetConfig{
 			MaxQuestions:  5,
 			MaxTransitions: 2,
 			MaxFrames:     100,
@@ -50,7 +49,7 @@ func TestNewBudget(t *testing.T) {
 	}
 }
 
-func TestRecordFrame(t *testing.T) {
+func TestBudgetRecordFrame(t *testing.T) {
 	budget := DefaultBudget()
 	
 	// Record frames up to limit (unlimited by default)
@@ -125,7 +124,7 @@ func TestRecordSkip(t *testing.T) {
 	}
 }
 
-func TestRecordTransition(t *testing.T) {
+func TestBudgetRecordTransition(t *testing.T) {
 	budget := DefaultBudget()
 	
 	// Record transitions within limit
