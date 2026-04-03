@@ -120,6 +120,8 @@ func TestIDsByWorkspace(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, rec1)
 
+	// advance time to ensure distinct IDs
+	now = now.Add(time.Second)
 	rec2, err := svc.Create(ctx, CreateInput{
 		WorkspaceID: "/workspace/ids",
 		WorkflowID:  "wf-ids",
@@ -230,7 +232,9 @@ func TestResolveMergesFields(t *testing.T) {
 	require.Contains(t, resolvedRec.CommentRefs, "comment-1")
 	require.Contains(t, resolvedRec.CommentRefs, "comment-2")
 	require.Equal(t, true, resolvedRec.Metadata["original"])
-	require.Equal(t, true, resolvedRec.Metadata["resolved"])
+	require.NotNil(t, resolvedRec.Resolution)
+	require.Equal(t, true, resolvedRec.Resolution.Metadata["resolved"])
+	require.Equal(t, true, resolvedRec.Resolution.Metadata["original"])
 }
 
 func TestMultipleConvergenceHistoryOrder(t *testing.T) {
