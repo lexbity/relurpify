@@ -796,6 +796,136 @@ func TestPrepareLivingPlanCreatesPendingRequestsWithoutProviders(t *testing.T) {
 	}
 }
 
+func TestPrepareLivingPlanWithNoPlanStore(t *testing.T) {
+	svc := archaeology.Service{}
+	state := core.NewContext()
+	result := svc.PrepareLivingPlan(context.Background(), &core.Task{}, state, "")
+	require.Nil(t, result.Plan)
+	require.Nil(t, result.Step)
+	require.Nil(t, result.Result)
+	require.NoError(t, result.Err)
+}
+
+func TestPrepareLivingPlanWhenLoadActiveContextReturnsNil(t *testing.T) {
+	store := &stubPlanStore{}
+	var phases []archaeodomain.EucloPhase
+	svc := archaeology.Service{
+		Plans: archaeoplans.Service{Store: store},
+		PersistPhase: func(_ context.Context, _ *core.Task, _ *core.Context, phase archaeodomain.EucloPhase, _ string, _ *frameworkplan.PlanStep) {
+			phases = append(phases, phase)
+		},
+		EvaluateGate: func(context.Context, *core.Task, *core.Context, *frameworkplan.LivingPlan, *frameworkplan.PlanStep) (archaeoexec.PreflightOutcome, error) {
+			return archaeoexec.PreflightOutcome{}, nil
+		},
+	}
+	state := core.NewContext()
+	result := svc.PrepareLivingPlan(context.Background(), &core.Task{
+		Context: map[string]any{"workspace": "/tmp/ws"},
+	}, state, "wf-1")
+	require.NoError(t, result.Err)
+	require.Nil(t, result.Plan)
+	require.Equal(t, []archaeodomain.EucloPhase{archaeodomain.PhaseArchaeology}, phases)
+}
+
+func TestPrepareLivingPlanWhenGateEvaluatorIsNil(t *testing.T) {
+	now := time.Now().UTC()
+	store := &stubPlanStore{
+		plan: &frameworkplan.LivingPlan{
+			ID:         "plan-1",
+			WorkflowID: "wf-1",
+			Steps: map[string]*frameworkplan.PlanStep{
+				"step-1": {ID: "step-1", Status: frameworkplan.PlanStepPending, CreatedAt: now, UpdatedAt: now},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	var phases []archaeodomain.EucloPhase
+	svc := archaeology.Service{
+		Plans: archaeoplans.Service{Store: store},
+		PersistPhase: func(_ context.Context, _ *core.Task, _ *core.Context, phase archaeodomain.EucloPhase, _ string, _ *frameworkplan.PlanStep) {
+			phases = append(phases, phase)
+		},
+		// EvaluateGate is nil
+	}
+	task := &core.Task{Context: map[string]any{"current_step_id": "step-1"}}
+	state := core.NewContext()
+	result := svc.PrepareLivingPlan(context.Background(), task, state, "wf-1")
+	require.Error(t, result.Err)
+	require.Equal(t, []archaeodomain.EucloPhase{archaeodomain.PhaseBlocked}, phases)
+}
+
+func TestPrepareLivingPlanWhenGateReturnsShortCircuit(t *testing.T) {
+	now := time.Now().UTC()
+	store := &stubPlanStore{
+		plan: &frameworkplan.LivingPlan{
+			ID:         "plan-1",
+			WorkflowID: "wf-1",
+			Steps: map[string]*frameworkplan.PlanStep{
+				"step-1": {ID: "step-1", Status: frameworkplan.PlanStepPending, CreatedAt: now, UpdatedAt: now},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	var phases []archaeodomain.EucloPhase
+	svc := archaeology.Service{
+		Plans: archaeoplans.Service{Store: store},
+		PersistPhase: func(_ context.Context, _ *core.Task, _ *core.Context, phase archaeodomain.EucloPhase, _ string, _ *frameworkplan.PlanStep) {
+			phases = append(phases, phase)
+		},
+		EvaluateGate: func(context.Context, *core.Task, *core.Context, *frameworkplan.LivingPlan, *frameworkplan.PlanStep) (archaeoexec.PreflightOutcome, error) {
+			return archaeoexec.PreflightOutcome{
+				Result: &core.Result{Success: true, Data: map[string]any{"skip": true}},
+			}, nil
+		},
+	}
+	task := &core.Task{Context: map[string]any{"current_step_id": "step-1"}}
+	state := core.NewContext()
+	result := svc.PrepareLivingPlan(context.Background(), task, state, "wf-1")
+	require.NoError(t, result.Err)
+	require.NotNil(t, result.Result)
+	require.True(t, result.Result.Success)
+	// Should not be blocked
+	require.NotEqual(t, archaeodomain.PhaseBlocked, phases)
+}
+
+func TestPrepareLivingPlanWhenGateReturnsConfidenceUpdated(t *testing.T) {
+	now := time.Now().UTC()
+	store := &stubPlanStore{
+		plan: &frameworkplan.LivingPlan{
+			ID:         "plan-1",
+			WorkflowID: "wf-1",
+			Steps: map[string]*frameworkplan.PlanStep{
+				"step-1": {ID: "step-1", Status: frameworkplan.PlanStepPending, CreatedAt: now, UpdatedAt: now},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	var phases []archaeodomain.EucloPhase
+	svc := archaeology.Service{
+		Plans: archaeoplans.Service{Store: store},
+		PersistPhase: func(_ context.Context, _ *core.Task, _ *core.Context, phase archaeodomain.EucloPhase, _ string, _ *frameworkplan.PlanStep) {
+			phases = append(phases, phase)
+		},
+		EvaluateGate: func(context.Context, *core.Task, *core.Context, *frameworkplan.LivingPlan, *frameworkplan.PlanStep) (archaeoexec.PreflightOutcome, error) {
+			return archaeoexec.PreflightOutcome{
+				ConfidenceUpdated: true,
+			}, nil
+		},
+	}
+	task := &core.Task{Context: map[string]any{"current_step_id": "step-1"}}
+	state := core.NewContext()
+	result := svc.PrepareLivingPlan(context.Background(), task, state, "wf-1")
+	require.NoError(t, result.Err)
+	require.Nil(t, result.Result)
+	require.NotNil(t, result.Step)
+	// phase not blocked, but we didn't record any phase because no blocking
+	// The current step should be set in state
+	require.Equal(t, "step-1", state.GetString("euclo.current_plan_step_id"))
+}
+
 func newWorkflowStore(t *testing.T) *memorydb.SQLiteWorkflowStateStore {
 	t.Helper()
 	store, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
