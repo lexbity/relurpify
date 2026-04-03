@@ -147,20 +147,30 @@ type ExpectSpec struct {
 
 // EucloExpectSpec defines expectations specific to Euclo's interactive execution.
 type EucloExpectSpec struct {
-	Mode                   string              `yaml:"mode,omitempty"`
-	Profile                string              `yaml:"profile,omitempty"`
-	PhasesExecuted         []string            `yaml:"phases_executed,omitempty"`
-	PhasesSkipped          []string            `yaml:"phases_skipped,omitempty"`
-	ArtifactsProduced      []string            `yaml:"artifacts_produced,omitempty"` // artifact kinds
-	ArtifactChain          []ArtifactChainSpec `yaml:"artifact_chain,omitempty"`
-	RecoveryAttempted      bool                `yaml:"recovery_attempted,omitempty"`
-	RecoveryStrategies     []string            `yaml:"recovery_strategies,omitempty"`
-	MinTransitionsProposed int                 `yaml:"min_transitions_proposed,omitempty"`
-	MaxTransitionsProposed int                 `yaml:"max_transitions_proposed,omitempty"`
-	MinFramesEmitted       int                 `yaml:"min_frames_emitted,omitempty"`
-	MaxFramesEmitted       int                 `yaml:"max_frames_emitted,omitempty"`
-	FrameKindsEmitted      []string            `yaml:"frame_kinds_emitted,omitempty"`
-	FrameKindsMustExclude  []string            `yaml:"frame_kinds_must_exclude,omitempty"`
+	Mode                           string              `yaml:"mode,omitempty"`
+	Profile                        string              `yaml:"profile,omitempty"`
+	BehaviorFamily                 string              `yaml:"behavior_family,omitempty"`
+	PrimaryRelurpicCapability      string              `yaml:"primary_relurpic_capability,omitempty"`
+	SupportingRelurpicCapabilities []string            `yaml:"supporting_relurpic_capabilities,omitempty"`
+	SpecializedCapabilityIDs       []string            `yaml:"specialized_capability_ids,omitempty"`
+	RecipeIDs                      []string            `yaml:"recipe_ids,omitempty"`
+	ResultClass                    string              `yaml:"result_class,omitempty"`
+	AssuranceClass                 string              `yaml:"assurance_class,omitempty"`
+	SuccessGateReason              string              `yaml:"success_gate_reason,omitempty"`
+	RecoveryStatus                 string              `yaml:"recovery_status,omitempty"`
+	DegradationMode                string              `yaml:"degradation_mode,omitempty"`
+	PhasesExecuted                 []string            `yaml:"phases_executed,omitempty"`
+	PhasesSkipped                  []string            `yaml:"phases_skipped,omitempty"`
+	ArtifactsProduced              []string            `yaml:"artifacts_produced,omitempty"` // artifact kinds
+	ArtifactChain                  []ArtifactChainSpec `yaml:"artifact_chain,omitempty"`
+	RecoveryAttempted              bool                `yaml:"recovery_attempted,omitempty"`
+	RecoveryStrategies             []string            `yaml:"recovery_strategies,omitempty"`
+	MinTransitionsProposed         int                 `yaml:"min_transitions_proposed,omitempty"`
+	MaxTransitionsProposed         int                 `yaml:"max_transitions_proposed,omitempty"`
+	MinFramesEmitted               int                 `yaml:"min_frames_emitted,omitempty"`
+	MaxFramesEmitted               int                 `yaml:"max_frames_emitted,omitempty"`
+	FrameKindsEmitted              []string            `yaml:"frame_kinds_emitted,omitempty"`
+	FrameKindsMustExclude          []string            `yaml:"frame_kinds_must_exclude,omitempty"`
 }
 
 type ArtifactChainSpec struct {

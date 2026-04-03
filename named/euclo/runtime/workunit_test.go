@@ -150,6 +150,19 @@ func TestRoutineBindingsUseFailedVerificationRepairFamily(t *testing.T) {
 	require.True(t, found)
 }
 
+func TestRoutineBindingsDoNotAddFailedVerificationRepairForReviewSuggestImplement(t *testing.T) {
+	mode := ModeResolution{ModeID: "review"}
+	profile := ExecutionProfileSelection{ProfileID: "review_suggest_implement", VerificationRequired: false}
+	class := TaskClassification{}
+	policy := ResolvedExecutionPolicy{}
+	bindings := routineBindingsForWork(mode, profile, class, policy)
+	for _, binding := range bindings {
+		if binding.Family == "failed_verification_repair" {
+			t.Fatalf("did not expect failed_verification_repair binding for review_suggest_implement, got %#v", binding)
+		}
+	}
+}
+
 func TestBehaviorFamilyGapAnalysisPlanProfile(t *testing.T) {
 	mode := ModeResolution{ModeID: "code"}
 	profile := ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
@@ -276,6 +289,7 @@ func TestBuildCompiledExecutionCopiesFields(t *testing.T) {
 	status := RuntimeExecutionStatus{
 		Status:           ExecutionStatusCompleted,
 		ResultClass:      ExecutionResultClassCompleted,
+		AssuranceClass:   AssuranceClassVerifiedSuccess,
 		UpdatedAt:        uow.CreatedAt,
 		DeferredIssueIDs: []string{"di-1"},
 	}
@@ -300,6 +314,7 @@ func TestBuildCompiledExecutionCopiesFields(t *testing.T) {
 	require.Equal(t, status.DeferredIssueIDs, compiled.DeferredIssueIDs)
 	require.Equal(t, ExecutionStatusCompleted, compiled.Status)
 	require.Equal(t, ExecutionResultClassCompleted, compiled.ResultClass)
+	require.Equal(t, AssuranceClassVerifiedSuccess, compiled.AssuranceClass)
 }
 
 func TestBuildCompiledExecutionSetsCompiledAtNow(t *testing.T) {
@@ -383,6 +398,7 @@ func TestReconstructUnitOfWorkNilState(t *testing.T) {
 
 func TestBuildRuntimeExecutionStatusCopiesIDs(t *testing.T) {
 	uow := buildTestUnitOfWork()
+	uow.AssuranceClass = AssuranceClassRepairExhausted
 	now := time.Now().UTC()
 
 	res := BuildRuntimeExecutionStatus(uow, ExecutionStatusExecuting, ExecutionResultClassCompleted, now)
@@ -393,6 +409,7 @@ func TestBuildRuntimeExecutionStatusCopiesIDs(t *testing.T) {
 	require.Equal(t, uow.ID, res.UnitOfWorkID)
 	require.Equal(t, ExecutionStatusExecuting, res.Status)
 	require.Equal(t, ExecutionResultClassCompleted, res.ResultClass)
+	require.Equal(t, AssuranceClassRepairExhausted, res.AssuranceClass)
 	require.Equal(t, now, res.UpdatedAt)
 }
 

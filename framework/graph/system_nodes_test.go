@@ -175,6 +175,39 @@ func TestSummarizeContextNodeAllowsNilArtifactSink(t *testing.T) {
 	require.NotEmpty(t, result.Data["summary"])
 }
 
+func TestSummarizeContextNodeBoundsLargeStructuredPayload(t *testing.T) {
+	node := graph.NewSummarizeContextNode("summarize", &core.SimpleSummarizer{})
+	node.StateKeys = []string{"react.last_tool_result"}
+
+	state := core.NewContext()
+	state.Set("task.id", "task-1")
+	files := make([]any, 0, 100)
+	for i := 0; i < 100; i++ {
+		files = append(files, filepath.Join("/very/long/path", "segment", "file-name-with-extra-text.txt"))
+	}
+	state.Set("react.last_tool_result", map[string]any{
+		"file_list": map[string]any{
+			"data": map[string]any{
+				"files": files,
+			},
+		},
+	})
+
+	result, err := node.Execute(context.Background(), state)
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	summary, _ := result.Data["summary"].(string)
+	require.NotEmpty(t, summary)
+
+	raw, ok := state.Get("graph.summary")
+	require.True(t, ok)
+	payload, ok := raw.(map[string]any)
+	require.True(t, ok)
+	text, ok := payload["summary"].(string)
+	require.True(t, ok)
+	require.Less(t, len(text), 2048)
+}
+
 func TestPersistenceWriterNodePersistsDeclarativeSummaryAndAudit(t *testing.T) {
 	store, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
 	require.NoError(t, err)

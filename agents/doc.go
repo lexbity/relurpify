@@ -43,6 +43,5 @@
 //
 // Skills are reusable capability bundles declared in SkillManifest YAML files.
 // Framework-owned skill resolution and capability admission live under
-// framework/skills. The agents package may expose temporary compatibility
-// wrappers under agents/skills, but those are not the canonical APIs.
+// framework/skills.
 package agents

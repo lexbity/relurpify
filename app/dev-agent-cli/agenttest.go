@@ -32,6 +32,7 @@ func newAgentTestCmd() *cobra.Command {
 func newAgentTestRunCmd() *cobra.Command {
 	var suites []string
 	var agentName string
+	var caseName string
 	var tags []string
 	var lane string
 	var tier string
@@ -92,9 +93,9 @@ func newAgentTestRunCmd() *cobra.Command {
 				if !shouldRunAgentTestSuite(suite, tier, profile, includeQuarantined) {
 					continue
 				}
-				suite = agenttest.FilterSuiteCasesByTags(suite, tags)
-				if len(suite.Spec.Cases) == 0 {
-					continue
+				suite, err = filterAgentTestSuiteCases(suite, caseName, tags)
+				if err != nil {
+					return fmt.Errorf("%s: %w", suitePath, err)
 				}
 				loadedSuites = append(loadedSuites, suite)
 			}
@@ -167,6 +168,7 @@ func newAgentTestRunCmd() *cobra.Command {
 
 	cmd.Flags().StringArrayVar(&suites, "suite", nil, "Path to a testsuite YAML (repeatable)")
 	cmd.Flags().StringVar(&agentName, "agent", "", "Run suites matching <agent> in testsuite/agenttests/")
+	cmd.Flags().StringVar(&caseName, "case", "", "Only run a single case by name")
 	cmd.Flags().StringArrayVar(&tags, "tag", nil, "Only run cases carrying at least one matching tag (repeatable)")
 	cmd.Flags().StringVar(&lane, "lane", "", "Apply a CI lane preset (pr-smoke|merge-stable|quarantined-live)")
 	cmd.Flags().StringVar(&tier, "tier", "", "Only run suites in the requested tier (smoke|stable|live-flaky|quarantined)")
@@ -250,7 +252,7 @@ func newAgentTestRefreshCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			suite, err = filterRefreshSuiteCases(suite, caseName, tags)
+			suite, err = filterAgentTestSuiteCases(suite, caseName, tags)
 			if err != nil {
 				return fmt.Errorf("%s: %w", suitePath, err)
 			}
@@ -301,7 +303,7 @@ func newAgentTestRefreshCmd() *cobra.Command {
 	return cmd
 }
 
-func filterRefreshSuiteCases(suite *agenttest.Suite, caseName string, tags []string) (*agenttest.Suite, error) {
+func filterAgentTestSuiteCases(suite *agenttest.Suite, caseName string, tags []string) (*agenttest.Suite, error) {
 	if suite == nil {
 		return nil, errors.New("suite is required")
 	}

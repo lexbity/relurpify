@@ -1,8 +1,6 @@
 package execution
 
 import (
-	"context"
-
 	htnpkg "github.com/lexcodex/relurpify/agents/htn"
 	plannerpkg "github.com/lexcodex/relurpify/agents/planner"
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
@@ -17,65 +15,23 @@ import (
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
-type WorkUnitExecutor interface {
-	Descriptor() eucloruntime.WorkUnitExecutorDescriptor
-	BuildGraph(ctx *ExecutorContext) (*graph.Graph, error)
-	Execute(ctx context.Context, exec *ExecutorContext) (*core.Result, error)
-}
-
-type ExecutorContext struct {
-	Task           *core.Task
-	State          *core.Context
-	Envelope       eucloruntime.TaskEnvelope
-	Classification eucloruntime.TaskClassification
-	Mode           eucloruntime.ModeResolution
-	Profile        eucloruntime.ExecutionProfileSelection
-	Work           eucloruntime.UnitOfWork
+type Selection struct {
+	Descriptor eucloruntime.WorkUnitExecutorDescriptor
+	Runtime    eucloruntime.ExecutorRuntimeState
+	Workflow   graph.WorkflowExecutor
 }
 
 type ExecutorFactory struct {
-	Model           core.LanguageModel
-	Registry        *capability.Registry
-	Memory          memory.MemoryStore
-	Config          *core.Config
-	CheckpointPath  string
-	IndexManager    *ast.IndexManager
-	SearchEngine    *search.SearchEngine
-	Telemetry       core.Telemetry
-	React           *reactpkg.ReActAgent
-	EnsureReact     func() error
-	RunWithWorkflow func(ctx context.Context, exec *ExecutorContext, executor graph.WorkflowExecutor) (*core.Result, error)
-}
-
-type nativeExecutor struct {
-	factory     ExecutorFactory
-	descriptor  eucloruntime.WorkUnitExecutorDescriptor
-	pathLabel   string
-	buildGraphF func(*ExecutorContext) (*graph.Graph, error)
-	executeF    func(context.Context, *ExecutorContext) (*core.Result, error)
-}
-
-func (e nativeExecutor) Descriptor() eucloruntime.WorkUnitExecutorDescriptor { return e.descriptor }
-func (e nativeExecutor) BuildGraph(ctx *ExecutorContext) (*graph.Graph, error) {
-	if e.buildGraphF != nil {
-		return e.buildGraphF(ctx)
-	}
-	return nil, nil
-}
-func (e nativeExecutor) Execute(ctx context.Context, exec *ExecutorContext) (*core.Result, error) {
-	if exec != nil && exec.State != nil {
-		path := e.pathLabel
-		if path == "" {
-			path = "workflow_executor"
-		}
-		exec.State.Set("euclo.executor_runtime", eucloruntime.ExecutorRuntimeState{
-			ExecutorID: e.descriptor.ExecutorID,
-			Family:     e.descriptor.Family,
-			Path:       path,
-			Reason:     e.descriptor.Reason,
-		})
-	}
-	return e.executeF(ctx, exec)
+	Model          core.LanguageModel
+	Registry       *capability.Registry
+	Memory         memory.MemoryStore
+	Config         *core.Config
+	CheckpointPath string
+	IndexManager   *ast.IndexManager
+	SearchEngine   *search.SearchEngine
+	Telemetry      core.Telemetry
+	React          *reactpkg.ReActAgent
+	EnsureReact    func() error
 }
 
 func newPlannerAgent(f ExecutorFactory) *plannerpkg.PlannerAgent {
@@ -112,63 +68,49 @@ func newReflectionAgent(f ExecutorFactory) (*reflectionpkg.ReflectionAgent, erro
 	return agent, nil
 }
 
-func SelectExecutor(f ExecutorFactory, work eucloruntime.UnitOfWork) WorkUnitExecutor {
+func SelectExecutor(f ExecutorFactory, work eucloruntime.UnitOfWork) (Selection, error) {
 	descriptor := work.ExecutorDescriptor
 	if descriptor.ExecutorID == "" {
 		descriptor = eucloruntime.WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: eucloruntime.ExecutorFamilyReact, Reason: "default managed react executor"}
 	}
+	buildSelection := func(path string, workflow graph.WorkflowExecutor) (Selection, error) {
+		if path == "" {
+			path = "workflow_executor"
+		}
+		return Selection{
+			Descriptor: descriptor,
+			Runtime: eucloruntime.ExecutorRuntimeState{
+				ExecutorID: descriptor.ExecutorID,
+				Family:     descriptor.Family,
+				Path:       path,
+				Reason:     descriptor.Reason,
+			},
+			Workflow: workflow,
+		}, nil
+	}
 	switch descriptor.Family {
 	case eucloruntime.ExecutorFamilyPlanner:
-		return nativeExecutor{factory: f, descriptor: descriptor, pathLabel: "planner_executor", buildGraphF: func(ctx *ExecutorContext) (*graph.Graph, error) { return newPlannerAgent(f).BuildGraph(ctx.Task) }, executeF: func(ctx context.Context, exec *ExecutorContext) (*core.Result, error) {
-			return f.RunWithWorkflow(ctx, exec, newPlannerAgent(f))
-		}}
+		return buildSelection("planner_executor", newPlannerAgent(f))
 	case eucloruntime.ExecutorFamilyHTN:
-		return nativeExecutor{factory: f, descriptor: descriptor, pathLabel: "htn_executor", buildGraphF: func(ctx *ExecutorContext) (*graph.Graph, error) {
-			agent, err := newHTNAgent(f)
-			if err != nil {
-				return nil, err
-			}
-			return agent.BuildGraph(ctx.Task)
-		}, executeF: func(ctx context.Context, exec *ExecutorContext) (*core.Result, error) {
-			agent, err := newHTNAgent(f)
-			if err != nil {
-				return nil, err
-			}
-			return f.RunWithWorkflow(ctx, exec, agent)
-		}}
+		agent, err := newHTNAgent(f)
+		if err != nil {
+			return Selection{}, err
+		}
+		return buildSelection("htn_executor", agent)
 	case eucloruntime.ExecutorFamilyRewoo:
-		return nativeExecutor{factory: f, descriptor: descriptor, pathLabel: "rewoo_executor", buildGraphF: func(ctx *ExecutorContext) (*graph.Graph, error) { return newRewooAgent(f).BuildGraph(ctx.Task) }, executeF: func(ctx context.Context, exec *ExecutorContext) (*core.Result, error) {
-			return f.RunWithWorkflow(ctx, exec, newRewooAgent(f))
-		}}
+		return buildSelection("rewoo_executor", newRewooAgent(f))
 	case eucloruntime.ExecutorFamilyReflection:
-		return nativeExecutor{factory: f, descriptor: descriptor, pathLabel: "reflection_executor", buildGraphF: func(ctx *ExecutorContext) (*graph.Graph, error) {
-			agent, err := newReflectionAgent(f)
-			if err != nil {
-				return nil, err
-			}
-			return agent.BuildGraph(ctx.Task)
-		}, executeF: func(ctx context.Context, exec *ExecutorContext) (*core.Result, error) {
-			agent, err := newReflectionAgent(f)
-			if err != nil {
-				return nil, err
-			}
-			return f.RunWithWorkflow(ctx, exec, agent)
-		}}
+		agent, err := newReflectionAgent(f)
+		if err != nil {
+			return Selection{}, err
+		}
+		return buildSelection("reflection_executor", agent)
 	default:
-		return nativeExecutor{factory: f, descriptor: descriptor, pathLabel: "react_executor", buildGraphF: func(ctx *ExecutorContext) (*graph.Graph, error) {
-			if f.EnsureReact != nil {
-				if err := f.EnsureReact(); err != nil {
-					return nil, err
-				}
+		if f.EnsureReact != nil {
+			if err := f.EnsureReact(); err != nil {
+				return Selection{}, err
 			}
-			return f.React.BuildGraph(ctx.Task)
-		}, executeF: func(ctx context.Context, exec *ExecutorContext) (*core.Result, error) {
-			if f.EnsureReact != nil {
-				if err := f.EnsureReact(); err != nil {
-					return nil, err
-				}
-			}
-			return f.RunWithWorkflow(ctx, exec, f.React)
-		}}
+		}
+		return buildSelection("react_executor", f.React)
 	}
 }

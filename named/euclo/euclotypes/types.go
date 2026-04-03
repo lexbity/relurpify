@@ -416,6 +416,12 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 	if assuranceClass := assuranceClassFromReport(report); assuranceClass != "" {
 		report["assurance_class"] = assuranceClass
 	}
+	if degradationMode := degradationModeFromReport(report); degradationMode != "" {
+		report["degradation_mode"] = degradationMode
+	}
+	if degradationReason := degradationReasonFromReport(report); degradationReason != "" {
+		report["degradation_reason"] = degradationReason
+	}
 	if deferredRefs := deferredIssueIDsFromReport(report); len(deferredRefs) > 0 {
 		report["deferred_issue_ids"] = deferredRefs
 	}
@@ -488,6 +494,32 @@ func deferredIssueIDsFromReport(report map[string]any) []string {
 		}
 	}
 	return nil
+}
+
+func degradationModeFromReport(report map[string]any) string {
+	for _, key := range []string{"success_gate", "proof_surface", "final_report"} {
+		payload := payloadMap(report[key])
+		if payload == nil {
+			continue
+		}
+		if value := strings.TrimSpace(fmt.Sprint(payload["degradation_mode"])); value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
+}
+
+func degradationReasonFromReport(report map[string]any) string {
+	for _, key := range []string{"success_gate", "proof_surface", "final_report"} {
+		payload := payloadMap(report[key])
+		if payload == nil {
+			continue
+		}
+		if value := strings.TrimSpace(fmt.Sprint(payload["degradation_reason"])); value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
 }
 
 // ValidateArtifactProvenance checks that all "produced" artifacts have a

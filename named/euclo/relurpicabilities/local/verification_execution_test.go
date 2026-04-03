@@ -73,7 +73,7 @@ func TestBuildVerificationPlan_UsesGoPackageTargetsFromFiles(t *testing.T) {
 		ID:         "edit",
 		Kind:       euclotypes.ArtifactKindEditIntent,
 		Summary:    "updated Go files",
-		Payload:    map[string]any{"files": []string{"named/euclo/runtime/verification.go", "named/euclo/runtime/session/session.go"}},
+		Payload:    map[string]any{"files": []string{"named/euclo/runtime/verification.go", "named/euclo/runtime/assurance/assurance.go"}},
 		ProducerID: "test",
 		Status:     "produced",
 	}})
@@ -88,7 +88,7 @@ func TestBuildVerificationPlan_UsesGoPackageTargetsFromFiles(t *testing.T) {
 	if plan.Commands[0].Args[1] != "./named/euclo/runtime" {
 		t.Fatalf("expected runtime package target, got %#v", plan.Commands[0].Args)
 	}
-	if plan.Commands[1].Args[1] != "./named/euclo/runtime/session" {
+	if plan.Commands[1].Args[1] != "./named/euclo/runtime/assurance" {
 		t.Fatalf("expected session package target, got %#v", plan.Commands[1].Args)
 	}
 }
@@ -332,5 +332,40 @@ func TestExecuteVerificationFlow_NoPlanDoesNotExecute(t *testing.T) {
 	}
 	if _, ok := state.Get("pipeline.verify"); ok {
 		t.Fatal("expected no verification evidence to be stored")
+	}
+}
+
+func TestExecuteVerificationFlow_DoesNotRequireMaterializedIntakeArtifactForInternalCall(t *testing.T) {
+	state := core.NewContext()
+	env := euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			Instruction: "verify this change",
+			Context: map[string]any{
+				"workspace":             ".",
+				"verification_commands": []string{"sh -c true"},
+			},
+		},
+		State: state,
+		RunID: "run-internal-no-intake",
+	}
+
+	artifacts, executed, err := ExecuteVerificationFlow(context.Background(), env, euclotypes.CapabilitySnapshot{
+		HasExecuteTools:      true,
+		HasVerificationTools: true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !executed {
+		t.Fatal("expected verification flow to execute without materialized intake artifact")
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected scope and verification artifacts, got %d", len(artifacts))
+	}
+	if _, ok := state.Get("euclo.verification_plan"); !ok {
+		t.Fatal("expected verification plan to be stored")
+	}
+	if _, ok := state.Get("pipeline.verify"); !ok {
+		t.Fatal("expected verification evidence to be stored")
 	}
 }

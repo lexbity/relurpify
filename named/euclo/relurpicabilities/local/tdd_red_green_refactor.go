@@ -110,6 +110,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 	}
 	execution.PropagateBehaviorTrace(env.State, testState)
 	testEditPayload := firstNonNilMap(testResult.Data, map[string]any{"summary": resultSummary(testResult)})
+	applyRecipeCodePayloadToState(env.State, testState, testEditPayload)
 	testArtifact := euclotypes.Artifact{
 		ID:         "tdd_test_edit",
 		Kind:       euclotypes.ArtifactKindEditIntent,
@@ -158,7 +159,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 
 	implementTask := &core.Task{
 		ID:          firstNonEmpty(taskIdentifier(env.Task), "tdd") + "-implement",
-		Instruction: "TDD green phase: implement the production change necessary to satisfy the failing tests. " + taskInstruction(env.Task),
+		Instruction: tddGreenPhaseInstruction(env),
 		Type:        core.TaskTypeCodeModification,
 		Context:     taskContextFromEnvelope(env),
 	}
@@ -170,6 +171,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 	}
 	execution.PropagateBehaviorTrace(env.State, implState)
 	implEditPayload := firstNonNilMap(implResult.Data, map[string]any{"summary": resultSummary(implResult)})
+	applyRecipeCodePayloadToState(env.State, implState, implEditPayload)
 	implArtifact := euclotypes.Artifact{
 		ID:         "tdd_implementation_edit",
 		Kind:       euclotypes.ArtifactKindEditIntent,
@@ -233,6 +235,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 		}
 		execution.PropagateBehaviorTrace(env.State, refactorState)
 		refactorPayload := firstNonNilMap(refactorResult.Data, map[string]any{"summary": resultSummary(refactorResult)})
+		applyRecipeCodePayloadToState(env.State, refactorState, refactorPayload)
 		refactorArtifact := euclotypes.Artifact{
 			ID:         "tdd_refactor_edit",
 			Kind:       euclotypes.ArtifactKindEditIntent,
@@ -310,6 +313,23 @@ func cloneMapAny(input map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+func applyRecipeCodePayloadToState(target, recipeState *core.Context, payload map[string]any) {
+	if target == nil {
+		return
+	}
+	if recipeState != nil {
+		if raw, ok := recipeState.Get("pipeline.code"); ok && raw != nil {
+			if typed, ok := raw.(map[string]any); ok {
+				target.Set("pipeline.code", cloneMapAny(typed))
+				return
+			}
+		}
+	}
+	if payload != nil {
+		target.Set("pipeline.code", cloneMapAny(payload))
+	}
 }
 
 func firstNonNilMap(value map[string]any, fallback map[string]any) map[string]any {
@@ -516,11 +536,73 @@ func shouldSynthesizeRegressionForTDD(env euclotypes.ExecutionEnvelope) bool {
 
 func tddRedPhaseInstruction(env euclotypes.ExecutionEnvelope) string {
 	base := "TDD red phase: write or update failing tests first for this request without implementing the production fix yet. " + taskInstruction(env.Task)
+	if guidance := tddPackageGuidance(env); guidance != "" {
+		base += " " + guidance
+	}
 	reproducer := mapPayloadFromState(env.State, "euclo.reproduction")
 	if len(reproducer) == 0 {
 		return base
 	}
 	return base + " Reproducer target: " + tddReproducerPrompt(reproducer)
+}
+
+func tddGreenPhaseInstruction(env euclotypes.ExecutionEnvelope) string {
+	base := "TDD green phase: implement the production change necessary to satisfy the failing tests, and update the production source file requested by the task. " + taskInstruction(env.Task)
+	if guidance := tddPackageGuidance(env); guidance != "" {
+		base += " " + guidance
+	}
+	return base
+}
+
+func tddPackageGuidance(env euclotypes.ExecutionEnvelope) string {
+	if env.Task == nil || env.Task.Context == nil {
+		return ""
+	}
+	contextFiles, _ := env.Task.Context["context_file_contents"].([]map[string]any)
+	if len(contextFiles) == 0 {
+		if raw, ok := env.Task.Context["context_file_contents"].([]any); ok {
+			for _, item := range raw {
+				record, _ := item.(map[string]any)
+				if record != nil {
+					contextFiles = append(contextFiles, record)
+				}
+			}
+		}
+	}
+	if len(contextFiles) == 0 {
+		return ""
+	}
+	parts := []string{}
+	for _, record := range contextFiles {
+		path := strings.TrimSpace(stringValue(record["path"]))
+		content := stringValue(record["content"])
+		if !strings.HasSuffix(path, ".go") {
+			continue
+		}
+		pkg := detectGoPackageName(content)
+		if pkg == "" {
+			continue
+		}
+		parts = append(parts, path+" declares package "+pkg)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Preserve the existing Go package declarations when writing tests and implementation; do not invent a different package name. " + strings.Join(parts, "; ") + "."
+}
+
+func detectGoPackageName(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "package ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			return strings.TrimSpace(fields[1])
+		}
+	}
+	return ""
 }
 
 func tddReproducerPrompt(reproducer map[string]any) string {

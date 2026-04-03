@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
@@ -139,7 +140,7 @@ func (n *reflectionReviewNode) Execute(ctx context.Context, state *core.Context)
 	prompt := fmt.Sprintf(`Review the following result for task "%s".
 %s
 Respond JSON {"issues":[{"severity":"high|medium|low","description":"...","suggestion":"..."}],"approve":bool}
-Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), lastResult)
+Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), compactResultForReview(lastResult))
 	resp, err := n.agent.Reviewer.Generate(ctx, prompt, &core.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0.2,
@@ -312,6 +313,102 @@ func reflectionAssessmentForReview(agent *ReflectionAgent, state *core.Context, 
 		assessment.BlockingIssueCount == 0 &&
 		assessment.IssueScore <= assessment.ApprovalThreshold
 	return assessment
+}
+
+func compactResultForReview(result *core.Result) map[string]any {
+	if result == nil {
+		return map[string]any{"present": false}
+	}
+	data := map[string]any{
+		"present": result != nil,
+		"node_id": strings.TrimSpace(result.NodeID),
+		"success": result.Success,
+	}
+	if result.Error != nil {
+		data["error"] = truncateReflectionString(result.Error.Error())
+	}
+	if len(result.Data) > 0 {
+		data["data"] = compactReflectionValue(result.Data, 0)
+	}
+	return data
+}
+
+const (
+	reflectionMaxDepth           = 3
+	reflectionMaxMapItems        = 10
+	reflectionMaxCollectionItems = 6
+	reflectionMaxStringLen       = 400
+)
+
+func compactReflectionValue(value any, depth int) any {
+	if depth >= reflectionMaxDepth {
+		return truncateReflectionString(fmt.Sprint(value))
+	}
+	switch typed := value.(type) {
+	case nil:
+		return nil
+	case string:
+		return truncateReflectionString(typed)
+	case []string:
+		limit := reflectionMinInt(len(typed), reflectionMaxCollectionItems)
+		out := make([]any, 0, limit+1)
+		for i := 0; i < limit; i++ {
+			out = append(out, truncateReflectionString(typed[i]))
+		}
+		if len(typed) > limit {
+			out = append(out, fmt.Sprintf("... (%d more)", len(typed)-limit))
+		}
+		return out
+	case []any:
+		limit := reflectionMinInt(len(typed), reflectionMaxCollectionItems)
+		out := make([]any, 0, limit+1)
+		for i := 0; i < limit; i++ {
+			out = append(out, compactReflectionValue(typed[i], depth+1))
+		}
+		if len(typed) > limit {
+			out = append(out, fmt.Sprintf("... (%d more)", len(typed)-limit))
+		}
+		return out
+	case map[string]any:
+		return compactReflectionMap(typed, depth)
+	default:
+		return truncateReflectionString(fmt.Sprint(value))
+	}
+}
+
+func compactReflectionMap(values map[string]any, depth int) map[string]any {
+	if len(values) == 0 {
+		return map[string]any{}
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	limit := reflectionMinInt(len(keys), reflectionMaxMapItems)
+	out := make(map[string]any, limit+1)
+	for _, key := range keys[:limit] {
+		out[key] = compactReflectionValue(values[key], depth+1)
+	}
+	if len(keys) > limit {
+		out["_truncated_keys"] = len(keys) - limit
+	}
+	return out
+}
+
+func truncateReflectionString(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= reflectionMaxStringLen {
+		return value
+	}
+	return value[:reflectionMaxStringLen] + "...(truncated)"
+}
+
+func reflectionMinInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func reflectionSeverityGuidance(weights map[string]float64) string {

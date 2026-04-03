@@ -74,6 +74,104 @@ func TestEvaluateEucloExpectationsReportsMissingRecoveryStrategy(t *testing.T) {
 	}
 }
 
+func TestEvaluateEucloExpectationsMatchesAssuranceAndResultState(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.execution_status": map[string]any{
+				"result_class":    "failed",
+				"assurance_class": "repair_exhausted",
+			},
+			"euclo.proof_surface": map[string]any{
+				"assurance_class":     "repair_exhausted",
+				"recovery_status":     "repair_exhausted",
+				"success_gate_reason": "verification_failed",
+			},
+		},
+	}
+
+	failures := evaluateEucloExpectations(&EucloExpectSpec{
+		ResultClass:       "failed",
+		AssuranceClass:    "repair_exhausted",
+		SuccessGateReason: "verification_failed",
+		RecoveryStatus:    "repair_exhausted",
+	}, snapshot)
+	if len(failures) > 0 {
+		t.Fatalf("expected assurance/result expectations to pass, got %v", failures)
+	}
+}
+
+func TestEvaluateEucloExpectationsMatchesBehaviorTrace(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.relurpic_behavior_trace": map[string]any{
+				"primary_capability_id":      "euclo:chat.implement",
+				"supporting_routines":        []any{"euclo:chat.direct-edit-execution", "euclo:chat.targeted-verification-repair"},
+				"recipe_ids":                 []any{"chat.implement.edit", "chat.implement.verify"},
+				"specialized_capability_ids": []any{"euclo.execution.react"},
+				"executor_family":            "react",
+			},
+		},
+	}
+
+	failures := evaluateEucloExpectations(&EucloExpectSpec{
+		BehaviorFamily:                 "react",
+		PrimaryRelurpicCapability:      "euclo:chat.implement",
+		SupportingRelurpicCapabilities: []string{"euclo:chat.direct-edit-execution", "euclo:chat.targeted-verification-repair"},
+		SpecializedCapabilityIDs:       []string{"euclo.execution.react"},
+		RecipeIDs:                      []string{"chat.implement.edit", "chat.implement.verify"},
+	}, snapshot)
+	if len(failures) > 0 {
+		t.Fatalf("expected behavior trace expectations to pass, got %v", failures)
+	}
+}
+
+func TestEvaluateEucloExpectationsReportsMissingBehaviorTraceFields(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.relurpic_behavior_trace": map[string]any{
+				"primary_capability_id": "euclo:debug.investigate",
+				"executor_family":       "react",
+			},
+		},
+	}
+
+	failures := evaluateEucloExpectations(&EucloExpectSpec{
+		PrimaryRelurpicCapability:      "euclo:debug.investigate",
+		SupportingRelurpicCapabilities: []string{"euclo:debug.root-cause"},
+		RecipeIDs:                      []string{"debug.investigate.localize"},
+	}, snapshot)
+	if len(failures) != 2 {
+		t.Fatalf("expected two missing behavior trace failures, got %v", failures)
+	}
+	if !strings.Contains(strings.Join(failures, "; "), `euclo.supporting_relurpic_capabilities: missing "euclo:debug.root-cause"`) {
+		t.Fatalf("expected missing supporting capability failure, got %v", failures)
+	}
+	if !strings.Contains(strings.Join(failures, "; "), `euclo.recipe_ids: missing "debug.investigate.localize"`) {
+		t.Fatalf("expected missing recipe failure, got %v", failures)
+	}
+}
+
+func TestEvaluateEucloExpectationsMatchesDegradationModeFromSuccessGate(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.success_gate": map[string]any{
+				"result_class":     "completed_with_deferrals",
+				"assurance_class":  "operator_deferred",
+				"degradation_mode": "operator_waiver",
+			},
+		},
+	}
+
+	failures := evaluateEucloExpectations(&EucloExpectSpec{
+		ResultClass:     "completed_with_deferrals",
+		AssuranceClass:  "operator_deferred",
+		DegradationMode: "operator_waiver",
+	}, snapshot)
+	if len(failures) > 0 {
+		t.Fatalf("expected degradation expectations to pass, got %v", failures)
+	}
+}
+
 func TestEvaluateEucloExpectationsMatchesPhasesExecuted(t *testing.T) {
 	snapshot := &core.ContextSnapshot{
 		State: map[string]any{

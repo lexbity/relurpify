@@ -308,7 +308,7 @@ func evaluateWorkflowTensionExpectations(workspace string, workflowIDs []string)
 func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSnapshot) []string {
 	var failures []string
 	if snapshot == nil {
-		if euclo.Mode != "" || euclo.Profile != "" || len(euclo.PhasesExecuted) > 0 {
+		if euclo.Mode != "" || euclo.Profile != "" || euclo.BehaviorFamily != "" || euclo.PrimaryRelurpicCapability != "" || euclo.ResultClass != "" || euclo.AssuranceClass != "" || euclo.SuccessGateReason != "" || euclo.RecoveryStatus != "" || euclo.DegradationMode != "" || len(euclo.PhasesExecuted) > 0 || len(euclo.SupportingRelurpicCapabilities) > 0 || len(euclo.SpecializedCapabilityIDs) > 0 || len(euclo.RecipeIDs) > 0 {
 			failures = append(failures, "euclo expectations set but no context snapshot")
 		}
 		return failures
@@ -322,6 +322,10 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 	interactionRecords := toAnySlice(snapshot.State["euclo.interaction_records"])
 	profilePhaseRecords := toAnySlice(snapshot.State["euclo.profile_phase_records"])
 	recoveryTrace := toStringAnyMap(snapshot.State["euclo.recovery_trace"])
+	executionStatus := toStringAnyMap(snapshot.State["euclo.execution_status"])
+	proofSurface := toStringAnyMap(snapshot.State["euclo.proof_surface"])
+	successGate := toStringAnyMap(snapshot.State["euclo.success_gate"])
+	behaviorTrace := eucloBehaviorTraceFromSnapshot(snapshot)
 
 	// Mode check.
 	if euclo.Mode != "" {
@@ -345,6 +349,99 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 		}
 		if got != euclo.Profile {
 			failures = append(failures, fmt.Sprintf("euclo.profile: got %q, want %q", got, euclo.Profile))
+		}
+	}
+
+	if euclo.BehaviorFamily != "" {
+		got := strings.TrimSpace(mapStringValue(behaviorTrace, "executor_family"))
+		if got != euclo.BehaviorFamily {
+			failures = append(failures, fmt.Sprintf("euclo.behavior_family: got %q, want %q", got, euclo.BehaviorFamily))
+		}
+	}
+
+	if euclo.PrimaryRelurpicCapability != "" {
+		got := strings.TrimSpace(mapStringValue(behaviorTrace, "primary_capability_id"))
+		if got != euclo.PrimaryRelurpicCapability {
+			failures = append(failures, fmt.Sprintf("euclo.primary_relurpic_capability: got %q, want %q", got, euclo.PrimaryRelurpicCapability))
+		}
+	}
+
+	if len(euclo.SupportingRelurpicCapabilities) > 0 {
+		gotSupporting := toStringSlice(behaviorTrace["supporting_routines"])
+		for _, expected := range euclo.SupportingRelurpicCapabilities {
+			if !stringSliceContains(gotSupporting, expected) {
+				failures = append(failures, fmt.Sprintf("euclo.supporting_relurpic_capabilities: missing %q", expected))
+			}
+		}
+	}
+
+	if len(euclo.SpecializedCapabilityIDs) > 0 {
+		gotSpecialized := toStringSlice(behaviorTrace["specialized_capability_ids"])
+		for _, expected := range euclo.SpecializedCapabilityIDs {
+			if !stringSliceContains(gotSpecialized, expected) {
+				failures = append(failures, fmt.Sprintf("euclo.specialized_capability_ids: missing %q", expected))
+			}
+		}
+	}
+
+	if len(euclo.RecipeIDs) > 0 {
+		gotRecipes := toStringSlice(behaviorTrace["recipe_ids"])
+		for _, expected := range euclo.RecipeIDs {
+			if !stringSliceContains(gotRecipes, expected) {
+				failures = append(failures, fmt.Sprintf("euclo.recipe_ids: missing %q", expected))
+			}
+		}
+	}
+
+	if euclo.ResultClass != "" {
+		got := firstNonEmptyString(
+			mapStringValue(executionStatus, "result_class"),
+			mapStringValue(successGate, "result_class"),
+			mapStringValue(proofSurface, "result_class"),
+		)
+		if got != euclo.ResultClass {
+			failures = append(failures, fmt.Sprintf("euclo.result_class: got %q, want %q", got, euclo.ResultClass))
+		}
+	}
+
+	if euclo.AssuranceClass != "" {
+		got := firstNonEmptyString(
+			mapStringValue(proofSurface, "assurance_class"),
+			mapStringValue(successGate, "assurance_class"),
+			mapStringValue(executionStatus, "assurance_class"),
+		)
+		if got != euclo.AssuranceClass {
+			failures = append(failures, fmt.Sprintf("euclo.assurance_class: got %q, want %q", got, euclo.AssuranceClass))
+		}
+	}
+
+	if euclo.SuccessGateReason != "" {
+		got := firstNonEmptyString(
+			mapStringValue(proofSurface, "success_gate_reason"),
+			mapStringValue(successGate, "reason"),
+		)
+		if got != euclo.SuccessGateReason {
+			failures = append(failures, fmt.Sprintf("euclo.success_gate_reason: got %q, want %q", got, euclo.SuccessGateReason))
+		}
+	}
+
+	if euclo.RecoveryStatus != "" {
+		got := firstNonEmptyString(
+			mapStringValue(proofSurface, "recovery_status"),
+			mapStringValue(recoveryTrace, "status"),
+		)
+		if got != euclo.RecoveryStatus {
+			failures = append(failures, fmt.Sprintf("euclo.recovery_status: got %q, want %q", got, euclo.RecoveryStatus))
+		}
+	}
+
+	if euclo.DegradationMode != "" {
+		got := firstNonEmptyString(
+			mapStringValue(proofSurface, "degradation_mode"),
+			mapStringValue(successGate, "degradation_mode"),
+		)
+		if got != euclo.DegradationMode {
+			failures = append(failures, fmt.Sprintf("euclo.degradation_mode: got %q, want %q", got, euclo.DegradationMode))
 		}
 	}
 
@@ -483,6 +580,29 @@ func evaluateArtifactChainExpectations(specs []ArtifactChainSpec, interactionRec
 		}
 	}
 	return failures
+}
+
+func mapStringValue(record map[string]any, key string) string {
+	if record == nil {
+		return ""
+	}
+	return strings.TrimSpace(toString(record[key]))
+}
+
+func eucloBehaviorTraceFromSnapshot(snapshot *core.ContextSnapshot) map[string]any {
+	if snapshot == nil {
+		return nil
+	}
+	return toStringAnyMap(snapshot.State["euclo.relurpic_behavior_trace"])
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 type interactionPhaseRecord struct {

@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
@@ -103,5 +104,53 @@ func TestBuildTDDLifecycleArtifact_TracksPhaseHistory(t *testing.T) {
 	history, ok := payload["phase_history"].([]map[string]any)
 	if !ok || len(history) < 4 {
 		t.Fatalf("expected phase history to be preserved, got %#v", payload["phase_history"])
+	}
+}
+
+func TestApplyRecipeCodePayloadToState_PrefersRecipeStatePipelineCode(t *testing.T) {
+	target := core.NewContext()
+	recipeState := core.NewContext()
+	recipeState.Set("pipeline.code", map[string]any{
+		"summary": "recipe pipeline code",
+		"final_output": map[string]any{
+			"result": map[string]any{
+				"file_write": map[string]any{
+					"success": true,
+					"data": map[string]any{"path": "testsuite/fixtures/strings_test.go"},
+				},
+			},
+		},
+	})
+
+	applyRecipeCodePayloadToState(target, recipeState, map[string]any{"summary": "fallback payload"})
+
+	raw, ok := target.Get("pipeline.code")
+	if !ok || raw == nil {
+		t.Fatal("expected pipeline.code to be set on target state")
+	}
+	payload, _ := raw.(map[string]any)
+	if payload["summary"] != "recipe pipeline code" {
+		t.Fatalf("expected recipe state pipeline.code to win, got %#v", payload)
+	}
+}
+
+func TestTDDPackageGuidance_PreservesGoPackageDeclarations(t *testing.T) {
+	env := euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			Context: map[string]any{
+				"context_file_contents": []map[string]any{{
+					"path":    "testsuite/fixtures/strings.go",
+					"content": "package main\n\nfunc Existing() {}\n",
+				}},
+			},
+		},
+	}
+
+	guidance := tddPackageGuidance(env)
+	if guidance == "" {
+		t.Fatal("expected package guidance to be generated")
+	}
+	if !strings.Contains(guidance, "testsuite/fixtures/strings.go declares package main") {
+		t.Fatalf("expected concrete package guidance, got %q", guidance)
 	}
 }

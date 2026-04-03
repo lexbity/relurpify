@@ -1,4 +1,4 @@
-package orchestrate
+package dispatch
 
 import (
 	"context"
@@ -16,13 +16,13 @@ import (
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
-type Service struct {
+type Dispatcher struct {
 	behaviors map[string]execution.Behavior
 	routines  map[string]euclorelurpic.SupportingRoutine
 }
 
-func NewService() *Service {
-	s := &Service{behaviors: map[string]execution.Behavior{}, routines: map[string]euclorelurpic.SupportingRoutine{}}
+func NewDispatcher() *Dispatcher {
+	d := &Dispatcher{behaviors: map[string]execution.Behavior{}, routines: map[string]euclorelurpic.SupportingRoutine{}}
 	for _, behavior := range []execution.Behavior{
 		chatbehavior.NewAskBehavior(),
 		chatbehavior.NewInspectBehavior(),
@@ -32,33 +32,33 @@ func NewService() *Service {
 		archaeologybehavior.NewCompilePlanBehavior(),
 		archaeologybehavior.NewImplementPlanBehavior(),
 	} {
-		s.behaviors[behavior.ID()] = behavior
+		d.behaviors[behavior.ID()] = behavior
 	}
 	for _, routine := range append(append(chatbehavior.NewSupportingRoutines(), debugbehavior.NewSupportingRoutines()...), archaeologybehavior.NewSupportingRoutines()...) {
-		s.routines[routine.ID()] = routine
+		d.routines[routine.ID()] = routine
 	}
-	return s
+	return d
 }
 
-func (s *Service) Execute(ctx context.Context, in execution.ExecuteInput) (*core.Result, error) {
-	if s == nil {
+func (d *Dispatcher) Execute(ctx context.Context, in execution.ExecuteInput) (*core.Result, error) {
+	if d == nil {
 		return nil, fmt.Errorf("relurpic behavior service unavailable")
 	}
 	behaviorID := strings.TrimSpace(in.Work.PrimaryRelurpicCapabilityID)
-	behavior, ok := s.behaviors[behaviorID]
+	behavior, ok := d.behaviors[behaviorID]
 	if !ok {
 		return nil, fmt.Errorf("relurpic behavior %q unavailable", behaviorID)
 	}
-	in.RunSupportingRoutine = s.ExecuteRoutine
+	in.RunSupportingRoutine = d.ExecuteRoutine
 	return behavior.Execute(ctx, in)
 }
 
-func (s *Service) ExecuteRoutine(ctx context.Context, routineID string, task *core.Task, state *core.Context, work runtimepkg.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
-	if s == nil {
+func (d *Dispatcher) ExecuteRoutine(ctx context.Context, routineID string, task *core.Task, state *core.Context, work runtimepkg.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
+	if d == nil {
 		return nil, fmt.Errorf("relurpic behavior service unavailable")
 	}
 	routineID = strings.TrimSpace(routineID)
-	routine, ok := s.routines[routineID]
+	routine, ok := d.routines[routineID]
 	if !ok {
 		return nil, nil
 	}

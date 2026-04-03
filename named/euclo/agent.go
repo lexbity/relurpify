@@ -35,11 +35,12 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
+	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
+	euclodispatch "github.com/lexcodex/relurpify/named/euclo/runtime/dispatch"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
-	eucloses "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 	golangpkg "github.com/lexcodex/relurpify/platform/lang/go"
 	jspkg "github.com/lexcodex/relurpify/platform/lang/js"
@@ -52,18 +53,23 @@ import (
 //	Agent.Execute
 //	  -> runtimeState(...)
 //	  -> selectExecutor(...)
-//	  -> nativeExecutor.Execute(...)
-//	  -> executeWithWorkflowExecutor(...)
 //	  -> executeManagedFlow(...)
-//	  -> named/euclo/runtime/session.SessionService.Execute(...)
-//	  -> BehaviorService.Execute(...)
+//	  -> named/euclo/runtime/assurance.Execute(...)
+//	  -> named/euclo/runtime/dispatch.Dispatcher.Execute(...)
 //	  -> execution.ExecuteRecipe(...)
 //	  -> /agents paradigm runner (react / planner / htn / reflection / architect / rewoo)
+//
+// BuildGraph follows the same executor selection path and delegates directly to
+// the selected WorkflowExecutor's graph builder.
+//
+// Previous Euclo-only adapter hops (nativeExecutor.Execute and
+// executeWithWorkflowExecutor) were collapsed so Agent owns the direct handoff
+// into managed orchestration.
 //
 // ProfileController is not the primary coding execution path. It is invoked
 // during executeManagedFlow only for interactive mode-machine work when the
 // interaction registry is active. The primary run path dispatches through
-// BehaviorService and the relurpic capability owners.
+// the behavior dispatcher and the relurpic capability owners.
 //
 // ExecuteInput.Environment carries the framework agent substrate
 // (model/registry/index/search/memory/config). Euclo-owned runtime services
@@ -71,9 +77,8 @@ import (
 // Euclo ServiceBundle at behavior dispatch time.
 //
 // ExecuteInput.WorkflowExecutor is the selected executor family instance built
-// by the native executor selected from the UnitOfWork's ExecutorDescriptor.
-// BehaviorService receives both the executor and the UnitOfWork-derived
-// execution context.
+// from the UnitOfWork's ExecutorDescriptor. The behavior dispatcher receives
+// both the executor and the UnitOfWork-derived execution context.
 //
 // Agent is the named coding-runtime boundary for software-engineering work.
 type Agent struct {
@@ -103,7 +108,7 @@ type Agent struct {
 	CodingCapabilities  *capabilities.EucloCapabilityRegistry
 	ProfileCtrl         *orchestrate.ProfileController
 	RecoveryCtrl        *orchestrate.RecoveryController
-	BehaviorService     *orchestrate.Service
+	BehaviorDispatcher  *euclodispatch.Dispatcher
 	Emitter             interaction.FrameEmitter // live emitter from TUI; nil means use task-scoped emitter
 	RuntimeProviders    []core.Provider
 }
@@ -202,8 +207,8 @@ func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
 			a.RecoveryCtrl,
 		)
 	}
-	if a.BehaviorService == nil {
-		a.BehaviorService = orchestrate.NewService()
+	if a.BehaviorDispatcher == nil {
+		a.BehaviorDispatcher = euclodispatch.NewDispatcher()
 	}
 	return a.Initialize(a.Environment.Config)
 }
@@ -559,12 +564,12 @@ func (a *Agent) executionFinalizer() archaeoexec.Finalizer {
 	})
 }
 
-func (a *Agent) executionSession() eucloses.SessionService {
-	return eucloses.SessionService{
+func (a *Agent) assuranceRuntime() eucloassurance.Runtime {
+	return eucloassurance.Runtime{
 		Memory:              a.Memory,
 		Environment:         a.Environment,
 		ProfileCtrl:         a.ProfileCtrl,
-		BehaviorService:     a.BehaviorService,
+		BehaviorDispatcher:  a.BehaviorDispatcher,
 		InteractionRegistry: a.InteractionRegistry,
 		Emitter:             a.Emitter,
 		ResolveEmitter: func(task *core.Task, live interaction.FrameEmitter) (interaction.FrameEmitter, bool, int) {
@@ -1258,6 +1263,12 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	case eucloruntime.AssuranceClassReviewBlocked:
 		work.ResultClass = eucloruntime.ExecutionResultClassBlocked
 		status = eucloruntime.ExecutionStatusBlocked
+	case eucloruntime.AssuranceClassTDDIncomplete:
+		work.ResultClass = eucloruntime.ExecutionResultClassFailed
+		status = eucloruntime.ExecutionStatusFailed
+	case eucloruntime.AssuranceClassOperatorDeferred:
+		work.ResultClass = eucloruntime.ExecutionResultClassCompletedWithDeferrals
+		status = eucloruntime.ExecutionStatusCompletedWithDeferrals
 	}
 	status = euclowork.StatusForResultClass(status, work.ResultClass)
 	switch work.ResultClass {

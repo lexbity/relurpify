@@ -20,6 +20,14 @@ type primitiveDispatcher struct {
 	fallback graph.WorkflowExecutor
 }
 
+// DispatchTask executes a primitive HTN task against the capability registry
+// and falls back to the provided workflow executor when no capability target
+// resolves. Use NewPrimitiveDispatcher when an executor-shaped wrapper is
+// required, such as plan execution with branch isolation.
+func DispatchTask(ctx context.Context, tools *capability.Registry, fallback graph.WorkflowExecutor, task *core.Task, state *core.Context) (*core.Result, error) {
+	return (&primitiveDispatcher{tools: tools, fallback: fallback}).Execute(ctx, task, state)
+}
+
 func NewPrimitiveDispatcher(tools *capability.Registry, fallback graph.WorkflowExecutor) graph.WorkflowExecutor {
 	return &primitiveDispatcher{
 		tools:    tools,

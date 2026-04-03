@@ -238,6 +238,100 @@ integration, including:
 - `euclo.unit_of_work_history`
 - `euclo.shared_context_runtime`
 
+Euclo also now publishes assurance- and proof-oriented runtime surfaces,
+including:
+
+- `euclo.success_gate`
+- `euclo.proof_surface`
+- `euclo.verification_plan`
+- `euclo.tdd.lifecycle`
+- `euclo.waiver`
+
+Those surfaces distinguish execution outcome from proof quality. Fresh edits
+must be backed by executed current-run verification evidence unless an explicit
+operator waiver is present.
+
+---
+
+## Assurance Model
+
+Euclo reports runtime outcome and assurance as separate dimensions.
+
+`result_class` answers whether the run completed, blocked, failed, or completed
+with deferrals.
+
+`assurance_class` answers how trustworthy the completion claim is. Current
+assurance classes include:
+
+- `verified_success`
+- `partially_verified`
+- `unverified_success`
+- `review_blocked`
+- `repair_exhausted`
+- `tdd_incomplete`
+- `operator_deferred`
+
+This split is intentional:
+
+- lifecycle outcome remains stable for runtime and restore consumers
+- proof quality remains explicit for operators and downstream tooling
+
+Euclo does not allow fallback or reused verification evidence to prove fresh
+mutating success.
+
+---
+
+## Verification, Review, And Repair
+
+For mutating work, Euclo now enforces a hardened path:
+
+- semantic review gates all automatic mutation flows
+- verification scope is selected explicitly and persisted as
+  `euclo.verification_plan`
+- verification execution records command-level evidence tied to the current run
+- failed verification enters bounded repair rather than soft success
+- exhausted repair loops surface as `repair_exhausted`
+
+Language- and tool-specific verification planning is delegated outward:
+
+- `named/euclo` owns assurance, gating, and reporting
+- `/framework` owns generic planning interfaces and policy overlays
+- `/platform` owns backend-specific verification scope resolution
+
+---
+
+## TDD Contract
+
+TDD is no longer treated as a generic edit-and-verify variation.
+
+In `test_driven_generation`, Euclo requires:
+
+- red-phase evidence
+- green-phase evidence
+- explicit lifecycle state in `euclo.tdd.lifecycle`
+- refactor evidence when refactor was requested
+
+Bugfix-shaped TDD and debug flows may synthesize a reproducer first through
+`euclo:test.regression_synthesize`, but that synthesized reproducer is surfaced
+explicitly in artifacts and state.
+
+---
+
+## Waivers And Deferrals
+
+Waivers are explicit and auditable.
+
+An operator waiver:
+
+- is surfaced as `euclo.waiver`
+- is reflected in the success gate and proof surface
+- yields `assurance_class=operator_deferred`
+- is projected into deferred issue state
+- may be linked into Archaeo provenance when that substrate is configured
+
+Automatic degraded operation remains distinct from an operator waiver and does
+not silently authorize proof claims.
+
 These runtime objects are the main contract for local engineering tests. The
 full live-model end-to-end suite remains separate in `/testsuite`.
 

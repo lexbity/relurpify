@@ -216,6 +216,17 @@ For Euclo specifically, this means:
 - Euclo should own Euclo-specific relurpic capabilities
 - Euclo may compose `/agents` paradigms through those relurpic capabilities
 
+That does not mean Euclo-specific proof contracts belong in `framework/`.
+For example:
+
+- Euclo-owned semantic review gating
+- Euclo-owned assurance and waiver semantics
+- Euclo-owned TDD lifecycle enforcement
+- Euclo-owned bounded failed-verification repair
+
+Those are runtime contracts of a named agent built on top of the relurpic
+primitive, not framework-level definitions of what relurpic means.
+
 ---
 
 ## Policy And Manifest Surface
@@ -271,3 +282,15 @@ Instead:
 
 This is consistent with the current implementation and with the intended
 layering rules.
+
+In practice, the current Euclo layering is:
+
+- `framework/` defines relurpic as a capability runtime family and exposes
+  policy/planning interfaces
+- `/platform` provides backend-specific verification and compatibility helpers
+- `named/euclo` defines the coding-specific relurpic capabilities and enforces
+  assurance, review, verification, TDD, repair, and reporting contracts
+
+That separation keeps relurpic general-purpose at the framework level while
+still allowing named agents to provide strong domain-specific behavior
+guarantees.

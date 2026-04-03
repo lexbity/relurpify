@@ -1,4 +1,4 @@
-package session
+package assurance
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclodispatch "github.com/lexcodex/relurpify/named/euclo/runtime/dispatch"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
@@ -26,11 +27,11 @@ type ArtifactPersister func(context.Context, *core.Task, *core.Context, []euclot
 type BeforeVerificationHook func(context.Context, *core.Task, *core.Context) error
 type MutationCheckpointHook func(context.Context, archaeodomain.MutationCheckpoint, *core.Task, *core.Context) error
 
-type SessionService struct {
+type Runtime struct {
 	Memory              memory.MemoryStore
 	Environment         agentenv.AgentEnvironment
 	ProfileCtrl         *orchestrate.ProfileController
-	BehaviorService     *orchestrate.Service
+	BehaviorDispatcher  *euclodispatch.Dispatcher
 	InteractionRegistry *interaction.ModeMachineRegistry
 	Emitter             interaction.FrameEmitter
 	ResolveEmitter      EmitterResolver
@@ -41,7 +42,7 @@ type SessionService struct {
 	ResetDoomLoop       func()
 }
 
-type SessionInput struct {
+type Input struct {
 	Task             *core.Task
 	ExecutionTask    *core.Task
 	WorkflowExecutor graph.WorkflowExecutor
@@ -54,7 +55,7 @@ type SessionInput struct {
 	ServiceBundle    eucloexec.ServiceBundle
 }
 
-type SessionOutput struct {
+type Output struct {
 	Result              *core.Result
 	Err                 error
 	Artifacts           []euclotypes.Artifact
@@ -74,12 +75,12 @@ type ShortCircuitInput struct {
 	SkipSuccessGate bool
 }
 
-func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOutput {
-	var out SessionOutput
+func Execute(s Runtime, ctx context.Context, in Input) Output {
+	var out Output
 	if in.State == nil {
 		return out
 	}
-	if s.BehaviorService == nil {
+	if s.BehaviorDispatcher == nil {
 		out.Err = fmt.Errorf("relurpic behavior service unavailable")
 		out.Result = &core.Result{Success: false, Error: out.Err}
 		return out
@@ -112,8 +113,8 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 		result  *core.Result
 		execErr error
 	)
-	if s.BehaviorService != nil && in.Work.PrimaryRelurpicCapabilityID != "" {
-		result, execErr = s.BehaviorService.Execute(ctx, eucloexec.ExecuteInput{
+	if s.BehaviorDispatcher != nil && in.Work.PrimaryRelurpicCapabilityID != "" {
+		result, execErr = s.BehaviorDispatcher.Execute(ctx, eucloexec.ExecuteInput{
 			Task:             in.Task,
 			ExecutionTask:    executionTask,
 			State:            in.State,
@@ -155,8 +156,8 @@ func (s SessionService) Execute(ctx context.Context, in SessionInput) SessionOut
 	return out
 }
 
-func (s SessionService) ShortCircuit(ctx context.Context, in ShortCircuitInput) SessionOutput {
-	out := SessionOutput{Result: in.Result}
+func ShortCircuit(s Runtime, ctx context.Context, in ShortCircuitInput) Output {
+	out := Output{Result: in.Result}
 	if in.State == nil {
 		return out
 	}
@@ -213,7 +214,15 @@ func (s SessionService) ShortCircuit(ctx context.Context, in ShortCircuitInput) 
 	return out
 }
 
-func (s SessionService) expandContext(ctx context.Context, in SessionInput) (*core.Task, error) {
+func (s Runtime) Execute(ctx context.Context, in Input) Output {
+	return Execute(s, ctx, in)
+}
+
+func (s Runtime) ShortCircuit(ctx context.Context, in ShortCircuitInput) Output {
+	return ShortCircuit(s, ctx, in)
+}
+
+func (s Runtime) expandContext(ctx context.Context, in Input) (*core.Task, error) {
 	executionTask := in.ExecutionTask
 	if executionTask == nil {
 		executionTask = in.Task
@@ -239,7 +248,7 @@ func (s SessionService) expandContext(ctx context.Context, in SessionInput) (*co
 	}
 }
 
-func (s SessionService) runInteractive(ctx context.Context, executionTask *core.Task, env euclotypes.ExecutionEnvelope, mode euclotypes.ModeResolution) error {
+func (s Runtime) runInteractive(ctx context.Context, executionTask *core.Task, env euclotypes.ExecutionEnvelope, mode euclotypes.ModeResolution) error {
 	if s.InteractionRegistry == nil || s.ProfileCtrl == nil {
 		return nil
 	}
@@ -252,7 +261,7 @@ func (s SessionService) runInteractive(ctx context.Context, executionTask *core.
 	return err
 }
 
-func (s SessionService) resolveEmitter(task *core.Task) (interaction.FrameEmitter, bool, int) {
+func (s Runtime) resolveEmitter(task *core.Task) (interaction.FrameEmitter, bool, int) {
 	if s.ResolveEmitter != nil {
 		return s.ResolveEmitter(task, s.Emitter)
 	}
@@ -262,7 +271,7 @@ func (s SessionService) resolveEmitter(task *core.Task) (interaction.FrameEmitte
 	return &interaction.NoopEmitter{}, false, 0
 }
 
-func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in SessionInput, out *SessionOutput) {
+func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, out *Output) {
 	policy := euclopolicy.ResolveVerificationPolicy(in.Mode, in.Profile)
 	in.State.Set("euclo.verification_policy", policy)
 	if out.Err == nil && in.Profile.MutationAllowed {
@@ -280,10 +289,21 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 	}
 	successGate := eucloruntime.EvaluateSuccessGate(policy, evidence, editRecord, in.State)
 	if raw, ok := in.State.Get("euclo.execution_waiver"); ok && raw != nil {
+		originalReason := successGate.Reason
 		successGate.WaiverApplied = true
-		if successGate.AssuranceClass == "" || successGate.AssuranceClass == eucloruntime.AssuranceClassVerifiedSuccess {
-			successGate.AssuranceClass = eucloruntime.AssuranceClassOperatorDeferred
+		successGate.DegradationMode = "operator_waiver"
+		successGate.DegradationReason = "operator_waiver"
+		successGate.AutomaticDegradation = false
+		successGate.Allowed = true
+		if originalReason != "" && originalReason != "manual_verification_allowed" {
+			successGate.Details = append(successGate.Details, "waived_reason="+originalReason)
+			successGate.Reason = "operator_waiver_applied"
 		}
+		successGate.AssuranceClass = eucloruntime.AssuranceClassOperatorDeferred
+	} else if mode, reason, degraded := eucloruntime.DetectAutomaticVerificationDegradation(policy, in.State, evidence); degraded {
+		successGate.AutomaticDegradation = true
+		successGate.DegradationMode = mode
+		successGate.DegradationReason = reason
 	}
 	if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
 		if trace, ok := raw.(map[string]any); ok {
@@ -353,6 +373,12 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 	if raw, ok := in.State.Get("euclo.waiver"); ok && raw != nil {
 		finalReport["waiver"] = raw
 	}
+	if successGate.DegradationMode != "" {
+		finalReport["degradation_mode"] = successGate.DegradationMode
+	}
+	if successGate.DegradationReason != "" {
+		finalReport["degradation_reason"] = successGate.DegradationReason
+	}
 	in.State.Set("euclo.final_report", finalReport)
 	eucloreporting.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
 	if out.Result != nil {
@@ -370,7 +396,7 @@ func (s SessionService) applyVerificationAndArtifacts(ctx context.Context, in Se
 	out.MutationCheckpoints = archaeoexec.MutationCheckpointSummaries(in.State)
 }
 
-func (s SessionService) runCheckpoint(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
+func (s Runtime) runCheckpoint(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
 	if s.Checkpoint == nil {
 		return nil
 	}

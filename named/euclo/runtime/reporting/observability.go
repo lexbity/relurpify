@@ -84,6 +84,8 @@ func BuildProofSurface(state *core.Context, artifacts []euclotypes.Artifact) euc
 			proof.SuccessGateReason = typed.Reason
 			proof.AssuranceClass = string(typed.AssuranceClass)
 			proof.WaiverApplied = typed.WaiverApplied
+			proof.DegradationMode = typed.DegradationMode
+			proof.DegradationReason = typed.DegradationReason
 		}
 	}
 	if raw, ok := state.Get("euclo.profile_controller"); ok && raw != nil {
@@ -158,6 +160,8 @@ func EmitObservabilityTelemetry(telemetry core.Telemetry, task *core.Task, log [
 			"recovery_status":         proof.RecoveryStatus,
 			"success_gate_reason":     proof.SuccessGateReason,
 			"assurance_class":         proof.AssuranceClass,
+			"degradation_mode":        proof.DegradationMode,
+			"degradation_reason":      proof.DegradationReason,
 			"waiver_applied":          proof.WaiverApplied,
 			"artifact_kinds":          proof.ArtifactKinds,
 			"workflow_retrieval_used": proof.WorkflowRetrievalUsed,

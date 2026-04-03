@@ -1619,6 +1619,155 @@ func TestInboundMessagesReuseExistingRexWorkflow(t *testing.T) {
 	}, 3*time.Second, 20*time.Millisecond)
 }
 
+func TestConcurrentTenantInboundMessagesStayIsolatedAcrossRexWorkflows(t *testing.T) {
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{enableRex: true})
+
+	boundaryA := core.SessionBoundary{
+		SessionID:  "sess-tenant-a",
+		TenantID:   "tenant-a",
+		Scope:      core.SessionScopePerChannelPeer,
+		Partition:  nexusEventPartition,
+		ChannelID:  "webchat",
+		PeerID:     "conv-shared",
+		Owner:      core.SubjectRef{TenantID: "tenant-a", Kind: core.SubjectKindServiceAccount, ID: "svc-a"},
+		TrustClass: core.TrustClassRemoteApproved,
+		CreatedAt:  time.Now().UTC(),
+	}
+	boundaryB := core.SessionBoundary{
+		SessionID:  "sess-tenant-b",
+		TenantID:   "tenant-b",
+		Scope:      core.SessionScopePerChannelPeer,
+		Partition:  nexusEventPartition,
+		ChannelID:  "webchat",
+		PeerID:     "conv-shared",
+		Owner:      core.SubjectRef{TenantID: "tenant-b", Kind: core.SubjectKindServiceAccount, ID: "svc-b"},
+		TrustClass: core.TrustClassRemoteApproved,
+		CreatedAt:  time.Now().UTC(),
+	}
+	h.seedBoundary(t, &boundaryA)
+	h.seedBoundary(t, &boundaryB)
+
+	appendErrs := make(chan error, 2)
+	go func() {
+		_, err := h.eventLog.Append(context.Background(), nexusEventPartition, []core.FrameworkEvent{{
+			Timestamp: time.Now().UTC(),
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-tenant-a", TenantID: "tenant-a"},
+			Partition: nexusEventPartition,
+			Payload:   json.RawMessage(`{"session_key":"sess-tenant-a","channel":"webchat","conversation_id":"conv-shared","sender_id":"user-a","content":{"text":"same prompt"}}`),
+		}})
+		appendErrs <- err
+	}()
+	go func() {
+		_, err := h.eventLog.Append(context.Background(), nexusEventPartition, []core.FrameworkEvent{{
+			Timestamp: time.Now().UTC(),
+			Type:      core.FrameworkEventSessionMessage,
+			Actor:     core.EventActor{Kind: "session", ID: "sess-tenant-b", TenantID: "tenant-b"},
+			Partition: nexusEventPartition,
+			Payload:   json.RawMessage(`{"session_key":"sess-tenant-b","channel":"webchat","conversation_id":"conv-shared","sender_id":"user-b","content":{"text":"same prompt"}}`),
+		}})
+		appendErrs <- err
+	}()
+	require.NoError(t, <-appendErrs)
+	require.NoError(t, <-appendErrs)
+
+	require.Equal(t, "svc-a", boundaryA.Owner.ID)
+	require.Equal(t, "svc-b", boundaryB.Owner.ID)
+
+	workflowIDA := "rex-session:" + boundaryA.SessionID
+	workflowIDB := "rex-session:" + boundaryB.SessionID
+	_, runA := h.waitForRexWorkflow(t, workflowIDA)
+	_, runB := h.waitForRexWorkflow(t, workflowIDB)
+	require.NotEqual(t, runA.RunID, runB.RunID)
+
+	require.Eventually(t, func() bool {
+		workflows := h.listRexWorkflows(t, 10)
+		if len(workflows) != 2 {
+			return false
+		}
+		seen := map[string]bool{}
+		for _, workflow := range workflows {
+			seen[workflow.WorkflowID] = true
+		}
+		return seen[workflowIDA] && seen[workflowIDB]
+	}, 3*time.Second, 20*time.Millisecond)
+
+	eventsA := h.listRexEvents(t, workflowIDA, 10)
+	eventsB := h.listRexEvents(t, workflowIDB, 10)
+	require.NotEmpty(t, eventsA)
+	require.NotEmpty(t, eventsB)
+	for _, event := range eventsA {
+		require.Equal(t, workflowIDA, event.WorkflowID)
+	}
+	for _, event := range eventsB {
+		require.Equal(t, workflowIDB, event.WorkflowID)
+	}
+	require.Equal(t, workflowIDA, runA.WorkflowID)
+	require.Equal(t, workflowIDB, runB.WorkflowID)
+}
+
+func TestStaleWorkflowSignalAfterCompletionIsRejectedWithoutMutation(t *testing.T) {
+	h := newNexusHarnessWithOptions(t, testGatewayConfig(), nexusHarnessOptions{enableRex: true})
+
+	now := time.Now().UTC().Truncate(time.Second)
+	workflowID := "wf-stale-signal"
+	runID := "run-stale-signal"
+
+	require.NoError(t, h.rexRuntime.WorkflowStore.CreateWorkflow(context.Background(), memory.WorkflowRecord{
+		WorkflowID:  workflowID,
+		TaskID:      "task-stale-signal",
+		TaskType:    core.TaskTypeAnalysis,
+		Instruction: "completed workflow",
+		Status:      memory.WorkflowRunStatusCompleted,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}))
+	require.NoError(t, h.rexRuntime.WorkflowStore.CreateRun(context.Background(), memory.WorkflowRunRecord{
+		RunID:          runID,
+		WorkflowID:     workflowID,
+		Status:         memory.WorkflowRunStatusCompleted,
+		RuntimeVersion: "rex-test",
+		StartedAt:      now.Add(-time.Minute),
+		FinishedAt:     &now,
+	}))
+	require.NoError(t, h.rexRuntime.WorkflowStore.AppendEvent(context.Background(), memory.WorkflowEventRecord{
+		EventID:    "evt-stale-signal-finished",
+		WorkflowID: workflowID,
+		RunID:      runID,
+		EventType:  "rex.run.finished",
+		Message:    "completed",
+		CreatedAt:  now,
+	}))
+
+	beforeEvents := h.listRexEvents(t, workflowID, 10)
+
+	h.appendEvents(t, core.FrameworkEvent{
+		Timestamp: time.Now().UTC(),
+		Type:      "rex.workflow.signal.v1",
+		Actor:     core.EventActor{Kind: "agent", ID: "svc-a", TenantID: "tenant-a"},
+		Partition: nexusEventPartition,
+		Payload: json.RawMessage(`{
+			"workflow_id":"wf-stale-signal",
+			"run_id":"run-stale-signal",
+			"expected_signal":"resume",
+			"signal":"resume"
+		}`),
+	})
+
+	workflow, ok, err := h.rexRuntime.WorkflowStore.GetWorkflow(context.Background(), workflowID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, memory.WorkflowRunStatusCompleted, workflow.Status)
+
+	run, ok, err := h.rexRuntime.WorkflowStore.GetRun(context.Background(), runID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, memory.WorkflowRunStatusCompleted, run.Status)
+
+	afterEvents := h.listRexEvents(t, workflowID, 10)
+	require.Len(t, afterEvents, len(beforeEvents))
+}
+
 func TestFMPResumeIntoRexUsesFullAppHarness(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	ownership := &fwfmp.InMemoryOwnershipStore{}

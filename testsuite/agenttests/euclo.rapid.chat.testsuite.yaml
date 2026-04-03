@@ -1,0 +1,349 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.rapid.chat
+  description: "Rapid live-model validation for Euclo chat ask, inspect, and implement paths."
+  owner: agent-platform
+  tier: live-flaky
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 75s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: rapid_chat_ask_repo_question
+      description: "Fast chat ask path: explain a small repository-local type without editing files."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, chat, ask, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_chat/ask/user.go
+            content: |
+              package rapidchatask
+
+              type User struct {
+                ID      int
+                Name    string
+                Email   string
+                Enabled bool
+              }
+
+              func NewUser(id int, name, email string) User {
+                return User{ID: id, Name: name, Email: email, Enabled: true}
+              }
+      prompt: >
+        Explain what the User type in testsuite/fixtures/rapid_chat/ask/user.go
+        represents and what NewUser does. Do not modify any files.
+      context:
+        euclo.mode: chat
+        context_file_contents:
+          - path: testsuite/fixtures/rapid_chat/ask/user.go
+            content: |
+              package rapidchatask
+
+              type User struct {
+                ID      int
+                Name    string
+                Email   string
+                Enabled bool
+              }
+
+              func NewUser(id int, name, email string) User {
+                return User{ID: id, Name: name, Email: email, Enabled: true}
+              }
+      overrides:
+        max_iterations: 3
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(user|email|enabled|newuser)
+        euclo:
+          behavior_family: react
+          mode: chat
+          primary_relurpic_capability: euclo:chat.ask
+          recipe_ids:
+            - chat.ask.inquiry
+
+    - name: rapid_chat_inspect_small_api
+      description: "Fast chat inspect path: compare two tiny implementations and explain the tradeoff."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, chat, inspect, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_chat/inspect/store.go
+            content: |
+              package rapidchatinspect
+
+              type Store interface {
+                Save(key, value string) error
+                Load(key string) (string, error)
+              }
+
+              type MemoryStore struct{ data map[string]string }
+
+              func (s *MemoryStore) Save(key, value string) error {
+                s.data[key] = value
+                return nil
+              }
+
+              func (s *MemoryStore) Load(key string) (string, error) {
+                return s.data[key], nil
+              }
+
+              type NullStore struct{}
+
+              func (s *NullStore) Save(key, value string) error { return nil }
+
+              func (s *NullStore) Load(key string) (string, error) {
+                return "", nil
+              }
+      prompt: >
+        Inspect testsuite/fixtures/rapid_chat/inspect/store.go and compare
+        MemoryStore with NullStore. Describe how their behavior differs and when
+        you would use each. Do not modify any files.
+      context:
+        euclo.mode: chat
+        context_file_contents:
+          - path: testsuite/fixtures/rapid_chat/inspect/store.go
+            content: |
+              package rapidchatinspect
+
+              type Store interface {
+                Save(key, value string) error
+                Load(key string) (string, error)
+              }
+
+              type MemoryStore struct{ data map[string]string }
+
+              func (s *MemoryStore) Save(key, value string) error {
+                s.data[key] = value
+                return nil
+              }
+
+              func (s *MemoryStore) Load(key string) (string, error) {
+                return s.data[key], nil
+              }
+
+              type NullStore struct{}
+
+              func (s *NullStore) Save(key, value string) error { return nil }
+
+              func (s *NullStore) Load(key string) (string, error) {
+                return "", nil
+              }
+      overrides:
+        max_iterations: 3
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(memorystore|nullstore|store|discard|memory)
+        euclo:
+          behavior_family: react
+          mode: chat
+          primary_relurpic_capability: euclo:chat.inspect
+          supporting_relurpic_capabilities:
+            - euclo:chat.local-review
+          recipe_ids:
+            - chat.inspect.collect
+
+    - name: rapid_chat_review_gated_mutation
+      description: "Fast chat inspect/review path: surface a local correctness risk without editing files."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, chat, inspect, review, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_chat/review/cache.go
+            content: |
+              package rapidchatreview
+
+              type Cache struct {
+                items map[string]string
+              }
+
+              func (c *Cache) Put(key, value string) {
+                c.items[key] = value
+              }
+
+              func (c *Cache) Get(key string) string {
+                return c.items[key]
+              }
+      prompt: >
+        Inspect testsuite/fixtures/rapid_chat/review/cache.go and review it for
+        correctness risks. Explain the problem and the minimal safe fix, but do
+        not modify any files.
+      context:
+        euclo.mode: chat
+        context_file_contents:
+          - path: testsuite/fixtures/rapid_chat/review/cache.go
+            content: |
+              package rapidchatreview
+
+              type Cache struct {
+                items map[string]string
+              }
+
+              func (c *Cache) Put(key, value string) {
+                c.items[key] = value
+              }
+
+              func (c *Cache) Get(key string) string {
+                return c.items[key]
+              }
+      overrides:
+        max_iterations: 3
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(nil|map|panic|initializ)
+        euclo:
+          behavior_family: react
+          mode: chat
+          primary_relurpic_capability: euclo:chat.inspect
+          supporting_relurpic_capabilities:
+            - euclo:chat.local-review
+          recipe_ids:
+            - chat.inspect.review
+
+    - name: rapid_chat_implement_single_edit
+      description: "Fast chat implement path: replace a tiny TODO implementation with the intended logic."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, chat, implement, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_chat/implement/clamp.go
+            content: |
+              package rapidchatimplement
+
+              // Clamp returns v clamped to the range [lo, hi].
+              func Clamp(v, lo, hi int) int {
+                // TODO: implement
+                return 0
+              }
+      prompt: >
+        Implement Clamp in testsuite/fixtures/rapid_chat/implement/clamp.go
+        according to its doc comment. Keep the change minimal.
+      context:
+        euclo.mode: chat
+        context_file_contents:
+          - path: testsuite/fixtures/rapid_chat/implement/clamp.go
+            content: |
+              package rapidchatimplement
+
+              // Clamp returns v clamped to the range [lo, hi].
+              func Clamp(v, lo, hi int) int {
+                // TODO: implement
+                return 0
+              }
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_chat/implement/clamp.go
+        files_contain:
+          - path: testsuite/fixtures/rapid_chat/implement/clamp.go
+            contains: ["if v < lo", "if v > hi", "return v"]
+        euclo:
+          behavior_family: react
+          mode: chat
+          primary_relurpic_capability: euclo:chat.implement
+          supporting_relurpic_capabilities:
+            - euclo:chat.direct-edit-execution
+            - euclo:chat.targeted-verification-repair
+          recipe_ids:
+            - chat.implement.edit
+
+    - name: rapid_chat_verification_repair
+      description: "Fast chat implement path with a test-backed repair expectation."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, chat, implement, verification, level:2]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_chat/verify/max.go
+            content: |
+              package rapidchatverify
+
+              // Max returns the larger of a and b.
+              func Max(a, b int) int {
+                return 0
+              }
+          - path: testsuite/fixtures/rapid_chat/verify/max_test.go
+            content: |
+              package rapidchatverify
+
+              import "testing"
+
+              func TestMax(t *testing.T) {
+                if Max(3, 7) != 7 {
+                  t.Fatalf("got %d, want 7", Max(3, 7))
+                }
+                if Max(9, 2) != 9 {
+                  t.Fatalf("got %d, want 9", Max(9, 2))
+                }
+              }
+      prompt: >
+        Implement Max in testsuite/fixtures/rapid_chat/verify/max.go so the
+        test passes. Keep the patch minimal and verify the behavior before
+        finishing.
+      context:
+        euclo.mode: chat
+        context_file_contents:
+          - path: testsuite/fixtures/rapid_chat/verify/max.go
+            content: |
+              package rapidchatverify
+
+              // Max returns the larger of a and b.
+              func Max(a, b int) int {
+                return 0
+              }
+          - path: testsuite/fixtures/rapid_chat/verify/max_test.go
+            content: |
+              package rapidchatverify
+
+              import "testing"
+
+              func TestMax(t *testing.T) {
+                if Max(3, 7) != 7 {
+                  t.Fatalf("got %d, want 7", Max(3, 7))
+                }
+                if Max(9, 2) != 9 {
+                  t.Fatalf("got %d, want 9", Max(9, 2))
+                }
+              }
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_chat/verify/max.go
+        files_contain:
+          - path: testsuite/fixtures/rapid_chat/verify/max.go
+            contains: ["if a > b", "return a", "return b"]
+        euclo:
+          behavior_family: react
+          mode: chat
+          primary_relurpic_capability: euclo:chat.implement
+          supporting_relurpic_capabilities:
+            - euclo:chat.direct-edit-execution
+            - euclo:chat.targeted-verification-repair
+          recipe_ids:
+            - chat.implement.edit
+            - chat.implement.verify

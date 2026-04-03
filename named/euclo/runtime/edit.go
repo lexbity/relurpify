@@ -15,7 +15,12 @@ func ApplyEditIntentArtifacts(ctx context.Context, registry *capability.Registry
 	}
 	intents := extractEditIntents(state)
 	if len(intents) == 0 {
-		return nil, nil
+		record := synthesizeEditExecutionFromPipelineCode(state)
+		if record == nil {
+			return nil, nil
+		}
+		state.Set("euclo.edit_execution", *record)
+		return record, nil
 	}
 	record := ExecuteEditIntents(ctx, registry, intents, state)
 	state.Set("euclo.edit_execution", record)
@@ -167,6 +172,91 @@ func summarizeEditExecution(record EditExecutionRecord) string {
 		parts = append(parts, fmt.Sprintf("rejected=%d", n))
 	}
 	return strings.Join(parts, " ")
+}
+
+func synthesizeEditExecutionFromPipelineCode(state *core.Context) *EditExecutionRecord {
+	if state == nil {
+		return nil
+	}
+	raw, ok := state.Get("pipeline.code")
+	if !ok || raw == nil {
+		return nil
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	finalOutput, ok := payload["final_output"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	result, ok := finalOutput["result"].(map[string]any)
+	if !ok || len(result) == 0 {
+		return nil
+	}
+	record := EditExecutionRecord{}
+	for toolName, rawEntry := range result {
+		action, tracksEdit := editActionForToolName(toolName)
+		if !tracksEdit {
+			continue
+		}
+		entry, ok := rawEntry.(map[string]any)
+		if !ok {
+			continue
+		}
+		data, _ := entry["data"].(map[string]any)
+		path := ""
+		if data != nil {
+			path = strings.TrimSpace(fmt.Sprint(data["path"]))
+			if path == "<nil>" {
+				path = ""
+			}
+		}
+		if path == "" {
+			continue
+		}
+		op := EditOperationRecord{
+			Path:      path,
+			Action:    action,
+			Requested: true,
+			Status:    "executed",
+			Tool:      toolName,
+			Result:    cloneAnyMap(data),
+		}
+		if summary := strings.TrimSpace(fmt.Sprint(payload["summary"])); summary != "" && summary != "<nil>" {
+			op.Summary = summary
+		}
+		record.Requested = append(record.Requested, op)
+		record.Approved = append(record.Approved, op)
+		if success, ok := entry["success"].(bool); ok && !success {
+			op.Status = "rejected"
+			errText := strings.TrimSpace(fmt.Sprint(entry["error"]))
+			if errText != "" && errText != "<nil>" {
+				op.Error = errText
+			}
+			record.Rejected = append(record.Rejected, op)
+			continue
+		}
+		record.Executed = append(record.Executed, op)
+	}
+	if len(record.Requested) == 0 && len(record.Executed) == 0 && len(record.Rejected) == 0 {
+		return nil
+	}
+	record.Summary = summarizeEditExecution(record)
+	return &record
+}
+
+func editActionForToolName(toolName string) (string, bool) {
+	switch strings.TrimSpace(strings.ToLower(toolName)) {
+	case "file_write":
+		return "update", true
+	case "file_create":
+		return "create", true
+	case "file_delete":
+		return "delete", true
+	default:
+		return "", false
+	}
 }
 
 func cloneAnyMap(input map[string]any) map[string]any {

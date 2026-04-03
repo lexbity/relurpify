@@ -112,7 +112,7 @@ Examples of local capability substrate use:
 
 ## Behavior Dispatch And Execution
 
-`runtime/orchestrate/behavior_service.go` dispatches from `UnitOfWork` to the correct primary relurpic owner.
+`runtime/dispatch/dispatcher.go` dispatches from `UnitOfWork` to the correct primary relurpic owner.
 
 It is not where the behavior is implemented.
 
@@ -141,8 +141,32 @@ Euclo now has:
 - concrete chat/debug/archaeology primary owners
 - archaeology exploration, compile, and implement behavior that no longer collapse into thin workflow wrappers
 - recipe-level execution reporting that reflects the actual behavior path
+- assurance-aware runtime reporting with separate `result_class` and `assurance_class`
+- executed-verification enforcement for fresh edits
+- bounded failed-verification repair
+- a real TDD red/green/refactor lifecycle
+- semantic review gating for automatic mutation
+- verification-plan and waiver artifacts in final reporting
 
-The main remaining work is cleanup:
-- continue sorting root `runtime` files into the runtime subpackages
-- reduce remaining duplicated helpers
-- rewrite tests and benchmarks around the new tree rather than the old Euclo layout
+## Current Runtime Guarantees
+
+For normal mutating flows, Euclo now guarantees:
+
+- fresh edits are not proven by fallback or reused verification evidence
+- semantic review blocks automatic mutation when critical findings are present
+- verification plans and executed checks are surfaced explicitly
+- failed verification enters bounded repair rather than soft success
+- TDD completion requires explicit red and green evidence
+- final reporting includes both lifecycle outcome and assurance level
+
+Those guarantees are enforced in runtime/assurance/reporting code and covered by
+unit, behavior, and runtime-surface tests under `named/euclo/...`.
+
+## Remaining Work
+
+The main remaining work is now narrower:
+
+- continue expanding higher-level agenttest/live scenario coverage
+- keep sorting shared runtime helpers into the subpackages
+- reduce remaining duplicated helper logic
+- finish documentation and reporting cleanup where older wording remains

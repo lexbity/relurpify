@@ -1,0 +1,238 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.rapid.debug
+  description: "Rapid live-model validation for Euclo debug bug-hunting paths."
+  owner: agent-platform
+  tier: live-flaky
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 75s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: rapid_debug_root_cause_trace
+      description: "Fast debug analysis path: infer likely fault location from an incident trace without patching."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, debug, root-cause, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_debug_trace/cache.go
+            content: |
+              package rapiddebugtrace
+
+              func First(items []string) string {
+                return items[0]
+              }
+      prompt: |
+        Incident trace:
+        panic: runtime error: index out of range [0] with length 0
+        rapiddebugtrace.First(...)
+          testsuite/fixtures/rapid_debug_trace/cache.go:4
+
+        Identify the likely root cause and where it is localized. Do not modify files.
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/rapid_debug_trace/cache.go
+            content: |
+              package rapiddebugtrace
+
+              func First(items []string) string {
+                return items[0]
+              }
+      overrides:
+        max_iterations: 3
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(index out of range|empty slice|cache.go|first)
+        euclo:
+          behavior_family: react
+          mode: debug
+          primary_relurpic_capability: euclo:debug.investigate
+          supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.localization
+            - euclo:debug.flaw-surface
+          recipe_ids:
+            - debug.investigate.reproduce
+
+    - name: rapid_debug_single_bug
+      description: "Fast debug path: repair a single obvious logic bug."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, debug, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_debug/math.go
+            content: |
+              package rapiddebug
+
+              func Divide(a, b int) int {
+                if b == 0 {
+                  return 0
+                }
+                return a * b
+              }
+          - path: testsuite/fixtures/rapid_debug/math_test.go
+            content: |
+              package rapiddebug
+
+              import "testing"
+
+              func TestDivide(t *testing.T) {
+                if Divide(12, 3) != 4 {
+                  t.Fatalf("got %d, want 4", Divide(12, 3))
+                }
+              }
+      prompt: "Debug the failing Divide behavior in testsuite/fixtures/rapid_debug and fix the implementation."
+      context:
+        euclo.mode: debug
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_debug/math.go
+        files_contain:
+          - path: testsuite/fixtures/rapid_debug/math.go
+            contains: ["return a / b"]
+        euclo:
+          behavior_family: react
+          mode: debug
+          primary_relurpic_capability: euclo:debug.investigate
+          profile: reproduce_localize_patch
+          supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.localization
+          recipe_ids:
+            - debug.investigate.reproduce
+
+    - name: rapid_debug_failed_verification_repair
+      description: "Fast debug repair path: fix a small bug with explicit verification-backed repair expectations."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, debug, verification, level:2]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_debug_verify/abs.go
+            content: |
+              package rapiddebugverify
+
+              func Abs(v int) int {
+                if v < 0 {
+                  return v
+                }
+                return v
+              }
+          - path: testsuite/fixtures/rapid_debug_verify/abs_test.go
+            content: |
+              package rapiddebugverify
+
+              import "testing"
+
+              func TestAbs(t *testing.T) {
+                if Abs(-3) != 3 {
+                  t.Fatalf("got %d, want 3", Abs(-3))
+                }
+                if Abs(4) != 4 {
+                  t.Fatalf("got %d, want 4", Abs(4))
+                }
+              }
+      prompt: >
+        Debug the failing Abs behavior in testsuite/fixtures/rapid_debug_verify.
+        Fix the implementation and verify the result before finishing.
+      context:
+        euclo.mode: debug
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_debug_verify/abs.go
+        files_contain:
+          - path: testsuite/fixtures/rapid_debug_verify/abs.go
+            contains: ["if v < 0", "return -v"]
+        euclo:
+          behavior_family: react
+          mode: debug
+          primary_relurpic_capability: euclo:debug.investigate
+          profile: reproduce_localize_patch
+          supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.localization
+            - euclo:debug.verification-repair
+          recipe_ids:
+            - debug.investigate.reproduce
+
+    - name: rapid_debug_localize_without_patch
+      description: "Fast debug localization path: identify the faulty region without applying a patch."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, debug, localization, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_debug_localize/score.go
+            content: |
+              package rapiddebuglocalize
+
+              func NormalizeScore(raw int) int {
+                if raw < 0 {
+                  return raw
+                }
+                if raw > 100 {
+                  return 100
+                }
+                return raw
+              }
+      prompt: >
+        The bug report says negative scores should clamp to 0, but
+        NormalizeScore currently returns the negative value unchanged.
+        Localize the exact faulty branch and explain the minimal fix. Do not modify files.
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/rapid_debug_localize/score.go
+            content: |
+              package rapiddebuglocalize
+
+              func NormalizeScore(raw int) int {
+                if raw < 0 {
+                  return raw
+                }
+                if raw > 100 {
+                  return 100
+                }
+                return raw
+              }
+      overrides:
+        max_iterations: 3
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        output_regex:
+          - (?i)(raw < 0|negative|return raw|score.go|branch)
+        euclo:
+          behavior_family: react
+          mode: debug
+          primary_relurpic_capability: euclo:debug.investigate
+          supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.localization
+            - euclo:debug.hypothesis-refine
+          recipe_ids:
+            - debug.investigate.reproduce

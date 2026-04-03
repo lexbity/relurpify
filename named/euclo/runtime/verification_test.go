@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )
 
 func TestNormalizeVerificationEvidence_AssignsFallbackProvenanceForStringPayload(t *testing.T) {
@@ -88,6 +89,49 @@ func TestEvaluateSuccessGate_RejectsReusedEvidenceForFreshEdits(t *testing.T) {
 	}
 	if result.Reason != "verification_reused_rejected" {
 		t.Fatalf("unexpected reason %q", result.Reason)
+	}
+}
+
+func TestDetectAutomaticVerificationDegradation_ForMissingVerificationTools(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.envelope", TaskEnvelope{
+		CapabilitySnapshot: euclotypes.CapabilitySnapshot{
+			HasExecuteTools:      false,
+			HasVerificationTools: false,
+		},
+	})
+	mode, reason, degraded := DetectAutomaticVerificationDegradation(VerificationPolicy{RequiresVerification: true}, state, VerificationEvidence{})
+	if !degraded {
+		t.Fatal("expected automatic degradation to be detected")
+	}
+	if mode != "automatic" || reason != "verification_tools_unavailable" {
+		t.Fatalf("unexpected degradation %q %q", mode, reason)
+	}
+}
+
+func TestResolveVerificationPolicy_DebugProfileHonorsVerificationRequired(t *testing.T) {
+	policy := ResolveVerificationPolicy(
+		ModeResolution{ModeID: "debug"},
+		ExecutionProfileSelection{ProfileID: "reproduce_localize_patch", VerificationRequired: true},
+	)
+	if !policy.RequiresVerification {
+		t.Fatal("expected debug profile with verification_required to require verification")
+	}
+	if !policy.RequiresExecutedCheck {
+		t.Fatal("expected debug profile with verification_required to require executed checks")
+	}
+}
+
+func TestResolveVerificationPolicy_DebugModeWithoutVerificationRequiredDoesNotRequireVerification(t *testing.T) {
+	policy := ResolveVerificationPolicy(
+		ModeResolution{ModeID: "debug"},
+		ExecutionProfileSelection{ProfileID: "trace_execute_analyze", VerificationRequired: false},
+	)
+	if policy.RequiresVerification {
+		t.Fatal("expected debug profile without verification_required to skip verification")
+	}
+	if policy.RequiresExecutedCheck {
+		t.Fatal("expected debug profile without verification_required to skip executed checks")
 	}
 }
 

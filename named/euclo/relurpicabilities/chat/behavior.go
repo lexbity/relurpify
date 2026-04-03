@@ -473,18 +473,16 @@ func executeSpecializedImplementBehavior(ctx context.Context, in execution.Execu
 	artifactState := euclotypes.NewArtifactState(append([]euclotypes.Artifact{}, euclotypes.ArtifactStateFromContext(in.State).All()...))
 	snapshot := eucloruntime.SnapshotCapabilities(in.Environment.Registry)
 
-	specialized := []euclotypes.EucloCodingCapability{
-		localbehavior.NewTDDRedGreenRefactorCapability(in.Environment),
-		localbehavior.NewMigrationExecuteCapability(in.Environment),
-		localbehavior.NewRefactorAPICompatibleCapability(in.Environment),
-		localbehavior.NewReviewImplementIfSafeCapability(in.Environment),
-	}
+	specialized := specializedImplementCapabilities(in)
 	for _, capability := range specialized {
 		if capability == nil {
 			continue
 		}
+		if !specializedCapabilitySelectedForProfile(in.Profile.ProfileID, capability.Descriptor().ID) {
+			continue
+		}
 		eligibility := capability.Eligible(artifactState, snapshot)
-		if !eligibility.Eligible {
+		if !eligibility.Eligible && !specializedCapabilityForcedForProfile(in.Profile.ProfileID, capability.Descriptor().ID) {
 			continue
 		}
 		result := capability.Execute(ctx, envelope)
@@ -508,6 +506,30 @@ func executeSpecializedImplementBehavior(ctx context.Context, in execution.Execu
 		}}, true, nil
 	}
 	return nil, false, nil
+}
+
+func specializedImplementCapabilities(in execution.ExecuteInput) []euclotypes.EucloCodingCapability {
+	return []euclotypes.EucloCodingCapability{
+		localbehavior.NewTDDRedGreenRefactorCapability(in.Environment),
+		localbehavior.NewMigrationExecuteCapability(in.Environment),
+		localbehavior.NewRefactorAPICompatibleCapability(in.Environment),
+		localbehavior.NewReviewImplementIfSafeCapability(in.Environment),
+	}
+}
+
+func specializedCapabilitySelectedForProfile(profileID, capabilityID string) bool {
+	switch strings.TrimSpace(profileID) {
+	case "test_driven_generation":
+		return capabilityID == "euclo:tdd.red_green_refactor"
+	case "review_suggest_implement":
+		return capabilityID == "euclo:review.implement_if_safe"
+	default:
+		return true
+	}
+}
+
+func specializedCapabilityForcedForProfile(profileID, capabilityID string) bool {
+	return strings.TrimSpace(profileID) == "test_driven_generation" && capabilityID == "euclo:tdd.red_green_refactor"
 }
 
 func appendSpecializedArtifactSummaries(ctx context.Context, in execution.ExecuteInput, env euclotypes.ExecutionEnvelope, artifacts *[]euclotypes.Artifact) {

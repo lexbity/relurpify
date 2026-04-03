@@ -89,7 +89,36 @@ Coverage-matrix cases use the `coverage-matrix` tag so they can be run as a focu
 ./dev-agent agenttest run --tag coverage-matrix
 ```
 
-For a quick live-model Euclo bug-hunting pass, run the dedicated rapid suite:
+For short Euclo debugging passes before the broader live catalog, start with
+the smallest stable slices:
+
+```
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.debug.testsuite.yaml --tag level:1 --timeout 75s
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.review.testsuite.yaml --tag level:1 --timeout 75s
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.tdd.testsuite.yaml --timeout 75s
+```
+
+If the local model is not loaded, fall back to package-level scenario and
+behavior tests in `named/euclo/...` first, then retry the live subset.
+
+For a quick live-model Euclo bug-hunting pass, the canonical rapid suite family
+now runs as three focused passes on a single local Ollama instance:
+
+```
+curl -s http://localhost:11434/api/generate -d '{"model":"qwen2.5-coder:14b","prompt":"ping","stream":false,"keep_alive":"10m"}'
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.chat.testsuite.yaml --timeout 75s
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.debug.testsuite.yaml --timeout 75s
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.archaeology.testsuite.yaml --timeout 90s
+```
+
+Rerun one family or one case when debugging:
+
+```
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.debug.testsuite.yaml --case rapid_debug_single_bug --timeout 75s
+./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.chat.testsuite.yaml --case rapid_chat_implement_single_edit --timeout 75s
+```
+
+The legacy aggregate entrypoint remains available for compatibility:
 
 ```
 ./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.testsuite.yaml --tier live-flaky

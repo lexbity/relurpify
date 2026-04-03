@@ -22,8 +22,10 @@ func ResolveVerificationPolicy(mode ModeResolution, profile ExecutionProfileSele
 		policy.RequiresVerification = false
 		policy.RequiresExecutedCheck = false
 	case "debug":
-		policy.RequiresVerification = false
-		policy.RequiresExecutedCheck = false
+		if !profile.VerificationRequired {
+			policy.RequiresVerification = false
+			policy.RequiresExecutedCheck = false
+		}
 		policy.ManualOutcomeAllowed = false
 	case "code", "tdd":
 		policy.ManualOutcomeAllowed = false
@@ -173,6 +175,50 @@ func EvaluateSuccessGate(policy VerificationPolicy, evidence VerificationEvidenc
 	}
 	result.Reason = "verification_accepted"
 	return result
+}
+
+func DetectAutomaticVerificationDegradation(policy VerificationPolicy, state *core.Context, evidence VerificationEvidence) (string, string, bool) {
+	if !policy.RequiresVerification || state == nil {
+		return "", "", false
+	}
+	if evidence.EvidencePresent && evidence.Provenance == VerificationProvenanceExecuted {
+		return "", "", false
+	}
+	raw, ok := state.Get("euclo.envelope")
+	if ok && raw != nil {
+		if envelope, ok := raw.(TaskEnvelope); ok {
+			if !envelope.CapabilitySnapshot.HasExecuteTools && !envelope.CapabilitySnapshot.HasVerificationTools {
+				return "automatic", "verification_tools_unavailable", true
+			}
+		}
+		if payload, ok := raw.(map[string]any); ok {
+			if snapshot, ok := payload["capability_snapshot"].(map[string]any); ok {
+				if !verificationBoolValue(snapshot["has_execute_tools"]) && !verificationBoolValue(snapshot["has_verification_tools"]) {
+					return "automatic", "verification_tools_unavailable", true
+				}
+			}
+		}
+	}
+	if raw, ok := state.Get("euclo.verification_plan"); ok && raw != nil {
+		if plan, ok := raw.(map[string]any); ok {
+			commands, _ := plan["commands"].([]any)
+			if len(commands) == 0 {
+				return "automatic", "verification_plan_unavailable", true
+			}
+		}
+	}
+	return "", "", false
+}
+
+func verificationBoolValue(raw any) bool {
+	switch typed := raw.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
 }
 
 func tddEvidencePresent(state *core.Context, key, wantStatus, runID string) bool {

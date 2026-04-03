@@ -26,22 +26,20 @@ func NewVerificationExecuteCapability(env agentenv.AgentEnvironment) euclotypes.
 }
 
 func ExecuteVerificationFlow(ctx context.Context, env euclotypes.ExecutionEnvelope, snapshot euclotypes.CapabilitySnapshot) ([]euclotypes.Artifact, bool, error) {
-	scopeCap := NewVerificationScopeSelectCapability(env.Environment)
-	artifactState := euclotypes.ArtifactStateFromContext(env.State)
-	if eligibility := scopeCap.Eligible(artifactState, snapshot); !eligibility.Eligible {
+	if !snapshot.HasVerificationTools && !snapshot.HasExecuteTools {
 		return nil, false, nil
 	}
+	scopeCap := NewVerificationScopeSelectCapability(env.Environment)
 	scopeResult := scopeCap.Execute(ctx, env)
 	if scopeResult.Status == euclotypes.ExecutionStatusFailed {
 		return nil, false, verificationFlowError(scopeResult)
 	}
 	artifacts := append([]euclotypes.Artifact{}, scopeResult.Artifacts...)
 
-	execCap := NewVerificationExecuteCapability(env.Environment)
-	artifactState = euclotypes.ArtifactStateFromContext(env.State)
-	if eligibility := execCap.Eligible(artifactState, snapshot); !eligibility.Eligible {
+	if !snapshot.HasExecuteTools {
 		return artifacts, false, nil
 	}
+	execCap := NewVerificationExecuteCapability(env.Environment)
 	execResult := execCap.Execute(ctx, env)
 	if execResult.Status == euclotypes.ExecutionStatusFailed {
 		return artifacts, false, verificationFlowError(execResult)

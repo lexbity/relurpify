@@ -49,9 +49,11 @@ type Trace struct {
 
 type RecipeID string
 
+type RecipeRunner func(context.Context, ExecuteInput, RecipeSpec, string, string) (*core.Result, *core.Context, error)
+
 type RecipeSpec struct {
-	Family   string
 	TaskType core.TaskType
+	Run      RecipeRunner
 }
 
 const (
@@ -79,27 +81,72 @@ const (
 )
 
 var recipeSpecs = map[RecipeID]RecipeSpec{
-	RecipeChatAskInquiry:                 {Family: "react", TaskType: core.TaskTypeAnalysis},
-	RecipeChatAskOptions:                 {Family: "planner", TaskType: core.TaskTypeAnalysis},
-	RecipeChatAskReview:                  {Family: "reflection", TaskType: core.TaskTypeAnalysis},
-	RecipeChatInspectCollect:             {Family: "react", TaskType: core.TaskTypeAnalysis},
-	RecipeChatInspectReview:              {Family: "reflection", TaskType: core.TaskTypeAnalysis},
-	RecipeChatImplementArchitect:         {Family: "architect", TaskType: core.TaskTypeCodeModification},
-	RecipeChatImplementExplore:           {Family: "react", TaskType: core.TaskTypeAnalysis},
-	RecipeChatImplementEdit:              {Family: "react", TaskType: core.TaskTypeCodeModification},
-	RecipeChatImplementVerify:            {Family: "react", TaskType: core.TaskTypeAnalysis},
-	RecipeDebugInvestigateReproduce:      {Family: "react", TaskType: core.TaskTypeAnalysis},
-	RecipeDebugInvestigateLocalize:       {Family: "htn", TaskType: core.TaskTypeAnalysis},
-	RecipeDebugInvestigatePatch:          {Family: "react", TaskType: core.TaskTypeCodeModification},
-	RecipeDebugInvestigateReview:         {Family: "reflection", TaskType: core.TaskTypeAnalysis},
-	RecipeArchaeologyExploreShape:        {Family: "planner", TaskType: core.TaskTypeAnalysis},
-	RecipeArchaeologyExploreReview:       {Family: "reflection", TaskType: core.TaskTypeAnalysis},
-	RecipeArchaeologyCompileReconcile:    {Family: "planner", TaskType: core.TaskTypeAnalysis},
-	RecipeArchaeologyCompileShape:        {Family: "planner", TaskType: core.TaskTypeAnalysis},
-	RecipeArchaeologyCompileReview:       {Family: "reflection", TaskType: core.TaskTypeAnalysis},
-	RecipeArchaeologyImplementStep:       {Family: "react", TaskType: core.TaskTypeCodeModification},
-	RecipeArchaeologyImplementCheckpoint: {Family: "reflection", TaskType: core.TaskTypeAnalysis},
-	RecipeArchaeologyImplementGapDetect:  {Family: "reflection", TaskType: core.TaskTypeAnalysis},
+	RecipeChatAskInquiry:                 reactRecipe(core.TaskTypeAnalysis),
+	RecipeChatAskOptions:                 plannerRecipe(),
+	RecipeChatAskReview:                  reflectionRecipe(),
+	RecipeChatInspectCollect:             reactRecipe(core.TaskTypeAnalysis),
+	RecipeChatInspectReview:              reflectionRecipe(),
+	RecipeChatImplementArchitect:         architectRecipe(core.TaskTypeCodeModification),
+	RecipeChatImplementExplore:           reactRecipe(core.TaskTypeAnalysis),
+	RecipeChatImplementEdit:              reactRecipe(core.TaskTypeCodeModification),
+	RecipeChatImplementVerify:            reactRecipe(core.TaskTypeAnalysis),
+	RecipeDebugInvestigateReproduce:      reactRecipe(core.TaskTypeAnalysis),
+	RecipeDebugInvestigateLocalize:       htnRecipe(core.TaskTypeAnalysis),
+	RecipeDebugInvestigatePatch:          reactRecipe(core.TaskTypeCodeModification),
+	RecipeDebugInvestigateReview:         reflectionRecipe(),
+	RecipeArchaeologyExploreShape:        plannerRecipe(),
+	RecipeArchaeologyExploreReview:       reflectionRecipe(),
+	RecipeArchaeologyCompileReconcile:    plannerRecipe(),
+	RecipeArchaeologyCompileShape:        plannerRecipe(),
+	RecipeArchaeologyCompileReview:       reflectionRecipe(),
+	RecipeArchaeologyImplementStep:       reactRecipe(core.TaskTypeCodeModification),
+	RecipeArchaeologyImplementCheckpoint: reflectionRecipe(),
+	RecipeArchaeologyImplementGapDetect:  reflectionRecipe(),
+}
+
+func reactRecipe(taskType core.TaskType) RecipeSpec {
+	return RecipeSpec{
+		TaskType: taskType,
+		Run: func(ctx context.Context, in ExecuteInput, spec RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
+			return ExecuteReactTask(ctx, in, taskID, instruction, spec.TaskType)
+		},
+	}
+}
+
+func htnRecipe(taskType core.TaskType) RecipeSpec {
+	return RecipeSpec{
+		TaskType: taskType,
+		Run: func(ctx context.Context, in ExecuteInput, spec RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
+			return ExecuteHTNTask(ctx, in, taskID, instruction, spec.TaskType)
+		},
+	}
+}
+
+func plannerRecipe() RecipeSpec {
+	return RecipeSpec{
+		TaskType: core.TaskTypeAnalysis,
+		Run: func(ctx context.Context, in ExecuteInput, _ RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
+			return ExecutePlannerTask(ctx, in, taskID, instruction)
+		},
+	}
+}
+
+func reflectionRecipe() RecipeSpec {
+	return RecipeSpec{
+		TaskType: core.TaskTypeAnalysis,
+		Run: func(ctx context.Context, in ExecuteInput, _ RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
+			return ExecuteReflectionTask(ctx, in, taskID, instruction)
+		},
+	}
+}
+
+func architectRecipe(taskType core.TaskType) RecipeSpec {
+	return RecipeSpec{
+		TaskType: taskType,
+		Run: func(ctx context.Context, in ExecuteInput, spec RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
+			return ExecuteArchitectTask(ctx, in, taskID, instruction, spec.TaskType)
+		},
+	}
 }
 
 func SetBehaviorTrace(state *core.Context, work eucloruntime.UnitOfWork, routines []string) {
@@ -380,21 +427,11 @@ func ExecuteRecipe(ctx context.Context, in ExecuteInput, recipeID RecipeID, task
 		return &core.Result{Success: false, Error: err}, nil, err
 	}
 	appendRecipeTrace(in.State, recipeID)
-	switch spec.Family {
-	case "react":
-		return ExecuteReactTask(ctx, in, taskID, instruction, spec.TaskType)
-	case "planner":
-		return ExecutePlannerTask(ctx, in, taskID, instruction)
-	case "reflection":
-		return ExecuteReflectionTask(ctx, in, taskID, instruction)
-	case "htn":
-		return ExecuteHTNTask(ctx, in, taskID, instruction, spec.TaskType)
-	case "architect":
-		return ExecuteArchitectTask(ctx, in, taskID, instruction, spec.TaskType)
-	default:
-		err := fmt.Errorf("unsupported execution family %s for recipe %s", spec.Family, string(recipeID))
+	if spec.Run == nil {
+		err := fmt.Errorf("recipe %s has no runner", string(recipeID))
 		return &core.Result{Success: false, Error: err}, nil, err
 	}
+	return spec.Run(ctx, in, spec, taskID, instruction)
 }
 
 func ExecuteEnvelopeRecipe(ctx context.Context, env euclotypes.ExecutionEnvelope, recipeID RecipeID, taskID, instruction string) (*core.Result, *core.Context, error) {

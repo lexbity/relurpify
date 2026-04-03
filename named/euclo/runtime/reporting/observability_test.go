@@ -17,10 +17,12 @@ func TestBuildProofSurface_CarriesAssuranceAndWaiver(t *testing.T) {
 		Provenance: eucloruntime.VerificationProvenanceExecuted,
 	})
 	state.Set("euclo.success_gate", eucloruntime.SuccessGateResult{
-		Allowed:        true,
-		Reason:         "manual_verification_allowed",
-		AssuranceClass: eucloruntime.AssuranceClassOperatorDeferred,
-		WaiverApplied:  true,
+		Allowed:           true,
+		Reason:            "manual_verification_allowed",
+		AssuranceClass:    eucloruntime.AssuranceClassOperatorDeferred,
+		WaiverApplied:     true,
+		DegradationMode:   "operator_waiver",
+		DegradationReason: "operator_waiver",
 	})
 	state.Set("euclo.recovery_trace", map[string]any{
 		"status":        "repaired",
@@ -36,6 +38,12 @@ func TestBuildProofSurface_CarriesAssuranceAndWaiver(t *testing.T) {
 	}
 	if !proof.WaiverApplied {
 		t.Fatal("expected waiver applied to be true")
+	}
+	if proof.DegradationMode != "operator_waiver" {
+		t.Fatalf("expected degradation mode, got %q", proof.DegradationMode)
+	}
+	if proof.DegradationReason != "operator_waiver" {
+		t.Fatalf("expected degradation reason, got %q", proof.DegradationReason)
 	}
 	if proof.RecoveryStatus != "repaired" {
 		t.Fatalf("expected recovery status, got %q", proof.RecoveryStatus)

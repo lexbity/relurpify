@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.rapid
-  description: "Rapid live-model validation for Euclo bug hunting across debug and archaeology paths."
+  description: "Legacy aggregate rapid suite entrypoint; canonical rapid suites now live under euclo.rapid.chat/debug/archaeology."
   owner: agent-platform
   tier: live-flaky
   quarantined: false

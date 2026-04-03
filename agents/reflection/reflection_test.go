@@ -1,12 +1,79 @@
 package reflection
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/stretchr/testify/assert"
 )
+
+type recordingLLM struct {
+	lastPrompt string
+	response   *core.LLMResponse
+}
+
+func (r *recordingLLM) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
+	r.lastPrompt = prompt
+	if r.response != nil {
+		return r.response, nil
+	}
+	return &core.LLMResponse{Text: `{"issues":[],"approve":true}`}, nil
+}
+
+func (r *recordingLLM) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
+	return nil, nil
+}
+
+func (r *recordingLLM) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
+	return nil, nil
+}
+
+func (r *recordingLLM) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
+	return nil, nil
+}
+
+func TestReflectionReviewNodeBoundsLargeResultPayloadInPrompt(t *testing.T) {
+	reviewer := &recordingLLM{}
+	agent := &ReflectionAgent{
+		Reviewer: reviewer,
+		Config:   &core.Config{Model: "test-model"},
+	}
+	node := &reflectionReviewNode{
+		id:    "reflection_review",
+		agent: agent,
+		task:  &core.Task{Instruction: "Review the drafted answer"},
+	}
+	state := core.NewContext()
+	hugeFiles := make([]any, 0, 200)
+	for i := 0; i < 200; i++ {
+		hugeFiles = append(hugeFiles, strings.Repeat("very/long/path/", 20))
+	}
+	state.Set("reflection.last_result", &core.Result{
+		NodeID:  "reflection_execute",
+		Success: false,
+		Data: map[string]any{
+			"final_output": map[string]any{
+				"result": map[string]any{
+					"file_list": map[string]any{
+						"data": map[string]any{
+							"files": hugeFiles,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	result, err := node.Execute(context.Background(), state)
+	assert.NoError(t, err)
+	assert.True(t, result.Success)
+	assert.NotEmpty(t, reviewer.lastPrompt)
+	assert.Less(t, len(reviewer.lastPrompt), 10000)
+	assert.Contains(t, reviewer.lastPrompt, "...(truncated)")
+}
 
 func TestReflectionReviewGuidanceIncludesSkillPolicy(t *testing.T) {
 	agent := &ReflectionAgent{

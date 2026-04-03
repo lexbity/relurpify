@@ -7,6 +7,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo"
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
@@ -16,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAgentExecuteDispatchesThroughBehaviorService(t *testing.T) {
+func TestAgentExecuteDispatchesThroughBehaviorDispatcher(t *testing.T) {
 	agent := euclo.New(testutil.Env(t))
 	task := &core.Task{
 		ID:          "task-chat-ask",
@@ -86,6 +87,49 @@ func TestChatRuntimeCarriesBehaviorTrace(t *testing.T) {
 	if !rt.LazySemanticAcquisitionTriggered {
 		t.Fatalf("expected lazy semantic acquisition to be surfaced")
 	}
+}
+
+func TestProofSurfaceCarriesRecoveryStateForRepairedRun(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.mode_resolution", eucloruntime.ModeResolution{ModeID: "code"})
+	state.Set("euclo.execution_profile_selection", eucloruntime.ExecutionProfileSelection{ProfileID: "edit_verify_repair"})
+	state.Set("euclo.verification", eucloruntime.VerificationEvidence{
+		Status:     "pass",
+		Provenance: eucloruntime.VerificationProvenanceExecuted,
+	})
+	state.Set("euclo.success_gate", eucloruntime.SuccessGateResult{
+		Allowed:        true,
+		Reason:         "verification_accepted",
+		AssuranceClass: eucloruntime.AssuranceClassVerifiedSuccess,
+	})
+	state.Set("euclo.recovery_trace", map[string]any{
+		"status":        "repaired",
+		"attempt_count": 1,
+	})
+
+	proof := eucloreporting.BuildProofSurface(state, euclotypes.CollectArtifactsFromState(state))
+	require.Equal(t, "repaired", proof.RecoveryStatus)
+	require.Equal(t, 1, proof.RecoveryAttempts)
+	require.Equal(t, "verified_success", proof.AssuranceClass)
+}
+
+func TestProofSurfaceCarriesAutomaticDegradationState(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.mode_resolution", eucloruntime.ModeResolution{ModeID: "debug"})
+	state.Set("euclo.execution_profile_selection", eucloruntime.ExecutionProfileSelection{ProfileID: "reproduce_localize_patch"})
+	state.Set("euclo.success_gate", eucloruntime.SuccessGateResult{
+		Allowed:              false,
+		Reason:               "verification_missing",
+		AssuranceClass:       eucloruntime.AssuranceClassUnverifiedSuccess,
+		DegradationMode:      "automatic",
+		DegradationReason:    "verification_tools_unavailable",
+		AutomaticDegradation: true,
+	})
+
+	proof := eucloreporting.BuildProofSurface(state, euclotypes.CollectArtifactsFromState(state))
+	require.Equal(t, "automatic", proof.DegradationMode)
+	require.Equal(t, "verification_tools_unavailable", proof.DegradationReason)
+	require.Equal(t, "unverified_success", proof.AssuranceClass)
 }
 
 func TestArchaeologyRuntimeCarriesPolicyAndTrace(t *testing.T) {

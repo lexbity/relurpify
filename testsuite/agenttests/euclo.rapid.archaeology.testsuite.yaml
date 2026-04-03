@@ -1,0 +1,352 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.rapid.archaeology
+  description: "Rapid live-model validation for Euclo archaeology exploration and plan-execution paths."
+  owner: agent-platform
+  tier: live-flaky
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 90s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: rapid_archaeology_pattern_surface
+      description: "Fast Archaeo-backed exploration path that surfaces repeated implementation patterns."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, archaeology, patterns, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch-pattern
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch_pattern/http_a.go
+            content: |
+              package rapidarchpattern
+
+              import "strings"
+
+              func NormalizeHeader(v string) string {
+                return strings.TrimSpace(strings.ToLower(v))
+              }
+          - path: testsuite/fixtures/rapid_arch_pattern/http_b.go
+            content: |
+              package rapidarchpattern
+
+              import "strings"
+
+              func NormalizeQuery(v string) string {
+                return strings.TrimSpace(strings.ToLower(v))
+              }
+          - path: testsuite/fixtures/rapid_arch_pattern/http_c.go
+            content: |
+              package rapidarchpattern
+
+              func NormalizeCookie(v string) string {
+                return v
+              }
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch-pattern
+              task_type: analysis
+              instruction: Surface code patterns and mismatches in normalization helpers
+              status: running
+      prompt: >
+        Explore testsuite/fixtures/rapid_arch_pattern and identify the dominant
+        normalization pattern plus any inconsistent implementation. Do not modify files.
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_key_not_empty:
+          - euclo.active_exploration_id
+        euclo:
+          mode: planning
+          primary_relurpic_capability: euclo:archaeology.explore
+          supporting_relurpic_capabilities:
+            - euclo:archaeology.pattern-surface
+            - euclo:archaeology.coherence-assess
+
+    - name: rapid_archaeology_compile_plan
+      description: "Fast Archaeo-backed plan compilation from seeded exploration context."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, archaeology, compile-plan, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch-compile
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch_compile/handler.go
+            content: |
+              package rapidarchcompile
+
+              func NormalizeEmail(email string) string {
+                return email
+              }
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch-compile
+              task_type: analysis
+              instruction: Compile a small implementation plan for email normalization
+              status: running
+            runs:
+              - run_id: rapid-arch-compile-run
+                status: running
+            knowledge:
+              - record_id: rapid-arch-compile-explore
+                kind: fact
+                title: Exploration result
+                content: >
+                  handler.go exposes NormalizeEmail(email string) string and currently
+                  returns the input unchanged. We need to trim surrounding whitespace,
+                  lowercase the value, and keep the implementation limited to this file.
+                status: accepted
+      prompt: >
+        Use the prior exploration result for testsuite/fixtures/rapid_arch_compile
+        to compile a minimal implementation plan. Do not modify files.
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_key_not_empty:
+          - euclo.active_exploration_id
+        euclo:
+          mode: planning
+          primary_relurpic_capability: euclo:archaeology.compile-plan
+          supporting_relurpic_capabilities:
+            - euclo:archaeology.prospective-assess
+            - euclo:archaeology.convergence-guard
+
+    - name: rapid_archaeology_seeded_fix
+      description: "Fast Archaeo-backed plan execution using seeded workflow knowledge through planning mode."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, archaeology, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch/handler.go
+            content: |
+              package rapidarch
+
+              func NormalizeName(name string) string {
+                if name == "" {
+                  return ""
+                }
+                return name
+              }
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch
+              task_type: code_modification
+              instruction: Normalize names by trimming whitespace before validation
+              status: running
+            runs:
+              - run_id: rapid-arch-plan
+                status: running
+            knowledge:
+              - record_id: rapid-arch-plan-result
+                kind: fact
+                title: Compiled plan
+                content: >
+                  Plan: update testsuite/fixtures/rapid_arch/handler.go so NormalizeName
+                  trims leading and trailing whitespace before checking for empty input,
+                  then returns the trimmed value. Add the strings import if needed.
+                status: accepted
+      prompt: >
+        Execute the plan from workflow knowledge to update
+        testsuite/fixtures/rapid_arch/handler.go. Keep the change minimal.
+      overrides:
+        max_iterations: 5
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_arch/handler.go
+        state_key_not_empty:
+          - euclo.active_exploration_id
+          - euclo.active_exploration_snapshot_id
+        files_contain:
+          - path: testsuite/fixtures/rapid_arch/handler.go
+            contains: ['import "strings"', "strings.TrimSpace(name)"]
+        euclo:
+          primary_relurpic_capability: euclo:archaeology.implement-plan
+          supporting_relurpic_capabilities:
+            - euclo:archaeology.convergence-guard
+            - euclo:archaeology.coherence-assess
+          mode: planning
+
+    - name: rapid_archaeology_plan_execution
+      description: "Fast Archaeo-backed plan execution from a seeded compiled plan with explicit plan ownership."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, archaeology, implement-plan, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch-exec
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch_exec/slug.go
+            content: |
+              package rapidarchexec
+
+              func NormalizeSlug(slug string) string {
+                return slug
+              }
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch-exec
+              task_type: code_modification
+              instruction: Execute the compiled slug normalization plan
+              status: running
+            runs:
+              - run_id: rapid-arch-exec-run
+                status: running
+            knowledge:
+              - record_id: rapid-arch-exec-plan
+                kind: fact
+                title: Compiled plan
+                content: >
+                  Plan: update testsuite/fixtures/rapid_arch_exec/slug.go so
+                  NormalizeSlug trims surrounding whitespace and lowercases the
+                  slug before returning it. Add the strings import if needed.
+                status: accepted
+      prompt: >
+        Execute the compiled plan for testsuite/fixtures/rapid_arch_exec/slug.go.
+        Keep the change limited to that file.
+      overrides:
+        max_iterations: 5
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_arch_exec/slug.go
+        files_contain:
+          - path: testsuite/fixtures/rapid_arch_exec/slug.go
+            contains: ['import "strings"', "strings.TrimSpace(slug)", "strings.ToLower"]
+        euclo:
+          mode: planning
+          primary_relurpic_capability: euclo:archaeology.implement-plan
+          supporting_relurpic_capabilities:
+            - euclo:archaeology.compile-plan
+            - euclo:archaeology.convergence-guard
+            - euclo:archaeology.coherence-assess
+
+    - name: rapid_archaeology_tension_scan
+      description: "Fast Archaeo-backed analysis path that should surface at least one unresolved workflow tension."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, archaeology, tensions, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch-tension
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch_tension/handler.go
+            content: |
+              package rapidarchtension
+
+              func NormalizeDisplayName(name string) string {
+                if name == "" {
+                  return ""
+                }
+                return name
+              }
+          - path: testsuite/fixtures/rapid_arch_tension/notes.txt
+            content: |
+              Requirement A: preserve user-visible spacing exactly as entered.
+              Requirement B: trim leading and trailing whitespace before validation.
+              Requirement C: empty-or-whitespace-only names must be rejected.
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch-tension
+              task_type: analysis
+              instruction: Identify contradictions and unresolved implementation tensions in NormalizeDisplayName
+              status: running
+      prompt: >
+        Analyze testsuite/fixtures/rapid_arch_tension for contradictions and unresolved
+        implementation assumptions. Surface the tensions in workflow state. Do not modify files.
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_key_not_empty:
+          - euclo.active_exploration_id
+          - euclo.active_exploration_snapshot_id
+        workflow_has_tensions:
+          - wf-rapid-arch-tension
+        euclo:
+          primary_relurpic_capability: euclo:archaeology.explore
+          supporting_relurpic_capabilities:
+            - euclo:archaeology.pattern-surface
+            - euclo:archaeology.convergence-guard
+          mode: planning
+
+    - name: rapid_archaeology_scope_tension
+      description: "Fast Archaeo-backed tension scan that should expose scope expansion pressure."
+      task_type: analysis
+      tags: [smoke, rapid-iteration, archaeology, scope, tensions, level:2]
+      timeout: 90s
+      context:
+        workflow_id: wf-rapid-arch-scope
+        euclo.mode: planning
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_arch_scope/store.go
+            content: |
+              package rapidarchscope
+
+              func NormalizeUsername(name string) string {
+                return name
+              }
+          - path: testsuite/fixtures/rapid_arch_scope/requirements.txt
+            content: |
+              Requirement A: trim surrounding whitespace.
+              Requirement B: preserve exact user-visible casing.
+              Requirement C: usernames must also be unique after case-folding.
+              Requirement D: the current task only mentions NormalizeUsername, but the
+              uniqueness requirement likely needs broader validation and storage changes.
+        workflows:
+          - workflow:
+              workflow_id: wf-rapid-arch-scope
+              task_type: analysis
+              instruction: Identify unresolved tensions and scope expansion risks around NormalizeUsername
+              status: running
+      prompt: >
+        Explore testsuite/fixtures/rapid_arch_scope and identify contradictions,
+        broader implementation implications, and any scope expansion risks. Do not
+        modify files.
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        workflow_has_tensions:
+          - wf-rapid-arch-scope
+        euclo:
+          mode: planning
+          primary_relurpic_capability: euclo:archaeology.explore
+          supporting_relurpic_capabilities:
+            - euclo:archaeology.pattern-surface
+            - euclo:archaeology.scope-expansion-assess
+            - euclo:archaeology.coherence-assess

@@ -7,27 +7,22 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
+	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
 	euclocontext "github.com/lexcodex/relurpify/named/euclo/runtime/context"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	eucloses "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
 func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {
-	env, classification, mode, profile, work := a.runtimeState(task, nil)
-	executor := a.selectExecutor(work)
-	return executor.BuildGraph(&eucloexec.ExecutorContext{
-		Task:           task,
-		Envelope:       env,
-		Classification: classification,
-		Mode:           mode,
-		Profile:        profile,
-		Work:           work,
-	})
+	_, _, _, _, work := a.runtimeState(task, nil)
+	selection, err := a.selectExecutor(work)
+	if err != nil {
+		return nil, err
+	}
+	return selection.Workflow.BuildGraph(task)
 }
 
 func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
@@ -36,28 +31,16 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	}
 	envelope, classification, mode, profile, work := a.runtimeState(task, state)
 	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
-	executor := a.selectExecutor(work)
-	return executor.Execute(ctx, &eucloexec.ExecutorContext{
-		Task:           task,
-		State:          state,
-		Envelope:       envelope,
-		Classification: classification,
-		Mode:           mode,
-		Profile:        profile,
-		Work:           work,
-	})
-}
-
-func (a *Agent) executeWithWorkflowExecutor(ctx context.Context, exec *eucloexec.ExecutorContext, executor graph.WorkflowExecutor) (*core.Result, error) {
-	if exec == nil || executor == nil {
-		return &core.Result{Success: false, Error: fmt.Errorf("executor context unavailable")}, fmt.Errorf("executor context unavailable")
+	selection, err := a.selectExecutor(work)
+	if err != nil {
+		return &core.Result{Success: false, Error: err}, err
 	}
-	task := exec.Task
-	state := exec.State
-	if state == nil {
-		state = core.NewContext()
+	if selection.Workflow == nil {
+		err := fmt.Errorf("workflow executor unavailable")
+		return &core.Result{Success: false, Error: err}, err
 	}
-	return a.executeManagedFlow(ctx, task, state, executor)
+	state.Set("euclo.executor_runtime", selection.Runtime)
+	return a.executeManagedFlow(ctx, task, state, selection.Workflow)
 }
 
 func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *core.Context, workflowExecutor graph.WorkflowExecutor) (*core.Result, error) {
@@ -146,7 +129,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 		state.Set("euclo.unit_of_work", work)
 		euclowork.SeedCompiledExecutionState(state, work, euclowork.BuildRuntimeExecutionStatus(work, euclowork.ExecutionStatusCompleted, work.ResultClass, time.Now().UTC()))
 		short := a.shortCircuitResult(state, prep)
-		sessionOutput := a.executionSession().ShortCircuit(ctx, eucloses.ShortCircuitInput{
+		sessionOutput := eucloassurance.ShortCircuit(a.assuranceRuntime(), ctx, eucloassurance.ShortCircuitInput{
 			Task:            task,
 			State:           state,
 			Mode:            mode,
@@ -181,7 +164,7 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	state.Set("euclo.unit_of_work", work)
 	euclowork.SeedCompiledExecutionState(state, work, euclowork.BuildRuntimeExecutionStatus(work, euclowork.ExecutionStatusExecuting, "", time.Now().UTC()))
 	executionTask := a.eucloTask(task, envelope, classification, mode, profile, work)
-	sessionOutput := a.executionSession().Execute(ctx, eucloses.SessionInput{
+	sessionOutput := eucloassurance.Execute(a.assuranceRuntime(), ctx, eucloassurance.Input{
 		Task:             task,
 		ExecutionTask:    executionTask,
 		WorkflowExecutor: workflowExecutor,
@@ -223,4 +206,3 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	a.applyRuntimeResultMetadata(result, state)
 	return result, err
 }
-

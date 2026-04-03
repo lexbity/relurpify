@@ -87,9 +87,11 @@ func TestAssembleFinalReport_IncludesWaiverAndAssuranceClass(t *testing.T) {
 			Kind:    euclotypes.ArtifactKindSuccessGate,
 			Summary: "completion gate evaluated",
 			Payload: map[string]any{
-				"allowed":         true,
-				"reason":          "manual_verification_allowed",
-				"assurance_class": "operator_deferred",
+				"allowed":            true,
+				"reason":             "manual_verification_allowed",
+				"assurance_class":    "operator_deferred",
+				"degradation_mode":   "operator_waiver",
+				"degradation_reason": "operator_waiver",
 			},
 		},
 		{
@@ -108,6 +110,12 @@ func TestAssembleFinalReport_IncludesWaiverAndAssuranceClass(t *testing.T) {
 	report := euclotypes.AssembleFinalReport(artifacts)
 	if report["assurance_class"] != "operator_deferred" {
 		t.Fatalf("expected assurance class in report, got %#v", report["assurance_class"])
+	}
+	if report["degradation_mode"] != "operator_waiver" {
+		t.Fatalf("expected degradation mode in report, got %#v", report["degradation_mode"])
+	}
+	if report["degradation_reason"] != "operator_waiver" {
+		t.Fatalf("expected degradation reason in report, got %#v", report["degradation_reason"])
 	}
 	if _, ok := report["verification_plan"].(map[string]any); !ok {
 		t.Fatalf("expected verification plan payload in report, got %#v", report["verification_plan"])

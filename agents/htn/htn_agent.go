@@ -401,8 +401,7 @@ func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, ste
 
 // delegateToPrimitive passes the task through the capability dispatcher.
 func (a *HTNAgent) delegateToPrimitive(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
-	dispatcher := runtime.NewPrimitiveDispatcher(a.Tools, a.primitiveAgent())
-	return dispatcher.Execute(ctx, task, state)
+	return runtime.DispatchTask(ctx, a.Tools, a.primitiveAgent(), task, state)
 }
 
 // primitiveAgent returns the configured primitive executor or a no-op fallback.

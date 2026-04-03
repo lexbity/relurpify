@@ -34,7 +34,7 @@ func TestAgentTestRefreshDefaultsSkipASTIndex(t *testing.T) {
 	}
 }
 
-func TestFilterRefreshSuiteCasesByTag(t *testing.T) {
+func TestFilterAgentTestSuiteCasesByTag(t *testing.T) {
 	suite := &agenttest.Suite{
 		Spec: agenttest.SuiteSpec{
 			Cases: []agenttest.CaseSpec{
@@ -44,16 +44,16 @@ func TestFilterRefreshSuiteCasesByTag(t *testing.T) {
 		},
 	}
 
-	filtered, err := filterRefreshSuiteCases(suite, "", []string{"recovery"})
+	filtered, err := filterAgentTestSuiteCases(suite, "", []string{"recovery"})
 	if err != nil {
-		t.Fatalf("filterRefreshSuiteCases: %v", err)
+		t.Fatalf("filterAgentTestSuiteCases: %v", err)
 	}
 	if len(filtered.Spec.Cases) != 1 || filtered.Spec.Cases[0].Name != "recovery_case" {
 		t.Fatalf("unexpected filtered cases: %+v", filtered.Spec.Cases)
 	}
 }
 
-func TestFilterRefreshSuiteCasesRejectsCaseMissAfterTagFilter(t *testing.T) {
+func TestFilterAgentTestSuiteCasesSelectsNamedCase(t *testing.T) {
 	suite := &agenttest.Suite{
 		Spec: agenttest.SuiteSpec{
 			Cases: []agenttest.CaseSpec{
@@ -63,7 +63,26 @@ func TestFilterRefreshSuiteCasesRejectsCaseMissAfterTagFilter(t *testing.T) {
 		},
 	}
 
-	_, err := filterRefreshSuiteCases(suite, "stable_case", []string{"recovery"})
+	filtered, err := filterAgentTestSuiteCases(suite, "stable_case", nil)
+	if err != nil {
+		t.Fatalf("filterAgentTestSuiteCases: %v", err)
+	}
+	if len(filtered.Spec.Cases) != 1 || filtered.Spec.Cases[0].Name != "stable_case" {
+		t.Fatalf("unexpected filtered cases: %+v", filtered.Spec.Cases)
+	}
+}
+
+func TestFilterAgentTestSuiteCasesRejectsCaseMissAfterTagFilter(t *testing.T) {
+	suite := &agenttest.Suite{
+		Spec: agenttest.SuiteSpec{
+			Cases: []agenttest.CaseSpec{
+				{Name: "recovery_case", Tags: []string{"recovery"}},
+				{Name: "stable_case", Tags: []string{"stable"}},
+			},
+		},
+	}
+
+	_, err := filterAgentTestSuiteCases(suite, "stable_case", []string{"recovery"})
 	if err == nil || !strings.Contains(err.Error(), `case "stable_case" not found after applying tags recovery`) {
 		t.Fatalf("expected tag-filtered case miss, got %v", err)
 	}

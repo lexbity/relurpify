@@ -3,6 +3,8 @@ package graph
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -698,7 +700,7 @@ func summarizeNodePayload(state *Context, keys []string, includeHistory bool) st
 	var parts []string
 	for _, key := range keys {
 		if raw, ok := state.Get(key); ok && raw != nil {
-			parts = append(parts, fmt.Sprintf("%s: %v", key, raw))
+			parts = append(parts, fmt.Sprintf("%s: %v", key, boundedSummaryValue(raw, 0)))
 		}
 	}
 	if includeHistory {
@@ -712,6 +714,175 @@ func summarizeNodePayload(state *Context, keys []string, includeHistory bool) st
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+const (
+	summaryMaxDepth           = 3
+	summaryMaxMapItems        = 12
+	summaryMaxCollectionItems = 8
+	summaryMaxStringLen       = 512
+)
+
+func boundedSummaryValue(value any, depth int) any {
+	if depth >= summaryMaxDepth {
+		return summarizeLeafValue(value)
+	}
+	switch typed := value.(type) {
+	case nil:
+		return nil
+	case string:
+		return truncateSummaryString(typed)
+	case []string:
+		limit := minInt(len(typed), summaryMaxCollectionItems)
+		out := make([]any, 0, limit+1)
+		for i := 0; i < limit; i++ {
+			out = append(out, truncateSummaryString(typed[i]))
+		}
+		if len(typed) > limit {
+			out = append(out, fmt.Sprintf("... (%d more)", len(typed)-limit))
+		}
+		return out
+	case []any:
+		limit := minInt(len(typed), summaryMaxCollectionItems)
+		out := make([]any, 0, limit+1)
+		for i := 0; i < limit; i++ {
+			out = append(out, boundedSummaryValue(typed[i], depth+1))
+		}
+		if len(typed) > limit {
+			out = append(out, fmt.Sprintf("... (%d more)", len(typed)-limit))
+		}
+		return out
+	case map[string]any:
+		return boundedSummaryMap(typed, depth)
+	case core.ArtifactReference:
+		return map[string]any{
+			"artifact_id": typed.ArtifactID,
+			"kind":        typed.Kind,
+			"summary":     truncateSummaryString(typed.Summary),
+			"storage":     typed.StorageKind,
+		}
+	default:
+		return boundedSummaryReflectValue(reflect.ValueOf(value), depth)
+	}
+}
+
+func boundedSummaryReflectValue(value reflect.Value, depth int) any {
+	if !value.IsValid() {
+		return nil
+	}
+	if depth >= summaryMaxDepth {
+		return summarizeLeafValue(reflectValueInterface(value))
+	}
+	for value.Kind() == reflect.Pointer || value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return nil
+		}
+		value = value.Elem()
+	}
+	switch value.Kind() {
+	case reflect.Slice, reflect.Array:
+		limit := minInt(value.Len(), summaryMaxCollectionItems)
+		out := make([]any, 0, limit+1)
+		for i := 0; i < limit; i++ {
+			out = append(out, boundedSummaryReflectValue(value.Index(i), depth+1))
+		}
+		if value.Len() > limit {
+			out = append(out, fmt.Sprintf("... (%d more)", value.Len()-limit))
+		}
+		return out
+	case reflect.Map:
+		if value.Type().Key().Kind() != reflect.String {
+			return summarizeLeafValue(reflectValueInterface(value))
+		}
+		keys := value.MapKeys()
+		keyNames := make([]string, 0, len(keys))
+		for _, key := range keys {
+			keyNames = append(keyNames, key.String())
+		}
+		sort.Strings(keyNames)
+		limit := minInt(len(keyNames), summaryMaxMapItems)
+		out := make(map[string]any, limit+1)
+		for _, key := range keyNames[:limit] {
+			out[key] = boundedSummaryReflectValue(value.MapIndex(reflect.ValueOf(key)), depth+1)
+		}
+		if len(keyNames) > limit {
+			out["_truncated_keys"] = len(keyNames) - limit
+		}
+		return out
+	case reflect.Struct:
+		typ := value.Type()
+		fieldNames := make([]string, 0, typ.NumField())
+		fields := make(map[string]reflect.Value, typ.NumField())
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			if field.PkgPath != "" {
+				continue
+			}
+			fieldNames = append(fieldNames, field.Name)
+			fields[field.Name] = value.Field(i)
+		}
+		sort.Strings(fieldNames)
+		limit := minInt(len(fieldNames), summaryMaxMapItems)
+		out := make(map[string]any, limit+1)
+		for _, name := range fieldNames[:limit] {
+			out[name] = boundedSummaryReflectValue(fields[name], depth+1)
+		}
+		if len(fieldNames) > limit {
+			out["_truncated_fields"] = len(fieldNames) - limit
+		}
+		return out
+	default:
+		return summarizeLeafValue(reflectValueInterface(value))
+	}
+}
+
+func reflectValueInterface(value reflect.Value) any {
+	if !value.IsValid() {
+		return nil
+	}
+	if value.CanInterface() {
+		return value.Interface()
+	}
+	return fmt.Sprintf("<%s>", value.Type().String())
+}
+
+func boundedSummaryMap(values map[string]any, depth int) map[string]any {
+	if len(values) == 0 {
+		return map[string]any{}
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	limit := minInt(len(keys), summaryMaxMapItems)
+	out := make(map[string]any, limit+1)
+	for _, key := range keys[:limit] {
+		out[key] = boundedSummaryValue(values[key], depth+1)
+	}
+	if len(keys) > limit {
+		out["_truncated_keys"] = len(keys) - limit
+	}
+	return out
+}
+
+func summarizeLeafValue(value any) string {
+	return truncateSummaryString(fmt.Sprint(value))
+}
+
+func truncateSummaryString(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) <= summaryMaxStringLen {
+		return value
+	}
+	return value[:summaryMaxStringLen] + "...(truncated)"
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func emitSystemNodeEvent(telemetry core.Telemetry, taskID, message string, metadata map[string]any) {

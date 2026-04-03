@@ -789,11 +789,14 @@ type VerificationEvidence struct {
 }
 
 type SuccessGateResult struct {
-	Allowed        bool           `json:"allowed"`
-	Reason         string         `json:"reason,omitempty"`
-	Details        []string       `json:"details,omitempty"`
-	AssuranceClass AssuranceClass `json:"assurance_class,omitempty"`
-	WaiverApplied  bool           `json:"waiver_applied"`
+	Allowed              bool           `json:"allowed"`
+	Reason               string         `json:"reason,omitempty"`
+	Details              []string       `json:"details,omitempty"`
+	AssuranceClass       AssuranceClass `json:"assurance_class,omitempty"`
+	WaiverApplied        bool           `json:"waiver_applied"`
+	DegradationMode      string         `json:"degradation_mode,omitempty"`
+	DegradationReason    string         `json:"degradation_reason,omitempty"`
+	AutomaticDegradation bool           `json:"automatic_degradation"`
 }
 
 type WaiverKind string
@@ -875,6 +878,8 @@ type ProofSurface struct {
 	RecoveryStatus         string   `json:"recovery_status,omitempty"`
 	SuccessGateReason      string   `json:"success_gate_reason,omitempty"`
 	AssuranceClass         string   `json:"assurance_class,omitempty"`
+	DegradationMode        string   `json:"degradation_mode,omitempty"`
+	DegradationReason      string   `json:"degradation_reason,omitempty"`
 	ArtifactKinds          []string `json:"artifact_kinds,omitempty"`
 	WorkflowRetrievalUsed  bool     `json:"workflow_retrieval_used"`
 	CapabilityIDs          []string `json:"capability_ids,omitempty"`
