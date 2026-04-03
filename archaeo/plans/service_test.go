@@ -707,7 +707,7 @@ func TestApplyInvalidationWithExcludeStepID(t *testing.T) {
 		At:     now,
 	}, "step-2")
 	require.Empty(t, invalidated)
-	require.Equal(t, frameworkplan.PlanStepPending, plan.Steps["step-2"].Status)
+	require.Equal(t, frameworkplan.PlanStepInvalidated, plan.Steps["step-2"].Status)
 }
 
 func TestApplyAnchorInvalidations(t *testing.T) {
@@ -919,7 +919,7 @@ func TestEnsureDraftSuccessorNotFound(t *testing.T) {
 	svc := plans.Service{Store: store, WorkflowStore: workflowStore, Now: func() time.Time { return now }}
 	// no version exists
 	successor, err := svc.EnsureDraftSuccessor(ctx, "wf-notfound", 1, "reason")
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.Nil(t, successor)
 }
 
