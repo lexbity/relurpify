@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	projections "github.com/lexcodex/relurpify/archaeo/projections"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
