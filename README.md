@@ -5,12 +5,12 @@
 </div>
 
 <div align="center">
-  Local-first agentic software work with a security-first runtime.
+  To the day it rewrites itself
 </div>
 
 ## What Is Relurpify?
 
-To the day it rewrites itself 
+ 
 
 Relurpify is a fullstack Agent framework 
 - generic execution Agent library 
