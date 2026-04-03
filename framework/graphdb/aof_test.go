@@ -101,7 +101,8 @@ func TestBinaryEncoderDecoderRoundtrip(t *testing.T) {
 }
 
 func TestBinaryDecoder_TrailingDataError(t *testing.T) {
-	data := []byte{0, 0, 0, 1, 'a'} // extra byte after valid string length=1 + 'a'
+	// length=1, string "a", plus extra trailing byte 0x99
+	data := []byte{0, 0, 0, 1, 'a', 0x99}
 	dec := binaryDecoderFromBytes(data)
 	_, err := dec.readString()
 	require.NoError(t, err)

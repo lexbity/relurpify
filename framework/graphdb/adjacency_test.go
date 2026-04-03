@@ -22,7 +22,7 @@ func TestCloneNode_WithData(t *testing.T) {
 		DeletedAt: 0,
 	}
 	copied := cloneNode(node)
-	require.Equal(t, *node, copied)
+	require.EqualValues(t, *node, copied)
 	// ensure slices are copies
 	require.NotSame(t, node.Labels, copied.Labels)
 	require.NotSame(t, node.Props, copied.Props)
@@ -39,7 +39,7 @@ func TestCloneEdge(t *testing.T) {
 		DeletedAt: 0,
 	}
 	copied := cloneEdge(edge)
-	require.Equal(t, edge, copied)
+	require.EqualValues(t, edge, copied)
 	require.NotSame(t, edge.Props, copied.Props)
 }
 

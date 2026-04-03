@@ -7,8 +7,8 @@ import (
 
 // ImpactSet returns breadth-first reachability from the origin IDs.
 func (e *Engine) ImpactSet(originIDs []string, edgeKinds []EdgeKind, maxDepth int) ImpactResult {
-	if maxDepth <= 0 {
-		maxDepth = 1
+	if maxDepth < 0 {
+		maxDepth = 0
 	}
 	allowed := kindSet(edgeKinds)
 	visited := make(map[string]struct{}, len(originIDs))
@@ -226,8 +226,8 @@ func (e *Engine) Neighbors(nodeID string, direction Direction, kinds ...EdgeKind
 
 // Subgraph returns nodes and edges reachable within maxDepth.
 func (e *Engine) Subgraph(query GraphQuery) ([]NodeRecord, []EdgeRecord) {
-	if query.MaxDepth <= 0 {
-		query.MaxDepth = 1
+	if query.MaxDepth < 0 {
+		query.MaxDepth = 0
 	}
 	allowed := kindSet(query.EdgeKinds)
 	nodeSet := make(map[string]struct{})
