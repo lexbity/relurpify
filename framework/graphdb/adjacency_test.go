@@ -30,7 +30,7 @@ func TestCloneNode_WithData(t *testing.T) {
 	node.Labels = append(node.Labels, "c")
 	node.Props = append(node.Props, 'x')
 	require.Equal(t, []string{"a", "b"}, copied.Labels, "labels slice should be independent")
-	require.Equal(t, []byte(`{"x":1}`), copied.Props, "props slice should be independent")
+	require.Equal(t, []byte(`{"x":1}`), []byte(copied.Props), "props slice should be independent")
 	// restore for cleanliness
 	node.Labels = originalLabels
 	node.Props = originalProps
@@ -50,7 +50,7 @@ func TestCloneEdge(t *testing.T) {
 	require.True(t, reflect.DeepEqual(edge, copied), "cloned edge should equal original")
 	originalProps := edge.Props
 	edge.Props = append(edge.Props, 'y')
-	require.Equal(t, []byte(`{"site":"x"}`), copied.Props, "props slice should be independent")
+	require.Equal(t, []byte(`{"site":"x"}`), []byte(copied.Props), "props slice should be independent")
 	edge.Props = originalProps
 }
 
