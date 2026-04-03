@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var _ = frameworkplan.LivingPlan{}
+
 func TestFormationMatchesVersion(t *testing.T) {
 	record := &archaeodomain.VersionedLivingPlan{
 		DerivedFromExploration:  "exp1",
