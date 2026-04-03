@@ -13,19 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestEngine(t *testing.T) (*Engine, Options) {
-	t.Helper()
-	opts := DefaultOptions(t.TempDir())
-	opts.AutoSaveInterval = 10 * time.Millisecond
-	opts.AutoSaveThreshold = 100
-	opts.AOFRewriteThresholdBytes = 1 << 20
-	engine, err := Open(opts)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, engine.Close())
-	})
-	return engine, opts
-}
 
 func TestNodeOperationsRoundTrip(t *testing.T) {
 	engine, _ := newTestEngine(t)
@@ -226,19 +213,6 @@ func TestConcurrentUpsertAndLink(t *testing.T) {
 	require.Len(t, engine.ListNodes("function"), workers)
 }
 
-func allOutEdges(t *testing.T, engine *Engine, nodeID string) []EdgeRecord {
-	t.Helper()
-	engine.store.mu.RLock()
-	defer engine.store.mu.RUnlock()
-	return cloneEdges(engine.store.forward[nodeID])
-}
-
-func allInEdges(t *testing.T, engine *Engine, nodeID string) []EdgeRecord {
-	t.Helper()
-	engine.store.mu.RLock()
-	defer engine.store.mu.RUnlock()
-	return cloneEdges(engine.store.reverse[nodeID])
-}
 
 func mustJSON(t *testing.T, value any) []byte {
 	t.Helper()
