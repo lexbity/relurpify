@@ -1347,8 +1347,16 @@ func TestMeshTransportFrameHandlerResumeReplayAfterFenceDoesNotCreateDuplicateRe
 		return kinds["rex.fmp_import"] && kinds["rex.fmp_lineage"] && kinds["rex.task_request"]
 	}, 5*time.Second, 20*time.Millisecond)
 	artifactIDsBefore := map[string]bool{}
+	requiredArtifactIDs := map[string]string{
+		"rex.fmp_import":  fixture.destAttempt + ":fmp-import",
+		"rex.fmp_lineage": fixture.destAttempt + ":fmp-lineage",
+		"rex.task_request": fixture.destAttempt + ":task-request",
+	}
 	for _, artifact := range artifactsBefore {
 		artifactIDsBefore[artifact.ArtifactID] = true
+	}
+	for kind, artifactID := range requiredArtifactIDs {
+		require.True(t, artifactIDsBefore[artifactID], "missing %s artifact before replay", kind)
 	}
 
 	require.NoError(t, fixture.handler(context.Background(), fixture.ws, fixture.resumeFrame))
@@ -1359,9 +1367,15 @@ func TestMeshTransportFrameHandlerResumeReplayAfterFenceDoesNotCreateDuplicateRe
 
 	artifactsAfter, err := fixture.rexProvider.WorkflowStore.ListWorkflowArtifacts(context.Background(), fixture.importWorkflow, fixture.destAttempt)
 	require.NoError(t, err)
-	require.Len(t, artifactsAfter, len(artifactIDsBefore))
+	artifactIDsAfter := map[string]bool{}
 	for _, artifact := range artifactsAfter {
-		require.True(t, artifactIDsBefore[artifact.ArtifactID], "unexpected artifact after replay: %s", artifact.ArtifactID)
+		artifactIDsAfter[artifact.ArtifactID] = true
+	}
+	for kind, artifactID := range requiredArtifactIDs {
+		require.True(t, artifactIDsAfter[artifactID], "missing %s artifact after replay", kind)
+	}
+	for artifactID := range artifactIDsBefore {
+		require.True(t, artifactIDsAfter[artifactID], "artifact disappeared after replay: %s", artifactID)
 	}
 
 	source, ok, err := fixture.ownership.GetAttempt(context.Background(), fixture.sourceAttempt)
@@ -1370,6 +1384,18 @@ func TestMeshTransportFrameHandlerResumeReplayAfterFenceDoesNotCreateDuplicateRe
 	require.NotNil(t, source)
 	require.Equal(t, core.AttemptStateCommittedRemote, source.State)
 	require.True(t, source.Fenced)
+
+	dest, ok, err := fixture.ownership.GetAttempt(context.Background(), fixture.destAttempt)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, dest)
+	require.Equal(t, fixture.lineageID, dest.LineageID)
+
+	lineage, ok, err := fixture.ownership.GetLineage(context.Background(), fixture.lineageID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, lineage)
+	require.Equal(t, fixture.destAttempt, lineage.CurrentOwnerAttempt)
 }
 
 func TestMeshTransportFrameHandlerResumePersistsImportedRexWorkflow(t *testing.T) {

@@ -144,6 +144,49 @@ func TestIndexManagerWaitUntilReadyReturnsCancellationError(t *testing.T) {
 	}
 }
 
+func TestIndexManagerCloseWaitsForAsyncIndexToFinish(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSQLiteStore(filepath.Join(tmpDir, "index.db"))
+	if err != nil {
+		t.Fatalf("sqlite init failed: %v", err)
+	}
+
+	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir, ParallelWorkers: 1})
+	path := filepath.Join(tmpDir, "main.go")
+	if err := os.WriteFile(path, []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	release := make(chan struct{})
+	manager.RegisterParser(&blockingParser{release: release})
+
+	if err := manager.StartIndexing(context.Background()); err != nil {
+		t.Fatalf("start indexing: %v", err)
+	}
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- manager.Close()
+	}()
+
+	select {
+	case err := <-closeDone:
+		t.Fatalf("close returned before indexing completed: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case err := <-closeDone:
+		if err != nil {
+			t.Fatalf("close failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for close to finish")
+	}
+}
+
 func TestIndexManagerIndexWorkspaceMarksReady(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
 	path := filepath.Join(tmpDir, "main.go")

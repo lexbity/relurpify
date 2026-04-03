@@ -443,6 +443,13 @@ func (im *IndexManager) Close() error {
 	if im == nil {
 		return nil
 	}
+	im.mu.Lock()
+	running := im.workspaceIndex.running
+	readyCh := im.workspaceIndex.readyCh
+	im.mu.Unlock()
+	if running && readyCh != nil {
+		<-readyCh
+	}
 	var firstErr error
 	if im.GraphDB != nil {
 		if err := im.GraphDB.Close(); err != nil {

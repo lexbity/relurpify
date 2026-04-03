@@ -54,6 +54,7 @@ type Manager struct {
 	active         int
 	queueDepth     int
 	cancel         context.CancelFunc
+	loopDone       chan struct{}
 	recoveries     []state.RecoveryCandidate
 	loopStarted    bool
 	lastWorkflowID string
@@ -81,6 +82,7 @@ func (m *Manager) Start(ctx context.Context) {
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	m.cancel = cancel
+	m.loopDone = make(chan struct{})
 	m.loopStarted = true
 	m.mu.Unlock()
 	go m.loop(runCtx)
@@ -89,10 +91,14 @@ func (m *Manager) Start(ctx context.Context) {
 func (m *Manager) Stop() {
 	m.mu.Lock()
 	cancel := m.cancel
+	done := m.loopDone
 	m.loopStarted = false
 	m.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+	if done != nil {
+		<-done
 	}
 }
 
@@ -175,6 +181,7 @@ func (m *Manager) BeginExecution(workflowID, runID string) func(error) {
 }
 
 func (m *Manager) loop(ctx context.Context) {
+	defer close(m.loopDone)
 	ticker := time.NewTicker(m.cfg.RecoveryScanPeriod)
 	defer ticker.Stop()
 	m.scanRecoveries(ctx)

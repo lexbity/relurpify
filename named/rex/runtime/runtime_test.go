@@ -179,6 +179,53 @@ func TestManagerWorkerFailureSetsDegradedHealth(t *testing.T) {
 	}
 }
 
+func TestManagerStopWaitsForWorkerExit(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewHybridMemory: %v", err)
+	}
+	cfg := rexconfig.Default()
+	cfg.RecoveryScanPeriod = time.Hour
+	manager := New(cfg, memStore)
+	workerStarted := make(chan struct{})
+	workerExited := make(chan struct{})
+	manager.SetWorker(func(ctx context.Context, item WorkItem) error {
+		close(workerStarted)
+		<-ctx.Done()
+		close(workerExited)
+		return ctx.Err()
+	})
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	manager.Start(runCtx)
+	if !manager.Enqueue(WorkItem{WorkflowID: "wf-stop", RunID: "run-stop"}) {
+		t.Fatalf("enqueue failed")
+	}
+	select {
+	case <-workerStarted:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("timed out waiting for worker start")
+	}
+
+	stopDone := make(chan struct{})
+	go func() {
+		manager.Stop()
+		close(stopDone)
+	}()
+
+	select {
+	case <-stopDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("timed out waiting for stop to return")
+	}
+
+	select {
+	case <-workerExited:
+	default:
+		t.Fatalf("worker should have exited before stop returned")
+	}
+}
+
 func TestManagerDetailsDegradeWhenPartitioned(t *testing.T) {
 	memStore, err := memory.NewHybridMemory(t.TempDir())
 	if err != nil {
