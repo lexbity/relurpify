@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/archaeo/execution"
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -160,4 +161,50 @@ func TestAssessPlanStepBuildsGateAssessment(t *testing.T) {
 	require.NotNil(t, assessment.BlastRadius)
 	require.Equal(t, 1, assessment.BlastRadius.Expected)
 	require.Greater(t, assessment.BlastRadius.Actual, execution.BlastRadiusExpansionThreshold(assessment.BlastRadius.Expected))
+}
+
+func TestEvaluateMutationsNoWorkflowStore(t *testing.T) {
+	svc := execution.Service{}
+	eval, err := svc.EvaluateMutations(context.Background(), "workflow-id", nil, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, eval)
+}
+
+func TestEvaluateMutationsEmptyWorkflowID(t *testing.T) {
+	svc := execution.Service{}
+	eval, err := svc.EvaluateMutations(context.Background(), "", nil, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, eval)
+}
+
+func TestAnchorGateStateWithoutRetrieval(t *testing.T) {
+	svc := execution.Service{}
+	active, drifted, err := svc.AnchorGateState(context.Background(), &core.Task{})
+	require.NoError(t, err)
+	require.Empty(t, active)
+	require.Empty(t, drifted)
+}
+
+func TestBlastRadiusExpansionThreshold(t *testing.T) {
+	require.Equal(t, 0, execution.BlastRadiusExpansionThreshold(0))
+	require.Equal(t, 5, execution.BlastRadiusExpansionThreshold(1))
+	require.Equal(t, 10, execution.BlastRadiusExpansionThreshold(5))
+}
+
+func TestShouldCheckBlastRadius(t *testing.T) {
+	require.True(t, execution.ShouldCheckBlastRadius(&frameworkplan.PlanStep{Scope: []string{"a"}}, true))
+	require.False(t, execution.ShouldCheckBlastRadius(&frameworkplan.PlanStep{Scope: []string{"a"}}, false))
+	require.False(t, execution.ShouldCheckBlastRadius(nil, true))
+}
+
+func TestRequiredSymbols(t *testing.T) {
+	require.Nil(t, execution.RequiredSymbols(nil))
+	step := &frameworkplan.PlanStep{
+		EvidenceGate: &frameworkplan.EvidenceGate{
+			RequiredSymbols: []string{"a"},
+		},
+	}
+	require.Equal(t, []string{"a"}, execution.RequiredSymbols(step))
+	step.EvidenceGate = nil
+	require.Nil(t, execution.RequiredSymbols(step))
 }
