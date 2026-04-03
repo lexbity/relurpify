@@ -673,3 +673,380 @@ func TestEnsureDraftFromExplorationMarksActiveVersionStaleAndCreatesDraft(t *tes
 	require.True(t, active.RecomputeRequired)
 	require.Contains(t, active.StaleReason, "formation inputs changed")
 }
+
+func TestApplyInvalidationWithExcludeStepID(t *testing.T) {
+	now := time.Date(2026, 3, 28, 0, 0, 0, 0, time.UTC)
+	svc := plans.Service{Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:        "plan-1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {
+				ID:        "step-1",
+				Status:    frameworkplan.PlanStepPending,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			"step-2": {
+				ID:        "step-2",
+				Status:    frameworkplan.PlanStepPending,
+				CreatedAt: now,
+				UpdatedAt: now,
+				InvalidatedBy: []frameworkplan.InvalidationRule{{
+					Kind:   frameworkplan.InvalidationSymbolChanged,
+					Target: "sym",
+				}},
+			},
+		},
+	}
+	invalidated := svc.ApplyInvalidation(plan, frameworkplan.InvalidationEvent{
+		Kind:   frameworkplan.InvalidationSymbolChanged,
+		Target: "sym",
+		At:     now,
+	}, "step-2")
+	require.Empty(t, invalidated)
+	require.Equal(t, frameworkplan.PlanStepPending, plan.Steps["step-2"].Status)
+}
+
+func TestApplyAnchorInvalidations(t *testing.T) {
+	now := time.Date(2026, 3, 28, 1, 0, 0, 0, time.UTC)
+	svc := plans.Service{Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:        "plan-1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {
+				ID:        "step-1",
+				Status:    frameworkplan.PlanStepPending,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			"step-2": {
+				ID:        "step-2",
+				Status:    frameworkplan.PlanStepPending,
+				CreatedAt: now,
+				UpdatedAt: now,
+				InvalidatedBy: []frameworkplan.InvalidationRule{{
+					Kind:   frameworkplan.InvalidationAnchorDrifted,
+					Target: "anchor1",
+				}},
+			},
+		},
+	}
+	changed := svc.ApplyAnchorInvalidations(plan, "step-1", []string{"anchor1"})
+	require.Equal(t, []string{"step-2"}, changed)
+	require.Equal(t, frameworkplan.PlanStepInvalidated, plan.Steps["step-2"].Status)
+}
+
+func TestApplyScopeInvalidations(t *testing.T) {
+	now := time.Date(2026, 3, 28, 2, 0, 0, 0, time.UTC)
+	svc := plans.Service{Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:        "plan-1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {
+				ID:        "step-1",
+				Status:    frameworkplan.PlanStepPending,
+				Scope:     []string{"symbolA"},
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			"step-2": {
+				ID:        "step-2",
+				Status:    frameworkplan.PlanStepPending,
+				CreatedAt: now,
+				UpdatedAt: now,
+				InvalidatedBy: []frameworkplan.InvalidationRule{{
+					Kind:   frameworkplan.InvalidationSymbolChanged,
+					Target: "symbolA",
+				}},
+			},
+		},
+	}
+	changed := svc.ApplyScopeInvalidations(plan, plan.Steps["step-1"])
+	require.Equal(t, []string{"step-2"}, changed)
+	require.Equal(t, frameworkplan.PlanStepInvalidated, plan.Steps["step-2"].Status)
+	require.False(t, plan.UpdatedAt.IsZero())
+}
+
+func TestLoadActiveContextNilStore(t *testing.T) {
+	svc := plans.Service{Store: nil}
+	ctx, err := svc.LoadActiveContext(context.Background(), "wf-none", &core.Task{Context: map[string]any{"current_step_id": "step"}})
+	require.NoError(t, err)
+	require.Nil(t, ctx)
+}
+
+func TestLoadActiveContextNoPlan(t *testing.T) {
+	store := &stubPlanStore{plan: nil}
+	svc := plans.Service{Store: store}
+	ctx, err := svc.LoadActiveContext(context.Background(), "wf-none", &core.Task{Context: map[string]any{"current_step_id": "step"}})
+	require.NoError(t, err)
+	require.Nil(t, ctx)
+}
+
+func TestPersistAllSteps(t *testing.T) {
+	now := time.Date(2026, 3, 28, 3, 0, 0, 0, time.UTC)
+	store := &stubPlanStore{}
+	svc := plans.Service{Store: store, Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:         "plan-1",
+		WorkflowID: "wf-1",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", CreatedAt: now, UpdatedAt: now},
+			"step-2": {ID: "step-2", CreatedAt: now, UpdatedAt: now},
+		},
+	}
+	err := svc.PersistAllSteps(context.Background(), plan)
+	require.NoError(t, err)
+	require.Contains(t, store.updates, "step-1")
+	require.Contains(t, store.updates, "step-2")
+}
+
+func TestRecordBlockedStepWithoutInvalidate(t *testing.T) {
+	now := time.Date(2026, 3, 28, 4, 0, 0, 0, time.UTC)
+	svc := plans.Service{Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:        "plan-1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {
+				ID:        "step-1",
+				Status:    frameworkplan.PlanStepPending,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+	}
+	svc.RecordBlockedStep(plan, plan.Steps["step-1"], "blocked but not invalidated", false)
+	require.Equal(t, frameworkplan.PlanStepPending, plan.Steps["step-1"].Status)
+	require.Len(t, plan.Steps["step-1"].History, 1)
+	require.Equal(t, "blocked", plan.Steps["step-1"].History[0].Outcome)
+}
+
+func TestPersistPreflightBlockedWithInvalidatedSteps(t *testing.T) {
+	now := time.Date(2026, 3, 28, 5, 0, 0, 0, time.UTC)
+	store := &stubPlanStore{}
+	svc := plans.Service{Store: store, Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:         "plan-1",
+		WorkflowID: "wf-1",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", Status: frameworkplan.PlanStepPending, CreatedAt: now, UpdatedAt: now},
+			"step-2": {ID: "step-2", Status: frameworkplan.PlanStepPending, CreatedAt: now, UpdatedAt: now},
+		},
+	}
+	result, err := svc.PersistPreflightBlocked(context.Background(), plan, plan.Steps["step-1"], "blocked test", true, []string{"step-2"})
+	require.Error(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.Success)
+	require.Equal(t, frameworkplan.PlanStepInvalidated, plan.Steps["step-1"].Status)
+	require.Contains(t, store.updates, "step-1")
+	// step-2 should also have been persisted because invalidatedStepIDs non‑empty
+	require.Contains(t, store.updates, "step-2")
+}
+
+func TestPersistPreflightShortCircuitWithError(t *testing.T) {
+	now := time.Date(2026, 3, 28, 6, 0, 0, 0, time.UTC)
+	store := &stubPlanStore{}
+	svc := plans.Service{Store: store, Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:         "plan-1",
+		WorkflowID: "wf-1",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", CreatedAt: now, UpdatedAt: now},
+		},
+	}
+	origErr := fmt.Errorf("original error")
+	result, err := svc.PersistPreflightShortCircuit(context.Background(), plan, plan.Steps["step-1"], &core.Result{Success: false}, origErr)
+	require.Error(t, err)
+	require.Equal(t, origErr, err)
+	require.NotNil(t, result)
+	require.False(t, result.Success)
+	require.Contains(t, store.updates, "step-1")
+}
+
+func TestActiveStepVariousInputs(t *testing.T) {
+	now := time.Date(2026, 3, 28, 7, 0, 0, 0, time.UTC)
+	plan := &frameworkplan.LivingPlan{
+		ID:        "plan-1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", CreatedAt: now, UpdatedAt: now},
+		},
+	}
+	// nil task
+	require.Nil(t, plans.ActiveStep(nil, plan))
+	// nil plan
+	require.Nil(t, plans.ActiveStep(&core.Task{Context: map[string]any{"current_step_id": "step-1"}}, nil))
+	// empty context
+	require.Nil(t, plans.ActiveStep(&core.Task{Context: map[string]any{}}, plan))
+	// non‑string value
+	require.Nil(t, plans.ActiveStep(&core.Task{Context: map[string]any{"current_step_id": 123}}, plan))
+	// valid step id
+	step := plans.ActiveStep(&core.Task{Context: map[string]any{"current_step_id": "step-1"}}, plan)
+	require.NotNil(t, step)
+	require.Equal(t, "step-1", step.ID)
+}
+
+func TestUniqueStrings(t *testing.T) {
+	require.Nil(t, plans.UniqueStrings(nil))
+	require.Nil(t, plans.UniqueStrings([]string{}))
+	require.Equal(t, []string{"a", "b"}, plans.UniqueStrings([]string{"a", "b", "a"}))
+}
+
+func TestNowDefault(t *testing.T) {
+	svc := plans.Service{}
+	now := svc.now()
+	require.False(t, now.IsZero())
+}
+
+func TestEnsureDraftSuccessorNotFound(t *testing.T) {
+	now := time.Date(2026, 3, 28, 8, 0, 0, 0, time.UTC)
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+	ctx := context.Background()
+	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-notfound",
+		TaskID:      "task-notfound",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "plan",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	store := &stubPlanStore{}
+	svc := plans.Service{Store: store, WorkflowStore: workflowStore, Now: func() time.Time { return now }}
+	// no version exists
+	successor, err := svc.EnsureDraftSuccessor(ctx, "wf-notfound", 1, "reason")
+	require.Error(t, err)
+	require.Nil(t, successor)
+}
+
+func TestSyncActiveVersionWithExplorationNoChanges(t *testing.T) {
+	now := time.Date(2026, 3, 28, 9, 0, 0, 0, time.UTC)
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+	ctx := context.Background()
+	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-nochange",
+		TaskID:      "task-nochange",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "plan",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	store := &stubPlanStore{}
+	svc := plans.Service{Store: store, WorkflowStore: workflowStore, Now: func() time.Time { return now }}
+	plan := &frameworkplan.LivingPlan{
+		ID:         "plan-nochange",
+		WorkflowID: "wf-nochange",
+		Title:      "base",
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", CreatedAt: now, UpdatedAt: now},
+		},
+		StepOrder: []string{"step-1"},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	v1, err := svc.DraftVersion(ctx, plan, plans.DraftVersionInput{
+		WorkflowID:             "wf-nochange",
+		DerivedFromExploration: "explore-1",
+		BasedOnRevision:        "rev-1",
+		SemanticSnapshotRef:    "snap-1",
+		PatternRefs:            []string{"pattern-a"},
+		AnchorRefs:             []string{"anchor-a"},
+		TensionRefs:            []string{"tension-a"},
+	})
+	require.NoError(t, err)
+	_, err = svc.ActivateVersion(ctx, "wf-nochange", v1.Version)
+	require.NoError(t, err)
+
+	// snapshot with identical data
+	draft, err := svc.SyncActiveVersionWithExploration(ctx, "wf-nochange", &archaeodomain.ExplorationSnapshot{
+		ID:                   "snap-1",
+		ExplorationID:        "explore-1",
+		WorkflowID:           "wf-nochange",
+		BasedOnRevision:      "rev-1",
+		SemanticSnapshotRef:  "snap-1",
+		CandidatePatternRefs: []string{"pattern-a"},
+		CandidateAnchorRefs:  []string{"anchor-a"},
+		TensionIDs:           []string{"tension-a"},
+	})
+	require.NoError(t, err)
+	require.Nil(t, draft) // should return nil when no changes
+}
+
+func TestEnsureDraftFromExplorationNoChanges(t *testing.T) {
+	now := time.Date(2026, 3, 28, 10, 0, 0, 0, time.UTC)
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+	ctx := context.Background()
+	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-nochange-form",
+		TaskID:      "task-nochange-form",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "plan",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	store := &stubPlanStore{}
+	svc := plans.Service{Store: store, WorkflowStore: workflowStore, Now: func() time.Time { return now }}
+	// create an active version first
+	plan := &frameworkplan.LivingPlan{
+		ID:         "plan-nochange-form",
+		WorkflowID: "wf-nochange-form",
+		Title:      "base",
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", CreatedAt: now, UpdatedAt: now},
+		},
+		StepOrder: []string{"step-1"},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	v1, err := svc.DraftVersion(ctx, plan, plans.DraftVersionInput{
+		WorkflowID:             "wf-nochange-form",
+		DerivedFromExploration: "explore-1",
+		BasedOnRevision:        "rev-1",
+		SemanticSnapshotRef:    "snap-1",
+		PatternRefs:            []string{"pattern-a"},
+		AnchorRefs:             []string{"anchor-a"},
+		TensionRefs:            []string{"tension-a"},
+	})
+	require.NoError(t, err)
+	_, err = svc.ActivateVersion(ctx, "wf-nochange-form", v1.Version)
+	require.NoError(t, err)
+
+	// call EnsureDraftFromExploration with identical inputs (active matches)
+	record, err := svc.EnsureDraftFromExploration(ctx, plans.FormationInput{
+		WorkflowID:       "wf-nochange-form",
+		ExplorationID:    "explore-1",
+		SnapshotID:       "snap-1",
+		BasedOnRevision:  "rev-1",
+		SemanticSnapshot: "snap-1",
+		PatternRefs:      []string{"pattern-a"},
+		AnchorRefs:       []string{"anchor-a"},
+		TensionRefs:      []string{"tension-a"},
+	})
+	require.NoError(t, err)
+	require.Nil(t, record) // should return nil when active already matches
+}
+
+func TestEnsureDraftFromExplorationNilWorkflowStore(t *testing.T) {
+	svc := plans.Service{WorkflowStore: nil}
+	record, err := svc.EnsureDraftFromExploration(context.Background(), plans.FormationInput{
+		WorkflowID: "wf-none",
+	})
+	require.NoError(t, err)
+	require.Nil(t, record)
+}
