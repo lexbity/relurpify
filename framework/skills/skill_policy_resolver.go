@@ -119,53 +119,18 @@ func resolveCapabilityNames(registry *capability.Registry, explicit []string, se
 				continue
 			}
 			capability, ok := registry.GetCapability(name)
-			if ok && registry.EffectiveExposure(capability) == core.CapabilityExposureCallable && selectorMatchesCapability(selector, capability) {
+			if ok && registry.EffectiveExposure(capability) == core.CapabilityExposureCallable && core.SkillSelectorMatchesDescriptor(selector, capability) {
 				out = mergeResolvedNames(out, []string{resolvedCapabilityName(capability)})
 			}
 			continue
 		}
 		for _, capability := range candidates {
-			if selectorMatchesCapability(selector, capability) {
+			if core.SkillSelectorMatchesDescriptor(selector, capability) {
 				out = mergeResolvedNames(out, []string{resolvedCapabilityName(capability)})
 			}
 		}
 	}
 	return out
-}
-
-func selectorMatchesCapability(selector core.SkillCapabilitySelector, capability core.CapabilityDescriptor) bool {
-	if strings.TrimSpace(capability.ID) == "" {
-		return false
-	}
-	if name := selector.CapabilityName(); name != "" &&
-		!strings.EqualFold(strings.TrimSpace(name), capability.ID) &&
-		!strings.EqualFold(strings.TrimSpace(name), capability.Name) {
-		return false
-	}
-	if len(selector.RuntimeFamilies) > 0 {
-		matched := false
-		for _, family := range selector.RuntimeFamilies {
-			if family == capability.RuntimeFamily {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-	}
-	tags := normalizeTags(capability.Tags)
-	for _, want := range selector.Tags {
-		if _, ok := tags[strings.ToLower(strings.TrimSpace(want))]; !ok {
-			return false
-		}
-	}
-	for _, blocked := range selector.ExcludeTags {
-		if _, ok := tags[strings.ToLower(strings.TrimSpace(blocked))]; ok {
-			return false
-		}
-	}
-	return true
 }
 
 func registryCapabilitiesSorted(registry *capability.Registry) []core.CapabilityDescriptor {
@@ -193,18 +158,6 @@ func cloneResolvedPhaseCapabilities(input map[string][]string) map[string][]stri
 	out := make(map[string][]string, len(input))
 	for phase, values := range input {
 		out[phase] = append([]string{}, values...)
-	}
-	return out
-}
-
-func normalizeTags(tags []string) map[string]struct{} {
-	out := make(map[string]struct{}, len(tags))
-	for _, tag := range tags {
-		tag = strings.ToLower(strings.TrimSpace(tag))
-		if tag == "" {
-			continue
-		}
-		out[tag] = struct{}{}
 	}
 	return out
 }

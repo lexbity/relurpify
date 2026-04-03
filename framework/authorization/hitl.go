@@ -304,12 +304,15 @@ func (h *HITLBroker) PendingRequests() []*PermissionRequest {
 
 // GrantManual creates a permission grant without the async flow.
 func GrantManual(permission core.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) *PermissionGrant {
-	return &PermissionGrant{
+	grant := &PermissionGrant{
 		ID:         fmt.Sprintf("manual-%d", time.Now().UnixNano()),
 		Permission: permission,
 		Scope:      scope,
 		ApprovedBy: approvedBy,
 		GrantedAt:  time.Now().UTC(),
-		ExpiresAt:  time.Now().Add(duration),
 	}
+	if duration > 0 {
+		grant.ExpiresAt = time.Now().Add(duration)
+	}
+	return grant
 }

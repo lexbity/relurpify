@@ -210,6 +210,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	}
 	registry.SetPolicyEngine(compiledPolicy.Engine)
 	applyAgentTestCapabilityDefaults(registry, allowedCapabilities)
+	pregrantAgentTestCapabilities(permMgr, agentManifest.Metadata.Name, executionAgentName, registry)
 	mem = boot.Memory
 
 	env := boot.Environment
@@ -362,6 +363,40 @@ func applyAgentTestCapabilityDefaults(registry *capability.Registry, allowedCapa
 	_ = registerCapabilityAlias(registry, "read_file", "file_read")
 	_ = registerCapabilityAlias(registry, "write_file", "file_write")
 	registry.RestrictToCapabilities(uniqueCapabilitySelectors(allowedCapabilities))
+}
+
+func pregrantAgentTestCapabilities(manager *fauthorization.PermissionManager, agentID, executionAgentName string, registry *capability.Registry) {
+	if manager == nil || registry == nil {
+		return
+	}
+	resources := uniqueStrings([]string{
+		strings.TrimSpace(agentID),
+		strings.TrimSpace(executionAgentName),
+		"coding",
+		"react",
+		"planner",
+		"reflection",
+		"architect",
+	})
+	for _, desc := range registry.CallableCapabilities() {
+		actions := []string{"capability:" + desc.ID}
+		if name := strings.TrimSpace(desc.Name); name != "" && name != desc.ID {
+			actions = append(actions, "capability:"+name)
+		}
+		for _, action := range actions {
+			for _, resource := range resources {
+				if resource == "" {
+					continue
+				}
+				manager.GrantPermission(core.PermissionDescriptor{
+					Type:         core.PermissionTypeCapability,
+					Action:       action,
+					Resource:     resource,
+					RequiresHITL: true,
+				}, "agenttest-auto", fauthorization.GrantScopeSession, 0)
+			}
+		}
+	}
 }
 
 func mergeCapabilitySelectors(base, extra []core.CapabilitySelector) []core.CapabilitySelector {

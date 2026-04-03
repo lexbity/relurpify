@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
+	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -239,7 +240,10 @@ func applyKnowledgeSourceResponse(bb *agentblackboard.Blackboard, sourceName, ra
 	}
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		return fmt.Errorf("invalid JSON response: %w", err)
+		extracted := strings.TrimSpace(reactpkg.ExtractJSONSnippet(raw))
+		if extracted == "" || json.Unmarshal([]byte(extracted), &payload) != nil {
+			return fmt.Errorf("invalid JSON response: %w", err)
+		}
 	}
 	if facts, ok := payload["facts"].([]any); ok {
 		for _, item := range facts {

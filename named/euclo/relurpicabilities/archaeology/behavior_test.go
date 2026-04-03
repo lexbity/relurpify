@@ -3,6 +3,7 @@ package archaeology
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -656,6 +657,12 @@ func TestCompilePlanBehaviorExecutesOfflineWithScenarioStubModel(t *testing.T) {
 	if !compiledPlanReady(payload) {
 		t.Fatalf("expected compiled plan payload in state, got %#v", payload)
 	}
+	if got := strings.TrimSpace(state.GetString("euclo.active_exploration_id")); got != "explore-1" {
+		t.Fatalf("expected active exploration id to be seeded, got %q", got)
+	}
+	if got := strings.TrimSpace(state.GetString("euclo.active_exploration_snapshot_id")); got == "" {
+		t.Fatal("expected active exploration snapshot id to be seeded")
+	}
 	model.AssertExhausted(t)
 }
 
@@ -761,6 +768,12 @@ func TestExploreBehaviorExecutesOfflineWithScenarioStubModel(t *testing.T) {
 	if _, ok := state.Get("euclo.plan_candidates"); !ok {
 		t.Fatalf("expected euclo.plan_candidates in state")
 	}
+	if got := strings.TrimSpace(state.GetString("euclo.active_exploration_id")); got != "explore-1" {
+		t.Fatalf("expected active exploration id to be seeded, got %q", got)
+	}
+	if got := strings.TrimSpace(state.GetString("euclo.active_exploration_snapshot_id")); got == "" {
+		t.Fatal("expected active exploration snapshot id to be seeded")
+	}
 	artifacts := euclotypes.ArtifactStateFromContext(state).All()
 	if len(artifacts) == 0 {
 		t.Fatalf("expected produced artifacts in state")
@@ -839,5 +852,11 @@ func TestImplementPlanBehaviorBlocksOnLearningGateOffline(t *testing.T) {
 	}
 	if issues[0].RecommendedReentry != "archaeology" {
 		t.Fatalf("expected archaeology reentry, got %q", issues[0].RecommendedReentry)
+	}
+	if got := strings.TrimSpace(state.GetString("euclo.active_exploration_id")); got != "explore-1" {
+		t.Fatalf("expected active exploration id to be seeded, got %q", got)
+	}
+	if got := strings.TrimSpace(state.GetString("euclo.active_exploration_snapshot_id")); got == "" {
+		t.Fatal("expected active exploration snapshot id to be seeded")
 	}
 }

@@ -60,7 +60,7 @@ func (r *CapabilityRegistry) setAllowedCapabilities(allowed []core.CapabilitySel
 		return
 	}
 	r.mu.Lock()
-	r.allowedCapabilities = cloneCapabilitySelectors(allowed)
+	r.allowedCapabilities = core.CloneCapabilitySelectors(allowed)
 	r.allowedMatchers = compileSelectors(allowed)
 	r.mu.Unlock()
 	r.RestrictToCapabilities(allowed)
@@ -235,15 +235,6 @@ func exposureRestrictiveness(access core.CapabilityExposure) int {
 	default:
 		return 1
 	}
-}
-
-func cloneCapabilitySelectors(input []core.CapabilitySelector) []core.CapabilitySelector {
-	if input == nil {
-		return nil
-	}
-	out := make([]core.CapabilitySelector, len(input))
-	copy(out, input)
-	return out
 }
 
 func cloneToolPolicies(input map[string]ToolPolicy) map[string]ToolPolicy {

@@ -347,6 +347,51 @@ func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
 	}
 }
 
+func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge(t *testing.T) {
+	state := core.NewContext()
+	task := &core.Task{
+		Instruction: "Execute the compiled plan",
+		Context: map[string]any{
+			"mode":        "planning",
+			"workflow_id": "wf-compiled",
+		},
+	}
+	c := CaseSpec{
+		Setup: SetupSpec{
+			Workflows: []WorkflowSeedSpec{{
+				Workflow: WorkflowRecordSeedSpec{WorkflowID: "wf-compiled"},
+				Knowledge: []WorkflowKnowledgeSeedSpec{{
+					RecordID: "k-plan",
+					Title:    "Compiled plan",
+					Content:  "Plan: update testsuite/fixtures/rapid_arch_exec/slug.go so NormalizeSlug trims whitespace and lowercases the slug before returning it.",
+				}},
+			}},
+		},
+	}
+
+	seedWorkflowRetrievalStateForCase(state, task, c)
+
+	raw, ok := state.Get("pipeline.plan")
+	if !ok {
+		t.Fatal("expected pipeline.plan to be seeded")
+	}
+	plan, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected seeded pipeline.plan payload, got %T", raw)
+	}
+	steps, ok := plan["steps"].([]map[string]any)
+	if !ok || len(steps) != 1 {
+		t.Fatalf("expected a single seeded plan step, got %#v", plan["steps"])
+	}
+	scope, ok := steps[0]["scope"].([]string)
+	if !ok || len(scope) != 1 || scope[0] != "testsuite/fixtures/rapid_arch_exec/slug.go" {
+		t.Fatalf("expected seeded scope from workflow knowledge, got %#v", steps[0]["scope"])
+	}
+	if got := state.GetString("euclo.active_exploration_id"); !strings.Contains(got, "wf-compiled:seeded-exploration") {
+		t.Fatalf("expected seeded exploration id, got %q", got)
+	}
+}
+
 func TestRunnerPreflightSuiteChecksLoadedModels(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.manifest.yaml")

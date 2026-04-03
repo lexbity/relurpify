@@ -722,7 +722,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 		registeredAgentID:   r.registeredAgentID,
 		agentSpec:           r.agentSpec,
 		runtimePolicy:       r.currentRuntimePolicyLocked(),
-		allowedCapabilities: cloneCapabilitySelectors(r.allowedCapabilities),
+		allowedCapabilities: core.CloneCapabilitySelectors(r.allowedCapabilities),
 		allowedMatchers:     append([]compiledSelector{}, r.allowedMatchers...),
 		telemetry:           r.telemetry,
 		safety:              r.safety,

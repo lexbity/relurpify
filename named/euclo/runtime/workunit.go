@@ -138,10 +138,17 @@ func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, classification Task
 	switch mode.ModeID {
 	case "planning":
 		switch {
+		case planningExploreIntent(lower):
+			return euclorelurpic.CapabilityArchaeologyExplore
 		case planningCompileIntent(lower):
 			return euclorelurpic.CapabilityArchaeologyCompilePlan
-		case planningImplementIntent(lower) || profile.ProfileID == "plan_stage_execute":
+		case planningImplementIntent(lower):
 			return euclorelurpic.CapabilityArchaeologyImplement
+		case profile.ProfileID == "plan_stage_execute":
+			if envelope.EditPermitted {
+				return euclorelurpic.CapabilityArchaeologyImplement
+			}
+			return euclorelurpic.CapabilityArchaeologyCompilePlan
 		default:
 			return euclorelurpic.CapabilityArchaeologyExplore
 		}
@@ -213,13 +220,13 @@ func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnv
 }
 
 func chatAskIntent(lower string, classification TaskClassification, envelope TaskEnvelope) bool {
+	if chatInspectPhraseIntent(lower) {
+		return false
+	}
 	if strings.Contains(lower, "?") {
 		return true
 	}
 	if hasAnyPhrase(lower, "how ", "what ", "why ", "explain ", "summarize ", "describe ", "tell me ", "help me understand") {
-		return true
-	}
-	if !classification.EditPermitted && !containsIntent(classification.IntentFamilies, "review") && !containsIntent(classification.IntentFamilies, "debug") {
 		return true
 	}
 	if !envelope.EditPermitted && hasAnyPhrase(lower, "what is", "how does", "why does") {
@@ -229,9 +236,16 @@ func chatAskIntent(lower string, classification TaskClassification, envelope Tas
 }
 
 func chatInspectIntent(lower string, classification TaskClassification) bool {
+	if chatInspectPhraseIntent(lower) {
+		return true
+	}
 	if containsIntent(classification.IntentFamilies, "review") {
 		return true
 	}
+	return false
+}
+
+func chatInspectPhraseIntent(lower string) bool {
 	return hasAnyPhrase(lower, "inspect", "review", "audit", "look at", "check", "analyze", "examine")
 }
 
@@ -247,11 +261,26 @@ func planningCompileIntent(lower string) bool {
 	)
 }
 
+func planningExploreIntent(lower string) bool {
+	return hasAnyPhrase(lower,
+		"explore ",
+		"identify the dominant",
+		"surface code patterns",
+		"surface patterns",
+		"find patterns",
+		"inspect the repository",
+		"inspect the codebase",
+	)
+}
+
 func planningImplementIntent(lower string) bool {
 	return hasAnyPhrase(lower,
 		"implement the plan",
+		"implement the compiled plan",
 		"execute the plan",
+		"execute the compiled plan",
 		"carry out the plan",
+		"carry out the compiled plan",
 		"stage and execute",
 	)
 }
@@ -451,6 +480,15 @@ func planBindingFromState(task *core.Task, state *core.Context) *UnitOfWorkPlanB
 		}
 		return binding
 	}
+	if planPayloadBacked(state) {
+		binding.IsPlanBacked = true
+		if binding.ActiveStepID == "" {
+			if stepID := firstPlanStepID(state); stepID != "" {
+				binding.ActiveStepID = stepID
+			}
+		}
+		return binding
+	}
 	raw, ok := state.Get("euclo.active_plan_version")
 	if !ok || raw == nil {
 		if binding.ActiveStepID == "" {
@@ -470,6 +508,70 @@ func planBindingFromState(task *core.Task, state *core.Context) *UnitOfWorkPlanB
 	}
 	binding.IsPlanBacked = true
 	return binding
+}
+
+func planPayloadBacked(state *core.Context) bool {
+	if state == nil {
+		return false
+	}
+	raw, ok := state.Get("pipeline.plan")
+	if !ok || raw == nil {
+		return false
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok || len(payload) == 0 {
+		return false
+	}
+	if plan, ok := payload["plan"].(map[string]any); ok {
+		payload = plan
+	}
+	return len(anyMapSlice(payload["steps"])) > 0 || len(anyMapSlice(payload["items"])) > 0
+}
+
+func firstPlanStepID(state *core.Context) string {
+	if state == nil {
+		return ""
+	}
+	raw, ok := state.Get("pipeline.plan")
+	if !ok || raw == nil {
+		return ""
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok || len(payload) == 0 {
+		return ""
+	}
+	if plan, ok := payload["plan"].(map[string]any); ok {
+		payload = plan
+	}
+	for _, step := range anyMapSlice(payload["steps"]) {
+		if stepID := strings.TrimSpace(stringValue(step["id"])); stepID != "" {
+			return stepID
+		}
+	}
+	for _, item := range anyMapSlice(payload["items"]) {
+		if stepID := strings.TrimSpace(stringValue(item["id"])); stepID != "" {
+			return stepID
+		}
+	}
+	return ""
+}
+
+func anyMapSlice(raw any) []map[string]any {
+	switch typed := raw.(type) {
+	case []map[string]any:
+		return append([]map[string]any(nil), typed...)
+	case []any:
+		out := make([]map[string]any, 0, len(typed))
+		for _, item := range typed {
+			record, ok := item.(map[string]any)
+			if ok {
+				out = append(out, record)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func populatePlanBinding(binding *UnitOfWorkPlanBinding, version *archaeodomain.VersionedLivingPlan) {

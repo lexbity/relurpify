@@ -12,6 +12,7 @@ import (
 	"time"
 
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -19,6 +20,28 @@ import (
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	namedfactory "github.com/lexcodex/relurpify/named/factory"
 )
+
+type agenttestApprovalStubTool struct {
+	name string
+}
+
+func (t agenttestApprovalStubTool) Name() string { return t.name }
+
+func (t agenttestApprovalStubTool) Description() string { return "stub tool" }
+
+func (t agenttestApprovalStubTool) Category() string { return "test" }
+
+func (t agenttestApprovalStubTool) Parameters() []core.ToolParameter { return nil }
+
+func (t agenttestApprovalStubTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+	return &core.ToolResult{Success: true, Data: map[string]interface{}{}}, nil
+}
+
+func (t agenttestApprovalStubTool) IsAvailable(context.Context, *core.Context) bool { return true }
+
+func (t agenttestApprovalStubTool) Permissions() core.ToolPermissions { return core.ToolPermissions{} }
+
+func (t agenttestApprovalStubTool) Tags() []string { return []string{core.TagReadOnly} }
 
 func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 	workspace := t.TempDir()
@@ -171,6 +194,47 @@ func TestBuildAgentExposesDefaultAgenttestToolsForCoding(t *testing.T) {
 		if !slices.Contains(names, required) {
 			t.Fatalf("expected %s in model-callable tools, got %v", required, names)
 		}
+	}
+}
+
+func TestPregrantAgentTestCapabilitiesMatchesRuntimeApprovalKey(t *testing.T) {
+	registry := capability.NewRegistry()
+	requireTool := agenttestApprovalStubTool{name: "file_write"}
+	if err := registry.Register(requireTool); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
+
+	manager, err := fauthorization.NewPermissionManager(t.TempDir(), &core.PermissionSet{
+		FileSystem: []core.FileSystemPermission{{
+			Action: core.FileSystemRead,
+			Path:   "**",
+		}},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("new permission manager: %v", err)
+	}
+
+	const agentID = "agenttest-coding"
+	pregrantAgentTestCapabilities(manager, agentID, "react", registry)
+
+	err = manager.RequireApproval(context.Background(), agentID, core.PermissionDescriptor{
+		Type:         core.PermissionTypeHITL,
+		Action:       "capability:" + core.ToolCapabilityID(requireTool),
+		Resource:     agentID,
+		RequiresHITL: true,
+	}, "tool execution approval", fauthorization.GrantScopeOneTime, fauthorization.RiskLevelMedium, 0)
+	if err != nil {
+		t.Fatalf("require approval should be pregranted: %v", err)
+	}
+
+	err = manager.RequireApproval(context.Background(), agentID, core.PermissionDescriptor{
+		Type:         core.PermissionTypeHITL,
+		Action:       "capability:" + requireTool.Name(),
+		Resource:     agentID,
+		RequiresHITL: true,
+	}, "tool execution approval", fauthorization.GrantScopeOneTime, fauthorization.RiskLevelMedium, 0)
+	if err != nil {
+		t.Fatalf("require approval should be pregranted by capability name: %v", err)
 	}
 }
 

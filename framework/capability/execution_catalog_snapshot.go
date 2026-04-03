@@ -70,7 +70,7 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 		modelCallableTools:     make([]Tool, 0, len(r.entries)),
 		modelCallableToolSpecs: make([]core.LLMToolSpec, 0, len(r.entries)),
 		policySnapshot:         r.capturePolicySnapshotLocked(now),
-		allowedCapabilities:    cloneCapabilitySelectors(r.allowedCapabilities),
+		allowedCapabilities:    core.CloneCapabilitySelectors(r.allowedCapabilities),
 	}
 
 	ids := make([]string, 0, len(r.entries))
@@ -213,5 +213,5 @@ func (s *ExecutionCapabilityCatalogSnapshot) AllowedCapabilities() []core.Capabi
 	if s == nil {
 		return nil
 	}
-	return cloneCapabilitySelectors(s.allowedCapabilities)
+	return core.CloneCapabilitySelectors(s.allowedCapabilities)
 }

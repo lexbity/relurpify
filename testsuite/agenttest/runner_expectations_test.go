@@ -103,12 +103,15 @@ func TestEvaluateEucloExpectationsMatchesAssuranceAndResultState(t *testing.T) {
 func TestEvaluateEucloExpectationsMatchesBehaviorTrace(t *testing.T) {
 	snapshot := &core.ContextSnapshot{
 		State: map[string]any{
+			"euclo.unit_of_work": map[string]any{
+				"behavior_family": "react",
+			},
 			"euclo.relurpic_behavior_trace": map[string]any{
 				"primary_capability_id":      "euclo:chat.implement",
 				"supporting_routines":        []any{"euclo:chat.direct-edit-execution", "euclo:chat.targeted-verification-repair"},
 				"recipe_ids":                 []any{"chat.implement.edit", "chat.implement.verify"},
 				"specialized_capability_ids": []any{"euclo.execution.react"},
-				"executor_family":            "react",
+				"executor_family":            "react_executor",
 			},
 		},
 	}
@@ -122,6 +125,26 @@ func TestEvaluateEucloExpectationsMatchesBehaviorTrace(t *testing.T) {
 	}, snapshot)
 	if len(failures) > 0 {
 		t.Fatalf("expected behavior trace expectations to pass, got %v", failures)
+	}
+}
+
+func TestEvaluateEucloExpectationsPrefersModeResolutionOverInteractionState(t *testing.T) {
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.mode_resolution": map[string]any{
+				"mode_id": "chat",
+			},
+			"euclo.interaction_state": map[string]any{
+				"mode": "review",
+			},
+		},
+	}
+
+	failures := evaluateEucloExpectations(&EucloExpectSpec{
+		Mode: "chat",
+	}, snapshot)
+	if len(failures) > 0 {
+		t.Fatalf("expected mode expectation to pass, got %v", failures)
 	}
 }
 

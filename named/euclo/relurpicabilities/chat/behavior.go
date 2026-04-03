@@ -116,6 +116,7 @@ func (askBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*cor
 		})
 	}
 
+	writeBehaviorFinalOutput(in.State, "chat.ask", answerResult, execution.ResultSummary(reviewResult))
 	execution.MergeStateArtifactsToContext(in.State, artifacts)
 	return execution.SuccessResult("chat ask completed successfully", artifacts)
 }
@@ -233,8 +234,68 @@ func (inspectBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 		})
 	}
 
+	writeBehaviorFinalOutput(in.State, "chat.inspect", inspectResult, execution.ResultSummary(semanticReviewResult(semanticReview)))
 	execution.MergeStateArtifactsToContext(in.State, artifacts)
 	return execution.SuccessResult("chat inspect completed successfully", artifacts)
+}
+
+func writeBehaviorFinalOutput(state *core.Context, mode string, result *core.Result, reviewSummary string) {
+	if state == nil {
+		return
+	}
+	text := behaviorOutputText(result)
+	payload := map[string]any{
+		"mode":    strings.TrimSpace(mode),
+		"summary": text,
+		"text":    text,
+	}
+	if reviewSummary = strings.TrimSpace(reviewSummary); reviewSummary != "" {
+		payload["review_summary"] = reviewSummary
+	}
+	state.Set("pipeline.final_output", payload)
+}
+
+func behaviorOutputText(result *core.Result) string {
+	if result == nil {
+		return ""
+	}
+	if result.Data != nil {
+		if raw, ok := result.Data["final_output"]; ok {
+			if text := outputText(raw); text != "" {
+				return text
+			}
+		}
+		for _, key := range []string{"text", "output", "summary"} {
+			if text, ok := result.Data[key].(string); ok && strings.TrimSpace(text) != "" {
+				return strings.TrimSpace(text)
+			}
+		}
+	}
+	if result.Error != nil {
+		return strings.TrimSpace(result.Error.Error())
+	}
+	return ""
+}
+
+func outputText(raw any) string {
+	switch typed := raw.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]any:
+		for _, key := range []string{"text", "output", "summary"} {
+			if text, ok := typed[key].(string); ok && strings.TrimSpace(text) != "" {
+				return strings.TrimSpace(text)
+			}
+		}
+	}
+	return ""
+}
+
+func semanticReviewResult(result euclotypes.ExecutionResult) *core.Result {
+	if result.Status != euclotypes.ExecutionStatusCompleted {
+		return nil
+	}
+	return &core.Result{Success: true, Data: map[string]any{"summary": strings.TrimSpace(result.Summary)}}
 }
 
 func executeInspectChain(ctx context.Context, in execution.ExecuteInput) string {

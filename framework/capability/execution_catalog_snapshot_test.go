@@ -89,3 +89,38 @@ func TestExecutionCatalogSnapshotPolicySnapshotRemainsStable(t *testing.T) {
 	require.Equal(t, AgentPermissionAsk, policy.ToolPolicies["cli_git"].Execute)
 	require.Equal(t, AgentPermissionDeny, policy.GlobalPolicies[string(core.RiskClassExecute)])
 }
+
+func TestExecutionCatalogSnapshotAllowedCapabilitiesRemainStable(t *testing.T) {
+	longRunning := true
+	registry := NewCapabilityRegistry()
+	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
+		AllowedCapabilities: []core.CapabilitySelector{{
+			Name:                        "reviewer",
+			RuntimeFamilies:             []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic},
+			Tags:                        []string{"lang:go"},
+			CoordinationRoles:           []core.CoordinationRole{core.CoordinationRoleReviewer},
+			CoordinationLongRunning:     &longRunning,
+			CoordinationDirectInsertion: capabilityBoolPtr(false),
+		}},
+	})
+
+	snapshot := registry.CaptureExecutionCatalogSnapshot()
+	require.NotNil(t, snapshot)
+
+	allowed := snapshot.AllowedCapabilities()
+	require.Len(t, allowed, 1)
+	allowed[0].Tags[0] = "mutated"
+	allowed[0].RuntimeFamilies[0] = core.CapabilityRuntimeFamilyProvider
+	*allowed[0].CoordinationLongRunning = false
+	*allowed[0].CoordinationDirectInsertion = true
+
+	stable := snapshot.AllowedCapabilities()
+	require.Equal(t, "lang:go", stable[0].Tags[0])
+	require.Equal(t, core.CapabilityRuntimeFamilyRelurpic, stable[0].RuntimeFamilies[0])
+	require.True(t, *stable[0].CoordinationLongRunning)
+	require.False(t, *stable[0].CoordinationDirectInsertion)
+}
+
+func capabilityBoolPtr(value bool) *bool {
+	return &value
+}

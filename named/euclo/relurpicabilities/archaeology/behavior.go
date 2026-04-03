@@ -57,6 +57,7 @@ func (exploreBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 	execution.SetBehaviorTrace(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
 	enriched := enrichArchaeoExecutionInput(ctx, in)
+	ensureArchaeologyExecutionState(in.State, in.Work, enriched)
 	if len(enriched.patternRefs) > 0 || len(enriched.tensionIDs) > 0 || len(enriched.learningRefs) > 0 {
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_explore_archaeo_context",
@@ -99,6 +100,7 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 	execution.SetBehaviorTrace(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
 	enriched := enrichArchaeoExecutionInput(ctx, in)
+	ensureArchaeologyExecutionState(in.State, in.Work, enriched)
 
 	evidencePayload := compileEvidencePayload(withEnrichedSemanticInput(in, enriched))
 	artifacts = append(artifacts, euclotypes.Artifact{
@@ -228,6 +230,7 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 func (implementPlanBehavior) ID() string { return ImplementPlan }
 
 func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*core.Result, error) {
+	seededPlanPayload := planArtifactFromState(in.State)
 	routines := execution.SupportingIDs(in.Work, "euclo:archaeology.")
 	routineArtifacts, executed, err := execution.ExecuteSupportingRoutines(ctx, in, routines)
 	if err != nil {
@@ -236,6 +239,7 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 	execution.AppendDiagnostic(in.State, "pipeline.plan", "archaeology implement-plan executing against a compiled plan")
 	execution.SetBehaviorTrace(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
+	ensureArchaeologyExecutionState(in.State, in.Work, enrichArchaeoExecutionInput(ctx, in))
 	// Blocking learning gate: if the convergence-guard routine found unresolved
 	// blocking learning interactions, halt before any plan step executes. These
 	// represent prior learning items (anchor drift, pattern proposals, tension
@@ -285,6 +289,12 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 		}}, gateErr
 	}
 	planPayload := planArtifactFromState(in.State)
+	if len(compiledPlanSteps(planPayload)) == 0 {
+		planPayload = seededPlanPayload
+		if in.State != nil && planPayload != nil {
+			in.State.Set("pipeline.plan", planPayload)
+		}
+	}
 	if planPayload == nil {
 		if active, err := loadBoundPlan(ctx, in); err == nil && active != nil {
 			planPayload = versionedPlanPayload(active)
@@ -694,6 +704,11 @@ func planArtifactFromState(state *core.Context) map[string]any {
 			return typed
 		}
 	}
+	if raw, ok := state.Get("euclo.seeded_pipeline_plan"); ok {
+		if typed, ok := raw.(map[string]any); ok && len(typed) > 0 {
+			return typed
+		}
+	}
 	if raw, ok := state.Get("propose.items"); ok && raw != nil {
 		return map[string]any{"items": raw}
 	}
@@ -860,6 +875,32 @@ func enrichArchaeoExecutionInput(ctx context.Context, in execution.ExecuteInput)
 	enriched.learningRefs = execution.UniqueStrings(enriched.learningRefs)
 	enriched.anchorRefs = execution.UniqueStrings(enriched.anchorRefs)
 	return enriched
+}
+
+func ensureArchaeologyExecutionState(state *core.Context, work eucloruntime.UnitOfWork, enriched enrichedArchaeoInput) {
+	if state == nil {
+		return
+	}
+	explorationID := firstNonEmptyString(
+		strings.TrimSpace(work.SemanticInputs.ExplorationID),
+		strings.TrimSpace(enriched.explorationID),
+		strings.TrimSpace(state.GetString("euclo.active_exploration_id")),
+	)
+	if explorationID == "" && strings.TrimSpace(work.WorkflowID) != "" {
+		explorationID = strings.TrimSpace(work.WorkflowID) + ":exploration"
+	}
+	if explorationID == "" {
+		explorationID = "euclo:exploration"
+	}
+	snapshotID := firstNonEmptyString(
+		strings.TrimSpace(enriched.semanticSnapshotRef),
+		strings.TrimSpace(state.GetString("euclo.active_exploration_snapshot_id")),
+	)
+	if snapshotID == "" {
+		snapshotID = explorationID + ":snapshot"
+	}
+	state.Set("euclo.active_exploration_id", explorationID)
+	state.Set("euclo.active_exploration_snapshot_id", snapshotID)
 }
 
 func (e enrichedArchaeoInput) summary() string {

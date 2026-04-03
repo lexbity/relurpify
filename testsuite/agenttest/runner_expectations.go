@@ -318,6 +318,7 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 	interactionState := toStringAnyMap(snapshot.State["euclo.interaction_state"])
 	modeResolution := toStringAnyMap(snapshot.State["euclo.mode_resolution"])
 	profileSelection := toStringAnyMap(snapshot.State["euclo.execution_profile_selection"])
+	unitOfWork := toStringAnyMap(snapshot.State["euclo.unit_of_work"])
 	interactionRecording := toStringAnyMap(snapshot.State["euclo.interaction_recording"])
 	interactionRecords := toAnySlice(snapshot.State["euclo.interaction_records"])
 	profilePhaseRecords := toAnySlice(snapshot.State["euclo.profile_phase_records"])
@@ -330,11 +331,11 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 	// Mode check.
 	if euclo.Mode != "" {
 		got := ""
-		if interactionState != nil {
-			got, _ = interactionState["mode"].(string)
-		}
-		if got == "" && modeResolution != nil {
+		if modeResolution != nil {
 			got, _ = modeResolution["mode_id"].(string)
+		}
+		if got == "" && interactionState != nil {
+			got, _ = interactionState["mode"].(string)
 		}
 		if got != euclo.Mode {
 			failures = append(failures, fmt.Sprintf("euclo.mode: got %q, want %q", got, euclo.Mode))
@@ -353,7 +354,10 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 	}
 
 	if euclo.BehaviorFamily != "" {
-		got := strings.TrimSpace(mapStringValue(behaviorTrace, "executor_family"))
+		got := strings.TrimSpace(mapStringValue(unitOfWork, "behavior_family"))
+		if got == "" {
+			got = strings.TrimSpace(mapStringValue(behaviorTrace, "behavior_family"))
+		}
 		if got != euclo.BehaviorFamily {
 			failures = append(failures, fmt.Sprintf("euclo.behavior_family: got %q, want %q", got, euclo.BehaviorFamily))
 		}

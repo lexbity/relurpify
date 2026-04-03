@@ -74,7 +74,7 @@ spec:
         output_regex:
           - (?i)(user|email|enabled|newuser)
         euclo:
-          behavior_family: react
+          behavior_family: direct_change_execution
           mode: chat
           primary_relurpic_capability: euclo:chat.ask
           recipe_ids:
@@ -155,7 +155,7 @@ spec:
         output_regex:
           - (?i)(memorystore|nullstore|store|discard|memory)
         euclo:
-          behavior_family: react
+          behavior_family: direct_change_execution
           mode: chat
           primary_relurpic_capability: euclo:chat.inspect
           supporting_relurpic_capabilities:

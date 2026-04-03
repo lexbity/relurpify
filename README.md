@@ -16,7 +16,7 @@ Relurpify is a fullstack Agent framework
 - generic execution Agent library 
 - LLM oriented memory/context/graph/sandbox management framework 
 - (Rex) event agent, distributed coordination fabric , protocol platform 
-- archaeology provenance memory system 
+- archaeology memory system 
 - extensive testsuite
 - (Euclo) coding agent 
 - TUI interfaces 

@@ -376,53 +376,11 @@ func cloneCapabilityPolicies(policies []CapabilityPolicy) []CapabilityPolicy {
 }
 
 func cloneCapabilitySelectors(selectors []CapabilitySelector) []CapabilitySelector {
-	if selectors == nil {
-		return nil
-	}
-	out := make([]CapabilitySelector, len(selectors))
-	for i, selector := range selectors {
-		out[i] = cloneCapabilitySelector(selector)
-	}
-	return out
+	return CloneCapabilitySelectors(selectors)
 }
 
 func cloneCapabilitySelector(selector CapabilitySelector) CapabilitySelector {
-	if selector.Tags != nil {
-		selector.Tags = append([]string{}, selector.Tags...)
-	}
-	if selector.ExcludeTags != nil {
-		selector.ExcludeTags = append([]string{}, selector.ExcludeTags...)
-	}
-	if selector.SourceScopes != nil {
-		selector.SourceScopes = append([]CapabilityScope{}, selector.SourceScopes...)
-	}
-	if selector.TrustClasses != nil {
-		selector.TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
-	}
-	if selector.RiskClasses != nil {
-		selector.RiskClasses = append([]RiskClass{}, selector.RiskClasses...)
-	}
-	if selector.EffectClasses != nil {
-		selector.EffectClasses = append([]EffectClass{}, selector.EffectClasses...)
-	}
-	if selector.CoordinationRoles != nil {
-		selector.CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
-	}
-	if selector.CoordinationTaskTypes != nil {
-		selector.CoordinationTaskTypes = append([]string{}, selector.CoordinationTaskTypes...)
-	}
-	if selector.CoordinationExecutionModes != nil {
-		selector.CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
-	}
-	if selector.CoordinationLongRunning != nil {
-		value := *selector.CoordinationLongRunning
-		selector.CoordinationLongRunning = &value
-	}
-	if selector.CoordinationDirectInsertion != nil {
-		value := *selector.CoordinationDirectInsertion
-		selector.CoordinationDirectInsertion = &value
-	}
-	return selector
+	return CloneCapabilitySelector(selector)
 }
 
 func cloneAgentCoordinationSpec(spec AgentCoordinationSpec) AgentCoordinationSpec {
@@ -741,26 +699,7 @@ func cloneSkillCapabilitySelector(input SkillCapabilitySelector) SkillCapability
 }
 
 func mergeCapabilitySelectors(base, extra []CapabilitySelector) []CapabilitySelector {
-	if len(extra) == 0 {
-		return append([]CapabilitySelector{}, base...)
-	}
-	seen := make(map[string]struct{}, len(base)+len(extra))
-	out := make([]CapabilitySelector, 0, len(base)+len(extra))
-	for _, selector := range append(append([]CapabilitySelector{}, base...), extra...) {
-		key := selector.ID + "|" + selector.Name + "|" + string(selector.Kind) + "|" +
-			strings.Join(selector.Tags, ",") + "|" + strings.Join(selector.ExcludeTags, ",") + "|" +
-			joinCapabilityScopes(selector.SourceScopes) + "|" + joinTrustClasses(selector.TrustClasses) + "|" +
-			joinRiskClasses(selector.RiskClasses) + "|" + joinEffectClasses(selector.EffectClasses) + "|" +
-			joinCoordinationRoles(selector.CoordinationRoles) + "|" + strings.Join(selector.CoordinationTaskTypes, ",") + "|" +
-			joinCoordinationExecutionModes(selector.CoordinationExecutionModes) + "|" + boolPointerKey(selector.CoordinationLongRunning) + "|" +
-			boolPointerKey(selector.CoordinationDirectInsertion)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, cloneCapabilitySelector(selector))
-	}
-	return out
+	return MergeCapabilitySelectors(base, extra)
 }
 
 func joinCapabilityScopes(values []CapabilityScope) string {

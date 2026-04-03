@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -582,6 +583,7 @@ func seedWorkflowRetrievalStateForCase(state *core.Context, task *core.Task, c C
 		return
 	}
 	var summary string
+	var seededPlan map[string]any
 	for _, workflow := range c.Setup.Workflows {
 		if workflow.Workflow.WorkflowID != fmt.Sprint(workflowID) {
 			continue
@@ -592,6 +594,9 @@ func seedWorkflowRetrievalStateForCase(state *core.Context, task *core.Task, c C
 					summary += "\n"
 				}
 				summary += text
+			}
+			if seededPlan == nil {
+				seededPlan = seededWorkflowPlan(record)
 			}
 		}
 		break
@@ -612,6 +617,54 @@ func seedWorkflowRetrievalStateForCase(state *core.Context, task *core.Task, c C
 	default:
 		state.Set("pipeline.workflow_retrieval", payload)
 	}
+	if seededPlan != nil {
+		state.Set("pipeline.plan", seededPlan)
+		state.Set("euclo.seeded_pipeline_plan", seededPlan)
+		explorationID := fmt.Sprintf("%s:seeded-exploration", strings.TrimSpace(fmt.Sprint(workflowID)))
+		state.Set("euclo.active_exploration_id", explorationID)
+		state.Set("euclo.active_exploration_snapshot_id", explorationID+":snapshot")
+	}
+}
+
+func seededWorkflowPlan(record WorkflowKnowledgeSeedSpec) map[string]any {
+	title := strings.TrimSpace(record.Title)
+	content := strings.TrimSpace(record.Content)
+	lowerTitle := strings.ToLower(title)
+	lowerContent := strings.ToLower(content)
+	if !strings.Contains(lowerTitle, "compiled plan") && !strings.HasPrefix(lowerContent, "plan:") {
+		return nil
+	}
+	step := map[string]any{
+		"id":          "seeded-plan-step-1",
+		"title":       firstNonEmpty(title, "Compiled plan"),
+		"description": content,
+	}
+	if scope := seededWorkflowPlanScope(content); len(scope) > 0 {
+		step["scope"] = scope
+	}
+	return map[string]any{
+		"source":  "agenttest.workflow_knowledge",
+		"summary": content,
+		"steps":   []map[string]any{step},
+	}
+}
+
+func seededWorkflowPlanScope(content string) []string {
+	re := regexp.MustCompile(`[\w./-]+\.(?:go|md|yaml|yml|json|toml|txt)`)
+	matches := re.FindAllString(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if _, ok := seen[match]; ok {
+			continue
+		}
+		seen[match] = struct{}{}
+		out = append(out, match)
+	}
+	return out
 }
 
 func shouldRestrictAllowedCapabilitiesForCase(c CaseSpec) bool {

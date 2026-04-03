@@ -628,29 +628,7 @@ func EffectiveAllowedCapabilitySelectors(spec *AgentRuntimeSpec) []CapabilitySel
 	if spec == nil {
 		return nil
 	}
-	out := make([]CapabilitySelector, len(spec.AllowedCapabilities))
-	for i, selector := range spec.AllowedCapabilities {
-		out[i] = selector
-		out[i].RuntimeFamilies = append([]CapabilityRuntimeFamily{}, selector.RuntimeFamilies...)
-		out[i].Tags = append([]string{}, selector.Tags...)
-		out[i].ExcludeTags = append([]string{}, selector.ExcludeTags...)
-		out[i].SourceScopes = append([]CapabilityScope{}, selector.SourceScopes...)
-		out[i].TrustClasses = append([]TrustClass{}, selector.TrustClasses...)
-		out[i].RiskClasses = append([]RiskClass{}, selector.RiskClasses...)
-		out[i].EffectClasses = append([]EffectClass{}, selector.EffectClasses...)
-		out[i].CoordinationRoles = append([]CoordinationRole{}, selector.CoordinationRoles...)
-		out[i].CoordinationTaskTypes = append([]string{}, selector.CoordinationTaskTypes...)
-		out[i].CoordinationExecutionModes = append([]CoordinationExecutionMode{}, selector.CoordinationExecutionModes...)
-		if selector.CoordinationLongRunning != nil {
-			value := *selector.CoordinationLongRunning
-			out[i].CoordinationLongRunning = &value
-		}
-		if selector.CoordinationDirectInsertion != nil {
-			value := *selector.CoordinationDirectInsertion
-			out[i].CoordinationDirectInsertion = &value
-		}
-	}
-	return out
+	return CloneCapabilitySelectors(spec.AllowedCapabilities)
 }
 
 func EffectiveDelegationTargetSelectors(spec *AgentRuntimeSpec) []CapabilitySelector {
@@ -689,26 +667,7 @@ func EffectiveCoordination(spec *AgentRuntimeSpec) AgentCoordinationSpec {
 }
 
 func dedupeCapabilitySelectors(input []CapabilitySelector) []CapabilitySelector {
-	if len(input) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(input))
-	out := make([]CapabilitySelector, 0, len(input))
-	for _, selector := range input {
-		key := selector.ID + "|" + selector.Name + "|" + string(selector.Kind) + "|" +
-			strings.Join(selector.Tags, ",") + "|" + strings.Join(selector.ExcludeTags, ",") + "|" +
-			joinCapabilityScopes(selector.SourceScopes) + "|" + joinTrustClasses(selector.TrustClasses) + "|" +
-			joinRiskClasses(selector.RiskClasses) + "|" + joinEffectClasses(selector.EffectClasses) + "|" +
-			joinCoordinationRoles(selector.CoordinationRoles) + "|" + strings.Join(selector.CoordinationTaskTypes, ",") + "|" +
-			joinCoordinationExecutionModes(selector.CoordinationExecutionModes) + "|" + boolPointerKey(selector.CoordinationLongRunning) + "|" +
-			boolPointerKey(selector.CoordinationDirectInsertion)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, cloneCapabilitySelector(selector))
-	}
-	return out
+	return MergeCapabilitySelectors(nil, input)
 }
 
 func (c AgentCoordinationSpec) Validate(invocation AgentInvocationSpec) error {

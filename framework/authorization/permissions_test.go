@@ -335,6 +335,19 @@ func TestPermissionGrantExpired(t *testing.T) {
 	}
 }
 
+func TestGrantManualZeroDurationDoesNotExpire(t *testing.T) {
+	grant := GrantManual(core.PermissionDescriptor{
+		Type:     core.PermissionTypeHITL,
+		Action:   "capability:tool:file_write",
+		Resource: "agent",
+	}, "tester", GrantScopeSession, 0)
+	if grant == nil {
+		t.Fatal("expected grant")
+	}
+	assert.True(t, grant.ExpiresAt.IsZero())
+	assert.False(t, grant.Expired(time.Now().Add(time.Hour)))
+}
+
 // ---- effectiveDefaultPolicy ----
 
 func TestEffectiveDefaultPolicy(t *testing.T) {

@@ -262,6 +262,17 @@ func (m *PermissionManager) RevokeTaskGrant(runID string) {
 	delete(m.taskGrants, strings.TrimSpace(runID))
 }
 
+// GrantPermission records a manual approval for a specific permission key.
+func (m *PermissionManager) GrantPermission(desc core.PermissionDescriptor, approvedBy string, scope GrantScope, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	grant := GrantManual(desc, approvedBy, scope, duration)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.grants[desc.Action+":"+desc.Resource] = grant
+}
+
 func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool core.Tool) bool {
 	if m == nil || tool == nil {
 		return false

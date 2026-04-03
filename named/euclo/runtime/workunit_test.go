@@ -179,6 +179,95 @@ func TestBehaviorFamilyStaleAssumptionFromClassification(t *testing.T) {
 	require.Equal(t, "stale_assumption_detection", behaviorFamilyForWork(mode, profile, class, policy))
 }
 
+func TestPrimaryRelurpicCapabilityPrefersInspectOverAskForInspectPrompt(t *testing.T) {
+	envelope := TaskEnvelope{
+		Instruction:   "Inspect testsuite/fixtures/rapid_chat/inspect/store.go and compare MemoryStore with NullStore. Do not modify any files.",
+		EditPermitted: false,
+	}
+	classification := TaskClassification{
+		EditPermitted: false,
+	}
+	mode := ModeResolution{ModeID: "chat"}
+	profile := ExecutionProfileSelection{}
+
+	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	require.Equal(t, "euclo:chat.inspect", got)
+}
+
+func TestPrimaryRelurpicCapabilityKeepsAskForExplainPrompt(t *testing.T) {
+	envelope := TaskEnvelope{
+		Instruction:   "Explain what the User type represents and what NewUser does. Do not modify any files.",
+		EditPermitted: false,
+	}
+	classification := TaskClassification{
+		EditPermitted: false,
+	}
+	mode := ModeResolution{ModeID: "chat"}
+	profile := ExecutionProfileSelection{}
+
+	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	require.Equal(t, "euclo:chat.ask", got)
+}
+
+func TestPrimaryRelurpicCapabilityAskPromptOverridesReviewClassification(t *testing.T) {
+	envelope := TaskEnvelope{
+		Instruction:   "Explain what the User type represents and what NewUser does. Do not modify any files.",
+		EditPermitted: false,
+	}
+	classification := TaskClassification{
+		EditPermitted:  false,
+		IntentFamilies: []string{"review"},
+	}
+	mode := ModeResolution{ModeID: "chat"}
+	profile := ExecutionProfileSelection{}
+
+	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	require.Equal(t, "euclo:chat.ask", got)
+}
+
+func TestPrimaryRelurpicCapabilityPlanningExplorePromptStaysExplore(t *testing.T) {
+	envelope := TaskEnvelope{
+		Instruction:   "Explore testsuite/fixtures/rapid_arch_pattern and identify the dominant normalization pattern plus any inconsistent implementation. Do not modify files.",
+		EditPermitted: false,
+	}
+	classification := TaskClassification{EditPermitted: false}
+	mode := ModeResolution{ModeID: "planning"}
+	profile := ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
+
+	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	require.Equal(t, "euclo:archaeology.explore", got)
+}
+
+func TestPrimaryRelurpicCapabilityPlanningCompiledExecutionPromptUsesImplement(t *testing.T) {
+	envelope := TaskEnvelope{
+		Instruction:   "Execute the compiled plan for testsuite/fixtures/rapid_arch_exec/slug.go. Keep the change limited to that file.",
+		EditPermitted: true,
+	}
+	classification := TaskClassification{EditPermitted: true}
+	mode := ModeResolution{ModeID: "planning"}
+	profile := ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
+
+	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	require.Equal(t, "euclo:archaeology.implement-plan", got)
+}
+
+func TestPlanBindingFromStateUsesSeededPipelinePlan(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.workflow_id", "wf-seeded")
+	state.Set("pipeline.plan", map[string]any{
+		"steps": []map[string]any{{
+			"id":          "seeded-step-1",
+			"description": "execute the compiled plan",
+		}},
+	})
+
+	binding := planBindingFromState(nil, state)
+	require.NotNil(t, binding)
+	require.True(t, binding.IsPlanBacked)
+	require.Equal(t, "wf-seeded", binding.WorkflowID)
+	require.Equal(t, "seeded-step-1", binding.ActiveStepID)
+}
+
 // ---------------------------------------------------------------------------
 // ResultClassForOutcome
 // ---------------------------------------------------------------------------

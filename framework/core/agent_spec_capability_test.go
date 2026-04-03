@@ -112,6 +112,29 @@ func TestValidateSkillCapabilitySelectorAcceptsRuntimeFamilyField(t *testing.T) 
 	require.NoError(t, err)
 }
 
+func TestSkillSelectorMatchesDescriptor(t *testing.T) {
+	desc := CapabilityDescriptor{
+		ID:            "relurpic:planner.plan",
+		Name:          "planner.plan",
+		Kind:          CapabilityKindPrompt,
+		RuntimeFamily: CapabilityRuntimeFamilyRelurpic,
+		Tags:          []string{"planning", "lang:go"},
+	}
+
+	require.True(t, SkillSelectorMatchesDescriptor(SkillCapabilitySelector{
+		RuntimeFamilies: []CapabilityRuntimeFamily{CapabilityRuntimeFamilyRelurpic},
+		Tags:            []string{"planning"},
+	}, desc))
+
+	require.True(t, SkillSelectorMatchesDescriptor(SkillCapabilitySelector{
+		Capability: "planner.plan",
+	}, desc))
+
+	require.False(t, SkillSelectorMatchesDescriptor(SkillCapabilitySelector{
+		ExcludeTags: []string{"planning"},
+	}, desc))
+}
+
 func TestEffectiveAllowedCapabilitySelectorsClonesSelectors(t *testing.T) {
 	longRunning := true
 	directInsertion := false
@@ -144,6 +167,99 @@ func TestEffectiveAllowedCapabilitySelectorsClonesSelectors(t *testing.T) {
 	require.Equal(t, []CoordinationRole{CoordinationRolePlanner}, spec.AllowedCapabilities[0].CoordinationRoles)
 	require.Equal(t, []string{"plan"}, spec.AllowedCapabilities[0].CoordinationTaskTypes)
 	require.True(t, *spec.AllowedCapabilities[0].CoordinationLongRunning)
+}
+
+func TestCloneCapabilitySelectorsDeepCopiesAllSelectorFields(t *testing.T) {
+	longRunning := true
+	directInsertion := false
+	input := []CapabilitySelector{{
+		ID:                          "selector-1",
+		Name:                        "reviewer",
+		Kind:                        CapabilityKindTool,
+		RuntimeFamilies:             []CapabilityRuntimeFamily{CapabilityRuntimeFamilyRelurpic},
+		Tags:                        []string{"lang:go"},
+		ExcludeTags:                 []string{"unsafe"},
+		SourceScopes:                []CapabilityScope{CapabilityScopeProvider},
+		TrustClasses:                []TrustClass{TrustClassRemoteDeclared},
+		RiskClasses:                 []RiskClass{RiskClassExecute},
+		EffectClasses:               []EffectClass{EffectClassProcessSpawn},
+		CoordinationRoles:           []CoordinationRole{CoordinationRoleReviewer},
+		CoordinationTaskTypes:       []string{"review"},
+		CoordinationExecutionModes:  []CoordinationExecutionMode{CoordinationExecutionModeBackgroundAgent},
+		CoordinationLongRunning:     &longRunning,
+		CoordinationDirectInsertion: &directInsertion,
+	}}
+
+	cloned := CloneCapabilitySelectors(input)
+	require.Len(t, cloned, 1)
+
+	cloned[0].RuntimeFamilies[0] = CapabilityRuntimeFamilyProvider
+	cloned[0].Tags[0] = "lang:rust"
+	cloned[0].ExcludeTags[0] = "mutated"
+	cloned[0].SourceScopes[0] = CapabilityScopeWorkspace
+	cloned[0].TrustClasses[0] = TrustClassWorkspaceTrusted
+	cloned[0].RiskClasses[0] = RiskClassNetwork
+	cloned[0].EffectClasses[0] = EffectClassNetworkEgress
+	cloned[0].CoordinationRoles[0] = CoordinationRolePlanner
+	cloned[0].CoordinationTaskTypes[0] = "plan"
+	cloned[0].CoordinationExecutionModes[0] = CoordinationExecutionModeSessionBacked
+	*cloned[0].CoordinationLongRunning = false
+	*cloned[0].CoordinationDirectInsertion = true
+
+	require.Equal(t, CapabilityRuntimeFamilyRelurpic, input[0].RuntimeFamilies[0])
+	require.Equal(t, "lang:go", input[0].Tags[0])
+	require.Equal(t, "unsafe", input[0].ExcludeTags[0])
+	require.Equal(t, CapabilityScopeProvider, input[0].SourceScopes[0])
+	require.Equal(t, TrustClassRemoteDeclared, input[0].TrustClasses[0])
+	require.Equal(t, RiskClassExecute, input[0].RiskClasses[0])
+	require.Equal(t, EffectClassProcessSpawn, input[0].EffectClasses[0])
+	require.Equal(t, CoordinationRoleReviewer, input[0].CoordinationRoles[0])
+	require.Equal(t, "review", input[0].CoordinationTaskTypes[0])
+	require.Equal(t, CoordinationExecutionModeBackgroundAgent, input[0].CoordinationExecutionModes[0])
+	require.True(t, *input[0].CoordinationLongRunning)
+	require.False(t, *input[0].CoordinationDirectInsertion)
+}
+
+func TestMergeCapabilitySelectorsDeduplicatesAndDeepCopies(t *testing.T) {
+	longRunning := true
+	base := []CapabilitySelector{{
+		Name:                        "reviewer",
+		RuntimeFamilies:             []CapabilityRuntimeFamily{CapabilityRuntimeFamilyRelurpic},
+		Tags:                        []string{"lang:go"},
+		CoordinationRoles:           []CoordinationRole{CoordinationRoleReviewer},
+		CoordinationLongRunning:     &longRunning,
+		CoordinationDirectInsertion: selectorBoolPtr(false),
+	}}
+	extra := []CapabilitySelector{
+		{
+			Name:                        "reviewer",
+			RuntimeFamilies:             []CapabilityRuntimeFamily{CapabilityRuntimeFamilyRelurpic},
+			Tags:                        []string{"lang:go"},
+			CoordinationRoles:           []CoordinationRole{CoordinationRoleReviewer},
+			CoordinationLongRunning:     selectorBoolPtr(true),
+			CoordinationDirectInsertion: selectorBoolPtr(false),
+		},
+		{
+			Name:            "planner",
+			RuntimeFamilies: []CapabilityRuntimeFamily{CapabilityRuntimeFamilyProvider},
+			Tags:            []string{"lang:rust"},
+		},
+	}
+
+	merged := MergeCapabilitySelectors(base, extra)
+	require.Len(t, merged, 2)
+	require.Equal(t, "reviewer", merged[0].Name)
+	require.Equal(t, "planner", merged[1].Name)
+
+	merged[0].Tags[0] = "mutated"
+	merged[1].RuntimeFamilies[0] = CapabilityRuntimeFamilyLocalTool
+
+	require.Equal(t, "lang:go", base[0].Tags[0])
+	require.Equal(t, CapabilityRuntimeFamilyProvider, extra[1].RuntimeFamilies[0])
+}
+
+func selectorBoolPtr(value bool) *bool {
+	return &value
 }
 
 func TestMergeAgentSpecsPreservesNilCapabilitySelectorSlices(t *testing.T) {
