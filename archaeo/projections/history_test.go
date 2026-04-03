@@ -4,12 +4,8 @@ import (
 	"context"
 	"testing"
 
-	projections "github.com/lexcodex/relurpify/archaeo/projections"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	"github.com/lexcodex/relurpify/archaeo/testscenario"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )
@@ -52,7 +48,7 @@ func TestRequestHistoryBasic(t *testing.T) {
 		CreatedAt:  f.Now(),
 		UpdatedAt:  f.Now(),
 	}
-	active := f.SeedActivePlan(plan, archaeoplans.DraftVersionInput{
+	_ = f.SeedActivePlan(plan, archaeoplans.DraftVersionInput{
 		WorkflowID:             "wf-request-history",
 		DerivedFromExploration: session.ID,
 		BasedOnRevision:        "rev-1",
