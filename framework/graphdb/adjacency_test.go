@@ -76,7 +76,7 @@ func TestMatchKinds_SpecificAllowed(t *testing.T) {
 	allowed := kindSet([]EdgeKind{"calls", "imports"})
 	require.True(t, matchKinds("calls", allowed))
 	require.True(t, matchKinds("imports", allowed))
-	require.False(t, matchKinds("unknown", allowed)
+	require.False(t, matchKinds("unknown", allowed))
 }
 
 func TestAddRemoveNodeSourceIndex(t *testing.T) {
