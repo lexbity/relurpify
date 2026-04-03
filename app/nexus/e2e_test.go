@@ -1937,8 +1937,11 @@ func TestFMPResumeIntoRexUsesFullAppHarness(t *testing.T) {
 	lineageRecord := h.getFMPLineage(t, "lineage-e2e")
 	require.Equal(t, commit.NewAttemptID, lineageRecord.CurrentOwnerAttempt)
 
-	events := h.listRexEvents(t, "wf-import", 10)
-	require.NotEmpty(t, events)
+	var events []memory.WorkflowEventRecord
+	require.Eventually(t, func() bool {
+		events = h.listRexEvents(t, "wf-import", 10)
+		return len(events) > 0
+	}, 5*time.Second, 20*time.Millisecond)
 }
 
 func TestFMPControlPlaneEventsUpdateRexBindingThroughAppBridge(t *testing.T) {
@@ -2455,6 +2458,7 @@ func TestAgentInvokesNodeCapability(t *testing.T) {
 	t.Cleanup(func() {
 		_ = device.Close()
 	})
+	require.Len(t, h.waitForCapabilities(t, "tenant-a", 1), 1)
 
 	h.seedBoundary(t, &core.SessionBoundary{
 		SessionID:  "sess-owned",

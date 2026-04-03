@@ -35,6 +35,12 @@ func NewSQLiteEventLog(path string) (*SQLiteEventLog, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SQLiteEventLog is used concurrently by the app and its background cleanup
+	// loop. A single shared connection avoids writer self-contention on the same
+	// database file during uncached test runs.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
 	log := &SQLiteEventLog{db: db, path: path}
 	if err := log.init(); err != nil {
 		_ = db.Close()

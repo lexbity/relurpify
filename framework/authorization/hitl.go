@@ -230,12 +230,13 @@ func (h *HITLBroker) SubmitAsync(req PermissionRequest) (string, error) {
 	req.RequestedAt = h.clock()
 	req.State = "pending"
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if _, exists := h.requests[req.ID]; exists {
+		h.mu.Unlock()
 		return "", fmt.Errorf("request %s already registered", req.ID)
 	}
 	h.requests[req.ID] = &req
 	h.waiters[req.ID] = make(chan PermissionDecision, 1)
+	h.mu.Unlock()
 	h.broadcast(HITLEvent{Type: HITLEventRequested, Request: &req})
 	return req.ID, nil
 }

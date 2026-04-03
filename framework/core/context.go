@@ -35,10 +35,10 @@ type CompressionEvent struct {
 
 // MergeConflictRecord tracks a conflict that occurred during context merge.
 type MergeConflictRecord struct {
-	Key              string        `json:"key"`
-	ConflictArea     string        `json:"conflict_area"` // "state", "variables", or "knowledge"
-	LosingValueHash  string        `json:"losing_value_hash"`
-	Timestamp        time.Time     `json:"timestamp"`
+	Key             string    `json:"key"`
+	ConflictArea    string    `json:"conflict_area"` // "state", "variables", or "knowledge"
+	LosingValueHash string    `json:"losing_value_hash"`
+	Timestamp       time.Time `json:"timestamp"`
 }
 
 // Context acts as the in-memory “blackboard” shared by nodes inside a graph.
@@ -199,11 +199,18 @@ func (c *Context) Merge(other *Context) {
 	if other == nil {
 		return
 	}
+	other.mu.RLock()
+	otherState := deepCopyMap(other.materializedStateLocked())
+	otherVariables := deepCopyMap(other.materializedVariablesLocked())
+	otherKnowledge := deepCopyMap(other.materializedKnowledgeLocked())
+	otherHistory := append([]Interaction(nil), other.history...)
+	otherCompressedHistory := append([]CompressedContext(nil), other.compressedHistory...)
+	otherCompressionLog := append([]CompressionEvent(nil), other.compressionLog...)
+	otherInteractionIDCtr := other.interactionIDCtr
+	other.mu.RUnlock()
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	other.mu.RLock()
-	defer other.mu.RUnlock()
 
 	type interactionKey struct {
 		ID        int
@@ -247,7 +254,7 @@ func (c *Context) Merge(other *Context) {
 		c.mergeConflicts = []MergeConflictRecord{}
 	}
 
-	for k, v := range other.materializedStateLocked() {
+	for k, v := range otherState {
 		var existing interface{}
 		var hasExisting bool
 		if existing, hasExisting = c.state[k]; hasExisting && !deepEqual(existing, v) {
@@ -268,21 +275,21 @@ func (c *Context) Merge(other *Context) {
 			}
 		}
 	}
-	for k, v := range other.materializedVariablesLocked() {
+	for k, v := range otherVariables {
 		if existing, ok := c.variables[k]; ok && !deepEqual(existing, v) {
 			c.recordMergeConflict(k, existing, v, "variables")
 		}
 		c.variables[k] = v
 		c.dirtyVariables[k] = struct{}{}
 	}
-	for k, v := range other.materializedKnowledgeLocked() {
+	for k, v := range otherKnowledge {
 		if existing, ok := c.knowledge[k]; ok && !deepEqual(existing, v) {
 			c.recordMergeConflict(k, existing, v, "knowledge")
 		}
 		c.knowledge[k] = v
 		c.dirtyKnowledge[k] = struct{}{}
 	}
-	for _, interaction := range other.history {
+	for _, interaction := range otherHistory {
 		key := interactionKey{
 			ID:        interaction.ID,
 			Role:      interaction.Role,
@@ -306,7 +313,7 @@ func (c *Context) Merge(other *Context) {
 			OriginalTok: cc.OriginalTokens,
 		}] = struct{}{}
 	}
-	for _, cc := range other.compressedHistory {
+	for _, cc := range otherCompressedHistory {
 		key := compressedKey{
 			Start:       cc.StartInteractionID,
 			End:         cc.EndInteractionID,
@@ -331,7 +338,7 @@ func (c *Context) Merge(other *Context) {
 			SavedTokens: event.TokensSaved,
 		}] = struct{}{}
 	}
-	for _, event := range other.compressionLog {
+	for _, event := range otherCompressionLog {
 		key := compressionEventKey{
 			Start:       event.StartInteractionID,
 			End:         event.EndInteractionID,
@@ -346,8 +353,8 @@ func (c *Context) Merge(other *Context) {
 		c.compressionLog = append(c.compressionLog, event)
 		c.compressionDirty = true
 	}
-	if other.interactionIDCtr > c.interactionIDCtr {
-		c.interactionIDCtr = other.interactionIDCtr
+	if otherInteractionIDCtr > c.interactionIDCtr {
+		c.interactionIDCtr = otherInteractionIDCtr
 	}
 	c.smartTruncateHistoryLocked()
 }
@@ -1138,10 +1145,10 @@ type CompressionStats struct {
 // recordMergeConflict records a merge conflict for later inspection
 func (c *Context) recordMergeConflict(key string, losingValue, winningValue interface{}, area string) {
 	record := MergeConflictRecord{
-		Key:              key,
-		ConflictArea:     area,
-		LosingValueHash:  hashValue(losingValue),
-		Timestamp:        time.Now().UTC(),
+		Key:             key,
+		ConflictArea:    area,
+		LosingValueHash: hashValue(losingValue),
+		Timestamp:       time.Now().UTC(),
 	}
 	c.mergeConflicts = append(c.mergeConflicts, record)
 }
