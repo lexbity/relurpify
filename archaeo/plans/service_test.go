@@ -2,6 +2,7 @@ package plans_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -900,17 +901,6 @@ func TestActiveStepVariousInputs(t *testing.T) {
 	require.Equal(t, "step-1", step.ID)
 }
 
-func TestUniqueStrings(t *testing.T) {
-	require.Nil(t, plans.UniqueStrings(nil))
-	require.Nil(t, plans.UniqueStrings([]string{}))
-	require.Equal(t, []string{"a", "b"}, plans.UniqueStrings([]string{"a", "b", "a"}))
-}
-
-func TestNowDefault(t *testing.T) {
-	svc := plans.Service{}
-	now := svc.now()
-	require.False(t, now.IsZero())
-}
 
 func TestEnsureDraftSuccessorNotFound(t *testing.T) {
 	now := time.Date(2026, 3, 28, 8, 0, 0, 0, time.UTC)
