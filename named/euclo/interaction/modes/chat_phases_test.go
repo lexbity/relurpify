@@ -3,7 +3,6 @@ package modes
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
