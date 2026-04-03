@@ -3,7 +3,6 @@ package graphdb
 import (
 	"bytes"
 	"encoding/binary"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
