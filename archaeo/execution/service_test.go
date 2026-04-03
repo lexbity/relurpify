@@ -186,7 +186,7 @@ func TestAnchorGateStateWithoutRetrieval(t *testing.T) {
 
 func TestBlastRadiusExpansionThreshold(t *testing.T) {
 	require.Equal(t, 0, execution.BlastRadiusExpansionThreshold(0))
-	require.Equal(t, 5, execution.BlastRadiusExpansionThreshold(1))
+	require.Equal(t, 6, execution.BlastRadiusExpansionThreshold(1))
 	require.Equal(t, 10, execution.BlastRadiusExpansionThreshold(5))
 }
 
