@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,7 @@ func TestCloneNode_WithData(t *testing.T) {
 		DeletedAt: 0,
 	}
 	copied := cloneNode(node)
-	require.EqualValues(t, *node, copied)
+	require.True(t, reflect.DeepEqual(*node, copied), "cloned node should equal original")
 	// ensure slices are copies
 	require.NotSame(t, node.Labels, copied.Labels)
 	require.NotSame(t, node.Props, copied.Props)
@@ -39,7 +40,7 @@ func TestCloneEdge(t *testing.T) {
 		DeletedAt: 0,
 	}
 	copied := cloneEdge(edge)
-	require.EqualValues(t, edge, copied)
+	require.True(t, reflect.DeepEqual(edge, copied), "cloned edge should equal original")
 	require.NotSame(t, edge.Props, copied.Props)
 }
 
