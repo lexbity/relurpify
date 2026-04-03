@@ -2,7 +2,6 @@ package plans
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
