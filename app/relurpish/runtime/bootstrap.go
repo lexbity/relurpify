@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 
 	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -68,112 +68,49 @@ type BootstrappedAgentRuntime struct {
 	CompiledPolicy       *policybundle.CompiledPolicyBundle
 }
 
+// BootstrapAgentRuntime delegates to ayenitd.BootstrapAgentRuntime and then
+// registers relurpic and agent capabilities on top. ayenitd intentionally omits
+// relurpic capabilities because named agents register their own. app/relurpish
+// uses this bootstrap path directly (not through named agents), so we add them
+// here.
 func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
-	if workspace == "" {
-		return nil, fmt.Errorf("workspace required")
-	}
-	if opts.Manifest == nil {
-		return nil, fmt.Errorf("agent manifest required")
-	}
-	if opts.Manifest.Spec.Agent == nil && opts.AgentSpec == nil {
-		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
-	}
-	if opts.Runner == nil {
-		return nil, fmt.Errorf("command runner required")
-	}
-
-	var agentDefs map[string]*core.AgentDefinition
-	var err error
-	if opts.AgentsDir != "" {
-		agentDefs, err = LoadAgentDefinitions(opts.AgentsDir)
-		if err != nil && !os.IsNotExist(err) {
-			return nil, fmt.Errorf("load agent definitions: %w", err)
-		}
-	}
-
-	manifestForResolution := opts.Manifest
-	if opts.AgentSpec != nil {
-		clone := *opts.Manifest
-		clone.Spec.Agent = opts.AgentSpec
-		manifestForResolution = &clone
-	}
-	resolveOpts := contractpkg.ResolveOptions{
-		AgentOverlays: selectedAgentDefinitionOverlays(opts.AgentName, agentDefs),
-	}
-	effectiveContract, err := contractpkg.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts)
-	if err != nil {
-		return nil, err
-	}
-	agentSpec := effectiveContract.AgentSpec
-	skillResults := append([]frameworkskills.SkillResolution{}, effectiveContract.SkillResults...)
-	resolvedSkills := append([]frameworkskills.ResolvedSkill{}, effectiveContract.ResolvedSkills...)
-
-	resolvedModel := opts.OllamaModel
-	if resolvedModel == "" {
-		resolvedModel = agentSpec.Model.Name
-	}
-
-	capabilities, err := BuildBuiltinCapabilityBundle(workspace, opts.Runner, CapabilityRegistryOptions{
-		Context:           opts.Context,
-		AgentID:           opts.AgentID,
-		PermissionManager: opts.PermissionManager,
-		AgentSpec:         agentSpec,
-		OllamaEndpoint:    opts.OllamaEndpoint,
-		OllamaModel:       resolvedModel,
-		SkipASTIndex:      opts.SkipASTIndex,
+	boot, err := ayenitd.BootstrapAgentRuntime(workspace, ayenitd.AgentBootstrapOptions{
+		Context:             opts.Context,
+		AgentID:             opts.AgentID,
+		AgentName:           opts.AgentName,
+		ConfigName:          opts.ConfigName,
+		AgentsDir:           opts.AgentsDir,
+		AgentSpec:           opts.AgentSpec,
+		Manifest:            opts.Manifest,
+		PermissionManager:   opts.PermissionManager,
+		Runner:              opts.Runner,
+		Model:               opts.Model,
+		Memory:              opts.Memory,
+		Telemetry:           opts.Telemetry,
+		OllamaEndpoint:      opts.OllamaEndpoint,
+		OllamaModel:         opts.OllamaModel,
+		SkipASTIndex:        opts.SkipASTIndex,
+		MaxIterations:       opts.MaxIterations,
+		AllowedCapabilities: opts.AllowedCapabilities,
+		DebugLLM:            opts.DebugLLM,
+		DebugAgent:          opts.DebugAgent,
+		PatternStore:        opts.PatternStore,
+		CommentStore:        opts.CommentStore,
+		RetrievalDB:         opts.RetrievalDB,
+		PlanStore:           opts.PlanStore,
+		GuidanceBroker:      opts.GuidanceBroker,
+		WorkflowStore:       opts.WorkflowStore,
 	})
 	if err != nil {
 		return nil, err
 	}
-	registry := capabilities.Registry
-	indexManager := capabilities.IndexManager
-	searchEngine := capabilities.SearchEngine
-	if opts.Telemetry != nil {
-		registry.UseTelemetry(opts.Telemetry)
-	}
-	if opts.PermissionManager != nil {
-		registry.UsePermissionManager(opts.AgentID, opts.PermissionManager)
-	}
-	compiledPolicy, err := policybundle.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, opts.PermissionManager)
-	if err != nil {
-		return nil, fmt.Errorf("compile effective policy: %w", err)
-	}
-	registry.SetPolicyEngine(compiledPolicy.Engine)
 
-	maxIterations := opts.MaxIterations
-	if maxIterations <= 0 {
-		maxIterations = 8
-	}
-	configName := opts.ConfigName
-	if configName == "" {
-		configName = opts.Manifest.Metadata.Name
-	}
-	agentCfg := &core.Config{
-		Name:              configName,
-		Model:             resolvedModel,
-		OllamaEndpoint:    opts.OllamaEndpoint,
-		MaxIterations:     maxIterations,
-		OllamaToolCalling: agentSpec.ToolCallingEnabled(),
-		AgentSpec:         agentSpec,
-		DebugLLM:          opts.DebugLLM,
-		DebugAgent:        opts.DebugAgent,
-		Telemetry:         opts.Telemetry,
-	}
-	registry.UseAgentSpec(opts.AgentID, agentSpec)
-	admissionResults, err := capabilityplan.AdmitCandidates(
-		registry,
-		toCapabilityPlanCandidates(frameworkskills.EnumerateSkillCapabilities(resolvedSkills)),
-		core.EffectiveAllowedCapabilitySelectors(agentSpec),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("admit skill capabilities: %w", err)
-	}
 	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
-		registry,
+		boot.Registry,
 		opts.Model,
-		agentCfg,
-		agents.WithIndexManager(indexManager),
-		agents.WithGraphDB(graphDBFromIndexManager(indexManager)),
+		boot.AgentConfig,
+		agents.WithIndexManager(boot.IndexManager),
+		agents.WithGraphDB(graphDBFromIndexManager(boot.IndexManager)),
 		agents.WithPatternStore(opts.PatternStore),
 		agents.WithCommentStore(opts.CommentStore),
 		agents.WithRetrievalDB(opts.RetrievalDB),
@@ -183,34 +120,32 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	); err != nil {
 		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
 	}
+
 	env := agents.AgentEnvironment{
-		Model:        opts.Model,
-		Registry:     registry,
-		IndexManager: indexManager,
-		SearchEngine: searchEngine,
-		Memory:       opts.Memory,
-		Config:       agentCfg,
+		Config:       boot.Environment.Config,
+		Model:        boot.Environment.Model,
+		Registry:     boot.Environment.Registry,
+		IndexManager: boot.Environment.IndexManager,
+		SearchEngine: boot.Environment.SearchEngine,
+		Memory:       boot.Environment.Memory,
 	}
-	if err := agents.RegisterAgentCapabilities(registry, env); err != nil {
+	if err := agents.RegisterAgentCapabilities(boot.Registry, env); err != nil {
 		return nil, fmt.Errorf("register agent capabilities: %w", err)
-	}
-	if len(opts.AllowedCapabilities) > 0 {
-		registry.RestrictToCapabilities(opts.AllowedCapabilities)
 	}
 
 	return &BootstrappedAgentRuntime{
-		Registry:             registry,
-		IndexManager:         indexManager,
-		SearchEngine:         searchEngine,
-		Memory:               opts.Memory,
-		AgentSpec:            agentSpec,
-		AgentConfig:          agentCfg,
+		Registry:             boot.Registry,
+		IndexManager:         boot.IndexManager,
+		SearchEngine:         boot.SearchEngine,
+		Memory:               boot.Memory,
+		AgentSpec:            boot.AgentSpec,
+		AgentConfig:          boot.AgentConfig,
 		Environment:          env,
-		AgentDefinitions:     agentDefs,
-		SkillResults:         skillResults,
-		CapabilityAdmissions: admissionResults,
-		Contract:             effectiveContract,
-		CompiledPolicy:       compiledPolicy,
+		AgentDefinitions:     boot.AgentDefinitions,
+		SkillResults:         boot.SkillResults,
+		CapabilityAdmissions: boot.CapabilityAdmissions,
+		Contract:             boot.Contract,
+		CompiledPolicy:       boot.CompiledPolicy,
 	}, nil
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	"github.com/lexcodex/relurpify/ayenitd"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/config"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
@@ -167,7 +168,7 @@ func newStartCmd() *cobra.Command {
 			client.SetDebugLogging(logLLM)
 			model := llm.NewInstrumentedModel(client, telemetrySink, logLLM)
 
-			boot, err := appruntime.BootstrapAgentRuntime(ws, appruntime.AgentBootstrapOptions{
+			boot, err := ayenitd.BootstrapAgentRuntime(ws, ayenitd.AgentBootstrapOptions{
 				Context:           runCtx,
 				AgentID:           registration.ID,
 				AgentName:         agentName,
@@ -188,6 +189,29 @@ func newStartCmd() *cobra.Command {
 			})
 			if err != nil {
 				return err
+			}
+			// Register relurpic and agent capabilities. ayenitd.BootstrapAgentRuntime
+			// intentionally omits these; named agents register their own. dev-agent-cli
+			// builds agents directly from spec, so we register here.
+			relurpicOpts := []agents.RelurpicOption{agents.WithIndexManager(boot.IndexManager)}
+			if boot.IndexManager != nil {
+				relurpicOpts = append(relurpicOpts, agents.WithGraphDB(boot.IndexManager.GraphDB))
+			}
+			if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
+				boot.Registry, model, boot.AgentConfig, relurpicOpts...,
+			); err != nil {
+				return fmt.Errorf("register relurpic capabilities: %w", err)
+			}
+			bootEnv := agents.AgentEnvironment{
+				Config:       boot.Environment.Config,
+				Model:        boot.Environment.Model,
+				Registry:     boot.Environment.Registry,
+				IndexManager: boot.Environment.IndexManager,
+				SearchEngine: boot.Environment.SearchEngine,
+				Memory:       boot.Environment.Memory,
+			}
+			if err := agents.RegisterAgentCapabilities(boot.Registry, bootEnv); err != nil {
+				return fmt.Errorf("register agent capabilities: %w", err)
 			}
 			spec = boot.AgentSpec
 			tools := boot.Registry
