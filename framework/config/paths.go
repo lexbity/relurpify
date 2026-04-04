@@ -152,3 +152,11 @@ func (p Paths) TestRunTmpDir(parts ...string) string {
 	segments = append(segments, "tmp")
 	return filepath.Join(segments...)
 }
+
+func (p Paths) ShellBlacklistFile() string {
+	return filepath.Join(p.ConfigRoot(), "shell_blacklist.yaml")
+}
+
+func (p Paths) ModelProfilesDir() string {
+	return filepath.Join(p.ConfigRoot(), "model_profiles")
+}

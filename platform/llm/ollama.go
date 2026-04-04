@@ -22,6 +22,7 @@ type Client struct {
 	Model    string
 	client   *http.Client
 	Debug    bool
+	profile  *ModelProfile
 }
 
 type toolFunction struct {
@@ -211,15 +212,36 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 		Usage:        normalizeUsage(finalChunk),
 	}
 	if finalChunk.Message != nil {
-		result.ToolCalls = append(result.ToolCalls, parseToolCalls(finalChunk.Message.ToolCalls)...)
+		result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.Message.ToolCalls)...)
 	}
-	result.ToolCalls = append(result.ToolCalls, parseToolCalls(finalChunk.ToolCalls)...)
+	result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.ToolCalls)...)
 	return result, nil
 }
 
 // SetDebugLogging enables or disables verbose logging for requests/responses.
 func (c *Client) SetDebugLogging(enabled bool) {
 	c.Debug = enabled
+}
+
+// SetProfile sets the model profile for this client.
+func (c *Client) SetProfile(p *ModelProfile) {
+	c.profile = p
+}
+
+// ToolRepairStrategy implements core.ProfiledModel.
+func (c *Client) ToolRepairStrategy() string {
+	if c.profile == nil {
+		return "heuristic-only"
+	}
+	return c.profile.Repair.Strategy
+}
+
+// MaxToolsPerCall implements core.ProfiledModel.
+func (c *Client) MaxToolsPerCall() int {
+	if c.profile == nil {
+		return 0
+	}
+	return c.profile.ToolCalling.MaxToolsPerCall
 }
 
 func (c *Client) getHTTPClient() *http.Client {
@@ -316,7 +338,7 @@ func (c *Client) doRequest(ctx context.Context, path string, payload interface{}
 		return nil, err
 	}
 	c.logResponse(path, responseBody)
-	return decodeLLMResponse(bytes.NewReader(responseBody))
+	return c.decodeLLMResponse(bytes.NewReader(responseBody))
 }
 
 func convertMessages(messages []core.Message) []map[string]interface{} {
@@ -423,14 +445,14 @@ func decodeLLMResponse(body io.Reader) (*core.LLMResponse, error) {
 	if resp.Text == "" && raw.Message != nil {
 		resp.Text = raw.Message.Content
 	}
-	resp.ToolCalls = append(resp.ToolCalls, parseToolCalls(raw.ToolCalls)...)
+	resp.ToolCalls = append(resp.ToolCalls, c.parseToolCalls(raw.ToolCalls)...)
 	if raw.Message != nil {
-		resp.ToolCalls = append(resp.ToolCalls, parseToolCalls(raw.Message.ToolCalls)...)
+		resp.ToolCalls = append(resp.ToolCalls, c.parseToolCalls(raw.Message.ToolCalls)...)
 	}
 	return resp, nil
 }
 
-func parseToolCalls(calls []ollamaToolCall) []core.ToolCall {
+func (c *Client) parseToolCalls(calls []ollamaToolCall) []core.ToolCall {
 	results := make([]core.ToolCall, 0, len(calls))
 	for _, call := range calls {
 		name := call.Name
@@ -441,7 +463,7 @@ func parseToolCalls(calls []ollamaToolCall) []core.ToolCall {
 		if len(call.Function.Arguments) > 0 {
 			args = call.Function.Arguments
 		}
-		parsedArgs := parseArguments(args)
+		parsedArgs := c.parseArguments(args)
 		results = append(results, core.ToolCall{
 			ID:   call.ID,
 			Name: name,
@@ -451,7 +473,7 @@ func parseToolCalls(calls []ollamaToolCall) []core.ToolCall {
 	return results
 }
 
-func parseArguments(raw json.RawMessage) map[string]interface{} {
+func (c *Client) parseArguments(raw json.RawMessage) map[string]interface{} {
 	if len(raw) == 0 {
 		return map[string]interface{}{}
 	}
@@ -459,13 +481,16 @@ func parseArguments(raw json.RawMessage) map[string]interface{} {
 	if err := json.Unmarshal(raw, &obj); err == nil {
 		return obj
 	}
-	var str string
-	if err := json.Unmarshal(raw, &str); err == nil {
-		var nested map[string]interface{}
-		if err := json.Unmarshal([]byte(str), &nested); err == nil {
-			return nested
+	// Check for double-encoded JSON string if profile requires it
+	if c.profile != nil && c.profile.ToolCalling.DoubleEncodedArgs {
+		var str string
+		if err := json.Unmarshal(raw, &str); err == nil {
+			var nested map[string]interface{}
+			if err := json.Unmarshal([]byte(str), &nested); err == nil {
+				return nested
+			}
+			return map[string]interface{}{"value": str}
 		}
-		return map[string]interface{}{"value": str}
 	}
 	return map[string]interface{}{"_raw": string(raw)}
 }

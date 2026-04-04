@@ -100,18 +100,33 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, state *core.Cont
 	if resp == nil {
 		return decisionPayload{}, nil, fmt.Errorf("empty llm response")
 	}
+	// Apply MaxToolsPerCall limit if model supports ProfiledModel
+	maxTools := 0
+	if pm, ok := n.agent.Model.(core.ProfiledModel); ok {
+		maxTools = pm.MaxToolsPerCall()
+	}
+	var toolCalls []core.ToolCall
 	if len(resp.ToolCalls) > 0 {
-		call := resp.ToolCalls[0]
-		return decisionPayload{
-			Thought:   truncateForPrompt(resp.Text, 220),
-			Tool:      call.Name,
-			Arguments: call.Args,
-			Complete:  false,
-			Timestamp: time.Now().UTC(),
-		}, filterToolCalls(resp.ToolCalls), nil
+		toolCalls = filterToolCalls(resp.ToolCalls)
+		if maxTools > 0 && len(toolCalls) > maxTools {
+			toolCalls = toolCalls[:maxTools]
+		}
+		if len(toolCalls) > 0 {
+			call := toolCalls[0]
+			return decisionPayload{
+				Thought:   truncateForPrompt(resp.Text, 220),
+				Tool:      call.Name,
+				Arguments: call.Args,
+				Complete:  false,
+				Timestamp: time.Now().UTC(),
+			}, toolCalls, nil
+		}
 	}
 	detectedCalls := filterToolCalls(frameworktools.ParseToolCallsFromText(resp.Text))
 	if len(detectedCalls) > 0 {
+		if maxTools > 0 && len(detectedCalls) > maxTools {
+			detectedCalls = detectedCalls[:maxTools]
+		}
 		return decisionPayload{
 			Thought:   truncateForPrompt(resp.Text, 220),
 			Complete:  false,
@@ -122,8 +137,17 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, state *core.Cont
 	if err == nil && (parsed.Tool != "" || parsed.Complete) {
 		return parsed, nil, nil
 	}
-	repaired, repairErr := n.repairDecision(ctx, tools, resp.Text, useToolCalling)
-	if repairErr != nil {
+	// Check repair strategy
+	repairStrategy := "heuristic-only"
+	if pm, ok := n.agent.Model.(core.ProfiledModel); ok {
+		repairStrategy = pm.ToolRepairStrategy()
+	}
+	var repaired string
+	var repairErr error
+	if repairStrategy == "llm" {
+		repaired, repairErr = n.repairDecision(ctx, tools, resp.Text, useToolCalling)
+	}
+	if repairErr != nil || repairStrategy != "llm" {
 		if textSuggestsPendingToolCall(resp.Text) {
 			return decisionPayload{Thought: truncateForPrompt(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
 		}

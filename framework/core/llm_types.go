@@ -109,6 +109,17 @@ func LLMToolSpecsFromTools(tools []Tool) []LLMToolSpec {
 	return specs
 }
 
+// ProfiledModel is an optional extension for LanguageModel implementations that
+// expose active model profile metadata. Callers type-assert to check support:
+//
+//   if pm, ok := model.(ProfiledModel); ok { ... }
+//
+// The LanguageModel interface is not changed.
+type ProfiledModel interface {
+	ToolRepairStrategy() string // "llm" | "heuristic-only"
+	MaxToolsPerCall() int       // 0 = no limit
+}
+
 // LanguageModel provides the required LLM capabilities.
 type LanguageModel interface {
 	Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error)
