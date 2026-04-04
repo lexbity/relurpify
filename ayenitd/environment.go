@@ -3,7 +3,6 @@ package ayenitd
 import (
 	"database/sql"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -47,8 +46,8 @@ type WorkspaceEnvironment struct {
 	RetrievalDB *sql.DB            // shared DB for retrieval index tables
 
 	// Agents that verify or extract compatibility surface (optional)
-	VerificationPlanner           agentenv.VerificationPlanner
-	CompatibilitySurfaceExtractor agentenv.CompatibilitySurfaceExtractor
+	VerificationPlanner           VerificationPlanner
+	CompatibilitySurfaceExtractor CompatibilitySurfaceExtractor
 
 	// Scheduler
 	Scheduler *ServiceScheduler
