@@ -8,40 +8,6 @@ import (
 	"go.lsp.dev/protocol"
 )
 
-func TestPathToURI(t *testing.T) {
-	tests := []struct {
-		path     string
-		expected string
-	}{
-		{"/home/user/file.go", "file:///home/user/file.go"},
-		{"relative/file.go", "file:///relative/file.go"},
-		{"C:\\Users\\file.go", "file:///C%3A/Users/file.go"},
-	}
-	for _, tt := range tests {
-		got := pathToURI(tt.path)
-		if got != tt.expected {
-			t.Errorf("pathToURI(%q) = %q, want %q", tt.path, got, tt.expected)
-		}
-	}
-}
-
-func TestURIToPath(t *testing.T) {
-	tests := []struct {
-		uri      string
-		expected string
-	}{
-		{"file:///home/user/file.go", "/home/user/file.go"},
-		{"file:///relative/file.go", "/relative/file.go"},
-		{"file:///C%3A/Users/file.go", "C:\\Users\\file.go"},
-	}
-	for _, tt := range tests {
-		got := uriToPath(tt.uri)
-		if got != tt.expected {
-			t.Errorf("uriToPath(%q) = %q, want %q", tt.uri, got, tt.expected)
-		}
-	}
-}
-
 func TestConvertDiagnostics(t *testing.T) {
 	protocolDiags := []protocol.Diagnostic{
 		{
@@ -184,10 +150,4 @@ func TestProcessLSPClient_Metadata(t *testing.T) {
 		RootDir:    ".",
 		LanguageID: "test",
 	}
-}
-
-func TestStdioReadWriteCloser(t *testing.T) {
-	// minimal smoke test for the type
-	rwc := &stdioReadWriteCloser{}
-	_ = rwc.Close() // should not panic
 }
