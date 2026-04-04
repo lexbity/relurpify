@@ -49,10 +49,23 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase E: Agent Registration + Authorization
+	sandboxCfg := fsandbox.SandboxConfig{}
+	if cfg.Sandbox {
+		// Enable sandbox with default settings
+		sandboxCfg.RunscPath = "runsc"
+		sandboxCfg.Platform = "kvm"
+		sandboxCfg.ContainerRuntime = "docker"
+		sandboxCfg.NetworkIsolation = true
+		sandboxCfg.ReadOnlyRoot = true
+	} else {
+		// Disable network isolation when sandbox is off
+		sandboxCfg.NetworkIsolation = false
+		sandboxCfg.ReadOnlyRoot = false
+	}
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath: cfg.ManifestPath,
 		ConfigPath:   cfg.ConfigPath,
-		Sandbox:      cfg.Sandbox,
+		Sandbox:      sandboxCfg,
 		AuditLimit:   cfg.AuditLimit,
 		BaseFS:       cfg.Workspace,
 		HITLTimeout:  cfg.HITLTimeout,
