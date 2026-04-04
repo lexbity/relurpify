@@ -113,11 +113,12 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 		trace.FallbackReason = "anchor_coverage_sufficient"
 	}
 	if !skipHypothetical && p.hypotheticalGen != nil {
-		sketch, err := p.hypotheticalGen.Generate(ctx, input.Query, stage1)
+		generatedSketch, err := p.hypotheticalGen.Generate(ctx, input.Query, stage1)
 		if err != nil {
 			trace.FallbackUsed = true
 			trace.FallbackReason = "hypothetical_generation_error"
-		} else if sketch.Grounded {
+		} else if generatedSketch.Grounded {
+			sketch = generatedSketch
 			trace.HypotheticalGenerated = true
 			trace.HypotheticalTokens = sketch.TokenCount
 		} else {
@@ -181,7 +182,7 @@ func NewPipeline(
 		index: indexQuerier,
 		deps:  depQuerier,
 		config: IndexRetrieverConfig{
-			DependencyHops:   1,
+			DependencyHops:     1,
 			MaxFilesPerSymbol: 3,
 		},
 	}

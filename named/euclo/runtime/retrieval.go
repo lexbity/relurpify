@@ -36,7 +36,7 @@ func ResolveRetrievalPolicy(mode ModeResolution, profile ExecutionProfileSelecti
 		ModeID:            mode.ModeID,
 		ProfileID:         profile.ProfileID,
 		LocalPathsFirst:   true,
-		WidenWhenNoLocal:  true,
+		WidenWhenNoLocal:  true, // Always true for all modes, including chat
 		WorkflowLimit:     4,
 		WorkflowMaxTokens: 500,
 		ExpansionStrategy: "local_first",
@@ -52,6 +52,12 @@ func ResolveRetrievalPolicy(mode ModeResolution, profile ExecutionProfileSelecti
 		policy.WorkflowLimit = 5
 		policy.WorkflowMaxTokens = 700
 		policy.ExpansionStrategy = "local_then_targeted_workflow"
+	case "chat":
+		// Chat mode should also widen to workflow when no local files
+		policy.WidenToWorkflow = true
+		policy.WorkflowLimit = 4
+		policy.WorkflowMaxTokens = 600
+		policy.ExpansionStrategy = "local_then_workflow"
 	default:
 		policy.WidenToWorkflow = false
 	}

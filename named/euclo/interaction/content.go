@@ -137,3 +137,36 @@ type TransitionInfo struct {
 	Phrase     string `json:"phrase"`
 	TargetMode string `json:"target_mode"`
 }
+
+// ContextProposalContent is the typed payload for context enrichment proposal frames.
+// The host UI renders this however appropriate for its surface.
+type ContextProposalContent struct {
+	// AnchoredFiles are high-confidence files (user-selected or session pins).
+	AnchoredFiles []ContextFileEntry `json:"anchored_files,omitempty"`
+
+	// ExpandedFiles are structurally or semantically retrieved files.
+	ExpandedFiles []ContextFileEntry `json:"expanded_files,omitempty"`
+
+	// KnowledgeItems are archaeo-sourced patterns, tensions, and decisions.
+	KnowledgeItems []ContextKnowledgeEntry `json:"knowledge_items,omitempty"`
+
+	// PipelineTrace is the per-stage diagnostic summary.
+	PipelineTrace pretask.PipelineTrace `json:"pipeline_trace"`
+}
+
+// ContextFileEntry is a single file entry in a context proposal.
+type ContextFileEntry struct {
+	Path    string  `json:"path"`
+	Summary string  `json:"summary,omitempty"` // one-line description
+	Score   float64 `json:"score,omitempty"`
+	Source  string  `json:"source"` // "anchor" | "index" | "vector"
+}
+
+// ContextKnowledgeEntry is a single archaeo knowledge item in a context proposal.
+type ContextKnowledgeEntry struct {
+	RefID   string `json:"ref_id"`
+	Kind    string `json:"kind"`    // "pattern" | "tension" | "decision" | "interaction"
+	Title   string `json:"title"`
+	Summary string `json:"summary,omitempty"`
+	Source  string `json:"source"` // "archaeo_topic" | "archaeo_expanded"
+}

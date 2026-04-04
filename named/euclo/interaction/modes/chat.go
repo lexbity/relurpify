@@ -2,7 +2,10 @@ package modes
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
@@ -24,12 +27,151 @@ func (p *ContextProposalPhase) Execute(
 	ctx context.Context,
 	mc interaction.PhaseMachineContext,
 ) (interaction.PhaseOutcome, error) {
-	// For now, implement a stub that just advances to the next phase
-	// This will be implemented fully according to the plan later
+	// Get user response from the context
+	userResp := mc.UserResponse
+	if userResp == nil {
+		// No user response yet, emit a status frame
+		mc.Emitter.Emit(interaction.InteractionFrame{
+			Kind:    interaction.FrameStatus,
+			Mode:    "chat",
+			Phase:   "context_proposal",
+			Content: interaction.StatusContent{Message: "Preparing context enrichment..."},
+		})
+		return interaction.PhaseOutcome{
+			Advance:      false,
+			StateUpdates: map[string]interface{}{},
+		}, nil
+	}
+
+	// Resolve current turn files from user response
+	resolved := p.FileResolver.Resolve(userResp.Selections, userResp.Text)
+	
+	// Load session pins from memory
+	var sessionPins []string
+	if memory := mc.Memory; memory != nil {
+		if record, found, _ := memory.Recall(ctx, "context.pinned_files", memory.MemoryScopeSession); found && record != nil {
+			if pins, ok := record.Value["pins"].([]interface{}); ok {
+				for _, pin := range pins {
+					if path, ok := pin.(string); ok {
+						sessionPins = append(sessionPins, path)
+					}
+				}
+			}
+		}
+	}
+
+	// Get workflow ID from state
+	workflowID := ""
+	if state := mc.State; state != nil {
+		if wf, ok := state["euclo.workflow_id"].(string); ok {
+			workflowID = wf
+		}
+	}
+
+	// Run the pipeline
+	input := pretask.PipelineInput{
+		Query:            userResp.Text,
+		CurrentTurnFiles: resolved.Paths,
+		SessionPins:      sessionPins,
+		WorkflowID:       workflowID,
+	}
+
+	bundle, err := p.Pipeline.Run(ctx, input)
+	if err != nil {
+		// Log error but continue
+		mc.Emitter.Emit(interaction.InteractionFrame{
+			Kind:    interaction.FrameStatus,
+			Mode:    "chat",
+			Phase:   "context_proposal",
+			Content: interaction.StatusContent{Message: fmt.Sprintf("Context enrichment had issues: %v", err)},
+		})
+		// Continue without enrichment
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: map[string]interface{}{},
+		}, nil
+	}
+
+	// Convert bundle to ContextProposalContent
+	content := convertToContextProposalContent(bundle)
+
+	// Emit the proposal frame
+	mc.Emitter.Emit(interaction.InteractionFrame{
+		Kind:    interaction.FrameProposal,
+		Mode:    "chat",
+		Phase:   "context_proposal",
+		Content: content,
+		Actions: []interaction.ActionSlot{
+			{
+				ID:          "confirm",
+				Label:       "Confirm",
+				Kind:        interaction.ActionKindPrimary,
+				Default:     true,
+				TargetPhase: "intent",
+			},
+			{
+				ID:          "skip",
+				Label:       "Skip",
+				Kind:        interaction.ActionKindSecondary,
+				TargetPhase: "intent",
+			},
+		},
+		Continuable: true,
+	})
+
+	// Wait for user response
 	return interaction.PhaseOutcome{
-		Advance:      true,
+		Advance:      false, // Wait for user to confirm or skip
 		StateUpdates: map[string]interface{}{},
 	}, nil
+}
+
+func convertToContextProposalContent(bundle pretask.EnrichedContextBundle) interaction.ContextProposalContent {
+	content := interaction.ContextProposalContent{
+		PipelineTrace: bundle.PipelineTrace,
+	}
+
+	// Convert anchored files
+	for _, item := range bundle.AnchoredFiles {
+		content.AnchoredFiles = append(content.AnchoredFiles, interaction.ContextFileEntry{
+			Path:    item.Path,
+			Summary: item.Summary,
+			Score:   item.Score,
+			Source:  string(item.Source),
+		})
+	}
+
+	// Convert expanded files
+	for _, item := range bundle.ExpandedFiles {
+		content.ExpandedFiles = append(content.ExpandedFiles, interaction.ContextFileEntry{
+			Path:    item.Path,
+			Summary: item.Summary,
+			Score:   item.Score,
+			Source:  string(item.Source),
+		})
+	}
+
+	// Convert knowledge items
+	for _, item := range bundle.KnowledgeTopic {
+		content.KnowledgeItems = append(content.KnowledgeItems, interaction.ContextKnowledgeEntry{
+			RefID:   item.RefID,
+			Kind:    string(item.Kind),
+			Title:   item.Title,
+			Summary: item.Summary,
+			Source:  string(item.Source),
+		})
+	}
+	for _, item := range bundle.KnowledgeExpanded {
+		content.KnowledgeItems = append(content.KnowledgeItems, interaction.ContextKnowledgeEntry{
+			RefID:   item.RefID,
+			Kind:    string(item.Kind),
+			Title:   item.Title,
+			Summary: item.Summary,
+			Source:  string(item.Source),
+		})
+	}
+
+	return content
 }
 
 // ChatMode builds the phase machine for the chat interaction mode.
@@ -88,6 +230,26 @@ func ChatMode(
 		Resolver: resolver,
 		Phases:   phases,
 	})
+}
+
+// ChatModeWithContext is a convenience function that creates a chat mode with context enrichment
+func ChatModeWithContext(
+	emitter interaction.FrameEmitter,
+	resolver *interaction.AgencyResolver,
+	workspaceEnv ayenitd.WorkspaceEnvironment,
+) *interaction.PhaseMachine {
+	// Create file resolver
+	fileResolver := &pretask.FileResolver{
+		workspace: workspaceEnv.Config.Workspace,
+	}
+	
+	// Create pipeline with default config
+	config := pretask.DefaultPipelineConfig()
+	var tensionQuerier pretask.TensionQuerier
+	// In a real implementation, get tension service from workspaceEnv
+	pipeline := pretask.NewPipeline(workspaceEnv, tensionQuerier, config)
+	
+	return ChatMode(emitter, resolver, pipeline, fileResolver)
 }
 
 // ChatModeLegacy provides backward compatibility for callers that don't provide pipeline.
