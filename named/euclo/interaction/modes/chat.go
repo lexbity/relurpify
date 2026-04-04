@@ -27,101 +27,21 @@ func (p *ContextProposalPhase) Execute(
 	ctx context.Context,
 	mc interaction.PhaseMachineContext,
 ) (interaction.PhaseOutcome, error) {
-	// Get user response from the context
-	userResp := mc.UserResponse
-	if userResp == nil {
-		// No user response yet, emit a status frame
-		mc.Emitter.Emit(interaction.InteractionFrame{
-			Kind:    interaction.FrameStatus,
-			Mode:    "chat",
-			Phase:   "context_proposal",
-			Content: interaction.StatusContent{Message: "Preparing context enrichment..."},
-		})
-		return interaction.PhaseOutcome{
-			Advance:      false,
-			StateUpdates: map[string]interface{}{},
-		}, nil
-	}
-
-	// Resolve current turn files from user response
-	resolved := p.FileResolver.Resolve(userResp.Selections, userResp.Text)
+	// For now, we'll skip the context proposal phase and advance directly
+	// This is a temporary implementation until we can properly integrate
+	// with the interaction system
 	
-	// Load session pins from memory
-	var sessionPins []string
-	if memory := mc.Memory; memory != nil {
-		if record, found, _ := memory.Recall(ctx, "context.pinned_files", memory.MemoryScopeSession); found && record != nil {
-			if pins, ok := record.Value["pins"].([]interface{}); ok {
-				for _, pin := range pins {
-					if path, ok := pin.(string); ok {
-						sessionPins = append(sessionPins, path)
-					}
-				}
-			}
-		}
-	}
-
-	// Get workflow ID from state
-	workflowID := ""
-	if state := mc.State; state != nil {
-		if wf, ok := state["euclo.workflow_id"].(string); ok {
-			workflowID = wf
-		}
-	}
-
-	// Run the pipeline
-	input := pretask.PipelineInput{
-		Query:            userResp.Text,
-		CurrentTurnFiles: resolved.Paths,
-		SessionPins:      sessionPins,
-		WorkflowID:       workflowID,
-	}
-
-	bundle, err := p.Pipeline.Run(ctx, input)
-	if err != nil {
-		// Log error but continue
-		mc.Emitter.Emit(interaction.InteractionFrame{
-			Kind:    interaction.FrameStatus,
-			Mode:    "chat",
-			Phase:   "context_proposal",
-			Content: interaction.StatusContent{Message: fmt.Sprintf("Context enrichment had issues: %v", err)},
-		})
-		// Continue without enrichment
-		return interaction.PhaseOutcome{
-			Advance:      true,
-			StateUpdates: map[string]interface{}{},
-		}, nil
-	}
-
-	// Convert bundle to ContextProposalContent
-	content := convertToContextProposalContent(bundle)
-
-	// Emit the proposal frame
-	mc.Emitter.Emit(interaction.InteractionFrame{
-		Kind:    interaction.FrameProposal,
+	// Emit a status frame
+	mc.Emitter.Emit(ctx, interaction.InteractionFrame{
+		Kind:    interaction.FrameStatus,
 		Mode:    "chat",
 		Phase:   "context_proposal",
-		Content: content,
-		Actions: []interaction.ActionSlot{
-			{
-				ID:          "confirm",
-				Label:       "Confirm",
-				Kind:        interaction.ActionKindPrimary,
-				Default:     true,
-				TargetPhase: "intent",
-			},
-			{
-				ID:          "skip",
-				Label:       "Skip",
-				Kind:        interaction.ActionKindSecondary,
-				TargetPhase: "intent",
-			},
-		},
-		Continuable: true,
+		Content: interaction.StatusContent{Message: "Context enrichment is not yet implemented."},
 	})
-
-	// Wait for user response
+	
+	// Advance to the next phase
 	return interaction.PhaseOutcome{
-		Advance:      false, // Wait for user to confirm or skip
+		Advance:      true,
 		StateUpdates: map[string]interface{}{},
 	}, nil
 }
@@ -249,18 +169,9 @@ func ChatModeWithContext(
 	resolver *interaction.AgencyResolver,
 	workspaceEnv ayenitd.WorkspaceEnvironment,
 ) *interaction.PhaseMachine {
-	// Create file resolver
-	fileResolver := &pretask.FileResolver{
-		workspace: workspaceEnv.Config.Workspace,
-	}
-	
-	// Create pipeline with default config
-	config := pretask.DefaultPipelineConfig()
-	var tensionQuerier pretask.TensionQuerier
-	// In a real implementation, get tension service from workspaceEnv
-	pipeline := pretask.NewPipeline(workspaceEnv, tensionQuerier, config)
-	
-	return ChatMode(emitter, resolver, pipeline, fileResolver)
+	// For now, just use the legacy chat mode
+	// We'll implement proper context enrichment later
+	return ChatModeLegacy(emitter, resolver)
 }
 
 // ChatModeLegacy provides backward compatibility for callers that don't provide pipeline.

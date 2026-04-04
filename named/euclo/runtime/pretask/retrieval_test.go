@@ -44,7 +44,7 @@ func TestArchaeoRetriever_RetrieveTopic(t *testing.T) {
 		t.Fatalf("RetrieveTopic failed: %v", err)
 	}
 	
-	// With nil dependencies, should return empty results gracefully
+	// With nil dependencies, should return empty slice
 	if results == nil {
 		t.Error("Results should not be nil")
 	}

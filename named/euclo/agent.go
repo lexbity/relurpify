@@ -246,12 +246,14 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		// We'll create the querier regardless; its methods will handle nil store.
 		tensionQuerier = &tensionServiceQuerier{service: a.tensionService()}
 		// Create pipeline environment from WorkspaceEnv
+		// Note: We need to check if WorkspaceEnv has the required fields
+		// For now, create a minimal environment
 		env := pretask.PipelineEnv{
-			IndexManager:   a.WorkspaceEnv.IndexManager,
-			Model:          a.WorkspaceEnv.Model,
-			Embedder:       a.WorkspaceEnv.Embedder,
-			PatternStore:   a.WorkspaceEnv.PatternStore,
-			KnowledgeStore: a.WorkspaceEnv.KnowledgeStore,
+			IndexManager:   a.Environment.IndexManager,
+			Model:          a.Environment.Model,
+			Embedder:       nil, // We'll need to get this from somewhere
+			PatternStore:   a.PatternStore,
+			KnowledgeStore: nil, // We'll need to get this from somewhere
 		}
 		a.ContextPipeline = pretask.NewPipeline(env, tensionQuerier, config)
 	}

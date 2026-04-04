@@ -10,7 +10,7 @@ import (
 // FileResolver validates and normalizes file paths from user input.
 // It wraps framework/contextmgr.ExtractFileReferences for @mention parsing.
 type FileResolver struct {
-	workspace string // absolute workspace root
+	Workspace string // absolute workspace root
 }
 
 // ResolvedFiles holds the output of a resolution pass.

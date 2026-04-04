@@ -77,7 +77,6 @@ func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloru
 		CompactionEligible:   work.ContextBundle.CompactionEligible,
 		RestoreRequired:      work.ContextBundle.RestoreRequired,
 		ProtectedPaths:       contextProtectedPaths(task, work),
-		ConfirmedFiles:       confirmedFiles, // Add confirmed files to state
 		UpdatedAt:            time.Now().UTC(),
 	}
 	if policy != nil && policy.Budget != nil {
@@ -91,7 +90,6 @@ func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloru
 		Shared:         core.NewSharedContext(core.NewContext(), policy.Budget, policy.Summarizer),
 		State:          state,
 		protectedPaths: stringSliceSet(state.ProtectedPaths),
-		confirmedFiles: confirmedFiles,
 	}
 	
 	// Pre-load confirmed files if policy is available
@@ -108,30 +106,6 @@ func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloru
 func (rt *ContextRuntime) Activate(task *core.Task, state *core.Context, model core.LanguageModel) ContextRuntimeState {
 	if rt == nil || rt.Policy == nil || state == nil {
 		return ContextRuntimeState{}
-	}
-	
-	// Load confirmed files from state before initial load
-	if confirmedFilesRaw, ok := state.Get("context.confirmed_files"); ok && confirmedFilesRaw != nil {
-		var confirmedFiles []string
-		if cf, ok := confirmedFilesRaw.([]string); ok {
-			confirmedFiles = cf
-		} else if cfSlice, ok := confirmedFilesRaw.([]interface{}); ok {
-			for _, item := range cfSlice {
-				if path, ok := item.(string); ok {
-					confirmedFiles = append(confirmedFiles, path)
-				}
-			}
-		}
-		
-		// Store in runtime
-		rt.confirmedFiles = confirmedFiles
-		
-		// Load confirmed files via ProgressiveLoader
-		if rt.Policy != nil && rt.Policy.Progressive != nil && len(confirmedFiles) > 0 {
-			for _, path := range confirmedFiles {
-				_ = rt.Policy.Progressive.DrillDown(path)
-			}
-		}
 	}
 	
 	rt.State.InitialLoadAttempted = true

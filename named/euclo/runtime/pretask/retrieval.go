@@ -121,7 +121,7 @@ type ArchaeoRetrieverConfig struct {
 // RetrieveTopic performs Stage 1b: query-driven archaeo retrieval.
 func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID string) ([]KnowledgeEvidenceItem, error) {
 	if workflowID == "" {
-		return nil, nil
+		return []KnowledgeEvidenceItem{}, nil
 	}
 	
 	var results []KnowledgeEvidenceItem
