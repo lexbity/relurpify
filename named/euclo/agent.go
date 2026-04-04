@@ -114,6 +114,7 @@ type Agent struct {
 	Emitter             interaction.FrameEmitter // live emitter from TUI; nil means use task-scoped emitter
 	RuntimeProviders    []core.Provider
 	ContextPipeline     *pretask.Pipeline // Phase 2: context enrichment pipeline
+	WorkspaceEnv        ayenitd.WorkspaceEnvironment // Full workspace environment
 }
 
 func New(env ayenitd.WorkspaceEnvironment) *Agent {
@@ -125,6 +126,8 @@ func New(env ayenitd.WorkspaceEnvironment) *Agent {
 func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	a.Config = env.Config
 	a.Memory = env.Memory
+	// Store the full workspace environment
+	a.WorkspaceEnv = env
 	// Convert workspace environment to the agentenv subset used internally.
 	// Workspace-specific fields (WorkflowStore, PlanStore, etc.) are already
 	// stored as separate fields on Agent and are set directly below.
@@ -238,7 +241,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		config := pretask.DefaultPipelineConfig()
 		// We'll need to get the tension service
 		// For now, pass nil
-		a.ContextPipeline = pretask.NewPipeline(a.Environment, nil, config)
+		a.ContextPipeline = pretask.NewPipeline(a.WorkspaceEnv, nil, config)
 	}
 	
 	return a.Initialize(a.Environment.Config)

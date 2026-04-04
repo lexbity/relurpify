@@ -3,7 +3,6 @@ package pretask
 import (
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/lexcodex/relurpify/framework/ast"
 )
