@@ -12,7 +12,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestChatMode_ReturnsNonNilMachine(t *testing.T) {
-	m := modes.ChatMode(&interaction.NoopEmitter{}, interaction.NewAgencyResolver())
+	m := modes.ChatModeLegacy(&interaction.NoopEmitter{}, interaction.NewAgencyResolver())
 	if m == nil {
 		t.Fatal("expected non-nil machine")
 	}
@@ -22,7 +22,7 @@ func TestChatMode_ReturnsNonNilMachine(t *testing.T) {
 }
 
 func TestChatMode_NilResolverNoPanic(t *testing.T) {
-	m := modes.ChatMode(&interaction.NoopEmitter{}, nil)
+	m := modes.ChatModeLegacy(&interaction.NoopEmitter{}, nil)
 	if m == nil {
 		t.Fatal("expected non-nil machine even with nil resolver")
 	}
@@ -68,7 +68,7 @@ func TestRegisterChatTriggers_RegistersExpectedPhrases(t *testing.T) {
 // skipChatReflect is tested via the machine's SkipWhen predicate:
 // build machine, set state, verify reflect is skipped.
 func TestChatMode_SkipReflect_SkipFlag(t *testing.T) {
-	m := modes.ChatMode(&interaction.NoopEmitter{}, interaction.NewAgencyResolver())
+	m := modes.ChatModeLegacy(&interaction.NoopEmitter{}, interaction.NewAgencyResolver())
 	m.State()["chat.skip_reflect"] = true
 	// reflect is the 3rd phase (index 2); jump to it to test SkipWhen
 	m.JumpToPhase("reflect")
@@ -78,7 +78,7 @@ func TestChatMode_SkipReflect_SkipFlag(t *testing.T) {
 }
 
 func TestChatMode_SkipReflect_AskSubMode(t *testing.T) {
-	m := modes.ChatMode(&interaction.NoopEmitter{}, interaction.NewAgencyResolver())
+	m := modes.ChatModeLegacy(&interaction.NoopEmitter{}, interaction.NewAgencyResolver())
 	m.State()["chat.sub_mode"] = "ask"
 	m.State()["present.answered"] = true
 	m.JumpToPhase("reflect")
