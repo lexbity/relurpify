@@ -46,23 +46,43 @@ type IndexQuerier interface {
 // retrieval expansion. The loader skips re-reading them (cache hit).
 func (e *AnchorExtractor) Extract(input PipelineInput) AnchorSet {
 	var anchors AnchorSet
-	// 1. CurrentTurnFiles highest priority
-	anchors.FilePaths = append(anchors.FilePaths, input.CurrentTurnFiles...)
-	// 2. SessionPins
-	anchors.SessionPins = append(anchors.SessionPins, input.SessionPins...)
-	// 3. @-mentions
+	
+	// 1. CurrentTurnFiles highest priority - user-selected this turn
+	// These are added unconditionally, no index confirmation needed
+	for _, path := range input.CurrentTurnFiles {
+		if path == "" {
+			continue
+		}
+		anchors.FilePaths = append(anchors.FilePaths, path)
+	}
+	
+	// 2. SessionPins - confirmed in prior turns, also unconditional
+	anchors.SessionPins = append([]string{}, input.SessionPins...)
+	
+	// 3. @-mentions from query
 	atMentions := extractAtMentions(input.Query)
-	anchors.FilePaths = append(anchors.FilePaths, atMentions...)
-	// 4. CamelCase identifiers
+	for _, path := range atMentions {
+		// Check if not already in FilePaths
+		found := false
+		for _, existing := range anchors.FilePaths {
+			if existing == path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			anchors.FilePaths = append(anchors.FilePaths, path)
+		}
+	}
+	
+	// 4. Extract and confirm CamelCase identifiers
 	camelSymbols := extractCamelCase(input.Query)
-	// 5. Package paths
-	pkgRefs := extractPackagePaths(input.Query)
-	// Confirm symbols and package paths via index
 	confirmedSymbols := make([]string, 0)
 	for _, sym := range camelSymbols {
 		if len(sym) < e.config.MinSymbolLength {
 			continue
 		}
+		// Confirm against index
 		nodes, err := e.index.QuerySymbol(sym)
 		if err == nil && len(nodes) > 0 {
 			confirmedSymbols = append(confirmedSymbols, sym)
@@ -71,13 +91,17 @@ func (e *AnchorExtractor) Extract(input PipelineInput) AnchorSet {
 			}
 		}
 	}
+	anchors.SymbolNames = confirmedSymbols
+	
+	// 5. Extract and confirm package paths
+	pkgRefs := extractPackagePaths(input.Query)
 	for _, pkg := range pkgRefs {
 		nodes, err := e.index.QuerySymbol(pkg)
 		if err == nil && len(nodes) > 0 {
 			anchors.PackageRefs = append(anchors.PackageRefs, pkg)
 		}
 	}
-	anchors.SymbolNames = confirmedSymbols
+	
 	anchors.Raw = input.Query
 	return anchors
 }

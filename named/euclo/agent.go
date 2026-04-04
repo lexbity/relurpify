@@ -112,6 +112,7 @@ type Agent struct {
 	BehaviorDispatcher  *euclodispatch.Dispatcher
 	Emitter             interaction.FrameEmitter // live emitter from TUI; nil means use task-scoped emitter
 	RuntimeProviders    []core.Provider
+	ContextPipeline     *pretask.Pipeline // Phase 2: context enrichment pipeline
 }
 
 func New(env ayenitd.WorkspaceEnvironment) *Agent {
@@ -230,6 +231,15 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	if a.BehaviorDispatcher == nil {
 		a.BehaviorDispatcher = euclodispatch.NewDispatcher()
 	}
+	
+	// Initialize context enrichment pipeline (Phase 2)
+	if a.ContextPipeline == nil {
+		config := pretask.DefaultPipelineConfig()
+		// We'll need to get the tension service
+		// For now, pass nil
+		a.ContextPipeline = pretask.NewPipeline(a.Environment, nil, config)
+	}
+	
 	return a.Initialize(a.Environment.Config)
 }
 

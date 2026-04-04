@@ -30,29 +30,33 @@ func (m *ResultMerger) Merge(
 ) EnrichedContextBundle {
 	bundle := EnrichedContextBundle{}
 
-	// 1. Collect anchored files from anchors.FilePaths
+	// 1. Collect anchored files from anchors.FilePaths and anchors.SessionPins
 	anchoredMap := make(map[string]CodeEvidenceItem)
+	
+	// Add current turn files with highest priority
 	for _, path := range anchors.FilePaths {
 		item := CodeEvidenceItem{
-			Path:   path,
-			Score:  1.0,
-			Source: EvidenceSourceAnchor,
+			Path:    path,
+			Score:   1.0,
+			Source:  EvidenceSourceAnchor,
 			Summary: "User‑selected file",
 		}
 		anchoredMap[path] = item
 	}
-	// Also include session pins as anchored
+	
+	// Add session pins with slightly lower priority
 	for _, path := range anchors.SessionPins {
-		if _, ok := anchoredMap[path]; !ok {
+		if _, exists := anchoredMap[path]; !exists {
 			item := CodeEvidenceItem{
-				Path:   path,
-				Score:  0.9,
-				Source: EvidenceSourceAnchor,
+				Path:    path,
+				Score:   0.9,
+				Source:  EvidenceSourceAnchor,
 				Summary: "Previously pinned",
 			}
 			anchoredMap[path] = item
 		}
 	}
+	
 	// Convert map to slice
 	for _, item := range anchoredMap {
 		bundle.AnchoredFiles = append(bundle.AnchoredFiles, item)
@@ -63,6 +67,9 @@ func (m *ResultMerger) Merge(
 	for _, item := range bundle.AnchoredFiles {
 		seenPaths[item.Path] = true
 	}
+	
+	// Sort stage1.CodeEvidence by score (descending) for better selection
+	// For now, just take all available
 	for _, item := range stage1.CodeEvidence {
 		if seenPaths[item.Path] {
 			continue
@@ -73,6 +80,8 @@ func (m *ResultMerger) Merge(
 
 	// 3. Knowledge items (deduplicate by RefID)
 	seenRefs := make(map[string]bool)
+	
+	// Add knowledge from stage1
 	for _, item := range stage1.KnowledgeEvidence {
 		if seenRefs[item.RefID] {
 			continue
@@ -80,6 +89,8 @@ func (m *ResultMerger) Merge(
 		bundle.KnowledgeTopic = append(bundle.KnowledgeTopic, item)
 		seenRefs[item.RefID] = true
 	}
+	
+	// Add expanded knowledge
 	for _, item := range expanded {
 		if seenRefs[item.RefID] {
 			continue
@@ -89,24 +100,60 @@ func (m *ResultMerger) Merge(
 	}
 
 	// 4. Apply limits
+	// Limit anchored files (should rarely exceed limit)
 	if len(bundle.AnchoredFiles) > m.config.MaxCodeFiles {
 		bundle.AnchoredFiles = bundle.AnchoredFiles[:m.config.MaxCodeFiles]
 	}
+	
+	// Limit expanded files
 	if len(bundle.ExpandedFiles) > m.config.MaxCodeFiles {
 		bundle.ExpandedFiles = bundle.ExpandedFiles[:m.config.MaxCodeFiles]
 	}
-	if len(bundle.KnowledgeTopic) > m.config.MaxKnowledgeItems {
-		bundle.KnowledgeTopic = bundle.KnowledgeTopic[:m.config.MaxKnowledgeItems]
-	}
-	if len(bundle.KnowledgeExpanded) > m.config.MaxKnowledgeItems {
-		bundle.KnowledgeExpanded = bundle.KnowledgeExpanded[:m.config.MaxKnowledgeItems]
+	
+	// Limit knowledge items
+	totalKnowledge := len(bundle.KnowledgeTopic) + len(bundle.KnowledgeExpanded)
+	if totalKnowledge > m.config.MaxKnowledgeItems {
+		// Distribute proportionally
+		topicRatio := float64(len(bundle.KnowledgeTopic)) / float64(totalKnowledge)
+		topicLimit := int(float64(m.config.MaxKnowledgeItems) * topicRatio)
+		if topicLimit < 1 && len(bundle.KnowledgeTopic) > 0 {
+			topicLimit = 1
+		}
+		expandedLimit := m.config.MaxKnowledgeItems - topicLimit
+		
+		if len(bundle.KnowledgeTopic) > topicLimit {
+			bundle.KnowledgeTopic = bundle.KnowledgeTopic[:topicLimit]
+		}
+		if len(bundle.KnowledgeExpanded) > expandedLimit {
+			bundle.KnowledgeExpanded = bundle.KnowledgeExpanded[:expandedLimit]
+		}
 	}
 
-	// 5. Simple token estimate (placeholder)
-	bundle.TokenEstimate = len(bundle.AnchoredFiles)*500 + len(bundle.ExpandedFiles)*300 +
-		len(bundle.KnowledgeTopic)*100 + len(bundle.KnowledgeExpanded)*100
+	// 5. Simple token estimate
+	// Rough estimates: anchored files ~500 tokens, expanded ~300 tokens
+	// Knowledge items ~100 tokens each
+	bundle.TokenEstimate = len(bundle.AnchoredFiles)*500 + 
+		len(bundle.ExpandedFiles)*300 +
+		(len(bundle.KnowledgeTopic) + len(bundle.KnowledgeExpanded))*100
+	
+	// Enforce token budget
 	if bundle.TokenEstimate > m.config.TokenBudget {
+		// For now, just cap the estimate
 		bundle.TokenEstimate = m.config.TokenBudget
+	}
+
+	// 6. Populate PipelineTrace (simplified for now)
+	bundle.PipelineTrace = PipelineTrace{
+		AnchorsExtracted:      len(anchors.SymbolNames) + len(anchors.FilePaths) + len(anchors.PackageRefs),
+		AnchorsConfirmed:      len(anchors.SymbolNames) + len(anchors.PackageRefs),
+		Stage1CodeResults:     len(stage1.CodeEvidence),
+		Stage1ArchaeoResults:  len(stage1.KnowledgeEvidence),
+		HypotheticalGenerated: sketch.Grounded,
+		HypotheticalTokens:    sketch.TokenCount,
+		Stage3ArchaeoResults:  len(expanded),
+		FallbackUsed:          !sketch.Grounded && len(stage1.CodeEvidence) == 0,
+		FallbackReason:        "",
+		TotalTokenEstimate:    bundle.TokenEstimate,
 	}
 
 	return bundle

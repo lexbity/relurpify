@@ -9,6 +9,9 @@ package pretask
 import (
 	"context"
 	"sync"
+
+	"github.com/lexcodex/relurpify/ayenitd"
+	"github.com/lexcodex/relurpify/framework/ast"
 )
 
 // Pipeline orchestrates the full pre-task context enrichment flow.
@@ -67,16 +70,27 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 	var stage1Knowledge []KnowledgeEvidenceItem
 	var stage1Err, archErr error
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		stage1Code, stage1Err = p.indexRetriever.Retrieve(ctx, anchors)
-	}()
-	go func() {
-		defer wg.Done()
-		stage1Knowledge, archErr = p.archaeoRetriever.RetrieveTopic(ctx, input.Query, input.WorkflowID)
-	}()
+	
+	// Only run index retriever if we have anchors
+	if len(anchors.FilePaths) > 0 || len(anchors.SymbolNames) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			stage1Code, stage1Err = p.indexRetriever.Retrieve(ctx, anchors)
+		}()
+	}
+	
+	// Only run archaeo retriever if we have a workflow ID
+	if input.WorkflowID != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			stage1Knowledge, archErr = p.archaeoRetriever.RetrieveTopic(ctx, input.Query, input.WorkflowID)
+		}()
+	}
+	
 	wg.Wait()
+	
 	// errors are ignored for now (logged in trace)
 	if stage1Err != nil {
 		trace.FallbackUsed = true
@@ -86,6 +100,7 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 		trace.FallbackUsed = true
 		trace.FallbackReason = "archaeo_topic_error"
 	}
+	
 	stage1 := Stage1Result{
 		CodeEvidence:      stage1Code,
 		KnowledgeEvidence: stage1Knowledge,
@@ -134,21 +149,88 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 	return bundle, nil
 }
 
-// NewPipeline constructs a pipeline with default stub components.
-func NewPipeline(config PipelineConfig) *Pipeline {
-	// Create a dummy index querier for the anchor extractor.
-	dummyQuerier := &dummyIndexQuerier{}
-	return &Pipeline{
-		anchorExtractor: &AnchorExtractor{
-			index:  dummyQuerier,
-			config: AnchorConfig{MinSymbolLength: 3, MaxSymbols: 12},
+// NewPipeline constructs a pipeline from a WorkspaceEnvironment and an optional
+// TensionQuerier. All service fields are optional — nil dependencies cause the
+// relevant stage to be skipped gracefully.
+func NewPipeline(
+	env ayenitd.WorkspaceEnvironment,
+	tensions TensionQuerier,  // optional — nil degrades archaeo topic retrieval to pattern-only
+	config PipelineConfig,
+) *Pipeline {
+	// Create anchor extractor with index from environment
+	var indexQuerier IndexQuerier
+	if env.IndexManager != nil {
+		indexQuerier = &indexManagerQuerier{im: env.IndexManager}
+	} else {
+		indexQuerier = &dummyIndexQuerier{}
+	}
+	
+	anchorExtractor := &AnchorExtractor{
+		index: indexQuerier,
+		config: AnchorConfig{
+			MinSymbolLength: 3,
+			MaxSymbols:      12,
 		},
-		indexRetriever:   &IndexRetriever{},
-		archaeoRetriever: &ArchaeoRetriever{},
-		hypotheticalGen:  &HypotheticalGenerator{},
-		merger:           &ResultMerger{config: MergerConfig{TokenBudget: config.TokenBudget, MaxCodeFiles: config.MaxCodeFiles, MaxKnowledgeItems: config.MaxKnowledgeItems}},
+	}
+	
+	// Create index retriever
+	indexRetriever := &IndexRetriever{
+		index: indexQuerier,
+		config: IndexRetrieverConfig{
+			DependencyHops:   1,
+			MaxFilesPerSymbol: 3,
+		},
+	}
+	
+	// Create archaeo retriever
+	archaeoRetriever := &ArchaeoRetriever{
+		tensionSvc: tensions,
+		config: ArchaeoRetrieverConfig{
+			WorkflowID: config.WorkflowID,
+			MaxItems:   config.MaxKnowledgeItems,
+			MaxTokens:  500,
+		},
+	}
+	
+	// Create hypothetical generator (stub for now)
+	hypotheticalGen := &HypotheticalGenerator{}
+	
+	// Create merger
+	merger := &ResultMerger{
+		config: MergerConfig{
+			TokenBudget:       config.TokenBudget,
+			MaxCodeFiles:      config.MaxCodeFiles,
+			MaxKnowledgeItems: config.MaxKnowledgeItems,
+		},
+	}
+	
+	return &Pipeline{
+		anchorExtractor:  anchorExtractor,
+		indexRetriever:   indexRetriever,
+		archaeoRetriever: archaeoRetriever,
+		hypotheticalGen:  hypotheticalGen,
+		merger:           merger,
 		config:           config,
 	}
+}
+
+// indexManagerQuerier implements IndexQuerier using ast.IndexManager
+type indexManagerQuerier struct {
+	im *ast.IndexManager
+}
+
+func (q *indexManagerQuerier) QuerySymbol(pattern string) ([]*ast.Node, error) {
+	if q.im == nil {
+		return nil, nil
+	}
+	return q.im.QuerySymbol(pattern)
+}
+
+func (q *indexManagerQuerier) SearchNodes(query ast.NodeQuery) ([]*ast.Node, error) {
+	if q.im == nil {
+		return nil, nil
+	}
+	return q.im.SearchNodes(query)
 }
 
 // dummyIndexQuerier implements IndexQuerier for stub purposes.
