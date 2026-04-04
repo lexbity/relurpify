@@ -134,7 +134,38 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 
 	// Phase I: Scheduler Start
 	scheduler := NewServiceScheduler()
-	// TODO: load cron-from-memory jobs
+	
+	// Load cron-from-memory jobs
+	if err := scheduler.LoadJobsFromMemory(ctx, memStore); err != nil {
+		logger.Printf("scheduler: failed to load jobs from memory: %v", err)
+	}
+	
+	// Register hardcoded re-index job if configured
+	// For Phase 1, we'll register it if MaxIterations > 0 (as a demo flag)
+	if cfg.MaxIterations > 0 {
+		scheduler.Register(ScheduledJob{
+			ID:       "reindex-workspace",
+			CronExpr: "0 */6 * * *", // Every 6 hours at minute 0
+			Action: func(ctx context.Context) error {
+				logger.Printf("scheduler: re-indexing workspace")
+				// Re-call IndexManager.StartIndexing if it exists
+				if boot.Environment.IndexManager != nil {
+					// Start indexing in background
+					go func() {
+						if err := boot.Environment.IndexManager.StartIndexing(ctx); err != nil {
+							logger.Printf("scheduler: re-index failed: %v", err)
+						} else {
+							logger.Printf("scheduler: re-index completed")
+						}
+					}()
+				}
+				return nil
+			},
+			Source: "internal",
+		})
+		logger.Printf("scheduler: registered re-index job")
+	}
+	
 	scheduler.Start(ctx)
 
 	// Build WorkspaceEnvironment

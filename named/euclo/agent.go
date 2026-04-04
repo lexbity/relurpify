@@ -85,7 +85,7 @@ type Agent struct {
 	Delegate       *reactpkg.ReActAgent
 	CheckpointPath string
 	Memory         memory.MemoryStore
-	Environment    agentenv.AgentEnvironment
+	Environment    agents.WorkspaceEnvironment
 	GraphDB        *graphdb.Engine
 	RetrievalDB    *sql.DB
 	PlanStore      frameworkplan.PlanStore
@@ -112,13 +112,13 @@ type Agent struct {
 	RuntimeProviders    []core.Provider
 }
 
-func New(env agentenv.AgentEnvironment) *Agent {
+func New(env agents.WorkspaceEnvironment) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *Agent) InitializeEnvironment(env agents.WorkspaceEnvironment) error {
 	a.Config = env.Config
 	a.Memory = env.Memory
 	a.Environment = env

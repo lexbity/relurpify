@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/agents"
 	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -29,7 +29,7 @@ import (
 // Agent is the Nexus-managed named runtime for rex.
 type Agent struct {
 	Config      *core.Config
-	Environment agentenv.AgentEnvironment
+	Environment agents.WorkspaceEnvironment
 	Workspace   string
 	RexConfig   rexconfig.Config
 	Delegates   *delegates.Registry
@@ -39,17 +39,17 @@ type Agent struct {
 	LastProof   proof.ProofSurface
 }
 
-func New(env agentenv.AgentEnvironment) *Agent {
+func New(env agents.WorkspaceEnvironment) *Agent {
 	return NewWithWorkspace(env, "")
 }
 
-func NewWithWorkspace(env agentenv.AgentEnvironment, workspace string) *Agent {
+func NewWithWorkspace(env agents.WorkspaceEnvironment, workspace string) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env, workspace)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment, workspace string) error {
+func (a *Agent) InitializeEnvironment(env agents.WorkspaceEnvironment, workspace string) error {
 	a.Environment = env
 	a.Config = env.Config
 	a.RexConfig = rexconfig.Default()

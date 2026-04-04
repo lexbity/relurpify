@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/agents"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -29,12 +29,12 @@ type Agent struct {
 }
 
 func init() {
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.AgentEnvironment) graph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agents.WorkspaceEnvironment) graph.WorkflowExecutor {
 		return New(env, WithWorkspace(workspace))
 	})
 }
 
-func New(env agentenv.AgentEnvironment, opts ...Option) *Agent {
+func New(env agents.WorkspaceEnvironment, opts ...Option) *Agent {
 	agent := &Agent{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -45,7 +45,7 @@ func New(env agentenv.AgentEnvironment, opts ...Option) *Agent {
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *Agent) InitializeEnvironment(env agents.WorkspaceEnvironment) error {
 	a.Config = env.Config
 	if a.Tools == nil {
 		a.Tools = env.Registry
