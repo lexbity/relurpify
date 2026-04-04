@@ -72,9 +72,9 @@ type Stage1Result struct {
 
 // HypotheticalSketch is the grounded vocabulary output from Stage 2.
 type HypotheticalSketch struct {
-	Text       string // raw model output
-	Embedding  []float32 // computed after generation
-	Grounded   bool   // false if generation was skipped / fell back
+	Text       string     // raw model output
+	Embedding  []float32  // computed after generation
+	Grounded   bool       // false if generation was skipped / fell back
 	TokenCount int
 }
 

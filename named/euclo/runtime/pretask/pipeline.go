@@ -113,15 +113,17 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 		trace.FallbackReason = "anchor_coverage_sufficient"
 	}
 	if !skipHypothetical && p.hypotheticalGen != nil {
-		var err error
-		sketch, err = p.hypotheticalGen.Generate(ctx, input.Query, stage1)
+		sketch, err := p.hypotheticalGen.Generate(ctx, input.Query, stage1)
 		if err != nil {
 			trace.FallbackUsed = true
 			trace.FallbackReason = "hypothetical_generation_error"
-		} else {
-			sketch.Grounded = true
+		} else if sketch.Grounded {
 			trace.HypotheticalGenerated = true
 			trace.HypotheticalTokens = sketch.TokenCount
+		} else {
+			// Generation succeeded but returned ungrounded (e.g., no evidence)
+			trace.FallbackUsed = true
+			trace.FallbackReason = "hypothetical_not_grounded"
 		}
 	}
 
@@ -191,9 +193,18 @@ func NewPipeline(
 		patternQuerier = &patternStoreQuerier{store: env.PatternStore}
 	}
 	
+	// Get retriever service from environment if available
+	var retrieverSvc retrieval.RetrieverService
+	if env.RetrievalDB != nil {
+		// In a real implementation, we'd create a retriever service from the DB
+		// For now, we'll leave it nil
+		retrieverSvc = nil
+	}
+	
 	archaeoRetriever := &ArchaeoRetriever{
 		tensionSvc: tensions,
 		patternSvc: patternQuerier,
+		retriever:  retrieverSvc,
 		config: ArchaeoRetrieverConfig{
 			WorkflowID: config.WorkflowID,
 			MaxItems:   config.MaxKnowledgeItems,
@@ -201,8 +212,21 @@ func NewPipeline(
 		},
 	}
 	
-	// Create hypothetical generator (stub for now)
-	hypotheticalGen := &HypotheticalGenerator{}
+	// Create hypothetical generator with model and embedder from environment
+	var hypotheticalGen *HypotheticalGenerator
+	if env.Model != nil && env.Embedder != nil {
+		hypotheticalGen = &HypotheticalGenerator{
+			model:    env.Model,
+			embedder: env.Embedder,
+			config: HypotheticalConfig{
+				MaxTokens:   config.HypotheticalMaxTokens,
+				Temperature: 0.1,
+			},
+		}
+	} else {
+		// Create stub generator
+		hypotheticalGen = &HypotheticalGenerator{}
+	}
 	
 	// Create merger
 	merger := &ResultMerger{

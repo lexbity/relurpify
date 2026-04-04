@@ -184,8 +184,13 @@ func (r *ArchaeoRetriever) RetrieveExpanded(ctx context.Context, sketch Hypothet
 	
 	var results []KnowledgeEvidenceItem
 	
-	// Simulate expanded results based on the hypothetical sketch
-	// In a real implementation, this would use the retriever service
+	// Try to use the retriever service if available
+	if r.retriever != nil {
+		// In a real implementation, we would call r.retriever.Retrieve()
+		// For now, we'll use the stub implementation
+	}
+	
+	// Fallback to stub results
 	results = append(results, KnowledgeEvidenceItem{
 		RefID:   "expanded_1",
 		Kind:    KnowledgeKindDecision,

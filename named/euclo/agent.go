@@ -483,6 +483,9 @@ type tensionServiceQuerier struct {
 }
 
 func (q *tensionServiceQuerier) ActiveByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
+	if q.service == nil {
+		return nil, nil
+	}
 	tensions, err := q.service.ListByWorkflow(ctx, workflowID)
 	if err != nil {
 		return nil, err
