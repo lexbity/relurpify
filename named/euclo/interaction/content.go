@@ -1,9 +1,5 @@
 package interaction
 
-import (
-	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
-)
-
 // ProposalContent is the typed payload for FrameProposal frames.
 // The system proposes its interpretation of the user's instruction.
 type ProposalContent struct {
@@ -142,6 +138,20 @@ type TransitionInfo struct {
 	TargetMode string `json:"target_mode"`
 }
 
+// PipelineTrace records per-stage diagnostics. Written to state for observability.
+type PipelineTrace struct {
+	AnchorsExtracted       int    `json:"anchors_extracted"`
+	AnchorsConfirmed       int    `json:"anchors_confirmed"`
+	Stage1CodeResults      int    `json:"stage1_code_results"`
+	Stage1ArchaeoResults   int    `json:"stage1_archaeo_results"`
+	HypotheticalGenerated  bool   `json:"hypothetical_generated"`
+	HypotheticalTokens     int    `json:"hypothetical_tokens"`
+	Stage3ArchaeoResults   int    `json:"stage3_archaeo_results"`
+	FallbackUsed           bool   `json:"fallback_used"`
+	FallbackReason         string `json:"fallback_reason,omitempty"`
+	TotalTokenEstimate     int    `json:"total_token_estimate"`
+}
+
 // ContextProposalContent is the typed payload for context enrichment proposal frames.
 // The host UI renders this however appropriate for its surface.
 type ContextProposalContent struct {
@@ -155,7 +165,7 @@ type ContextProposalContent struct {
 	KnowledgeItems []ContextKnowledgeEntry `json:"knowledge_items,omitempty"`
 
 	// PipelineTrace is the per-stage diagnostic summary.
-	PipelineTrace pretask.PipelineTrace `json:"pipeline_trace"`
+	PipelineTrace PipelineTrace `json:"pipeline_trace"`
 }
 
 // ContextFileEntry is a single file entry in a context proposal.

@@ -128,7 +128,18 @@ func (p *ContextProposalPhase) Execute(
 
 func convertToContextProposalContent(bundle pretask.EnrichedContextBundle) interaction.ContextProposalContent {
 	content := interaction.ContextProposalContent{
-		PipelineTrace: bundle.PipelineTrace,
+		PipelineTrace: interaction.PipelineTrace{
+			AnchorsExtracted:      bundle.PipelineTrace.AnchorsExtracted,
+			AnchorsConfirmed:      bundle.PipelineTrace.AnchorsConfirmed,
+			Stage1CodeResults:     bundle.PipelineTrace.Stage1CodeResults,
+			Stage1ArchaeoResults:  bundle.PipelineTrace.Stage1ArchaeoResults,
+			HypotheticalGenerated: bundle.PipelineTrace.HypotheticalGenerated,
+			HypotheticalTokens:    bundle.PipelineTrace.HypotheticalTokens,
+			Stage3ArchaeoResults:  bundle.PipelineTrace.Stage3ArchaeoResults,
+			FallbackUsed:          bundle.PipelineTrace.FallbackUsed,
+			FallbackReason:        bundle.PipelineTrace.FallbackReason,
+			TotalTokenEstimate:    bundle.PipelineTrace.TotalTokenEstimate,
+		},
 	}
 
 	// Convert anchored files
