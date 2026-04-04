@@ -2,6 +2,7 @@ package ayenitd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -143,10 +144,20 @@ func checkOllamaModel(endpoint, model string) (bool, string) {
 	if resp.StatusCode != 200 {
 		return false, fmt.Sprintf("Ollama API returned %s", resp.Status)
 	}
-	// For simplicity, we'll assume the model is present if the endpoint responds.
-	// In a real implementation, we would parse the JSON response.
-	// This is a placeholder.
-	return true, fmt.Sprintf("model %s assumed present (check not fully implemented)", model)
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, fmt.Sprintf("failed to parse model list: %s", err)
+	}
+	for _, m := range result.Models {
+		if m.Name == model {
+			return true, fmt.Sprintf("model %s present", model)
+		}
+	}
+	return false, fmt.Sprintf("model %s not found in Ollama; run: ollama pull %s", model, model)
 }
 
 func checkDiskSpace(workspace string, requiredBytes int64) (bool, string) {

@@ -200,6 +200,16 @@ func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
 	return os.WriteFile(dst, []byte(rendered), 0o644)
 }
 
+func runCommand(ctx context.Context, name string, args ...string) (string, error) {
+	// placeholder
+	return "", nil
+}
+
+func runCommand(ctx context.Context, name string, args ...string) (string, error) {
+	// placeholder implementation
+	return "", nil
+}
+
 func detectChromiumStatus(ctx context.Context) DependencyStatus {
 	binaries := []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
 	for _, name := range binaries {
@@ -248,4 +258,14 @@ func firstNonEmpty(values ...string) string {
 
 var execLookPath = func(file string) (string, error) {
 	return execLookPathImpl(file)
+}
+
+func execLookPathImpl(file string) (string, error) {
+	// placeholder implementation
+	return "", fmt.Errorf("not found")
+}
+
+func execLookPathImpl(file string) (string, error) {
+	// placeholder implementation
+	return "", fmt.Errorf("not found")
 }
