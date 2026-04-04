@@ -1,4 +1,4 @@
-# anitd — Engineering Specification
+# ayenitd — Engineering Specification
 
 **Status**: Approved, not yet implemented  
 **Depends on**: Nothing (foundational)  
@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-`ayenitd` is the **composition root and service lifecycle manager** for Relurpify. It is analogous to systemd/init: it starts services in dependency order, holds them alive, and shuts them down cleanly on exit. Nothing in `agents/`, `named/`, or `app/` should be responsible for constructing or wiring platform services — that is `anitd`'s job.
+`ayenitd` is the **composition root and service lifecycle manager** for Relurpify. It is analogous to systemd/init: it starts services in dependency order, holds them alive, and shuts them down cleanly on exit. Nothing in `agents/`, `named/`, or `app/` should be responsible for constructing or wiring platform services — that is `ayenitd`'s job.
 
 Currently this responsibility is scattered across:
 - `app/relurpish/runtime/runtime.go:New()` — opens stores, builds model, calls bootstrap
@@ -17,32 +17,32 @@ Currently this responsibility is scattered across:
 - `app/relurpish/runtime/runtime.go:openRuntimeStores()` — opens SQLite stores
 - `app/dev-agent-cli/start.go` — separate init path with duplicated wiring
 
-`anitd` centralises all of this into a single `Open()` call that returns a live, health-checked `*Workspace`.
+`ayenitd` centralises all of this into a single `Open()` call that returns a live, health-checked `*Workspace`.
 
 ### Position in package hierarchy
 
 ```
-app/relurpish/          ← TUI, CLI, HTTP — uses anitd.Open()
-app/dev-agent-cli/      ← CLI entry point — uses anitd.Open()
-named/euclo/            ← receives anitd.WorkspaceEnvironment
-named/rex/              ← receives anitd.WorkspaceEnvironment
-named/testfu/           ← receives anitd.WorkspaceEnvironment
+app/relurpish/          ← TUI, CLI, HTTP — uses ayenitd.Open()
+app/dev-agent-cli/      ← CLI entry point — uses ayenitd.Open()
+named/euclo/            ← receives ayenitd.WorkspaceEnvironment
+named/rex/              ← receives ayenitd.WorkspaceEnvironment
+named/testfu/           ← receives ayenitd.WorkspaceEnvironment
 ------------------------------------------------------------
-anitd/                  ← NEW: composition root + service lifecycle
+ayenitd/                  ← NEW: composition root + service lifecycle
 ------------------------------------------------------------
 agents/                 ← implementation layer, framework imports only
 framework/              ← pure abstractions: interfaces, types, algorithms
 platform/               ← OS-level adapters: llm/, fs/, git/, shell/, ast/
 ```
 
-`anitd` imports from `framework/`, `platform/`, and `archaeo/`. Nothing in `framework/` or `platform/` imports `anitd`.
+`ayenitd` imports from `framework/`, `platform/`, and `archaeo/`. Nothing in `framework/` or `platform/` imports `ayenitd`.
 
 ---
 
 ## 2. Package Structure
 
 ```
-anitd/
+ayenitd/
   doc.go                 — package overview
   open.go                — Open() entry point
   workspace.go           — Workspace struct + Close()
@@ -68,7 +68,7 @@ This is the shared dependency container that agents receive. It replaces `framew
 
 ```go
 // WorkspaceEnvironment is the set of pre-initialized services shared across all
-// agents in a workspace session. It is produced by anitd.Open() and passed
+// agents in a workspace session. It is produced by ayenitd.Open() and passed
 // directly to agent constructors. It is shallow-copyable; agents may narrow
 // scope (e.g. replace Registry for a child execution) without rebuilding.
 type WorkspaceEnvironment struct {
@@ -127,7 +127,7 @@ func (e WorkspaceEnvironment) WithMemory(m memory.MemoryStore) WorkspaceEnvironm
 
 ```go
 // WorkspaceConfig is the resolved configuration produced from CLI flags, YAML
-// workspace config, and environment. It is the input to anitd.Open().
+// workspace config, and environment. It is the input to ayenitd.Open().
 type WorkspaceConfig struct {
     // Required
     Workspace      string   // absolute path to workspace root
@@ -352,7 +352,7 @@ func (s *ServiceScheduler) Start(ctx context.Context)
 func (s *ServiceScheduler) Stop()
 ```
 
-**Cron-from-memory**: On startup, `anitd.Open()` queries the pattern/memory store for persisted job definitions (stored under a well-known key prefix, e.g. `anitd.cron.*`). Each entry is deserialized as a `ScheduledJob` and registered with the scheduler.
+**Cron-from-memory**: On startup, `ayenitd.Open()` queries the pattern/memory store for persisted job definitions (stored under a well-known key prefix, e.g. `ayenitd.cron.*`). Each entry is deserialized as a `ScheduledJob` and registered with the scheduler.
 
 **Phase 1 jobs** (hardcoded, not from memory yet):
 - Re-index workspace (re-call `IndexManager.StartIndexing`) on a configurable interval (default: none, opt-in via workspace config)
@@ -361,7 +361,7 @@ func (s *ServiceScheduler) Stop()
 
 ---
 
-## 7. Moving framework/agentenv → anitd
+## 7. Moving framework/agentenv → ayenitd
 
 ### 7.1 What lives in framework/agentenv today
 
@@ -374,26 +374,26 @@ func (s *ServiceScheduler) Stop()
 
 | Item | Moves to |
 |---|---|
-| `AgentEnvironment` struct + helpers | **replaced** by `anitd.WorkspaceEnvironment` |
-| `VerificationPlan` / `VerificationPlanRequest` / `VerificationPlanner` | `anitd/verification.go` (or `framework/agentenv` stays as a thin interface-only package — see note) |
+| `AgentEnvironment` struct + helpers | **replaced** by `ayenitd.WorkspaceEnvironment` |
+| `VerificationPlan` / `VerificationPlanRequest` / `VerificationPlanner` | `ayenitd/verification.go` (or `framework/agentenv` stays as a thin interface-only package — see note) |
 | `CompatibilitySurface*` / `CompatibilitySurfaceExtractor` | same as above |
 
-**Design note**: `VerificationPlanner` and `CompatibilitySurfaceExtractor` are interfaces used by `named/euclo`. They don't belong in `framework/` (they're agent-level contracts, not framework-level abstractions), but they also shouldn't live in `anitd/` if `anitd` is imported by `framework/`. Since `framework/` never imports `anitd`, there is no cycle risk — these interfaces can move to `anitd/verification.go`. The concrete implementations (if any) stay in `named/euclo/`.
+**Design note**: `VerificationPlanner` and `CompatibilitySurfaceExtractor` are interfaces used by `named/euclo`. They don't belong in `framework/` (they're agent-level contracts, not framework-level abstractions), but they also shouldn't live in `ayenitd/` if `ayenitd` is imported by `framework/`. Since `framework/` never imports `ayenitd`, there is no cycle risk — these interfaces can move to `ayenitd/verification.go`. The concrete implementations (if any) stay in `named/euclo/`.
 
 ### 7.3 Migration plan (backward-compat first, cleanup later)
 
-**Step 1** — Add `anitd.WorkspaceEnvironment` with all fields. Do not touch `framework/agentenv` yet.
+**Step 1** — Add `ayenitd.WorkspaceEnvironment` with all fields. Do not touch `framework/agentenv` yet.
 
 **Step 2** — In `agents/environment.go`, add a second type alias:
 ```go
 // WorkspaceEnvironment is the new composition-root-supplied environment.
 // Use this in new code. AgentEnvironment is kept for compatibility.
-type WorkspaceEnvironment = anitd.WorkspaceEnvironment
+type WorkspaceEnvironment = ayenitd.WorkspaceEnvironment
 ```
 
-**Step 3** — Change `app/relurpish/runtime/runtime.go` to call `anitd.Open()` instead of inline construction. The `BootstrappedAgentRuntime.Environment` field stays as `AgentEnvironment` at this point (it's populated from `WorkspaceEnvironment` by a conversion function).
+**Step 3** — Change `app/relurpish/runtime/runtime.go` to call `ayenitd.Open()` instead of inline construction. The `BootstrappedAgentRuntime.Environment` field stays as `AgentEnvironment` at this point (it's populated from `WorkspaceEnvironment` by a conversion function).
 
-**Step 4** — Migrate `named/euclo/agent.go`, `named/rex/agent.go`, and other named agents to accept `anitd.WorkspaceEnvironment` instead of `agents.AgentEnvironment`. This is a field rename — the struct fields are a superset.
+**Step 4** — Migrate `named/euclo/agent.go`, `named/rex/agent.go`, and other named agents to accept `ayenitd.WorkspaceEnvironment` instead of `agents.AgentEnvironment`. This is a field rename — the struct fields are a superset.
 
 **Step 5** (cleanup, later session) — Delete `framework/agentenv/environment.go`. Update all import paths. Remove `agents/environment.go` alias.
 
@@ -417,18 +417,18 @@ These are the files that need updating in Step 4. All other files that import `a
 
 ## 8. app/relurpish/runtime migration
 
-After `anitd.Open()` exists, `app/relurpish/runtime/runtime.go:New()` becomes:
+After `ayenitd.Open()` exists, `app/relurpish/runtime/runtime.go:New()` becomes:
 
 ```go
 func New(ctx context.Context, cfg Config) (*Runtime, error) {
-    wcfg := anitd.WorkspaceConfig{
+    wcfg := ayenitd.WorkspaceConfig{
         Workspace:      cfg.Workspace,
         ManifestPath:   cfg.ManifestPath,
         OllamaEndpoint: cfg.OllamaEndpoint,
         OllamaModel:    cfg.OllamaModel,
         // ... map remaining fields
     }
-    ws, err := anitd.Open(ctx, wcfg)
+    ws, err := ayenitd.Open(ctx, wcfg)
     if err != nil {
         return nil, err
     }
@@ -443,25 +443,25 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 The `Runtime` struct keeps its existing fields for now (no structural change to `Runtime`). The composition logic moves; the struct's public surface stays stable.
 
-`app/relurpish/runtime/bootstrap.go` becomes an internal detail of `anitd` — its exported `BootstrapAgentRuntime` and `AgentBootstrapOptions` types are deprecated (kept for `dev-agent-cli` until it's also migrated).
+`app/relurpish/runtime/bootstrap.go` becomes an internal detail of `ayenitd` — its exported `BootstrapAgentRuntime` and `AgentBootstrapOptions` types are deprecated (kept for `dev-agent-cli` until it's also migrated).
 
 ---
 
 ## 9. Architectural Cleanup Notes (future work)
 
-The following are **not** in scope for the initial `anitd` implementation. They are listed here so they are not forgotten.
+The following are **not** in scope for the initial `ayenitd` implementation. They are listed here so they are not forgotten.
 
 | Item | Current location | Future location | Reason |
 |---|---|---|---|
-| SQLite store implementations | `framework/memory/db/` | `anitd/db/` or keep in framework | SQLite is an impl detail, not a framework abstraction |
-| `IndexManager` (concrete) | `framework/ast/` | `anitd/` or `platform/ast/` | Depends on filesystem + goroutines, not a pure abstraction |
-| `PermissionManager` | `framework/authorization/` | `anitd/` | Stateful service, not an algorithm |
-| `CapabilityRegistry` | `framework/capability/` | `anitd/` | Stateful registry, depends on service lifecycle |
+| SQLite store implementations | `framework/memory/db/` | `ayenitd/db/` or keep in framework | SQLite is an impl detail, not a framework abstraction |
+| `IndexManager` (concrete) | `framework/ast/` | `ayenitd/` or `platform/ast/` | Depends on filesystem + goroutines, not a pure abstraction |
+| `PermissionManager` | `framework/authorization/` | `ayenitd/` | Stateful service, not an algorithm |
+| `CapabilityRegistry` | `framework/capability/` | `ayenitd/` | Stateful registry, depends on service lifecycle |
 | `OllamaEmbedder` | `framework/retrieval/` | `platform/llm/` | Platform implementation |
-| `openRuntimeStores` | `app/relurpish/runtime/` | `anitd/stores.go` | Already handled in initial scope |
-| `doctor.go` | `app/relurpish/runtime/` | delegates to `anitd.ProbeWorkspace()` | anitd owns checks |
+| `openRuntimeStores` | `app/relurpish/runtime/` | `ayenitd/stores.go` | Already handled in initial scope |
+| `doctor.go` | `app/relurpish/runtime/` | delegates to `ayenitd.ProbeWorkspace()` | ayenitd owns checks |
 
-**Rule**: `framework/` should contain zero SQLite/HTTP/filesystem dependencies. It should be buildable with `GOOS=js` or in a WASM sandbox. Move everything that violates this rule to `anitd/` or `platform/` in a future cleanup pass.
+**Rule**: `framework/` should contain zero SQLite/HTTP/filesystem dependencies. It should be buildable with `GOOS=js` or in a WASM sandbox. Move everything that violates this rule to `ayenitd/` or `platform/` in a future cleanup pass.
 
 ---
 
@@ -481,7 +481,7 @@ func TestOpenWorkspace(t *testing.T) {
     // Requires: Ollama running, test model present
     // 1. Create temp directory with a few .go files
     // 2. Copy test manifest
-    // 3. anitd.Open(ctx, cfg)
+    // 3. ayenitd.Open(ctx, cfg)
     // 4. Assert ws.Environment.IndexManager != nil
     // 5. Assert ws.Environment.WorkflowStore != nil
     // 6. Assert ws.Environment.Registry != nil
@@ -520,29 +520,29 @@ func TestProbeWorkspace_OllamaUnreachable(t *testing.T) {
 
 ### Phase 1 — Package skeleton + WorkspaceEnvironment type
 
-- Create `anitd/` directory
+- Create `ayenitd/` directory
 - Define `WorkspaceEnvironment`, `WorkspaceConfig`, `Workspace` types
 - Implement `Open()` by **extracting** the existing logic from `runtime.go:New()` + `bootstrap.go:BootstrapAgentRuntime()` verbatim — no new logic yet
 - Add `ProbeWorkspace()` extracted from `runtime/doctor.go`
 - Add `stores.go` extracted from `openRuntimeStores()`
-- Add `anitd.WorkspaceEnvironment` to `agents/environment.go` as second alias
+- Add `ayenitd.WorkspaceEnvironment` to `agents/environment.go` as second alias
 - All existing tests must pass unchanged
 
 ### Phase 2 — Platform probe improvements
 
 - Implement full probe suite (Ollama, disk space, workspace dir, SQLite writability)
-- Make `app/relurpish/runtime/doctor.go` delegate to `anitd.ProbeWorkspace()`
+- Make `app/relurpish/runtime/doctor.go` delegate to `ayenitd.ProbeWorkspace()`
 - Add probe unit tests
 
-### Phase 3 — Migrate app/relurpish to use anitd.Open()
+### Phase 3 — Migrate app/relurpish to use ayenitd.Open()
 
-- Rewrite `runtime.go:New()` to call `anitd.Open()`
+- Rewrite `runtime.go:New()` to call `ayenitd.Open()`
 - Delete or internalize `bootstrap.go` logic (keep exported symbols as deprecated stubs for dev-agent-cli)
 - Add integration test `TestOpenWorkspace`
 
 ### Phase 4 — Migrate named agents to WorkspaceEnvironment
 
-- Update `named/euclo/agent.go` — `Environment anitd.WorkspaceEnvironment`
+- Update `named/euclo/agent.go` — `Environment ayenitd.WorkspaceEnvironment`
 - Update `named/rex/agent.go`, `named/testfu/agent.go`, `named/eternal/agent.go`
 - Update `testutil/euclotestutil/` helpers
 - Confirm all tests pass
@@ -555,9 +555,9 @@ func TestProbeWorkspace_OllamaUnreachable(t *testing.T) {
 
 ### Phase 6 — framework/agentenv cleanup (separate session)
 
-- After all named agents use `anitd.WorkspaceEnvironment`
+- After all named agents use `ayenitd.WorkspaceEnvironment`
 - Delete `framework/agentenv/environment.go`
-- Move `VerificationPlanner` / `CompatibilitySurfaceExtractor` interfaces to `anitd/verification.go`
+- Move `VerificationPlanner` / `CompatibilitySurfaceExtractor` interfaces to `ayenitd/verification.go`
 - Update all import paths
 - Delete `agents/environment.go`
 
@@ -565,8 +565,8 @@ func TestProbeWorkspace_OllamaUnreachable(t *testing.T) {
 
 ## 12. Open Questions
 
-1. **Embedder in WorkspaceEnvironment vs CapabilityBundle**: The current `BuildBuiltinCapabilityBundle` doesn't build an Embedder. Should Phase 1 add Embedder to `CapabilityRegistryOptions` and wire it there, or should `anitd.Open()` construct it separately after `CapabilityBundle`? Recommendation: construct separately in Phase 1 (simpler), add to bundle in Phase 5 when the context enrichment pipeline needs it.
+1. **Embedder in WorkspaceEnvironment vs CapabilityBundle**: The current `BuildBuiltinCapabilityBundle` doesn't build an Embedder. Should Phase 1 add Embedder to `CapabilityRegistryOptions` and wire it there, or should `ayenitd.Open()` construct it separately after `CapabilityBundle`? Recommendation: construct separately in Phase 1 (simpler), add to bundle in Phase 5 when the context enrichment pipeline needs it.
 
-2. **dev-agent-cli migration**: `app/dev-agent-cli/start.go` has its own wiring path. It should call `anitd.Open()` in Phase 3, but it currently uses different CLI flags. Flag mapping should be explicit; no silent defaults.
+2. **dev-agent-cli migration**: `app/dev-agent-cli/start.go` has its own wiring path. It should call `ayenitd.Open()` in Phase 3, but it currently uses different CLI flags. Flag mapping should be explicit; no silent defaults.
 
-3. **WorkspaceEnvironment in framework/contextmgr**: `NewProgressiveLoader` currently takes `*ast.IndexManager` directly. After agents receive `WorkspaceEnvironment`, should `contextmgr` accept the full environment or continue with the specific field? Continue with specific field — `contextmgr` is a framework package and must not import `anitd`.
+3. **WorkspaceEnvironment in framework/contextmgr**: `NewProgressiveLoader` currently takes `*ast.IndexManager` directly. After agents receive `WorkspaceEnvironment`, should `contextmgr` accept the full environment or continue with the specific field? Continue with specific field — `contextmgr` is a framework package and must not import `ayenitd`.
