@@ -49,10 +49,19 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase E: Agent Registration + Authorization
+	var sandboxCfg fsandbox.SandboxConfig
+	if cfg.Sandbox {
+		// Use default sandbox configuration when sandbox is enabled
+		sandboxCfg = fsandbox.SandboxConfig{
+			// Set appropriate defaults
+			NetworkIsolation: true,
+			ReadOnlyRoot:     false,
+		}
+	}
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath: cfg.ManifestPath,
 		ConfigPath:   cfg.ConfigPath,
-		Sandbox:      cfg.Sandbox,
+		Sandbox:      sandboxCfg,
 		AuditLimit:   cfg.AuditLimit,
 		BaseFS:       cfg.Workspace,
 		HITLTimeout:  cfg.HITLTimeout,
@@ -175,9 +184,3 @@ func setupLogging(cfg WorkspaceConfig) (*os.File, *log.Logger, error) {
 	return logFile, logger, nil
 }
 
-func (cfg WorkspaceConfig) AgentLabel() string {
-	if cfg.AgentName != "" {
-		return cfg.AgentName
-	}
-	return "default"
-}
