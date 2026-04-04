@@ -2,12 +2,6 @@ package pretask
 
 import (
 	"context"
-)
-
-package pretask
-
-import (
-	"context"
 	"sync"
 
 	"github.com/lexcodex/relurpify/ayenitd"
