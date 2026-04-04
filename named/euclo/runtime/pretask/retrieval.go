@@ -29,10 +29,10 @@ type IndexRetrieverConfig struct {
 // Retrieve returns code evidence for the given anchor set.
 func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]CodeEvidenceItem, error) {
 	if r.index == nil {
-		return nil, nil
+		return []CodeEvidenceItem{}, nil
 	}
 	
-	var results []CodeEvidenceItem
+	results := make([]CodeEvidenceItem, 0)
 	seenPaths := make(map[string]bool)
 	
 	// Process file paths directly (these are already confirmed)
@@ -124,7 +124,7 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 		return []KnowledgeEvidenceItem{}, nil
 	}
 	
-	var results []KnowledgeEvidenceItem
+	results := make([]KnowledgeEvidenceItem, 0)
 	
 	// Try to get tensions if available
 	if r.tensionSvc != nil {
@@ -172,16 +172,16 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 // RetrieveExpanded performs Stage 3: hypothetical-driven archaeo retrieval.
 func (r *ArchaeoRetriever) RetrieveExpanded(ctx context.Context, sketch HypotheticalSketch) ([]KnowledgeEvidenceItem, error) {
 	if !sketch.Grounded || r.config.WorkflowID == "" {
-		return nil, nil
+		return []KnowledgeEvidenceItem{}, nil
 	}
 	
 	// Use the sketch text for retrieval
 	queryText := sketch.Text
 	if queryText == "" {
-		return nil, nil
+		return []KnowledgeEvidenceItem{}, nil
 	}
 	
-	var results []KnowledgeEvidenceItem
+	results := make([]KnowledgeEvidenceItem, 0)
 	
 	// Try to use the retriever service if available
 	if r.retriever != nil {
