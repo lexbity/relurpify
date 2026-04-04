@@ -32,3 +32,11 @@ type WorkspaceConfig struct {
 	DebugAgent          bool
 	AllowedCapabilities []core.CapabilitySelector
 }
+
+// AgentLabel returns the agent name to use for configuration.
+func (cfg WorkspaceConfig) AgentLabel() string {
+	if cfg.AgentName != "" {
+		return cfg.AgentName
+	}
+	return "default"
+}

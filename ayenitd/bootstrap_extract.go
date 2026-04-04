@@ -174,18 +174,22 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	// This will be added in Phase 3.
 
 	env := WorkspaceEnvironment{
-		Config:         agentCfg,
-		Model:          opts.Model,
-		Registry:       registry,
-		IndexManager:   indexManager,
-		SearchEngine:   searchEngine,
-		Memory:         opts.Memory,
-		WorkflowStore:  opts.WorkflowStore,
-		PlanStore:      opts.PlanStore,
-		PatternStore:   opts.PatternStore,
-		CommentStore:   opts.CommentStore,
-		GuidanceBroker: opts.GuidanceBroker,
-		RetrievalDB:    opts.RetrievalDB,
+		Config:             agentCfg,
+		Model:              opts.Model,
+		Registry:           registry,
+		PermissionManager:  opts.PermissionManager,
+		IndexManager:       indexManager,
+		SearchEngine:       searchEngine,
+		Memory:             opts.Memory,
+		WorkflowStore:      opts.WorkflowStore,
+		PlanStore:          opts.PlanStore,
+		PatternStore:       opts.PatternStore,
+		CommentStore:       opts.CommentStore,
+		GuidanceBroker:     opts.GuidanceBroker,
+		RetrievalDB:        opts.RetrievalDB,
+		VerificationPlanner: nil,
+		CompatibilitySurfaceExtractor: nil,
+		Scheduler: nil,
 	}
 
 	return &BootstrappedAgentRuntime{

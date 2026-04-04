@@ -132,6 +132,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	env.Embedder = embedder
 	env.Scheduler = scheduler
 	env.GuidanceBroker = guidanceBroker
+	env.PermissionManager = registration.Permissions
 
 	ws := &Workspace{
 		Environment:       env,
