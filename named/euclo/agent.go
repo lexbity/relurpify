@@ -245,7 +245,15 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		// tensionService returns a struct, not a pointer; we need to check if it's usable.
 		// We'll create the querier regardless; its methods will handle nil store.
 		tensionQuerier = &tensionServiceQuerier{service: a.tensionService()}
-		a.ContextPipeline = pretask.NewPipeline(a.WorkspaceEnv, tensionQuerier, config)
+		// Create pipeline environment from WorkspaceEnv
+		env := pretask.PipelineEnv{
+			IndexManager:   a.WorkspaceEnv.IndexManager,
+			Model:          a.WorkspaceEnv.Model,
+			Embedder:       a.WorkspaceEnv.Embedder,
+			PatternStore:   a.WorkspaceEnv.PatternStore,
+			KnowledgeStore: a.WorkspaceEnv.KnowledgeStore,
+		}
+		a.ContextPipeline = pretask.NewPipeline(env, tensionQuerier, config)
 	}
 	
 	return a.Initialize(a.Environment.Config)

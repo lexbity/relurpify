@@ -4,10 +4,22 @@ import (
 	"context"
 	"sync"
 
-	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/patterns"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/retrieval"
+	"github.com/lexcodex/relurpify/framework/memory"
 )
+
+// PipelineEnv provides the dependencies needed by the pipeline.
+// This is a minimal interface to avoid importing ayenitd.
+type PipelineEnv struct {
+	IndexManager   *ast.IndexManager
+	Model          core.LanguageModel
+	Embedder       retrieval.Embedder
+	PatternStore   patterns.PatternStore
+	KnowledgeStore memory.KnowledgeStore
+}
 
 // Pipeline orchestrates the full pre-task context enrichment flow.
 type Pipeline struct {
@@ -147,11 +159,11 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 	return bundle, nil
 }
 
-// NewPipeline constructs a pipeline from a WorkspaceEnvironment and an optional
+// NewPipeline constructs a pipeline from a PipelineEnv and an optional
 // TensionQuerier. All service fields are optional — nil dependencies cause the
 // relevant stage to be skipped gracefully.
 func NewPipeline(
-	env ayenitd.WorkspaceEnvironment,
+	env PipelineEnv,
 	tensions TensionQuerier,  // optional — nil degrades archaeo topic retrieval to pattern-only
 	config PipelineConfig,
 ) *Pipeline {
