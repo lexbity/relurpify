@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/templates"
@@ -80,30 +81,62 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 	}
 
 	env := ProbeEnvironment(ctx, cfg)
-	report.Dependencies = []DependencyStatus{
-		{
-			Name:      "runsc",
-			Required:  false,
-			Available: env.Sandbox.Runsc.Error == "",
-			Blocking:  false,
-			Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Runsc.Error)),
-		},
-		{
-			Name:      "docker",
-			Required:  false,
-			Available: env.Sandbox.Docker.Error == "",
-			Blocking:  false,
-			Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error)),
-		},
-		{
-			Name:      "ollama",
-			Required:  true,
-			Available: env.Ollama.Healthy,
-			Blocking:  !env.Ollama.Healthy,
-			Details:   firstNonEmpty(env.Ollama.SelectedModel, env.Ollama.Error),
-		},
-		detectChromiumStatus(ctx),
+	// Convert ayenitd probe results
+	ayenitdResults := ayenitd.ProbeWorkspace(ayenitd.WorkspaceConfig{
+		Workspace:      cfg.Workspace,
+		ManifestPath:   cfg.ManifestPath,
+		OllamaEndpoint: cfg.OllamaEndpoint,
+		OllamaModel:    cfg.OllamaModel,
+		ConfigPath:     cfg.ConfigPath,
+		AgentsDir:      cfg.AgentsDir,
+		AgentName:      cfg.AgentName,
+		LogPath:        cfg.LogPath,
+		TelemetryPath:  cfg.TelemetryPath,
+		EventsPath:     cfg.EventsPath,
+		MemoryPath:     cfg.MemoryPath,
+		MaxIterations:  cfg.MaxIterations,
+		SkipASTIndex:   cfg.SkipASTIndex,
+		HITLTimeout:    cfg.HITLTimeout,
+		AuditLimit:     cfg.AuditLimit,
+		Sandbox:        cfg.Sandbox,
+		DebugLLM:       cfg.DebugLLM,
+		DebugAgent:     cfg.DebugAgent,
+	})
+	var deps []DependencyStatus
+	for _, r := range ayenitdResults {
+		deps = append(deps, DependencyStatus{
+			Name:      r.Name,
+			Required:  r.Required,
+			Available: r.OK,
+			Blocking:  r.Required && !r.OK,
+			Details:   r.Message,
+		})
 	}
+	// Keep existing sandbox and chromium checks
+	deps = append(deps, DependencyStatus{
+		Name:      "runsc",
+		Required:  false,
+		Available: env.Sandbox.Runsc.Error == "",
+		Blocking:  false,
+		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Runsc.Error)),
+	})
+	deps = append(deps, DependencyStatus{
+		Name:      "docker",
+		Required:  false,
+		Available: env.Sandbox.Docker.Error == "",
+		Blocking:  false,
+		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error)),
+	})
+	// Ollama check is already covered by ayenitd, but keep for compatibility
+	deps = append(deps, DependencyStatus{
+		Name:      "ollama",
+		Required:  true,
+		Available: env.Ollama.Healthy,
+		Blocking:  !env.Ollama.Healthy,
+		Details:   firstNonEmpty(env.Ollama.SelectedModel, env.Ollama.Error),
+	})
+	deps = append(deps, detectChromiumStatus(ctx))
+	report.Dependencies = deps
 	return report
 }
 
