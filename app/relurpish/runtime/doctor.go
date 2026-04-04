@@ -82,7 +82,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 
 	env := ProbeEnvironment(ctx, cfg)
 	// Convert ayenitd probe results
-	ayenitdResults := ayenitd.ProbeWorkspace(ayenitd.WorkspaceConfig{
+	// Map available Config fields to ayenitd.WorkspaceConfig.
+	// Some fields may be missing in Config; use zero values.
+	ayenitdCfg := ayenitd.WorkspaceConfig{
 		Workspace:      cfg.Workspace,
 		ManifestPath:   cfg.ManifestPath,
 		OllamaEndpoint: cfg.OllamaEndpoint,
@@ -94,14 +96,14 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		TelemetryPath:  cfg.TelemetryPath,
 		EventsPath:     cfg.EventsPath,
 		MemoryPath:     cfg.MemoryPath,
-		MaxIterations:  cfg.MaxIterations,
-		SkipASTIndex:   cfg.SkipASTIndex,
 		HITLTimeout:    cfg.HITLTimeout,
 		AuditLimit:     cfg.AuditLimit,
-		Sandbox:        cfg.Sandbox,
-		DebugLLM:       cfg.DebugLLM,
-		DebugAgent:     cfg.DebugAgent,
-	})
+		// Fields not present in Config are left zero.
+		// Sandbox is a sandbox.SandboxConfig in Config, but bool in WorkspaceConfig.
+		// For probe purposes, treat as false (sandbox not enabled).
+		Sandbox: false,
+	}
+	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg)
 	var deps []DependencyStatus
 	for _, r := range ayenitdResults {
 		deps = append(deps, DependencyStatus{
