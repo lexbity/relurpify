@@ -2,42 +2,70 @@ package modes
 
 import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
 
 // ChatMode builds the phase machine for the chat interaction mode.
 //
-// Phases: intent → present → reflect
+// Phases: context_proposal → intent → present → reflect
 //
 // Chat mode is for conversational tasks: answering questions, explaining
 // concepts, and optionally proposing transitions to code/debug for
 // implementation or investigation work.
-func ChatMode(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+func ChatMode(
+	emitter interaction.FrameEmitter,
+	resolver *interaction.AgencyResolver,
+	pipeline ContextEnrichmentPipeline,
+	fileResolver *pretask.FileResolver,
+) *interaction.PhaseMachine {
 	RegisterChatTriggers(resolver)
+
+	phases := []interaction.PhaseDefinition{}
+	
+	// Add context proposal phase if pipeline is provided
+	if pipeline != nil && fileResolver != nil {
+		phases = append(phases, interaction.PhaseDefinition{
+			ID:      "context_proposal",
+			Label:   "Context",
+			Handler: &ContextProposalPhase{
+				Pipeline:     pipeline,
+				FileResolver: fileResolver,
+			},
+		})
+	}
+	
+	// Add the original phases
+	phases = append(phases, []interaction.PhaseDefinition{
+		{
+			ID:      "intent",
+			Label:   "Intent",
+			Handler: &ChatIntentPhase{},
+		},
+		{
+			ID:      "present",
+			Label:   "Present",
+			Handler: &ChatPresentPhase{},
+		},
+		{
+			ID:        "reflect",
+			Label:     "Reflect",
+			Handler:   &ChatReflectPhase{},
+			Skippable: true,
+			SkipWhen:  skipChatReflect,
+		},
+	}...)
 
 	return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
 		Mode:     "chat",
 		Emitter:  emitter,
 		Resolver: resolver,
-		Phases: []interaction.PhaseDefinition{
-			{
-				ID:      "intent",
-				Label:   "Intent",
-				Handler: &ChatIntentPhase{},
-			},
-			{
-				ID:      "present",
-				Label:   "Present",
-				Handler: &ChatPresentPhase{},
-			},
-			{
-				ID:        "reflect",
-				Label:     "Reflect",
-				Handler:   &ChatReflectPhase{},
-				Skippable: true,
-				SkipWhen:  skipChatReflect,
-			},
-		},
+		Phases:   phases,
 	})
+}
+
+// ChatModeLegacy provides backward compatibility for callers that don't provide pipeline.
+func ChatModeLegacy(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+	return ChatMode(emitter, resolver, nil, nil)
 }
 
 // skipChatReflect skips the reflect phase when the user explicitly opts out
@@ -76,13 +104,13 @@ func RegisterChatTriggers(resolver *interaction.AgencyResolver) {
 
 // ChatPhaseIDs returns the ordered phase IDs for chat mode.
 func ChatPhaseIDs() []string {
-	return []string{"intent", "present", "reflect"}
+	return []string{"context_proposal", "intent", "present", "reflect"}
 }
 
 // ChatPhaseLabels returns phase labels for the help surface.
 func ChatPhaseLabels() []interaction.PhaseInfo {
 	ids := ChatPhaseIDs()
-	labels := []string{"Intent", "Present", "Reflect"}
+	labels := []string{"Context", "Intent", "Present", "Reflect"}
 	out := make([]interaction.PhaseInfo, len(ids))
 	for i := range ids {
 		out[i] = interaction.PhaseInfo{ID: ids[i], Label: labels[i]}
