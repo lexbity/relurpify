@@ -20,7 +20,6 @@ import (
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	archaeoverification "github.com/lexcodex/relurpify/archaeo/verification"
-	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
