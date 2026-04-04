@@ -3,7 +3,6 @@ package pretask
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/retrieval"
@@ -125,16 +124,16 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 	if r.tensionSvc != nil {
 		tensions, err := r.tensionSvc.ActiveByWorkflow(ctx, workflowID)
 		if err == nil && len(tensions) > 0 {
-			for i, tension := range tensions {
+			for i := range tensions {
 				// Convert to KnowledgeEvidenceItem
 				// This is a simplified conversion
 				results = append(results, KnowledgeEvidenceItem{
-					RefID:  fmt.Sprintf("tension_%d", i),
-					Kind:   KnowledgeKindTension,
-					Title:  fmt.Sprintf("Tension %d", i),
+					RefID:   fmt.Sprintf("tension_%d", i),
+					Kind:    KnowledgeKindTension,
+					Title:   fmt.Sprintf("Tension %d", i),
 					Summary: "Active tension related to query",
-					Score:  0.7,
-					Source: EvidenceSourceArchaeoTopic,
+					Score:   0.7,
+					Source:  EvidenceSourceArchaeoTopic,
 				})
 			}
 		}
@@ -144,14 +143,14 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 	if r.patternSvc != nil {
 		patterns, err := r.patternSvc.ListByWorkflow(ctx, workflowID)
 		if err == nil && len(patterns) > 0 {
-			for i, pattern := range patterns {
+			for i := range patterns {
 				results = append(results, KnowledgeEvidenceItem{
-					RefID:  fmt.Sprintf("pattern_%d", i),
-					Kind:   KnowledgeKindPattern,
-					Title:  fmt.Sprintf("Pattern %d", i),
+					RefID:   fmt.Sprintf("pattern_%d", i),
+					Kind:    KnowledgeKindPattern,
+					Title:   fmt.Sprintf("Pattern %d", i),
 					Summary: "Pattern related to query",
-					Score:  0.6,
-					Source: EvidenceSourceArchaeoTopic,
+					Score:   0.6,
+					Source:  EvidenceSourceArchaeoTopic,
 				})
 			}
 		}

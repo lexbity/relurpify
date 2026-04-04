@@ -1,7 +1,6 @@
 package pretask
 
 import (
-	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
