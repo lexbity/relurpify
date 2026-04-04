@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lexcodex/relurpify/ayenitd"
 	relruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework/agentenv"
 	relconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -79,14 +79,13 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		_ = workflowStore.Close()
 		return nil, err
 	}
-	env := agentenv.AgentEnvironment{
+	agent := rex.NewWithWorkspace(ayenitd.WorkspaceEnvironment{
 		Registry:     bundle.Registry,
 		IndexManager: bundle.IndexManager,
 		SearchEngine: bundle.SearchEngine,
 		Memory:       memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, checkpointStore),
 		Config:       &core.Config{Name: "rex"},
-	}
-	agent := rex.NewWithWorkspace(env, workspace)
+	}, workspace)
 	agent.Runtime.Start(ctx)
 	provider := &RexRuntimeProvider{
 		Agent:           agent,

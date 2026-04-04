@@ -17,7 +17,7 @@ import (
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	archaeoverification "github.com/lexcodex/relurpify/archaeo/verification"
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -146,13 +146,12 @@ func newBenchmarkFixture(b *testing.B, name string) *benchmarkFixture {
 }
 
 func (f *benchmarkFixture) newAgent() *euclo.Agent {
-	env := agentenv.AgentEnvironment{
+	agent := euclo.New(ayenitd.WorkspaceEnvironment{
 		Model:    testutil.StubModel{},
 		Registry: f.registry,
 		Memory:   f.memoryStore.WithVectorStore(memory.NewInMemoryVectorStore()),
 		Config:   &core.Config{Name: "euclo-bench", Model: "stub", MaxIterations: 1},
-	}
-	agent := euclo.New(env)
+	})
 	agent.WorkflowStore = f.workflowStore
 	agent.PlanStore = f.planStore
 	agent.PatternStore = f.patternStore

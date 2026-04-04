@@ -96,12 +96,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		TelemetryPath:  cfg.TelemetryPath,
 		EventsPath:     cfg.EventsPath,
 		MemoryPath:     cfg.MemoryPath,
-		HITLTimeout:    cfg.HITLTimeout,
-		AuditLimit:     cfg.AuditLimit,
-		// Fields not present in Config are left zero.
-		// Sandbox is a sandbox.SandboxConfig in Config, but bool in WorkspaceConfig.
-		// For probe purposes, treat as false (sandbox not enabled).
-		Sandbox: false,
+		HITLTimeout: cfg.HITLTimeout,
+		AuditLimit:  cfg.AuditLimit,
+		Sandbox:     cfg.Sandbox,
 	}
 	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg)
 	var deps []DependencyStatus
@@ -200,16 +197,6 @@ func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
 	return os.WriteFile(dst, []byte(rendered), 0o644)
 }
 
-func runCommand(ctx context.Context, name string, args ...string) (string, error) {
-	// placeholder
-	return "", nil
-}
-
-func runCommand(ctx context.Context, name string, args ...string) (string, error) {
-	// placeholder implementation
-	return "", nil
-}
-
 func detectChromiumStatus(ctx context.Context) DependencyStatus {
 	binaries := []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
 	for _, name := range binaries {
@@ -260,12 +247,3 @@ var execLookPath = func(file string) (string, error) {
 	return execLookPathImpl(file)
 }
 
-func execLookPathImpl(file string) (string, error) {
-	// placeholder implementation
-	return "", fmt.Errorf("not found")
-}
-
-func execLookPathImpl(file string) (string, error) {
-	// placeholder implementation
-	return "", fmt.Errorf("not found")
-}

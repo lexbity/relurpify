@@ -11,7 +11,7 @@ import (
 	"time"
 
 	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -369,7 +369,7 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 
 	checkpoints := memdb.NewSQLiteCheckpointStore(workflowStore.DB())
 	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, checkpoints)
-	agent := rexpkg.New(agentenv.AgentEnvironment{
+	agent := rexpkg.New(ayenitd.WorkspaceEnvironment{
 		Model:    stubModel{},
 		Registry: capability.NewRegistry(),
 		Memory:   composite,

@@ -18,6 +18,7 @@ import (
 	"github.com/lexcodex/relurpify/agents"
 	relurpic "github.com/lexcodex/relurpify/agents/relurpic"
 	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
+	"github.com/lexcodex/relurpify/ayenitd"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	relurpishbindings "github.com/lexcodex/relurpify/archaeo/bindings/relurpish"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
@@ -51,7 +52,6 @@ import (
 	platformast "github.com/lexcodex/relurpify/platform/ast"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	platformgit "github.com/lexcodex/relurpify/platform/git"
-	"github.com/lexcodex/relurpify/platform/llm"
 	platformsearch "github.com/lexcodex/relurpify/platform/search"
 	platformshell "github.com/lexcodex/relurpify/platform/shell"
 )
@@ -114,86 +114,62 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if err := cfg.Normalize(); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(cfg.LogPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create log directory: %w", err)
-	}
-	logFile, err := os.OpenFile(cfg.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return nil, fmt.Errorf("open log: %w", err)
-	}
-	logger := log.New(logFile, "relurpish ", log.LstdFlags|log.Lmicroseconds)
 
-	memStore, err := memory.NewHybridMemory(cfg.MemoryPath)
-	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("memory init: %w", err)
-	}
-	memStore = memStore.WithVectorStore(memory.NewInMemoryVectorStore())
-
+	// Load workspace YAML to get AllowedCapabilities and Nexus config before
+	// calling ayenitd.Open — Open will handle model/agent-name overrides
+	// internally, but AllowedCapabilities is a runtime-level concern.
 	var workspaceCfg WorkspaceConfig
 	var allowedCapabilities []core.CapabilitySelector
 	if cfg.ConfigPath != "" {
 		if loaded, err := LoadWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
-			if workspaceCfg.Model != "" {
+			if workspaceCfg.Model != "" && cfg.OllamaModel == "" {
 				cfg.OllamaModel = workspaceCfg.Model
 			}
-			if len(workspaceCfg.Agents) > 0 {
+			if len(workspaceCfg.Agents) > 0 && cfg.AgentName == "" {
 				cfg.AgentName = workspaceCfg.Agents[0]
 			}
 			allowedCapabilities = append(allowedCapabilities, workspaceCfg.AllowedCapabilities...)
-		} else if !errors.Is(err, os.ErrNotExist) {
-			logger.Printf("workspace config load failed: %v", err)
 		}
+		// Missing config file is not an error — workspace may not be initialized yet.
 	}
 
-	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
-		ManifestPath: cfg.ManifestPath,
-		ConfigPath:   cfg.ConfigPath,
-		Sandbox:      cfg.Sandbox,
-		AuditLimit:   cfg.AuditLimit,
-		BaseFS:       cfg.Workspace,
-		HITLTimeout:  cfg.HITLTimeout,
+	// Delegate all workspace initialization to ayenitd.Open().
+	ws, err := ayenitd.Open(ctx, ayenitd.WorkspaceConfig{
+		Workspace:           cfg.Workspace,
+		ManifestPath:        cfg.ManifestPath,
+		OllamaEndpoint:      cfg.OllamaEndpoint,
+		OllamaModel:         cfg.OllamaModel,
+		ConfigPath:          cfg.ConfigPath,
+		AgentsDir:           cfg.AgentsDir,
+		AgentName:           cfg.AgentName,
+		LogPath:             cfg.LogPath,
+		TelemetryPath:       cfg.TelemetryPath,
+		EventsPath:          cfg.EventsPath,
+		MemoryPath:          cfg.MemoryPath,
+		MaxIterations:       8,
+		HITLTimeout:         cfg.HITLTimeout,
+		AuditLimit:          cfg.AuditLimit,
+		Sandbox:             cfg.Sandbox,
+		AllowedCapabilities: allowedCapabilities,
 	})
 	if err != nil {
-		logFile.Close()
-		return nil, fmt.Errorf("sandbox registration failed: %w", err)
-	}
-	if registration.Manifest == nil || registration.Manifest.Spec.Agent == nil {
-		logFile.Close()
-		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
-	}
-	agentSpec := contractpkg.ApplyManifestDefaultsForAgent(registration.Manifest.Metadata.Name, registration.Manifest.Spec.Agent, registration.Manifest.Spec.Defaults)
-	if agentSpec.Model.Name == "" {
-		logFile.Close()
-		return nil, fmt.Errorf("agent manifest missing spec.agent.model.name")
-	}
-	if cfg.OllamaModel == "" {
-		cfg.OllamaModel = agentSpec.Model.Name
-	}
-	if cfg.OllamaModel == "" {
-		logFile.Close()
-		return nil, fmt.Errorf("ollama model not configured; update %s", cfg.ManifestPath)
-	}
-	runner, err := fsandbox.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
-	if err != nil {
-		logFile.Close()
 		return nil, err
 	}
-	// Setup Telemetry
-	var sinks []core.Telemetry
-	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
 
-	if cfg.TelemetryPath != "" {
-		if err := os.MkdirAll(filepath.Dir(cfg.TelemetryPath), 0o755); err == nil {
-			if fileSink, err := telemetry.NewJSONFileTelemetry(cfg.TelemetryPath); err == nil {
-				sinks = append(sinks, fileSink)
-			} else {
-				logger.Printf("warning: failed to init json telemetry: %v", err)
-			}
-		}
-	}
+	// Transfer closer ownership from Workspace to Runtime so that rt.Close()
+	// manages the lifecycle directly. ws.Close() is not called.
+	logFile, patternDB, _ := ws.StealClosers()
+
+	env := ws.Environment
+	registration := ws.Registration
+	logger := ws.Logger
+	baseTelemetry := ws.Telemetry
+
+	// Extend telemetry with an event log sink (uses app/nexus/db which ayenitd
+	// cannot import without a cycle).
 	var eventTelemetry telemetry.EventTelemetry
+	var eventLogCloser io.Closer
 	if cfg.EventsPath != "" {
 		if err := os.MkdirAll(filepath.Dir(cfg.EventsPath), 0o755); err == nil {
 			if eventLog, err := nexusdb.NewSQLiteEventLog(cfg.EventsPath); err == nil {
@@ -202,7 +178,8 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 					Partition: "local",
 					Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 				}
-				sinks = append(sinks, eventTelemetry)
+				eventLogCloser = eventLog
+				// Re-wire the permission event logger with full event log support.
 				if registration.Permissions != nil {
 					registration.Permissions.SetEventLogger(func(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
 						payload := map[string]interface{}{
@@ -224,133 +201,104 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 						}
 					})
 				}
-			} else {
+			} else if logger != nil {
 				logger.Printf("warning: failed to init event log: %v", err)
 			}
 		}
 	}
-	telemetry := telemetry.MultiplexTelemetry{Sinks: sinks}
 
-	logLLM := false
-	if agentSpec.Logging != nil && agentSpec.Logging.LLM != nil {
-		logLLM = *agentSpec.Logging.LLM
+	// Assemble the final telemetry (base + event log if available).
+	var combinedTelemetry core.Telemetry
+	if eventTelemetry.Log != nil {
+		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {
+			mt.Sinks = append(mt.Sinks, eventTelemetry)
+			combinedTelemetry = mt
+		} else {
+			combinedTelemetry = telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{baseTelemetry, eventTelemetry}}
+		}
+	} else {
+		combinedTelemetry = baseTelemetry
 	}
-	modelClient := llm.NewClient(cfg.OllamaEndpoint, cfg.OllamaModel)
-	modelClient.SetDebugLogging(logLLM)
-	model := llm.NewInstrumentedModel(modelClient, telemetry, logLLM)
-	guidanceBroker := guidance.NewGuidanceBroker(0)
+
+	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
 	learningBroker := archaeolearning.NewBroker(0)
-
-	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(cfg.Workspace)
-	if err != nil {
+	agentEnv := agents.AgentEnvironment{
+		Config:       env.Config,
+		Model:        env.Model,
+		Registry:     env.Registry,
+		IndexManager: env.IndexManager,
+		SearchEngine: env.SearchEngine,
+		Memory:       env.Memory,
+	}
+	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
+		env.Registry,
+		env.Model,
+		env.Config,
+		agents.WithIndexManager(env.IndexManager),
+		agents.WithGraphDB(graphDBFromIndexManager(env.IndexManager)),
+		agents.WithPatternStore(env.PatternStore),
+		agents.WithCommentStore(env.CommentStore),
+		agents.WithRetrievalDB(env.RetrievalDB),
+		agents.WithPlanStore(env.PlanStore),
+		agents.WithGuidanceBroker(env.GuidanceBroker),
+		agents.WithWorkflowStore(env.WorkflowStore),
+	); err != nil {
 		logFile.Close()
-		return nil, err
-	}
-
-	if cfg.AgentName == "" {
-		cfg.AgentName = registration.Manifest.Metadata.Name
-	}
-	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
-		Context:             ctx,
-		AgentID:             registration.ID,
-		AgentName:           cfg.AgentName,
-		ConfigName:          cfg.AgentLabel(),
-		AgentsDir:           cfg.AgentsDir,
-		Manifest:            registration.Manifest,
-		PermissionManager:   registration.Permissions,
-		Runner:              runner,
-		Model:               model,
-		Memory:              memStore,
-		Telemetry:           telemetry,
-		OllamaEndpoint:      cfg.OllamaEndpoint,
-		OllamaModel:         cfg.OllamaModel,
-		MaxIterations:       8,
-		AllowedCapabilities: allowedCapabilities,
-		DebugLLM:            logLLM,
-		PatternStore:        patternStore,
-		CommentStore:        commentStore,
-		RetrievalDB:         workflowStore.DB(),
-		PlanStore:           planStore,
-		GuidanceBroker:      guidanceBroker,
-		WorkflowStore:       workflowStore,
-	})
-	if err != nil {
 		patternDB.Close()
-		workflowStore.Close()
+		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
+	}
+	if err := agents.RegisterAgentCapabilities(env.Registry, agentEnv); err != nil {
 		logFile.Close()
-		return nil, err
+		patternDB.Close()
+		return nil, fmt.Errorf("register agent capabilities: %w", err)
 	}
-	registry := boot.Registry
-	indexManager := boot.IndexManager
-	searchEngine := boot.SearchEngine
-	agentSpec = boot.AgentSpec
-	agentCfg := boot.AgentConfig
-	agentEnv := boot.Environment
-	agentDefs := boot.AgentDefinitions
-	skillResults := boot.SkillResults
-	compiledPolicy := boot.CompiledPolicy
-	if compiledPolicy == nil {
-		var err error
-		contract := boot.Contract
-		if contract == nil {
-			contract = &contractpkg.EffectiveAgentContract{
-				AgentID:   registration.ID,
-				AgentSpec: agentSpec,
-			}
-		}
-		compiledPolicy, err = policybundle.BuildFromSpec(contract.AgentID, contract.AgentSpec, registration.Permissions)
-		if err != nil {
-			logFile.Close()
-			return nil, fmt.Errorf("compile effective policy: %w", err)
-		}
+
+	// Type-assert WorkflowStore to the concrete SQLite type for rt.WorkflowStore.
+	var workflowStore *memorydb.SQLiteWorkflowStateStore
+	if ws, ok := env.WorkflowStore.(*memorydb.SQLiteWorkflowStateStore); ok {
+		workflowStore = ws
 	}
-	registration.Policy = compiledPolicy.Engine
-	registry.SetPolicyEngine(compiledPolicy.Engine)
+
 	rt := &Runtime{
 		Config:               cfg,
-		Tools:                registry,
-		Memory:               memStore,
+		Tools:                env.Registry,
+		Memory:               env.Memory,
 		Context:              core.NewContext(),
-		Model:                model,
-		IndexManager:         indexManager,
-		GraphDB:              indexManager.GraphDB,
-		SearchEngine:         searchEngine,
+		Model:                env.Model,
+		IndexManager:         env.IndexManager,
+		GraphDB:              graphDBFromIndexManager(env.IndexManager),
+		SearchEngine:         env.SearchEngine,
 		WorkflowStore:        workflowStore,
-		PlanStore:            planStore,
-		PatternStore:         patternStore,
-		CommentStore:         commentStore,
-		GuidanceBroker:       guidanceBroker,
+		PlanStore:            env.PlanStore,
+		PatternStore:         env.PatternStore,
+		CommentStore:         env.CommentStore,
+		GuidanceBroker:       env.GuidanceBroker,
 		LearningBroker:       learningBroker,
 		Logger:               logger,
 		logFile:              logFile,
-		eventLog:             io.Closer(nil),
+		eventLog:             eventLogCloser,
 		patternDB:            patternDB,
 		Workspace:            workspaceCfg,
 		Registration:         registration,
 		Delegations:          fauthorization.NewDelegationManager(),
-		AgentSpec:            agentSpec,
-		AgentDefinitions:     agentDefs,
-		CapabilityAdmissions: boot.CapabilityAdmissions,
-		EffectiveContract:    boot.Contract,
-		CompiledPolicy:       compiledPolicy,
-		Telemetry:            telemetry,
+		AgentSpec:            ws.AgentSpec,
+		AgentDefinitions:     ws.AgentDefinitions,
+		CapabilityAdmissions: ws.CapabilityAdmissions,
+		EffectiveContract:    ws.EffectiveContract,
+		CompiledPolicy:       ws.CompiledPolicy,
+		Telemetry:            combinedTelemetry,
 	}
-	if eventTelemetry.Log != nil {
-		if closer, ok := eventTelemetry.Log.(io.Closer); ok {
-			rt.eventLog = closer
-		}
-		if registration.HITL != nil {
-			ch, cancel := registration.HITL.Subscribe(32)
-			rt.hitlCancel = cancel
-			go func() {
-				for ev := range ch {
-					eventTelemetry.EmitHITLEvent(ev)
-				}
-			}()
-		}
+	if eventTelemetry.Log != nil && registration.HITL != nil {
+		ch, cancel := registration.HITL.Subscribe(32)
+		rt.hitlCancel = cancel
+		go func() {
+			for ev := range ch {
+				eventTelemetry.EmitHITLEvent(ev)
+			}
+		}()
 	}
 	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
-	for _, skill := range skillResults {
+	for _, skill := range ws.SkillResults {
 		if !skill.Applied || skill.Paths.Root == "" {
 			continue
 		}
@@ -369,12 +317,12 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("register local nexus node: %w", err)
 	}
 
-	agent := instantiateAgent(cfg, agentEnv, agentDefs)
+	agent := instantiateAgent(cfg, agentEnv, ws.AgentDefinitions)
 	rt.wireRuntimeAgentDependencies(agent)
 
 	// Enforce the effective (post-definition) tool policies before initializing.
-	if agentCfg.AgentSpec != nil {
-		registry.UseAgentSpec(registration.ID, agentCfg.AgentSpec)
+	if env.Config != nil && env.Config.AgentSpec != nil {
+		env.Registry.UseAgentSpec(registration.ID, env.Config.AgentSpec)
 	}
 
 	rt.Agent = agent
