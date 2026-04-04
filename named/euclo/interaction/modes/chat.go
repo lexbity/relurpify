@@ -18,8 +18,9 @@ type ContextEnrichmentPipeline interface {
 // ContextProposalPhase emits a ContextProposalFrame and awaits the user's
 // response before the main execution phase runs.
 type ContextProposalPhase struct {
-	Pipeline     ContextEnrichmentPipeline
-	FileResolver *pretask.FileResolver
+	Pipeline               ContextEnrichmentPipeline
+	FileResolver           *pretask.FileResolver
+	ShowConfirmationFrame  bool
 }
 
 // Execute runs the pipeline, emits the proposal frame, and collects the response.
@@ -27,41 +28,63 @@ func (p *ContextProposalPhase) Execute(
 	ctx context.Context,
 	mc interaction.PhaseMachineContext,
 ) (interaction.PhaseOutcome, error) {
-	// Get user response from the context
-	userResp := mc.UserResponse
-	if userResp == nil {
-		// No user response yet, emit a status frame
+	state := mc.State
+	if state == nil {
+		state = make(map[string]any)
+	}
+
+	// For now, we'll implement a simplified version that always advances
+	// In a real implementation, we would handle user responses properly
+	
+	// Get initial query from state
+	var userText string
+	if queryRaw, ok := state["query"]; ok {
+		userText, _ = queryRaw.(string)
+	}
+	
+	// Get file selections from state
+	var userSelections []string
+	if selectionsRaw, ok := state["selections"]; ok {
+		if selections, ok := selectionsRaw.([]string); ok {
+			userSelections = selections
+		} else if selectionsSlice, ok := selectionsRaw.([]interface{}); ok {
+			for _, item := range selectionsSlice {
+				if path, ok := item.(string); ok {
+					userSelections = append(userSelections, path)
+				}
+			}
+		}
+	}
+	
+	// If no query or selections, emit status and advance
+	if userText == "" && len(userSelections) == 0 {
 		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
 			Kind:    interaction.FrameStatus,
 			Mode:    "chat",
 			Phase:   "context_proposal",
-			Content: interaction.StatusContent{Message: "Preparing context enrichment..."},
+			Content: interaction.StatusContent{Message: "No query provided, skipping context enrichment."},
 		})
 		return interaction.PhaseOutcome{
-			Advance:      false,
+			Advance:      true,
 			StateUpdates: map[string]interface{}{},
 		}, nil
 	}
 
-	// Resolve current turn files from user response
-	resolved := p.FileResolver.Resolve(userResp.Selections, userResp.Text)
+	// Resolve current turn files
+	resolved := p.FileResolver.Resolve(userSelections, userText)
 	
-	// Load session pins from memory
-	var sessionPins []string
-	// TODO: Load from HybridMemory["context.pinned_files"] (MemoryScopeSession)
-	// For now, use empty
+	// Load session pins from state
+	sessionPins := getSessionPins(state)
 	
 	// Get workflow ID from state
 	workflowID := ""
-	if state := mc.State; state != nil {
-		if wf, ok := state["euclo.workflow_id"].(string); ok {
-			workflowID = wf
-		}
+	if wf, ok := state["euclo.workflow_id"].(string); ok {
+		workflowID = wf
 	}
 
 	// Run the pipeline
 	input := pretask.PipelineInput{
-		Query:            userResp.Text,
+		Query:            userText,
 		CurrentTurnFiles: resolved.Paths,
 		SessionPins:      sessionPins,
 		WorkflowID:       workflowID,
@@ -83,10 +106,10 @@ func (p *ContextProposalPhase) Execute(
 		}, nil
 	}
 
-	// Convert bundle to ContextProposalContent
+	// Check if we should show confirmation frame
+	// For now, always show confirmation frame
 	content := convertToContextProposalContent(bundle)
-
-	// Emit the proposal frame
+	
 	mc.Emitter.Emit(ctx, interaction.InteractionFrame{
 		Kind:    interaction.FrameProposal,
 		Mode:    "chat",
@@ -109,12 +132,65 @@ func (p *ContextProposalPhase) Execute(
 		},
 		Continuable: true,
 	})
-
-	// Wait for user response
+	
+	// For now, automatically confirm and advance
+	confirmedPaths := make([]string, 0)
+	for _, file := range bundle.AnchoredFiles {
+		confirmedPaths = append(confirmedPaths, file.Path)
+	}
+	for _, file := range bundle.ExpandedFiles {
+		confirmedPaths = append(confirmedPaths, file.Path)
+	}
+	
+	updatedPins := updateSessionPins(sessionPins, confirmedPaths)
+	
+	stateUpdates := map[string]interface{}{
+		"context.confirmed_files": confirmedPaths,
+		"context.pinned_files":    updatedPins,
+		"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+		"context.pipeline_trace":  bundle.PipelineTrace,
+	}
+	
 	return interaction.PhaseOutcome{
-		Advance:      false, // Wait for user to confirm or skip
-		StateUpdates: map[string]interface{}{},
+		Advance:      true,
+		StateUpdates: stateUpdates,
 	}, nil
+}
+
+// Helper functions
+func getSessionPins(state map[string]any) []string {
+	var sessionPins []string
+	if pinsRaw, ok := state["context.pinned_files"]; ok {
+		if pins, ok := pinsRaw.([]string); ok {
+			sessionPins = pins
+		} else if pinsSlice, ok := pinsRaw.([]interface{}); ok {
+			for _, item := range pinsSlice {
+				if path, ok := item.(string); ok {
+					sessionPins = append(sessionPins, path)
+				}
+			}
+		}
+	}
+	return sessionPins
+}
+
+func updateSessionPins(existing []string, newPaths []string) []string {
+	seen := make(map[string]bool)
+	for _, path := range existing {
+		seen[path] = true
+	}
+	
+	result := make([]string, len(existing))
+	copy(result, existing)
+	
+	for _, path := range newPaths {
+		if !seen[path] {
+			result = append(result, path)
+			seen[path] = true
+		}
+	}
+	
+	return result
 }
 
 func convertToContextProposalContent(bundle pretask.EnrichedContextBundle) interaction.ContextProposalContent {
@@ -188,6 +264,7 @@ func ChatMode(
 	resolver *interaction.AgencyResolver,
 	pipeline ContextEnrichmentPipeline,
 	fileResolver *pretask.FileResolver,
+	showConfirmationFrame bool,
 ) *interaction.PhaseMachine {
 	RegisterChatTriggers(resolver)
 
@@ -199,8 +276,9 @@ func ChatMode(
 			ID:      "context_proposal",
 			Label:   "Context",
 			Handler: &ContextProposalPhase{
-				Pipeline:     pipeline,
-				FileResolver: fileResolver,
+				Pipeline:               pipeline,
+				FileResolver:           fileResolver,
+				ShowConfirmationFrame:  showConfirmationFrame,
 			},
 		})
 	}
@@ -247,7 +325,7 @@ func ChatModeWithContext(
 
 // ChatModeLegacy provides backward compatibility for callers that don't provide pipeline.
 func ChatModeLegacy(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
-	return ChatMode(emitter, resolver, nil, nil)
+	return ChatMode(emitter, resolver, nil, nil, true)
 }
 
 // skipChatReflect skips the reflect phase when the user explicitly opts out

@@ -1586,7 +1586,11 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 		if a.ContextPipeline != nil {
 			pipeline = a.ContextPipeline
 		}
-		return modes.ChatMode(emitter, resolver, pipeline, fileResolver)
+		// Determine if we should show confirmation frame
+		// For now, default to true
+		showConfirmationFrame := true
+		// TODO: Read from agent configuration
+		return modes.ChatMode(emitter, resolver, pipeline, fileResolver, showConfirmationFrame)
 	})
 	reg.Register("code", modes.CodeMode)
 	reg.Register("debug", modes.DebugMode)
