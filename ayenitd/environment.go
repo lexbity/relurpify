@@ -3,7 +3,9 @@ package ayenitd
 import (
 	"database/sql"
 
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/ast"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
@@ -25,7 +27,7 @@ type WorkspaceEnvironment struct {
 
 	// Capability + permission
 	Registry          *capability.Registry
-	PermissionManager interface{} // *authorization.PermissionManager (placeholder)
+	PermissionManager *fauthorization.PermissionManager
 
 	// Code intelligence
 	IndexManager *ast.IndexManager
@@ -45,8 +47,8 @@ type WorkspaceEnvironment struct {
 	RetrievalDB *sql.DB            // shared DB for retrieval index tables
 
 	// Agents that verify or extract compatibility surface (optional)
-	VerificationPlanner           interface{} // agentenv.VerificationPlanner (placeholder)
-	CompatibilitySurfaceExtractor interface{} // agentenv.CompatibilitySurfaceExtractor (placeholder)
+	VerificationPlanner           agentenv.VerificationPlanner
+	CompatibilitySurfaceExtractor agentenv.CompatibilitySurfaceExtractor
 
 	// Scheduler
 	Scheduler *ServiceScheduler
