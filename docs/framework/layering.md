@@ -57,6 +57,22 @@ full four-layer architecture overview, see [architecture.md](architecture.md).
 - convenience adapters for CLI/TUI/server entry points
 - temporary migration shims at the product edge
 
+## ayenitd Boundary Rules
+
+`ayenitd` is the composition root. It sits between `app/` and the named agent layer.
+
+`ayenitd` may import from:
+- `framework/` and all its sub-packages
+- `platform/` and all its sub-packages
+- `agents/` (implementation layer)
+
+`ayenitd` must not import:
+- `named/` — named agents receive `WorkspaceEnvironment` from ayenitd; they do not provide it
+
+`framework/` and `platform/` must not import `ayenitd`. The dependency arrow flows downward only.
+
+`app/` constructs a `WorkspaceConfig` and calls `ayenitd.Open()`. It does not call framework or platform packages directly for runtime composition.
+
 ## Practical Test
 
 Before placing logic in `framework/`, ask:

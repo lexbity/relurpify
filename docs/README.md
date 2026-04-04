@@ -34,6 +34,12 @@ This directory is organized by codebase boundary and audience.
 | agents/blackboard.md | Blackboard paradigm |
 | agents/custom-agents.md | How to build custom agents |
 
+## Composition Root
+
+| Document | Description |
+|----------|-------------|
+| ayenitd/ayenitd.md | ayenitd — service lifecycle manager, Open() entry point, WorkspaceEnvironment |
+
 ## Applications
 
 | Document | Description |

@@ -31,7 +31,13 @@ and provenance cut across those layers rather than replacing one of them:
 │  App Layer                               app/        │
 │  relurpish TUI · Nexus gateway · nexusish · dev-agent│
 └──────────────────────┬───────────────────────────────┘
-                       │
+                       │ ayenitd.Open()
+┌──────────────────────▼───────────────────────────────┐
+│  Composition Root                        ayenitd/    │
+│  Open() · WorkspaceEnvironment · Workspace           │
+│  Platform probes · Store init · ServiceScheduler     │
+└──────────────────────┬───────────────────────────────┘
+                       │ WorkspaceEnvironment
 ┌──────────────────────▼───────────────────────────────┐
 │  Named Agent Layer                       named/      │
 │  Euclo (coding) · Rex (distributed) · Eternal ·      │
@@ -78,7 +84,7 @@ where the system's agent identities become concrete. See the
 These are the building blocks that named agents compose: ReAct
 (thought-action-observation loops), Architect (plan-then-execute), Pipeline
 (typed stage sequences), and others. They implement `WorkflowExecutor` and
-receive their dependencies via `AgentEnvironment`.
+receive their dependencies via `ayenitd.WorkspaceEnvironment`.
 
 **Framework layer** — the infrastructure agents sit on top of. This is the
 agent framework and skill runtime. The graph runtime executes workflows as
@@ -125,7 +131,8 @@ The framework/agents split is defined by ownership of the security envelope, not
 
 - `framework/` owns manifests, config, effective contracts, skill resolution that affects the sandbox envelope, capability admission, and policy compilation.
 - `agents/` owns concrete agent implementations and runtime behavior that happens after the framework has produced the final contract.
-- `app/` owns product bootstrap and edge adapters.
+- `ayenitd/` owns composition root: service wiring, store init, platform probes, scheduler, and `WorkspaceEnvironment` construction.
+- `app/` owns product entry points — they call `ayenitd.Open()` and wire the result to UI/HTTP/CLI surfaces.
 
 The critical dependency rule is:
 
