@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/retrieval"
@@ -36,7 +37,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase C: Log and Telemetry Setup
-	logFile, _, err := setupLogging(cfg)
+	logFile, logger, err := setupLogging(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +143,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	env.Scheduler = scheduler
 	env.GuidanceBroker = guidanceBroker
 	env.PermissionManager = registration.Permissions
+	env.CheckpointStore = nil // TODO: implement in framework
 
 	ws := &Workspace{
 		Environment:       env,
@@ -153,6 +155,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		CompiledPolicy:    boot.CompiledPolicy,
 		EffectiveContract: boot.Contract,
 	}
+	// Store logger for cleanup
+	ws.eventLog = nil // TODO: set up event log
+
+	logger.Printf("ayenitd: workspace opened successfully")
 	return ws, nil
 }
 
@@ -173,10 +179,16 @@ func validateConfig(cfg WorkspaceConfig) error {
 }
 
 func setupLogging(cfg WorkspaceConfig) (*os.File, *log.Logger, error) {
-	if err := os.MkdirAll(filepath.Dir(cfg.LogPath), 0o755); err != nil {
+	logPath := cfg.LogPath
+	if logPath == "" {
+		// Default log path
+		paths := config.New(cfg.Workspace)
+		logPath = filepath.Join(paths.LogsDir(), "ayenitd.log")
+	}
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return nil, nil, fmt.Errorf("create log directory: %w", err)
 	}
-	logFile, err := os.OpenFile(cfg.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open log: %w", err)
 	}
