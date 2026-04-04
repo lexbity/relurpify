@@ -1,0 +1,128 @@
+package pretask
+
+import (
+	"context"
+	"testing"
+)
+
+// TestPipelineIntegration_Basic tests the basic pipeline flow
+func TestPipelineIntegration_Basic(t *testing.T) {
+	// Create a minimal pipeline with stub dependencies
+	config := DefaultPipelineConfig()
+	
+	// Create pipeline with nil dependencies (should handle gracefully)
+	pipeline := &Pipeline{
+		anchorExtractor: &AnchorExtractor{
+			index: &dummyIndexQuerier{},
+			config: AnchorConfig{
+				MinSymbolLength: 3,
+				MaxSymbols:      12,
+			},
+		},
+		indexRetriever: &IndexRetriever{
+			index: &dummyIndexQuerier{},
+			config: IndexRetrieverConfig{
+				DependencyHops:     1,
+				MaxFilesPerSymbol: 3,
+			},
+		},
+		archaeoRetriever: &ArchaeoRetriever{
+			config: ArchaeoRetrieverConfig{
+				WorkflowID: "",
+				MaxItems:   4,
+				MaxTokens:  500,
+			},
+		},
+		hypotheticalGen: &HypotheticalGenerator{},
+		merger: &ResultMerger{
+			config: MergerConfig{
+				TokenBudget:       2000,
+				MaxCodeFiles:      6,
+				MaxKnowledgeItems: 4,
+			},
+		},
+		config: config,
+	}
+	
+	input := PipelineInput{
+		Query:            "How does PermissionManager work?",
+		CurrentTurnFiles: []string{"framework/authorization/manager.go"},
+		SessionPins:      []string{"framework/core/types.go"},
+		WorkflowID:       "",
+	}
+	
+	bundle, err := pipeline.Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Pipeline.Run failed: %v", err)
+	}
+	
+	// Check that anchored files are included
+	if len(bundle.AnchoredFiles) < 1 {
+		t.Errorf("Expected at least 1 anchored file, got %d", len(bundle.AnchoredFiles))
+	}
+	
+	// Check pipeline trace is populated
+	if bundle.PipelineTrace.AnchorsExtracted == 0 {
+		t.Error("PipelineTrace should have AnchorsExtracted > 0")
+	}
+}
+
+// TestPipelineIntegration_NoArchaeoWhenWorkflowIDEmpty tests that archaeo retrieval
+// is skipped when workflow ID is empty
+func TestPipelineIntegration_NoArchaeoWhenWorkflowIDEmpty(t *testing.T) {
+	config := DefaultPipelineConfig()
+	
+	pipeline := &Pipeline{
+		anchorExtractor: &AnchorExtractor{
+			index: &dummyIndexQuerier{},
+			config: AnchorConfig{
+				MinSymbolLength: 3,
+				MaxSymbols:      12,
+			},
+		},
+		indexRetriever: &IndexRetriever{
+			index: &dummyIndexQuerier{},
+			config: IndexRetrieverConfig{
+				DependencyHops:     1,
+				MaxFilesPerSymbol: 3,
+			},
+		},
+		archaeoRetriever: &ArchaeoRetriever{
+			config: ArchaeoRetrieverConfig{
+				WorkflowID: "", // Empty workflow ID
+				MaxItems:   4,
+				MaxTokens:  500,
+			},
+		},
+		hypotheticalGen: &HypotheticalGenerator{},
+		merger: &ResultMerger{
+			config: MergerConfig{
+				TokenBudget:       2000,
+				MaxCodeFiles:      6,
+				MaxKnowledgeItems: 4,
+			},
+		},
+		config: config,
+	}
+	
+	input := PipelineInput{
+		Query:            "Test query",
+		CurrentTurnFiles: []string{"test.go"},
+		WorkflowID:       "", // Empty workflow ID
+	}
+	
+	bundle, err := pipeline.Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Pipeline.Run failed: %v", err)
+	}
+	
+	// Should still have anchored files
+	if len(bundle.AnchoredFiles) == 0 {
+		t.Error("Expected anchored files even with empty workflow ID")
+	}
+	
+	// Knowledge items should be empty
+	if len(bundle.KnowledgeTopic) != 0 || len(bundle.KnowledgeExpanded) != 0 {
+		t.Error("Expected no knowledge items with empty workflow ID")
+	}
+}
