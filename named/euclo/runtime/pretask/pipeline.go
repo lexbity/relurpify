@@ -7,7 +7,6 @@ import (
 	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/patterns"
-	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
 // Pipeline orchestrates the full pre-task context enrichment flow.
@@ -194,19 +193,10 @@ func NewPipeline(
 		patternQuerier = &patternStoreQuerier{store: env.PatternStore}
 	}
 	
-	// Get retriever service from environment if available
-	// For now, we'll leave it nil as the retrieval.RetrieverService may not be available
-	var retrieverSvc interface{}
-	if env.RetrievalDB != nil {
-		// In a real implementation, we'd create a retriever service from the DB
-		// For now, we'll leave it nil
-		retrieverSvc = nil
-	}
-	
 	archaeoRetriever := &ArchaeoRetriever{
 		tensionSvc: tensions,
 		patternSvc: patternQuerier,
-		retriever:  nil, // retrieverSvc is not used in current implementation
+		retriever:  nil, // retriever service is not used in current implementation
 		config: ArchaeoRetrieverConfig{
 			WorkflowID: config.WorkflowID,
 			MaxItems:   config.MaxKnowledgeItems,

@@ -5,6 +5,31 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
 
+// ContextEnrichmentPipeline is the narrow interface the phase needs.
+type ContextEnrichmentPipeline interface {
+	Run(ctx context.Context, input pretask.PipelineInput) (pretask.EnrichedContextBundle, error)
+}
+
+// ContextProposalPhase emits a ContextProposalFrame and awaits the user's
+// response before the main execution phase runs.
+type ContextProposalPhase struct {
+	Pipeline     ContextEnrichmentPipeline
+	FileResolver *pretask.FileResolver
+}
+
+// Execute runs the pipeline, emits the proposal frame, and collects the response.
+func (p *ContextProposalPhase) Execute(
+	ctx context.Context,
+	mc interaction.PhaseMachineContext,
+) (interaction.PhaseOutcome, error) {
+	// For now, implement a stub that just advances to the next phase
+	// This will be implemented fully according to the plan later
+	return interaction.PhaseOutcome{
+		Advance:      true,
+		StateUpdates: map[string]interface{}{},
+	}, nil
+}
+
 // ChatMode builds the phase machine for the chat interaction mode.
 //
 // Phases: context_proposal → intent → present → reflect

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
 // IndexRetriever performs structural retrieval from the AST index.
