@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )

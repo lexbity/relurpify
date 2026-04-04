@@ -3,8 +3,11 @@ package ayenitd
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
@@ -169,9 +172,10 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if err != nil {
 		return nil, fmt.Errorf("admit skill capabilities: %w", err)
 	}
-	// Note: agents.RegisterBuiltinRelurpicCapabilitiesWithOptions is omitted for now
-	// because it requires agents package which may create circular dependency.
-	// This will be added in Phase 3.
+	// Relurpic capability registration is intentionally omitted from ayenitd.
+	// Relurpic capabilities are subagent-backed and caller-owned: each named agent
+	// (euclo, rex, etc.) is responsible for registering them after receiving the
+	// WorkspaceEnvironment. Registering here would create a named/ → ayenitd import cycle.
 
 	env := WorkspaceEnvironment{
 		Config:                        agentCfg,
@@ -210,8 +214,33 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 }
 
 func loadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) {
-	// Placeholder: will be implemented later
-	return make(map[string]*core.AgentDefinition), nil
+	defs := make(map[string]*core.AgentDefinition)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		def, err := core.LoadAgentDefinition(path)
+		if err != nil {
+			if errors.Is(err, core.ErrNotAgentDefinition) {
+				continue
+			}
+			return nil, fmt.Errorf("load %s: %w", name, err)
+		}
+		if def.Name == "" {
+			def.Name = strings.TrimSuffix(name, filepath.Ext(name))
+		}
+		defs[def.Name] = def
+	}
+	return defs, nil
 }
 
 func selectedAgentDefinitionOverlays(agentName string, defs map[string]*core.AgentDefinition) []core.AgentSpecOverlay {

@@ -64,6 +64,13 @@ type ollamaResponse struct {
 	PromptEvalCount int              `json:"prompt_eval_count"`
 }
 
+// NewClientWithProfile builds a new Ollama client with an active model profile.
+func NewClientWithProfile(endpoint, model string, p *ModelProfile) *Client {
+	c := NewClient(endpoint, model)
+	c.profile = p
+	return c
+}
+
 // NewClient builds a new Ollama client.
 func NewClient(endpoint, model string) *Client {
 	if endpoint == "" {
@@ -242,6 +249,14 @@ func (c *Client) MaxToolsPerCall() int {
 		return 0
 	}
 	return c.profile.ToolCalling.MaxToolsPerCall
+}
+
+// UsesNativeToolCalling implements core.ProfiledModel.
+func (c *Client) UsesNativeToolCalling() bool {
+	if c.profile == nil {
+		return false
+	}
+	return c.profile.ToolCalling.NativeAPI
 }
 
 func (c *Client) getHTTPClient() *http.Client {

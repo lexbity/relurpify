@@ -14,9 +14,18 @@ import (
 )
 
 // ScheduledJob represents a time-based job that the scheduler will execute.
+// Exactly one of Interval or CronExpr should be set:
+//   - Interval: fixed duration between executions (e.g. 6*time.Hour). Runs
+//     immediately on start, then repeats. Use for period-based internal jobs.
+//   - CronExpr: standard 5-field cron expression. Checked once per minute.
+//     Use for time-of-day-anchored jobs (e.g. "0 2 * * *" = 02:00 daily).
+//     Supports: wildcards (*), ranges (1-5), comma lists (1,3,5), steps (*/2, 1-10/3).
+//
+// If both are set, Interval takes precedence.
 type ScheduledJob struct {
 	ID       string
-	CronExpr string // standard 5-field cron expression
+	Interval time.Duration // fixed-period scheduling; zero means use CronExpr
+	CronExpr string        // standard 5-field cron expression
 	Action   func(context.Context) error
 	Source   string // "memory" | "config" | "internal"
 }
@@ -49,7 +58,7 @@ func (s *ServiceScheduler) LoadJobsFromMemory(ctx context.Context, mem memory.Me
 	}
 	
 	// Search for cron jobs in memory store
-	records, err := mem.Search(ctx, "ayenitd.cron", memory.ScopeWorkspace)
+	records, err := mem.Search(ctx, "ayenitd.cron", memory.MemoryScopeProject)
 	if err != nil {
 		// If Search is not implemented, just log and continue
 		log.Printf("scheduler: memory store search not available: %v", err)
@@ -76,11 +85,13 @@ func (s *ServiceScheduler) LoadJobsFromMemory(ctx context.Context, mem memory.Me
 			continue
 		}
 		
-		// Action cannot be serialized, so we need to map ID to a predefined action
-		// For now, we'll register a placeholder action
+		// Phase 2 contract: action dispatch from memory records MUST go through
+		// the CapabilityRegistry with full provenance tracking. Actions may NOT
+		// be arbitrary Go closures loaded from persisted data — they must be
+		// mapped to a registered capability ID so that PermissionManager and the
+		// sandbox apply. Until Phase 2 is implemented, loaded jobs are inert.
 		job.Action = func(ctx context.Context) error {
-			log.Printf("scheduler: executing memory job %s", job.ID)
-			// TODO: Implement actual action based on job type
+			log.Printf("scheduler: memory job %s is pending Phase 2 action dispatch implementation", job.ID)
 			return nil
 		}
 		job.Source = "memory"
@@ -92,51 +103,109 @@ func (s *ServiceScheduler) LoadJobsFromMemory(ctx context.Context, mem memory.Me
 	return nil
 }
 
-// parseCronField parses a single cron field (minute, hour, day of month, month, day of week)
+// parseCronField parses a single cron field supporting:
+//   - wildcard: *
+//   - single value: 5
+//   - range: 1-5
+//   - comma list: 1,3,5 (each element may itself be a range or step)
+//   - step on wildcard: */2  (every 2nd value from min to max)
+//   - step on range: 1-10/3 (1, 4, 7, 10)
 func parseCronField(field string, min, max int) (map[int]bool, error) {
 	result := make(map[int]bool)
-	
-	// Handle wildcard
-	if field == "*" {
-		for i := min; i <= max; i++ {
-			result[i] = true
-		}
-		return result, nil
+	if field == "" {
+		return nil, fmt.Errorf("empty cron field")
 	}
-	
-	// Handle comma-separated values
-	parts := strings.Split(field, ",")
-	for _, part := range parts {
-		// Handle ranges
-		if strings.Contains(part, "-") {
-			rangeParts := strings.Split(part, "-")
-			if len(rangeParts) != 2 {
-				return nil, fmt.Errorf("invalid range: %s", part)
-			}
-			start, err1 := strconv.Atoi(rangeParts[0])
-			end, err2 := strconv.Atoi(rangeParts[1])
-			if err1 != nil || err2 != nil {
-				return nil, fmt.Errorf("invalid range numbers: %s", part)
-			}
-			if start < min || end > max || start > end {
-				return nil, fmt.Errorf("range out of bounds: %s", part)
-			}
-			for i := start; i <= end; i++ {
-				result[i] = true
-			}
-		} else {
-			// Single number
-			val, err := strconv.Atoi(part)
-			if err != nil {
-				return nil, fmt.Errorf("invalid number: %s", part)
-			}
-			if val < min || val > max {
-				return nil, fmt.Errorf("value out of bounds: %d", val)
-			}
-			result[val] = true
+
+	for _, part := range strings.Split(field, ",") {
+		if err := parseCronPart(part, min, max, result); err != nil {
+			return nil, err
 		}
 	}
 	return result, nil
+}
+
+// parseCronPart handles one comma-element: plain, range, step-on-wildcard, or step-on-range.
+func parseCronPart(part string, min, max int, result map[int]bool) error {
+	// Step syntax: base/step  where base is * or start-end
+	if idx := strings.Index(part, "/"); idx >= 0 {
+		base := part[:idx]
+		stepStr := part[idx+1:]
+		step, err := strconv.Atoi(stepStr)
+		if err != nil || step <= 0 {
+			return fmt.Errorf("invalid step value in %q", part)
+		}
+		var start, end int
+		switch {
+		case base == "*":
+			start, end = min, max
+		case strings.Contains(base, "-"):
+			var err error
+			start, end, err = parseRange(base, min, max)
+			if err != nil {
+				return fmt.Errorf("invalid range in step %q: %w", part, err)
+			}
+		default:
+			v, err := strconv.Atoi(base)
+			if err != nil || v < min || v > max {
+				return fmt.Errorf("invalid step base in %q", part)
+			}
+			start, end = v, max
+		}
+		for i := start; i <= end; i += step {
+			result[i] = true
+		}
+		return nil
+	}
+
+	// Range syntax: start-end
+	if strings.Contains(part, "-") {
+		start, end, err := parseRange(part, min, max)
+		if err != nil {
+			return err
+		}
+		for i := start; i <= end; i++ {
+			result[i] = true
+		}
+		return nil
+	}
+
+	// Wildcard
+	if part == "*" {
+		for i := min; i <= max; i++ {
+			result[i] = true
+		}
+		return nil
+	}
+
+	// Single value
+	val, err := strconv.Atoi(part)
+	if err != nil {
+		return fmt.Errorf("invalid cron value %q", part)
+	}
+	if val < min || val > max {
+		return fmt.Errorf("cron value %d out of range [%d, %d]", val, min, max)
+	}
+	result[val] = true
+	return nil
+}
+
+func parseRange(s string, min, max int) (start, end int, err error) {
+	parts := strings.SplitN(s, "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid range %q", s)
+	}
+	start, err = strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid range start in %q", s)
+	}
+	end, err = strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid range end in %q", s)
+	}
+	if start < min || end > max || start > end {
+		return 0, 0, fmt.Errorf("range %d-%d out of bounds [%d, %d]", start, end, min, max)
+	}
+	return start, end, nil
 }
 
 // cronMatches checks if the given time matches the cron expression
@@ -188,74 +257,81 @@ func cronMatches(cronExpr string, t time.Time) (bool, error) {
 	return true, nil
 }
 
-// Start begins executing scheduled jobs.
+// Start begins executing scheduled jobs. It is a no-op if no jobs are
+// registered or if the scheduler has already been started.
 func (s *ServiceScheduler) Start(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
-	if s.cancel != nil {
-		// Already started
+
+	if s.cancel != nil || len(s.jobs) == 0 {
 		return
 	}
 	
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	
-	// Start a background goroutine for each job
+	// Start a background goroutine for each job.
 	for _, job := range s.jobs {
-		job := job // Capture for closure
+		job := job // capture for closure
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			
-			// If cron expression is empty or "* * * * *", run every minute
-			if job.CronExpr == "" || job.CronExpr == "* * * * *" {
-				// Simple implementation for每分钟
-				ticker := time.NewTicker(time.Minute)
-				defer ticker.Stop()
-				
-				// Run immediately
-				if err := job.Action(ctx); err != nil {
-					log.Printf("scheduler: job %s failed: %v", job.ID, err)
-				}
-				
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case <-ticker.C:
-						if err := job.Action(ctx); err != nil {
-							log.Printf("scheduler: job %s failed: %v", job.ID, err)
-						}
-					}
-				}
+			if job.Interval > 0 {
+				runIntervalJob(ctx, job)
 			} else {
-				// Parse cron expression and run at specified times
-				ticker := time.NewTicker(time.Minute)
-				defer ticker.Stop()
-				
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case t := <-ticker.C:
-						matches, err := cronMatches(job.CronExpr, t)
-						if err != nil {
-							log.Printf("scheduler: invalid cron expression for job %s: %v", job.ID, err)
-							continue
-						}
-						if matches {
-							if err := job.Action(ctx); err != nil {
-								log.Printf("scheduler: job %s failed: %v", job.ID, err)
-							}
-						}
-					}
-				}
+				runCronJob(ctx, job)
 			}
 		}()
 	}
 	
 	log.Printf("scheduler: started with %d jobs", len(s.jobs))
+}
+
+// runIntervalJob runs job.Action immediately, then repeats every job.Interval.
+func runIntervalJob(ctx context.Context, job ScheduledJob) {
+	if err := job.Action(ctx); err != nil {
+		log.Printf("scheduler: job %s failed: %v", job.ID, err)
+	}
+	ticker := time.NewTicker(job.Interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := job.Action(ctx); err != nil {
+				log.Printf("scheduler: job %s failed: %v", job.ID, err)
+			}
+		}
+	}
+}
+
+// runCronJob fires job.Action whenever the cron expression matches the current
+// wall-clock minute. The cron check polls once per minute.
+func runCronJob(ctx context.Context, job ScheduledJob) {
+	expr := job.CronExpr
+	if expr == "" {
+		expr = "* * * * *"
+	}
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case t := <-ticker.C:
+			matches, err := cronMatches(expr, t)
+			if err != nil {
+				log.Printf("scheduler: invalid cron expression for job %s: %v", job.ID, err)
+				return // bad expression won't fix itself; stop this goroutine
+			}
+			if matches {
+				if err := job.Action(ctx); err != nil {
+					log.Printf("scheduler: job %s failed: %v", job.ID, err)
+				}
+			}
+		}
+	}
 }
 
 // Stop gracefully stops the scheduler.
@@ -281,8 +357,9 @@ func SaveJobToMemory(ctx context.Context, mem memory.MemoryStore, job ScheduledJ
 	value := map[string]interface{}{
 		"id":        job.ID,
 		"cron_expr": job.CronExpr,
+		"interval":  job.Interval.String(),
 		"source":    job.Source,
-		// Note: Action cannot be serialized
+		// Note: Action cannot be serialized — see Phase 2 contract in LoadJobsFromMemory.
 	}
 	
 	// Convert to JSON for storage
@@ -294,5 +371,5 @@ func SaveJobToMemory(ctx context.Context, mem memory.MemoryStore, job ScheduledJ
 	// Store in memory
 	return mem.Remember(ctx, key, map[string]interface{}{
 		"data": string(jsonData),
-	}, memory.ScopeWorkspace)
+	}, memory.MemoryScopeProject)
 }

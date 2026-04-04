@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 // WorkspaceConfig is the resolved configuration produced from CLI flags, YAML
@@ -27,10 +28,13 @@ type WorkspaceConfig struct {
 	SkipASTIndex        bool
 	HITLTimeout         time.Duration
 	AuditLimit          int
-	Sandbox             bool
+	Sandbox             fsandbox.SandboxConfig
 	DebugLLM            bool
 	DebugAgent          bool
 	AllowedCapabilities []core.CapabilitySelector
+	// ReindexInterval, if non-zero, schedules periodic AST re-indexing.
+	// Zero (default) disables the background re-index job.
+	ReindexInterval time.Duration
 }
 
 // AgentLabel returns the agent name to use for configuration.

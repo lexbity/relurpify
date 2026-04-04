@@ -5,9 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/sandbox"
 	"gopkg.in/yaml.v3"
 )

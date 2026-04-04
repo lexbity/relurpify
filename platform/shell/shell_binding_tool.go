@@ -3,7 +3,6 @@ package shell
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/sandbox"
@@ -25,38 +24,29 @@ func NewShellBindingTool(binding ShellBinding, query *CommandQuery, runner sandb
 	}
 }
 
-// Name returns the binding's name.
-func (t *shellBindingTool) Name() string {
-	return t.binding.Name
-}
+func (t *shellBindingTool) Name() string        { return t.binding.Name }
+func (t *shellBindingTool) Description() string { return t.binding.Description }
+func (t *shellBindingTool) Category() string    { return "shell-binding" }
 
-// Description returns the binding's description.
-func (t *shellBindingTool) Description() string {
-	return t.binding.Description
-}
-
-// Parameters defines the tool's parameters.
 func (t *shellBindingTool) Parameters() []core.ToolParameter {
-	params := []core.ToolParameter{}
 	if t.binding.ArgsPassthrough {
-		params = append(params, core.ToolParameter{
-			Name:        "extra_args",
-			Type:        "string",
-			Description: "Extra arguments to append to the command",
-			Required:    false,
-		})
+		return []core.ToolParameter{
+			{
+				Name:        "extra_args",
+				Type:        "string",
+				Description: "Extra arguments to append to the command",
+				Required:    false,
+			},
+		}
 	}
-	return params
+	return []core.ToolParameter{}
 }
 
-// Execute runs the shell binding.
-func (t *shellBindingTool) Execute(ctx context.Context, params map[string]interface{}) (*core.ToolResult, error) {
+func (t *shellBindingTool) Execute(ctx context.Context, _ *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	var extraArgs []string
 	if t.binding.ArgsPassthrough {
-		if raw, ok := params["extra_args"]; ok {
+		if raw, ok := args["extra_args"]; ok {
 			if s, ok := raw.(string); ok && s != "" {
-				// Split by spaces, but keep as a single string for shell binding
-				// For simplicity, we'll treat it as a single argument
 				extraArgs = []string{s}
 			}
 		}
@@ -83,6 +73,16 @@ func (t *shellBindingTool) Execute(ctx context.Context, params map[string]interf
 		},
 	}, nil
 }
+
+func (t *shellBindingTool) IsAvailable(_ context.Context, _ *core.Context) bool {
+	return t.runner != nil
+}
+
+func (t *shellBindingTool) Permissions() core.ToolPermissions {
+	return core.ToolPermissions{}
+}
+
+func (t *shellBindingTool) Tags() []string { return t.binding.Tags }
 
 // SetCommandRunner sets the command runner for the tool.
 func (t *shellBindingTool) SetCommandRunner(runner sandbox.CommandRunner) {

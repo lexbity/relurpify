@@ -137,6 +137,17 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if err != nil {
 		return nil, err
 	}
+	if cfg.SkipASTIndex {
+		searchEngine := search.NewSearchEngine(nil, codeIndex)
+		if searchEngine == nil {
+			return nil, fmt.Errorf("search engine initialization failed")
+		}
+		return &CapabilityBundle{
+			Registry:     registry,
+			IndexManager: manager,
+			SearchEngine: searchEngine,
+		}, nil
+	}
 	if cfg.PermissionManager != nil {
 		codeIndex.SetPathFilter(func(path string, isDir bool) bool {
 			action := core.FileSystemRead
@@ -154,17 +165,6 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	}
 	if err := codeIndex.Save(); err != nil {
 		return nil, err
-	}
-	if cfg.SkipASTIndex {
-		searchEngine := search.NewSearchEngine(nil, codeIndex)
-		if searchEngine == nil {
-			return nil, fmt.Errorf("search engine initialization failed")
-		}
-		return &CapabilityBundle{
-			Registry:     registry,
-			IndexManager: manager,
-			SearchEngine: searchEngine,
-		}, nil
 	}
 	if err := manager.StartIndexing(buildCtx); err != nil {
 		return nil, err

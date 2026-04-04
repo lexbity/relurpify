@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -67,6 +68,8 @@ func (r *TelemetryRecorder) Emit(event core.Event) {
 	r.Events = append(r.Events, event)
 }
 
+// EnvMinimal returns a minimal agentenv.AgentEnvironment for tests that use
+// the agents/ implementation layer (chainer, goalcon, htn, react, etc.).
 func EnvMinimal() agentenv.AgentEnvironment {
 	return agentenv.AgentEnvironment{
 		Registry: capability.NewRegistry(),
@@ -74,6 +77,8 @@ func EnvMinimal() agentenv.AgentEnvironment {
 	}
 }
 
+// Env returns an agentenv.AgentEnvironment for tests that use the agents/
+// implementation layer (chainer, goalcon, htn, react, etc.).
 func Env(t interface {
 	Helper()
 	Fatalf(string, ...interface{})
@@ -85,6 +90,26 @@ func Env(t interface {
 		t.Fatalf("failed to create memory store: %v", err)
 	}
 	return agentenv.AgentEnvironment{
+		Model:    StubModel{},
+		Registry: capability.NewRegistry(),
+		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+		Config:   &core.Config{Name: "test", Model: "stub", MaxIterations: 1},
+	}
+}
+
+// WorkspaceEnv returns an ayenitd.WorkspaceEnvironment for tests that use named
+// agents (euclo, rex, etc.) that accept WorkspaceEnvironment directly.
+func WorkspaceEnv(t interface {
+	Helper()
+	Fatalf(string, ...interface{})
+	TempDir() string
+}) ayenitd.WorkspaceEnvironment {
+	t.Helper()
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create memory store: %v", err)
+	}
+	return ayenitd.WorkspaceEnvironment{
 		Model:    StubModel{},
 		Registry: capability.NewRegistry(),
 		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),

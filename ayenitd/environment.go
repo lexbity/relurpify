@@ -35,7 +35,7 @@ type WorkspaceEnvironment struct {
 	// Memory + storage
 	Memory          memory.MemoryStore
 	WorkflowStore   memory.WorkflowStateStore
-	CheckpointStore memory.CheckpointStore // nil until implemented in framework
+	CheckpointStore *memory.CheckpointStore // nil until implemented in framework
 	PlanStore       plan.PlanStore
 	PatternStore    patterns.PatternStore
 	CommentStore    patterns.CommentStore
@@ -45,7 +45,8 @@ type WorkspaceEnvironment struct {
 	Embedder    retrieval.Embedder // generic interface, not Ollama-specific
 	RetrievalDB *sql.DB            // shared DB for retrieval index tables
 
-	// Agents that verify or extract compatibility surface (optional)
+	// Agents that verify or extract compatibility surface (optional).
+	// These use the agentenv type aliases defined in agentenv_interfaces.go.
 	VerificationPlanner           VerificationPlanner
 	CompatibilitySurfaceExtractor CompatibilitySurfaceExtractor
 

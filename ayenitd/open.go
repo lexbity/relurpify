@@ -2,17 +2,21 @@ package ayenitd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/platform/llm"
 )
 
@@ -28,6 +32,9 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		return nil, fmt.Errorf("invalid workspace config: %w", err)
 	}
 
+	// Resolve workspace YAML overrides before probing or opening stores.
+	cfg = resolveWorkspaceConfigOverrides(cfg)
+
 	// Phase B: Platform Runtime Checks
 	results := ProbeWorkspace(cfg)
 	for _, r := range results {
@@ -37,7 +44,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase C: Log and Telemetry Setup
-	logFile, logger, err := setupLogging(cfg)
+	logFile, logger, tel, err := setupTelemetry(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -50,19 +57,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase E: Agent Registration + Authorization
-	var sandboxCfg fsandbox.SandboxConfig
-	if cfg.Sandbox {
-		// Use default sandbox configuration when sandbox is enabled
-		sandboxCfg = fsandbox.SandboxConfig{
-			// Set appropriate defaults
-			NetworkIsolation: true,
-			ReadOnlyRoot:     false,
-		}
-	}
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath: cfg.ManifestPath,
 		ConfigPath:   cfg.ConfigPath,
-		Sandbox:      sandboxCfg,
+		Sandbox:      cfg.Sandbox,
 		AuditLimit:   cfg.AuditLimit,
 		BaseFS:       cfg.Workspace,
 		HITLTimeout:  cfg.HITLTimeout,
@@ -91,10 +89,35 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 	memStore = memStore.WithVectorStore(memory.NewInMemoryVectorStore())
 
-	modelClient := llm.NewClient(cfg.OllamaEndpoint, cfg.OllamaModel)
-	modelClient.SetDebugLogging(cfg.DebugLLM)
-	model := llm.NewInstrumentedModel(modelClient, nil, cfg.DebugLLM)
+	// Resolve model from manifest if not overridden in config.
+	ollamaModel := cfg.OllamaModel
+	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
+		if specModel := registration.Manifest.Spec.Agent.Model.Name; specModel != "" && ollamaModel == "" {
+			ollamaModel = specModel
+		}
+	}
+
+	logLLM := cfg.DebugLLM
+	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
+		if registration.Manifest.Spec.Agent.Logging != nil && registration.Manifest.Spec.Agent.Logging.LLM != nil {
+			logLLM = *registration.Manifest.Spec.Agent.Logging.LLM
+		}
+	}
+	modelClient := llm.NewClient(cfg.OllamaEndpoint, ollamaModel)
+	modelClient.SetDebugLogging(logLLM)
+	model := llm.NewInstrumentedModel(modelClient, tel, logLLM)
 	guidanceBroker := guidance.NewGuidanceBroker(0)
+
+	// Wire permission event logger if event telemetry is available.
+	if et, ok := tel.(interface {
+		EmitPermissionEvent(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{})
+	}); ok {
+		if registration.Permissions != nil {
+			registration.Permissions.SetEventLogger(func(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+				et.EmitPermissionEvent(ctx, desc, effect, reason, fields)
+			})
+		}
+	}
 
 	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
 		Context:             ctx,
@@ -107,13 +130,13 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		Runner:              runner,
 		Model:               model,
 		Memory:              memStore,
-		Telemetry:           nil, // TODO: telemetry
+		Telemetry:           tel,
 		OllamaEndpoint:      cfg.OllamaEndpoint,
-		OllamaModel:         cfg.OllamaModel,
+		OllamaModel:         ollamaModel,
 		MaxIterations:       cfg.MaxIterations,
 		SkipASTIndex:        cfg.SkipASTIndex,
 		AllowedCapabilities: cfg.AllowedCapabilities,
-		DebugLLM:            cfg.DebugLLM,
+		DebugLLM:            logLLM,
 		DebugAgent:          cfg.DebugAgent,
 		PatternStore:        patternStore,
 		CommentStore:        commentStore,
@@ -129,28 +152,28 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		return nil, err
 	}
 
+	// Apply compiled policy engine.
+	if boot.CompiledPolicy != nil {
+		registration.Policy = boot.CompiledPolicy.Engine
+		boot.Environment.Registry.SetPolicyEngine(boot.CompiledPolicy.Engine)
+	}
+
 	// Phase H: Embedder Initialization
-	embedder := retrieval.NewOllamaEmbedder(cfg.OllamaEndpoint, cfg.OllamaModel)
+	embedder := retrieval.NewOllamaEmbedder(cfg.OllamaEndpoint, ollamaModel)
 
 	// Phase I: Scheduler Start
 	scheduler := NewServiceScheduler()
-	
-	// Load cron-from-memory jobs
 	if err := scheduler.LoadJobsFromMemory(ctx, memStore); err != nil {
 		logger.Printf("scheduler: failed to load jobs from memory: %v", err)
 	}
-	
-	// Register hardcoded re-index job if configured
-	// For Phase 1, we'll register it if MaxIterations > 0 (as a demo flag)
-	if cfg.MaxIterations > 0 {
+	if cfg.ReindexInterval > 0 {
 		scheduler.Register(ScheduledJob{
 			ID:       "reindex-workspace",
-			CronExpr: "0 */6 * * *", // Every 6 hours at minute 0
+			Interval: cfg.ReindexInterval,
+			Source:   "internal",
 			Action: func(ctx context.Context) error {
 				logger.Printf("scheduler: re-indexing workspace")
-				// Re-call IndexManager.StartIndexing if it exists
 				if boot.Environment.IndexManager != nil {
-					// Start indexing in background
 					go func() {
 						if err := boot.Environment.IndexManager.StartIndexing(ctx); err != nil {
 							logger.Printf("scheduler: re-index failed: %v", err)
@@ -161,11 +184,9 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 				}
 				return nil
 			},
-			Source: "internal",
 		})
-		logger.Printf("scheduler: registered re-index job")
+		logger.Printf("scheduler: registered re-index job (interval: %s)", cfg.ReindexInterval)
 	}
-	
 	scheduler.Start(ctx)
 
 	// Build WorkspaceEnvironment
@@ -177,20 +198,50 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	env.CheckpointStore = nil // TODO: implement in framework
 
 	ws := &Workspace{
-		Environment:       env,
-		Registration:      registration,
-		logFile:           logFile,
-		patternDB:         patternDB,
-		AgentSpec:         boot.AgentSpec,
-		AgentDefinitions:  boot.AgentDefinitions,
-		CompiledPolicy:    boot.CompiledPolicy,
-		EffectiveContract: boot.Contract,
+		Environment:          env,
+		Registration:         registration,
+		logFile:              logFile,
+		patternDB:            patternDB,
+		AgentSpec:            boot.AgentSpec,
+		AgentDefinitions:     boot.AgentDefinitions,
+		CompiledPolicy:       boot.CompiledPolicy,
+		EffectiveContract:    boot.Contract,
+		CapabilityAdmissions: boot.CapabilityAdmissions,
+		SkillResults:         boot.SkillResults,
+		Telemetry:            tel,
+		Logger:               logger,
 	}
-	// Store logger for cleanup
-	ws.eventLog = nil // TODO: set up event log
 
 	logger.Printf("ayenitd: workspace opened successfully")
 	return ws, nil
+}
+
+// resolveWorkspaceConfigOverrides loads the workspace YAML (if ConfigPath is
+// set) and applies model and agent-name overrides. Errors are silently ignored
+// so that a missing or malformed config file does not prevent startup.
+func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
+	if cfg.ConfigPath == "" {
+		return cfg
+	}
+	type yamlCfg struct {
+		Model  string   `json:"model" yaml:"model"`
+		Agents []string `json:"agents" yaml:"agents"`
+	}
+	data, err := os.ReadFile(cfg.ConfigPath)
+	if err != nil {
+		return cfg
+	}
+	// Try JSON first (YAML is a superset, but we keep it simple here).
+	var yc yamlCfg
+	if jsonErr := json.Unmarshal(data, &yc); jsonErr == nil {
+		if yc.Model != "" && cfg.OllamaModel == "" {
+			cfg.OllamaModel = yc.Model
+		}
+		if len(yc.Agents) > 0 && cfg.AgentName == "" {
+			cfg.AgentName = yc.Agents[0]
+		}
+	}
+	return cfg
 }
 
 func validateConfig(cfg WorkspaceConfig) error {
@@ -209,21 +260,54 @@ func validateConfig(cfg WorkspaceConfig) error {
 	return nil
 }
 
-func setupLogging(cfg WorkspaceConfig) (*os.File, *log.Logger, error) {
+// setupTelemetry opens the log file, creates a logger, and assembles the
+// telemetry sink chain (logger + optional JSON file). Returns the log file
+// (which must be closed by the caller), the logger, and the assembled telemetry.
+func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry, error) {
 	logPath := cfg.LogPath
 	if logPath == "" {
-		// Default log path
 		paths := config.New(cfg.Workspace)
 		logPath = filepath.Join(paths.LogsDir(), "ayenitd.log")
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-		return nil, nil, fmt.Errorf("create log directory: %w", err)
+		return nil, nil, nil, fmt.Errorf("create log directory: %w", err)
 	}
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open log: %w", err)
+		return nil, nil, nil, fmt.Errorf("open log: %w", err)
 	}
 	logger := log.New(logFile, "ayenitd ", log.LstdFlags|log.Lmicroseconds)
-	return logFile, logger, nil
+
+	var sinks []core.Telemetry
+	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
+
+	if cfg.TelemetryPath != "" {
+		if err := os.MkdirAll(filepath.Dir(cfg.TelemetryPath), 0o755); err == nil {
+			if fileSink, err := telemetry.NewJSONFileTelemetry(cfg.TelemetryPath); err == nil {
+				sinks = append(sinks, fileSink)
+			} else {
+				logger.Printf("warning: failed to init json telemetry: %v", err)
+			}
+		}
+	}
+
+	return logFile, logger, telemetry.MultiplexTelemetry{Sinks: sinks}, nil
 }
 
+// permissionEventLogger wraps a core.Telemetry to provide a SetEventLogger
+// callback. Used to emit permission audit events when telemetry is a multiplex.
+type permissionEventLogger struct {
+	log     *log.Logger
+	agentID string
+}
+
+func (l *permissionEventLogger) emit(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+	if l.log == nil {
+		return
+	}
+	l.log.Printf("permission: agent=%s type=%s action=%s resource=%s effect=%s reason=%s",
+		l.agentID, desc.Type, desc.Action, desc.Resource, effect, reason)
+}
+
+// fakeNow returns the current time for scheduler tick alignment.
+func fakeNow() time.Time { return time.Now() }

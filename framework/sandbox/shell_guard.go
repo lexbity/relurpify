@@ -4,10 +4,15 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/lexcodex/relurpify/framework/authorization"
 )
+
+// CommandApprover is the interface ShellGuard needs for HITL escalation of
+// blacklist-matched commands. authorization.PermissionManager satisfies this
+// via a thin adapter at the wiring site, breaking the import cycle between
+// framework/sandbox and framework/authorization.
+type CommandApprover interface {
+	ApproveCommand(ctx context.Context, agentID, ruleID, reason, command string) (bool, error)
+}
 
 // ShellGuard wraps a CommandRunner and applies the blacklist before forwarding.
 // It reconstructs the full command string as "args[0] args[1] ..." (same format
@@ -15,13 +20,13 @@ import (
 type ShellGuard struct {
 	inner     CommandRunner
 	blacklist *ShellBlacklist
-	manager   *authorization.PermissionManager
+	manager   CommandApprover
 	agentID   string
 }
 
 // NewShellGuard creates a new ShellGuard.
 func NewShellGuard(inner CommandRunner, blacklist *ShellBlacklist,
-	manager *authorization.PermissionManager, agentID string) *ShellGuard {
+	manager CommandApprover, agentID string) *ShellGuard {
 	return &ShellGuard{
 		inner:     inner,
 		blacklist: blacklist,
@@ -42,18 +47,16 @@ func (g *ShellGuard) Run(ctx context.Context, req CommandRequest) (string, strin
 			return "", "", fmt.Errorf("shell filter blocked [%s]: %s", rule.ID, rule.Reason)
 		case BlacklistActionHITL:
 			if g.manager != nil {
-				// Try to escalate through RequireApproval
-				// We'll use a placeholder for now
-				// In a real implementation, we would call:
-				// approved, err := g.manager.RequireApproval(ctx, g.agentID, "shell_guard", map[string]string{
-				// 	"rule_id": rule.ID,
-				// 	"reason":  rule.Reason,
-				// 	"command": cmdStr,
-				// })
-				// For now, we'll block with a message indicating HITL is required
-				return "", "", fmt.Errorf("shell filter requires HITL approval [%s]: %s (HITL not yet implemented)", rule.ID, rule.Reason)
+				approved, err := g.manager.ApproveCommand(ctx, g.agentID, rule.ID, rule.Reason, cmdStr)
+				if err != nil {
+					return "", "", fmt.Errorf("shell filter HITL error [%s]: %w", rule.ID, err)
+				}
+				if !approved {
+					return "", "", fmt.Errorf("shell filter denied [%s]: %s", rule.ID, rule.Reason)
+				}
+				break
 			}
-			return "", "", fmt.Errorf("shell filter requires HITL approval [%s]: %s (no permission manager available)", rule.ID, rule.Reason)
+			return "", "", fmt.Errorf("shell filter requires HITL approval [%s]: %s (no approver configured)", rule.ID, rule.Reason)
 		}
 	}
 	return g.inner.Run(ctx, req)

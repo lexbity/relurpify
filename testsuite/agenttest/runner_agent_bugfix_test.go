@@ -13,6 +13,7 @@ import (
 
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -49,7 +50,7 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 
 	agentName := "testfu"
 	var capturedCfg *core.Config
-	namedfactory.RegisterNamedAgent(agentName, func(_ string, env agentenv.AgentEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent(agentName, func(_ string, env ayenitd.WorkspaceEnvironment) graph.Agent {
 		capturedCfg = env.Config
 		return &stubNamedAgent{}
 	})
@@ -398,7 +399,7 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 
 	agentName := "testfu"
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent(agentName, func(workspace string, env agentenv.AgentEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent(agentName, func(workspace string, env ayenitd.WorkspaceEnvironment) graph.Agent {
 		return &retryCheckAgent{
 			workspace: workspace,
 			shared:    shared,
@@ -488,7 +489,7 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 	defer ollama.Close()
 
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env agentenv.AgentEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env ayenitd.WorkspaceEnvironment) graph.Agent {
 		return &nonInfraRetryAgent{shared: shared}
 	})
 
@@ -553,7 +554,7 @@ func TestRunCaseStopsRetryingAfterConfiguredLimit(t *testing.T) {
 	defer ollama.Close()
 
 	shared := &retryCheckShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ agentenv.AgentEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.Agent {
 		return &alwaysRetryAgent{shared: shared}
 	})
 
@@ -625,7 +626,7 @@ func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 	defer ollama.Close()
 
 	shared := &executionTimeoutShared{}
-	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ agentenv.AgentEnvironment) graph.Agent {
+	namedfactory.RegisterNamedAgent("testfu", func(_ string, _ ayenitd.WorkspaceEnvironment) graph.Agent {
 		return &executionTimeoutAgent{shared: shared}
 	})
 

@@ -1,6 +1,5 @@
 package llm
 
-import "gopkg.in/yaml.v3"
 
 // ModelProfile captures model-specific quirks and configuration.
 type ModelProfile struct {

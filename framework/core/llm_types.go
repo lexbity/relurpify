@@ -116,8 +116,9 @@ func LLMToolSpecsFromTools(tools []Tool) []LLMToolSpec {
 //
 // The LanguageModel interface is not changed.
 type ProfiledModel interface {
-	ToolRepairStrategy() string // "llm" | "heuristic-only"
-	MaxToolsPerCall() int       // 0 = no limit
+	ToolRepairStrategy() string    // "llm" | "heuristic-only"
+	MaxToolsPerCall() int          // 0 = no limit
+	UsesNativeToolCalling() bool   // true if profile enables native API tool calling
 }
 
 // LanguageModel provides the required LLM capabilities.

@@ -134,6 +134,16 @@ func TestClientChatTrimsOpenAIv1Endpoint(t *testing.T) {
 
 func TestClientChatWithToolsParsesToolCalls(t *testing.T) {
 	client := NewClient("http://fake", "model")
+	// This test exercises the double-encoded arguments quirk present in qwen2.5-coder,
+	// where function.arguments is a JSON string rather than a JSON object.
+	client.SetProfile(&ModelProfile{
+		ToolCalling: struct {
+			NativeAPI               bool `yaml:"native_api"`
+			DoubleEncodedArgs       bool `yaml:"double_encoded_args"`
+			MultilineStringLiterals bool `yaml:"multiline_string_literals"`
+			MaxToolsPerCall         int  `yaml:"max_tools_per_call"`
+		}{DoubleEncodedArgs: true},
+	})
 	client.client = &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) *http.Response {
 			assert.Equal(t, "/api/chat", req.URL.Path)
