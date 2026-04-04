@@ -39,6 +39,7 @@ import (
 	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
 	euclodispatch "github.com/lexcodex/relurpify/named/euclo/runtime/dispatch"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
