@@ -432,7 +432,7 @@ func schemaToOllamaParameters(schema *core.Schema) map[string]interface{} {
 	return parameters
 }
 
-func decodeLLMResponse(body io.Reader) (*core.LLMResponse, error) {
+func (c *Client) decodeLLMResponse(body io.Reader) (*core.LLMResponse, error) {
 	var raw ollamaResponse
 	if err := json.NewDecoder(body).Decode(&raw); err != nil {
 		return nil, err
