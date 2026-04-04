@@ -196,6 +196,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	env.GuidanceBroker = guidanceBroker
 	env.PermissionManager = registration.Permissions
 	env.CheckpointStore = nil // TODO: implement in framework
+	env.KnowledgeStore = nil
 
 	ws := &Workspace{
 		Environment:          env,

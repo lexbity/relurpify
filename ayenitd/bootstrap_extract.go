@@ -190,6 +190,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		PlanStore:                     opts.PlanStore,
 		PatternStore:                  opts.PatternStore,
 		CommentStore:                  opts.CommentStore,
+		KnowledgeStore:                nil,
 		GuidanceBroker:                opts.GuidanceBroker,
 		RetrievalDB:                   opts.RetrievalDB,
 		VerificationPlanner:           nil,

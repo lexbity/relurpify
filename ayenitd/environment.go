@@ -39,6 +39,7 @@ type WorkspaceEnvironment struct {
 	PlanStore       plan.PlanStore
 	PatternStore    patterns.PatternStore
 	CommentStore    patterns.CommentStore
+	KnowledgeStore  memory.KnowledgeStore
 	GuidanceBroker  *guidance.GuidanceBroker
 
 	// Retrieval
