@@ -14,7 +14,7 @@ import (
 
 // openRuntimeStores opens all SQLite stores required for a workspace.
 // Extracted from app/relurpish/runtime/runtime.go.
-func openRuntimeStores(workspace string) (*db.SQLiteWorkflowStateStore, frameworkplan.PlanStore, patterns.PatternStore, patterns.CommentStore, io.Closer, error) {
+func openRuntimeStores(workspace string) (*db.SQLiteWorkflowStateStore, frameworkplan.PlanStore, patterns.PatternStore, patterns.CommentStore, memory.KnowledgeStore, io.Closer, error) {
 	paths := config.New(workspace)
 	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("create sessions directory: %w", err)
@@ -51,5 +51,8 @@ func openRuntimeStores(workspace string) (*db.SQLiteWorkflowStateStore, framewor
 		_ = workflowStore.Close()
 		return nil, nil, nil, nil, nil, fmt.Errorf("open comment catalog: %w", err)
 	}
-	return workflowStore, planStore, patternStore, commentStore, patternDB, nil
+	// Create a knowledge store
+	knowledgeStore := memory.NewInMemoryKnowledgeStore()
+	
+	return workflowStore, planStore, patternStore, commentStore, knowledgeStore, patternDB, nil
 }

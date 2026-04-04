@@ -53,6 +53,7 @@ type AgentBootstrapOptions struct {
 	PlanStore           frameworkplan.PlanStore
 	GuidanceBroker      *guidance.GuidanceBroker
 	WorkflowStore       memory.WorkflowStateStore
+	KnowledgeStore      memory.KnowledgeStore
 }
 
 // BootstrappedAgentRuntime is copied from runtime package.
@@ -190,7 +191,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		PlanStore:                     opts.PlanStore,
 		PatternStore:                  opts.PatternStore,
 		CommentStore:                  opts.CommentStore,
-		KnowledgeStore:                nil,
+		KnowledgeStore:                opts.KnowledgeStore,
 		GuidanceBroker:                opts.GuidanceBroker,
 		RetrievalDB:                   opts.RetrievalDB,
 		VerificationPlanner:           nil,

@@ -50,7 +50,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase D: Store Initialization
-	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(cfg.Workspace)
+	workflowStore, planStore, patternStore, commentStore, knowledgeStore, patternDB, err := openRuntimeStores(cfg.Workspace)
 	if err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("open runtime stores: %w", err)
@@ -144,6 +144,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		PlanStore:           planStore,
 		GuidanceBroker:      guidanceBroker,
 		WorkflowStore:       workflowStore,
+		KnowledgeStore:      knowledgeStore,
 	})
 	if err != nil {
 		patternDB.Close()
@@ -196,7 +197,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	env.GuidanceBroker = guidanceBroker
 	env.PermissionManager = registration.Permissions
 	env.CheckpointStore = nil // TODO: implement in framework
-	env.KnowledgeStore = nil
+	env.KnowledgeStore = knowledgeStore
 
 	ws := &Workspace{
 		Environment:          env,
