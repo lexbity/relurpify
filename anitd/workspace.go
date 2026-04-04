@@ -3,14 +3,17 @@ package anitd
 import (
 	"io"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/policybundle"
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 )
 
 // Workspace is a live, initialized workspace session. It holds all open
 // resources. Close() must be called when the session ends.
 type Workspace struct {
 	Environment WorkspaceEnvironment
-	Registration interface{} // *authorization.AgentRegistration (placeholder)
+	Registration *fauthorization.AgentRegistration
 
 	// Internals held for Close()
 	logFile     io.Closer
@@ -20,8 +23,8 @@ type Workspace struct {
 	// Derived fields for callers that need them
 	AgentSpec         *core.AgentRuntimeSpec
 	AgentDefinitions  map[string]*core.AgentDefinition
-	CompiledPolicy    interface{} // *policybundle.CompiledPolicyBundle (placeholder)
-	EffectiveContract interface{} // *contractpkg.EffectiveAgentContract (placeholder)
+	CompiledPolicy    *policybundle.CompiledPolicyBundle
+	EffectiveContract *contractpkg.EffectiveAgentContract
 }
 
 // Close releases all resources held by the Workspace.
