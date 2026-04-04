@@ -11,6 +11,11 @@ import (
 // It wraps framework/contextmgr.ExtractFileReferences for @mention parsing.
 type FileResolver struct {
 	Workspace string // absolute workspace root
+
+	// CheckFileAccess, when non-nil, is called for each resolved path. Paths that
+	// return a non-nil error are moved to Skipped (not loaded). This is the hook
+	// for PermissionManager.CheckFileAccess without creating a hard dependency.
+	CheckFileAccess func(path string) error
 }
 
 // ResolvedFiles holds the output of a resolution pass.
@@ -43,6 +48,12 @@ func (r *FileResolver) Resolve(selections []string, text string) ResolvedFiles {
 		if err != nil || strings.HasPrefix(rel, "..") {
 			skipped = append(skipped, raw)
 			continue
+		}
+		if r.CheckFileAccess != nil {
+			if accessErr := r.CheckFileAccess(abs); accessErr != nil {
+				skipped = append(skipped, abs)
+				continue
+			}
 		}
 		paths = append(paths, abs)
 	}

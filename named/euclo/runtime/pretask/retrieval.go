@@ -35,20 +35,21 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 	results := make([]CodeEvidenceItem, 0)
 	seenPaths := make(map[string]bool)
 	
-	// Process file paths directly (these are already confirmed)
+	// Process file paths directly (these are already confirmed by the user)
 	for _, path := range anchors.FilePaths {
 		if seenPaths[path] {
 			continue
 		}
 		results = append(results, CodeEvidenceItem{
-			Path:    path,
-			Score:   1.0,
-			Source:  EvidenceSourceAnchor,
-			Summary: fmt.Sprintf("File: %s", path),
+			Path:       path,
+			Score:      1.0,
+			Source:     EvidenceSourceAnchor,
+			TrustClass: "workspace-trusted",
+			Summary:    fmt.Sprintf("File: %s", path),
 		})
 		seenPaths[path] = true
 	}
-	
+
 	// Process symbols for dependency expansion
 	for _, symbol := range anchors.SymbolNames {
 		// Get the file containing the symbol
@@ -56,20 +57,21 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 		if err != nil || len(nodes) == 0 {
 			continue
 		}
-		
+
 		// Placeholder path for the symbol
 		path := fmt.Sprintf("symbol:%s", symbol)
 		if seenPaths[path] {
 			continue
 		}
 		results = append(results, CodeEvidenceItem{
-			Path:    path,
-			Score:   0.8,
-			Source:  EvidenceSourceIndex,
-			Summary: fmt.Sprintf("Contains symbol: %s", symbol),
+			Path:       path,
+			Score:      0.8,
+			Source:     EvidenceSourceIndex,
+			TrustClass: "builtin-trusted",
+			Summary:    fmt.Sprintf("Contains symbol: %s", symbol),
 		})
 		seenPaths[path] = true
-		
+
 		// Expand dependencies if available
 		if r.deps != nil && r.config.DependencyHops > 0 {
 			// Try to get dependency graph
@@ -79,10 +81,11 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 					depPath := fmt.Sprintf("dep:%s", dep.Name)
 					if !seenPaths[depPath] {
 						results = append(results, CodeEvidenceItem{
-							Path:    depPath,
-							Score:   0.6,
-							Source:  EvidenceSourceIndex,
-							Summary: fmt.Sprintf("Dependency of %s", symbol),
+							Path:       depPath,
+							Score:      0.6,
+							Source:     EvidenceSourceIndex,
+							TrustClass: "builtin-trusted",
+							Summary:    fmt.Sprintf("Dependency of %s", symbol),
 						})
 						seenPaths[depPath] = true
 					}
@@ -131,31 +134,32 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 		tensions, err := r.tensionSvc.ActiveByWorkflow(ctx, workflowID)
 		if err == nil && tensions != nil {
 			for i := range tensions {
-				// Convert to KnowledgeEvidenceItem
 				results = append(results, KnowledgeEvidenceItem{
-					RefID:   fmt.Sprintf("tension_%d", i),
-					Kind:    KnowledgeKindTension,
-					Title:   fmt.Sprintf("Tension %d", i),
-					Summary: fmt.Sprintf("Active tension in workflow %s", workflowID),
-					Score:   0.7,
-					Source:  EvidenceSourceArchaeoTopic,
+					RefID:      fmt.Sprintf("tension_%d", i),
+					Kind:       KnowledgeKindTension,
+					Title:      fmt.Sprintf("Tension %d", i),
+					Summary:    fmt.Sprintf("Active tension in workflow %s", workflowID),
+					Score:      0.7,
+					Source:     EvidenceSourceArchaeoTopic,
+					TrustClass: "builtin-trusted",
 				})
 			}
 		}
 	}
-	
+
 	// Try to get patterns if available
 	if r.patternSvc != nil {
 		patterns, err := r.patternSvc.ListByWorkflow(ctx, workflowID)
 		if err == nil && patterns != nil {
 			for i := range patterns {
 				results = append(results, KnowledgeEvidenceItem{
-					RefID:   fmt.Sprintf("pattern_%d", i),
-					Kind:    KnowledgeKindPattern,
-					Title:   fmt.Sprintf("Pattern %d", i),
-					Summary: fmt.Sprintf("Pattern in workflow %s", workflowID),
-					Score:   0.6,
-					Source:  EvidenceSourceArchaeoTopic,
+					RefID:      fmt.Sprintf("pattern_%d", i),
+					Kind:       KnowledgeKindPattern,
+					Title:      fmt.Sprintf("Pattern %d", i),
+					Summary:    fmt.Sprintf("Pattern in workflow %s", workflowID),
+					Score:      0.6,
+					Source:     EvidenceSourceArchaeoTopic,
+					TrustClass: "builtin-trusted",
 				})
 			}
 		}
@@ -191,21 +195,23 @@ func (r *ArchaeoRetriever) RetrieveExpanded(ctx context.Context, sketch Hypothet
 	
 	// Fallback to stub results
 	results = append(results, KnowledgeEvidenceItem{
-		RefID:   "expanded_1",
-		Kind:    KnowledgeKindDecision,
-		Title:   "Architectural decision",
-		Summary: fmt.Sprintf("Decision related to: %s", queryText),
-		Score:   0.8,
-		Source:  EvidenceSourceArchaeoExpanded,
+		RefID:      "expanded_1",
+		Kind:       KnowledgeKindDecision,
+		Title:      "Architectural decision",
+		Summary:    fmt.Sprintf("Decision related to: %s", queryText),
+		Score:      0.8,
+		Source:     EvidenceSourceArchaeoExpanded,
+		TrustClass: "builtin-trusted",
 	})
-	
+
 	results = append(results, KnowledgeEvidenceItem{
-		RefID:   "expanded_2",
-		Kind:    KnowledgeKindInteraction,
-		Title:   "Previous interaction",
-		Summary: "Similar interaction from workflow history",
-		Score:   0.7,
-		Source:  EvidenceSourceArchaeoExpanded,
+		RefID:      "expanded_2",
+		Kind:       KnowledgeKindInteraction,
+		Title:      "Previous interaction",
+		Summary:    "Similar interaction from workflow history",
+		Score:      0.7,
+		Source:     EvidenceSourceArchaeoExpanded,
+		TrustClass: "builtin-trusted",
 	})
 	
 	// Apply limits

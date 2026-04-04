@@ -1,6 +1,7 @@
 package pretask
 
 import (
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
@@ -29,6 +30,7 @@ type CodeEvidenceItem struct {
 	Path       string
 	Score      float64
 	Source     EvidenceSource // "anchor" | "index" | "vector"
+	TrustClass string         // "workspace-trusted" | "builtin-trusted" (mirrors core.TrustClass constants)
 	Summary    string         // one-line description for the confirmation frame
 	Citations  []retrieval.PackedCitation
 }
@@ -41,6 +43,7 @@ type KnowledgeEvidenceItem struct {
 	Summary     string
 	Score       float64
 	Source      EvidenceSource // "archaeo_topic" | "archaeo_expanded"
+	TrustClass  string         // "workspace-trusted" | "builtin-trusted" (mirrors core.TrustClass constants)
 	RelatedRefs []string
 }
 
@@ -98,6 +101,10 @@ type EnrichedContextBundle struct {
 
 	// PipelineTrace records what each stage did, for observability.
 	PipelineTrace PipelineTrace
+
+	// PolicySnapshot captures the effective capability policy at retrieval time.
+	// Nil when no CapabilityRegistry is available (e.g. tests, legacy callers).
+	PolicySnapshot *core.PolicySnapshot
 }
 
 // ConfirmedContextBundle is what the user has validated via the confirmation frame.

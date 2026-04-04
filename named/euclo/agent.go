@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -254,13 +255,17 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		// We'll create the querier regardless; its methods will handle nil store.
 		tensionQuerier = &tensionServiceQuerier{service: a.tensionService()}
 		// Create pipeline environment from WorkspaceEnv
-		// Use the WorkspaceEnv which should have all required fields
 		env := pretask.PipelineEnv{
 			IndexManager:   a.WorkspaceEnv.IndexManager,
 			Model:          a.WorkspaceEnv.Model,
 			Embedder:       a.WorkspaceEnv.Embedder,
 			PatternStore:   a.WorkspaceEnv.PatternStore,
 			KnowledgeStore: a.WorkspaceEnv.KnowledgeStore,
+		}
+		if reg := a.WorkspaceEnv.Registry; reg != nil {
+			env.PolicySnapshotProvider = func() *core.PolicySnapshot {
+				return reg.CapturePolicySnapshot()
+			}
 		}
 		a.ContextPipeline = pretask.NewPipeline(env, tensionQuerier, config)
 	}
@@ -532,14 +537,14 @@ func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode e
 	if mode.ModeID != "planning" && mode.ModeID != "debug" && mode.ModeID != "review" {
 		if existing, ok := state.Get("euclo.semantic_inputs"); ok && existing != nil {
 			if typed, ok := existing.(eucloruntime.SemanticInputBundle); ok {
-				return typed
+				return enrichBundleWithContextKnowledge(typed, state)
 			}
 		}
-		return eucloruntime.SemanticInputBundle{}
+		return enrichBundleWithContextKnowledge(eucloruntime.SemanticInputBundle{}, state)
 	}
 	workflowID := workflowIDFromTaskState(task, state)
 	if workflowID == "" {
-		return eucloruntime.SemanticInputBundle{}
+		return enrichBundleWithContextKnowledge(eucloruntime.SemanticInputBundle{}, state)
 	}
 	ctx := context.Background()
 	var activePlan *archaeodomain.VersionedLivingPlan
@@ -572,7 +577,36 @@ func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode e
 	case "review":
 		bundle.Source = bundle.Source + "+review_prepass"
 	}
-	return eucloarchaeomem.EnrichSemanticInputBundle(bundle, state, eucloruntime.UnitOfWork{}, nil)
+	enriched := eucloarchaeomem.EnrichSemanticInputBundle(bundle, state, eucloruntime.UnitOfWork{}, nil)
+	return enrichBundleWithContextKnowledge(enriched, state)
+}
+
+// enrichBundleWithContextKnowledge merges knowledge items from the context enrichment
+// pipeline (stored as "context.knowledge_items" in agent state) into the semantic bundle.
+func enrichBundleWithContextKnowledge(bundle eucloruntime.SemanticInputBundle, state *core.Context) eucloruntime.SemanticInputBundle {
+	if state == nil {
+		return bundle
+	}
+	raw, ok := state.Get("context.knowledge_items")
+	if !ok || raw == nil {
+		return bundle
+	}
+	items, ok := raw.([]pretask.KnowledgeEvidenceItem)
+	if !ok || len(items) == 0 {
+		return bundle
+	}
+	for _, item := range items {
+		finding := eucloruntime.SemanticFindingSummary{
+			RefID:       item.RefID,
+			Kind:        "context_retrieved_" + string(item.Kind),
+			Status:      "retrieved",
+			Title:       item.Title,
+			Summary:     item.Summary,
+			RelatedRefs: append([]string(nil), item.RelatedRefs...),
+		}
+		bundle.PatternFindings = append(bundle.PatternFindings, finding)
+	}
+	return bundle
 }
 
 func (a *Agent) WorkflowProjection(ctx context.Context, workflowID string) (*archaeoprojections.WorkflowReadModel, error) {
@@ -1576,18 +1610,24 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 	
 	// For chat mode, we need to provide the pipeline and file resolver
 	reg.Register("chat", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
-		// Create file resolver with workspace path
-		var workspacePath string
-		if a.WorkspaceEnv.Config != nil && a.WorkspaceEnv.Config.Workspace != "" {
-			workspacePath = a.WorkspaceEnv.Config.Workspace
-		} else if a.Config != nil && a.Config.Workspace != "" {
-			workspacePath = a.Config.Workspace
-		} else {
-			// Fallback to current directory
+		// Resolve workspace path. core.Config has no Workspace field; fall back to
+		// the current working directory, which is set by ayenitd.Open before agents start.
+		workspacePath, _ := os.Getwd()
+		if workspacePath == "" {
 			workspacePath = "."
 		}
+
 		fileResolver := &pretask.FileResolver{
 			Workspace: workspacePath,
+		}
+		if pm := a.WorkspaceEnv.PermissionManager; pm != nil {
+			agentID := ""
+			if a.Config != nil {
+				agentID = a.Config.Name
+			}
+			fileResolver.CheckFileAccess = func(path string) error {
+				return pm.CheckFileAccess(context.Background(), agentID, core.FileSystemRead, path)
+			}
 		}
 		// Use the pipeline from the agent
 		var pipeline modes.ContextEnrichmentPipeline
@@ -1595,17 +1635,12 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 			pipeline = a.ContextPipeline
 		}
 		// Determine if we should show confirmation frame
-		// Read from configuration or default to true
 		showConfirmationFrame := true
 		if a.Config != nil && a.Config.AgentSpec != nil {
-			// In a real implementation, we would parse skill_config.context_enrichment.show_confirmation_frame
-			// For now, we'll use a simple approach
-			// Check if there's a context_enrichment configuration
-			if a.Config.AgentSpec.SkillConfig != nil {
-				// This is a placeholder - actual implementation would parse the YAML
-			}
+			// placeholder: parse skill_config.context_enrichment.show_confirmation_frame
+			_ = a.Config.AgentSpec
 		}
-		return modes.ChatMode(emitter, resolver, pipeline, fileResolver, showConfirmationFrame)
+		return modes.ChatMode(emitter, resolver, pipeline, fileResolver, showConfirmationFrame, a.WorkspaceEnv.Memory)
 	})
 	reg.Register("code", modes.CodeMode)
 	reg.Register("debug", modes.DebugMode)

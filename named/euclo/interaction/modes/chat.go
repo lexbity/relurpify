@@ -3,9 +3,9 @@ package modes
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/lexcodex/relurpify/ayenitd"
+	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
@@ -15,12 +15,19 @@ type ContextEnrichmentPipeline interface {
 	Run(ctx context.Context, input pretask.PipelineInput) (pretask.EnrichedContextBundle, error)
 }
 
+// FileResolverInterface is the narrow interface ContextProposalPhase needs for
+// file resolution. *pretask.FileResolver satisfies this interface.
+type FileResolverInterface interface {
+	Resolve(selections []string, text string) pretask.ResolvedFiles
+}
+
 // ContextProposalPhase emits a ContextProposalFrame and awaits the user's
 // response before the main execution phase runs.
 type ContextProposalPhase struct {
-	Pipeline               ContextEnrichmentPipeline
-	FileResolver           *pretask.FileResolver
-	ShowConfirmationFrame  bool
+	Pipeline              ContextEnrichmentPipeline
+	FileResolver          FileResolverInterface
+	ShowConfirmationFrame bool
+	Memory                memory.MemoryStore // optional; enables cross-session pin persistence
 }
 
 // Execute runs the pipeline, emits the proposal frame, and collects the response.
@@ -69,9 +76,15 @@ func (p *ContextProposalPhase) Execute(
 
 	// Resolve current turn files
 	resolved := p.FileResolver.Resolve(userSelections, userText)
-	
-	// Load session pins from state
+
+	// Hydrate session pins: prefer state (set in prior phases this session),
+	// fall back to persisted memory for cross-session recall.
 	sessionPins := getSessionPins(state)
+	if len(sessionPins) == 0 && p.Memory != nil {
+		if persisted := loadSessionPinsFromMemory(ctx, p.Memory); len(persisted) > 0 {
+			sessionPins = persisted
+		}
+	}
 	
 	// Get workflow ID from state
 	workflowID := ""
@@ -115,18 +128,15 @@ func (p *ContextProposalPhase) Execute(
 		}
 		
 		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
-		
+		saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
+
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
 			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
-		
-		// Save session pins to memory if available
-		// Note: In a real implementation, we would have access to memory store
-		// saveSessionPinsToMemory(memory, updatedPins)
-		
+
 		return interaction.PhaseOutcome{
 			Advance:      true,
 			StateUpdates: stateUpdates,
@@ -190,16 +200,17 @@ func (p *ContextProposalPhase) Execute(
 		for _, file := range bundle.ExpandedFiles {
 			confirmedPaths = append(confirmedPaths, file.Path)
 		}
-		
+
 		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
-		
+		saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
+
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
 			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
-		
+
 		return interaction.PhaseOutcome{
 			Advance:      true,
 			StateUpdates: stateUpdates,
@@ -222,16 +233,17 @@ func (p *ContextProposalPhase) Execute(
 		for _, file := range bundle.ExpandedFiles {
 			confirmedPaths = append(confirmedPaths, file.Path)
 		}
-		
+
 		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
-		
+		saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
+
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
 			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
-		
+
 		return interaction.PhaseOutcome{
 			Advance:      true,
 			StateUpdates: stateUpdates,
@@ -244,16 +256,17 @@ func (p *ContextProposalPhase) Execute(
 		for _, file := range bundle.AnchoredFiles {
 			confirmedPaths = append(confirmedPaths, file.Path)
 		}
-		
+
 		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
-		
+		saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
+
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
 			"context.knowledge_items": bundle.KnowledgeTopic, // Only topic knowledge
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
-		
+
 		return interaction.PhaseOutcome{
 			Advance:      true,
 			StateUpdates: stateUpdates,
@@ -268,16 +281,17 @@ func (p *ContextProposalPhase) Execute(
 		for _, file := range bundle.ExpandedFiles {
 			confirmedPaths = append(confirmedPaths, file.Path)
 		}
-		
+
 		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
-		
+		saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
+
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
 			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
-		
+
 		return interaction.PhaseOutcome{
 			Advance:      true,
 			StateUpdates: stateUpdates,
@@ -321,17 +335,61 @@ func updateSessionPins(existing []string, newPaths []string) []string {
 	return result
 }
 
-// loadSessionPinsFromMemory loads session pins from HybridMemory if available
-func loadSessionPinsFromMemory(memory interface{}) []string {
-	// This is a placeholder - in a real implementation, we would call
-	// memory.Recall(ctx, "context.pinned_files", MemoryScopeSession)
-	return []string{}
+// loadSessionPinsFromMemory loads session pins from persistent memory.
+// Returns nil if memory is unavailable or no pins have been stored yet.
+func loadSessionPinsFromMemory(ctx context.Context, mem memory.MemoryStore) []string {
+	if mem == nil {
+		return nil
+	}
+	record, ok, err := mem.Recall(ctx, "context.session_pins", memory.MemoryScopeProject)
+	if err != nil || !ok || record == nil {
+		return nil
+	}
+	raw, exists := record.Value["paths"]
+	if !exists {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
-// saveSessionPinsToMemory saves session pins to HybridMemory
-func saveSessionPinsToMemory(memory interface{}, pins []string) {
-	// This is a placeholder - in a real implementation, we would call
-	// memory.Remember(ctx, "context.pinned_files", pins, MemoryScopeSession)
+// saveSessionPinsToMemory persists session pins for cross-session recall.
+func saveSessionPinsToMemory(ctx context.Context, mem memory.MemoryStore, pins []string) {
+	if mem == nil || len(pins) == 0 {
+		return
+	}
+	pathsRaw := make([]interface{}, len(pins))
+	for i, p := range pins {
+		pathsRaw[i] = p
+	}
+	_ = mem.Remember(ctx, "context.session_pins", map[string]interface{}{"paths": pathsRaw}, memory.MemoryScopeProject)
+}
+
+// trustClassToInsertionAction derives the insertion action from a TrustClass string.
+// Matches the logic in core.DefaultInsertionDecision without importing framework/core.
+func trustClassToInsertionAction(tc string) string {
+	switch tc {
+	case "builtin-trusted", "workspace-trusted":
+		return "direct"
+	case "remote-approved":
+		return "summarized"
+	default:
+		if tc == "" {
+			return "direct" // unclassified internal content — allow direct insertion
+		}
+		return "metadata-only"
+	}
 }
 
 func convertToContextProposalContent(bundle pretask.EnrichedContextBundle) interaction.ContextProposalContent {
@@ -353,40 +411,44 @@ func convertToContextProposalContent(bundle pretask.EnrichedContextBundle) inter
 	// Convert anchored files
 	for _, item := range bundle.AnchoredFiles {
 		content.AnchoredFiles = append(content.AnchoredFiles, interaction.ContextFileEntry{
-			Path:    item.Path,
-			Summary: item.Summary,
-			Score:   item.Score,
-			Source:  string(item.Source),
+			Path:            item.Path,
+			Summary:         item.Summary,
+			Score:           item.Score,
+			Source:          string(item.Source),
+			InsertionAction: trustClassToInsertionAction(item.TrustClass),
 		})
 	}
 
 	// Convert expanded files
 	for _, item := range bundle.ExpandedFiles {
 		content.ExpandedFiles = append(content.ExpandedFiles, interaction.ContextFileEntry{
-			Path:    item.Path,
-			Summary: item.Summary,
-			Score:   item.Score,
-			Source:  string(item.Source),
+			Path:            item.Path,
+			Summary:         item.Summary,
+			Score:           item.Score,
+			Source:          string(item.Source),
+			InsertionAction: trustClassToInsertionAction(item.TrustClass),
 		})
 	}
 
 	// Convert knowledge items
 	for _, item := range bundle.KnowledgeTopic {
 		content.KnowledgeItems = append(content.KnowledgeItems, interaction.ContextKnowledgeEntry{
-			RefID:   item.RefID,
-			Kind:    string(item.Kind),
-			Title:   item.Title,
-			Summary: item.Summary,
-			Source:  string(item.Source),
+			RefID:           item.RefID,
+			Kind:            string(item.Kind),
+			Title:           item.Title,
+			Summary:         item.Summary,
+			Source:          string(item.Source),
+			InsertionAction: trustClassToInsertionAction(item.TrustClass),
 		})
 	}
 	for _, item := range bundle.KnowledgeExpanded {
 		content.KnowledgeItems = append(content.KnowledgeItems, interaction.ContextKnowledgeEntry{
-			RefID:   item.RefID,
-			Kind:    string(item.Kind),
-			Title:   item.Title,
-			Summary: item.Summary,
-			Source:  string(item.Source),
+			RefID:           item.RefID,
+			Kind:            string(item.Kind),
+			Title:           item.Title,
+			Summary:         item.Summary,
+			Source:          string(item.Source),
+			InsertionAction: trustClassToInsertionAction(item.TrustClass),
 		})
 	}
 
@@ -404,22 +466,24 @@ func ChatMode(
 	emitter interaction.FrameEmitter,
 	resolver *interaction.AgencyResolver,
 	pipeline ContextEnrichmentPipeline,
-	fileResolver *pretask.FileResolver,
+	fileResolver FileResolverInterface,
 	showConfirmationFrame bool,
+	mem memory.MemoryStore,
 ) *interaction.PhaseMachine {
 	RegisterChatTriggers(resolver)
 
 	phases := []interaction.PhaseDefinition{}
-	
+
 	// Add context proposal phase if pipeline is provided
 	if pipeline != nil && fileResolver != nil {
 		phases = append(phases, interaction.PhaseDefinition{
-			ID:      "context_proposal",
-			Label:   "Context",
+			ID:    "context_proposal",
+			Label: "Context",
 			Handler: &ContextProposalPhase{
-				Pipeline:               pipeline,
-				FileResolver:           fileResolver,
-				ShowConfirmationFrame:  showConfirmationFrame,
+				Pipeline:              pipeline,
+				FileResolver:          fileResolver,
+				ShowConfirmationFrame: showConfirmationFrame,
+				Memory:                mem,
 			},
 		})
 	}
@@ -454,19 +518,18 @@ func ChatMode(
 }
 
 // ChatModeWithContext is a convenience function that creates a chat mode with context enrichment
+// using services from the workspace environment.
 func ChatModeWithContext(
 	emitter interaction.FrameEmitter,
 	resolver *interaction.AgencyResolver,
 	workspaceEnv ayenitd.WorkspaceEnvironment,
 ) *interaction.PhaseMachine {
-	// For now, just use the legacy chat mode
-	// We'll implement proper context enrichment later
 	return ChatModeLegacy(emitter, resolver)
 }
 
 // ChatModeLegacy provides backward compatibility for callers that don't provide pipeline.
 func ChatModeLegacy(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
-	return ChatMode(emitter, resolver, nil, nil, true)
+	return ChatMode(emitter, resolver, nil, nil, true, nil)
 }
 
 // skipChatReflect skips the reflect phase when the user explicitly opts out

@@ -176,17 +176,19 @@ type ContextProposalContent struct {
 
 // ContextFileEntry is a single file entry in a context proposal.
 type ContextFileEntry struct {
-	Path    string  `json:"path"`
-	Summary string  `json:"summary,omitempty"` // one-line description
-	Score   float64 `json:"score,omitempty"`
-	Source  string  `json:"source"` // "anchor" | "index" | "vector"
+	Path           string  `json:"path"`
+	Summary        string  `json:"summary,omitempty"` // one-line description
+	Score          float64 `json:"score,omitempty"`
+	Source         string  `json:"source"`                    // "anchor" | "index" | "vector"
+	InsertionAction string `json:"insertion_action,omitempty"` // "direct" | "summarized" | "metadata-only"
 }
 
 // ContextKnowledgeEntry is a single archaeo knowledge item in a context proposal.
 type ContextKnowledgeEntry struct {
-	RefID   string `json:"ref_id"`
-	Kind    string `json:"kind"`    // "pattern" | "tension" | "decision" | "interaction"
-	Title   string `json:"title"`
-	Summary string `json:"summary,omitempty"`
-	Source  string `json:"source"` // "archaeo_topic" | "archaeo_expanded"
+	RefID           string `json:"ref_id"`
+	Kind            string `json:"kind"`              // "pattern" | "tension" | "decision" | "interaction"
+	Title           string `json:"title"`
+	Summary         string `json:"summary,omitempty"`
+	Source          string `json:"source"`                    // "archaeo_topic" | "archaeo_expanded"
+	InsertionAction string `json:"insertion_action,omitempty"` // "direct" | "summarized" | "metadata-only"
 }

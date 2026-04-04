@@ -19,10 +19,15 @@ type PipelineEnv struct {
 	Embedder       retrieval.Embedder
 	PatternStore   patterns.PatternStore
 	KnowledgeStore memory.KnowledgeStore
+
+	// PolicySnapshotProvider, when non-nil, is called once before Stage 1 to
+	// capture the effective capability policy at retrieval time. Optional.
+	PolicySnapshotProvider func() *core.PolicySnapshot
 }
 
 // Pipeline orchestrates the full pre-task context enrichment flow.
 type Pipeline struct {
+	env              PipelineEnv
 	anchorExtractor  *AnchorExtractor
 	indexRetriever   *IndexRetriever
 	archaeoRetriever *ArchaeoRetriever
@@ -66,6 +71,13 @@ type PipelineInput struct {
 // The PipelineTrace in the returned bundle records what was skipped and why.
 func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContextBundle, error) {
 	trace := PipelineTrace{}
+
+	// Capture policy snapshot before any retrieval so provenance is stamped at the
+	// right point in time (before tool calls, not after).
+	var policySnapshot *core.PolicySnapshot
+	if p.env.PolicySnapshotProvider != nil {
+		policySnapshot = p.env.PolicySnapshotProvider()
+	}
 
 	// Stage 0: extract anchors
 	anchors := p.anchorExtractor.Extract(input)
@@ -156,6 +168,7 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 	// Merge
 	bundle := p.merger.Merge(input.Query, anchors, stage1, sketch, expandedKnowledge)
 	bundle.PipelineTrace = trace
+	bundle.PolicySnapshot = policySnapshot
 	return bundle, nil
 }
 
@@ -243,6 +256,7 @@ func NewPipeline(
 	}
 	
 	return &Pipeline{
+		env:              env,
 		anchorExtractor:  anchorExtractor,
 		indexRetriever:   indexRetriever,
 		archaeoRetriever: archaeoRetriever,
