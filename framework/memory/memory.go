@@ -265,6 +265,190 @@ func (m *HybridMemory) Forget(ctx context.Context, key string, scope MemoryScope
 	return nil
 }
 
+// KnowledgeStore is an interface for storing and retrieving knowledge items
+// such as patterns, tensions, decisions, and interactions.
+type KnowledgeStore interface {
+	// StoreKnowledge stores a knowledge item
+	StoreKnowledge(ctx context.Context, item KnowledgeItem) error
+	// RetrieveKnowledge retrieves knowledge items matching the query
+	RetrieveKnowledge(ctx context.Context, query KnowledgeQuery) ([]KnowledgeItem, error)
+	// DeleteKnowledge removes a knowledge item by ID
+	DeleteKnowledge(ctx context.Context, id string) error
+}
+
+// KnowledgeItem represents a single piece of knowledge in the store
+type KnowledgeItem struct {
+	ID        string                 `json:"id"`
+	Kind      string                 `json:"kind"` // pattern, tension, decision, interaction
+	Title     string                 `json:"title"`
+	Content   map[string]interface{} `json:"content"`
+	Metadata  map[string]interface{} `json:"metadata"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
+}
+
+// KnowledgeQuery defines parameters for querying knowledge items
+type KnowledgeQuery struct {
+	Kind      string   `json:"kind,omitempty"`
+	TextQuery string   `json:"text_query,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	Limit     int      `json:"limit,omitempty"`
+	Offset    int      `json:"offset,omitempty"`
+}
+
+// NewInMemoryKnowledgeStore creates a simple in-memory knowledge store
+func NewInMemoryKnowledgeStore() KnowledgeStore {
+	return &inMemoryKnowledgeStore{
+		items: make(map[string]KnowledgeItem),
+	}
+}
+
+type inMemoryKnowledgeStore struct {
+	mu    sync.RWMutex
+	items map[string]KnowledgeItem
+}
+
+func (s *inMemoryKnowledgeStore) StoreKnowledge(ctx context.Context, item KnowledgeItem) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if item.ID == "" {
+		item.ID = fmt.Sprintf("knowledge_%d", time.Now().UnixNano())
+	}
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = time.Now().UTC()
+	}
+	item.UpdatedAt = time.Now().UTC()
+	
+	s.items[item.ID] = item
+	return nil
+}
+
+func (s *inMemoryKnowledgeStore) RetrieveKnowledge(ctx context.Context, query KnowledgeQuery) ([]KnowledgeItem, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	var results []KnowledgeItem
+	for _, item := range s.items {
+		// Simple filtering by kind
+		if query.Kind != "" && item.Kind != query.Kind {
+			continue
+		}
+		// Simple text search in title
+		if query.TextQuery != "" {
+			if !strings.Contains(strings.ToLower(item.Title), strings.ToLower(query.TextQuery)) {
+				continue
+			}
+		}
+		results = append(results, item)
+		
+		if query.Limit > 0 && len(results) >= query.Limit {
+			break
+		}
+	}
+	return results, nil
+}
+
+func (s *inMemoryKnowledgeStore) DeleteKnowledge(ctx context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	delete(s.items, id)
+	return nil
+}
+
+// KnowledgeStore is an interface for storing and retrieving knowledge items
+// such as patterns, tensions, decisions, and interactions.
+type KnowledgeStore interface {
+	// StoreKnowledge stores a knowledge item
+	StoreKnowledge(ctx context.Context, item KnowledgeItem) error
+	// RetrieveKnowledge retrieves knowledge items matching the query
+	RetrieveKnowledge(ctx context.Context, query KnowledgeQuery) ([]KnowledgeItem, error)
+	// DeleteKnowledge removes a knowledge item by ID
+	DeleteKnowledge(ctx context.Context, id string) error
+}
+
+// KnowledgeItem represents a single piece of knowledge in the store
+type KnowledgeItem struct {
+	ID        string                 `json:"id"`
+	Kind      string                 `json:"kind"` // pattern, tension, decision, interaction
+	Title     string                 `json:"title"`
+	Content   map[string]interface{} `json:"content"`
+	Metadata  map[string]interface{} `json:"metadata"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
+}
+
+// KnowledgeQuery defines parameters for querying knowledge items
+type KnowledgeQuery struct {
+	Kind      string   `json:"kind,omitempty"`
+	TextQuery string   `json:"text_query,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	Limit     int      `json:"limit,omitempty"`
+	Offset    int      `json:"offset,omitempty"`
+}
+
+// NewInMemoryKnowledgeStore creates a simple in-memory knowledge store
+func NewInMemoryKnowledgeStore() KnowledgeStore {
+	return &inMemoryKnowledgeStore{
+		items: make(map[string]KnowledgeItem),
+	}
+}
+
+type inMemoryKnowledgeStore struct {
+	mu    sync.RWMutex
+	items map[string]KnowledgeItem
+}
+
+func (s *inMemoryKnowledgeStore) StoreKnowledge(ctx context.Context, item KnowledgeItem) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if item.ID == "" {
+		item.ID = fmt.Sprintf("knowledge_%d", time.Now().UnixNano())
+	}
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = time.Now().UTC()
+	}
+	item.UpdatedAt = time.Now().UTC()
+	
+	s.items[item.ID] = item
+	return nil
+}
+
+func (s *inMemoryKnowledgeStore) RetrieveKnowledge(ctx context.Context, query KnowledgeQuery) ([]KnowledgeItem, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	var results []KnowledgeItem
+	for _, item := range s.items {
+		// Simple filtering by kind
+		if query.Kind != "" && item.Kind != query.Kind {
+			continue
+		}
+		// Simple text search in title
+		if query.TextQuery != "" {
+			if !strings.Contains(strings.ToLower(item.Title), strings.ToLower(query.TextQuery)) {
+				continue
+			}
+		}
+		results = append(results, item)
+		
+		if query.Limit > 0 && len(results) >= query.Limit {
+			break
+		}
+	}
+	return results, nil
+}
+
+func (s *inMemoryKnowledgeStore) DeleteKnowledge(ctx context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	delete(s.items, id)
+	return nil
+}
+
 // Summarize compresses older records into a textual summary. Teams often call
 // this before persisting workflows so they can log “what just happened” without
 // storing entire transcripts.
