@@ -9,12 +9,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 const permissionMatchAll = "**"
@@ -35,39 +37,6 @@ type hitlRateBucket struct {
 	windowAt time.Time
 }
 
-// SandboxRuntime describes a sandbox backend (gVisor).
-// Local copy to avoid import cycle with framework/sandbox.
-type SandboxRuntime interface {
-	Name() string
-	Verify(ctx context.Context) error
-	RunConfig() SandboxConfig
-	EnforcePolicy(policy SandboxPolicy) error
-	Policy() SandboxPolicy
-}
-
-// SandboxConfig exposes runtime knobs.
-type SandboxConfig struct {
-	RunscPath        string
-	ContainerRuntime string // docker or containerd
-	Platform         string // ptrace or kvm
-	NetworkIsolation bool
-	ReadOnlyRoot     bool
-	SeccompProfile   string
-}
-
-// SandboxPolicy captures runtime adjustments derived from permissions.
-type SandboxPolicy struct {
-	NetworkRules []NetworkRule
-	ReadOnlyRoot bool
-}
-
-// NetworkRule represents an allowed network scope.
-type NetworkRule struct {
-	Direction string
-	Protocol  string
-	Host      string
-	Port      int
-}
 
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
@@ -75,11 +44,11 @@ type PermissionManager struct {
 	declared       *core.PermissionSet
 	audit          core.AuditLogger
 	hitl           HITLProvider
-	runtime        SandboxRuntime
+	runtime        sandbox.SandboxRuntime
 	grants         map[string]*PermissionGrant
 	mu             sync.RWMutex
 	grantClock     func() time.Time
-	netPolicy      []NetworkRule
+	netPolicy      []sandbox.NetworkRule
 	defaultPolicy  core.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
 	eventLogger    func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})
 	taskGrants     map[string]taskGrant
@@ -118,12 +87,12 @@ func NewPermissionManager(basePath string, declared *core.PermissionSet, audit c
 }
 
 // AttachRuntime allows the manager to push policy updates to the sandbox.
-func (m *PermissionManager) AttachRuntime(runtime SandboxRuntime) {
+func (m *PermissionManager) AttachRuntime(runtime sandbox.SandboxRuntime) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runtime = runtime
 	if len(m.netPolicy) > 0 {
-		_ = runtime.EnforcePolicy(SandboxPolicy{NetworkRules: m.netPolicy})
+		_ = runtime.EnforcePolicy(sandbox.SandboxPolicy{NetworkRules: m.netPolicy})
 	}
 }
 
@@ -486,7 +455,7 @@ func (m *PermissionManager) recordNetworkRule(direction, protocol, host string, 
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rule := NetworkRule{
+	rule := sandbox.NetworkRule{
 		Direction: direction,
 		Protocol:  protocol,
 		Host:      host,
@@ -494,8 +463,8 @@ func (m *PermissionManager) recordNetworkRule(direction, protocol, host string, 
 	}
 	m.netPolicy = append(m.netPolicy, rule)
 	if m.runtime != nil {
-		_ = m.runtime.EnforcePolicy(SandboxPolicy{
-			NetworkRules: append([]NetworkRule(nil), m.netPolicy...),
+		_ = m.runtime.EnforcePolicy(sandbox.SandboxPolicy{
+			NetworkRules: append([]sandbox.NetworkRule(nil), m.netPolicy...),
 		})
 	}
 }
