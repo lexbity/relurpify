@@ -239,9 +239,12 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	// Initialize context enrichment pipeline (Phase 2)
 	if a.ContextPipeline == nil {
 		config := pretask.DefaultPipelineConfig()
-		// We'll need to get the tension service
-		// For now, pass nil
-		a.ContextPipeline = pretask.NewPipeline(a.WorkspaceEnv, nil, config)
+		// Get the tension service if available
+		var tensionQuerier pretask.TensionQuerier
+		if ts := a.tensionService(); ts != nil {
+			tensionQuerier = &tensionServiceQuerier{service: ts}
+		}
+		a.ContextPipeline = pretask.NewPipeline(a.WorkspaceEnv, tensionQuerier, config)
 	}
 	
 	return a.Initialize(a.Environment.Config)
@@ -472,6 +475,24 @@ func (a *Agent) planService() archaeoplans.Service {
 
 func (a *Agent) tensionService() archaeotensions.Service {
 	return a.archaeoBinding().TensionService()
+}
+
+// tensionServiceQuerier implements pretask.TensionQuerier using archaeotensions.Service
+type tensionServiceQuerier struct {
+	service archaeotensions.Service
+}
+
+func (q *tensionServiceQuerier) ActiveByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
+	tensions, err := q.service.ListByWorkflow(ctx, workflowID)
+	if err != nil {
+		return nil, err
+	}
+	// Convert to []interface{}
+	result := make([]interface{}, len(tensions))
+	for i, t := range tensions {
+		result[i] = t
+	}
+	return result, nil
 }
 
 func (a *Agent) verificationService() archaeoverification.Service {

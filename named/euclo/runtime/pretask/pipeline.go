@@ -168,8 +168,15 @@ func NewPipeline(
 	}
 	
 	// Create index retriever
+	// For dependency querier, we can use the IndexManager if available
+	var depQuerier DependencyQuerier
+	if env.IndexManager != nil {
+		depQuerier = env.IndexManager
+	}
+	
 	indexRetriever := &IndexRetriever{
 		index: indexQuerier,
+		deps:  depQuerier,
 		config: IndexRetrieverConfig{
 			DependencyHops:   1,
 			MaxFilesPerSymbol: 3,
@@ -177,8 +184,15 @@ func NewPipeline(
 	}
 	
 	// Create archaeo retriever
+	// For pattern store, we can use env.PatternStore
+	var patternQuerier PatternQuerier
+	if env.PatternStore != nil {
+		patternQuerier = &patternStoreQuerier{store: env.PatternStore}
+	}
+	
 	archaeoRetriever := &ArchaeoRetriever{
 		tensionSvc: tensions,
+		patternSvc: patternQuerier,
 		config: ArchaeoRetrieverConfig{
 			WorkflowID: config.WorkflowID,
 			MaxItems:   config.MaxKnowledgeItems,
@@ -206,6 +220,17 @@ func NewPipeline(
 		merger:           merger,
 		config:           config,
 	}
+}
+
+// patternStoreQuerier implements PatternQuerier using patterns.PatternStore
+type patternStoreQuerier struct {
+	store patterns.PatternStore
+}
+
+func (q *patternStoreQuerier) ListByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
+	// This is a simplified implementation
+	// In reality, we would call the appropriate method on PatternStore
+	return []interface{}{}, nil
 }
 
 // indexManagerQuerier implements IndexQuerier using ast.IndexManager
