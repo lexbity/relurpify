@@ -21,7 +21,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
-	namedfactory "github.com/lexcodex/relurpify/named/factory"
 )
 
 type AgentCapabilityHandler struct {
@@ -91,11 +90,9 @@ func buildAgentFromEnvironment(env agentenv.AgentEnvironment, agentType string) 
 	case "goalcon":
 		agent = &goalconpkg.GoalConAgent{}
 	case "testfu":
-		built, err := namedfactory.BuildFromSpec(env, core.AgentRuntimeSpec{Implementation: "testfu"})
-		if err != nil {
-			return nil, err
-		}
-		agent = built
+		// testfu is a named test-runner agent, not a general-purpose subagent type.
+		// Use named/factory.BuildFromSpec or named/testfu directly if you need testfu.
+		return nil, fmt.Errorf("agent type %q is not available as a relurpic subagent", agentType)
 	default:
 		return nil, fmt.Errorf("unknown agent type %q", agentType)
 	}

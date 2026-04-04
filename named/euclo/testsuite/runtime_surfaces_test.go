@@ -18,7 +18,7 @@ import (
 )
 
 func TestAgentExecuteDispatchesThroughBehaviorDispatcher(t *testing.T) {
-	agent := euclo.New(testutil.Env(t))
+	agent := euclo.New(testutil.WorkspaceEnv(t))
 	task := &core.Task{
 		ID:          "task-chat-ask",
 		Type:        core.TaskTypeAnalysis,

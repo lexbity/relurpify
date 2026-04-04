@@ -5,10 +5,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	euclotestutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
 
 // stubCapability is a minimal EucloCodingCapability for testing.
@@ -293,7 +294,7 @@ func TestRegistry_ConcurrentRegisterAndLookup(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNewDefaultCapabilityRegistry_IsNonEmpty(t *testing.T) {
-	env := euclotestutil.EnvMinimal()
+	env := agentenv.AgentEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{Name: "test", Model: "stub"}}
 	reg := capabilities.NewDefaultCapabilityRegistry(env)
 	got := reg.ForProfile("")
 	if len(got) == 0 {
@@ -302,7 +303,7 @@ func TestNewDefaultCapabilityRegistry_IsNonEmpty(t *testing.T) {
 }
 
 func TestNewDefaultCapabilityRegistry_ContainsExpectedIDs(t *testing.T) {
-	env := euclotestutil.EnvMinimal()
+	env := agentenv.AgentEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{Name: "test", Model: "stub"}}
 	reg := capabilities.NewDefaultCapabilityRegistry(env)
 	wantIDs := []string{
 		"euclo:artifact.diff_summary",

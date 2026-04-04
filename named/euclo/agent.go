@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/ayenitd"
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
@@ -85,7 +87,7 @@ type Agent struct {
 	Delegate       *reactpkg.ReActAgent
 	CheckpointPath string
 	Memory         memory.MemoryStore
-	Environment    agents.WorkspaceEnvironment
+	Environment    agentenv.AgentEnvironment
 	GraphDB        *graphdb.Engine
 	RetrievalDB    *sql.DB
 	PlanStore      frameworkplan.PlanStore
@@ -112,16 +114,35 @@ type Agent struct {
 	RuntimeProviders    []core.Provider
 }
 
-func New(env agents.WorkspaceEnvironment) *Agent {
+func New(env ayenitd.WorkspaceEnvironment) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agents.WorkspaceEnvironment) error {
+func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	a.Config = env.Config
 	a.Memory = env.Memory
-	a.Environment = env
+	// Convert workspace environment to the agentenv subset used internally.
+	// Workspace-specific fields (WorkflowStore, PlanStore, etc.) are already
+	// stored as separate fields on Agent and are set directly below.
+	a.Environment = agentenv.AgentEnvironment{
+		Config:                        env.Config,
+		Model:                         env.Model,
+		Registry:                      env.Registry,
+		IndexManager:                  env.IndexManager,
+		SearchEngine:                  env.SearchEngine,
+		Memory:                        env.Memory,
+		VerificationPlanner:           env.VerificationPlanner,
+		CompatibilitySurfaceExtractor: env.CompatibilitySurfaceExtractor,
+	}
+	// Propagate workspace-specific stores to dedicated fields.
+	if env.WorkflowStore != nil && a.WorkflowStore == nil {
+		a.WorkflowStore = env.WorkflowStore
+	}
+	if env.PlanStore != nil && a.PlanStore == nil {
+		a.PlanStore = env.PlanStore
+	}
 	if a.Environment.VerificationPlanner == nil {
 		a.Environment.VerificationPlanner = frameworkplan.NewVerificationScopePlanner(
 			golangpkg.NewVerificationResolver(),

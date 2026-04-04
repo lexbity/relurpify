@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -31,13 +31,13 @@ func (stubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSp
 	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func testEnv(t *testing.T) agentenv.AgentEnvironment {
+func testEnv(t *testing.T) ayenitd.WorkspaceEnvironment {
 	t.Helper()
 	memStore, err := memory.NewHybridMemory(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	return agentenv.AgentEnvironment{
+	return ayenitd.WorkspaceEnvironment{
 		Model:    stubModel{},
 		Registry: capability.NewRegistry(),
 		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
@@ -45,7 +45,7 @@ func testEnv(t *testing.T) agentenv.AgentEnvironment {
 	}
 }
 
-func testRuntimeEnv(t *testing.T) agentenv.AgentEnvironment {
+func testRuntimeEnv(t *testing.T) ayenitd.WorkspaceEnvironment {
 	t.Helper()
 	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
 	if err != nil {
@@ -57,7 +57,7 @@ func testRuntimeEnv(t *testing.T) agentenv.AgentEnvironment {
 	}
 	checkpoints := db.NewSQLiteCheckpointStore(workflowStore.DB())
 	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, checkpoints)
-	return agentenv.AgentEnvironment{
+	return ayenitd.WorkspaceEnvironment{
 		Model:    stubModel{},
 		Registry: capability.NewRegistry(),
 		Memory:   composite,

@@ -8,8 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/ayenitd"
 	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -29,7 +30,7 @@ import (
 // Agent is the Nexus-managed named runtime for rex.
 type Agent struct {
 	Config      *core.Config
-	Environment agents.WorkspaceEnvironment
+	Environment ayenitd.WorkspaceEnvironment
 	Workspace   string
 	RexConfig   rexconfig.Config
 	Delegates   *delegates.Registry
@@ -39,22 +40,29 @@ type Agent struct {
 	LastProof   proof.ProofSurface
 }
 
-func New(env agents.WorkspaceEnvironment) *Agent {
+func New(env ayenitd.WorkspaceEnvironment) *Agent {
 	return NewWithWorkspace(env, "")
 }
 
-func NewWithWorkspace(env agents.WorkspaceEnvironment, workspace string) *Agent {
+func NewWithWorkspace(env ayenitd.WorkspaceEnvironment, workspace string) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env, workspace)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agents.WorkspaceEnvironment, workspace string) error {
+func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment, workspace string) error {
 	a.Environment = env
 	a.Config = env.Config
 	a.RexConfig = rexconfig.Default()
 	a.Workspace = resolveWorkspaceRoot(workspace)
-	a.Delegates = delegates.NewRegistry(env, a.Workspace)
+	a.Delegates = delegates.NewRegistry(agentenv.AgentEnvironment{
+		Config:       env.Config,
+		Model:        env.Model,
+		Registry:     env.Registry,
+		IndexManager: env.IndexManager,
+		SearchEngine: env.SearchEngine,
+		Memory:       env.Memory,
+	}, a.Workspace)
 	a.Runtime = rexruntime.New(a.RexConfig, env.Memory)
 	a.Reconciler = &reconcile.InMemoryReconciler{}
 	return a.Initialize(env.Config)

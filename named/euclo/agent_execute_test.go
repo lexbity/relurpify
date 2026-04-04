@@ -37,7 +37,7 @@ func (cancelOnGenerateModel) ChatWithTools(ctx context.Context, _ []core.Message
 }
 
 func TestAgentExecute_ChatAskCompletesSuccessfully(t *testing.T) {
-	env := testutil.Env(t)
+	env := testutil.WorkspaceEnv(t)
 	agent := New(env)
 	task := &core.Task{
 		ID:          "task-chat-ask",
@@ -69,7 +69,7 @@ func TestAgentExecute_ChatAskCompletesSuccessfully(t *testing.T) {
 }
 
 func TestAgentExecute_DebugInvestigateCompletesSuccessfully(t *testing.T) {
-	env := testutil.Env(t)
+	env := testutil.WorkspaceEnv(t)
 	agent := New(env)
 	task := &core.Task{
 		ID:   "task-debug",
@@ -135,7 +135,7 @@ func TestAgentExecute_PlanningExploreCompletesSuccessfully(t *testing.T) {
 			Response:       &core.LLMResponse{Text: `{"issues":[],"approve":true}`},
 		},
 	)
-	env := testutil.Env(t)
+	env := testutil.WorkspaceEnv(t)
 	env.Model = model
 	env.Config.Model = "scenario-stub"
 	env.Config.MaxIterations = 1
@@ -174,7 +174,7 @@ func TestAgentExecute_PlanningExploreCompletesSuccessfully(t *testing.T) {
 }
 
 func TestAgentExecute_UnknownInteractiveModeReturnsError(t *testing.T) {
-	env := testutil.Env(t)
+	env := testutil.WorkspaceEnv(t)
 	agent := New(env)
 	agent.InteractionRegistry = interaction.NewModeMachineRegistry()
 
@@ -196,7 +196,7 @@ func TestAgentExecute_UnknownInteractiveModeReturnsError(t *testing.T) {
 }
 
 func TestAgentExecute_ContextCanceledPropagatesFromModel(t *testing.T) {
-	env := testutil.Env(t)
+	env := testutil.WorkspaceEnv(t)
 	env.Model = cancelOnGenerateModel{}
 	agent := New(env)
 

@@ -50,7 +50,14 @@ func (n *reactThinkNode) Execute(ctx context.Context, state *core.Context) (*cor
 	var err error
 	tools := n.agent.availableToolsForPhase(state, n.task)
 	recordActiveToolNames(state, tools)
-	useToolCalling := len(tools) > 0 && (n.agent.Config == nil || n.agent.Config.OllamaToolCalling)
+	configNativeTC := n.agent.Config != nil && n.agent.Config.OllamaToolCalling
+	profileNativeTC := false
+	if !configNativeTC {
+		if pm, ok := n.agent.Model.(core.ProfiledModel); ok {
+			profileNativeTC = pm.UsesNativeToolCalling()
+		}
+	}
+	useToolCalling := len(tools) > 0 && (configNativeTC || profileNativeTC)
 	streamCB := n.streamCallback()
 	if useToolCalling {
 		messages := n.ensureMessages(state, tools)

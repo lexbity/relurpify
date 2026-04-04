@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	runnerpkg "github.com/lexcodex/relurpify/named/testfu/runner"
@@ -68,7 +68,7 @@ func TestActionRunAgentDispatchesToAllMatchingSuites(t *testing.T) {
 		{Name: "smoke", Success: true},
 		{Name: "extended", Success: true},
 	}}}
-	agent := New(agentenv.AgentEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{}},
+	agent := New(ayenitd.WorkspaceEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{}},
 		WithWorkspace(ws), WithRunner(runner))
 
 	state := core.NewContext()
@@ -100,7 +100,7 @@ func TestActionRunAgentTagsFilterAppliedBeforeRunning(t *testing.T) {
 	runner := &fakeRunner{report: &runnerpkg.SuiteReport{Cases: []runnerpkg.CaseReport{
 		{Name: "smoke", Success: true},
 	}}}
-	agent := New(agentenv.AgentEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{}},
+	agent := New(ayenitd.WorkspaceEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{}},
 		WithWorkspace(ws), WithRunner(runner))
 
 	state := core.NewContext()
@@ -132,7 +132,7 @@ func TestActionRunAgentBudgetedTimeoutSkipsSuitesWhenDeadlinePassed(t *testing.T
 	writeSuiteFile(t, suiteDir, "react.memory.testsuite.yaml", "react")
 
 	runner := &fakeRunner{report: &runnerpkg.SuiteReport{Cases: []runnerpkg.CaseReport{{Name: "smoke", Success: true}}}}
-	agent := New(agentenv.AgentEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{}},
+	agent := New(ayenitd.WorkspaceEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{}},
 		WithWorkspace(ws), WithRunner(runner))
 
 	// Already-expired deadline — the first suite call may or may not happen
@@ -212,7 +212,7 @@ spec:
 		t.Fatal(err)
 	}
 	runner := &fakeRunner{report: &runnerpkg.SuiteReport{Cases: []runnerpkg.CaseReport{{Name: "smoke", Success: true}}}}
-	agent := New(agentenv.AgentEnvironment{
+	agent := New(ayenitd.WorkspaceEnvironment{
 		Registry: capability.NewRegistry(),
 		Config:   &core.Config{},
 	}, WithWorkspace(ws), WithRunner(runner))

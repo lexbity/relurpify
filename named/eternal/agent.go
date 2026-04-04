@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 )
@@ -22,13 +22,13 @@ type Agent struct {
 	SleepPerCycle     time.Duration
 }
 
-func New(env agents.WorkspaceEnvironment) *Agent {
+func New(env ayenitd.WorkspaceEnvironment) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env agents.WorkspaceEnvironment) error {
+func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	a.Model = env.Model
 	a.Config = env.Config
 	return a.Initialize(env.Config)

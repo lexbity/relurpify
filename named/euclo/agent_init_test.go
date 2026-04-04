@@ -3,7 +3,7 @@ package euclo
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
@@ -12,7 +12,7 @@ import (
 
 func TestInitializeEnvironment_WiresDefaultVerificationPlanner(t *testing.T) {
 	agent := &Agent{}
-	err := agent.InitializeEnvironment(agentenv.AgentEnvironment{
+	err := agent.InitializeEnvironment(ayenitd.WorkspaceEnvironment{
 		Registry: capability.NewRegistry(),
 		Config:   &core.Config{Name: "test", Model: "stub", MaxIterations: 1},
 	})
@@ -27,7 +27,7 @@ func TestInitializeEnvironment_WiresDefaultVerificationPlanner(t *testing.T) {
 func TestInitializeEnvironment_PreservesExistingVerificationPlanner(t *testing.T) {
 	custom := frameworkplan.NewVerificationScopePlanner(golangpkg.NewVerificationResolver())
 	agent := &Agent{}
-	err := agent.InitializeEnvironment(agentenv.AgentEnvironment{
+	err := agent.InitializeEnvironment(ayenitd.WorkspaceEnvironment{
 		Registry:            capability.NewRegistry(),
 		Config:              &core.Config{Name: "test", Model: "stub", MaxIterations: 1},
 		VerificationPlanner: custom,
@@ -42,7 +42,7 @@ func TestInitializeEnvironment_PreservesExistingVerificationPlanner(t *testing.T
 
 func TestInitializeEnvironment_WiresCompatibilitySurfaceWhenNil(t *testing.T) {
 	agent := &Agent{}
-	if err := agent.InitializeEnvironment(agentenv.AgentEnvironment{
+	if err := agent.InitializeEnvironment(ayenitd.WorkspaceEnvironment{
 		Registry: capability.NewRegistry(),
 		Config:   &core.Config{Name: "test", Model: "stub", MaxIterations: 1},
 	}); err != nil {

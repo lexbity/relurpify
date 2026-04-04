@@ -15,6 +15,7 @@ import (
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	reflectionpkg "github.com/lexcodex/relurpify/agents/reflection"
 	rewoopkg "github.com/lexcodex/relurpify/agents/rewoo"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/config"
@@ -28,7 +29,11 @@ import (
 
 var namedAgentRegistry sync.Map
 
-func RegisterNamedAgent(name string, ctor func(workspace string, env agentenv.AgentEnvironment) graph.WorkflowExecutor) {
+// RegisterNamedAgent registers a named agent constructor under the given name.
+// The constructor receives ayenitd.WorkspaceEnvironment so it can access all
+// workspace services. Named agents that only need the common fields can ignore
+// the extra fields; they will be nil/zero when invoked from lower-level callers.
+func RegisterNamedAgent(name string, ctor func(workspace string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || ctor == nil {
 		return
@@ -36,16 +41,33 @@ func RegisterNamedAgent(name string, ctor func(workspace string, env agentenv.Ag
 	namedAgentRegistry.Store(name, ctor)
 }
 
-func instantiateRegisteredNamedAgent(workspace, name string, env agentenv.AgentEnvironment) (graph.WorkflowExecutor, bool) {
+func instantiateRegisteredNamedAgent(workspace, name string, env ayenitd.WorkspaceEnvironment) (graph.WorkflowExecutor, bool) {
 	value, ok := namedAgentRegistry.Load(strings.ToLower(strings.TrimSpace(name)))
 	if !ok {
 		return nil, false
 	}
-	ctor, ok := value.(func(workspace string, env agentenv.AgentEnvironment) graph.WorkflowExecutor)
+	ctor, ok := value.(func(workspace string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor)
 	if !ok || ctor == nil {
 		return nil, false
 	}
 	return ctor(workspace, env), true
+}
+
+// envToWorkspace converts an AgentEnvironment to a WorkspaceEnvironment for
+// passing to named agent constructors. Fields not present in AgentEnvironment
+// (WorkflowStore, PlanStore, etc.) are left as zero/nil values.
+func envToWorkspace(env agentenv.AgentEnvironment) ayenitd.WorkspaceEnvironment {
+	return ayenitd.WorkspaceEnvironment{
+		Config:       env.Config,
+		Model:        env.Model,
+		Registry:     env.Registry,
+		IndexManager: env.IndexManager,
+		SearchEngine: env.SearchEngine,
+		Memory:       env.Memory,
+		// VerificationPlanner and CompatibilitySurfaceExtractor are different interface
+		// types between agentenv and ayenitd packages — left nil here.
+		// Callers that need these should pass WorkspaceEnvironment directly.
+	}
 }
 
 type ToolScope struct {
@@ -103,9 +125,9 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 	case "react":
 		return reactpkg.New(env), nil
 	case "coding":
-		return euclo.New(env), nil
+		return euclo.New(envToWorkspace(env)), nil
 	case "rex":
-		return rex.NewWithWorkspace(env, ""), nil
+		return rex.NewWithWorkspace(envToWorkspace(env), ""), nil
 	case "architect":
 		return architectpkg.New(
 			env,
@@ -129,9 +151,9 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 	case "goalcon":
 		return goalconpkg.New(env, goalconpkg.NewOperatorRegistry()), nil
 	case "eternal":
-		return eternal.New(env), nil
+		return eternal.New(envToWorkspace(env)), nil
 	case "testfu":
-		if agent, ok := instantiateRegisteredNamedAgent("", "testfu", env); ok {
+		if agent, ok := instantiateRegisteredNamedAgent("", "testfu", envToWorkspace(env)); ok {
 			return agent, nil
 		}
 		return nil, fmt.Errorf("unknown agent type %q", agentType)
@@ -152,12 +174,12 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 		agent.CheckpointPath = paths.CheckpointsDir()
 		return agent
 		case "coding", "euclo":
-			agent := euclo.New(env)
+			agent := euclo.New(envToWorkspace(env))
 			agent.CheckpointPath = paths.CheckpointsDir()
 			_ = agent.Initialize(env.Config)
 			return agent
 		case "rex":
-			agent := rex.NewWithWorkspace(env, workspace)
+			agent := rex.NewWithWorkspace(envToWorkspace(env), workspace)
 			_ = agent.Initialize(env.Config)
 			return agent
 	case "reflection":
@@ -192,9 +214,9 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 	case "goalcon":
 		return goalconpkg.New(env, goalconpkg.NewOperatorRegistry())
 	case "eternal":
-		return eternal.New(env)
+		return eternal.New(envToWorkspace(env))
 	case "testfu":
-		if agent, ok := instantiateRegisteredNamedAgent(workspace, "testfu", env); ok {
+		if agent, ok := instantiateRegisteredNamedAgent(workspace, "testfu", envToWorkspace(env)); ok {
 			return agent
 		}
 		agent := reactpkg.New(env)
