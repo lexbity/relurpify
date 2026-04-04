@@ -7,6 +7,7 @@ import (
 	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/patterns"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
 // Pipeline orchestrates the full pre-task context enrichment flow.

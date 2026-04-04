@@ -483,7 +483,10 @@ type tensionServiceQuerier struct {
 }
 
 func (q *tensionServiceQuerier) ActiveByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
-	if q.service == nil {
+	// Check if the service is zero-valued (not usable)
+	// archaeotensions.Service is a struct, so we compare with zero value
+	var zero archaeotensions.Service
+	if q.service == zero {
 		return nil, nil
 	}
 	tensions, err := q.service.ListByWorkflow(ctx, workflowID)
