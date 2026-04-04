@@ -7,7 +7,7 @@ import (
 
 func defaultInteractionRegistry() *interaction.ModeMachineRegistry {
 	reg := interaction.NewModeMachineRegistry()
-	reg.Register("chat", modes.ChatMode)
+	reg.Register("chat", modes.ChatModeLegacy)
 	reg.Register("code", modes.CodeMode)
 	reg.Register("debug", modes.DebugMode)
 	reg.Register("planning", modes.PlanningMode)
