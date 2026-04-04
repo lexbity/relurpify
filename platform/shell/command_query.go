@@ -49,6 +49,10 @@ func NewCommandQuery(allowed []string, bindings []ShellBinding) *CommandQuery {
 			shellOK = true
 		}
 	}
+	// If allowed list is empty, assume all binaries are allowed (including shell)
+	if len(allowed) == 0 {
+		shellOK = true
+	}
 	bindingMap := make(map[string]*ShellBinding)
 	for i := range bindings {
 		bindingMap[bindings[i].Name] = &bindings[i]
@@ -68,7 +72,10 @@ func (q *CommandQuery) Resolve(name string, extraArgs []string) (sandbox.Command
 	}
 	// Check shell permission
 	if binding.Shell && !q.shellOK {
-		return sandbox.CommandRequest{}, fmt.Errorf("shell binding %q requires shell execution but shell is not allowed", name)
+		// If allowed set is empty, we assume shell is allowed (backwards compatibility)
+		if len(q.allowed) > 0 {
+			return sandbox.CommandRequest{}, fmt.Errorf("shell binding %q requires shell execution but shell is not allowed", name)
+		}
 	}
 	// Build args
 	args := make([]string, len(binding.Command))
@@ -83,12 +90,14 @@ func (q *CommandQuery) Resolve(name string, extraArgs []string) (sandbox.Command
 		}
 		args = []string{"bash", "-c", args[0]}
 	}
-	// Validate each binary against allowed set
-	for i, arg := range args {
-		if i == 0 {
-			bin := filepath.Base(arg)
-			if _, allowed := q.allowed[bin]; !allowed {
-				return sandbox.CommandRequest{}, fmt.Errorf("binary %q in binding %q is not allowed", bin, name)
+	// Validate each binary against allowed set (skip if allowed set is empty)
+	if len(q.allowed) > 0 {
+		for i, arg := range args {
+			if i == 0 {
+				bin := filepath.Base(arg)
+				if _, allowed := q.allowed[bin]; !allowed {
+					return sandbox.CommandRequest{}, fmt.Errorf("binary %q in binding %q is not allowed", bin, name)
+				}
 			}
 		}
 	}
@@ -103,9 +112,12 @@ func (q *CommandQuery) ValidateRaw(args []string) (sandbox.CommandRequest, error
 	if len(args) == 0 {
 		return sandbox.CommandRequest{}, fmt.Errorf("empty command")
 	}
-	bin := filepath.Base(args[0])
-	if _, allowed := q.allowed[bin]; !allowed {
-		return sandbox.CommandRequest{}, fmt.Errorf("binary %q is not allowed", bin)
+	// Skip validation if allowed set is empty (backwards compatibility)
+	if len(q.allowed) > 0 {
+		bin := filepath.Base(args[0])
+		if _, allowed := q.allowed[bin]; !allowed {
+			return sandbox.CommandRequest{}, fmt.Errorf("binary %q is not allowed", bin)
+		}
 	}
 	return sandbox.CommandRequest{
 		Args: args,
