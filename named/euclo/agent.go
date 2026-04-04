@@ -241,9 +241,9 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		config := pretask.DefaultPipelineConfig()
 		// Get the tension service if available
 		var tensionQuerier pretask.TensionQuerier
-		if ts := a.tensionService(); ts != nil {
-			tensionQuerier = &tensionServiceQuerier{service: ts}
-		}
+		// tensionService returns a struct, not a pointer; we need to check if it's usable.
+		// We'll create the querier regardless; its methods will handle nil store.
+		tensionQuerier = &tensionServiceQuerier{service: a.tensionService()}
 		a.ContextPipeline = pretask.NewPipeline(a.WorkspaceEnv, tensionQuerier, config)
 	}
 	

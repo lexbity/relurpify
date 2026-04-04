@@ -6,6 +6,7 @@ import (
 
 	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/lexcodex/relurpify/framework/patterns"
 )
 
 // Pipeline orchestrates the full pre-task context enrichment flow.
@@ -230,6 +231,9 @@ type patternStoreQuerier struct {
 func (q *patternStoreQuerier) ListByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
 	// This is a simplified implementation
 	// In reality, we would call the appropriate method on PatternStore
+	_ = ctx
+	_ = workflowID
+	_ = q.store
 	return []interface{}{}, nil
 }
 

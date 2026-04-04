@@ -58,38 +58,34 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 			continue
 		}
 		
-		// For each node, get its file
-		for _, node := range nodes {
-			// In a real implementation, we would get the actual file path from the node
-			// For now, we'll use a placeholder approach
-			path := fmt.Sprintf("symbol:%s", symbol)
-			if seenPaths[path] {
-				continue
-			}
-			results = append(results, CodeEvidenceItem{
-				Path:    path,
-				Score:   0.8,
-				Source:  EvidenceSourceIndex,
-				Summary: fmt.Sprintf("Contains symbol: %s", symbol),
-			})
-			seenPaths[path] = true
-			
-			// Expand dependencies if available
-			if r.deps != nil && r.config.DependencyHops > 0 {
-				// Try to get dependency graph
-				depGraph, err := r.deps.GetDependencyGraph(symbol)
-				if err == nil && depGraph != nil {
-					for _, dep := range depGraph.Dependencies {
-						depPath := fmt.Sprintf("dep:%s", dep.Name)
-						if !seenPaths[depPath] {
-							results = append(results, CodeEvidenceItem{
-								Path:    depPath,
-								Score:   0.6,
-								Source:  EvidenceSourceIndex,
-								Summary: fmt.Sprintf("Dependency of %s", symbol),
-							})
-							seenPaths[depPath] = true
-						}
+		// Placeholder path for the symbol
+		path := fmt.Sprintf("symbol:%s", symbol)
+		if seenPaths[path] {
+			continue
+		}
+		results = append(results, CodeEvidenceItem{
+			Path:    path,
+			Score:   0.8,
+			Source:  EvidenceSourceIndex,
+			Summary: fmt.Sprintf("Contains symbol: %s", symbol),
+		})
+		seenPaths[path] = true
+		
+		// Expand dependencies if available
+		if r.deps != nil && r.config.DependencyHops > 0 {
+			// Try to get dependency graph
+			depGraph, err := r.deps.GetDependencyGraph(symbol)
+			if err == nil && depGraph != nil {
+				for _, dep := range depGraph.Dependencies {
+					depPath := fmt.Sprintf("dep:%s", dep.Name)
+					if !seenPaths[depPath] {
+						results = append(results, CodeEvidenceItem{
+							Path:    depPath,
+							Score:   0.6,
+							Source:  EvidenceSourceIndex,
+							Summary: fmt.Sprintf("Dependency of %s", symbol),
+						})
+						seenPaths[depPath] = true
 					}
 				}
 			}
@@ -135,7 +131,7 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 	if r.tensionSvc != nil {
 		tensions, err := r.tensionSvc.ActiveByWorkflow(ctx, workflowID)
 		if err == nil && tensions != nil {
-			for i, tension := range tensions {
+			for i := range tensions {
 				// Convert to KnowledgeEvidenceItem
 				results = append(results, KnowledgeEvidenceItem{
 					RefID:   fmt.Sprintf("tension_%d", i),
@@ -153,7 +149,7 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 	if r.patternSvc != nil {
 		patterns, err := r.patternSvc.ListByWorkflow(ctx, workflowID)
 		if err == nil && patterns != nil {
-			for i, pattern := range patterns {
+			for i := range patterns {
 				results = append(results, KnowledgeEvidenceItem{
 					RefID:   fmt.Sprintf("pattern_%d", i),
 					Kind:    KnowledgeKindPattern,
