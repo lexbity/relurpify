@@ -6,15 +6,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/platform/llm"
@@ -41,7 +36,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase C: Log and Telemetry Setup
-	logFile, logger, err := setupLogging(cfg)
+	logFile, _, err := setupLogging(cfg)
 	if err != nil {
 		return nil, err
 	}
