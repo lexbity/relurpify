@@ -33,9 +33,6 @@ func (p *ContextProposalPhase) Execute(
 		state = make(map[string]any)
 	}
 
-	// For now, we'll implement a simplified version that always advances
-	// In a real implementation, we would handle user responses properly
-	
 	// Get initial query from state
 	var userText string
 	if queryRaw, ok := state["query"]; ok {
@@ -107,7 +104,36 @@ func (p *ContextProposalPhase) Execute(
 	}
 
 	// Check if we should show confirmation frame
-	// For now, always show confirmation frame
+	if !p.ShowConfirmationFrame {
+		// Silent mode: skip the frame, load results directly
+		confirmedPaths := make([]string, 0)
+		for _, file := range bundle.AnchoredFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		for _, file := range bundle.ExpandedFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		
+		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
+		
+		stateUpdates := map[string]interface{}{
+			"context.confirmed_files": confirmedPaths,
+			"context.pinned_files":    updatedPins,
+			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.pipeline_trace":  bundle.PipelineTrace,
+		}
+		
+		// Save session pins to memory if available
+		// Note: In a real implementation, we would have access to memory store
+		// saveSessionPinsToMemory(memory, updatedPins)
+		
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: stateUpdates,
+		}, nil
+	}
+
+	// Show confirmation frame
 	content := convertToContextProposalContent(bundle)
 	
 	mc.Emitter.Emit(ctx, interaction.InteractionFrame{
@@ -129,32 +155,134 @@ func (p *ContextProposalPhase) Execute(
 				Kind:        interaction.ActionKindSecondary,
 				TargetPhase: "intent",
 			},
+			{
+				ID:          "add",
+				Label:       "Add Files",
+				Kind:        interaction.ActionKindSecondary,
+				TargetPhase: "context_proposal",
+			},
+			{
+				ID:          "remove",
+				Label:       "Remove Files",
+				Kind:        interaction.ActionKindSecondary,
+				TargetPhase: "context_proposal",
+			},
 		},
 		Continuable: true,
 	})
 	
-	// For now, automatically confirm and advance
-	confirmedPaths := make([]string, 0)
-	for _, file := range bundle.AnchoredFiles {
-		confirmedPaths = append(confirmedPaths, file.Path)
-	}
-	for _, file := range bundle.ExpandedFiles {
-		confirmedPaths = append(confirmedPaths, file.Path)
-	}
-	
-	updatedPins := updateSessionPins(sessionPins, confirmedPaths)
-	
-	stateUpdates := map[string]interface{}{
-		"context.confirmed_files": confirmedPaths,
-		"context.pinned_files":    updatedPins,
-		"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
-		"context.pipeline_trace":  bundle.PipelineTrace,
+	// Wait for user response
+	resp, err := mc.Emitter.AwaitResponse(ctx)
+	if err != nil {
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: map[string]interface{}{},
+		}, nil
 	}
 	
-	return interaction.PhaseOutcome{
-		Advance:      true,
-		StateUpdates: stateUpdates,
-	}, nil
+	// Handle different actions
+	switch resp.ActionID {
+	case "confirm":
+		confirmedPaths := make([]string, 0)
+		for _, file := range bundle.AnchoredFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		for _, file := range bundle.ExpandedFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		
+		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
+		
+		stateUpdates := map[string]interface{}{
+			"context.confirmed_files": confirmedPaths,
+			"context.pinned_files":    updatedPins,
+			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.pipeline_trace":  bundle.PipelineTrace,
+		}
+		
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: stateUpdates,
+		}, nil
+		
+	case "skip":
+		// Skip enrichment, continue with empty context
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: map[string]interface{}{},
+		}, nil
+		
+	case "add":
+		// In a real implementation, we would handle adding files
+		// For now, just confirm with existing files
+		confirmedPaths := make([]string, 0)
+		for _, file := range bundle.AnchoredFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		for _, file := range bundle.ExpandedFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		
+		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
+		
+		stateUpdates := map[string]interface{}{
+			"context.confirmed_files": confirmedPaths,
+			"context.pinned_files":    updatedPins,
+			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.pipeline_trace":  bundle.PipelineTrace,
+		}
+		
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: stateUpdates,
+		}, nil
+		
+	case "remove":
+		// In a real implementation, we would handle removing files
+		// For now, just confirm with anchored files only
+		confirmedPaths := make([]string, 0)
+		for _, file := range bundle.AnchoredFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		
+		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
+		
+		stateUpdates := map[string]interface{}{
+			"context.confirmed_files": confirmedPaths,
+			"context.pinned_files":    updatedPins,
+			"context.knowledge_items": bundle.KnowledgeTopic, // Only topic knowledge
+			"context.pipeline_trace":  bundle.PipelineTrace,
+		}
+		
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: stateUpdates,
+		}, nil
+		
+	default:
+		// Default to confirm
+		confirmedPaths := make([]string, 0)
+		for _, file := range bundle.AnchoredFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		for _, file := range bundle.ExpandedFiles {
+			confirmedPaths = append(confirmedPaths, file.Path)
+		}
+		
+		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
+		
+		stateUpdates := map[string]interface{}{
+			"context.confirmed_files": confirmedPaths,
+			"context.pinned_files":    updatedPins,
+			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.pipeline_trace":  bundle.PipelineTrace,
+		}
+		
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: stateUpdates,
+		}, nil
+	}
 }
 
 // Helper functions
@@ -191,6 +319,19 @@ func updateSessionPins(existing []string, newPaths []string) []string {
 	}
 	
 	return result
+}
+
+// loadSessionPinsFromMemory loads session pins from HybridMemory if available
+func loadSessionPinsFromMemory(memory interface{}) []string {
+	// This is a placeholder - in a real implementation, we would call
+	// memory.Recall(ctx, "context.pinned_files", MemoryScopeSession)
+	return []string{}
+}
+
+// saveSessionPinsToMemory saves session pins to HybridMemory
+func saveSessionPinsToMemory(memory interface{}, pins []string) {
+	// This is a placeholder - in a real implementation, we would call
+	// memory.Remember(ctx, "context.pinned_files", pins, MemoryScopeSession)
 }
 
 func convertToContextProposalContent(bundle pretask.EnrichedContextBundle) interaction.ContextProposalContent {

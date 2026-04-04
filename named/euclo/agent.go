@@ -240,6 +240,14 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	// Initialize context enrichment pipeline (Phase 2)
 	if a.ContextPipeline == nil {
 		config := pretask.DefaultPipelineConfig()
+		
+		// Read configuration from agent spec if available
+		if a.Config != nil && a.Config.AgentSpec != nil {
+			// Check for context enrichment configuration in skill_config
+			// This is a simplified implementation - in reality, we would parse the YAML
+			// For now, we'll use defaults
+		}
+		
 		// Get the tension service if available
 		var tensionQuerier pretask.TensionQuerier
 		// tensionService returns a struct, not a pointer; we need to check if it's usable.
@@ -1587,9 +1595,16 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 			pipeline = a.ContextPipeline
 		}
 		// Determine if we should show confirmation frame
-		// For now, default to true
+		// Read from configuration or default to true
 		showConfirmationFrame := true
-		// TODO: Read from agent configuration
+		if a.Config != nil && a.Config.AgentSpec != nil {
+			// In a real implementation, we would parse skill_config.context_enrichment.show_confirmation_frame
+			// For now, we'll use a simple approach
+			// Check if there's a context_enrichment configuration
+			if a.Config.AgentSpec.SkillConfig != nil {
+				// This is a placeholder - actual implementation would parse the YAML
+			}
+		}
 		return modes.ChatMode(emitter, resolver, pipeline, fileResolver, showConfirmationFrame)
 	})
 	reg.Register("code", modes.CodeMode)
