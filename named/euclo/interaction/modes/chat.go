@@ -27,21 +27,92 @@ func (p *ContextProposalPhase) Execute(
 	ctx context.Context,
 	mc interaction.PhaseMachineContext,
 ) (interaction.PhaseOutcome, error) {
-	// For now, we'll skip the context proposal phase and advance directly
-	// This is a temporary implementation until we can properly integrate
-	// with the interaction system
+	// Get user response from the context
+	userResp := mc.UserResponse
+	if userResp == nil {
+		// No user response yet, emit a status frame
+		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
+			Kind:    interaction.FrameStatus,
+			Mode:    "chat",
+			Phase:   "context_proposal",
+			Content: interaction.StatusContent{Message: "Preparing context enrichment..."},
+		})
+		return interaction.PhaseOutcome{
+			Advance:      false,
+			StateUpdates: map[string]interface{}{},
+		}, nil
+	}
+
+	// Resolve current turn files from user response
+	resolved := p.FileResolver.Resolve(userResp.Selections, userResp.Text)
 	
-	// Emit a status frame
+	// Load session pins from memory
+	var sessionPins []string
+	// TODO: Load from HybridMemory["context.pinned_files"] (MemoryScopeSession)
+	// For now, use empty
+	
+	// Get workflow ID from state
+	workflowID := ""
+	if state := mc.State; state != nil {
+		if wf, ok := state["euclo.workflow_id"].(string); ok {
+			workflowID = wf
+		}
+	}
+
+	// Run the pipeline
+	input := pretask.PipelineInput{
+		Query:            userResp.Text,
+		CurrentTurnFiles: resolved.Paths,
+		SessionPins:      sessionPins,
+		WorkflowID:       workflowID,
+	}
+
+	bundle, err := p.Pipeline.Run(ctx, input)
+	if err != nil {
+		// Log error but continue
+		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
+			Kind:    interaction.FrameStatus,
+			Mode:    "chat",
+			Phase:   "context_proposal",
+			Content: interaction.StatusContent{Message: fmt.Sprintf("Context enrichment had issues: %v", err)},
+		})
+		// Continue without enrichment
+		return interaction.PhaseOutcome{
+			Advance:      true,
+			StateUpdates: map[string]interface{}{},
+		}, nil
+	}
+
+	// Convert bundle to ContextProposalContent
+	content := convertToContextProposalContent(bundle)
+
+	// Emit the proposal frame
 	mc.Emitter.Emit(ctx, interaction.InteractionFrame{
-		Kind:    interaction.FrameStatus,
+		Kind:    interaction.FrameProposal,
 		Mode:    "chat",
 		Phase:   "context_proposal",
-		Content: interaction.StatusContent{Message: "Context enrichment is not yet implemented."},
+		Content: content,
+		Actions: []interaction.ActionSlot{
+			{
+				ID:          "confirm",
+				Label:       "Confirm",
+				Kind:        interaction.ActionKindPrimary,
+				Default:     true,
+				TargetPhase: "intent",
+			},
+			{
+				ID:          "skip",
+				Label:       "Skip",
+				Kind:        interaction.ActionKindSecondary,
+				TargetPhase: "intent",
+			},
+		},
+		Continuable: true,
 	})
-	
-	// Advance to the next phase
+
+	// Wait for user response
 	return interaction.PhaseOutcome{
-		Advance:      true,
+		Advance:      false, // Wait for user to confirm or skip
 		StateUpdates: map[string]interface{}{},
 	}, nil
 }

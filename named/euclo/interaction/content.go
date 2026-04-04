@@ -138,6 +138,12 @@ type TransitionInfo struct {
 	TargetMode string `json:"target_mode"`
 }
 
+// ActionKind constants
+const (
+	ActionKindPrimary   ActionKind = "primary"
+	ActionKindSecondary ActionKind = "secondary"
+)
+
 // PipelineTrace records per-stage diagnostics. Written to state for observability.
 type PipelineTrace struct {
 	AnchorsExtracted       int    `json:"anchors_extracted"`

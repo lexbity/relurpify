@@ -246,14 +246,13 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		// We'll create the querier regardless; its methods will handle nil store.
 		tensionQuerier = &tensionServiceQuerier{service: a.tensionService()}
 		// Create pipeline environment from WorkspaceEnv
-		// Note: We need to check if WorkspaceEnv has the required fields
-		// For now, create a minimal environment
+		// Use the WorkspaceEnv which should have all required fields
 		env := pretask.PipelineEnv{
-			IndexManager:   a.Environment.IndexManager,
-			Model:          a.Environment.Model,
-			Embedder:       nil, // We'll need to get this from somewhere
-			PatternStore:   a.PatternStore,
-			KnowledgeStore: nil, // We'll need to get this from somewhere
+			IndexManager:   a.WorkspaceEnv.IndexManager,
+			Model:          a.WorkspaceEnv.Model,
+			Embedder:       a.WorkspaceEnv.Embedder,
+			PatternStore:   a.WorkspaceEnv.PatternStore,
+			KnowledgeStore: a.WorkspaceEnv.KnowledgeStore,
 		}
 		a.ContextPipeline = pretask.NewPipeline(env, tensionQuerier, config)
 	}
@@ -1569,12 +1568,21 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 	
 	// For chat mode, we need to provide the pipeline and file resolver
 	reg.Register("chat", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
-		// Create file resolver
+		// Create file resolver with workspace path
+		var workspacePath string
+		if a.WorkspaceEnv.Config != nil && a.WorkspaceEnv.Config.Workspace != "" {
+			workspacePath = a.WorkspaceEnv.Config.Workspace
+		} else if a.Config != nil && a.Config.Workspace != "" {
+			workspacePath = a.Config.Workspace
+		} else {
+			// Fallback to current directory
+			workspacePath = "."
+		}
 		fileResolver := &pretask.FileResolver{
-			workspace: a.WorkspaceEnv.Config.Workspace,
+			Workspace: workspacePath,
 		}
 		// Use the pipeline from the agent
-		var pipeline pretask.ContextEnrichmentPipeline
+		var pipeline modes.ContextEnrichmentPipeline
 		if a.ContextPipeline != nil {
 			pipeline = a.ContextPipeline
 		}
