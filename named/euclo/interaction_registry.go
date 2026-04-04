@@ -5,14 +5,11 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction/modes"
 )
 
+// defaultInteractionRegistry creates a registry without pipeline injection.
+// Used as a fallback when agent is not fully initialized.
 func defaultInteractionRegistry() *interaction.ModeMachineRegistry {
 	reg := interaction.NewModeMachineRegistry()
-	// Register a factory function that can create chat mode with context enrichment
-	reg.Register("chat", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
-		// We'll need to get the pipeline from somewhere
-		// For now, use the legacy mode
-		return modes.ChatModeLegacy(emitter, resolver)
-	})
+	reg.Register("chat", modes.ChatModeLegacy)
 	reg.Register("code", modes.CodeMode)
 	reg.Register("debug", modes.DebugMode)
 	reg.Register("planning", modes.PlanningMode)

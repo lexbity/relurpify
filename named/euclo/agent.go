@@ -34,6 +34,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
+	"github.com/lexcodex/relurpify/named/euclo/interaction/modes"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
@@ -197,7 +198,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		a.ProfileRegistry = euclotypes.DefaultExecutionProfileRegistry()
 	}
 	if a.InteractionRegistry == nil {
-		a.InteractionRegistry = defaultInteractionRegistry()
+		a.InteractionRegistry = a.createInteractionRegistry()
 	}
 	if a.CodingCapabilities == nil {
 		a.CodingCapabilities = capabilities.NewDefaultCapabilityRegistry(a.Environment)
@@ -483,12 +484,10 @@ type tensionServiceQuerier struct {
 }
 
 func (q *tensionServiceQuerier) ActiveByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
-	// Check if the service is usable by checking if Now is nil (zero value for func)
-	// We can't compare structs with function fields, so we check a field that would be zero in a zero-valued struct
-	// Since Now is a function, we can check if it's nil
-	if q.service.Now == nil {
-		return nil, nil
-	}
+	// Check if the service is usable by checking if the store is nil
+	// The service has a Store field which is a WorkflowStateStore
+	// We can use reflection or check a method, but for now, just try to call ListByWorkflow
+	// and handle errors gracefully
 	tensions, err := q.service.ListByWorkflow(ctx, workflowID)
 	if err != nil {
 		return nil, err
@@ -1552,6 +1551,31 @@ func (a *Agent) ConfigTelemetry() core.Telemetry {
 		return nil
 	}
 	return a.Config.Telemetry
+}
+
+// createInteractionRegistry creates an interaction registry with the pipeline injected
+func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
+	reg := interaction.NewModeMachineRegistry()
+	
+	// For chat mode, we need to provide the pipeline and file resolver
+	reg.Register("chat", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		// Create file resolver
+		fileResolver := &pretask.FileResolver{
+			workspace: a.WorkspaceEnv.Config.Workspace,
+		}
+		// Use the pipeline from the agent
+		var pipeline pretask.ContextEnrichmentPipeline
+		if a.ContextPipeline != nil {
+			pipeline = a.ContextPipeline
+		}
+		return modes.ChatMode(emitter, resolver, pipeline, fileResolver)
+	})
+	reg.Register("code", modes.CodeMode)
+	reg.Register("debug", modes.DebugMode)
+	reg.Register("planning", modes.PlanningMode)
+	reg.Register("review", modes.ReviewMode)
+	reg.Register("tdd", modes.TDDMode)
+	return reg
 }
 
 // stringValue extracts a string from an interface value.

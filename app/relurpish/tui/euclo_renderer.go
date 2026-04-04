@@ -65,7 +65,12 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) Message {
 
 	switch frame.Kind {
 	case interaction.FrameProposal:
-		msg.Content.Text = renderProposal(frame)
+		// Check if it's a ContextProposalContent
+		if content, ok := frame.Content.(interaction.ContextProposalContent); ok {
+			msg.Content.Text = renderContextProposal(content)
+		} else {
+			msg.Content.Text = renderProposal(frame)
+		}
 	case interaction.FrameQuestion:
 		msg.Content.Text = renderQuestion(frame)
 	case interaction.FrameCandidates:
@@ -386,6 +391,61 @@ func renderHelp(frame interaction.InteractionFrame) string {
 // ──────────────────────────────────────────────────────────────
 // Action slot rendering for notification bar
 // ──────────────────────────────────────────────────────────────
+
+func renderContextProposal(content interaction.ContextProposalContent) string {
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Context Proposal") + "\n")
+	
+	if len(content.AnchoredFiles) > 0 {
+		b.WriteString(dimStyle.Render("Anchored Files:") + "\n")
+		for _, file := range content.AnchoredFiles {
+			b.WriteString(fmt.Sprintf("  %s (%s) - %s\n", 
+				filePathStyle.Render(file.Path),
+				file.Source,
+				file.Summary,
+			))
+		}
+	}
+	
+	if len(content.ExpandedFiles) > 0 {
+		b.WriteString(dimStyle.Render("Expanded Files:") + "\n")
+		for _, file := range content.ExpandedFiles {
+			b.WriteString(fmt.Sprintf("  %s (%s) - %s\n",
+				filePathStyle.Render(file.Path),
+				file.Source,
+				file.Summary,
+			))
+		}
+	}
+	
+	if len(content.KnowledgeItems) > 0 {
+		b.WriteString(dimStyle.Render("Knowledge Items:") + "\n")
+		for _, item := range content.KnowledgeItems {
+			b.WriteString(fmt.Sprintf("  [%s] %s - %s\n",
+				item.Kind,
+				item.Title,
+				item.Summary,
+			))
+		}
+	}
+	
+	// Add pipeline trace info
+	trace := content.PipelineTrace
+	b.WriteString(dimStyle.Render("Pipeline Trace:") + "\n")
+	b.WriteString(fmt.Sprintf("  Anchors: %d extracted, %d confirmed\n", 
+		trace.AnchorsExtracted, trace.AnchorsConfirmed))
+	b.WriteString(fmt.Sprintf("  Stage1: %d code, %d archaeo\n",
+		trace.Stage1CodeResults, trace.Stage1ArchaeoResults))
+	if trace.HypotheticalGenerated {
+		b.WriteString(fmt.Sprintf("  Hypothetical: %d tokens\n", trace.HypotheticalTokens))
+	}
+	b.WriteString(fmt.Sprintf("  Stage3: %d archaeo\n", trace.Stage3ArchaeoResults))
+	if trace.FallbackUsed {
+		b.WriteString(fmt.Sprintf("  Fallback: %s\n", trace.FallbackReason))
+	}
+	
+	return eucloFrameStyle.Render(b.String())
+}
 
 // RenderActionSlots formats action slots for the notification bar hint.
 func RenderActionSlots(actions []interaction.ActionSlot) string {

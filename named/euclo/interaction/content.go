@@ -1,5 +1,9 @@
 package interaction
 
+import (
+	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
+)
+
 // ProposalContent is the typed payload for FrameProposal frames.
 // The system proposes its interpretation of the user's instruction.
 type ProposalContent struct {
