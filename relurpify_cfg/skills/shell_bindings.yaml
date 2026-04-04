@@ -1,0 +1,38 @@
+# Relurpify shell bindings — user-defined named shell capabilities.
+# Each binding becomes a named tool capability auto-registered when
+# CommandLineTools() initializes the platform shell registry.
+#
+# Fields:
+#   id              — unique identifier (snake_case)
+#   name            — tool name exposed to agents
+#   description     — shown in tool listings and prompts
+#   command         — argv array, no shell interpolation (unless shell: true)
+#   shell           — if true, wraps in bash -c; requires shell in allowed binary set
+#   args_passthrough — if true, callers may append extra args to command
+#   tags            — optional tags for capability filtering
+
+version: "1"
+bindings: []
+
+# Examples (uncomment and adapt):
+#
+# - id: run-migrations
+#   name: run_migrations
+#   description: Runs pending database migrations
+#   command: ["python", "manage.py", "migrate"]
+#   shell: false
+#   tags: [database, migration]
+#
+# - id: format-go
+#   name: format_go
+#   description: Formats all Go source files in the workspace
+#   command: ["gofmt", "-w", "."]
+#   shell: false
+#   tags: [formatting]
+#
+# - id: custom-lint
+#   name: run_custom_lint
+#   description: Runs the project-specific lint script
+#   command: ["./scripts/lint.sh"]
+#   shell: true
+#   tags: [lint, verification]

@@ -1,0 +1,52 @@
+# Relurpify shell blacklist — workspace-level danger pattern filter.
+# Applied before CommandRunner.Run() for all commands passing through a ShellGuard.
+# Patterns are Go regular expressions matched against the full command string
+# (args joined with spaces: "binary arg1 arg2 ...").
+#
+# Actions:
+#   block — hard error, command is never executed
+#   hitl  — requires human-in-the-loop approval via the permission manager
+#
+# Add workspace-specific rules below the community set.
+
+version: "1"
+rules:
+  - id: recursive-delete-root
+    pattern: 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f\s+/'
+    reason: recursive force delete from filesystem root
+    action: block
+
+  - id: recursive-delete-home
+    pattern: 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f\s+~'
+    reason: recursive force delete from home directory
+    action: block
+
+  - id: pipe-to-shell
+    pattern: '(curl|wget|fetch)\b.*\|\s*(ba)?sh'
+    reason: remote code execution via pipe-to-shell download
+    action: block
+
+  - id: fork-bomb
+    pattern: ':\(\)\s*\{.*\}\s*;?\s*:&'
+    reason: fork bomb pattern
+    action: block
+
+  - id: etc-write
+    pattern: '(>>?|tee\s+)/etc/'
+    reason: writing to system configuration directory
+    action: block
+
+  - id: history-clear
+    pattern: 'history\s+-[a-zA-Z]*c'
+    reason: clearing shell history (audit log)
+    action: block
+
+  - id: privilege-escalation
+    pattern: '\bsudo\s+su\b|\bsudo\s+-[a-zA-Z]*i\b'
+    reason: privilege escalation to root shell
+    action: hitl
+
+  - id: package-manager-remove
+    pattern: '\b(apt|apt-get|yum|dnf|pacman)\b.*\s(remove|purge|erase)\b.*--yes\b'
+    reason: unattended system package removal
+    action: hitl

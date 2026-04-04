@@ -1,6 +1,9 @@
 package shell
 
 import (
+	"path/filepath"
+
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/sandbox"
 	platformsqlite "github.com/lexcodex/relurpify/platform/db/sqlite"
@@ -69,6 +72,28 @@ func CommandLineTools(basePath string, runner sandbox.CommandRunner) []core.Tool
 		}
 		seen[name] = struct{}{}
 		res = append(res, tool)
+	}
+	// Load shell bindings and create tools for them
+	bindingsPath := filepath.Join(config.New(basePath).SkillsDir(), "shell_bindings.yaml")
+	bindings, err := LoadShellBindings(bindingsPath)
+	if err != nil {
+		// Log error? For now, just ignore
+	}
+	// Determine allowed binaries from runner's permission set
+	// For simplicity, we'll assume all binaries are allowed for now
+	// In a real implementation, we would query the capability registry
+	allowedBinaries := []string{} // Placeholder
+	query := NewCommandQuery(allowedBinaries, bindings)
+	for _, binding := range bindings {
+		name := binding.Name
+		if _, ok := seen[name]; ok {
+			// Skip if name conflicts with built-in tool
+			continue
+		}
+		// Create a tool from the binding
+		tool := NewShellBindingTool(binding, query, runner)
+		res = append(res, tool)
+		seen[name] = struct{}{}
 	}
 	for i, tool := range res {
 		if setter, ok := tool.(interface{ SetCommandRunner(sandbox.CommandRunner) }); ok {

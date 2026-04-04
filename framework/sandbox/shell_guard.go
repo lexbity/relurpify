@@ -42,10 +42,16 @@ func (g *ShellGuard) Run(ctx context.Context, req CommandRequest) (string, strin
 			return "", "", fmt.Errorf("shell filter blocked [%s]: %s", rule.ID, rule.Reason)
 		case BlacklistActionHITL:
 			if g.manager != nil {
-				// For now, we'll just block if HITL is required but no manager is available
-				// In a real implementation, we would call RequireApproval
-				// Since we don't have the exact signature, we'll block with a message
-				return "", "", fmt.Errorf("shell filter requires HITL approval [%s]: %s", rule.ID, rule.Reason)
+				// Try to escalate through RequireApproval
+				// We'll use a placeholder for now
+				// In a real implementation, we would call:
+				// approved, err := g.manager.RequireApproval(ctx, g.agentID, "shell_guard", map[string]string{
+				// 	"rule_id": rule.ID,
+				// 	"reason":  rule.Reason,
+				// 	"command": cmdStr,
+				// })
+				// For now, we'll block with a message indicating HITL is required
+				return "", "", fmt.Errorf("shell filter requires HITL approval [%s]: %s (HITL not yet implemented)", rule.ID, rule.Reason)
 			}
 			return "", "", fmt.Errorf("shell filter requires HITL approval [%s]: %s (no permission manager available)", rule.ID, rule.Reason)
 		}
