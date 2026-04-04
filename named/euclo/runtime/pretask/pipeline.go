@@ -195,7 +195,8 @@ func NewPipeline(
 	}
 	
 	// Get retriever service from environment if available
-	var retrieverSvc retrieval.RetrieverService
+	// For now, we'll leave it nil as the retrieval.RetrieverService may not be available
+	var retrieverSvc interface{}
 	if env.RetrievalDB != nil {
 		// In a real implementation, we'd create a retriever service from the DB
 		// For now, we'll leave it nil
@@ -205,7 +206,7 @@ func NewPipeline(
 	archaeoRetriever := &ArchaeoRetriever{
 		tensionSvc: tensions,
 		patternSvc: patternQuerier,
-		retriever:  retrieverSvc,
+		retriever:  nil, // retrieverSvc is not used in current implementation
 		config: ArchaeoRetrieverConfig{
 			WorkflowID: config.WorkflowID,
 			MaxItems:   config.MaxKnowledgeItems,

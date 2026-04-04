@@ -99,7 +99,7 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 type ArchaeoRetriever struct {
 	tensionSvc   TensionQuerier
 	patternSvc   PatternQuerier
-	retriever    retrieval.RetrieverService
+	retriever    interface{} // Placeholder for future retriever service
 	config       ArchaeoRetrieverConfig
 }
 
