@@ -1,6 +1,8 @@
 package modes
 
 import (
+	"context"
+
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
