@@ -37,9 +37,9 @@ func (r *FileResolver) Resolve(selections []string, text string) ResolvedFiles {
 		}
 		abs := clean
 		if !filepath.IsAbs(clean) {
-			abs = filepath.Join(r.workspace, clean)
+			abs = filepath.Join(r.Workspace, clean)
 		}
-		rel, err := filepath.Rel(r.workspace, abs)
+		rel, err := filepath.Rel(r.Workspace, abs)
 		if err != nil || strings.HasPrefix(rel, "..") {
 			skipped = append(skipped, raw)
 			continue
