@@ -182,6 +182,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		SearchEngine:                  searchEngine,
 		Memory:                        opts.Memory,
 		WorkflowStore:                 opts.WorkflowStore,
+		CheckpointStore:               nil,
 		PlanStore:                     opts.PlanStore,
 		PatternStore:                  opts.PatternStore,
 		CommentStore:                  opts.CommentStore,

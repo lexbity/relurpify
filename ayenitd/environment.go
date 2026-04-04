@@ -35,7 +35,7 @@ type WorkspaceEnvironment struct {
 	// Memory + storage
 	Memory          memory.MemoryStore
 	WorkflowStore   memory.WorkflowStateStore
-	CheckpointStore memory.CheckpointStore // nil until implemented in framework
+	CheckpointStore *memory.CheckpointStore // nil until implemented in framework
 	PlanStore       plan.PlanStore
 	PatternStore    patterns.PatternStore
 	CommentStore    patterns.CommentStore
