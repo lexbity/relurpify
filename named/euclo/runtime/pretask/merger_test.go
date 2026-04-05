@@ -16,7 +16,7 @@ func TestResultMerger_AnchoredFilesAlwaysIncluded(t *testing.T) {
 	}
 	stage1 := Stage1Result{
 		CodeEvidence: []CodeEvidenceItem{
-			{Path: "expanded.go", Score: 0.9, TokenEstimate: 100},
+			{Path: "expanded.go", Score: 0.9},
 		},
 	}
 	bundle := merger.Merge("query", anchors, stage1, HypotheticalSketch{}, nil)

@@ -30,7 +30,7 @@ func TestAnchorExtract_CurrentTurnFilesIncluded(t *testing.T) {
 			MaxSymbols:      12,
 		},
 	}
-	input := AnchorExtractInput{
+	input := PipelineInput{
 		CurrentTurnFiles: []string{"a.go"},
 	}
 	anchors := extractor.Extract(input)
@@ -47,7 +47,7 @@ func TestAnchorExtract_SessionPinsIncluded(t *testing.T) {
 			MaxSymbols:      12,
 		},
 	}
-	input := AnchorExtractInput{
+	input := PipelineInput{
 		SessionPins: []string{"pinned.go"},
 	}
 	anchors := extractor.Extract(input)
@@ -64,7 +64,7 @@ func TestAnchorExtract_AtMentionExtraction(t *testing.T) {
 			MaxSymbols:      12,
 		},
 	}
-	input := AnchorExtractInput{
+	input := PipelineInput{
 		Query: "look at @cmd/main.go for details",
 	}
 	anchors := extractor.Extract(input)
@@ -86,7 +86,7 @@ func TestAnchorExtract_CamelCaseConfirmedByIndex(t *testing.T) {
 			MaxSymbols:      12,
 		},
 	}
-	input := AnchorExtractInput{
+	input := PipelineInput{
 		Query: "fix MyHandler bug",
 	}
 	anchors := extractor.Extract(input)
@@ -106,7 +106,7 @@ func TestAnchorExtract_CamelCaseFilteredByIndex(t *testing.T) {
 			MaxSymbols:      12,
 		},
 	}
-	input := AnchorExtractInput{
+	input := PipelineInput{
 		Query: "fix MyHandler bug",
 	}
 	anchors := extractor.Extract(input)
@@ -123,7 +123,7 @@ func TestAnchorExtract_EmptyInput(t *testing.T) {
 			MaxSymbols:      12,
 		},
 	}
-	input := AnchorExtractInput{}
+	input := PipelineInput{}
 	anchors := extractor.Extract(input)
 	if len(anchors.FilePaths) != 0 || len(anchors.SymbolNames) != 0 || len(anchors.PackageRefs) != 0 {
 		t.Errorf("Expected empty AnchorSet, got %+v", anchors)
