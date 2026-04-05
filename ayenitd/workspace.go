@@ -57,12 +57,12 @@ func (w *Workspace) StealClosers() (logFile, patternDB, eventLog io.Closer) {
 }
 
 // Close releases all resources held by the Workspace. This includes:
-// 1. Stopping all services via ServiceManager
+// 1. Stopping all services via ServiceManager (clearing registry)
 // 2. Closing database stores, files, and loggers
 func (w *Workspace) Close() error {
-	// Stop all registered services first
+	// Stop all registered services first, clearing registry
 	if w.ServiceManager != nil {
-		if err := w.ServiceManager.StopAll(); err != nil {
+		if err := w.ServiceManager.Clear(); err != nil {
 			return fmt.Errorf("stop services: %w", err)
 		}
 	}
@@ -94,14 +94,10 @@ func (w *Workspace) Close() error {
 // is useful for "ping" the workspace or applying configuration changes
 // without dropping out of Open().
 func (w *Workspace) Restart(ctx context.Context) error {
-	if w.ServiceManager != nil && len(w.ServiceManager.registry) > 0 {
-		log.Printf("workspace: stopping services for restart")
+	log.Printf("workspace: stopping services for restart")
+	if err := w.stopServices(); err != nil {
+		return fmt.Errorf("stop services for restart: %w", err)
 	}
-
-	if err := w.Close(); err != nil {
-		return err
-	}
-
 	log.Printf("workspace: restarting services")
 	return w.ServiceManager.StartAll(ctx)
 }
@@ -130,4 +126,19 @@ func (w *Workspace) ListServices() []string {
 		result = append(result, id)
 	}
 	return result
+}
+
+// stopServices stops all running services but does not clear the registry or close stores.
+func (w *Workspace) stopServices() error {
+	// Stop all registered services first
+	if w.ServiceManager != nil {
+		if err := w.ServiceManager.StopAll(); err != nil {
+			return fmt.Errorf("stop services: %w", err)
+		}
+	}
+
+	if w.Environment.Scheduler != nil {
+		w.Environment.Scheduler.Stop()
+	}
+	return nil
 }

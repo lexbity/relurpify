@@ -106,8 +106,6 @@ func (sm *ServiceManager) StopAll() error {
 		}
 	}
 
-	sm.registry = make(map[string]Service) // clear registry on stop
-
 	sm.wg.Wait() // wait for all stop operations to complete
 
 	if len(errs) > 0 {
@@ -148,5 +146,9 @@ func (sm *ServiceManager) Count() int {
 // Clear removes all services from the registry and stops them. Useful for
 // restarting or cleaning up state without creating a new Workspace.
 func (sm *ServiceManager) Clear() error {
-	return sm.StopAll()
+	err := sm.StopAll()
+	sm.mu.Lock()
+	sm.registry = make(map[string]Service)
+	sm.mu.Unlock()
+	return err
 }
