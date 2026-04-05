@@ -120,6 +120,9 @@ func (m *ResultMerger) Merge(
 			topicLimit = 1
 		}
 		expandedLimit := m.config.MaxKnowledgeItems - topicLimit
+		if expandedLimit < 0 {
+			expandedLimit = 0
+		}
 		
 		if len(bundle.KnowledgeTopic) > topicLimit {
 			bundle.KnowledgeTopic = bundle.KnowledgeTopic[:topicLimit]
