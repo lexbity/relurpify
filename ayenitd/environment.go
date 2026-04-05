@@ -53,6 +53,9 @@ type WorkspaceEnvironment struct {
 
 	// Scheduler
 	Scheduler *ServiceScheduler
+
+	// Service management (new for dynamic lifecycle)
+	ServiceManager *ServiceManager
 }
 
 // WithRegistry returns a shallow copy with Registry replaced.
@@ -65,5 +68,15 @@ func (e WorkspaceEnvironment) WithRegistry(r *capability.Registry) WorkspaceEnvi
 // WithMemory returns a shallow copy with Memory replaced.
 func (e WorkspaceEnvironment) WithMemory(m memory.MemoryStore) WorkspaceEnvironment {
 	e.Memory = m
+	return e
+}
+
+// WithService adds a service to the ServiceManager via manager.Add().
+// This is useful for registering dynamic services at runtime.
+func (e WorkspaceEnvironment) WithService(id string, s Service) WorkspaceEnvironment {
+	if e.ServiceManager == nil {
+		return e
+	}
+	e.ServiceManager.Register(id, s)
 	return e
 }

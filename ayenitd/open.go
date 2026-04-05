@@ -119,7 +119,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		}
 	}
 
-	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
+	// Phase G: Create ServiceManager and Bootstrap
+	scheduler := NewScheduler()
+
+	bootstrap, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             registration.ID,
 		AgentName:           cfg.AgentName,
@@ -162,35 +165,13 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	// Phase H: Embedder Initialization
 	embedder := retrieval.NewOllamaEmbedder(cfg.OllamaEndpoint, ollamaModel)
 
-	// Phase I: Scheduler Start
-	scheduler := NewServiceScheduler()
-	if err := scheduler.LoadJobsFromMemory(ctx, memStore); err != nil {
-		logger.Printf("scheduler: failed to load jobs from memory: %v", err)
-	}
-	if cfg.ReindexInterval > 0 {
-		scheduler.Register(ScheduledJob{
-			ID:       "reindex-workspace",
-			Interval: cfg.ReindexInterval,
-			Source:   "internal",
-			Action: func(ctx context.Context) error {
-				logger.Printf("scheduler: re-indexing workspace")
-				if boot.Environment.IndexManager != nil {
-					go func() {
-						if err := boot.Environment.IndexManager.StartIndexing(ctx); err != nil {
-							logger.Printf("scheduler: re-index failed: %v", err)
-						} else {
-							logger.Printf("scheduler: re-index completed")
-						}
-					}()
-				}
-				return nil
-			},
-		})
-		logger.Printf("scheduler: registered re-index job (interval: %s)", cfg.ReindexInterval)
-	}
-	scheduler.Start(ctx)
+	// Phase I: ServiceManager Setup & Scheduler Registration
+	sm := NewServiceManager()
+	sm.Register("scheduler", scheduler)
 
-	// Build WorkspaceEnvironment
+	// Register additional services here if needed:
+	// sm.Register("custom-worker", &CustomWorker{})
+
 	env := boot.Environment
 	env.Embedder = embedder
 	env.Scheduler = scheduler
@@ -198,6 +179,9 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	env.PermissionManager = registration.Permissions
 	env.CheckpointStore = nil // TODO: implement in framework
 	env.KnowledgeStore = knowledgeStore
+
+	// Attach ServiceManager to environment (for direct access)
+	env.ServiceManager = sm
 
 	ws := &Workspace{
 		Environment:          env,
@@ -212,13 +196,14 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		SkillResults:         boot.SkillResults,
 		Telemetry:            tel,
 		Logger:               logger,
+		ServiceManager:       sm,
 	}
 
 	logger.Printf("ayenitd: workspace opened successfully")
 	return ws, nil
 }
 
-// resolveWorkspaceConfigOverrides loads the workspace YAML (if ConfigPath is
+// resolveWorkspaceConfig loads the workspace YAML (if ConfigPath is
 // set) and applies model and agent-name overrides. Errors are silently ignored
 // so that a missing or malformed config file does not prevent startup.
 func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
