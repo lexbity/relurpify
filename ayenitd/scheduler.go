@@ -259,12 +259,12 @@ func cronMatches(cronExpr string, t time.Time) (bool, error) {
 
 // Start begins executing scheduled jobs. It is a no-op if no jobs are
 // registered or if the scheduler has already been started.
-func (s *ServiceScheduler) Start(ctx context.Context) {
+func (s *ServiceScheduler) Start(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.cancel != nil || len(s.jobs) == 0 {
-		return
+		return nil
 	}
 	
 	ctx, cancel := context.WithCancel(ctx)
@@ -285,6 +285,7 @@ func (s *ServiceScheduler) Start(ctx context.Context) {
 	}
 	
 	log.Printf("scheduler: started with %d jobs", len(s.jobs))
+	return nil
 }
 
 // runIntervalJob runs job.Action immediately, then repeats every job.Interval.
@@ -335,7 +336,7 @@ func runCronJob(ctx context.Context, job ScheduledJob) {
 }
 
 // Stop gracefully stops the scheduler.
-func (s *ServiceScheduler) Stop() {
+func (s *ServiceScheduler) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
@@ -345,6 +346,7 @@ func (s *ServiceScheduler) Stop() {
 	}
 	s.wg.Wait()
 	log.Printf("scheduler: stopped")
+	return nil
 }
 
 // SaveJobToMemory stores a job definition in the memory store.
