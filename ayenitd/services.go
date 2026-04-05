@@ -81,8 +81,6 @@ func (sm *ServiceManager) StartAll(ctx context.Context) error {
 	}
 
 	for id, s := range sm.registry {
-		id = id // capture for closure
-		s := s  // capture for closure
 		sm.wg.Add(1)
 		go func(id string, s Service) {
 			defer sm.wg.Done()
@@ -103,8 +101,6 @@ func (sm *ServiceManager) StopAll() error {
 
 	var errs []error
 	for id, s := range sm.registry {
-		id = id // capture for closure
-		s := s  // capture for closure
 		if err := s.Stop(); err != nil {
 			errs = append(errs, fmt.Errorf("service %s stop error: %v", id, err))
 		}

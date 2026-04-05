@@ -281,20 +281,4 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry,
 	return logFile, logger, telemetry.MultiplexTelemetry{Sinks: sinks}, nil
 }
 
-// permissionEventLogger wraps a core.Telemetry to provide a SetEventLogger
-// callback. Used to emit permission audit events when telemetry is a multiplex.
-type permissionEventLogger struct {
-	log     *log.Logger
-	agentID string
-}
 
-func (l *permissionEventLogger) emit(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
-	if l.log == nil {
-		return
-	}
-	l.log.Printf("permission: agent=%s type=%s action=%s resource=%s effect=%s reason=%s",
-		l.agentID, desc.Type, desc.Action, desc.Resource, effect, reason)
-}
-
-// fakeNow returns the current time for scheduler tick alignment.
-func fakeNow() time.Time { return time.Now() }
