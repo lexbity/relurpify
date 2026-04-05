@@ -6,6 +6,7 @@ package ayenitd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 )
@@ -105,7 +106,7 @@ func (sm *ServiceManager) StopAll() error {
 		id = id // capture for closure
 		s := s  // capture for closure
 		if err := s.Stop(); err != nil {
-			errs = append(errs, errorf("service %s stop error: %v", id, err))
+			errs = append(errs, fmt.Errorf("service %s stop error: %v", id, err))
 		}
 	}
 

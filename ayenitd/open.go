@@ -120,9 +120,9 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase G: Create ServiceManager and Bootstrap
-	scheduler := NewScheduler()
+	scheduler := NewServiceScheduler()
 
-	bootstrap, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
+	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             registration.ID,
 		AgentName:           cfg.AgentName,
