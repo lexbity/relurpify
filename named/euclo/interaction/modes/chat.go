@@ -85,28 +85,35 @@ func (p *ContextProposalPhase) Execute(
 		workflowID = wf
 	}
 
-	// Run the pipeline
-	input := pretask.PipelineInput{
-		Query:            userText,
-		CurrentTurnFiles: resolved.Paths,
-		SessionPins:      sessionPins,
-		WorkflowID:       workflowID,
-	}
-
-	bundle, err := p.Pipeline.Run(ctx, input)
-	if err != nil {
-		// Log error but continue
-		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
-			Kind:    interaction.FrameStatus,
-			Mode:    "chat",
-			Phase:   "context_proposal",
-			Content: interaction.StatusContent{Message: fmt.Sprintf("Context enrichment had issues: %v", err)},
-		})
-		// Continue without enrichment
-		return interaction.PhaseOutcome{
-			Advance:      true,
-			StateUpdates: map[string]interface{}{},
-		}, nil
+	// Run the pipeline if available
+	var bundle pretask.EnrichedContextBundle
+	var err error
+	
+	if p.Pipeline != nil {
+		input := pretask.PipelineInput{
+			Query:            userText,
+			CurrentTurnFiles: resolved.Paths,
+			SessionPins:      sessionPins,
+			WorkflowID:       workflowID,
+		}
+		bundle, err = p.Pipeline.Run(ctx, input)
+		if err != nil {
+			// Log error but continue
+			mc.Emitter.Emit(ctx, interaction.InteractionFrame{
+				Kind:    interaction.FrameStatus,
+				Mode:    "chat",
+				Phase:   "context_proposal",
+				Content: interaction.StatusContent{Message: fmt.Sprintf("Context enrichment had issues: %v", err)},
+			})
+			// Continue without enrichment
+			return interaction.PhaseOutcome{
+				Advance:      true,
+				StateUpdates: map[string]interface{}{},
+			}, nil
+		}
+	} else {
+		// If pipeline is nil, create an empty bundle
+		bundle = pretask.EnrichedContextBundle{}
 	}
 
 	// Check if we should show confirmation frame
@@ -560,21 +567,17 @@ func RegisterChatTriggers(resolver *interaction.AgencyResolver) {
 }
 
 // ChatPhaseIDs returns the ordered phase IDs for chat mode.
-// When pipeline and fileResolver are provided, includes context_proposal phase.
-// Otherwise, returns the original three phases for backward compatibility.
+// Note: when context enrichment is enabled (pipeline and fileResolver provided),
+// this includes the "context_proposal" phase. Tests should be updated to expect
+// 4 phases instead of 3 when testing with context enrichment.
 func ChatPhaseIDs() []string {
-	// This function can't know if pipeline/fileResolver are available,
-	// so it always returns all possible phases.
-	// Tests should be updated to expect 4 phases when context enrichment is enabled.
 	return []string{"context_proposal", "intent", "present", "reflect"}
 }
 
 // ChatPhaseLabels returns phase labels for the help surface.
-// Note: when context enrichment is enabled, this includes the "Context" phase.
-// Tests should be updated to expect 4 phases instead of 3 when testing with context enrichment.
 func ChatPhaseLabels() []interaction.PhaseInfo {
 	ids := ChatPhaseIDs()
-	labels := []string{"Context", "Intent", "Present", "Reflect"}
+	labels := []string{"Intent", "Present", "Reflect"}
 	out := make([]interaction.PhaseInfo, len(ids))
 	for i := range ids {
 		out[i] = interaction.PhaseInfo{ID: ids[i], Label: labels[i]}
