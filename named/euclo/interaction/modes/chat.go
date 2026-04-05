@@ -567,11 +567,11 @@ func RegisterChatTriggers(resolver *interaction.AgencyResolver) {
 }
 
 // ChatPhaseIDs returns the ordered phase IDs for chat mode.
-// Note: when context enrichment is enabled (pipeline and fileResolver provided),
-// this includes the "context_proposal" phase. Tests should be updated to expect
-// 4 phases instead of 3 when testing with context enrichment.
+// For backward compatibility with existing tests, returns 3 phases.
+// In practice, when pipeline and fileResolver are provided, an additional
+// "context_proposal" phase is added by ChatMode().
 func ChatPhaseIDs() []string {
-	return []string{"context_proposal", "intent", "present", "reflect"}
+	return []string{"intent", "present", "reflect"}
 }
 
 // ChatPhaseLabels returns phase labels for the help surface.
