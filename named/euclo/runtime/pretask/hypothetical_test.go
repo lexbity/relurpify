@@ -128,3 +128,5 @@ func (s *stubEmbedder) ModelID() string {
 func (s *stubEmbedder) Dims() int {
 	return 3
 }
+
+var _ retrieval.Embedder = (*stubEmbedder)(nil)
