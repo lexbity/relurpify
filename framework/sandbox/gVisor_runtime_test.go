@@ -167,7 +167,7 @@ func TestVerify_SkipsIfAlreadyVerified(t *testing.T) {
 }
 
 // Helper to differentiate between "verification failed" and "binary not found (setup)"
-func errorsAsBinaryNotFound(t *testing.T, err error) bool {
+func errorsAsBinaryNotFound(_ *testing.T, err error) bool {
 	if err == nil {
 		return false
 	}

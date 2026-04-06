@@ -106,7 +106,7 @@ func TestShellBlacklistCheckEmpty(t *testing.T) {
 // TestShellBlacklistCheckNil tests that Check() on a nil/empty blacklist always returns nil.
 func TestShellBlacklistCheckNil(t *testing.T) {
 	var bl *ShellBlacklist = nil
-	if bl != nil && bl.Check("echo hello") != nil {
+	if bl.Check("echo hello") != nil {
 		t.Error("nil blacklist Check() should return nil")
 	}
 }
@@ -436,10 +436,10 @@ func TestShellBlacklistLargeRules(t *testing.T) {
 	var content strings.Builder
 	content.WriteString("version: 1.0\nrules:\n")
 	for i := 1; i <= 100; i++ {
-		content.WriteString(fmt.Sprintf("  - id: rule-%d\n", i))
-		content.WriteString(fmt.Sprintf("    pattern: \"rule%d.*\"\n", i))
-		content.WriteString(fmt.Sprintf("    reason: \"Rule %d\"\n", i))
-		content.WriteString(fmt.Sprintf("    action: block\n"))
+		fmt.Fprintf(&content, "  - id: rule-%d\n", i)
+		fmt.Fprintf(&content, "    pattern: \"rule%d.*\"\n", i)
+		fmt.Fprintf(&content, "    reason: \"Rule %d\"\n", i)
+		fmt.Fprintf(&content, "    action: block\n")
 	}
 
 	if _, err := tmpFile.Write([]byte(content.String())); err != nil {
