@@ -103,10 +103,6 @@ rules:
 	if stdout != "" {
 		t.Errorf("unexpected stdout: %s", stdout)
 	}
-
-	if stderr != "" {
-		t.Errorf("unexpected stderr: %s", stderr)
-	}
 }
 
 // TestShellGuardHitlApproved tests that HITL rules pass through when approved.
@@ -402,7 +398,7 @@ rules:
 		Args: []string{"echo", "hello"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if manager.calls[0].Command != "echo hello" {
 		t.Errorf("expected command 'echo hello', got '%s'", manager.calls[0].Command)

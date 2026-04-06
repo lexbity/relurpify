@@ -2,7 +2,6 @@ package sandbox
 
 import (
 	"context"
-	"errors"
 	"os/exec"
 	"strings"
 	"sync"
