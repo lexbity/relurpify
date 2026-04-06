@@ -87,31 +87,25 @@ func TestEnforcePolicy_ConcurrentSafe(t *testing.T) {
 
 	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{}}}
 
-	// Launch concurrent calls to EnforcePolicy
-	done := make(chan error, 3)
+	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
+		wg.Add(1)
 		go func(i int) {
+			defer wg.Done()
 			if i%2 == 0 {
-				done <- gt.EnforcePolicy(policy1)
+				_ = gt.EnforcePolicy(policy1)
 			} else {
-				done <- gt.Policy() // Policy reads too, not writes
+				_ = gt.Policy()
 			}
-			close(done)
 		}(i)
 
+		wg.Add(1)
 		go func(i int) {
-			done <- gt.Policy()
-			close(done)
+			defer wg.Done()
+			_ = gt.Policy()
 		}(i)
 	}
-
-	for range done {
-		// Drain goroutines - we expect no deadlocks or crashes here
-	}
-
-	if err := <-done; err != nil && err == nil {
-		t.Fatal("Expected error for empty channel, got nil")
-	}
+	wg.Wait()
 }
 
 func TestPolicy_ReturnsSnapshot(t *testing.T) {
