@@ -28,7 +28,6 @@ full four-layer architecture.
 |-------|--------|--------------|
 | **Euclo** | Primary coding orchestrator — classifies tasks, selects modes, gates phases | [euclo.md](euclo.md) |
 | **Rex** | Nexus-managed distributed runtime with delegate routing | — |
-| **Eternal** | Long-lived background execution | [eternal.md](eternal.md) |
 | **TestFu** | Agent test automation | — |
 
 ## Generic Agent Runtimes
@@ -38,7 +37,6 @@ full four-layer architecture.
 | Architect | Plan once, then execute each step with a focused executor |
 | Blackboard | Shared-state specialist dispatch driven by evolving task state |
 | Chainer | Deterministic linear chain of isolated LLM stages |
-| Eternal | Continuous or long-lived looped execution |
 | GoalCon | Deterministic backward-chaining goal planning |
 | HTN | Hierarchical decomposition using a method library |
 | Pipeline | Typed multi-stage execution using pipeline contracts |

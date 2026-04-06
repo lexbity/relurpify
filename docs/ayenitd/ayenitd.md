@@ -16,7 +16,6 @@ app/dev-agent-cli/      ← CLI entry point — calls ayenitd.Open()
 named/euclo/            ← receives ayenitd.WorkspaceEnvironment
 named/rex/              ← receives ayenitd.WorkspaceEnvironment
 named/testfu/           ← receives ayenitd.WorkspaceEnvironment
-named/eternal/          ← receives ayenitd.WorkspaceEnvironment
 ------------------------------------------------------------
 ayenitd/                  ← composition root + service lifecycle
 ------------------------------------------------------------

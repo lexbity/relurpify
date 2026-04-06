@@ -40,7 +40,7 @@ and provenance cut across those layers rather than replacing one of them:
                        │ WorkspaceEnvironment
 ┌──────────────────────▼───────────────────────────────┐
 │  Named Agent Layer                       named/      │
-│  Euclo (coding) · Rex (distributed) · Eternal ·      │
+│  Euclo (coding) · Rex (distributed) ·      │
 │  TestFu (test automation)                            │
 └──────────────────────┬───────────────────────────────┘
                        │

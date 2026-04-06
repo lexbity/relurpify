@@ -265,8 +265,6 @@ func describeAgentRuntime(agent graph.Agent) (string, string) {
 		return mode, "reflection"
 	case *agents.PlannerAgent:
 		return "plan", "plan-execute-verify"
-	case *agents.EternalAgent:
-		return "loop", "eternal"
 	default:
 		_ = typed
 		return "", ""

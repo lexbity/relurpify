@@ -72,7 +72,7 @@ func TestAgentBuilderBuildsAllSupportedAgentTypes(t *testing.T) {
 
 	for _, agentType := range []string{
 		"react", "architect", "pipeline", "planner", "reflection",
-		"chainer", "htn", "blackboard", "rewoo", "goalcon", "testfu", "eternal",
+		"chainer", "htn", "blackboard", "rewoo", "goalcon", "testfu",
 	} {
 		t.Run(agentType, func(t *testing.T) {
 			agent, err := NewAgentBuilder().WithEnvironment(&env).Build(agentType)

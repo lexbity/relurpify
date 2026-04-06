@@ -90,7 +90,6 @@ Current built-in implementation routing includes:
 - `blackboard`
 - `goalcon`
 - `rewoo`
-- `eternal`
 - `rex`
 
 If your use case fits one of those, prefer a manifest over a new runtime.

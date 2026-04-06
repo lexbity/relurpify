@@ -22,7 +22,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/eternal"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/rex"
 )
@@ -150,8 +149,6 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 		return rewoopkg.New(env), nil
 	case "goalcon":
 		return goalconpkg.New(env, goalconpkg.NewOperatorRegistry()), nil
-	case "eternal":
-		return eternal.New(envToWorkspace(env)), nil
 	case "testfu":
 		if agent, ok := instantiateRegisteredNamedAgent("", "testfu", envToWorkspace(env)); ok {
 			return agent, nil
@@ -173,15 +170,15 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 		agent := reactpkg.New(env)
 		agent.CheckpointPath = paths.CheckpointsDir()
 		return agent
-		case "coding", "euclo":
-			agent := euclo.New(envToWorkspace(env))
-			agent.CheckpointPath = paths.CheckpointsDir()
-			_ = agent.Initialize(env.Config)
-			return agent
-		case "rex":
-			agent := rex.NewWithWorkspace(envToWorkspace(env), workspace)
-			_ = agent.Initialize(env.Config)
-			return agent
+	case "coding", "euclo":
+		agent := euclo.New(envToWorkspace(env))
+		agent.CheckpointPath = paths.CheckpointsDir()
+		_ = agent.Initialize(env.Config)
+		return agent
+	case "rex":
+		agent := rex.NewWithWorkspace(envToWorkspace(env), workspace)
+		_ = agent.Initialize(env.Config)
+		return agent
 	case "reflection":
 		agent := reflectionpkg.New(env, nil)
 		if delegate, ok := agent.Delegate.(*reactpkg.ReActAgent); ok {
@@ -213,8 +210,6 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 		return blackboardpkg.New(env)
 	case "goalcon":
 		return goalconpkg.New(env, goalconpkg.NewOperatorRegistry())
-	case "eternal":
-		return eternal.New(envToWorkspace(env))
 	case "testfu":
 		if agent, ok := instantiateRegisteredNamedAgent(workspace, "testfu", envToWorkspace(env)); ok {
 			return agent

@@ -44,7 +44,7 @@ full four-layer architecture overview, see [architecture.md](architecture.md).
 
 `named/` may own:
 
-- top-level specialized agents (euclo, rex, eternal, testfu)
+- top-level specialized agents (euclo, rex, testfu)
 - agent-specific control schemes, classification, phased execution
 - self-registration with `named/factory`
 - own configuration, state management, and artifact models

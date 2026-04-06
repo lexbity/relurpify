@@ -23,8 +23,6 @@
 //     workflow state for recovery across interruptions.
 //   - PipelineAgent: executes a deterministic sequence of typed pipeline
 //     stages declared via framework/pipeline contracts.
-//   - EternalAgent: long-lived stateful agent designed for persistent
-//     background tasks and continuous monitoring loops.
 //
 // # Orchestration capabilities (relurpic: namespace)
 //
