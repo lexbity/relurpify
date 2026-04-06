@@ -4,6 +4,7 @@
 package sandbox
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -432,12 +433,12 @@ func TestShellBlacklistLargeRules(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	var content strings.Builder
-	content.WriteString(`version: 1.0\nrules:\n`)
+	content.WriteString("version: 1.0\nrules:\n")
 	for i := 1; i <= 100; i++ {
 		content.WriteString(fmt.Sprintf("  - id: rule-%d\n", i))
 		content.WriteString(fmt.Sprintf("    pattern: \"rule%d.*\"\n", i))
-		content.WriteString(`    reason: "Rule %d\n`, i)
-		content.WriteString(fmt.Sprintf("    action: block\n\n"))
+		content.WriteString(fmt.Sprintf("    reason: \"Rule %d\"\n", i))
+		content.WriteString(fmt.Sprintf("    action: block\n"))
 	}
 
 	if _, err := tmpFile.Write([]byte(content.String())); err != nil {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -85,7 +86,6 @@ func TestEnforcePolicy_ConcurrentSafe(t *testing.T) {
 	gt := NewGVisorRuntime(SandboxConfig{})
 
 	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{}}}
-	policy2 := SandboxPolicy{NetworkRules: []NetworkRule{{Host: "final"}}}
 
 	// Launch concurrent calls to EnforcePolicy
 	done := make(chan error, 3)
@@ -204,7 +204,7 @@ func TestVerify_RunsOnlyIfBinariesExist(t *testing.T) {
 		t.Errorf("Verify() failed unexpectedly with binaries present: %v", err)
 	}
 
-	if !gt.config.verified {
+	if !gt.verified {
 		t.Error("Expected runtime to be verified=true after successful Verify() call")
 	}
 }
@@ -253,7 +253,7 @@ func TestVerify_PlatformHintMismatchAnnotates(t *testing.T) {
 		errStr := strings.ToLower(err.Error())
 		// If we get an error due to version string mismatch, check that it doesn't block execution entirely
 		// and the version is annotated with platform hint message. This tests the fallback logic in CheckRunsc.
-		if errors.AsBinaryNotFound(t, nil) { // Check if we hit the expected non-fatal behavior
+		if errorsAsBinaryNotFound(t, nil) { // Check if we hit the expected non-fatal behavior
 			t.Logf("Verify() handled platform mismatch as non-fatal: %v", err)
 		} else {
 			t.Logf("Platform hint mismatch logged via version string: %s", errStr)

@@ -83,7 +83,7 @@ rules:
     reason: "Dangerous command detected"
     action: block`)
 
-	manager := nil // No approver needed for block rules
+	var manager CommandApprover = nil // No approver needed for block rules
 	agentID := "test-agent"
 	guard := NewShellGuard(inner, blacklist, manager, agentID)
 
@@ -92,7 +92,7 @@ rules:
 		Args: []string{"bash", "-c", "dangerous command"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err == nil {
 		t.Error("Run() should return error for blocked rule")
@@ -130,7 +130,7 @@ rules:
 		Args: []string{"bash", "-c", "review command"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err != nil {
 		t.Errorf("Run() should return nil for approved HITL rule: %v", err)
@@ -170,7 +170,7 @@ rules:
 		Args: []string{"bash", "-c", "deny command"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err == nil {
 		t.Error("Run() should return error for denied HITL rule")
@@ -211,7 +211,7 @@ rules:
 		Args: []string{"bash", "-c", "system check"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err == nil || errors.Is(err, fmt.Errorf("shell filter approved [hitl-system-error]")) {
 		t.Error("Run() should return error for HITL approval error")
@@ -236,7 +236,7 @@ rules:
     reason: "Requires HITL approval but none configured"
     action: hitl`)
 
-	manager = nil // No approver
+	var manager CommandApprover = nil // No approver
 	agentID := "test-agent-none"
 	guard := NewShellGuard(inner, blacklist, manager, agentID)
 
@@ -245,7 +245,7 @@ rules:
 		Args: []string{"bash", "-c", "unapproved command"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err == nil {
 		t.Error("Run() should return error for HITL with no approver configured")
@@ -279,7 +279,7 @@ rules:
 		Args: []string{"echo", "hello"}, // Not matching any rule
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err != nil {
 		t.Errorf("Run() should return nil for non-matching rule: %v", err)
@@ -301,7 +301,7 @@ func TestShellGuardNilBlacklist(t *testing.T) {
 	t.Parallel()
 
 	inner := &mockCommandRunner{stdout: "nil blacklist output"}
-	blacklist = nil // Documented as valid
+	var blacklist *ShellBlacklist = nil // Documented as valid
 	manager := newMockCommandApprover(true, nil)
 	agentID := "test-agent-nil"
 	guard := NewShellGuard(inner, blacklist, manager, agentID)
@@ -311,7 +311,7 @@ func TestShellGuardNilBlacklist(t *testing.T) {
 		Args: []string{"any", "command"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err != nil {
 		t.Errorf("Run() should return nil for nil blacklist: %v", err)
@@ -368,7 +368,7 @@ rules:
 		Args: []string{"echo", "hello"},
 	}
 
-	stdout, stderr, err := guard.Run(ctx, req)
+	stdout, _, err := guard.Run(ctx, req)
 
 	if err != nil {
 		t.Logf("Error (expected first match): %v", err)
