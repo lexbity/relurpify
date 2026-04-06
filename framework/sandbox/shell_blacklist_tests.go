@@ -97,7 +97,8 @@ rules:
 
 // TestShellBlacklistCheckEmpty returns correct behavior for empty blacklist.
 func TestShellBlacklistCheckEmpty(t *testing.T) {
-	if bl := &ShellBlacklist{}; bl.Check("echo hello") != nil {
+	bl := &ShellBlacklist{}
+	if bl.Check("echo hello") != nil {
 		t.Error("empty blacklist Check() should return nil on any command")
 	}
 }
