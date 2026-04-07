@@ -1615,55 +1615,267 @@ func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
 
 // Service management methods
 func (r *runtimeAdapter) ListServices() []ServiceInfo {
-	// TODO: Implement service listing
-	return nil
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	// Check if Workspace has ServiceManager
+	if r.rt.Workspace.ServiceManager == nil {
+		return nil
+	}
+	
+	services := r.rt.Workspace.ServiceManager.ListServices()
+	infos := make([]ServiceInfo, 0, len(services))
+	for _, svc := range services {
+		status := ServiceStatusStopped
+		if svc.Running() {
+			status = ServiceStatusRunning
+		}
+		// Check for error state
+		if svc.Error() != nil {
+			status = ServiceStatusError
+		}
+		infos = append(infos, ServiceInfo{
+			ID:     svc.ID(),
+			Status: status,
+		})
+	}
+	return infos
 }
 
 func (r *runtimeAdapter) StopService(id string) error {
-	// TODO: Implement service stopping
-	return fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	if r.rt.Workspace.ServiceManager == nil {
+		return fmt.Errorf("service manager unavailable")
+	}
+	
+	svc := r.rt.Workspace.ServiceManager.GetService(id)
+	if svc == nil {
+		return fmt.Errorf("service %s not found", id)
+	}
+	
+	return svc.Stop()
 }
 
 func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
-	// TODO: Implement service restart
-	return fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	if r.rt.Workspace.ServiceManager == nil {
+		return fmt.Errorf("service manager unavailable")
+	}
+	
+	svc := r.rt.Workspace.ServiceManager.GetService(id)
+	if svc == nil {
+		return fmt.Errorf("service %s not found", id)
+	}
+	
+	// Stop first
+	if err := svc.Stop(); err != nil {
+		return fmt.Errorf("stop service: %w", err)
+	}
+	
+	// Start again
+	return svc.Start(ctx)
 }
 
 func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {
-	// TODO: Implement restart all services
-	return fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	if r.rt.Workspace.ServiceManager == nil {
+		return fmt.Errorf("service manager unavailable")
+	}
+	
+	return r.rt.Workspace.ServiceManager.RestartAll(ctx)
 }
 
 // Archaeology methods
 func (r *runtimeAdapter) LoadActivePlan(ctx context.Context, workflowID string) (*ActivePlanView, error) {
-	// TODO: Implement loading active plan
-	return nil, fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	
+	// Get active plan version
+	planVersion, err := r.rt.ActivePlanVersion(ctx, workflowID)
+	if err != nil {
+		return nil, fmt.Errorf("get active plan version: %w", err)
+	}
+	if planVersion == nil {
+		return nil, nil
+	}
+	
+	// Convert to ActivePlanView
+	view := &ActivePlanView{
+		WorkflowID: workflowID,
+		Title:      planVersion.Plan.Title,
+		UpdatedAt:  planVersion.Plan.UpdatedAt,
+		Steps:      make([]PlanStepInfo, 0, len(planVersion.Plan.StepOrder)),
+	}
+	
+	for _, stepID := range planVersion.Plan.StepOrder {
+		step := planVersion.Plan.Steps[stepID]
+		if step == nil {
+			continue
+		}
+		
+		// Convert step status
+		status := "pending"
+		switch step.Status {
+		case "completed":
+			status = "done"
+		case "in_progress":
+			status = "running"
+		case "failed":
+			status = "failed"
+		case "blocked":
+			status = "blocked"
+		}
+		
+		view.Steps = append(view.Steps, PlanStepInfo{
+			ID:          step.ID,
+			Title:       step.Description,
+			Status:      status,
+			SymbolScope: step.Scope,
+			Anchors:     convertAnchors(step.AnchorDependencies),
+			DependsOn:   step.DependsOn,
+			Attempts:    len(step.History),
+		})
+	}
+	
+	return view, nil
 }
 
 func (r *runtimeAdapter) LoadBlobs(ctx context.Context, workflowID string) ([]BlobEntry, error) {
-	// TODO: Implement loading blobs
-	return nil, fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	
+	var blobs []BlobEntry
+	
+	// Load tensions
+	tensions, err := r.rt.TensionsByWorkflow(ctx, workflowID)
+	if err != nil {
+		return nil, fmt.Errorf("get tensions: %w", err)
+	}
+	for _, tension := range tensions {
+		blobs = append(blobs, BlobEntry{
+			ID:          tension.ID,
+			Kind:        BlobTension,
+			Title:       tension.Title,
+			Description: tension.Description,
+			Severity:    string(tension.Severity),
+			Status:      string(tension.Status),
+			InPlan:      tension.PlanStepID != "",
+			AnchorRefs:  tension.AnchorRefs,
+			StepID:      tension.PlanStepID,
+		})
+	}
+	
+	// Load learning queue
+	learningQueue, err := r.rt.LearningQueueProjection(ctx, workflowID)
+	if err != nil {
+		return nil, fmt.Errorf("get learning queue: %w", err)
+	}
+	if learningQueue != nil {
+		for _, interaction := range learningQueue.PendingLearning {
+			blobs = append(blobs, BlobEntry{
+				ID:          interaction.ID,
+				Kind:        BlobLearning,
+				Title:       interaction.Title,
+				Description: interaction.Description,
+				Status:      string(interaction.Status),
+				InPlan:      interaction.PlanStepID != "",
+				StepID:      interaction.PlanStepID,
+			})
+		}
+	}
+	
+	// TODO: Load patterns - need to check how to get patterns for workflow
+	// For now, we'll skip patterns
+	
+	return blobs, nil
 }
 
 func (r *runtimeAdapter) AddBlobToPlan(ctx context.Context, workflowID string, blobID string) error {
-	// TODO: Implement adding blob to plan
-	return fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	
+	// This would need to call a method on the agent to add blob to plan
+	// For now, return not implemented
+	return fmt.Errorf("adding blob to plan not yet implemented")
 }
 
 func (r *runtimeAdapter) RemoveBlobFromPlan(ctx context.Context, workflowID string, blobID string) error {
-	// TODO: Implement removing blob from plan
-	return fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	
+	// This would need to call a method on the agent to remove blob from plan
+	// For now, return not implemented
+	return fmt.Errorf("removing blob from plan not yet implemented")
 }
 
 // Context file management
 func (r *runtimeAdapter) AddFileToContext(path string) error {
-	// TODO: Implement adding file to context
-	return fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	
+	// Add to context in memory
+	if r.rt.Context != nil {
+		// Get current context files
+		var files []string
+		if current, ok := r.rt.Context.Get("context.confirmed_files"); ok {
+			if fileList, ok := current.([]string); ok {
+				files = fileList
+			}
+		}
+		
+		// Check if already exists
+		for _, f := range files {
+			if f == path {
+				return nil // Already in context
+			}
+		}
+		
+		// Add to list
+		files = append(files, path)
+		r.rt.Context.Set("context.confirmed_files", files)
+	}
+	
+	return nil
 }
 
 func (r *runtimeAdapter) DropFileFromContext(path string) error {
-	// TODO: Implement dropping file from context
-	return fmt.Errorf("not implemented")
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	
+	// Remove from context in memory
+	if r.rt.Context != nil {
+		// Get current context files
+		var files []string
+		if current, ok := r.rt.Context.Get("context.confirmed_files"); ok {
+			if fileList, ok := current.([]string); ok {
+				files = fileList
+			}
+		}
+		
+		// Filter out the path
+		newFiles := make([]string, 0, len(files))
+		for _, f := range files {
+			if f != path {
+				newFiles = append(newFiles, f)
+			}
+		}
+		
+		r.rt.Context.Set("context.confirmed_files", newFiles)
+	}
+	
+	return nil
 }
 
 func (r *runtimeAdapter) QueryPatternProposals(scope string) ([]PatternProposalInfo, error) {
@@ -2168,6 +2380,21 @@ func mapPlanAnchors(ids []string) []AnchorRef {
 			continue
 		}
 		out = append(out, AnchorRef{Name: id, Status: "active"})
+	}
+	return out
+}
+
+func convertAnchors(anchorIDs []string) []AnchorRef {
+	out := make([]AnchorRef, 0, len(anchorIDs))
+	for _, id := range anchorIDs {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		out = append(out, AnchorRef{
+			Name:   id,
+			Class:  "technical", // Default class
+			Status: "active",
+		})
 	}
 	return out
 }

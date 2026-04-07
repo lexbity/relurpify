@@ -224,18 +224,65 @@ func (p *ContextProposalPhase) Execute(
 		}, nil
 		
 	case "add":
-		// Open file picker - in a real implementation, this would emit a frame
-		// that the TUI responds to. For now, we'll return the current list
-		// and let the TUI handle the file picker.
-		// The TUI should send a response with selected files in the "selections" field
-		// For this stub, we'll just return to wait for user input
+		// Emit a frame that prompts the TUI to open a file picker
 		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
-			Kind:    interaction.FrameStatus,
+			Kind:    interaction.FrameQuestion,
 			Mode:    "chat",
 			Phase:   "context_proposal",
-			Content: interaction.StatusContent{Message: "File picker would open here. Please select files."},
+			Content: interaction.QuestionContent{
+				Question: "Add files to context",
+				Description: "Select files to add to the context. You can select multiple files.",
+				Options: []interaction.QuestionOption{
+					{ID: "file_picker", Label: "Open file picker", Description: "Browse and select files"},
+					{ID: "cancel", Label: "Cancel", Description: "Return without adding files"},
+				},
+			},
+			Actions: []interaction.ActionSlot{
+				{
+					ID:          "select_files",
+					Label:       "Select Files",
+					Kind:        interaction.ActionKindPrimary,
+					TargetPhase: "context_proposal",
+				},
+				{
+					ID:          "cancel_add",
+					Label:       "Cancel",
+					Kind:        interaction.ActionKindSecondary,
+					TargetPhase: "context_proposal",
+				},
+			},
 		})
-		// Return without advancing to wait for user response with selections
+		
+		// Wait for user response
+		resp, err := mc.Emitter.AwaitResponse(ctx)
+		if err != nil {
+			return interaction.PhaseOutcome{
+				Advance:      true,
+				StateUpdates: map[string]interface{}{},
+			}, nil
+		}
+		
+		if resp.ActionID == "select_files" {
+			// The TUI should have provided selected files in resp.Selections
+			if len(resp.Selections) > 0 {
+				// Add selected files to user selections in state
+				currentSelections := getSessionPins(state)
+				newSelections := updateSessionPins(currentSelections, resp.Selections)
+				
+				// Update state with new selections
+				stateUpdates := map[string]interface{}{
+					"selections": newSelections,
+				}
+				
+				// Re-run the phase with updated selections
+				return interaction.PhaseOutcome{
+					Advance:      false, // Stay in same phase to re-run with new selections
+					StateUpdates: stateUpdates,
+				}, nil
+			}
+		}
+		
+		// If cancel or no selections, continue with current state
 		return interaction.PhaseOutcome{
 			Advance:      false,
 			StateUpdates: map[string]interface{}{},

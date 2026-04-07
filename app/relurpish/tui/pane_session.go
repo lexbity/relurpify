@@ -25,6 +25,7 @@ const (
 	liveSectionWorkflows liveSection = iota
 	liveSectionProviders
 	liveSectionApprovals
+	liveSectionServices
 )
 
 // SessionPane displays workspace files, session changes, and live diagnostics.
@@ -50,10 +51,12 @@ type SessionPane struct {
 	workflows   []WorkflowInfo
 	providers   []LiveProviderInfo
 	approvals   []ApprovalInfo
+	services    []ServiceInfo
 	liveSection liveSection
 	workflowSel int
 	providerSel int
 	approvalSel int
+	serviceSel  int
 	workflow    *WorkflowDetails
 	provider    *LiveProviderDetail
 	approval    *ApprovalDetail
@@ -99,6 +102,12 @@ func (p *SessionPane) SetLiveSnapshot(d DiagnosticsInfo, workflows []WorkflowInf
 	p.workflows = append([]WorkflowInfo(nil), workflows...)
 	p.providers = append([]LiveProviderInfo(nil), providers...)
 	p.approvals = append([]ApprovalInfo(nil), approvals...)
+	
+	// Load services
+	if p.runtime != nil {
+		p.services = p.runtime.ListServices()
+	}
+	
 	if p.workflowSel >= len(p.workflows) {
 		p.workflowSel = max(0, len(p.workflows)-1)
 	}
@@ -107,6 +116,9 @@ func (p *SessionPane) SetLiveSnapshot(d DiagnosticsInfo, workflows []WorkflowInf
 	}
 	if p.approvalSel >= len(p.approvals) {
 		p.approvalSel = max(0, len(p.approvals)-1)
+	}
+	if p.serviceSel >= len(p.services) {
+		p.serviceSel = max(0, len(p.services)-1)
 	}
 	p.refreshLiveDetails()
 }
@@ -147,13 +159,37 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 		if p.activeSubTab == SubTabSessionLive {
 			switch msg.String() {
 			case "tab", "right", "l":
-				p.liveSection = (p.liveSection + 1) % 3
+				p.liveSection = (p.liveSection + 1) % 4
 			case "shift+tab", "left", "h":
-				p.liveSection = (p.liveSection + 2) % 3
+				p.liveSection = (p.liveSection + 3) % 4
 			case "up", "k":
 				p.moveLiveSelection(-1)
 			case "down", "j":
 				p.moveLiveSelection(1)
+			case "s":
+				if p.liveSection == liveSectionServices && p.runtime != nil {
+					if p.serviceSel >= 0 && p.serviceSel < len(p.services) {
+						serviceID := p.services[p.serviceSel].ID
+						if err := p.runtime.StopService(serviceID); err != nil {
+							// Handle error
+						}
+					}
+				}
+			case "r":
+				if p.liveSection == liveSectionServices && p.runtime != nil {
+					if p.serviceSel >= 0 && p.serviceSel < len(p.services) {
+						serviceID := p.services[p.serviceSel].ID
+						if err := p.runtime.RestartService(context.Background(), serviceID); err != nil {
+							// Handle error
+						}
+					}
+				}
+			case "R":
+				if p.liveSection == liveSectionServices && p.runtime != nil {
+					if err := p.runtime.RestartAllServices(context.Background()); err != nil {
+						// Handle error
+					}
+				}
 			}
 			return p, nil
 		}
@@ -488,6 +524,18 @@ func (p *SessionPane) moveLiveSelection(delta int) {
 		}
 		if p.approvalSel >= len(p.approvals) {
 			p.approvalSel = len(p.approvals) - 1
+		}
+		p.refreshLiveDetails()
+	case liveSectionServices:
+		if len(p.services) == 0 {
+			return
+		}
+		p.serviceSel += delta
+		if p.serviceSel < 0 {
+			p.serviceSel = 0
+		}
+		if p.serviceSel >= len(p.services) {
+			p.serviceSel = len(p.services) - 1
 		}
 		p.refreshLiveDetails()
 	}
