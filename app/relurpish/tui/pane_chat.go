@@ -9,8 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/lexcodex/relurpify/framework/core"
 )
 
@@ -68,6 +71,13 @@ type ChatPane struct {
 	// compact run tracking: set by rootHandleCompact, cleared on completion
 	compactRunID    string
 	compactMsgCount int
+
+	// Context sidebar state
+	showSidebar      bool
+	sidebarWidth     int
+	sidebarCursor    int
+	sidebarViewport  viewport.Model
+	contextEntries   []ContextSidebarEntry
 }
 
 // NewChatPane initializes the ChatPane. The feed is created but not sized yet.
@@ -77,17 +87,30 @@ func NewChatPane(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *No
 
 	svc := hitlService(rt)
 
-	return &ChatPane{
-		feed:         NewFeed(),
-		spinner:      sp,
-		runStates:    make(map[string]*RunState),
-		context:      ctx,
-		session:      sess,
-		notifQ:       notifQ,
-		hitlSvc:      svc,
-		runtime:      rt,
-		expandTarget: "thinking",
+	// Initialize sidebar viewport
+	vp := viewport.New(0, 0)
+	vp.KeyMap = viewport.KeyMap{
+		Up:   key.NewBinding(key.WithKeys("up", "k")),
+		Down: key.NewBinding(key.WithKeys("down", "j")),
 	}
+
+	return &ChatPane{
+		feed:            NewFeed(),
+		spinner:         sp,
+		runStates:       make(map[string]*RunState),
+		context:         ctx,
+		session:         sess,
+		notifQ:          notifQ,
+		hitlSvc:         svc,
+		runtime:         rt,
+		expandTarget:    "thinking",
+		showSidebar:     false,
+		sidebarWidth:    30,
+		sidebarCursor:   0,
+		sidebarViewport: vp,
+		contextEntries:  []ContextSidebarEntry{},
+	}
+}
 }
 
 // SetSubTab updates the active chat subtab and adjusts execution policy.
@@ -116,7 +139,20 @@ func (p *ChatPane) Cleanup() {
 func (p *ChatPane) SetSize(w, h int) {
 	p.width = w
 	p.height = h
-	p.feed.SetSize(w, h)
+	
+	// Calculate available width for feed (accounting for sidebar)
+	feedWidth := w
+	if p.showSidebar && w > 90 {
+		feedWidth = w - p.sidebarWidth
+	}
+	p.feed.SetSize(feedWidth, h)
+	
+	// Update sidebar viewport
+	if p.showSidebar {
+		p.sidebarViewport.Width = p.sidebarWidth
+		p.sidebarViewport.Height = h - 2 // Leave room for header
+		p.updateSidebarContent()
+	}
 }
 
 // Undo reverts the feed to the previous snapshot state.
@@ -221,6 +257,25 @@ func (p *ChatPane) Update(msg tea.Msg) (ChatPaner, tea.Cmd) {
 		p.addSystemMessage(msg.Text)
 		return p, nil
 
+	case tea.KeyMsg:
+		// Handle sidebar keys when sidebar is shown
+		if p.showSidebar && p.width > 90 {
+			switch msg.String() {
+			case "ctrl+]":
+				p.ToggleSidebar()
+				return p, nil
+			case "up", "k", "down", "j", "x", "d", "a":
+				if cmd := p.HandleSidebarKey(msg.String()); cmd != nil {
+					return p, cmd
+				}
+				return p, nil
+			}
+		}
+		// Handle sidebar toggle
+		if msg.String() == "ctrl+]" {
+			p.ToggleSidebar()
+			return p, nil
+		}
 	case tea.MouseMsg:
 		f, cmd := p.feed.Update(msg)
 		p.feed = f
@@ -231,7 +286,15 @@ func (p *ChatPane) Update(msg tea.Msg) (ChatPaner, tea.Cmd) {
 
 // View renders the feed (input bar is rendered by root).
 func (p *ChatPane) View() string {
-	return p.feed.View()
+	if !p.showSidebar || p.width <= 90 {
+		return p.feed.View()
+	}
+	
+	// Render with sidebar
+	feedView := p.feed.View()
+	sidebarView := p.renderSidebar()
+	
+	return lipgloss.JoinHorizontal(lipgloss.Top, feedView, sidebarView)
 }
 
 // HandleInputSubmit processes text submitted from the input bar.
@@ -468,6 +531,172 @@ func (p *ChatPane) addSystemMessage(text string) {
 		Content:   MessageContent{Text: text},
 	}
 	p.feed.AppendMessage(msg)
+}
+
+// updateSidebarContent refreshes the sidebar entries from context
+func (p *ChatPane) updateSidebarContent() {
+	if p.context == nil {
+		p.contextEntries = []ContextSidebarEntry{}
+		return
+	}
+	
+	// Convert context files to sidebar entries
+	entries := make([]ContextSidebarEntry, 0, len(p.context.Files))
+	for _, file := range p.context.Files {
+		// Determine insertion action (simplified - would need actual logic)
+		insertionAction := "direct"
+		if strings.HasSuffix(file, ".md") || strings.HasSuffix(file, ".txt") {
+			insertionAction = "direct"
+		} else if strings.HasSuffix(file, ".go") || strings.HasSuffix(file, ".py") {
+			insertionAction = "direct"
+		} else {
+			insertionAction = "metadata-only"
+		}
+		
+		// Check if it's a session pin (simplified)
+		isPin := false
+		if p.session != nil && strings.Contains(file, p.session.Workspace) {
+			isPin = true
+		}
+		
+		entries = append(entries, ContextSidebarEntry{
+			Path:            file,
+			InsertionAction: insertionAction,
+			IsPin:           isPin,
+		})
+	}
+	p.contextEntries = entries
+	
+	// Update viewport content
+	content := p.renderSidebarContent()
+	p.sidebarViewport.SetContent(content)
+}
+
+// renderSidebarContent generates the sidebar content
+func (p *ChatPane) renderSidebarContent() string {
+	var b strings.Builder
+	
+	b.WriteString(sectionHeaderStyle.Render("Context") + "\n")
+	b.WriteString(dimStyle.Render(strings.Repeat("─", p.sidebarWidth-2)) + "\n")
+	
+	if len(p.contextEntries) == 0 {
+		b.WriteString(dimStyle.Render("No files in context") + "\n")
+	} else {
+		for i, entry := range p.contextEntries {
+			line := p.renderSidebarEntry(entry, i == p.sidebarCursor)
+			b.WriteString(line + "\n")
+		}
+	}
+	
+	b.WriteString("\n" + dimStyle.Render(strings.Repeat("─", p.sidebarWidth-2)) + "\n")
+	b.WriteString(dimStyle.Render("[a] add  [x] remove"))
+	
+	return b.String()
+}
+
+// renderSidebarEntry renders a single sidebar entry
+func (p *ChatPane) renderSidebarEntry(entry ContextSidebarEntry, selected bool) string {
+	// Format path for display
+	displayPath := entry.Path
+	if len(displayPath) > p.sidebarWidth-10 {
+		displayPath = "..." + displayPath[len(displayPath)-(p.sidebarWidth-10):]
+	}
+	
+	// Add pin indicator
+	prefix := "  "
+	if entry.IsPin {
+		prefix = "· "
+	}
+	
+	// Add insertion action badge
+	badge := ""
+	switch entry.InsertionAction {
+	case "direct":
+		badge = "[dir]"
+	case "summarized":
+		badge = "[sum]"
+	case "metadata-only":
+		badge = "[ref]"
+	}
+	
+	line := fmt.Sprintf("%s%s %s", prefix, displayPath, dimStyle.Render(badge))
+	
+	if selected {
+		return panelItemActiveStyle.Render(line)
+	}
+	return panelItemStyle.Render(line)
+}
+
+// renderSidebar renders the entire sidebar
+func (p *ChatPane) renderSidebar() string {
+	return lipgloss.NewStyle().
+		Width(p.sidebarWidth).
+		Height(p.height).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(0, 1).
+		Render(p.sidebarViewport.View())
+}
+
+// ToggleSidebar shows/hides the context sidebar
+func (p *ChatPane) ToggleSidebar() {
+	p.showSidebar = !p.showSidebar
+	p.SetSize(p.width, p.height) // Recalculate sizes
+}
+
+// AddFileToSidebar adds a file to the context and updates sidebar
+func (p *ChatPane) AddFileToSidebar(path string) error {
+	if p.context == nil {
+		return fmt.Errorf("context unavailable")
+	}
+	if err := p.context.AddFile(path); err != nil {
+		return err
+	}
+	p.updateSidebarContent()
+	return nil
+}
+
+// RemoveFileFromSidebar removes a file from context and updates sidebar
+func (p *ChatPane) RemoveFileFromSidebar(path string) {
+	if p.context == nil {
+		return
+	}
+	p.context.RemoveFile(path)
+	p.updateSidebarContent()
+}
+
+// HandleSidebarKey handles key events when sidebar is focused
+func (p *ChatPane) HandleSidebarKey(key string) tea.Cmd {
+	switch key {
+	case "up", "k":
+		if p.sidebarCursor > 0 {
+			p.sidebarCursor--
+			p.sidebarViewport.LineUp(1)
+		}
+	case "down", "j":
+		if p.sidebarCursor < len(p.contextEntries)-1 {
+			p.sidebarCursor++
+			p.sidebarViewport.LineDown(1)
+		}
+	case "x", "d":
+		if p.sidebarCursor >= 0 && p.sidebarCursor < len(p.contextEntries) {
+			entry := p.contextEntries[p.sidebarCursor]
+			p.RemoveFileFromSidebar(entry.Path)
+			// Adjust cursor if needed
+			if p.sidebarCursor >= len(p.contextEntries) {
+				p.sidebarCursor = max(0, len(p.contextEntries)-1)
+			}
+			return func() tea.Msg {
+				return chatSystemMsg{Text: fmt.Sprintf("Removed from context: %s", entry.Path)}
+			}
+		}
+	case "a":
+		// Open file picker (would need integration with input bar)
+		return func() tea.Msg {
+			return chatSystemMsg{Text: "File picker not yet implemented"}
+		}
+	}
+	return nil
 }
 
 // ──────────────────────────────────────────────────────────────

@@ -1001,6 +1001,14 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 	case "@":
 		// File picker: enable file selection mode in input
 		m.inputBar.SetFilePickerMode(true)
+	case "ctrl+]":
+		// Toggle chat context sidebar
+		if m.chat != nil && m.activeTab == TabChat {
+			// We need to cast to *ChatPane to access ToggleSidebar
+			if chatPane, ok := m.chat.(*ChatPane); ok {
+				chatPane.ToggleSidebar()
+			}
+		}
 	case "ctrl+k":
 		// Compact: toggle message compactness in chat feed
 		if m.chat != nil {

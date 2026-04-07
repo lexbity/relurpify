@@ -419,6 +419,13 @@ func normalizePaths(paths []string) []string {
 	return out
 }
 
+// ContextSidebarEntry represents a file in the chat context sidebar
+type ContextSidebarEntry struct {
+	Path            string
+	InsertionAction string // "direct" | "summarized" | "metadata-only"
+	IsPin           bool   // session pin vs per-turn confirmed
+}
+
 // ServiceInfo represents a service in the ayenitd service manager
 type ServiceInfo struct {
 	ID     string

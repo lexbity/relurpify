@@ -15,13 +15,14 @@ type globalKeyMap struct {
 	TabPrev key.Binding
 
 	// Chat operations
-	Undo      key.Binding
-	Redo      key.Binding
-	ScrollUp  key.Binding
+	Undo       key.Binding
+	Redo       key.Binding
+	ScrollUp   key.Binding
 	ScrollDown key.Binding
-	PageUp    key.Binding
+	PageUp     key.Binding
 	FilePicker key.Binding
-	Compact   key.Binding
+	Compact    key.Binding
+	ToggleSidebar key.Binding
 
 	// UI toggles
 	ToggleBar key.Binding
@@ -41,13 +42,14 @@ var GlobalKeys = globalKeyMap{
 	TabPrev: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev tab")),
 
 	// Chat operations
-	Undo:       key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("ctrl+z", "undo")),
-	Redo:       key.NewBinding(key.WithKeys("ctrl+y"), key.WithHelp("ctrl+y", "redo")),
-	ScrollUp:   key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "scroll up")),
-	ScrollDown: key.NewBinding(key.WithKeys("pagedown"), key.WithHelp("pagedown", "scroll down")),
-	PageUp:     key.NewBinding(key.WithKeys("pageup"), key.WithHelp("pageup", "page up")),
-	FilePicker: key.NewBinding(key.WithKeys("@"), key.WithHelp("@", "file picker")),
-	Compact:    key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "compact")),
+	Undo:         key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("ctrl+z", "undo")),
+	Redo:         key.NewBinding(key.WithKeys("ctrl+y"), key.WithHelp("ctrl+y", "redo")),
+	ScrollUp:     key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "scroll up")),
+	ScrollDown:   key.NewBinding(key.WithKeys("pagedown"), key.WithHelp("pagedown", "scroll down")),
+	PageUp:       key.NewBinding(key.WithKeys("pageup"), key.WithHelp("pageup", "page up")),
+	FilePicker:   key.NewBinding(key.WithKeys("@"), key.WithHelp("@", "file picker")),
+	Compact:      key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "compact")),
+	ToggleSidebar: key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "toggle sidebar")),
 
 	// UI toggles
 	ToggleBar:  key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "toggle title")),
@@ -81,7 +83,7 @@ func (k globalKeyMap) FullHelp() [][]key.Binding {
 		// Chat operations
 		{k.Undo, k.Redo},
 		{k.ScrollUp, k.ScrollDown, k.PageUp},
-		{k.FilePicker, k.Compact},
+		{k.FilePicker, k.Compact, k.ToggleSidebar},
 
 		// UI toggles and search
 		{k.ToggleBar, k.SearchMode},

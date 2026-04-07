@@ -239,6 +239,13 @@ func rootHandleAdd(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			if m.sharedCtx != nil {
 				m.sharedCtx.AddFile(path)
 			}
+			// Update chat sidebar if visible
+			if m.chat != nil {
+				// We need to cast to *ChatPane to access AddFileToSidebar
+				if chatPane, ok := m.chat.(*ChatPane); ok {
+					chatPane.AddFileToSidebar(path)
+				}
+			}
 		}
 	} else if m.chat != nil {
 		return m, m.chat.AddFile(path)
@@ -261,10 +268,23 @@ func rootHandleRemove(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			if m.sharedCtx != nil {
 				m.sharedCtx.RemoveFile(path)
 			}
+			// Update chat sidebar if visible
+			if m.chat != nil {
+				// We need to cast to *ChatPane to access RemoveFileFromSidebar
+				if chatPane, ok := m.chat.(*ChatPane); ok {
+					chatPane.RemoveFileFromSidebar(path)
+				}
+			}
 		}
 	} else if m.sharedCtx != nil {
 		m.sharedCtx.RemoveFile(path)
 		m.addSystemMessage(fmt.Sprintf("Removed from context: %s", path))
+		// Update chat sidebar if visible
+		if m.chat != nil {
+			if chatPane, ok := m.chat.(*ChatPane); ok {
+				chatPane.RemoveFileFromSidebar(path)
+			}
+		}
 	}
 	return m, nil
 }
