@@ -137,6 +137,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "guidance", Aliases: []string{"gd"}, Description: "Show pending guidance requests", Usage: "/guidance", Handler: rootHandleGuidance},
 		{Name: "deferred", Aliases: []string{"df"}, Description: "Show deferred guidance observations", Usage: "/deferred", Handler: rootHandleDeferred},
 		{Name: "queue", Aliases: []string{"qtask"}, Description: "Queue a task for sequential execution", Usage: "/queue <instruction>", Handler: rootHandleQueueTask},
+		{Name: "service", Aliases: []string{"svc"}, Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabSession}},
 	} {
 		r.Register(cmd)
 	}
@@ -909,6 +910,63 @@ func savePolicyCmd(rt RuntimeAdapter, action string) tea.Cmd {
 			return chatSystemMsg{Text: fmt.Sprintf("Failed to save policy for %s: %v", toolName, err)}
 		}
 		return chatSystemMsg{Text: fmt.Sprintf("Policy for '%s' saved to manifest (always allow)", toolName)}
+	}
+}
+
+// rootHandleService handles service management commands
+func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if len(args) < 1 {
+		m.addSystemMessage("Usage: /service <stop|restart|restart-all> <id>")
+		return m, nil
+	}
+	
+	action := strings.ToLower(args[0])
+	if m.runtime == nil {
+		m.addSystemMessage("Runtime unavailable")
+		return m, nil
+	}
+	
+	switch action {
+	case "stop":
+		if len(args) < 2 {
+			m.addSystemMessage("Usage: /service stop <service-id>")
+			return m, nil
+		}
+		serviceID := args[1]
+		return m, func() tea.Msg {
+			err := m.runtime.StopService(serviceID)
+			if err != nil {
+				return chatSystemMsg{Text: fmt.Sprintf("Failed to stop service %s: %v", serviceID, err)}
+			}
+			return chatSystemMsg{Text: fmt.Sprintf("Service %s stopped", serviceID)}
+		}
+		
+	case "restart":
+		if len(args) < 2 {
+			m.addSystemMessage("Usage: /service restart <service-id>")
+			return m, nil
+		}
+		serviceID := args[1]
+		return m, func() tea.Msg {
+			err := m.runtime.RestartService(context.Background(), serviceID)
+			if err != nil {
+				return chatSystemMsg{Text: fmt.Sprintf("Failed to restart service %s: %v", serviceID, err)}
+			}
+			return chatSystemMsg{Text: fmt.Sprintf("Service %s restarted", serviceID)}
+		}
+		
+	case "restart-all":
+		return m, func() tea.Msg {
+			err := m.runtime.RestartAllServices(context.Background())
+			if err != nil {
+				return chatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
+			}
+			return chatSystemMsg{Text: "All services restarted"}
+		}
+		
+	default:
+		m.addSystemMessage("Unknown service action. Use: stop, restart, restart-all")
+		return m, nil
 	}
 }
 

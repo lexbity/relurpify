@@ -471,20 +471,33 @@ func (p *SessionPane) viewLive() string {
 	if d.LiveProviders > 0 {
 		b.WriteString(dimStyle.Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
 	}
+	
+	// Build the panels
+	panels := []string{
+		plannerPanel("Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
+		plannerPanel("Workflows", widths[1], plannerList(p.liveWorkflowLines(), p.workflowSel, p.height-12)),
+	}
+	
+	// Add services panel if we're in services section or show combined panel
+	if p.liveSection == liveSectionServices {
+		panels = append(panels, plannerPanel("Services", widths[2], 
+			sectionHeaderStyle.Render("Services"),
+			plannerList(p.liveServiceLines(), p.serviceSel, 8),
+		))
+	} else {
+		panels = append(panels, plannerPanel("Providers / Approvals", widths[2],
+			sectionHeaderStyle.Render("Providers"),
+			plannerList(p.liveProviderLines(), p.providerSel, 4),
+			"",
+			sectionHeaderStyle.Render("Approvals"),
+			plannerList(p.liveApprovalLines(), p.approvalSel, 4),
+		))
+	}
+	
 	return strings.Join([]string{
-		lipgloss.JoinHorizontal(lipgloss.Top,
-			plannerPanel("Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
-			plannerPanel("Workflows", widths[1], plannerList(p.liveWorkflowLines(), p.workflowSel, p.height-12)),
-			plannerPanel("Providers / Approvals", widths[2],
-				sectionHeaderStyle.Render("Providers"),
-				plannerList(p.liveProviderLines(), p.providerSel, 4),
-				"",
-				sectionHeaderStyle.Render("Approvals"),
-				plannerList(p.liveApprovalLines(), p.approvalSel, 4),
-			),
-		),
+		lipgloss.JoinHorizontal(lipgloss.Top, panels...),
 		plannerPanel("Detail", p.width, p.liveDetailLines()...),
-		dimStyle.Render("tab/shift+tab switch focus  ↑↓ navigate"),
+		dimStyle.Render("tab/shift+tab switch focus  ↑↓ navigate  s=stop  r=restart  R=restart-all (services)"),
 	}, "\n")
 }
 
@@ -618,6 +631,32 @@ func (p *SessionPane) liveApprovalLines() []string {
 	return lines
 }
 
+func (p *SessionPane) liveServiceLines() []string {
+	if len(p.services) == 0 {
+		return []string{dimStyle.Render("no services")}
+	}
+	lines := make([]string, 0, len(p.services))
+	for i, service := range p.services {
+		statusBadge := ""
+		switch service.Status {
+		case ServiceStatusRunning:
+			statusBadge = completedStyle.Render("[running]")
+		case ServiceStatusStopped:
+			statusBadge = dimStyle.Render("[stopped]")
+		case ServiceStatusError:
+			statusBadge = diffRemoveStyle.Render("[error]")
+		default:
+			statusBadge = dimStyle.Render("[unknown]")
+		}
+		line := fmt.Sprintf("%-20s %s", service.ID, statusBadge)
+		if p.liveSection == liveSectionServices && i == p.serviceSel {
+			line = panelItemActiveStyle.Render("  " + line)
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
 func (p *SessionPane) liveDetailLines() []string {
 	switch p.liveSection {
 	case liveSectionWorkflows:
@@ -679,6 +718,31 @@ func (p *SessionPane) liveDetailLines() []string {
 			dimStyle.Render("Recoverability") + "  " + fallback(provider.Recoverability, "n/a"),
 			dimStyle.Render("Capabilities") + "  " + joinOrNA(provider.CapabilityIDs),
 		}
+	case liveSectionServices:
+		if len(p.services) == 0 {
+			return []string{dimStyle.Render("No services available.")}
+		}
+		if p.serviceSel >= 0 && p.serviceSel < len(p.services) {
+			service := p.services[p.serviceSel]
+			statusDesc := ""
+			switch service.Status {
+			case ServiceStatusRunning:
+				statusDesc = "Service is running"
+			case ServiceStatusStopped:
+				statusDesc = "Service is stopped"
+			case ServiceStatusError:
+				statusDesc = "Service is in error state"
+			}
+			return []string{
+				service.ID,
+				"",
+				dimStyle.Render("Status") + "  " + string(service.Status),
+				dimStyle.Render("Description") + "  " + statusDesc,
+				"",
+				dimStyle.Render("Actions") + "  s=stop  r=restart",
+			}
+		}
+		return []string{dimStyle.Render("Select a service for details.")}
 	default:
 		if p.approval != nil {
 			lines := []string{
