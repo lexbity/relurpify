@@ -224,8 +224,114 @@ func (p *ContextProposalPhase) Execute(
 		}, nil
 		
 	case "add":
-		// In a real implementation, we would handle adding files
-		// For now, just confirm with existing files
+		// Open file picker - in a real implementation, this would emit a frame
+		// that the TUI responds to. For now, we'll return the current list
+		// and let the TUI handle the file picker.
+		// The TUI should send a response with selected files in the "selections" field
+		// For this stub, we'll just return to wait for user input
+		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
+			Kind:    interaction.FrameStatus,
+			Mode:    "chat",
+			Phase:   "context_proposal",
+			Content: interaction.StatusContent{Message: "File picker would open here. Please select files."},
+		})
+		// Return without advancing to wait for user response with selections
+		return interaction.PhaseOutcome{
+			Advance:      false,
+			StateUpdates: map[string]interface{}{},
+		}, nil
+		
+	case "remove":
+		// Show current files for removal selection
+		// Build a list of all files in the bundle
+		allFiles := make([]string, 0)
+		for _, file := range bundle.AnchoredFiles {
+			allFiles = append(allFiles, file.Path)
+		}
+		for _, file := range bundle.ExpandedFiles {
+			allFiles = append(allFiles, file.Path)
+		}
+		
+		// Emit a frame showing files that can be removed
+		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
+			Kind:    interaction.FrameCandidates,
+			Mode:    "chat",
+			Phase:   "context_proposal",
+			Content: interaction.CandidatesContent{
+				Candidates: func() []interaction.Candidate {
+					cands := make([]interaction.Candidate, len(allFiles))
+					for i, path := range allFiles {
+						cands[i] = interaction.Candidate{
+							ID:       path,
+							Summary:  path,
+							Properties: map[string]string{"type": "file"},
+						}
+					}
+					return cands
+				}(),
+			},
+			Actions: []interaction.ActionSlot{
+				{
+					ID:          "remove_selected",
+					Label:       "Remove Selected",
+					Kind:        interaction.ActionKindPrimary,
+					TargetPhase: "context_proposal",
+				},
+				{
+					ID:          "cancel",
+					Label:       "Cancel",
+					Kind:        interaction.ActionKindSecondary,
+					TargetPhase: "context_proposal",
+				},
+			},
+		})
+		
+		// Wait for user response
+		resp, err := mc.Emitter.AwaitResponse(ctx)
+		if err != nil {
+			return interaction.PhaseOutcome{
+				Advance:      true,
+				StateUpdates: map[string]interface{}{},
+			}, nil
+		}
+		
+		if resp.ActionID == "remove_selected" && len(resp.Selections) > 0 {
+			// Remove selected files from confirmed paths
+			confirmedPaths := make([]string, 0)
+			selectedSet := make(map[string]bool)
+			for _, sel := range resp.Selections {
+				selectedSet[sel] = true
+			}
+			
+			// Keep only files not selected for removal
+			for _, file := range bundle.AnchoredFiles {
+				if !selectedSet[file.Path] {
+					confirmedPaths = append(confirmedPaths, file.Path)
+				}
+			}
+			for _, file := range bundle.ExpandedFiles {
+				if !selectedSet[file.Path] {
+					confirmedPaths = append(confirmedPaths, file.Path)
+				}
+			}
+			
+			updatedPins := updateSessionPins(sessionPins, confirmedPaths)
+			saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
+
+			stateUpdates := map[string]interface{}{
+				"context.confirmed_files": confirmedPaths,
+				"context.pinned_files":    updatedPins,
+				"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+				"context.pipeline_trace":  bundle.PipelineTrace,
+			}
+
+			return interaction.PhaseOutcome{
+				Advance:      true,
+				StateUpdates: stateUpdates,
+			}, nil
+		}
+		
+		// If cancel or no selections, just continue with current files
 		confirmedPaths := make([]string, 0)
 		for _, file := range bundle.AnchoredFiles {
 			confirmedPaths = append(confirmedPaths, file.Path)
@@ -241,29 +347,6 @@ func (p *ContextProposalPhase) Execute(
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
 			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
-			"context.pipeline_trace":  bundle.PipelineTrace,
-		}
-
-		return interaction.PhaseOutcome{
-			Advance:      true,
-			StateUpdates: stateUpdates,
-		}, nil
-		
-	case "remove":
-		// In a real implementation, we would handle removing files
-		// For now, just confirm with anchored files only
-		confirmedPaths := make([]string, 0)
-		for _, file := range bundle.AnchoredFiles {
-			confirmedPaths = append(confirmedPaths, file.Path)
-		}
-
-		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
-		saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
-
-		stateUpdates := map[string]interface{}{
-			"context.confirmed_files": confirmedPaths,
-			"context.pinned_files":    updatedPins,
-			"context.knowledge_items": bundle.KnowledgeTopic, // Only topic knowledge
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
 

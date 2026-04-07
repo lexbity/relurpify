@@ -189,6 +189,7 @@ func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
 		SubTabs: []SubTabDefinition{
 			{SubTabSessionLive, "live"},
 			{SubTabSessionTasks, "tasks"},
+			{SubTabSessionServices, "services"},
 			{SubTabSessionSettings, "settings"},
 		},
 	})

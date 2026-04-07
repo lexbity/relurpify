@@ -125,6 +125,19 @@ type RuntimeAdapter interface {
 	// the agent mode, tool enablement, or context strategy accordingly.
 	// The TUI continues regardless of whether this call returns an error.
 	ApplyChatPolicy(subtab SubTabID) error
+	// Service management methods for Phase 1
+	ListServices() []ServiceInfo
+	StopService(id string) error
+	RestartService(ctx context.Context, id string) error
+	RestartAllServices(ctx context.Context) error
+	// Archaeology methods for Phase 1
+	LoadActivePlan(ctx context.Context, workflowID string) (*ActivePlanView, error)
+	LoadBlobs(ctx context.Context, workflowID string) ([]BlobEntry, error)
+	AddBlobToPlan(ctx context.Context, workflowID string, blobID string) error
+	RemoveBlobFromPlan(ctx context.Context, workflowID string, blobID string) error
+	// Context file management
+	AddFileToContext(path string) error
+	DropFileFromContext(path string) error
 }
 
 type runtimeAdapter struct {
@@ -1598,6 +1611,59 @@ func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
 	// propagating the mode hint via metadata on the next ExecuteInstruction
 	// call (which happens via buildMetadata in ChatPane). Nothing to do here.
 	return nil
+}
+
+// Service management methods
+func (r *runtimeAdapter) ListServices() []ServiceInfo {
+	// TODO: Implement service listing
+	return nil
+}
+
+func (r *runtimeAdapter) StopService(id string) error {
+	// TODO: Implement service stopping
+	return fmt.Errorf("not implemented")
+}
+
+func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
+	// TODO: Implement service restart
+	return fmt.Errorf("not implemented")
+}
+
+func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {
+	// TODO: Implement restart all services
+	return fmt.Errorf("not implemented")
+}
+
+// Archaeology methods
+func (r *runtimeAdapter) LoadActivePlan(ctx context.Context, workflowID string) (*ActivePlanView, error) {
+	// TODO: Implement loading active plan
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (r *runtimeAdapter) LoadBlobs(ctx context.Context, workflowID string) ([]BlobEntry, error) {
+	// TODO: Implement loading blobs
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (r *runtimeAdapter) AddBlobToPlan(ctx context.Context, workflowID string, blobID string) error {
+	// TODO: Implement adding blob to plan
+	return fmt.Errorf("not implemented")
+}
+
+func (r *runtimeAdapter) RemoveBlobFromPlan(ctx context.Context, workflowID string, blobID string) error {
+	// TODO: Implement removing blob from plan
+	return fmt.Errorf("not implemented")
+}
+
+// Context file management
+func (r *runtimeAdapter) AddFileToContext(path string) error {
+	// TODO: Implement adding file to context
+	return fmt.Errorf("not implemented")
+}
+
+func (r *runtimeAdapter) DropFileFromContext(path string) error {
+	// TODO: Implement dropping file from context
+	return fmt.Errorf("not implemented")
 }
 
 func (r *runtimeAdapter) QueryPatternProposals(scope string) ([]PatternProposalInfo, error) {

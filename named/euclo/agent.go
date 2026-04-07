@@ -1637,8 +1637,18 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 		// Determine if we should show confirmation frame
 		showConfirmationFrame := true
 		if a.Config != nil && a.Config.AgentSpec != nil {
-			// placeholder: parse skill_config.context_enrichment.show_confirmation_frame
-			_ = a.Config.AgentSpec
+			// Parse skill_config.context_enrichment.show_confirmation_frame from manifest
+			// The AgentSpec may have skill_config field
+			// For now, we'll check if there's a skill config in the spec
+			if a.Config.AgentSpec.SkillConfig != nil {
+				if sc, ok := a.Config.AgentSpec.SkillConfig["context_enrichment"].(map[string]interface{}); ok {
+					if val, exists := sc["show_confirmation_frame"]; exists {
+						if boolVal, ok := val.(bool); ok {
+							showConfirmationFrame = boolVal
+						}
+					}
+				}
+			}
 		}
 		return modes.ChatMode(emitter, resolver, pipeline, fileResolver, showConfirmationFrame, a.WorkspaceEnv.Memory)
 	})

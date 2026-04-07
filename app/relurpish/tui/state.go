@@ -419,6 +419,49 @@ func normalizePaths(paths []string) []string {
 	return out
 }
 
+// ServiceInfo represents a service in the ayenitd service manager
+type ServiceInfo struct {
+	ID     string
+	Status ServiceStatus // Running | Stopped | Error
+}
+
+type ServiceStatus string
+
+const (
+	ServiceStatusRunning ServiceStatus = "running"
+	ServiceStatusStopped ServiceStatus = "stopped"
+	ServiceStatusError   ServiceStatus = "error"
+)
+
+// ActivePlanView represents a view of the active living plan
+type ActivePlanView struct {
+	WorkflowID string
+	Title      string
+	Steps      []PlanStepInfo
+	UpdatedAt  time.Time
+}
+
+// BlobEntry represents a tension, pattern, or learning item
+type BlobEntry struct {
+	ID          string
+	Kind        BlobKind // BlobTension | BlobPattern | BlobLearning
+	Title       string
+	Description string
+	Severity    string // for tensions: high/med/low
+	Status      string // for tensions: active/accepted/resolved
+	InPlan      bool
+	AnchorRefs  []string
+	StepID      string // set when InPlan is true
+}
+
+type BlobKind string
+
+const (
+	BlobTension  BlobKind = "tension"
+	BlobPattern  BlobKind = "pattern"
+	BlobLearning BlobKind = "learning"
+)
+
 // ─── TUI-safe data types added for the rework (Part 10 / plan-06) ────────────
 
 // CommentRef is a lightweight reference to a pattern comment surfaced in the

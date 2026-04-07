@@ -45,6 +45,7 @@ const (
 	// Session subtabs — universal.
 	SubTabSessionLive     SubTabID = "live"
 	SubTabSessionTasks    SubTabID = "tasks"
+	SubTabSessionServices SubTabID = "services"
 	SubTabSessionSettings SubTabID = "settings"
 )
 

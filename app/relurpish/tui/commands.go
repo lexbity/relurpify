@@ -229,8 +229,19 @@ func rootHandleAdd(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		m.addSystemMessage("Usage: /add <path>")
 		return m, nil
 	}
-	if m.chat != nil {
-		return m, m.chat.AddFile(args[0])
+	path := args[0]
+	if m.runtime != nil {
+		if err := m.runtime.AddFileToContext(path); err != nil {
+			m.addSystemMessage(fmt.Sprintf("Error adding file: %v", err))
+		} else {
+			m.addSystemMessage(fmt.Sprintf("Added to context: %s", path))
+			// Also add to shared context for immediate UI update
+			if m.sharedCtx != nil {
+				m.sharedCtx.AddFile(path)
+			}
+		}
+	} else if m.chat != nil {
+		return m, m.chat.AddFile(path)
 	}
 	return m, nil
 }
@@ -240,9 +251,20 @@ func rootHandleRemove(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		m.addSystemMessage("Usage: /remove <path>")
 		return m, nil
 	}
-	if m.sharedCtx != nil {
-		m.sharedCtx.RemoveFile(args[0])
-		m.addSystemMessage(fmt.Sprintf("Removed from context: %s", args[0]))
+	path := args[0]
+	if m.runtime != nil {
+		if err := m.runtime.DropFileFromContext(path); err != nil {
+			m.addSystemMessage(fmt.Sprintf("Error removing file: %v", err))
+		} else {
+			m.addSystemMessage(fmt.Sprintf("Removed from context: %s", path))
+			// Also remove from shared context for immediate UI update
+			if m.sharedCtx != nil {
+				m.sharedCtx.RemoveFile(path)
+			}
+		}
+	} else if m.sharedCtx != nil {
+		m.sharedCtx.RemoveFile(path)
+		m.addSystemMessage(fmt.Sprintf("Removed from context: %s", path))
 	}
 	return m, nil
 }
