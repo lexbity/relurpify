@@ -27,10 +27,10 @@ type RouteDecision struct {
 
 // ExecutionPlan converts a route decision into execution requirements.
 type ExecutionPlan struct {
-	PrimaryFamily      string
-	Fallbacks          []string
-	RequirePersistence bool
-	RequireRetrieval   bool
+	PrimaryFamily       string
+	Fallbacks           []string
+	RequirePersistence  bool
+	RequireRetrieval    bool
 	RequireVerification bool
 }
 
@@ -54,10 +54,10 @@ func Decide(env envelope.Envelope, class classify.Classification) RouteDecision 
 // BuildExecutionPlan turns a route decision into execution policy.
 func BuildExecutionPlan(decision RouteDecision) ExecutionPlan {
 	return ExecutionPlan{
-		PrimaryFamily:      decision.Family,
-		Fallbacks:          append([]string{}, decision.Fallbacks...),
-		RequirePersistence: decision.RequirePersistence,
-		RequireRetrieval:   decision.RequireRetrieval,
+		PrimaryFamily:       decision.Family,
+		Fallbacks:           append([]string{}, decision.Fallbacks...),
+		RequirePersistence:  decision.RequirePersistence,
+		RequireRetrieval:    decision.RequireRetrieval,
 		RequireVerification: decision.RequireProof,
 	}
 }

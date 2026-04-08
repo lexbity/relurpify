@@ -51,17 +51,17 @@ type ActionLogEntry struct {
 
 // ProofSurface summarizes rex execution for audit and completion.
 type ProofSurface struct {
-	RouteFamily             string   `json:"route_family"`
-	Mode                    string   `json:"mode"`
-	Profile                 string   `json:"profile"`
-	VerificationStatus      string   `json:"verification_status"`
-	VerificationSource      string   `json:"verification_source,omitempty"`
-	VerificationEvidence    bool     `json:"verification_evidence"`
-	SuccessGateReason       string   `json:"success_gate_reason,omitempty"`
-	RecoveryCount           int      `json:"recovery_count"`
-	ArtifactKinds           []string `json:"artifact_kinds,omitempty"`
-	WorkflowRetrieval       bool     `json:"workflow_retrieval"`
-	CompletionAllowed       bool     `json:"completion_allowed"`
+	RouteFamily          string   `json:"route_family"`
+	Mode                 string   `json:"mode"`
+	Profile              string   `json:"profile"`
+	VerificationStatus   string   `json:"verification_status"`
+	VerificationSource   string   `json:"verification_source,omitempty"`
+	VerificationEvidence bool     `json:"verification_evidence"`
+	SuccessGateReason    string   `json:"success_gate_reason,omitempty"`
+	RecoveryCount        int      `json:"recovery_count"`
+	ArtifactKinds        []string `json:"artifact_kinds,omitempty"`
+	WorkflowRetrieval    bool     `json:"workflow_retrieval"`
+	CompletionAllowed    bool     `json:"completion_allowed"`
 }
 
 // CompletionDecision records final gate evaluation.
@@ -101,11 +101,11 @@ func BuildActionLog(decision route.RouteDecision, class classify.Classification,
 // BuildProofSurface builds the proof surface from route and result state.
 func BuildProofSurface(decision route.RouteDecision, result *core.Result, state *core.Context) ProofSurface {
 	proof := ProofSurface{
-		RouteFamily:      decision.Family,
-		Mode:             decision.Mode,
-		Profile:          decision.Profile,
+		RouteFamily:        decision.Family,
+		Mode:               decision.Mode,
+		Profile:            decision.Profile,
 		VerificationStatus: verificationStatus(state),
-		CompletionAllowed: result == nil || result.Error == nil,
+		CompletionAllowed:  result == nil || result.Error == nil,
 	}
 	if state != nil {
 		if evidence := VerificationEvidence(state); evidence.EvidencePresent {

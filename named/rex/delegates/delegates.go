@@ -6,13 +6,13 @@ import (
 
 	architectpkg "github.com/lexcodex/relurpify/agents/architect"
 	blackboardpkg "github.com/lexcodex/relurpify/agents/blackboard"
+	chainerpkg "github.com/lexcodex/relurpify/agents/chainer"
 	goalconpkg "github.com/lexcodex/relurpify/agents/goalcon"
 	htnpkg "github.com/lexcodex/relurpify/agents/htn"
 	pipelinepkg "github.com/lexcodex/relurpify/agents/pipeline"
 	plannerpkg "github.com/lexcodex/relurpify/agents/planner"
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
 	rewoopkg "github.com/lexcodex/relurpify/agents/rewoo"
-	chainerpkg "github.com/lexcodex/relurpify/agents/chainer"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -33,7 +33,9 @@ type agentDelegate struct {
 }
 
 func (d agentDelegate) Family() string { return d.family }
-func (d agentDelegate) BuildGraph(task *core.Task) (*graph.Graph, error) { return d.agent.BuildGraph(task) }
+func (d agentDelegate) BuildGraph(task *core.Task) (*graph.Graph, error) {
+	return d.agent.BuildGraph(task)
+}
 func (d agentDelegate) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
 	return d.agent.Execute(ctx, task, state)
 }

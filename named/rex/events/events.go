@@ -95,12 +95,12 @@ func (DefaultNormalizer) Normalize(event CanonicalEvent) (CanonicalEvent, error)
 
 // MapAdapter normalizes generic map payloads into canonical rex events.
 type MapAdapter struct {
-	NameID       string
-	DefaultType  string
-	TrustClass   string
-	Partition    string
-	Source       string
-	Normalizer   EventNormalizer
+	NameID      string
+	DefaultType string
+	TrustClass  string
+	Partition   string
+	Source      string
+	Normalizer  EventNormalizer
 }
 
 func (a MapAdapter) Name() string {
@@ -166,12 +166,12 @@ func AllowsIngress(event CanonicalEvent) bool {
 func ToEnvelope(event CanonicalEvent) envelope.Envelope {
 	payload := event.Payload
 	meta := map[string]string{
-		"event_type":       event.Type,
-		"event_id":         event.ID,
-		"event_source":     event.Source,
-		"event_partition":  event.Partition,
-		"event_trust":      event.TrustClass,
-		"idempotency_key":  event.IdempotencyKey,
+		"event_type":      event.Type,
+		"event_id":        event.ID,
+		"event_source":    event.Source,
+		"event_partition": event.Partition,
+		"event_trust":     event.TrustClass,
+		"idempotency_key": event.IdempotencyKey,
 	}
 	env := envelope.Envelope{
 		TaskID:             firstNonEmpty(stringValue(payload["task_id"]), event.ID),

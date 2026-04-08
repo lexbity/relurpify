@@ -40,7 +40,7 @@ type workflowKnowledgeLister interface {
 }
 
 type workflowRetrievalResult struct {
-	Text      string                             `json:"text"`
+	Text      string                              `json:"text"`
 	Citations []frameworkretrieval.PackedCitation `json:"citations,omitempty"`
 }
 

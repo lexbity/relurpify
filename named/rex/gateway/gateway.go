@@ -75,12 +75,12 @@ func (g DefaultGateway) Resolve(ctx context.Context, event events.CanonicalEvent
 
 	switch classifyEvent(event.Type) {
 	case SignalDecisionStart:
-			if err := g.ensureStartAllowed(ctx, workflowID); err != nil {
-				return Decision{Decision: SignalDecisionReject, WorkflowID: workflowID, RunID: runID, Reason: "start_rejected"}, err
-			}
-			if g.hasWorkflow(ctx, workflowID) {
-				return Decision{Decision: SignalDecisionSignal, WorkflowID: workflowID, RunID: runID, Reason: "existing_workflow"}, nil
-			}
+		if err := g.ensureStartAllowed(ctx, workflowID); err != nil {
+			return Decision{Decision: SignalDecisionReject, WorkflowID: workflowID, RunID: runID, Reason: "start_rejected"}, err
+		}
+		if g.hasWorkflow(ctx, workflowID) {
+			return Decision{Decision: SignalDecisionSignal, WorkflowID: workflowID, RunID: runID, Reason: "existing_workflow"}, nil
+		}
 		return Decision{Decision: SignalDecisionStart, WorkflowID: workflowID, RunID: runID, Reason: "new_workflow"}, nil
 	case SignalDecisionSignal:
 		if err := g.validateSignalEvent(ctx, workflowID, runID, event); err != nil {
