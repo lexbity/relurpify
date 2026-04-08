@@ -54,6 +54,6 @@ func openRuntimeStores(workspace string) (*db.SQLiteWorkflowStateStore, framewor
 	}
 	// Create a knowledge store
 	knowledgeStore := memory.NewInMemoryKnowledgeStore()
-	
+
 	return workflowStore, planStore, patternStore, commentStore, knowledgeStore, patternDB, nil
 }

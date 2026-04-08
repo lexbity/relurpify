@@ -56,7 +56,7 @@ func (s *ServiceScheduler) LoadJobsFromMemory(ctx context.Context, mem memory.Me
 	if mem == nil {
 		return nil
 	}
-	
+
 	// Search for cron jobs in memory store
 	records, err := mem.Search(ctx, "ayenitd.cron", memory.MemoryScopeProject)
 	if err != nil {
@@ -64,14 +64,14 @@ func (s *ServiceScheduler) LoadJobsFromMemory(ctx context.Context, mem memory.Me
 		log.Printf("scheduler: memory store search not available: %v", err)
 		return nil
 	}
-	
+
 	for _, record := range records {
 		// Each record should have a JSON payload with job definition
 		data := record.Value
 		if data == nil {
 			continue
 		}
-		
+
 		// Try to extract job fields
 		var job ScheduledJob
 		if id, ok := data["id"].(string); ok {
@@ -84,7 +84,7 @@ func (s *ServiceScheduler) LoadJobsFromMemory(ctx context.Context, mem memory.Me
 		} else {
 			continue
 		}
-		
+
 		// Phase 2 contract: action dispatch from memory records MUST go through
 		// the CapabilityRegistry with full provenance tracking. Actions may NOT
 		// be arbitrary Go closures loaded from persisted data — they must be
@@ -95,11 +95,11 @@ func (s *ServiceScheduler) LoadJobsFromMemory(ctx context.Context, mem memory.Me
 			return nil
 		}
 		job.Source = "memory"
-		
+
 		s.Register(job)
 		log.Printf("scheduler: loaded job %s from memory", job.ID)
 	}
-	
+
 	return nil
 }
 
@@ -214,7 +214,7 @@ func cronMatches(cronExpr string, t time.Time) (bool, error) {
 	if len(fields) != 5 {
 		return false, fmt.Errorf("cron expression must have 5 fields")
 	}
-	
+
 	// Parse each field
 	minuteMap, err := parseCronField(fields[0], 0, 59)
 	if err != nil {
@@ -236,7 +236,7 @@ func cronMatches(cronExpr string, t time.Time) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("weekday field: %w", err)
 	}
-	
+
 	// Check if current time matches
 	if !minuteMap[t.Minute()] {
 		return false, nil
@@ -253,7 +253,7 @@ func cronMatches(cronExpr string, t time.Time) (bool, error) {
 	if !weekdayMap[int(t.Weekday())] {
 		return false, nil
 	}
-	
+
 	return true, nil
 }
 
@@ -266,10 +266,10 @@ func (s *ServiceScheduler) Start(ctx context.Context) error {
 	if s.cancel != nil || len(s.jobs) == 0 {
 		return nil
 	}
-	
+
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
-	
+
 	// Start a background goroutine for each job.
 	for _, job := range s.jobs {
 		job := job // capture for closure
@@ -283,7 +283,7 @@ func (s *ServiceScheduler) Start(ctx context.Context) error {
 			}
 		}()
 	}
-	
+
 	log.Printf("scheduler: started with %d jobs", len(s.jobs))
 	return nil
 }
@@ -339,7 +339,7 @@ func runCronJob(ctx context.Context, job ScheduledJob) {
 func (s *ServiceScheduler) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
@@ -354,7 +354,7 @@ func SaveJobToMemory(ctx context.Context, mem memory.MemoryStore, job ScheduledJ
 	if mem == nil {
 		return fmt.Errorf("memory store is nil")
 	}
-	
+
 	key := fmt.Sprintf("ayenitd.cron.%s", job.ID)
 	value := map[string]interface{}{
 		"id":        job.ID,
@@ -363,13 +363,13 @@ func SaveJobToMemory(ctx context.Context, mem memory.MemoryStore, job ScheduledJ
 		"source":    job.Source,
 		// Note: Action cannot be serialized — see Phase 2 contract in LoadJobsFromMemory.
 	}
-	
+
 	// Convert to JSON for storage
 	jsonData, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	
+
 	// Store in memory
 	return mem.Remember(ctx, key, map[string]interface{}{
 		"data": string(jsonData),
