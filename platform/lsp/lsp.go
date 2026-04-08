@@ -133,15 +133,19 @@ func (p *Proxy) clientForFile(file string) (LSPClient, error) {
 
 func (p *Proxy) cached(key string, fetch func() (interface{}, error)) (interface{}, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if entry, ok := p.cache[key]; ok && time.Now().Before(entry.expiration) {
-		return entry.value, nil
+		val := entry.value
+		p.mu.Unlock()
+		return val, nil
 	}
+	p.mu.Unlock()
 	val, err := fetch()
 	if err != nil {
 		return nil, err
 	}
+	p.mu.Lock()
 	p.cache[key] = cacheEntry{value: val, expiration: time.Now().Add(p.ttl)}
+	p.mu.Unlock()
 	return val, nil
 }
 

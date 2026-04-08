@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -111,11 +110,7 @@ func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fauthoriz
 	}
 
 	handler := jsonrpc2.HandlerWithError(func(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) (interface{}, error) {
-		if !req.Notif {
-			return nil, &jsonrpc2.Error{Code: jsonrpc2.CodeMethodNotFound, Message: "method not handled"}
-		}
-		switch req.Method {
-		case "textDocument/publishDiagnostics":
+		if req.Notif && req.Method == "textDocument/publishDiagnostics" {
 			var params protocol.PublishDiagnosticsParams
 			if err := json.Unmarshal(*req.Params, &params); err != nil {
 				return nil, err
@@ -123,10 +118,8 @@ func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fauthoriz
 			client.mu.Lock()
 			client.diagnostics[params.URI] = params.Diagnostics
 			client.mu.Unlock()
-			return nil, nil
-		default:
-			return nil, nil
 		}
+		return nil, nil
 	})
 
 	conn := jsonrpc2.NewConn(ctx, stream, handler)
@@ -343,7 +336,7 @@ func (c *processLSPClient) GetDiagnostics(ctx context.Context, file string) ([]D
 	}
 	uri := protocol.DocumentURI(pathToURI(file))
 	// wait for publishDiagnostics notification
-	deadline := time.After(3 * time.Second)
+	deadline := time.After(diagnosticsWait)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -362,6 +355,8 @@ func (c *processLSPClient) GetDiagnostics(ctx context.Context, file string) ([]D
 		}
 	}
 }
+
+var diagnosticsWait = 3 * time.Second
 
 func (c *processLSPClient) SearchSymbols(ctx context.Context, query string) ([]SymbolInformation, error) {
 	params := protocol.WorkspaceSymbolParams{Query: query}
@@ -463,18 +458,6 @@ func (s *stdioReadWriteCloser) Write(p []byte) (int, error) { return s.writer.Wr
 func (s *stdioReadWriteCloser) Close() error {
 	_ = s.reader.Close()
 	return s.writer.Close()
-}
-
-func pathToURI(path string) string {
-	path = filepath.Clean(path)
-	if runtime.GOOS == "windows" {
-		path = strings.ReplaceAll(path, "\\", "/")
-		return "file:///" + strings.ReplaceAll(path, ":", "%3A")
-	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	return "file://" + path
 }
 
 func uriToPath(uri string) string {
