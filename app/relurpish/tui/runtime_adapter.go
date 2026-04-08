@@ -1768,7 +1768,7 @@ func (r *runtimeAdapter) AddBlobToPlan(ctx context.Context, workflowID string, b
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	
+
 	// This would need to call a method on the agent to add blob to plan
 	// For now, return not implemented
 	return fmt.Errorf("adding blob to plan not yet implemented")
@@ -1778,7 +1778,7 @@ func (r *runtimeAdapter) RemoveBlobFromPlan(ctx context.Context, workflowID stri
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	
+
 	// This would need to call a method on the agent to remove blob from plan
 	// For now, return not implemented
 	return fmt.Errorf("removing blob from plan not yet implemented")
@@ -1789,7 +1789,7 @@ func (r *runtimeAdapter) AddFileToContext(path string) error {
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	
+
 	// Add to context in memory
 	if r.rt.Context != nil {
 		// Get current context files
@@ -1799,19 +1799,19 @@ func (r *runtimeAdapter) AddFileToContext(path string) error {
 				files = fileList
 			}
 		}
-		
+
 		// Check if already exists
 		for _, f := range files {
 			if f == path {
 				return nil // Already in context
 			}
 		}
-		
+
 		// Add to list
 		files = append(files, path)
 		r.rt.Context.Set("context.confirmed_files", files)
 	}
-	
+
 	return nil
 }
 
@@ -1819,7 +1819,7 @@ func (r *runtimeAdapter) DropFileFromContext(path string) error {
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	
+
 	// Remove from context in memory
 	if r.rt.Context != nil {
 		// Get current context files
@@ -1829,7 +1829,7 @@ func (r *runtimeAdapter) DropFileFromContext(path string) error {
 				files = fileList
 			}
 		}
-		
+
 		// Filter out the path
 		newFiles := make([]string, 0, len(files))
 		for _, f := range files {
@@ -1837,10 +1837,10 @@ func (r *runtimeAdapter) DropFileFromContext(path string) error {
 				newFiles = append(newFiles, f)
 			}
 		}
-		
+
 		r.rt.Context.Set("context.confirmed_files", newFiles)
 	}
-	
+
 	return nil
 }
 

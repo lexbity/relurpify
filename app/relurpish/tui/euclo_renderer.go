@@ -395,18 +395,18 @@ func renderHelp(frame interaction.InteractionFrame) string {
 func renderContextProposal(content interaction.ContextProposalContent) string {
 	var b strings.Builder
 	b.WriteString(sectionHeaderStyle.Render("Context Proposal") + "\n")
-	
+
 	if len(content.AnchoredFiles) > 0 {
 		b.WriteString(dimStyle.Render("Anchored Files:") + "\n")
 		for _, file := range content.AnchoredFiles {
-			b.WriteString(fmt.Sprintf("  %s (%s) - %s\n", 
+			b.WriteString(fmt.Sprintf("  %s (%s) - %s\n",
 				filePathStyle.Render(file.Path),
 				file.Source,
 				file.Summary,
 			))
 		}
 	}
-	
+
 	if len(content.ExpandedFiles) > 0 {
 		b.WriteString(dimStyle.Render("Expanded Files:") + "\n")
 		for _, file := range content.ExpandedFiles {
@@ -417,7 +417,7 @@ func renderContextProposal(content interaction.ContextProposalContent) string {
 			))
 		}
 	}
-	
+
 	if len(content.KnowledgeItems) > 0 {
 		b.WriteString(dimStyle.Render("Knowledge Items:") + "\n")
 		for _, item := range content.KnowledgeItems {
@@ -428,11 +428,11 @@ func renderContextProposal(content interaction.ContextProposalContent) string {
 			))
 		}
 	}
-	
+
 	// Add pipeline trace info
 	trace := content.PipelineTrace
 	b.WriteString(dimStyle.Render("Pipeline Trace:") + "\n")
-	b.WriteString(fmt.Sprintf("  Anchors: %d extracted, %d confirmed\n", 
+	b.WriteString(fmt.Sprintf("  Anchors: %d extracted, %d confirmed\n",
 		trace.AnchorsExtracted, trace.AnchorsConfirmed))
 	b.WriteString(fmt.Sprintf("  Stage1: %d code, %d archaeo\n",
 		trace.Stage1CodeResults, trace.Stage1ArchaeoResults))
@@ -443,7 +443,7 @@ func renderContextProposal(content interaction.ContextProposalContent) string {
 	if trace.FallbackUsed {
 		b.WriteString(fmt.Sprintf("  Fallback: %s\n", trace.FallbackReason))
 	}
-	
+
 	return eucloFrameStyle.Render(b.String())
 }
 

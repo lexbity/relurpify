@@ -52,6 +52,9 @@ func TestLocalNexusNodeProviderRegistersProviderScopedCapabilities(t *testing.T)
 	runner := fsandbox.NewLocalCommandRunner(dir, nil)
 	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, capabilities.Close())
+	})
 	registry := capabilities.Registry
 
 	provider, err := NewLocalNexusNodeProvider(registry, NodeRegistrationConfig{

@@ -96,9 +96,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		TelemetryPath:  cfg.TelemetryPath,
 		EventsPath:     cfg.EventsPath,
 		MemoryPath:     cfg.MemoryPath,
-		HITLTimeout: cfg.HITLTimeout,
-		AuditLimit:  cfg.AuditLimit,
-		Sandbox:     cfg.Sandbox,
+		HITLTimeout:    cfg.HITLTimeout,
+		AuditLimit:     cfg.AuditLimit,
+		Sandbox:        cfg.Sandbox,
 	}
 	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg)
 	var deps []DependencyStatus
@@ -246,4 +246,3 @@ func firstNonEmpty(values ...string) string {
 var execLookPath = func(file string) (string, error) {
 	return execLookPathImpl(file)
 }
-

@@ -18,7 +18,6 @@ import (
 	"github.com/lexcodex/relurpify/agents"
 	relurpic "github.com/lexcodex/relurpify/agents/relurpic"
 	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/ayenitd"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	relurpishbindings "github.com/lexcodex/relurpify/archaeo/bindings/relurpish"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
@@ -26,6 +25,7 @@ import (
 	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
+	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -547,6 +547,14 @@ type CapabilityBundle struct {
 	Registry     *capability.Registry
 	IndexManager *ast.IndexManager
 	SearchEngine *search.SearchEngine
+}
+
+// Close releases bundle-owned resources.
+func (b *CapabilityBundle) Close() error {
+	if b == nil || b.IndexManager == nil {
+		return nil
+	}
+	return b.IndexManager.Close()
 }
 
 // BuildBuiltinCapabilityBundle registers builtin tool capabilities scoped to

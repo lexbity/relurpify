@@ -18,11 +18,11 @@ type TitleBar struct {
 	width     int
 
 	// Blob counts — populated when archaeo tab is active via BlobsUpdatedMsg.
-	activeTab     TabID
-	blobTensions  int
-	blobPatterns  int
-	blobLearning  int
-	blobEmojiOn   bool
+	activeTab    TabID
+	blobTensions int
+	blobPatterns int
+	blobLearning int
+	blobEmojiOn  bool
 }
 
 // NewTitleBar creates a TitleBar from session info.

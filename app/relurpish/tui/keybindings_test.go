@@ -398,15 +398,27 @@ func (m *minimalKeybindingTestAdapter) InvokeCapability(context.Context, string,
 func (m *minimalKeybindingTestAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {}
 func (m *minimalKeybindingTestAdapter) Diagnostics() DiagnosticsInfo                     { return DiagnosticsInfo{} }
 func (m *minimalKeybindingTestAdapter) ApplyChatPolicy(SubTabID) error                   { return nil }
-func (m *minimalKeybindingTestAdapter) ListServices() []ServiceInfo                                              { return nil }
-func (m *minimalKeybindingTestAdapter) StopService(string) error                                                 { return nil }
-func (m *minimalKeybindingTestAdapter) RestartService(context.Context, string) error                             { return nil }
-func (m *minimalKeybindingTestAdapter) RestartAllServices(context.Context) error                                 { return nil }
-func (m *minimalKeybindingTestAdapter) LoadActivePlan(context.Context, string) (*ActivePlanView, error)          { return nil, nil }
-func (m *minimalKeybindingTestAdapter) LoadBlobs(context.Context, string) ([]BlobEntry, error)                  { return nil, nil }
-func (m *minimalKeybindingTestAdapter) AddBlobToPlan(context.Context, string, string) error                     { return nil }
-func (m *minimalKeybindingTestAdapter) RemoveBlobFromPlan(context.Context, string, string) error                { return nil }
-func (m *minimalKeybindingTestAdapter) AddFileToContext(string) error                                            { return nil }
-func (m *minimalKeybindingTestAdapter) DropFileFromContext(string) error                                         { return nil }
-func (m *minimalKeybindingTestAdapter) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error)      { return nil, nil }
-func (m *minimalKeybindingTestAdapter) ActivatePlanVersion(context.Context, string, int) error                   { return nil }
+func (m *minimalKeybindingTestAdapter) ListServices() []ServiceInfo                      { return nil }
+func (m *minimalKeybindingTestAdapter) StopService(string) error                         { return nil }
+func (m *minimalKeybindingTestAdapter) RestartService(context.Context, string) error     { return nil }
+func (m *minimalKeybindingTestAdapter) RestartAllServices(context.Context) error         { return nil }
+func (m *minimalKeybindingTestAdapter) LoadActivePlan(context.Context, string) (*ActivePlanView, error) {
+	return nil, nil
+}
+func (m *minimalKeybindingTestAdapter) LoadBlobs(context.Context, string) ([]BlobEntry, error) {
+	return nil, nil
+}
+func (m *minimalKeybindingTestAdapter) AddBlobToPlan(context.Context, string, string) error {
+	return nil
+}
+func (m *minimalKeybindingTestAdapter) RemoveBlobFromPlan(context.Context, string, string) error {
+	return nil
+}
+func (m *minimalKeybindingTestAdapter) AddFileToContext(string) error    { return nil }
+func (m *minimalKeybindingTestAdapter) DropFileFromContext(string) error { return nil }
+func (m *minimalKeybindingTestAdapter) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error) {
+	return nil, nil
+}
+func (m *minimalKeybindingTestAdapter) ActivatePlanVersion(context.Context, string, int) error {
+	return nil
+}

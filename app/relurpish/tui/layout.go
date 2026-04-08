@@ -51,9 +51,9 @@ func (c *ChromeLayout) Recalculate(width, height int) {
 
 // SubTabBar renders the subtab row for the currently active main tab.
 type SubTabBar struct {
-	active   SubTabID
-	subtabs  []SubTabDefinition
-	width    int
+	active  SubTabID
+	subtabs []SubTabDefinition
+	width   int
 }
 
 // NewSubTabBar creates a SubTabBar from a tab definition.

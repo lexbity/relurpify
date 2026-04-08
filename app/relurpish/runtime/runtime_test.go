@@ -137,6 +137,7 @@ func TestBuildCapabilityRegistryDoesNotRegisterGenericExecutionToolsByDefault(t 
 
 	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner)
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, capabilities.Close()) })
 	registry := capabilities.Registry
 	indexManager := capabilities.IndexManager
 	searchEngine := capabilities.SearchEngine
@@ -169,6 +170,7 @@ func TestBuildCapabilityRegistryReturnsUsableSearchEngine(t *testing.T) {
 
 	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner)
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, capabilities.Close()) })
 	searchEngine := capabilities.SearchEngine
 	require.NotNil(t, searchEngine)
 
@@ -191,6 +193,7 @@ func TestBuildCapabilityRegistryContinuesWhenBootstrapContextCanceled(t *testing
 
 	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner, CapabilityRegistryOptions{Context: ctx})
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, capabilities.Close()) })
 	require.NotNil(t, capabilities)
 	require.NotNil(t, capabilities.Registry)
 	require.NotNil(t, capabilities.IndexManager)
@@ -217,6 +220,7 @@ func TestBuildCapabilityRegistrySkipASTIndexSkipsSemanticBootstrap(t *testing.T)
 		SkipASTIndex:   true,
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, capabilities.Close()) })
 	require.NotNil(t, capabilities)
 	require.NotNil(t, capabilities.IndexManager)
 	require.NotNil(t, capabilities.IndexManager.GraphDB)

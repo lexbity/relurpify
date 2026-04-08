@@ -433,7 +433,9 @@ func TestBootstrapAgentRuntimeIndexManagerReachesReActAgent(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		var req struct{ Input []string `json:"input"` }
+		var req struct {
+			Input []string `json:"input"`
+		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

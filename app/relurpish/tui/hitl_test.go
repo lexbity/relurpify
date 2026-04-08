@@ -167,20 +167,30 @@ func (m *minimalHITLRuntimeAdapter) CancelWorkflow(string) error                
 func (m *minimalHITLRuntimeAdapter) InvokeCapability(context.Context, string, map[string]any) (*core.ToolResult, error) {
 	return nil, nil
 }
-func (m *minimalHITLRuntimeAdapter) Diagnostics() DiagnosticsInfo   { return DiagnosticsInfo{} }
-func (m *minimalHITLRuntimeAdapter) ApplyChatPolicy(SubTabID) error { return nil }
-func (m *minimalHITLRuntimeAdapter) ListServices() []ServiceInfo                                              { return nil }
-func (m *minimalHITLRuntimeAdapter) StopService(string) error                                                 { return nil }
-func (m *minimalHITLRuntimeAdapter) RestartService(context.Context, string) error                             { return nil }
-func (m *minimalHITLRuntimeAdapter) RestartAllServices(context.Context) error                                 { return nil }
-func (m *minimalHITLRuntimeAdapter) LoadActivePlan(context.Context, string) (*ActivePlanView, error)          { return nil, nil }
-func (m *minimalHITLRuntimeAdapter) LoadBlobs(context.Context, string) ([]BlobEntry, error)                  { return nil, nil }
-func (m *minimalHITLRuntimeAdapter) AddBlobToPlan(context.Context, string, string) error                     { return nil }
-func (m *minimalHITLRuntimeAdapter) RemoveBlobFromPlan(context.Context, string, string) error                { return nil }
-func (m *minimalHITLRuntimeAdapter) AddFileToContext(string) error                                            { return nil }
-func (m *minimalHITLRuntimeAdapter) DropFileFromContext(string) error                                         { return nil }
-func (m *minimalHITLRuntimeAdapter) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error)      { return nil, nil }
-func (m *minimalHITLRuntimeAdapter) ActivatePlanVersion(context.Context, string, int) error                   { return nil }
+func (m *minimalHITLRuntimeAdapter) Diagnostics() DiagnosticsInfo                 { return DiagnosticsInfo{} }
+func (m *minimalHITLRuntimeAdapter) ApplyChatPolicy(SubTabID) error               { return nil }
+func (m *minimalHITLRuntimeAdapter) ListServices() []ServiceInfo                  { return nil }
+func (m *minimalHITLRuntimeAdapter) StopService(string) error                     { return nil }
+func (m *minimalHITLRuntimeAdapter) RestartService(context.Context, string) error { return nil }
+func (m *minimalHITLRuntimeAdapter) RestartAllServices(context.Context) error     { return nil }
+func (m *minimalHITLRuntimeAdapter) LoadActivePlan(context.Context, string) (*ActivePlanView, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) LoadBlobs(context.Context, string) ([]BlobEntry, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) AddBlobToPlan(context.Context, string, string) error { return nil }
+func (m *minimalHITLRuntimeAdapter) RemoveBlobFromPlan(context.Context, string, string) error {
+	return nil
+}
+func (m *minimalHITLRuntimeAdapter) AddFileToContext(string) error    { return nil }
+func (m *minimalHITLRuntimeAdapter) DropFileFromContext(string) error { return nil }
+func (m *minimalHITLRuntimeAdapter) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error) {
+	return nil, nil
+}
+func (m *minimalHITLRuntimeAdapter) ActivatePlanVersion(context.Context, string, int) error {
+	return nil
+}
 
 // TestHITLEventPushesNotification verifies that a HITLEventRequested event
 // causes the notification queue to receive a HITL item via RootModel (after Gap 2).

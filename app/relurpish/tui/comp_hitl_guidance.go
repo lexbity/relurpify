@@ -38,8 +38,8 @@ type GuidancePanelSubmitMsg struct {
 // GuidancePanelAnnotateMsg is emitted when the user presses [a] to save the
 // response as a pattern annotation. The panel stays open.
 type GuidancePanelAnnotateMsg struct {
-	RequestID string
-	Body      string
+	RequestID  string
+	Body       string
 	IntentType string
 }
 

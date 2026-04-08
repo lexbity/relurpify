@@ -383,10 +383,10 @@ func (r *phase6HistoryRuntime) ExecuteInstruction(context.Context, string, core.
 func (r *phase6HistoryRuntime) ExecuteInstructionStream(context.Context, string, core.TaskType, map[string]any, func(string)) (*core.Result, error) {
 	return nil, nil
 }
-func (r *phase6HistoryRuntime) AvailableAgents() []string                    { return nil }
-func (r *phase6HistoryRuntime) SwitchAgent(string) error                     { return nil }
+func (r *phase6HistoryRuntime) AvailableAgents() []string                      { return nil }
+func (r *phase6HistoryRuntime) SwitchAgent(string) error                       { return nil }
 func (r *phase6HistoryRuntime) SetInteractionEmitter(interaction.FrameEmitter) {}
-func (r *phase6HistoryRuntime) SessionInfo() SessionInfo                     { return SessionInfo{} }
+func (r *phase6HistoryRuntime) SessionInfo() SessionInfo                       { return SessionInfo{} }
 func (r *phase6HistoryRuntime) ResolveContextFiles(context.Context, []string) ContextFileResolution {
 	return ContextFileResolution{}
 }
@@ -394,19 +394,19 @@ func (r *phase6HistoryRuntime) SessionArtifacts() SessionArtifacts { return Sess
 func (r *phase6HistoryRuntime) OllamaModels(context.Context) ([]string, error) {
 	return nil, nil
 }
-func (r *phase6HistoryRuntime) RecordingMode() string               { return "off" }
-func (r *phase6HistoryRuntime) SetRecordingMode(string) error       { return nil }
-func (r *phase6HistoryRuntime) SaveModel(string) error              { return nil }
-func (r *phase6HistoryRuntime) ContractSummary() *ContractSummary   { return nil }
-func (r *phase6HistoryRuntime) CapabilityAdmissions() []CapabilityAdmissionInfo { return nil }
+func (r *phase6HistoryRuntime) RecordingMode() string                                  { return "off" }
+func (r *phase6HistoryRuntime) SetRecordingMode(string) error                          { return nil }
+func (r *phase6HistoryRuntime) SaveModel(string) error                                 { return nil }
+func (r *phase6HistoryRuntime) ContractSummary() *ContractSummary                      { return nil }
+func (r *phase6HistoryRuntime) CapabilityAdmissions() []CapabilityAdmissionInfo        { return nil }
 func (r *phase6HistoryRuntime) SaveToolPolicy(string, core.AgentPermissionLevel) error { return nil }
-func (r *phase6HistoryRuntime) ListToolsInfo() []ToolInfo               { return nil }
-func (r *phase6HistoryRuntime) ListCapabilities() []CapabilityInfo      { return nil }
-func (r *phase6HistoryRuntime) ListPrompts() []PromptInfo               { return nil }
-func (r *phase6HistoryRuntime) ListResources([]string) []ResourceInfo   { return nil }
-func (r *phase6HistoryRuntime) ListLiveProviders() []LiveProviderInfo   { return nil }
-func (r *phase6HistoryRuntime) ListLiveSessions() []LiveProviderSessionInfo { return nil }
-func (r *phase6HistoryRuntime) ListApprovals() []ApprovalInfo           { return nil }
+func (r *phase6HistoryRuntime) ListToolsInfo() []ToolInfo                              { return nil }
+func (r *phase6HistoryRuntime) ListCapabilities() []CapabilityInfo                     { return nil }
+func (r *phase6HistoryRuntime) ListPrompts() []PromptInfo                              { return nil }
+func (r *phase6HistoryRuntime) ListResources([]string) []ResourceInfo                  { return nil }
+func (r *phase6HistoryRuntime) ListLiveProviders() []LiveProviderInfo                  { return nil }
+func (r *phase6HistoryRuntime) ListLiveSessions() []LiveProviderSessionInfo            { return nil }
+func (r *phase6HistoryRuntime) ListApprovals() []ApprovalInfo                          { return nil }
 func (r *phase6HistoryRuntime) GetCapabilityDetail(string) (*CapabilityDetail, error) {
 	return nil, nil
 }
@@ -426,11 +426,11 @@ func (r *phase6HistoryRuntime) GetApprovalDetail(string) (*ApprovalDetail, error
 func (r *phase6HistoryRuntime) GetClassPolicies() map[string]core.AgentPermissionLevel {
 	return nil
 }
-func (r *phase6HistoryRuntime) SetToolPolicyLive(string, core.AgentPermissionLevel) {}
+func (r *phase6HistoryRuntime) SetToolPolicyLive(string, core.AgentPermissionLevel)  {}
 func (r *phase6HistoryRuntime) SetClassPolicyLive(string, core.AgentPermissionLevel) {}
-func (r *phase6HistoryRuntime) ListWorkflows(int) ([]WorkflowInfo, error) { return nil, nil }
-func (r *phase6HistoryRuntime) GetWorkflow(string) (*WorkflowDetails, error) { return nil, nil }
-func (r *phase6HistoryRuntime) CancelWorkflow(string) error               { return nil }
+func (r *phase6HistoryRuntime) ListWorkflows(int) ([]WorkflowInfo, error)            { return nil, nil }
+func (r *phase6HistoryRuntime) GetWorkflow(string) (*WorkflowDetails, error)         { return nil, nil }
+func (r *phase6HistoryRuntime) CancelWorkflow(string) error                          { return nil }
 func (r *phase6HistoryRuntime) ApproveHITL(string, string, fauthorization.GrantScope, time.Duration) error {
 	return nil
 }
@@ -445,7 +445,7 @@ func (r *phase6HistoryRuntime) SubscribeGuidance() (<-chan guidance.GuidanceEven
 	return nil, func() {}
 }
 func (r *phase6HistoryRuntime) PendingDeferrals() []guidance.EngineeringObservation { return nil }
-func (r *phase6HistoryRuntime) ResolveDeferral(string) error                         { return nil }
+func (r *phase6HistoryRuntime) ResolveDeferral(string) error                        { return nil }
 func (r *phase6HistoryRuntime) SubscribeLearning() (<-chan archaeolearning.Event, func()) {
 	return nil, func() {}
 }
@@ -456,23 +456,23 @@ func (r *phase6HistoryRuntime) ResolveLearning(string, archaeolearning.ResolveIn
 func (r *phase6HistoryRuntime) InvokeCapability(context.Context, string, map[string]any) (*core.ToolResult, error) {
 	return nil, nil
 }
-func (r *phase6HistoryRuntime) Diagnostics() DiagnosticsInfo   { return DiagnosticsInfo{} }
-func (r *phase6HistoryRuntime) ApplyChatPolicy(SubTabID) error { return nil }
-func (r *phase6HistoryRuntime) ListServices() []ServiceInfo    { return nil }
-func (r *phase6HistoryRuntime) StopService(string) error       { return nil }
-func (r *phase6HistoryRuntime) RestartService(context.Context, string) error    { return nil }
-func (r *phase6HistoryRuntime) RestartAllServices(context.Context) error        { return nil }
+func (r *phase6HistoryRuntime) Diagnostics() DiagnosticsInfo                 { return DiagnosticsInfo{} }
+func (r *phase6HistoryRuntime) ApplyChatPolicy(SubTabID) error               { return nil }
+func (r *phase6HistoryRuntime) ListServices() []ServiceInfo                  { return nil }
+func (r *phase6HistoryRuntime) StopService(string) error                     { return nil }
+func (r *phase6HistoryRuntime) RestartService(context.Context, string) error { return nil }
+func (r *phase6HistoryRuntime) RestartAllServices(context.Context) error     { return nil }
 func (r *phase6HistoryRuntime) LoadActivePlan(context.Context, string) (*ActivePlanView, error) {
 	return nil, nil
 }
 func (r *phase6HistoryRuntime) LoadBlobs(context.Context, string) ([]BlobEntry, error) {
 	return nil, nil
 }
-func (r *phase6HistoryRuntime) AddBlobToPlan(context.Context, string, string) error    { return nil }
+func (r *phase6HistoryRuntime) AddBlobToPlan(context.Context, string, string) error { return nil }
 func (r *phase6HistoryRuntime) RemoveBlobFromPlan(context.Context, string, string) error {
 	return nil
 }
-func (r *phase6HistoryRuntime) AddFileToContext(string) error  { return nil }
+func (r *phase6HistoryRuntime) AddFileToContext(string) error    { return nil }
 func (r *phase6HistoryRuntime) DropFileFromContext(string) error { return nil }
 func (r *phase6HistoryRuntime) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error) {
 	return nil, nil
@@ -482,4 +482,3 @@ func (r *phase6HistoryRuntime) ActivatePlanVersion(_ context.Context, _ string, 
 	r.activatedVersion = version
 	return nil
 }
-

@@ -189,5 +189,4 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(colorWarning).
 				Padding(0, 1)
-
 )

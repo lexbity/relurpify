@@ -102,12 +102,12 @@ func (p *SessionPane) SetLiveSnapshot(d DiagnosticsInfo, workflows []WorkflowInf
 	p.workflows = append([]WorkflowInfo(nil), workflows...)
 	p.providers = append([]LiveProviderInfo(nil), providers...)
 	p.approvals = append([]ApprovalInfo(nil), approvals...)
-	
+
 	// Load services
 	if p.runtime != nil {
 		p.services = p.runtime.ListServices()
 	}
-	
+
 	if p.workflowSel >= len(p.workflows) {
 		p.workflowSel = max(0, len(p.workflows)-1)
 	}
@@ -483,7 +483,7 @@ func (p *SessionPane) viewLive() string {
 	if d.LiveProviders > 0 {
 		b.WriteString(dimStyle.Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
 	}
-	
+
 	panels := []string{
 		plannerPanel("Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
 		plannerPanel("Workflows", widths[1], plannerList(p.liveWorkflowLines(), p.workflowSel, p.height-12)),
@@ -619,7 +619,6 @@ func (p *SessionPane) liveApprovalLines() []string {
 	}
 	return lines
 }
-
 
 func (p *SessionPane) liveDetailLines() []string {
 	switch p.liveSection {

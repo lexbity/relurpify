@@ -711,8 +711,8 @@ func TestBlobSidebar_Scroll(t *testing.T) {
 	var blobs []BlobEntry
 	for i := 0; i < 20; i++ {
 		blobs = append(blobs, BlobEntry{
-			ID:   fmt.Sprintf("t%d", i),
-			Kind: BlobTension,
+			ID:    fmt.Sprintf("t%d", i),
+			Kind:  BlobTension,
 			Title: fmt.Sprintf("tension-%d", i),
 		})
 	}
@@ -855,7 +855,7 @@ func TestEffectiveBlobList(t *testing.T) {
 		{ID: "t1", Kind: BlobTension, Title: "from-backend", InPlan: true},
 	}
 	p.stagedBlobs = []StagedBlobEntry{
-		{ID: "t1", Kind: BlobTension, Title: "from-backend"},  // duplicate — should not appear twice
+		{ID: "t1", Kind: BlobTension, Title: "from-backend"},   // duplicate — should not appear twice
 		{ID: "p1", Kind: BlobPattern, Title: "staged-pattern"}, // new staged blob
 	}
 
