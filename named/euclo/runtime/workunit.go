@@ -580,6 +580,7 @@ func populatePlanBinding(binding *UnitOfWorkPlanBinding, version *archaeodomain.
 	}
 	binding.PlanID = strings.TrimSpace(version.Plan.ID)
 	binding.PlanVersion = version.Version
+	binding.RootChunkIDs = append([]string(nil), version.RootChunkIDs...)
 	binding.StepIDs = append([]string(nil), version.Plan.StepOrder...)
 	if binding.ActiveStepID == "" {
 		for _, stepID := range version.Plan.StepOrder {

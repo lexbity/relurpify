@@ -95,7 +95,7 @@ func Execute(s Runtime, ctx context.Context, in Input) Output {
 	if s.ProfileCtrl != nil && s.InteractionRegistry != nil {
 		execEnvelope := eucloruntime.BuildExecutionEnvelope(
 			executionTask, in.State, in.Mode, in.Profile, s.Environment,
-			nil, "", "", in.Telemetry,
+			in.ServiceBundle.PlanStore, nil, "", "", in.Telemetry,
 		)
 		if interactionErr := s.runInteractive(ctx, executionTask, execEnvelope, in.Mode); interactionErr != nil && out.Err == nil {
 			out.Err = interactionErr

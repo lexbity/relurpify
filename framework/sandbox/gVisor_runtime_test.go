@@ -203,9 +203,8 @@ func TestVerify_RunsOnlyIfBinariesExist(t *testing.T) {
 }
 
 func TestVerify_RunscMissing_FailsGracefully(t *testing.T) {
-	// This test will only run if 'runsc' is available; otherwise we expect skip
-	if !isBinaryExists("runsc") && !isBinaryExists("docker") {
-		t.Skip("Skipping Verify() failure test: runsc binary missing to demonstrate behavior")
+	if isBinaryExists("runsc") {
+		t.Skip("Skipping Verify() failure test: runsc is available on PATH")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -219,9 +218,8 @@ func TestVerify_RunscMissing_FailsGracefully(t *testing.T) {
 }
 
 func TestVerify_DockerMissing_FailsGracefully(t *testing.T) {
-	// Similar to above - requires at least one binary to test the other missing case
-	if !isBinaryExists("runsc") && !isBinaryExists("docker") {
-		t.Skip("Skipping Verify() failure test: no binaries found to compare against")
+	if isBinaryExists("containerd") {
+		t.Skip("Skipping Verify() failure test: containerd is available on PATH")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

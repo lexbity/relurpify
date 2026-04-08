@@ -74,21 +74,29 @@ func (sm *ServiceManager) Deregister(id string) {
 // are logged but do not halt the startup of other services.
 func (sm *ServiceManager) StartAll(ctx context.Context) error {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	if len(sm.registry) == 0 {
+		sm.mu.Unlock()
 		return nil // nothing to start
 	}
+	services := make(map[string]Service, len(sm.registry))
+	for id, svc := range sm.registry {
+		services[id] = svc
+	}
+	sm.mu.Unlock()
 
-	for id, s := range sm.registry {
+	var started sync.WaitGroup
+	started.Add(len(services))
+	for id, s := range services {
 		sm.wg.Add(1)
 		go func(id string, s Service) {
 			defer sm.wg.Done()
+			defer started.Done()
 			if err := s.Start(ctx); err != nil {
 				log.Printf("service %s start failed: %v", id, err)
 			}
 		}(id, s)
 	}
+	started.Wait()
 
 	return nil
 }

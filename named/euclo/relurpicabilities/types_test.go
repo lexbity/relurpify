@@ -178,6 +178,8 @@ func TestDefaultRegistry_ContainsSupportingCapabilities(t *testing.T) {
 		relurpicabilities.CapabilityDebugLocalization,
 		relurpicabilities.CapabilityArchaeologyPatternSurface,
 		relurpicabilities.CapabilityArchaeologyScopeExpand,
+		relurpicabilities.CapabilityBKCCompile,
+		relurpicabilities.CapabilityBKCStream,
 	}
 	for _, id := range supporting {
 		if _, ok := r.Lookup(id); !ok {

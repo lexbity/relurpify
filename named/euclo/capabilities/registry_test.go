@@ -21,7 +21,7 @@ type stubCapability struct {
 func (s *stubCapability) Descriptor() core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{ID: s.id, Annotations: s.annotations}
 }
-func (s *stubCapability) Contract() euclotypes.ArtifactContract       { return euclotypes.ArtifactContract{} }
+func (s *stubCapability) Contract() euclotypes.ArtifactContract { return euclotypes.ArtifactContract{} }
 func (s *stubCapability) Eligible(euclotypes.ArtifactState, euclotypes.CapabilitySnapshot) euclotypes.EligibilityResult {
 	return euclotypes.EligibilityResult{Eligible: true}
 }
@@ -306,6 +306,8 @@ func TestNewDefaultCapabilityRegistry_ContainsExpectedIDs(t *testing.T) {
 	env := agentenv.AgentEnvironment{Registry: capability.NewRegistry(), Config: &core.Config{Name: "test", Model: "stub"}}
 	reg := capabilities.NewDefaultCapabilityRegistry(env)
 	wantIDs := []string{
+		"euclo:bkc.compile",
+		"euclo:bkc.stream",
 		"euclo:artifact.diff_summary",
 		"euclo:verification.execute",
 		"euclo:repair.failed_verification",

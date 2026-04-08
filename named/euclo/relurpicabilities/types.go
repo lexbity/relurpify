@@ -10,6 +10,10 @@ const (
 	CapabilityArchaeologyCompilePlan = "euclo:archaeology.compile-plan"
 	CapabilityArchaeologyImplement   = "euclo:archaeology.implement-plan"
 	CapabilityDebugInvestigate       = "euclo:debug.investigate"
+	CapabilityBKCCompile             = "euclo:bkc.compile"
+	CapabilityBKCStream              = "euclo:bkc.stream"
+	CapabilityBKCCheckpoint          = "euclo:bkc.checkpoint"
+	CapabilityBKCInvalidate          = "euclo:bkc.invalidate"
 
 	CapabilityChatDirectEditExecution      = "euclo:chat.direct-edit-execution"
 	CapabilityChatLocalReview              = "euclo:chat.local-review"
@@ -191,6 +195,56 @@ func DefaultRegistry() *Registry {
 				CapabilityChatInspect,
 			},
 			Summary: "Mixed debugging behavior with tool exposition and controlled implementation escalation.",
+		},
+		{
+			ID:                CapabilityBKCCompile,
+			DisplayName:       "BKC Compile",
+			ModeFamily:        "planning",
+			SupportingOnly:    true,
+			Mutability:        MutabilityNonMutating,
+			ArchaeoAssociated: true,
+			LLMDependent:      true,
+			ArchaeoOperation:  "bkc_compile",
+			ExecutorRecipe:    "bkc.compile.semantic_compile",
+			ParadigmMix:       []string{"planner", "reflection"},
+			Summary:           "Compile an LLM-assisted BKC candidate and queue it for archaeology confirmation.",
+		},
+		{
+			ID:                CapabilityBKCStream,
+			DisplayName:       "BKC Stream",
+			ModeFamily:        "planning",
+			SupportingOnly:    true,
+			Mutability:        MutabilityNonMutating,
+			ArchaeoAssociated: true,
+			ArchaeoOperation:  "bkc_stream",
+			ExecutorRecipe:    "bkc.stream.semantic_context",
+			ParadigmMix:       []string{"planner"},
+			Summary:           "Stream chunk-backed semantic context into Euclo runtime state.",
+		},
+		{
+			ID:                CapabilityBKCCheckpoint,
+			DisplayName:       "BKC Checkpoint",
+			ModeFamily:        "planning",
+			SupportingOnly:    true,
+			Mutability:        MutabilityPolicyConstrained,
+			ArchaeoAssociated: true,
+			LLMDependent:      true,
+			ArchaeoOperation:  "bkc_checkpoint",
+			ExecutorRecipe:    "bkc.checkpoint.plan_anchor",
+			ParadigmMix:       []string{"planner", "reflection"},
+			Summary:           "Anchor chunk roots to the active living plan version.",
+		},
+		{
+			ID:                CapabilityBKCInvalidate,
+			DisplayName:       "BKC Invalidate",
+			ModeFamily:        "planning",
+			SupportingOnly:    true,
+			Mutability:        MutabilityNonMutating,
+			ArchaeoAssociated: true,
+			ArchaeoOperation:  "bkc_invalidate",
+			ExecutorRecipe:    "bkc.invalidate.revision_staleness",
+			ParadigmMix:       []string{"planner", "reflection"},
+			Summary:           "Surface stale BKC chunks and tensions after revision drift.",
 		},
 		{
 			ID:             CapabilityChatDirectEditExecution,

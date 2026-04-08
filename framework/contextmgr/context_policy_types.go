@@ -29,13 +29,28 @@ type ContextStrategy interface {
 	PrioritizeContext(items []core.ContextItem) []core.ContextItem
 }
 
+// ChunkLoader is an optional extension point for strategies that can seed
+// context from a semantic chunk sequence before normal file/AST/memory loading.
+type ChunkLoader interface {
+	LoadChunks(task *core.Task, budget *core.ContextBudget) ([]ContextChunk, error)
+}
+
 // ContextRequest describes what context to load.
 type ContextRequest struct {
 	Files         []FileRequest
 	ASTQueries    []ASTQuery
 	MemoryQueries []MemoryQuery
 	SearchQueries []SearchQuery
+	ChunkSequence []ContextChunk
 	MaxTokens     int
+}
+
+// ContextChunk is a framework-generic semantic chunk payload.
+type ContextChunk struct {
+	ID            string
+	Content       string
+	TokenEstimate int
+	Metadata      map[string]string
 }
 
 // FileRequest specifies how to load a file.

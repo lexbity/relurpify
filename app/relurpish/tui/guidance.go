@@ -30,6 +30,12 @@ type learningSubscribedMsg struct {
 	unsub func()
 }
 
+type learningResolvedMsg struct {
+	workflowID    string
+	interactionID string
+	err           error
+}
+
 func listenLearningEvents(ch <-chan archaeolearning.Event) tea.Cmd {
 	if ch == nil {
 		return nil

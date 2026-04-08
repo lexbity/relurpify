@@ -80,6 +80,13 @@ func (pl *ProgressiveLoader) InitialLoad(task *core.Task, strategy ContextStrate
 	if err != nil {
 		return fmt.Errorf("select context: %w", err)
 	}
+	if loader, ok := strategy.(ChunkLoader); ok {
+		chunks, err := loader.LoadChunks(task, pl.budget)
+		if err != nil {
+			return fmt.Errorf("load chunks: %w", err)
+		}
+		request.ChunkSequence = append(request.ChunkSequence, chunks...)
+	}
 	ResolveContextRequestPaths(request, task)
 	return pl.ExecuteContextRequest(request, "initial")
 }
@@ -93,6 +100,14 @@ func (pl *ProgressiveLoader) ExecuteContextRequest(request *ContextRequest, trig
 		Timestamp: time.Now(),
 		Trigger:   trigger,
 		Success:   true,
+	}
+	for _, chunk := range request.ChunkSequence {
+		if err := pl.loadChunk(chunk); err != nil {
+			event.Success = false
+			event.Reason = err.Error()
+			continue
+		}
+		event.ItemsLoaded++
 	}
 	for _, fileReq := range request.Files {
 		if err := pl.loadFile(fileReq); err != nil {
@@ -218,6 +233,33 @@ func (pl *ProgressiveLoader) loadFile(req FileRequest) error {
 	}
 	pl.loadedFiles[req.Path] = req.DetailLevel
 	return nil
+}
+
+func (pl *ProgressiveLoader) loadChunk(chunk ContextChunk) error {
+	if pl.contextManager == nil {
+		return fmt.Errorf("context manager unavailable")
+	}
+	ref := &core.ContextReference{
+		Kind:    core.ContextReferenceWorkflowArtifact,
+		ID:      chunk.ID,
+		Detail:  "bkc_chunk",
+		Version: chunk.Metadata["version"],
+	}
+	if len(chunk.Metadata) > 0 {
+		ref.Metadata = make(map[string]string, len(chunk.Metadata))
+		for key, value := range chunk.Metadata {
+			ref.Metadata[key] = value
+		}
+	}
+	item := &core.MemoryContextItem{
+		Source:       "semantic_chunk:" + chunk.ID,
+		Content:      chunk.Content,
+		Reference:    ref,
+		LastAccessed: time.Now().UTC(),
+		Relevance:    0.95,
+		PriorityVal:  0,
+	}
+	return pl.contextManager.AddItem(item)
 }
 
 // DemoteToFree progressively lowers detail on less-important files before pruning.

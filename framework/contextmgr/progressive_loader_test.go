@@ -18,6 +18,11 @@ type stubContextStrategy struct {
 	request *ContextRequest
 }
 
+type chunkLoadingStrategy struct {
+	request *ContextRequest
+	chunks  []ContextChunk
+}
+
 type countingSummarizer struct {
 	count int
 }
@@ -156,6 +161,28 @@ func (s stubContextStrategy) ShouldExpandContext(ctx *core.SharedContext, lastRe
 }
 
 func (s stubContextStrategy) PrioritizeContext(items []core.ContextItem) []core.ContextItem {
+	return items
+}
+
+func (s chunkLoadingStrategy) SelectContext(task *core.Task, budget *core.ContextBudget) (*ContextRequest, error) {
+	return s.request, nil
+}
+
+func (s chunkLoadingStrategy) LoadChunks(task *core.Task, budget *core.ContextBudget) ([]ContextChunk, error) {
+	return append([]ContextChunk(nil), s.chunks...), nil
+}
+
+func (s chunkLoadingStrategy) ShouldCompress(ctx *core.SharedContext) bool { return false }
+
+func (s chunkLoadingStrategy) DetermineDetailLevel(file string, relevance float64) DetailLevel {
+	return DetailFull
+}
+
+func (s chunkLoadingStrategy) ShouldExpandContext(ctx *core.SharedContext, lastResult *core.Result) bool {
+	return false
+}
+
+func (s chunkLoadingStrategy) PrioritizeContext(items []core.ContextItem) []core.ContextItem {
 	return items
 }
 
@@ -464,6 +491,59 @@ func TestProgressiveLoaderInitialLoadResolvesRelativePathsFromWorkspace(t *testi
 	}
 	if strings.Contains(item.Content, "live repo") {
 		t.Fatalf("loaded content from cwd instead of workspace: %q", item.Content)
+	}
+}
+
+func TestProgressiveLoaderInitialLoadSeedsChunkSequenceBeforeFiles(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.txt")
+	if err := os.WriteFile(path, []byte("file payload"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	budget := core.NewContextBudget(8000)
+	cm := NewContextManager(budget)
+	loader := NewProgressiveLoader(cm, nil, nil, nil, budget, &core.SimpleSummarizer{})
+	task := &core.Task{Instruction: "load chunk-backed context"}
+	strategy := chunkLoadingStrategy{
+		request: &ContextRequest{
+			Files: []FileRequest{{Path: path, DetailLevel: DetailFull}},
+		},
+		chunks: []ContextChunk{{
+			ID:            "chunk-1",
+			Content:       "semantic payload",
+			TokenEstimate: 8,
+			Metadata: map[string]string{
+				"version":      "2",
+				"workspace_id": "ws-a",
+			},
+		}},
+	}
+
+	if err := loader.InitialLoad(task, strategy); err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+
+	items := cm.GetItems()
+	if len(items) != 2 {
+		t.Fatalf("expected chunk and file items, got %d", len(items))
+	}
+	memoryItem, ok := items[0].(*core.MemoryContextItem)
+	if !ok {
+		t.Fatalf("expected first item to be chunk-backed memory item, got %T", items[0])
+	}
+	if memoryItem.Content != "semantic payload" {
+		t.Fatalf("unexpected chunk content: %q", memoryItem.Content)
+	}
+	if memoryItem.Reference == nil || memoryItem.Reference.Detail != "bkc_chunk" || memoryItem.Reference.ID != "chunk-1" {
+		t.Fatalf("unexpected chunk reference: %+v", memoryItem.Reference)
+	}
+	if got := memoryItem.Reference.Metadata["workspace_id"]; got != "ws-a" {
+		t.Fatalf("expected workspace metadata, got %q", got)
+	}
+	if _, ok := items[1].(*core.FileContextItem); !ok {
+		t.Fatalf("expected second item to be file item, got %T", items[1])
 	}
 }
 

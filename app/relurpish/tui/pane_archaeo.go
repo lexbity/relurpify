@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
@@ -97,6 +98,11 @@ type ArchaeoPane struct {
 	historyVersions []PlanVersionInfo
 	historySel      int // cursor in historyVersions
 	historyDiffSel  int // version whose step list is shown in diff view (0 = none)
+
+	// ── review subtab ────────────────────────────────────────────────────────
+	learningQueue     []archaeolearning.Interaction
+	learningSel       int
+	learningScrollOff int
 }
 
 // NewArchaeoPane creates a new ArchaeoPane with the explore subtab active.
@@ -170,6 +176,16 @@ func (p *ArchaeoPane) Update(msg tea.Msg) (ArchaeoPaner, tea.Cmd) {
 		}
 		return p, nil
 
+	case ArchaeoLearningQueueMsg:
+		p.learningQueue = filterBKCInteractions(msg.Interactions)
+		if p.learningSel >= len(p.learningQueue) {
+			p.learningSel = 0
+		}
+		if p.learningScrollOff >= len(p.learningQueue) {
+			p.learningScrollOff = 0
+		}
+		return p, nil
+
 	case planVersionActivatedMsg:
 		if msg.err != nil {
 			p.planOutputLines = appendOutputLine(p.planOutputLines,
@@ -234,6 +250,9 @@ func (p *ArchaeoPane) Update(msg tea.Msg) (ArchaeoPaner, tea.Cmd) {
 		if p.activeSubTab == SubTabArchaeoPlan {
 			return p.handlePlanKey(msg)
 		}
+		if p.activeSubTab == SubTabArchaeoReview {
+			return p.handleReviewKey(msg)
+		}
 		if p.activeSubTab == SubTabArchaeoHistory {
 			return p.handleHistoryKey(msg)
 		}
@@ -296,6 +315,33 @@ func (p *ArchaeoPane) handlePlanKey(msg tea.KeyMsg) (ArchaeoPaner, tea.Cmd) {
 			return p.handleSidebarKey(msg)
 		}
 		return p.handleMainAreaKey(msg)
+	}
+	return p, nil
+}
+
+// handleReviewKey routes key events in the BKC review subtab.
+func (p *ArchaeoPane) handleReviewKey(msg tea.KeyMsg) (ArchaeoPaner, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		if p.learningSel < len(p.learningQueue)-1 {
+			p.learningSel++
+			if p.learningSel >= p.learningScrollOff+visibleBlobRows(p.height) {
+				p.learningScrollOff++
+			}
+		}
+	case "k", "up":
+		if p.learningSel > 0 {
+			p.learningSel--
+			if p.learningSel < p.learningScrollOff {
+				p.learningScrollOff--
+			}
+		}
+	case "c", "enter":
+		return p, p.resolveLearningSelectedCmd(archaeolearning.ResolutionConfirm)
+	case "r":
+		return p, p.resolveLearningSelectedCmd(archaeolearning.ResolutionReject)
+	case "d", "esc":
+		return p, p.resolveLearningSelectedCmd(archaeolearning.ResolutionDefer)
 	}
 	return p, nil
 }
@@ -396,6 +442,8 @@ func (p *ArchaeoPane) View() string {
 	switch p.activeSubTab {
 	case SubTabArchaeoPlan:
 		return p.viewPlan()
+	case SubTabArchaeoReview:
+		return p.viewReview()
 	case SubTabArchaeoHistory:
 		return p.viewHistory()
 	default:
@@ -449,6 +497,55 @@ func (p *ArchaeoPane) viewExplore() string {
 	}
 
 	sb.WriteString("\n " + helpLine("[j/k] navigate  [enter] stage  [x] unstage"))
+	return sb.String()
+}
+
+// viewReview renders the BKC review queue.
+func (p *ArchaeoPane) viewReview() string {
+	var sb strings.Builder
+	sb.WriteString("\n bkc review\n")
+	sb.WriteString(strings.Repeat("─", p.width) + "\n")
+
+	if len(p.learningQueue) == 0 {
+		sb.WriteString("\n (no pending BKC confirmations)\n")
+		sb.WriteString(" BKC compile proposals and chunk confirmations will appear here.\n")
+		sb.WriteString("\n " + helpLine("[j/k] navigate  [c/enter] confirm  [r] reject  [d/esc] defer"))
+		return sb.String()
+	}
+
+	maxVisible := p.height - 8
+	if maxVisible < 3 {
+		maxVisible = 3
+	}
+	start := p.learningScrollOff
+	if start >= len(p.learningQueue) {
+		start = 0
+	}
+	visible := 0
+	for i := start; i < len(p.learningQueue) && visible < maxVisible; i++ {
+		item := p.learningQueue[i]
+		line := formatBKCInteractionSummary(item, p.width-2)
+		if i == p.learningSel {
+			line = lipgloss.NewStyle().Bold(true).Render(line)
+		}
+		sb.WriteString(" " + line + "\n")
+		if item.Description != "" {
+			sb.WriteString("   " + truncateStr(item.Description, p.width-4) + "\n")
+		}
+		for _, ev := range item.Evidence {
+			if ev.Title != "" {
+				sb.WriteString("   evidence: " + truncateStr(ev.Title, p.width-15) + "\n")
+			}
+		}
+		visible++
+	}
+	if p.learningScrollOff > 0 {
+		sb.WriteString(" ↑ more above\n")
+	}
+	if start+visible < len(p.learningQueue) {
+		sb.WriteString(" ↓ more below\n")
+	}
+	sb.WriteString("\n " + helpLine("[j/k] navigate  [c/enter] confirm  [r] reject  [d/esc] defer"))
 	return sb.String()
 }
 
@@ -758,6 +855,14 @@ func (p *ArchaeoPane) SetSubTab(id SubTabID) {
 			p.blobSel = 0
 		}
 	}
+	if id == SubTabArchaeoReview {
+		if p.learningSel >= len(p.learningQueue) {
+			p.learningSel = 0
+		}
+		if p.learningScrollOff >= len(p.learningQueue) {
+			p.learningScrollOff = 0
+		}
+	}
 }
 
 // HandleInputSubmit handles a submitted value in the explore subtab. In the
@@ -803,6 +908,55 @@ func (p *ArchaeoPane) PromoteAll() {
 			p.stageBlob(entry.Blob)
 			entry.IsStaged = true
 		}
+	}
+}
+
+func filterBKCInteractions(interactions []archaeolearning.Interaction) []archaeolearning.Interaction {
+	if len(interactions) == 0 {
+		return nil
+	}
+	out := make([]archaeolearning.Interaction, 0, len(interactions))
+	for _, interaction := range interactions {
+		if interaction.Kind != archaeolearning.InteractionKnowledgeProposal {
+			continue
+		}
+		if strings.TrimSpace(interaction.WorkflowID) == "" {
+			continue
+		}
+		out = append(out, interaction)
+	}
+	return out
+}
+
+func formatBKCInteractionSummary(item archaeolearning.Interaction, width int) string {
+	title := truncateStr(item.Title, width-20)
+	status := strings.TrimSpace(string(item.Status))
+	if status == "" {
+		status = "pending"
+	}
+	return fmt.Sprintf("[bkc] %-8s %s", status, title)
+}
+
+func (p *ArchaeoPane) resolveLearningSelectedCmd(kind archaeolearning.ResolutionKind) tea.Cmd {
+	if p.runtime == nil || p.learningSel < 0 || p.learningSel >= len(p.learningQueue) {
+		return nil
+	}
+	item := p.learningQueue[p.learningSel]
+	workflowID := strings.TrimSpace(item.WorkflowID)
+	interactionID := strings.TrimSpace(item.ID)
+	if workflowID == "" || interactionID == "" {
+		return nil
+	}
+	rt := p.runtime
+	return func() tea.Msg {
+		err := rt.ResolveLearning(workflowID, archaeolearning.ResolveInput{
+			WorkflowID:     workflowID,
+			InteractionID:  interactionID,
+			ExpectedStatus: archaeolearning.StatusPending,
+			Kind:           kind,
+			ResolvedBy:     "tui",
+		})
+		return learningResolvedMsg{workflowID: workflowID, interactionID: interactionID, err: err}
 	}
 }
 

@@ -118,6 +118,8 @@ type VersionedLivingPlan struct {
 	TensionRefs             []string                 `json:"tension_refs,omitempty"`
 	PatternRefs             []string                 `json:"pattern_refs,omitempty"`
 	AnchorRefs              []string                 `json:"anchor_refs,omitempty"`
+	RootChunkIDs            []string                 `json:"root_chunk_ids,omitempty"`
+	ChunkStateRef           string                   `json:"chunk_state_ref,omitempty"`
 	FormationResultRef      string                   `json:"formation_result_ref,omitempty"`
 	FormationProvenanceRefs []string                 `json:"formation_provenance_refs,omitempty"`
 	CreatedAt               time.Time                `json:"created_at"`

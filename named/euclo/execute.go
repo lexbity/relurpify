@@ -86,12 +86,13 @@ func (a *Agent) executeManagedFlow(ctx context.Context, task *core.Task, state *
 	if err := a.applyLearningResolution(ctx, task, state); err != nil {
 		return &core.Result{Success: false, Error: err}, err
 	}
-	contextRuntime := euclocontext.BuildContextRuntime(task, euclocontext.ContextRuntimeConfig{
-		Config:       a.Config,
-		Model:        a.Environment.Model,
-		MemoryStore:  a.Memory,
-		IndexManager: a.Environment.IndexManager,
-		SearchEngine: a.Environment.SearchEngine,
+	contextRuntime := euclocontext.BuildContextRuntime(task, state, euclocontext.ContextRuntimeConfig{
+		Config:            a.Config,
+		Model:             a.Environment.Model,
+		MemoryStore:       a.Memory,
+		IndexManager:      a.Environment.IndexManager,
+		SearchEngine:      a.Environment.SearchEngine,
+		BKCBootstrapReady: a.WorkspaceEnv.BKCEvents == nil || a.WorkspaceEnv.BKCEvents.BootstrapReady(),
 	}, mode, work)
 	if contextRuntime != nil {
 		contextRuntime.Activate(task, state, a.Environment.Model)

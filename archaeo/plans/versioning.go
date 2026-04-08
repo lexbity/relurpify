@@ -24,6 +24,8 @@ type DraftVersionInput struct {
 	TensionRefs             []string
 	PatternRefs             []string
 	AnchorRefs              []string
+	RootChunkIDs            []string
+	ChunkStateRef           string
 	FormationResultRef      string
 	FormationProvenanceRefs []string
 }
@@ -190,6 +192,8 @@ func (s Service) DraftVersion(ctx context.Context, plan *frameworkplan.LivingPla
 			TensionRefs:             append([]string(nil), input.TensionRefs...),
 			PatternRefs:             append([]string(nil), input.PatternRefs...),
 			AnchorRefs:              append([]string(nil), input.AnchorRefs...),
+			RootChunkIDs:            append([]string(nil), input.RootChunkIDs...),
+			ChunkStateRef:           strings.TrimSpace(input.ChunkStateRef),
 			FormationResultRef:      strings.TrimSpace(input.FormationResultRef),
 			FormationProvenanceRefs: append([]string(nil), input.FormationProvenanceRefs...),
 			CreatedAt:               now,
@@ -356,6 +360,12 @@ func (s Service) ensureDraftSuccessorWithInput(ctx context.Context, workflowID s
 		if len(override.TensionRefs) > 0 {
 			latest.TensionRefs = append([]string(nil), override.TensionRefs...)
 		}
+		if len(override.RootChunkIDs) > 0 {
+			latest.RootChunkIDs = append([]string(nil), override.RootChunkIDs...)
+		}
+		if strings.TrimSpace(override.ChunkStateRef) != "" {
+			latest.ChunkStateRef = strings.TrimSpace(override.ChunkStateRef)
+		}
 		latest.StaleReason = strings.TrimSpace(reason)
 		latest.UpdatedAt = s.now()
 		if err := s.saveVersion(ctx, &latest); err != nil {
@@ -383,6 +393,8 @@ func (s Service) ensureDraftSuccessorWithInput(ctx context.Context, workflowID s
 		TensionRefs:             firstNonEmptySlice(override.TensionRefs, base.TensionRefs),
 		PatternRefs:             firstNonEmptySlice(override.PatternRefs, base.PatternRefs),
 		AnchorRefs:              firstNonEmptySlice(override.AnchorRefs, base.AnchorRefs),
+		RootChunkIDs:            firstNonEmptySlice(override.RootChunkIDs, base.RootChunkIDs),
+		ChunkStateRef:           firstNonEmpty(override.ChunkStateRef, base.ChunkStateRef),
 		FormationResultRef:      firstNonEmpty(override.FormationResultRef, base.FormationResultRef),
 		FormationProvenanceRefs: firstNonEmptySlice(override.FormationProvenanceRefs, base.FormationProvenanceRefs),
 	})

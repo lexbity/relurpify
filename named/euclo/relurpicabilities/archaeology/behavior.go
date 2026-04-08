@@ -17,6 +17,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclobb "github.com/lexcodex/relurpify/named/euclo/execution/blackboard"
 	rewooexec "github.com/lexcodex/relurpify/named/euclo/execution/rewoo"
+	euclocap "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -83,6 +84,13 @@ func (exploreBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 		return &core.Result{Success: false, Error: err}, err
 	}
 	artifacts = append(artifacts, alternativeArtifacts...)
+	if len(enriched.patternRefs) > 0 || len(enriched.tensionIDs) > 0 || len(enriched.learningRefs) > 0 {
+		triggerBKCCompile(ctx, in, "archaeology exploration surfaced candidate semantic knowledge", map[string]any{
+			"pattern_refs":  append([]string(nil), enriched.patternRefs...),
+			"tension_refs":  append([]string(nil), enriched.tensionIDs...),
+			"learning_refs": append([]string(nil), enriched.learningRefs...),
+		})
+	}
 	if len(artifacts) > 0 {
 		execution.MergeStateArtifactsToContext(in.State, artifacts)
 	}
@@ -207,6 +215,11 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		payload["plan_version"] = persisted.Version
 		payload["workflow_id"] = persisted.WorkflowID
 		persistPlanReviewComment(ctx, in, persisted.Plan.ID, reviewResult)
+		triggerBKCCheckpoint(ctx, in, "archaeology compile-plan produced a checkpointable living plan", map[string]any{
+			"plan_id":        persisted.Plan.ID,
+			"plan_version":   persisted.Version,
+			"root_chunk_ids": append([]string(nil), planRootChunkIDs(in.Work)...),
+		})
 	} else if err != nil {
 		execution.MergeStateArtifactsToContext(in.State, artifacts)
 		return &core.Result{Success: false, Error: err}, err
@@ -313,6 +326,11 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 	if result, handled, execErr := executeImplementPlanViaRewoo(ctx, in, planPayload, steps, artifacts); handled {
 		return result, execErr
 	}
+	triggerBKCCheckpoint(ctx, in, "archaeology implement-plan confirmed a living-plan checkpoint", map[string]any{
+		"plan_id":        activePlanID(in.Work),
+		"plan_version":   activePlanVersion(in.Work),
+		"root_chunk_ids": append([]string(nil), planRootChunkIDs(in.Work)...),
+	})
 
 	checkpointRefs := make([]string, 0, len(steps))
 	completedSteps := make([]string, 0, len(steps))
@@ -1110,6 +1128,7 @@ func archaeologyExecutionEnvelope(in execution.ExecuteInput) euclotypes.Executio
 		State:       in.State,
 		Memory:      in.Environment.Memory,
 		Environment: in.Environment,
+		PlanStore:   in.ServiceBundle.PlanStore,
 		Telemetry:   in.Telemetry,
 		WorkflowID:  in.Work.WorkflowID,
 		RunID:       in.Work.RunID,
@@ -1460,6 +1479,17 @@ func stringValue(raw any) string {
 	return strings.TrimSpace(fmt.Sprint(raw))
 }
 
+func taskContextValue(task *core.Task, key string) any {
+	if task == nil || task.Context == nil {
+		return nil
+	}
+	value, ok := task.Context[key]
+	if !ok {
+		return nil
+	}
+	return value
+}
+
 func stringSlice(raw any) []string {
 	switch typed := raw.(type) {
 	case []string:
@@ -1475,6 +1505,13 @@ func stringSlice(raw any) []string {
 	default:
 		return nil
 	}
+}
+
+func planRootChunkIDs(work eucloruntime.UnitOfWork) []string {
+	if work.PlanBinding == nil {
+		return nil
+	}
+	return append([]string(nil), work.PlanBinding.RootChunkIDs...)
 }
 
 // deferredIssuesFromState reads the current deferred issues slice from state.
@@ -1749,6 +1786,58 @@ func persistPlanReviewComment(ctx context.Context, in execution.ExecuteInput, pl
 		UpdatedAt:   now,
 	}
 	_ = in.ServiceBundle.CommentStore.Save(ctx, record)
+}
+
+func triggerBKCCompile(ctx context.Context, in execution.ExecuteInput, reason string, metadata map[string]any) {
+	if in.Environment.Registry == nil || in.Task == nil || strings.TrimSpace(in.Work.WorkflowID) == "" {
+		return
+	}
+	args := map[string]any{
+		"workflow_id":    in.Work.WorkflowID,
+		"exploration_id": firstNonEmptyString(in.Work.SemanticInputs.ExplorationID, stringValue(taskContextValue(in.Task, "exploration_id"))),
+		"based_on_revision": firstNonEmptyString(
+			strings.TrimSpace(in.Work.SemanticInputs.BasedOnRevision),
+			stringValue(taskContextValue(in.Task, "based_on_revision")),
+		),
+		"title":          firstNonEmptyString(stringValue(taskContextValue(in.Task, "title")), "BKC semantic compile"),
+		"description":    firstNonEmptyString(stringValue(taskContextValue(in.Task, "description")), reason),
+		"instruction":    strings.TrimSpace(reason),
+		"root_chunk_ids": append([]string(nil), planRootChunkIDs(in.Work)...),
+	}
+	for key, value := range metadata {
+		args[key] = value
+	}
+	_, _ = in.Environment.Registry.InvokeCapability(ctx, core.NewContext(), euclocap.CapabilityBKCCompile, args)
+}
+
+func triggerBKCCheckpoint(ctx context.Context, in execution.ExecuteInput, reason string, metadata map[string]any) {
+	if in.Environment.Registry == nil || in.Task == nil || strings.TrimSpace(in.Work.WorkflowID) == "" {
+		return
+	}
+	rootChunkIDs := append([]string(nil), planRootChunkIDs(in.Work)...)
+	if len(rootChunkIDs) == 0 && in.State != nil {
+		if raw, ok := in.State.Get("euclo.bkc.root_chunk_ids"); ok && raw != nil {
+			rootChunkIDs = stringSlice(raw)
+		}
+	}
+	chunkStateRef := ""
+	if in.State != nil {
+		chunkStateRef = firstNonEmptyString(
+			strings.TrimSpace(in.State.GetString("euclo.bkc.checkpoint_ref")),
+			strings.TrimSpace(in.State.GetString("euclo.bkc.context_checkpoint_ref")),
+		)
+	}
+	args := map[string]any{
+		"workflow_id":     in.Work.WorkflowID,
+		"plan_version":    activePlanVersion(in.Work),
+		"root_chunk_ids":  rootChunkIDs,
+		"chunk_state_ref": chunkStateRef,
+		"instruction":     strings.TrimSpace(reason),
+	}
+	for key, value := range metadata {
+		args[key] = value
+	}
+	_, _ = in.Environment.Registry.InvokeCapability(ctx, core.NewContext(), euclocap.CapabilityBKCCheckpoint, args)
 }
 
 // livingPlanStepFromState returns the PlanStep for stepID from the living plan

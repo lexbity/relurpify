@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
+	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/archaeo/internal/keylock"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -257,6 +259,43 @@ func ActiveStep(task *core.Task, plan *frameworkplan.LivingPlan) *frameworkplan.
 		return nil
 	}
 	return plan.Steps[stepID]
+}
+
+func (s Service) AnchorChunks(ctx context.Context, workflowID string, version int, rootChunkIDs []string, chunkStateRef string) (*frameworkplan.LivingPlan, error) {
+	record, err := s.AnchorChunkVersion(ctx, workflowID, version, rootChunkIDs, chunkStateRef)
+	if err != nil || record == nil {
+		return nil, err
+	}
+	return &record.Plan, nil
+}
+
+func (s Service) AnchorChunkVersion(ctx context.Context, workflowID string, version int, rootChunkIDs []string, chunkStateRef string) (*archaeodomain.VersionedLivingPlan, error) {
+	var (
+		record *archaeodomain.VersionedLivingPlan
+		err    error
+	)
+	err = planMutationLocks.With("workflow:"+strings.TrimSpace(workflowID), func() error {
+		record, err = s.LoadVersion(ctx, workflowID, version)
+		if err != nil || record == nil {
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("plan version %d not found", version)
+		}
+		record.RootChunkIDs = uniqueStrings(rootChunkIDs)
+		record.ChunkStateRef = strings.TrimSpace(chunkStateRef)
+		record.UpdatedAt = s.now()
+		return s.saveVersion(ctx, record)
+	})
+	return record, err
+}
+
+func (s Service) ChunkSeedForVersion(ctx context.Context, workflowID string, version int) ([]string, error) {
+	record, err := s.LoadVersion(ctx, workflowID, version)
+	if err != nil || record == nil {
+		return nil, err
+	}
+	return append([]string(nil), record.RootChunkIDs...), nil
 }
 
 func (s Service) now() time.Time {

@@ -11,6 +11,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )
 
 // ============================================================================
@@ -56,6 +57,8 @@ const (
 	ArtifactKindCompiledExecution       ArtifactKind = "euclo.compiled_execution"
 	ArtifactKindExecutionStatus         ArtifactKind = "euclo.execution_status"
 	ArtifactKindDeferredExecutionIssues ArtifactKind = "euclo.deferred_execution_issues"
+	ArtifactKindSemanticCompile         ArtifactKind = "euclo.semantic_compile"
+	ArtifactKindSemanticContext         ArtifactKind = "euclo.semantic_context"
 	ArtifactKindContextCompaction       ArtifactKind = "euclo.context_compaction"
 	ArtifactKindFinalReport             ArtifactKind = "euclo.final_report"
 	ArtifactKindRecoveryTrace           ArtifactKind = "euclo.recovery_trace"
@@ -128,6 +131,8 @@ func CollectArtifactsFromState(state *core.Context) []Artifact {
 		{Key: "euclo.compiled_execution", Kind: ArtifactKindCompiledExecution},
 		{Key: "euclo.execution_status", Kind: ArtifactKindExecutionStatus},
 		{Key: "euclo.deferred_execution_issues", Kind: ArtifactKindDeferredExecutionIssues},
+		{Key: "euclo.semantic_compile", Kind: ArtifactKindSemanticCompile},
+		{Key: "euclo.semantic_context", Kind: ArtifactKindSemanticContext},
 		{Key: "euclo.context_compaction", Kind: ArtifactKindContextCompaction},
 		{Key: "pipeline.final_output", Kind: ArtifactKindFinalReport},
 	}
@@ -651,6 +656,11 @@ type ExecutionEnvelope struct {
 	State         *core.Context
 	Memory        memory.MemoryStore
 	Environment   agentenv.AgentEnvironment
+	PlanStore     frameworkplan.PlanStore
+	PlanID        string
+	PlanVersion   int
+	RootChunkIDs  []string
+	ChunkStateRef string
 	WorkflowStore WorkflowArtifactWriter
 	WorkflowID    string
 	RunID         string
@@ -1303,6 +1313,10 @@ func StateKeyForArtifactKind(kind ArtifactKind) string {
 		return "euclo.execution_status"
 	case ArtifactKindDeferredExecutionIssues:
 		return "euclo.deferred_execution_issues"
+	case ArtifactKindSemanticCompile:
+		return "euclo.semantic_compile"
+	case ArtifactKindSemanticContext:
+		return "euclo.semantic_context"
 	case ArtifactKindContextCompaction:
 		return "euclo.context_compaction"
 	case ArtifactKindFinalReport:

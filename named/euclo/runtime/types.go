@@ -567,6 +567,7 @@ type UnitOfWorkPlanBinding struct {
 	PlanID        string              `json:"plan_id,omitempty"`
 	PlanVersion   int                 `json:"plan_version,omitempty"`
 	ActiveStepID  string              `json:"active_step_id,omitempty"`
+	RootChunkIDs  []string            `json:"root_chunk_ids,omitempty"`
 	StepIDs       []string            `json:"step_ids,omitempty"`
 	IsPlanBacked  bool                `json:"is_plan_backed"`
 	IsLongRunning bool                `json:"is_long_running"`

@@ -3,6 +3,7 @@ package ayenitd
 import (
 	"database/sql"
 
+	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
 	"github.com/lexcodex/relurpify/framework/ast"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
@@ -56,6 +57,7 @@ type WorkspaceEnvironment struct {
 
 	// Service management (new for dynamic lifecycle)
 	ServiceManager *ServiceManager
+	BKCEvents      *archaeobkc.EventBus
 }
 
 // WithRegistry returns a shallow copy with Registry replaced.

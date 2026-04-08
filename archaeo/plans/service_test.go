@@ -901,7 +901,6 @@ func TestActiveStepVariousInputs(t *testing.T) {
 	require.Equal(t, "step-1", step.ID)
 }
 
-
 func TestEnsureDraftSuccessorNotFound(t *testing.T) {
 	now := time.Date(2026, 3, 28, 8, 0, 0, 0, time.UTC)
 	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
@@ -1039,4 +1038,64 @@ func TestEnsureDraftFromExplorationNilWorkflowStore(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Nil(t, record)
+}
+
+func TestAnchorChunksAndChunkSeedForVersion(t *testing.T) {
+	now := time.Date(2026, 3, 28, 11, 0, 0, 0, time.UTC)
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+	ctx := context.Background()
+	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-anchor",
+		TaskID:      "task-anchor",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "plan",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	store := &stubPlanStore{}
+	svc := plans.Service{Store: store, WorkflowStore: workflowStore, Now: func() time.Time { return now }}
+
+	plan := &frameworkplan.LivingPlan{
+		ID:         "plan-anchor",
+		WorkflowID: "wf-anchor",
+		Title:      "anchor",
+		Steps: map[string]*frameworkplan.PlanStep{
+			"step-1": {ID: "step-1", CreatedAt: now, UpdatedAt: now},
+		},
+		StepOrder: []string{"step-1"},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	record, err := svc.DraftVersion(ctx, plan, plans.DraftVersionInput{WorkflowID: "wf-anchor"})
+	require.NoError(t, err)
+
+	anchored, err := svc.AnchorChunkVersion(ctx, "wf-anchor", record.Version, []string{"chunk-2", "chunk-1", "chunk-1"}, "chunk-state:1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"chunk-2", "chunk-1"}, anchored.RootChunkIDs)
+	require.Equal(t, "chunk-state:1", anchored.ChunkStateRef)
+
+	seed, err := svc.ChunkSeedForVersion(ctx, "wf-anchor", record.Version)
+	require.NoError(t, err)
+	require.Equal(t, []string{"chunk-2", "chunk-1"}, seed)
+}
+
+func TestAnchorChunksMissingVersion(t *testing.T) {
+	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+	ctx := context.Background()
+	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-anchor-missing",
+		TaskID:      "task-anchor-missing",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "plan",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+	svc := plans.Service{Store: &stubPlanStore{}, WorkflowStore: workflowStore, Now: func() time.Time { return now }}
+
+	anchored, err := svc.AnchorChunkVersion(ctx, "wf-anchor-missing", 9, []string{"chunk-1"}, "chunk-state:missing")
+	require.Error(t, err)
+	require.Nil(t, anchored)
 }

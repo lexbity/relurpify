@@ -209,6 +209,7 @@ func debugExecutionEnvelope(in execution.ExecuteInput) euclotypes.ExecutionEnvel
 		State:       in.State,
 		Memory:      in.Environment.Memory,
 		Environment: in.Environment,
+		PlanStore:   in.ServiceBundle.PlanStore,
 		Telemetry:   in.Telemetry,
 		WorkflowID:  in.Work.WorkflowID,
 		RunID:       in.Work.RunID,

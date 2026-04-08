@@ -78,7 +78,7 @@ func TestNodePairAndApproveCommandsPersistState(t *testing.T) {
 	approveCmd := newNodeApproveCmd(&workspace, &config)
 	var approveOut bytes.Buffer
 	approveCmd.SetOut(&approveOut)
-	approveCmd.SetArgs([]string{code})
+	approveCmd.SetArgs([]string{"--", code})
 	require.NoError(t, approveCmd.ExecuteContext(context.Background()))
 	require.Contains(t, approveOut.String(), "approved")
 

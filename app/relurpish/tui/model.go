@@ -358,6 +358,10 @@ func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
 				return BlobsUpdatedMsg{Blobs: blobs}
 			}
 			return tea.Batch(planCmd, blobsCmd)
+		case SubTabArchaeoReview:
+			return func() tea.Msg {
+				return ArchaeoLearningQueueMsg{Interactions: rt.PendingLearning()}
+			}
 		case SubTabArchaeoHistory:
 			return func() tea.Msg {
 				versions, err := rt.ListPlanVersions(context.Background(), "")
@@ -410,6 +414,7 @@ func (m RootModel) Init() tea.Cmd {
 		m.subscribeHITLCmd(),
 		m.subscribeGuidanceCmd(),
 		m.subscribeLearningCmd(),
+		m.refreshArchaeoLearningQueueCmd(),
 	)
 }
 
@@ -459,6 +464,16 @@ func (m RootModel) subscribeLearningCmd() tea.Cmd {
 		}
 		ch, unsub := rt.SubscribeLearning()
 		return learningSubscribedMsg{ch: ch, unsub: unsub}
+	}
+}
+
+func (m RootModel) refreshArchaeoLearningQueueCmd() tea.Cmd {
+	rt := m.runtime
+	return func() tea.Msg {
+		if rt == nil {
+			return nil
+		}
+		return ArchaeoLearningQueueMsg{Interactions: rt.PendingLearning()}
 	}
 }
 
@@ -586,6 +601,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case learningEventMsg:
 		return m.handleLearningEvent(msg)
+
+	case learningResolvedMsg:
+		if msg.err != nil {
+			m.addSystemMessage(fmt.Sprintf("Learning resolve failed: %v", msg.err))
+		} else {
+			m.addSystemMessage(fmt.Sprintf("Learning resolved: %s", msg.interactionID))
+		}
+		return m, m.refreshArchaeoLearningQueueCmd()
+
+	case ArchaeoLearningQueueMsg:
+		if m.archaeo != nil {
+			ap, cmd := m.archaeo.Update(msg)
+			m.archaeo = ap
+			return m, cmd
+		}
+		return m, nil
 
 	// Diagnostics snapshot — route to session pane regardless of active tab.
 	case DiagnosticsUpdatedMsg:
@@ -1001,6 +1032,9 @@ func (m *RootModel) setActiveSubTab(sub SubTabID) {
 	if m.activeTab == TabSession && m.session != nil {
 		m.session.SetSubTab(sub)
 	}
+	if m.activeTab == TabArchaeo && m.archaeo != nil {
+		m.archaeo.SetSubTab(sub)
+	}
 }
 
 // handleGlobalKey processes navigation keys emitted by InputBar when the
@@ -1386,7 +1420,7 @@ func (m RootModel) handleLearningEvent(msg learningEventMsg) (RootModel, tea.Cmd
 			}
 		}
 	}
-	return m, listenLearningEvents(m.learningCh)
+	return m, tea.Batch(listenLearningEvents(m.learningCh), m.refreshArchaeoLearningQueueCmd())
 }
 
 func (m RootModel) shouldRouteNotificationKeyToInput(msg tea.KeyMsg) bool {

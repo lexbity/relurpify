@@ -1,8 +1,13 @@
 package runtime
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
+	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )
 
@@ -13,6 +18,7 @@ func BuildExecutionEnvelope(
 	mode euclotypes.ModeResolution,
 	profile euclotypes.ExecutionProfileSelection,
 	env agentenv.AgentEnvironment,
+	planStore frameworkplan.PlanStore,
 	workflowStore euclotypes.WorkflowArtifactWriter,
 	workflowID, runID string,
 	telemetry core.Telemetry,
@@ -25,11 +31,156 @@ func BuildExecutionEnvelope(
 		State:         state,
 		Memory:        env.Memory,
 		Environment:   env,
+		PlanStore:     planStore,
+		PlanID:        firstNonEmpty(envelopeStateString(state, "euclo.plan_id"), envelopeStateStructString(state, "euclo.active_plan_version", "PlanID"), envelopeStateStructString(state, "euclo.active_plan_version", "ID")),
+		PlanVersion:   firstNonZero(envelopeStateInt(state, "euclo.plan_version"), envelopeStateStructInt(state, "euclo.active_plan_version", "Version")),
+		RootChunkIDs:  envelopeStateStringSlice(state, "euclo.bkc.root_chunk_ids"),
+		ChunkStateRef: envelopeStateString(state, "euclo.bkc.checkpoint_ref"),
 		WorkflowStore: workflowStore,
 		WorkflowID:    workflowID,
 		RunID:         runID,
 		Telemetry:     telemetry,
 	}
+}
+
+func envelopeStateString(state *core.Context, key string) string {
+	if state == nil {
+		return ""
+	}
+	return state.GetString(key)
+}
+
+func envelopeStateInt(state *core.Context, key string) int {
+	if state == nil {
+		return 0
+	}
+	raw, ok := state.Get(key)
+	if !ok || raw == nil {
+		return 0
+	}
+	switch typed := raw.(type) {
+	case int:
+		return typed
+	case int8:
+		return int(typed)
+	case int16:
+		return int(typed)
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	case float64:
+		return int(typed)
+	default:
+		return 0
+	}
+}
+
+func envelopeStateStringSlice(state *core.Context, key string) []string {
+	if state == nil {
+		return nil
+	}
+	raw, ok := state.Get(key)
+	if !ok || raw == nil {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case []string:
+		return append([]string(nil), typed...)
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text := strings.TrimSpace(fmt.Sprint(item)); text != "" && text != "<nil>" {
+				out = append(out, text)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func envelopeStateStructString(state *core.Context, key, field string) string {
+	raw, ok := envelopeStateValue(state, key)
+	if !ok {
+		return ""
+	}
+	value := reflect.ValueOf(raw)
+	if value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			return ""
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return ""
+	}
+	f := value.FieldByName(field)
+	if !f.IsValid() || !f.CanInterface() {
+		return ""
+	}
+	if text, ok := f.Interface().(string); ok {
+		return strings.TrimSpace(text)
+	}
+	return ""
+}
+
+func envelopeStateStructInt(state *core.Context, key, field string) int {
+	raw, ok := envelopeStateValue(state, key)
+	if !ok {
+		return 0
+	}
+	value := reflect.ValueOf(raw)
+	if value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			return 0
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return 0
+	}
+	f := value.FieldByName(field)
+	if !f.IsValid() || !f.CanInterface() {
+		return 0
+	}
+	switch typed := f.Interface().(type) {
+	case int:
+		return typed
+	case int8:
+		return int(typed)
+	case int16:
+		return int(typed)
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	case float64:
+		return int(typed)
+	default:
+		return 0
+	}
+}
+
+func envelopeStateValue(state *core.Context, key string) (any, bool) {
+	if state == nil {
+		return nil, false
+	}
+	raw, ok := state.Get(key)
+	return raw, ok && raw != nil
+}
+
+func firstNonZero(values ...int) int {
+	for _, value := range values {
+		if value != 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 // ClassificationContextPayload converts a TaskClassification to a map for task context.

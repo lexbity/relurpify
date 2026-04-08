@@ -5,10 +5,11 @@ import "time"
 type InteractionKind string
 
 const (
-	InteractionPatternProposal  InteractionKind = "pattern_proposal"
-	InteractionAnchorProposal   InteractionKind = "anchor_proposal"
-	InteractionTensionReview    InteractionKind = "tension_review"
-	InteractionIntentRefinement InteractionKind = "intent_refinement"
+	InteractionPatternProposal   InteractionKind = "pattern_proposal"
+	InteractionAnchorProposal    InteractionKind = "anchor_proposal"
+	InteractionTensionReview     InteractionKind = "tension_review"
+	InteractionIntentRefinement  InteractionKind = "intent_refinement"
+	InteractionKnowledgeProposal InteractionKind = "knowledge_proposal"
 )
 
 type SubjectType string

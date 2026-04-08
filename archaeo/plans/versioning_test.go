@@ -109,3 +109,48 @@ func TestArchiveVersion(t *testing.T) {
 	require.NotNil(t, lineage)
 	require.Nil(t, lineage.ActiveVersion) // because the only version is archived
 }
+
+func TestDraftVersionPersistsChunkAnchors(t *testing.T) {
+	now := time.Now().UTC()
+	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer workflowStore.Close()
+
+	ctx := context.Background()
+	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-anchors",
+		TaskID:      "task-anchors",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "plan",
+		Status:      memory.WorkflowRunStatusRunning,
+	}))
+
+	svc := Service{
+		Store:         &versioningTestStore{},
+		WorkflowStore: workflowStore,
+		Now:           func() time.Time { return now },
+	}
+	plan := &frameworkplan.LivingPlan{
+		ID:         "plan-anchors",
+		WorkflowID: "wf-anchors",
+		Title:      "Anchored",
+		Steps:      map[string]*frameworkplan.PlanStep{},
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	record, err := svc.DraftVersion(ctx, plan, DraftVersionInput{
+		WorkflowID:    "wf-anchors",
+		RootChunkIDs:  []string{"chunk-a", "chunk-b"},
+		ChunkStateRef: "chunk-state:v1",
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"chunk-a", "chunk-b"}, record.RootChunkIDs)
+	require.Equal(t, "chunk-state:v1", record.ChunkStateRef)
+
+	loaded, err := svc.LoadVersion(ctx, "wf-anchors", record.Version)
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, []string{"chunk-a", "chunk-b"}, loaded.RootChunkIDs)
+	require.Equal(t, "chunk-state:v1", loaded.ChunkStateRef)
+}

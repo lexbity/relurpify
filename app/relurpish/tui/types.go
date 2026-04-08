@@ -1,6 +1,10 @@
 package tui
 
-import "time"
+import (
+	"time"
+
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
+)
 
 // TabID identifies one of the main TUI tabs. String-based to support
 // agent-declared tabs without a central enum.
@@ -52,6 +56,7 @@ const (
 	// Archaeo subtabs — euclo-specific.
 	SubTabArchaeoPlan    SubTabID = "plan"
 	SubTabArchaeoExplore SubTabID = "archaeo-explore" // distinct from SubTabPlannerExplore
+	SubTabArchaeoReview  SubTabID = "review"
 	SubTabArchaeoHistory SubTabID = "history"
 )
 
@@ -273,6 +278,7 @@ func registerEucloTabs(reg *TabRegistry) {
 		SubTabs: []SubTabDefinition{
 			{SubTabArchaeoPlan, "plan"},
 			{SubTabArchaeoExplore, "explore"},
+			{SubTabArchaeoReview, "review"},
 			{SubTabArchaeoHistory, "history"},
 		},
 	})
@@ -318,6 +324,12 @@ type PlanVersionInfo struct {
 // archaeo history subtab.
 type PlanHistoryUpdatedMsg struct {
 	Versions []PlanVersionInfo
+}
+
+// ArchaeoLearningQueueMsg delivers the current pending learning queue to the
+// archaeology pane review subtab.
+type ArchaeoLearningQueueMsg struct {
+	Interactions []archaeolearning.Interaction
 }
 
 // SessionLiveSnapshotMsg delivers the richer runtime-backed snapshot for the

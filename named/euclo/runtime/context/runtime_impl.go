@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -23,15 +24,20 @@ type ContextRuntime struct {
 }
 
 type ContextRuntimeConfig struct {
-	Config       *core.Config
-	Model        core.LanguageModel
-	MemoryStore  memory.MemoryStore
-	IndexManager *ast.IndexManager
-	SearchEngine *search.SearchEngine
+	Config            *core.Config
+	Model             core.LanguageModel
+	MemoryStore       memory.MemoryStore
+	IndexManager      *ast.IndexManager
+	SearchEngine      *search.SearchEngine
+	BKCBootstrapReady bool
 }
 
-func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloruntime.ModeResolution, work eucloruntime.UnitOfWork) *ContextRuntime {
+func BuildContextRuntime(task *core.Task, state *core.Context, cfg ContextRuntimeConfig, mode eucloruntime.ModeResolution, work eucloruntime.UnitOfWork) *ContextRuntime {
 	strategy, strategyName := selectContextStrategy(mode, work)
+	if bkcStrategy, ok := wrapBKCStrategy(task, state, cfg, mode, work, strategy); ok {
+		strategy = bkcStrategy
+		strategyName = strategyName + "+bkc"
+	}
 	preferences := buildContextPolicyPreferences(mode, work)
 	spec := agentContextSpec(cfg.Config)
 	policy := contextmgr.NewContextPolicy(contextmgr.ContextPolicyConfig{
@@ -46,7 +52,7 @@ func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloru
 		system, tools, output := contextReservationsForWork(work)
 		policy.Budget.SetReservations(system, tools, output)
 	}
-	
+
 	// Get confirmed files from task context or state
 	var confirmedFiles []string
 	if task != nil && task.Context != nil {
@@ -62,11 +68,11 @@ func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloru
 			}
 		}
 	}
-	
+
 	// Also check if we have a state attached to the task (for progressive loading)
 	// The actual loading of confirmed files will be done in Activate method
-	
-	state := ContextRuntimeState{
+
+	runtimeState := ContextRuntimeState{
 		ModeID:               mode.ModeID,
 		ExecutorFamily:       work.ExecutorDescriptor.Family,
 		StrategyName:         strategyName,
@@ -80,18 +86,18 @@ func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloru
 		UpdatedAt:            time.Now().UTC(),
 	}
 	if policy != nil && policy.Budget != nil {
-		state.BudgetMaxTokens = policy.Budget.MaxTokens
-		state.AvailableContextTokens = policy.Budget.AvailableForContext
-		state.BudgetState = budgetStateLabel(policy.Budget.CheckBudget())
+		runtimeState.BudgetMaxTokens = policy.Budget.MaxTokens
+		runtimeState.AvailableContextTokens = policy.Budget.AvailableForContext
+		runtimeState.BudgetState = budgetStateLabel(policy.Budget.CheckBudget())
 	}
-	
+
 	rt := &ContextRuntime{
 		Policy:         policy,
 		Shared:         core.NewSharedContext(core.NewContext(), policy.Budget, policy.Summarizer),
-		State:          state,
-		protectedPaths: stringSliceSet(state.ProtectedPaths),
+		State:          runtimeState,
+		protectedPaths: stringSliceSet(runtimeState.ProtectedPaths),
 	}
-	
+
 	// Pre-load confirmed files if policy is available
 	if policy != nil && policy.Progressive != nil && len(confirmedFiles) > 0 {
 		for _, path := range confirmedFiles {
@@ -99,7 +105,7 @@ func BuildContextRuntime(task *core.Task, cfg ContextRuntimeConfig, mode eucloru
 			_ = policy.Progressive.DrillDown(path)
 		}
 	}
-	
+
 	return rt
 }
 
@@ -107,7 +113,7 @@ func (rt *ContextRuntime) Activate(task *core.Task, state *core.Context, model c
 	if rt == nil || rt.Policy == nil || state == nil {
 		return ContextRuntimeState{}
 	}
-	
+
 	rt.State.InitialLoadAttempted = true
 	if err := rt.Policy.InitialLoad(task); err != nil {
 		rt.State.LastInitialLoadError = err.Error()
@@ -259,6 +265,71 @@ func contextProtectedPaths(task *core.Task, work eucloruntime.UnitOfWork) []stri
 		}
 	}
 	return uniqueStrings(paths)
+}
+
+func wrapBKCStrategy(task *core.Task, state *core.Context, cfg ContextRuntimeConfig, mode eucloruntime.ModeResolution, work eucloruntime.UnitOfWork, base contextmgr.ContextStrategy) (contextmgr.ContextStrategy, bool) {
+	if base == nil {
+		return nil, false
+	}
+	if !cfg.BKCBootstrapReady {
+		return base, false
+	}
+	seedChunks := bkcSeedChunks(task, state, mode, work)
+	if len(seedChunks) == 0 {
+		return base, false
+	}
+	streamer := &archaeobkc.Streamer{Store: bkcChunkStore(cfg)}
+	return &bkcContextStrategy{base: base, streamer: streamer, seedChunks: seedChunks}, true
+}
+
+func bkcSeedChunks(task *core.Task, state *core.Context, mode eucloruntime.ModeResolution, work eucloruntime.UnitOfWork) []contextmgr.ContextChunk {
+	var chunks []contextmgr.ContextChunk
+	if state != nil {
+		if raw, ok := state.Get("euclo.bkc.context_chunks"); ok && raw != nil {
+			chunks = append(chunks, contextChunksFromAny(raw)...)
+		}
+		if len(chunks) == 0 {
+			if raw, ok := state.Get("euclo.semantic_context"); ok && raw != nil {
+				chunks = append(chunks, contextChunksFromAny(raw)...)
+			}
+		}
+	}
+	if len(chunks) > 0 {
+		return uniqueContextChunks(chunks)
+	}
+	var rootChunkIDs []string
+	switch {
+	case work.PlanBinding != nil && len(work.PlanBinding.RootChunkIDs) > 0:
+		rootChunkIDs = append(rootChunkIDs, work.PlanBinding.RootChunkIDs...)
+	case strings.EqualFold(mode.ModeID, "planning"), strings.EqualFold(mode.ModeID, "review"):
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "root_chunk_ids")...)
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "active_plan_root_chunk_ids")...)
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "checkpoint_root_chunk_ids")...)
+	case strings.EqualFold(mode.ModeID, "debug"):
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "root_chunk_ids")...)
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "tension_refs")...)
+	default:
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "root_chunk_ids")...)
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "learning_interaction_refs")...)
+	}
+	if len(rootChunkIDs) == 0 && state != nil {
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "root_chunk_ids")...)
+		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(task, "tension_refs")...)
+	}
+	if len(rootChunkIDs) == 0 {
+		return nil
+	}
+	for _, id := range rootChunkIDs {
+		chunks = append(chunks, contextmgr.ContextChunk{ID: strings.TrimSpace(id)})
+	}
+	return uniqueContextChunks(chunks)
+}
+
+func bkcChunkStore(cfg ContextRuntimeConfig) *archaeobkc.ChunkStore {
+	if cfg.IndexManager == nil || cfg.IndexManager.GraphDB == nil {
+		return nil
+	}
+	return &archaeobkc.ChunkStore{Graph: cfg.IndexManager.GraphDB}
 }
 
 func stringSliceSet(values []string) map[string]struct{} {

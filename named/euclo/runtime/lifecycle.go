@@ -232,6 +232,7 @@ func clonePlanBinding(in *UnitOfWorkPlanBinding) *UnitOfWorkPlanBinding {
 		return nil
 	}
 	out := *in
+	out.RootChunkIDs = append([]string(nil), in.RootChunkIDs...)
 	out.StepIDs = append([]string(nil), in.StepIDs...)
 	if len(in.ArchaeoRefs) > 0 {
 		out.ArchaeoRefs = make(map[string][]string, len(in.ArchaeoRefs))

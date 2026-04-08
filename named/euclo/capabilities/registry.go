@@ -7,6 +7,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	bkccaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/bkc"
 	debugcaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/debug"
 	localcaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 )
@@ -22,6 +23,10 @@ func NewEucloCapabilityRegistry() *EucloCapabilityRegistry {
 
 func NewDefaultCapabilityRegistry(env agentenv.AgentEnvironment) *EucloCapabilityRegistry {
 	reg := NewEucloCapabilityRegistry()
+	_ = reg.Register(bkccaps.NewCompileCapability(env))
+	_ = reg.Register(bkccaps.NewStreamCapability(env))
+	_ = reg.Register(bkccaps.NewCheckpointCapability(env))
+	_ = reg.Register(bkccaps.NewInvalidateCapability(env))
 	_ = reg.Register(debugcaps.NewInvestigateRegressionCapability(env))
 	_ = reg.Register(localcaps.NewDesignAlternativesCapability(env))
 	_ = reg.Register(localcaps.NewExecutionProfileSelectCapability(env))

@@ -7,7 +7,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
+	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
+	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
@@ -165,13 +168,41 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	embedder := retrieval.NewOllamaEmbedder(cfg.OllamaEndpoint, ollamaModel)
 
 	// Phase I: ServiceManager Setup & Scheduler Registration
+	env := boot.Environment
 	sm := NewServiceManager()
+	bkcEvents := &archaeobkc.EventBus{}
 	sm.Register("scheduler", scheduler)
+	if env.IndexManager != nil {
+		sm.Register("bkc.workspace_bootstrap", &WorkspaceBootstrapService{
+			IndexManager:  env.IndexManager,
+			EventBus:      bkcEvents,
+			WorkspaceRoot: cfg.Workspace,
+		})
+		if env.IndexManager.GraphDB != nil && workflowStore != nil {
+			sm.Register("bkc.invalidation", &archaeobkc.InvalidationPass{
+				Store: &archaeobkc.ChunkStore{Graph: env.IndexManager.GraphDB},
+				Staleness: &archaeobkc.StalenessManager{
+					Store:     &archaeobkc.ChunkStore{Graph: env.IndexManager.GraphDB},
+					Propagate: true,
+					MaxDepth:  3,
+				},
+				Tensions: archaeobindings.Runtime{
+					WorkflowStore: workflowStore,
+					Now:           time.Now,
+				}.TensionService(),
+				Events:        bkcEvents,
+				WorkspaceRoot: cfg.Workspace,
+			})
+		}
+	}
+	sm.Register("bkc.git_watcher", &GitWatcherService{
+		WorkspaceRoot: cfg.Workspace,
+		EventBus:      bkcEvents,
+	})
 
 	// Register additional services here if needed:
 	// sm.Register("custom-worker", &CustomWorker{})
 
-	env := boot.Environment
 	env.Embedder = embedder
 	env.Scheduler = scheduler
 	env.GuidanceBroker = guidanceBroker
@@ -181,6 +212,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 
 	// Attach ServiceManager to environment (for direct access)
 	env.ServiceManager = sm
+	env.BKCEvents = bkcEvents
 
 	ws := &Workspace{
 		Environment:          env,
@@ -279,5 +311,3 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, core.Telemetry,
 
 	return logFile, logger, telemetry.MultiplexTelemetry{Sinks: sinks}, nil
 }
-
-

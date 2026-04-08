@@ -616,7 +616,9 @@ func rootHandleLearning(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	}
 	interactions := m.runtime.PendingLearning()
 	m.addSystemMessage(formatPendingLearningSummary(interactions))
-	return m, nil
+	m.setActiveTab(TabArchaeo)
+	m.setActiveSubTab(SubTabArchaeoReview)
+	return m, m.refreshArchaeoLearningQueueCmd()
 }
 
 func rootHandleMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
@@ -954,13 +956,13 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		m.addSystemMessage("Usage: /service <stop|restart|restart-all> <id>")
 		return m, nil
 	}
-	
+
 	action := strings.ToLower(args[0])
 	if m.runtime == nil {
 		m.addSystemMessage("Runtime unavailable")
 		return m, nil
 	}
-	
+
 	switch action {
 	case "stop":
 		if len(args) < 2 {
@@ -975,7 +977,7 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			}
 			return chatSystemMsg{Text: fmt.Sprintf("Service %s stopped", serviceID)}
 		}
-		
+
 	case "restart":
 		if len(args) < 2 {
 			m.addSystemMessage("Usage: /service restart <service-id>")
@@ -989,7 +991,7 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			}
 			return chatSystemMsg{Text: fmt.Sprintf("Service %s restarted", serviceID)}
 		}
-		
+
 	case "restart-all":
 		return m, func() tea.Msg {
 			err := m.runtime.RestartAllServices(context.Background())
@@ -998,7 +1000,7 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			}
 			return chatSystemMsg{Text: "All services restarted"}
 		}
-		
+
 	default:
 		m.addSystemMessage("Unknown service action. Use: stop, restart, restart-all")
 		return m, nil
