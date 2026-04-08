@@ -211,50 +211,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 				return &graph.StepRecovery{Diagnosis: diagnosis, Notes: notes}, nil
 			},
 			AfterStep: func(step core.PlanStep, s *core.Context, result *core.Result) {
-				// Keep HTN execution state and legacy plan.completed_steps in sync.
-				completed := runtime.CompletedStepsFromContext(s)
-				if !containsStepID(completed, step.ID) {
-					completed = append(completed, step.ID)
-				}
-				s.Set("plan.completed_steps", completed)
-				execution := runtime.LoadExecutionState(s)
-				execution.CompletedSteps = append([]string(nil), completed...)
-				runtime.PublishExecutionState(s, execution)
-				if checkpointStore != nil {
-					_ = checkpointStore.Save(&frameworkpipeline.Checkpoint{
-						CheckpointID: fmt.Sprintf("htn_%s_%d", step.ID, time.Now().UnixNano()),
-						TaskID:       taskID(resolvedTask),
-						StageName:    step.ID,
-						StageIndex:   stepIndexes[step.ID],
-						CreatedAt:    time.Now().UTC(),
-						Context:      s.Clone(),
-						Result: frameworkpipeline.StageResult{
-							StageName:     step.ID,
-							DecodedOutput: resultData(result),
-							ValidationOK:  result != nil && result.Success,
-							ErrorText:     resultErrorText(result),
-							Transition: frameworkpipeline.StageTransition{
-								Kind: frameworkpipeline.TransitionNext,
-							},
-						},
-					})
-				}
-				// Phase 9: Persist operator outcome to framework artifacts.
-				if surfaces.Workflow != nil && workflowID != "" && runID != "" {
-					operatorName := step.Tool
-					if step.Tool == "" {
-						operatorName = step.ID
-					}
-					success := result != nil && result.Success
-					var outputKeys []string
-					if result != nil && result.Data != nil {
-						for k := range result.Data {
-							outputKeys = append(outputKeys, k)
-						}
-					}
-					stepRunID := fmt.Sprintf("%s_%d", step.ID, time.Now().UnixNano())
-					_ = a.persistOperatorOutcome(ctx, surfaces.Workflow, workflowID, runID, stepRunID, operatorName, step.ID, 0, success, outputKeys, nil)
-				}
+				a.afterStep(ctx, step, s, result, checkpointStore, stepIndexes, surfaces.Workflow, workflowID, runID, resolvedTask)
 			},
 		},
 	}
@@ -304,64 +261,6 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 	return result, nil
 }
 
-func compactHTNCheckpointState(state *core.Context) {
-	if state == nil {
-		return
-	}
-	if _, ok := state.Get(runtime.ContextKeyCheckpointRef); !ok {
-		return
-	}
-	raw, ok := state.Get(runtime.ContextKeyCheckpoint)
-	if !ok {
-		return
-	}
-	switch checkpoint := raw.(type) {
-	case runtime.CheckpointState:
-		state.Set(runtime.ContextKeyCheckpoint, compactHTNCheckpoint(checkpoint))
-	case *runtime.CheckpointState:
-		if checkpoint != nil {
-			state.Set(runtime.ContextKeyCheckpoint, compactHTNCheckpoint(*checkpoint))
-		}
-	case map[string]any:
-		state.Set(runtime.ContextKeyCheckpoint, compactHTNCheckpointMap(checkpoint))
-	}
-}
-
-func compactHTNCheckpoint(checkpoint runtime.CheckpointState) map[string]any {
-	return map[string]any{
-		"checkpoint_id":   checkpoint.CheckpointID,
-		"stage_name":      checkpoint.StageName,
-		"stage_index":     checkpoint.StageIndex,
-		"workflow_id":     checkpoint.WorkflowID,
-		"run_id":          checkpoint.RunID,
-		"completed_steps": len(checkpoint.CompletedSteps),
-		"has_snapshot":    checkpoint.Snapshot != nil,
-		"schema_version":  checkpoint.SchemaVersion,
-	}
-}
-
-func compactHTNCheckpointMap(checkpoint map[string]any) map[string]any {
-	value := map[string]any{
-		"checkpoint_id":  checkpoint["checkpoint_id"],
-		"stage_name":     checkpoint["stage_name"],
-		"stage_index":    checkpoint["stage_index"],
-		"workflow_id":    checkpoint["workflow_id"],
-		"run_id":         checkpoint["run_id"],
-		"schema_version": checkpoint["schema_version"],
-	}
-	if completed, ok := checkpoint["completed_steps"]; ok {
-		switch values := completed.(type) {
-		case []string:
-			value["completed_steps"] = len(values)
-		case []any:
-			value["completed_steps"] = len(values)
-		}
-	}
-	_, hasSnapshot := checkpoint["snapshot"]
-	value["has_snapshot"] = hasSnapshot
-	return value
-}
-
 func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, step core.PlanStep, _ *core.Context) *core.Task {
 	stepTask := core.CloneTask(parentTask)
 	if stepTask == nil {
@@ -397,6 +296,64 @@ func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, ste
 		stepTask.Instruction += fmt.Sprintf("\nVerification: %s", step.Verification)
 	}
 	return stepTask
+}
+
+// afterStep is called by the PlanExecutor after each step completes. It syncs
+// completed-step tracking, saves a pipeline checkpoint, and persists the
+// operator outcome to the workflow store.
+func (a *HTNAgent) afterStep(
+	ctx context.Context,
+	step core.PlanStep,
+	state *core.Context,
+	result *core.Result,
+	checkpointStore *agentpipeline.SQLitePipelineCheckpointStore,
+	stepIndexes map[string]int,
+	wfStore memory.WorkflowStateStore,
+	workflowID, runID string,
+	task *core.Task,
+) {
+	completed := runtime.CompletedStepsFromContext(state)
+	if !containsStepID(completed, step.ID) {
+		completed = append(completed, step.ID)
+	}
+	state.Set("plan.completed_steps", completed)
+	execution := runtime.LoadExecutionState(state)
+	execution.CompletedSteps = append([]string(nil), completed...)
+	runtime.PublishExecutionState(state, execution)
+	if checkpointStore != nil {
+		_ = checkpointStore.Save(&frameworkpipeline.Checkpoint{
+			CheckpointID: fmt.Sprintf("htn_%s_%d", step.ID, time.Now().UnixNano()),
+			TaskID:       taskID(task),
+			StageName:    step.ID,
+			StageIndex:   stepIndexes[step.ID],
+			CreatedAt:    time.Now().UTC(),
+			Context:      state.Clone(),
+			Result: frameworkpipeline.StageResult{
+				StageName:     step.ID,
+				DecodedOutput: resultData(result),
+				ValidationOK:  result != nil && result.Success,
+				ErrorText:     resultErrorText(result),
+				Transition: frameworkpipeline.StageTransition{
+					Kind: frameworkpipeline.TransitionNext,
+				},
+			},
+		})
+	}
+	if wfStore != nil && workflowID != "" && runID != "" {
+		operatorName := step.Tool
+		if step.Tool == "" {
+			operatorName = step.ID
+		}
+		success := result != nil && result.Success
+		var outputKeys []string
+		if result != nil && result.Data != nil {
+			for k := range result.Data {
+				outputKeys = append(outputKeys, k)
+			}
+		}
+		stepRunID := fmt.Sprintf("%s_%d", step.ID, time.Now().UnixNano())
+		_ = a.persistOperatorOutcome(ctx, wfStore, workflowID, runID, stepRunID, operatorName, step.ID, 0, success, outputKeys, nil)
+	}
 }
 
 // delegateToPrimitive passes the task through the capability dispatcher.
@@ -438,181 +395,11 @@ func (n *noopAgent) Execute(_ context.Context, _ *core.Task, _ *core.Context) (*
 	return &core.Result{Success: true, Data: map[string]any{}}, nil
 }
 
-type recordingPrimitiveAgent struct {
-	delegate graph.WorkflowExecutor
-	runtime  memory.RuntimeMemoryStore
-	workflow interface {
-		PutKnowledge(context.Context, memory.KnowledgeRecord) error
-		AppendEvent(context.Context, memory.WorkflowEventRecord) error
-	}
-	workflowID string
-	runID      string
-}
-
-func (a *recordingPrimitiveAgent) BranchExecutor() (graph.WorkflowExecutor, error) {
-	if a == nil {
-		return &recordingPrimitiveAgent{}, nil
-	}
-	branch := &recordingPrimitiveAgent{
-		runtime:    a.runtime,
-		workflow:   a.workflow,
-		workflowID: a.workflowID,
-		runID:      a.runID,
-	}
-	if provider, ok := a.delegate.(graph.BranchExecutorProvider); ok {
-		exec, err := provider.BranchExecutor()
-		if err != nil {
-			return nil, err
-		}
-		branch.delegate = exec
-		return branch, nil
-	}
-	branch.delegate = a.delegate
-	return branch, nil
-}
-
-func (a *recordingPrimitiveAgent) Initialize(cfg *core.Config) error {
-	if a == nil || a.delegate == nil {
-		return nil
-	}
-	return a.delegate.Initialize(cfg)
-}
-
-func (a *recordingPrimitiveAgent) Capabilities() []core.Capability {
-	if a == nil || a.delegate == nil {
-		return nil
-	}
-	return a.delegate.Capabilities()
-}
-
-func (a *recordingPrimitiveAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
-	if a == nil || a.delegate == nil {
-		return nil, nil
-	}
-	return a.delegate.BuildGraph(task)
-}
-
-func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
-	if a == nil || a.delegate == nil {
-		return &core.Result{Success: true}, nil
-	}
-	result, err := a.delegate.Execute(ctx, task, state)
-	a.persistStep(ctx, task, result, err)
-	return result, err
-}
-
-func (a *recordingPrimitiveAgent) persistStep(ctx context.Context, task *core.Task, result *core.Result, execErr error) {
-	stepID, stepTitle := htnStepMetadata(task)
-	if stepID == "" {
-		return
-	}
-	summary := htnResultSummary(result, execErr)
-	now := time.Now().UTC()
-	if a.runtime != nil {
-		record := memory.DeclarativeMemoryRecord{
-			RecordID:   fmt.Sprintf("htn_step_%d", now.UnixNano()),
-			Scope:      memory.MemoryScopeProject,
-			Kind:       memory.DeclarativeMemoryKindFact,
-			Title:      stepTitle,
-			Content:    summary,
-			Summary:    summary,
-			WorkflowID: a.workflowID,
-			TaskID:     taskID(task),
-			Verified:   execErr == nil,
-			CreatedAt:  now,
-			UpdatedAt:  now,
-			Tags:       []string{"agent:htn", "step:" + stepID},
-			Metadata: map[string]any{
-				"step_id": stepID,
-				"run_id":  a.runID,
-				"status":  htnStatus(execErr),
-			},
-		}
-		_ = a.runtime.PutDeclarative(ctx, record)
-	}
-	if a.workflow != nil && strings.TrimSpace(a.workflowID) != "" {
-		kind := memory.KnowledgeKindFact
-		title := "Primitive step result"
-		status := "accepted"
-		eventType := "step_completed"
-		if execErr != nil {
-			kind = memory.KnowledgeKindIssue
-			title = "Primitive step failure"
-			status = "open"
-			eventType = "step_failed"
-		}
-		_ = a.workflow.PutKnowledge(ctx, memory.KnowledgeRecord{
-			RecordID:   fmt.Sprintf("htn_knowledge_%d", now.UnixNano()),
-			WorkflowID: a.workflowID,
-			StepID:     stepID,
-			Kind:       kind,
-			Title:      title,
-			Content:    summary,
-			Status:     status,
-			Metadata:   map[string]any{"agent": "htn", "run_id": a.runID},
-			CreatedAt:  now,
-		})
-		_ = a.workflow.AppendEvent(ctx, memory.WorkflowEventRecord{
-			EventID:    fmt.Sprintf("htn_event_%d", now.UnixNano()),
-			WorkflowID: a.workflowID,
-			RunID:      a.runID,
-			StepID:     stepID,
-			EventType:  eventType,
-			Message:    summary,
-			CreatedAt:  now,
-		})
-	}
-}
-
-func htnStepMetadata(task *core.Task) (string, string) {
-	if task == nil || task.Context == nil {
-		return "", ""
-	}
-	raw, ok := task.Context["current_step"]
-	if !ok {
-		return "", ""
-	}
-	switch step := raw.(type) {
-	case core.PlanStep:
-		return step.ID, strings.TrimSpace(step.Description)
-	case *core.PlanStep:
-		if step == nil {
-			return "", ""
-		}
-		return step.ID, strings.TrimSpace(step.Description)
-	default:
-		return "", ""
-	}
-}
-
-func htnResultSummary(result *core.Result, execErr error) string {
-	if execErr != nil {
-		return execErr.Error()
-	}
-	if result == nil {
-		return "step completed"
-	}
-	if text := strings.TrimSpace(fmt.Sprint(result.Data["text"])); text != "" && text != "<nil>" {
-		return text
-	}
-	if len(result.Data) == 0 {
-		return "step completed"
-	}
-	return fmt.Sprint(result.Data)
-}
-
 func taskID(task *core.Task) string {
 	if task == nil {
 		return ""
 	}
 	return strings.TrimSpace(task.ID)
-}
-
-func htnStatus(execErr error) string {
-	if execErr != nil {
-		return "failed"
-	}
-	return "completed"
 }
 
 func timePtr(value time.Time) *time.Time {
