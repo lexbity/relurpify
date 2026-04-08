@@ -38,10 +38,10 @@ type ChatSubTabPolicy struct {
 
 // chatSubTabPolicies maps each chat subtab to its execution policy.
 var chatSubTabPolicies = map[SubTabID]ChatSubTabPolicy{
-	SubTabChatLocalRead:   {ModeHint: "review", EditEnabled: false, OnlineToolsEnabled: false},
-	SubTabChatLocalEdit:   {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: false},
-	SubTabChatOnlineRead:  {ModeHint: "research", EditEnabled: false, OnlineToolsEnabled: true},
-	SubTabChatOnlineEdit:  {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: true},
+	SubTabChatLocalRead:  {ModeHint: "review", EditEnabled: false, OnlineToolsEnabled: false},
+	SubTabChatLocalEdit:  {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: false},
+	SubTabChatOnlineRead: {ModeHint: "research", EditEnabled: false, OnlineToolsEnabled: true},
+	SubTabChatOnlineEdit: {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: true},
 }
 
 // ChatPane owns the message feed and run management.
@@ -73,11 +73,11 @@ type ChatPane struct {
 	compactMsgCount int
 
 	// Context sidebar state
-	showSidebar      bool
-	sidebarWidth     int
-	sidebarCursor    int
-	sidebarViewport  viewport.Model
-	contextEntries   []ContextSidebarEntry
+	showSidebar     bool
+	sidebarWidth    int
+	sidebarCursor   int
+	sidebarViewport viewport.Model
+	contextEntries  []ContextSidebarEntry
 }
 
 // NewChatPane initializes the ChatPane. The feed is created but not sized yet.
@@ -138,14 +138,14 @@ func (p *ChatPane) Cleanup() {
 func (p *ChatPane) SetSize(w, h int) {
 	p.width = w
 	p.height = h
-	
+
 	// Calculate available width for feed (accounting for sidebar)
 	feedWidth := w
 	if p.showSidebar && w > 90 {
 		feedWidth = w - p.sidebarWidth
 	}
 	p.feed.SetSize(feedWidth, h)
-	
+
 	// Update sidebar viewport
 	if p.showSidebar {
 		p.sidebarViewport.Width = p.sidebarWidth
@@ -288,11 +288,11 @@ func (p *ChatPane) View() string {
 	if !p.showSidebar || p.width <= 90 {
 		return p.feed.View()
 	}
-	
+
 	// Render with sidebar
 	feedView := p.feed.View()
 	sidebarView := p.renderSidebar()
-	
+
 	return lipgloss.JoinHorizontal(lipgloss.Top, feedView, sidebarView)
 }
 
@@ -531,7 +531,6 @@ func (p *ChatPane) addSystemMessage(text string) {
 	}
 	p.feed.AppendMessage(msg)
 }
-
 
 // ──────────────────────────────────────────────────────────────
 // ChatPaner interface implementation

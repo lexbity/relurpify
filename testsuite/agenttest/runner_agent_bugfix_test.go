@@ -12,9 +12,9 @@ import (
 	"time"
 
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/agentenv"
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -285,6 +285,11 @@ func TestDefaultAgenttestAllowlistKeepsRuntimeFileTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildCapabilityRegistry: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := bundle.Close(); err != nil {
+			t.Fatalf("close capability bundle: %v", err)
+		}
+	})
 
 	for _, required := range []string{"file_read", "file_write", "file_list", "go_test", "go_build"} {
 		if _, ok := bundle.Registry.Get(required); !ok {
