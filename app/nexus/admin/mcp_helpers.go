@@ -163,9 +163,10 @@ func pageRequestFromQuery(values url.Values) PageRequest {
 // scopeRank maps canonical nexus scope names to their rank. Aliases are
 // resolved in normalizeScope before the map is consulted.
 var scopeRank = map[string]int{
-	"nexus:observer": 1,
-	"nexus:operator": 2,
-	"nexus:admin":    3,
+	"nexus:observer":     1,
+	"nexus:operator":     2,
+	"nexus:admin":        3,
+	"nexus:admin:global": 4,
 }
 
 // normalizeScope maps well-known scope aliases to their canonical form.
@@ -173,10 +174,12 @@ var scopeRank = map[string]int{
 // case (already-normalized scopes stored at principal creation) is zero-alloc.
 func normalizeScope(s string) string {
 	switch s {
-	case "nexus:observer", "nexus:operator", "nexus:admin":
+	case "nexus:observer", "nexus:operator", "nexus:admin", "nexus:admin:global":
 		return s
 	case "gateway:admin", "admin":
 		return "nexus:admin"
+	case "gateway:admin:global", "admin:global":
+		return "nexus:admin:global"
 	case "operator":
 		return "nexus:operator"
 	}
@@ -185,8 +188,12 @@ func normalizeScope(s string) string {
 	switch normalized {
 	case "gateway:admin", "admin":
 		return "nexus:admin"
+	case "gateway:admin:global", "admin:global":
+		return "nexus:admin:global"
 	case "operator":
 		return "nexus:operator"
+	case "nexus:admin:global":
+		return normalized
 	default:
 		return normalized
 	}
@@ -196,7 +203,11 @@ func hasScope(principal core.AuthenticatedPrincipal, minimum string) bool {
 	if minimum == "" {
 		return true
 	}
-	minRank := scopeRank[strings.ToLower(minimum)]
+	minimum = normalizeScope(minimum)
+	minRank, ok := scopeRank[minimum]
+	if !ok {
+		return false
+	}
 	for _, scope := range principal.Scopes {
 		if scopeRank[normalizeScope(scope)] >= minRank {
 			return true

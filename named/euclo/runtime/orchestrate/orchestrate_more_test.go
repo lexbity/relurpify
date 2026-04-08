@@ -1,6 +1,7 @@
 package orchestrate
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -8,7 +9,15 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
+
+type phaseHandlerFunc func(context.Context, interaction.PhaseMachineContext) (interaction.PhaseOutcome, error)
+
+func (f phaseHandlerFunc) Execute(ctx context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+	return f(ctx, mc)
+}
 
 func TestRecoveryStackAndHelperMappings(t *testing.T) {
 	stack := NewRecoveryStack()
@@ -46,6 +55,475 @@ func TestRecoveryStackAndHelperMappings(t *testing.T) {
 	}
 	if got := uniqueRecoveryStrings([]string{" a ", "a", "b", "", "b"}); !reflect.DeepEqual(got, []string{" a ", "a", "b"}) {
 		t.Fatalf("unexpected unique recovery strings: %#v", got)
+	}
+}
+
+func TestSetDefaultSnapshotFuncAndSnapshotFromEnv(t *testing.T) {
+	original := defaultSnapshotFunc
+	t.Cleanup(func() { defaultSnapshotFunc = original })
+
+	defaultSnapshotFunc = func(reg interface{}) euclotypes.CapabilitySnapshot {
+		if reg == nil {
+			return euclotypes.CapabilitySnapshot{}
+		}
+		return euclotypes.CapabilitySnapshot{HasExecuteTools: true, ToolNames: []string{"demo"}}
+	}
+
+	env := euclotypes.ExecutionEnvelope{Registry: capability.NewRegistry()}
+	got := snapshotFromEnv(env)
+	if !got.HasExecuteTools || len(got.ToolNames) != 1 || got.ToolNames[0] != "demo" {
+		t.Fatalf("unexpected snapshot from env: %#v", got)
+	}
+
+	SetDefaultSnapshotFunc(func(reg interface{}) euclotypes.CapabilitySnapshot {
+		return euclotypes.CapabilitySnapshot{HasReadTools: true}
+	})
+	got = snapshotFromEnv(env)
+	if !got.HasReadTools || got.HasExecuteTools {
+		t.Fatalf("expected overridden snapshot func to apply, got %#v", got)
+	}
+
+	if got := snapshotFromEnv(euclotypes.ExecutionEnvelope{}); !reflect.DeepEqual(got, euclotypes.CapabilitySnapshot{}) {
+		t.Fatalf("expected nil registry snapshot to be empty, got %#v", got)
+	}
+}
+
+func TestAdaptCapabilityRegistry(t *testing.T) {
+	if AdaptCapabilityRegistry(nil) != nil {
+		t.Fatal("expected nil registry adapter for nil input")
+	}
+
+	capA := &stubCap{id: "cap-a", eligible: true, status: euclotypes.ExecutionStatusCompleted}
+	reg := capabilities.NewEucloCapabilityRegistry()
+	if err := reg.Register(capA); err != nil {
+		t.Fatalf("register capability: %v", err)
+	}
+
+	adapter := AdaptCapabilityRegistry(reg)
+	if adapter == nil {
+		t.Fatal("expected registry adapter")
+	}
+	if got := adapter.ForProfile("missing"); len(got) != 1 {
+		t.Fatalf("expected adapter to surface registered capability for unknown profile, got %#v", got)
+	}
+	lookedUp, ok := adapter.Lookup("cap-a")
+	if !ok || lookedUp == nil {
+		t.Fatal("expected capability lookup through adapter to succeed")
+	}
+	if lookedUp.Descriptor().ID != "cap-a" {
+		t.Fatalf("unexpected descriptor from adapter: %#v", lookedUp.Descriptor())
+	}
+}
+
+func TestRecoveryControllerAttemptRecoveryBranches(t *testing.T) {
+	t.Run("paradigm switch missing suggestion", func(t *testing.T) {
+		rc := NewRecoveryController(nil, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		failed := euclotypes.ExecutionResult{
+			Status: euclotypes.ExecutionStatusFailed,
+			Artifacts: []euclotypes.Artifact{{
+				ProducerID: "cap-a",
+				Kind:       euclotypes.ArtifactKindAnalyze,
+			}},
+		}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy:          euclotypes.RecoveryStrategyParadigmSwitch,
+			SuggestedParadigm: "",
+		}, failed, testEnvelope(), stack)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || stack.Attempts[0].Success {
+			t.Fatalf("expected one failed attempt, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("paradigm switch missing capability", func(t *testing.T) {
+		rc := NewRecoveryController(recoveryStubRegistry{}, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		failed := euclotypes.ExecutionResult{
+			Status: euclotypes.ExecutionStatusFailed,
+			Artifacts: []euclotypes.Artifact{{
+				ProducerID: "cap-missing",
+				Kind:       euclotypes.ArtifactKindAnalyze,
+			}},
+		}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy:          euclotypes.RecoveryStrategyParadigmSwitch,
+			SuggestedParadigm: "planning",
+		}, failed, testEnvelope(), stack)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || stack.Attempts[0].Reason == "" {
+			t.Fatalf("expected missing capability attempt to be recorded, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("paradigm switch success", func(t *testing.T) {
+		capabilityRun := false
+		capA := &stubCap{
+			id:       "cap-a",
+			eligible: true,
+			status:   euclotypes.ExecutionStatusCompleted,
+			executeFn: func(_ context.Context, env euclotypes.ExecutionEnvelope) euclotypes.ExecutionResult {
+				capabilityRun = true
+				if env.Task == nil || env.Task.Context["euclo.paradigm_override"] != "planning" {
+					t.Fatalf("expected paradigm override in task context, got %#v", env.Task)
+				}
+				return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "recovered"}
+			},
+		}
+		rc := NewRecoveryController(recoveryStubRegistry{byID: map[string]CapabilityI{"cap-a": capA}}, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		failed := euclotypes.ExecutionResult{
+			Status: euclotypes.ExecutionStatusFailed,
+			Artifacts: []euclotypes.Artifact{{
+				ProducerID: "cap-a",
+				Kind:       euclotypes.ArtifactKindAnalyze,
+			}},
+			FailureInfo: &euclotypes.CapabilityFailure{ParadigmUsed: "react"},
+		}
+		env := testEnvelope()
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy:          euclotypes.RecoveryStrategyParadigmSwitch,
+			SuggestedParadigm: "planning",
+		}, failed, env, stack)
+		if !capabilityRun {
+			t.Fatal("expected capability to rerun under paradigm switch")
+		}
+		if got.Status != euclotypes.ExecutionStatusCompleted {
+			t.Fatalf("expected successful recovery result, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || !stack.Attempts[0].Success {
+			t.Fatalf("expected successful paradigm recovery attempt, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("capability fallback missing registry", func(t *testing.T) {
+		rc := NewRecoveryController(nil, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		failed := euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy:            euclotypes.RecoveryStrategyCapabilityFallback,
+			SuggestedCapability: "cap-x",
+		}, failed, testEnvelope(), stack)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || stack.Attempts[0].Reason != "capability registry unavailable" {
+			t.Fatalf("expected registry unavailable attempt, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("capability fallback no candidates", func(t *testing.T) {
+		rc := NewRecoveryController(recoveryStubRegistry{}, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		failed := euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy: euclotypes.RecoveryStrategyCapabilityFallback,
+		}, failed, testEnvelope(), stack)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || stack.Attempts[0].Reason != "no suggested capability" {
+			t.Fatalf("expected no suggested capability attempt, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("capability fallback success", func(t *testing.T) {
+		fallback := &stubCap{
+			id:       "cap-fallback",
+			eligible: true,
+			status:   euclotypes.ExecutionStatusCompleted,
+			summary:  "recovered",
+		}
+		rc := NewRecoveryController(recoveryStubRegistry{byID: map[string]CapabilityI{"cap-fallback": fallback}}, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		failed := euclotypes.ExecutionResult{
+			Status: euclotypes.ExecutionStatusFailed,
+			Artifacts: []euclotypes.Artifact{{
+				ProducerID: "cap-original",
+				Kind:       euclotypes.ArtifactKindAnalyze,
+			}},
+		}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy:            euclotypes.RecoveryStrategyCapabilityFallback,
+			SuggestedCapability: "cap-fallback",
+		}, failed, testEnvelope(), stack)
+		if got.Status != euclotypes.ExecutionStatusCompleted {
+			t.Fatalf("expected fallback success, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || !stack.Attempts[0].Success {
+			t.Fatalf("expected successful capability fallback attempt, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("profile escalation missing registry", func(t *testing.T) {
+		rc := NewRecoveryController(recoveryStubRegistry{}, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		env := testEnvelope()
+		failed := euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy: euclotypes.RecoveryStrategyProfileEscalation,
+		}, failed, env, stack)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || stack.Attempts[0].Reason != "profile registry unavailable" {
+			t.Fatalf("expected profile registry unavailable attempt, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("profile escalation success", func(t *testing.T) {
+		profiles := euclotypes.NewExecutionProfileRegistry()
+		if err := profiles.Register(euclotypes.ExecutionProfileDescriptor{
+			ProfileID:         "current",
+			SupportedModes:    []string{"code"},
+			FallbackProfiles:  []string{"fallback"},
+			PhaseRoutes:       map[string]string{"analyze": "react"},
+			RequiredArtifacts: []string{"euclo.intake"},
+		}); err != nil {
+			t.Fatalf("register current profile: %v", err)
+		}
+		if err := profiles.Register(euclotypes.ExecutionProfileDescriptor{
+			ProfileID:         "fallback",
+			SupportedModes:    []string{"code"},
+			FallbackProfiles:  []string{},
+			PhaseRoutes:       map[string]string{"analyze": "react"},
+			RequiredArtifacts: []string{"euclo.intake"},
+		}); err != nil {
+			t.Fatalf("register fallback profile: %v", err)
+		}
+		fallbackCap := &stubCap{id: "cap-profile", eligible: true, status: euclotypes.ExecutionStatusCompleted, summary: "profile ok"}
+		rc := NewRecoveryController(recoveryStubRegistry{byProfile: map[string][]CapabilityI{"fallback": {fallbackCap}}}, profiles, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		env := testEnvelope()
+		env.Profile.ProfileID = "current"
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy: euclotypes.RecoveryStrategyProfileEscalation,
+		}, euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}, env, stack)
+		if got.Status != euclotypes.ExecutionStatusCompleted {
+			t.Fatalf("expected profile escalation success, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 || !stack.Attempts[0].Success {
+			t.Fatalf("expected successful profile recovery attempt, got %+v", stack.Attempts)
+		}
+	})
+
+	t.Run("mode escalation", func(t *testing.T) {
+		rc := NewRecoveryController(nil, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		failed := euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed, Summary: "bad"}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy: euclotypes.RecoveryStrategyModeEscalation,
+		}, failed, testEnvelope(), stack)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+		if got.RecoveryHint == nil || got.RecoveryHint.Context["requires_approval"] != true {
+			t.Fatalf("expected mode escalation recovery hint, got %+v", got.RecoveryHint)
+		}
+		if len(stack.Attempts) != 1 || stack.Attempts[0].Level != RecoveryLevelMode {
+			t.Fatalf("expected mode escalation attempt, got %+v", stack.Attempts)
+		}
+	})
+}
+
+func TestMaybeResumeInteractiveSessionAndUniqueStrings(t *testing.T) {
+	resumeEmitter := interaction.NewTestFrameEmitter(interaction.ScriptedResponse{
+		Kind:     string(interaction.FrameSessionResume),
+		ActionID: "resume",
+	})
+	machine := interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+		Mode:    "chat",
+		Emitter: resumeEmitter,
+		Phases: []interaction.PhaseDefinition{
+			{ID: "start", Handler: phaseHandlerFunc(func(context.Context, interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+				return interaction.PhaseOutcome{Advance: true}, nil
+			})},
+			{ID: "resume-point", Handler: phaseHandlerFunc(func(context.Context, interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+				return interaction.PhaseOutcome{Advance: true}, nil
+			})},
+		},
+		Resolver: interaction.NewAgencyResolver(),
+	})
+	state := core.NewContext()
+	state.Set("euclo.interaction_state", interaction.InteractionState{
+		Mode:           "chat",
+		CurrentPhase:    "resume-point",
+		PhaseStates:     map[string]any{"resume.key": "value"},
+		PhasesExecuted:  []string{"start"},
+		SkippedPhases:   []string{"skipped"},
+		Selections:      map[string]string{"choice": "resume"},
+	})
+
+	if err := maybeResumeInteractiveSession(context.Background(), machine, state, "chat"); err != nil {
+		t.Fatalf("maybeResumeInteractiveSession: %v", err)
+	}
+	if consumed, _ := state.Get("euclo.session_resume_consumed"); consumed != true {
+		t.Fatalf("expected session resume to be consumed, got %#v", consumed)
+	}
+	if got := machine.CurrentPhase(); got != "resume-point" {
+		t.Fatalf("expected resume jump to resume-point, got %q", got)
+	}
+	if got := machine.State()["resume.key"]; got != "value" {
+		t.Fatalf("expected phase state restoration, got %#v", got)
+	}
+
+	if err := maybeResumeInteractiveSession(context.Background(), machine, state, "chat"); err != nil {
+		t.Fatalf("second maybeResumeInteractiveSession: %v", err)
+	}
+
+	if got := uniqueStrings([]string{"alpha", "", "beta", "alpha", "beta"}); !reflect.DeepEqual(got, []string{"alpha", "beta"}) {
+		t.Fatalf("unexpected unique strings: %#v", got)
+	}
+	if got := uniqueStrings(nil); got != nil {
+		t.Fatalf("expected nil for empty uniqueStrings input, got %#v", got)
+	}
+}
+
+func TestExecuteInteractiveAndTransitions(t *testing.T) {
+	original := defaultSnapshotFunc
+	t.Cleanup(func() { defaultSnapshotFunc = original })
+	defaultSnapshotFunc = func(reg interface{}) euclotypes.CapabilitySnapshot {
+		return euclotypes.CapabilitySnapshot{}
+	}
+
+	env := testEnvelope()
+	env.State.Set("seed.key", "seed")
+	env.State.Set("euclo.artifacts", []euclotypes.Artifact{{
+		ID:         "seed-art",
+		Kind:       euclotypes.ArtifactKindAnalyze,
+		ProducerID: "seed-cap",
+		Summary:    "seed",
+	}})
+
+	registry := interaction.NewModeMachineRegistry()
+	registry.Register("code", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+			Mode:    "code",
+			Emitter: emitter,
+			Resolver: resolver,
+			Phases: []interaction.PhaseDefinition{
+				{
+					ID: "inspect",
+					Handler: phaseHandlerFunc(func(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+						if !mc.Artifacts.Has(euclotypes.ArtifactKindAnalyze) {
+							t.Fatal("expected seed artifact to be loaded into machine")
+						}
+						return interaction.PhaseOutcome{
+							Advance: true,
+							Artifacts: []euclotypes.Artifact{{
+								ID:         "code-art",
+								Kind:       euclotypes.ArtifactKindAnalyze,
+								ProducerID: "code-cap",
+								Summary:    "code",
+							}},
+							StateUpdates: map[string]any{"propose.items": []any{"one", "two"}},
+						}, nil
+					}),
+				},
+			},
+		})
+	})
+
+	pc := NewProfileController(nil, nil, testutil.EnvMinimal(), nil, nil)
+	result, detail, err := pc.ExecuteInteractive(context.Background(), registry, euclotypes.ModeResolution{ModeID: "code"}, env, &interaction.NoopEmitter{})
+	if err != nil {
+		t.Fatalf("ExecuteInteractive: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected interactive success, got %+v", result)
+	}
+	if detail == nil || len(detail.PhasesExecuted) != 1 || detail.PhasesExecuted[0] != "inspect" {
+		t.Fatalf("unexpected interactive detail: %+v", detail)
+	}
+	if _, ok := env.State.Get("euclo.interaction_state"); !ok {
+		t.Fatal("expected interaction state to be persisted")
+	}
+	if _, ok := env.State.Get("pipeline.plan"); !ok {
+		t.Fatal("expected proposal items to be mirrored into pipeline.plan")
+	}
+
+	transitionEmitter := interaction.NewTestFrameEmitter(interaction.ScriptedResponse{
+		Kind:     string(interaction.FrameTransition),
+		ActionID: "accept",
+	})
+	transitionRegistry := interaction.NewModeMachineRegistry()
+	transitionRegistry.Register("code", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+			Mode:    "code",
+			Emitter: emitter,
+			Resolver: resolver,
+			Phases: []interaction.PhaseDefinition{
+				{
+					ID: "inspect",
+					Handler: phaseHandlerFunc(func(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+						return interaction.PhaseOutcome{
+							Advance: true,
+							Artifacts: []euclotypes.Artifact{{
+								ID:         "code-art",
+								Kind:       euclotypes.ArtifactKindAnalyze,
+								ProducerID: "code-cap",
+								Summary:    "code",
+							}},
+							Transition: "debug",
+						}, nil
+					}),
+				},
+			},
+		})
+	})
+	transitionRegistry.Register("debug", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+			Mode:    "debug",
+			Emitter: emitter,
+			Resolver: resolver,
+			Phases: []interaction.PhaseDefinition{
+				{
+					ID: "verify",
+					Handler: phaseHandlerFunc(func(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+						if !mc.Artifacts.Has(euclotypes.ArtifactKindAnalyze) {
+							t.Fatal("expected carry-over artifact in transition target machine")
+						}
+						return interaction.PhaseOutcome{
+							Advance: true,
+							Artifacts: []euclotypes.Artifact{{
+								ID:         "debug-art",
+								Kind:       euclotypes.ArtifactKindPlan,
+								ProducerID: "debug-cap",
+								Summary:    "debug",
+							}},
+						}, nil
+					}),
+				},
+			},
+		})
+	})
+
+	env2 := testEnvelope()
+	env2.State.Set("euclo.artifacts", []euclotypes.Artifact{{
+		ID:         "seed-art",
+		Kind:       euclotypes.ArtifactKindAnalyze,
+		ProducerID: "seed-cap",
+		Summary:    "seed",
+	}})
+	result, detail, err = pc.ExecuteInteractiveWithTransitions(context.Background(), transitionRegistry, euclotypes.ModeResolution{ModeID: "code"}, env2, transitionEmitter, 2)
+	if err != nil {
+		t.Fatalf("ExecuteInteractiveWithTransitions: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected transitioned interactive success, got %+v", result)
+	}
+	if detail == nil || detail.InteractionState.Mode != "debug" {
+		t.Fatalf("expected final interaction state for debug mode, got %+v", detail)
+	}
+	if len(detail.PhasesExecuted) != 2 {
+		t.Fatalf("expected both phase runs to be recorded, got %+v", detail.PhasesExecuted)
+	}
+	if got := uniqueStrings([]string{"inspect", "verify", "inspect", ""}); !reflect.DeepEqual(got, []string{"inspect", "verify"}) {
+		t.Fatalf("unexpected deduped phases: %#v", got)
 	}
 }
 

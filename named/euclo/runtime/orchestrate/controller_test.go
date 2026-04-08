@@ -206,7 +206,8 @@ func TestOrderedPhases_UsesGateChainWhenPresent(t *testing.T) {
 }
 
 type recoveryStubRegistry struct {
-	byID map[string]CapabilityI
+	byID      map[string]CapabilityI
+	byProfile map[string][]CapabilityI
 }
 
 func (r recoveryStubRegistry) Lookup(id string) (CapabilityI, bool) {
@@ -217,7 +218,12 @@ func (r recoveryStubRegistry) Lookup(id string) (CapabilityI, bool) {
 	return c, ok
 }
 
-func (recoveryStubRegistry) ForProfile(string) []CapabilityI { return nil }
+func (r recoveryStubRegistry) ForProfile(profileID string) []CapabilityI {
+	if r.byProfile == nil {
+		return nil
+	}
+	return append([]CapabilityI(nil), r.byProfile[profileID]...)
+}
 
 func TestAttemptRecovery_CapabilityFallbackRunsEligibleCapability(t *testing.T) {
 	saved := defaultSnapshotFunc

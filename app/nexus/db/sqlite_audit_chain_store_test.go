@@ -108,3 +108,30 @@ func TestSQLiteAuditChainStoreDetectsTampering(t *testing.T) {
 	require.False(t, verification.Verified)
 	require.Contains(t, verification.Failure, "sequence 1")
 }
+
+func TestSQLiteAuditChainStoreNilVerifierAndInvalidPath(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewSQLiteAuditChainStore("   ", nil, nil)
+	require.Error(t, err)
+
+	store, err := NewSQLiteAuditChainStore(filepath.Join(t.TempDir(), "audit.db"), fwfmp.NewEd25519SignerFromSeed([]byte("audit-chain-nil-verifier")), nil)
+	require.NoError(t, err)
+	defer store.Close()
+
+	require.NoError(t, store.Log(context.Background(), core.AuditRecord{
+		AgentID:    "runtime-a",
+		Action:     "fmp",
+		Type:       core.FrameworkEventFMPHandoffOffered,
+		Permission: "mesh",
+		Result:     "ok",
+		Metadata: map[string]any{
+			"lineage_id": "lineage-1",
+		},
+	}))
+
+	verification, err := store.VerifyChain(context.Background(), core.AuditChainFilter{LineageID: "lineage-1"})
+	require.NoError(t, err)
+	require.True(t, verification.Verified)
+	require.Equal(t, 1, verification.EntryCount)
+}

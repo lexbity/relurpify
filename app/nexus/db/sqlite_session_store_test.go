@@ -154,6 +154,22 @@ func TestSQLiteSessionStoreGetBoundaryBySessionID(t *testing.T) {
 	require.Equal(t, "sess_opaque_1", got.SessionID)
 }
 
+func TestSQLiteSessionStoreMissingBoundaryLookups(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewSQLiteSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	got, err := store.GetBoundary(context.Background(), "missing")
+	require.NoError(t, err)
+	require.Nil(t, got)
+
+	got, err = store.GetBoundaryBySessionID(context.Background(), "missing")
+	require.NoError(t, err)
+	require.Nil(t, got)
+}
+
 func TestSQLiteSessionStorePersistsSessionDelegations(t *testing.T) {
 	store, err := NewSQLiteSessionStore(filepath.Join(t.TempDir(), "sessions.db"))
 	require.NoError(t, err)
