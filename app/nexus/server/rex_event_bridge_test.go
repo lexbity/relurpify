@@ -119,6 +119,11 @@ func TestRexEventBridgePersistsCursor(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("first event was not handled")
 	}
+	require.Eventually(t, func() bool {
+		seq, err := cursor.Load(context.Background())
+		require.NoError(t, err)
+		return seq == 1
+	}, time.Second, 20*time.Millisecond)
 	cancel1()
 
 	secondHandled := make(chan string, 2)

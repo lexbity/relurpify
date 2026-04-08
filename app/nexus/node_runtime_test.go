@@ -454,14 +454,14 @@ func TestHandleGatewayNodeConnectionAdvertisesAuthoritativeRexRuntimeMetadata(t 
 				Authenticated: true,
 				Actor:         core.EventActor{Kind: "node", ID: "node-1", TenantID: "tenant-1", SubjectKind: core.SubjectKindNode},
 			}, fwgateway.NodeConnectInfo{
-				NodeID:           "node-1",
-				TrustDomain:      "mesh.spoofed",
-				RuntimeID:        "spoofed-runtime",
-				RuntimeVersion:   "9.9.9-spoofed",
-				CompatibilityClass: "spoofed-compat",
+				NodeID:                  "node-1",
+				TrustDomain:             "mesh.spoofed",
+				RuntimeID:               "spoofed-runtime",
+				RuntimeVersion:          "9.9.9-spoofed",
+				CompatibilityClass:      "spoofed-compat",
 				SupportedContextClasses: []string{"spoofed-context"},
-				TransportProfile: fwgateway.TransportProfileWebSocketTLS,
-				PeerKeyID:        "key-1",
+				TransportProfile:        fwgateway.TransportProfileWebSocketTLS,
+				PeerKeyID:               "key-1",
 			}, conn, rexProvider)
 		}))
 	)
@@ -1230,12 +1230,12 @@ func newTransportResumeFixture(t *testing.T) *transportResumeFixture {
 	}
 
 	return &transportResumeFixture{
-		now:            now,
-		ownership:      ownership,
-		rexProvider:    rexProvider,
-		handler:        nexusserver.MeshTransportFrameHandlerWithRuntimeForTest(mesh, connectInfo, rexProvider),
-		ws:             ws,
-		rpc:            rpc,
+		now:         now,
+		ownership:   ownership,
+		rexProvider: rexProvider,
+		handler:     nexusserver.MeshTransportFrameHandlerWithRuntimeForTest(mesh, connectInfo, rexProvider),
+		ws:          ws,
+		rpc:         rpc,
 		resumeFrame: mustRawFrame(t, map[string]any{
 			"type": "fmp.resume.execute",
 			"actor": map[string]any{
@@ -1348,8 +1348,8 @@ func TestMeshTransportFrameHandlerResumeReplayAfterFenceDoesNotCreateDuplicateRe
 	}, 5*time.Second, 20*time.Millisecond)
 	artifactIDsBefore := map[string]bool{}
 	requiredArtifactIDs := map[string]string{
-		"rex.fmp_import":  fixture.destAttempt + ":fmp-import",
-		"rex.fmp_lineage": fixture.destAttempt + ":fmp-lineage",
+		"rex.fmp_import":   fixture.destAttempt + ":fmp-import",
+		"rex.fmp_lineage":  fixture.destAttempt + ":fmp-lineage",
 		"rex.task_request": fixture.destAttempt + ":task-request",
 	}
 	for _, artifact := range artifactsBefore {

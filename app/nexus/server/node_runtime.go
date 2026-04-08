@@ -15,9 +15,15 @@ import (
 	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
 	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
 	"github.com/lexcodex/relurpify/framework/middleware/session"
+	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 )
 
 const NodeDisconnectTimeout = 5 * time.Second
+
+type rexRuntimeView interface {
+	RuntimeProjection() rexnexus.Projection
+	RuntimeDescriptor(context.Context) (core.RuntimeDescriptor, error)
+}
 
 type websocketRPCConn struct {
 	conn *websocket.Conn
@@ -40,7 +46,7 @@ func (c *websocketRPCConn) Close() error {
 	return c.conn.Close()
 }
 
-func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, mesh *fwfmp.Service, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn, rexRuntime interface{}) error {
+func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, identities identity.Store, mesh *fwfmp.Service, principal fwgateway.ConnectionPrincipal, frame fwgateway.NodeConnectInfo, conn *websocket.Conn, rexRuntime rexRuntimeView) error {
 	if manager == nil {
 		return fmt.Errorf("node manager unavailable")
 	}
@@ -77,7 +83,7 @@ func HandleGatewayNodeConnection(ctx context.Context, manager *fwnode.Manager, i
 	return wsConn.ReadLoop(ctx)
 }
 
-func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo, rexRuntime interface{}) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
+func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
 	return func(ctx context.Context, conn *fwnode.WSConnection, frame map[string]json.RawMessage) error {
 		if mesh == nil {
 			return nil
@@ -157,8 +163,8 @@ func meshTransportFrameHandler(mesh *fwfmp.Service, connectInfo fwgateway.NodeCo
 			}
 
 			// Phase 7.3: Include DR metadata from runtime projection for federation health visibility
-			if rexProvider, ok := rexRuntime.(*RexRuntimeProvider); ok && rexProvider != nil {
-				projection := rexProvider.RuntimeProjection()
+			if rexRuntime != nil {
+				projection := rexRuntime.RuntimeProjection()
 				exportAd.FailoverReady = projection.FailoverReady
 				exportAd.RecoveryState = projection.RecoveryState
 				exportAd.RuntimeVersion = projection.RuntimeVersion
@@ -284,7 +290,7 @@ func MeshTransportFrameHandlerForTest(mesh *fwfmp.Service, connectInfo fwgateway
 	return meshTransportFrameHandler(mesh, connectInfo, nil)
 }
 
-func MeshTransportFrameHandlerWithRuntimeForTest(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo, rexRuntime interface{}) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
+func MeshTransportFrameHandlerWithRuntimeForTest(mesh *fwfmp.Service, connectInfo fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) func(context.Context, *fwnode.WSConnection, map[string]json.RawMessage) error {
 	return meshTransportFrameHandler(mesh, connectInfo, rexRuntime)
 }
 
@@ -326,7 +332,7 @@ func AdvertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeD
 	return advertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame, nil)
 }
 
-func advertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime interface{}) error {
+func advertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) error {
 	if mesh == nil {
 		return nil
 	}
@@ -349,7 +355,7 @@ func advertiseConnectedNodeToFMP(ctx context.Context, mesh *fwfmp.Service, nodeD
 	})
 }
 
-func advertisedRuntimeDescriptor(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime interface{}) core.RuntimeDescriptor {
+func advertisedRuntimeDescriptor(nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) core.RuntimeDescriptor {
 	runtime := core.RuntimeDescriptor{
 		RuntimeID:               fallbackNodeRuntimeID(nodeDesc, frame),
 		NodeID:                  nodeDesc.ID,
@@ -367,8 +373,8 @@ func advertisedRuntimeDescriptor(nodeDesc core.NodeDescriptor, frame fwgateway.N
 			"runtime_version": fallbackRuntimeVersion(frame),
 		},
 	}
-	if rexProvider, ok := rexRuntime.(*RexRuntimeProvider); ok && rexProvider != nil && rexProvider.RuntimeEndpoint != nil {
-		if descriptor, err := rexProvider.RuntimeEndpoint.Descriptor(context.Background()); err == nil {
+	if rexRuntime != nil {
+		if descriptor, err := rexRuntime.RuntimeDescriptor(context.Background()); err == nil {
 			if strings.TrimSpace(descriptor.RuntimeID) != "" {
 				runtime.RuntimeID = strings.TrimSpace(descriptor.RuntimeID)
 			}
@@ -486,7 +492,7 @@ func ConnectedNodeCapabilitiesForTest(ctx context.Context, manager *fwnode.Manag
 	return connectedNodeCapabilities(ctx, manager, nodeID)
 }
 
-func AdvertiseConnectedNodeToFMPWithRuntimeForTest(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime interface{}) error {
+func AdvertiseConnectedNodeToFMPWithRuntimeForTest(ctx context.Context, mesh *fwfmp.Service, nodeDesc core.NodeDescriptor, frame fwgateway.NodeConnectInfo, rexRuntime rexRuntimeView) error {
 	return advertiseConnectedNodeToFMP(ctx, mesh, nodeDesc, frame, rexRuntime)
 }
 

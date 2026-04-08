@@ -667,11 +667,11 @@ type ListFMPCompatibilityWindowsResult struct {
 }
 
 type FMPCompatibilityWindow struct {
-	ContextClass         string `json:"context_class"`
-	MinSchemaVersion     string `json:"min_schema_version,omitempty"`
-	MaxSchemaVersion     string `json:"max_schema_version,omitempty"`
-	MinRuntimeVersion    string `json:"min_runtime_version,omitempty"`
-	MaxRuntimeVersion    string `json:"max_runtime_version,omitempty"`
+	ContextClass      string `json:"context_class"`
+	MinSchemaVersion  string `json:"min_schema_version,omitempty"`
+	MaxSchemaVersion  string `json:"max_schema_version,omitempty"`
+	MinRuntimeVersion string `json:"min_runtime_version,omitempty"`
+	MaxRuntimeVersion string `json:"max_runtime_version,omitempty"`
 }
 
 type SetFMPCompatibilityWindowRequest struct {
@@ -706,21 +706,21 @@ type ListFMPCircuitBreakersResult struct {
 }
 
 type FMPCircuitBreakerStatus struct {
-	TrustDomain string    `json:"trust_domain"`
-	State       string    `json:"state"`
-	ErrorRate   float64   `json:"error_rate"`
-	Requests    int       `json:"requests"`
-	TrippedAt   *int64    `json:"tripped_at,omitempty"` // Unix timestamp in ns
-	RecoveryAt  *int64    `json:"recovery_at,omitempty"` // Unix timestamp in ns
+	TrustDomain string  `json:"trust_domain"`
+	State       string  `json:"state"`
+	ErrorRate   float64 `json:"error_rate"`
+	Requests    int     `json:"requests"`
+	TrippedAt   *int64  `json:"tripped_at,omitempty"`  // Unix timestamp in ns
+	RecoveryAt  *int64  `json:"recovery_at,omitempty"` // Unix timestamp in ns
 }
 
 type SetFMPCircuitBreakerConfigRequest struct {
 	AdminRequest
-	TrustDomain      string  `json:"trust_domain"`
-	ErrorThreshold   float64 `json:"error_threshold"`
-	MinRequests      int     `json:"min_requests"`
-	WindowDurationSec int     `json:"window_duration_sec"`
-	RecoveryDurationSec int  `json:"recovery_duration_sec"`
+	TrustDomain         string  `json:"trust_domain"`
+	ErrorThreshold      float64 `json:"error_threshold"`
+	MinRequests         int     `json:"min_requests"`
+	WindowDurationSec   int     `json:"window_duration_sec"`
+	RecoveryDurationSec int     `json:"recovery_duration_sec"`
 }
 
 type SetFMPCircuitBreakerConfigResult struct {

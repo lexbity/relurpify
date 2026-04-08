@@ -71,4 +71,3 @@ func (s *service) SetTenantEnabled(ctx context.Context, req SetTenantEnabledRequ
 		Enabled:        req.Enabled,
 	}, nil
 }
-

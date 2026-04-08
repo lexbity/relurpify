@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	"github.com/lexcodex/relurpify/framework/core"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 )
 
 type fmpLineageLister interface {

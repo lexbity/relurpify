@@ -22,18 +22,18 @@ func TestListSessionDelegationsReturnsDelegationsForTenant(t *testing.T) {
 	now := time.Now().UTC()
 
 	require.NoError(t, sessionStore.UpsertDelegation(ctx, core.SessionDelegationRecord{
-		TenantID:  "tenant-1",
-		SessionID: "sess-1",
-		Grantee:   core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "operator-1"},
+		TenantID:   "tenant-1",
+		SessionID:  "sess-1",
+		Grantee:    core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindServiceAccount, ID: "operator-1"},
 		Operations: []core.SessionOperation{core.SessionOperationSend},
-		CreatedAt: now,
+		CreatedAt:  now,
 	}))
 	require.NoError(t, sessionStore.UpsertDelegation(ctx, core.SessionDelegationRecord{
-		TenantID:  "tenant-2",
-		SessionID: "sess-2",
-		Grantee:   core.SubjectRef{TenantID: "tenant-2", Kind: core.SubjectKindServiceAccount, ID: "operator-2"},
+		TenantID:   "tenant-2",
+		SessionID:  "sess-2",
+		Grantee:    core.SubjectRef{TenantID: "tenant-2", Kind: core.SubjectKindServiceAccount, ID: "operator-2"},
 		Operations: []core.SessionOperation{core.SessionOperationResume},
-		CreatedAt: now,
+		CreatedAt:  now,
 	}))
 
 	svc := NewService(ServiceConfig{Sessions: sessionStore}).(*service)

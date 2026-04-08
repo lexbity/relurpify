@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
 	relruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	"github.com/lexcodex/relurpify/ayenitd"
 	relconfig "github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -433,6 +433,15 @@ func (p *RexRuntimeProvider) runtimeDescriptor() core.RuntimeDescriptor {
 		MaxContextSize:            8 << 20,
 		MaxConcurrentResumes:      8,
 	}
+}
+
+func (p *RexRuntimeProvider) RuntimeDescriptor(context.Context) (core.RuntimeDescriptor, error) {
+	if p != nil && p.RuntimeEndpoint != nil {
+		if descriptor, err := p.RuntimeEndpoint.Descriptor(context.Background()); err == nil {
+			return descriptor, nil
+		}
+	}
+	return p.runtimeDescriptor(), nil
 }
 
 func (p *RexRuntimeProvider) runtimeRecipient() string {

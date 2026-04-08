@@ -7,17 +7,17 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	"github.com/lexcodex/relurpify/framework/event"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 )
 
 // GCScanner periodically enforces TTL-based garbage collection on FMP advertisements and context objects.
 // It maintains two independent scan intervals: one for discovery TTL enforcement and one for context object GC.
 type GCScanner struct {
-	Service            *fwfmp.Service
-	DiscoveryExpiry    time.Duration
-	ContextGCExpiry    time.Duration
-	Log                event.Log
+	Service         *fwfmp.Service
+	DiscoveryExpiry time.Duration
+	ContextGCExpiry time.Duration
+	Log             event.Log
 
 	mu              sync.Mutex
 	done            chan struct{}

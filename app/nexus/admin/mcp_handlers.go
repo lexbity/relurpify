@@ -194,12 +194,12 @@ type listFMPCompatibilityWindowsArgs struct {
 }
 
 type setFMPCompatibilityWindowArgs struct {
-	APIVersion        string  `json:"api_version,omitempty"`
-	ContextClass      string  `json:"context_class"`
-	MinSchemaVersion  string  `json:"min_schema_version,omitempty"`
-	MaxSchemaVersion  string  `json:"max_schema_version,omitempty"`
-	MinRuntimeVersion string  `json:"min_runtime_version,omitempty"`
-	MaxRuntimeVersion string  `json:"max_runtime_version,omitempty"`
+	APIVersion        string `json:"api_version,omitempty"`
+	ContextClass      string `json:"context_class"`
+	MinSchemaVersion  string `json:"min_schema_version,omitempty"`
+	MaxSchemaVersion  string `json:"max_schema_version,omitempty"`
+	MinRuntimeVersion string `json:"min_runtime_version,omitempty"`
+	MaxRuntimeVersion string `json:"max_runtime_version,omitempty"`
 }
 
 type deleteFMPCompatibilityWindowArgs struct {
@@ -214,12 +214,12 @@ type listFMPCircuitBreakersArgs struct {
 }
 
 type setFMPCircuitBreakerConfigArgs struct {
-	APIVersion            string  `json:"api_version,omitempty"`
-	TrustDomain           string  `json:"trust_domain"`
-	ErrorThreshold        float64 `json:"error_threshold"`
-	MinRequests           int     `json:"min_requests"`
-	WindowDurationSec     int     `json:"window_duration_sec,omitempty"`
-	RecoveryDurationSec   int     `json:"recovery_duration_sec,omitempty"`
+	APIVersion          string  `json:"api_version,omitempty"`
+	TrustDomain         string  `json:"trust_domain"`
+	ErrorThreshold      float64 `json:"error_threshold"`
+	MinRequests         int     `json:"min_requests"`
+	WindowDurationSec   int     `json:"window_duration_sec,omitempty"`
+	RecoveryDurationSec int     `json:"recovery_duration_sec,omitempty"`
 }
 
 type resetFMPCircuitBreakerArgs struct {
@@ -787,12 +787,12 @@ func handleSetFMPCircuitBreakerConfig(ctx context.Context, svc AdminService, pri
 	switch version {
 	case APIVersionV1Alpha1:
 		result, err := svc.SetFMPCircuitBreakerConfig(ctx, SetFMPCircuitBreakerConfigRequest{
-			AdminRequest:          requestEnvelope(principal, version, tenantFromPrincipal(principal)),
-			TrustDomain:           stringArg(args, "trust_domain", ""),
-			ErrorThreshold:        floatArg(args, "error_threshold", 0.5),
-			MinRequests:           intArg(args, "min_requests", 10),
-			WindowDurationSec:     intArg(args, "window_duration_sec", 60),
-			RecoveryDurationSec:   intArg(args, "recovery_duration_sec", 30),
+			AdminRequest:        requestEnvelope(principal, version, tenantFromPrincipal(principal)),
+			TrustDomain:         stringArg(args, "trust_domain", ""),
+			ErrorThreshold:      floatArg(args, "error_threshold", 0.5),
+			MinRequests:         intArg(args, "min_requests", 10),
+			WindowDurationSec:   intArg(args, "window_duration_sec", 60),
+			RecoveryDurationSec: intArg(args, "recovery_duration_sec", 30),
 		})
 		if err != nil {
 			return nil, err

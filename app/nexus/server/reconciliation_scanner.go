@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 	"github.com/lexcodex/relurpify/framework/event"
+	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
 )
 
 // ReconciliationScanner periodically scans expired FMP leases and orphans unresolved attempts.
