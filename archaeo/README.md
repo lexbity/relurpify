@@ -30,11 +30,11 @@ artifacts.
 
 Archaeology intelligence is different. It is concerned with:
 
-- discovering patterns already present in a codebase
+- discovering patterns already present in a codebase/knowledgebase
 - surfacing tensions, contradictions, and drift
 - grounding inferred intent in evidence
 - involving the developer in semantic confirmation and refinement
-- evolving a living plan over time as the codebase and the understanding of it
+- evolving a living plan over time as the codebase/knowledge system and the understanding of it
   change
 
 Those concerns are too important to leave embedded only inside a single agent
@@ -87,79 +87,79 @@ only one part of the loop.
 
 Current subpackages:
 
-- [`archaeo/domain`](/home/lex/Public/Relurpify/archaeo/domain)
+- `archaeo/domain`
   - core domain records and enums
   - phases, exploration sessions, snapshots, tensions, convergence state,
     versioned plans, handoff records, timeline events
 
-- [`archaeo/phases`](/home/lex/Public/Relurpify/archaeo/phases)
+- `archaeo/phases`
   - durable phase-state transitions
   - phase driver logic
   - blocked/deferred/surfacing/completion semantics
 
-- [`archaeo/archaeology`](/home/lex/Public/Relurpify/archaeo/archaeology)
+- `archaeo/archaeology`
   - exploration session and snapshot lifecycle
   - archaeology-side preparation and refresh logic
   - current integration point between exploration state and living-plan prep
 
-- [`archaeo/learning`](/home/lex/Public/Relurpify/archaeo/learning)
+- `archaeo/learning`
   - learning interaction model
   - blocking vs non-blocking learning
   - proposal sync from patterns, drifts, and tensions
   - resolution side effects into patterns, anchors, tensions, and plan state
   - broker for live learning interaction delivery
 
-- [`archaeo/tensions`](/home/lex/Public/Relurpify/archaeo/tensions)
+- `archaeo/tensions`
   - tension artifact lifecycle
   - summary and status management
   - accepted vs unresolved tension semantics
 
-- [`archaeo/plans`](/home/lex/Public/Relurpify/archaeo/plans)
+- `archaeo/plans`
   - active living-plan loading
   - versioned plan lifecycle
   - successor draft generation
   - version comparison
   - active-version alignment with exploration drift
 
-- [`archaeo/execution`](/home/lex/Public/Relurpify/archaeo/execution)
+- `archaeo/execution`
   - execution-preflight helpers
   - execution handoff records
   - step finalization and execution-session support
   - intentionally execution-adjacent because accepted plans must be handed off
     cleanly
 
-- [`archaeo/verification`](/home/lex/Public/Relurpify/archaeo/verification)
+- `archaeo/verification`
   - convergence finalization
   - convergence failure surfacing
   - unresolved-tension-aware verification state
 
-- [`archaeo/events`](/home/lex/Public/Relurpify/archaeo/events)
+- `archaeo/events`
   - durable archaeology event vocabulary
   - workflow event log adapter
   - projection snapshot storage helpers
 
-- [`archaeo/projections`](/home/lex/Public/Relurpify/archaeo/projections)
+- `archaeo/projections`
   - read models for exploration, learning queue, active plan, and timeline
   - workflow-level materialized views
   - live projection subscription support
 
-- [`archaeo/providers`](/home/lex/Public/Relurpify/archaeo/providers)
+- `archaeo/providers`
   - runtime-facing archaeology provider contracts
   - pattern surfacing, tension analysis, prospective analysis, and convergence
     review interfaces
   - intended to be implemented by archaeology-specialist capability families
     such as relurpic
 
-- [`archaeo/bindings/euclo`](/home/lex/Public/Relurpify/archaeo/bindings/euclo)
+- `archaeo/bindings/euclo`
   - direct in-process euclo adapter over archaeology runtime services
   - keeps euclo execution-focused while avoiding archaeology package-by-package
     wiring in the agent
 
-- [`archaeo/bindings/relurpish`](/home/lex/Public/Relurpify/archaeo/bindings/relurpish)
+- `archaeo/bindings/relurpish`
   - direct in-process relurpish-facing archaeology adapter
   - exposes projection and interaction surfaces without requiring transport
 
-- [`archaeo/benchmark`](/home/lex/Public/Relurpify/archaeo/benchmark)
+- `archaeo/benchmark`
   - deterministic benchmark fixtures and archaeology/runtime benchmarks
   - no live LLM dependency
 

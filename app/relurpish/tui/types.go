@@ -17,6 +17,7 @@ const (
 	TabChat    TabID = "chat"
 	TabPlanner TabID = "planner"
 	TabDebug   TabID = "debug"
+	TabArchaeo TabID = "archaeo"
 )
 
 // SubTabID identifies a subtab within a main tab. Alias so string literals are
@@ -47,6 +48,11 @@ const (
 	SubTabSessionTasks    SubTabID = "tasks"
 	SubTabSessionServices SubTabID = "services"
 	SubTabSessionSettings SubTabID = "settings"
+
+	// Archaeo subtabs — euclo-specific.
+	SubTabArchaeoPlan    SubTabID = "plan"
+	SubTabArchaeoExplore SubTabID = "archaeo-explore" // distinct from SubTabPlannerExplore
+	SubTabArchaeoHistory SubTabID = "history"
 )
 
 // TabDefinition declares a main tab and its subtabs.
@@ -262,6 +268,14 @@ func registerEucloTabs(reg *TabRegistry) {
 			{SubTabDebugPlanDiff, "live-plan-diff"},
 		},
 	})
+	reg.Register(TabDefinition{
+		ID: TabArchaeo, Label: "archaeo", AgentFilter: []string{"euclo"},
+		SubTabs: []SubTabDefinition{
+			{SubTabArchaeoPlan, "plan"},
+			{SubTabArchaeoExplore, "explore"},
+			{SubTabArchaeoHistory, "history"},
+		},
+	})
 	// Config and Session are registered universally in newRootModel.
 }
 
@@ -269,6 +283,41 @@ func registerEucloTabs(reg *TabRegistry) {
 // session pane's live subtab.
 type DiagnosticsUpdatedMsg struct {
 	Info DiagnosticsInfo
+}
+
+// ServicesUpdatedMsg delivers a fresh service list to the session services subtab.
+type ServicesUpdatedMsg struct {
+	Services []ServiceInfo
+}
+
+// PlanUpdatedMsg delivers a refreshed live plan to the archaeo plan subtab.
+type PlanUpdatedMsg struct {
+	Plan *ActivePlanView
+}
+
+// BlobsUpdatedMsg delivers a refreshed blob list to the archaeo plan subtab sidebar.
+type BlobsUpdatedMsg struct {
+	Blobs []BlobEntry
+}
+
+// ArchaeoExploreMsg adds entries to the archaeo explore feed. Produced when an
+// explore run completes or when a FrameArchaeoFindings frame is received.
+type ArchaeoExploreMsg struct {
+	Entries []ExploreEntry
+}
+
+// PlanVersionInfo is a TUI-safe summary of an archaeo plan version.
+type PlanVersionInfo struct {
+	Version        int
+	Status         string // "active" | "draft" | "archived" | "superseded"
+	ExplorationRef string // derived-from exploration ID (short ref)
+	StepCount      int
+}
+
+// PlanHistoryUpdatedMsg delivers a refreshed list of plan versions for the
+// archaeo history subtab.
+type PlanHistoryUpdatedMsg struct {
+	Versions []PlanVersionInfo
 }
 
 // SessionLiveSnapshotMsg delivers the richer runtime-backed snapshot for the

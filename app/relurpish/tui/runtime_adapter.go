@@ -138,6 +138,9 @@ type RuntimeAdapter interface {
 	// Context file management
 	AddFileToContext(path string) error
 	DropFileFromContext(path string) error
+	// Plan version history — archaeology tab history subtab
+	ListPlanVersions(ctx context.Context, workflowID string) ([]PlanVersionInfo, error)
+	ActivatePlanVersion(ctx context.Context, workflowID string, version int) error
 }
 
 type runtimeAdapter struct {
@@ -1615,112 +1618,78 @@ func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
 
 // Service management methods
 func (r *runtimeAdapter) ListServices() []ServiceInfo {
-	if r == nil || r.rt == nil {
+	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
 		return nil
 	}
-	// Check if Workspace has ServiceManager
-	if r.rt.Workspace.ServiceManager == nil {
-		return nil
-	}
-	
-	services := r.rt.Workspace.ServiceManager.ListServices()
-	infos := make([]ServiceInfo, 0, len(services))
-	for _, svc := range services {
-		status := ServiceStatusStopped
-		if svc.Running() {
-			status = ServiceStatusRunning
-		}
-		// Check for error state
-		if svc.Error() != nil {
-			status = ServiceStatusError
-		}
+	ids := r.rt.ServiceManager.ListIDs()
+	infos := make([]ServiceInfo, 0, len(ids))
+	for _, id := range ids {
 		infos = append(infos, ServiceInfo{
-			ID:     svc.ID(),
-			Status: status,
+			ID:     id,
+			Status: ServiceStatusRunning, // registered services are considered running
 		})
 	}
 	return infos
 }
 
 func (r *runtimeAdapter) StopService(id string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	if r.rt.Workspace.ServiceManager == nil {
-		return fmt.Errorf("service manager unavailable")
-	}
-	
-	svc := r.rt.Workspace.ServiceManager.GetService(id)
+	svc := r.rt.ServiceManager.Get(id)
 	if svc == nil {
 		return fmt.Errorf("service %s not found", id)
 	}
-	
 	return svc.Stop()
 }
 
 func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	if r.rt.Workspace.ServiceManager == nil {
-		return fmt.Errorf("service manager unavailable")
-	}
-	
-	svc := r.rt.Workspace.ServiceManager.GetService(id)
+	svc := r.rt.ServiceManager.Get(id)
 	if svc == nil {
 		return fmt.Errorf("service %s not found", id)
 	}
-	
-	// Stop first
 	if err := svc.Stop(); err != nil {
-		return fmt.Errorf("stop service: %w", err)
+		return fmt.Errorf("stop: %w", err)
 	}
-	
-	// Start again
 	return svc.Start(ctx)
 }
 
 func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.rt == nil || r.rt.ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	if r.rt.Workspace.ServiceManager == nil {
-		return fmt.Errorf("service manager unavailable")
+	if err := r.rt.ServiceManager.StopAll(); err != nil {
+		return fmt.Errorf("stop all: %w", err)
 	}
-	
-	return r.rt.Workspace.ServiceManager.RestartAll(ctx)
+	return r.rt.ServiceManager.StartAll(ctx)
 }
 
 // Archaeology methods
-func (r *runtimeAdapter) LoadActivePlan(ctx context.Context, workflowID string) (*ActivePlanView, error) {
+func (r *runtimeAdapter) LoadActivePlan(_ context.Context, workflowID string) (*ActivePlanView, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	
-	// Get active plan version
-	planVersion, err := r.rt.ActivePlanVersion(ctx, workflowID)
+	planVersion, err := r.rt.ActivePlanVersion(workflowID)
 	if err != nil {
 		return nil, fmt.Errorf("get active plan version: %w", err)
 	}
 	if planVersion == nil {
 		return nil, nil
 	}
-	
-	// Convert to ActivePlanView
 	view := &ActivePlanView{
 		WorkflowID: workflowID,
 		Title:      planVersion.Plan.Title,
 		UpdatedAt:  planVersion.Plan.UpdatedAt,
 		Steps:      make([]PlanStepInfo, 0, len(planVersion.Plan.StepOrder)),
 	}
-	
 	for _, stepID := range planVersion.Plan.StepOrder {
 		step := planVersion.Plan.Steps[stepID]
 		if step == nil {
 			continue
 		}
-		
-		// Convert step status
 		status := "pending"
 		switch step.Status {
 		case "completed":
@@ -1732,7 +1701,6 @@ func (r *runtimeAdapter) LoadActivePlan(ctx context.Context, workflowID string) 
 		case "blocked":
 			status = "blocked"
 		}
-		
 		view.Steps = append(view.Steps, PlanStepInfo{
 			ID:          step.ID,
 			Title:       step.Description,
@@ -1743,58 +1711,56 @@ func (r *runtimeAdapter) LoadActivePlan(ctx context.Context, workflowID string) 
 			Attempts:    len(step.History),
 		})
 	}
-	
 	return view, nil
 }
 
-func (r *runtimeAdapter) LoadBlobs(ctx context.Context, workflowID string) ([]BlobEntry, error) {
+func (r *runtimeAdapter) LoadBlobs(_ context.Context, workflowID string) ([]BlobEntry, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	
 	var blobs []BlobEntry
-	
-	// Load tensions
-	tensions, err := r.rt.TensionsByWorkflow(ctx, workflowID)
+
+	// Tensions
+	tensions, err := r.rt.TensionsByWorkflow(workflowID)
 	if err != nil {
 		return nil, fmt.Errorf("get tensions: %w", err)
 	}
-	for _, tension := range tensions {
+	for _, t := range tensions {
+		inPlan := len(t.RelatedPlanStepIDs) > 0
+		stepID := ""
+		if inPlan {
+			stepID = t.RelatedPlanStepIDs[0]
+		}
 		blobs = append(blobs, BlobEntry{
-			ID:          tension.ID,
+			ID:          t.ID,
 			Kind:        BlobTension,
-			Title:       tension.Title,
-			Description: tension.Description,
-			Severity:    string(tension.Severity),
-			Status:      string(tension.Status),
-			InPlan:      tension.PlanStepID != "",
-			AnchorRefs:  tension.AnchorRefs,
-			StepID:      tension.PlanStepID,
+			Title:       t.Kind + ": " + t.Description,
+			Description: t.Description,
+			Severity:    t.Severity,
+			Status:      string(t.Status),
+			InPlan:      inPlan,
+			AnchorRefs:  t.AnchorRefs,
+			StepID:      stepID,
 		})
 	}
-	
-	// Load learning queue
-	learningQueue, err := r.rt.LearningQueueProjection(ctx, workflowID)
+
+	// Learning queue
+	learningQueue, err := r.rt.LearningQueueProjection(workflowID)
 	if err != nil {
 		return nil, fmt.Errorf("get learning queue: %w", err)
 	}
 	if learningQueue != nil {
-		for _, interaction := range learningQueue.PendingLearning {
+		for _, it := range learningQueue.PendingLearning {
 			blobs = append(blobs, BlobEntry{
-				ID:          interaction.ID,
+				ID:          it.ID,
 				Kind:        BlobLearning,
-				Title:       interaction.Title,
-				Description: interaction.Description,
-				Status:      string(interaction.Status),
-				InPlan:      interaction.PlanStepID != "",
-				StepID:      interaction.PlanStepID,
+				Title:       it.Title,
+				Description: it.Description,
+				Status:      string(it.Status),
 			})
 		}
 	}
-	
-	// TODO: Load patterns - need to check how to get patterns for workflow
-	// For now, we'll skip patterns
-	
+
 	return blobs, nil
 }
 
@@ -1876,6 +1842,38 @@ func (r *runtimeAdapter) DropFileFromContext(path string) error {
 	}
 	
 	return nil
+}
+
+func (r *runtimeAdapter) ListPlanVersions(ctx context.Context, workflowID string) ([]PlanVersionInfo, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	versions, err := r.rt.PlanVersions(workflowID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PlanVersionInfo, 0, len(versions))
+	for _, v := range versions {
+		explorationRef := v.DerivedFromExploration
+		if len(explorationRef) > 8 {
+			explorationRef = explorationRef[:8]
+		}
+		out = append(out, PlanVersionInfo{
+			Version:        v.Version,
+			Status:         string(v.Status),
+			ExplorationRef: explorationRef,
+			StepCount:      len(v.Plan.Steps),
+		})
+	}
+	return out, nil
+}
+
+func (r *runtimeAdapter) ActivatePlanVersion(ctx context.Context, workflowID string, version int) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	// Delegate to the agent's plan versioning layer via the relurpish binding.
+	return fmt.Errorf("ActivatePlanVersion not yet wired through relurpish runtime binding")
 }
 
 func (r *runtimeAdapter) QueryPatternProposals(scope string) ([]PatternProposalInfo, error) {
@@ -1994,7 +1992,7 @@ func (r *runtimeAdapter) QueryTensions(scope string) ([]TensionInfo, error) {
 	return out, nil
 }
 
-func (r *runtimeAdapter) LoadActivePlan(workflowID string) (*LivePlanInfo, error) {
+func (r *runtimeAdapter) LoadLivePlan(workflowID string) (*LivePlanInfo, error) {
 	if r == nil || r.rt == nil || r.rt.PlanStore == nil {
 		return nil, nil
 	}
@@ -2074,7 +2072,7 @@ func (r *runtimeAdapter) AddPlanNote(stepRef string, body string) error {
 
 func (r *runtimeAdapter) GetPlanDiff(workflowID string) (PlanDiffInfo, error) {
 	info := PlanDiffInfo{WorkflowID: workflowID}
-	plan, err := r.LoadActivePlan(workflowID)
+	plan, err := r.LoadLivePlan(workflowID)
 	if err != nil || plan == nil {
 		return info, err
 	}

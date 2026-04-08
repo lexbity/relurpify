@@ -183,6 +183,26 @@ type ContextFileEntry struct {
 	InsertionAction string `json:"insertion_action,omitempty"` // "direct" | "summarized" | "metadata-only"
 }
 
+// ArchaeoFindingsContent is the typed payload for FrameArchaeoFindings frames.
+// The archaeology relurpic capability emits this when it produces tension,
+// pattern, or learning interaction proposals during an explore run.
+type ArchaeoFindingsContent struct {
+	// Blobs holds the proposed tensions, patterns, and learning interactions.
+	Blobs []ArchaeoFindingBlob `json:"blobs"`
+	// RunID identifies the explore run that produced these findings (optional).
+	RunID string `json:"run_id,omitempty"`
+}
+
+// ArchaeoFindingBlob is a single proposed blob in an archaeo findings frame.
+type ArchaeoFindingBlob struct {
+	ID          string   `json:"id"`
+	Kind        string   `json:"kind"` // "tension" | "pattern" | "learning"
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	AnchorRefs  []string `json:"anchor_refs,omitempty"`
+	Severity    string   `json:"severity,omitempty"` // for tensions: high/med/low
+}
+
 // ContextKnowledgeEntry is a single archaeo knowledge item in a context proposal.
 type ContextKnowledgeEntry struct {
 	RefID           string `json:"ref_id"`

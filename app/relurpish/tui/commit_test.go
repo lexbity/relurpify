@@ -102,6 +102,18 @@ func (r *recordingAdapter) ResolveLearning(string, archaeolearning.ResolveInput)
 func (r *recordingAdapter) SetInteractionEmitter(interaction.FrameEmitter) {}
 func (r *recordingAdapter) Diagnostics() DiagnosticsInfo                        { return DiagnosticsInfo{} }
 func (r *recordingAdapter) ApplyChatPolicy(SubTabID) error                      { return nil }
+func (r *recordingAdapter) ListServices() []ServiceInfo                                              { return nil }
+func (r *recordingAdapter) StopService(string) error                                                 { return nil }
+func (r *recordingAdapter) RestartService(context.Context, string) error                             { return nil }
+func (r *recordingAdapter) RestartAllServices(context.Context) error                                 { return nil }
+func (r *recordingAdapter) LoadActivePlan(context.Context, string) (*ActivePlanView, error)          { return nil, nil }
+func (r *recordingAdapter) LoadBlobs(context.Context, string) ([]BlobEntry, error)                  { return nil, nil }
+func (r *recordingAdapter) AddBlobToPlan(context.Context, string, string) error                     { return nil }
+func (r *recordingAdapter) RemoveBlobFromPlan(context.Context, string, string) error                { return nil }
+func (r *recordingAdapter) AddFileToContext(string) error                                            { return nil }
+func (r *recordingAdapter) DropFileFromContext(string) error                                         { return nil }
+func (r *recordingAdapter) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error)      { return nil, nil }
+func (r *recordingAdapter) ActivatePlanVersion(context.Context, string, int) error                   { return nil }
 
 // TestGitStatusInvokesCliGit verifies gitStatusCmd routes through cli_git capability.
 func TestGitStatusInvokesCliGit(t *testing.T) {
@@ -316,6 +328,18 @@ func (m *minimalCommitTestAdapter) InvokeCapability(context.Context, string, map
 func (m *minimalCommitTestAdapter) SetInteractionEmitter(e interaction.FrameEmitter) {}
 func (m *minimalCommitTestAdapter) Diagnostics() DiagnosticsInfo                     { return DiagnosticsInfo{} }
 func (m *minimalCommitTestAdapter) ApplyChatPolicy(SubTabID) error                   { return nil }
+func (m *minimalCommitTestAdapter) ListServices() []ServiceInfo                                              { return nil }
+func (m *minimalCommitTestAdapter) StopService(string) error                                                 { return nil }
+func (m *minimalCommitTestAdapter) RestartService(context.Context, string) error                             { return nil }
+func (m *minimalCommitTestAdapter) RestartAllServices(context.Context) error                                 { return nil }
+func (m *minimalCommitTestAdapter) LoadActivePlan(context.Context, string) (*ActivePlanView, error)          { return nil, nil }
+func (m *minimalCommitTestAdapter) LoadBlobs(context.Context, string) ([]BlobEntry, error)                  { return nil, nil }
+func (m *minimalCommitTestAdapter) AddBlobToPlan(context.Context, string, string) error                     { return nil }
+func (m *minimalCommitTestAdapter) RemoveBlobFromPlan(context.Context, string, string) error                { return nil }
+func (m *minimalCommitTestAdapter) AddFileToContext(string) error                                            { return nil }
+func (m *minimalCommitTestAdapter) DropFileFromContext(string) error                                         { return nil }
+func (m *minimalCommitTestAdapter) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error)      { return nil, nil }
+func (m *minimalCommitTestAdapter) ActivatePlanVersion(context.Context, string, int) error                   { return nil }
 
 // --- gitAutoCommitCmd tests ---
 

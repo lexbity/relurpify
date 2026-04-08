@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -136,6 +137,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "hitl", Aliases: []string{"hi"}, Description: "Show pending HITL approvals", Usage: "/hitl", Handler: rootHandleHITL},
 		{Name: "guidance", Aliases: []string{"gd"}, Description: "Show pending guidance requests", Usage: "/guidance", Handler: rootHandleGuidance},
 		{Name: "deferred", Aliases: []string{"df"}, Description: "Show deferred guidance observations", Usage: "/deferred", Handler: rootHandleDeferred},
+		{Name: "learning", Aliases: []string{"lq"}, Description: "Show pending learning interactions", Usage: "/learning", Handler: rootHandleLearning},
 		{Name: "queue", Aliases: []string{"qtask"}, Description: "Queue a task for sequential execution", Usage: "/queue <instruction>", Handler: rootHandleQueueTask},
 		{Name: "service", Aliases: []string{"svc"}, Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabSession}},
 	} {
@@ -146,7 +148,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 func registerChatCommands(r *CommandRegistry) {
 	for _, cmd := range []Command{
 		{Name: "add", Aliases: []string{"a"}, Description: "Add file to context", Usage: "/add <path>", Handler: rootHandleAdd, TabFilter: []TabID{TabChat}},
-		{Name: "remove", Aliases: []string{"rm"}, Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
+		{Name: "remove", Aliases: []string{"rm", "drop"}, Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
 		{Name: "context", Aliases: []string{"ctx", "c"}, Description: "Show current context", Usage: "/context", Handler: rootHandleContext, TabFilter: []TabID{TabChat}},
 		{Name: "clear", Aliases: []string{"cls"}, Description: "Clear chat history", Usage: "/clear", Handler: rootHandleClear, TabFilter: []TabID{TabChat}},
 		{Name: "approve", Aliases: []string{"ap"}, Description: "Approve pending changes", Usage: "/approve", Handler: rootHandleApprove, TabFilter: []TabID{TabChat}},
@@ -166,6 +168,28 @@ func registerPlannerCommands(_ *CommandRegistry) {
 	// Planner-specific commands to be added here as they are implemented.
 }
 
+func registerArchaeoCommands(r *CommandRegistry) {
+	for _, cmd := range []Command{
+		{
+			Name:        "promote-all",
+			Aliases:     []string{"pa"},
+			Description: "Stage all proposed blobs from the current explore run",
+			Usage:       "/promote-all",
+			Handler:     rootHandlePromoteAll,
+			TabFilter:   []TabID{TabArchaeo},
+		},
+	} {
+		r.Register(cmd)
+	}
+}
+
+func rootHandlePromoteAll(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	if m.archaeo != nil {
+		m.archaeo.PromoteAll()
+	}
+	return m, nil
+}
+
 func registerDebugCommands(r *CommandRegistry) {
 	for _, cmd := range []Command{
 		{Name: "test", Aliases: []string{"t"}, Description: "Run go tests for a package or pattern", Usage: "/test [package]", Handler: rootHandleRunTests, TabFilter: []TabID{TabDebug}},
@@ -183,6 +207,7 @@ func init() {
 	registerChatCommands(rootCommandRegistry)
 	registerPlannerCommands(rootCommandRegistry)
 	registerDebugCommands(rootCommandRegistry)
+	registerArchaeoCommands(rootCommandRegistry)
 }
 
 // executeCommand dispatches a command by name (with alias fallback).
@@ -581,6 +606,16 @@ func rootHandleDeferred(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	}
 	observations := m.runtime.PendingDeferrals()
 	m.addSystemMessage(formatDeferredObservationsSummary(observations))
+	return m, nil
+}
+
+func rootHandleLearning(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	if m.runtime == nil {
+		m.addSystemMessage("Runtime unavailable")
+		return m, nil
+	}
+	interactions := m.runtime.PendingLearning()
+	m.addSystemMessage(formatPendingLearningSummary(interactions))
 	return m, nil
 }
 

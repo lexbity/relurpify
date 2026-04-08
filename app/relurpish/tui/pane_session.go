@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,7 +26,6 @@ const (
 	liveSectionWorkflows liveSection = iota
 	liveSectionProviders
 	liveSectionApprovals
-	liveSectionServices
 )
 
 // SessionPane displays workspace files, session changes, and live diagnostics.
@@ -146,6 +146,13 @@ func (p *SessionPane) SyncContext(ctx *AgentContext) {
 // Update handles navigation and async messages.
 func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 	switch msg := msg.(type) {
+	case ServicesUpdatedMsg:
+		p.services = append([]ServiceInfo(nil), msg.Services...)
+		if p.serviceSel >= len(p.services) {
+			p.serviceSel = max(0, len(p.services)-1)
+		}
+		return p, nil
+
 	case fileIndexMsg:
 		p.loading = false
 		if msg.err != nil {
@@ -159,36 +166,39 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 		if p.activeSubTab == SubTabSessionLive {
 			switch msg.String() {
 			case "tab", "right", "l":
-				p.liveSection = (p.liveSection + 1) % 4
+				p.liveSection = (p.liveSection + 1) % 3
 			case "shift+tab", "left", "h":
-				p.liveSection = (p.liveSection + 3) % 4
+				p.liveSection = (p.liveSection + 2) % 3
 			case "up", "k":
 				p.moveLiveSelection(-1)
 			case "down", "j":
 				p.moveLiveSelection(1)
+			}
+			return p, nil
+		}
+		if p.activeSubTab == SubTabSessionServices {
+			switch msg.String() {
+			case "up", "k":
+				if p.serviceSel > 0 {
+					p.serviceSel--
+				}
+			case "down", "j":
+				if p.serviceSel < len(p.services)-1 {
+					p.serviceSel++
+				}
 			case "s":
-				if p.liveSection == liveSectionServices && p.runtime != nil {
-					if p.serviceSel >= 0 && p.serviceSel < len(p.services) {
-						serviceID := p.services[p.serviceSel].ID
-						if err := p.runtime.StopService(serviceID); err != nil {
-							// Handle error
-						}
-					}
+				if p.runtime != nil && p.serviceSel >= 0 && p.serviceSel < len(p.services) {
+					serviceID := p.services[p.serviceSel].ID
+					_ = p.runtime.StopService(serviceID)
 				}
 			case "r":
-				if p.liveSection == liveSectionServices && p.runtime != nil {
-					if p.serviceSel >= 0 && p.serviceSel < len(p.services) {
-						serviceID := p.services[p.serviceSel].ID
-						if err := p.runtime.RestartService(context.Background(), serviceID); err != nil {
-							// Handle error
-						}
-					}
+				if p.runtime != nil && p.serviceSel >= 0 && p.serviceSel < len(p.services) {
+					serviceID := p.services[p.serviceSel].ID
+					_ = p.runtime.RestartService(context.Background(), serviceID)
 				}
 			case "R":
-				if p.liveSection == liveSectionServices && p.runtime != nil {
-					if err := p.runtime.RestartAllServices(context.Background()); err != nil {
-						// Handle error
-					}
+				if p.runtime != nil {
+					_ = p.runtime.RestartAllServices(context.Background())
 				}
 			}
 			return p, nil
@@ -304,6 +314,8 @@ func (p *SessionPane) View() string {
 			return p.viewChanges()
 		}
 		return p.viewFiles()
+	case SubTabSessionServices:
+		return p.viewServices()
 	case SubTabSessionSettings:
 		return p.viewSessionSettings()
 	default:
@@ -472,32 +484,21 @@ func (p *SessionPane) viewLive() string {
 		b.WriteString(dimStyle.Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
 	}
 	
-	// Build the panels
 	panels := []string{
 		plannerPanel("Summary", widths[0], strings.Split(strings.TrimRight(b.String(), "\n"), "\n")...),
 		plannerPanel("Workflows", widths[1], plannerList(p.liveWorkflowLines(), p.workflowSel, p.height-12)),
-	}
-	
-	// Add services panel if we're in services section or show combined panel
-	if p.liveSection == liveSectionServices {
-		panels = append(panels, plannerPanel("Services", widths[2], 
-			sectionHeaderStyle.Render("Services"),
-			plannerList(p.liveServiceLines(), p.serviceSel, 8),
-		))
-	} else {
-		panels = append(panels, plannerPanel("Providers / Approvals", widths[2],
+		plannerPanel("Providers / Approvals", widths[2],
 			sectionHeaderStyle.Render("Providers"),
 			plannerList(p.liveProviderLines(), p.providerSel, 4),
 			"",
 			sectionHeaderStyle.Render("Approvals"),
 			plannerList(p.liveApprovalLines(), p.approvalSel, 4),
-		))
+		),
 	}
-	
 	return strings.Join([]string{
 		lipgloss.JoinHorizontal(lipgloss.Top, panels...),
 		plannerPanel("Detail", p.width, p.liveDetailLines()...),
-		dimStyle.Render("tab/shift+tab switch focus  ↑↓ navigate  s=stop  r=restart  R=restart-all (services)"),
+		dimStyle.Render("tab/shift+tab switch focus  ↑↓ navigate"),
 	}, "\n")
 }
 
@@ -537,18 +538,6 @@ func (p *SessionPane) moveLiveSelection(delta int) {
 		}
 		if p.approvalSel >= len(p.approvals) {
 			p.approvalSel = len(p.approvals) - 1
-		}
-		p.refreshLiveDetails()
-	case liveSectionServices:
-		if len(p.services) == 0 {
-			return
-		}
-		p.serviceSel += delta
-		if p.serviceSel < 0 {
-			p.serviceSel = 0
-		}
-		if p.serviceSel >= len(p.services) {
-			p.serviceSel = len(p.services) - 1
 		}
 		p.refreshLiveDetails()
 	}
@@ -631,31 +620,6 @@ func (p *SessionPane) liveApprovalLines() []string {
 	return lines
 }
 
-func (p *SessionPane) liveServiceLines() []string {
-	if len(p.services) == 0 {
-		return []string{dimStyle.Render("no services")}
-	}
-	lines := make([]string, 0, len(p.services))
-	for i, service := range p.services {
-		statusBadge := ""
-		switch service.Status {
-		case ServiceStatusRunning:
-			statusBadge = completedStyle.Render("[running]")
-		case ServiceStatusStopped:
-			statusBadge = dimStyle.Render("[stopped]")
-		case ServiceStatusError:
-			statusBadge = diffRemoveStyle.Render("[error]")
-		default:
-			statusBadge = dimStyle.Render("[unknown]")
-		}
-		line := fmt.Sprintf("%-20s %s", service.ID, statusBadge)
-		if p.liveSection == liveSectionServices && i == p.serviceSel {
-			line = panelItemActiveStyle.Render("  " + line)
-		}
-		lines = append(lines, line)
-	}
-	return lines
-}
 
 func (p *SessionPane) liveDetailLines() []string {
 	switch p.liveSection {
@@ -718,32 +682,7 @@ func (p *SessionPane) liveDetailLines() []string {
 			dimStyle.Render("Recoverability") + "  " + fallback(provider.Recoverability, "n/a"),
 			dimStyle.Render("Capabilities") + "  " + joinOrNA(provider.CapabilityIDs),
 		}
-	case liveSectionServices:
-		if len(p.services) == 0 {
-			return []string{dimStyle.Render("No services available.")}
-		}
-		if p.serviceSel >= 0 && p.serviceSel < len(p.services) {
-			service := p.services[p.serviceSel]
-			statusDesc := ""
-			switch service.Status {
-			case ServiceStatusRunning:
-				statusDesc = "Service is running"
-			case ServiceStatusStopped:
-				statusDesc = "Service is stopped"
-			case ServiceStatusError:
-				statusDesc = "Service is in error state"
-			}
-			return []string{
-				service.ID,
-				"",
-				dimStyle.Render("Status") + "  " + string(service.Status),
-				dimStyle.Render("Description") + "  " + statusDesc,
-				"",
-				dimStyle.Render("Actions") + "  s=stop  r=restart",
-			}
-		}
-		return []string{dimStyle.Render("Select a service for details.")}
-	default:
+	case liveSectionApprovals:
 		if p.approval != nil {
 			lines := []string{
 				p.approval.ID,
@@ -774,6 +713,7 @@ func (p *SessionPane) liveDetailLines() []string {
 			dimStyle.Render("Justification") + "  " + fallback(approval.Justification, "n/a"),
 		}
 	}
+	return nil
 }
 
 // contextBar renders a simple fill bar for token usage.
@@ -828,6 +768,39 @@ func (p *SessionPane) viewSessionSettings() string {
 	}
 
 	b.WriteString("\n" + dimStyle.Render("full policy config → config tab"))
+	return b.String()
+}
+
+func (p *SessionPane) viewServices() string {
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("ayenitd services") + "\n\n")
+
+	if len(p.services) == 0 {
+		b.WriteString(dimStyle.Render("No services registered.") + "\n")
+	} else {
+		for i, svc := range p.services {
+			statusBadge := ""
+			switch svc.Status {
+			case ServiceStatusRunning:
+				statusBadge = completedStyle.Render("[running]")
+			case ServiceStatusStopped:
+				statusBadge = dimStyle.Render("[stopped]")
+			case ServiceStatusError:
+				statusBadge = diffRemoveStyle.Render("[error]")
+			default:
+				statusBadge = dimStyle.Render("[unknown]")
+			}
+			line := fmt.Sprintf("%-24s %s", svc.ID, statusBadge)
+			if i == p.serviceSel {
+				line = panelItemActiveStyle.Render(line)
+			} else {
+				line = panelItemStyle.Render(line)
+			}
+			b.WriteString(line + "\n")
+		}
+	}
+
+	b.WriteString("\n" + dimStyle.Render("[s] stop  [r] restart  [R] restart-all  ↑↓ navigate"))
 	return b.String()
 }
 

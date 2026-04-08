@@ -63,6 +63,9 @@ type ChatPaner interface {
 	MutateMessages(fn func(msgs []Message))
 	// AddFile adds a file reference to the pane's context.
 	AddFile(path string) tea.Cmd
+	// UpdateSidebarFromFrame inspects the frame content; if it is a
+	// ContextProposalContent it updates the context sidebar entries.
+	UpdateSidebarFromFrame(frame interaction.InteractionFrame)
 }
 
 // PlannerPaner is the interface that euclotui.PlannerPane must implement.
@@ -81,6 +84,23 @@ type DebugPaner interface {
 	SetSize(w, h int)
 	SetSubTab(id SubTabID)
 	HandleInputSubmit(value string) tea.Cmd
+}
+
+// ArchaeoPaner is the interface for the archaeology tab pane. It handles both
+// the explore subtab (full-width feed of blob proposals) and the plan subtab
+// (live plan + staged blob sidebar, Phase 5).
+type ArchaeoPaner interface {
+	Update(msg tea.Msg) (ArchaeoPaner, tea.Cmd)
+	View() string
+	SetSize(w, h int)
+	SetSubTab(id SubTabID)
+	HandleInputSubmit(value string) tea.Cmd
+	// SetBlobEmojiEnabled toggles emoji vs letter-badge rendering.
+	SetBlobEmojiEnabled(enabled bool)
+	// StagedBlobs returns the current set of staged blobs from the explore feed.
+	StagedBlobs() []StagedBlobEntry
+	// PromoteAll stages all proposed blobs in the current explore run.
+	PromoteAll()
 }
 
 // EucloEmitter is the interface for an object that can resolve interaction

@@ -657,7 +657,7 @@ func (f *fakeRuntimeAdapter) QueryIntentGaps(string, string) ([]IntentGapInfo, e
 func (f *fakeRuntimeAdapter) QueryTensions(string) ([]TensionInfo, error) {
 	return append([]TensionInfo(nil), f.tensions...), nil
 }
-func (f *fakeRuntimeAdapter) LoadActivePlan(string) (*LivePlanInfo, error) {
+func (f *fakeRuntimeAdapter) LoadLivePlan(string) (*LivePlanInfo, error) {
 	if f.activePlan == nil {
 		return nil, nil
 	}
@@ -665,6 +665,25 @@ func (f *fakeRuntimeAdapter) LoadActivePlan(string) (*LivePlanInfo, error) {
 	clone.Steps = append([]PlanStepInfo(nil), f.activePlan.Steps...)
 	return &clone, nil
 }
+func (f *fakeRuntimeAdapter) LoadActivePlan(context.Context, string) (*ActivePlanView, error) {
+	return nil, nil
+}
+func (f *fakeRuntimeAdapter) LoadBlobs(context.Context, string) ([]BlobEntry, error) { return nil, nil }
+func (f *fakeRuntimeAdapter) AddBlobToPlan(context.Context, string, string) error    { return nil }
+func (f *fakeRuntimeAdapter) RemoveBlobFromPlan(context.Context, string, string) error {
+	return nil
+}
+func (f *fakeRuntimeAdapter) ListServices() []ServiceInfo                              { return nil }
+func (f *fakeRuntimeAdapter) StopService(string) error                                 { return nil }
+func (f *fakeRuntimeAdapter) RestartService(context.Context, string) error             { return nil }
+func (f *fakeRuntimeAdapter) RestartAllServices(context.Context) error                 { return nil }
+func (f *fakeRuntimeAdapter) AddFileToContext(string) error                            { return nil }
+func (f *fakeRuntimeAdapter) DropFileFromContext(string) error                         { return nil }
+func (f *fakeRuntimeAdapter) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error) {
+	return nil, nil
+}
+func (f *fakeRuntimeAdapter) ActivatePlanVersion(context.Context, string, int) error { return nil }
+func (f *fakeRuntimeAdapter) UpdateSidebarFromFrame(interaction.InteractionFrame)      {}
 func (f *fakeRuntimeAdapter) AddPlanNote(stepRef string, body string) error {
 	f.addedPlanNoteStep = stepRef
 	f.addedPlanNoteBody = body
@@ -862,6 +881,29 @@ func (f *fakeRuntimeAdapterWithHITL) InvokeCapability(context.Context, string, m
 }
 func (f *fakeRuntimeAdapterWithHITL) Diagnostics() DiagnosticsInfo   { return DiagnosticsInfo{} }
 func (f *fakeRuntimeAdapterWithHITL) ApplyChatPolicy(SubTabID) error { return nil }
+func (f *fakeRuntimeAdapterWithHITL) ListServices() []ServiceInfo                              { return nil }
+func (f *fakeRuntimeAdapterWithHITL) StopService(string) error                                 { return nil }
+func (f *fakeRuntimeAdapterWithHITL) RestartService(context.Context, string) error             { return nil }
+func (f *fakeRuntimeAdapterWithHITL) RestartAllServices(context.Context) error                 { return nil }
+func (f *fakeRuntimeAdapterWithHITL) LoadActivePlan(context.Context, string) (*ActivePlanView, error) {
+	return nil, nil
+}
+func (f *fakeRuntimeAdapterWithHITL) LoadBlobs(context.Context, string) ([]BlobEntry, error) {
+	return nil, nil
+}
+func (f *fakeRuntimeAdapterWithHITL) AddBlobToPlan(context.Context, string, string) error    { return nil }
+func (f *fakeRuntimeAdapterWithHITL) RemoveBlobFromPlan(context.Context, string, string) error {
+	return nil
+}
+func (f *fakeRuntimeAdapterWithHITL) AddFileToContext(string) error                       { return nil }
+func (f *fakeRuntimeAdapterWithHITL) DropFileFromContext(string) error                    { return nil }
+func (f *fakeRuntimeAdapterWithHITL) UpdateSidebarFromFrame(interaction.InteractionFrame) {}
+func (f *fakeRuntimeAdapterWithHITL) ListPlanVersions(context.Context, string) ([]PlanVersionInfo, error) {
+	return nil, nil
+}
+func (f *fakeRuntimeAdapterWithHITL) ActivatePlanVersion(context.Context, string, int) error {
+	return nil
+}
 
 func TestRootModelHandlesGuidanceRequestedEvent(t *testing.T) {
 	m := newRootModel(&fakeRuntimeAdapter{})

@@ -85,6 +85,7 @@ type Runtime struct {
 	Telemetry            core.Telemetry
 	Logger               *log.Logger
 	Workspace            WorkspaceConfig
+	ServiceManager       *ayenitd.ServiceManager
 	NexusNodeProvider    core.NodeProvider
 	NexusClient          *NexusClient
 
@@ -279,6 +280,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		eventLog:             eventLogCloser,
 		patternDB:            patternDB,
 		Workspace:            workspaceCfg,
+		ServiceManager:       ws.ServiceManager,
 		Registration:         registration,
 		Delegations:          fauthorization.NewDelegationManager(),
 		AgentSpec:            ws.AgentSpec,

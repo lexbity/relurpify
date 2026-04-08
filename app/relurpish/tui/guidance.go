@@ -111,6 +111,31 @@ func formatPendingGuidanceSummary(pending []*guidance.GuidanceRequest) string {
 	return b.String()
 }
 
+func formatPendingLearningSummary(interactions []archaeolearning.Interaction) string {
+	if len(interactions) == 0 {
+		return "No pending learning interactions"
+	}
+	var b strings.Builder
+	b.WriteString("Pending learning interactions:\n")
+	for _, it := range interactions {
+		blocking := " [non-blocking]"
+		if it.Blocking {
+			blocking = " [BLOCKING]"
+		}
+		b.WriteString(fmt.Sprintf(" - %s [%s]%s %s\n", it.ID, it.Kind, blocking, it.Title))
+		if it.Description != "" {
+			b.WriteString(fmt.Sprintf("   %s\n", it.Description))
+		}
+		for _, ev := range it.Evidence {
+			b.WriteString(fmt.Sprintf("   evidence: %s %s\n", ev.Kind, ev.Title))
+		}
+	}
+	b.WriteString("\n")
+	b.WriteString("Non-blocking: /d to dismiss  /esc to defer\n")
+	b.WriteString("Blocking: open HITL panel to respond")
+	return b.String()
+}
+
 func formatDeferredObservationsSummary(observations []guidance.EngineeringObservation) string {
 	if len(observations) == 0 {
 		return "No deferred guidance observations"

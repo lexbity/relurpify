@@ -16,7 +16,8 @@ const (
 	FrameSummary       FrameKind = "summary"        // final summary with produced artifacts
 	FrameTransition    FrameKind = "transition"     // proposed mode transition
 	FrameHelp          FrameKind = "help"           // mode help surface
-	FrameSessionResume FrameKind = "session_resume" // resume previously persisted interaction state
+	FrameSessionResume    FrameKind = "session_resume"    // resume previously persisted interaction state
+	FrameArchaeoFindings FrameKind = "archaeo_findings" // archaeology exploration findings with blob proposals
 )
 
 // ActionKind identifies the type of user action available in a frame.

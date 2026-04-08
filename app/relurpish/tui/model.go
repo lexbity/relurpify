@@ -13,6 +13,7 @@ import (
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 // Run bootstraps the TUI without a euclo plugin. This is the public entrypoint
@@ -76,6 +77,7 @@ type RootModel struct {
 	session *SessionPane
 	planner PlannerPaner
 	debug   DebugPaner
+	archaeo ArchaeoPaner
 	config  *ConfigPane
 
 	// Shared state
@@ -123,7 +125,7 @@ type plannerDataRuntime interface {
 	QueryConfirmedPatterns(scope string) ([]PatternRecordInfo, error)
 	QueryIntentGaps(filePath, scope string) ([]IntentGapInfo, error)
 	QueryTensions(scope string) ([]TensionInfo, error)
-	LoadActivePlan(workflowID string) (*LivePlanInfo, error)
+	LoadLivePlan(workflowID string) (*LivePlanInfo, error)
 	AddPlanNote(stepRef string, body string) error
 	GetPlanDiff(workflowID string) (PlanDiffInfo, error)
 	GetLatestTrace() (TraceInfo, error)
@@ -244,6 +246,7 @@ func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
 	} else {
 		m.debug = NewDebugPane()
 	}
+	m.archaeo = NewArchaeoPane(rt)
 	m.config = NewConfigPane(rt)
 
 	return m
@@ -302,7 +305,7 @@ func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
 			}
 		case SubTabPlannerFinalize:
 			return func() tea.Msg {
-				plan, err := loader.LoadActivePlan("")
+				plan, err := loader.LoadLivePlan("")
 				if err != nil {
 					return chatSystemMsg{Text: fmt.Sprintf("plan load failed: %v", err)}
 				}
@@ -333,8 +336,43 @@ func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
 				return DebugPlanDiffMsg{Diff: diff}
 			}
 		}
+	case TabArchaeo:
+		if m.runtime == nil {
+			return nil
+		}
+		rt := m.runtime
+		switch m.tabs.ActiveSubTab() {
+		case SubTabArchaeoPlan:
+			planCmd := func() tea.Msg {
+				plan, err := rt.LoadActivePlan(context.Background(), "")
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("plan load failed: %v", err)}
+				}
+				return PlanUpdatedMsg{Plan: plan}
+			}
+			blobsCmd := func() tea.Msg {
+				blobs, err := rt.LoadBlobs(context.Background(), "")
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("blob load failed: %v", err)}
+				}
+				return BlobsUpdatedMsg{Blobs: blobs}
+			}
+			return tea.Batch(planCmd, blobsCmd)
+		case SubTabArchaeoHistory:
+			return func() tea.Msg {
+				versions, err := rt.ListPlanVersions(context.Background(), "")
+				if err != nil {
+					return chatSystemMsg{Text: fmt.Sprintf("history load failed: %v", err)}
+				}
+				return PlanHistoryUpdatedMsg{Versions: versions}
+			}
+		}
 	case TabSession:
-		if m.tabs.ActiveSubTab() == SubTabSessionLive && m.runtime != nil {
+		if m.runtime == nil {
+			return nil
+		}
+		switch m.tabs.ActiveSubTab() {
+		case SubTabSessionLive:
 			return func() tea.Msg {
 				workflows, _ := m.runtime.ListWorkflows(3)
 				return SessionLiveSnapshotMsg{
@@ -343,6 +381,10 @@ func (m RootModel) refreshActiveSurfaceCmd() tea.Cmd {
 					Providers: m.runtime.ListLiveProviders(),
 					Approvals: m.runtime.ListApprovals(),
 				}
+			}
+		case SubTabSessionServices:
+			return func() tea.Msg {
+				return ServicesUpdatedMsg{Services: m.runtime.ListServices()}
 			}
 		}
 	}
@@ -584,6 +626,34 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.planner = pp
 		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
 
+	// Archaeo pane data messages — route to archaeo pane regardless of active tab.
+	case PlanUpdatedMsg, ArchaeoExploreMsg, clearPlanHighlightMsg, PlanHistoryUpdatedMsg:
+		ap, cmd := m.archaeo.Update(msg)
+		m.archaeo = ap
+		return m, cmd
+
+	case BlobsUpdatedMsg:
+		ap, cmd := m.archaeo.Update(msg)
+		m.archaeo = ap
+		// Update titlebar blob counts when archaeo tab is active.
+		if m.activeTab == TabArchaeo {
+			tensions, patterns, learning := countBlobsByKind(msg.Blobs)
+			m.titleBar.SetBlobCounts(tensions, patterns, learning)
+		}
+		return m, cmd
+
+	// Archaeo blob operations — route to pane, then trigger a plan+blob refresh.
+	case blobAddedMsg, blobRemovedMsg:
+		ap, cmd := m.archaeo.Update(msg)
+		m.archaeo = ap
+		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
+
+	case planVersionActivatedMsg:
+		ap, cmd := m.archaeo.Update(msg)
+		m.archaeo = ap
+		// Refresh history after activation.
+		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
+
 	// File index for session pane.
 	case fileIndexMsg:
 		sp, cmd := m.session.Update(msg)
@@ -631,9 +701,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.notifQ != nil {
 			m.notifQ.PushInteraction(msg.Frame)
 		}
-		// Add the rendered frame to the chat feed.
+		// Add the rendered frame to the chat feed and update sidebar on proposal frames.
 		if m.chat != nil {
 			m.chat.AppendMessage(msg.Msg)
+			m.chat.UpdateSidebarFromFrame(msg.Frame)
+		}
+		// Route archaeo findings frames to the archaeo pane regardless of active tab.
+		if msg.Frame.Kind == interaction.FrameArchaeoFindings && m.archaeo != nil {
+			ap, cmd := m.archaeo.Update(msg)
+			m.archaeo = ap
+			return m, cmd
 		}
 		return m, nil
 
@@ -738,6 +815,12 @@ func (m RootModel) routeToActivePanes(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case TabArchaeo:
+		ap, cmd := m.archaeo.Update(msg)
+		m.archaeo = ap
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case TabConfig:
 		cp, cmd := m.config.Update(msg)
 		m.config = cp
@@ -816,6 +899,8 @@ func (m RootModel) activePaneView() string {
 		return m.planner.View()
 	case TabDebug:
 		return m.debug.View()
+	case TabArchaeo:
+		return m.archaeo.View()
 	case TabConfig:
 		return m.config.View()
 	default:
@@ -843,6 +928,7 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.session.SetSize(msg.Width, paneH)
 	m.planner.SetSize(msg.Width, paneH)
 	m.debug.SetSize(msg.Width, paneH)
+	m.archaeo.SetSize(msg.Width, paneH)
 	m.config.SetSize(msg.Width, paneH)
 
 	return m, nil
@@ -872,6 +958,7 @@ func (m RootModel) layoutHeights() (title, pane, input, tab int) {
 // and the subtab bar consistently.
 func (m *RootModel) setActiveTab(id TabID) {
 	m.activeTab = id
+	m.titleBar.SetActiveTab(id)
 	m.tabBar.SetActive(id)
 	m.tabs.SetActive(id)
 	m.subTabBar.SetSubTabs(m.tabs.ActiveTab())
@@ -889,6 +976,9 @@ func (m *RootModel) setActiveTab(id TabID) {
 	}
 	if id == TabSession && m.session != nil {
 		m.session.SetSubTab(sub)
+	}
+	if id == TabArchaeo && m.archaeo != nil {
+		m.archaeo.SetSubTab(sub)
 	}
 }
 
@@ -1074,6 +1164,9 @@ func (m RootModel) handleInputSubmitted(value string) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tea.Batch(cmd, m.refreshActiveSurfaceCmd())
+	case TabArchaeo:
+		cmd := m.archaeo.HandleInputSubmit(value)
+		return m, cmd
 	case TabConfig:
 		// Config pane input: trigger refresh (any non-empty text acts as refresh).
 		return m, func() tea.Msg { return configRefreshMsg{} }

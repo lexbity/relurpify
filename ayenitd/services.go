@@ -143,6 +143,18 @@ func (sm *ServiceManager) Count() int {
 	return len(sm.registry)
 }
 
+// ListIDs returns a snapshot of all registered service IDs in unspecified order.
+func (sm *ServiceManager) ListIDs() []string {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	ids := make([]string, 0, len(sm.registry))
+	for id := range sm.registry {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // Clear removes all services from the registry and stops them. Useful for
 // restarting or cleaning up state without creating a new Workspace.
 func (sm *ServiceManager) Clear() error {
