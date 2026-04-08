@@ -37,7 +37,6 @@ type hitlRateBucket struct {
 	windowAt time.Time
 }
 
-
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
 	basePath       string

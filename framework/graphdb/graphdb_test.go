@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func TestNodeOperationsRoundTrip(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function", SourceID: "a.go", Labels: []string{"a"}}))
@@ -211,7 +210,6 @@ func TestConcurrentUpsertAndLink(t *testing.T) {
 	wg.Wait()
 	require.Len(t, engine.ListNodes("function"), workers)
 }
-
 
 func mustJSON(t *testing.T, value any) []byte {
 	t.Helper()

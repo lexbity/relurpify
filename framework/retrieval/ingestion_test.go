@@ -140,10 +140,10 @@ func TestIngestionPipelineSkipsRedundantVersionForUnchangedContent(t *testing.T)
 	sourceUpdatedAt := time.Date(2026, 3, 10, 8, 0, 0, 0, time.UTC)
 
 	first, err := p.Ingest(context.Background(), IngestRequest{
-		CanonicalURI: "docs/guide.md",
-		Content:      []byte("# Intro\nhello\n"),
-		CorpusScope:  "workspace",
-		PolicyTags:   []string{"docs"},
+		CanonicalURI:    "docs/guide.md",
+		Content:         []byte("# Intro\nhello\n"),
+		CorpusScope:     "workspace",
+		PolicyTags:      []string{"docs"},
 		SourceUpdatedAt: &sourceUpdatedAt,
 	})
 	require.NoError(t, err)

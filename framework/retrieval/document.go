@@ -11,18 +11,18 @@ import (
 
 // DocumentRecord is the durable identity of an ingested source.
 type DocumentRecord struct {
-	DocID          string    `json:"doc_id"`
-	CanonicalURI   string    `json:"canonical_uri"`
-	ContentHash    string    `json:"content_hash"`
-	CorpusScope    string    `json:"corpus_scope"`
-	SourceType     string    `json:"source_type"`
-	PolicyTags     []string  `json:"policy_tags,omitempty"`
-	ParserVersion  string    `json:"parser_version"`
-	ChunkerVersion string    `json:"chunker_version"`
+	DocID           string    `json:"doc_id"`
+	CanonicalURI    string    `json:"canonical_uri"`
+	ContentHash     string    `json:"content_hash"`
+	CorpusScope     string    `json:"corpus_scope"`
+	SourceType      string    `json:"source_type"`
+	PolicyTags      []string  `json:"policy_tags,omitempty"`
+	ParserVersion   string    `json:"parser_version"`
+	ChunkerVersion  string    `json:"chunker_version"`
 	SourceUpdatedAt time.Time `json:"source_updated_at"`
 	LastIngestedAt  time.Time `json:"last_ingested_at"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // DocumentVersionRecord records each ingested revision for a document lineage.
@@ -80,18 +80,18 @@ func NewDocumentRecord(canonicalURI string, content []byte, sourceType, parserVe
 	uri := CanonicalizeURI(canonicalURI)
 	chunkerVersion := chunkerVersionFor(sourceType)
 	return DocumentRecord{
-		DocID:          DeriveDocID(uri),
-		CanonicalURI:   uri,
-		ContentHash:    HashContent(content),
-		CorpusScope:    normalizeScope(corpusScope),
-		SourceType:     strings.TrimSpace(sourceType),
-		PolicyTags:     cloneStrings(policyTags),
-		ParserVersion:  strings.TrimSpace(parserVersion),
-		ChunkerVersion: chunkerVersion,
+		DocID:           DeriveDocID(uri),
+		CanonicalURI:    uri,
+		ContentHash:     HashContent(content),
+		CorpusScope:     normalizeScope(corpusScope),
+		SourceType:      strings.TrimSpace(sourceType),
+		PolicyTags:      cloneStrings(policyTags),
+		ParserVersion:   strings.TrimSpace(parserVersion),
+		ChunkerVersion:  chunkerVersion,
 		SourceUpdatedAt: sourceTS,
 		LastIngestedAt:  ts,
-		CreatedAt:      ts,
-		UpdatedAt:      ts,
+		CreatedAt:       ts,
+		UpdatedAt:       ts,
 	}
 }
 

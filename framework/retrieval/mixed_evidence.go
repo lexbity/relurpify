@@ -1,7 +1,7 @@
 package retrieval
 
 import (
-		"sort"
+	"sort"
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -9,14 +9,14 @@ import (
 )
 
 type MixedEvidenceResult struct {
-	Text       string           `json:"text"`
-	Summary    string           `json:"summary,omitempty"`
-	Source     string           `json:"source,omitempty"`
-	RecordID   string           `json:"record_id,omitempty"`
-	Kind       string           `json:"kind,omitempty"`
-	Reference  map[string]any   `json:"reference,omitempty"`
-	Citations  []PackedCitation `json:"citations,omitempty"`
-	Anchors    []AnchorRef      `json:"anchors,omitempty"` // Semantic anchors from evidence
+	Text       string                `json:"text"`
+	Summary    string                `json:"summary,omitempty"`
+	Source     string                `json:"source,omitempty"`
+	RecordID   string                `json:"record_id,omitempty"`
+	Kind       string                `json:"kind,omitempty"`
+	Reference  map[string]any        `json:"reference,omitempty"`
+	Citations  []PackedCitation      `json:"citations,omitempty"`
+	Anchors    []AnchorRef           `json:"anchors,omitempty"` // Semantic anchors from evidence
 	Derivation *core.DerivationChain `json:"derivation,omitempty"`
 	score      float64
 	order      int
@@ -451,11 +451,11 @@ func SupplementalEvidenceFromDeclarativeMemory(records []memory.DeclarativeMemor
 			scoreBoost = 0.3
 		}
 		result = append(result, SupplementalEvidenceRecord{
-			Text:       rec.Content,
-			Summary:    rec.Summary,
-			Source:     "runtime_memory",
-			RecordID:   rec.RecordID,
-			Kind:       string(rec.Kind),
+			Text:     rec.Content,
+			Summary:  rec.Summary,
+			Source:   "runtime_memory",
+			RecordID: rec.RecordID,
+			Kind:     string(rec.Kind),
 			Reference: map[string]any{
 				"uri": rec.ArtifactRef,
 			},
@@ -477,11 +477,11 @@ func SupplementalEvidenceFromProceduralMemory(records []memory.ProceduralMemoryR
 			scoreBoost += 0.1
 		}
 		result = append(result, SupplementalEvidenceRecord{
-			Text:       rec.Description,
-			Summary:    rec.Summary,
-			Source:     "runtime_memory",
-			RecordID:   rec.RoutineID,
-			Kind:       string(rec.Kind),
+			Text:     rec.Description,
+			Summary:  rec.Summary,
+			Source:   "runtime_memory",
+			RecordID: rec.RoutineID,
+			Kind:     string(rec.Kind),
 			Reference: map[string]any{
 				"uri": rec.BodyRef,
 			},

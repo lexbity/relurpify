@@ -416,7 +416,7 @@ rules:
 
 	rule1 := bl.Check("echo Hello World") // Capital H
 	rule2 := bl.Check("echo hello World") // lowercase h
-	
+
 	if rule1 == nil {
 		t.Error("Check() should match uppercase 'H' in pattern")
 	}

@@ -106,15 +106,15 @@ func (ici *InteractionContextItem) Age() time.Duration {
 
 // FileContextItem represents file contents tracked in context.
 type FileContextItem struct {
-	Path              string
-	Content           string
-	Summary           string
-	Reference         *ContextReference
-	LastAccessed      time.Time
-	Relevance         float64
-	PriorityVal       int
-	Pinned            bool
-	derives   *DerivationChain
+	Path         string
+	Content      string
+	Summary      string
+	Reference    *ContextReference
+	LastAccessed time.Time
+	Relevance    float64
+	PriorityVal  int
+	Pinned       bool
+	derives      *DerivationChain
 }
 
 func (fci *FileContextItem) TokenCount() int {
@@ -170,7 +170,7 @@ func (fci *FileContextItem) Compress() (ContextItem, error) {
 		Relevance:    fci.Relevance * 0.9,
 		PriorityVal:  fci.PriorityVal + 1,
 		Pinned:       fci.Pinned,
-		derives:   &chain,
+		derives:      &chain,
 	}, nil
 }
 
@@ -277,7 +277,7 @@ func (mci *MemoryContextItem) Compress() (ContextItem, error) {
 		LastAccessed: mci.LastAccessed,
 		Relevance:    mci.Relevance * 0.9,
 		PriorityVal:  mci.PriorityVal + 1,
-		derives:   &chain,
+		derives:      &chain,
 	}, nil
 }
 
@@ -382,7 +382,7 @@ func (rci *RetrievalContextItem) Compress() (ContextItem, error) {
 		LastAccessed: rci.LastAccessed,
 		Relevance:    rci.Relevance * 0.9,
 		PriorityVal:  rci.PriorityVal + 1,
-		derives:   &chain,
+		derives:      &chain,
 	}, nil
 }
 
@@ -493,7 +493,7 @@ func (tr *CapabilityResultContextItem) Compress() (ContextItem, error) {
 		LastAccessed: tr.LastAccessed,
 		Relevance:    tr.Relevance * 0.9,
 		PriorityVal:  tr.PriorityVal + 1,
-		derives:   &chain,
+		derives:      &chain,
 	}, nil
 }
 

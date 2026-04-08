@@ -29,7 +29,7 @@ type SQLiteRuntimeMemoryStore struct {
 	db                *sql.DB
 	retrieve          retrieval.RetrieverService
 	retrievalEmbedder retrieval.Embedder
-	corpusScope       string  // corpus scope for anchor binding lookups
+	corpusScope       string // corpus scope for anchor binding lookups
 	declSearchFTS     bool
 	procSearchFTS     bool
 }
@@ -48,7 +48,7 @@ type SQLiteRuntimeRetrievalOptions struct {
 	Embedder       retrieval.Embedder
 	Telemetry      core.Telemetry
 	ServiceOptions retrieval.ServiceOptions
-	CorpusScope    string  // optional corpus scope for anchor binding
+	CorpusScope    string // optional corpus scope for anchor binding
 }
 
 // NewSQLiteRuntimeMemoryStoreWithRetrieval opens or creates the runtime memory database

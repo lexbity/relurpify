@@ -331,7 +331,7 @@ func TestCapabilityResultContextItemDerivation(t *testing.T) {
 
 func TestWithDerivation(t *testing.T) {
 	item := &MemoryContextItem{
-		Source: "memory",
+		Source:  "memory",
 		Content: "test",
 	}
 

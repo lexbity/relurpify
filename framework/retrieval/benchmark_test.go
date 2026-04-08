@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/lexcodex/relurpify/framework/core"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func openRetrievalBenchmarkDB(b *testing.B) *sql.DB {

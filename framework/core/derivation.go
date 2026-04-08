@@ -156,9 +156,9 @@ func (c DerivationChain) LastTimestamp() time.Time {
 
 // DerivationSummary is a compact representation for serialization into context blocks.
 type DerivationSummary struct {
-	Depth        int     `json:"depth"`
-	TotalLoss    float64 `json:"total_loss"`
-	OriginSystem string  `json:"origin_system"`
+	Depth         int     `json:"depth"`
+	TotalLoss     float64 `json:"total_loss"`
+	OriginSystem  string  `json:"origin_system"`
 	LastTransform string  `json:"last_transform"`
 }
 
@@ -170,9 +170,9 @@ func (c DerivationChain) Summary() DerivationSummary {
 	}
 
 	return DerivationSummary{
-		Depth:        c.Depth(),
-		TotalLoss:    c.TotalLoss(),
-		OriginSystem: originSystem,
+		Depth:         c.Depth(),
+		TotalLoss:     c.TotalLoss(),
+		OriginSystem:  originSystem,
 		LastTransform: c.LastTransform(),
 	}
 }

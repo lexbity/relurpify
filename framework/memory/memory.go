@@ -265,7 +265,6 @@ func (m *HybridMemory) Forget(ctx context.Context, key string, scope MemoryScope
 	return nil
 }
 
-
 // KnowledgeStore is an interface for storing and retrieving knowledge items
 // such as patterns, tensions, decisions, and interactions.
 type KnowledgeStore interface {
@@ -312,7 +311,7 @@ type inMemoryKnowledgeStore struct {
 func (s *inMemoryKnowledgeStore) StoreKnowledge(ctx context.Context, item KnowledgeItem) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if item.ID == "" {
 		item.ID = fmt.Sprintf("knowledge_%d", time.Now().UnixNano())
 	}
@@ -320,7 +319,7 @@ func (s *inMemoryKnowledgeStore) StoreKnowledge(ctx context.Context, item Knowle
 		item.CreatedAt = time.Now().UTC()
 	}
 	item.UpdatedAt = time.Now().UTC()
-	
+
 	s.items[item.ID] = item
 	return nil
 }
@@ -328,7 +327,7 @@ func (s *inMemoryKnowledgeStore) StoreKnowledge(ctx context.Context, item Knowle
 func (s *inMemoryKnowledgeStore) RetrieveKnowledge(ctx context.Context, query KnowledgeQuery) ([]KnowledgeItem, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var results []KnowledgeItem
 	for _, item := range s.items {
 		// Simple filtering by kind
@@ -342,7 +341,7 @@ func (s *inMemoryKnowledgeStore) RetrieveKnowledge(ctx context.Context, query Kn
 			}
 		}
 		results = append(results, item)
-		
+
 		if query.Limit > 0 && len(results) >= query.Limit {
 			break
 		}
@@ -353,7 +352,7 @@ func (s *inMemoryKnowledgeStore) RetrieveKnowledge(ctx context.Context, query Kn
 func (s *inMemoryKnowledgeStore) DeleteKnowledge(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	delete(s.items, id)
 	return nil
 }

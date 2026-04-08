@@ -30,18 +30,18 @@ var DefaultTechnicalTerms = []string{
 
 // DefaultAnchorTerms is a map from anchor class to default terms for that class.
 var DefaultAnchorTerms = map[string][]string{
-	"policy":      DefaultPolicyTerms,
-	"identity":    DefaultIdentityTerms,
-	"commitment":  DefaultCommitmentTerms,
-	"technical":   DefaultTechnicalTerms,
+	"policy":     DefaultPolicyTerms,
+	"identity":   DefaultIdentityTerms,
+	"commitment": DefaultCommitmentTerms,
+	"technical":  DefaultTechnicalTerms,
 }
 
 // AnchorDetectionConfig controls whether and how anchors are auto-detected during ingestion.
 type AnchorDetectionConfig struct {
-	Enabled         bool
-	CorpusScope     string
-	Classes         map[string]bool // which anchor classes to auto-detect
-	CustomTerms     map[string][]string // custom term sets per class
+	Enabled     bool
+	CorpusScope string
+	Classes     map[string]bool     // which anchor classes to auto-detect
+	CustomTerms map[string][]string // custom term sets per class
 }
 
 // DefaultAnchorDetectionConfig returns a config with auto-detection disabled by default.

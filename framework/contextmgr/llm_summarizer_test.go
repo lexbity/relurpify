@@ -14,8 +14,8 @@ import (
 // preset response. It is used to verify that LLMSummarizer sends the right
 // prompt and uses the returned text as the summary.
 type stubLM struct {
-	response string
-	err      error
+	response   string
+	err        error
 	lastPrompt string
 }
 

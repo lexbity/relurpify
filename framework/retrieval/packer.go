@@ -40,12 +40,12 @@ type PackedCitation struct {
 
 // PackedAnchorMetadata represents semantic anchor information in packed blocks.
 type PackedAnchorMetadata struct {
-	AnchorID  string    `json:"anchor_id"`
-	Term      string    `json:"term"`
-	Definition string   `json:"definition"`
-	Class     string    `json:"class"`
-	Status    string    `json:"status"` // "fresh" | "drifted" | "superseded"
-	CreatedAt time.Time `json:"created_at"`
+	AnchorID   string    `json:"anchor_id"`
+	Term       string    `json:"term"`
+	Definition string    `json:"definition"`
+	Class      string    `json:"class"`
+	Status     string    `json:"status"` // "fresh" | "drifted" | "superseded"
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // PackingResult captures packed blocks plus the packing decisions made.

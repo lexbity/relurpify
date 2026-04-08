@@ -32,12 +32,12 @@ const (
 	// CapabilityRuntimeFamilyLocalTool identifies local callable tool execution.
 	CapabilityRuntimeFamilyLocalTool CapabilityRuntimeFamily = "local-tool"
 	// CapabilityRuntimeFamilyProvider identifies provider-backed capability execution.
-	CapabilityRuntimeFamilyProvider  CapabilityRuntimeFamily = "provider"
+	CapabilityRuntimeFamilyProvider CapabilityRuntimeFamily = "provider"
 	// CapabilityRuntimeFamilyRelurpic identifies higher-order execution behavior
 	// composed from capabilities, skills, sub-agents, or multiple execution
 	// paradigms. Relurpic is a runtime-family classification inside the canonical
 	// capability model, not a separate capability system.
-	CapabilityRuntimeFamilyRelurpic  CapabilityRuntimeFamily = "relurpic"
+	CapabilityRuntimeFamilyRelurpic CapabilityRuntimeFamily = "relurpic"
 )
 
 type TrustClass string
@@ -219,8 +219,8 @@ type ContentProvenance struct {
 	ProviderID   string             `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
 	TrustClass   TrustClass         `json:"trust_class,omitempty" yaml:"trust_class,omitempty"`
 	Disposition  ContentDisposition `json:"disposition,omitempty" yaml:"disposition,omitempty"`
-	Derivation   *DerivationChain   `json:"derivation,omitempty" yaml:"derivation,omitempty"`        // NEW: transformation history
-	Anchors      []AnchorRef        `json:"anchors,omitempty" yaml:"anchors,omitempty"`              // NEW: semantic anchors in result
+	Derivation   *DerivationChain   `json:"derivation,omitempty" yaml:"derivation,omitempty"` // NEW: transformation history
+	Anchors      []AnchorRef        `json:"anchors,omitempty" yaml:"anchors,omitempty"`       // NEW: semantic anchors in result
 }
 
 type CapabilityDescriptorProvider interface {

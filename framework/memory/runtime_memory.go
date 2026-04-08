@@ -40,46 +40,46 @@ const (
 
 // DeclarativeMemoryRecord stores durable facts, decisions, and constraints.
 type DeclarativeMemoryRecord struct {
-	RecordID      string
-	Scope         MemoryScope
-	Kind          DeclarativeMemoryKind
-	Title         string
-	Content       string
-	Summary       string
-	WorkflowID    string
-	TaskID        string
-	ProjectID     string
-	ArtifactRef   string
-	Tags          []string
-	Metadata      map[string]any
-	Verified      bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	StaleAnchors  []AnchorRef `json:"-"`  // populated on read if bound anchors have drifted/superseded status
+	RecordID     string
+	Scope        MemoryScope
+	Kind         DeclarativeMemoryKind
+	Title        string
+	Content      string
+	Summary      string
+	WorkflowID   string
+	TaskID       string
+	ProjectID    string
+	ArtifactRef  string
+	Tags         []string
+	Metadata     map[string]any
+	Verified     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	StaleAnchors []AnchorRef `json:"-"` // populated on read if bound anchors have drifted/superseded status
 }
 
 // ProceduralMemoryRecord stores reusable executable routines and metadata.
 type ProceduralMemoryRecord struct {
-	RoutineID               string
-	Scope                   MemoryScope
-	Kind                    ProceduralMemoryKind
-	Name                    string
-	Description             string
-	Summary                 string
-	WorkflowID              string
-	TaskID                  string
-	ProjectID               string
-	BodyRef                 string
-	InlineBody              string
-	CapabilityDependencies  []core.CapabilitySelector
-	VerificationMetadata    map[string]any
-	PolicySnapshotID        string
-	Verified                bool
-	Version                 int
-	ReuseCount              int
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	StaleAnchors            []AnchorRef `json:"-"`  // populated on read if bound anchors have drifted/superseded status
+	RoutineID              string
+	Scope                  MemoryScope
+	Kind                   ProceduralMemoryKind
+	Name                   string
+	Description            string
+	Summary                string
+	WorkflowID             string
+	TaskID                 string
+	ProjectID              string
+	BodyRef                string
+	InlineBody             string
+	CapabilityDependencies []core.CapabilitySelector
+	VerificationMetadata   map[string]any
+	PolicySnapshotID       string
+	Verified               bool
+	Version                int
+	ReuseCount             int
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	StaleAnchors           []AnchorRef `json:"-"` // populated on read if bound anchors have drifted/superseded status
 }
 
 // DeclarativeMemoryQuery supports bounded retrieval of fact-like memory.
@@ -95,14 +95,14 @@ type DeclarativeMemoryQuery struct {
 
 // ProceduralMemoryQuery supports bounded retrieval of routine-like memory.
 type ProceduralMemoryQuery struct {
-	Query             string
-	Scope             MemoryScope
-	Kinds             []ProceduralMemoryKind
-	TaskID            string
-	WorkflowID        string
-	ProjectID         string
-	CapabilityName    string
-	Limit             int
+	Query          string
+	Scope          MemoryScope
+	Kinds          []ProceduralMemoryKind
+	TaskID         string
+	WorkflowID     string
+	ProjectID      string
+	CapabilityName string
+	Limit          int
 }
 
 // DeclarativeMemoryStore persists and retrieves declarative memory records.
