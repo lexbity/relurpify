@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/rex/events"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 )
 
 type SignalDecision string
@@ -45,16 +46,16 @@ type DefaultGateway struct {
 }
 
 func (g DefaultGateway) IdentityFor(event events.CanonicalEvent) string {
-	if workflowID := strings.TrimSpace(stringValue(event.Payload["workflow_id"])); workflowID != "" {
+	if workflowID := strings.TrimSpace(stringValue(event.Payload[rexkeys.WorkflowID])); workflowID != "" {
 		return workflowID
 	}
-	sum := sha1.Sum([]byte(strings.Join([]string{
+	sum := sha256.Sum256([]byte(strings.Join([]string{
 		strings.TrimSpace(event.Type),
 		strings.TrimSpace(event.ActorID),
 		strings.TrimSpace(event.Partition),
 		strings.TrimSpace(event.IdempotencyKey),
 	}, "::")))
-	return "rexwf:" + hex.EncodeToString(sum[:8])
+	return "rexwf:" + hex.EncodeToString(sum[:])
 }
 
 func (g DefaultGateway) Decide(event events.CanonicalEvent) SignalDecision {
@@ -71,7 +72,7 @@ func (g DefaultGateway) Resolve(ctx context.Context, event events.CanonicalEvent
 		return Decision{Decision: SignalDecisionReject, Reason: "invalid_event"}, err
 	}
 	workflowID := g.IdentityFor(event)
-	runID := firstNonEmpty(stringValue(event.Payload["run_id"]), workflowID+":run")
+	runID := firstNonEmpty(stringValue(event.Payload[rexkeys.RunID]), workflowID+":run")
 
 	switch classifyEvent(event.Type) {
 	case SignalDecisionStart:
@@ -112,6 +113,9 @@ func (g DefaultGateway) ensureStartAllowed(ctx context.Context, workflowID strin
 }
 
 func (g DefaultGateway) validateSignalEvent(ctx context.Context, workflowID, runID string, event events.CanonicalEvent) error {
+	if event.TrustClass == events.TrustUntrusted {
+		return errors.New("untrusted signals rejected")
+	}
 	if strings.TrimSpace(workflowID) == "" {
 		return errors.New("workflow identity required")
 	}
@@ -151,9 +155,6 @@ func (g DefaultGateway) validateSignalEvent(ctx context.Context, workflowID, run
 				return err
 			}
 		}
-	}
-	if event.TrustClass == events.TrustUntrusted {
-		return errors.New("untrusted signals rejected")
 	}
 	return nil
 }

@@ -21,6 +21,7 @@ import (
 	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
 	rexevents "github.com/lexcodex/relurpify/named/rex/events"
 	rexgateway "github.com/lexcodex/relurpify/named/rex/gateway"
+	rexctx "github.com/lexcodex/relurpify/named/rex/rexctx"
 	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
 	"github.com/stretchr/testify/require"
 )
@@ -327,12 +328,11 @@ func TestRexEventBridgeAdmissionRejectsOnceAndAudits(t *testing.T) {
 
 	appendRexFrameworkEvent(t, eventLog, core.FrameworkEvent{
 		Type:      rexevents.TypeTaskRequested,
-		Actor:     core.EventActor{Kind: "service", ID: "test", TenantID: "tenant-a"},
+		Actor:     core.EventActor{Kind: "service", ID: "test", TenantID: "tenant-a", Scopes: []string{"rex:workload:critical"}},
 		Partition: "local",
 		Payload: mustJSON(t, map[string]any{
-			"task_id":        "task-1",
-			"instruction":    "run rex task",
-			"workload_class": string(rexcontrolplane.WorkloadImportant),
+			"task_id":     "task-1",
+			"instruction": "run rex task",
 		}),
 	})
 
@@ -342,7 +342,7 @@ func TestRexEventBridgeAdmissionRejectsOnceAndAudits(t *testing.T) {
 	require.Equal(t, 0, controller.ReleaseCount())
 	require.Len(t, controller.decideRequests, 1)
 	require.Equal(t, "tenant-a", controller.decideRequests[0].TenantID)
-	require.Equal(t, rexcontrolplane.WorkloadImportant, controller.decideRequests[0].Class)
+	require.Equal(t, rexcontrolplane.WorkloadCritical, controller.decideRequests[0].Class)
 	records := audit.Records()
 	require.Len(t, records, 1)
 	require.False(t, records[0].Allowed)
@@ -392,8 +392,13 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 		Admission:      controller,
 		AdmissionAudit: &rexcontrolplane.AuditLog{},
 	}
+	trustedCtx := rexctx.WithTrustedExecutionContext(ctx, rexctx.TrustedExecutionContext{
+		TenantID:      "tenant-a",
+		WorkloadClass: rexcontrolplane.WorkloadImportant,
+		SessionID:     "sess-1",
+	})
 
-	err = provider.handleEventDecision(ctx, rexgateway.Decision{
+	err = provider.handleEventDecision(trustedCtx, rexgateway.Decision{
 		Decision:   rexgateway.SignalDecisionStart,
 		WorkflowID: "wf-1",
 		RunID:      "wf-1:run",
@@ -403,12 +408,10 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 		Partition:  "local",
 		TrustClass: rexevents.TrustInternal,
 		Payload: map[string]any{
-			"task_id":                 "task-1",
-			"instruction":             "review the code",
-			"workspace":               t.TempDir(),
-			"edit_permitted":          false,
-			"rex.admission_tenant_id": "tenant-a",
-			"rex.workload_class":      string(rexcontrolplane.WorkloadImportant),
+			"task_id":        "task-1",
+			"instruction":    "review the code",
+			"workspace":      t.TempDir(),
+			"edit_permitted": false,
 		},
 	})
 	require.NoError(t, err)
@@ -434,7 +437,13 @@ func TestHandleEventDecisionReleasesAdmissionWhenQueueIsFull(t *testing.T) {
 		AdmissionAudit: &rexcontrolplane.AuditLog{},
 	}
 
-	err := provider.handleEventDecision(context.Background(), rexgateway.Decision{
+	trustedCtx := rexctx.WithTrustedExecutionContext(context.Background(), rexctx.TrustedExecutionContext{
+		TenantID:      "tenant-a",
+		WorkloadClass: rexcontrolplane.WorkloadImportant,
+		SessionID:     "sess-2",
+	})
+
+	err := provider.handleEventDecision(trustedCtx, rexgateway.Decision{
 		Decision:   rexgateway.SignalDecisionStart,
 		WorkflowID: "wf-queue",
 		RunID:      "wf-queue:run",
@@ -444,10 +453,8 @@ func TestHandleEventDecisionReleasesAdmissionWhenQueueIsFull(t *testing.T) {
 		Partition:  "local",
 		TrustClass: rexevents.TrustInternal,
 		Payload: map[string]any{
-			"task_id":                 "task-queue",
-			"instruction":             "queue should reject",
-			"rex.admission_tenant_id": "tenant-a",
-			"rex.workload_class":      string(rexcontrolplane.WorkloadImportant),
+			"task_id":     "task-queue",
+			"instruction": "queue should reject",
 		},
 	})
 	require.EqualError(t, err, "rex runtime queue full")

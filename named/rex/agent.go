@@ -22,6 +22,7 @@ import (
 	"github.com/lexcodex/relurpify/named/rex/proof"
 	"github.com/lexcodex/relurpify/named/rex/reconcile"
 	"github.com/lexcodex/relurpify/named/rex/retrieval"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 	"github.com/lexcodex/relurpify/named/rex/route"
 	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
 	"github.com/lexcodex/relurpify/named/rex/state"
@@ -109,8 +110,8 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 	decision := route.Decide(env, class)
 	execPlan := route.BuildExecutionPlan(decision)
 	identity := state.ComputeIdentity(env)
-	stateCtx.Set("rex.workflow_id", identity.WorkflowID)
-	stateCtx.Set("rex.run_id", identity.RunID)
+	stateCtx.Set(rexkeys.RexWorkflowID, identity.WorkflowID)
+	stateCtx.Set(rexkeys.RexRunID, identity.RunID)
 	stateCtx.Set("rex.route", decision.Family)
 	if a.Observer != nil {
 		if err := a.Observer.BeforeExecute(ctx, identity.WorkflowID, identity.RunID, task, stateCtx); err != nil {
@@ -127,7 +128,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 	}()
 
 	surfaces := state.ResolveRuntimeSurfaces(a.Environment.Memory)
-	eventSuffix := stateCtx.GetString("rex.event_id")
+	eventSuffix := stateCtx.GetString(rexkeys.RexEventID)
 	if eventSuffix == "" {
 		eventSuffix = "runtime"
 	}
@@ -196,8 +197,8 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 	a.LastProof = proof.BuildProofSurface(decision, result, stateCtx)
 	result.Data["rex.proof_surface"] = a.LastProof
 	result.Data["rex.completion"] = completion
-	result.Data["rex.workflow_id"] = identity.WorkflowID
-	result.Data["rex.run_id"] = identity.RunID
+	result.Data[rexkeys.RexWorkflowID] = identity.WorkflowID
+	result.Data[rexkeys.RexRunID] = identity.RunID
 	result.Data["rex.route"] = decision.Family
 	if surfaces.Workflow != nil {
 		_ = persistProof(ctx, surfaces.Workflow, identity, decision, a.LastProof, actionLog, completion, stateCtx)

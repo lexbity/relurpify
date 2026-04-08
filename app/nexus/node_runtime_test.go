@@ -1291,7 +1291,7 @@ func TestMeshTransportFrameHandlerResumePersistsImportedRexWorkflowAndFencesSour
 		for _, artifact := range artifacts {
 			kinds[artifact.Kind] = true
 		}
-		return kinds["rex.fmp_import"] && kinds["rex.fmp_lineage"] && kinds["rex.task_request"]
+		return kinds["rex.task_request"]
 	}, 5*time.Second, 20*time.Millisecond)
 
 	source, ok, err := fixture.ownership.GetAttempt(context.Background(), fixture.sourceAttempt)
@@ -1344,12 +1344,10 @@ func TestMeshTransportFrameHandlerResumeReplayAfterFenceDoesNotCreateDuplicateRe
 		for _, artifact := range artifactsBefore {
 			kinds[artifact.Kind] = true
 		}
-		return kinds["rex.fmp_import"] && kinds["rex.fmp_lineage"] && kinds["rex.task_request"]
+		return kinds["rex.task_request"]
 	}, 5*time.Second, 20*time.Millisecond)
 	artifactIDsBefore := map[string]bool{}
 	requiredArtifactIDs := map[string]string{
-		"rex.fmp_import":   fixture.destAttempt + ":fmp-import",
-		"rex.fmp_lineage":  fixture.destAttempt + ":fmp-lineage",
 		"rex.task_request": fixture.destAttempt + ":task-request",
 	}
 	for _, artifact := range artifactsBefore {
@@ -1552,7 +1550,7 @@ func TestMeshTransportFrameHandlerResumePersistsImportedRexWorkflow(t *testing.T
 		for _, artifact := range artifacts {
 			kinds[artifact.Kind] = true
 		}
-		return kinds["rex.fmp_import"] && kinds["rex.fmp_lineage"] && kinds["rex.task_request"]
+		return kinds["rex.task_request"]
 	}, 5*time.Second, 20*time.Millisecond)
 
 	attempt, ok, err := ownership.GetAttempt(context.Background(), "lineage-real:rex:resume")

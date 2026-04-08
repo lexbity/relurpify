@@ -11,6 +11,8 @@ type EventActor struct {
 	ID          string      `json:"id"`
 	Label       string      `json:"label,omitempty"`
 	TenantID    string      `json:"tenant_id,omitempty"`
+	SessionID   string      `json:"session_id,omitempty"`
+	Scopes      []string    `json:"scopes,omitempty"`
 	SubjectKind SubjectKind `json:"subject_kind,omitempty"`
 }
 

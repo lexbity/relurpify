@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/memory"
@@ -82,6 +83,10 @@ func TestDefaultGatewayResolveAndValidationHelpers(t *testing.T) {
 	}
 	if got := stringValue(nil); got != "" {
 		t.Fatalf("unexpected stringValue result: %q", got)
+	}
+	identity := gw.IdentityFor(events.CanonicalEvent{Type: events.TypeTaskRequested, ActorID: "actor", Partition: "local", IdempotencyKey: "idem"})
+	if !strings.HasPrefix(identity, "rexwf:") || len(identity) != len("rexwf:")+64 {
+		t.Fatalf("expected sha256 identity, got %q", identity)
 	}
 }
 

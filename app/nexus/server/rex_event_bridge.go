@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -13,6 +14,8 @@ import (
 	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
 	rexevents "github.com/lexcodex/relurpify/named/rex/events"
 	rexgateway "github.com/lexcodex/relurpify/named/rex/gateway"
+	rexctx "github.com/lexcodex/relurpify/named/rex/rexctx"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
 )
 
@@ -28,14 +31,19 @@ type rexEventBridgeGateway interface {
 }
 
 type RexEventBridge struct {
-	Log        event.Log
-	Partition  string
-	Cursor     rexEventCursorStore
-	Gateway    rexEventBridgeGateway
-	Control    func(context.Context, core.FrameworkEvent) error
-	Handle     func(context.Context, rexgateway.Decision, rexevents.CanonicalEvent) error
-	PollPeriod time.Duration
-	Now        func() time.Time
+	Log             event.Log
+	Partition       string
+	Cursor          rexEventCursorStore
+	Gateway         rexEventBridgeGateway
+	Control         func(context.Context, core.FrameworkEvent) error
+	Handle          func(context.Context, rexgateway.Decision, rexevents.CanonicalEvent) error
+	PollPeriod      time.Duration
+	Now             func() time.Time
+	TrustedResolver rexctx.TrustedContextResolver
+	healthMu        sync.RWMutex
+	healthy         bool
+	lastError       string
+	failedAt        time.Time
 	// Phase 7.1: Admission control for gateway routing
 	Admission      rexcontrolplane.AdmissionController
 	AdmissionAudit *rexcontrolplane.AuditLog
@@ -49,11 +57,13 @@ func NewRexEventBridge(log event.Log, partition string, runtime *RexRuntimeProvi
 		return nil, fmt.Errorf("rex runtime with workflow store required")
 	}
 	return &RexEventBridge{
-		Log:       log,
-		Partition: partitionOrDefault(partition),
-		Cursor:    newSQLiteRexEventCursorStore(runtime.WorkflowStore.DB(), partitionOrDefault(partition), rexEventBridgeConsumerID),
-		Gateway:   rexgateway.DefaultGateway{Store: runtime.WorkflowStore},
-		Handle:    runtime.handleEventDecision,
+		Log:             log,
+		Partition:       partitionOrDefault(partition),
+		Cursor:          newSQLiteRexEventCursorStore(runtime.WorkflowStore.DB(), partitionOrDefault(partition), rexEventBridgeConsumerID),
+		Gateway:         rexgateway.DefaultGateway{Store: runtime.WorkflowStore},
+		Handle:          runtime.handleEventDecision,
+		TrustedResolver: runtime.TrustedResolver,
+		healthy:         true,
 		// Phase 7.1: Wire admission controller from runtime
 		Admission:      runtime.Admission,
 		AdmissionAudit: runtime.AdmissionAudit,
@@ -73,11 +83,27 @@ func (b *RexEventBridge) Start(ctx context.Context) error {
 }
 
 func (b *RexEventBridge) loop(ctx context.Context, afterSeq uint64) {
+	backoff := time.Second
+	const maxBackoff = 30 * time.Second
 	for {
 		events, err := b.Log.Read(ctx, partitionOrDefault(b.Partition), afterSeq, 256, true)
 		if err != nil {
-			return
+			b.setHealth(false, err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+				if backoff < maxBackoff {
+					backoff *= 2
+					if backoff > maxBackoff {
+						backoff = maxBackoff
+					}
+				}
+				continue
+			}
 		}
+		backoff = time.Second
+		b.setHealth(true, nil)
 		for _, frameworkEvent := range events {
 			if err := b.processEvent(ctx, frameworkEvent); err != nil {
 				continue
@@ -87,6 +113,33 @@ func (b *RexEventBridge) loop(ctx context.Context, afterSeq uint64) {
 			_ = b.Cursor.Save(context.WithoutCancel(ctx), afterSeq)
 		}
 	}
+}
+
+func (b *RexEventBridge) setHealth(healthy bool, err error) {
+	if b == nil {
+		return
+	}
+	b.healthMu.Lock()
+	defer b.healthMu.Unlock()
+	b.healthy = healthy
+	if err != nil {
+		b.lastError = err.Error()
+		b.failedAt = time.Now().UTC()
+		return
+	}
+	b.lastError = ""
+	if healthy {
+		b.failedAt = time.Time{}
+	}
+}
+
+func (b *RexEventBridge) Health() (bool, string) {
+	if b == nil {
+		return false, "bridge unavailable"
+	}
+	b.healthMu.RLock()
+	defer b.healthMu.RUnlock()
+	return b.healthy, b.lastError
 }
 
 func (b *RexEventBridge) processEvent(ctx context.Context, frameworkEvent core.FrameworkEvent) error {
@@ -102,11 +155,16 @@ func (b *RexEventBridge) processEvent(ctx context.Context, frameworkEvent core.F
 	if err != nil || !ok {
 		return err
 	}
+	trusted, err := b.resolveTrustedExecutionContext(ctx, frameworkEvent)
+	if err != nil {
+		return err
+	}
+	trustedCtx := rexctx.WithTrustedExecutionContext(ctx, trusted)
 
 	// Phase 7.1: Check admission control before routing task to Rex
 	if b.Admission != nil && shouldCheckAdmission(canonicalEvent) {
-		tenantID := extractTenantID(frameworkEvent)
-		workloadClass := extractWorkloadClass(frameworkEvent)
+		tenantID := trusted.TenantID
+		workloadClass := trusted.WorkloadClass
 		admissionReq := rexcontrolplane.AdmissionRequest{
 			TenantID: tenantID,
 			Class:    workloadClass,
@@ -114,7 +172,7 @@ func (b *RexEventBridge) processEvent(ctx context.Context, frameworkEvent core.F
 		admissionDecision := b.Admission.Decide(admissionReq)
 		recordAdmissionDecision(b.AdmissionAudit, admissionReq, admissionDecision, b.nowUTC())
 		if !admissionDecision.Allowed {
-			emitAdmissionRejection(ctx, b.Log, frameworkEvent, admissionDecision)
+			emitAdmissionRejection(ctx, b.Log, frameworkEvent, admissionDecision, workloadClass)
 			return nil
 		}
 		annotateAdmissionContext(&canonicalEvent, admissionReq)
@@ -127,7 +185,7 @@ func (b *RexEventBridge) processEvent(ctx context.Context, frameworkEvent core.F
 	if decision.Decision == rexgateway.SignalDecisionReject {
 		return nil
 	}
-	return b.Handle(ctx, decision, canonicalEvent)
+	return b.Handle(trustedCtx, decision, canonicalEvent)
 }
 
 func isRexControlPlaneEvent(eventType string) bool {
@@ -144,6 +202,13 @@ func (b *RexEventBridge) nowUTC() time.Time {
 		return b.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func (b *RexEventBridge) resolveTrustedExecutionContext(ctx context.Context, frameworkEvent core.FrameworkEvent) (rexctx.TrustedExecutionContext, error) {
+	if b != nil && b.TrustedResolver != nil {
+		return b.TrustedResolver.Resolve(ctx, frameworkEvent.Actor)
+	}
+	return rexctx.DefaultTrustedContextResolver{}.Resolve(ctx, frameworkEvent.Actor)
 }
 
 func mapFrameworkEventToRex(frameworkEvent core.FrameworkEvent) (rexevents.CanonicalEvent, bool, error) {
@@ -185,7 +250,7 @@ func mapSessionMessageToRex(frameworkEvent core.FrameworkEvent) (rexevents.Canon
 		"sender_id":       payload.SenderID,
 	}
 	if payload.SessionKey != "" {
-		canonicalPayload["workflow_id"] = "rex-session:" + payload.SessionKey
+		canonicalPayload[rexkeys.WorkflowID] = "rex-session:" + payload.SessionKey
 	}
 	return rexevents.DefaultNormalizer{}.Normalize(rexevents.CanonicalEvent{
 		ID:             fmt.Sprintf("%d", frameworkEvent.Seq),
@@ -283,34 +348,7 @@ func shouldCheckAdmission(event rexevents.CanonicalEvent) bool {
 	return event.Type == rexevents.TypeTaskRequested || event.Type == rexevents.TypeWorkflowResume
 }
 
-func extractTenantID(frameworkEvent core.FrameworkEvent) string {
-	if frameworkEvent.Actor.TenantID != "" {
-		return frameworkEvent.Actor.TenantID
-	}
-	return "default"
-}
-
-func extractWorkloadClass(frameworkEvent core.FrameworkEvent) rexcontrolplane.WorkloadClass {
-	// Parse workload class from event payload or default to best_effort
-	if len(frameworkEvent.Payload) == 0 {
-		return rexcontrolplane.WorkloadBestEffort
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(frameworkEvent.Payload, &payload); err != nil {
-		return rexcontrolplane.WorkloadBestEffort
-	}
-	if classStr, ok := payload["workload_class"].(string); ok {
-		switch strings.TrimSpace(classStr) {
-		case string(rexcontrolplane.WorkloadCritical):
-			return rexcontrolplane.WorkloadCritical
-		case string(rexcontrolplane.WorkloadImportant):
-			return rexcontrolplane.WorkloadImportant
-		}
-	}
-	return rexcontrolplane.WorkloadBestEffort
-}
-
-func emitAdmissionRejection(ctx context.Context, log event.Log, frameworkEvent core.FrameworkEvent, decision rexcontrolplane.AdmissionDecision) {
+func emitAdmissionRejection(ctx context.Context, log event.Log, frameworkEvent core.FrameworkEvent, decision rexcontrolplane.AdmissionDecision, workloadClass rexcontrolplane.WorkloadClass) {
 	if log == nil {
 		return
 	}
@@ -318,7 +356,7 @@ func emitAdmissionRejection(ctx context.Context, log event.Log, frameworkEvent c
 		"tenant_id":      firstNonEmpty(frameworkEvent.Actor.TenantID, "default"),
 		"event_type":     frameworkEvent.Type,
 		"event_seq":      frameworkEvent.Seq,
-		"workload_class": string(extractWorkloadClass(frameworkEvent)),
+		"workload_class": string(workloadClass),
 		"reason":         decision.Reason,
 	})
 	if err != nil {
@@ -353,8 +391,8 @@ func annotateAdmissionContext(event *rexevents.CanonicalEvent, req rexcontrolpla
 	if event.Payload == nil {
 		event.Payload = map[string]any{}
 	}
-	event.Payload["rex.admission_tenant_id"] = strings.TrimSpace(req.TenantID)
-	event.Payload["rex.workload_class"] = string(req.Class)
+	event.Payload[rexkeys.RexAdmissionTenantID] = strings.TrimSpace(req.TenantID)
+	event.Payload[rexkeys.RexWorkloadClass] = string(req.Class)
 }
 
 func recordAdmissionDecision(audit *rexcontrolplane.AuditLog, req rexcontrolplane.AdmissionRequest, decision rexcontrolplane.AdmissionDecision, now time.Time) {
@@ -375,15 +413,15 @@ func admissionRequestFromContext(ctx map[string]any) (rexcontrolplane.AdmissionR
 	if len(ctx) == 0 {
 		return rexcontrolplane.AdmissionRequest{}, false
 	}
-	tenantID := strings.TrimSpace(stringValue(ctx["rex.admission_tenant_id"]))
+	tenantID := strings.TrimSpace(stringValue(ctx[rexkeys.RexAdmissionTenantID]))
 	if tenantID == "" {
-		tenantID = strings.TrimSpace(stringValue(ctx["gateway.tenant_id"]))
+		tenantID = strings.TrimSpace(stringValue(ctx[rexkeys.GatewayTenantID]))
 	}
 	if tenantID == "" {
 		return rexcontrolplane.AdmissionRequest{}, false
 	}
 	class := rexcontrolplane.WorkloadBestEffort
-	switch strings.TrimSpace(stringValue(ctx["rex.workload_class"])) {
+	switch strings.TrimSpace(stringValue(ctx[rexkeys.RexWorkloadClass])) {
 	case string(rexcontrolplane.WorkloadCritical):
 		class = rexcontrolplane.WorkloadCritical
 	case string(rexcontrolplane.WorkloadImportant):
@@ -396,26 +434,38 @@ func (p *RexRuntimeProvider) handleEventDecision(ctx context.Context, decision r
 	if p == nil || p.Agent == nil || p.Agent.Runtime == nil {
 		return fmt.Errorf("rex runtime unavailable")
 	}
+	trusted, _ := rexctx.TrustedExecutionContextFromContext(ctx)
 	task := rexevents.ToTask(event)
 	state := core.NewContext()
 	for key, value := range task.Context {
 		state.Set(key, value)
 	}
+	if strings.TrimSpace(trusted.TenantID) != "" {
+		task.Context[rexkeys.RexAdmissionTenantID] = trusted.TenantID
+		state.Set(rexkeys.RexAdmissionTenantID, trusted.TenantID)
+	}
+	if strings.TrimSpace(string(trusted.WorkloadClass)) != "" {
+		task.Context[rexkeys.RexWorkloadClass] = string(trusted.WorkloadClass)
+		state.Set(rexkeys.RexWorkloadClass, string(trusted.WorkloadClass))
+	}
+	if strings.TrimSpace(trusted.SessionID) != "" {
+		state.Set(rexkeys.GatewaySessionID, trusted.SessionID)
+	}
 	admissionReq, releaseAdmission := admissionRequestFromContext(task.Context)
 	if decision.WorkflowID != "" {
-		task.Context["workflow_id"] = decision.WorkflowID
-		state.Set("workflow_id", decision.WorkflowID)
-		state.Set("rex.workflow_id", decision.WorkflowID)
+		task.Context[rexkeys.WorkflowID] = decision.WorkflowID
+		state.Set(rexkeys.WorkflowID, decision.WorkflowID)
+		state.Set(rexkeys.RexWorkflowID, decision.WorkflowID)
 	}
 	if decision.RunID != "" {
-		task.Context["run_id"] = decision.RunID
-		state.Set("run_id", decision.RunID)
-		state.Set("rex.run_id", decision.RunID)
+		task.Context[rexkeys.RunID] = decision.RunID
+		state.Set(rexkeys.RunID, decision.RunID)
+		state.Set(rexkeys.RexRunID, decision.RunID)
 	}
-	state.Set("rex.event_type", event.Type)
-	state.Set("rex.event_id", event.ID)
-	state.Set("rex.event_partition", event.Partition)
-	state.Set("rex.event_trust_class", event.TrustClass)
+	state.Set(rexkeys.RexEventType, event.Type)
+	state.Set(rexkeys.RexEventID, event.ID)
+	state.Set(rexkeys.RexEventPartition, event.Partition)
+	state.Set(rexkeys.RexEventTrustClass, event.TrustClass)
 	item := rexruntime.WorkItem{
 		WorkflowID: decision.WorkflowID,
 		RunID:      decision.RunID,

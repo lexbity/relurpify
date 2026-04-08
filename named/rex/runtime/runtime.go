@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,9 +21,12 @@ const (
 	HealthDegraded   Health = "degraded"
 )
 
+const maxFailCount = 3
+
 type WorkItem struct {
 	WorkflowID string
 	RunID      string
+	Attempts   int
 	Task       *core.Task
 	State      *core.Context
 	Execute    func(context.Context, WorkItem) error
@@ -37,6 +41,7 @@ type Details struct {
 	LastWorkflowID string                    `json:"last_workflow_id,omitempty"`
 	LastRunID      string                    `json:"last_run_id,omitempty"`
 	LastError      string                    `json:"last_error,omitempty"`
+	DeadLetter     []WorkItem                `json:"dead_letter,omitempty"`
 	Recoveries     []state.RecoveryCandidate `json:"recoveries,omitempty"`
 }
 
@@ -55,6 +60,7 @@ type Manager struct {
 	queueDepth     int
 	cancel         context.CancelFunc
 	loopDone       chan struct{}
+	workerWG       sync.WaitGroup
 	recoveries     []state.RecoveryCandidate
 	loopStarted    bool
 	lastWorkflowID string
@@ -62,10 +68,25 @@ type Manager struct {
 	lastError      string
 	worker         func(context.Context, WorkItem) error
 	partition      PartitionDetector
+
+	inflightMu sync.Mutex
+	inflight   map[string]struct{}
+	pending    map[string][]WorkItem
+	failCount  map[string]int
+	deadLetter []WorkItem
 }
 
 func New(cfg config.Config, mem memory.MemoryStore) *Manager {
-	return &Manager{cfg: cfg, mem: mem, queue: make(chan WorkItem, max(1, cfg.QueueCapacity)), health: HealthHealthy}
+	cfg = normalizeConfig(cfg)
+	return &Manager{
+		cfg:       cfg,
+		mem:       mem,
+		queue:     make(chan WorkItem, max(1, cfg.QueueCapacity)),
+		health:    HealthHealthy,
+		inflight:  map[string]struct{}{},
+		pending:   map[string][]WorkItem{},
+		failCount: map[string]int{},
+	}
 }
 
 func (m *Manager) SetWorker(worker func(context.Context, WorkItem) error) {
@@ -147,6 +168,7 @@ func (m *Manager) Details() Details {
 		LastWorkflowID: m.lastWorkflowID,
 		LastRunID:      m.lastRunID,
 		LastError:      lastError,
+		DeadLetter:     append([]WorkItem{}, m.deadLetter...),
 		Recoveries:     append([]state.RecoveryCandidate{}, m.recoveries...),
 	}
 }
@@ -182,15 +204,30 @@ func (m *Manager) BeginExecution(workflowID, runID string) func(error) {
 
 func (m *Manager) loop(ctx context.Context) {
 	defer close(m.loopDone)
+	for i := 0; i < max(1, m.cfg.WorkerCount); i++ {
+		m.workerWG.Add(1)
+		go m.runWorker(ctx)
+	}
 	ticker := time.NewTicker(m.cfg.RecoveryScanPeriod)
 	defer ticker.Stop()
 	m.scanRecoveries(ctx)
+	defer m.workerWG.Wait()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			m.scanRecoveries(ctx)
+		}
+	}
+}
+
+func (m *Manager) runWorker(ctx context.Context) {
+	defer m.workerWG.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
 		case item := <-m.queue:
 			m.mu.Lock()
 			if m.queueDepth > 0 {
@@ -198,9 +235,23 @@ func (m *Manager) loop(ctx context.Context) {
 			}
 			worker := m.worker
 			m.mu.Unlock()
+
+			if !m.tryAcquireWorkflow(item.WorkflowID) {
+				m.addPending(item)
+				continue
+			}
+
 			finish := m.BeginExecution(item.WorkflowID, item.RunID)
 			err := m.executeItem(ctx, worker, item)
 			finish(err)
+			if err != nil {
+				m.handleFailedItem(ctx, item)
+			} else {
+				m.clearFailureCount(item)
+			}
+
+			pending := m.releaseWorkflow(item.WorkflowID)
+			m.requeuePending(ctx, pending)
 		}
 	}
 }
@@ -215,6 +266,7 @@ func (m *Manager) scanRecoveries(ctx context.Context) {
 	m.mu.Lock()
 	m.recoveries = candidates
 	m.mu.Unlock()
+	_ = m.DrainDeadLetter()
 	m.setHealth(HealthHealthy)
 }
 
@@ -233,6 +285,137 @@ func (m *Manager) executeItem(ctx context.Context, worker func(context.Context, 
 		}
 	}
 	return nil
+}
+
+func (m *Manager) tryAcquireWorkflow(workflowID string) bool {
+	if strings.TrimSpace(workflowID) == "" {
+		return true
+	}
+	m.inflightMu.Lock()
+	defer m.inflightMu.Unlock()
+	if _, ok := m.inflight[workflowID]; ok {
+		return false
+	}
+	m.inflight[workflowID] = struct{}{}
+	return true
+}
+
+func (m *Manager) releaseWorkflow(workflowID string) []WorkItem {
+	if strings.TrimSpace(workflowID) == "" {
+		return nil
+	}
+	m.inflightMu.Lock()
+	defer m.inflightMu.Unlock()
+	delete(m.inflight, workflowID)
+	items := append([]WorkItem(nil), m.pending[workflowID]...)
+	delete(m.pending, workflowID)
+	return items
+}
+
+func (m *Manager) addPending(item WorkItem) {
+	if strings.TrimSpace(item.WorkflowID) == "" {
+		return
+	}
+	m.inflightMu.Lock()
+	defer m.inflightMu.Unlock()
+	m.pending[item.WorkflowID] = append(m.pending[item.WorkflowID], item)
+}
+
+func (m *Manager) requeuePending(ctx context.Context, items []WorkItem) {
+	if len(items) == 0 {
+		return
+	}
+	items = append([]WorkItem(nil), items...)
+	go func() {
+		for _, item := range items {
+			if !m.enqueueBlocking(ctx, item) {
+				return
+			}
+		}
+	}()
+}
+
+func (m *Manager) enqueueBlocking(ctx context.Context, item WorkItem) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case m.queue <- item:
+		m.mu.Lock()
+		m.queueDepth++
+		m.mu.Unlock()
+		return true
+	}
+}
+
+func (m *Manager) handleFailedItem(ctx context.Context, item WorkItem) {
+	key := item.workflowKey()
+	if key == "" {
+		return
+	}
+	item.Attempts = m.incrementFailureCount(key)
+	if item.Attempts >= maxFailCount {
+		m.addDeadLetter(item)
+		return
+	}
+	delay := retryDelay(item.Attempts)
+	go func() {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			_ = m.enqueueBlocking(ctx, item)
+		}
+	}()
+}
+
+func (m *Manager) incrementFailureCount(key string) int {
+	m.inflightMu.Lock()
+	defer m.inflightMu.Unlock()
+	m.failCount[key]++
+	return m.failCount[key]
+}
+
+func (m *Manager) clearFailureCount(item WorkItem) {
+	key := item.workflowKey()
+	if key == "" {
+		return
+	}
+	m.inflightMu.Lock()
+	defer m.inflightMu.Unlock()
+	delete(m.failCount, key)
+}
+
+func (m *Manager) addDeadLetter(item WorkItem) {
+	m.inflightMu.Lock()
+	defer m.inflightMu.Unlock()
+	m.deadLetter = append(m.deadLetter, item)
+}
+
+func (m *Manager) DrainDeadLetter() []WorkItem {
+	m.inflightMu.Lock()
+	defer m.inflightMu.Unlock()
+	return append([]WorkItem(nil), m.deadLetter...)
+}
+
+func (item WorkItem) workflowKey() string {
+	workflowID := strings.TrimSpace(item.WorkflowID)
+	runID := strings.TrimSpace(item.RunID)
+	if workflowID == "" {
+		return ""
+	}
+	if runID == "" {
+		return workflowID
+	}
+	return workflowID + ":" + runID
+}
+
+func retryDelay(attempts int) time.Duration {
+	if attempts < 1 {
+		attempts = 1
+	}
+	return time.Duration(20+attempts*10) * time.Millisecond
 }
 
 func (m *Manager) setHealth(health Health) {
@@ -255,4 +438,27 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func normalizeConfig(cfg config.Config) config.Config {
+	if strings.TrimSpace(string(cfg.RuntimeMode)) == "" {
+		cfg.RuntimeMode = config.RuntimeModeNexusManaged
+	}
+	if cfg.QueueCapacity <= 0 {
+		cfg.QueueCapacity = 32
+	}
+	if cfg.WorkerCount <= 0 {
+		if cfg.RuntimeMode == config.RuntimeModeEmbedded {
+			cfg.WorkerCount = 1
+		} else {
+			cfg.WorkerCount = 4
+		}
+	}
+	if cfg.RecoveryScanPeriod <= 0 {
+		cfg.RecoveryScanPeriod = 30 * time.Second
+	}
+	if cfg.IdlePollPeriod <= 0 {
+		cfg.IdlePollPeriod = 200 * time.Millisecond
+	}
+	return cfg
 }

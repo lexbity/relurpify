@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 )
 
 // Envelope is rex's normalized intake shape.
@@ -38,18 +39,18 @@ func Normalize(task *core.Task, state *core.Context) Envelope {
 		env.Workspace = stringValue(task.Context["workspace"])
 		env.ModeHint = stringValue(task.Context["mode_hint"])
 		env.ResumedRoute = stringValue(task.Context["rex.route"])
-		env.WorkflowID = stringValue(task.Context["workflow_id"])
-		env.RunID = stringValue(task.Context["run_id"])
+		env.WorkflowID = stringValue(task.Context[rexkeys.WorkflowID])
+		env.RunID = stringValue(task.Context[rexkeys.RunID])
 		env.Source = firstNonEmpty(stringValue(task.Context["source"]), env.Source)
 		env.EditPermitted = boolValue(task.Context["edit_permitted"]) || boolValue(task.Context["mutation_allowed"])
 		env.CapabilitySnapshot = stringSlice(task.Context["capability_snapshot"])
 	}
 	if state != nil {
 		if env.WorkflowID == "" {
-			env.WorkflowID = strings.TrimSpace(state.GetString("rex.workflow_id"))
+			env.WorkflowID = strings.TrimSpace(state.GetString(rexkeys.RexWorkflowID))
 		}
 		if env.RunID == "" {
-			env.RunID = strings.TrimSpace(state.GetString("rex.run_id"))
+			env.RunID = strings.TrimSpace(state.GetString(rexkeys.RexRunID))
 		}
 		if env.ResumedRoute == "" {
 			env.ResumedRoute = strings.TrimSpace(state.GetString("rex.route"))

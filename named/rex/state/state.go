@@ -2,7 +2,7 @@ package state
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -12,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/named/rex/envelope"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 )
 
 // Identity captures the durable workflow identity used by rex.
@@ -31,8 +32,8 @@ type RecoveryCandidate struct {
 func ComputeIdentity(env envelope.Envelope) Identity {
 	workflowID := strings.TrimSpace(env.WorkflowID)
 	if workflowID == "" {
-		sum := sha1.Sum([]byte(strings.Join([]string{env.TaskID, env.Source, env.Instruction}, "::")))
-		workflowID = "rex:" + hex.EncodeToString(sum[:8])
+		sum := sha256.Sum256([]byte(strings.Join([]string{env.TaskID, env.Source, env.Instruction}, "::")))
+		workflowID = "rex:" + hex.EncodeToString(sum[:])
 	}
 	runID := strings.TrimSpace(env.RunID)
 	if runID == "" {
@@ -68,6 +69,19 @@ func RecoveryBoot(ctx context.Context, mem memory.MemoryStore) ([]RecoveryCandid
 	if surfaces.Workflow == nil {
 		return nil, nil
 	}
+	if lister, ok := any(surfaces.Workflow).(interface {
+		ListRunsByStatus(context.Context, []memory.WorkflowRunStatus, int) ([]memory.WorkflowRunRecord, error)
+	}); ok {
+		runs, err := lister.ListRunsByStatus(ctx, []memory.WorkflowRunStatus{memory.WorkflowRunStatusRunning, memory.WorkflowRunStatusNeedsReplan}, 128)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]RecoveryCandidate, 0, len(runs))
+		for _, run := range runs {
+			out = append(out, RecoveryCandidate{WorkflowID: run.WorkflowID, RunID: run.RunID, Status: string(run.Status)})
+		}
+		return out, nil
+	}
 	rows, err := surfaces.Workflow.ListWorkflows(ctx, 128)
 	if err != nil {
 		return nil, err
@@ -77,15 +91,7 @@ func RecoveryBoot(ctx context.Context, mem memory.MemoryStore) ([]RecoveryCandid
 		if row.Status != memory.WorkflowRunStatusRunning && row.Status != memory.WorkflowRunStatusNeedsReplan {
 			continue
 		}
-		status := string(row.Status)
-		runID := row.WorkflowID + ":run"
-		if run, ok, err := surfaces.Workflow.GetRun(ctx, runID); err != nil {
-			return nil, err
-		} else if ok {
-			runID = run.RunID
-			status = string(run.Status)
-		}
-		out = append(out, RecoveryCandidate{WorkflowID: row.WorkflowID, RunID: runID, Status: status})
+		out = append(out, RecoveryCandidate{WorkflowID: row.WorkflowID, RunID: row.WorkflowID + ":run", Status: string(row.Status)})
 	}
 	return out, nil
 }
@@ -95,10 +101,10 @@ func PersistIdentity(ctx map[string]any, identity Identity) {
 	if ctx == nil {
 		return
 	}
-	ctx["rex.workflow_id"] = identity.WorkflowID
-	ctx["rex.run_id"] = identity.RunID
-	ctx["workflow_id"] = identity.WorkflowID
-	ctx["run_id"] = identity.RunID
+	ctx[rexkeys.RexWorkflowID] = identity.WorkflowID
+	ctx[rexkeys.RexRunID] = identity.RunID
+	ctx[rexkeys.WorkflowID] = identity.WorkflowID
+	ctx[rexkeys.RunID] = identity.RunID
 }
 
 // PersistenceRequired reports whether workflow state is required.

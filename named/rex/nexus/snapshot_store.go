@@ -53,6 +53,11 @@ func (s SnapshotStore) QueryWorkflowRuntime(ctx context.Context, workflowID, run
 			payload["run"] = run
 		}
 	}
+	if binding, ok, err := s.WorkflowStore.GetLineageBinding(ctx, workflowID, runID); err != nil {
+		return nil, err
+	} else if ok && binding != nil {
+		payload["lineage_binding"] = binding
+	}
 	artifacts, err := s.WorkflowStore.ListWorkflowArtifacts(ctx, workflowID, runID)
 	if err != nil {
 		return nil, err
@@ -87,8 +92,10 @@ func (s SnapshotStore) QueryWorkflowRuntime(ctx context.Context, workflowID, run
 				payload["verification_evidence"] = value
 			}
 		case "rex.fmp_lineage":
-			if value := decodeArtifactJSON(artifact); value != nil {
-				payload["lineage_binding"] = value
+			if _, ok := payload["lineage_binding"]; !ok {
+				if value := decodeArtifactJSON(artifact); value != nil {
+					payload["lineage_binding"] = value
+				}
 			}
 		}
 	}

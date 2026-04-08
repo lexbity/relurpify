@@ -133,6 +133,67 @@ func TestManagerProcessesQueuedWorkAndTracksLastRun(t *testing.T) {
 	}
 }
 
+func TestManagerDoesNotExecuteSameWorkflowConcurrently(t *testing.T) {
+	memStore, err := memory.NewHybridMemory(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewHybridMemory: %v", err)
+	}
+	cfg := rexconfig.Default()
+	cfg.WorkerCount = 2
+	cfg.RecoveryScanPeriod = time.Hour
+	manager := New(cfg, memStore)
+	var inFlight atomic.Int32
+	var maxInFlight atomic.Int32
+	firstStarted := make(chan struct{}, 1)
+	releaseFirst := make(chan struct{})
+	secondStarted := make(chan struct{}, 1)
+	manager.SetWorker(func(ctx context.Context, item WorkItem) error {
+		current := inFlight.Add(1)
+		for {
+			observed := maxInFlight.Load()
+			if current <= observed || maxInFlight.CompareAndSwap(observed, current) {
+				break
+			}
+		}
+		if item.RunID == "run-1" {
+			firstStarted <- struct{}{}
+			<-releaseFirst
+		} else {
+			secondStarted <- struct{}{}
+		}
+		inFlight.Add(-1)
+		return nil
+	})
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	manager.Start(runCtx)
+	if !manager.Enqueue(WorkItem{WorkflowID: "wf-same", RunID: "run-1"}) {
+		t.Fatalf("first enqueue failed")
+	}
+	if !manager.Enqueue(WorkItem{WorkflowID: "wf-same", RunID: "run-2"}) {
+		t.Fatalf("second enqueue failed")
+	}
+	select {
+	case <-firstStarted:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("timed out waiting for first execution")
+	}
+	select {
+	case <-secondStarted:
+		t.Fatalf("second workflow item started before first completed")
+	default:
+	}
+	close(releaseFirst)
+	select {
+	case <-secondStarted:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("timed out waiting for second execution")
+	}
+	if got := maxInFlight.Load(); got != 1 {
+		t.Fatalf("expected max concurrency of 1, got %d", got)
+	}
+}
+
 func TestManagerBeginExecutionMarksDegradedOnFailure(t *testing.T) {
 	memStore, err := memory.NewHybridMemory(t.TempDir())
 	if err != nil {

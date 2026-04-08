@@ -7,6 +7,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/rex/classify"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 	"github.com/lexcodex/relurpify/named/rex/route"
 )
 
@@ -79,8 +80,8 @@ func BuildActionLog(decision route.RouteDecision, class classify.Classification,
 		{Kind: "classification", Message: "classified rex task", Timestamp: now, Metadata: map[string]any{"intent": class.Intent, "risk": class.RiskLevel, "read_only": class.ReadOnly}},
 	}
 	if state != nil {
-		if workflowID := strings.TrimSpace(state.GetString("rex.workflow_id")); workflowID != "" {
-			log = append(log, ActionLogEntry{Kind: "identity", Message: "resolved rex workflow identity", Timestamp: now, Metadata: map[string]any{"workflow_id": workflowID}})
+		if workflowID := strings.TrimSpace(state.GetString(rexkeys.RexWorkflowID)); workflowID != "" {
+			log = append(log, ActionLogEntry{Kind: "identity", Message: "resolved rex workflow identity", Timestamp: now, Metadata: map[string]any{rexkeys.WorkflowID: workflowID}})
 		}
 		if raw, ok := state.Get("rex.context_expansion"); ok && raw != nil {
 			log = append(log, ActionLogEntry{Kind: "retrieval", Message: "expanded rex context", Timestamp: now, Metadata: map[string]any{"payload": raw}})

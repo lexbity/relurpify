@@ -10,6 +10,9 @@ func TestDefaultUsesNexusManagedHosting(t *testing.T) {
 	if cfg.QueueCapacity <= 0 {
 		t.Fatalf("QueueCapacity = %d", cfg.QueueCapacity)
 	}
+	if cfg.WorkerCount != 4 {
+		t.Fatalf("WorkerCount = %d", cfg.WorkerCount)
+	}
 	if !cfg.RequireProof {
 		t.Fatalf("RequireProof = false")
 	}

@@ -22,6 +22,8 @@ import (
 	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
 	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 	rexreconcile "github.com/lexcodex/relurpify/named/rex/reconcile"
+	rexctx "github.com/lexcodex/relurpify/named/rex/rexctx"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
 )
 
@@ -38,6 +40,8 @@ type RexRuntimeProvider struct {
 	RuntimeStore    *memdb.SQLiteRuntimeMemoryStore
 	CheckpointStore *memdb.SQLiteCheckpointStore
 	Bundle          *relruntime.CapabilityBundle
+	TrustedResolver rexctx.TrustedContextResolver
+	EventBridge     interface{ Health() (bool, string) }
 	// Phase 7.1: Admission control for gateway routing
 	Admission         rexcontrolplane.AdmissionController
 	AdmissionAudit    *rexcontrolplane.AuditLog
@@ -95,6 +99,7 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		RuntimeStore:    runtimeStore,
 		CheckpointStore: checkpointStore,
 		Bundle:          bundle,
+		TrustedResolver: &rexctx.DefaultTrustedContextResolver{},
 		// Phase 7.1: Initialize admission controller with default capacity and fairness quotas
 		Admission: &rexcontrolplane.LoadController{
 			Capacity: 100, // Default max concurrent workflows
@@ -168,6 +173,17 @@ func (p *RexRuntimeProvider) RuntimeProjection() rexnexus.Projection {
 			projection.LastError = "ownership store partitioned"
 		}
 	}
+	if p.EventBridge != nil {
+		healthy, lastError := p.EventBridge.Health()
+		if !healthy {
+			projection.Health = rexruntime.HealthDegraded
+			if strings.TrimSpace(lastError) != "" {
+				projection.LastError = lastError
+			} else if projection.LastError == "" {
+				projection.LastError = "event bridge unhealthy"
+			}
+		}
+	}
 	return projection
 }
 
@@ -214,9 +230,11 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 		LocalRecipient: mediationRecipient,
 	}
 	p.LineageBridge = &rexnexus.LineageBridge{
-		Service:       service,
-		WorkflowStore: p.WorkflowStore,
-		RuntimeID:     p.runtimeDescriptor().RuntimeID,
+		Service:             service,
+		WorkflowStore:       p.WorkflowStore,
+		LineageBindingStore: p.WorkflowStore,
+		RuntimeID:           p.runtimeDescriptor().RuntimeID,
+		PolicyResolver:      p.TrustedResolver,
 	}
 	p.Agent.Observer = p.LineageBridge
 	p.Agent.Reconciler = &rexreconcile.FMPBackedReconciler{
@@ -235,9 +253,10 @@ func (p *RexRuntimeProvider) AttachFMPService(service *fwfmp.Service) {
 		ApplyOutcome: p.LineageBridge.ApplyReconciliationOutcome,
 	}
 	p.RuntimeEndpoint = &rexnexus.RuntimeEndpoint{
-		DescriptorValue: p.runtimeDescriptor(),
-		Packager:        packager,
-		WorkflowStore:   p.WorkflowStore,
+		DescriptorValue:     p.runtimeDescriptor(),
+		Packager:            packager,
+		WorkflowStore:       p.WorkflowStore,
+		LineageBindingStore: p.WorkflowStore,
 		Schedule: func(ctx context.Context, workflowID, runID string, task *core.Task, state *core.Context) error {
 			item := rexnexusWorkItem(workflowID, runID, task, state, p.Agent)
 			if !p.Agent.Runtime.Enqueue(item) {
@@ -312,13 +331,13 @@ func (p *RexRuntimeProvider) CapabilityDescriptor() core.CapabilityDescriptor {
 		InputSchema: &core.Schema{
 			Type: "object",
 			Properties: map[string]*core.Schema{
-				"instruction": {Type: "string", Description: "Task instruction for Rex"},
-				"task_type":   {Type: "string", Description: "Optional core task type"},
-				"task_id":     {Type: "string"},
-				"workflow_id": {Type: "string"},
-				"run_id":      {Type: "string"},
-				"context":     {Type: "object", Description: "Initial context state"},
-				"metadata":    {Type: "object", Description: "String metadata for the task"},
+				"instruction":      {Type: "string", Description: "Task instruction for Rex"},
+				"task_type":        {Type: "string", Description: "Optional core task type"},
+				"task_id":          {Type: "string"},
+				rexkeys.WorkflowID: {Type: "string"},
+				rexkeys.RunID:      {Type: "string"},
+				"context":          {Type: "object", Description: "Initial context state"},
+				"metadata":         {Type: "object", Description: "String metadata for the task"},
 			},
 			Required: []string{"instruction"},
 		},
@@ -337,10 +356,10 @@ func (p *RexRuntimeProvider) InvokeCapability(ctx context.Context, sessionKey st
 		return nil, err
 	}
 	if sessionKey != "" {
-		state.Set("gateway.session_id", sessionKey)
+		state.Set(rexkeys.GatewaySessionID, sessionKey)
 	}
 	if principalTenantID != "" {
-		state.Set("gateway.tenant_id", principalTenantID)
+		state.Set(rexkeys.GatewayTenantID, principalTenantID)
 	}
 	result, err := p.Adapter.Invoke(ctx, task, state)
 	out := &core.CapabilityExecutionResult{Success: err == nil, Data: map[string]any{}}
@@ -377,13 +396,13 @@ func rexTaskFromArgs(args map[string]any) (*core.Task, *core.Context, error) {
 	for key, value := range task.Context {
 		state.Set(key, value)
 	}
-	if workflowID := strings.TrimSpace(stringValue(args["workflow_id"])); workflowID != "" {
-		state.Set("workflow_id", workflowID)
-		state.Set("rex.workflow_id", workflowID)
+	if workflowID := strings.TrimSpace(stringValue(args[rexkeys.WorkflowID])); workflowID != "" {
+		state.Set(rexkeys.WorkflowID, workflowID)
+		state.Set(rexkeys.RexWorkflowID, workflowID)
 	}
-	if runID := strings.TrimSpace(stringValue(args["run_id"])); runID != "" {
-		state.Set("run_id", runID)
-		state.Set("rex.run_id", runID)
+	if runID := strings.TrimSpace(stringValue(args[rexkeys.RunID])); runID != "" {
+		state.Set(rexkeys.RunID, runID)
+		state.Set(rexkeys.RexRunID, runID)
 	}
 	return task, state, nil
 }

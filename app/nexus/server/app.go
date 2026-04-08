@@ -143,6 +143,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 			return nil, err
 		}
 		a.RexEventBridge = bridge
+		a.RexRuntime.EventBridge = bridge
 	}
 	if a.FMPService != nil && a.RexRuntime != nil {
 		a.RexRuntime.AttachFMPService(a.FMPService)

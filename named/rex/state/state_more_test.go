@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
@@ -126,5 +127,8 @@ func TestPersistIdentityAndDescriptions(t *testing.T) {
 	identity := ComputeIdentity(envelope.Envelope{TaskID: "t", Source: "s", Instruction: "i"})
 	if identity.WorkflowID == "" || identity.RunID == "" {
 		t.Fatalf("expected identity")
+	}
+	if !strings.HasPrefix(identity.WorkflowID, "rex:") || len(identity.WorkflowID) != len("rex:")+64 {
+		t.Fatalf("expected sha256 workflow id, got %q", identity.WorkflowID)
 	}
 }

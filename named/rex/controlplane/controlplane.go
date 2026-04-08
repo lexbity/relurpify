@@ -156,6 +156,7 @@ type AuditRecord struct {
 
 type AuditLog struct {
 	mu      sync.RWMutex
+	Cap     int
 	records []AuditRecord
 }
 
@@ -163,6 +164,13 @@ func (l *AuditLog) Append(record AuditRecord) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.records = append(l.records, record)
+	cap := l.Cap
+	if cap <= 0 {
+		cap = 10_000
+	}
+	if len(l.records) > cap {
+		l.records = append([]AuditRecord(nil), l.records[len(l.records)-cap:]...)
+	}
 }
 
 func (l *AuditLog) Records() []AuditRecord {
@@ -208,6 +216,14 @@ type WorkflowLister interface {
 	GetRun(context.Context, string) (*memory.WorkflowRunRecord, bool, error)
 }
 
+type WorkflowStatusAggregator interface {
+	AggregateWorkflowStatusCounts(context.Context) (map[memory.WorkflowRunStatus]int, error)
+}
+
+type WorkflowRunLister interface {
+	ListRunsByStatus(context.Context, []memory.WorkflowRunStatus, int) ([]memory.WorkflowRunRecord, error)
+}
+
 type SLOSignals struct {
 	TotalWorkflows      int      `json:"total_workflows"`
 	RunningWorkflows    int      `json:"running_workflows"`
@@ -221,11 +237,53 @@ func CollectSLOSignals(ctx context.Context, store WorkflowLister, limit int) (SL
 	if store == nil {
 		return SLOSignals{}, nil
 	}
+	signals := SLOSignals{}
+	if aggregator, ok := any(store).(WorkflowStatusAggregator); ok {
+		counts, err := aggregator.AggregateWorkflowStatusCounts(ctx)
+		if err != nil {
+			return SLOSignals{}, err
+		}
+		for status, count := range counts {
+			signals.TotalWorkflows += count
+			switch status {
+			case memory.WorkflowRunStatusRunning, memory.WorkflowRunStatusNeedsReplan:
+				signals.RunningWorkflows += count
+				signals.RecoverySensitive += count
+			case memory.WorkflowRunStatusCompleted:
+				signals.CompletedWorkflows += count
+			case memory.WorkflowRunStatusFailed, memory.WorkflowRunStatusCanceled:
+				signals.FailedWorkflows += count
+			}
+		}
+		if lister, ok := any(store).(WorkflowLister); ok {
+			workflows, err := lister.ListWorkflows(ctx, limit)
+			if err != nil {
+				return SLOSignals{}, err
+			}
+			for _, workflow := range workflows {
+				if workflow.Status == memory.WorkflowRunStatusFailed || workflow.Status == memory.WorkflowRunStatusCanceled {
+					signals.DegradedWorkflowIDs = append(signals.DegradedWorkflowIDs, workflow.WorkflowID)
+				}
+			}
+		}
+		if runLister, ok := any(store).(WorkflowRunLister); ok {
+			runs, err := runLister.ListRunsByStatus(ctx, []memory.WorkflowRunStatus{memory.WorkflowRunStatusRunning, memory.WorkflowRunStatusNeedsReplan}, limit)
+			if err != nil {
+				return SLOSignals{}, err
+			}
+			for _, run := range runs {
+				if strings.Contains(strings.ToLower(run.AgentMode), "recover") {
+					signals.RecoverySensitive++
+				}
+			}
+		}
+		return signals, nil
+	}
 	workflows, err := store.ListWorkflows(ctx, limit)
 	if err != nil {
 		return SLOSignals{}, err
 	}
-	signals := SLOSignals{TotalWorkflows: len(workflows)}
+	signals = SLOSignals{TotalWorkflows: len(workflows)}
 	for _, workflow := range workflows {
 		switch workflow.Status {
 		case memory.WorkflowRunStatusRunning, memory.WorkflowRunStatusNeedsReplan:
@@ -271,8 +329,12 @@ func BuildDRMetadata(workflow memory.WorkflowRecord, run *memory.WorkflowRunReco
 }
 
 func isPrivilegedRole(role string) bool {
-	role = strings.ToLower(strings.TrimSpace(role))
-	return strings.Contains(role, "operator") || strings.Contains(role, "admin")
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "operator", "admin", "nexus:operator", "nexus:admin", "gateway:admin":
+		return true
+	default:
+		return false
+	}
 }
 
 func errorString(err error) string {

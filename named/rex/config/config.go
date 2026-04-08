@@ -14,6 +14,7 @@ const (
 type Config struct {
 	RuntimeMode        RuntimeMode
 	QueueCapacity      int
+	WorkerCount        int
 	RecoveryScanPeriod time.Duration
 	IdlePollPeriod     time.Duration
 	RequireProof       bool
@@ -24,6 +25,7 @@ func Default() Config {
 	return Config{
 		RuntimeMode:        RuntimeModeNexusManaged,
 		QueueCapacity:      32,
+		WorkerCount:        4,
 		RecoveryScanPeriod: 30 * time.Second,
 		IdlePollPeriod:     200 * time.Millisecond,
 		RequireProof:       true,

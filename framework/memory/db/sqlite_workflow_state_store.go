@@ -20,7 +20,7 @@ import (
 )
 
 // WorkflowStateSchemaVersion is the current schema version for workflow state storage.
-const WorkflowStateSchemaVersion = 7
+const WorkflowStateSchemaVersion = 8
 const workflowStateSchemaVersion = WorkflowStateSchemaVersion
 
 // SQLiteWorkflowStateStore persists workflow state in SQLite.
@@ -117,6 +117,7 @@ func (s *SQLiteWorkflowStateStore) init() error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status);`,
 		`CREATE TABLE IF NOT EXISTS workflow_runs (
 			run_id TEXT PRIMARY KEY,
 			workflow_id TEXT NOT NULL,
@@ -129,6 +130,7 @@ func (s *SQLiteWorkflowStateStore) init() error {
 			finished_at TEXT,
 			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
 		);`,
+		`CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status);`,
 		`CREATE TABLE IF NOT EXISTS workflow_plans (
 			plan_id TEXT PRIMARY KEY,
 			workflow_id TEXT NOT NULL,
@@ -346,6 +348,17 @@ func (s *SQLiteWorkflowStateStore) init() error {
 			created_at TEXT NOT NULL,
 			FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
 		);`,
+		`CREATE TABLE IF NOT EXISTS rex_fmp_lineage_bindings (
+			workflow_id TEXT NOT NULL,
+			run_id TEXT NOT NULL,
+			lineage_id TEXT NOT NULL,
+			attempt_id TEXT NOT NULL,
+			runtime_id TEXT NOT NULL DEFAULT '',
+			session_id TEXT NOT NULL DEFAULT '',
+			state TEXT NOT NULL DEFAULT '',
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY (workflow_id, run_id)
+		);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_steps_status ON workflow_steps(workflow_id, status, ordinal);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_step_runs_attempt ON step_runs(workflow_id, step_id, attempt);`,
 		`CREATE INDEX IF NOT EXISTS idx_step_runs_workflow_step ON step_runs(workflow_id, step_id, attempt DESC);`,
@@ -363,9 +376,20 @@ func (s *SQLiteWorkflowStateStore) init() error {
 		`CREATE INDEX IF NOT EXISTS idx_workflow_delegations_scope ON workflow_delegations(workflow_id, run_id, updated_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_delegation_transitions_scope ON workflow_delegation_transitions(delegation_id, created_at ASC);`,
 		`CREATE INDEX IF NOT EXISTS idx_knowledge_workflow_kind ON workflow_knowledge(workflow_id, kind, created_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_rex_lineage_by_lineage ON rex_fmp_lineage_bindings(lineage_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_rex_lineage_by_attempt ON rex_fmp_lineage_bindings(attempt_id);`,
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	currentVersion, err := s.schemaVersionValue(context.Background())
+	if err != nil {
+		return err
+	}
+	if currentVersion < workflowStateSchemaVersion {
+		if err := s.migrateLineageBindings(context.Background()); err != nil {
 			return err
 		}
 	}
@@ -376,9 +400,16 @@ func (s *SQLiteWorkflowStateStore) init() error {
 }
 
 func (s *SQLiteWorkflowStateStore) SchemaVersion(ctx context.Context) (int, error) {
+	return s.schemaVersionValue(ctx)
+}
+
+func (s *SQLiteWorkflowStateStore) schemaVersionValue(ctx context.Context) (int, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT value FROM schema_metadata WHERE key = 'workflow_state_schema_version'`)
 	var value string
 	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
 		return 0, err
 	}
 	var version int
@@ -386,6 +417,57 @@ func (s *SQLiteWorkflowStateStore) SchemaVersion(ctx context.Context) (int, erro
 		return 0, err
 	}
 	return version, nil
+}
+
+func (s *SQLiteWorkflowStateStore) migrateLineageBindings(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, `SELECT workflow_id, run_id, kind, inline_raw_text, created_at FROM workflow_artifacts WHERE kind = 'rex.fmp_lineage'`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var workflowID, runID, kind, rawText, createdAt string
+		if err := rows.Scan(&workflowID, &runID, &kind, &rawText, &createdAt); err != nil {
+			return err
+		}
+		if strings.TrimSpace(rawText) == "" {
+			continue
+		}
+		var record LineageBindingRecord
+		if err := json.Unmarshal([]byte(rawText), &record); err != nil {
+			return err
+		}
+		if strings.TrimSpace(record.WorkflowID) == "" {
+			record.WorkflowID = strings.TrimSpace(workflowID)
+		}
+		if strings.TrimSpace(record.RunID) == "" {
+			record.RunID = firstNonEmptyString(strings.TrimSpace(runID), record.AttemptID)
+		}
+		if strings.TrimSpace(record.LineageID) == "" || strings.TrimSpace(record.AttemptID) == "" || strings.TrimSpace(record.WorkflowID) == "" || strings.TrimSpace(record.RunID) == "" {
+			continue
+		}
+		if strings.TrimSpace(record.RuntimeID) == "" {
+			record.RuntimeID = "rex"
+		}
+		if record.UpdatedAt.IsZero() {
+			record.UpdatedAt = parseTime(createdAt)
+		}
+		if err := upsertLineageBindingTx(ctx, tx, record); err != nil {
+			return err
+		}
+		_ = kind
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLiteWorkflowStateStore) CreateWorkflow(ctx context.Context, workflow memory.WorkflowRecord) error {
@@ -533,6 +615,64 @@ func (s *SQLiteWorkflowStateStore) GetRun(ctx context.Context, runID string) (*m
 		record.FinishedAt = &t
 	}
 	return &record, true, nil
+}
+
+func (s *SQLiteWorkflowStateStore) AggregateWorkflowStatusCounts(ctx context.Context) (map[memory.WorkflowRunStatus]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM workflows GROUP BY status`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := map[memory.WorkflowRunStatus]int{}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		counts[memory.WorkflowRunStatus(strings.TrimSpace(status))] = count
+	}
+	return counts, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) ListRunsByStatus(ctx context.Context, statuses []memory.WorkflowRunStatus, limit int) ([]memory.WorkflowRunRecord, error) {
+	if len(statuses) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, 0, len(statuses))
+	args := make([]any, 0, len(statuses)+1)
+	for _, status := range statuses {
+		placeholders = append(placeholders, "?")
+		args = append(args, string(status))
+	}
+	query := `SELECT run_id, workflow_id, status, agent_name, agent_mode, runtime_version, metadata_json, started_at, finished_at FROM workflow_runs WHERE status IN (` + strings.Join(placeholders, ",") + `) ORDER BY started_at DESC`
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []memory.WorkflowRunRecord
+	for rows.Next() {
+		var record memory.WorkflowRunRecord
+		var metadataJSON string
+		var startedAt string
+		var finishedAt sql.NullString
+		if err := rows.Scan(&record.RunID, &record.WorkflowID, &record.Status, &record.AgentName, &record.AgentMode, &record.RuntimeVersion, &metadataJSON, &startedAt, &finishedAt); err != nil {
+			return nil, err
+		}
+		record.Metadata = decodeJSONMap(metadataJSON)
+		record.StartedAt = parseTime(startedAt)
+		if finishedAt.Valid {
+			t := parseTime(finishedAt.String)
+			record.FinishedAt = &t
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
 }
 
 func (s *SQLiteWorkflowStateStore) UpdateRunStatus(ctx context.Context, runID string, status memory.WorkflowRunStatus, finishedAt *time.Time) error {
@@ -1051,6 +1191,83 @@ func (s *SQLiteWorkflowStateStore) WorkflowArtifactByID(ctx context.Context, art
 		return nil, false, err
 	}
 	return record, true, nil
+}
+
+func (s *SQLiteWorkflowStateStore) UpsertLineageBinding(ctx context.Context, record LineageBindingRecord) error {
+	if s == nil || s.db == nil {
+		return errors.New("workflow state db unavailable")
+	}
+	if strings.TrimSpace(record.WorkflowID) == "" || strings.TrimSpace(record.RunID) == "" || strings.TrimSpace(record.LineageID) == "" || strings.TrimSpace(record.AttemptID) == "" {
+		return errors.New("lineage binding requires workflow, run, lineage, and attempt ids")
+	}
+	record.UpdatedAt = ensureTime(record.UpdatedAt)
+	return upsertLineageBindingTx(ctx, s.db, record)
+}
+
+func (s *SQLiteWorkflowStateStore) GetLineageBinding(ctx context.Context, workflowID, runID string) (*LineageBindingRecord, bool, error) {
+	if s == nil || s.db == nil {
+		return nil, false, errors.New("workflow state db unavailable")
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT workflow_id, run_id, lineage_id, attempt_id, runtime_id, session_id, state, updated_at
+		FROM rex_fmp_lineage_bindings WHERE workflow_id = ? AND run_id = ?`, workflowID, runID)
+	record, err := scanLineageBindingRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return record, true, nil
+}
+
+func (s *SQLiteWorkflowStateStore) FindLineageBindingsByLineageID(ctx context.Context, lineageID string) ([]LineageBindingRecord, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("workflow state db unavailable")
+	}
+	lineageID = strings.TrimSpace(lineageID)
+	if lineageID == "" {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT workflow_id, run_id, lineage_id, attempt_id, runtime_id, session_id, state, updated_at
+		FROM rex_fmp_lineage_bindings WHERE lineage_id = ? ORDER BY updated_at ASC`, lineageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LineageBindingRecord
+	for rows.Next() {
+		record, err := scanLineageBindingRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteWorkflowStateStore) FindLineageBindingsByAttemptID(ctx context.Context, attemptID string) ([]LineageBindingRecord, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("workflow state db unavailable")
+	}
+	attemptID = strings.TrimSpace(attemptID)
+	if attemptID == "" {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT workflow_id, run_id, lineage_id, attempt_id, runtime_id, session_id, state, updated_at
+		FROM rex_fmp_lineage_bindings WHERE attempt_id = ? ORDER BY updated_at ASC`, attemptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LineageBindingRecord
+	for rows.Next() {
+		record, err := scanLineageBindingRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *record)
+	}
+	return out, rows.Err()
 }
 
 func (s *SQLiteWorkflowStateStore) SaveStageResult(ctx context.Context, record memory.WorkflowStageResultRecord) error {
@@ -1987,6 +2204,51 @@ func scanDelegationTransitionRows(rows *sql.Rows) (*memory.WorkflowDelegationTra
 	record.Metadata = decodeJSONMap(metadataJSON)
 	record.CreatedAt = parseTime(createdAt)
 	return &record, nil
+}
+
+func scanLineageBindingRows(rows *sql.Rows) (*LineageBindingRecord, error) {
+	var record LineageBindingRecord
+	var updatedAt string
+	if err := rows.Scan(&record.WorkflowID, &record.RunID, &record.LineageID, &record.AttemptID, &record.RuntimeID, &record.SessionID, &record.State, &updatedAt); err != nil {
+		return nil, err
+	}
+	record.UpdatedAt = parseTime(updatedAt)
+	return &record, nil
+}
+
+func scanLineageBindingRow(row *sql.Row) (*LineageBindingRecord, error) {
+	var record LineageBindingRecord
+	var updatedAt string
+	if err := row.Scan(&record.WorkflowID, &record.RunID, &record.LineageID, &record.AttemptID, &record.RuntimeID, &record.SessionID, &record.State, &updatedAt); err != nil {
+		return nil, err
+	}
+	record.UpdatedAt = parseTime(updatedAt)
+	return &record, nil
+}
+
+func upsertLineageBindingTx(ctx context.Context, exec interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, record LineageBindingRecord) error {
+	_, err := exec.ExecContext(ctx, `INSERT INTO rex_fmp_lineage_bindings (
+		workflow_id, run_id, lineage_id, attempt_id, runtime_id, session_id, state, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(workflow_id, run_id) DO UPDATE SET
+		lineage_id = excluded.lineage_id,
+		attempt_id = excluded.attempt_id,
+		runtime_id = excluded.runtime_id,
+		session_id = excluded.session_id,
+		state = excluded.state,
+		updated_at = excluded.updated_at`,
+		record.WorkflowID,
+		record.RunID,
+		record.LineageID,
+		record.AttemptID,
+		record.RuntimeID,
+		record.SessionID,
+		record.State,
+		timeString(record.UpdatedAt),
+	)
+	return err
 }
 
 func (s *SQLiteWorkflowStateStore) indexWorkflowArtifact(ctx context.Context, artifact memory.WorkflowArtifactRecord) error {

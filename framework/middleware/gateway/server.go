@@ -605,6 +605,12 @@ func actorForLog(principal ConnectionPrincipal, fallbackKind string) core.EventA
 	if strings.TrimSpace(actor.ID) == "" {
 		actor.ID = connectionSessionID(principal)
 	}
+	if strings.TrimSpace(actor.SessionID) == "" {
+		actor.SessionID = connectionSessionID(principal)
+	}
+	if principal.Principal != nil && len(principal.Principal.Scopes) > 0 {
+		actor.Scopes = append([]string(nil), principal.Principal.Scopes...)
+	}
 	return actor
 }
 

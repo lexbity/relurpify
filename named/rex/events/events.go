@@ -8,6 +8,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/rex/envelope"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 )
 
 const (
@@ -65,7 +66,7 @@ func (DefaultNormalizer) Normalize(event CanonicalEvent) (CanonicalEvent, error)
 		event.Payload = map[string]any{}
 	}
 	if event.ID == "" {
-		event.ID = firstNonEmpty(stringValue(event.Payload["event_id"]), stringValue(event.Payload["task_id"]), stringValue(event.Payload["workflow_id"]))
+		event.ID = firstNonEmpty(stringValue(event.Payload["event_id"]), stringValue(event.Payload["task_id"]), stringValue(event.Payload[rexkeys.WorkflowID]))
 	}
 	if event.ID == "" {
 		return CanonicalEvent{}, fmt.Errorf("canonical event id required")
@@ -180,8 +181,8 @@ func ToEnvelope(event CanonicalEvent) envelope.Envelope {
 		ModeHint:           stringValue(payload["mode_hint"]),
 		ResumedRoute:       stringValue(payload["rex.route"]),
 		EditPermitted:      boolValue(payload["edit_permitted"]) || boolValue(payload["mutation_allowed"]),
-		WorkflowID:         stringValue(payload["workflow_id"]),
-		RunID:              stringValue(payload["run_id"]),
+		WorkflowID:         stringValue(payload[rexkeys.WorkflowID]),
+		RunID:              stringValue(payload[rexkeys.RunID]),
 		Source:             firstNonEmpty(event.Source, "event"),
 		CapabilitySnapshot: stringSlice(payload["capability_snapshot"]),
 		Metadata:           meta,
@@ -202,15 +203,15 @@ func ToTask(event CanonicalEvent) *core.Task {
 	if contextMap == nil {
 		contextMap = map[string]any{}
 	}
-	contextMap["workflow_id"] = env.WorkflowID
-	contextMap["run_id"] = env.RunID
+	contextMap[rexkeys.WorkflowID] = env.WorkflowID
+	contextMap[rexkeys.RunID] = env.RunID
 	contextMap["workspace"] = env.Workspace
 	contextMap["mode_hint"] = env.ModeHint
 	contextMap["source"] = env.Source
-	contextMap["event_type"] = event.Type
-	contextMap["event_id"] = event.ID
-	contextMap["event_partition"] = event.Partition
-	contextMap["event_trust_class"] = event.TrustClass
+	contextMap[rexkeys.RexEventType] = event.Type
+	contextMap[rexkeys.RexEventID] = event.ID
+	contextMap[rexkeys.RexEventPartition] = event.Partition
+	contextMap[rexkeys.RexEventTrustClass] = event.TrustClass
 	contextMap["idempotency_key"] = event.IdempotencyKey
 	contextMap["edit_permitted"] = env.EditPermitted
 	if env.ResumedRoute != "" {

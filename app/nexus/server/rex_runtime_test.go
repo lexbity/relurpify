@@ -72,3 +72,27 @@ func TestRexRuntimeProviderRuntimeProjectionIncludesDRMetadata(t *testing.T) {
 		t.Fatalf("unexpected last checkpoint: %+v", projection)
 	}
 }
+
+type unhealthyBridge struct {
+	lastError string
+}
+
+func (b unhealthyBridge) Health() (bool, string) {
+	return false, b.lastError
+}
+
+func TestRexRuntimeProviderRuntimeProjectionUsesEventBridgeHealth(t *testing.T) {
+	provider := &RexRuntimeProvider{
+		Agent:       &rex.Agent{Runtime: rexruntime.New(rexconfig.Default(), nil)},
+		Adapter:     rexnexus.NewAdapter("rex", &rex.Agent{Runtime: rexruntime.New(rexconfig.Default(), nil)}, nil),
+		EventBridge: unhealthyBridge{lastError: "bridge down"},
+	}
+
+	projection := provider.RuntimeProjection()
+	if projection.Health != rexruntime.HealthDegraded {
+		t.Fatalf("expected degraded projection: %+v", projection)
+	}
+	if projection.LastError != "bridge down" {
+		t.Fatalf("unexpected last error: %+v", projection)
+	}
+}

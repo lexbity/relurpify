@@ -34,9 +34,12 @@ func TestSQLiteWorkflowStateStoreEndToEndProjection(t *testing.T) {
 		TaskType:    core.TaskTypePlanning,
 		Instruction: "plan it",
 		Metadata:    map[string]any{"owner": "alice"},
+		Status:      memory.WorkflowRunStatusPending,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}))
+	_, err = store.UpdateWorkflowStatus(ctx, "wf-1", 0, memory.WorkflowRunStatusRunning, "")
+	require.NoError(t, err)
 	wf, ok, err := store.GetWorkflow(ctx, "wf-1")
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -55,6 +58,31 @@ func TestSQLiteWorkflowStateStoreEndToEndProjection(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "run-1", run.RunID)
 	require.Equal(t, map[string]any{"attempt": float64(1)}, run.Metadata)
+	require.NoError(t, store.CreateWorkflow(ctx, memory.WorkflowRecord{
+		WorkflowID:  "wf-2",
+		TaskID:      "task-2",
+		TaskType:    core.TaskTypePlanning,
+		Instruction: "plan more",
+		Status:      memory.WorkflowRunStatusPending,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}))
+	_, err = store.UpdateWorkflowStatus(ctx, "wf-2", 0, memory.WorkflowRunStatusFailed, "")
+	require.NoError(t, err)
+	require.NoError(t, store.CreateRun(ctx, memory.WorkflowRunRecord{
+		RunID:      "run-2",
+		WorkflowID: "wf-2",
+		Status:     memory.WorkflowRunStatusFailed,
+		AgentMode:  "recover",
+		StartedAt:  now,
+	}))
+	counts, err := store.AggregateWorkflowStatusCounts(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, counts[memory.WorkflowRunStatusRunning])
+	require.Equal(t, 1, counts[memory.WorkflowRunStatusFailed])
+	runsByStatus, err := store.ListRunsByStatus(ctx, []memory.WorkflowRunStatus{memory.WorkflowRunStatusRunning, memory.WorkflowRunStatusFailed}, 10)
+	require.NoError(t, err)
+	require.Len(t, runsByStatus, 2)
 
 	plan := memory.WorkflowPlanRecord{
 		PlanID:     "plan-1",
@@ -97,7 +125,7 @@ func TestSQLiteWorkflowStateStoreEndToEndProjection(t *testing.T) {
 
 	version, err := store.UpdateWorkflowStatus(ctx, "wf-1", 0, memory.WorkflowRunStatusRunning, "step-1")
 	require.NoError(t, err)
-	require.Equal(t, int64(2), version)
+	require.Equal(t, int64(3), version)
 	_, err = store.UpdateWorkflowStatus(ctx, "wf-1", 1, memory.WorkflowRunStatusCompleted, "step-2")
 	require.ErrorIs(t, err, sql.ErrNoRows)
 
@@ -189,7 +217,7 @@ func TestSQLiteWorkflowStateStoreEndToEndProjection(t *testing.T) {
 		StageName:      "stage-a",
 		StageIndex:     0,
 		ResponseJSON:   `{"ok":true}`,
-		DecodedOutput:   map[string]any{"ok": true},
+		DecodedOutput:  map[string]any{"ok": true},
 		ValidationOK:   true,
 		TransitionKind: "next",
 		NextStage:      "stage-b",
@@ -310,9 +338,9 @@ func TestSQLiteWorkflowStateStoreEndToEndProjection(t *testing.T) {
 	require.Equal(t, "session-1", sessions[0].Session.ID)
 
 	delegation := memory.WorkflowDelegationRecord{
-		DelegationID:   "del-1",
-		WorkflowID:     "wf-1",
-		RunID:          "run-1",
+		DelegationID: "del-1",
+		WorkflowID:   "wf-1",
+		RunID:        "run-1",
 		Request: core.DelegationRequest{
 			ID:                 "del-1",
 			WorkflowID:         "wf-1",

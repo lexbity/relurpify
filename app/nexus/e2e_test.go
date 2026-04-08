@@ -1692,10 +1692,13 @@ func TestConcurrentTenantInboundMessagesStayIsolatedAcrossRexWorkflows(t *testin
 		return seen[workflowIDA] && seen[workflowIDB]
 	}, 3*time.Second, 20*time.Millisecond)
 
-	eventsA := h.listRexEvents(t, workflowIDA, 10)
-	eventsB := h.listRexEvents(t, workflowIDB, 10)
-	require.NotEmpty(t, eventsA)
-	require.NotEmpty(t, eventsB)
+	var eventsA []memory.WorkflowEventRecord
+	var eventsB []memory.WorkflowEventRecord
+	require.Eventually(t, func() bool {
+		eventsA = h.listRexEvents(t, workflowIDA, 10)
+		eventsB = h.listRexEvents(t, workflowIDB, 10)
+		return len(eventsA) > 0 && len(eventsB) > 0
+	}, 3*time.Second, 20*time.Millisecond)
 	for _, event := range eventsA {
 		require.Equal(t, workflowIDA, event.WorkflowID)
 	}
@@ -1906,18 +1909,14 @@ func TestFMPResumeIntoRexUsesFullAppHarness(t *testing.T) {
 		for _, artifact := range artifacts {
 			kinds[artifact.Kind] = true
 		}
-		return kinds["rex.fmp_import"] && kinds["rex.fmp_lineage"] && kinds["rex.task_request"]
+		return kinds["rex.task_request"]
 	}, 5*time.Second, 20*time.Millisecond)
-	importArtifact := requireArtifactKind(t, artifacts, "rex.fmp_import")
-	lineageArtifact := requireArtifactKind(t, artifacts, "rex.fmp_lineage")
 	taskArtifact := requireArtifactKind(t, artifacts, "rex.task_request")
 
-	var imported map[string]any
-	require.NoError(t, json.Unmarshal([]byte(importArtifact.InlineRawText), &imported))
-	require.Equal(t, commit.NewAttemptID, imported["attempt_id"])
-
-	var binding rexnexus.LineageBinding
-	require.NoError(t, json.Unmarshal([]byte(lineageArtifact.InlineRawText), &binding))
+	binding, ok, err := h.rexRuntime.WorkflowStore.GetLineageBinding(context.Background(), "wf-import", commit.NewAttemptID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, binding)
 	require.Equal(t, "lineage-e2e", binding.LineageID)
 	require.Equal(t, commit.NewAttemptID, binding.AttemptID)
 
@@ -2004,12 +2003,17 @@ func TestFMPControlPlaneEventsUpdateRexBindingThroughAppBridge(t *testing.T) {
 
 	var controlBinding rexnexus.LineageBinding
 	require.Eventually(t, func() bool {
-		artifact, ok := findArtifactKind(h.listRexArtifacts(t, "wf-control", "attempt-control"), "rex.fmp_lineage")
-		if !ok {
+		record, ok, err := h.rexRuntime.WorkflowStore.GetLineageBinding(context.Background(), "wf-control", "attempt-control")
+		if err != nil || !ok || record == nil {
 			return false
 		}
-		if err := json.Unmarshal([]byte(artifact.InlineRawText), &controlBinding); err != nil {
-			return false
+		controlBinding = rexnexus.LineageBinding{
+			LineageID: record.LineageID,
+			AttemptID: record.AttemptID,
+			RuntimeID: record.RuntimeID,
+			SessionID: record.SessionID,
+			State:     record.State,
+			UpdatedAt: record.UpdatedAt,
 		}
 		return controlBinding.State == string(core.AttemptStateFenced)
 	}, 5*time.Second, 20*time.Millisecond)
@@ -2027,8 +2031,18 @@ func TestFMPControlPlaneEventsUpdateRexBindingThroughAppBridge(t *testing.T) {
 	}, controlEventTypes)
 
 	var otherBinding rexnexus.LineageBinding
-	otherArtifact := h.waitForRexArtifact(t, "wf-other", "attempt-other", "rex.fmp_lineage")
-	require.NoError(t, json.Unmarshal([]byte(otherArtifact.InlineRawText), &otherBinding))
+	otherRecord, ok, err := h.rexRuntime.WorkflowStore.GetLineageBinding(context.Background(), "wf-other", "attempt-other")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, otherRecord)
+	otherBinding = rexnexus.LineageBinding{
+		LineageID: otherRecord.LineageID,
+		AttemptID: otherRecord.AttemptID,
+		RuntimeID: otherRecord.RuntimeID,
+		SessionID: otherRecord.SessionID,
+		State:     otherRecord.State,
+		UpdatedAt: otherRecord.UpdatedAt,
+	}
 	require.Equal(t, string(core.AttemptStateRunning), otherBinding.State)
 	otherEvents := h.listRexEvents(t, "wf-other", 10)
 	require.Empty(t, otherEvents)
@@ -2299,13 +2313,19 @@ func findArtifactKind(artifacts []memory.WorkflowArtifactRecord, kind string) (m
 
 func readRexBinding(t *testing.T, h *nexusHarness, workflowID, runID string) (rexnexus.LineageBinding, bool) {
 	t.Helper()
-	artifact, ok := findArtifactKind(h.listRexArtifacts(t, workflowID, runID), "rex.fmp_lineage")
-	if !ok {
+	record, ok, err := h.rexRuntime.WorkflowStore.GetLineageBinding(context.Background(), workflowID, runID)
+	require.NoError(t, err)
+	if !ok || record == nil {
 		return rexnexus.LineageBinding{}, false
 	}
-	var binding rexnexus.LineageBinding
-	require.NoError(t, json.Unmarshal([]byte(artifact.InlineRawText), &binding))
-	return binding, true
+	return rexnexus.LineageBinding{
+		LineageID: record.LineageID,
+		AttemptID: record.AttemptID,
+		RuntimeID: record.RuntimeID,
+		SessionID: record.SessionID,
+		State:     record.State,
+		UpdatedAt: record.UpdatedAt,
+	}, true
 }
 
 func seedRexBinding(t *testing.T, h *nexusHarness, workflowID, runID string, binding rexnexus.LineageBinding) {
@@ -2326,19 +2346,15 @@ func seedRexBinding(t *testing.T, h *nexusHarness, workflowID, runID string, bin
 		Status:     memory.WorkflowRunStatusRunning,
 		StartedAt:  binding.UpdatedAt,
 	}))
-	raw, err := json.Marshal(binding)
-	require.NoError(t, err)
-	require.NoError(t, h.rexRuntime.WorkflowStore.UpsertWorkflowArtifact(context.Background(), memory.WorkflowArtifactRecord{
-		ArtifactID:      runID + ":fmp-lineage",
-		WorkflowID:      workflowID,
-		RunID:           runID,
-		Kind:            "rex.fmp_lineage",
-		ContentType:     "application/json",
-		StorageKind:     memory.ArtifactStorageInline,
-		SummaryText:     "rex fmp lineage binding",
-		InlineRawText:   string(raw),
-		SummaryMetadata: map[string]any{"lineage_id": binding.LineageID, "attempt_id": binding.AttemptID, "state": binding.State},
-		CreatedAt:       binding.UpdatedAt,
+	require.NoError(t, h.rexRuntime.WorkflowStore.UpsertLineageBinding(context.Background(), memdb.LineageBindingRecord{
+		WorkflowID: workflowID,
+		RunID:      runID,
+		LineageID:  binding.LineageID,
+		AttemptID:  binding.AttemptID,
+		RuntimeID:  binding.RuntimeID,
+		SessionID:  binding.SessionID,
+		State:      binding.State,
+		UpdatedAt:  binding.UpdatedAt,
 	}))
 }
 

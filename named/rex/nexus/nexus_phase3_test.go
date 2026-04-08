@@ -44,10 +44,11 @@ func TestRuntimeEndpointHelpersAndAttemptFlow(t *testing.T) {
 
 	packager := &stubContextPackager{}
 	endpoint := &RuntimeEndpoint{
-		DescriptorValue: core.RuntimeDescriptor{RuntimeID: "rex"},
-		Packager:        packager,
-		WorkflowStore:   workflowStore,
-		Now: func() time.Time { return time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC) },
+		DescriptorValue:     core.RuntimeDescriptor{RuntimeID: "rex"},
+		Packager:            packager,
+		WorkflowStore:       workflowStore,
+		LineageBindingStore: workflowStore,
+		Now:                 func() time.Time { return time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC) },
 	}
 
 	desc, err := endpoint.Descriptor(context.Background())
@@ -92,7 +93,14 @@ func TestRuntimeEndpointHelpersAndAttemptFlow(t *testing.T) {
 	require.Equal(t, "wf-1", state.GetString("workflow_id"))
 
 	require.NoError(t, endpoint.ensureImportedWorkflow(context.Background(), "wf-1", "attempt-2", task))
-	require.NoError(t, endpoint.persistImport(context.Background(), "wf-1", "attempt-2", core.HandoffAccept{OfferID: "offer-1", ProvisionalAttemptID: "attempt-2", AcceptedContextClass: "workflow-runtime"}, &fwfmp.PortableContextPackage{Manifest: core.ContextManifest{ContextID: "ctx-1"}}))
+	require.NoError(t, endpoint.persistImport(context.Background(), "wf-1", "attempt-2", "lineage-1", task, state, core.HandoffAccept{OfferID: "offer-1", ProvisionalAttemptID: "attempt-2", AcceptedContextClass: "workflow-runtime"}))
+
+	binding, ok, err := workflowStore.GetLineageBinding(context.Background(), "wf-1", "attempt-2")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, binding)
+	require.Equal(t, "lineage-1", binding.LineageID)
+	require.Equal(t, "attempt-2", binding.AttemptID)
 
 	endpoint.rememberProjection("attempt-2", core.CapabilityEnvelope{AllowedCapabilityIDs: []string{string(core.CapabilityExecute)}})
 	require.NotEmpty(t, endpoint.projectionForAttempt("attempt-2").AllowedCapabilityIDs)
@@ -148,7 +156,7 @@ func TestLineageBridgeHelpersAndLifecycle(t *testing.T) {
 	bridge := &LineageBridge{
 		WorkflowStore: store,
 		Service:       &fwfmp.Service{Ownership: ownership},
-		Now: func() time.Time { return time.Date(2026, 4, 8, 11, 0, 0, 0, time.UTC) },
+		Now:           func() time.Time { return time.Date(2026, 4, 8, 11, 0, 0, 0, time.UTC) },
 	}
 
 	state := core.NewContext()
@@ -161,12 +169,20 @@ func TestLineageBridgeHelpersAndLifecycle(t *testing.T) {
 	require.Equal(t, "rex", bridge.runtimeID())
 	require.Equal(t, time.Date(2026, 4, 8, 11, 0, 0, 0, time.UTC), bridge.nowUTC())
 	require.Equal(t, "sess-1", sessionIDFromState(state, &core.Task{Context: map[string]any{"session_id": "fallback"}}))
-	require.Equal(t, core.SensitivityClass("restricted"), sensitivityFromState(state))
-	require.Equal(t, []string{"mesh-a", "mesh-b"}, federationTargetsFromState(state))
 	require.NotEmpty(t, defaultCapabilityEnvelope().AllowedCapabilityIDs)
 
-	require.Equal(t, string(core.AttemptStateCommittedRemote), func() string { s, ok, err := bridgeStateForFrameworkEvent(core.FrameworkEvent{Type: core.FrameworkEventFMPResumeCommitted}); require.NoError(t, err); require.True(t, ok); return s }())
-	require.Equal(t, "", func() string { s, ok, err := bridgeStateForFrameworkEvent(core.FrameworkEvent{Type: "unknown"}); require.NoError(t, err); require.False(t, ok); return s }())
+	require.Equal(t, string(core.AttemptStateCommittedRemote), func() string {
+		s, ok, err := bridgeStateForFrameworkEvent(core.FrameworkEvent{Type: core.FrameworkEventFMPResumeCommitted})
+		require.NoError(t, err)
+		require.True(t, ok)
+		return s
+	}())
+	require.Equal(t, "", func() string {
+		s, ok, err := bridgeStateForFrameworkEvent(core.FrameworkEvent{Type: "unknown"})
+		require.NoError(t, err)
+		require.False(t, ok)
+		return s
+	}())
 
 	payload, err := decodeFrameworkPayload(core.FrameworkEvent{Payload: []byte(`{"lineage_id":"lineage-1"}`)})
 	require.NoError(t, err)
@@ -223,7 +239,10 @@ func TestNexusAdapterAndSnapshotHelpers(t *testing.T) {
 	registration := adapter.Registration()
 	require.True(t, registration.Managed)
 	require.Equal(t, "nexus-managed", registration.RuntimeType)
-	require.NoError(t, func() error { _, err := adapter.Invoke(ctx, &core.Task{Instruction: "run"}, core.NewContext()); return err }())
+	require.NoError(t, func() error {
+		_, err := adapter.Invoke(ctx, &core.Task{Instruction: "run"}, core.NewContext())
+		return err
+	}())
 
 	snapshot, err := adapter.AdminSnapshot(ctx)
 	require.NoError(t, err)

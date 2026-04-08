@@ -148,9 +148,6 @@ func TestLineageBridgeEnsureBindingAndHelperBranches(t *testing.T) {
 
 	require.Equal(t, "sess-2", sessionIDFromState(state, nil))
 	require.Equal(t, "task-sess", sessionIDFromState(nil, &core.Task{Context: map[string]any{"session_id": "task-sess"}}))
-	require.Equal(t, core.SensitivityClassModerate, sensitivityFromState(nil))
-	state.Set("fmp.allowed_federation_targets", []string{"mesh-a", "mesh-b"})
-	require.Equal(t, []string{"mesh-a", "mesh-b"}, federationTargetsFromState(state))
 
 	require.Equal(t, string(core.AttemptStateHandoffAccepted), func() string {
 		s, ok, err := bridgeStateForFrameworkEvent(core.FrameworkEvent{Type: core.FrameworkEventFMPHandoffAccepted})
@@ -338,8 +335,15 @@ func TestRuntimeEndpointAndSnapshotStoreHelperBranches(t *testing.T) {
 
 	// Exercise the workflow import helper on an already-present workflow/run.
 	endpoint := &RuntimeEndpoint{WorkflowStore: store, Now: func() time.Time { return time.Date(2026, 4, 8, 18, 0, 0, 0, time.UTC) }}
+	endpoint.LineageBindingStore = store
 	require.NoError(t, endpoint.ensureImportedWorkflow(ctx, "wf-5", "run-5", &core.Task{ID: "task-5", Type: core.TaskTypeCodeGeneration, Instruction: "review"}))
-	require.NoError(t, endpoint.persistImport(ctx, "wf-5", "run-5", core.HandoffAccept{OfferID: "offer-5", ProvisionalAttemptID: "run-5", AcceptedContextClass: "workflow-runtime"}, &fwfmp.PortableContextPackage{Manifest: core.ContextManifest{ContextID: "ctx-5"}}))
+	require.NoError(t, endpoint.persistImport(ctx, "wf-5", "run-5", "lineage-5", &core.Task{ID: "task-5", Type: core.TaskTypeCodeGeneration, Instruction: "review"}, core.NewContext(), core.HandoffAccept{OfferID: "offer-5", ProvisionalAttemptID: "run-5", AcceptedContextClass: "workflow-runtime"}))
+
+	binding, ok, err := store.GetLineageBinding(ctx, "wf-5", "run-5")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, binding)
+	require.Equal(t, "lineage-5", binding.LineageID)
 
 	// Snapshot store should summarize the additional rex artifact kinds and
 	// still be able to recover the fallback state when no explicit state block is present.
@@ -347,7 +351,9 @@ func TestRuntimeEndpointAndSnapshotStoreHelperBranches(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "ok", payload["completion"].(map[string]any)["result"])
 	require.Equal(t, true, payload["verification_evidence"].(map[string]any)["verified"])
-	require.Equal(t, "lineage-5", payload["lineage_binding"].(map[string]any)["lineage_id"])
+	bindingPayload, ok := payload["lineage_binding"].(*db.LineageBindingRecord)
+	require.True(t, ok)
+	require.Equal(t, "lineage-5", bindingPayload.LineageID)
 	require.Equal(t, "wf-5", payload["state"].(map[string]any)["workflow_id"])
 
 	_, err = (SnapshotStore{}).QueryWorkflowRuntime(ctx, "wf-5", "run-5")

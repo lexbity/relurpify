@@ -12,18 +12,23 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	memdb "github.com/lexcodex/relurpify/framework/memory/db"
 	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 )
 
 var _ fwfmp.RuntimeEndpoint = (*RuntimeEndpoint)(nil)
 
+const maxRuntimeEndpointProjections = 256
+
 type RuntimeEndpoint struct {
-	DescriptorValue core.RuntimeDescriptor
-	Packager        fwfmp.ContextPackager
-	WorkflowStore   *memdb.SQLiteWorkflowStateStore
-	Schedule        func(context.Context, string, string, *core.Task, *core.Context) error
-	Now             func() time.Time
-	mu              sync.Mutex
-	projections     map[string]core.CapabilityEnvelope
+	DescriptorValue     core.RuntimeDescriptor
+	Packager            fwfmp.ContextPackager
+	WorkflowStore       *memdb.SQLiteWorkflowStateStore
+	LineageBindingStore memdb.LineageBindingStore
+	Schedule            func(context.Context, string, string, *core.Task, *core.Context) error
+	Now                 func() time.Time
+	mu                  sync.Mutex
+	projections         map[string]core.CapabilityEnvelope
+	projectionOrder     []string
 }
 
 func (e *RuntimeEndpoint) Descriptor(context.Context) (core.RuntimeDescriptor, error) {
@@ -69,16 +74,16 @@ func (e *RuntimeEndpoint) CreateAttempt(ctx context.Context, lineage core.Lineag
 	if err != nil {
 		return nil, err
 	}
-	state.Set("fmp.lineage_id", lineage.LineageID)
-	state.Set("fmp.attempt_id", accept.ProvisionalAttemptID)
+	state.Set(rexkeys.FMPLineageID, lineage.LineageID)
+	state.Set(rexkeys.FMPAttemptID, accept.ProvisionalAttemptID)
 	state.Set("fmp.capability_projection", accept.AcceptedCapabilityProjection)
-	state.Set("rex.fmp_lineage_id", lineage.LineageID)
-	state.Set("rex.fmp_attempt_id", accept.ProvisionalAttemptID)
+	state.Set(rexkeys.RexFMPLineageID, lineage.LineageID)
+	state.Set(rexkeys.RexFMPAttemptID, accept.ProvisionalAttemptID)
 	if e.WorkflowStore != nil {
 		if err := e.ensureImportedWorkflow(ctx, workflowID, runID, task); err != nil {
 			return nil, err
 		}
-		if err := e.persistImport(ctx, workflowID, runID, accept, pkg); err != nil {
+		if err := e.persistImport(ctx, workflowID, runID, lineage.LineageID, task, state, accept); err != nil {
 			return nil, err
 		}
 	}
@@ -146,48 +151,36 @@ func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, linea
 	for key, value := range task.Context {
 		state.Set(key, value)
 	}
-	workflowID := strings.TrimSpace(valueString(stateMap["workflow_id"]))
+	workflowID := strings.TrimSpace(valueString(stateMap[rexkeys.WorkflowID]))
 	if workflowID == "" {
-		workflowID = strings.TrimSpace(valueString(task.Context["workflow_id"]))
+		workflowID = strings.TrimSpace(valueString(task.Context[rexkeys.WorkflowID]))
 	}
 	if workflowID == "" {
 		workflowID = lineage.LineageID
 	}
 	runID := accept.ProvisionalAttemptID
-	task.Context["workflow_id"] = workflowID
-	task.Context["run_id"] = runID
-	state.Set("workflow_id", workflowID)
-	state.Set("run_id", runID)
-	state.Set("rex.workflow_id", workflowID)
-	state.Set("rex.run_id", runID)
+	task.Context[rexkeys.WorkflowID] = workflowID
+	task.Context[rexkeys.RunID] = runID
+	state.Set(rexkeys.WorkflowID, workflowID)
+	state.Set(rexkeys.RunID, runID)
+	state.Set(rexkeys.RexWorkflowID, workflowID)
+	state.Set(rexkeys.RexRunID, runID)
 	return task, state, workflowID, runID, nil
 }
 
-func (e *RuntimeEndpoint) persistImport(ctx context.Context, workflowID, runID string, accept core.HandoffAccept, pkg *fwfmp.PortableContextPackage) error {
-	if e.WorkflowStore == nil {
+func (e *RuntimeEndpoint) persistImport(ctx context.Context, workflowID, runID, lineageID string, task *core.Task, state *core.Context, accept core.HandoffAccept) error {
+	if e.LineageBindingStore == nil {
 		return nil
 	}
-	body, err := json.Marshal(map[string]any{
-		"offer_id":               accept.OfferID,
-		"attempt_id":             accept.ProvisionalAttemptID,
-		"accepted_context_class": accept.AcceptedContextClass,
-		"capability_projection":  accept.AcceptedCapabilityProjection,
-		"manifest":               pkg.Manifest,
-	})
-	if err != nil {
-		return err
-	}
-	return e.WorkflowStore.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
-		ArtifactID:      runID + ":fmp-import",
-		WorkflowID:      workflowID,
-		RunID:           runID,
-		Kind:            "rex.fmp_import",
-		ContentType:     "application/json",
-		StorageKind:     memory.ArtifactStorageInline,
-		SummaryText:     "rex fmp import",
-		InlineRawText:   string(body),
-		SummaryMetadata: map[string]any{"offer_id": accept.OfferID},
-		CreatedAt:       e.nowUTC(),
+	return e.LineageBindingStore.UpsertLineageBinding(ctx, memdb.LineageBindingRecord{
+		WorkflowID: workflowID,
+		RunID:      runID,
+		LineageID:  lineageID,
+		AttemptID:  accept.ProvisionalAttemptID,
+		RuntimeID:  e.DescriptorValue.RuntimeID,
+		SessionID:  importedSessionID(state, task),
+		State:      string(core.AttemptStateRunning),
+		UpdatedAt:  e.nowUTC(),
 	})
 }
 
@@ -244,6 +237,25 @@ func (e *RuntimeEndpoint) rememberProjection(attemptID string, projection core.C
 	if e.projections == nil {
 		e.projections = map[string]core.CapabilityEnvelope{}
 	}
+	if _, ok := e.projections[attemptID]; ok {
+		e.projections[attemptID] = projection
+		return
+	}
+	if len(e.projections) >= maxRuntimeEndpointProjections {
+		evictID := ""
+		for len(e.projectionOrder) > 0 {
+			evictID = e.projectionOrder[0]
+			e.projectionOrder = e.projectionOrder[1:]
+			if _, ok := e.projections[evictID]; ok {
+				break
+			}
+			evictID = ""
+		}
+		if evictID != "" {
+			delete(e.projections, evictID)
+		}
+	}
+	e.projectionOrder = append(e.projectionOrder, attemptID)
 	e.projections[attemptID] = projection
 }
 
@@ -257,6 +269,25 @@ func (e *RuntimeEndpoint) projectionForAttempt(attemptID string) core.Capability
 		return core.CapabilityEnvelope{}
 	}
 	return e.projections[attemptID]
+}
+
+func importedSessionID(state *core.Context, task *core.Task) string {
+	if state != nil {
+		if value := strings.TrimSpace(state.GetString(rexkeys.GatewaySessionID)); value != "" {
+			return value
+		}
+		if value := strings.TrimSpace(state.GetString(rexkeys.SessionID)); value != "" {
+			return value
+		}
+	}
+	if task != nil && task.Context != nil {
+		for _, key := range []string{rexkeys.GatewaySessionID, rexkeys.SessionID} {
+			if value := strings.TrimSpace(valueString(task.Context[key])); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
 }
 
 func valueString(value any) string {

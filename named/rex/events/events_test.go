@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 )
 
 func TestMapAdapterNormalizesTrustedTaskEvent(t *testing.T) {
@@ -95,7 +96,7 @@ func TestToEnvelopeAndTaskPreserveIngressMetadata(t *testing.T) {
 	if task.ID != "task-3" || task.Type != core.TaskTypeCodeModification {
 		t.Fatalf("unexpected task: %+v", task)
 	}
-	if task.Context["event_partition"] != "tenant-a" || task.Context["idempotency_key"] != "idem-3" {
+	if task.Context[rexkeys.RexEventPartition] != "tenant-a" || task.Context["idempotency_key"] != "idem-3" {
 		t.Fatalf("missing ingress metadata: %+v", task.Context)
 	}
 }

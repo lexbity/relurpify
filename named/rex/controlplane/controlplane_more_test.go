@@ -99,4 +99,15 @@ func TestValidationAndSLOHelpersCoverFailureBranches(t *testing.T) {
 	if !isPrivilegedRole("nexus:operator") || isPrivilegedRole("viewer") {
 		t.Fatal("unexpected privilege role classification")
 	}
+	if isPrivilegedRole("badmin") || isPrivilegedRole("operator-auditor") {
+		t.Fatal("substring roles should not be privileged")
+	}
+	audit := &AuditLog{Cap: 2}
+	audit.Append(AuditRecord{Action: "one"})
+	audit.Append(AuditRecord{Action: "two"})
+	audit.Append(AuditRecord{Action: "three"})
+	records := audit.Records()
+	if len(records) != 2 || records[0].Action != "two" || records[1].Action != "three" {
+		t.Fatalf("unexpected audit log trim: %+v", records)
+	}
 }
