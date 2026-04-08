@@ -1,8 +1,8 @@
 package llm
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/lexcodex/relurpify/framework/core"

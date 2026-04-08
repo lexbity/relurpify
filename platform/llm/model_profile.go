@@ -1,6 +1,5 @@
 package llm
 
-
 // ModelProfile captures model-specific quirks and configuration.
 type ModelProfile struct {
 	// Pattern is matched against the model name. Supports prefix matching

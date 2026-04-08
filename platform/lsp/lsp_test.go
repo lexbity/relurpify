@@ -8,27 +8,27 @@ import (
 
 // mockLSPClient implements LSPClient for testing.
 type mockLSPClient struct {
-	defResult       DefinitionResult
-	defErr          error
-	refsResult      []Location
-	refsErr         error
-	hoverResult     HoverResult
-	hoverErr        error
-	diagResult      []Diagnostic
-	diagErr         error
-	searchResult    []SymbolInformation
-	searchErr       error
-	docSymResult    []SymbolInformation
-	docSymErr       error
-	formatResult    string
-	formatErr       error
-	calledDef       bool
-	calledRefs      bool
-	calledHover     bool
-	calledDiag      bool
-	calledSearch    bool
-	calledDocSym    bool
-	calledFormat    bool
+	defResult    DefinitionResult
+	defErr       error
+	refsResult   []Location
+	refsErr      error
+	hoverResult  HoverResult
+	hoverErr     error
+	diagResult   []Diagnostic
+	diagErr      error
+	searchResult []SymbolInformation
+	searchErr    error
+	docSymResult []SymbolInformation
+	docSymErr    error
+	formatResult string
+	formatErr    error
+	calledDef    bool
+	calledRefs   bool
+	calledHover  bool
+	calledDiag   bool
+	calledSearch bool
+	calledDocSym bool
+	calledFormat bool
 }
 
 func (m *mockLSPClient) GetDefinition(ctx context.Context, req DefinitionRequest) (DefinitionResult, error) {

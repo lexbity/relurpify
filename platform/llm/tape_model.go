@@ -328,7 +328,7 @@ func (t *TapeModel) validateHeader(currentModel, currentDigest string) error {
 		log.Printf("WARNING: golden tape for %q/%q was recorded %d days ago. Consider refreshing with: agenttest refresh --suite %s --case %s",
 			firstTapeValue(h.SuiteName, "unknown-suite"),
 			firstTapeValue(h.CaseName, "unknown-case"),
-			int(age.Round(24*time.Hour)/ (24 * time.Hour)),
+			int(age.Round(24*time.Hour)/(24*time.Hour)),
 			firstTapeValue(h.SuiteName, "<suite-path>"),
 			firstTapeValue(h.CaseName, "<case-name>"),
 		)
