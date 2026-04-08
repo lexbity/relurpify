@@ -281,7 +281,7 @@ func newSkillTestCmd() *cobra.Command {
 			}
 			suite.Spec.Manifest = derivedManifestPath
 
-			runner := &agenttest.Runner{}
+			runner := newAgentTestRunnerFn()
 			opts := agenttest.RunOptions{
 				TargetWorkspace:  ws,
 				OutputDir:        outDir,

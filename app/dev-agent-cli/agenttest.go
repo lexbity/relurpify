@@ -17,6 +17,14 @@ import (
 	"time"
 )
 
+type agentTestRunner interface {
+	RunSuite(context.Context, *agenttest.Suite, agenttest.RunOptions) (*agenttest.SuiteReport, error)
+}
+
+var newAgentTestRunnerFn = func() agentTestRunner {
+	return &agenttest.Runner{}
+}
+
 func newAgentTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agenttest",
@@ -102,7 +110,7 @@ func newAgentTestRunCmd() *cobra.Command {
 			if len(loadedSuites) == 0 {
 				return fmt.Errorf("no testsuites matched the requested filters")
 			}
-			r := &agenttest.Runner{}
+			r := newAgentTestRunnerFn()
 			opts := agenttest.RunOptions{
 				TargetWorkspace:    ws,
 				OutputDir:          outDir,
@@ -259,7 +267,7 @@ func newAgentTestRefreshCmd() *cobra.Command {
 			suite.Spec.Recording.Strategy = "live"
 			suite.Spec.Recording.Mode = "record"
 			suite.Spec.Recording.Tape = ""
-			r := &agenttest.Runner{}
+			r := newAgentTestRunnerFn()
 			opts := agenttest.RunOptions{
 				TargetWorkspace:  ws,
 				OutputDir:        outDir,

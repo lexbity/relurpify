@@ -24,6 +24,20 @@ import (
 	"time"
 )
 
+var (
+	registerAgentFn                        = fauthorization.RegisterAgent
+	newLocalCommandRunnerFn                = fsandbox.NewLocalCommandRunner
+	newSandboxCommandRunnerFn              = fsandbox.NewSandboxCommandRunner
+	newHybridMemoryFn                      = memory.NewHybridMemory
+	newLLMClientFn                         = llm.NewClient
+	newInstrumentedModelFn                 = llm.NewInstrumentedModel
+	bootstrapAgentRuntimeFn                = ayenitd.BootstrapAgentRuntime
+	registerBuiltinProvidersFn             = appruntime.RegisterBuiltinProviders
+	registerBuiltinRelurpicCapabilitiesFn  = agents.RegisterBuiltinRelurpicCapabilitiesWithOptions
+	registerAgentCapabilitiesFn            = agents.RegisterAgentCapabilities
+	buildFromSpecFn                        = agents.BuildFromSpec
+)
+
 // newStartCmd constructs the development CLI command that runs an agent.
 func newStartCmd() *cobra.Command {
 	var mode string
@@ -97,7 +111,7 @@ func newStartCmd() *cobra.Command {
 			if err := runtimeCfg.Normalize(); err != nil {
 				return err
 			}
-			registration, err := fauthorization.RegisterAgent(runCtx, fauthorization.RuntimeConfig{
+			registration, err := registerAgentFn(runCtx, fauthorization.RuntimeConfig{
 				ManifestPath: runtimeCfg.ManifestPath,
 				Sandbox:      runtimeCfg.Sandbox,
 				AuditLimit:   runtimeCfg.AuditLimit,
@@ -144,9 +158,9 @@ func newStartCmd() *cobra.Command {
 			}
 			var runner fsandbox.CommandRunner
 			if noSandbox {
-				runner = fsandbox.NewLocalCommandRunner(runtimeCfg.Workspace, nil)
+				runner = newLocalCommandRunnerFn(runtimeCfg.Workspace, nil)
 			} else {
-				sandboxRunner, err := fsandbox.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, runtimeCfg.Workspace)
+				sandboxRunner, err := newSandboxCommandRunnerFn(registration.Manifest, registration.Runtime, runtimeCfg.Workspace)
 				if err != nil {
 					return err
 				}
@@ -155,7 +169,7 @@ func newStartCmd() *cobra.Command {
 			telemetrySink := telemetry.LoggerTelemetry{Logger: log.Default()}
 			paths := config.New(ws)
 			memoryPath := paths.MemoryDir()
-			memStore, err := memory.NewHybridMemory(memoryPath)
+			memStore, err := newHybridMemoryFn(memoryPath)
 			if err != nil {
 				return err
 			}
@@ -164,11 +178,11 @@ func newStartCmd() *cobra.Command {
 			if modelName == "" {
 				modelName = defaultModelName()
 			}
-			client := llm.NewClient(defaultEndpoint(), modelName)
+			client := newLLMClientFn(defaultEndpoint(), modelName)
 			client.SetDebugLogging(logLLM)
-			model := llm.NewInstrumentedModel(client, telemetrySink, logLLM)
+			model := newInstrumentedModelFn(client, telemetrySink, logLLM)
 
-			boot, err := ayenitd.BootstrapAgentRuntime(ws, ayenitd.AgentBootstrapOptions{
+			boot, err := bootstrapAgentRuntimeFn(ws, ayenitd.AgentBootstrapOptions{
 				Context:           runCtx,
 				AgentID:           registration.ID,
 				AgentName:         agentName,
@@ -197,7 +211,7 @@ func newStartCmd() *cobra.Command {
 			if boot.IndexManager != nil {
 				relurpicOpts = append(relurpicOpts, agents.WithGraphDB(boot.IndexManager.GraphDB))
 			}
-			if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
+			if err := registerBuiltinRelurpicCapabilitiesFn(
 				boot.Registry, model, boot.AgentConfig, relurpicOpts...,
 			); err != nil {
 				return fmt.Errorf("register relurpic capabilities: %w", err)
@@ -210,7 +224,7 @@ func newStartCmd() *cobra.Command {
 				SearchEngine: boot.Environment.SearchEngine,
 				Memory:       boot.Environment.Memory,
 			}
-			if err := agents.RegisterAgentCapabilities(boot.Registry, bootEnv); err != nil {
+			if err := registerAgentCapabilitiesFn(boot.Registry, bootEnv); err != nil {
 				return fmt.Errorf("register agent capabilities: %w", err)
 			}
 			spec = boot.AgentSpec
@@ -238,7 +252,7 @@ func newStartCmd() *cobra.Command {
 				Registration: registration,
 				AgentSpec:    spec,
 			}
-			if err := appruntime.RegisterBuiltinProviders(runCtx, providerRuntime); err != nil {
+			if err := registerBuiltinProvidersFn(runCtx, providerRuntime); err != nil {
 				return err
 			}
 			env := agents.AgentEnvironment{
@@ -259,9 +273,9 @@ func newStartCmd() *cobra.Command {
 				DebugAgent:        logAgent,
 			}
 			env.Config = cfg
-			agent, err := agents.BuildFromSpec(env, *spec)
+			agent, err := buildFromSpecFn(env, *spec)
 			if err != nil {
-				agent, err = agents.BuildFromSpec(env, core.AgentRuntimeSpec{Implementation: "react"})
+				agent, err = buildFromSpecFn(env, core.AgentRuntimeSpec{Implementation: "react"})
 			}
 			if err != nil {
 				return err
