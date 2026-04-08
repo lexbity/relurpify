@@ -92,24 +92,8 @@ func directCompletionSummary(task *core.Task, state *core.Context) (string, bool
 		return "", false
 	}
 	if !taskNeedsEditing(task) && taskLooksLikeReadOnlySummary(task) {
-		for i := len(observations) - 1; i >= 0; i-- {
-			observation := observations[i]
-			if !observation.Success || observation.Tool != "file_read" {
-				continue
-			}
-			path := strings.TrimSpace(fmt.Sprint(observation.Args["path"]))
-			snippet := strings.TrimSpace(fmt.Sprint(observation.Data["snippet"]))
-			if snippet == "" {
-				snippet = strings.TrimSpace(fmt.Sprint(observation.Summary))
-			}
-			if snippet == "" {
-				continue
-			}
-			snippet = truncateForPrompt(strings.ReplaceAll(snippet, "\n", " "), 220)
-			if path != "" {
-				return fmt.Sprintf("Summary of %s: %s", path, snippet), true
-			}
-			return snippet, true
+		if summary, ok := latestReadOnlyFileSummary(observations); ok {
+			return summary, true
 		}
 	}
 	if taskNeedsEditing(task) && hasEditObservation(state) && !taskRequiresVerification(task) {
@@ -148,19 +132,9 @@ func repeatedReadCompletionSummary(task *core.Task, state *core.Context) (string
 		return "", false
 	}
 	if !taskNeedsEditing(task) && taskLooksLikeReadOnlySummary(task) {
-		path := strings.TrimSpace(fmt.Sprint(last.Args["path"]))
-		snippet := strings.TrimSpace(fmt.Sprint(last.Data["snippet"]))
-		if snippet == "" {
-			snippet = strings.TrimSpace(fmt.Sprint(last.Summary))
+		if summary, ok := latestReadOnlyFileSummary(observations); ok {
+			return summary, true
 		}
-		if snippet == "" {
-			return "", false
-		}
-		snippet = truncateForPrompt(strings.ReplaceAll(snippet, "\n", " "), 220)
-		if path != "" {
-			return fmt.Sprintf("Summary of %s: %s", path, snippet), true
-		}
-		return snippet, true
 	}
 	if taskNeedsEditing(task) && hasEditObservation(state) && !taskRequiresVerification(task) {
 		return fmt.Sprintf("%s confirmed the requested changes", last.Tool), true
@@ -168,43 +142,28 @@ func repeatedReadCompletionSummary(task *core.Task, state *core.Context) (string
 	return "", false
 }
 
-func finalResultFallbackSummary(task *core.Task, state *core.Context) (string, bool) {
-	observations := getToolObservations(state)
-	if len(observations) == 0 || task == nil {
-		return "", false
-	}
-	if !taskNeedsEditing(task) && taskLooksLikeReadOnlySummary(task) {
-		for i := len(observations) - 1; i >= 0; i-- {
-			observation := observations[i]
-			if !observation.Success || observation.Tool != "file_read" {
-				continue
-			}
-			path := strings.TrimSpace(fmt.Sprint(observation.Args["path"]))
-			snippet := strings.TrimSpace(fmt.Sprint(observation.Data["snippet"]))
-			if snippet == "" {
-				snippet = strings.TrimSpace(fmt.Sprint(observation.Summary))
-			}
-			if snippet == "" {
-				continue
-			}
-			snippet = truncateForPrompt(strings.ReplaceAll(snippet, "\n", " "), 220)
-			if path != "" {
-				return fmt.Sprintf("Summary of %s: %s", path, snippet), true
-			}
-			return snippet, true
+func latestReadOnlyFileSummary(observations []ToolObservation) (string, bool) {
+	for i := len(observations) - 1; i >= 0; i-- {
+		observation := observations[i]
+		if !observation.Success || observation.Tool != "file_read" {
+			continue
 		}
-	}
-	if taskNeedsEditing(task) && hasEditObservation(state) && !taskRequiresVerification(task) {
-		for i := len(observations) - 1; i >= 0; i-- {
-			observation := observations[i]
-			if !observation.Success {
-				continue
-			}
-			toolName := strings.ToLower(observation.Tool)
-			if strings.Contains(toolName, "write") || strings.Contains(toolName, "create") || strings.Contains(toolName, "delete") {
-				return fmt.Sprintf("%s applied the requested changes", observation.Tool), true
-			}
+		path := strings.TrimSpace(fmt.Sprint(observation.Args["path"]))
+		snippet := strings.TrimSpace(fmt.Sprint(observation.Data["snippet"]))
+		if snippet == "" {
+			snippet = strings.TrimSpace(fmt.Sprint(observation.Data["summary"]))
 		}
+		if snippet == "" {
+			snippet = strings.TrimSpace(fmt.Sprint(observation.Summary))
+		}
+		if snippet == "" {
+			continue
+		}
+		snippet = truncateForPrompt(strings.ReplaceAll(snippet, "\n", " "), 220)
+		if path != "" {
+			return fmt.Sprintf("Summary of %s: %s", path, snippet), true
+		}
+		return snippet, true
 	}
 	return "", false
 }
@@ -244,25 +203,13 @@ func readOnlySummaryFromState(task *core.Task, state *core.Context, lastMap map[
 		return "", false
 	}
 	observations := getToolObservations(state)
+	if summary, ok := latestReadOnlyFileSummary(observations); ok {
+		return summary, true
+	}
 	for i := len(observations) - 1; i >= 0; i-- {
 		observation := observations[i]
 		if !observation.Success {
 			continue
-		}
-		if observation.Tool == "file_read" {
-			path := strings.TrimSpace(fmt.Sprint(observation.Args["path"]))
-			snippet := strings.TrimSpace(fmt.Sprint(observation.Data["snippet"]))
-			if snippet == "" {
-				snippet = strings.TrimSpace(fmt.Sprint(observation.Data["summary"]))
-			}
-			if snippet == "" {
-				continue
-			}
-			snippet = truncateForPrompt(strings.ReplaceAll(snippet, "\n", " "), 220)
-			if path != "" {
-				return fmt.Sprintf("Summary of %s: %s", path, snippet), true
-			}
-			return snippet, true
 		}
 		if summary := strings.TrimSpace(observation.Summary); summary != "" {
 			return summary, true

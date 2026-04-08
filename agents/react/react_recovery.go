@@ -177,6 +177,48 @@ func inferFailureSymbol(lastMap map[string]interface{}) string {
 
 // --- Manifest / path inference from observations ---
 
+type manifestInferenceRule struct {
+	tools      []string
+	dataKeys   []string
+	pathSuffix []string
+}
+
+func inferredManifestFromObservations(state *core.Context, rule manifestInferenceRule) string {
+	observations := getToolObservations(state)
+	for i := len(observations) - 1; i >= 0; i-- {
+		obs := observations[i]
+		if len(rule.tools) > 0 {
+			matched := false
+			for _, tool := range rule.tools {
+				if strings.EqualFold(strings.TrimSpace(obs.Tool), tool) {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				for _, key := range rule.dataKeys {
+					if manifest := strings.TrimSpace(fmt.Sprint(obs.Data[key])); manifest != "" && manifest != "<nil>" {
+						return manifest
+					}
+				}
+			}
+		}
+		if obs.Tool != "file_read" {
+			continue
+		}
+		path := strings.TrimSpace(fmt.Sprint(obs.Args["path"]))
+		if path == "" || path == "<nil>" {
+			continue
+		}
+		for _, suffix := range rule.pathSuffix {
+			if strings.HasSuffix(path, suffix) {
+				return path
+			}
+		}
+	}
+	return ""
+}
+
 func inferredPathFromObservations(state *core.Context, keys ...string) string {
 	observations := getToolObservations(state)
 	for i := len(observations) - 1; i >= 0; i-- {
@@ -208,88 +250,35 @@ func inferredPathFromObservations(state *core.Context, keys ...string) string {
 }
 
 func inferredCargoManifest(state *core.Context) string {
-	observations := getToolObservations(state)
-	for i := len(observations) - 1; i >= 0; i-- {
-		obs := observations[i]
-		if obs.Tool == "rust_workspace_detect" {
-			if manifest := strings.TrimSpace(fmt.Sprint(obs.Data["manifest_path"])); manifest != "" {
-				return manifest
-			}
-		}
-		if obs.Tool == "file_read" {
-			if path := strings.TrimSpace(fmt.Sprint(obs.Args["path"])); strings.HasSuffix(path, "Cargo.toml") {
-				return path
-			}
-		}
-	}
-	return ""
+	return inferredManifestFromObservations(state, manifestInferenceRule{
+		tools:      []string{"rust_workspace_detect"},
+		dataKeys:   []string{"manifest_path"},
+		pathSuffix: []string{"Cargo.toml"},
+	})
 }
 
 func inferredPythonManifest(state *core.Context) string {
-	observations := getToolObservations(state)
-	for i := len(observations) - 1; i >= 0; i-- {
-		obs := observations[i]
-		switch obs.Tool {
-		case "python_workspace_detect", "python_project_metadata":
-			if manifest := strings.TrimSpace(fmt.Sprint(obs.Data["manifest_path"])); manifest != "" {
-				return manifest
-			}
-		case "file_read":
-			if path := strings.TrimSpace(fmt.Sprint(obs.Args["path"])); strings.HasSuffix(path, "pyproject.toml") || strings.HasSuffix(path, "setup.py") || strings.HasSuffix(path, "setup.cfg") || strings.HasSuffix(path, "requirements.txt") {
-				return path
-			}
-		}
-	}
-	return ""
+	return inferredManifestFromObservations(state, manifestInferenceRule{
+		tools:      []string{"python_workspace_detect", "python_project_metadata"},
+		dataKeys:   []string{"manifest_path"},
+		pathSuffix: []string{"pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"},
+	})
 }
 
 func inferredNodeManifest(state *core.Context) string {
-	observations := getToolObservations(state)
-	for i := len(observations) - 1; i >= 0; i-- {
-		obs := observations[i]
-		switch obs.Tool {
-		case "node_workspace_detect", "node_project_metadata":
-			if manifest := strings.TrimSpace(fmt.Sprint(obs.Data["manifest_path"])); manifest != "" {
-				return manifest
-			}
-		case "file_read":
-			path := strings.TrimSpace(fmt.Sprint(obs.Args["path"]))
-			if strings.HasSuffix(path, "package.json") ||
-				strings.HasSuffix(path, "package-lock.json") ||
-				strings.HasSuffix(path, "pnpm-lock.yaml") ||
-				strings.HasSuffix(path, "yarn.lock") ||
-				strings.HasSuffix(path, "tsconfig.json") {
-				return path
-			}
-		}
-	}
-	return ""
+	return inferredManifestFromObservations(state, manifestInferenceRule{
+		tools:      []string{"node_workspace_detect", "node_project_metadata"},
+		dataKeys:   []string{"manifest_path"},
+		pathSuffix: []string{"package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "tsconfig.json"},
+	})
 }
 
 func inferredGoManifest(state *core.Context) string {
-	observations := getToolObservations(state)
-	for i := len(observations) - 1; i >= 0; i-- {
-		obs := observations[i]
-		switch obs.Tool {
-		case "go_workspace_detect":
-			if manifest := strings.TrimSpace(fmt.Sprint(obs.Data["module_path"])); manifest != "" {
-				return manifest
-			}
-			if manifest := strings.TrimSpace(fmt.Sprint(obs.Data["workspace_path"])); manifest != "" {
-				return manifest
-			}
-		case "go_module_metadata":
-			if manifest := strings.TrimSpace(fmt.Sprint(obs.Data["go_mod"])); manifest != "" {
-				return manifest
-			}
-		case "file_read":
-			path := strings.TrimSpace(fmt.Sprint(obs.Args["path"]))
-			if strings.HasSuffix(path, "go.mod") || strings.HasSuffix(path, "go.work") {
-				return path
-			}
-		}
-	}
-	return ""
+	return inferredManifestFromObservations(state, manifestInferenceRule{
+		tools:      []string{"go_workspace_detect", "go_module_metadata"},
+		dataKeys:   []string{"module_path", "workspace_path", "go_mod"},
+		pathSuffix: []string{"go.mod", "go.work"},
+	})
 }
 
 func inferredSQLiteDatabase(state *core.Context) string {

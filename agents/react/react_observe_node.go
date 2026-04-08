@@ -78,89 +78,17 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *core.Context) (*c
 		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 		return result, nil
 	}
-	if verificationSummary, ok := verificationSummaryFromSuccess(n.agent, n.task, state, lastMap); ok {
-		completed := true
-		diagnostic.WriteString("Conclusion: " + verificationSummary + "\n")
-		state.Set("react.synthetic_summary", verificationSummary)
-		state.Set("react.incomplete_reason", "")
-		state.Set("react.done", completed)
-		state.Set("react.final_output", map[string]interface{}{
-			"summary": verificationSummary,
-			"result":  lastMap,
-		})
-		result := &core.Result{
-			NodeID:  n.id,
-			Success: true,
-			Data: map[string]interface{}{
-				"diagnostic": diagnostic.String(),
-				"complete":   completed,
-			},
-		}
-		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
-		return result, nil
+	if summary, ok := verificationSummaryFromSuccess(n.agent, n.task, state, lastMap); ok {
+		return n.applyCompletionSummary(state, summary, lastMap, &diagnostic), nil
 	}
-	if editSummary, ok := editSummaryFromSuccess(n.task, state, lastMap); ok {
-		completed := true
-		diagnostic.WriteString("Conclusion: " + editSummary + "\n")
-		state.Set("react.synthetic_summary", editSummary)
-		state.Set("react.incomplete_reason", "")
-		state.Set("react.done", completed)
-		state.Set("react.final_output", map[string]interface{}{
-			"summary": editSummary,
-			"result":  lastMap,
-		})
-		result := &core.Result{
-			NodeID:  n.id,
-			Success: true,
-			Data: map[string]interface{}{
-				"diagnostic": diagnostic.String(),
-				"complete":   completed,
-			},
-		}
-		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
-		return result, nil
+	if summary, ok := editSummaryFromSuccess(n.task, state, lastMap); ok {
+		return n.applyCompletionSummary(state, summary, lastMap, &diagnostic), nil
 	}
-	if readOnlySummary, ok := readOnlySummaryFromState(n.task, state, lastMap); ok {
-		completed := true
-		diagnostic.WriteString("Conclusion: " + readOnlySummary + "\n")
-		state.Set("react.synthetic_summary", readOnlySummary)
-		state.Set("react.incomplete_reason", "")
-		state.Set("react.done", completed)
-		state.Set("react.final_output", map[string]interface{}{
-			"summary": readOnlySummary,
-			"result":  lastMap,
-		})
-		result := &core.Result{
-			NodeID:  n.id,
-			Success: true,
-			Data: map[string]interface{}{
-				"diagnostic": diagnostic.String(),
-				"complete":   completed,
-			},
-		}
-		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
-		return result, nil
+	if summary, ok := readOnlySummaryFromState(n.task, state, lastMap); ok {
+		return n.applyCompletionSummary(state, summary, lastMap, &diagnostic), nil
 	}
-	if analysisSummary, ok := analysisSummaryFromFailure(n.task, state, lastMap); ok {
-		completed := true
-		diagnostic.WriteString("Conclusion: " + analysisSummary + "\n")
-		state.Set("react.synthetic_summary", analysisSummary)
-		state.Set("react.incomplete_reason", "")
-		state.Set("react.done", completed)
-		state.Set("react.final_output", map[string]interface{}{
-			"summary": analysisSummary,
-			"result":  lastMap,
-		})
-		result := &core.Result{
-			NodeID:  n.id,
-			Success: true,
-			Data: map[string]interface{}{
-				"diagnostic": diagnostic.String(),
-				"complete":   completed,
-			},
-		}
-		state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
-		return result, nil
+	if summary, ok := analysisSummaryFromFailure(n.task, state, lastMap); ok {
+		return n.applyCompletionSummary(state, summary, lastMap, &diagnostic), nil
 	}
 	repeated, repeatReason := detectRepeatedToolLoop(state, n.task)
 	completed := decision.Complete
@@ -170,27 +98,21 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *core.Context) (*c
 		}
 	}
 	if repeated {
-		if successSummary, ok := completionSummaryFromState(n.agent, n.task, state, lastMap); ok {
+		if summary, ok := completionSummaryFromState(n.agent, n.task, state, lastMap); ok {
 			completed = true
-			diagnostic.WriteString("Conclusion: " + successSummary + "\n")
-			state.Set("react.synthetic_summary", successSummary)
-			state.Set("react.incomplete_reason", "")
-		} else if analysisSummary, ok := repeatedFailureAnalysis(n.task, state, lastMap); ok {
+			setSynthesizedConclusion(state, summary, &diagnostic)
+		} else if summary, ok := repeatedFailureAnalysis(n.task, state, lastMap); ok {
 			completed = true
-			diagnostic.WriteString("Conclusion: " + analysisSummary + "\n")
-			state.Set("react.synthetic_summary", analysisSummary)
-			state.Set("react.incomplete_reason", "")
+			setSynthesizedConclusion(state, summary, &diagnostic)
 		} else {
 			completed = true
 			state.Set("react.incomplete_reason", repeatReason)
 		}
 	}
 	if !completed && iter >= n.agent.maxIterations {
-		if successSummary, ok := completionSummaryFromState(n.agent, n.task, state, lastMap); ok {
+		if summary, ok := completionSummaryFromState(n.agent, n.task, state, lastMap); ok {
 			completed = true
-			diagnostic.WriteString("Conclusion: " + successSummary + "\n")
-			state.Set("react.synthetic_summary", successSummary)
-			state.Set("react.incomplete_reason", "")
+			setSynthesizedConclusion(state, summary, &diagnostic)
 		} else {
 			completed = true
 			state.Set("react.incomplete_reason", iterationExhaustionReason(n.task, state))
@@ -228,6 +150,39 @@ func (n *reactObserveNode) Execute(ctx context.Context, state *core.Context) (*c
 	}
 	state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
 	return result, nil
+}
+
+// applyCompletionSummary records a completion outcome in state and returns a
+// terminal Result. Use this for branches where the observe loop should stop
+// immediately after detecting a conclusive outcome.
+func (n *reactObserveNode) applyCompletionSummary(state *core.Context, summary string, lastMap map[string]interface{}, diagnostic *strings.Builder) *core.Result {
+	diagnostic.WriteString("Conclusion: " + summary + "\n")
+	state.Set("react.synthetic_summary", summary)
+	state.Set("react.incomplete_reason", "")
+	state.Set("react.done", true)
+	state.Set("react.final_output", map[string]interface{}{
+		"summary": summary,
+		"result":  lastMap,
+	})
+	result := &core.Result{
+		NodeID:  n.id,
+		Success: true,
+		Data: map[string]interface{}{
+			"diagnostic": diagnostic.String(),
+			"complete":   true,
+		},
+	}
+	state.SetHandleScoped("react.last_result", result, reactTaskScope(state))
+	return result
+}
+
+// setSynthesizedConclusion records a synthesized summary in state without
+// returning. Use this when the loop has already been determined complete but
+// control should fall through to the shared final-output block.
+func setSynthesizedConclusion(state *core.Context, summary string, diagnostic *strings.Builder) {
+	diagnostic.WriteString("Conclusion: " + summary + "\n")
+	state.Set("react.synthetic_summary", summary)
+	state.Set("react.incomplete_reason", "")
 }
 
 func (n *reactObserveNode) scheduleRecoveryProbe(state *core.Context, lastMap map[string]interface{}) bool {
@@ -520,18 +475,10 @@ func repeatedFailureAnalysis(task *core.Task, state *core.Context, lastMap map[s
 		return "", false
 	}
 	last := observations[len(observations)-1]
-	if !strings.Contains(strings.ToLower(last.Tool), "cargo") &&
-		!strings.Contains(strings.ToLower(last.Tool), "test") &&
-		!strings.Contains(strings.ToLower(last.Tool), "build") {
+	if !failureAnalysisToolEligible(last.Tool) {
 		return "", false
 	}
-	reason := strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(last.Data["stderr"])))
-	if reason == "" {
-		reason = strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(last.Data["stdout"])))
-	}
-	if reason == "" {
-		reason = strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(last.Data["error"])))
-	}
+	reason := failureAnalysisReason(last)
 	if reason == "" {
 		return "", false
 	}
@@ -547,21 +494,33 @@ func analysisSummaryFromFailure(task *core.Task, state *core.Context, lastMap ma
 		return "", false
 	}
 	last := observations[len(observations)-1]
-	toolName := strings.ToLower(last.Tool)
-	if !strings.Contains(toolName, "cargo") &&
-		!strings.Contains(toolName, "test") &&
-		!strings.Contains(toolName, "build") {
+	if !failureAnalysisToolEligible(last.Tool) {
 		return "", false
 	}
-	reason := strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(last.Data["stderr"])))
-	if reason == "" {
-		reason = strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(last.Data["stdout"])))
-	}
-	if reason == "" {
-		reason = strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(last.Data["error"])))
-	}
+	reason := failureAnalysisReason(last)
 	if reason == "" {
 		return "", false
 	}
 	return fmt.Sprintf("%s failed: %s", last.Tool, reason), true
+}
+
+func failureAnalysisReason(observation ToolObservation) string {
+	for _, raw := range []interface{}{
+		observation.Data["stderr"],
+		observation.Data["stdout"],
+		observation.Data["error"],
+	} {
+		reason := strings.TrimSpace(firstMeaningfulLine(fmt.Sprint(raw)))
+		if reason != "" {
+			return reason
+		}
+	}
+	return ""
+}
+
+func failureAnalysisToolEligible(toolName string) bool {
+	lower := strings.ToLower(toolName)
+	return strings.Contains(lower, "cargo") ||
+		strings.Contains(lower, "test") ||
+		strings.Contains(lower, "build")
 }

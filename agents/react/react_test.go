@@ -1983,7 +1983,7 @@ func TestLatchVerificationSuccessAllowsPromptDrivenVerificationStop(t *testing.T
 	assert.Equal(t, "cli_cargo succeeded after applying changes", state.GetString("react.synthetic_summary"))
 }
 
-func TestDirectCompletionSummaryHandlesReadOnlySummary(t *testing.T) {
+func TestDirectCompletionSummaryHandlesReadOnlySummaryLegacy(t *testing.T) {
 	task := &core.Task{Instruction: "Summarize README.md in 5 bullets."}
 	state := core.NewContext()
 	state.Set("react.tool_observations", []ToolObservation{
@@ -2121,7 +2121,7 @@ func TestToolAllowedByExecutionContextBlocksRepeatedFileReadBeforeEdit(t *testin
 	assert.True(t, agent.toolAllowedByExecutionContext(state, task, contextmgrPhaseEdit, stubTool{name: "file_write"}))
 }
 
-func TestFinalResultFallbackSummaryHandlesReadOnlySummary(t *testing.T) {
+func TestDirectCompletionSummaryHandlesReadOnlySummaryAgain(t *testing.T) {
 	task := &core.Task{Instruction: "Summarize README.md in 5 bullets."}
 	state := core.NewContext()
 	state.Set("react.tool_observations", []ToolObservation{
@@ -2133,7 +2133,7 @@ func TestFinalResultFallbackSummaryHandlesReadOnlySummary(t *testing.T) {
 		},
 	})
 
-	summary, ok := finalResultFallbackSummary(task, state)
+	summary, ok := directCompletionSummary(task, state)
 
 	assert.True(t, ok)
 	assert.Contains(t, summary, "README.md")
