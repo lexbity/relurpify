@@ -59,6 +59,7 @@ const (
 	ArtifactKindDeferredExecutionIssues ArtifactKind = "euclo.deferred_execution_issues"
 	ArtifactKindSemanticCompile         ArtifactKind = "euclo.semantic_compile"
 	ArtifactKindSemanticContext         ArtifactKind = "euclo.semantic_context"
+	ArtifactKindTension                 ArtifactKind = "euclo.tension"
 	ArtifactKindContextCompaction       ArtifactKind = "euclo.context_compaction"
 	ArtifactKindFinalReport             ArtifactKind = "euclo.final_report"
 	ArtifactKindRecoveryTrace           ArtifactKind = "euclo.recovery_trace"

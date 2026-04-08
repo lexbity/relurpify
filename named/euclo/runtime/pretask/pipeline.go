@@ -5,10 +5,10 @@ import (
 	"sync"
 
 	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/patterns"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/patterns"
+	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
 // PipelineEnv provides the dependencies needed by the pipeline.
@@ -57,15 +57,16 @@ type PipelineInput struct {
 // Run executes the full pipeline and returns an EnrichedContextBundle.
 //
 // Execution order:
-//   Stage 0: AnchorExtractor.Extract(input)
-//            — CurrentTurnFiles and SessionPins are included unconditionally
-//   Stage 1: parallel — IndexRetriever.Retrieve(anchors)
-//                     + ArchaeoRetriever.RetrieveTopic(input.Query, input.WorkflowID)
-//   Stage 2: HypotheticalGenerator.Generate(input.Query, stage1)
-//            — skipped if anchor + stage1 code coverage >= SkipHypotheticalIfAnchorsAbove
-//   Stage 3: ArchaeoRetriever.RetrieveExpanded(sketch)
-//            — skipped if input.WorkflowID empty or Stage 2 was skipped
-//   Merge:   ResultMerger.Merge
+//
+//	Stage 0: AnchorExtractor.Extract(input)
+//	         — CurrentTurnFiles and SessionPins are included unconditionally
+//	Stage 1: parallel — IndexRetriever.Retrieve(anchors)
+//	                  + ArchaeoRetriever.RetrieveTopic(input.Query, input.WorkflowID)
+//	Stage 2: HypotheticalGenerator.Generate(input.Query, stage1)
+//	         — skipped if anchor + stage1 code coverage >= SkipHypotheticalIfAnchorsAbove
+//	Stage 3: ArchaeoRetriever.RetrieveExpanded(sketch)
+//	         — skipped if input.WorkflowID empty or Stage 2 was skipped
+//	Merge:   ResultMerger.Merge
 //
 // Any stage error is logged and the pipeline continues with partial results.
 // The PipelineTrace in the returned bundle records what was skipped and why.
@@ -89,7 +90,7 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 	var stage1Knowledge []KnowledgeEvidenceItem
 	var stage1Err, archErr error
 	var wg sync.WaitGroup
-	
+
 	// Only run index retriever if we have anchors
 	if len(anchors.FilePaths) > 0 || len(anchors.SymbolNames) > 0 {
 		wg.Add(1)
@@ -98,7 +99,7 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 			stage1Code, stage1Err = p.indexRetriever.Retrieve(ctx, anchors)
 		}()
 	}
-	
+
 	// Only run archaeo retriever if we have a workflow ID
 	if input.WorkflowID != "" {
 		wg.Add(1)
@@ -107,9 +108,9 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 			stage1Knowledge, archErr = p.archaeoRetriever.RetrieveTopic(ctx, input.Query, input.WorkflowID)
 		}()
 	}
-	
+
 	wg.Wait()
-	
+
 	// errors are ignored for now (logged in trace)
 	if stage1Err != nil {
 		trace.FallbackUsed = true
@@ -119,7 +120,7 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 		trace.FallbackUsed = true
 		trace.FallbackReason = "archaeo_topic_error"
 	}
-	
+
 	stage1 := Stage1Result{
 		CodeEvidence:      stage1Code,
 		KnowledgeEvidence: stage1Knowledge,
@@ -177,7 +178,7 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 // relevant stage to be skipped gracefully.
 func NewPipeline(
 	env PipelineEnv,
-	tensions TensionQuerier,  // optional — nil degrades archaeo topic retrieval to pattern-only
+	tensions TensionQuerier, // optional — nil degrades archaeo topic retrieval to pattern-only
 	config PipelineConfig,
 ) *Pipeline {
 	// Create anchor extractor with index from environment
@@ -187,7 +188,7 @@ func NewPipeline(
 	} else {
 		indexQuerier = &dummyIndexQuerier{}
 	}
-	
+
 	anchorExtractor := &AnchorExtractor{
 		index: indexQuerier,
 		config: AnchorConfig{
@@ -195,30 +196,30 @@ func NewPipeline(
 			MaxSymbols:      12,
 		},
 	}
-	
+
 	// Create index retriever
 	// For dependency querier, we can use the IndexManager if available
 	var depQuerier DependencyQuerier
 	if env.IndexManager != nil {
 		depQuerier = env.IndexManager
 	}
-	
+
 	indexRetriever := &IndexRetriever{
 		index: indexQuerier,
 		deps:  depQuerier,
 		config: IndexRetrieverConfig{
-			DependencyHops:     1,
+			DependencyHops:    1,
 			MaxFilesPerSymbol: 3,
 		},
 	}
-	
+
 	// Create archaeo retriever
 	// For pattern store, we can use env.PatternStore
 	var patternQuerier PatternQuerier
 	if env.PatternStore != nil {
 		patternQuerier = &patternStoreQuerier{store: env.PatternStore}
 	}
-	
+
 	archaeoRetriever := &ArchaeoRetriever{
 		tensionSvc: tensions,
 		patternSvc: patternQuerier,
@@ -229,7 +230,7 @@ func NewPipeline(
 			MaxTokens:  500,
 		},
 	}
-	
+
 	// Create hypothetical generator with model and embedder from environment
 	var hypotheticalGen *HypotheticalGenerator
 	if env.Model != nil && env.Embedder != nil {
@@ -245,7 +246,7 @@ func NewPipeline(
 		// Create stub generator
 		hypotheticalGen = &HypotheticalGenerator{}
 	}
-	
+
 	// Create merger
 	merger := &ResultMerger{
 		config: MergerConfig{
@@ -254,7 +255,7 @@ func NewPipeline(
 			MaxKnowledgeItems: config.MaxKnowledgeItems,
 		},
 	}
-	
+
 	return &Pipeline{
 		env:              env,
 		anchorExtractor:  anchorExtractor,
@@ -302,5 +303,5 @@ func (q *indexManagerQuerier) SearchNodes(query ast.NodeQuery) ([]*ast.Node, err
 // dummyIndexQuerier implements IndexQuerier for stub purposes.
 type dummyIndexQuerier struct{}
 
-func (d dummyIndexQuerier) QuerySymbol(pattern string) ([]*ast.Node, error) { return nil, nil }
+func (d dummyIndexQuerier) QuerySymbol(pattern string) ([]*ast.Node, error)      { return nil, nil }
 func (d dummyIndexQuerier) SearchNodes(query ast.NodeQuery) ([]*ast.Node, error) { return nil, nil }

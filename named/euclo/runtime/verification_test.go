@@ -277,3 +277,70 @@ func TestEvaluateSuccessGate_RejectsTDDWithoutRequestedRefactorEvidence(t *testi
 		t.Fatalf("unexpected reason %q", result.Reason)
 	}
 }
+
+func TestVerificationHelperBranchesAndDegradationFallbacks(t *testing.T) {
+	if !verificationBoolValue(true) || verificationBoolValue(false) {
+		t.Fatal("unexpected bool parsing")
+	}
+	if !verificationBoolValue(" true ") || verificationBoolValue("no") {
+		t.Fatal("unexpected string bool parsing")
+	}
+	if got := verificationEvidenceFromRaw(nil); got.Status != "not_verified" || got.Source != "pipeline.verify" {
+		t.Fatalf("unexpected raw verification fallback: %#v", got)
+	}
+
+	typedHistory := phaseHistoryRecords([]map[string]any{
+		{"phase": "red", "run_id": "run-1"},
+		{"phase": "green", "run_id": "run-1"},
+	})
+	if len(typedHistory) != 2 {
+		t.Fatalf("unexpected typed history: %#v", typedHistory)
+	}
+	mixedHistory := phaseHistoryRecords([]any{
+		map[string]any{"phase": "complete", "run_id": "run-1"},
+		"ignore",
+	})
+	if len(mixedHistory) != 1 {
+		t.Fatalf("unexpected mixed history: %#v", mixedHistory)
+	}
+
+	state := core.NewContext()
+	state.Set("euclo.envelope", map[string]any{
+		"capability_snapshot": map[string]any{
+			"has_execute_tools":      false,
+			"has_verification_tools": false,
+		},
+	})
+	mode, reason, degraded := DetectAutomaticVerificationDegradation(VerificationPolicy{RequiresVerification: true}, state, VerificationEvidence{})
+	if !degraded || mode != "automatic" || reason != "verification_tools_unavailable" {
+		t.Fatalf("unexpected tool degradation: %q %q %v", mode, reason, degraded)
+	}
+
+	state = core.NewContext()
+	state.Set("euclo.verification_plan", map[string]any{"commands": []any{}})
+	mode, reason, degraded = DetectAutomaticVerificationDegradation(VerificationPolicy{RequiresVerification: true}, state, VerificationEvidence{})
+	if !degraded || mode != "automatic" || reason != "verification_plan_unavailable" {
+		t.Fatalf("unexpected plan degradation: %q %q %v", mode, reason, degraded)
+	}
+
+	state = core.NewContext()
+	state.Set("euclo.envelope", TaskEnvelope{
+		CapabilitySnapshot: euclotypes.CapabilitySnapshot{
+			HasExecuteTools:      true,
+			HasVerificationTools: true,
+		},
+	})
+	mode, reason, degraded = DetectAutomaticVerificationDegradation(VerificationPolicy{RequiresVerification: true}, state, VerificationEvidence{
+		EvidencePresent: true,
+		Provenance:      VerificationProvenanceExecuted,
+	})
+	if degraded || mode != "" || reason != "" {
+		t.Fatalf("unexpected non-degraded result: %q %q %v", mode, reason, degraded)
+	}
+
+	state = core.NewContext()
+	state.Set("euclo.tdd.lifecycle", map[string]any{"requested_refactor": "yes"})
+	if !tddLifecycleRequestedRefactor(state) {
+		t.Fatal("expected string requested_refactor to be recognized")
+	}
+}

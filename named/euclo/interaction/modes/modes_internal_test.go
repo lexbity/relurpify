@@ -28,7 +28,7 @@ func TestSkipChatReflect_True_SkipFlag(t *testing.T) {
 
 func TestSkipChatReflect_True_AskSubModeWithAnswer(t *testing.T) {
 	state := map[string]any{
-		"chat.sub_mode":   "ask",
+		"chat.sub_mode":    "ask",
 		"present.answered": true,
 	}
 	if !skipChatReflect(state, nil) {

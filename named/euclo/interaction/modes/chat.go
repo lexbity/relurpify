@@ -45,7 +45,7 @@ func (p *ContextProposalPhase) Execute(
 	if queryRaw, ok := state["query"]; ok {
 		userText, _ = queryRaw.(string)
 	}
-	
+
 	// Get file selections from state
 	var userSelections []string
 	if selectionsRaw, ok := state["selections"]; ok {
@@ -59,7 +59,7 @@ func (p *ContextProposalPhase) Execute(
 			}
 		}
 	}
-	
+
 	// Even with empty query and selections, we still run the pipeline
 	// to handle session pins and workflow context retrieval
 	if userText == "" && len(userSelections) == 0 {
@@ -78,7 +78,7 @@ func (p *ContextProposalPhase) Execute(
 			sessionPins = persisted
 		}
 	}
-	
+
 	// Get workflow ID from state
 	workflowID := ""
 	if wf, ok := state["euclo.workflow_id"].(string); ok {
@@ -88,7 +88,7 @@ func (p *ContextProposalPhase) Execute(
 	// Run the pipeline if available
 	var bundle pretask.EnrichedContextBundle
 	var err error
-	
+
 	if p.Pipeline != nil {
 		input := pretask.PipelineInput{
 			Query:            userText,
@@ -126,7 +126,7 @@ func (p *ContextProposalPhase) Execute(
 		for _, file := range bundle.ExpandedFiles {
 			confirmedPaths = append(confirmedPaths, file.Path)
 		}
-		
+
 		updatedPins := updateSessionPins(sessionPins, confirmedPaths)
 		saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
 
@@ -145,7 +145,7 @@ func (p *ContextProposalPhase) Execute(
 
 	// Show confirmation frame
 	content := convertToContextProposalContent(bundle)
-	
+
 	mc.Emitter.Emit(ctx, interaction.InteractionFrame{
 		Kind:    interaction.FrameProposal,
 		Mode:    "chat",
@@ -180,7 +180,7 @@ func (p *ContextProposalPhase) Execute(
 		},
 		Continuable: true,
 	})
-	
+
 	// Wait for user response
 	resp, err := mc.Emitter.AwaitResponse(ctx)
 	if err != nil {
@@ -189,7 +189,7 @@ func (p *ContextProposalPhase) Execute(
 			StateUpdates: map[string]interface{}{},
 		}, nil
 	}
-	
+
 	// Handle different actions
 	switch resp.ActionID {
 	case "confirm":
@@ -215,22 +215,22 @@ func (p *ContextProposalPhase) Execute(
 			Advance:      true,
 			StateUpdates: stateUpdates,
 		}, nil
-		
+
 	case "skip":
 		// Skip enrichment, continue with empty context
 		return interaction.PhaseOutcome{
 			Advance:      true,
 			StateUpdates: map[string]interface{}{},
 		}, nil
-		
+
 	case "add":
 		// Emit a frame that prompts the TUI to open a file picker
 		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
-			Kind:    interaction.FrameQuestion,
-			Mode:    "chat",
-			Phase:   "context_proposal",
+			Kind:  interaction.FrameQuestion,
+			Mode:  "chat",
+			Phase: "context_proposal",
 			Content: interaction.QuestionContent{
-				Question: "Add files to context",
+				Question:    "Add files to context",
 				Description: "Select files to add to the context. You can select multiple files.",
 				Options: []interaction.QuestionOption{
 					{ID: "file_picker", Label: "Open file picker", Description: "Browse and select files"},
@@ -252,7 +252,7 @@ func (p *ContextProposalPhase) Execute(
 				},
 			},
 		})
-		
+
 		// Wait for user response
 		resp, err := mc.Emitter.AwaitResponse(ctx)
 		if err != nil {
@@ -261,19 +261,19 @@ func (p *ContextProposalPhase) Execute(
 				StateUpdates: map[string]interface{}{},
 			}, nil
 		}
-		
+
 		if resp.ActionID == "select_files" {
 			// The TUI should have provided selected files in resp.Selections
 			if len(resp.Selections) > 0 {
 				// Add selected files to user selections in state
 				currentSelections := getSessionPins(state)
 				newSelections := updateSessionPins(currentSelections, resp.Selections)
-				
+
 				// Update state with new selections
 				stateUpdates := map[string]interface{}{
 					"selections": newSelections,
 				}
-				
+
 				// Re-run the phase with updated selections
 				return interaction.PhaseOutcome{
 					Advance:      false, // Stay in same phase to re-run with new selections
@@ -281,13 +281,13 @@ func (p *ContextProposalPhase) Execute(
 				}, nil
 			}
 		}
-		
+
 		// If cancel or no selections, continue with current state
 		return interaction.PhaseOutcome{
 			Advance:      false,
 			StateUpdates: map[string]interface{}{},
 		}, nil
-		
+
 	case "remove":
 		// Show current files for removal selection
 		// Build a list of all files in the bundle
@@ -298,19 +298,19 @@ func (p *ContextProposalPhase) Execute(
 		for _, file := range bundle.ExpandedFiles {
 			allFiles = append(allFiles, file.Path)
 		}
-		
+
 		// Emit a frame showing files that can be removed
 		mc.Emitter.Emit(ctx, interaction.InteractionFrame{
-			Kind:    interaction.FrameCandidates,
-			Mode:    "chat",
-			Phase:   "context_proposal",
+			Kind:  interaction.FrameCandidates,
+			Mode:  "chat",
+			Phase: "context_proposal",
 			Content: interaction.CandidatesContent{
 				Candidates: func() []interaction.Candidate {
 					cands := make([]interaction.Candidate, len(allFiles))
 					for i, path := range allFiles {
 						cands[i] = interaction.Candidate{
-							ID:       path,
-							Summary:  path,
+							ID:         path,
+							Summary:    path,
 							Properties: map[string]string{"type": "file"},
 						}
 					}
@@ -332,7 +332,7 @@ func (p *ContextProposalPhase) Execute(
 				},
 			},
 		})
-		
+
 		// Wait for user response
 		resp, err := mc.Emitter.AwaitResponse(ctx)
 		if err != nil {
@@ -341,7 +341,7 @@ func (p *ContextProposalPhase) Execute(
 				StateUpdates: map[string]interface{}{},
 			}, nil
 		}
-		
+
 		if resp.ActionID == "remove_selected" && len(resp.Selections) > 0 {
 			// Remove selected files from confirmed paths
 			confirmedPaths := make([]string, 0)
@@ -349,7 +349,7 @@ func (p *ContextProposalPhase) Execute(
 			for _, sel := range resp.Selections {
 				selectedSet[sel] = true
 			}
-			
+
 			// Keep only files not selected for removal
 			for _, file := range bundle.AnchoredFiles {
 				if !selectedSet[file.Path] {
@@ -361,7 +361,7 @@ func (p *ContextProposalPhase) Execute(
 					confirmedPaths = append(confirmedPaths, file.Path)
 				}
 			}
-			
+
 			updatedPins := updateSessionPins(sessionPins, confirmedPaths)
 			saveSessionPinsToMemory(ctx, p.Memory, updatedPins)
 
@@ -377,7 +377,7 @@ func (p *ContextProposalPhase) Execute(
 				StateUpdates: stateUpdates,
 			}, nil
 		}
-		
+
 		// If cancel or no selections, just continue with current files
 		confirmedPaths := make([]string, 0)
 		for _, file := range bundle.AnchoredFiles {
@@ -401,7 +401,7 @@ func (p *ContextProposalPhase) Execute(
 			Advance:      true,
 			StateUpdates: stateUpdates,
 		}, nil
-		
+
 	default:
 		// Default to confirm
 		confirmedPaths := make([]string, 0)
@@ -451,17 +451,17 @@ func updateSessionPins(existing []string, newPaths []string) []string {
 	for _, path := range existing {
 		seen[path] = true
 	}
-	
+
 	result := make([]string, len(existing))
 	copy(result, existing)
-	
+
 	for _, path := range newPaths {
 		if !seen[path] {
 			result = append(result, path)
 			seen[path] = true
 		}
 	}
-	
+
 	return result
 }
 
@@ -617,7 +617,7 @@ func ChatMode(
 			},
 		})
 	}
-	
+
 	// Add the original phases
 	phases = append(phases, []interaction.PhaseDefinition{
 		{

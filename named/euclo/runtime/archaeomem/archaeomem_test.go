@@ -20,19 +20,19 @@ func TestBuildArchaeologyCapabilityRuntimeState_ExplorePrimaryPopulatesCounts(t 
 			euclorelurpic.CapabilityArchaeologyPatternSurface,
 		},
 		SemanticInputs: eucloruntime.SemanticInputBundle{
-			ExplorationID:   "ex-1",
-			PatternRefs:     []string{"p1", "p2"},
-			TensionRefs:        []string{"t1"},
-			ProspectiveRefs:    []string{"pr1"},
-			ConvergenceRefs:    []string{"c1"},
-			PendingRequests:    []eucloruntime.SemanticRequestRef{{RequestID: "rq1"}},
-			CompletedRequests: []eucloruntime.SemanticRequestRef{{RequestID: "done1"}},
+			ExplorationID:           "ex-1",
+			PatternRefs:             []string{"p1", "p2"},
+			TensionRefs:             []string{"t1"},
+			ProspectiveRefs:         []string{"pr1"},
+			ConvergenceRefs:         []string{"c1"},
+			PendingRequests:         []eucloruntime.SemanticRequestRef{{RequestID: "rq1"}},
+			CompletedRequests:       []eucloruntime.SemanticRequestRef{{RequestID: "done1"}},
 			LearningInteractionRefs: []string{"lr1"},
 		},
 		PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{
-			PlanID:       "plan-z",
-			PlanVersion:  3,
-			IsPlanBacked: true,
+			PlanID:        "plan-z",
+			PlanVersion:   3,
+			IsPlanBacked:  true,
 			IsLongRunning: true,
 		},
 	}
@@ -42,9 +42,9 @@ func TestBuildArchaeologyCapabilityRuntimeState_ExplorePrimaryPopulatesCounts(t 
 		Path:      "explore",
 	})
 	state.Set("euclo.security_runtime", eucloruntime.SecurityRuntimeState{
-		PolicySnapshotID:      "pol-1",
-		AdmittedCallableCaps:  []string{"euclo:archaeology.explore"},
-		AdmittedModelTools:    []string{"file_read"},
+		PolicySnapshotID:     "pol-1",
+		AdmittedCallableCaps: []string{"euclo:archaeology.explore"},
+		AdmittedModelTools:   []string{"file_read"},
 	})
 
 	rt := BuildArchaeologyCapabilityRuntimeState(work, state, time.Unix(1700000000, 0).UTC())

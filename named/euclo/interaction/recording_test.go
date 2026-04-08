@@ -14,7 +14,7 @@ func TestNewInteractionRecording(t *testing.T) {
 	if recording == nil {
 		t.Fatal("NewInteractionRecording returned nil")
 	}
-	
+
 	// Initial recording should have no events
 	events := recording.Events()
 	if len(events) != 0 {
@@ -24,10 +24,10 @@ func TestNewInteractionRecording(t *testing.T) {
 
 func TestRecordFrame(t *testing.T) {
 	recording := NewInteractionRecording()
-	
+
 	// Define FrameKind constants if they don't exist
 	frameKind := FrameKind("proposal")
-	
+
 	frame := InteractionFrame{
 		Kind:    frameKind,
 		Mode:    "chat",
@@ -37,14 +37,14 @@ func TestRecordFrame(t *testing.T) {
 			Timestamp: time.Now(),
 		},
 	}
-	
+
 	recording.RecordFrame(frame)
-	
+
 	events := recording.Events()
 	if len(events) != 1 {
 		t.Fatalf("Expected 1 event, got %d", len(events))
 	}
-	
+
 	event := events[0]
 	if event.Type != "frame" {
 		t.Errorf("Expected event type 'frame', got %s", event.Type)
@@ -59,7 +59,7 @@ func TestRecordFrame(t *testing.T) {
 
 func TestRecordResponse(t *testing.T) {
 	recording := NewInteractionRecording()
-	
+
 	// First record a frame
 	frame := InteractionFrame{
 		Kind:  FrameProposal,
@@ -67,19 +67,19 @@ func TestRecordResponse(t *testing.T) {
 		Phase: "intent",
 	}
 	recording.RecordFrame(frame)
-	
+
 	// Then record a response
 	resp := UserResponse{
 		ActionID: "confirm",
 		Text:     "yes",
 	}
 	recording.RecordResponse(resp, "intent", "chat")
-	
+
 	events := recording.Events()
 	if len(events) != 2 {
 		t.Fatalf("Expected 2 events, got %d", len(events))
 	}
-	
+
 	// Check response event
 	responseEvent := events[1]
 	if responseEvent.Type != "response" {
@@ -95,14 +95,14 @@ func TestRecordResponse(t *testing.T) {
 
 func TestRecordPhaseSkip(t *testing.T) {
 	recording := NewInteractionRecording()
-	
+
 	recording.RecordPhaseSkip("planning", "code", "no artifacts")
-	
+
 	events := recording.Events()
 	if len(events) != 1 {
 		t.Fatalf("Expected 1 event, got %d", len(events))
 	}
-	
+
 	event := events[0]
 	if event.Type != "phase_skip" {
 		t.Errorf("Expected event type 'phase_skip', got %s", event.Type)
@@ -117,14 +117,14 @@ func TestRecordPhaseSkip(t *testing.T) {
 
 func TestRecordTransition(t *testing.T) {
 	recording := NewInteractionRecording()
-	
+
 	recording.RecordTransition("chat", "code", "user request")
-	
+
 	events := recording.Events()
 	if len(events) != 1 {
 		t.Fatalf("Expected 1 event, got %d", len(events))
 	}
-	
+
 	event := events[0]
 	if event.Type != "transition" {
 		t.Errorf("Expected event type 'transition', got %s", event.Type)
@@ -139,7 +139,7 @@ func TestRecordTransition(t *testing.T) {
 
 func TestRecordPhaseArtifacts(t *testing.T) {
 	recording := NewInteractionRecording()
-	
+
 	produced := []euclotypes.Artifact{
 		{
 			ID:      "artifact1",
@@ -151,9 +151,9 @@ func TestRecordPhaseArtifacts(t *testing.T) {
 		euclotypes.ArtifactKindPlan,
 		euclotypes.ArtifactKindExplore,
 	}
-	
+
 	recording.RecordPhaseArtifacts("plan", "code", produced, consumed)
-	
+
 	// This adds to the full records, not events
 	records := recording.Records()
 	if len(records) == 0 {
@@ -164,7 +164,7 @@ func TestRecordPhaseArtifacts(t *testing.T) {
 func TestRecordingEmitter(t *testing.T) {
 	// Create a mock inner emitter
 	mockEmitter := &mockFrameEmitter{}
-	
+
 	recordingEmitter := NewRecordingEmitter(mockEmitter)
 	if recordingEmitter == nil {
 		t.Fatal("NewRecordingEmitter returned nil")
@@ -172,26 +172,26 @@ func TestRecordingEmitter(t *testing.T) {
 	if recordingEmitter.Recording == nil {
 		t.Fatal("RecordingEmitter should have a Recording")
 	}
-	
+
 	// Test Emit
 	frame := InteractionFrame{
 		Kind:  FrameStatus,
 		Mode:  "chat",
 		Phase: "test",
 	}
-	
+
 	ctx := context.Background()
 	err := recordingEmitter.Emit(ctx, frame)
 	if err != nil {
 		t.Errorf("Emit failed: %v", err)
 	}
-	
+
 	// Check recording has the frame
 	events := recordingEmitter.Recording.Events()
 	if len(events) != 1 {
 		t.Errorf("Expected 1 recorded event, got %d", len(events))
 	}
-	
+
 	// Test AwaitResponse
 	mockEmitter.response = UserResponse{ActionID: "test"}
 	resp, err := recordingEmitter.AwaitResponse(ctx)
@@ -201,7 +201,7 @@ func TestRecordingEmitter(t *testing.T) {
 	if resp.ActionID != "test" {
 		t.Errorf("Expected ActionID 'test', got %s", resp.ActionID)
 	}
-	
+
 	// Check response was recorded
 	events = recordingEmitter.Recording.Events()
 	if len(events) != 2 {
@@ -211,25 +211,25 @@ func TestRecordingEmitter(t *testing.T) {
 
 func TestMarshalJSON(t *testing.T) {
 	recording := NewInteractionRecording()
-	
+
 	// Add some events
 	recording.RecordFrame(InteractionFrame{
 		Kind:  FrameProposal,
 		Mode:  "chat",
 		Phase: "test",
 	})
-	
+
 	data, err := recording.MarshalJSON()
 	if err != nil {
 		t.Fatalf("MarshalJSON failed: %v", err)
 	}
-	
+
 	// Verify it's valid JSON
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
-	
+
 	// Check structure
 	if _, ok := parsed["events"]; !ok {
 		t.Error("JSON should have 'events' field")

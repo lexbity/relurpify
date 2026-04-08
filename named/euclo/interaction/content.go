@@ -146,16 +146,16 @@ const (
 
 // PipelineTrace records per-stage diagnostics. Written to state for observability.
 type PipelineTrace struct {
-	AnchorsExtracted       int    `json:"anchors_extracted"`
-	AnchorsConfirmed       int    `json:"anchors_confirmed"`
-	Stage1CodeResults      int    `json:"stage1_code_results"`
-	Stage1ArchaeoResults   int    `json:"stage1_archaeo_results"`
-	HypotheticalGenerated  bool   `json:"hypothetical_generated"`
-	HypotheticalTokens     int    `json:"hypothetical_tokens"`
-	Stage3ArchaeoResults   int    `json:"stage3_archaeo_results"`
-	FallbackUsed           bool   `json:"fallback_used"`
-	FallbackReason         string `json:"fallback_reason,omitempty"`
-	TotalTokenEstimate     int    `json:"total_token_estimate"`
+	AnchorsExtracted      int    `json:"anchors_extracted"`
+	AnchorsConfirmed      int    `json:"anchors_confirmed"`
+	Stage1CodeResults     int    `json:"stage1_code_results"`
+	Stage1ArchaeoResults  int    `json:"stage1_archaeo_results"`
+	HypotheticalGenerated bool   `json:"hypothetical_generated"`
+	HypotheticalTokens    int    `json:"hypothetical_tokens"`
+	Stage3ArchaeoResults  int    `json:"stage3_archaeo_results"`
+	FallbackUsed          bool   `json:"fallback_used"`
+	FallbackReason        string `json:"fallback_reason,omitempty"`
+	TotalTokenEstimate    int    `json:"total_token_estimate"`
 }
 
 // ContextProposalContent is the typed payload for context enrichment proposal frames.
@@ -176,11 +176,11 @@ type ContextProposalContent struct {
 
 // ContextFileEntry is a single file entry in a context proposal.
 type ContextFileEntry struct {
-	Path           string  `json:"path"`
-	Summary        string  `json:"summary,omitempty"` // one-line description
-	Score          float64 `json:"score,omitempty"`
-	Source         string  `json:"source"`                    // "anchor" | "index" | "vector"
-	InsertionAction string `json:"insertion_action,omitempty"` // "direct" | "summarized" | "metadata-only"
+	Path            string  `json:"path"`
+	Summary         string  `json:"summary,omitempty"` // one-line description
+	Score           float64 `json:"score,omitempty"`
+	Source          string  `json:"source"`                     // "anchor" | "index" | "vector"
+	InsertionAction string  `json:"insertion_action,omitempty"` // "direct" | "summarized" | "metadata-only"
 }
 
 // ArchaeoFindingsContent is the typed payload for FrameArchaeoFindings frames.
@@ -206,9 +206,9 @@ type ArchaeoFindingBlob struct {
 // ContextKnowledgeEntry is a single archaeo knowledge item in a context proposal.
 type ContextKnowledgeEntry struct {
 	RefID           string `json:"ref_id"`
-	Kind            string `json:"kind"`              // "pattern" | "tension" | "decision" | "interaction"
+	Kind            string `json:"kind"` // "pattern" | "tension" | "decision" | "interaction"
 	Title           string `json:"title"`
 	Summary         string `json:"summary,omitempty"`
-	Source          string `json:"source"`                    // "archaeo_topic" | "archaeo_expanded"
+	Source          string `json:"source"`                     // "archaeo_topic" | "archaeo_expanded"
 	InsertionAction string `json:"insertion_action,omitempty"` // "direct" | "summarized" | "metadata-only"
 }

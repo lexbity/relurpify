@@ -24,9 +24,10 @@ type HypotheticalConfig struct {
 // Generate produces a vocabulary sketch grounded in Stage 1 evidence.
 //
 // Prompt strategy:
-//   "Given this question and the following code signatures/knowledge from
-//    this codebase, list the additional function names, types, and packages
-//    that are likely relevant. Be terse. Use names that exist in this codebase."
+//
+//	"Given this question and the following code signatures/knowledge from
+//	 this codebase, list the additional function names, types, and packages
+//	 that are likely relevant. Be terse. Use names that exist in this codebase."
 //
 // The prompt includes:
 //   - The original query
@@ -76,9 +77,9 @@ func (g *HypotheticalGenerator) Generate(
 	if err != nil || len(embeddings) == 0 {
 		// If embedding fails, still return the text but mark as not grounded
 		return HypotheticalSketch{
-			Text:      text,
-			Embedding: nil,
-			Grounded:  false,
+			Text:       text,
+			Embedding:  nil,
+			Grounded:   false,
 			TokenCount: len(strings.Fields(text)),
 		}, nil
 	}
@@ -93,15 +94,15 @@ func (g *HypotheticalGenerator) Generate(
 
 func (g *HypotheticalGenerator) buildPrompt(query string, stage1 Stage1Result) string {
 	var builder strings.Builder
-	
+
 	builder.WriteString("Given this question and the following code signatures/knowledge from ")
 	builder.WriteString("this codebase, list the additional function names, types, and packages ")
 	builder.WriteString("that are likely relevant. Be terse. Use names that exist in this codebase.\n\n")
-	
+
 	builder.WriteString("Question: ")
 	builder.WriteString(query)
 	builder.WriteString("\n\n")
-	
+
 	// Add code evidence summaries
 	if len(stage1.CodeEvidence) > 0 {
 		builder.WriteString("Code signatures:\n")
@@ -115,7 +116,7 @@ func (g *HypotheticalGenerator) buildPrompt(query string, stage1 Stage1Result) s
 		}
 		builder.WriteString("\n")
 	}
-	
+
 	// Add knowledge evidence summaries
 	if len(stage1.KnowledgeEvidence) > 0 {
 		builder.WriteString("Related knowledge:\n")
@@ -133,8 +134,8 @@ func (g *HypotheticalGenerator) buildPrompt(query string, stage1 Stage1Result) s
 		}
 		builder.WriteString("\n")
 	}
-	
+
 	builder.WriteString("Relevant vocabulary (function names, types, packages):\n")
-	
+
 	return builder.String()
 }

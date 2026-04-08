@@ -7,8 +7,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
 
@@ -179,8 +179,8 @@ func TestAgentExecute_UnknownInteractiveModeReturnsError(t *testing.T) {
 	agent.InteractionRegistry = interaction.NewModeMachineRegistry()
 
 	task := &core.Task{
-		ID:          "task-interactive-missing",
-		Type:        core.TaskTypeAnalysis,
+		ID:   "task-interactive-missing",
+		Type: core.TaskTypeAnalysis,
 		// Avoid summary/status fast path (plan_stage_execute + "summarize") which
 		// short-circuits before the interactive phase machine runs.
 		Instruction: "What does this code do?",

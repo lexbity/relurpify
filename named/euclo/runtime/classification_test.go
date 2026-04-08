@@ -5,8 +5,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
 

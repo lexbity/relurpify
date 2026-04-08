@@ -9,9 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
 	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/agentenv"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
@@ -23,6 +21,8 @@ import (
 	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
 	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
 	archaeoverification "github.com/lexcodex/relurpify/archaeo/verification"
+	"github.com/lexcodex/relurpify/ayenitd"
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
@@ -41,8 +41,8 @@ import (
 	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
 	euclodispatch "github.com/lexcodex/relurpify/named/euclo/runtime/dispatch"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
@@ -115,7 +115,7 @@ type Agent struct {
 	BehaviorDispatcher  *euclodispatch.Dispatcher
 	Emitter             interaction.FrameEmitter // live emitter from TUI; nil means use task-scoped emitter
 	RuntimeProviders    []core.Provider
-	ContextPipeline     *pretask.Pipeline // Phase 2: context enrichment pipeline
+	ContextPipeline     *pretask.Pipeline            // Phase 2: context enrichment pipeline
 	WorkspaceEnv        ayenitd.WorkspaceEnvironment // Full workspace environment
 }
 
@@ -237,18 +237,18 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	if a.BehaviorDispatcher == nil {
 		a.BehaviorDispatcher = euclodispatch.NewDispatcher()
 	}
-	
+
 	// Initialize context enrichment pipeline (Phase 2)
 	if a.ContextPipeline == nil {
 		config := pretask.DefaultPipelineConfig()
-		
+
 		// Read configuration from agent spec if available
 		if a.Config != nil && a.Config.AgentSpec != nil {
 			// Check for context enrichment configuration in skill_config
 			// This is a simplified implementation - in reality, we would parse the YAML
 			// For now, we'll use defaults
 		}
-		
+
 		// Get the tension service if available
 		var tensionQuerier pretask.TensionQuerier
 		// tensionService returns a struct, not a pointer; we need to check if it's usable.
@@ -269,7 +269,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		}
 		a.ContextPipeline = pretask.NewPipeline(env, tensionQuerier, config)
 	}
-	
+
 	return a.Initialize(a.Environment.Config)
 }
 
@@ -1607,7 +1607,7 @@ func (a *Agent) ConfigTelemetry() core.Telemetry {
 // createInteractionRegistry creates an interaction registry with the pipeline injected
 func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 	reg := interaction.NewModeMachineRegistry()
-	
+
 	// For chat mode, we need to provide the pipeline and file resolver
 	reg.Register("chat", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
 		// Resolve workspace path. core.Config has no Workspace field; fall back to

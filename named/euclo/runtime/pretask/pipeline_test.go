@@ -8,7 +8,7 @@ import (
 func TestPipeline_RunBasic(t *testing.T) {
 	// Create a minimal pipeline with stub dependencies
 	config := DefaultPipelineConfig()
-	
+
 	// Create pipeline with nil dependencies (should handle gracefully)
 	pipeline := &Pipeline{
 		anchorExtractor: &AnchorExtractor{
@@ -21,7 +21,7 @@ func TestPipeline_RunBasic(t *testing.T) {
 		indexRetriever: &IndexRetriever{
 			index: &dummyIndexQuerier{},
 			config: IndexRetrieverConfig{
-				DependencyHops:   1,
+				DependencyHops:    1,
 				MaxFilesPerSymbol: 3,
 			},
 		},
@@ -42,24 +42,24 @@ func TestPipeline_RunBasic(t *testing.T) {
 		},
 		config: config,
 	}
-	
+
 	input := PipelineInput{
 		Query:            "How does PermissionManager work?",
 		CurrentTurnFiles: []string{"framework/authorization/manager.go"},
 		SessionPins:      []string{"framework/core/types.go"},
 		WorkflowID:       "",
 	}
-	
+
 	bundle, err := pipeline.Run(context.Background(), input)
 	if err != nil {
 		t.Fatalf("Pipeline.Run failed: %v", err)
 	}
-	
+
 	// Check that anchored files are included
 	if len(bundle.AnchoredFiles) < 1 {
 		t.Errorf("Expected at least 1 anchored file, got %d", len(bundle.AnchoredFiles))
 	}
-	
+
 	// Check pipeline trace is populated
 	if bundle.PipelineTrace.AnchorsExtracted == 0 {
 		t.Error("PipelineTrace should have AnchorsExtracted > 0")

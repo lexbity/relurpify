@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
@@ -14,14 +14,14 @@ import (
 )
 
 type stubCap struct {
-	id         string
-	eligible   bool
-	status     euclotypes.ExecutionStatus
-	summary    string
-	artifacts  []euclotypes.Artifact
-	contract   euclotypes.ArtifactContract
-	hint       *euclotypes.RecoveryHint
-	executeFn  func(context.Context, euclotypes.ExecutionEnvelope) euclotypes.ExecutionResult
+	id        string
+	eligible  bool
+	status    euclotypes.ExecutionStatus
+	summary   string
+	artifacts []euclotypes.Artifact
+	contract  euclotypes.ArtifactContract
+	hint      *euclotypes.RecoveryHint
+	executeFn func(context.Context, euclotypes.ExecutionEnvelope) euclotypes.ExecutionResult
 }
 
 func (s *stubCap) Descriptor() core.CapabilityDescriptor {

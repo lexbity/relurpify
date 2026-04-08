@@ -564,9 +564,9 @@ type ProposalContent struct {
 }
 
 type QuestionContent struct {
-	Question       string
-	Options        []Option
-	AllowFreetext  bool
+	Question      string
+	Options       []Option
+	AllowFreetext bool
 }
 
 type Option struct {
@@ -583,10 +583,10 @@ type SummaryContent struct {
 }
 
 type SessionResume struct {
-	Mode           string
-	LastPhase      string
-	HasArtifacts   bool
-	ArtifactKinds  []string
-	SkippedPhases  []string
+	Mode            string
+	LastPhase       string
+	HasArtifacts    bool
+	ArtifactKinds   []string
+	SkippedPhases   []string
 	CompletedPhases []string
 }

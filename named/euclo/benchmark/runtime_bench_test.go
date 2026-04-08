@@ -73,9 +73,9 @@ func BenchmarkBuildArchaeologyCapabilityRuntimeState(b *testing.B) {
 		SpecializedCapabilityIDs: []string{"euclo.execution.rewoo"},
 	})
 	state.Set("euclo.security_runtime", eucloruntime.SecurityRuntimeState{
-		PolicySnapshotID:    "policy-bench",
+		PolicySnapshotID:     "policy-bench",
 		AdmittedCallableCaps: []string{"file_read", "file_write", "cli_go"},
-		AdmittedModelTools:  []string{"file_read", "file_write", "cli_go"},
+		AdmittedModelTools:   []string{"file_read", "file_write", "cli_go"},
 	})
 	now := time.Now().UTC()
 	b.ResetTimer()

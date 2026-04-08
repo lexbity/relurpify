@@ -320,7 +320,7 @@ func TestTelemetryEmitter_NilTelemetryNoPanic(t *testing.T) {
 	noop := &interaction.NoopEmitter{}
 	e := interaction.NewTelemetryEmitter(noop, nil)
 	_ = e.Emit(context.Background(), interaction.InteractionFrame{
-		Kind: interaction.FrameResult,
+		Kind:    interaction.FrameResult,
 		Actions: []interaction.ActionSlot{{ID: "continue", Default: true}},
 	})
 	_, err := e.AwaitResponse(context.Background())

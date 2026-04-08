@@ -38,7 +38,7 @@ type CodeEvidenceItem struct {
 // KnowledgeEvidenceItem is a single result from archaeo retrieval.
 type KnowledgeEvidenceItem struct {
 	RefID       string
-	Kind        KnowledgeKind  // "pattern" | "tension" | "decision" | "interaction"
+	Kind        KnowledgeKind // "pattern" | "tension" | "decision" | "interaction"
 	Title       string
 	Summary     string
 	Score       float64
@@ -75,9 +75,9 @@ type Stage1Result struct {
 
 // HypotheticalSketch is the grounded vocabulary output from Stage 2.
 type HypotheticalSketch struct {
-	Text       string     // raw model output
-	Embedding  []float32  // computed after generation
-	Grounded   bool       // false if generation was skipped / fell back
+	Text       string    // raw model output
+	Embedding  []float32 // computed after generation
+	Grounded   bool      // false if generation was skipped / fell back
 	TokenCount int
 }
 
@@ -117,16 +117,16 @@ type ConfirmedContextBundle struct {
 
 // PipelineTrace records per-stage diagnostics. Written to state for observability.
 type PipelineTrace struct {
-	AnchorsExtracted       int
-	AnchorsConfirmed       int
-	Stage1CodeResults      int
-	Stage1ArchaeoResults   int
-	HypotheticalGenerated  bool
-	HypotheticalTokens     int
-	Stage3ArchaeoResults   int
-	FallbackUsed           bool
-	FallbackReason         string
-	TotalTokenEstimate     int
+	AnchorsExtracted      int
+	AnchorsConfirmed      int
+	Stage1CodeResults     int
+	Stage1ArchaeoResults  int
+	HypotheticalGenerated bool
+	HypotheticalTokens    int
+	Stage3ArchaeoResults  int
+	FallbackUsed          bool
+	FallbackReason        string
+	TotalTokenEstimate    int
 }
 
 // PipelineConfig controls pipeline behaviour.

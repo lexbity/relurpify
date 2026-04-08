@@ -31,20 +31,20 @@ type IndexQuerier interface {
 // Extract builds an AnchorSet from the full pipeline input.
 //
 // Extraction order (priority):
-//   1. input.CurrentTurnFiles — user-selected this turn, not yet loaded.
-//      Added unconditionally. No index confirmation. These are the user's
-//      explicit intent and take precedence over all other signals.
-//   2. input.SessionPins — confirmed in prior turns. Also unconditional.
-//   3. @-mentioned file paths parsed from input.Query (trust user-provided paths).
-//   4. CamelCase identifiers extracted from input.Query, confirmed against index.
-//   5. Package-path-style tokens (e.g. "framework/capability"), confirmed against index.
+//  1. input.CurrentTurnFiles — user-selected this turn, not yet loaded.
+//     Added unconditionally. No index confirmation. These are the user's
+//     explicit intent and take precedence over all other signals.
+//  2. input.SessionPins — confirmed in prior turns. Also unconditional.
+//  3. @-mentioned file paths parsed from input.Query (trust user-provided paths).
+//  4. CamelCase identifiers extracted from input.Query, confirmed against index.
+//  5. Package-path-style tokens (e.g. "framework/capability"), confirmed against index.
 //
 // Files that are already loaded (present in ProgressiveLoader.loadedFiles) are
 // still included in the AnchorSet — they were confirmed previously and drive
 // retrieval expansion. The loader skips re-reading them (cache hit).
 func (e *AnchorExtractor) Extract(input PipelineInput) AnchorSet {
 	var anchors AnchorSet
-	
+
 	// 1. CurrentTurnFiles highest priority - user-selected this turn
 	// These are added unconditionally, no index confirmation needed
 	for _, path := range input.CurrentTurnFiles {
@@ -53,10 +53,10 @@ func (e *AnchorExtractor) Extract(input PipelineInput) AnchorSet {
 		}
 		anchors.FilePaths = append(anchors.FilePaths, path)
 	}
-	
+
 	// 2. SessionPins - confirmed in prior turns, also unconditional
 	anchors.SessionPins = append([]string{}, input.SessionPins...)
-	
+
 	// 3. @-mentions from query
 	atMentions := extractAtMentions(input.Query)
 	for _, path := range atMentions {
@@ -72,7 +72,7 @@ func (e *AnchorExtractor) Extract(input PipelineInput) AnchorSet {
 			anchors.FilePaths = append(anchors.FilePaths, path)
 		}
 	}
-	
+
 	// 4. Extract and confirm CamelCase identifiers
 	camelSymbols := extractCamelCase(input.Query)
 	confirmedSymbols := make([]string, 0)
@@ -90,7 +90,7 @@ func (e *AnchorExtractor) Extract(input PipelineInput) AnchorSet {
 		}
 	}
 	anchors.SymbolNames = confirmedSymbols
-	
+
 	// 5. Extract and confirm package paths
 	pkgRefs := extractPackagePaths(input.Query)
 	for _, pkg := range pkgRefs {
@@ -99,7 +99,7 @@ func (e *AnchorExtractor) Extract(input PipelineInput) AnchorSet {
 			anchors.PackageRefs = append(anchors.PackageRefs, pkg)
 		}
 	}
-	
+
 	anchors.Raw = input.Query
 	return anchors
 }

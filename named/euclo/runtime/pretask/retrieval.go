@@ -9,9 +9,9 @@ import (
 
 // IndexRetriever performs structural retrieval from the AST index.
 type IndexRetriever struct {
-	index    IndexQuerier
-	deps     DependencyQuerier
-	config   IndexRetrieverConfig
+	index  IndexQuerier
+	deps   DependencyQuerier
+	config IndexRetrieverConfig
 }
 
 type DependencyQuerier interface {
@@ -31,10 +31,10 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 	if r.index == nil {
 		return []CodeEvidenceItem{}, nil
 	}
-	
+
 	results := make([]CodeEvidenceItem, 0)
 	seenPaths := make(map[string]bool)
-	
+
 	// Process file paths directly (these are already confirmed by the user)
 	for _, path := range anchors.FilePaths {
 		if seenPaths[path] {
@@ -93,16 +93,16 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 			}
 		}
 	}
-	
+
 	return results, nil
 }
 
 // ArchaeoRetriever queries the archaeo knowledge layer.
 type ArchaeoRetriever struct {
-	tensionSvc   TensionQuerier
-	patternSvc   PatternQuerier
-	retriever    interface{} // Placeholder for future retriever service
-	config       ArchaeoRetrieverConfig
+	tensionSvc TensionQuerier
+	patternSvc PatternQuerier
+	retriever  interface{} // Placeholder for future retriever service
+	config     ArchaeoRetrieverConfig
 }
 
 // TensionQuerier is the narrow interface needed from archaeo/tensions.
@@ -126,9 +126,9 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 	if workflowID == "" {
 		return []KnowledgeEvidenceItem{}, nil
 	}
-	
+
 	results := make([]KnowledgeEvidenceItem, 0)
-	
+
 	// Try to get tensions if available
 	if r.tensionSvc != nil {
 		tensions, err := r.tensionSvc.ActiveByWorkflow(ctx, workflowID)
@@ -164,12 +164,12 @@ func (r *ArchaeoRetriever) RetrieveTopic(ctx context.Context, query, workflowID 
 			}
 		}
 	}
-	
+
 	// Apply limits
 	if len(results) > r.config.MaxItems {
 		results = results[:r.config.MaxItems]
 	}
-	
+
 	return results, nil
 }
 
@@ -178,21 +178,21 @@ func (r *ArchaeoRetriever) RetrieveExpanded(ctx context.Context, sketch Hypothet
 	if !sketch.Grounded || r.config.WorkflowID == "" {
 		return []KnowledgeEvidenceItem{}, nil
 	}
-	
+
 	// Use the sketch text for retrieval
 	queryText := sketch.Text
 	if queryText == "" {
 		return []KnowledgeEvidenceItem{}, nil
 	}
-	
+
 	results := make([]KnowledgeEvidenceItem, 0)
-	
+
 	// Try to use the retriever service if available
 	if r.retriever != nil {
 		// In a real implementation, we would call r.retriever.Retrieve()
 		// For now, we'll use the stub implementation
 	}
-	
+
 	// Fallback to stub results
 	results = append(results, KnowledgeEvidenceItem{
 		RefID:      "expanded_1",
@@ -213,11 +213,11 @@ func (r *ArchaeoRetriever) RetrieveExpanded(ctx context.Context, sketch Hypothet
 		Source:     EvidenceSourceArchaeoExpanded,
 		TrustClass: "builtin-trusted",
 	})
-	
+
 	// Apply limits
 	if len(results) > r.config.MaxItems {
 		results = results[:r.config.MaxItems]
 	}
-	
+
 	return results, nil
 }

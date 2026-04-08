@@ -3,7 +3,7 @@ package modes
 import (
 	"context"
 	"testing"
-	
+
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
@@ -54,22 +54,22 @@ func TestContextProposalPhase_SilentMode(t *testing.T) {
 		FileResolver:          &MockFileResolver{Paths: []string{"test1.go"}},
 		ShowConfirmationFrame: false,
 	}
-	
+
 	ctx := context.Background()
 	mc := interaction.PhaseMachineContext{
 		Emitter: &interaction.NoopEmitter{},
 		State:   make(map[string]any),
 	}
-	
+
 	outcome, err := phase.Execute(ctx, mc)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	
+
 	if !outcome.Advance {
 		t.Error("Expected Advance to be true")
 	}
-	
+
 	// Check that state updates were set
 	if confirmedFiles, ok := outcome.StateUpdates["context.confirmed_files"].([]string); !ok || len(confirmedFiles) != 2 {
 		t.Error("Expected confirmed_files in state updates")
@@ -97,19 +97,19 @@ func TestContextProposalPhase_WithConfirmationFrame(t *testing.T) {
 		FileResolver:          &MockFileResolver{Paths: []string{"test1.go"}},
 		ShowConfirmationFrame: true,
 	}
-	
+
 	ctx := context.Background()
 	mc := interaction.PhaseMachineContext{
 		Emitter: &interaction.NoopEmitter{},
 		State:   make(map[string]any),
 	}
-	
+
 	// The NoopEmitter doesn't actually wait for responses, so this will work
 	outcome, err := phase.Execute(ctx, mc)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	
+
 	// Should still advance
 	if !outcome.Advance {
 		t.Error("Expected Advance to be true")

@@ -107,3 +107,52 @@ func TestStreamCapabilityStreamsChunkContext(t *testing.T) {
 		t.Fatal("expected semantic context payload in state")
 	}
 }
+
+func TestStreamCapabilityReportsStaleChunkGaps(t *testing.T) {
+	graph, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(t.TempDir(), "graphdb")))
+	if err != nil {
+		t.Fatalf("graphdb: %v", err)
+	}
+	defer graph.Close()
+	store := &archaeobkc.ChunkStore{Graph: graph}
+	if _, err := store.Save(archaeobkc.KnowledgeChunk{
+		ID:            "chunk:stale",
+		WorkspaceID:   "ws-bkc",
+		ContentHash:   "hash",
+		TokenEstimate: 12,
+		Provenance:    archaeobkc.ChunkProvenance{WorkflowID: "wf-bkc", CompiledBy: archaeobkc.CompilerDeterministic},
+		Freshness:     archaeobkc.FreshnessStale,
+		Body:          archaeobkc.ChunkBody{Raw: "stale context", Fields: map[string]any{"file_path": "service.go"}},
+	}); err != nil {
+		t.Fatalf("save chunk: %v", err)
+	}
+
+	cap := NewStreamCapability(agentenv.AgentEnvironment{
+		Model:        testutil.StubModel{},
+		Registry:     capability.NewRegistry(),
+		IndexManager: &ast.IndexManager{GraphDB: graph},
+	})
+	state := core.NewContext()
+	result := cap.Execute(context.Background(), euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			ID:          "task-bkc-stream",
+			Instruction: "Stream semantic context.",
+			Context: map[string]any{
+				"files": []string{"service.go"},
+			},
+		},
+		State: state,
+	})
+	if result.Status != euclotypes.ExecutionStatusCompleted {
+		t.Fatalf("expected completed result, got %+v", result)
+	}
+	if staleIDs, ok := state.Get("euclo.bkc.stale_chunk_ids"); !ok || staleIDs == nil {
+		t.Fatal("expected stale chunk ids in state")
+	}
+	if messages, ok := state.Get("euclo.bkc.stale_gap_messages"); !ok || messages == nil {
+		t.Fatal("expected stale gap messages in state")
+	}
+	if len(result.Artifacts) != 2 || result.Artifacts[1].Kind != euclotypes.ArtifactKindTension || result.Artifacts[1].Status != "gap" {
+		t.Fatalf("expected gap artifact, got %+v", result.Artifacts)
+	}
+}

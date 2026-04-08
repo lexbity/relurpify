@@ -387,11 +387,25 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 	if err != nil {
 		return failureResult("bkc_stream_failed", err.Error())
 	}
+	if len(result.StaleDuringStream) > 0 && env.State != nil {
+		env.State.Set("euclo.bkc.stale_chunk_ids", chunkIDsToStrings(result.StaleDuringStream))
+		env.State.Set("euclo.bkc.stale_gap_messages", append([]string(nil), result.StaleGapMessages...))
+	}
+	if len(result.StaleDuringStream) > 0 {
+		pass := &archaeobkc.InvalidationPass{
+			Store:    store,
+			Tensions: archaeotensions.Service{Store: workflowStoreFromEnvelope(env)},
+		}
+		if err := pass.SurfaceStaleDuringStream(ctx, result); err != nil {
+			_ = err
+		}
+	}
 	contextChunks := archaeobkc.ToContextChunks(result.Chunks)
 	payload := map[string]any{
 		"chunk_count":         len(result.Chunks),
 		"token_total":         result.TokenTotal,
 		"stale_during_stream": chunkIDsToStrings(result.StaleDuringStream),
+		"stale_gap_messages":  append([]string(nil), result.StaleGapMessages...),
 		"context_chunks":      contextChunks,
 	}
 	artifact := euclotypes.Artifact{
@@ -405,11 +419,22 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 	if env.State != nil {
 		env.State.Set("euclo.bkc.context_chunks", contextChunks)
 	}
-	mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{artifact})
+	artifacts := []euclotypes.Artifact{artifact}
+	if len(result.StaleDuringStream) > 0 {
+		artifacts = append(artifacts, euclotypes.Artifact{
+			ID:         "bkc_stream_gap",
+			Kind:       euclotypes.ArtifactKindTension,
+			Summary:    fmt.Sprintf("%d BKC chunks were stale and excluded from context", len(result.StaleDuringStream)),
+			Payload:    map[string]any{"gap_messages": append([]string(nil), result.StaleGapMessages...)},
+			ProducerID: euclorelurpic.CapabilityBKCStream,
+			Status:     "gap",
+		})
+	}
+	mergeStateArtifactsToContext(env.State, artifacts)
 	return euclotypes.ExecutionResult{
 		Status:    euclotypes.ExecutionStatusCompleted,
 		Summary:   artifact.Summary,
-		Artifacts: []euclotypes.Artifact{artifact},
+		Artifacts: artifacts,
 	}
 }
 
@@ -466,6 +491,11 @@ func failureResult(code, message string) euclotypes.ExecutionResult {
 			FailedPhase: "semantic",
 		},
 	}
+}
+
+func workflowStoreFromEnvelope(env euclotypes.ExecutionEnvelope) memory.WorkflowStateStore {
+	workflowStore, _ := env.WorkflowStore.(memory.WorkflowStateStore)
+	return workflowStore
 }
 
 func instructionFromArtifacts(artifacts euclotypes.ArtifactState) string {

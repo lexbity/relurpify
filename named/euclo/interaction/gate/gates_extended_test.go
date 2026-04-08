@@ -617,8 +617,8 @@ func TestEvaluateGateSequence_WarnContinues(t *testing.T) {
 			OnFail: gate.GateFailWarn, // warn — continues even on failure
 		},
 		{
-			From: gate.PhaseSummarize,
-			To:   gate.PhaseReport,
+			From:        gate.PhaseSummarize,
+			To:          gate.PhaseReport,
 			DefaultGate: gate.ArtifactGate{}, // empty gate always passes
 			OnFail:      gate.GateFailBlock,
 		},
@@ -645,8 +645,8 @@ func TestEvaluateGateSequence_SkipContinues(t *testing.T) {
 			OnFail: gate.GateFailSkip,
 		},
 		{
-			From: gate.PhasePlan,
-			To:   gate.PhaseEdit,
+			From:        gate.PhasePlan,
+			To:          gate.PhaseEdit,
 			DefaultGate: gate.ArtifactGate{},
 			OnFail:      gate.GateFailBlock,
 		},

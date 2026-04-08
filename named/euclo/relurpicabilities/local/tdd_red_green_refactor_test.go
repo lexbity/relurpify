@@ -116,7 +116,7 @@ func TestApplyRecipeCodePayloadToState_PrefersRecipeStatePipelineCode(t *testing
 			"result": map[string]any{
 				"file_write": map[string]any{
 					"success": true,
-					"data": map[string]any{"path": "testsuite/fixtures/strings_test.go"},
+					"data":    map[string]any{"path": "testsuite/fixtures/strings_test.go"},
 				},
 			},
 		},
