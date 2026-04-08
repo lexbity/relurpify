@@ -66,13 +66,13 @@ func TestFormPlan(t *testing.T) {
 	now := time.Now().UTC()
 	svc := Service{Now: func() time.Time { return now }}
 	input := FormationInput{
-		WorkflowID:       "wf1",
-		PatternRefs:      []string{"p1"},
-		AnchorRefs:       []string{"a1"},
-		TensionRefs:      []string{"t1"},
-		PendingLearning:  []string{"l1"},
-		RequestRefs:      []string{"r1"},
-		MutationRefs:     []string{"m1"},
+		WorkflowID:      "wf1",
+		PatternRefs:     []string{"p1"},
+		AnchorRefs:      []string{"a1"},
+		TensionRefs:     []string{"t1"},
+		PendingLearning: []string{"l1"},
+		RequestRefs:     []string{"r1"},
+		MutationRefs:    []string{"m1"},
 	}
 	plan := svc.formPlan(input)
 	require.NotNil(t, plan)

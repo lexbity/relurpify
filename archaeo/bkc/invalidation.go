@@ -126,24 +126,59 @@ func (p *InvalidationPass) upsertStaleTension(ctx context.Context, chunk Knowled
 	if p.Tensions.Store == nil || strings.TrimSpace(chunk.Provenance.WorkflowID) == "" {
 		return nil
 	}
+	description := fmt.Sprintf("knowledge chunk %s became stale", chunk.ID)
+	if r := strings.TrimSpace(reason); r != "" {
+		description = fmt.Sprintf("knowledge chunk %s became stale: %s", chunk.ID, r)
+	}
+	commentRefs := p.invalidatedEdgeRefs(chunk)
 	_, err := p.Tensions.CreateOrUpdate(ctx, archaeotensions.CreateInput{
 		WorkflowID:         chunk.Provenance.WorkflowID,
 		SourceRef:          string(chunk.ID),
 		Kind:               "bkc_chunk_stale",
-		Description:        fmt.Sprintf("knowledge chunk %s became stale", chunk.ID),
+		Description:        description,
 		Severity:           "medium",
 		Status:             status,
 		AnchorRefs:         affectedPathsFromChunk(chunk, affectedPaths),
 		SymbolScope:        symbolScopeFromChunk(chunk),
 		BlastRadiusNodeIDs: append([]string(nil), affectedPaths...),
 		BasedOnRevision:    chunk.Provenance.CodeStateRef,
-		CommentRefs:        nil,
+		CommentRefs:        commentRefs,
 	})
 	if err != nil {
 		return err
 	}
-	_ = reason
 	return nil
+}
+
+func (p *InvalidationPass) invalidatedEdgeRefs(chunk KnowledgeChunk) []string {
+	if p == nil || p.Store == nil {
+		return nil
+	}
+	edges, err := p.Store.LoadEdgesFrom(chunk.ID, EdgeKindDependsOnCodeState, EdgeKindRequiresContext, EdgeKindAmplifies)
+	if err != nil || len(edges) == 0 {
+		return nil
+	}
+	commentRefs := make([]string, 0, len(edges))
+	for _, edge := range edges {
+		ref := strings.TrimSpace(string(edge.Kind)) + ":"
+		if edge.ToChunk != "" {
+			ref += string(edge.ToChunk)
+		} else if edge.Meta != nil {
+			if sourceRef, ok := edge.Meta["code_state_ref"].(string); ok && strings.TrimSpace(sourceRef) != "" {
+				ref += strings.TrimSpace(sourceRef)
+			} else if sourceRef, ok := edge.Meta["source_ref"].(string); ok && strings.TrimSpace(sourceRef) != "" {
+				ref += strings.TrimSpace(sourceRef)
+			}
+		}
+		if strings.TrimSpace(ref) == ":" {
+			continue
+		}
+		commentRefs = append(commentRefs, ref)
+	}
+	if len(commentRefs) == 0 {
+		return nil
+	}
+	return commentRefs
 }
 
 func (p *InvalidationPass) matchAffectedChunks(paths []string, newRevision string) ([]ChunkID, error) {

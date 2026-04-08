@@ -20,12 +20,22 @@ import (
 type mutationsPlanStore struct{}
 
 func (mutationsPlanStore) SavePlan(context.Context, *frameworkplan.LivingPlan) error { return nil }
-func (mutationsPlanStore) LoadPlan(context.Context, string) (*frameworkplan.LivingPlan, error) { return nil, nil }
-func (mutationsPlanStore) LoadPlanByWorkflow(context.Context, string) (*frameworkplan.LivingPlan, error) { return nil, nil }
-func (mutationsPlanStore) UpdateStep(context.Context, string, string, *frameworkplan.PlanStep) error { return nil }
-func (mutationsPlanStore) InvalidateStep(context.Context, string, string, frameworkplan.InvalidationRule) error { return nil }
+func (mutationsPlanStore) LoadPlan(context.Context, string) (*frameworkplan.LivingPlan, error) {
+	return nil, nil
+}
+func (mutationsPlanStore) LoadPlanByWorkflow(context.Context, string) (*frameworkplan.LivingPlan, error) {
+	return nil, nil
+}
+func (mutationsPlanStore) UpdateStep(context.Context, string, string, *frameworkplan.PlanStep) error {
+	return nil
+}
+func (mutationsPlanStore) InvalidateStep(context.Context, string, string, frameworkplan.InvalidationRule) error {
+	return nil
+}
 func (mutationsPlanStore) DeletePlan(context.Context, string) error { return nil }
-func (mutationsPlanStore) ListPlans(context.Context) ([]frameworkplan.PlanSummary, error) { return nil, nil }
+func (mutationsPlanStore) ListPlans(context.Context) ([]frameworkplan.PlanSummary, error) {
+	return nil, nil
+}
 
 func TestEvaluateMutationsIgnoresInformationalMutation(t *testing.T) {
 	ctx := context.Background()

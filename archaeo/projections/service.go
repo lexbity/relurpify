@@ -748,7 +748,9 @@ type ExplorationActivityMaterializer struct {
 	Projection *ExplorationActivityProjection
 }
 
-func (m *ExplorationActivityMaterializer) Name() string { return "archaeo-exploration-activity-projection" }
+func (m *ExplorationActivityMaterializer) Name() string {
+	return "archaeo-exploration-activity-projection"
+}
 func (m *ExplorationActivityMaterializer) Apply(ctx context.Context, events []core.FrameworkEvent) error {
 	if m.Projection != nil && !hasRelevantEvent(events,
 		archaeoevents.EventExplorationSessionUpserted,

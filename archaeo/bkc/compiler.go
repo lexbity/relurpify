@@ -30,6 +30,7 @@ type PatternConfirmationInput struct {
 	Pattern         frameworkpatterns.PatternRecord
 	BasedOnRevision string
 	RelatedChunkIDs []ChunkID
+	AmplifyChunkIDs []ChunkID
 	SessionID       string
 }
 
@@ -38,6 +39,7 @@ type AnchorConfirmationInput struct {
 	WorkflowID      string
 	Anchor          frameworkretrieval.AnchorRecord
 	RelatedChunkIDs []ChunkID
+	AmplifyChunkIDs []ChunkID
 	SessionID       string
 }
 
@@ -51,6 +53,7 @@ type ASTIndexEntryInput struct {
 	Kind            string
 	BasedOnRevision string
 	RelatedChunkIDs []ChunkID
+	AmplifyChunkIDs []ChunkID
 	SessionID       string
 }
 
@@ -60,6 +63,7 @@ type UserStatementInput struct {
 	Interaction     archaeolearning.Interaction
 	Statement       string
 	BasedOnRevision string
+	AmplifyChunkIDs []ChunkID
 	SessionID       string
 }
 
@@ -216,7 +220,7 @@ func (c *Compiler) fromPatternConfirmation(ctx context.Context, input PatternCon
 			Fields: bodyFields,
 		},
 	}
-	return c.saveCompiledChunk(chunk, input.RelatedChunkIDs, true)
+	return c.saveCompiledChunk(chunk, input.RelatedChunkIDs, input.AmplifyChunkIDs, true)
 }
 
 func (c *Compiler) fromAnchorConfirmation(ctx context.Context, input AnchorConfirmationInput) (*CompileResult, error) {
@@ -261,7 +265,7 @@ func (c *Compiler) fromAnchorConfirmation(ctx context.Context, input AnchorConfi
 			Fields: bodyFields,
 		},
 	}
-	return c.saveCompiledChunk(chunk, input.RelatedChunkIDs, true)
+	return c.saveCompiledChunk(chunk, input.RelatedChunkIDs, input.AmplifyChunkIDs, true)
 }
 
 func (c *Compiler) fromASTIndexEntry(ctx context.Context, input ASTIndexEntryInput) (*CompileResult, error) {
@@ -303,7 +307,7 @@ func (c *Compiler) fromASTIndexEntry(ctx context.Context, input ASTIndexEntryInp
 			Fields: bodyFields,
 		},
 	}
-	return c.saveCompiledChunk(chunk, input.RelatedChunkIDs, true)
+	return c.saveCompiledChunk(chunk, input.RelatedChunkIDs, input.AmplifyChunkIDs, true)
 }
 
 func (c *Compiler) fromUserStatement(ctx context.Context, input UserStatementInput) (*CompileResult, error) {
@@ -346,10 +350,10 @@ func (c *Compiler) fromUserStatement(ctx context.Context, input UserStatementInp
 			Fields: bodyFields,
 		},
 	}
-	return c.saveCompiledChunk(chunk, nil, false)
+	return c.saveCompiledChunk(chunk, nil, input.AmplifyChunkIDs, false)
 }
 
-func (c *Compiler) saveCompiledChunk(chunk KnowledgeChunk, related []ChunkID, writeCodeStateEdge bool) (*CompileResult, error) {
+func (c *Compiler) saveCompiledChunk(chunk KnowledgeChunk, related []ChunkID, amplifies []ChunkID, writeCodeStateEdge bool) (*CompileResult, error) {
 	if c == nil || c.Store == nil {
 		return nil, fmt.Errorf("bkc: compiler store required")
 	}
@@ -413,6 +417,26 @@ func (c *Compiler) saveCompiledChunk(chunk KnowledgeChunk, related []ChunkID, wr
 			ToChunk:    relatedID,
 			Kind:       EdgeKindRequiresContext,
 			Weight:     1.0,
+			Provenance: saved.Provenance,
+		})
+		if err != nil {
+			return nil, err
+		}
+		result.EdgeIDs = append(result.EdgeIDs, edge.ID)
+	}
+	for i, amplifyID := range amplifies {
+		if amplifyID == "" {
+			continue
+		}
+		weight := 0.9 - float64(i)*0.1
+		if weight < 0.1 {
+			weight = 0.1
+		}
+		edge, err := c.Store.SaveEdge(ChunkEdge{
+			FromChunk:  saved.ID,
+			ToChunk:    amplifyID,
+			Kind:       EdgeKindAmplifies,
+			Weight:     weight,
 			Provenance: saved.Provenance,
 		})
 		if err != nil {

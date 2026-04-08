@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	projections "github.com/lexcodex/relurpify/archaeo/projections"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
+	projections "github.com/lexcodex/relurpify/archaeo/projections"
 	"github.com/lexcodex/relurpify/archaeo/testscenario"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 )

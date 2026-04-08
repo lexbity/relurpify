@@ -2,6 +2,7 @@ package bkc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
@@ -73,6 +74,9 @@ func TestStreamerSkipsStaleAndReportsIt(t *testing.T) {
 	}
 	if len(result.Chunks) != 0 || len(result.StaleDuringStream) != 1 || result.StaleDuringStream[0] != "stale-seed" {
 		t.Fatalf("unexpected stale handling: %+v", result)
+	}
+	if len(result.StaleGapMessages) != 1 || !strings.Contains(result.StaleGapMessages[0], "stale-seed") {
+		t.Fatalf("unexpected stale gap messages: %+v", result.StaleGapMessages)
 	}
 }
 

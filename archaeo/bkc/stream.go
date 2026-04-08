@@ -2,7 +2,9 @@ package bkc
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/contextmgr"
@@ -17,6 +19,7 @@ type StreamSeed struct {
 type StreamResult struct {
 	Chunks            []KnowledgeChunk `json:"chunks,omitempty"`
 	StaleDuringStream []ChunkID        `json:"stale_during_stream,omitempty"`
+	StaleGapMessages  []string         `json:"stale_gap_messages,omitempty"`
 	TokenTotal        int              `json:"token_total,omitempty"`
 }
 
@@ -50,6 +53,12 @@ func (s *Streamer) Stream(ctx context.Context, seed StreamSeed, budget int) (*St
 		seen[chunk.ID] = struct{}{}
 		if chunk.Freshness == FreshnessStale {
 			result.StaleDuringStream = append(result.StaleDuringStream, chunk.ID)
+			result.StaleGapMessages = append(result.StaleGapMessages, fmt.Sprintf(
+				"chunk %s (%.0f tokens, source: %s) was skipped - stale",
+				chunk.ID,
+				float64(chunk.TokenEstimate),
+				firstProvenanceRef(chunk.Provenance),
+			))
 			continue
 		}
 		if chunk.TokenEstimate <= 0 {
@@ -131,6 +140,18 @@ func (s *Streamer) loadAmplifies(seed []ChunkID, remaining int, seen map[ChunkID
 		total += entry.chunk.TokenEstimate
 	}
 	return out, nil
+}
+
+func firstProvenanceRef(p ChunkProvenance) string {
+	if len(p.Sources) > 0 {
+		if ref := strings.TrimSpace(p.Sources[0].Ref); ref != "" {
+			return ref
+		}
+	}
+	if ref := strings.TrimSpace(p.CodeStateRef); ref != "" {
+		return ref
+	}
+	return "unknown"
 }
 
 func (s *Streamer) ChatSeed(files []string) (StreamSeed, error) {

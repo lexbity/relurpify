@@ -123,6 +123,88 @@ func TestInvalidationPassSurfaceStaleDuringStream(t *testing.T) {
 	}
 }
 
+func TestInvalidationPassSurfaceStaleChunksIncludesReasonAndEdgeRefs(t *testing.T) {
+	store := newTestChunkStore(t)
+	workflowStore := newTestWorkflowStore(t, "wf-reason")
+	pass := &InvalidationPass{
+		Store:     store,
+		Staleness: &StalenessManager{Store: store},
+		Tensions:  archaeotensions.Service{Store: workflowStore},
+	}
+	chunk := testChunk("reason-chunk", "ws", "rev-1")
+	chunk.Provenance.WorkflowID = "wf-reason"
+	_, _ = store.Save(chunk)
+	_, _ = store.Save(testChunk("dep-chunk", "ws", "rev-1"))
+	_, _ = store.Save(testChunk("amp-chunk", "ws", "rev-1"))
+	_, _ = store.SaveEdge(ChunkEdge{
+		FromChunk:  chunk.ID,
+		Kind:       EdgeKindDependsOnCodeState,
+		Provenance: chunk.Provenance,
+		Meta:       map[string]any{"code_state_ref": "abc123"},
+	})
+	_, _ = store.SaveEdge(ChunkEdge{
+		FromChunk: chunk.ID,
+		ToChunk:   "dep-chunk",
+		Kind:      EdgeKindRequiresContext,
+	})
+	_, _ = store.SaveEdge(ChunkEdge{
+		FromChunk: chunk.ID,
+		ToChunk:   "amp-chunk",
+		Kind:      EdgeKindAmplifies,
+	})
+
+	if err := pass.SurfaceStaleChunks(context.Background(), []string{"reason-chunk"}, []string{"pkg/service.go"}, "revision_drift"); err != nil {
+		t.Fatalf("surface stale chunks: %v", err)
+	}
+	tensions, err := pass.Tensions.ListByWorkflow(context.Background(), "wf-reason")
+	if err != nil {
+		t.Fatalf("list tensions: %v", err)
+	}
+	if len(tensions) != 1 {
+		t.Fatalf("expected one tension, got %+v", tensions)
+	}
+	got := tensions[0]
+	if got.Description != "knowledge chunk reason-chunk became stale: revision_drift" {
+		t.Fatalf("unexpected description: %q", got.Description)
+	}
+	if !containsString(got.CommentRefs, "depends_on_code_state:abc123") {
+		t.Fatalf("expected code-state edge ref in comment refs, got %+v", got.CommentRefs)
+	}
+	if !containsString(got.CommentRefs, "requires_context:dep-chunk") {
+		t.Fatalf("expected requires_context edge ref in comment refs, got %+v", got.CommentRefs)
+	}
+	if !containsString(got.CommentRefs, "amplifies:amp-chunk") {
+		t.Fatalf("expected amplifies edge ref in comment refs, got %+v", got.CommentRefs)
+	}
+}
+
+func TestInvalidationPassSurfaceStaleChunksNoEdgesCommentRefsEmpty(t *testing.T) {
+	store := newTestChunkStore(t)
+	workflowStore := newTestWorkflowStore(t, "wf-no-edges")
+	pass := &InvalidationPass{
+		Store:     store,
+		Staleness: &StalenessManager{Store: store},
+		Tensions:  archaeotensions.Service{Store: workflowStore},
+	}
+	chunk := testChunk("plain-chunk", "ws", "rev-1")
+	chunk.Provenance.WorkflowID = "wf-no-edges"
+	_, _ = store.Save(chunk)
+
+	if err := pass.SurfaceStaleChunks(context.Background(), []string{"plain-chunk"}, nil, "manual_invalidation"); err != nil {
+		t.Fatalf("surface stale chunks: %v", err)
+	}
+	tensions, err := pass.Tensions.ListByWorkflow(context.Background(), "wf-no-edges")
+	if err != nil {
+		t.Fatalf("list tensions: %v", err)
+	}
+	if len(tensions) != 1 {
+		t.Fatalf("expected one tension, got %+v", tensions)
+	}
+	if len(tensions[0].CommentRefs) != 0 {
+		t.Fatalf("expected empty comment refs, got %+v", tensions[0].CommentRefs)
+	}
+}
+
 func TestInvalidationPassStartConsumesBusEvents(t *testing.T) {
 	store := newTestChunkStore(t)
 	workflowStore := newTestWorkflowStore(t, "wf-bus")
@@ -163,6 +245,15 @@ func withChunkFile(chunk KnowledgeChunk, path string) KnowledgeChunk {
 	}
 	chunk.Body.Fields["file_path"] = path
 	return chunk
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func newTestWorkflowStore(t *testing.T, workflowID string) memory.WorkflowStateStore {

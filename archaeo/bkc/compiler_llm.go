@@ -37,6 +37,7 @@ type LLMCompileInput struct {
 	Description     string
 	Prompt          string
 	RelatedChunkIDs []ChunkID
+	AmplifyChunkIDs []ChunkID
 	SessionID       string
 	Blocking        bool
 }
@@ -68,6 +69,7 @@ type ChunkCandidate struct {
 	InteractionID   string               `json:"interaction_id,omitempty"`
 	Chunk           KnowledgeChunk       `json:"chunk"`
 	RelatedChunkIDs []ChunkID            `json:"related_chunk_ids,omitempty"`
+	AmplifyChunkIDs []ChunkID            `json:"amplify_chunk_ids,omitempty"`
 	Status          ChunkCandidateStatus `json:"status"`
 	CreatedAt       time.Time            `json:"created_at"`
 	UpdatedAt       time.Time            `json:"updated_at"`
@@ -86,6 +88,7 @@ type ResolveCandidateInput struct {
 	ChoiceID        string
 	Comment         *archaeolearning.CommentInput
 	BasedOnRevision string
+	RefinedViews    []ChunkView
 }
 
 // LLMCompiler proposes chunk candidates, routes them through archaeology
@@ -167,6 +170,7 @@ func (c *LLMCompiler) Propose(ctx context.Context, input LLMCompileInput) (*Cand
 		SnapshotID:      strings.TrimSpace(input.SnapshotID),
 		Chunk:           chunk,
 		RelatedChunkIDs: append([]ChunkID(nil), input.RelatedChunkIDs...),
+		AmplifyChunkIDs: append([]ChunkID(nil), input.AmplifyChunkIDs...),
 		Status:          ChunkCandidatePending,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -242,7 +246,10 @@ func (c *LLMCompiler) ResolveCandidate(ctx context.Context, input ResolveCandida
 	case archaeolearning.ResolutionConfirm:
 		candidate.Chunk.Freshness = FreshnessValid
 		candidate.Status = ChunkCandidateConfirmed
-		result, err := (&Compiler{Store: c.Store, Now: c.Now}).saveCompiledChunk(candidate.Chunk, candidate.RelatedChunkIDs, true)
+		if len(input.RefinedViews) > 0 {
+			candidate.Chunk.Views = mergeChunkViews(candidate.Chunk.Views, input.RefinedViews)
+		}
+		result, err := (&Compiler{Store: c.Store, Now: c.Now}).saveCompiledChunk(candidate.Chunk, candidate.RelatedChunkIDs, candidate.AmplifyChunkIDs, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -254,7 +261,10 @@ func (c *LLMCompiler) ResolveCandidate(ctx context.Context, input ResolveCandida
 	case archaeolearning.ResolutionDefer:
 		candidate.Chunk.Freshness = FreshnessUnverified
 		candidate.Status = ChunkCandidateDeferred
-		result, err := (&Compiler{Store: c.Store, Now: c.Now}).saveCompiledChunk(candidate.Chunk, candidate.RelatedChunkIDs, false)
+		if len(input.RefinedViews) > 0 {
+			candidate.Chunk.Views = mergeChunkViews(candidate.Chunk.Views, input.RefinedViews)
+		}
+		result, err := (&Compiler{Store: c.Store, Now: c.Now}).saveCompiledChunk(candidate.Chunk, candidate.RelatedChunkIDs, candidate.AmplifyChunkIDs, false)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -385,6 +395,29 @@ func toChunkViews(in []llmChunkView) []ChunkView {
 			continue
 		}
 		out = append(out, ChunkView{Kind: view.Kind, Data: view.Data})
+	}
+	return out
+}
+
+func mergeChunkViews(existing, refined []ChunkView) []ChunkView {
+	if len(refined) == 0 {
+		return append([]ChunkView(nil), existing...)
+	}
+	if len(existing) == 0 {
+		return append([]ChunkView(nil), refined...)
+	}
+	byKind := make(map[ViewKind]int, len(existing))
+	out := append([]ChunkView(nil), existing...)
+	for i, view := range out {
+		byKind[view.Kind] = i
+	}
+	for _, view := range refined {
+		if idx, ok := byKind[view.Kind]; ok {
+			out[idx] = view
+			continue
+		}
+		byKind[view.Kind] = len(out)
+		out = append(out, view)
 	}
 	return out
 }

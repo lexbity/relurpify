@@ -207,11 +207,11 @@ func TestResolveMergesFields(t *testing.T) {
 	svc := Service{Store: store, Now: func() time.Time { return now }}
 
 	rec, err := svc.Create(ctx, CreateInput{
-		WorkspaceID:  "/workspace/merge",
-		WorkflowID:   "wf-merge",
-		Title:        "Test merge",
-		CommentRefs:  []string{"comment-1"},
-		Metadata:     map[string]any{"original": true},
+		WorkspaceID: "/workspace/merge",
+		WorkflowID:  "wf-merge",
+		Title:       "Test merge",
+		CommentRefs: []string{"comment-1"},
+		Metadata:    map[string]any{"original": true},
 	})
 	require.NoError(t, err)
 
@@ -219,11 +219,11 @@ func TestResolveMergesFields(t *testing.T) {
 		WorkflowID: "wf-merge",
 		RecordID:   rec.ID,
 		Resolution: archaeodomain.ConvergenceResolution{
-			Status:      archaeodomain.ConvergenceResolutionResolved,
-			CommentRefs: []string{"comment-2"},
-			Metadata:    map[string]any{"resolved": true},
+			Status:       archaeodomain.ConvergenceResolutionResolved,
+			CommentRefs:  []string{"comment-2"},
+			Metadata:     map[string]any{"resolved": true},
 			ChosenOption: "yes",
-			Summary:     "Resolved",
+			Summary:      "Resolved",
 		},
 	})
 	require.NoError(t, err)
