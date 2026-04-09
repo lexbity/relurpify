@@ -241,7 +241,7 @@ func newArchaeoWorkflowsCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "No workflow store available.")
 				return nil
 			}
-			records, err := ws.Environment.WorkflowStore.ListWorkflows(ctx, 1000)
+			records, err := ws.Environment.WorkflowStore.ListWorkflows(ctx, 0)
 			if err != nil {
 				return err
 			}
