@@ -121,7 +121,7 @@ func TestArchitectAgentExecutesPlannedSteps(t *testing.T) {
 		ExecutorTools:     executorTools,
 		WorkflowStatePath: filepath.Join(t.TempDir(), "workflow_state.db"),
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestArchitectAgentLegacyExecutionCompactsPlanResultState(t *testing.T) {
 		PlannerTools:  plannerTools,
 		ExecutorTools: executorTools,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestArchitectAgentResumesLatestWorkflow(t *testing.T) {
 		ExecutorTools:     executorTools,
 		WorkflowStatePath: workflowStatePath,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
@@ -635,7 +635,7 @@ func TestArchitectAgentResumesWorkflowAcrossNewTaskID(t *testing.T) {
 		ExecutorTools:     executorTools,
 		WorkflowStatePath: workflowStatePath,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
@@ -838,7 +838,7 @@ func TestArchitectAgentRerunFromStepInvalidatesDependentsAndReplays(t *testing.T
 		ExecutorTools:     executorTools,
 		WorkflowStatePath: workflowStatePath,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	requireNoErr(t, agent.Initialize(cfg))
 
 	store := newArchitectWorkflowStore(t, workflowStatePath)
@@ -946,7 +946,7 @@ func TestArchitectAgentMarksWorkflowNeedsReplanAfterRepeatedFailures(t *testing.
 		ExecutorTools:     executorTools,
 		WorkflowStatePath: workflowStatePath,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	requireNoErr(t, agent.Initialize(cfg))
 
 	store := newArchitectWorkflowStore(t, workflowStatePath)

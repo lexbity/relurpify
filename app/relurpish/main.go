@@ -15,8 +15,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/app/relurpish/euclotui"
+	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/app/relurpish/tui"
 )
 
@@ -49,8 +49,8 @@ func newRootCmd() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&cfg.Workspace, "workspace", cfg.Workspace, "Workspace directory")
 	root.PersistentFlags().StringVar(&cfg.ManifestPath, "manifest", cfg.ManifestPath, "Agent manifest path")
-	root.PersistentFlags().StringVar(&cfg.OllamaEndpoint, "ollama-endpoint", cfg.OllamaEndpoint, "Ollama endpoint URL")
-	root.PersistentFlags().StringVar(&cfg.OllamaModel, "ollama-model", cfg.OllamaModel, "Ollama model name")
+	root.PersistentFlags().StringVar(&cfg.InferenceEndpoint, "inference-endpoint", cfg.InferenceEndpoint, "Inference backend endpoint URL")
+	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name")
 	root.PersistentFlags().StringVar(&cfg.AgentName, "agent", cfg.AgentLabel(), "Agent preset (coding, planner, react, reflection)")
 	root.PersistentFlags().StringVar(&cfg.ServerAddr, "addr", cfg.ServerAddr, "HTTP server listen address")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.RunscPath, "runsc", cfg.Sandbox.RunscPath, "runsc binary path")
@@ -216,6 +216,21 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 		fmt.Fprintf(w, " (%s)", report.ManifestError)
 	}
 	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Inference backend:")
+	fmt.Fprintf(w, "  provider: %s\n", firstNonEmpty(report.Inference.Provider, "unknown"))
+	fmt.Fprintf(w, "  endpoint: %s\n", firstNonEmpty(report.Inference.Endpoint, "-"))
+	fmt.Fprintf(w, "  state: %s\n", firstNonEmpty(string(report.Inference.State), "unknown"))
+	if len(report.Inference.Models) > 0 {
+		fmt.Fprintf(w, "  models: %s\n", strings.Join(report.Inference.Models, ", "))
+	} else {
+		fmt.Fprintln(w, "  models: -")
+	}
+	if report.Inference.SelectedModel != "" {
+		fmt.Fprintf(w, "  selected: %s\n", report.Inference.SelectedModel)
+	}
+	if report.Inference.Error != "" {
+		fmt.Fprintf(w, "  error: %s\n", report.Inference.Error)
+	}
 	fmt.Fprintln(w, "Dependencies:")
 	for _, dep := range report.Dependencies {
 		status := "ok"
@@ -268,6 +283,15 @@ func yesNo(v bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func shouldRunDoctorFallback(err error) bool {

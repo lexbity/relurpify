@@ -62,7 +62,7 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 			Name:              "bootstrapped",
 			Model:             "boot-model",
 			MaxIterations:     17,
-			OllamaToolCalling: true,
+			NativeToolCalling: true,
 		}
 		return &appruntime.BootstrappedAgentRuntime{
 			Registry:    registry,
@@ -101,8 +101,8 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 	if capturedCfg.MaxIterations != 17 {
 		t.Fatalf("expected MaxIterations 17, got %d", capturedCfg.MaxIterations)
 	}
-	if !capturedCfg.OllamaToolCalling {
-		t.Fatal("expected OllamaToolCalling to come from bootstrapped config")
+	if !capturedCfg.NativeToolCalling {
+		t.Fatal("expected NativeToolCalling to come from bootstrapped config")
 	}
 	if capturedCfg.Model != "boot-model" {
 		t.Fatalf("expected model boot-model, got %q", capturedCfg.Model)
@@ -414,7 +414,7 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 	origBootstrap := bootstrapAgentRuntime
 	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
-		cfg := &core.Config{Name: "retry", MaxIterations: 3, OllamaToolCalling: true}
+		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
 		return &appruntime.BootstrappedAgentRuntime{
 			Registry:    registry,
 			Memory:      opts.Memory,
@@ -470,7 +470,7 @@ func TestRunCaseRetryRebuildsWorkspace(t *testing.T) {
 		RunOptions{
 			TargetWorkspace: workspace,
 			OutputDir:       t.TempDir(),
-			OllamaResetOn:   []string{"reset requested"},
+			BackendResetOn:  []string{"reset requested"},
 		},
 		workspace,
 		t.TempDir(),
@@ -501,7 +501,7 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 	origBootstrap := bootstrapAgentRuntime
 	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
-		cfg := &core.Config{Name: "retry", MaxIterations: 3, OllamaToolCalling: true}
+		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
 		return &appruntime.BootstrappedAgentRuntime{
 			Registry:    registry,
 			Memory:      opts.Memory,
@@ -538,7 +538,7 @@ func TestRunCaseDoesNotRetryNonInfraFailureEvenWhenPatternMatches(t *testing.T) 
 		RunOptions{
 			TargetWorkspace: workspace,
 			OutputDir:       t.TempDir(),
-			OllamaResetOn:   []string{"reset requested"},
+			BackendResetOn:  []string{"reset requested"},
 		},
 		workspace,
 		t.TempDir(),
@@ -566,7 +566,7 @@ func TestRunCaseStopsRetryingAfterConfiguredLimit(t *testing.T) {
 	origBootstrap := bootstrapAgentRuntime
 	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
 		registry := capability.NewRegistry()
-		cfg := &core.Config{Name: "retry", MaxIterations: 3, OllamaToolCalling: true}
+		cfg := &core.Config{Name: "retry", MaxIterations: 3, NativeToolCalling: true}
 		return &appruntime.BootstrappedAgentRuntime{
 			Registry:    registry,
 			Memory:      opts.Memory,
@@ -604,7 +604,7 @@ func TestRunCaseStopsRetryingAfterConfiguredLimit(t *testing.T) {
 			TargetWorkspace: workspace,
 			OutputDir:       t.TempDir(),
 			MaxRetries:      1,
-			OllamaResetOn:   []string{"reset requested"},
+			BackendResetOn:  []string{"reset requested"},
 		},
 		workspace,
 		t.TempDir(),
@@ -639,7 +639,7 @@ func TestRunCaseExecutionTimeoutDoesNotIncludeBootstrapTime(t *testing.T) {
 	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
 		time.Sleep(30 * time.Millisecond)
 		registry := capability.NewRegistry()
-		cfg := &core.Config{Name: "timeout", MaxIterations: 3, OllamaToolCalling: true}
+		cfg := &core.Config{Name: "timeout", MaxIterations: 3, NativeToolCalling: true}
 		return &appruntime.BootstrappedAgentRuntime{
 			Registry:    registry,
 			Memory:      opts.Memory,

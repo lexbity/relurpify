@@ -324,7 +324,7 @@ func (m *minimalKeybindingTestAdapter) ResolveContextFiles(context.Context, []st
 	return ContextFileResolution{}
 }
 func (m *minimalKeybindingTestAdapter) SessionArtifacts() SessionArtifacts { return SessionArtifacts{} }
-func (m *minimalKeybindingTestAdapter) OllamaModels(context.Context) ([]string, error) {
+func (m *minimalKeybindingTestAdapter) InferenceModels(context.Context) ([]string, error) {
 	return nil, nil
 }
 func (m *minimalKeybindingTestAdapter) RecordingMode() string                           { return "off" }

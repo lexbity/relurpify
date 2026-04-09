@@ -135,13 +135,13 @@ Useful flags:
 --sandbox                      Run tool execution via gVisor/docker
 --timeout 120s                 Per-case timeout
 --model <name>                 Override model for all cases
---endpoint <url>               Override Ollama endpoint
+--endpoint <url>               Override inference backend endpoint
 --max-iterations <n>           Override agent loop limit
 --debug-llm                    Enable verbose LLM telemetry
 --debug-agent                  Enable verbose agent logging
---ollama-reset none|model|server
---ollama-reset-between
---ollama-reset-on <regex>      Repeatable reset trigger
+--backend-reset none|model|server
+--backend-reset-between
+--backend-reset-on <regex>      Repeatable reset trigger
 ```
 
 ---
@@ -407,6 +407,6 @@ For CI stability:
 
 - commit suites with `recording.mode: replay`
 - pin the model name in `spec.models`
-- use `--ollama-reset` and `--ollama-reset-between` only when live Ollama runs are unavoidable
+- use `--backend-reset` and `--backend-reset-between` only when live backend resets are unavoidable
 
 ---

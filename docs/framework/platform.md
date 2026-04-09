@@ -3,9 +3,9 @@
 ## Synopsis
 
 The `platform/` layer provides concrete implementations of agent-callable tools
-and the LLM client. Platform packages are the only place where external binaries,
-language runtimes, and the Ollama API are invoked. Everything above (agents,
-framework) depends only on abstractions from `framework/core`.
+and the inference facade. Platform packages are the only place where external
+binaries, language runtimes, and provider APIs are invoked. Everything above
+(agents, framework) depends only on abstractions from `framework/core`.
 
 ---
 
@@ -13,7 +13,7 @@ framework) depends only on abstractions from `framework/core`.
 
 ```
 platform/
-├── llm/          Ollama client, telemetry wrapper, tape recorder
+├── llm/          Managed backend facade, telemetry wrapper, tape recorder
 ├── shell/        Bash command execution
 ├── git/          Git operations
 ├── fs/           File read/write/search
@@ -34,12 +34,25 @@ platform/
 
 ## llm
 
-`platform/llm` implements the `framework/core.LanguageModel` interface against
-a locally running Ollama instance. No cloud LLM APIs are supported.
+`platform/llm` exposes a provider-neutral managed backend factory plus
+transport-specific provider packages.
 
-**Ollama client** (`ollama.go`) — sends chat completion requests to `http://localhost:11434`.
-LLM parameters (temperature, top_p, num_predict, etc.) are placed inside the
-`options` sub-object as required by the Ollama API.
+The root package owns:
+
+- `ManagedBackend` and related capability/health types
+- `ProviderConfig` and `New(cfg)` factory selection
+- `InstrumentedModel` wrappers
+- `TapeModel` capture/replay
+
+Provider implementations live in subpackages:
+
+- `platform/llm/ollama` for Ollama-native transport
+- `platform/llm/lmstudio` for OpenAI-compatible LM Studio transport
+- `platform/llm/openaicompat` for shared OpenAI-compatible HTTP behavior
+
+The default provider remains Ollama when no explicit provider is configured.
+Each provider package returns a `core.LanguageModel` implementation through the
+managed backend facade.
 
 **InstrumentedModel** (`instrumented_model.go`) — wraps any `LanguageModel` to
 emit telemetry events per call: token counts, latency, model name, and a
@@ -47,7 +60,7 @@ truncated prompt digest.
 
 **TapeModel** (`tape_model.go`) — records request/response pairs to a tape file
 (capture mode) and plays them back deterministically (replay mode), enabling
-agent integration tests to run without a live Ollama instance.
+agent integration tests to run without a live backend.
 
 ---
 

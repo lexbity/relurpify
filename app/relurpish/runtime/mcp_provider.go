@@ -575,7 +575,7 @@ func (h mcpRuntimeRequestHandler) HandleSamplingRequest(ctx context.Context, par
 	return &protocol.CreateMessageResult{
 		Role:       "assistant",
 		Content:    protocol.ContentBlock{Type: "text", Text: resp.Text},
-		Model:      h.runtime.Config.OllamaModel,
+		Model:      h.runtime.Config.InferenceModel,
 		StopReason: resp.FinishReason,
 	}, nil
 }

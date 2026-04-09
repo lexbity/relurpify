@@ -82,7 +82,7 @@ func TestBootstrapAgentRuntimeUsesManifestModelAndRegistersAgentCapabilities(t *
 		},
 		Runner:         fsandbox.NewLocalCommandRunner(workspace, nil),
 		Memory:         store,
-		OllamaEndpoint: embedServer.URL,
+		InferenceModel: "manifest-model",
 	})
 	if err != nil {
 		t.Fatalf("BootstrapAgentRuntime: %v", err)
@@ -376,11 +376,11 @@ spec:
 	requireNoError(t, err)
 	rt := &Runtime{
 		Config: Config{
-			Workspace:      workspace,
-			AgentsDir:      agentsDir,
-			AgentName:      "coding",
-			OllamaModel:    "manifest-model",
-			OllamaEndpoint: "http://localhost:11434",
+			Workspace:         workspace,
+			AgentsDir:         agentsDir,
+			AgentName:         "coding",
+			InferenceModel:    "manifest-model",
+			InferenceEndpoint: "http://localhost:11434",
 		},
 		Tools:        capability.NewRegistry(),
 		Model:        nil,
@@ -462,7 +462,7 @@ func TestBootstrapAgentRuntimeIndexManagerReachesReActAgent(t *testing.T) {
 		},
 		Runner:         fsandbox.NewLocalCommandRunner(workspace, nil),
 		Memory:         store,
-		OllamaEndpoint: embedServer.URL,
+		InferenceModel: "test-model",
 	})
 	requireNoError(t, err)
 

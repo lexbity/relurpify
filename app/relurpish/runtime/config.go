@@ -2,35 +2,42 @@ package runtime
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"gopkg.in/yaml.v3"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 // Config captures every knob shared across the relurpish CLI, TUI, and server
 // entry points. Keeping it as a lightweight struct makes it trivial to reuse in
 // tests or future headless workflows.
 type Config struct {
-	Workspace      string
-	ManifestPath   string
-	AgentsDir      string
-	MemoryPath     string
-	LogPath        string
-	TelemetryPath  string
-	EventsPath     string
-	ConfigPath     string
-	OllamaEndpoint string
-	OllamaModel    string
-	AgentName      string
-	ServerAddr     string
-	RecordingMode  string
-	Sandbox        fsandbox.SandboxConfig
-	AuditLimit     int
-	HITLTimeout    time.Duration
+	Workspace                  string
+	ManifestPath               string
+	AgentsDir                  string
+	MemoryPath                 string
+	LogPath                    string
+	TelemetryPath              string
+	EventsPath                 string
+	ConfigPath                 string
+	InferenceProvider          string
+	InferenceEndpoint          string
+	InferenceModel             string
+	InferenceAPIKey            string
+	InferenceNativeToolCalling bool
+	EmbeddingProvider          string
+	EmbeddingEndpoint          string
+	EmbeddingModel             string
+	AgentName                  string
+	ServerAddr                 string
+	RecordingMode              string
+	Sandbox                    fsandbox.SandboxConfig
+	AuditLimit                 int
+	HITLTimeout                time.Duration
 }
 
 // DefaultConfig infers sensible defaults based on the current working
@@ -120,8 +127,11 @@ func (c *Config) Normalize() error {
 	if c.AgentName == "" {
 		c.AgentName = "coding"
 	}
-	if c.OllamaEndpoint == "" {
-		c.OllamaEndpoint = "http://localhost:11434"
+	if c.InferenceProvider == "" {
+		c.InferenceProvider = "ollama"
+	}
+	if c.InferenceEndpoint == "" {
+		c.InferenceEndpoint = "http://localhost:11434"
 	}
 	if c.ServerAddr == "" {
 		c.ServerAddr = ":8080"
@@ -133,6 +143,26 @@ func (c *Config) Normalize() error {
 		c.HITLTimeout = 30 * time.Second
 	}
 	return nil
+}
+
+func (c Config) InferenceProviderValue() string {
+	return c.InferenceProvider
+}
+
+func (c Config) InferenceEndpointValue() string {
+	return c.InferenceEndpoint
+}
+
+func (c Config) InferenceModelValue() string {
+	return c.InferenceModel
+}
+
+func (c Config) InferenceAPIKeyValue() string {
+	return c.InferenceAPIKey
+}
+
+func (c Config) InferenceNativeToolCallingValue() bool {
+	return c.InferenceNativeToolCalling
 }
 
 // AgentLabel returns the normalized agent identifier used across telemetry and
@@ -151,6 +181,7 @@ func (c Config) AgentLabel() string {
 // WorkspaceConfig captures persisted workspace preferences under relurpify_cfg.
 type WorkspaceConfig struct {
 	Model               string                    `yaml:"model"`
+	Provider            string                    `yaml:"provider,omitempty"`
 	Agents              []string                  `yaml:"agents"`
 	AllowedCapabilities []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
 	Nexus               NexusConfig               `yaml:"nexus,omitempty"`

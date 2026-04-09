@@ -26,7 +26,7 @@ func TestReActAgent_Scenario_SingleToolCall_ThenComplete(t *testing.T) {
 			Build(),
 	)
 	f.Env.Config.MaxIterations = 3
-	f.Env.Config.OllamaToolCalling = true
+	f.Env.Config.NativeToolCalling = true
 
 	agent := react.New(f.Env)
 	state := core.NewContext()
@@ -54,7 +54,7 @@ func TestReActAgent_Scenario_MaxIterationsReached(t *testing.T) {
 			Build(),
 	)
 	f.Env.Config.MaxIterations = 2
-	f.Env.Config.OllamaToolCalling = true
+	f.Env.Config.NativeToolCalling = true
 
 	agent := react.New(f.Env)
 	state := core.NewContext()
@@ -90,7 +90,7 @@ func TestReActAgent_Scenario_ToolCallError_Propagates(t *testing.T) {
 			Build(),
 	)
 	f.Env.Config.MaxIterations = 3
-	f.Env.Config.OllamaToolCalling = true
+	f.Env.Config.NativeToolCalling = true
 
 	agent := react.New(f.Env)
 	_, err := agent.Execute(context.Background(), &core.Task{

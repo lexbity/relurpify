@@ -20,6 +20,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/perfstats"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/platform/llm"
+	ollama "github.com/lexcodex/relurpify/platform/llm/ollama"
 )
 
 func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir string) CaseReport {
@@ -97,11 +98,11 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 	}
 
-	if opts.OllamaResetBetween {
-		maybeResetOllama(logger, opts, execution.Model)
+	if opts.BackendResetBetween {
+		maybeResetBackend(logger, opts, execution.Model)
 	}
 
-	client := llm.NewClient(execution.Endpoint, execution.Model)
+	client := ollama.NewClient(execution.Endpoint, execution.Model)
 	client.SetDebugLogging(opts.DebugLLM)
 
 	lm := core.LanguageModel(client)
@@ -111,6 +112,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 		}
 		if err := wrapped.ConfigureHeader(llm.TapeHeader{
+			ProviderID:  "ollama",
 			ModelName:   execution.Model,
 			ModelDigest: modelProvenanceDigest(modelProvenance),
 			SuiteName:   suite.Metadata.Name,
@@ -197,14 +199,14 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		})
 		res, execErr = agent.Execute(taskCtx, task, state)
 		cancel()
-		if !shouldRetryCaseWithOllamaReset(execErr, opts.OllamaResetOn) {
+		if !shouldRetryCaseWithBackendReset(execErr, opts.BackendResetOn) {
 			break
 		}
 		if attempt > maxRetries {
 			break
 		}
 		retryReasons = append(retryReasons, execErr.Error())
-		maybeResetOllama(logger, opts, execution.Model)
+		maybeResetBackend(logger, opts, execution.Model)
 	}
 	defer func() {
 		if cleanup != nil {
@@ -826,21 +828,21 @@ func extractOutput(state *core.Context, res *core.Result) string {
 	return ""
 }
 
-func resolveCaseModelProvenance(execution resolvedCaseExecution) (*OllamaModelProvenance, error) {
-	if !shouldPreflightOllama(execution.RecordingMode) {
+func resolveCaseModelProvenance(execution resolvedCaseExecution) (*BackendModelProvenance, error) {
+	if !shouldPreflightBackend(execution.RecordingMode) {
 		return nil, nil
 	}
-	return lookupOllamaModelProvenance(execution.Endpoint, execution.Model)
+	return lookupBackendModelProvenance(execution.Endpoint, execution.Model)
 }
 
-func modelProvenanceDigest(provenance *OllamaModelProvenance) string {
+func modelProvenanceDigest(provenance *BackendModelProvenance) string {
 	if provenance == nil {
 		return ""
 	}
 	return provenance.Digest
 }
 
-func modelProvenanceName(provenance *OllamaModelProvenance) string {
+func modelProvenanceName(provenance *BackendModelProvenance) string {
 	if provenance == nil {
 		return ""
 	}
@@ -882,12 +884,12 @@ func singleAssistantMessage(history []core.Interaction) string {
 	return found
 }
 
-func shouldRetryCaseWithOllamaReset(err error, patterns []string) bool {
+func shouldRetryCaseWithBackendReset(err error, patterns []string) bool {
 	if err == nil {
 		return false
 	}
 	if !isInfrastructureError(err.Error()) {
 		return false
 	}
-	return shouldResetOllama(err, patterns)
+	return shouldResetBackend(err, patterns)
 }

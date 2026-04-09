@@ -38,8 +38,8 @@ type CapabilityRegistryOptions struct {
 	AgentID           string
 	PermissionManager *fauthorization.PermissionManager
 	AgentSpec         *core.AgentRuntimeSpec
-	OllamaEndpoint    string
-	OllamaModel       string
+	InferenceEndpoint string
+	InferenceModel    string
 	SkipASTIndex      bool
 }
 

@@ -96,6 +96,7 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *core.Task, state *cor
 		ModelName:         a.modelName(),
 		Tools:             a.availableTools(),
 		EnableToolCalling: a.toolCallingEnabled(),
+		AgentSpec:         a.Config.AgentSpec,
 		Telemetry:         a.telemetry(),
 		CapabilityInvoker: a.Tools,
 	}}
@@ -295,7 +296,7 @@ func (a *PipelineAgent) toolCallingEnabled() bool {
 	if a == nil || a.Config == nil {
 		return false
 	}
-	return a.Config.OllamaToolCalling
+	return a.Config.NativeToolCalling
 }
 
 func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, state *core.Context) (*db.SQLiteWorkflowStateStore, string, string, error) {

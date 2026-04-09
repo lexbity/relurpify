@@ -14,6 +14,8 @@ type Session struct {
 	ID            string
 	StartTime     time.Time
 	Workspace     string
+	Provider      string
+	BackendState  string
 	Model         string
 	Agent         string
 	Role          string
@@ -25,13 +27,15 @@ type Session struct {
 
 // SessionInfo is a compact snapshot returned by runtime adapters.
 type SessionInfo struct {
-	Workspace string
-	Model     string
-	Agent     string
-	Role      string
-	Mode      string
-	Strategy  string
-	MaxTokens int
+	Workspace    string
+	Provider     string
+	BackendState string
+	Model        string
+	Agent        string
+	Role         string
+	Mode         string
+	Strategy     string
+	MaxTokens    int
 }
 
 // SessionArtifacts provides file paths for logs/telemetry.

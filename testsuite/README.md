@@ -147,11 +147,11 @@ Tags used across suites:
 --debug-agent               Verbose agent state logging
 --output-dir <path>         Where to write run artifacts
 
---ollama-reset none|model|server   Reset strategy on failure
---ollama-reset-between             Reset before each case
---ollama-reset-on <regex>          Trigger reset+retry when error matches pattern (repeatable)
---ollama-bin <path>                Path to ollama binary (default: ollama)
---ollama-service <name>            systemd service name for server restarts (default: ollama)
+--backend-reset none|model|server   Reset strategy on failure
+--backend-reset-between             Reset before each case
+--backend-reset-on <regex>          Trigger reset+retry when error matches pattern (repeatable)
+--backend-bin <path>                Path to backend binary (default: ollama)
+--backend-service <name>            systemd service name for server restarts (default: ollama)
 
 --include-quarantined       Include quarantined suites
 --tier <tier>               Filter by tier
@@ -174,13 +174,13 @@ Tags used across suites:
 ./dev-agent agenttest run --agent euclo --profile ci-live
 
 # Unload model between cases (reduces OOM risk)
-./dev-agent agenttest run --agent euclo --ollama-reset model --ollama-reset-between
+./dev-agent agenttest run --agent euclo --backend-reset model --backend-reset-between
 
 # Auto-retry on timeout
 ./dev-agent agenttest run \
   --agent euclo \
-  --ollama-reset server \
-  --ollama-reset-on "context deadline exceeded" \
+  --backend-reset server \
+  --backend-reset-on "context deadline exceeded" \
   --timeout 120s
 
 # Reproducible GOCACHE run
@@ -857,7 +857,7 @@ Model is not pulled: `ollama pull qwen2.5-coder:14b`.
 ### Case times out
 - Increase `--timeout`: `./dev-agent agenttest run --timeout 180s`
 - Or set per-case: `timeout: 180s` in the case YAML.
-- Add `--ollama-reset model --ollama-reset-between` to ensure a clean model state.
+- Add `--backend-reset model --backend-reset-between` to ensure a clean model state.
 
 ### Assertion fails with "expected changed file X but no files changed"
 The agent read the file from `context.context_file_contents` and never called a write

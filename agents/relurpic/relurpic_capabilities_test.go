@@ -73,7 +73,7 @@ func TestRegisterBuiltinRelurpicCapabilitiesRegistersCoordinationTargets(t *test
 		Name:              "coding",
 		Model:             "stub",
 		MaxIterations:     3,
-		OllamaToolCalling: true,
+		NativeToolCalling: true,
 	}))
 
 	targets := registry.CoordinationTargets()
@@ -751,7 +751,7 @@ func TestArchitectExecuteCapabilityUsesArchitectWorkflow(t *testing.T) {
 		Name:              "coding",
 		Model:             "stub",
 		MaxIterations:     3,
-		OllamaToolCalling: true,
+		NativeToolCalling: true,
 	}))
 
 	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "architect.execute", map[string]interface{}{

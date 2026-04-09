@@ -130,7 +130,7 @@ func newAgentsCreateCmd() *cobra.Command {
 						Mode:              core.AgentMode(kind),
 						Version:           "1.0.0",
 						Prompt:            defaultManifestPrompt(name),
-						OllamaToolCalling: &defaultToolCalling,
+						NativeToolCalling: &defaultToolCalling,
 						Model: core.AgentModelConfig{
 							Provider:    "ollama",
 							Name:        model,

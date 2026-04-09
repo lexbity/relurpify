@@ -58,11 +58,11 @@ func newAgentTestRunCmd() *cobra.Command {
 	var maxIterations int
 	var debugLLM bool
 	var debugAgent bool
-	var ollamaReset string
-	var ollamaBin string
-	var ollamaService string
-	var ollamaResetBetween bool
-	var ollamaResetOn []string
+	var backendReset string
+	var backendBin string
+	var backendService string
+	var backendResetBetween bool
+	var backendResetOn []string
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -112,25 +112,25 @@ func newAgentTestRunCmd() *cobra.Command {
 			}
 			r := newAgentTestRunnerFn()
 			opts := agenttest.RunOptions{
-				TargetWorkspace:    ws,
-				OutputDir:          outDir,
-				Sandbox:            sandbox,
-				Timeout:            timeout,
-				BootstrapTimeout:   bootstrapTimeout,
-				SkipASTIndex:       skipASTIndex,
-				Profile:            profile,
-				Strict:             strict,
-				MaxRetries:         maxRetries,
-				ModelOverride:      model,
-				EndpointOverride:   endpoint,
-				MaxIterations:      maxIterations,
-				DebugLLM:           debugLLM,
-				DebugAgent:         debugAgent,
-				OllamaReset:        ollamaReset,
-				OllamaBinary:       ollamaBin,
-				OllamaService:      ollamaService,
-				OllamaResetBetween: ollamaResetBetween,
-				OllamaResetOn:      ollamaResetOn,
+				TargetWorkspace:     ws,
+				OutputDir:           outDir,
+				Sandbox:             sandbox,
+				Timeout:             timeout,
+				BootstrapTimeout:    bootstrapTimeout,
+				SkipASTIndex:        skipASTIndex,
+				Profile:             profile,
+				Strict:              strict,
+				MaxRetries:          maxRetries,
+				ModelOverride:       model,
+				EndpointOverride:    endpoint,
+				MaxIterations:       maxIterations,
+				DebugLLM:            debugLLM,
+				DebugAgent:          debugAgent,
+				BackendReset:        backendReset,
+				BackendBinary:       backendBin,
+				BackendService:      backendService,
+				BackendResetBetween: backendResetBetween,
+				BackendResetOn:      backendResetOn,
 			}
 			hadFailures := false
 			totalInfraFailures := 0
@@ -188,22 +188,22 @@ func newAgentTestRunCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
 	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout for agent/runtime setup before execution")
 	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Default true for live agenttests: skip AST/bootstrap indexing during setup; use --skip-ast-index=false for dedicated AST-enabled end-to-end runs")
-	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case for Ollama reset/retry handling; use -1 to disable retries")
+	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case for backend reset/retry handling; use -1 to disable retries")
 	cmd.Flags().StringVar(&model, "model", "", "Override model name for all cases")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Override Ollama endpoint for all cases")
 	cmd.Flags().IntVar(&maxIterations, "max-iterations", 8, "Override max iterations for agent loops")
 	cmd.Flags().BoolVar(&debugLLM, "debug-llm", false, "Enable verbose LLM telemetry logging")
 	cmd.Flags().BoolVar(&debugAgent, "debug-agent", false, "Enable verbose agent debug logging")
-	cmd.Flags().StringVar(&ollamaReset, "ollama-reset", "none", "Reset strategy: none|model|server")
-	cmd.Flags().StringVar(&ollamaBin, "ollama-bin", "ollama", "Ollama CLI binary name/path")
-	cmd.Flags().StringVar(&ollamaService, "ollama-service", "ollama", "systemd service name for server restarts")
-	cmd.Flags().BoolVar(&ollamaResetBetween, "ollama-reset-between", false, "Reset before each case")
-	cmd.Flags().StringArrayVar(&ollamaResetOn, "ollama-reset-on", []string{
+	cmd.Flags().StringVar(&backendReset, "backend-reset", "none", "Reset strategy: none|model|server")
+	cmd.Flags().StringVar(&backendBin, "backend-bin", "ollama", "Inference backend CLI binary name/path")
+	cmd.Flags().StringVar(&backendService, "backend-service", "ollama", "systemd service name for backend restarts")
+	cmd.Flags().BoolVar(&backendResetBetween, "backend-reset-between", false, "Reset before each case")
+	cmd.Flags().StringArrayVar(&backendResetOn, "backend-reset-on", []string{
 		"(?i)context deadline exceeded",
 		"(?i)connection reset",
 		"(?i)EOF",
 		"(?i)too many requests",
-	}, "Regex patterns that trigger reset+retry (repeatable)")
+	}, "Regex patterns that trigger backend reset+retry (repeatable)")
 	return cmd
 }
 

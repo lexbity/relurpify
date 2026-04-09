@@ -24,6 +24,7 @@ import (
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 // AgentBootstrapOptions is copied from runtime package.
@@ -38,10 +39,10 @@ type AgentBootstrapOptions struct {
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
 	Model               core.LanguageModel
+	Backend             llm.ManagedBackend
+	InferenceModel      string
 	Memory              memory.MemoryStore
 	Telemetry           core.Telemetry
-	OllamaEndpoint      string
-	OllamaModel         string
 	SkipASTIndex        bool
 	MaxIterations       int
 	AllowedCapabilities []core.CapabilitySelector
@@ -64,6 +65,7 @@ type BootstrappedAgentRuntime struct {
 	Memory               memory.MemoryStore
 	AgentSpec            *core.AgentRuntimeSpec
 	AgentConfig          *core.Config
+	Backend              llm.ManagedBackend
 	Environment          WorkspaceEnvironment
 	AgentDefinitions     map[string]*core.AgentDefinition
 	SkillResults         []frameworkskills.SkillResolution
@@ -113,7 +115,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	skillResults := append([]frameworkskills.SkillResolution{}, effectiveContract.SkillResults...)
 	resolvedSkills := append([]frameworkskills.ResolvedSkill{}, effectiveContract.ResolvedSkills...)
 
-	resolvedModel := opts.OllamaModel
+	resolvedModel := opts.InferenceModel
 	if resolvedModel == "" {
 		resolvedModel = agentSpec.Model.Name
 	}
@@ -123,8 +125,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
 		AgentSpec:         agentSpec,
-		OllamaEndpoint:    opts.OllamaEndpoint,
-		OllamaModel:       resolvedModel,
 		SkipASTIndex:      opts.SkipASTIndex,
 	})
 	if err != nil {
@@ -156,9 +156,8 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	agentCfg := &core.Config{
 		Name:              configName,
 		Model:             resolvedModel,
-		OllamaEndpoint:    opts.OllamaEndpoint,
 		MaxIterations:     maxIterations,
-		OllamaToolCalling: agentSpec.ToolCallingEnabled(),
+		NativeToolCalling: agentSpec.NativeToolCallingEnabled(),
 		AgentSpec:         agentSpec,
 		DebugLLM:          opts.DebugLLM,
 		DebugAgent:        opts.DebugAgent,
@@ -206,6 +205,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Memory:               opts.Memory,
 		AgentSpec:            agentSpec,
 		AgentConfig:          agentCfg,
+		Backend:              opts.Backend,
 		Environment:          env,
 		AgentDefinitions:     agentDefs,
 		SkillResults:         skillResults,

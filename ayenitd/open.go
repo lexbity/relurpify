@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
@@ -31,16 +32,20 @@ import (
 // Open is the single composition root for all Relurpify entry points.
 // app/relurpish, app/dev-agent-cli, and integration tests all call Open().
 func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
+	// Resolve workspace YAML overrides before probing or opening stores.
+	cfg = resolveWorkspaceConfigOverrides(cfg)
+
 	// Phase A: Configuration Validation
 	if err := validateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid workspace config: %w", err)
 	}
 
-	// Resolve workspace YAML overrides before probing or opening stores.
-	cfg = resolveWorkspaceConfigOverrides(cfg)
-
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("build inference backend: %w", err)
+	}
 	// Phase B: Platform Runtime Checks
-	results := ProbeWorkspace(cfg)
+	results := ProbeWorkspace(cfg, backend)
 	for _, r := range results {
 		if r.Required && !r.OK {
 			return nil, fmt.Errorf("platform check failed: %s", r.Message)
@@ -127,10 +132,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	memStore = memStore.WithVectorStore(memory.NewInMemoryVectorStore())
 
 	// Resolve model from manifest if not overridden in config.
-	ollamaModel := cfg.OllamaModel
+	inferenceModel := cfg.InferenceModel
 	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
-		if specModel := registration.Manifest.Spec.Agent.Model.Name; specModel != "" && ollamaModel == "" {
-			ollamaModel = specModel
+		if specModel := registration.Manifest.Spec.Agent.Model.Name; specModel != "" && inferenceModel == "" {
+			inferenceModel = specModel
 		}
 	}
 
@@ -140,9 +145,8 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 			logLLM = *registration.Manifest.Spec.Agent.Logging.LLM
 		}
 	}
-	modelClient := llm.NewClient(cfg.OllamaEndpoint, ollamaModel)
-	modelClient.SetDebugLogging(logLLM)
-	model := llm.NewInstrumentedModel(modelClient, tel, logLLM)
+	backend.SetDebugLogging(logLLM)
+	model := llm.NewInstrumentedModel(backend.Model(), tel, logLLM)
 	guidanceBroker := guidance.NewGuidanceBroker(0)
 
 	// Wire permission event logger if event telemetry is available.
@@ -169,10 +173,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		PermissionManager:   registration.Permissions,
 		Runner:              runner,
 		Model:               model,
+		Backend:             backend,
+		InferenceModel:      inferenceModel,
 		Memory:              memStore,
 		Telemetry:           tel,
-		OllamaEndpoint:      cfg.OllamaEndpoint,
-		OllamaModel:         ollamaModel,
 		MaxIterations:       cfg.MaxIterations,
 		SkipASTIndex:        cfg.SkipASTIndex,
 		AllowedCapabilities: cfg.AllowedCapabilities,
@@ -200,7 +204,16 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase H: Embedder Initialization
-	embedder := retrieval.NewOllamaEmbedder(cfg.OllamaEndpoint, ollamaModel)
+	embedder, err := retrieval.NewEmbedder(backend, embedderCfgFromConfig(cfg, inferenceModel))
+	if err != nil {
+		patternDB.Close()
+		workflowStore.Close()
+		logFile.Close()
+		return nil, fmt.Errorf("build embedder: %w", err)
+	}
+	if embedder == nil && logger != nil {
+		logger.Printf("semantic indexing disabled: no embedder available")
+	}
 
 	// Phase I: ServiceManager Setup & Scheduler Registration
 	env := boot.Environment
@@ -252,6 +265,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	ws := &Workspace{
 		Environment:          env,
 		Registration:         registration,
+		Backend:              backend,
 		logFile:              logFile,
 		eventLog:             eventLog,
 		patternDB:            patternDB,
@@ -270,6 +284,24 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	return ws, nil
 }
 
+func embedderCfgFromConfig(cfg WorkspaceConfig, model string) retrieval.EmbedderConfig {
+	provider := strings.TrimSpace(cfg.InferenceProvider)
+	endpoint := strings.TrimSpace(cfg.InferenceEndpoint)
+	selectedModel := strings.TrimSpace(cfg.InferenceModel)
+
+	if provider == "" {
+		provider = "ollama"
+	}
+	if selectedModel == "" {
+		selectedModel = strings.TrimSpace(model)
+	}
+	return retrieval.EmbedderConfig{
+		Provider: provider,
+		Endpoint: endpoint,
+		Model:    selectedModel,
+	}
+}
+
 // resolveWorkspaceConfig loads the workspace YAML (if ConfigPath is
 // set) and applies model and agent-name overrides. Errors are silently ignored
 // so that a missing or malformed config file does not prevent startup.
@@ -278,6 +310,7 @@ func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
 		return cfg
 	}
 	type yamlCfg struct {
+		Provider     string   `json:"provider" yaml:"provider"`
 		Model        string   `json:"model" yaml:"model"`
 		Agent        string   `json:"agent" yaml:"agent"`
 		Agents       []string `json:"agents" yaml:"agents"`
@@ -292,11 +325,14 @@ func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
 	// Try JSON first (YAML is a superset, but we keep it simple here).
 	var yc yamlCfg
 	if err := yaml.Unmarshal(data, &yc); err == nil {
-		if yc.Model != "" && cfg.OllamaModel == "" {
-			cfg.OllamaModel = yc.Model
+		if yc.Provider != "" && cfg.InferenceProvider == "" {
+			cfg.InferenceProvider = yc.Provider
 		}
-		if yc.DefaultModel.Name != "" && cfg.OllamaModel == "" {
-			cfg.OllamaModel = yc.DefaultModel.Name
+		if yc.Model != "" && cfg.InferenceModel == "" {
+			cfg.InferenceModel = yc.Model
+		}
+		if yc.DefaultModel.Name != "" && cfg.InferenceModel == "" {
+			cfg.InferenceModel = yc.DefaultModel.Name
 		}
 		if yc.Agent != "" && cfg.AgentName == "" {
 			cfg.AgentName = yc.Agent
@@ -315,11 +351,8 @@ func validateConfig(cfg WorkspaceConfig) error {
 	if cfg.ManifestPath == "" {
 		return fmt.Errorf("ManifestPath is required")
 	}
-	if cfg.OllamaEndpoint == "" {
-		return fmt.Errorf("OllamaEndpoint is required")
-	}
-	if cfg.OllamaModel == "" {
-		return fmt.Errorf("OllamaModel is required")
+	if cfg.InferenceEndpoint == "" {
+		return fmt.Errorf("InferenceEndpoint is required")
 	}
 	return nil
 }

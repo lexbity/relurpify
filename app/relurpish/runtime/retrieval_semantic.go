@@ -15,10 +15,15 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/lexcodex/relurpify/framework/search"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 type retrieverSemanticAdapter struct {
 	retriever *retrieval.Retriever
+}
+
+func resolveSemanticEmbedder(backend llm.ManagedBackend, cfg Config, inferenceModel string) (retrieval.Embedder, error) {
+	return retrieval.NewEmbedder(backend, embedderCfgFromRuntimeConfig(cfg, inferenceModel))
 }
 
 func (a *retrieverSemanticAdapter) Query(ctx context.Context, query string, limit int) ([]search.VectorMatch, error) {

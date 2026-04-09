@@ -11,6 +11,8 @@ import (
 // TitleBar renders the top-of-screen info bar.
 type TitleBar struct {
 	agent     string
+	provider  string
+	state     string
 	model     string
 	workspace string
 	tokens    int
@@ -29,6 +31,8 @@ type TitleBar struct {
 func NewTitleBar(info SessionInfo) TitleBar {
 	return TitleBar{
 		agent:       info.Agent,
+		provider:    info.Provider,
+		state:       info.BackendState,
 		model:       info.Model,
 		workspace:   info.Workspace,
 		blobEmojiOn: true,
@@ -63,7 +67,14 @@ func (tb TitleBar) View() string {
 	if tb.activeTab != "" {
 		tabLabel = string(tb.activeTab)
 	}
-	left := fmt.Sprintf("%s · %s · %s", tabLabel, tb.agent, tb.model)
+	modelLabel := tb.model
+	if tb.provider != "" {
+		modelLabel = fmt.Sprintf("%s/%s", tb.provider, tb.model)
+	}
+	if tb.state != "" {
+		modelLabel = fmt.Sprintf("%s [%s]", modelLabel, tb.state)
+	}
+	left := fmt.Sprintf("%s · %s · %s", tabLabel, tb.agent, modelLabel)
 
 	// Right side: blob counts when on archaeo tab, else token/duration metrics.
 	var right string

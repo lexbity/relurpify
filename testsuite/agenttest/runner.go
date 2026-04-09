@@ -34,11 +34,11 @@ type RunOptions struct {
 	DebugLLM      bool
 	DebugAgent    bool
 
-	OllamaReset        string   // none|model|server
-	OllamaBinary       string   // default: ollama
-	OllamaService      string   // default: ollama
-	OllamaResetOn      []string // regexes matched against error to trigger reset+retry
-	OllamaResetBetween bool     // reset before each case
+	BackendReset        string   // none|model|server
+	BackendBinary       string   // default: ollama
+	BackendService      string   // default: ollama
+	BackendResetOn      []string // regexes matched against error to trigger reset+retry
+	BackendResetBetween bool     // reset before each case
 
 	Lane string // optional tag-lane filter for multi-suite runs
 }
@@ -219,7 +219,7 @@ func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptio
 			if err != nil {
 				return err
 			}
-			if !shouldPreflightOllama(exec.RecordingMode) {
+			if !shouldPreflightBackend(exec.RecordingMode) {
 				continue
 			}
 			key := strings.TrimSpace(exec.Endpoint) + "|" + strings.TrimSpace(exec.Model)
@@ -227,8 +227,8 @@ func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptio
 				continue
 			}
 			checked[key] = struct{}{}
-			if err := preflightOllama(exec.Endpoint, exec.Model); err != nil {
-				return fmt.Errorf("ollama preflight failed for suite %s case %s: %w", filepath.Base(suite.SourcePath), c.Name, err)
+			if err := preflightBackend(exec.Endpoint, exec.Model); err != nil {
+				return fmt.Errorf("inference backend preflight failed for suite %s case %s: %w", filepath.Base(suite.SourcePath), c.Name, err)
 			}
 		}
 	}

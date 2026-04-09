@@ -12,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/templates"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 // DependencyStatus captures one local dependency check.
@@ -32,6 +33,7 @@ type DoctorReport struct {
 	ManifestExists   bool
 	ConfigError      string
 	ManifestError    string
+	Inference        InferenceBackendReport
 	Dependencies     []DependencyStatus
 	CheckedAt        time.Time
 }
@@ -80,27 +82,42 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		}
 	}
 
-	env := ProbeEnvironment(ctx, cfg)
+	var env EnvironmentReport
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
+	if err != nil {
+		env = ProbeEnvironment(ctx, cfg, nil)
+		if env.Inference.Error == "" {
+			env.Inference.Error = err.Error()
+		}
+		env.Inference.State = llm.BackendHealthUnhealthy
+	} else {
+		defer backend.Close()
+		env = ProbeEnvironment(ctx, cfg, backend)
+	}
+	report.Inference = env.Inference
 	// Convert ayenitd probe results
 	// Map available Config fields to ayenitd.WorkspaceConfig.
 	// Some fields may be missing in Config; use zero values.
 	ayenitdCfg := ayenitd.WorkspaceConfig{
-		Workspace:      cfg.Workspace,
-		ManifestPath:   cfg.ManifestPath,
-		OllamaEndpoint: cfg.OllamaEndpoint,
-		OllamaModel:    cfg.OllamaModel,
-		ConfigPath:     cfg.ConfigPath,
-		AgentsDir:      cfg.AgentsDir,
-		AgentName:      cfg.AgentName,
-		LogPath:        cfg.LogPath,
-		TelemetryPath:  cfg.TelemetryPath,
-		EventsPath:     cfg.EventsPath,
-		MemoryPath:     cfg.MemoryPath,
-		HITLTimeout:    cfg.HITLTimeout,
-		AuditLimit:     cfg.AuditLimit,
-		Sandbox:        cfg.Sandbox,
+		Workspace:                  cfg.Workspace,
+		ManifestPath:               cfg.ManifestPath,
+		InferenceProvider:          cfg.InferenceProvider,
+		InferenceEndpoint:          cfg.InferenceEndpoint,
+		InferenceModel:             cfg.InferenceModel,
+		InferenceAPIKey:            cfg.InferenceAPIKey,
+		InferenceNativeToolCalling: cfg.InferenceNativeToolCalling,
+		ConfigPath:                 cfg.ConfigPath,
+		AgentsDir:                  cfg.AgentsDir,
+		AgentName:                  cfg.AgentName,
+		LogPath:                    cfg.LogPath,
+		TelemetryPath:              cfg.TelemetryPath,
+		EventsPath:                 cfg.EventsPath,
+		MemoryPath:                 cfg.MemoryPath,
+		HITLTimeout:                cfg.HITLTimeout,
+		AuditLimit:                 cfg.AuditLimit,
+		Sandbox:                    cfg.Sandbox,
 	}
-	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg)
+	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg, nil)
 	var deps []DependencyStatus
 	for _, r := range ayenitdResults {
 		deps = append(deps, DependencyStatus{
@@ -126,13 +143,13 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		Blocking:  false,
 		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error)),
 	})
-	// Ollama check is already covered by ayenitd, but keep for compatibility
+	// Inference backend check is already covered by ayenitd, but keep for compatibility.
 	deps = append(deps, DependencyStatus{
-		Name:      "ollama",
+		Name:      "inference",
 		Required:  true,
-		Available: env.Ollama.Healthy,
-		Blocking:  !env.Ollama.Healthy,
-		Details:   firstNonEmpty(env.Ollama.SelectedModel, env.Ollama.Error),
+		Available: env.Inference.State == llm.BackendHealthReady || env.Inference.State == llm.BackendHealthDegraded,
+		Blocking:  env.Inference.State == llm.BackendHealthUnhealthy,
+		Details:   firstNonEmpty(env.Inference.SelectedModel, env.Inference.Error),
 	})
 	deps = append(deps, detectChromiumStatus(ctx))
 	report.Dependencies = deps

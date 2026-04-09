@@ -56,7 +56,7 @@ Field meanings:
 
 | Field | Purpose |
 |-------|---------|
-| `model` | Default Ollama model override for this workspace |
+| `model` | Default inference model override for this workspace |
 | `agents` | Preferred agent presets or definitions |
 | `allowed_capabilities` | Restrict capability visibility with selector-based bundles |
 | `last_updated` | Unix timestamp of the last save |
@@ -275,7 +275,7 @@ spec:
             max_files: 20
             max_tokens: 20000
             include_dependencies: true
-        ollama_tool_calling: true
+        native_tool_calling: true
 
         capability_policies:
             - selector:

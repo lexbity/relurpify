@@ -437,6 +437,13 @@ func (p *SessionPane) viewLive() string {
 	if p.session != nil {
 		b.WriteString(dimStyle.Render("workspace  ") + filePathStyle.Render(p.session.Workspace) + "\n")
 		b.WriteString(dimStyle.Render("agent      ") + textStyle.Render(p.session.Agent) + "\n")
+		if p.session.Provider != "" {
+			label := p.session.Provider
+			if p.session.BackendState != "" {
+				label = fmt.Sprintf("%s [%s]", label, p.session.BackendState)
+			}
+			b.WriteString(dimStyle.Render("provider   ") + textStyle.Render(label) + "\n")
+		}
 		b.WriteString(dimStyle.Render("model      ") + textStyle.Render(p.session.Model) + "\n")
 		if p.session.Mode != "" {
 			b.WriteString(dimStyle.Render("mode       ") + inProgressStyle.Render(p.session.Mode) + "\n")

@@ -558,7 +558,7 @@ func TestCountTokenUsage(t *testing.T) {
 	}
 }
 
-func TestLookupOllamaModelProvenance(t *testing.T) {
+func TestLookupBackendModelProvenance(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
@@ -573,9 +573,9 @@ func TestLookupOllamaModelProvenance(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provenance, err := lookupOllamaModelProvenance(server.URL, "qwen2.5-coder:14b")
+	provenance, err := lookupBackendModelProvenance(server.URL, "qwen2.5-coder:14b")
 	if err != nil {
-		t.Fatalf("lookupOllamaModelProvenance: %v", err)
+		t.Fatalf("lookupBackendModelProvenance: %v", err)
 	}
 	if provenance == nil || provenance.Digest != "sha256:abc123" || provenance.LoadedName != "qwen2.5-coder:14b-q8_0" {
 		t.Fatalf("unexpected provenance: %+v", provenance)

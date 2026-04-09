@@ -18,7 +18,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var probeWorkspaceFn = ayenitd.ProbeWorkspace
+var probeWorkspaceFn = func(cfg ayenitd.WorkspaceConfig) []ayenitd.ProbeResult {
+	return ayenitd.ProbeWorkspace(cfg, nil)
+}
 
 type inspectionTarget struct {
 	workspace    string
@@ -76,7 +78,7 @@ func newWorkspaceStatusCmd() *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(), "workspace: %s\n", target.workspace)
 			fmt.Fprintf(cmd.OutOrStdout(), "agent: %s\n", target.agentName)
 			fmt.Fprintf(cmd.OutOrStdout(), "manifest: %s\n", target.manifestPath)
-			fmt.Fprintf(cmd.OutOrStdout(), "model: %s\n", target.cfg.OllamaModel)
+			fmt.Fprintf(cmd.OutOrStdout(), "model: %s\n", target.cfg.InferenceModel)
 			fmt.Fprintf(cmd.OutOrStdout(), "config: %s\n", target.cfg.ConfigPath)
 			fmt.Fprintf(cmd.OutOrStdout(), "log: %s\n", target.cfg.LogPath)
 			fmt.Fprintf(cmd.OutOrStdout(), "events: %s\n", target.cfg.EventsPath)
@@ -183,11 +185,12 @@ func buildProbeWorkspaceConfig(ws string) ayenitd.WorkspaceConfig {
 		modelName = globalCfg.DefaultModel.Name
 	}
 	return ayenitd.WorkspaceConfig{
-		Workspace:      ws,
-		ConfigPath:     cfgFile,
-		OllamaEndpoint: defaultEndpoint(),
-		OllamaModel:    modelName,
-		SkipASTIndex:   true,
+		Workspace:         ws,
+		InferenceProvider: "ollama",
+		InferenceEndpoint: defaultEndpoint(),
+		InferenceModel:    modelName,
+		ConfigPath:        cfgFile,
+		SkipASTIndex:      true,
 	}
 }
 
@@ -219,19 +222,20 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 		modelName = defaultModelName()
 	}
 	cfg := ayenitd.WorkspaceConfig{
-		Workspace:      runtimeCfg.Workspace,
-		ManifestPath:   runtimeCfg.ManifestPath,
-		ConfigPath:     runtimeCfg.ConfigPath,
-		AgentsDir:      runtimeCfg.AgentsDir,
-		AgentName:      agentName,
-		OllamaEndpoint: defaultEndpoint(),
-		OllamaModel:    modelName,
-		LogPath:        frameworkconfig.New(ws).LogFile("ayenitd.log"),
-		MemoryPath:     runtimeCfg.MemoryPath,
-		SkipASTIndex:   true,
-		HITLTimeout:    runtimeCfg.HITLTimeout,
-		AuditLimit:     runtimeCfg.AuditLimit,
-		Sandbox:        runtimeCfg.Sandbox,
+		Workspace:         runtimeCfg.Workspace,
+		ManifestPath:      runtimeCfg.ManifestPath,
+		InferenceProvider: "ollama",
+		InferenceEndpoint: defaultEndpoint(),
+		InferenceModel:    modelName,
+		ConfigPath:        runtimeCfg.ConfigPath,
+		AgentsDir:         runtimeCfg.AgentsDir,
+		AgentName:         agentName,
+		LogPath:           frameworkconfig.New(ws).LogFile("ayenitd.log"),
+		MemoryPath:        runtimeCfg.MemoryPath,
+		SkipASTIndex:      true,
+		HITLTimeout:       runtimeCfg.HITLTimeout,
+		AuditLimit:        runtimeCfg.AuditLimit,
+		Sandbox:           runtimeCfg.Sandbox,
 	}
 	return &inspectionTarget{
 		workspace:    ws,

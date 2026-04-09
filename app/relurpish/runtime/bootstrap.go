@@ -23,6 +23,7 @@ import (
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 type AgentBootstrapOptions struct {
@@ -36,10 +37,10 @@ type AgentBootstrapOptions struct {
 	PermissionManager   *fauthorization.PermissionManager
 	Runner              fsandbox.CommandRunner
 	Model               core.LanguageModel
+	Backend             llm.ManagedBackend
+	InferenceModel      string
 	Memory              memory.MemoryStore
 	Telemetry           core.Telemetry
-	OllamaEndpoint      string
-	OllamaModel         string
 	SkipASTIndex        bool
 	MaxIterations       int
 	AllowedCapabilities []core.CapabilitySelector
@@ -60,6 +61,7 @@ type BootstrappedAgentRuntime struct {
 	Memory               memory.MemoryStore
 	AgentSpec            *core.AgentRuntimeSpec
 	AgentConfig          *core.Config
+	Backend              llm.ManagedBackend
 	Environment          agents.AgentEnvironment
 	AgentDefinitions     map[string]*core.AgentDefinition
 	SkillResults         []frameworkskills.SkillResolution
@@ -85,10 +87,10 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		PermissionManager:   opts.PermissionManager,
 		Runner:              opts.Runner,
 		Model:               opts.Model,
+		Backend:             opts.Backend,
+		InferenceModel:      opts.InferenceModel,
 		Memory:              opts.Memory,
 		Telemetry:           opts.Telemetry,
-		OllamaEndpoint:      opts.OllamaEndpoint,
-		OllamaModel:         opts.OllamaModel,
 		SkipASTIndex:        opts.SkipASTIndex,
 		MaxIterations:       opts.MaxIterations,
 		AllowedCapabilities: opts.AllowedCapabilities,
@@ -140,6 +142,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		Memory:               boot.Memory,
 		AgentSpec:            boot.AgentSpec,
 		AgentConfig:          boot.AgentConfig,
+		Backend:              boot.Backend,
 		Environment:          env,
 		AgentDefinitions:     boot.AgentDefinitions,
 		SkillResults:         boot.SkillResults,

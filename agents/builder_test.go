@@ -66,7 +66,7 @@ func TestAgentBuilderBuildsAllSupportedAgentTypes(t *testing.T) {
 			Name:              "builder-test",
 			Model:             "stub",
 			MaxIterations:     2,
-			OllamaToolCalling: true,
+			NativeToolCalling: true,
 		},
 	}
 

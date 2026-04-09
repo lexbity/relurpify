@@ -57,7 +57,7 @@ func TestArchitectAgent_Scenario_PlanThenExecute_SingleStep(t *testing.T) {
 	cfg := &core.Config{
 		Model:             "scenario-stub",
 		MaxIterations:     3,
-		OllamaToolCalling: true,
+		NativeToolCalling: true,
 	}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
@@ -131,7 +131,7 @@ func TestArchitectAgent_Scenario_MultiStepPlan(t *testing.T) {
 	cfg := &core.Config{
 		Model:             "scenario-stub",
 		MaxIterations:     3,
-		OllamaToolCalling: true,
+		NativeToolCalling: true,
 	}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
@@ -185,7 +185,7 @@ func TestArchitectAgent_Scenario_PlanStateFlowsToExecutor(t *testing.T) {
 		ExecutorTools:     reg,
 		WorkflowStatePath: filepath.Join(t.TempDir(), "workflow.db"),
 	}
-	cfg := &core.Config{Model: "scenario-stub", MaxIterations: 2, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "scenario-stub", MaxIterations: 2, NativeToolCalling: true}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestArchitectAgent_Scenario_WorkflowPersistedAfterExecution(t *testing.T) {
 		ExecutorTools:     reg,
 		WorkflowStatePath: storePath,
 	}
-	cfg := &core.Config{Model: "scenario-stub", MaxIterations: 2, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "scenario-stub", MaxIterations: 2, NativeToolCalling: true}
 	if err := agent.Initialize(cfg); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}

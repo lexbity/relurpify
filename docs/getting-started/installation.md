@@ -171,8 +171,8 @@ The TUI opens with the Chat pane active.
 | `--workspace <path>` | Override the workspace root |
 | `--manifest <path>` | Override the active manifest path |
 | `--agent <name>` | Select an agent preset or definition |
-| `--ollama-endpoint <url>` | Override the Ollama endpoint |
-| `--ollama-model <name>` | Override the model name |
+| `--inference-endpoint <url>` | Override the inference backend endpoint |
+| `--inference-model <name>` | Override the inference backend model |
 | `--runsc <path>` | Override the `runsc` binary path |
 | `--container-runtime <name>` | Select `docker` or `containerd` |
 | `--sandbox-platform <name>` | Select `kvm` or `ptrace` |
@@ -185,7 +185,7 @@ Example:
 relurpish chat \
   --workspace /my/project \
   --manifest /my/project/relurpify_cfg/agent.manifest.yaml \
-  --ollama-model qwen2.5-coder:14b
+  --inference-model qwen2.5-coder:14b
 ```
 
 ---

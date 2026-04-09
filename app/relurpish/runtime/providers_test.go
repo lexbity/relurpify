@@ -1013,7 +1013,7 @@ func TestMCPClientProviderHandlesSamplingAndElicitationRequests(t *testing.T) {
 	require.NoError(t, err)
 
 	rt := &Runtime{
-		Config: Config{OllamaModel: "test-model"},
+		Config: Config{InferenceModel: "test-model"},
 		Tools:  capability.NewRegistry(),
 		Model:  mcpSamplingStubModel{},
 		AgentSpec: &core.AgentRuntimeSpec{

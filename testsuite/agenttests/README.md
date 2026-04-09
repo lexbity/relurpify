@@ -40,17 +40,17 @@ Flags:
 --tier smoke
 --include-quarantined
 --skip-ast-index                 default true; live agenttests run without AST bootstrap
---ollama-reset none|model|server   (default none)
---ollama-reset-between             reset before each case
---ollama-reset-on <regex>          repeatable; trigger reset+retry on matching errors
---ollama-bin ollama                path/name of ollama binary
---ollama-service ollama            systemd service name for server restarts
+--backend-reset none|model|server   (default none)
+--backend-reset-between             reset before each case
+--backend-reset-on <regex>          repeatable; trigger reset+retry on matching errors
+--backend-bin ollama                path/name of backend binary
+--backend-service ollama            systemd service name for server restarts
 ```
 
 Examples:
 ```
 # Unload model between cases
-./dev-agent agenttest run --agent coding --ollama-reset model --ollama-reset-between
+./dev-agent agenttest run --agent coding --backend-reset model --backend-reset-between
 
 # Run the default PR smoke lane
 ./dev-agent agenttest run --lane pr-smoke
@@ -62,7 +62,7 @@ Examples:
 ./dev-agent agenttest run --lane quarantined-live
 
 # Restart server and auto-retry on timeouts
-./dev-agent agenttest run --agent coding --ollama-reset server --ollama-reset-between --timeout 2m
+./dev-agent agenttest run --agent coding --backend-reset server --backend-reset-between --timeout 2m
 
 # Dedicated AST-enabled end-to-end coverage
 ./dev-agent agenttest run --agent coding --skip-ast-index=false

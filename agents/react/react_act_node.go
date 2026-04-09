@@ -131,7 +131,7 @@ func (n *reactActNode) Execute(ctx context.Context, state *core.Context) (*core.
 				return result, nil
 			}
 		}
-		if n.agent.Config != nil && !n.agent.Config.OllamaToolCalling {
+		if n.agent.Config != nil && !n.agent.Config.NativeToolCalling {
 			state.Set("react.tool_calls", []core.ToolCall{})
 		}
 	}

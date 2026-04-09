@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -28,6 +27,7 @@ import (
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 const contextFileMaxBytes = 8000
@@ -75,7 +75,7 @@ type RuntimeAdapter interface {
 	SessionInfo() SessionInfo
 	ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution
 	SessionArtifacts() SessionArtifacts
-	OllamaModels(ctx context.Context) ([]string, error)
+	InferenceModels(ctx context.Context) ([]string, error)
 	RecordingMode() string
 	SetRecordingMode(mode string) error
 	SaveModel(model string) error
@@ -201,13 +201,22 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	}
 	cfg := r.rt.Config
 	info.Workspace = cfg.Workspace
-	info.Model = cfg.OllamaModel
+	info.Provider = cfg.InferenceProvider
+	info.Model = cfg.InferenceModel
 	info.Agent = cfg.AgentLabel()
+	if r.rt.Backend != nil {
+		if health, err := r.rt.Backend.Health(context.Background()); err == nil && health != nil {
+			info.BackendState = string(health.State)
+		}
+	}
 
 	if r.rt.Registration != nil && r.rt.Registration.Manifest != nil {
 		manifest := r.rt.Registration.Manifest
 		info.Agent = manifest.Metadata.Name
 		if manifest.Spec.Agent != nil {
+			if manifest.Spec.Agent.Model.Provider != "" {
+				info.Provider = manifest.Spec.Agent.Model.Provider
+			}
 			if manifest.Spec.Agent.Model.Name != "" {
 				info.Model = manifest.Spec.Agent.Model.Name
 			}
@@ -362,37 +371,34 @@ func (r *runtimeAdapter) ExecuteInstructionStream(ctx context.Context, instructi
 	return r.rt.ExecuteInstructionStream(ctx, instruction, taskType, metadata, callback)
 }
 
-func (r *runtimeAdapter) OllamaModels(ctx context.Context) ([]string, error) {
+func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	endpoint := r.rt.Config.OllamaEndpoint
-	if endpoint == "" {
-		endpoint = "http://localhost:11434"
+	var models []string
+	if r.rt.Backend != nil {
+		backendModels, err := r.rt.Backend.ListModels(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, model := range backendModels {
+			models = append(models, model.Name)
+		}
+		return models, nil
 	}
-	u := strings.TrimRight(endpoint, "/") + "/api/tags"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.rt.Config))
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	defer backend.Close()
+	backendModels, err := backend.ListModels(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	var body struct {
-		Models []struct {
-			Name string `json:"name"`
-		} `json:"models"`
+	for _, model := range backendModels {
+		models = append(models, model.Name)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(body.Models))
-	for _, m := range body.Models {
-		names = append(names, m.Name)
-	}
-	return names, nil
+	return models, nil
 }
 
 func (r *runtimeAdapter) RecordingMode() string {
@@ -425,6 +431,11 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	if err != nil {
 		wsCfg = runtimesvc.WorkspaceConfig{}
 	}
+	provider := strings.TrimSpace(r.rt.Config.InferenceProvider)
+	if provider == "" {
+		provider = strings.TrimSpace(r.SessionInfo().Provider)
+	}
+	wsCfg.Provider = provider
 	wsCfg.Model = model
 	wsCfg.LastUpdated = time.Now().Unix()
 	return runtimesvc.SaveWorkspaceConfig(cfgPath, wsCfg)

@@ -82,7 +82,9 @@ framework/
 
 **Providers** — `Provider` is the common interface for all capability sources: builtin, plugin, MCP client/server, agent-runtime, LSP, node-device. `ProviderPolicy`, `CapabilityPolicy`, and `GlobalPolicy` form the declarative authorization layer.
 
-**LLM** — `LanguageModel`, `LLMOptions`, `LLMResponse`, `Message`, `ToolCall`, `Tool`. The interface implemented by `platform/llm`.
+**LLM** — `LanguageModel`, `LLMOptions`, `LLMResponse`, `Message`, `ToolCall`, `Tool`. `LanguageModel` is implemented by provider-backed transports in `platform/llm`.
+
+**Managed backends** — `BackendCapabilities`, `BackendClass`, and backend health/model metadata are the shared contract used by runtime bootstrap, capability routing, probe/doctor reporting, retrieval selection, and the TUI. The `framework/` layer never imports `platform/llm`; it consumes the shared capability types only.
 
 **Permissions & HITL** — `ToolPermissions`, `PermissionSet`, `ApprovalBinding`, `HITLRequest`. `HITLRequest` carries a `Timeout`, `TimeoutBehavior`, and `RunID` for background task flows.
 
@@ -108,7 +110,7 @@ runtime family for opinionated higher-order execution behaviors. See
 
 Dispatch is gated by the compiled policy engine plus concrete permission checks. Every result is wrapped in a `CapabilityResultEnvelope` carrying provenance and an `InsertionDecision`.
 
-`tool_formatting.go` converts descriptors to Ollama's JSON schema tool format. `node_support.go` wires node-device providers for Nexus-backed capabilities.
+`tool_formatting.go` converts descriptors to provider-native tool-call formats used by the transport backends. `node_support.go` wires node-device providers for Nexus-backed capabilities.
 
 ## capabilityplan
 

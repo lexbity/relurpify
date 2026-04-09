@@ -415,7 +415,7 @@ func (f *fakeRuntimeAdapter) SessionArtifacts() SessionArtifacts {
 	return SessionArtifacts{}
 }
 
-func (f *fakeRuntimeAdapter) OllamaModels(ctx context.Context) ([]string, error) {
+func (f *fakeRuntimeAdapter) InferenceModels(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
@@ -744,7 +744,7 @@ func (f *fakeRuntimeAdapterWithHITL) SessionArtifacts() SessionArtifacts {
 	return SessionArtifacts{}
 }
 
-func (f *fakeRuntimeAdapterWithHITL) OllamaModels(ctx context.Context) ([]string, error) {
+func (f *fakeRuntimeAdapterWithHITL) InferenceModels(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 

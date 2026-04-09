@@ -59,8 +59,8 @@ func main() {}
 	cfg := ayenitd.WorkspaceConfig{
 		Workspace:      workspace,
 		ManifestPath:   manifestPath,
-		OllamaEndpoint: "http://localhost:11434",
-		OllamaModel:    "qwen2.5-coder:14b",
+		InferenceEndpoint: "http://localhost:11434",
+		InferenceModel:    "qwen2.5-coder:14b",
 		MemoryPath:     filepath.Join(workspace, "memory"),
 		SkipASTIndex:   true, // don't block on full indexing in tests
 	}
@@ -122,8 +122,8 @@ func TestOpenWorkspace_ClosesCleanly(t *testing.T) {
 	cfg := ayenitd.WorkspaceConfig{
 		Workspace:      workspace,
 		ManifestPath:   manifestPath,
-		OllamaEndpoint: "http://localhost:11434",
-		OllamaModel:    "qwen2.5-coder:14b",
+		InferenceEndpoint: "http://localhost:11434",
+		InferenceModel:    "qwen2.5-coder:14b",
 		MemoryPath:     filepath.Join(workspace, "memory"),
 		SkipASTIndex:   true,
 	}
@@ -152,8 +152,8 @@ func TestOpenWorkspace_ProbeBlocksOnBadEndpoint(t *testing.T) {
 	cfg := ayenitd.WorkspaceConfig{
 		Workspace:      workspace,
 		ManifestPath:   manifestPath,
-		OllamaEndpoint: "http://127.0.0.1:19999", // deliberately wrong port
-		OllamaModel:    "qwen2.5-coder:14b",
+		InferenceEndpoint: "http://127.0.0.1:19999", // deliberately wrong port
+		InferenceModel:    "qwen2.5-coder:14b",
 		MemoryPath:     filepath.Join(workspace, "memory"),
 	}
 

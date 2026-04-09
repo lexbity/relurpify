@@ -453,7 +453,7 @@ func TestReActAgentExecute(t *testing.T) {
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 2, NativeToolCalling: true}
 	assert.NoError(t, agent.Initialize(cfg))
 
 	task := &core.Task{ID: "task-1", Instruction: "do something"}
@@ -501,7 +501,7 @@ func TestReActAgentToolCallingDisabled(t *testing.T) {
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: false}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 2, NativeToolCalling: false}
 	assert.NoError(t, agent.Initialize(cfg))
 
 	task := &core.Task{ID: "task-2", Instruction: "do something"}
@@ -545,7 +545,7 @@ func TestReActAgentToolCallingFallbackExecutesParsedToolCalls(t *testing.T) {
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 2, OllamaToolCalling: false}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 2, NativeToolCalling: false}
 	assert.NoError(t, agent.Initialize(cfg))
 
 	task := &core.Task{ID: "task-3", Instruction: "use tool via fallback"}
@@ -994,7 +994,7 @@ func TestReActAgentToolCalling(t *testing.T) {
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	assert.NoError(t, agent.Initialize(cfg))
 
 	task := &core.Task{ID: "task-2", Instruction: "use tool"}
@@ -1054,7 +1054,7 @@ func TestReActAgentToolCallingPreservesTranscriptAcrossTurns(t *testing.T) {
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 3, OllamaToolCalling: true}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 3, NativeToolCalling: true}
 	assert.NoError(t, agent.Initialize(cfg))
 
 	task := &core.Task{ID: "task-transcript", Instruction: "use the echo tool and finish"}
@@ -1183,7 +1183,7 @@ func TestReActAgentFailsWhenIterationBudgetIsExhaustedWithoutEdits(t *testing.T)
 		Model: llm,
 		Tools: registry,
 	}
-	cfg := &core.Config{Model: "test-model", MaxIterations: 5, OllamaToolCalling: false}
+	cfg := &core.Config{Model: "test-model", MaxIterations: 5, NativeToolCalling: false}
 	assert.NoError(t, agent.Initialize(cfg))
 
 	task := &core.Task{ID: "task-loop", Instruction: "Fix the bug and run tests"}

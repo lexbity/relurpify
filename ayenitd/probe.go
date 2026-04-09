@@ -2,15 +2,13 @@ package ayenitd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 // ProbeResult represents the outcome of a single platform runtime check.
@@ -23,7 +21,7 @@ type ProbeResult struct {
 
 // ProbeWorkspace runs all platform runtime checks required for a workspace.
 // It returns a slice of results, one per check.
-func ProbeWorkspace(cfg WorkspaceConfig) []ProbeResult {
+func ProbeWorkspace(cfg WorkspaceConfig, backend llm.ManagedBackend) []ProbeResult {
 	var results []ProbeResult
 
 	// 1. Workspace directory
@@ -44,25 +42,16 @@ func ProbeWorkspace(cfg WorkspaceConfig) []ProbeResult {
 		Message:  sqliteMsg,
 	})
 
-	// 3. Ollama endpoint reachable
-	ollamaReachOk, ollamaReachMsg := checkOllamaReachable(cfg.OllamaEndpoint)
+	// 3. Inference backend reachable
+	inferenceOk, inferenceMsg := checkInferenceBackend(cfg, backend)
 	results = append(results, ProbeResult{
-		Name:     "ollama_reachable",
+		Name:     "inference_backend",
 		Required: true,
-		OK:       ollamaReachOk,
-		Message:  ollamaReachMsg,
+		OK:       inferenceOk,
+		Message:  inferenceMsg,
 	})
 
-	// 4. Ollama model present
-	ollamaModelOk, ollamaModelMsg := checkOllamaModel(cfg.OllamaEndpoint, cfg.OllamaModel)
-	results = append(results, ProbeResult{
-		Name:     "ollama_model",
-		Required: true,
-		OK:       ollamaModelOk,
-		Message:  ollamaModelMsg,
-	})
-
-	// 5. Disk space
+	// 4. Disk space
 	diskOk, diskMsg := checkDiskSpace(cfg.Workspace, 256*1024*1024) // 256 MB
 	results = append(results, ProbeResult{
 		Name:     "disk_space",
@@ -82,7 +71,6 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 	if !info.IsDir() {
 		return false, "workspace path is not a directory"
 	}
-	// Check readability
 	f, err := os.Open(workspace)
 	if err != nil {
 		return false, fmt.Sprintf("workspace not readable: %s", err)
@@ -93,12 +81,10 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 
 func checkSQLiteWritable(workspace string) (bool, string) {
 	paths := config.New(workspace)
-	// Check sessions directory
 	sessionsDir := paths.SessionsDir()
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		return false, fmt.Sprintf("cannot create sessions dir: %s", err)
 	}
-	// Try to create a test file
 	testFile := filepath.Join(sessionsDir, ".probe_write_test")
 	if err := os.WriteFile(testFile, []byte("test"), 0o644); err != nil {
 		return false, fmt.Sprintf("sessions dir not writable: %s", err)
@@ -107,57 +93,35 @@ func checkSQLiteWritable(workspace string) (bool, string) {
 	return true, "SQLite locations are writable"
 }
 
-func checkOllamaReachable(endpoint string) (bool, string) {
-	if endpoint == "" {
-		return false, "Ollama endpoint not configured"
+func checkInferenceBackend(cfg WorkspaceConfig, backend llm.ManagedBackend) (bool, string) {
+	if backend == nil {
+		var err error
+		backend, err = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
+		if err != nil {
+			return false, fmt.Sprintf("build inference backend: %s", err)
+		}
+		defer backend.Close()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "HEAD", endpoint+"/api/tags", nil)
+	if err := backend.Warm(context.Background()); err != nil {
+		return false, fmt.Sprintf("inference backend unhealthy: %s", err)
+	}
+	models, err := backend.ListModels(context.Background())
 	if err != nil {
-		return false, fmt.Sprintf("invalid Ollama endpoint: %s", err)
+		return false, fmt.Sprintf("inference backend model list failed: %s", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false, fmt.Sprintf("Ollama not reachable at %s; is it running?", endpoint)
+	if len(models) == 0 {
+		return false, "inference backend returned no models"
 	}
-	resp.Body.Close()
-	return true, "Ollama endpoint reachable"
-}
-
-func checkOllamaModel(endpoint, model string) (bool, string) {
-	if endpoint == "" || model == "" {
-		return false, "Ollama endpoint or model not configured"
+	selected := cfg.InferenceModel
+	if selected == "" {
+		selected = models[0].Name
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	url := fmt.Sprintf("%s/api/tags", endpoint)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return false, fmt.Sprintf("cannot create request: %s", err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false, fmt.Sprintf("failed to fetch model list: %s", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return false, fmt.Sprintf("Ollama API returned %s", resp.Status)
-	}
-	var result struct {
-		Models []struct {
-			Name string `json:"name"`
-		} `json:"models"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return false, fmt.Sprintf("failed to parse model list: %s", err)
-	}
-	for _, m := range result.Models {
-		if m.Name == model {
-			return true, fmt.Sprintf("model %s present", model)
+	for _, model := range models {
+		if model.Name == selected {
+			return true, fmt.Sprintf("inference backend reachable; model %s present", selected)
 		}
 	}
-	return false, fmt.Sprintf("model %s not found in Ollama; run: ollama pull %s", model, model)
+	return false, fmt.Sprintf("model %s not found in inference backend", selected)
 }
 
 func checkDiskSpace(workspace string, requiredBytes int64) (bool, string) {

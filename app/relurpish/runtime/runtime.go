@@ -52,6 +52,7 @@ import (
 	platformast "github.com/lexcodex/relurpify/platform/ast"
 	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	platformgit "github.com/lexcodex/relurpify/platform/git"
+	"github.com/lexcodex/relurpify/platform/llm"
 	platformsearch "github.com/lexcodex/relurpify/platform/search"
 	platformshell "github.com/lexcodex/relurpify/platform/shell"
 )
@@ -85,6 +86,7 @@ type Runtime struct {
 	Telemetry            core.Telemetry
 	Logger               *log.Logger
 	Workspace            WorkspaceConfig
+	Backend              llm.ManagedBackend
 	ServiceManager       *ayenitd.ServiceManager
 	NexusNodeProvider    core.NodeProvider
 	NexusClient          *NexusClient
@@ -124,8 +126,11 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	if cfg.ConfigPath != "" {
 		if loaded, err := LoadWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
-			if workspaceCfg.Model != "" && cfg.OllamaModel == "" {
-				cfg.OllamaModel = workspaceCfg.Model
+			if workspaceCfg.Provider != "" && cfg.InferenceProvider == "" {
+				cfg.InferenceProvider = workspaceCfg.Provider
+			}
+			if workspaceCfg.Model != "" && cfg.InferenceModel == "" {
+				cfg.InferenceModel = workspaceCfg.Model
 			}
 			if len(workspaceCfg.Agents) > 0 && cfg.AgentName == "" {
 				cfg.AgentName = workspaceCfg.Agents[0]
@@ -137,22 +142,25 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 	// Delegate all workspace initialization to ayenitd.Open().
 	ws, err := ayenitd.Open(ctx, ayenitd.WorkspaceConfig{
-		Workspace:           cfg.Workspace,
-		ManifestPath:        cfg.ManifestPath,
-		OllamaEndpoint:      cfg.OllamaEndpoint,
-		OllamaModel:         cfg.OllamaModel,
-		ConfigPath:          cfg.ConfigPath,
-		AgentsDir:           cfg.AgentsDir,
-		AgentName:           cfg.AgentName,
-		LogPath:             cfg.LogPath,
-		TelemetryPath:       cfg.TelemetryPath,
-		EventsPath:          cfg.EventsPath,
-		MemoryPath:          cfg.MemoryPath,
-		MaxIterations:       8,
-		HITLTimeout:         cfg.HITLTimeout,
-		AuditLimit:          cfg.AuditLimit,
-		Sandbox:             cfg.Sandbox,
-		AllowedCapabilities: allowedCapabilities,
+		Workspace:                  cfg.Workspace,
+		ManifestPath:               cfg.ManifestPath,
+		InferenceProvider:          cfg.InferenceProvider,
+		InferenceEndpoint:          cfg.InferenceEndpoint,
+		InferenceModel:             cfg.InferenceModel,
+		InferenceAPIKey:            cfg.InferenceAPIKey,
+		InferenceNativeToolCalling: cfg.InferenceNativeToolCalling,
+		ConfigPath:                 cfg.ConfigPath,
+		AgentsDir:                  cfg.AgentsDir,
+		AgentName:                  cfg.AgentName,
+		LogPath:                    cfg.LogPath,
+		TelemetryPath:              cfg.TelemetryPath,
+		EventsPath:                 cfg.EventsPath,
+		MemoryPath:                 cfg.MemoryPath,
+		MaxIterations:              8,
+		HITLTimeout:                cfg.HITLTimeout,
+		AuditLimit:                 cfg.AuditLimit,
+		Sandbox:                    cfg.Sandbox,
+		AllowedCapabilities:        allowedCapabilities,
 	})
 	if err != nil {
 		return nil, err
@@ -280,6 +288,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		eventLog:             eventLogCloser,
 		patternDB:            patternDB,
 		Workspace:            workspaceCfg,
+		Backend:              ws.Backend,
 		ServiceManager:       ws.ServiceManager,
 		Registration:         registration,
 		Delegations:          fauthorization.NewDelegationManager(),
@@ -363,6 +372,12 @@ func (r *Runtime) Close() error {
 			errs = append(errs, err)
 		}
 		r.WorkflowStore = nil
+	}
+	if r.Backend != nil {
+		if err := r.Backend.Close(); err != nil {
+			errs = append(errs, err)
+		}
+		r.Backend = nil
 	}
 	if r.patternDB != nil {
 		if err := r.patternDB.Close(); err != nil {
@@ -486,7 +501,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contra
 	}
 	cfg := r.Config
 	cfg.AgentName = name
-	if effectiveContract.AgentSpec != nil && effectiveContract.AgentSpec.Model.Name != "" && effectiveContract.AgentSpec.Model.Name != cfg.OllamaModel {
+	if effectiveContract.AgentSpec != nil && effectiveContract.AgentSpec.Model.Name != "" && effectiveContract.AgentSpec.Model.Name != cfg.InferenceModel {
 		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, effectiveContract.AgentSpec.Model.Name)
 	}
 	if err := ensureStableSkillCapabilityTopology(r.EffectiveContract, effectiveContract); err != nil {
@@ -494,10 +509,10 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contra
 	}
 	agentCfg := &core.Config{
 		Name:              cfg.AgentLabel(),
-		Model:             cfg.OllamaModel,
-		OllamaEndpoint:    cfg.OllamaEndpoint,
+		Model:             cfg.InferenceModel,
+		InferenceEndpoint:    cfg.InferenceEndpoint,
 		MaxIterations:     8,
-		OllamaToolCalling: effectiveContract.AgentSpec.ToolCallingEnabled(),
+		NativeToolCalling: effectiveContract.AgentSpec.NativeToolCallingEnabled(),
 		AgentSpec:         effectiveContract.AgentSpec,
 		Telemetry:         r.Telemetry,
 	}
@@ -536,8 +551,8 @@ type CapabilityRegistryOptions struct {
 	AgentID           string
 	PermissionManager *fauthorization.PermissionManager
 	AgentSpec         *core.AgentRuntimeSpec
-	OllamaEndpoint    string
-	OllamaModel       string
+	InferenceEndpoint string
+	InferenceModel    string
 	SkipASTIndex      bool
 }
 
@@ -687,26 +702,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if err := manager.StartIndexing(buildCtx); err != nil {
 		return nil, err
 	}
-	// AST indexing is launched eagerly but remains eventually consistent during
-	// execution. Callers that truly require readiness should do a bounded wait at
-	// point of use instead of putting full-workspace AST warmup on every startup.
-	var semanticStore search.SemanticStore
-	if strings.TrimSpace(cfg.OllamaModel) != "" {
-		retrievalDB, err := openRetrievalDB(paths.RetrievalDB())
-		if err != nil {
-			return nil, err
-		}
-		embedder := retrieval.NewOllamaEmbedder(cfg.OllamaEndpoint, cfg.OllamaModel)
-		if err := ingestCodeIndex(buildCtx, workspace, codeIndex, retrieval.NewIngestionPipeline(retrievalDB, embedder)); err != nil {
-			if !shouldIgnoreBootstrapIndexError(err) {
-				return nil, err
-			}
-			log.Printf("runtime bootstrap warning: semantic ingestion incomplete: %v", err)
-		} else {
-			semanticStore = &retrieverSemanticAdapter{retriever: retrieval.NewRetriever(retrievalDB, embedder)}
-		}
-	}
-	searchEngine := search.NewSearchEngine(semanticStore, codeIndex)
+	searchEngine := search.NewSearchEngine(nil, codeIndex)
 	if searchEngine == nil {
 		return nil, fmt.Errorf("search engine initialization failed")
 	}
@@ -715,6 +711,14 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		IndexManager: manager,
 		SearchEngine: searchEngine,
 	}, nil
+}
+
+func embedderCfgFromRuntimeConfig(cfg Config, model string) retrieval.EmbedderConfig {
+	return retrieval.EmbedderConfig{
+		Provider: firstNonEmpty(strings.TrimSpace(cfg.EmbeddingProvider), strings.TrimSpace(cfg.InferenceProvider)),
+		Endpoint: firstNonEmpty(strings.TrimSpace(cfg.EmbeddingEndpoint), strings.TrimSpace(cfg.InferenceEndpoint)),
+		Model:    firstNonEmpty(strings.TrimSpace(cfg.EmbeddingModel), strings.TrimSpace(model), strings.TrimSpace(cfg.InferenceModel)),
+	}
 }
 
 func openRuntimeStores(workspace string) (*memorydb.SQLiteWorkflowStateStore, frameworkplan.PlanStore, patterns.PatternStore, patterns.CommentStore, io.Closer, error) {
@@ -815,7 +819,7 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*
 			spec = &def.Spec
 			env.Config.AgentSpec = spec
 		}
-		env.Config.OllamaToolCalling = spec.ToolCallingEnabled()
+		env.Config.NativeToolCalling = spec.NativeToolCallingEnabled()
 		if spec.Model.Name != "" {
 			env.Config.Model = spec.Model.Name
 		}
@@ -1390,12 +1394,12 @@ func (r *Runtime) linkTensionToPlan(ctx context.Context, workflowID string, t *a
 	}
 	now := time.Now()
 	step := &frameworkplan.PlanStep{
-		ID:                 stepID,
-		Description:        t.Description,
-		Scope:              append([]string(nil), t.AnchorRefs...),
-		Status:             frameworkplan.PlanStepPending,
-		CreatedAt:          now,
-		UpdatedAt:          now,
+		ID:          stepID,
+		Description: t.Description,
+		Scope:       append([]string(nil), t.AnchorRefs...),
+		Status:      frameworkplan.PlanStepPending,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	plan.Steps[stepID] = step
 	plan.StepOrder = append(plan.StepOrder, stepID)

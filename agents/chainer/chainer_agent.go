@@ -180,6 +180,7 @@ func (a *ChainerAgent) executePipeline(ctx context.Context, task *core.Task, sta
 			CheckpointStore:      a.CheckpointStore,
 			CheckpointAfterStage: a.CheckpointAfterStage,
 			ResumeCheckpoint:     resumeCP,
+			AgentSpec:            a.Config.AgentSpec,
 		},
 	}
 

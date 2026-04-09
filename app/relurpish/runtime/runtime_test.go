@@ -44,7 +44,7 @@ func TestProbeEnvironmentHandlesMissingRunsc(t *testing.T) {
 	cfg.ManifestPath = filepath.Join(dir, "agent.manifest.yaml")
 	cfg.ConfigPath = config.New(dir).ConfigFile()
 	cfg.Sandbox.RunscPath = "runsc-missing"
-	report := ProbeEnvironment(context.Background(), cfg)
+	report := ProbeEnvironment(context.Background(), cfg, nil)
 	require.Contains(t, strings.Join(report.Sandbox.Errors, " "), "runsc not found")
 }
 
@@ -215,9 +215,9 @@ func TestBuildCapabilityRegistrySkipASTIndexSkipsSemanticBootstrap(t *testing.T)
 	defer embedServer.Close()
 
 	capabilities, err := BuildBuiltinCapabilityBundle(dir, runner, CapabilityRegistryOptions{
-		OllamaEndpoint: embedServer.URL,
-		OllamaModel:    "test-embedder",
-		SkipASTIndex:   true,
+		InferenceEndpoint: embedServer.URL,
+		InferenceModel:    "test-embedder",
+		SkipASTIndex:      true,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, capabilities.Close()) })
@@ -641,11 +641,11 @@ func TestReloadEffectiveContractRefreshesDefinitionOverlay(t *testing.T) {
 	require.NoError(t, err)
 	rt := &Runtime{
 		Config: Config{
-			Workspace:      workspace,
-			AgentsDir:      agentsDir,
-			AgentName:      "reviewer",
-			OllamaModel:    "manifest-model",
-			OllamaEndpoint: "http://localhost:11434",
+			Workspace:         workspace,
+			AgentsDir:         agentsDir,
+			AgentName:         "reviewer",
+			InferenceModel:    "manifest-model",
+			InferenceEndpoint: "http://localhost:11434",
 		},
 		Tools: capability.NewRegistry(),
 		Registration: &authorization.AgentRegistration{
@@ -701,10 +701,10 @@ func TestReloadEffectiveContractRejectsSkillTopologyChanges(t *testing.T) {
 	require.NoError(t, err)
 	rt := &Runtime{
 		Config: Config{
-			Workspace:      workspace,
-			AgentName:      "coding",
-			OllamaModel:    "manifest-model",
-			OllamaEndpoint: "http://localhost:11434",
+			Workspace:         workspace,
+			AgentName:         "coding",
+			InferenceModel:    "manifest-model",
+			InferenceEndpoint: "http://localhost:11434",
 		},
 		Tools: capability.NewRegistry(),
 		Registration: &authorization.AgentRegistration{

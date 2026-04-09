@@ -391,7 +391,7 @@ func (r *phase6HistoryRuntime) ResolveContextFiles(context.Context, []string) Co
 	return ContextFileResolution{}
 }
 func (r *phase6HistoryRuntime) SessionArtifacts() SessionArtifacts { return SessionArtifacts{} }
-func (r *phase6HistoryRuntime) OllamaModels(context.Context) ([]string, error) {
+func (r *phase6HistoryRuntime) InferenceModels(context.Context) ([]string, error) {
 	return nil, nil
 }
 func (r *phase6HistoryRuntime) RecordingMode() string                                  { return "off" }

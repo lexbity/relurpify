@@ -64,8 +64,8 @@ type WorkspaceConfig struct {
     // Required
     Workspace      string            // absolute path to workspace root
     ManifestPath   string            // agent manifest YAML
-    OllamaEndpoint string
-    OllamaModel    string            // overrides manifest if non-empty
+    InferenceEndpoint string
+    InferenceModel    string            // overrides manifest if non-empty
 
     // Optional
     ConfigPath          string
@@ -182,7 +182,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error)
 
 ### Phase A: Configuration Validation
 
-Validates required fields: `Workspace`, `ManifestPath`, `OllamaEndpoint`, `OllamaModel`. Loads workspace YAML overrides via `resolveWorkspaceConfigOverrides`.
+Validates required fields: `Workspace`, `ManifestPath`, `InferenceEndpoint`, `InferenceModel`. Loads workspace YAML overrides via `resolveWorkspaceConfigOverrides`.
 
 ### Phase B: Platform Runtime Checks
 
@@ -212,7 +212,7 @@ openRuntimeStores(workspace):
 
 1. `fsandbox.NewSandboxCommandRunner` — builds the sandboxed command runner.
 2. `memory.NewHybridMemory` + `WithVectorStore(InMemoryVectorStore)` — memory store.
-3. Model resolution: `cfg.OllamaModel` overrides manifest `spec.agent.model.name`; manifest wins if config is empty.
+3. Model resolution: `cfg.InferenceModel` overrides manifest `spec.agent.model.name`; manifest wins if config is empty.
 4. `llm.NewInstrumentedModel` — wraps the Ollama client with telemetry.
 5. `guidance.NewGuidanceBroker(0)` — guidance broker.
 6. Permission event logger wired to telemetry emit function.
@@ -226,7 +226,7 @@ If `boot.CompiledPolicy != nil`, sets `registration.Policy` and installs the eng
 
 ### Phase H: Embedder Initialization
 
-Constructs `retrieval.OllamaEmbedder(cfg.OllamaEndpoint, ollamaModel)`. Assigned to `env.Embedder`. Future: config-driven backend selection via the `retrieval.Embedder` interface.
+Constructs the configured backend embedder from `cfg.InferenceEndpoint` and `cfg.InferenceModel`. Assigned to `env.Embedder`. Future: config-driven backend selection via the `retrieval.Embedder` interface.
 
 ### Phase I: Scheduler Start
 
@@ -273,8 +273,8 @@ type CapabilityRegistryOptions struct {
     AgentID           string
     PermissionManager *fauthorization.PermissionManager
     AgentSpec         *core.AgentRuntimeSpec
-    OllamaEndpoint    string
-    OllamaModel       string
+    InferenceEndpoint string
+    InferenceModel    string
     SkipASTIndex      bool
 }
 
@@ -366,4 +366,3 @@ The returned `BootstrappedAgentRuntime` carries the fully resolved `WorkspaceEnv
 `app/dev-agent-cli/start.go` calls `ayenitd.BootstrapAgentRuntime` directly and registers relurpic/agent capabilities inline. The `appruntime` import is kept only for config management, `Runtime` struct construction, and `RegisterBuiltinProviders`.
 
 `app/relurpish/runtime/runtime.go:New()` calls `ayenitd.Open()` (which internally calls `BootstrapAgentRuntime`) and then registers relurpic/agent capabilities itself after receiving the `WorkspaceEnvironment`. It calls `StealClosers()` to take ownership of the log and database handles. The `Runtime` struct's public surface is unchanged.
-

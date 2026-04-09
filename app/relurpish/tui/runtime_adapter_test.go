@@ -19,15 +19,17 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/policybundle"
+	"github.com/lexcodex/relurpify/platform/llm"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRuntimeAdapterSessionInfoUsesLiveAgentModeAndStrategy(t *testing.T) {
 	rt := &runtimesvc.Runtime{
 		Config: runtimesvc.Config{
-			Workspace:   "/workspace",
-			OllamaModel: "base-model",
-			AgentName:   "coding-go",
+			Workspace:         "/workspace",
+			InferenceProvider: "ollama",
+			InferenceModel:    "base-model",
+			AgentName:         "coding-go",
 		},
 		Agent: &agents.ReActAgent{},
 		Registration: &fauthorization.AgentRegistration{
@@ -49,6 +51,7 @@ func TestRuntimeAdapterSessionInfoUsesLiveAgentModeAndStrategy(t *testing.T) {
 	info := (&runtimeAdapter{rt: rt}).SessionInfo()
 
 	require.Equal(t, "coding-go", info.Agent)
+	require.Equal(t, "ollama", info.Provider)
 	require.Equal(t, "manifest-model", info.Model)
 	require.Equal(t, "primary", info.Role)
 	require.Equal(t, "react", info.Mode)
@@ -63,6 +66,57 @@ func TestDescribeAgentRuntimeForReflectionUsesDelegateMode(t *testing.T) {
 
 	require.Equal(t, "react", mode)
 	require.Equal(t, "reflection", strategy)
+}
+
+type runtimeAdapterModelBackend struct {
+	models []llm.ModelInfo
+}
+
+func (b runtimeAdapterModelBackend) Model() core.LanguageModel { return nil }
+func (b runtimeAdapterModelBackend) Embedder() llm.Embedder    { return nil }
+func (b runtimeAdapterModelBackend) Capabilities() core.BackendCapabilities {
+	return core.BackendCapabilities{}
+}
+func (b runtimeAdapterModelBackend) Health(context.Context) (*llm.HealthReport, error) {
+	return &llm.HealthReport{State: llm.BackendHealthReady}, nil
+}
+func (b runtimeAdapterModelBackend) ListModels(context.Context) ([]llm.ModelInfo, error) {
+	return append([]llm.ModelInfo(nil), b.models...), nil
+}
+func (b runtimeAdapterModelBackend) Warm(context.Context) error { return nil }
+func (b runtimeAdapterModelBackend) Close() error               { return nil }
+func (b runtimeAdapterModelBackend) SetDebugLogging(bool)       {}
+
+func TestRuntimeAdapterInferenceModelsListsBackendModels(t *testing.T) {
+	adapter := &runtimeAdapter{rt: &runtimesvc.Runtime{
+		Backend: runtimeAdapterModelBackend{
+			models: []llm.ModelInfo{{Name: "model-a"}, {Name: "model-b"}},
+		},
+	}}
+	models, err := adapter.InferenceModels(context.Background())
+	require.NoError(t, err)
+	require.Len(t, models, 2)
+	require.Equal(t, "model-a", models[0])
+	require.Equal(t, "model-b", models[1])
+}
+
+func TestRuntimeAdapterSaveModelPersistsProviderAndModel(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "relurpify.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("provider: anthropic\nmodel: old-model\n"), 0o644))
+	adapter := &runtimeAdapter{rt: &runtimesvc.Runtime{
+		Config: runtimesvc.Config{
+			Workspace:         dir,
+			ConfigPath:        cfgPath,
+			InferenceProvider: "ollama",
+			InferenceModel:    "base-model",
+		},
+	}}
+	require.NoError(t, adapter.SaveModel("selected-model"))
+	saved, err := runtimesvc.LoadWorkspaceConfig(cfgPath)
+	require.NoError(t, err)
+	require.Equal(t, "ollama", saved.Provider)
+	require.Equal(t, "selected-model", saved.Model)
 }
 
 func TestRuntimeAdapterListsWorkflows(t *testing.T) {

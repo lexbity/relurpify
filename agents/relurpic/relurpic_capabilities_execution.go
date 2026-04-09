@@ -201,15 +201,15 @@ func (h architectExecuteCapabilityHandler) Invoke(ctx context.Context, _ *core.C
 
 func (h architectExecuteCapabilityHandler) architectConfig() *core.Config {
 	if h.config == nil {
-		return &core.Config{Name: "architect.execute", MaxIterations: 3, OllamaToolCalling: true}
+		return &core.Config{Name: "architect.execute", MaxIterations: 3, NativeToolCalling: true}
 	}
 	cfg := *h.config
 	cfg.Name = "architect.execute"
 	if cfg.MaxIterations <= 0 {
 		cfg.MaxIterations = 3
 	}
-	if !cfg.OllamaToolCalling {
-		cfg.OllamaToolCalling = true
+	if !cfg.NativeToolCalling {
+		cfg.NativeToolCalling = true
 	}
 	cfg.AgentSpec = core.MergeAgentSpecs(h.config.AgentSpec)
 	return &cfg

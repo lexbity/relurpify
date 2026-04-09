@@ -12,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/policybundle"
 	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 // Workspace is a live, initialized workspace session. It holds all open
@@ -20,6 +21,7 @@ import (
 type Workspace struct {
 	Environment  WorkspaceEnvironment
 	Registration *fauthorization.AgentRegistration
+	Backend      llm.ManagedBackend
 
 	// Internals held for Close()/Restart()
 	logFile   io.Closer
@@ -69,6 +71,10 @@ func (w *Workspace) Close() error {
 
 	if w.Environment.Scheduler != nil {
 		w.Environment.Scheduler.Stop()
+	}
+
+	if w.Backend != nil {
+		_ = w.Backend.Close()
 	}
 
 	if c, ok := w.Environment.WorkflowStore.(io.Closer); ok {

@@ -124,7 +124,7 @@ func (m *minimalHITLRuntimeAdapter) ResolveContextFiles(context.Context, []strin
 	return ContextFileResolution{}
 }
 func (m *minimalHITLRuntimeAdapter) SessionArtifacts() SessionArtifacts              { return SessionArtifacts{} }
-func (m *minimalHITLRuntimeAdapter) OllamaModels(context.Context) ([]string, error)  { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) InferenceModels(context.Context) ([]string, error)  { return nil, nil }
 func (m *minimalHITLRuntimeAdapter) RecordingMode() string                           { return "off" }
 func (m *minimalHITLRuntimeAdapter) SetRecordingMode(string) error                   { return nil }
 func (m *minimalHITLRuntimeAdapter) SaveModel(string) error                          { return nil }

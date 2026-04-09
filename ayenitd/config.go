@@ -11,10 +11,13 @@ import (
 // workspace config, and environment. It is the input to ayenitd.Open().
 type WorkspaceConfig struct {
 	// Required
-	Workspace      string // absolute path to workspace root
-	ManifestPath   string // agent manifest YAML
-	OllamaEndpoint string
-	OllamaModel    string // overrides manifest if non-empty
+	Workspace                  string // absolute path to workspace root
+	ManifestPath               string // agent manifest YAML
+	InferenceProvider          string
+	InferenceEndpoint          string
+	InferenceModel             string // overrides manifest if non-empty
+	InferenceAPIKey            string
+	InferenceNativeToolCalling bool
 
 	// Optional
 	ConfigPath          string // workspace config YAML (relurpify.yaml etc)
@@ -35,6 +38,14 @@ type WorkspaceConfig struct {
 	// ReindexInterval, if non-zero, schedules periodic AST re-indexing.
 	// Zero (default) disables the background re-index job.
 	ReindexInterval time.Duration
+}
+
+func (cfg WorkspaceConfig) InferenceProviderValue() string { return cfg.InferenceProvider }
+func (cfg WorkspaceConfig) InferenceEndpointValue() string { return cfg.InferenceEndpoint }
+func (cfg WorkspaceConfig) InferenceModelValue() string    { return cfg.InferenceModel }
+func (cfg WorkspaceConfig) InferenceAPIKeyValue() string   { return cfg.InferenceAPIKey }
+func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
+	return cfg.InferenceNativeToolCalling
 }
 
 // AgentLabel returns the agent name to use for configuration.

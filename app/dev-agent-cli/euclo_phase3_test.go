@@ -70,10 +70,10 @@ func stubEucloWorkspaceFn(t *testing.T, ws string, skillResults []frameworkskill
 		env := ayenitd.WorkspaceEnvironment{
 			Config: &core.Config{
 				Name:              cfg.AgentName,
-				Model:             cfg.OllamaModel,
-				OllamaEndpoint:    cfg.OllamaEndpoint,
+				Model:             cfg.InferenceModel,
+				InferenceEndpoint:    cfg.InferenceEndpoint,
 				MaxIterations:     cfg.MaxIterations,
-				OllamaToolCalling: loaded.Spec.Agent != nil && loaded.Spec.Agent.ToolCallingEnabled(),
+				NativeToolCalling: loaded.Spec.Agent != nil && loaded.Spec.Agent.NativeToolCallingEnabled(),
 				AgentSpec:         loaded.Spec.Agent,
 				DebugLLM:          cfg.DebugLLM,
 				DebugAgent:        cfg.DebugAgent,

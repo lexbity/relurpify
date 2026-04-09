@@ -8,7 +8,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/retrieval"
+	"github.com/lexcodex/relurpify/platform/llm"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,6 +26,23 @@ func (runtimeFakeEmbedder) Embed(_ context.Context, texts []string) ([][]float32
 
 func (runtimeFakeEmbedder) ModelID() string { return "runtime-fake-v1" }
 func (runtimeFakeEmbedder) Dims() int       { return 2 }
+
+type runtimeFakeBackend struct {
+	embedder llm.Embedder
+}
+
+func (b runtimeFakeBackend) Model() core.LanguageModel { return nil }
+func (b runtimeFakeBackend) Embedder() llm.Embedder    { return b.embedder }
+func (runtimeFakeBackend) Capabilities() core.BackendCapabilities {
+	return core.BackendCapabilities{}
+}
+func (runtimeFakeBackend) Health(context.Context) (*llm.HealthReport, error) {
+	return &llm.HealthReport{State: llm.BackendHealthReady}, nil
+}
+func (runtimeFakeBackend) ListModels(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
+func (runtimeFakeBackend) Warm(context.Context) error                          { return nil }
+func (runtimeFakeBackend) Close() error                                        { return nil }
+func (runtimeFakeBackend) SetDebugLogging(bool)                                {}
 
 func TestRetrieverSemanticAdapterMapsCandidatesToVectorMatches(t *testing.T) {
 	t.Parallel()
@@ -50,4 +69,21 @@ func TestRetrieverSemanticAdapterMapsCandidatesToVectorMatches(t *testing.T) {
 	require.Equal(t, ingested.Chunks[0].ChunkID, results[0].ID)
 	require.Contains(t, results[0].Content, "needle")
 	require.Equal(t, ingested.Document.CanonicalURI, results[0].Metadata["path"])
+}
+
+func TestRetrievalBootstrap_UsesBackendEmbedder(t *testing.T) {
+	t.Parallel()
+
+	stub := &runtimeFakeEmbedder{}
+	embedder, err := resolveSemanticEmbedder(runtimeFakeBackend{embedder: stub}, Config{}, "ignored-model")
+	require.NoError(t, err)
+	require.Same(t, stub, embedder)
+}
+
+func TestRetrievalBootstrap_NilEmbedder_GracefulFallback(t *testing.T) {
+	t.Parallel()
+
+	embedder, err := resolveSemanticEmbedder(nil, Config{}, "")
+	require.NoError(t, err)
+	require.Nil(t, embedder)
 }

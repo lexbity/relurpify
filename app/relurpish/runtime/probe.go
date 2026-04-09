@@ -6,19 +6,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/platform/llm"
 )
 
 func execLookPathImpl(file string) (string, error) {
 	return exec.LookPath(file)
 }
+
+var newManagedBackend = llm.New
 
 type SandboxBinary struct {
 	Name          string
@@ -48,20 +51,22 @@ type ManifestSummary struct {
 	UpdatedAt   time.Time
 }
 
-// OllamaReport surfaces the health of the configured Ollama endpoint.
-type OllamaReport struct {
+// InferenceBackendReport surfaces the health of the configured inference backend.
+type InferenceBackendReport struct {
+	Provider      string
 	Endpoint      string
-	Healthy       bool
+	State         llm.BackendHealthState
 	Models        []string
 	SelectedModel string
 	Error         string
+	Resources     *llm.ResourceSnapshot
 }
 
 // EnvironmentReport aggregates the runtime environment checks.
 type EnvironmentReport struct {
 	Workspace string
 	Sandbox   SandboxReport
-	Ollama    OllamaReport
+	Inference InferenceBackendReport
 	Manifest  ManifestSummary
 	Config    WorkspaceConfig
 	Agent     string
@@ -76,11 +81,11 @@ type StatusSnapshot struct {
 	Context      *core.ContextSnapshot
 }
 
-// ProbeEnvironment inspects sandbox binaries, Ollama availability, and the
-// active manifest for status/reporting surfaces.
-func ProbeEnvironment(ctx context.Context, cfg Config) EnvironmentReport {
+// ProbeEnvironment inspects sandbox binaries, inference backend availability,
+// and the active manifest for status/reporting surfaces.
+func ProbeEnvironment(ctx context.Context, cfg Config, backend llm.ManagedBackend) EnvironmentReport {
 	sandbox := detectSandbox(ctx, cfg)
-	ollama := detectOllama(ctx, cfg)
+	inference := detectInferenceBackend(ctx, cfg, backend)
 	manifest := summarizeManifest(cfg.ManifestPath)
 	var workspaceCfg WorkspaceConfig
 	if wcfg, err := LoadWorkspaceConfig(cfg.ConfigPath); err == nil {
@@ -89,7 +94,7 @@ func ProbeEnvironment(ctx context.Context, cfg Config) EnvironmentReport {
 	return EnvironmentReport{
 		Workspace: cfg.Workspace,
 		Sandbox:   sandbox,
-		Ollama:    ollama,
+		Inference: inference,
 		Manifest:  manifest,
 		Config:    workspaceCfg,
 		Agent:     cfg.AgentLabel(),
@@ -120,41 +125,76 @@ func detectSandbox(ctx context.Context, cfg Config) SandboxReport {
 	return report
 }
 
-// detectOllama queries the Ollama tags endpoint to confirm health + models.
-func detectOllama(ctx context.Context, cfg Config) OllamaReport {
-	report := OllamaReport{Endpoint: cfg.OllamaEndpoint, SelectedModel: cfg.OllamaModel}
-	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(cfg.OllamaEndpoint, "/")+"/api/tags", nil)
-	if err != nil {
-		report.Error = err.Error()
-		return report
+// detectInferenceBackend queries the managed backend facade for health + models.
+func detectInferenceBackend(ctx context.Context, cfg Config, backend llm.ManagedBackend) InferenceBackendReport {
+	report := InferenceBackendReport{
+		Provider: cfg.InferenceProvider,
+		Endpoint: cfg.InferenceEndpoint,
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		report.Error = err.Error()
-		return report
+	ownedBackend := false
+	if backend == nil {
+		var err error
+		backend, err = newManagedBackend(llm.ProviderConfigFromRuntimeConfig(cfg))
+		if err != nil {
+			report.Error = err.Error()
+			report.State = llm.BackendHealthUnhealthy
+			return report
+		}
+		ownedBackend = true
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		report.Error = fmt.Sprintf("ollama responded with %s", resp.Status)
-		return report
+	if ownedBackend {
+		defer backend.Close()
 	}
-	var payload struct {
-		Models []struct {
-			Name string `json:"name"`
-		} `json:"models"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		report.Error = err.Error()
-		return report
-	}
-	for _, model := range payload.Models {
-		report.Models = append(report.Models, model.Name)
-		if model.Name == cfg.OllamaModel {
-			report.SelectedModel = model.Name
+	health, err := backend.Health(ctx)
+	if health != nil {
+		report.State = health.State
+		report.Resources = health.Resources
+		if health.Message != "" && report.Error == "" {
+			report.Error = health.Message
 		}
 	}
-	report.Healthy = true
+	if err != nil {
+		if report.Error == "" {
+			report.Error = err.Error()
+		}
+		if report.State == "" {
+			report.State = llm.BackendHealthUnhealthy
+		}
+	} else if report.State == "" {
+		report.State = llm.BackendHealthReady
+	}
+	models, err := backend.ListModels(ctx)
+	if err != nil {
+		report.Error = err.Error()
+		if report.State == "" {
+			report.State = llm.BackendHealthUnhealthy
+		}
+		return report
+	}
+	for _, model := range models {
+		report.Models = append(report.Models, model.Name)
+	}
+	selected := strings.TrimSpace(cfg.InferenceModel)
+	if selected == "" && len(models) > 0 {
+		selected = models[0].Name
+	}
+	report.SelectedModel = selected
+	for _, model := range models {
+		if model.Name == selected {
+			return report
+		}
+	}
+	if selected == "" {
+		report.Error = "inference backend returned no models"
+		if report.State == "" {
+			report.State = llm.BackendHealthUnhealthy
+		}
+		return report
+	}
+	report.Error = fmt.Sprintf("model %s not found in inference backend", selected)
+	if report.State == "" {
+		report.State = llm.BackendHealthDegraded
+	}
 	return report
 }
 
@@ -297,7 +337,7 @@ func summarizeManifest(path string) ManifestSummary {
 
 // Status collects runtime + environment data for the status view.
 func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
-	env := ProbeEnvironment(ctx, r.Config)
+	env := ProbeEnvironment(ctx, r.Config, r.Backend)
 	snapshot := StatusSnapshot{
 		Environment:  env,
 		PendingHITL:  r.PendingHITL(),

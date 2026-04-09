@@ -47,7 +47,7 @@ func (r *recordingAdapter) ResolveContextFiles(context.Context, []string) Contex
 	return ContextFileResolution{}
 }
 func (r *recordingAdapter) SessionArtifacts() SessionArtifacts                     { return SessionArtifacts{} }
-func (r *recordingAdapter) OllamaModels(context.Context) ([]string, error)         { return nil, nil }
+func (r *recordingAdapter) InferenceModels(context.Context) ([]string, error)         { return nil, nil }
 func (r *recordingAdapter) RecordingMode() string                                  { return "off" }
 func (r *recordingAdapter) SetRecordingMode(string) error                          { return nil }
 func (r *recordingAdapter) SaveModel(string) error                                 { return nil }
@@ -266,7 +266,7 @@ func (m *minimalCommitTestAdapter) ResolveContextFiles(context.Context, []string
 	return ContextFileResolution{}
 }
 func (m *minimalCommitTestAdapter) SessionArtifacts() SessionArtifacts              { return SessionArtifacts{} }
-func (m *minimalCommitTestAdapter) OllamaModels(context.Context) ([]string, error)  { return nil, nil }
+func (m *minimalCommitTestAdapter) InferenceModels(context.Context) ([]string, error)  { return nil, nil }
 func (m *minimalCommitTestAdapter) RecordingMode() string                           { return "off" }
 func (m *minimalCommitTestAdapter) SetRecordingMode(string) error                   { return nil }
 func (m *minimalCommitTestAdapter) SaveModel(string) error                          { return nil }
