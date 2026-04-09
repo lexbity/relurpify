@@ -422,3 +422,5 @@ func (m *minimalKeybindingTestAdapter) ListPlanVersions(context.Context, string)
 func (m *minimalKeybindingTestAdapter) ActivatePlanVersion(context.Context, string, int) error {
 	return nil
 }
+func (m *minimalKeybindingTestAdapter) ExecutePlan(context.Context, string) error { return nil }
+func (m *minimalKeybindingTestAdapter) ActiveWorkflowID() string                  { return "" }

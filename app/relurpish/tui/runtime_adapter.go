@@ -141,6 +141,10 @@ type RuntimeAdapter interface {
 	// Plan version history — archaeology tab history subtab
 	ListPlanVersions(ctx context.Context, workflowID string) ([]PlanVersionInfo, error)
 	ActivatePlanVersion(ctx context.Context, workflowID string, version int) error
+	// ExecutePlan triggers long-running plan execution via the euclo agent.
+	ExecutePlan(ctx context.Context, workflowID string) error
+	// ActiveWorkflowID returns the current active workflow ID (empty if none).
+	ActiveWorkflowID() string
 }
 
 type runtimeAdapter struct {
@@ -1768,20 +1772,14 @@ func (r *runtimeAdapter) AddBlobToPlan(ctx context.Context, workflowID string, b
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-
-	// This would need to call a method on the agent to add blob to plan
-	// For now, return not implemented
-	return fmt.Errorf("adding blob to plan not yet implemented")
+	return r.rt.AddBlobToPlan(ctx, workflowID, blobID)
 }
 
 func (r *runtimeAdapter) RemoveBlobFromPlan(ctx context.Context, workflowID string, blobID string) error {
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-
-	// This would need to call a method on the agent to remove blob from plan
-	// For now, return not implemented
-	return fmt.Errorf("removing blob from plan not yet implemented")
+	return r.rt.RemoveBlobFromPlan(ctx, workflowID, blobID)
 }
 
 // Context file management
@@ -1874,6 +1872,18 @@ func (r *runtimeAdapter) ActivatePlanVersion(ctx context.Context, workflowID str
 	}
 	// Delegate to the agent's plan versioning layer via the relurpish binding.
 	return fmt.Errorf("ActivatePlanVersion not yet wired through relurpish runtime binding")
+}
+
+func (r *runtimeAdapter) ExecutePlan(ctx context.Context, workflowID string) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	meta := map[string]any{"mode": "planning", "action": "execute"}
+	if workflowID != "" {
+		meta["workflow_id"] = workflowID
+	}
+	_, err := r.rt.ExecuteInstruction(ctx, "execute plan", core.TaskTypePlanning, meta)
+	return err
 }
 
 func (r *runtimeAdapter) QueryPatternProposals(scope string) ([]PatternProposalInfo, error) {
@@ -2167,6 +2177,9 @@ func (r *runtimeAdapter) RunBenchmark(pkg string) (DebugBenchmarkResultMsg, erro
 	}
 	return result, nil
 }
+
+// ActiveWorkflowID satisfies RuntimeAdapter.
+func (r *runtimeAdapter) ActiveWorkflowID() string { return r.activeWorkflowID() }
 
 func (r *runtimeAdapter) activeWorkflowID() string {
 	if r == nil || r.rt == nil {

@@ -118,6 +118,8 @@ func (r *recordingAdapter) ListPlanVersions(context.Context, string) ([]PlanVers
 	return nil, nil
 }
 func (r *recordingAdapter) ActivatePlanVersion(context.Context, string, int) error { return nil }
+func (r *recordingAdapter) ExecutePlan(context.Context, string) error               { return nil }
+func (r *recordingAdapter) ActiveWorkflowID() string                                { return "" }
 
 // TestGitStatusInvokesCliGit verifies gitStatusCmd routes through cli_git capability.
 func TestGitStatusInvokesCliGit(t *testing.T) {
@@ -354,6 +356,8 @@ func (m *minimalCommitTestAdapter) ListPlanVersions(context.Context, string) ([]
 func (m *minimalCommitTestAdapter) ActivatePlanVersion(context.Context, string, int) error {
 	return nil
 }
+func (m *minimalCommitTestAdapter) ExecutePlan(context.Context, string) error { return nil }
+func (m *minimalCommitTestAdapter) ActiveWorkflowID() string                  { return "" }
 
 // --- gitAutoCommitCmd tests ---
 

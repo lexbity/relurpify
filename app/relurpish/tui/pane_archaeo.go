@@ -25,6 +25,13 @@ const (
 	// planOutputMaxLines is the maximum number of euclo output stream lines
 	// shown in the plan subtab below the step list.
 	planOutputMaxLines = 5
+
+	// exploreChunkWidth is the width of the right-hand chunk panel in the
+	// explore split layout.
+	exploreChunkWidth = 34
+	// exploreCollapseAt is the terminal width below which the explore view
+	// collapses to a single feed (no chunk panel).
+	exploreCollapseAt = 90
 )
 
 // ---------------------------------------------------------------------------
@@ -70,8 +77,10 @@ type ArchaeoPane struct {
 	emojiEnabled bool
 
 	// ── explore subtab ──────────────────────────────────────────────────────
-	exploreEntries []ExploreEntry
-	exploreSel     int // cursor index into exploreEntries
+	exploreEntries   []ExploreEntry
+	exploreSel       int // cursor in the right-hand chunk panel (blob index)
+	exploreChunkSel  int // alias kept for clarity; same as exploreSel
+	workflowID       string
 
 	// ── staged blobs (explore → plan) ───────────────────────────────────────
 	// Blobs staged in the explore subtab but not yet committed to archaeo.
@@ -123,6 +132,9 @@ func (p *ArchaeoPane) Update(msg tea.Msg) (ArchaeoPaner, tea.Cmd) {
 	case PlanUpdatedMsg:
 		prevStepIDs := p.stepIDSet()
 		p.livePlan = msg.Plan
+		if msg.Plan != nil && msg.Plan.WorkflowID != "" {
+			p.workflowID = msg.Plan.WorkflowID
+		}
 		// If we're waiting to highlight a newly added step, find it.
 		if p.newStepPending && msg.Plan != nil {
 			for _, step := range msg.Plan.Steps {
@@ -196,6 +208,10 @@ func (p *ArchaeoPane) Update(msg tea.Msg) (ArchaeoPaner, tea.Cmd) {
 		}
 		return p, nil
 
+	case planExecuteCompleteMsg:
+		p.planOutputLines = appendOutputLine(p.planOutputLines, "✓ plan execution complete")
+		return p, nil
+
 	case EucloFrameMsg:
 		if msg.Frame.Kind == interaction.FrameArchaeoFindings {
 			if content, ok := msg.Frame.Content.(interaction.ArchaeoFindingsContent); ok {
@@ -265,10 +281,12 @@ func (p *ArchaeoPane) Update(msg tea.Msg) (ArchaeoPaner, tea.Cmd) {
 // ---------------------------------------------------------------------------
 
 // handleExploreKey routes key events in the explore subtab.
+// j/k navigate the right-hand chunk panel; enter/x stage/unstage the selected chunk.
 func (p *ArchaeoPane) handleExploreKey(msg tea.KeyMsg) (ArchaeoPaner, tea.Cmd) {
+	blobs := p.exploreBlobs()
 	switch msg.String() {
 	case "j", "down":
-		if p.exploreSel < len(p.exploreEntries)-1 {
+		if p.exploreSel < len(blobs)-1 {
 			p.exploreSel++
 		}
 	case "k", "up":
@@ -276,26 +294,35 @@ func (p *ArchaeoPane) handleExploreKey(msg tea.KeyMsg) (ArchaeoPaner, tea.Cmd) {
 			p.exploreSel--
 		}
 	case "enter":
-		if p.exploreSel >= 0 && p.exploreSel < len(p.exploreEntries) {
-			entry := &p.exploreEntries[p.exploreSel]
-			if entry.Kind == ExploreEntryBlob {
-				if entry.IsStaged {
-					p.unstageBlob(entry.Blob.ID)
-					entry.IsStaged = false
-				} else {
-					p.stageBlob(entry.Blob)
-					entry.IsStaged = true
+		if p.exploreSel >= 0 && p.exploreSel < len(blobs) {
+			// Find and toggle the blob entry in the backing slice.
+			target := blobs[p.exploreSel].Blob.ID
+			for i := range p.exploreEntries {
+				if p.exploreEntries[i].Kind == ExploreEntryBlob && p.exploreEntries[i].Blob.ID == target {
+					if p.exploreEntries[i].IsStaged {
+						p.unstageBlob(target)
+						p.exploreEntries[i].IsStaged = false
+					} else {
+						p.stageBlob(p.exploreEntries[i].Blob)
+						p.exploreEntries[i].IsStaged = true
+					}
+					break
 				}
 			}
 		}
 	case "x", "d":
-		if p.exploreSel >= 0 && p.exploreSel < len(p.exploreEntries) {
-			entry := &p.exploreEntries[p.exploreSel]
-			if entry.Kind == ExploreEntryBlob && entry.IsStaged {
-				p.unstageBlob(entry.Blob.ID)
-				entry.IsStaged = false
+		if p.exploreSel >= 0 && p.exploreSel < len(blobs) {
+			target := blobs[p.exploreSel].Blob.ID
+			for i := range p.exploreEntries {
+				if p.exploreEntries[i].Kind == ExploreEntryBlob && p.exploreEntries[i].Blob.ID == target && p.exploreEntries[i].IsStaged {
+					p.unstageBlob(target)
+					p.exploreEntries[i].IsStaged = false
+					break
+				}
 			}
 		}
+	case "P":
+		p.PromoteAll()
 	}
 	return p, nil
 }
@@ -310,6 +337,13 @@ func (p *ArchaeoPane) handlePlanKey(msg tea.KeyMsg) (ArchaeoPaner, tea.Cmd) {
 		// Toggle sidebar overlay in narrow-terminal mode.
 		p.sidebarVisible = !p.sidebarVisible
 
+	case "ctrl+r", "r":
+		// Trigger long-running plan execution via the euclo agent.
+		if !p.planFocused {
+			return p, p.executePlanCmd()
+		}
+		return p.handleMainAreaKey(msg)
+
 	default:
 		if p.planFocused {
 			return p.handleSidebarKey(msg)
@@ -317,6 +351,27 @@ func (p *ArchaeoPane) handlePlanKey(msg tea.KeyMsg) (ArchaeoPaner, tea.Cmd) {
 		return p.handleMainAreaKey(msg)
 	}
 	return p, nil
+}
+
+// executePlanCmd triggers plan execution via the runtime. The euclo agent runs
+// the plan long-form; deferral files are created for any blocked steps.
+func (p *ArchaeoPane) executePlanCmd() tea.Cmd {
+	if p.runtime == nil {
+		return nil
+	}
+	rt := p.runtime
+	wid := p.workflowID
+	if wid == "" {
+		wid = rt.ActiveWorkflowID()
+	}
+	p.planOutputLines = appendOutputLine(p.planOutputLines, "⟳ starting plan execution...")
+	return func() tea.Msg {
+		err := rt.ExecutePlan(context.Background(), wid)
+		if err != nil {
+			return blobAddedMsg{err: err} // reuse error surface
+		}
+		return planExecuteCompleteMsg{}
+	}
 }
 
 // handleReviewKey routes key events in the BKC review subtab.
@@ -451,53 +506,169 @@ func (p *ArchaeoPane) View() string {
 	}
 }
 
-// viewExplore renders the full-width explore feed.
+// viewExplore renders the explore subtab as a horizontal split:
+// left panel = conversation feed (text entries), right panel = knowledge chunks.
+// On narrow terminals the chunk panel is omitted.
 func (p *ArchaeoPane) viewExplore() string {
+	wide := p.width >= exploreCollapseAt
+	if wide {
+		feedW := p.width - exploreChunkWidth - 1
+		if feedW < 10 {
+			feedW = 10
+		}
+		feed := p.viewExploreFeed(feedW)
+		chunks := p.viewExploreChunks(exploreChunkWidth)
+		joined := joinColumns(feed, "│", chunks)
+		return "\n" + joined + "\n " + helpLine("[j/k] navigate chunks  [enter] stage  [x] unstage  [P] stage all")
+	}
+	// Narrow: single feed showing everything.
+	return p.viewExploreFeedNarrow()
+}
+
+// viewExploreFeed renders the left conversation panel (text entries only).
+func (p *ArchaeoPane) viewExploreFeed(w int) string {
+	var sb strings.Builder
+	sb.WriteString(" explore\n")
+	sb.WriteString(" " + strings.Repeat("─", w-2) + "\n")
+
+	texts := p.exploreTextEntries()
+	if len(texts) == 0 {
+		sb.WriteString("\n Submit a prompt to explore the codebase.\n")
+		sb.WriteString(" e.g. \"find naming inconsistencies in framework/capability\"\n")
+		sb.WriteString(" e.g. \"list tensions in the capability registry\"\n")
+		return sb.String()
+	}
+
+	maxLines := p.height - 6
+	if maxLines < 3 {
+		maxLines = 3
+	}
+	start := 0
+	if len(texts) > maxLines {
+		start = len(texts) - maxLines // always show most recent
+	}
+	for _, text := range texts[start:] {
+		if strings.HasPrefix(text, "> ") {
+			sb.WriteString(" " + lipgloss.NewStyle().Bold(true).Render(text) + "\n")
+		} else {
+			sb.WriteString(" " + truncateStr(text, w-2) + "\n")
+		}
+	}
+	return sb.String()
+}
+
+// viewExploreChunks renders the right knowledge-chunk panel, grouped by kind.
+func (p *ArchaeoPane) viewExploreChunks(w int) string {
+	var sb strings.Builder
+	sb.WriteString(" knowledge chunks\n")
+	sb.WriteString(" " + strings.Repeat("─", w-2) + "\n")
+
+	blobs := p.exploreBlobs()
+	if len(blobs) == 0 {
+		sb.WriteString("\n (none yet)\n")
+		sb.WriteString(" Chunks surface as\n")
+		sb.WriteString(" exploration runs.\n")
+		return sb.String()
+	}
+
+	// Group by kind: tensions → learnings → patterns → other.
+	grouped := map[BlobKind][]int{}
+	order := []BlobKind{BlobTension, BlobLearning, BlobPattern}
+	for i, b := range blobs {
+		grouped[b.Blob.Kind] = append(grouped[b.Blob.Kind], i)
+	}
+
+	visIdx := 0
+	maxVisible := p.height - 6
+	if maxVisible < 3 {
+		maxVisible = 3
+	}
+
+	for _, kind := range order {
+		indices := grouped[kind]
+		if len(indices) == 0 {
+			continue
+		}
+		badge := BlobKindBadge(kind, p.emojiEnabled)
+		header := fmt.Sprintf(" %s %s (%d)", badge, strings.ToUpper(string(kind))+"S", len(indices))
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(truncateStr(header, w-1)) + "\n")
+		visIdx++
+		if visIdx >= maxVisible {
+			break
+		}
+		for _, idx := range indices {
+			if visIdx >= maxVisible {
+				break
+			}
+			entry := &blobs[idx]
+			focused := idx == p.exploreSel
+			stagedMark := ""
+			if entry.IsStaged {
+				stagedMark = " ✓"
+			}
+			title := truncateStr(entry.Blob.Title, w-4)
+			line := "  " + title + stagedMark
+			if focused {
+				line = lipgloss.NewStyle().Bold(true).Reverse(true).Render(line)
+			}
+			sb.WriteString(line + "\n")
+			visIdx++
+		}
+	}
+	return sb.String()
+}
+
+// viewExploreFeedNarrow renders the full combined feed for narrow terminals.
+func (p *ArchaeoPane) viewExploreFeedNarrow() string {
 	var sb strings.Builder
 	sb.WriteString("\n explore\n")
 	sb.WriteString(strings.Repeat("─", p.width) + "\n")
-
 	if len(p.exploreEntries) == 0 {
-		sb.WriteString("\n Submit a prompt to explore the archaeology subsystem.\n")
-		sb.WriteString(" e.g. \"find naming inconsistencies in framework/capability\"\n")
+		sb.WriteString("\n Submit a prompt to explore the codebase.\n")
 	} else {
 		for i, entry := range p.exploreEntries {
 			focused := i == p.exploreSel
 			switch entry.Kind {
 			case ExploreEntryText:
-				if focused {
-					sb.WriteString(lipgloss.NewStyle().Bold(true).Render(" "+entry.Text) + "\n")
-				} else {
-					sb.WriteString(" " + entry.Text + "\n")
-				}
+				sb.WriteString(" " + entry.Text + "\n")
 			case ExploreEntryBlob:
 				badge := BlobKindBadge(entry.Blob.Kind, p.emojiEnabled)
-				action := " [stage]"
+				stagedMark := ""
 				if entry.IsStaged {
-					action = " [staged]"
+					stagedMark = " ✓"
 				}
-				title := entry.Blob.Title
-				if len(title) > p.width-20 && p.width > 25 {
-					title = title[:p.width-23] + "..."
-				}
-				line := fmt.Sprintf(" %s %-30s%s", badge, title, action)
+				line := fmt.Sprintf(" %s %s%s", badge, truncateStr(entry.Blob.Title, p.width-8), stagedMark)
 				if focused {
 					line = lipgloss.NewStyle().Bold(true).Render(line)
 				}
 				sb.WriteString(line + "\n")
-				if entry.Blob.Description != "" {
-					sb.WriteString("    " + entry.Blob.Description + "\n")
-				}
-				if len(entry.Blob.AnchorRefs) > 0 {
-					sb.WriteString("    Anchors: " + strings.Join(entry.Blob.AnchorRefs, ", ") + "\n")
-				}
-				sb.WriteString("\n")
 			}
 		}
 	}
-
 	sb.WriteString("\n " + helpLine("[j/k] navigate  [enter] stage  [x] unstage"))
 	return sb.String()
+}
+
+// exploreTextEntries returns only the text-kind entries from exploreEntries.
+func (p *ArchaeoPane) exploreTextEntries() []string {
+	var out []string
+	for _, e := range p.exploreEntries {
+		if e.Kind == ExploreEntryText {
+			out = append(out, e.Text)
+		}
+	}
+	return out
+}
+
+// exploreBlobs returns only the blob-kind entries from exploreEntries.
+func (p *ArchaeoPane) exploreBlobs() []ExploreEntry {
+	var out []ExploreEntry
+	for _, e := range p.exploreEntries {
+		if e.Kind == ExploreEntryBlob {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // viewReview renders the BKC review queue.
@@ -1052,6 +1223,9 @@ type archaeoResultMsg struct {
 	err    error
 }
 
+// planExecuteCompleteMsg is returned when ExecutePlan finishes (success).
+type planExecuteCompleteMsg struct{}
+
 // blobAddedMsg is returned when AddBlobToPlan completes.
 type blobAddedMsg struct {
 	blobID string
@@ -1197,7 +1371,7 @@ func planHelpLine(sidebarFocused bool) string {
 	if sidebarFocused {
 		return helpLine("[tab] focus main  [j/k] navigate  [enter] add  [x] remove  [e] expand")
 	}
-	return helpLine("[tab] focus sidebar  [j/k] scroll  [ctrl+]] toggle sidebar")
+	return helpLine("[tab] focus sidebar  [j/k] scroll  [r] execute plan  [ctrl+]] toggle sidebar")
 }
 
 // joinColumns joins two multi-line strings side by side with a separator.

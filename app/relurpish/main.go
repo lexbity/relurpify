@@ -12,9 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	"github.com/lexcodex/relurpify/app/relurpish/euclotui"
 	"github.com/lexcodex/relurpify/app/relurpish/tui"
 )
 
@@ -165,7 +167,13 @@ func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
 	if rt != nil && rt.Logger != nil {
 		log.SetOutput(rt.Logger.Writer())
 	}
-	return tui.Run(ctx, rt)
+	plugin := &tui.EucloPlugin{
+		SetupTabs: euclotui.RegisterEucloTabs,
+		NewEmitter: func(p *tea.Program) tui.EucloEmitter {
+			return euclotui.NewTUIFrameEmitter(p)
+		},
+	}
+	return tui.RunWithEuclo(ctx, rt, plugin)
 }
 
 func runDoctor(cmd *cobra.Command, fix, yes bool) error {

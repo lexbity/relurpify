@@ -191,6 +191,8 @@ func (m *minimalHITLRuntimeAdapter) ListPlanVersions(context.Context, string) ([
 func (m *minimalHITLRuntimeAdapter) ActivatePlanVersion(context.Context, string, int) error {
 	return nil
 }
+func (m *minimalHITLRuntimeAdapter) ExecutePlan(context.Context, string) error { return nil }
+func (m *minimalHITLRuntimeAdapter) ActiveWorkflowID() string                  { return "" }
 
 // TestHITLEventPushesNotification verifies that a HITLEventRequested event
 // causes the notification queue to receive a HITL item via RootModel (after Gap 2).

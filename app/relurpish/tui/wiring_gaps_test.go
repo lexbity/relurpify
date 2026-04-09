@@ -683,7 +683,9 @@ func (f *fakeRuntimeAdapter) ListPlanVersions(context.Context, string) ([]PlanVe
 	return nil, nil
 }
 func (f *fakeRuntimeAdapter) ActivatePlanVersion(context.Context, string, int) error { return nil }
-func (f *fakeRuntimeAdapter) UpdateSidebarFromFrame(interaction.InteractionFrame)    {}
+func (f *fakeRuntimeAdapter) ExecutePlan(context.Context, string) error               { return nil }
+func (f *fakeRuntimeAdapter) ActiveWorkflowID() string                                { return "" }
+func (f *fakeRuntimeAdapter) UpdateSidebarFromFrame(interaction.InteractionFrame)     {}
 func (f *fakeRuntimeAdapter) AddPlanNote(stepRef string, body string) error {
 	f.addedPlanNoteStep = stepRef
 	f.addedPlanNoteBody = body
@@ -904,6 +906,8 @@ func (f *fakeRuntimeAdapterWithHITL) ListPlanVersions(context.Context, string) (
 func (f *fakeRuntimeAdapterWithHITL) ActivatePlanVersion(context.Context, string, int) error {
 	return nil
 }
+func (f *fakeRuntimeAdapterWithHITL) ExecutePlan(context.Context, string) error { return nil }
+func (f *fakeRuntimeAdapterWithHITL) ActiveWorkflowID() string                  { return "" }
 
 func TestRootModelHandlesGuidanceRequestedEvent(t *testing.T) {
 	m := newRootModel(&fakeRuntimeAdapter{})
@@ -1000,6 +1004,70 @@ func TestRootModelRoutesGuidanceFreetextThroughRuntime(t *testing.T) {
 	}
 	if root.notifQ.Len() != 0 {
 		t.Fatalf("expected guidance notification to be resolved after freetext submission")
+	}
+}
+
+func TestRootModelRoutesInteractionFreetextAsEucloResponse(t *testing.T) {
+	rt := &fakeRuntimeAdapter{}
+	m := newRootModel(rt)
+	m.notifQ = &NotificationQueue{}
+	m.notifQ.Push(NotificationItem{
+		ID:   "interaction-1",
+		Kind: NotifKindInteraction,
+		Msg:  "What is the goal?",
+		Extra: map[string]string{
+			"action_count":   "1",
+			"action_0_id":    "user_goal",
+			"action_0_label": "Describe goal",
+			"action_0_kind":  string(interaction.ActionFreetext),
+		},
+	})
+
+	_, cmd := m.handleInputSubmitted("refactor the auth layer")
+	if cmd == nil {
+		t.Fatal("expected a command for interaction freetext")
+	}
+	msg := cmd()
+	resp, ok := msg.(EucloResponseMsg)
+	if !ok {
+		t.Fatalf("expected EucloResponseMsg, got %T", msg)
+	}
+	if resp.Response.ActionID != "user_goal" {
+		t.Fatalf("expected ActionID=user_goal, got %q", resp.Response.ActionID)
+	}
+	if resp.Response.Text != "refactor the auth layer" {
+		t.Fatalf("expected Text to carry typed input, got %q", resp.Response.Text)
+	}
+	if m.notifQ.Len() != 0 {
+		t.Fatal("expected notification to be resolved after freetext submission")
+	}
+}
+
+func TestRootModelInteractionFreetextShouldRouteToInputBar(t *testing.T) {
+	rt := &fakeRuntimeAdapter{}
+	m := newRootModel(rt)
+	// Replace the queue and rewire the notification bar so Active() returns true.
+	q := &NotificationQueue{}
+	m.notifQ = q
+	m.notifBar = NewNotificationBar(q)
+	m.notifQ.Push(NotificationItem{
+		ID:   "interaction-2",
+		Kind: NotifKindInteraction,
+		Msg:  "Describe the scope",
+		Extra: map[string]string{
+			"action_count":   "1",
+			"action_0_id":    "scope",
+			"action_0_label": "Type answer",
+			"action_0_kind":  string(interaction.ActionFreetext),
+		},
+	})
+	letterKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	escKey := tea.KeyMsg{Type: tea.KeyEsc}
+	if !m.shouldRouteNotificationKeyToInput(letterKey) {
+		t.Error("letter key should route to input bar when interaction freetext is active")
+	}
+	if m.shouldRouteNotificationKeyToInput(escKey) {
+		t.Error("esc key must not route to input bar")
 	}
 }
 

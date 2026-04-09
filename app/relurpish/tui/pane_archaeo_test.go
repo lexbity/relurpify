@@ -57,17 +57,25 @@ func TestArchaeoTab_NotVisibleForOtherAgents(t *testing.T) {
 // TestExploreSubtab_RendersFullWidth
 // ---------------------------------------------------------------------------
 
-// TestExploreSubtab_RendersFullWidth verifies that the explore subtab renders
-// without a sidebar split — there should be no sidebar decoration column.
+// TestExploreSubtab_RendersFullWidth verifies that on a wide terminal the
+// explore subtab renders as a two-panel split (conversation feed + chunk panel).
+// On narrow terminals it falls back to a single feed.
 func TestExploreSubtab_RendersFullWidth(t *testing.T) {
 	p := NewArchaeoPane(nil)
-	p.SetSize(100, 30)
 	p.SetSubTab(SubTabArchaeoExplore)
 
+	// Wide terminal: expect split layout with chunk panel.
+	p.SetSize(120, 30)
 	view := p.View()
-	// A sidebar split would produce "│" or "┌" column separators; there should be none.
-	require.NotContains(t, view, "│", "explore view should not have sidebar column separator")
 	require.Contains(t, view, "explore", "explore header should be present")
+	require.Contains(t, view, "knowledge chunks", "chunk panel header should be present on wide terminals")
+	require.Contains(t, view, "│", "wide layout should have column separator")
+
+	// Narrow terminal: expect single-column layout without chunk panel.
+	p.SetSize(70, 30)
+	view = p.View()
+	require.Contains(t, view, "explore", "explore header should be present on narrow terminals")
+	require.NotContains(t, view, "knowledge chunks", "chunk panel should be hidden on narrow terminals")
 }
 
 // ---------------------------------------------------------------------------
@@ -96,8 +104,9 @@ func TestExploreSubtab_FrameRendering(t *testing.T) {
 
 	view := p.View()
 	require.Contains(t, view, "naming-conv", "tension title should be rendered")
-	require.Contains(t, view, "[stage]", "unstaged blob should show [stage] action")
 	require.Contains(t, view, "error-handling", "pattern title should be rendered")
+	// Unstaged blobs appear without the ✓ mark.
+	require.NotContains(t, view, "✓", "unstaged blobs should not have staged mark")
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +136,7 @@ func TestBlobStaging_StageAction(t *testing.T) {
 	require.True(t, p.exploreEntries[0].IsStaged, "entry should be marked as staged")
 
 	view := p.View()
-	require.Contains(t, view, "[staged]", "staged blob should show [staged] badge")
+	require.Contains(t, view, "✓", "staged blob should show ✓ mark in chunk panel")
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +166,7 @@ func TestBlobStaging_Unstage(t *testing.T) {
 	require.False(t, p.exploreEntries[0].IsStaged, "entry should be unmarked")
 
 	view := p.View()
-	require.Contains(t, view, "[stage]", "blob should show [stage] again after unstage")
+	require.NotContains(t, view, "✓", "blob should not show staged mark after unstage")
 }
 
 // ---------------------------------------------------------------------------

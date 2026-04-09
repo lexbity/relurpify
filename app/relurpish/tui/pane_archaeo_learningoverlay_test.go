@@ -482,3 +482,5 @@ func (r *phase6HistoryRuntime) ActivatePlanVersion(_ context.Context, _ string, 
 	r.activatedVersion = version
 	return nil
 }
+func (r *phase6HistoryRuntime) ExecutePlan(context.Context, string) error { return nil }
+func (r *phase6HistoryRuntime) ActiveWorkflowID() string                  { return "" }

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1157,6 +1158,13 @@ func (m RootModel) handleInputSubmitted(value string) (tea.Model, tea.Cmd) {
 		}
 		return m, guidanceRequestCmd(m.runtime, requestID, "", value)
 	}
+	if notifID, actionID, ok := m.activeInteractionFreetextActionID(); ok && !strings.HasPrefix(value, "/") {
+		if m.notifQ != nil {
+			m.notifQ.Resolve(notifID)
+		}
+		resp := interaction.UserResponse{ActionID: actionID, Text: value}
+		return m, func() tea.Msg { return EucloResponseMsg{Response: resp} }
+	}
 	// Search mode: filter the chat feed instead of submitting a prompt.
 	if m.searchActive && m.chat != nil {
 		m.chat.SetSearchFilter(value)
@@ -1428,7 +1436,12 @@ func (m RootModel) shouldRouteNotificationKeyToInput(msg tea.KeyMsg) bool {
 		return false
 	}
 	item, ok := m.notifQ.Current()
-	if !ok || item.Kind != NotifKindGuidance || !notificationAllowsFreetext(item) {
+	if !ok {
+		return false
+	}
+	isGuidanceFreetext := item.Kind == NotifKindGuidance && notificationAllowsFreetext(item)
+	isInteractionFreetext := item.Kind == NotifKindInteraction && notificationAllowsFreetext(item)
+	if !isGuidanceFreetext && !isInteractionFreetext {
 		return false
 	}
 	switch msg.String() {
@@ -1454,6 +1467,29 @@ func (m RootModel) activeGuidanceFreetextRequestID() (string, bool) {
 		return "", false
 	}
 	return requestID, true
+}
+
+// activeInteractionFreetextActionID returns the notification item ID and
+// freetext action ID when the current notification is an interaction with a
+// freetext slot active.
+func (m RootModel) activeInteractionFreetextActionID() (notifID, actionID string, ok bool) {
+	if m.notifQ == nil {
+		return "", "", false
+	}
+	item, exists := m.notifQ.Current()
+	if !exists || item.Kind != NotifKindInteraction || !notificationAllowsFreetext(item) {
+		return "", "", false
+	}
+	count, _ := strconv.Atoi(item.Extra["action_count"])
+	for i := 0; i < count; i++ {
+		if item.Extra[fmt.Sprintf("action_%d_kind", i)] == string(interaction.ActionFreetext) {
+			aID := strings.TrimSpace(item.Extra[fmt.Sprintf("action_%d_id", i)])
+			if aID != "" {
+				return item.ID, aID, true
+			}
+		}
+	}
+	return "", "", false
 }
 
 // dequeueNextTask starts the next pending task from the task queue, if any.

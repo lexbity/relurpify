@@ -1297,6 +1297,198 @@ func (r *Runtime) ResolveDeferral(observationID string) error {
 	return nil
 }
 
+// AddBlobToPlan creates a plan step from the given blob and links the blob to
+// that step. If workflowID is empty the most recently created workflow is used.
+func (r *Runtime) AddBlobToPlan(ctx context.Context, workflowID, blobID string) error {
+	if r == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	workflowID, err := r.resolveWorkflowID(ctx, workflowID)
+	if err != nil {
+		return err
+	}
+	binding := r.relurpishBinding()
+
+	// Look in tensions first.
+	tensions, err := binding.TensionsByWorkflow(ctx, workflowID)
+	if err == nil {
+		for i := range tensions {
+			t := &tensions[i]
+			if t.ID == blobID {
+				return r.linkTensionToPlan(ctx, workflowID, t, binding)
+			}
+		}
+	}
+
+	// Fall back to learning queue.
+	lq, err := binding.LearningQueueProjection(ctx, workflowID)
+	if err == nil && lq != nil {
+		for _, item := range lq.PendingLearning {
+			if item.ID == blobID {
+				return r.linkLearningToPlan(ctx, workflowID, blobID, item.Title, item.Description)
+			}
+		}
+	}
+
+	return fmt.Errorf("blob %q not found in workflow %s", blobID, workflowID)
+}
+
+// RemoveBlobFromPlan removes the plan step that was created for the given blob
+// and unlinks the blob from that step.
+func (r *Runtime) RemoveBlobFromPlan(ctx context.Context, workflowID, blobID string) error {
+	if r == nil || r.PlanStore == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	workflowID, err := r.resolveWorkflowID(ctx, workflowID)
+	if err != nil {
+		return err
+	}
+	plan, err := r.PlanStore.LoadPlanByWorkflow(ctx, workflowID)
+	if err != nil || plan == nil {
+		return nil // nothing to remove
+	}
+
+	stepID := "step-" + blobID
+	if _, exists := plan.Steps[stepID]; !exists {
+		return nil // step not in plan
+	}
+	delete(plan.Steps, stepID)
+	newOrder := make([]string, 0, len(plan.StepOrder))
+	for _, sid := range plan.StepOrder {
+		if sid != stepID {
+			newOrder = append(newOrder, sid)
+		}
+	}
+	plan.StepOrder = newOrder
+	plan.UpdatedAt = time.Now()
+	if err := r.PlanStore.SavePlan(ctx, plan); err != nil {
+		return fmt.Errorf("save plan: %w", err)
+	}
+
+	// Unlink tension if applicable.
+	binding := r.relurpishBinding()
+	tensions, _ := binding.TensionsByWorkflow(ctx, workflowID)
+	for i := range tensions {
+		t := &tensions[i]
+		if t.ID == blobID {
+			t.RelatedPlanStepIDs = removeStringFromSlice(t.RelatedPlanStepIDs, stepID)
+			binding.TensionService().Update(ctx, t) //nolint:errcheck
+			break
+		}
+	}
+	return nil
+}
+
+func (r *Runtime) linkTensionToPlan(ctx context.Context, workflowID string, t *archaeodomain.Tension, binding relurpishbindings.Runtime) error {
+	plan, err := r.loadOrCreateActivePlan(ctx, workflowID)
+	if err != nil {
+		return err
+	}
+	stepID := "step-" + t.ID
+	if _, exists := plan.Steps[stepID]; exists {
+		return nil // already added
+	}
+	now := time.Now()
+	step := &frameworkplan.PlanStep{
+		ID:                 stepID,
+		Description:        t.Description,
+		Scope:              append([]string(nil), t.AnchorRefs...),
+		Status:             frameworkplan.PlanStepPending,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
+	plan.Steps[stepID] = step
+	plan.StepOrder = append(plan.StepOrder, stepID)
+	plan.UpdatedAt = now
+	if err := r.PlanStore.SavePlan(ctx, plan); err != nil {
+		return fmt.Errorf("save plan: %w", err)
+	}
+	t.RelatedPlanStepIDs = appendStringUnique(t.RelatedPlanStepIDs, stepID)
+	binding.TensionService().Update(ctx, t) //nolint:errcheck
+	return nil
+}
+
+func (r *Runtime) linkLearningToPlan(ctx context.Context, workflowID, blobID, title, description string) error {
+	plan, err := r.loadOrCreateActivePlan(ctx, workflowID)
+	if err != nil {
+		return err
+	}
+	stepID := "step-" + blobID
+	if _, exists := plan.Steps[stepID]; exists {
+		return nil
+	}
+	now := time.Now()
+	desc := title
+	if description != "" {
+		desc = description
+	}
+	step := &frameworkplan.PlanStep{
+		ID:          stepID,
+		Description: desc,
+		Status:      frameworkplan.PlanStepPending,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	plan.Steps[stepID] = step
+	plan.StepOrder = append(plan.StepOrder, stepID)
+	plan.UpdatedAt = now
+	return r.PlanStore.SavePlan(ctx, plan)
+}
+
+func (r *Runtime) loadOrCreateActivePlan(ctx context.Context, workflowID string) (*frameworkplan.LivingPlan, error) {
+	if r.PlanStore == nil {
+		return nil, fmt.Errorf("plan store unavailable")
+	}
+	plan, err := r.PlanStore.LoadPlanByWorkflow(ctx, workflowID)
+	if err == nil && plan != nil {
+		return plan, nil
+	}
+	now := time.Now()
+	return &frameworkplan.LivingPlan{
+		ID:         "plan-" + workflowID,
+		WorkflowID: workflowID,
+		Title:      "Working Plan",
+		Steps:      map[string]*frameworkplan.PlanStep{},
+		StepOrder:  []string{},
+		Version:    1,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}, nil
+}
+
+func (r *Runtime) resolveWorkflowID(ctx context.Context, workflowID string) (string, error) {
+	if workflowID != "" {
+		return workflowID, nil
+	}
+	if r.WorkflowStore == nil {
+		return "", fmt.Errorf("workflow store unavailable")
+	}
+	records, err := r.WorkflowStore.ListWorkflows(ctx, 1)
+	if err != nil || len(records) == 0 {
+		return "", fmt.Errorf("no active workflow")
+	}
+	return records[0].WorkflowID, nil
+}
+
+func appendStringUnique(slice []string, s string) []string {
+	for _, v := range slice {
+		if v == s {
+			return slice
+		}
+	}
+	return append(slice, s)
+}
+
+func removeStringFromSlice(slice []string, s string) []string {
+	out := slice[:0]
+	for _, v := range slice {
+		if v != s {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func (r *Runtime) currentEucloAgent() (*euclo.Agent, bool) {
 	if r == nil || r.Agent == nil {
 		return nil, false
