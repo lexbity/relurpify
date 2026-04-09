@@ -260,7 +260,7 @@ func mapSessionMessageToRex(frameworkEvent core.FrameworkEvent) (rexevents.Canon
 		Partition:      frameworkEvent.Partition,
 		IdempotencyKey: firstNonEmpty(frameworkEvent.IdempotencyKey, fmt.Sprintf("%d", frameworkEvent.Seq)),
 		Payload:        canonicalPayload,
-		TrustClass:     rexevents.TrustInternal,
+		IngressOrigin:  rexevents.OriginInternal,
 		Source:         "framework.session",
 	})
 }
@@ -465,7 +465,7 @@ func (p *RexRuntimeProvider) handleEventDecision(ctx context.Context, decision r
 	state.Set(rexkeys.RexEventType, event.Type)
 	state.Set(rexkeys.RexEventID, event.ID)
 	state.Set(rexkeys.RexEventPartition, event.Partition)
-	state.Set(rexkeys.RexEventTrustClass, event.TrustClass)
+	state.Set(rexkeys.RexEventIngressOrigin, event.IngressOrigin)
 	item := rexruntime.WorkItem{
 		WorkflowID: decision.WorkflowID,
 		RunID:      decision.RunID,

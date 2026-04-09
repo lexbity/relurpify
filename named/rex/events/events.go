@@ -11,10 +11,23 @@ import (
 	"github.com/lexcodex/relurpify/named/rex/rexkeys"
 )
 
+// IngressOrigin classifies the source of an inbound canonical event.
+// This is distinct from framework/core.TrustClass, which governs capability
+// execution authorization. IngressOrigin answers "where did this event come
+// from and how was its source authenticated?", not "is this capability allowed
+// to run?".
 const (
-	TrustInternal  = "internal"
-	TrustTrusted   = "trusted"
-	TrustUntrusted = "untrusted"
+	// OriginInternal marks events that originated within the Nexus fabric
+	// itself (e.g. framework-generated events, internal control-plane signals).
+	OriginInternal = "internal"
+
+	// OriginPeer marks events from an authenticated enrolled peer node.
+	// The node has completed the challenge/response pairing handshake.
+	OriginPeer = "trusted"
+
+	// OriginExternal marks events from an unauthenticated external source.
+	// These receive the most restrictive ingress policy.
+	OriginExternal = "untrusted"
 )
 
 const (
@@ -33,7 +46,7 @@ type CanonicalEvent struct {
 	Partition      string         `json:"partition"`
 	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 	Payload        map[string]any `json:"payload,omitempty"`
-	TrustClass     string         `json:"trust_class"`
+	IngressOrigin  string         `json:"ingress_origin"`
 	Source         string         `json:"source,omitempty"`
 }
 
@@ -57,7 +70,7 @@ func (DefaultNormalizer) Normalize(event CanonicalEvent) (CanonicalEvent, error)
 	event.ActorID = strings.TrimSpace(event.ActorID)
 	event.Partition = strings.TrimSpace(event.Partition)
 	event.IdempotencyKey = strings.TrimSpace(event.IdempotencyKey)
-	event.TrustClass = normalizeTrust(event.TrustClass)
+	event.IngressOrigin = normalizeOrigin(event.IngressOrigin)
 	event.Source = strings.TrimSpace(event.Source)
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now().UTC()
@@ -80,28 +93,28 @@ func (DefaultNormalizer) Normalize(event CanonicalEvent) (CanonicalEvent, error)
 	if event.IdempotencyKey == "" {
 		event.IdempotencyKey = firstNonEmpty(stringValue(event.Payload["idempotency_key"]), event.ID)
 	}
-	if event.TrustClass == "" {
-		event.TrustClass = TrustUntrusted
+	if event.IngressOrigin == "" {
+		event.IngressOrigin = OriginExternal
 	}
-	switch event.TrustClass {
-	case TrustInternal, TrustTrusted, TrustUntrusted:
+	switch event.IngressOrigin {
+	case OriginInternal, OriginPeer, OriginExternal:
 	default:
-		return CanonicalEvent{}, fmt.Errorf("trust class %q invalid", event.TrustClass)
+		return CanonicalEvent{}, fmt.Errorf("ingress origin %q invalid", event.IngressOrigin)
 	}
 	if !AllowsIngress(event) {
-		return CanonicalEvent{}, fmt.Errorf("event type %q rejected for trust class %q", event.Type, event.TrustClass)
+		return CanonicalEvent{}, fmt.Errorf("event type %q rejected for ingress origin %q", event.Type, event.IngressOrigin)
 	}
 	return event, nil
 }
 
 // MapAdapter normalizes generic map payloads into canonical rex events.
 type MapAdapter struct {
-	NameID      string
-	DefaultType string
-	TrustClass  string
-	Partition   string
-	Source      string
-	Normalizer  EventNormalizer
+	NameID        string
+	DefaultType   string
+	IngressOrigin string
+	Partition     string
+	Source        string
+	Normalizer    EventNormalizer
 }
 
 func (a MapAdapter) Name() string {
@@ -120,7 +133,7 @@ func (a MapAdapter) Normalize(payload map[string]any) (CanonicalEvent, error) {
 		Partition:      firstNonEmpty(stringValue(payload["partition"]), a.Partition),
 		IdempotencyKey: stringValue(payload["idempotency_key"]),
 		Payload:        cloneMap(payload),
-		TrustClass:     firstNonEmpty(stringValue(payload["trust_class"]), a.TrustClass),
+		IngressOrigin:  firstNonEmpty(stringValue(payload["ingress_origin"]), a.IngressOrigin),
 		Source:         firstNonEmpty(stringValue(payload["source"]), a.Source, a.Name()),
 	}
 	normalizer := a.Normalizer
@@ -146,20 +159,20 @@ func FromFrameworkEvent(event core.FrameworkEvent) (CanonicalEvent, error) {
 		Partition:      event.Partition,
 		IdempotencyKey: event.IdempotencyKey,
 		Payload:        payload,
-		TrustClass:     TrustInternal,
+		IngressOrigin:  OriginInternal,
 		Source:         "framework",
 	})
 }
 
-// AllowsIngress rejects untrusted ingress for internal-only event types.
+// AllowsIngress rejects external-origin events for internal-only event types.
 func AllowsIngress(event CanonicalEvent) bool {
 	switch event.Type {
 	case TypeTaskRequested:
 		return true
 	case TypeWorkflowResume, TypeWorkflowSignal, TypeCallbackReceived:
-		return event.TrustClass != TrustUntrusted
+		return event.IngressOrigin != OriginExternal
 	default:
-		return event.TrustClass == TrustInternal
+		return event.IngressOrigin == OriginInternal
 	}
 }
 
@@ -171,7 +184,7 @@ func ToEnvelope(event CanonicalEvent) envelope.Envelope {
 		"event_id":        event.ID,
 		"event_source":    event.Source,
 		"event_partition": event.Partition,
-		"event_trust":     event.TrustClass,
+		"event_ingress":   event.IngressOrigin,
 		"idempotency_key": event.IdempotencyKey,
 	}
 	env := envelope.Envelope{
@@ -211,7 +224,7 @@ func ToTask(event CanonicalEvent) *core.Task {
 	contextMap[rexkeys.RexEventType] = event.Type
 	contextMap[rexkeys.RexEventID] = event.ID
 	contextMap[rexkeys.RexEventPartition] = event.Partition
-	contextMap[rexkeys.RexEventTrustClass] = event.TrustClass
+	contextMap[rexkeys.RexEventIngressOrigin] = event.IngressOrigin
 	contextMap["idempotency_key"] = event.IdempotencyKey
 	contextMap["edit_permitted"] = env.EditPermitted
 	if env.ResumedRoute != "" {
@@ -246,14 +259,14 @@ func taskTypeForEvent(eventType string, editPermitted bool) core.TaskType {
 	}
 }
 
-func normalizeTrust(raw string) string {
+func normalizeOrigin(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", TrustUntrusted:
-		return TrustUntrusted
-	case TrustTrusted:
-		return TrustTrusted
-	case TrustInternal:
-		return TrustInternal
+	case "", OriginExternal:
+		return OriginExternal
+	case OriginPeer:
+		return OriginPeer
+	case OriginInternal:
+		return OriginInternal
 	default:
 		return strings.ToLower(strings.TrimSpace(raw))
 	}

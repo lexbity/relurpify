@@ -34,7 +34,7 @@ func TestResolveDuplicateStartCollapsesToSignalForExistingWorkflow(t *testing.T)
 	event := events.CanonicalEvent{
 		ID:             "evt-1",
 		Type:           events.TypeTaskRequested,
-		TrustClass:     events.TrustTrusted,
+		IngressOrigin:  events.OriginPeer,
 		ActorID:        "actor-1",
 		Partition:      "tenant-a",
 		IdempotencyKey: "idem-1",
@@ -88,7 +88,7 @@ func TestResolveValidCallbackAcceptsMatchingExpectedWaitState(t *testing.T) {
 	decision, err := gw.Resolve(ctx, events.CanonicalEvent{
 		ID:         "evt-2",
 		Type:       events.TypeCallbackReceived,
-		TrustClass: events.TrustTrusted,
+		IngressOrigin: events.OriginPeer,
 		Payload: map[string]any{
 			"workflow_id":       "wf-2",
 			"run_id":            "run-2",
@@ -120,7 +120,7 @@ func TestResolveRejectsStaleSignalsWithoutMutatingWorkflow(t *testing.T) {
 	decision, err := gw.Resolve(ctx, events.CanonicalEvent{
 		ID:         "evt-3",
 		Type:       events.TypeWorkflowSignal,
-		TrustClass: events.TrustTrusted,
+		IngressOrigin: events.OriginPeer,
 		Payload: map[string]any{
 			"workflow_id":     "wf-3",
 			"expected_signal": "resume",

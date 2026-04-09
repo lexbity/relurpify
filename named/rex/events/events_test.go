@@ -10,7 +10,7 @@ import (
 )
 
 func TestMapAdapterNormalizesTrustedTaskEvent(t *testing.T) {
-	adapter := MapAdapter{NameID: "stub", DefaultType: TypeTaskRequested, TrustClass: TrustTrusted, Partition: "local"}
+	adapter := MapAdapter{NameID: "stub", DefaultType: TypeTaskRequested, IngressOrigin: OriginPeer, Partition: "local"}
 	event, err := adapter.Normalize(map[string]any{
 		"event_id":        "evt-1",
 		"task_id":         "task-1",
@@ -24,7 +24,7 @@ func TestMapAdapterNormalizesTrustedTaskEvent(t *testing.T) {
 	if event.Type != TypeTaskRequested || event.Partition != "local" {
 		t.Fatalf("unexpected event: %+v", event)
 	}
-	if event.IdempotencyKey != "idem-1" || event.TrustClass != TrustTrusted {
+	if event.IdempotencyKey != "idem-1" || event.IngressOrigin != OriginPeer {
 		t.Fatalf("unexpected identity metadata: %+v", event)
 	}
 }
@@ -33,7 +33,7 @@ func TestDefaultNormalizerRejectsUntrustedResumeIngress(t *testing.T) {
 	_, err := DefaultNormalizer{}.Normalize(CanonicalEvent{
 		ID:         "evt-2",
 		Type:       TypeWorkflowResume,
-		TrustClass: TrustUntrusted,
+		IngressOrigin: OriginExternal,
 		Payload:    map[string]any{"workflow_id": "wf-1"},
 	})
 	if err == nil {
@@ -61,8 +61,8 @@ func TestFromFrameworkEventPreservesActorPartitionAndIdempotency(t *testing.T) {
 	if event.ActorID != "nexus" || event.Partition != "tenant-1" || event.IdempotencyKey != "idem-42" {
 		t.Fatalf("unexpected canonical event: %+v", event)
 	}
-	if event.TrustClass != TrustInternal {
-		t.Fatalf("unexpected trust class: %+v", event)
+	if event.IngressOrigin != OriginInternal {
+		t.Fatalf("unexpected ingress origin: %+v", event)
 	}
 }
 
@@ -70,7 +70,7 @@ func TestToEnvelopeAndTaskPreserveIngressMetadata(t *testing.T) {
 	event, err := DefaultNormalizer{}.Normalize(CanonicalEvent{
 		ID:             "evt-3",
 		Type:           TypeTaskRequested,
-		TrustClass:     TrustTrusted,
+		IngressOrigin:  OriginPeer,
 		Source:         "nexus-runtime",
 		Partition:      "tenant-a",
 		IdempotencyKey: "idem-3",
@@ -102,7 +102,7 @@ func TestToEnvelopeAndTaskPreserveIngressMetadata(t *testing.T) {
 }
 
 func TestNormalizerStaysTransportAgnostic(t *testing.T) {
-	adapter := MapAdapter{NameID: "http-json", DefaultType: TypeTaskRequested, TrustClass: TrustTrusted}
+	adapter := MapAdapter{NameID: "http-json", DefaultType: TypeTaskRequested, IngressOrigin: OriginPeer}
 	event, err := adapter.Normalize(map[string]any{
 		"event_id":    "evt-4",
 		"type":        TypeTaskRequested,
@@ -128,11 +128,11 @@ func TestEventHelpersCoverFallbacksAndBranches(t *testing.T) {
 	if got := (MapAdapter{NameID: " rex "}).Name(); got != "rex" {
 		t.Fatalf("trimmed Name() = %q", got)
 	}
-	if got := normalizeTrust(" TRUSTED "); got != TrustTrusted {
-		t.Fatalf("normalizeTrust trusted = %q", got)
+	if got := normalizeOrigin(" TRUSTED "); got != OriginPeer {
+		t.Fatalf("normalizeOrigin peer = %q", got)
 	}
-	if got := normalizeTrust("custom-trust"); got != "custom-trust" {
-		t.Fatalf("normalizeTrust custom = %q", got)
+	if got := normalizeOrigin("custom-origin"); got != "custom-origin" {
+		t.Fatalf("normalizeOrigin custom = %q", got)
 	}
 	if got := stringValue(nil); got != "" {
 		t.Fatalf("stringValue(nil) = %q", got)
@@ -177,10 +177,10 @@ func TestEventHelpersCoverFallbacksAndBranches(t *testing.T) {
 }
 
 func TestDefaultNormalizerRejectsInvalidTrustAndMissingIdentity(t *testing.T) {
-	if _, err := (DefaultNormalizer{}).Normalize(CanonicalEvent{ID: "evt", Type: TypeTaskRequested, TrustClass: "external", Payload: map[string]any{}}); err == nil {
+	if _, err := (DefaultNormalizer{}).Normalize(CanonicalEvent{ID: "evt", Type: TypeTaskRequested, IngressOrigin: "bad-origin", Payload: map[string]any{}}); err == nil {
 		t.Fatalf("expected invalid trust rejection")
 	}
-	if _, err := (DefaultNormalizer{}).Normalize(CanonicalEvent{TrustClass: TrustTrusted, Payload: map[string]any{}}); err == nil {
+	if _, err := (DefaultNormalizer{}).Normalize(CanonicalEvent{IngressOrigin: OriginPeer, Payload: map[string]any{}}); err == nil {
 		t.Fatalf("expected missing id rejection")
 	}
 }
@@ -195,7 +195,7 @@ func TestToEnvelopeAndTaskUseFallbacks(t *testing.T) {
 	event, err := DefaultNormalizer{}.Normalize(CanonicalEvent{
 		ID:         "evt-5",
 		Type:       TypeTaskRequested,
-		TrustClass: TrustTrusted,
+		IngressOrigin: OriginPeer,
 		Payload: map[string]any{
 			"task_id":             "task-5",
 			"summary":             "fallback summary",

@@ -113,7 +113,7 @@ func (g DefaultGateway) ensureStartAllowed(ctx context.Context, workflowID strin
 }
 
 func (g DefaultGateway) validateSignalEvent(ctx context.Context, workflowID, runID string, event events.CanonicalEvent) error {
-	if event.TrustClass == events.TrustUntrusted {
+	if event.IngressOrigin == events.OriginExternal {
 		return errors.New("untrusted signals rejected")
 	}
 	if strings.TrimSpace(workflowID) == "" {

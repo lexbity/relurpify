@@ -406,7 +406,7 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 		ID:         "evt-1",
 		Type:       rexevents.TypeTaskRequested,
 		Partition:  "local",
-		TrustClass: rexevents.TrustInternal,
+		IngressOrigin: rexevents.OriginInternal,
 		Payload: map[string]any{
 			"task_id":        "task-1",
 			"instruction":    "review the code",
@@ -451,7 +451,7 @@ func TestHandleEventDecisionReleasesAdmissionWhenQueueIsFull(t *testing.T) {
 		ID:         "evt-queue",
 		Type:       rexevents.TypeTaskRequested,
 		Partition:  "local",
-		TrustClass: rexevents.TrustInternal,
+		IngressOrigin: rexevents.OriginInternal,
 		Payload: map[string]any{
 			"task_id":     "task-queue",
 			"instruction": "queue should reject",

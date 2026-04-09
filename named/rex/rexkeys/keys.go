@@ -18,10 +18,10 @@ const (
 	GatewaySessionID = "gateway.session_id"
 	GatewayTenantID  = "gateway.tenant_id"
 
-	RexEventType       = "rex.event_type"
-	RexEventID         = "rex.event_id"
-	RexEventPartition  = "rex.event_partition"
-	RexEventTrustClass = "rex.event_trust_class"
+	RexEventType          = "rex.event_type"
+	RexEventID            = "rex.event_id"
+	RexEventPartition     = "rex.event_partition"
+	RexEventIngressOrigin = "rex.event_ingress_origin"
 
 	// TRUSTED - server-set only, never from payload.
 	RexAdmissionTenantID = "rex.admission_tenant_id"

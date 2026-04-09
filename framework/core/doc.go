@@ -18,6 +18,24 @@
 // wraps every tool result with provenance, an insertion decision, and a policy
 // snapshot so the agent loop can enforce content-security rules.
 //
+// # Trust model — execution authorization
+//
+// TrustClass in this package answers: "how much does the runtime trust this
+// capability to execute and access resources?" It is an execution-authorization
+// concept, not a network or transport concept.
+//
+//   - BuiltinTrusted: framework-owned capability, implicitly safe.
+//   - WorkspaceTrusted: declared in the workspace manifest and approved.
+//   - ProviderLocalUntrusted: sourced from a local provider but not workspace-approved.
+//   - RemoteDeclared: arrived from a remote node, declared but not yet approved.
+//   - RemoteApproved: remote capability that has passed the approval handshake.
+//
+// Do not conflate TrustClass with event ingress origin (see named/rex/events,
+// which uses IngressOrigin to classify where an inbound event came from) or
+// with node enrollment trust (see app/nexus, which uses TrustClass on
+// NodeEnrollment to record the result of the node pairing handshake — a
+// different application of the same type).
+//
 // Providers — Provider is the common interface for all capability sources
 // (builtin, plugin, MCP client/server, agent-runtime, LSP, node-device).
 // ProviderPolicy, CapabilityPolicy, and GlobalPolicy form the declarative

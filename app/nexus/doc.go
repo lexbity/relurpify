@@ -13,6 +13,31 @@
 //     unified observability stream.
 //   - Admin surface: management API exposed over MCP (see admin/, adminapi/).
 //
+// # Trust concepts in Nexus
+//
+// Nexus works with three distinct trust-related concepts. They operate at
+// different layers and must not be conflated:
+//
+// Node enrollment trust (framework/core.TrustClass on NodeEnrollment) —
+// records the result of the node pairing handshake. Answers: "how was this
+// node authenticated when it joined the fabric?"
+//
+//   - RemoteApproved: completed the challenge/response pairing handshake.
+//   - WorkspaceTrusted: declared in the local workspace manifest.
+//
+// Event ingress origin (named/rex/events.IngressOrigin on CanonicalEvent) —
+// classifies where an inbound event came from. Answers: "how trusted is the
+// source of this event?" Used by the gateway to gate which event types are
+// allowed from which origins.
+//
+//   - OriginInternal: originated inside the Nexus fabric.
+//   - OriginPeer: from an authenticated enrolled node.
+//   - OriginExternal: from an unauthenticated external source.
+//
+// FMP sensitivity (framework/core.SensitivityClass on FMP routing types) —
+// classifies how sensitive a payload is for transport routing decisions.
+// Answers: "how should this data be handled in transit?"
+//
 // # Subdirectories
 //
 //   - admin: admin domain and MCP handler surface.

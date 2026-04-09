@@ -61,7 +61,7 @@ func TestDefaultGatewayResolveAndValidationHelpers(t *testing.T) {
 
 	signal, err := gw.Resolve(ctx, events.CanonicalEvent{
 		Type:       events.TypeWorkflowSignal,
-		TrustClass: events.TrustTrusted,
+		IngressOrigin: events.OriginPeer,
 		Payload: map[string]any{
 			"workflow_id":     "wf-1",
 			"expected_signal": "resume",
@@ -99,10 +99,10 @@ func TestDefaultGatewayStartAndSignalGuardBranches(t *testing.T) {
 	if gw.hasWorkflow(ctx, "wf-1") {
 		t.Fatalf("expected hasWorkflow to be false without a store")
 	}
-	if err := gw.validateSignalEvent(ctx, "", "", events.CanonicalEvent{Type: events.TypeWorkflowSignal, TrustClass: events.TrustTrusted}); err == nil {
+	if err := gw.validateSignalEvent(ctx, "", "", events.CanonicalEvent{Type: events.TypeWorkflowSignal, IngressOrigin: events.OriginPeer}); err == nil {
 		t.Fatalf("expected workflow identity rejection")
 	}
-	if err := gw.validateSignalEvent(ctx, "wf-1", "run-1", events.CanonicalEvent{Type: events.TypeCallbackReceived, TrustClass: events.TrustUntrusted, Payload: map[string]any{"expected_callback": "cb", "callback_key": "cb"}}); err == nil {
+	if err := gw.validateSignalEvent(ctx, "wf-1", "run-1", events.CanonicalEvent{Type: events.TypeCallbackReceived, IngressOrigin: events.OriginExternal, Payload: map[string]any{"expected_callback": "cb", "callback_key": "cb"}}); err == nil {
 		t.Fatalf("expected untrusted signal rejection")
 	}
 	if err := ValidateSignal("", "cb"); err == nil {
@@ -119,7 +119,7 @@ func TestDefaultGatewayStartAndSignalGuardBranches(t *testing.T) {
 	if !gw.hasWorkflow(ctx, "wf-2") {
 		t.Fatalf("expected hasWorkflow to detect workflow")
 	}
-	decision, err := gw.Resolve(ctx, events.CanonicalEvent{Type: events.TypeTaskRequested, TrustClass: events.TrustTrusted, Payload: map[string]any{"workflow_id": "wf-2"}})
+	decision, err := gw.Resolve(ctx, events.CanonicalEvent{Type: events.TypeTaskRequested, IngressOrigin: events.OriginPeer, Payload: map[string]any{"workflow_id": "wf-2"}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
