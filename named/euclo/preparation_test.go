@@ -32,65 +32,140 @@ func TestShouldUseSummaryStatusFastPath(t *testing.T) {
 	}
 }
 
-func TestShortCircuitAndHydrationHelpers(t *testing.T) {
+func TestExecutionPreparationHelpers(t *testing.T) {
 	state := core.NewContext()
 	state.Set("euclo.archaeo_phase_state", archaeodomain.WorkflowPhaseState{CurrentPhase: archaeodomain.PhaseIntentElicitation})
 
-	if !shouldShortCircuitExecution(executionPreparation{summaryFastPath: true}, state) {
-		t.Fatal("expected summary fast path to short-circuit")
+	if !hasTerminalExecutionPreparation(executionPreparation{summaryFastPath: true}) {
+		t.Fatal("expected summary fast path to be terminal")
 	}
-	if !shouldShortCircuitExecution(executionPreparation{}, state) {
-		t.Fatal("expected intent elicitation to short-circuit")
+	if !hasTerminalExecutionPreparation(executionPreparation{skipReason: "summary/status request completed from cached execution state"}) {
+		t.Fatal("expected skip reason to be terminal")
+	}
+	if hasTerminalExecutionPreparation(executionPreparation{}) {
+		t.Fatal("expected empty preparation to be non-terminal")
+	}
+
+	if !shouldShortCircuitExecution(state) {
+		t.Fatal("expected intent elicitation phase to short-circuit")
 	}
 	state.Set("euclo.archaeo_phase_state", archaeodomain.WorkflowPhaseState{CurrentPhase: archaeodomain.PhaseSurfacing})
-	if !shouldShortCircuitExecution(executionPreparation{}, state) {
+	if !shouldShortCircuitExecution(state) {
 		t.Fatal("expected surfacing phase to short-circuit")
 	}
 	state.Set("euclo.archaeo_phase_state", archaeodomain.WorkflowPhaseState{CurrentPhase: archaeodomain.PhaseExecution})
-	if shouldShortCircuitExecution(executionPreparation{}, state) {
+	if shouldShortCircuitExecution(state) {
 		t.Fatal("expected execution phase not to short-circuit")
 	}
-	if shouldShortCircuitExecution(executionPreparation{}, nil) {
+	if shouldShortCircuitExecution(nil) {
 		t.Fatal("expected nil state not to short-circuit")
-	}
-	if !shouldShortCircuitExecution(executionPreparation{skipReason: "execution preparation skipped: workflow id unavailable"}, nil) {
-		t.Fatal("expected missing prerequisite skip reason to short-circuit")
-	}
-
-	task := &core.Task{Context: map[string]any{"run_id": "run-123", "euclo.interaction_state": map[string]any{}}}
-	if !shouldHydratePersistedArtifacts(task, nil, eucloruntime.TaskEnvelope{}) {
-		t.Fatal("expected task run_id or interaction state to trigger hydration")
-	}
-	if !shouldHydratePersistedArtifacts(nil, state, eucloruntime.TaskEnvelope{PreviousArtifactKinds: []string{"euclo.edit_execution"}}) {
-		t.Fatal("expected previous artifacts to trigger hydration")
-	}
-	if !shouldHydratePersistedArtifacts(task, core.NewContext(), eucloruntime.TaskEnvelope{}) {
-		t.Fatal("expected state or task artifacts to trigger hydration")
-	}
-	if shouldHydratePersistedArtifacts(nil, nil, eucloruntime.TaskEnvelope{}) {
-		t.Fatal("expected empty inputs to bypass hydration")
 	}
 }
 
-func TestPrepareExecutionAndLivingPlanFallbacks(t *testing.T) {
+func TestSummaryFastPathWithoutWorkflow(t *testing.T) {
 	agent := &Agent{}
-
-	summaryPrep := agent.prepareExecution(
+	prep := agent.prepareExecution(
 		context.Background(),
 		&core.Task{Instruction: "Please provide current status"},
 		nil,
 		eucloruntime.TaskClassification{},
 		eucloruntime.ExecutionProfileSelection{ProfileID: "plan_stage_execute"},
 	)
-	if !summaryPrep.summaryFastPath {
+	if !prep.summaryFastPath {
 		t.Fatal("expected summary fast path to be enabled")
 	}
-	if summaryPrep.skipReason == "" {
-		t.Fatal("expected summary fast path to record a skip reason")
+	if prep.skipReason != "summary/status request completed without explicit workflow" {
+		t.Fatalf("expected explicit-workflow skip reason, got %q", prep.skipReason)
 	}
-	if summaryPrep.livingPlan != nil || summaryPrep.activeStep != nil || summaryPrep.preflightResult != nil || summaryPrep.err != nil {
-		t.Fatalf("unexpected summary fast path prep: %#v", summaryPrep)
+	if prep.readBundle != nil || prep.livingPlan != nil || prep.activeStep != nil || prep.preflightResult != nil || prep.err != nil {
+		t.Fatalf("unexpected preparation state: %#v", prep)
 	}
+}
+
+func TestSummaryFastPathCachedBundleBranches(t *testing.T) {
+	agent := &Agent{}
+	task := &core.Task{Context: map[string]any{"workflow_id": "wf-1"}, Instruction: "Current status update please"}
+
+	t.Run("non-blocking", func(t *testing.T) {
+		state := core.NewContext()
+		bundle := &executionReadBundle{
+			workflowID: "wf-1",
+			learningQueue: &archaeoprojections.LearningQueueProjection{
+				PendingLearning: []archaeolearning.Interaction{{ID: "learn-1"}},
+			},
+			activePlan: &archaeoprojections.ActivePlanProjection{
+				PhaseState: &archaeodomain.WorkflowPhaseState{CurrentPhase: archaeodomain.PhaseExecution},
+				ActivePlanVersion: &archaeodomain.VersionedLivingPlan{
+					Plan: frameworkplan.LivingPlan{},
+				},
+			},
+		}
+
+		prep := agent.finalizeSummaryFastPathExecution(task, state, executionPreparation{workflowID: "wf-1"}, bundle)
+		if !prep.summaryFastPath {
+			t.Fatal("expected cached execution state to short-circuit")
+		}
+		if prep.skipReason != "summary/status request completed from cached execution state" {
+			t.Fatalf("unexpected skip reason: %q", prep.skipReason)
+		}
+		if prep.readBundle != bundle {
+			t.Fatal("expected cached bundle to be recorded")
+		}
+		if raw, ok := state.Get("euclo.execution_read_bundle"); !ok || raw != bundle {
+			t.Fatalf("expected bundle to be seeded into state, got %#v", raw)
+		}
+		if _, ok := state.Get("euclo.pending_learning_ids"); !ok {
+			t.Fatal("expected pending learning ids to be seeded")
+		}
+		if _, ok := state.Get("euclo.phase_state"); !ok {
+			t.Fatal("expected phase state to be seeded")
+		}
+	})
+
+	t.Run("blocking", func(t *testing.T) {
+		state := core.NewContext()
+		bundle := &executionReadBundle{
+			workflowID: "wf-1",
+			learningQueue: &archaeoprojections.LearningQueueProjection{
+				PendingGuidanceIDs: []string{"guide-1"},
+			},
+		}
+
+		prep := agent.finalizeSummaryFastPathExecution(task, state, executionPreparation{workflowID: "wf-1"}, bundle)
+		if prep.summaryFastPath {
+			t.Fatal("expected blocking cached state to fall back to living plan")
+		}
+		if prep.skipReason != "" {
+			t.Fatalf("expected no skip reason for blocking cache, got %q", prep.skipReason)
+		}
+		if prep.readBundle != bundle {
+			t.Fatal("expected cached bundle to remain available for fallback")
+		}
+		if _, ok := state.Get("euclo.pending_guidance_ids"); !ok {
+			t.Fatal("expected pending guidance ids to be seeded")
+		}
+	})
+}
+
+func TestLivingPlanFallbackNotes(t *testing.T) {
+	agent := &Agent{}
+
+	if got := agent.executionPreparationNote(&core.Task{}, core.NewContext()); got != "execution preparation note: workflow id unavailable" {
+		t.Fatalf("expected workflow note, got %q", got)
+	}
+	if got := agent.executionPreparationNote(&core.Task{Context: map[string]any{"workflow_id": "wf-1"}}, core.NewContext()); got != "execution preparation note: plan store unavailable" {
+		t.Fatalf("expected plan store note, got %q", got)
+	}
+	if lp, step, result, err, reason, note := agent.prepareLivingPlan(context.Background(), &core.Task{Context: map[string]any{"workflow_id": "wf-1"}}, core.NewContext()); lp != nil || step != nil || result != nil || err != nil || reason != "" || note != "execution preparation note: plan store unavailable" {
+		t.Fatalf("expected missing plan store note, got %#v %#v %#v %v %q %q", lp, step, result, err, reason, note)
+	}
+	if lp, step, result, err, reason, note := agent.prepareLivingPlan(context.Background(), &core.Task{}, core.NewContext()); lp != nil || step != nil || result != nil || err != nil || reason != "" || note != "execution preparation note: workflow id unavailable" {
+		t.Fatalf("expected missing workflow note, got %#v %#v %#v %v %q %q", lp, step, result, err, reason, note)
+	}
+}
+
+func TestPrepareExecutionAndLivingPlanFallbacks(t *testing.T) {
+	agent := &Agent{}
 
 	normalPrep := agent.prepareExecution(
 		context.Background(),
@@ -114,15 +189,8 @@ func TestPrepareExecutionAndLivingPlanFallbacks(t *testing.T) {
 	if normalPrep.livingPlan != nil || normalPrep.activeStep != nil || normalPrep.preflightResult != nil || normalPrep.err != nil {
 		t.Fatalf("expected nil living plan fallback, got %#v", normalPrep)
 	}
-	if shouldShortCircuitExecution(normalPrep, nil) {
+	if shouldShortCircuitExecution(nil) {
 		t.Fatal("expected missing plan store note not to short-circuit execution")
-	}
-
-	if lp, step, result, err, reason, note := (*Agent)(nil).prepareLivingPlan(context.Background(), &core.Task{Context: map[string]any{"workflow_id": "wf-456"}}, core.NewContext()); lp != nil || step != nil || result != nil || err != nil || reason != "" || note != "execution preparation note: plan store unavailable" {
-		t.Fatalf("expected nil receiver to return empty results, got %#v %#v %#v %v %q %q", lp, step, result, err, reason, note)
-	}
-	if lp, step, result, err, reason, note := agent.prepareLivingPlan(context.Background(), &core.Task{}, core.NewContext()); lp != nil || step != nil || result != nil || err != nil || reason != "" || note != "execution preparation note: workflow id unavailable" {
-		t.Fatalf("expected blank workflow id to return empty results, got %#v %#v %#v %v %q %q", lp, step, result, err, reason, note)
 	}
 }
 

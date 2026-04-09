@@ -70,13 +70,7 @@ func (a *Agent) shortCircuitResult(state *core.Context, prep executionPreparatio
 	}
 }
 
-func shouldShortCircuitExecution(prep executionPreparation, state *core.Context) bool {
-	if prep.summaryFastPath {
-		return true
-	}
-	if prep.skipReason != "" {
-		return true
-	}
+func shouldShortCircuitExecution(state *core.Context) bool {
 	if state == nil {
 		return false
 	}
@@ -100,6 +94,10 @@ func shouldShortCircuitExecution(prep executionPreparation, state *core.Context)
 	}
 }
 
+func hasTerminalExecutionPreparation(prep executionPreparation) bool {
+	return prep.summaryFastPath || prep.skipReason != ""
+}
+
 func (a *Agent) prepareExecution(ctx context.Context, task *core.Task, state *core.Context, classification eucloruntime.TaskClassification, profile euclotypes.ExecutionProfileSelection) executionPreparation {
 	prep := executionPreparation{
 		workflowID: workflowIDFromTaskState(task, state),
@@ -108,9 +106,7 @@ func (a *Agent) prepareExecution(ctx context.Context, task *core.Task, state *co
 		return a.finishExecutionPreparation(ctx, task, state, prep)
 	}
 	if !taskHasExplicitWorkflow(task) {
-		prep.summaryFastPath = true
-		prep.skipReason = "summary/status request completed without explicit workflow"
-		return prep
+		return a.markSummaryExecutionWithoutWorkflow(prep)
 	}
 	prep = a.prepareSummaryFastPathExecution(ctx, task, state, prep)
 	if prep.summaryFastPath {
@@ -120,15 +116,31 @@ func (a *Agent) prepareExecution(ctx context.Context, task *core.Task, state *co
 }
 
 func (a *Agent) prepareSummaryFastPathExecution(ctx context.Context, task *core.Task, state *core.Context, prep executionPreparation) executionPreparation {
-	if bundle, ok := a.loadExecutionReadBundle(ctx, prep.workflowID); ok {
-		prep.readBundle = bundle
-		a.seedExecutionReadBundleState(state, bundle)
-		if !bundleHasBlockingWork(task, bundle) {
-			prep.summaryFastPath = true
-			prep.skipReason = "summary/status request completed from cached execution state"
-			return prep
-		}
+	bundle, ok := a.loadExecutionReadBundle(ctx, prep.workflowID)
+	if !ok {
+		return prep
 	}
+	return a.finalizeSummaryFastPathExecution(task, state, prep, bundle)
+}
+
+func (a *Agent) finalizeSummaryFastPathExecution(task *core.Task, state *core.Context, prep executionPreparation, bundle *executionReadBundle) executionPreparation {
+	prep.readBundle = bundle
+	a.seedExecutionReadBundleState(state, bundle)
+	if bundleHasBlockingWork(task, bundle) {
+		return prep
+	}
+	return a.markSummaryExecutionFromCachedState(prep)
+}
+
+func (a *Agent) markSummaryExecutionWithoutWorkflow(prep executionPreparation) executionPreparation {
+	prep.summaryFastPath = true
+	prep.skipReason = "summary/status request completed without explicit workflow"
+	return prep
+}
+
+func (a *Agent) markSummaryExecutionFromCachedState(prep executionPreparation) executionPreparation {
+	prep.summaryFastPath = true
+	prep.skipReason = "summary/status request completed from cached execution state"
 	return prep
 }
 
@@ -138,15 +150,23 @@ func (a *Agent) finishExecutionPreparation(ctx context.Context, task *core.Task,
 }
 
 func (a *Agent) prepareLivingPlan(ctx context.Context, task *core.Task, state *core.Context) (*frameworkplan.LivingPlan, *frameworkplan.PlanStep, *core.Result, error, string, string) {
+	if note := a.executionPreparationNote(task, state); note != "" {
+		return nil, nil, nil, nil, "", note
+	}
 	workflowID := workflowIDFromTaskState(task, state)
-	if workflowID == "" {
-		return nil, nil, nil, nil, "", "execution preparation note: workflow id unavailable"
-	}
-	if a == nil || a.PlanStore == nil {
-		return nil, nil, nil, nil, "", "execution preparation note: plan store unavailable"
-	}
 	result := a.archaeologyService().PrepareLivingPlan(ctx, task, state, workflowID)
 	return result.Plan, result.Step, result.Result, result.Err, "", ""
+}
+
+func (a *Agent) executionPreparationNote(task *core.Task, state *core.Context) string {
+	workflowID := workflowIDFromTaskState(task, state)
+	if workflowID == "" {
+		return "execution preparation note: workflow id unavailable"
+	}
+	if a == nil || a.PlanStore == nil {
+		return "execution preparation note: plan store unavailable"
+	}
+	return ""
 }
 
 func (a *Agent) shouldUseSummaryStatusFastPath(task *core.Task, classification eucloruntime.TaskClassification, profile euclotypes.ExecutionProfileSelection) bool {

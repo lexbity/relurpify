@@ -125,7 +125,7 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 	flow.work = euclowork.BuildUnitOfWork(flow.task, flow.state, flow.envelope, flow.classification, flow.mode, flow.profile, a.ModeRegistry, flow.work.SemanticInputs, flow.work.ResolvedPolicy, flow.work.ExecutorDescriptor)
 	a.seedRuntimeState(flow.state, flow.envelope, flow.classification, flow.mode, flow.profile, flow.work)
 
-	if prep.activeStep == nil && shouldShortCircuitExecution(prep, flow.state) {
+	if prep.activeStep == nil && (hasTerminalExecutionPreparation(prep) || shouldShortCircuitExecution(flow.state)) {
 		flow.work.Status = eucloruntime.UnitOfWorkStatusCompleted
 		flow.work.ResultClass = euclowork.ResultClassForOutcome(euclowork.ExecutionStatusCompleted, flow.work.DeferredIssueIDs, nil)
 		flow.state.Set("euclo.unit_of_work", flow.work)
