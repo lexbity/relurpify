@@ -239,11 +239,17 @@ func mapsClone(input map[string]string) map[string]string {
 
 // methodStateFromResolved converts a ResolvedMethod to MethodState for serialization.
 func methodStateFromResolved(resolved ResolvedMethod) MethodState {
+	subtaskCount := 0
+	if resolved.Method != nil {
+		subtaskCount = len(resolved.Method.Subtasks)
+	} else if resolved.Spec.SubtaskCount != 0 {
+		subtaskCount = resolved.Spec.SubtaskCount
+	}
 	return MethodState{
 		Name:                 resolved.Spec.Name,
 		TaskType:             resolved.Spec.TaskType,
 		Priority:             resolved.Spec.Priority,
-		SubtaskCount:         len(resolved.Method.Subtasks),
+		SubtaskCount:         subtaskCount,
 		OperatorCount:        len(resolved.Operators),
 		RequiredCapabilities: dedupeSelectors(resolved.Spec.RequiredCapabilities),
 	}

@@ -102,3 +102,42 @@ func TestSharedContextPromptBlockUsesReferenceOnlyFallback(t *testing.T) {
 		t.Fatalf("expected reference-only fallback, got %q", block)
 	}
 }
+
+func TestContextItemPromptSummaryAndTruncationBranches(t *testing.T) {
+	if got := contextItemPromptSummary(nil); got != "" {
+		t.Fatalf("expected empty summary for nil item, got %q", got)
+	}
+
+	fileSummary := contextItemPromptSummary(&core.FileContextItem{Summary: "  file summary  "})
+	if fileSummary != "file summary" {
+		t.Fatalf("unexpected file summary: %q", fileSummary)
+	}
+
+	fileContent := contextItemPromptSummary(&core.FileContextItem{Content: "  file content  "})
+	if fileContent != "file content" {
+		t.Fatalf("unexpected file content summary: %q", fileContent)
+	}
+
+	memSummary := contextItemPromptSummary(&core.MemoryContextItem{Summary: "  memory summary  "})
+	if memSummary != "memory summary" {
+		t.Fatalf("unexpected memory summary: %q", memSummary)
+	}
+
+	retrievalContent := contextItemPromptSummary(&core.RetrievalContextItem{Content: "  retrieval content  "})
+	if retrievalContent != "retrieval content" {
+		t.Fatalf("unexpected retrieval summary: %q", retrievalContent)
+	}
+
+	if got := truncatePromptSnippet("   ", 4); got != "" {
+		t.Fatalf("expected empty truncated snippet, got %q", got)
+	}
+	if got := truncatePromptSnippet("abc", 10); got != "abc" {
+		t.Fatalf("expected passthrough snippet, got %q", got)
+	}
+	if got := truncatePromptSnippet("abcdef", 3); got != "abc..." {
+		t.Fatalf("expected truncated snippet, got %q", got)
+	}
+	if got := truncatePromptSnippet("abcdef", 0); got != "abcdef" {
+		t.Fatalf("expected no truncation when limit <= 0, got %q", got)
+	}
+}

@@ -57,6 +57,122 @@ func TestRewooCheckpointStoreSavePrefersArtifactRefs(t *testing.T) {
 	}
 }
 
+func TestRewooCheckpointStoreListDeleteAndArtifactLoadingErrors(t *testing.T) {
+	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	if err != nil {
+		t.Fatalf("workflow store: %v", err)
+	}
+	t.Cleanup(func() { _ = workflowStore.Close() })
+	requireNoErrCheckpoint(t, workflowStore.CreateWorkflow(context.Background(), frameworkmemory.WorkflowRecord{
+		WorkflowID:  "wf-checkpoints",
+		TaskID:      "task-checkpoints",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "checkpoints",
+		Status:      frameworkmemory.WorkflowRunStatusRunning,
+	}))
+	requireNoErrCheckpoint(t, workflowStore.CreateRun(context.Background(), frameworkmemory.WorkflowRunRecord{
+		RunID:      "run-checkpoints",
+		WorkflowID: "wf-checkpoints",
+		Status:     frameworkmemory.WorkflowRunStatusRunning,
+		StartedAt:  time.Now().UTC(),
+	}))
+
+	store := NewRewooCheckpointStore(workflowStore, nil)
+	listed, err := store.ListCheckpoints(context.Background())
+	if err != nil {
+		t.Fatalf("ListCheckpoints: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("expected empty checkpoint list, got %d", len(listed))
+	}
+
+	state := core.NewContext()
+	state.Set("rewoo.workflow_id", "wf-checkpoints")
+	state.Set("rewoo.run_id", "run-checkpoints")
+	state.Set("rewoo.plan", &RewooPlan{Goal: "goal", Steps: []RewooStep{{ID: "a", Tool: "tool"}}})
+	state.Set("rewoo.tool_results", []RewooStepResult{{StepID: "a", Tool: "tool", Success: true}})
+	state.Set("rewoo.synthesis", "final")
+	if err := store.SaveCheckpoint(context.Background(), "cp-checkpoints", "synthesis", 2, state); err != nil {
+		t.Fatalf("SaveCheckpoint: %v", err)
+	}
+
+	listed, err = store.ListCheckpoints(context.Background())
+	if err != nil {
+		t.Fatalf("ListCheckpoints after save: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected one checkpoint, got %d", len(listed))
+	}
+	if err := store.DeleteCheckpoint(context.Background(), "cp-checkpoints"); err != nil {
+		t.Fatalf("DeleteCheckpoint: %v", err)
+	}
+	listed, err = store.ListCheckpoints(context.Background())
+	if err != nil {
+		t.Fatalf("ListCheckpoints after delete: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("expected empty checkpoint list after delete, got %d", len(listed))
+	}
+
+	var target map[string]any
+	if err := (&RewooCheckpointStore{}).loadWorkflowArtifactJSON(context.Background(), core.ArtifactReference{}, &target); err == nil {
+		t.Fatal("expected error when workflow store is unavailable")
+	}
+
+	requireNoErrCheckpoint(t, workflowStore.UpsertWorkflowArtifact(context.Background(), frameworkmemory.WorkflowArtifactRecord{
+		ArtifactID:        "empty-artifact",
+		WorkflowID:        "wf-checkpoints",
+		RunID:             "run-checkpoints",
+		Kind:              "rewoo_plan",
+		ContentType:       "application/json",
+		StorageKind:       frameworkmemory.ArtifactStorageInline,
+		SummaryText:       "empty",
+		InlineRawText:     "",
+		RawSizeBytes:      0,
+		CompressionMethod: "none",
+		CreatedAt:         time.Now().UTC(),
+	}))
+	err = store.loadWorkflowArtifactJSON(context.Background(), core.ArtifactReference{
+		ArtifactID: "empty-artifact",
+		WorkflowID: "wf-checkpoints",
+		RunID:      "run-checkpoints",
+	}, &target)
+	if err == nil {
+		t.Fatal("expected error for missing inline payload")
+	}
+
+	requireNoErrCheckpoint(t, workflowStore.UpsertWorkflowArtifact(context.Background(), frameworkmemory.WorkflowArtifactRecord{
+		ArtifactID:        "bad-artifact",
+		WorkflowID:        "wf-checkpoints",
+		RunID:             "run-checkpoints",
+		Kind:              "rewoo_plan",
+		ContentType:       "application/json",
+		StorageKind:       frameworkmemory.ArtifactStorageInline,
+		SummaryText:       "bad",
+		InlineRawText:     "{bad json",
+		RawSizeBytes:      9,
+		CompressionMethod: "none",
+		CreatedAt:         time.Now().UTC(),
+	}))
+	err = store.loadWorkflowArtifactJSON(context.Background(), core.ArtifactReference{
+		ArtifactID: "bad-artifact",
+		WorkflowID: "wf-checkpoints",
+		RunID:      "run-checkpoints",
+	}, &target)
+	if err == nil {
+		t.Fatal("expected decode error for malformed JSON")
+	}
+
+	err = store.loadWorkflowArtifactJSON(context.Background(), core.ArtifactReference{
+		ArtifactID: "missing-artifact",
+		WorkflowID: "wf-checkpoints",
+		RunID:      "run-checkpoints",
+	}, &target)
+	if err == nil {
+		t.Fatal("expected not-found error for missing artifact")
+	}
+}
+
 func TestRewooCheckpointStoreRestoreHydratesArtifactBackedState(t *testing.T) {
 	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
 	if err != nil {
@@ -142,6 +258,88 @@ func TestRewooCheckpointStoreRestoreHydratesArtifactBackedState(t *testing.T) {
 	}
 	if got := state.GetString("rewoo.synthesis"); got != "final answer" {
 		t.Fatalf("unexpected rehydrated synthesis: %q", got)
+	}
+}
+
+func TestRewooCheckpointStoreRestorePlanAndSynthesisSummaryFallback(t *testing.T) {
+	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	if err != nil {
+		t.Fatalf("workflow store: %v", err)
+	}
+	t.Cleanup(func() { _ = workflowStore.Close() })
+	requireNoErrCheckpoint(t, workflowStore.CreateWorkflow(context.Background(), frameworkmemory.WorkflowRecord{
+		WorkflowID:  "wf-plan",
+		TaskID:      "task-plan",
+		TaskType:    core.TaskTypeCodeGeneration,
+		Instruction: "restore plan",
+		Status:      frameworkmemory.WorkflowRunStatusRunning,
+	}))
+	requireNoErrCheckpoint(t, workflowStore.CreateRun(context.Background(), frameworkmemory.WorkflowRunRecord{
+		RunID:      "run-plan",
+		WorkflowID: "wf-plan",
+		Status:     frameworkmemory.WorkflowRunStatusRunning,
+		StartedAt:  time.Now().UTC(),
+	}))
+	requireNoErrCheckpoint(t, workflowStore.UpsertWorkflowArtifact(context.Background(), frameworkmemory.WorkflowArtifactRecord{
+		ArtifactID:        "plan-1",
+		WorkflowID:        "wf-plan",
+		RunID:             "run-plan",
+		Kind:              "rewoo_plan",
+		ContentType:       "application/json",
+		StorageKind:       frameworkmemory.ArtifactStorageInline,
+		SummaryText:       "goal",
+		InlineRawText:     `{"goal":"goal","steps":[{"id":"a","tool":"tool"}]}`,
+		RawSizeBytes:      56,
+		CompressionMethod: "none",
+		CreatedAt:         time.Now().UTC(),
+	}))
+	requireNoErrCheckpoint(t, workflowStore.UpsertWorkflowArtifact(context.Background(), frameworkmemory.WorkflowArtifactRecord{
+		ArtifactID:        "synth-1",
+		WorkflowID:        "wf-plan",
+		RunID:             "run-plan",
+		Kind:              "rewoo_synthesis",
+		ContentType:       "application/json",
+		StorageKind:       frameworkmemory.ArtifactStorageInline,
+		SummaryText:       "summary fallback",
+		InlineRawText:     `{"synthesis":""}`,
+		RawSizeBytes:      16,
+		CompressionMethod: "none",
+		CreatedAt:         time.Now().UTC(),
+	}))
+
+	store := NewRewooCheckpointStore(workflowStore, nil)
+	checkpoint := &CheckpointMetadata{
+		CheckpointID: "cp-plan",
+		Phase:        "synthesis",
+		Attempt:      1,
+		Metadata: map[string]interface{}{
+			"state_snapshot": map[string]interface{}{
+				"rewoo.plan_ref": core.ArtifactReference{
+					ArtifactID: "plan-1",
+					WorkflowID: "wf-plan",
+					RunID:      "run-plan",
+					Kind:       "rewoo_plan",
+					Summary:    "goal",
+				},
+				"rewoo.synthesis_ref": core.ArtifactReference{
+					ArtifactID: "synth-1",
+					WorkflowID: "wf-plan",
+					RunID:      "run-plan",
+					Kind:       "rewoo_synthesis",
+					Summary:    "summary fallback",
+				},
+			},
+		},
+	}
+	state := core.NewContext()
+	if err := store.RestoreStateFromCheckpoint(context.Background(), state, checkpoint); err != nil {
+		t.Fatalf("RestoreStateFromCheckpoint: %v", err)
+	}
+	if _, ok := state.Get("rewoo.plan"); !ok {
+		t.Fatal("expected hydrated plan")
+	}
+	if got := state.GetString("rewoo.synthesis"); got != "summary fallback" {
+		t.Fatalf("expected summary fallback, got %q", got)
 	}
 }
 

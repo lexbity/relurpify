@@ -63,6 +63,9 @@ func (m Method) Validate() error {
 // Validate ensures the resolved method stays consistent with the method-level
 // HTN runtime contract.
 func (m ResolvedMethod) Validate() error {
+	if m.Method == nil {
+		return fmt.Errorf("htn: resolved method requires method")
+	}
 	if err := m.Method.Validate(); err != nil {
 		return err
 	}
