@@ -29,10 +29,10 @@ const (
 	ASTQueryGetDependencies = contextmgr.ASTQueryGetDependencies
 )
 
-func NewAggressiveStrategy() *contextmgr.AggressiveStrategy {
+func NewAggressiveStrategy() *contextmgr.ProfiledStrategy {
 	return contextmgr.NewAggressiveStrategy()
 }
-func NewConservativeStrategy() *contextmgr.ConservativeStrategy {
+func NewConservativeStrategy() *contextmgr.ProfiledStrategy {
 	return contextmgr.NewConservativeStrategy()
 }
 func NewAdaptiveStrategy() *contextmgr.AdaptiveStrategy { return contextmgr.NewAdaptiveStrategy() }

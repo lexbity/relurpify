@@ -124,7 +124,7 @@ func TestContextMgrStrategiesAndPruning(t *testing.T) {
 	aggressive := NewAggressiveStrategy()
 	request, err := aggressive.SelectContext(task, budget)
 	if err != nil {
-		t.Fatalf("AggressiveStrategy.SelectContext: %v", err)
+		t.Fatalf("aggressive SelectContext: %v", err)
 	}
 	if request.MaxTokens != budget.AvailableForContext/4 {
 		t.Fatalf("unexpected aggressive token budget: %d", request.MaxTokens)
@@ -145,13 +145,16 @@ func TestContextMgrStrategiesAndPruning(t *testing.T) {
 	conservative := NewConservativeStrategy()
 	request, err = conservative.SelectContext(task, budget)
 	if err != nil {
-		t.Fatalf("ConservativeStrategy.SelectContext: %v", err)
+		t.Fatalf("conservative SelectContext: %v", err)
 	}
 	if request.MaxTokens != budget.AvailableForContext*3/4 {
 		t.Fatalf("unexpected conservative token budget: %d", request.MaxTokens)
 	}
-	if len(request.MemoryQueries) == 0 || len(request.SearchQueries) != 0 {
-		t.Fatalf("expected conservative strategy to prefer memory and file loading, got %#v", request)
+	if len(request.MemoryQueries) == 0 || len(request.SearchQueries) == 0 {
+		t.Fatalf("expected conservative strategy to prefer memory, file loading, and search, got %#v", request)
+	}
+	if got := request.SearchQueries[0]; got.Text != task.Instruction || got.MaxResults != 20 {
+		t.Fatalf("unexpected conservative search query: %#v", got)
 	}
 	if got := conservative.DetermineDetailLevel("file.go", 0.9); got != DetailFull {
 		t.Fatalf("unexpected conservative detail level: %v", got)

@@ -175,12 +175,17 @@ func (rt *ContextRuntime) recordDebug(format string, args ...interface{}) {
 }
 
 func selectContextStrategy(mode eucloruntime.ModeResolution, work eucloruntime.UnitOfWork) (contextmgr.ContextStrategy, string) {
+	if strategyID := strings.TrimSpace(work.ContextStrategyID); strategyID != "" {
+		if profile, ok := contextmgr.LookupProfile(strategyID); ok {
+			return contextmgr.NewStrategyFromProfile(profile), strategyID
+		}
+	}
 	switch {
 	case work.ExecutorDescriptor.Family == eucloruntime.ExecutorFamilyRewoo:
 		return contextmgr.NewConservativeStrategy(), "conservative"
 	case work.ExecutorDescriptor.Family == eucloruntime.ExecutorFamilyPlanner:
 		return contextmgr.NewConservativeStrategy(), "conservative"
-	case mode.ModeID == "review" || work.ExecutorDescriptor.Family == eucloruntime.ExecutorFamilyReflection:
+	case mode.ModeID == "review" || mode.ModeID == "archaeology" || work.ExecutorDescriptor.Family == eucloruntime.ExecutorFamilyReflection:
 		return contextmgr.NewConservativeStrategy(), "conservative"
 	case mode.ModeID == "debug":
 		return contextmgr.NewAggressiveStrategy(), "aggressive"

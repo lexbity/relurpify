@@ -3,8 +3,6 @@ package contextmgr
 import (
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/search"
-	"sort"
 	"strings"
 	"time"
 )
@@ -25,6 +23,9 @@ type AdaptiveStrategy struct {
 	currentMode        StrategyMode
 	lowSuccessThreshold,
 	highSuccessThreshold float64
+	aggressive   *ProfiledStrategy
+	balanced     *ProfiledStrategy
+	conservative *ProfiledStrategy
 }
 
 // NewAdaptiveStrategy returns a ready adaptive strategy.
@@ -35,7 +36,31 @@ func NewAdaptiveStrategy() *AdaptiveStrategy {
 		currentMode:          ModeBalanced,
 		lowSuccessThreshold:  0.6,
 		highSuccessThreshold: 0.85,
+		aggressive:           NewStrategyFromProfile(AggressiveProfile),
+		balanced:             NewStrategyFromProfile(BalancedProfile),
+		conservative:         NewStrategyFromProfile(ConservativeProfile),
 	}
+}
+
+func (as *AdaptiveStrategy) activeStrategy() *ProfiledStrategy {
+	if as == nil {
+		return NewStrategyFromProfile(BalancedProfile)
+	}
+	switch as.currentMode {
+	case ModeAggressive:
+		if as.aggressive != nil {
+			return as.aggressive
+		}
+	case ModeConservative:
+		if as.conservative != nil {
+			return as.conservative
+		}
+	default:
+		if as.balanced != nil {
+			return as.balanced
+		}
+	}
+	return NewStrategyFromProfile(BalancedProfile)
 }
 
 // SelectContext delegates to the current mode.
@@ -48,57 +73,17 @@ func (as *AdaptiveStrategy) SelectContext(task *core.Task, budget *core.ContextB
 	}
 	complexity := as.analyzeTaskComplexity(task)
 	as.adjustMode(complexity)
-	switch as.currentMode {
-	case ModeAggressive:
-		return NewAggressiveStrategy().SelectContext(task, budget)
-	case ModeConservative:
-		return NewConservativeStrategy().SelectContext(task, budget)
-	default:
-		return as.selectBalancedContext(task, budget)
-	}
+	return as.activeStrategy().SelectContext(task, budget)
 }
 
 // ShouldCompress adapts threshold based on mode.
 func (as *AdaptiveStrategy) ShouldCompress(ctx *core.SharedContext) bool {
-	if ctx == nil {
-		return false
-	}
-	history := len(ctx.History())
-	switch as.currentMode {
-	case ModeAggressive:
-		return history > 5
-	case ModeConservative:
-		return history > 15
-	default:
-		return history > 10
-	}
+	return as.activeStrategy().ShouldCompress(ctx)
 }
 
 // DetermineDetailLevel returns mode-specific detail.
 func (as *AdaptiveStrategy) DetermineDetailLevel(file string, relevance float64) DetailLevel {
-	switch as.currentMode {
-	case ModeAggressive:
-		if relevance > 0.9 {
-			return DetailDetailed
-		}
-		return DetailConcise
-	case ModeConservative:
-		if relevance > 0.8 {
-			return DetailFull
-		}
-		if relevance > 0.5 {
-			return DetailDetailed
-		}
-		return DetailConcise
-	default:
-		if relevance > 0.85 {
-			return DetailFull
-		}
-		if relevance > 0.6 {
-			return DetailDetailed
-		}
-		return DetailConcise
-	}
+	return as.activeStrategy().DetermineDetailLevel(file, relevance)
 }
 
 // ShouldExpandContext reacts to failures or uncertainty.
@@ -134,13 +119,7 @@ func (as *AdaptiveStrategy) ShouldExpandContext(ctx *core.SharedContext, lastRes
 
 // PrioritizeContext combines relevance and recency.
 func (as *AdaptiveStrategy) PrioritizeContext(items []core.ContextItem) []core.ContextItem {
-	sorted := append([]core.ContextItem(nil), items...)
-	sort.Slice(sorted, func(i, j int) bool {
-		scoreI := sorted[i].RelevanceScore()*0.6 + (1.0/(1.0+sorted[i].Age().Hours()))*0.4
-		scoreJ := sorted[j].RelevanceScore()*0.6 + (1.0/(1.0+sorted[j].Age().Hours()))*0.4
-		return scoreI > scoreJ
-	})
-	return sorted
+	return as.activeStrategy().PrioritizeContext(items)
 }
 
 func (as *AdaptiveStrategy) analyzeTaskComplexity(task *core.Task) int {
@@ -199,42 +178,4 @@ func (as *AdaptiveStrategy) adjustMode(complexity int) {
 	default:
 		as.currentMode = ModeBalanced
 	}
-}
-
-func (as *AdaptiveStrategy) selectBalancedContext(task *core.Task, budget *core.ContextBudget) (*ContextRequest, error) {
-	if budget == nil {
-		return nil, fmt.Errorf("budget required")
-	}
-	request := &ContextRequest{
-		Files:         make([]FileRequest, 0),
-		ASTQueries:    make([]ASTQuery, 0, 1),
-		SearchQueries: make([]SearchQuery, 0, 1),
-		MaxTokens:     budget.AvailableForContext / 2,
-	}
-	request.ASTQueries = append(request.ASTQueries, ASTQuery{
-		Type: ASTQueryListSymbols,
-		Filter: ASTFilter{
-			ExportedOnly: true,
-		},
-	})
-	files := ExtractFileReferences(task.Instruction)
-	for i, file := range files {
-		priority := 0
-		if i > 2 {
-			priority = 1
-		}
-		request.Files = append(request.Files, FileRequest{
-			Path:        file,
-			DetailLevel: DetailConcise,
-			Priority:    priority,
-			Pinned:      i < 2,
-		})
-	}
-	request.SearchQueries = append(request.SearchQueries, SearchQuery{
-		Text:       ExtractKeywords(task.Instruction),
-		Mode:       search.SearchHybrid,
-		MaxResults: 10,
-	})
-	AppendContextFiles(request, task, DetailFull)
-	return request, nil
 }

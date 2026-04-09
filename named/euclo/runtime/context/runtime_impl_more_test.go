@@ -18,6 +18,16 @@ func TestRuntimeHelperSelectionAndPreferences(t *testing.T) {
 	if strategy == nil || name != "aggressive" {
 		t.Fatalf("unexpected debug strategy resolution: %T %q", strategy, name)
 	}
+	strategy, name = selectContextStrategy(eucloruntime.ModeResolution{ModeID: "code"}, eucloruntime.UnitOfWork{ContextStrategyID: "expand_carefully"})
+	if strategy == nil || name != "expand_carefully" {
+		t.Fatalf("unexpected explicit strategy resolution: %T %q", strategy, name)
+	}
+	if got := strategy.DetermineDetailLevel("file.go", 0.6); got != contextmgr.DetailDetailed {
+		t.Fatalf("expected explicit profile to use balanced thresholds, got %v", got)
+	}
+	if _, name = selectContextStrategy(eucloruntime.ModeResolution{ModeID: "code"}, eucloruntime.UnitOfWork{ContextStrategyID: "unknown-profile"}); name != "adaptive" {
+		t.Fatalf("unexpected fallback strategy name for unknown profile: %q", name)
+	}
 
 	prefs := buildContextPolicyPreferences(
 		eucloruntime.ModeResolution{ModeID: "planning"},
