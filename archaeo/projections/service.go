@@ -161,6 +161,9 @@ func projectionPartition(workflowID, snapshotKey string) string {
 
 func (s *Service) Exploration(ctx context.Context, workflowID string) (*ExplorationProjection, error) {
 	workflowID = strings.TrimSpace(workflowID)
+	if s == nil || s.Store == nil || workflowID == "" {
+		return nil, nil
+	}
 	mat := &ExplorationMaterializer{Store: s.Store, WorkflowID: workflowID}
 	if err := s.runMaterializer(ctx, workflowID, projectionSnapshotKey("exploration"), mat); err != nil {
 		return nil, err
@@ -170,6 +173,9 @@ func (s *Service) Exploration(ctx context.Context, workflowID string) (*Explorat
 
 func (s *Service) LearningQueue(ctx context.Context, workflowID string) (*LearningQueueProjection, error) {
 	workflowID = strings.TrimSpace(workflowID)
+	if s == nil || s.Store == nil || workflowID == "" {
+		return nil, nil
+	}
 	mat := &LearningQueueMaterializer{Store: s.Store, WorkflowID: workflowID}
 	if err := s.runMaterializer(ctx, workflowID, projectionSnapshotKey("learning-queue"), mat); err != nil {
 		return nil, err
@@ -179,6 +185,9 @@ func (s *Service) LearningQueue(ctx context.Context, workflowID string) (*Learni
 
 func (s *Service) ActivePlan(ctx context.Context, workflowID string) (*ActivePlanProjection, error) {
 	workflowID = strings.TrimSpace(workflowID)
+	if s == nil || s.Store == nil || workflowID == "" {
+		return nil, nil
+	}
 	mat := &ActivePlanMaterializer{Store: s.Store, WorkflowID: workflowID}
 	if err := s.runMaterializer(ctx, workflowID, projectionSnapshotKey("active-plan"), mat); err != nil {
 		return nil, err
@@ -196,6 +205,9 @@ func (s *Service) Timeline(ctx context.Context, workflowID string) ([]archaeodom
 
 func (s *Service) TimelineProjection(ctx context.Context, workflowID string) (*TimelineProjection, error) {
 	workflowID = strings.TrimSpace(workflowID)
+	if s == nil || s.Store == nil || workflowID == "" {
+		return nil, nil
+	}
 	mat := &TimelineMaterializer{Store: s.Store, WorkflowID: workflowID}
 	if err := s.runMaterializer(ctx, workflowID, projectionSnapshotKey("timeline"), mat); err != nil {
 		return nil, err
