@@ -43,6 +43,7 @@ type tapeRequest struct {
 }
 
 type TapeHeader struct {
+	ProviderID       string `json:"provider_id,omitempty"`
 	Kind             string `json:"kind"`
 	ModelName        string `json:"model_name"`
 	ModelDigest      string `json:"model_digest,omitempty"`
@@ -140,7 +141,7 @@ func (t *TapeModel) ConfigureHeader(header TapeHeader) error {
 		return t.writeHeader()
 	}
 	if t.mode == TapeReplay {
-		return t.validateHeader(header.ModelName, header.ModelDigest)
+		return t.validateHeader(header.ProviderID, header.ModelName, header.ModelDigest)
 	}
 	return nil
 }
@@ -306,7 +307,7 @@ func (t *TapeModel) nextEntry(kind, fp string) (tapeEntry, error) {
 	return tapeEntry{}, fmt.Errorf("tape exhausted or mismatch for %s fingerprint=%s", kind, fp)
 }
 
-func (t *TapeModel) validateHeader(currentModel, currentDigest string) error {
+func (t *TapeModel) validateHeader(currentProvider, currentModel, currentDigest string) error {
 	inspection, err := inspectLoadedTape(t.path, t.loaded)
 	if err != nil {
 		return err
@@ -323,6 +324,9 @@ func (t *TapeModel) validateHeader(currentModel, currentDigest string) error {
 	if strings.TrimSpace(h.ModelDigest) != "" && strings.TrimSpace(currentDigest) != "" && strings.TrimSpace(h.ModelDigest) != strings.TrimSpace(currentDigest) {
 		return fmt.Errorf("tape recorded with model digest %s but current digest is %s - model binary changed, re-record tape",
 			shortDigest(h.ModelDigest), shortDigest(currentDigest))
+	}
+	if strings.TrimSpace(h.ProviderID) != "" && strings.TrimSpace(currentProvider) != "" && strings.TrimSpace(h.ProviderID) != strings.TrimSpace(currentProvider) {
+		log.Printf("WARNING: tape recorded with provider %q but running with %q. Replay may intentionally switch providers.", h.ProviderID, currentProvider)
 	}
 	if age := time.Since(inspection.FirstRecordedAt); !inspection.FirstRecordedAt.IsZero() && age > staleTapeWarningThreshold {
 		log.Printf("WARNING: golden tape for %q/%q was recorded %d days ago. Consider refreshing with: agenttest refresh --suite %s --case %s",

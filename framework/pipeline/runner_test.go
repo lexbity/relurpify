@@ -21,6 +21,15 @@ type stubModel struct {
 	toolNamesSeen [][]string
 }
 
+func toolCallingSpec(enabled bool) *core.AgentRuntimeSpec {
+	v := enabled
+	return &core.AgentRuntimeSpec{NativeToolCalling: &v}
+}
+
+func nativeToolCallingCaps() core.BackendCapabilities {
+	return core.BackendCapabilities{NativeToolCalling: true}
+}
+
 func (m *stubModel) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
 	m.calls++
 	m.prompts = append(m.prompts, prompt)
@@ -395,9 +404,11 @@ func TestRunnerExecuteFiltersStageTools(t *testing.T) {
 	toolC := &stubTool{name: "file_write", available: true}
 
 	runner := &Runner{Options: RunnerOptions{
-		Model:             model,
-		Tools:             []core.Tool{toolA, toolB, toolC},
-		EnableToolCalling: true,
+		Model:               model,
+		Tools:               []core.Tool{toolA, toolB, toolC},
+		EnableToolCalling:   true,
+		AgentSpec:           toolCallingSpec(true),
+		BackendCapabilities: nativeToolCallingCaps(),
 	}}
 	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-tools"}, core.NewContext(), []Stage{stage})
 	if err != nil {
@@ -438,9 +449,11 @@ func TestRunnerExecuteUsesToolResultsForFinalResponse(t *testing.T) {
 	}
 
 	runner := &Runner{Options: RunnerOptions{
-		Model:             model,
-		Tools:             []core.Tool{tool},
-		EnableToolCalling: true,
+		Model:               model,
+		Tools:               []core.Tool{tool},
+		EnableToolCalling:   true,
+		AgentSpec:           toolCallingSpec(true),
+		BackendCapabilities: nativeToolCallingCaps(),
 	}}
 	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-tool-observation"}, core.NewContext(), []Stage{stage})
 	if err != nil {
@@ -474,9 +487,11 @@ func TestRunnerExecuteRetriesToolRequiredStageWithForcedToolPrompt(t *testing.T)
 	tool := &stubTool{name: "cli_cargo", available: true}
 
 	runner := &Runner{Options: RunnerOptions{
-		Model:             model,
-		Tools:             []core.Tool{tool},
-		EnableToolCalling: true,
+		Model:               model,
+		Tools:               []core.Tool{tool},
+		EnableToolCalling:   true,
+		AgentSpec:           toolCallingSpec(true),
+		BackendCapabilities: nativeToolCallingCaps(),
 	}}
 	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-tool-retry"}, core.NewContext(), []Stage{stage})
 	if err != nil {
@@ -492,10 +507,10 @@ func TestRunnerExecuteRetriesToolRequiredStageWithForcedToolPrompt(t *testing.T)
 
 func TestRunnerExecuteParsesToolCallsFromTextResponse(t *testing.T) {
 	model := &stubModel{
-		toolResponses: []*core.LLMResponse{{
-			Text: `{"name":"file_read","arguments":{"path":"main.rs"}}`,
-		}},
-		responses: []*core.LLMResponse{{Text: `{}`}},
+		responses: []*core.LLMResponse{
+			{Text: `{"name":"file_read","arguments":{"path":"main.rs"}}`},
+			{Text: `{}`},
+		},
 	}
 	stage := &toolStage{
 		runnerStage: makeRunnerStage("verify", "in", "out", map[string]any{"status": "pass"}),
@@ -514,9 +529,11 @@ func TestRunnerExecuteParsesToolCallsFromTextResponse(t *testing.T) {
 	}
 
 	runner := &Runner{Options: RunnerOptions{
-		Model:             model,
-		Tools:             []core.Tool{tool},
-		EnableToolCalling: true,
+		Model:               model,
+		Tools:               []core.Tool{tool},
+		EnableToolCalling:   true,
+		AgentSpec:           toolCallingSpec(false),
+		BackendCapabilities: core.BackendCapabilities{},
 	}}
 	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-tool-text"}, core.NewContext(), []Stage{stage})
 	if err != nil {
@@ -524,6 +541,41 @@ func TestRunnerExecuteParsesToolCallsFromTextResponse(t *testing.T) {
 	}
 	if len(model.prompts) == 0 || !strings.Contains(model.prompts[len(model.prompts)-1], "Tool results:") {
 		t.Fatalf("expected parsed text tool call to trigger final prompt")
+	}
+}
+
+func TestRunnerExecuteUsesFallbackToolCallingWhenNativeDisabled(t *testing.T) {
+	model := &stubModel{
+		responses: []*core.LLMResponse{
+			{Text: `{"name":"file_read","arguments":{"path":"main.rs"}}`},
+			{Text: `{"status":"pass"}`},
+		},
+	}
+	stage := &toolStage{
+		runnerStage: makeRunnerStage("verify", "in", "out", map[string]any{"status": "pass"}),
+		allowedTools: []string{
+			"file_read",
+		},
+	}
+	stage.contract.Metadata.AllowTools = true
+	tool := &stubTool{name: "file_read", available: true}
+
+	runner := &Runner{Options: RunnerOptions{
+		Model:               model,
+		Tools:               []core.Tool{tool},
+		EnableToolCalling:   true,
+		AgentSpec:           toolCallingSpec(false),
+		BackendCapabilities: core.BackendCapabilities{},
+	}}
+	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-fallback"}, core.NewContext(), []Stage{stage})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if model.toolCalls != 0 {
+		t.Fatalf("expected fallback path to avoid native tool calls, got %d", model.toolCalls)
+	}
+	if len(model.prompts) == 0 || !strings.Contains(model.prompts[0], "You have access to the following tools.") {
+		t.Fatalf("expected fallback prompt to render tool instructions, got %#v", model.prompts)
 	}
 }
 
@@ -559,10 +611,12 @@ func TestRunnerExecuteRoutesToolCallsThroughCapabilityInvoker(t *testing.T) {
 	invoker := &recordingCapabilityInvoker{}
 
 	runner := &Runner{Options: RunnerOptions{
-		Model:             model,
-		Tools:             []core.Tool{tool},
-		EnableToolCalling: true,
-		CapabilityInvoker: invoker,
+		Model:               model,
+		Tools:               []core.Tool{tool},
+		EnableToolCalling:   true,
+		AgentSpec:           toolCallingSpec(true),
+		BackendCapabilities: nativeToolCallingCaps(),
+		CapabilityInvoker:   invoker,
 	}}
 	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-tool-invoker"}, core.NewContext(), []Stage{stage})
 	if err != nil {
@@ -605,9 +659,11 @@ func TestRunnerExecuteRepromptsWhenRequiredToolCallIsMissing(t *testing.T) {
 	}
 
 	runner := &Runner{Options: RunnerOptions{
-		Model:             model,
-		Tools:             []core.Tool{tool},
-		EnableToolCalling: true,
+		Model:               model,
+		Tools:               []core.Tool{tool},
+		EnableToolCalling:   true,
+		AgentSpec:           toolCallingSpec(true),
+		BackendCapabilities: nativeToolCallingCaps(),
 	}}
 	_, err := runner.Execute(context.Background(), &core.Task{ID: "task-required", Instruction: "Run cli_cargo args [\"test\"]"}, core.NewContext(), []Stage{stage})
 	if err != nil {

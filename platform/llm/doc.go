@@ -1,11 +1,11 @@
-// Package llm provides the Ollama LLM client and supporting wrappers for
-// the Relurpify platform layer.
+// Package llm provides the managed inference backend facade, transport
+// adapters, and instrumentation wrappers for the Relurpify platform layer.
 //
-// # Ollama client
+// # Managed backends
 //
-// ollama.go implements the framework/core.LanguageModel interface against a
-// locally running Ollama instance. LLM parameters (temperature, top_p,
-// num_predict, etc.) are passed inside the Ollama-required options sub-object.
+// Provider subpackages implement the framework/core.LanguageModel interface
+// against local or OpenAI-compatible backends. LLM parameters are normalized
+// by the transport-specific adapters.
 //
 // # InstrumentedModel
 //
@@ -16,5 +16,5 @@
 //
 // tape_model.go records LLM request/response pairs to a tape file (capture
 // mode) and plays them back deterministically (replay mode), enabling agent
-// integration tests to run without a live Ollama instance.
+// integration tests to run without a live backend.
 package llm

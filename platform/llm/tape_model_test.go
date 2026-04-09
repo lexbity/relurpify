@@ -148,6 +148,29 @@ func TestTapeModelRecordWritesHeaderFirst(t *testing.T) {
 	}
 }
 
+func TestTapeModelReplayWarnsOnProviderMismatch(t *testing.T) {
+	tape := writeTapeFixture(t, []tapeEntry{
+		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ProviderID: "ollama", ModelName: "model-a"}}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &core.LLMResponse{Text: "ok"}},
+	})
+
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prev)
+
+	replay, err := NewTapeModel(stubModel{}, tape, "replay")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := replay.ConfigureHeader(TapeHeader{ProviderID: "lmstudio", ModelName: "model-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `tape recorded with provider "ollama"`) {
+		t.Fatalf("expected provider mismatch warning, got %q", buf.String())
+	}
+}
+
 func TestTapeModelReplayRejectsMismatchedModelHeader(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
 		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ModelName: "model-a"}}},

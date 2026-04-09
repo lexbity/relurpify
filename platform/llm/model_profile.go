@@ -7,7 +7,7 @@ type ModelProfile struct {
 	Pattern string `yaml:"pattern"`
 
 	ToolCalling struct {
-		// NativeAPI maps to core.Config.OllamaToolCalling when not explicitly set.
+		// NativeAPI maps to core.Config.NativeToolCalling when not explicitly set.
 		NativeAPI bool `yaml:"native_api"`
 		// DoubleEncodedArgs enables double-decode in parseArguments (qwen quirk:
 		// arguments JSON is sometimes returned as a quoted string).

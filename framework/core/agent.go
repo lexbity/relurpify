@@ -69,9 +69,9 @@ type Config struct {
 	DefaultAgent               string
 	MaxIterations              int
 	Model                      string
-	OllamaEndpoint             string
+	InferenceEndpoint          string
 	LanguageServers            map[string]map[string]string
-	OllamaToolCalling          bool
+	NativeToolCalling          bool
 	DebugLLM                   bool
 	DebugAgent                 bool
 	AgentSpec                  *AgentRuntimeSpec

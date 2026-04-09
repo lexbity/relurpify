@@ -1,4 +1,4 @@
-package llm
+package ollama
 
 import (
 	"bufio"
@@ -155,76 +155,6 @@ func (c *Client) ChatWithTools(ctx context.Context, messages []core.Message, too
 	return c.doRequest(ctx, "/api/chat", payload)
 }
 
-// doRequestStream POSTs with streaming enabled, calling callback on each token,
-// and returns a complete LLMResponse once done.
-func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]interface{}, callback func(string)) (*core.LLMResponse, error) {
-	payload["stream"] = true
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	c.logPayload(apiPath, body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+apiPath, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.getHTTPClient().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		detail := strings.TrimSpace(string(msg))
-		if detail != "" {
-			return nil, fmt.Errorf("ollama error: %s: %s", resp.Status, detail)
-		}
-		return nil, fmt.Errorf("ollama error: %s", resp.Status)
-	}
-
-	var fullText strings.Builder
-	var finalChunk ollamaResponse
-	scanner := bufio.NewScanner(resp.Body)
-	scanBuf := make([]byte, 0, 64*1024)
-	scanner.Buffer(scanBuf, 512*1024)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		var chunk ollamaResponse
-		if err := json.Unmarshal(line, &chunk); err != nil {
-			continue
-		}
-		token := ""
-		if chunk.Message != nil {
-			token = chunk.Message.Content
-		}
-		if token != "" {
-			fullText.WriteString(token)
-			if callback != nil {
-				callback(token)
-			}
-		}
-		finalChunk = chunk
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	result := &core.LLMResponse{
-		Text:         fullText.String(),
-		FinishReason: finalChunk.DoneReason,
-		Usage:        normalizeUsage(finalChunk),
-	}
-	if finalChunk.Message != nil {
-		result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.Message.ToolCalls)...)
-	}
-	result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.ToolCalls)...)
-	return result, nil
-}
-
 // SetDebugLogging enables or disables verbose logging for requests/responses.
 func (c *Client) SetDebugLogging(enabled bool) {
 	c.Debug = enabled
@@ -281,8 +211,6 @@ func (c *Client) applyOptions(payload map[string]interface{}, options *core.LLMO
 	if options == nil {
 		return
 	}
-	// Ollama native API takes model parameters inside an "options" sub-object.
-	// top-level keys like "temperature" or "max_tokens" are silently ignored.
 	opts := map[string]interface{}{}
 	if options.Temperature != 0 {
 		opts["temperature"] = options.Temperature
@@ -301,9 +229,6 @@ func (c *Client) applyOptions(payload map[string]interface{}, options *core.LLMO
 	}
 }
 
-// ollamaAPIEndpoint normalizes the configured endpoint for Ollama-native APIs.
-// In particular, it strips an OpenAI-compatible "/v1" suffix so we don't hit
-// "/v1/api/chat" and "/v1/api/generate" (which return 404 on Ollama).
 func (c *Client) ollamaAPIEndpoint() string {
 	endpoint := strings.TrimSpace(c.Endpoint)
 	if endpoint == "" {
@@ -324,13 +249,13 @@ func (c *Client) ollamaAPIEndpoint() string {
 	return strings.TrimRight(parsed.String(), "/")
 }
 
-func (c *Client) doRequest(ctx context.Context, path string, payload interface{}) (*core.LLMResponse, error) {
+func (c *Client) doRequest(ctx context.Context, apiPath string, payload interface{}) (*core.LLMResponse, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
-	c.logPayload(path, body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+path, bytes.NewReader(body))
+	c.logPayload(apiPath, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+apiPath, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -352,8 +277,74 @@ func (c *Client) doRequest(ctx context.Context, path string, payload interface{}
 	if err != nil {
 		return nil, err
 	}
-	c.logResponse(path, responseBody)
+	c.logResponse(apiPath, responseBody)
 	return c.decodeLLMResponse(bytes.NewReader(responseBody))
+}
+
+func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]interface{}, callback func(string)) (*core.LLMResponse, error) {
+	payload["stream"] = true
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	c.logPayload(apiPath, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+apiPath, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.getHTTPClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(msg))
+		if detail != "" {
+			return nil, fmt.Errorf("ollama error: %s: %s", resp.Status, detail)
+		}
+		return nil, fmt.Errorf("ollama error: %s", resp.Status)
+	}
+	var fullText strings.Builder
+	var finalChunk ollamaResponse
+	scanner := bufio.NewScanner(resp.Body)
+	scanBuf := make([]byte, 0, 64*1024)
+	scanner.Buffer(scanBuf, 512*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var chunk ollamaResponse
+		if err := json.Unmarshal(line, &chunk); err != nil {
+			continue
+		}
+		token := ""
+		if chunk.Message != nil {
+			token = chunk.Message.Content
+		}
+		if token != "" {
+			fullText.WriteString(token)
+			if callback != nil {
+				callback(token)
+			}
+		}
+		finalChunk = chunk
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	result := &core.LLMResponse{
+		Text:         fullText.String(),
+		FinishReason: finalChunk.DoneReason,
+		Usage:        normalizeUsage(finalChunk),
+	}
+	if finalChunk.Message != nil {
+		result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.Message.ToolCalls)...)
+	}
+	result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.ToolCalls)...)
+	return result, nil
 }
 
 func convertMessages(messages []core.Message) []map[string]interface{} {
@@ -399,8 +390,6 @@ func convertMessages(messages []core.Message) []map[string]interface{} {
 	return out
 }
 
-// convertLLMToolSpecs converts provider-agnostic LLMToolSpec values to the
-// Ollama wire format. All Ollama-specific JSON shaping is contained here.
 func convertLLMToolSpecs(specs []core.LLMToolSpec) []toolDef {
 	res := make([]toolDef, 0, len(specs))
 	for _, spec := range specs {
@@ -416,8 +405,6 @@ func convertLLMToolSpecs(specs []core.LLMToolSpec) []toolDef {
 	return res
 }
 
-// schemaToOllamaParameters converts a core.Schema to Ollama's parameters
-// map format: {"type":"object","properties":{...},"required":[...]}.
 func schemaToOllamaParameters(schema *core.Schema) map[string]interface{} {
 	props := make(map[string]interface{})
 	var required []string
@@ -496,7 +483,6 @@ func (c *Client) parseArguments(raw json.RawMessage) map[string]interface{} {
 	if err := json.Unmarshal(raw, &obj); err == nil {
 		return obj
 	}
-	// Check for double-encoded JSON string if profile requires it
 	if c.profile != nil && c.profile.ToolCalling.DoubleEncodedArgs {
 		var str string
 		if err := json.Unmarshal(raw, &str); err == nil {

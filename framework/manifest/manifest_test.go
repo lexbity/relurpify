@@ -199,6 +199,34 @@ func TestLoadAgentManifest_SetsSourcePath(t *testing.T) {
 	assert.Equal(t, path, m.SourcePath)
 }
 
+func TestLoadAgentManifest_NativeToolCalling(t *testing.T) {
+	path := writeManifestYAML(t, `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: test-agent
+spec:
+  image: test-image:latest
+  runtime: gvisor
+  agent:
+    mode: primary
+    model:
+      provider: ollama
+      name: test-model
+    native_tool_calling: false
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: /workspace/**
+`)
+	m, err := LoadAgentManifest(path)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	require.NotNil(t, m.Spec.Agent)
+	require.NotNil(t, m.Spec.Agent.NativeToolCalling)
+	require.False(t, *m.Spec.Agent.NativeToolCalling)
+}
+
 func TestLoadAgentManifest_MissingFile(t *testing.T) {
 	_, err := LoadAgentManifest("/nonexistent/path/manifest.yaml")
 	require.Error(t, err)

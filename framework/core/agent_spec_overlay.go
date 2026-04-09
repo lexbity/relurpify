@@ -29,7 +29,7 @@ type AgentSpecOverlay struct {
 	LSPOverlay          *AgentLSPSpecOverlay            `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	SearchOverlay       *AgentSearchSpecOverlay         `yaml:"search,omitempty" json:"search,omitempty"`
 	Metadata            *AgentMetadata                  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	OllamaToolCalling   *bool                           `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
+	NativeToolCalling   *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
 	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
 
@@ -85,7 +85,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 	}
 	skillConfig := cloneAgentSkillConfig(spec.SkillConfig)
 	metadata := spec.Metadata
-	toolCalling := spec.OllamaToolCalling
+	toolCalling := spec.NativeToolCalling
 	var logging *AgentLoggingSpec
 	if spec.Logging != nil {
 		llm := spec.Logging.LLM
@@ -118,7 +118,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		LSPOverlay:          &lspOverlay,
 		SearchOverlay:       &searchOverlay,
 		Metadata:            &metadata,
-		OllamaToolCalling:   toolCalling,
+		NativeToolCalling:   toolCalling,
 		Logging:             logging,
 	}
 }
@@ -214,8 +214,8 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 	if overlay.Metadata != nil {
 		spec.Metadata = *overlay.Metadata
 	}
-	if overlay.OllamaToolCalling != nil {
-		spec.OllamaToolCalling = overlay.OllamaToolCalling
+	if overlay.NativeToolCalling != nil {
+		spec.NativeToolCalling = overlay.NativeToolCalling
 	}
 	if overlay.Logging != nil {
 		if spec.Logging == nil {

@@ -36,7 +36,7 @@ type AgentRuntimeSpec struct {
 	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	Search              AgentSearchSpec                 `yaml:"search,omitempty" json:"search,omitempty"`
 	Metadata            AgentMetadata                   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	OllamaToolCalling   *bool                           `yaml:"ollama_tool_calling,omitempty" json:"ollama_tool_calling,omitempty"`
+	NativeToolCalling   *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
 	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
 
@@ -54,12 +54,15 @@ type AgentSearchSpec struct {
 	ASTIndex      bool `yaml:"ast_index" json:"ast_index"`
 }
 
-// ToolCallingEnabled reports whether Ollama tool calling should be used.
-func (a *AgentRuntimeSpec) ToolCallingEnabled() bool {
-	if a == nil || a.OllamaToolCalling == nil {
+// NativeToolCallingEnabled reports whether native tool calling should be used.
+func (a *AgentRuntimeSpec) NativeToolCallingEnabled() bool {
+	if a == nil {
 		return true
 	}
-	return *a.OllamaToolCalling
+	if a.NativeToolCalling != nil {
+		return *a.NativeToolCalling
+	}
+	return true
 }
 
 // AgentLoggingSpec controls debug logging toggles for the agent.
