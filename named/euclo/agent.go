@@ -35,6 +35,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/modes"
+	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
@@ -325,24 +326,12 @@ func (a *Agent) applyLearningResolution(ctx context.Context, task *core.Task, st
 	if workflowID == "" {
 		return nil
 	}
-	raw, ok := learningResolutionPayload(task, state)
+	raw, ok := agentstate.ExtractLearningResolutionPayload(task, state)
 	if !ok || raw == nil {
 		return nil
 	}
-	input := archaeolearning.ResolveInput{
-		WorkflowID:      workflowID,
-		InteractionID:   strings.TrimSpace(stringValue(raw["interaction_id"])),
-		ExpectedStatus:  archaeolearning.InteractionStatus(strings.TrimSpace(stringValue(raw["expected_status"]))),
-		Kind:            archaeolearning.ResolutionKind(strings.TrimSpace(stringValue(raw["resolution_kind"]))),
-		ChoiceID:        strings.TrimSpace(stringValue(raw["choice_id"])),
-		RefinedPayload:  mapValue(raw["refined_payload"]),
-		ResolvedBy:      strings.TrimSpace(stringValue(raw["resolved_by"])),
-		BasedOnRevision: strings.TrimSpace(stringValue(raw["based_on_revision"])),
-	}
-	if comment := commentInputValue(raw["comment"]); comment != nil {
-		input.Comment = comment
-	}
-	if input.InteractionID == "" || input.Kind == "" {
+	input, ok := agentstate.BuildLearningResolutionInput(workflowID, raw)
+	if !ok {
 		return nil
 	}
 	resolved, err := a.learningService().Resolve(ctx, input)
@@ -525,14 +514,14 @@ func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode e
 	if mode.ModeID != "planning" && mode.ModeID != "debug" && mode.ModeID != "review" {
 		if existing, ok := state.Get("euclo.semantic_inputs"); ok && existing != nil {
 			if typed, ok := existing.(eucloruntime.SemanticInputBundle); ok {
-				return enrichBundleWithContextKnowledge(typed, state)
+				return agentstate.EnrichBundleWithContextKnowledge(typed, state)
 			}
 		}
-		return enrichBundleWithContextKnowledge(eucloruntime.SemanticInputBundle{}, state)
+		return agentstate.EnrichBundleWithContextKnowledge(eucloruntime.SemanticInputBundle{}, state)
 	}
 	workflowID := workflowIDFromTaskState(task, state)
 	if workflowID == "" {
-		return enrichBundleWithContextKnowledge(eucloruntime.SemanticInputBundle{}, state)
+		return agentstate.EnrichBundleWithContextKnowledge(eucloruntime.SemanticInputBundle{}, state)
 	}
 	ctx := context.Background()
 	var activePlan *archaeodomain.VersionedLivingPlan
@@ -543,30 +532,19 @@ func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode e
 	provenance, _ := a.projectionService().Provenance(ctx, workflowID)
 	learning, _ := a.LearningQueueProjection(ctx, workflowID)
 	var convergence *archaeodomain.WorkspaceConvergenceProjection
-	if workspaceID := workspaceIDFromTask(task, state); workspaceID != "" {
+	if workspaceID := agentstate.WorkspaceIDFromTask(task, state); workspaceID != "" {
 		convergence, _ = a.archaeoBinding().ConvergenceHistory(ctx, workspaceID)
 	}
-	bundle := eucloarchaeomem.SemanticInputBundleFromSources(
+	return agentstate.BuildSemanticInputBundle(
 		workflowID,
 		activePlan,
-		adaptSemanticRequestHistory(requests),
-		adaptSemanticProvenance(provenance),
-		adaptSemanticLearningQueue(learning),
+		requests,
+		provenance,
+		learning,
 		convergence,
+		state,
+		mode.ModeID,
 	)
-	if bundle.Source == "" {
-		bundle.Source = "archaeo.projections"
-	}
-	switch mode.ModeID {
-	case "planning":
-		bundle.Source = bundle.Source + "+planning_prepass"
-	case "debug":
-		bundle.Source = bundle.Source + "+debug_prepass"
-	case "review":
-		bundle.Source = bundle.Source + "+review_prepass"
-	}
-	enriched := eucloarchaeomem.EnrichSemanticInputBundle(bundle, state, eucloruntime.UnitOfWork{}, nil)
-	return enrichBundleWithContextKnowledge(enriched, state)
 }
 
 func (a *Agent) WorkflowProjection(ctx context.Context, workflowID string) (*archaeoprojections.WorkflowReadModel, error) {
@@ -647,10 +625,10 @@ func (a *Agent) assuranceRuntime() eucloassurance.Runtime {
 			if live != nil {
 				return live, false, 0
 			}
-			emitter, withTransitions := interactionEmitterForTask(task)
-			return emitter, withTransitions, interactionMaxTransitions(task)
+			emitter, withTransitions := agentstate.InteractionEmitterForTask(task)
+			return emitter, withTransitions, agentstate.InteractionMaxTransitions(task)
 		},
-		SeedInteraction:  seedInteractionPrepass,
+		SeedInteraction:  agentstate.SeedInteractionPrepass,
 		PersistArtifacts: a.persistArtifacts,
 		Checkpoint: func(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
 			return a.liveMutationCheckpoint(ctx, checkpoint, task, state)
@@ -730,76 +708,6 @@ func (a *Agent) archaeoBinding() archaeobindings.Runtime {
 	}
 }
 
-func workspaceIDFromTask(task *core.Task, state *core.Context) string {
-	if state != nil {
-		if value := strings.TrimSpace(state.GetString("workspace")); value != "" {
-			return value
-		}
-		if value := strings.TrimSpace(state.GetString("euclo.workspace")); value != "" {
-			return value
-		}
-	}
-	if task != nil && task.Context != nil {
-		if value := strings.TrimSpace(stringValue(task.Context["workspace"])); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func adaptSemanticRequestHistory(history *archaeoprojections.RequestHistoryProjection) *eucloruntime.SemanticRequestHistory {
-	if history == nil {
-		return nil
-	}
-	return &eucloruntime.SemanticRequestHistory{
-		Requests: append([]archaeodomain.RequestRecord(nil), history.Requests...),
-	}
-}
-
-func adaptSemanticProvenance(provenance *archaeoprojections.ProvenanceProjection) *eucloruntime.SemanticProvenance {
-	if provenance == nil {
-		return nil
-	}
-	out := &eucloruntime.SemanticProvenance{
-		ConvergenceRefs: append([]string(nil), provenance.ConvergenceRefs...),
-		DecisionRefs:    append([]string(nil), provenance.DecisionRefs...),
-	}
-	for _, request := range provenance.Requests {
-		out.Requests = append(out.Requests, eucloruntime.SemanticRequestProvenanceRef{RequestID: request.RequestID})
-	}
-	for _, learning := range provenance.Learning {
-		out.Learning = append(out.Learning, eucloruntime.SemanticLearningRef{InteractionID: learning.InteractionID})
-	}
-	for _, tension := range provenance.Tensions {
-		out.Tensions = append(out.Tensions, eucloruntime.SemanticTensionRef{
-			TensionID:  tension.TensionID,
-			PatternIDs: append([]string(nil), tension.PatternIDs...),
-			AnchorRefs: append([]string(nil), tension.AnchorRefs...),
-		})
-	}
-	for _, planVersion := range provenance.PlanVersions {
-		out.PlanVersions = append(out.PlanVersions, eucloruntime.SemanticPlanVersionRef{
-			PatternRefs:             append([]string(nil), planVersion.PatternRefs...),
-			TensionRefs:             append([]string(nil), planVersion.TensionRefs...),
-			FormationProvenanceRefs: append([]string(nil), planVersion.FormationProvenanceRefs...),
-			FormationResultRef:      planVersion.FormationResultRef,
-			SemanticSnapshotRef:     planVersion.SemanticSnapshotRef,
-		})
-	}
-	return out
-}
-
-func adaptSemanticLearningQueue(queue *archaeoprojections.LearningQueueProjection) *eucloruntime.SemanticLearningQueue {
-	if queue == nil {
-		return nil
-	}
-	out := &eucloruntime.SemanticLearningQueue{}
-	for _, interaction := range queue.PendingLearning {
-		out.PendingLearning = append(out.PendingLearning, eucloruntime.SemanticLearningRef{InteractionID: interaction.ID})
-	}
-	return out
-}
-
 func errorString(err error) string {
 	if err == nil {
 		return ""
@@ -869,48 +777,6 @@ func workflowIDFromTaskState(task *core.Task, state *core.Context) string {
 		}
 	}
 	return ""
-}
-
-func learningResolutionPayload(task *core.Task, state *core.Context) (map[string]any, bool) {
-	if state != nil {
-		if raw, ok := state.Get("euclo.learning_resolution"); ok {
-			if payload, ok := raw.(map[string]any); ok {
-				return payload, true
-			}
-		}
-	}
-	if task != nil && task.Context != nil {
-		if raw, ok := task.Context["euclo.learning_resolution"]; ok {
-			if payload, ok := raw.(map[string]any); ok {
-				return payload, true
-			}
-		}
-	}
-	return nil, false
-}
-
-func mapValue(raw any) map[string]any {
-	if raw == nil {
-		return nil
-	}
-	if typed, ok := raw.(map[string]any); ok {
-		return typed
-	}
-	return nil
-}
-
-func commentInputValue(raw any) *archaeolearning.CommentInput {
-	payload, ok := raw.(map[string]any)
-	if !ok || payload == nil {
-		return nil
-	}
-	return &archaeolearning.CommentInput{
-		IntentType:  strings.TrimSpace(stringValue(payload["intent_type"])),
-		AuthorKind:  strings.TrimSpace(stringValue(payload["author_kind"])),
-		Body:        strings.TrimSpace(stringValue(payload["body"])),
-		TrustClass:  strings.TrimSpace(stringValue(payload["trust_class"])),
-		CorpusScope: strings.TrimSpace(stringValue(payload["corpus_scope"])),
-	}
 }
 
 func gitCheckpoint(ctx context.Context, task *core.Task, registry *capability.Registry) string {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
 	"github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclopretask "github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
@@ -21,7 +22,7 @@ func TestEnrichBundleWithContextKnowledge(t *testing.T) {
 		},
 	})
 
-	bundle := enrichBundleWithContextKnowledge(runtime.SemanticInputBundle{}, state)
+	bundle := agentstate.EnrichBundleWithContextKnowledge(runtime.SemanticInputBundle{}, state)
 	if len(bundle.PatternFindings) != 1 {
 		t.Fatalf("expected one pattern finding, got %#v", bundle.PatternFindings)
 	}
@@ -32,15 +33,15 @@ func TestEnrichBundleWithContextKnowledge(t *testing.T) {
 
 func TestSeedInteractionPrepassAndEvidenceHelpers(t *testing.T) {
 	state := core.NewContext()
-	seedInteractionPrepass(state, &core.Task{Instruction: "Please just do it"}, runtime.TaskClassification{}, euclotypes.ModeResolution{ModeID: "code"})
+	agentstate.SeedInteractionPrepass(state, &core.Task{Instruction: "Please just do it"}, runtime.TaskClassification{}, euclotypes.ModeResolution{ModeID: "code"})
 	if got, _ := state.Get("just_do_it"); got != true {
 		t.Fatalf("expected just_do_it flag, got %#v", got)
 	}
 
-	if !hasInstructionEvidence("panic: boom", nil) {
+	if !agentstate.HasInstructionEvidence("panic: boom", nil) {
 		t.Fatal("expected panic text to count as evidence")
 	}
-	if hasInstructionEvidence("plain text", nil) {
+	if agentstate.HasInstructionEvidence("plain text", nil) {
 		t.Fatal("expected plain text to not count as evidence")
 	}
 }
@@ -55,18 +56,18 @@ func TestInteractionScriptAndTransitionHelpers(t *testing.T) {
 		},
 	}
 
-	script := interactionScriptFromTask(task)
+	script := agentstate.InteractionScriptFromTask(task)
 	if len(script) != 1 || script[0].ActionID != "step-1" {
 		t.Fatalf("unexpected scripted responses: %#v", script)
 	}
-	emitter, withTransitions := interactionEmitterForTask(task)
+	emitter, withTransitions := agentstate.InteractionEmitterForTask(task)
 	if emitter == nil || !withTransitions {
 		t.Fatalf("expected emitter with transitions, got %#v %v", emitter, withTransitions)
 	}
-	if got := interactionMaxTransitions(task); got != 7 {
+	if got := agentstate.InteractionMaxTransitions(task); got != 7 {
 		t.Fatalf("unexpected max transitions: %d", got)
 	}
-	if got := interactionMaxTransitions(nil); got != 5 {
+	if got := agentstate.InteractionMaxTransitions(nil); got != 5 {
 		t.Fatalf("expected default max transitions, got %d", got)
 	}
 }

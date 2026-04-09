@@ -9,6 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
 )
 
 type stubProvider struct{}
@@ -31,34 +32,20 @@ func TestHelperExtractorsAndAggregators(t *testing.T) {
 	if got := stringValue(123); got != "" {
 		t.Fatalf("expected non-string to collapse to empty string, got %q", got)
 	}
-	if got := mapValue(map[string]any{"a": 1}); got == nil || got["a"] != 1 {
-		t.Fatalf("unexpected mapValue result: %#v", got)
-	}
-	if got := mapValue("nope"); got != nil {
-		t.Fatalf("expected non-map to return nil, got %#v", got)
-	}
-
-	comment := commentInputValue(map[string]any{
-		"intent_type":  " review ",
-		"author_kind":  " agent ",
-		"body":         " hello ",
-		"trust_class":  " builtin ",
-		"corpus_scope": " workspace ",
-	})
-	if comment == nil || comment.Body != "hello" || comment.AuthorKind != "agent" {
-		t.Fatalf("unexpected comment input: %#v", comment)
-	}
 
 	task := &core.Task{Context: map[string]any{"workspace": " workspace-id ", "workflow_id": " wf-1 "}}
-	if got := workspaceIDFromTask(task, core.NewContext()); got != "workspace-id" {
+	if got := agentstate.WorkspaceIDFromTask(task, core.NewContext()); got != "workspace-id" {
 		t.Fatalf("unexpected workspace id: %q", got)
 	}
 	if got := workflowIDFromTaskState(task, core.NewContext()); got != "wf-1" {
 		t.Fatalf("unexpected workflow id: %q", got)
 	}
 
-	if payload, ok := learningResolutionPayload(nil, nil); ok || payload != nil {
+	if payload, ok := agentstate.ExtractLearningResolutionPayload(nil, nil); ok || payload != nil {
 		t.Fatalf("expected empty learning resolution payload, got %#v %v", payload, ok)
+	}
+	if input, ok := agentstate.BuildLearningResolutionInput("wf-1", map[string]any{"interaction_id": "i-1", "resolution_kind": "accept"}); !ok || input.WorkflowID != "wf-1" {
+		t.Fatalf("unexpected learning resolution input: %#v %v", input, ok)
 	}
 
 	state := core.NewContext()
