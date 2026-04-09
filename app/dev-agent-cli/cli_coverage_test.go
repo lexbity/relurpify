@@ -1,9 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,19 +12,17 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/agents"
+	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
+	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/memory"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/policybundle"
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
 	"github.com/lexcodex/relurpify/platform/llm"
 	"github.com/lexcodex/relurpify/testsuite/agenttest"
 	"gopkg.in/yaml.v3"
@@ -43,6 +41,76 @@ func withCLIState(t *testing.T, ws string) {
 	workspace = ws
 	cfgFile = ""
 	globalCfg = nil
+}
+
+func stubStartWorkspaceFn(t *testing.T, ws string, compiledPolicy bool) {
+	t.Helper()
+	origOpenWorkspace := openWorkspaceFn
+	t.Cleanup(func() {
+		openWorkspaceFn = origOpenWorkspace
+	})
+	openWorkspaceFn = func(ctx context.Context, cfg ayenitd.WorkspaceConfig) (*ayenitd.Workspace, error) {
+		manifestPath := cfg.ManifestPath
+		if manifestPath == "" {
+			manifestPath = filepath.Join(ws, "relurpify_cfg", "agents", "testfu.yaml")
+		}
+		loaded, err := manifest.LoadAgentManifest(manifestPath)
+		if err != nil {
+			return nil, err
+		}
+		effectivePerms, err := manifest.ResolveEffectivePermissions(ws, loaded)
+		if err != nil {
+			return nil, err
+		}
+		hitl := authorization.NewHITLBroker(cfg.HITLTimeout)
+		perms, err := authorization.NewPermissionManager(ws, &effectivePerms, nil, hitl)
+		if err != nil {
+			return nil, err
+		}
+		env := ayenitd.WorkspaceEnvironment{
+			Config: &core.Config{
+				Name:              cfg.AgentName,
+				Model:             cfg.OllamaModel,
+				OllamaEndpoint:    cfg.OllamaEndpoint,
+				MaxIterations:     cfg.MaxIterations,
+				OllamaToolCalling: loaded.Spec.Agent != nil && loaded.Spec.Agent.ToolCallingEnabled(),
+				AgentSpec:         loaded.Spec.Agent,
+				DebugLLM:          cfg.DebugLLM,
+				DebugAgent:        cfg.DebugAgent,
+			},
+			Registry:          capability.NewRegistry(),
+			PermissionManager: perms,
+			IndexManager:      &ast.IndexManager{},
+		}
+		var compiled *policybundle.CompiledPolicyBundle
+		if compiledPolicy && loaded.Spec.Agent != nil {
+			engine, err := authorization.FromAgentSpecWithConfig(loaded.Spec.Agent, loaded.Metadata.Name, perms)
+			if err != nil {
+				return nil, err
+			}
+			compiled = &policybundle.CompiledPolicyBundle{
+				AgentID: loaded.Metadata.Name,
+				Spec:    loaded.Spec.Agent,
+				Engine:  engine,
+			}
+			env.Registry.SetPolicyEngine(engine)
+		}
+		return &ayenitd.Workspace{
+			Environment:    env,
+			Registration:   &authorization.AgentRegistration{ID: loaded.Metadata.Name, Manifest: loaded, Permissions: perms, HITL: hitl, Policy: compiledEngine(compiled)},
+			AgentSpec:      loaded.Spec.Agent,
+			CompiledPolicy: compiled,
+			SkillResults:   nil,
+			ServiceManager: ayenitd.NewServiceManager(),
+		}, nil
+	}
+}
+
+func compiledEngine(bundle *policybundle.CompiledPolicyBundle) authorization.PolicyEngine {
+	if bundle == nil {
+		return nil
+	}
+	return bundle.Engine
 }
 
 func writeAgentManifestFixture(t *testing.T, ws, name string, includeAgent bool) string {
@@ -833,24 +901,12 @@ func TestStartCmdCoveragePaths(t *testing.T) {
 	}
 
 	origRegisterAgent := registerAgentFn
-	origLocalRunner := newLocalCommandRunnerFn
-	origSandboxRunner := newSandboxCommandRunnerFn
-	origHybridMemory := newHybridMemoryFn
-	origLLMClient := newLLMClientFn
-	origInstrumentedModel := newInstrumentedModelFn
-	origBootstrap := bootstrapAgentRuntimeFn
 	origRegisterProviders := registerBuiltinProvidersFn
 	origRegisterRelurpic := registerBuiltinRelurpicCapabilitiesFn
 	origRegisterAgentCaps := registerAgentCapabilitiesFn
 	origBuildFromSpec := buildFromSpecFn
 	t.Cleanup(func() {
 		registerAgentFn = origRegisterAgent
-		newLocalCommandRunnerFn = origLocalRunner
-		newSandboxCommandRunnerFn = origSandboxRunner
-		newHybridMemoryFn = origHybridMemory
-		newLLMClientFn = origLLMClient
-		newInstrumentedModelFn = origInstrumentedModel
-		bootstrapAgentRuntimeFn = origBootstrap
 		registerBuiltinProvidersFn = origRegisterProviders
 		registerBuiltinRelurpicCapabilitiesFn = origRegisterRelurpic
 		registerAgentCapabilitiesFn = origRegisterAgentCaps
@@ -859,6 +915,7 @@ func TestStartCmdCoveragePaths(t *testing.T) {
 	globalCfg = &frameworkconfig.GlobalConfig{
 		Logging: frameworkconfig.LoggingConfig{LLM: true, Agent: true},
 	}
+	stubStartWorkspaceFn(t, ws, true)
 
 	registerAgentFn = func(ctx context.Context, cfg authorization.RuntimeConfig) (*authorization.AgentRegistration, error) {
 		manifestPath := filepath.Join(ws, "relurpify_cfg", "agents", "testfu.yaml")
@@ -882,41 +939,6 @@ func TestStartCmdCoveragePaths(t *testing.T) {
 			HITL:        authorization.NewHITLBroker(0),
 		}, nil
 	}
-	newLocalCommandRunnerFn = func(workspace string, extraEnv []string) *fsandbox.LocalCommandRunner {
-		return fsandbox.NewLocalCommandRunner(workspace, extraEnv)
-	}
-	newSandboxCommandRunnerFn = func(manifest *manifest.AgentManifest, runtime fsandbox.SandboxRuntime, workspace string) (*fsandbox.SandboxCommandRunner, error) {
-		return nil, nil
-	}
-	newHybridMemoryFn = func(path string) (*memory.HybridMemory, error) {
-		return memory.NewHybridMemory(path)
-	}
-	newLLMClientFn = func(endpoint, model string) *llm.Client {
-		return llm.NewClient(endpoint, model)
-	}
-	newInstrumentedModelFn = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) *llm.InstrumentedModel {
-		return llm.NewInstrumentedModel(inner, telemetry, debug)
-	}
-	bootstrapAgentRuntimeFn = func(workspace string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
-		llmDebug := true
-		agentDebug := true
-		return &ayenitd.BootstrappedAgentRuntime{
-			IndexManager: &ast.IndexManager{},
-			AgentSpec: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{
-					Provider: "ollama",
-					Name:     "qwen2.5-coder:14b",
-				},
-				Logging: &core.AgentLoggingSpec{
-					LLM:   &llmDebug,
-					Agent: &agentDebug,
-				},
-			},
-			AgentConfig: &core.Config{Name: "testfu"},
-			CompiledPolicy: &policybundle.CompiledPolicyBundle{},
-		}, nil
-	}
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error { return nil }
 	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.RelurpicOption) error {
 		return nil
@@ -937,9 +959,6 @@ func TestStartCmdCoveragePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := cmd2.Flags().Set("yes", "true"); err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd2.Flags().Set("no-sandbox", "true"); err != nil {
 		t.Fatal(err)
 	}
 	if err := cmd2.Flags().Set("resume-latest-workflow", "true"); err != nil {
@@ -1013,29 +1032,18 @@ func TestStartCmdPolicyAndBuildFallbackBranches(t *testing.T) {
 	writeAgentManifestFixture(t, ws, "testfu", true)
 
 	origRegisterAgent := registerAgentFn
-	origLocalRunner := newLocalCommandRunnerFn
-	origSandboxRunner := newSandboxCommandRunnerFn
-	origHybridMemory := newHybridMemoryFn
-	origLLMClient := newLLMClientFn
-	origInstrumentedModel := newInstrumentedModelFn
-	origBootstrap := bootstrapAgentRuntimeFn
 	origRegisterProviders := registerBuiltinProvidersFn
 	origRegisterRelurpic := registerBuiltinRelurpicCapabilitiesFn
 	origRegisterAgentCaps := registerAgentCapabilitiesFn
 	origBuildFromSpec := buildFromSpecFn
 	t.Cleanup(func() {
 		registerAgentFn = origRegisterAgent
-		newLocalCommandRunnerFn = origLocalRunner
-		newSandboxCommandRunnerFn = origSandboxRunner
-		newHybridMemoryFn = origHybridMemory
-		newLLMClientFn = origLLMClient
-		newInstrumentedModelFn = origInstrumentedModel
-		bootstrapAgentRuntimeFn = origBootstrap
 		registerBuiltinProvidersFn = origRegisterProviders
 		registerBuiltinRelurpicCapabilitiesFn = origRegisterRelurpic
 		registerAgentCapabilitiesFn = origRegisterAgentCaps
 		buildFromSpecFn = origBuildFromSpec
 	})
+	stubStartWorkspaceFn(t, ws, true)
 	registerAgentFn = func(ctx context.Context, cfg authorization.RuntimeConfig) (*authorization.AgentRegistration, error) {
 		loaded, err := manifest.LoadAgentManifest(filepath.Join(ws, "relurpify_cfg", "agents", "testfu.yaml"))
 		if err != nil {
@@ -1050,28 +1058,6 @@ func TestStartCmdPolicyAndBuildFallbackBranches(t *testing.T) {
 			return nil, err
 		}
 		return &authorization.AgentRegistration{ID: loaded.Metadata.Name, Manifest: loaded, Permissions: perms}, nil
-	}
-	newLocalCommandRunnerFn = func(workspace string, extraEnv []string) *fsandbox.LocalCommandRunner {
-		return fsandbox.NewLocalCommandRunner(workspace, extraEnv)
-	}
-	newSandboxCommandRunnerFn = func(manifest *manifest.AgentManifest, runtime fsandbox.SandboxRuntime, workspace string) (*fsandbox.SandboxCommandRunner, error) {
-		return nil, nil
-	}
-	newHybridMemoryFn = func(path string) (*memory.HybridMemory, error) { return memory.NewHybridMemory(path) }
-	newLLMClientFn = func(endpoint, model string) *llm.Client { return llm.NewClient(endpoint, model) }
-	newInstrumentedModelFn = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) *llm.InstrumentedModel {
-		return llm.NewInstrumentedModel(inner, telemetry, debug)
-	}
-	bootstrapAgentRuntimeFn = func(workspace string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
-		return &ayenitd.BootstrappedAgentRuntime{
-			IndexManager: &ast.IndexManager{},
-			AgentSpec: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{Provider: "ollama", Name: "qwen2.5-coder:14b"},
-			},
-			AgentConfig:     &core.Config{Name: "testfu"},
-			CompiledPolicy:  &policybundle.CompiledPolicyBundle{},
-		}, nil
 	}
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error { return nil }
 	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.RelurpicOption) error {
@@ -1101,15 +1087,41 @@ func TestStartCmdPolicyAndBuildFallbackBranches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bootstrapAgentRuntimeFn = func(workspace string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
-		return &ayenitd.BootstrappedAgentRuntime{
-			IndexManager: &ast.IndexManager{},
-			AgentSpec: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{Provider: "ollama", Name: "qwen2.5-coder:14b"},
+	origOpenWorkspace := openWorkspaceFn
+	t.Cleanup(func() { openWorkspaceFn = origOpenWorkspace })
+	openWorkspaceFn = func(ctx context.Context, cfg ayenitd.WorkspaceConfig) (*ayenitd.Workspace, error) {
+		loaded, err := manifest.LoadAgentManifest(filepath.Join(ws, "relurpify_cfg", "agents", "testfu.yaml"))
+		if err != nil {
+			return nil, err
+		}
+		effectivePerms, err := manifest.ResolveEffectivePermissions(ws, loaded)
+		if err != nil {
+			return nil, err
+		}
+		hitl := authorization.NewHITLBroker(cfg.HITLTimeout)
+		perms, err := authorization.NewPermissionManager(ws, &effectivePerms, nil, hitl)
+		if err != nil {
+			return nil, err
+		}
+		return &ayenitd.Workspace{
+			Environment: ayenitd.WorkspaceEnvironment{
+				Config: &core.Config{
+					Name:              cfg.AgentName,
+					Model:             cfg.OllamaModel,
+					OllamaEndpoint:    cfg.OllamaEndpoint,
+					MaxIterations:     cfg.MaxIterations,
+					OllamaToolCalling: loaded.Spec.Agent.ToolCallingEnabled(),
+					AgentSpec:         loaded.Spec.Agent,
+					DebugLLM:          cfg.DebugLLM,
+					DebugAgent:        cfg.DebugAgent,
+				},
+				Registry:          capability.NewRegistry(),
+				PermissionManager: perms,
+				IndexManager:      &ast.IndexManager{},
 			},
-			AgentConfig:     &core.Config{Name: "testfu"},
-			CompiledPolicy:  nil,
+			Registration:   &authorization.AgentRegistration{ID: loaded.Metadata.Name, Manifest: loaded, Permissions: perms, HITL: hitl},
+			AgentSpec:      loaded.Spec.Agent,
+			ServiceManager: ayenitd.NewServiceManager(),
 		}, nil
 	}
 	cmd2 := newStartCmd()
@@ -1157,58 +1169,10 @@ func TestStartCmdSetupErrorBranches(t *testing.T) {
 	withCLIState(t, ws)
 	writeAgentManifestFixture(t, ws, "testfu", true)
 
-	origRegisterAgent := registerAgentFn
-	origLocalRunner := newLocalCommandRunnerFn
-	origSandboxRunner := newSandboxCommandRunnerFn
-	origHybridMemory := newHybridMemoryFn
-	origLLMClient := newLLMClientFn
-	origInstrumentedModel := newInstrumentedModelFn
-	origBootstrap := bootstrapAgentRuntimeFn
-	origRegisterProviders := registerBuiltinProvidersFn
-	origRegisterRelurpic := registerBuiltinRelurpicCapabilitiesFn
-	origRegisterAgentCaps := registerAgentCapabilitiesFn
-	origBuildFromSpec := buildFromSpecFn
-	t.Cleanup(func() {
-		registerAgentFn = origRegisterAgent
-		newLocalCommandRunnerFn = origLocalRunner
-		newSandboxCommandRunnerFn = origSandboxRunner
-		newHybridMemoryFn = origHybridMemory
-		newLLMClientFn = origLLMClient
-		newInstrumentedModelFn = origInstrumentedModel
-		bootstrapAgentRuntimeFn = origBootstrap
-		registerBuiltinProvidersFn = origRegisterProviders
-		registerBuiltinRelurpicCapabilitiesFn = origRegisterRelurpic
-		registerAgentCapabilitiesFn = origRegisterAgentCaps
-		buildFromSpecFn = origBuildFromSpec
-	})
+	origOpenWorkspace := openWorkspaceFn
+	t.Cleanup(func() { openWorkspaceFn = origOpenWorkspace })
 
-	baseRegistration := func() *authorization.AgentRegistration {
-		loaded, err := manifest.LoadAgentManifest(filepath.Join(ws, "relurpify_cfg", "agents", "testfu.yaml"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		effectivePerms, err := manifest.ResolveEffectivePermissions(ws, loaded)
-		if err != nil {
-			t.Fatal(err)
-		}
-		perms, err := authorization.NewPermissionManager(ws, &effectivePerms, nil, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return &authorization.AgentRegistration{ID: loaded.Metadata.Name, Manifest: loaded, Permissions: perms}
-	}
-	baseBootstrap := func() *ayenitd.BootstrappedAgentRuntime {
-		return &ayenitd.BootstrappedAgentRuntime{
-			IndexManager: &ast.IndexManager{},
-			AgentSpec: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{Provider: "ollama", Name: "qwen2.5-coder:14b"},
-			},
-			AgentConfig:    &core.Config{Name: "testfu"},
-			CompiledPolicy: &policybundle.CompiledPolicyBundle{},
-		}
-	}
-	registerAgentFn = func(ctx context.Context, cfg authorization.RuntimeConfig) (*authorization.AgentRegistration, error) {
+	openWorkspaceFn = func(ctx context.Context, cfg ayenitd.WorkspaceConfig) (*ayenitd.Workspace, error) {
 		return nil, fmt.Errorf("register failed")
 	}
 
@@ -1223,13 +1187,7 @@ func TestStartCmdSetupErrorBranches(t *testing.T) {
 		t.Fatalf("expected register failure, got %v", err)
 	}
 
-	registerAgentFn = func(ctx context.Context, cfg authorization.RuntimeConfig) (*authorization.AgentRegistration, error) {
-		return baseRegistration(), nil
-	}
-	bootstrapAgentRuntimeFn = func(workspace string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
-		return baseBootstrap(), nil
-	}
-	newSandboxCommandRunnerFn = func(manifest *manifest.AgentManifest, runtime fsandbox.SandboxRuntime, workspace string) (*fsandbox.SandboxCommandRunner, error) {
+	openWorkspaceFn = func(ctx context.Context, cfg ayenitd.WorkspaceConfig) (*ayenitd.Workspace, error) {
 		return nil, fmt.Errorf("sandbox failed")
 	}
 	cmd2 := newStartCmd()
@@ -1243,10 +1201,7 @@ func TestStartCmdSetupErrorBranches(t *testing.T) {
 		t.Fatalf("expected sandbox failure, got %v", err)
 	}
 
-	newSandboxCommandRunnerFn = func(manifest *manifest.AgentManifest, runtime fsandbox.SandboxRuntime, workspace string) (*fsandbox.SandboxCommandRunner, error) {
-		return nil, nil
-	}
-	newHybridMemoryFn = func(path string) (*memory.HybridMemory, error) {
+	openWorkspaceFn = func(ctx context.Context, cfg ayenitd.WorkspaceConfig) (*ayenitd.Workspace, error) {
 		return nil, fmt.Errorf("memory failed")
 	}
 	cmd3 := newStartCmd()
@@ -1254,9 +1209,6 @@ func TestStartCmdSetupErrorBranches(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := cmd3.Flags().Set("instruction", "do work"); err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd3.Flags().Set("no-sandbox", "true"); err != nil {
 		t.Fatal(err)
 	}
 	if err := cmd3.RunE(cmd3, nil); err == nil || !strings.Contains(err.Error(), "memory failed") {
@@ -1270,27 +1222,11 @@ func TestStartCmdProviderRegistrationError(t *testing.T) {
 	writeAgentManifestFixture(t, ws, "testfu", true)
 
 	origRegisterAgent := registerAgentFn
-	origLocalRunner := newLocalCommandRunnerFn
-	origSandboxRunner := newSandboxCommandRunnerFn
-	origHybridMemory := newHybridMemoryFn
-	origLLMClient := newLLMClientFn
-	origInstrumentedModel := newInstrumentedModelFn
-	origBootstrap := bootstrapAgentRuntimeFn
 	origRegisterProviders := registerBuiltinProvidersFn
-	origRegisterRelurpic := registerBuiltinRelurpicCapabilitiesFn
-	origRegisterAgentCaps := registerAgentCapabilitiesFn
 	origBuildFromSpec := buildFromSpecFn
 	t.Cleanup(func() {
 		registerAgentFn = origRegisterAgent
-		newLocalCommandRunnerFn = origLocalRunner
-		newSandboxCommandRunnerFn = origSandboxRunner
-		newHybridMemoryFn = origHybridMemory
-		newLLMClientFn = origLLMClient
-		newInstrumentedModelFn = origInstrumentedModel
-		bootstrapAgentRuntimeFn = origBootstrap
 		registerBuiltinProvidersFn = origRegisterProviders
-		registerBuiltinRelurpicCapabilitiesFn = origRegisterRelurpic
-		registerAgentCapabilitiesFn = origRegisterAgentCaps
 		buildFromSpecFn = origBuildFromSpec
 	})
 
@@ -1309,38 +1245,13 @@ func TestStartCmdProviderRegistrationError(t *testing.T) {
 		}
 		return &authorization.AgentRegistration{ID: loaded.Metadata.Name, Manifest: loaded, Permissions: perms}, nil
 	}
-	newLocalCommandRunnerFn = func(workspace string, extraEnv []string) *fsandbox.LocalCommandRunner {
-		return fsandbox.NewLocalCommandRunner(workspace, extraEnv)
-	}
-	newSandboxCommandRunnerFn = func(manifest *manifest.AgentManifest, runtime fsandbox.SandboxRuntime, workspace string) (*fsandbox.SandboxCommandRunner, error) {
-		return nil, nil
-	}
-	newHybridMemoryFn = func(path string) (*memory.HybridMemory, error) { return memory.NewHybridMemory(path) }
-	newLLMClientFn = func(endpoint, model string) *llm.Client { return llm.NewClient(endpoint, model) }
-	newInstrumentedModelFn = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) *llm.InstrumentedModel {
-		return llm.NewInstrumentedModel(inner, telemetry, debug)
-	}
-	bootstrapAgentRuntimeFn = func(workspace string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
-		return &ayenitd.BootstrappedAgentRuntime{
-			IndexManager: &ast.IndexManager{},
-			AgentSpec: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{Provider: "ollama", Name: "qwen2.5-coder:14b"},
-			},
-			AgentConfig:    &core.Config{Name: "testfu"},
-			CompiledPolicy: &policybundle.CompiledPolicyBundle{},
-		}, nil
-	}
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error {
 		return fmt.Errorf("provider registration failed")
 	}
-	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.RelurpicOption) error {
-		return nil
-	}
-	registerAgentCapabilitiesFn = func(registry *capability.Registry, env agents.AgentEnvironment) error { return nil }
 	buildFromSpecFn = func(env agents.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 		return &stubWorkflowExecutor{}, nil
 	}
+	stubStartWorkspaceFn(t, ws, true)
 
 	cmd := newStartCmd()
 	if err := cmd.Flags().Set("agent", "testfu"); err != nil {
@@ -1360,27 +1271,11 @@ func TestStartCmdInteractiveHitlBranch(t *testing.T) {
 	writeAgentManifestFixture(t, ws, "testfu", true)
 
 	origRegisterAgent := registerAgentFn
-	origLocalRunner := newLocalCommandRunnerFn
-	origSandboxRunner := newSandboxCommandRunnerFn
-	origHybridMemory := newHybridMemoryFn
-	origLLMClient := newLLMClientFn
-	origInstrumentedModel := newInstrumentedModelFn
-	origBootstrap := bootstrapAgentRuntimeFn
 	origRegisterProviders := registerBuiltinProvidersFn
-	origRegisterRelurpic := registerBuiltinRelurpicCapabilitiesFn
-	origRegisterAgentCaps := registerAgentCapabilitiesFn
 	origBuildFromSpec := buildFromSpecFn
 	t.Cleanup(func() {
 		registerAgentFn = origRegisterAgent
-		newLocalCommandRunnerFn = origLocalRunner
-		newSandboxCommandRunnerFn = origSandboxRunner
-		newHybridMemoryFn = origHybridMemory
-		newLLMClientFn = origLLMClient
-		newInstrumentedModelFn = origInstrumentedModel
-		bootstrapAgentRuntimeFn = origBootstrap
 		registerBuiltinProvidersFn = origRegisterProviders
-		registerBuiltinRelurpicCapabilitiesFn = origRegisterRelurpic
-		registerAgentCapabilitiesFn = origRegisterAgentCaps
 		buildFromSpecFn = origBuildFromSpec
 	})
 
@@ -1404,36 +1299,11 @@ func TestStartCmdInteractiveHitlBranch(t *testing.T) {
 			HITL:        authorization.NewHITLBroker(0),
 		}, nil
 	}
-	newLocalCommandRunnerFn = func(workspace string, extraEnv []string) *fsandbox.LocalCommandRunner {
-		return fsandbox.NewLocalCommandRunner(workspace, extraEnv)
-	}
-	newSandboxCommandRunnerFn = func(manifest *manifest.AgentManifest, runtime fsandbox.SandboxRuntime, workspace string) (*fsandbox.SandboxCommandRunner, error) {
-		return nil, nil
-	}
-	newHybridMemoryFn = func(path string) (*memory.HybridMemory, error) { return memory.NewHybridMemory(path) }
-	newLLMClientFn = func(endpoint, model string) *llm.Client { return llm.NewClient(endpoint, model) }
-	newInstrumentedModelFn = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) *llm.InstrumentedModel {
-		return llm.NewInstrumentedModel(inner, telemetry, debug)
-	}
-	bootstrapAgentRuntimeFn = func(workspace string, opts ayenitd.AgentBootstrapOptions) (*ayenitd.BootstrappedAgentRuntime, error) {
-		return &ayenitd.BootstrappedAgentRuntime{
-			IndexManager: &ast.IndexManager{},
-			AgentSpec: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{Provider: "ollama", Name: "qwen2.5-coder:14b"},
-			},
-			AgentConfig:    &core.Config{Name: "testfu"},
-			CompiledPolicy: &policybundle.CompiledPolicyBundle{},
-		}, nil
-	}
 	registerBuiltinProvidersFn = func(ctx context.Context, rt *appruntime.Runtime) error { return nil }
-	registerBuiltinRelurpicCapabilitiesFn = func(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...agents.RelurpicOption) error {
-		return nil
-	}
-	registerAgentCapabilitiesFn = func(registry *capability.Registry, env agents.AgentEnvironment) error { return nil }
 	buildFromSpecFn = func(env agents.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 		return &stubWorkflowExecutor{}, nil
 	}
+	stubStartWorkspaceFn(t, ws, true)
 
 	cmd := newStartCmd()
 	var out bytes.Buffer
@@ -1442,9 +1312,6 @@ func TestStartCmdInteractiveHitlBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := cmd.Flags().Set("instruction", "interactive branch"); err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.Flags().Set("no-sandbox", "true"); err != nil {
 		t.Fatal(err)
 	}
 	if err := cmd.RunE(cmd, nil); err != nil {

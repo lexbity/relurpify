@@ -7,6 +7,9 @@
 // # Commands
 //
 //   - start: begin an agent session with a given instruction and agent type.
+//   - workspace: inspect workspace config, probes, and services.
+//   - service: manage workspace services.
+//   - archaeo: inspect workflow archaeology projections and workflow IDs.
 //   - agenttest: run integration test suites with optional tape recording and
 //     replay for deterministic CI.
 //   - agents: list registered agent types.
@@ -17,7 +20,8 @@
 // # Flags
 //
 //   - --agent: agent type to use (default: coding).
+//   - --mode: execution mode for euclo and other agents.
 //   - --instruction: task instruction (required for start).
 //   - --yes: approve all HITL prompts automatically (Allow policy).
-//   - --no-sandbox: disable gVisor sandboxing (development only).
+//   - --json: emit a machine-readable completion summary.
 package main

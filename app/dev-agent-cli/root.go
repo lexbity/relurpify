@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -42,6 +43,12 @@ func NewRootCmd() *cobra.Command {
 			}
 			if cfgFile == "" {
 				cfgFile = frameworkconfig.DefaultConfigPath(workspace)
+				altCfg := filepath.Join(frameworkconfig.New(workspace).ConfigRoot(), "relurpify.yaml")
+				if _, err := os.Stat(cfgFile); errors.Is(err, os.ErrNotExist) {
+					if _, altErr := os.Stat(altCfg); altErr == nil {
+						cfgFile = altCfg
+					}
+				}
 			}
 			cfg, err := frameworkconfig.LoadGlobalConfig(cfgFile, workspace)
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -56,6 +63,9 @@ func NewRootCmd() *cobra.Command {
 
 	root.AddCommand(
 		newStartCmd(),
+		newWorkspaceCmd(),
+		newServiceCmd(),
+		newArchaeoCmd(),
 		newAgentsCmd(),
 		newSkillCmd(),
 		newConfigCmd(),

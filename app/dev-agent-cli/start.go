@@ -3,39 +3,33 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/lexcodex/relurpify/agents"
 	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/ayenitd"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/config"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/platform/llm"
+	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/spf13/cobra"
-
-	"log"
-	"os"
-	"strings"
-	"time"
 )
 
 var (
-	registerAgentFn                        = fauthorization.RegisterAgent
-	newLocalCommandRunnerFn                = fsandbox.NewLocalCommandRunner
-	newSandboxCommandRunnerFn              = fsandbox.NewSandboxCommandRunner
-	newHybridMemoryFn                      = memory.NewHybridMemory
-	newLLMClientFn                         = llm.NewClient
-	newInstrumentedModelFn                 = llm.NewInstrumentedModel
-	bootstrapAgentRuntimeFn                = ayenitd.BootstrapAgentRuntime
-	registerBuiltinProvidersFn             = appruntime.RegisterBuiltinProviders
-	registerBuiltinRelurpicCapabilitiesFn  = agents.RegisterBuiltinRelurpicCapabilitiesWithOptions
-	registerAgentCapabilitiesFn            = agents.RegisterAgentCapabilities
-	buildFromSpecFn                        = agents.BuildFromSpec
+	registerAgentFn                       = fauthorization.RegisterAgent
+	openWorkspaceFn                       = ayenitd.Open
+	registerBuiltinProvidersFn            = appruntime.RegisterBuiltinProviders
+	registerBuiltinRelurpicCapabilitiesFn = agents.RegisterBuiltinRelurpicCapabilitiesWithOptions
+	registerAgentCapabilitiesFn           = agents.RegisterAgentCapabilities
+	buildFromSpecFn                       = agents.BuildFromSpec
 )
 
 // newStartCmd constructs the development CLI command that runs an agent.
@@ -45,10 +39,14 @@ func newStartCmd() *cobra.Command {
 	var instruction string
 	var dryRun bool
 	var autoApprove bool
-	var noSandbox bool
 	var resumeLatestWorkflow bool
 	var workflowID string
 	var rerunFromStepID string
+	var skipASTIndex bool
+	var logPath string
+	var eventsLogPath string
+	var telemetryPath string
+	var jsonOutput bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -76,13 +74,7 @@ func newStartCmd() *cobra.Command {
 			}
 			spec = contractpkg.ApplyManifestDefaultsForAgent(manifest.Metadata.Name, spec, manifest.Spec.Defaults)
 			spec = contractpkg.ResolveAgentSpec(globalCfg, spec)
-			if mode == "" {
-				if spec.Mode != "" {
-					mode = string(spec.Mode)
-				} else {
-					mode = "default"
-				}
-			}
+			modeFlagChanged := cmd.Flags().Changed("mode")
 			logLLM := false
 			logAgent := false
 			if globalCfg != nil {
@@ -97,6 +89,27 @@ func newStartCmd() *cobra.Command {
 					logAgent = *spec.Logging.Agent
 				}
 			}
+			eucloOutput := isEucloAgent(agentName, spec)
+			if eucloOutput {
+				requestedMode := strings.TrimSpace(mode)
+				if !modeFlagChanged {
+					fmt.Fprint(cmd.OutOrStdout(), eucloReadyHint(agentName))
+					return nil
+				}
+				mode = requestedMode
+				if mode == "" || strings.EqualFold(mode, "default") {
+					return fmt.Errorf("unknown euclo mode %q; valid modes: %s", requestedMode, strings.Join(eucloModeNames(eucloModeRegistry()), ", "))
+				}
+				if err := validateEucloMode(mode); err != nil {
+					return err
+				}
+			} else if mode == "" {
+				if spec.Mode != "" {
+					mode = string(spec.Mode)
+				} else {
+					mode = "default"
+				}
+			}
 			if instruction == "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "Agent %s ready in %s mode. Provide --instruction to execute a task.\n", agentName, mode)
 				return nil
@@ -108,27 +121,57 @@ func newStartCmd() *cobra.Command {
 			runtimeCfg := appruntime.DefaultConfig()
 			runtimeCfg.Workspace = ws
 			runtimeCfg.ManifestPath = manifest.SourcePath
+			runtimeCfg.AgentName = agentName
 			if err := runtimeCfg.Normalize(); err != nil {
 				return err
 			}
-			registration, err := registerAgentFn(runCtx, fauthorization.RuntimeConfig{
-				ManifestPath: runtimeCfg.ManifestPath,
-				Sandbox:      runtimeCfg.Sandbox,
-				AuditLimit:   runtimeCfg.AuditLimit,
-				BaseFS:       runtimeCfg.Workspace,
-				HITLTimeout:  runtimeCfg.HITLTimeout,
-			})
+			modelName := spec.Model.Name
+			if modelName == "" {
+				modelName = defaultModelName()
+			}
+			wsCfg := ayenitd.WorkspaceConfig{
+				Workspace:      runtimeCfg.Workspace,
+				ManifestPath:   runtimeCfg.ManifestPath,
+				ConfigPath:     runtimeCfg.ConfigPath,
+				AgentsDir:      runtimeCfg.AgentsDir,
+				AgentName:      agentName,
+				OllamaEndpoint: defaultEndpoint(),
+				OllamaModel:    modelName,
+				LogPath:        logPath,
+				TelemetryPath:  telemetryPath,
+				EventsPath:     eventsLogPath,
+				MemoryPath:     runtimeCfg.MemoryPath,
+				MaxIterations:  8,
+				SkipASTIndex:   skipASTIndex,
+				HITLTimeout:    runtimeCfg.HITLTimeout,
+				AuditLimit:     runtimeCfg.AuditLimit,
+				Sandbox:        runtimeCfg.Sandbox,
+				DebugLLM:       logLLM,
+				DebugAgent:     logAgent,
+			}
+			if wsCfg.LogPath == "" {
+				wsCfg.LogPath = config.New(wsCfg.Workspace).LogFile("ayenitd.log")
+			}
+			openedWS, err := openWorkspaceFn(runCtx, wsCfg)
 			if err != nil {
 				return err
 			}
-			// In CLI mode there is no TUI to handle HITL approval prompts.
+			defer func() {
+				_ = openedWS.Close()
+			}()
+			if openedWS.ServiceManager != nil {
+				if err := openedWS.ServiceManager.StartAll(runCtx); err != nil {
+					return err
+				}
+			}
+			registration := openedWS.Registration
+			if registration == nil {
+				return fmt.Errorf("workspace registration missing")
+			}
 			if autoApprove {
-				// --yes: bypass HITL by setting the default policy to allow and
-				// overriding the bash_permissions default so cli_* tools don't ask.
 				registration.Permissions.SetDefaultPolicy(core.AgentPermissionAllow)
 				spec.Bash.Default = core.AgentPermissionAllow
-			} else {
-				// Subscribe to the HITL broker and ask the user interactively on stdin.
+			} else if registration.HITL != nil {
 				hitlEvents, unsub := registration.HITL.Subscribe(4)
 				defer unsub()
 				go func() {
@@ -156,111 +199,53 @@ func newStartCmd() *cobra.Command {
 					}
 				}()
 			}
-			var runner fsandbox.CommandRunner
-			if noSandbox {
-				runner = newLocalCommandRunnerFn(runtimeCfg.Workspace, nil)
-			} else {
-				sandboxRunner, err := newSandboxCommandRunnerFn(registration.Manifest, registration.Runtime, runtimeCfg.Workspace)
-				if err != nil {
-					return err
-				}
-				runner = sandboxRunner
+			paths := config.New(wsCfg.Workspace)
+			if openedWS.CompiledPolicy == nil {
+				return fmt.Errorf("compiled policy missing from workspace")
 			}
-			telemetrySink := telemetry.LoggerTelemetry{Logger: log.Default()}
-			paths := config.New(ws)
-			memoryPath := paths.MemoryDir()
-			memStore, err := newHybridMemoryFn(memoryPath)
-			if err != nil {
-				return err
+			registration.Policy = openedWS.CompiledPolicy.Engine
+			openedWS.Environment.Registry.SetPolicyEngine(openedWS.CompiledPolicy.Engine)
+			if openedWS.Environment.Config != nil && openedWS.Environment.Config.AgentSpec != nil {
+				openedWS.Environment.Registry.UseAgentSpec(registration.ID, openedWS.Environment.Config.AgentSpec)
 			}
-			memStore = memStore.WithVectorStore(memory.NewInMemoryVectorStore())
-			modelName := spec.Model.Name
-			if modelName == "" {
-				modelName = defaultModelName()
+			spec = openedWS.AgentSpec
+			if spec == nil {
+				return fmt.Errorf("workspace agent spec missing")
 			}
-			client := newLLMClientFn(defaultEndpoint(), modelName)
-			client.SetDebugLogging(logLLM)
-			model := newInstrumentedModelFn(client, telemetrySink, logLLM)
-
-			boot, err := bootstrapAgentRuntimeFn(ws, ayenitd.AgentBootstrapOptions{
-				Context:           runCtx,
-				AgentID:           registration.ID,
-				AgentName:         agentName,
-				ConfigName:        manifest.Metadata.Name,
-				AgentsDir:         config.New(ws).AgentsDir(),
-				AgentSpec:         spec,
-				Manifest:          manifest,
-				PermissionManager: registration.Permissions,
-				Runner:            runner,
-				Model:             model,
-				Memory:            memStore,
-				Telemetry:         telemetrySink,
-				OllamaEndpoint:    runtimeCfg.OllamaEndpoint,
-				OllamaModel:       modelName,
-				MaxIterations:     8,
-				DebugLLM:          logLLM,
-				DebugAgent:        logAgent,
-			})
-			if err != nil {
-				return err
-			}
-			// Register relurpic and agent capabilities. ayenitd.BootstrapAgentRuntime
-			// intentionally omits these; named agents register their own. dev-agent-cli
-			// builds agents directly from spec, so we register here.
-			relurpicOpts := []agents.RelurpicOption{agents.WithIndexManager(boot.IndexManager)}
-			if boot.IndexManager != nil {
-				relurpicOpts = append(relurpicOpts, agents.WithGraphDB(boot.IndexManager.GraphDB))
-			}
-			if err := registerBuiltinRelurpicCapabilitiesFn(
-				boot.Registry, model, boot.AgentConfig, relurpicOpts...,
-			); err != nil {
-				return fmt.Errorf("register relurpic capabilities: %w", err)
-			}
-			bootEnv := agents.AgentEnvironment{
-				Config:       boot.Environment.Config,
-				Model:        boot.Environment.Model,
-				Registry:     boot.Environment.Registry,
-				IndexManager: boot.Environment.IndexManager,
-				SearchEngine: boot.Environment.SearchEngine,
-				Memory:       boot.Environment.Memory,
-			}
-			if err := registerAgentCapabilitiesFn(boot.Registry, bootEnv); err != nil {
-				return fmt.Errorf("register agent capabilities: %w", err)
-			}
-			spec = boot.AgentSpec
-			tools := boot.Registry
-			indexManager := boot.IndexManager
-			searchEngine := boot.SearchEngine
-			runtimeMemory := boot.Memory
 			if spec.Logging != nil {
 				if spec.Logging.LLM != nil {
 					logLLM = *spec.Logging.LLM
-					client.SetDebugLogging(logLLM)
 				}
 				if spec.Logging.Agent != nil {
 					logAgent = *spec.Logging.Agent
 				}
 			}
-			compiledPolicy := boot.CompiledPolicy
-			if compiledPolicy == nil {
-				return fmt.Errorf("compiled policy missing from bootstrap")
+			learningBroker := archaeolearning.NewBroker(0)
+			relurpicOpts := []agents.RelurpicOption{
+				agents.WithIndexManager(openedWS.Environment.IndexManager),
+				agents.WithGraphDB(graphDBFromEnv(openedWS.Environment)),
+				agents.WithPatternStore(openedWS.Environment.PatternStore),
+				agents.WithCommentStore(openedWS.Environment.CommentStore),
+				agents.WithRetrievalDB(retrievalDBFromEnv(openedWS.Environment)),
+				agents.WithPlanStore(openedWS.Environment.PlanStore),
+				agents.WithGuidanceBroker(openedWS.Environment.GuidanceBroker),
+				agents.WithWorkflowStore(openedWS.Environment.WorkflowStore),
 			}
-			registration.Policy = compiledPolicy.Engine
-			providerRuntime := &appruntime.Runtime{
-				Tools:        tools,
-				Context:      core.NewContext(),
-				Registration: registration,
-				AgentSpec:    spec,
+			if err := registerBuiltinRelurpicCapabilitiesFn(
+				openedWS.Environment.Registry, openedWS.Environment.Model, openedWS.Environment.Config, relurpicOpts...,
+			); err != nil {
+				return fmt.Errorf("register relurpic capabilities: %w", err)
 			}
-			if err := registerBuiltinProvidersFn(runCtx, providerRuntime); err != nil {
-				return err
+			agentEnv := agents.AgentEnvironment{
+				Config:       openedWS.Environment.Config,
+				Model:        openedWS.Environment.Model,
+				Registry:     openedWS.Environment.Registry,
+				IndexManager: openedWS.Environment.IndexManager,
+				SearchEngine: openedWS.Environment.SearchEngine,
+				Memory:       openedWS.Environment.Memory,
 			}
-			env := agents.AgentEnvironment{
-				Model:        model,
-				Registry:     tools,
-				IndexManager: indexManager,
-				SearchEngine: searchEngine,
-				Memory:       runtimeMemory,
+			if err := registerAgentCapabilitiesFn(openedWS.Environment.Registry, agentEnv); err != nil {
+				return fmt.Errorf("register agent capabilities: %w", err)
 			}
 			cfg := &core.Config{
 				Name:              agentName,
@@ -272,19 +257,44 @@ func newStartCmd() *cobra.Command {
 				DebugLLM:          logLLM,
 				DebugAgent:        logAgent,
 			}
-			env.Config = cfg
-			agent, err := buildFromSpecFn(env, *spec)
-			if err != nil {
-				agent, err = buildFromSpecFn(env, core.AgentRuntimeSpec{Implementation: "react"})
+			providerRuntime := &appruntime.Runtime{
+				Tools:        openedWS.Environment.Registry,
+				Context:      core.NewContext(),
+				Registration: registration,
+				AgentSpec:    spec,
+				Model:        openedWS.Environment.Model,
+				IndexManager: openedWS.Environment.IndexManager,
+				SearchEngine: openedWS.Environment.SearchEngine,
+				Memory:       openedWS.Environment.Memory,
 			}
-			if err != nil {
+			if err := registerBuiltinProvidersFn(runCtx, providerRuntime); err != nil {
 				return err
+			}
+			agentEnv.Config = cfg
+			var agent graph.WorkflowExecutor
+			if eucloOutput {
+				agent = buildAndWireEucloAgentFn(openedWS, learningBroker)
+				if agent == nil {
+					return fmt.Errorf("euclo agent builder returned nil")
+				}
+			} else {
+				var buildErr error
+				agent, buildErr = buildFromSpecFn(agentEnv, *spec)
+				if buildErr != nil {
+					agent, buildErr = buildFromSpecFn(agentEnv, core.AgentRuntimeSpec{Implementation: "react"})
+				}
+				if buildErr != nil {
+					return buildErr
+				}
 			}
 			if react, ok := agent.(*agents.ReActAgent); ok {
 				react.CheckpointPath = paths.CheckpointsDir()
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			execCtx, stopSignals := signal.NotifyContext(runCtx, os.Interrupt, syscall.SIGTERM)
+			defer stopSignals()
+			ctx, cancel := context.WithTimeout(execCtx, 10*time.Minute)
 			defer cancel()
+			startedAt := time.Now()
 			task := &core.Task{
 				ID:          fmt.Sprintf("cli-%d", time.Now().UnixNano()),
 				Instruction: instruction,
@@ -307,7 +317,7 @@ func newStartCmd() *cobra.Command {
 			state.Set("task.id", task.ID)
 			state.Set("task.type", string(task.Type))
 			state.Set("task.instruction", task.Instruction)
-			for _, skill := range boot.SkillResults {
+			for _, skill := range openedWS.SkillResults {
 				if !skill.Applied || skill.Paths.Root == "" {
 					continue
 				}
@@ -320,6 +330,19 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			summary := buildExecutionSummary(task.ID, mode, result, state, openedWS.SkillResults, time.Since(startedAt), eucloOutput)
+			if jsonOutput {
+				encoder := json.NewEncoder(cmd.OutOrStdout())
+				return encoder.Encode(summary)
+			}
+			if eucloOutput {
+				fmt.Fprintf(
+					cmd.OutOrStdout(),
+					"Euclo complete (node=%s, mode=%s, artifact_kinds=%v, artifact_paths=%v, recorded=%v)\n",
+					summary.ResultNode, summary.Mode, summary.ArtifactKinds, summary.ArtifactPaths, summary.Recorded,
+				)
+				return nil
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Agent complete (node=%s): %+v\n", result.NodeID, result.Data)
 			return nil
 		},
@@ -329,10 +352,14 @@ func newStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&instruction, "instruction", "", "Instruction to execute")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate configuration without executing")
 	cmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto-approve all HITL permission requests (skips interactive prompts)")
-	cmd.Flags().BoolVar(&noSandbox, "no-sandbox", false, "Run commands directly on the host instead of inside a gVisor/Docker sandbox")
 	cmd.Flags().BoolVar(&resumeLatestWorkflow, "resume-latest-workflow", false, "Resume the latest persisted architect workflow instead of starting from scratch")
 	cmd.Flags().StringVar(&workflowID, "workflow", "", "Resume or continue the specified workflow ID")
 	cmd.Flags().StringVar(&rerunFromStepID, "rerun-from-step", "", "Replay a workflow from the specified step ID")
+	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Default true for CLI startup: skip AST/bootstrap indexing during setup; use --skip-ast-index=false for dedicated AST-enabled end-to-end runs")
+	cmd.Flags().StringVar(&logPath, "log", "", "Override workspace log file path")
+	cmd.Flags().StringVar(&eventsLogPath, "events-log", "", "Optional SQLite event log path")
+	cmd.Flags().StringVar(&telemetryPath, "telemetry", "", "Optional JSON telemetry file path")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a machine-readable JSON execution summary")
 	return cmd
 }
 

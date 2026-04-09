@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
 	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
 	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
@@ -20,6 +21,7 @@ import (
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/platform/llm"
+	"gopkg.in/yaml.v3"
 )
 
 // Open initializes a complete workspace session: platform checks, store
@@ -72,6 +74,39 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("sandbox registration failed: %w", err)
+	}
+
+	// Optional SQLite event log for observability and permission auditing.
+	var eventLog *nexusdb.SQLiteEventLog
+	if cfg.EventsPath != "" {
+		if err := os.MkdirAll(filepath.Dir(cfg.EventsPath), 0o755); err == nil {
+			if logStore, err := nexusdb.NewSQLiteEventLog(cfg.EventsPath); err == nil {
+				eventLog = logStore
+				if registration.Permissions != nil {
+					registration.Permissions.SetEventLogger(func(ctx context.Context, desc core.PermissionDescriptor, effect, reason string, fields map[string]interface{}) {
+						payload := map[string]interface{}{
+							"permission_type": desc.Type,
+							"action":          desc.Action,
+							"resource":        desc.Resource,
+							"effect":          effect,
+							"reason":          reason,
+							"metadata":        fields,
+						}
+						if data, err := json.Marshal(payload); err == nil {
+							_, _ = eventLog.Append(ctx, "local", []core.FrameworkEvent{{
+								Timestamp: time.Now().UTC(),
+								Type:      core.FrameworkEventPolicyEvaluated,
+								Payload:   data,
+								Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+								Partition: "local",
+							}})
+						}
+					})
+				}
+			} else if logger != nil {
+				logger.Printf("warning: failed to init event log: %v", err)
+			}
+		}
 	}
 
 	// Phase F: Capability Bundle + Agent Environment
@@ -218,6 +253,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		Environment:          env,
 		Registration:         registration,
 		logFile:              logFile,
+		eventLog:             eventLog,
 		patternDB:            patternDB,
 		AgentSpec:            boot.AgentSpec,
 		AgentDefinitions:     boot.AgentDefinitions,
@@ -242,8 +278,12 @@ func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
 		return cfg
 	}
 	type yamlCfg struct {
-		Model  string   `json:"model" yaml:"model"`
-		Agents []string `json:"agents" yaml:"agents"`
+		Model        string   `json:"model" yaml:"model"`
+		Agent        string   `json:"agent" yaml:"agent"`
+		Agents       []string `json:"agents" yaml:"agents"`
+		DefaultModel struct {
+			Name string `json:"name" yaml:"name"`
+		} `json:"default_model" yaml:"default_model"`
 	}
 	data, err := os.ReadFile(cfg.ConfigPath)
 	if err != nil {
@@ -251,9 +291,15 @@ func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
 	}
 	// Try JSON first (YAML is a superset, but we keep it simple here).
 	var yc yamlCfg
-	if jsonErr := json.Unmarshal(data, &yc); jsonErr == nil {
+	if err := yaml.Unmarshal(data, &yc); err == nil {
 		if yc.Model != "" && cfg.OllamaModel == "" {
 			cfg.OllamaModel = yc.Model
+		}
+		if yc.DefaultModel.Name != "" && cfg.OllamaModel == "" {
+			cfg.OllamaModel = yc.DefaultModel.Name
+		}
+		if yc.Agent != "" && cfg.AgentName == "" {
+			cfg.AgentName = yc.Agent
 		}
 		if len(yc.Agents) > 0 && cfg.AgentName == "" {
 			cfg.AgentName = yc.Agents[0]
