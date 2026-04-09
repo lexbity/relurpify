@@ -220,7 +220,9 @@ func TestManagerWorkerFailureSetsDegradedHealth(t *testing.T) {
 	cfg.RecoveryScanPeriod = time.Hour
 	manager := New(cfg, memStore)
 	var calls atomic.Int32
+	done := make(chan struct{})
 	manager.SetWorker(func(ctx context.Context, item WorkItem) error {
+		defer close(done)
 		calls.Add(1)
 		return context.Canceled
 	})
@@ -230,7 +232,11 @@ func TestManagerWorkerFailureSetsDegradedHealth(t *testing.T) {
 	if !manager.Enqueue(WorkItem{WorkflowID: "wf-fail", RunID: "run-fail"}) {
 		t.Fatalf("enqueue failed")
 	}
-	time.Sleep(30 * time.Millisecond)
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("timed out waiting for worker completion")
+	}
 	if calls.Load() == 0 {
 		t.Fatalf("worker was not called")
 	}

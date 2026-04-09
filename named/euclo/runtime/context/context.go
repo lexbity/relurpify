@@ -17,4 +17,16 @@ type ProofSurface = runtimepkg.ProofSurface
 var ResolveRuntimeSurfaces = euclorestore.ResolveRuntimeSurfaces
 var BuildContextLifecycleState = runtimepkg.BuildContextLifecycleState
 
-func ApplyEditIntentArtifacts(ctx *frameworkcore.Context, state *frameworkcore.Context) {}
+func ApplyEditIntentArtifacts(ctx *frameworkcore.Context, state *frameworkcore.Context) {
+	if ctx == nil || state == nil {
+		return
+	}
+	for _, key := range []string{
+		"pipeline.code",
+		"euclo.edit_execution",
+	} {
+		if raw, ok := ctx.Get(key); ok && raw != nil {
+			state.Set(key, raw)
+		}
+	}
+}

@@ -5,6 +5,17 @@ import (
 	"testing"
 )
 
+type stubExpandedRetriever struct {
+	results []KnowledgeEvidenceItem
+	err     error
+	called  bool
+}
+
+func (s *stubExpandedRetriever) RetrieveExpanded(_ context.Context, _ HypotheticalSketch) ([]KnowledgeEvidenceItem, error) {
+	s.called = true
+	return append([]KnowledgeEvidenceItem(nil), s.results...), s.err
+}
+
 func TestIndexRetriever_Retrieve(t *testing.T) {
 	retriever := &IndexRetriever{
 		index: &dummyIndexQuerier{},
@@ -139,5 +150,38 @@ func TestArchaeoRetriever_RetrieveExpanded(t *testing.T) {
 	// Should handle gracefully
 	if results == nil {
 		t.Error("Results should not be nil")
+	}
+}
+
+func TestArchaeoRetriever_RetrieveExpanded_UsesInjectedRetriever(t *testing.T) {
+	custom := &stubExpandedRetriever{
+		results: []KnowledgeEvidenceItem{{
+			RefID:      "custom-1",
+			Kind:       KnowledgeKindDecision,
+			Title:      "Custom decision",
+			Summary:    "injected retriever result",
+			Score:      0.9,
+			Source:     EvidenceSourceArchaeoExpanded,
+			TrustClass: "builtin-trusted",
+		}},
+	}
+	retriever := &ArchaeoRetriever{
+		retriever: custom,
+		config: ArchaeoRetrieverConfig{
+			WorkflowID: "test-workflow",
+			MaxItems:   4,
+			MaxTokens:  500,
+		},
+	}
+
+	results, err := retriever.RetrieveExpanded(context.Background(), HypotheticalSketch{Text: "test sketch", Grounded: true})
+	if err != nil {
+		t.Fatalf("RetrieveExpanded failed: %v", err)
+	}
+	if !custom.called {
+		t.Fatal("expected injected retriever to be called")
+	}
+	if len(results) != 1 || results[0].RefID != "custom-1" {
+		t.Fatalf("expected injected retriever results, got %#v", results)
 	}
 }

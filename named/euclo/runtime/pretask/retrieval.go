@@ -101,8 +101,14 @@ func (r *IndexRetriever) Retrieve(ctx context.Context, anchors AnchorSet) ([]Cod
 type ArchaeoRetriever struct {
 	tensionSvc TensionQuerier
 	patternSvc PatternQuerier
-	retriever  interface{} // Placeholder for future retriever service
+	retriever  ExpandedKnowledgeRetriever
 	config     ArchaeoRetrieverConfig
+}
+
+// ExpandedKnowledgeRetriever optionally provides topic-specific expanded
+// retrieval instead of the built-in stub fallback.
+type ExpandedKnowledgeRetriever interface {
+	RetrieveExpanded(context.Context, HypotheticalSketch) ([]KnowledgeEvidenceItem, error)
 }
 
 // TensionQuerier is the narrow interface needed from archaeo/tensions.
@@ -187,10 +193,15 @@ func (r *ArchaeoRetriever) RetrieveExpanded(ctx context.Context, sketch Hypothet
 
 	results := make([]KnowledgeEvidenceItem, 0)
 
-	// Try to use the retriever service if available
+	// Try to use the retriever service if available.
 	if r.retriever != nil {
-		// In a real implementation, we would call r.retriever.Retrieve()
-		// For now, we'll use the stub implementation
+		results, err := r.retriever.RetrieveExpanded(ctx, sketch)
+		if err == nil && len(results) > 0 {
+			if len(results) > r.config.MaxItems {
+				return results[:r.config.MaxItems], nil
+			}
+			return results, nil
+		}
 	}
 
 	// Fallback to stub results

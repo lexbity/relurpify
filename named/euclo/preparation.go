@@ -21,6 +21,8 @@ type executionPreparation struct {
 	preflightResult *core.Result
 	err             error
 	summaryFastPath bool
+	skipReason      string
+	preparationNote string
 }
 
 type executionReadBundle struct {
@@ -51,8 +53,13 @@ func (a *Agent) shortCircuitResult(state *core.Context, prep executionPreparatio
 	if ids, ok := data["pending_learning_ids"]; ok && ids != nil {
 		message = "pending learning requires review before execution"
 	}
+	if prep.skipReason != "" {
+		message = prep.skipReason
+	}
 	if prep.summaryFastPath {
-		message = "summary/status request completed without active execution step"
+		if prep.skipReason == "" {
+			message = "summary/status request completed without active execution step"
+		}
 	}
 	return &core.Result{
 		Success: true,
@@ -65,6 +72,9 @@ func (a *Agent) shortCircuitResult(state *core.Context, prep executionPreparatio
 
 func shouldShortCircuitExecution(prep executionPreparation, state *core.Context) bool {
 	if prep.summaryFastPath {
+		return true
+	}
+	if prep.skipReason != "" {
 		return true
 	}
 	if state == nil {
@@ -94,34 +104,49 @@ func (a *Agent) prepareExecution(ctx context.Context, task *core.Task, state *co
 	prep := executionPreparation{
 		workflowID: workflowIDFromTaskState(task, state),
 	}
-	if a.shouldUseSummaryStatusFastPath(task, classification, profile) {
-		if !taskHasExplicitWorkflow(task) {
+	if !a.shouldUseSummaryStatusFastPath(task, classification, profile) {
+		return a.finishExecutionPreparation(ctx, task, state, prep)
+	}
+	if !taskHasExplicitWorkflow(task) {
+		prep.summaryFastPath = true
+		prep.skipReason = "summary/status request completed without explicit workflow"
+		return prep
+	}
+	prep = a.prepareSummaryFastPathExecution(ctx, task, state, prep)
+	if prep.summaryFastPath {
+		return prep
+	}
+	return a.finishExecutionPreparation(ctx, task, state, prep)
+}
+
+func (a *Agent) prepareSummaryFastPathExecution(ctx context.Context, task *core.Task, state *core.Context, prep executionPreparation) executionPreparation {
+	if bundle, ok := a.loadExecutionReadBundle(ctx, prep.workflowID); ok {
+		prep.readBundle = bundle
+		a.seedExecutionReadBundleState(state, bundle)
+		if !bundleHasBlockingWork(task, bundle) {
 			prep.summaryFastPath = true
+			prep.skipReason = "summary/status request completed from cached execution state"
 			return prep
 		}
-		if bundle, ok := a.loadExecutionReadBundle(ctx, prep.workflowID); ok {
-			prep.readBundle = bundle
-			a.seedExecutionReadBundleState(state, bundle)
-			if !bundleHasBlockingWork(task, bundle) {
-				prep.summaryFastPath = true
-				return prep
-			}
-		}
 	}
-	prep.livingPlan, prep.activeStep, prep.preflightResult, prep.err = a.prepareLivingPlan(ctx, task, state)
 	return prep
 }
 
-func (a *Agent) prepareLivingPlan(ctx context.Context, task *core.Task, state *core.Context) (*frameworkplan.LivingPlan, *frameworkplan.PlanStep, *core.Result, error) {
-	if a == nil || a.PlanStore == nil {
-		return nil, nil, nil, nil
-	}
+func (a *Agent) finishExecutionPreparation(ctx context.Context, task *core.Task, state *core.Context, prep executionPreparation) executionPreparation {
+	prep.livingPlan, prep.activeStep, prep.preflightResult, prep.err, prep.skipReason, prep.preparationNote = a.prepareLivingPlan(ctx, task, state)
+	return prep
+}
+
+func (a *Agent) prepareLivingPlan(ctx context.Context, task *core.Task, state *core.Context) (*frameworkplan.LivingPlan, *frameworkplan.PlanStep, *core.Result, error, string, string) {
 	workflowID := workflowIDFromTaskState(task, state)
 	if workflowID == "" {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, "", "execution preparation note: workflow id unavailable"
+	}
+	if a == nil || a.PlanStore == nil {
+		return nil, nil, nil, nil, "", "execution preparation note: plan store unavailable"
 	}
 	result := a.archaeologyService().PrepareLivingPlan(ctx, task, state, workflowID)
-	return result.Plan, result.Step, result.Result, result.Err
+	return result.Plan, result.Step, result.Result, result.Err, "", ""
 }
 
 func (a *Agent) shouldUseSummaryStatusFastPath(task *core.Task, classification eucloruntime.TaskClassification, profile euclotypes.ExecutionProfileSelection) bool {

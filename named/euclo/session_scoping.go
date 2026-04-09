@@ -10,7 +10,7 @@ import (
 
 func generateSessionID() string {
 	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := rand.Reader.Read(b); err != nil {
 		return fmt.Sprintf("euclo-session-%x", b[:4])
 	}
 	return "euclo-" + hex.EncodeToString(b)
