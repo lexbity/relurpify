@@ -141,6 +141,53 @@ func TestExecuteProfile_SucceedsWhenFirstEligibleCapabilityCompletes(t *testing.
 	}
 }
 
+func TestProfileExecutionEngine_Execute_SucceedsWhenFirstEligibleCapabilityCompletes(t *testing.T) {
+	saved := defaultSnapshotFunc
+	defaultSnapshotFunc = func(reg interface{}) euclotypes.CapabilitySnapshot {
+		if r, ok := reg.(*capability.Registry); ok {
+			return eucloruntime.SnapshotCapabilities(r)
+		}
+		return euclotypes.CapabilitySnapshot{}
+	}
+	t.Cleanup(func() { defaultSnapshotFunc = saved })
+
+	capOK := &stubCap{
+		id:       "euclo:stub.analyze",
+		eligible: true,
+		status:   euclotypes.ExecutionStatusCompleted,
+		summary:  "analysis ok",
+		artifacts: []euclotypes.Artifact{{
+			ID: "a1", Kind: euclotypes.ArtifactKindAnalyze, Summary: "ok",
+			Payload: map[string]any{"finding": "x"}, ProducerID: "euclo:stub.analyze", Status: "produced",
+		}},
+	}
+	pc := NewProfileController(
+		stubRegistry{byProfile: map[string][]CapabilityI{"phase_orchestrate_test": {capOK}}},
+		map[string][]gate.PhaseGate{},
+		testutil.EnvMinimal(),
+		euclotypes.DefaultExecutionProfileRegistry(),
+		nil,
+	)
+	env := testEnvelope()
+	res, detail, err := newProfileExecutionEngine(pc).Execute(context.Background(),
+		euclotypes.ExecutionProfileSelection{
+			ProfileID:   "phase_orchestrate_test",
+			PhaseRoutes: map[string]string{"analyze": "next"},
+		},
+		euclotypes.ModeResolution{ModeID: "debug"},
+		env,
+	)
+	if err != nil {
+		t.Fatalf("engine Execute: %v", err)
+	}
+	if res == nil || !res.Success {
+		t.Fatalf("expected success, got %+v", res)
+	}
+	if detail == nil || len(detail.CapabilityIDs) != 1 || detail.CapabilityIDs[0] != capOK.id {
+		t.Fatalf("unexpected detail: %+v", detail)
+	}
+}
+
 func TestExecuteProfile_ReturnsErrorWhenProfileCapabilityFails(t *testing.T) {
 	saved := defaultSnapshotFunc
 	defaultSnapshotFunc = func(reg interface{}) euclotypes.CapabilitySnapshot {

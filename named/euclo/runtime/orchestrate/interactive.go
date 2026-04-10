@@ -32,94 +32,28 @@ func (pc *ProfileController) ExecuteInteractive(
 		return nil, nil, fmt.Errorf("no interactive mode registered for %q", mode.ModeID)
 	}
 
-	recordingEmitter, ok := emitter.(*interaction.RecordingEmitter)
-	if !ok {
-		recordingEmitter = interaction.NewRecordingEmitter(emitter)
-	}
-
 	resolver := interaction.NewAgencyResolver()
 	interaction.RegisterHelpTriggers(resolver)
 
+	recordingEmitter := wrapInteractiveEmitter(emitter)
 	machine := registry.Build(mode.ModeID, recordingEmitter, resolver)
 	if machine == nil {
 		return nil, nil, fmt.Errorf("failed to build machine for mode %q", mode.ModeID)
 	}
 
-	// Seed state from execution envelope.
-	if env.Task != nil {
-		machine.State()["task.instruction"] = env.Task.Instruction
-	}
-	machine.State()["mode.id"] = mode.ModeID
-	machine.State()["profile.id"] = env.Profile.ProfileID
-
-	// Seed any existing artifacts from the execution context.
-	if env.State != nil {
-		snapshot := env.State.Snapshot()
-		for key, value := range snapshot.State {
-			machine.State()[key] = value
-		}
-		existingArtifacts := euclotypes.ArtifactStateFromContext(env.State)
-		for _, art := range existingArtifacts.All() {
-			machine.Artifacts().Add(art)
-		}
+	seedInteractiveMachine(machine, env, mode)
+	if err := maybeResumeInteractiveSession(ctx, machine, env.State, mode.ModeID); err != nil {
+		return nil, nil, fmt.Errorf("interactive resume for mode %q: %w", mode.ModeID, err)
 	}
 
-	if env.State != nil {
-		if err := maybeResumeInteractiveSession(ctx, machine, env.State, mode.ModeID); err != nil {
-			return nil, nil, fmt.Errorf("interactive resume for mode %q: %w", mode.ModeID, err)
-		}
-	}
-
-	// Run the machine.
 	if err := machine.Run(ctx); err != nil {
 		return nil, nil, fmt.Errorf("interactive execution for mode %q: %w", mode.ModeID, err)
 	}
 
-	// Extract results.
-	iResult := interaction.ExtractInteractionResult(machine)
-
-	// Merge interaction artifacts back into the execution state.
-	if env.State != nil {
-		mergeCapabilityArtifactsToState(env.State, iResult.Artifacts)
-	}
-
-	// Persist interaction state.
-	iState := interaction.ExtractInteractionState(machine)
-	iState.PhasesExecuted = append([]string{}, iResult.PhasesExecuted...)
-	if env.State != nil {
-		env.State.Set("euclo.interaction_state", iState)
-		env.State.Set("euclo.interaction_recording", recordingEmitter.Recording.ToStateMap())
-		env.State.Set("euclo.interaction_records", recordingEmitter.Recording.Records())
-		if raw, ok := machine.State()["propose.items"]; ok && raw != nil {
-			env.State.Set("pipeline.plan", map[string]any{
-				"source": "interaction.propose",
-				"items":  raw,
-			})
-		}
-	}
-
-	icResult := &InteractiveControllerResult{
-		Artifacts:        iResult.Artifacts,
-		PhasesExecuted:   iResult.PhasesExecuted,
-		TransitionTo:     iResult.TransitionTo,
-		InteractionState: iState,
-	}
-
-	result := &core.Result{
-		Success: true,
-		NodeID:  taskNodeID(env.Task),
-		Data: map[string]any{
-			"status":          "completed",
-			"mode":            mode.ModeID,
-			"phases_executed": iResult.PhasesExecuted,
-		},
-	}
-
-	// If a transition was accepted, include it in the result.
-	if iResult.TransitionTo != "" {
-		result.Data["transition_to"] = iResult.TransitionTo
-	}
-
+	iResult := extractInteractiveResult(machine)
+	persistInteractiveState(env, machine, recordingEmitter, iResult)
+	icResult := buildInteractiveControllerResult(machine, iResult)
+	result := buildInteractiveResult(env.Task, mode, iResult)
 	icResult.Result = result
 	return result, icResult, nil
 }
@@ -150,6 +84,84 @@ func maybeResumeInteractiveSession(ctx context.Context, machine *interaction.Pha
 	return nil
 }
 
+func wrapInteractiveEmitter(emitter interaction.FrameEmitter) *interaction.RecordingEmitter {
+	if emitter == nil {
+		emitter = &interaction.NoopEmitter{}
+	}
+	if recordingEmitter, ok := emitter.(*interaction.RecordingEmitter); ok {
+		return recordingEmitter
+	}
+	return interaction.NewRecordingEmitter(emitter)
+}
+
+func seedInteractiveMachine(machine *interaction.PhaseMachine, env euclotypes.ExecutionEnvelope, mode euclotypes.ModeResolution) {
+	if machine == nil {
+		return
+	}
+	if env.Task != nil {
+		machine.State()["task.instruction"] = env.Task.Instruction
+	}
+	machine.State()["mode.id"] = mode.ModeID
+	machine.State()["profile.id"] = env.Profile.ProfileID
+	if env.State == nil {
+		return
+	}
+	snapshot := env.State.Snapshot()
+	for key, value := range snapshot.State {
+		machine.State()[key] = value
+	}
+	existingArtifacts := euclotypes.ArtifactStateFromContext(env.State)
+	for _, art := range existingArtifacts.All() {
+		machine.Artifacts().Add(art)
+	}
+}
+
+func extractInteractiveResult(machine *interaction.PhaseMachine) interaction.InteractionResult {
+	if machine == nil {
+		return interaction.InteractionResult{}
+	}
+	return interaction.ExtractInteractionResult(machine)
+}
+
+func persistInteractiveState(
+	env euclotypes.ExecutionEnvelope,
+	machine *interaction.PhaseMachine,
+	recordingEmitter *interaction.RecordingEmitter,
+	iResult interaction.InteractionResult,
+) {
+	defaultOrchestrateRecorder.persistInteractiveState(env, machine, recordingEmitter, iResult)
+}
+
+func buildInteractiveControllerResult(machine *interaction.PhaseMachine, iResult interaction.InteractionResult) *InteractiveControllerResult {
+	iState := interaction.InteractionState{}
+	if machine != nil {
+		iState = interaction.ExtractInteractionState(machine)
+	}
+	iState.PhasesExecuted = append([]string{}, iResult.PhasesExecuted...)
+	return &InteractiveControllerResult{
+		Artifacts:        iResult.Artifacts,
+		PhasesExecuted:   iResult.PhasesExecuted,
+		TransitionTo:     iResult.TransitionTo,
+		InteractionState: iState,
+	}
+}
+
+func buildInteractiveResult(task *core.Task, mode euclotypes.ModeResolution, iResult interaction.InteractionResult) *core.Result {
+	result := &core.Result{
+		Success: true,
+		NodeID:  taskNodeID(task),
+		Data: map[string]any{
+			"status":          "completed",
+			"mode":            mode.ModeID,
+			"phases_executed": iResult.PhasesExecuted,
+		},
+	}
+	if iResult.TransitionTo != "" {
+		result.Data["transition_to"] = iResult.TransitionTo
+	}
+	return result
+}
+
 // ExecuteInteractiveWithTransitions runs interactive execution and handles
 // mode transitions by building new machines for the target mode.
 func (pc *ProfileController) ExecuteInteractiveWithTransitions(
@@ -169,10 +181,7 @@ func (pc *ProfileController) ExecuteInteractiveWithTransitions(
 	var allPhases []string
 	var allSkipped []string
 	var carryOver []euclotypes.Artifact
-	recordingEmitter, ok := emitter.(*interaction.RecordingEmitter)
-	if !ok {
-		recordingEmitter = interaction.NewRecordingEmitter(emitter)
-	}
+	recordingEmitter := wrapInteractiveEmitter(emitter)
 
 	for i := 0; i <= maxTransitions; i++ {
 		result, icResult, err := pc.ExecuteInteractive(ctx, registry, currentMode, env, recordingEmitter)
@@ -184,38 +193,58 @@ func (pc *ProfileController) ExecuteInteractiveWithTransitions(
 		allPhases = append(allPhases, icResult.PhasesExecuted...)
 		allSkipped = append(allSkipped, icResult.InteractionState.SkippedPhases...)
 
-		// Seed carry-over artifacts into the new machine's state.
-		if len(carryOver) > 0 && env.State != nil {
-			mergeCapabilityArtifactsToState(env.State, carryOver)
-		}
+		seedTransitionCarryOver(env, carryOver)
 
 		if icResult.TransitionTo == "" {
-			// No transition — we're done.
-			icResult.Artifacts = allArtifacts
-			icResult.PhasesExecuted = allPhases
-			icResult.InteractionState.PhasesExecuted = append([]string{}, allPhases...)
-			icResult.InteractionState.SkippedPhases = uniqueStrings(allSkipped)
-			if env.State != nil {
-				env.State.Set("euclo.interaction_state", icResult.InteractionState)
-			}
-			result.Data["phases_executed"] = allPhases
-			return result, icResult, nil
+			return finalizeTransitionResult(result, icResult, allArtifacts, allPhases, allSkipped, env), icResult, nil
 		}
 
-		// Prepare carry-over artifacts for the transition.
-		bundle := interaction.NewArtifactBundle()
-		for _, a := range icResult.Artifacts {
-			bundle.Add(a)
-		}
-		carryOver = interaction.CarryOverArtifacts(bundle, currentMode.ModeID, icResult.TransitionTo)
-
-		currentMode = euclotypes.ModeResolution{
-			ModeID: icResult.TransitionTo,
-			Source: "transition",
-		}
+		carryOver = carryOverTransitionArtifacts(icResult.Artifacts, currentMode.ModeID, icResult.TransitionTo)
+		currentMode = nextInteractiveMode(icResult.TransitionTo)
 	}
 
 	return nil, nil, fmt.Errorf("exceeded max transitions (%d)", maxTransitions)
+}
+
+func seedTransitionCarryOver(env euclotypes.ExecutionEnvelope, carryOver []euclotypes.Artifact) {
+	if env.State == nil || len(carryOver) == 0 {
+		return
+	}
+	mergeCapabilityArtifactsToState(env.State, carryOver)
+}
+
+func carryOverTransitionArtifacts(artifacts []euclotypes.Artifact, fromMode, toMode string) []euclotypes.Artifact {
+	bundle := interaction.NewArtifactBundle()
+	for _, a := range artifacts {
+		bundle.Add(a)
+	}
+	return interaction.CarryOverArtifacts(bundle, fromMode, toMode)
+}
+
+func nextInteractiveMode(modeID string) euclotypes.ModeResolution {
+	return euclotypes.ModeResolution{
+		ModeID: modeID,
+		Source: "transition",
+	}
+}
+
+func finalizeTransitionResult(
+	result *core.Result,
+	icResult *InteractiveControllerResult,
+	allArtifacts []euclotypes.Artifact,
+	allPhases []string,
+	allSkipped []string,
+	env euclotypes.ExecutionEnvelope,
+) *core.Result {
+	icResult.Artifacts = allArtifacts
+	icResult.PhasesExecuted = allPhases
+	icResult.InteractionState.PhasesExecuted = append([]string{}, allPhases...)
+	icResult.InteractionState.SkippedPhases = uniqueStrings(allSkipped)
+	if env.State != nil {
+		env.State.Set("euclo.interaction_state", icResult.InteractionState)
+	}
+	result.Data["phases_executed"] = allPhases
+	return result
 }
 
 func uniqueStrings(values []string) []string {

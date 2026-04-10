@@ -35,6 +35,12 @@ Current runtime subpackages:
 
 The root `runtime` package still holds shared runtime types and some cross-cutting helpers used by those subpackages.
 
+`runtime/orchestrate` is internally split into:
+- profile execution coordination
+- recovery strategy handling
+- interactive execution and transitions
+- observability and persistence recording
+
 ### `execution`
 
 Euclo-side execution substrate over `/agents`.
@@ -147,6 +153,7 @@ Euclo now has:
 - a real TDD red/green/refactor lifecycle
 - semantic review gating for automatic mutation
 - verification-plan and waiver artifacts in final reporting
+- orchestrate seams that separate profile execution, recovery, interactive flow, and observability
 
 ## Current Runtime Guarantees
 
@@ -168,5 +175,5 @@ The main remaining work is now narrower:
 
 - continue expanding higher-level agenttest/live scenario coverage
 - keep sorting shared runtime helpers into the subpackages
-- reduce remaining duplicated helper logic
+- collapse any remaining helper wrappers that no longer buy clarity
 - finish documentation and reporting cleanup where older wording remains

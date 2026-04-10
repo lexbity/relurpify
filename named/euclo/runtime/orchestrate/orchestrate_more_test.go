@@ -200,6 +200,35 @@ func TestRecoveryControllerAttemptRecoveryBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("nil stack", func(t *testing.T) {
+		rc := NewRecoveryController(nil, nil, nil, testutil.EnvMinimal())
+		failed := euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy: euclotypes.RecoveryStrategyModeEscalation,
+		}, failed, testEnvelope(), nil)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+	})
+
+	t.Run("exhausted stack", func(t *testing.T) {
+		rc := NewRecoveryController(recoveryStubRegistry{}, nil, nil, testutil.EnvMinimal())
+		stack := NewRecoveryStack()
+		stack.MaxDepth = 1
+		stack.Record(RecoveryAttempt{Level: RecoveryLevelCapability})
+		failed := euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}
+		got := rc.AttemptRecovery(context.Background(), euclotypes.RecoveryHint{
+			Strategy:            euclotypes.RecoveryStrategyCapabilityFallback,
+			SuggestedCapability: "cap-x",
+		}, failed, testEnvelope(), stack)
+		if got.Status != euclotypes.ExecutionStatusFailed {
+			t.Fatalf("expected original failure, got %+v", got)
+		}
+		if len(stack.Attempts) != 1 {
+			t.Fatalf("expected exhausted stack to remain unchanged, got %+v", stack.Attempts)
+		}
+	})
+
 	t.Run("capability fallback missing registry", func(t *testing.T) {
 		rc := NewRecoveryController(nil, nil, nil, testutil.EnvMinimal())
 		stack := NewRecoveryStack()
@@ -351,11 +380,11 @@ func TestMaybeResumeInteractiveSessionAndUniqueStrings(t *testing.T) {
 	state := core.NewContext()
 	state.Set("euclo.interaction_state", interaction.InteractionState{
 		Mode:           "chat",
-		CurrentPhase:    "resume-point",
-		PhaseStates:     map[string]any{"resume.key": "value"},
-		PhasesExecuted:  []string{"start"},
-		SkippedPhases:   []string{"skipped"},
-		Selections:      map[string]string{"choice": "resume"},
+		CurrentPhase:   "resume-point",
+		PhaseStates:    map[string]any{"resume.key": "value"},
+		PhasesExecuted: []string{"start"},
+		SkippedPhases:  []string{"skipped"},
+		Selections:     map[string]string{"choice": "resume"},
 	})
 
 	if err := maybeResumeInteractiveSession(context.Background(), machine, state, "chat"); err != nil {
@@ -402,8 +431,8 @@ func TestExecuteInteractiveAndTransitions(t *testing.T) {
 	registry := interaction.NewModeMachineRegistry()
 	registry.Register("code", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
 		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
-			Mode:    "code",
-			Emitter: emitter,
+			Mode:     "code",
+			Emitter:  emitter,
 			Resolver: resolver,
 			Phases: []interaction.PhaseDefinition{
 				{
@@ -442,6 +471,12 @@ func TestExecuteInteractiveAndTransitions(t *testing.T) {
 	if _, ok := env.State.Get("euclo.interaction_state"); !ok {
 		t.Fatal("expected interaction state to be persisted")
 	}
+	if _, ok := env.State.Get("euclo.interaction_recording"); !ok {
+		t.Fatal("expected interaction recording to be persisted")
+	}
+	if _, ok := env.State.Get("euclo.interaction_records"); !ok {
+		t.Fatal("expected interaction records to be persisted")
+	}
 	if _, ok := env.State.Get("pipeline.plan"); !ok {
 		t.Fatal("expected proposal items to be mirrored into pipeline.plan")
 	}
@@ -453,8 +488,8 @@ func TestExecuteInteractiveAndTransitions(t *testing.T) {
 	transitionRegistry := interaction.NewModeMachineRegistry()
 	transitionRegistry.Register("code", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
 		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
-			Mode:    "code",
-			Emitter: emitter,
+			Mode:     "code",
+			Emitter:  emitter,
 			Resolver: resolver,
 			Phases: []interaction.PhaseDefinition{
 				{
@@ -477,8 +512,8 @@ func TestExecuteInteractiveAndTransitions(t *testing.T) {
 	})
 	transitionRegistry.Register("debug", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
 		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
-			Mode:    "debug",
-			Emitter: emitter,
+			Mode:     "debug",
+			Emitter:  emitter,
 			Resolver: resolver,
 			Phases: []interaction.PhaseDefinition{
 				{
@@ -527,12 +562,103 @@ func TestExecuteInteractiveAndTransitions(t *testing.T) {
 	}
 }
 
+func TestExecuteInteractive_WrapsNilEmitter(t *testing.T) {
+	original := defaultSnapshotFunc
+	t.Cleanup(func() { defaultSnapshotFunc = original })
+	defaultSnapshotFunc = func(reg interface{}) euclotypes.CapabilitySnapshot {
+		return euclotypes.CapabilitySnapshot{}
+	}
+
+	env := testEnvelope()
+	registry := interaction.NewModeMachineRegistry()
+	registry.Register("code", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+			Mode:     "code",
+			Emitter:  emitter,
+			Resolver: resolver,
+			Phases: []interaction.PhaseDefinition{
+				{
+					ID: "inspect",
+					Handler: phaseHandlerFunc(func(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+						return interaction.PhaseOutcome{Advance: true}, nil
+					}),
+				},
+			},
+		})
+	})
+
+	pc := NewProfileController(nil, nil, testutil.EnvMinimal(), nil, nil)
+	result, detail, err := pc.ExecuteInteractive(context.Background(), registry, euclotypes.ModeResolution{ModeID: "code"}, env, nil)
+	if err != nil {
+		t.Fatalf("ExecuteInteractive with nil emitter: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("expected success, got %+v", result)
+	}
+	if detail == nil || len(detail.PhasesExecuted) != 1 {
+		t.Fatalf("unexpected detail from nil emitter path: %+v", detail)
+	}
+}
+
+func TestExecuteInteractiveWithTransitions_MaxTransitionsExhaustion(t *testing.T) {
+	original := defaultSnapshotFunc
+	t.Cleanup(func() { defaultSnapshotFunc = original })
+	defaultSnapshotFunc = func(reg interface{}) euclotypes.CapabilitySnapshot {
+		return euclotypes.CapabilitySnapshot{}
+	}
+
+	transitionEmitter := interaction.NewTestFrameEmitter(interaction.ScriptedResponse{
+		Kind:     string(interaction.FrameTransition),
+		ActionID: "accept",
+	})
+	registry := interaction.NewModeMachineRegistry()
+	registry.Register("code", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+			Mode:     "code",
+			Emitter:  emitter,
+			Resolver: resolver,
+			Phases: []interaction.PhaseDefinition{
+				{
+					ID: "inspect",
+					Handler: phaseHandlerFunc(func(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+						return interaction.PhaseOutcome{Advance: true, Transition: "debug"}, nil
+					}),
+				},
+			},
+		})
+	})
+	registry.Register("debug", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+		return interaction.NewPhaseMachine(interaction.PhaseMachineConfig{
+			Mode:     "debug",
+			Emitter:  emitter,
+			Resolver: resolver,
+			Phases: []interaction.PhaseDefinition{
+				{
+					ID: "verify",
+					Handler: phaseHandlerFunc(func(_ context.Context, mc interaction.PhaseMachineContext) (interaction.PhaseOutcome, error) {
+						return interaction.PhaseOutcome{Advance: true, Transition: "code"}, nil
+					}),
+				},
+			},
+		})
+	})
+
+	pc := NewProfileController(nil, nil, testutil.EnvMinimal(), nil, nil)
+	_, _, err := pc.ExecuteInteractiveWithTransitions(context.Background(), registry, euclotypes.ModeResolution{ModeID: "code"}, testEnvelope(), transitionEmitter, 1)
+	if err == nil {
+		t.Fatal("expected max transition exhaustion error")
+	}
+}
+
 func TestRecoveryTraceAndFailureHelpers(t *testing.T) {
 	stack := NewRecoveryStack()
 	stack.Record(RecoveryAttempt{Level: RecoveryLevelMode, Strategy: euclotypes.RecoveryStrategyModeEscalation, From: "code", To: "debug", Reason: "escalate", Success: true})
 	artifact := RecoveryTraceArtifact(stack, "producer-1")
 	if artifact.Kind != euclotypes.ArtifactKindRecoveryTrace || artifact.ProducerID != "producer-1" {
 		t.Fatalf("unexpected recovery trace artifact: %#v", artifact)
+	}
+	if payload, ok := artifact.Payload.(map[string]any); !ok || payload["exhausted"] != false || payload["max_depth"] != 3 {
+		t.Fatalf("unexpected recovery trace payload: %#v", artifact.Payload)
 	}
 	if got := paradigmFromFailure(euclotypes.ExecutionResult{FailureInfo: &euclotypes.CapabilityFailure{ParadigmUsed: "react"}}); got != "react" {
 		t.Fatalf("unexpected paradigm from failure: %q", got)
@@ -576,8 +702,24 @@ func TestControllerHelpersAndResultSynthesis(t *testing.T) {
 		RecoveryAttempts: 2,
 	}
 	recordProfileControllerObservability(state, pcResult, euclotypes.ModeResolution{ModeID: "debug"}, euclotypes.ExecutionProfileSelection{ProfileID: "profile-a"})
-	if _, ok := state.Get("euclo.profile_controller"); !ok {
+	rawController, ok := state.Get("euclo.profile_controller")
+	if !ok {
 		t.Fatal("expected controller observability in state")
+	}
+	controllerMap, ok := rawController.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected controller observability shape: %#v", rawController)
+	}
+	if controllerMap["mode_id"] != "debug" || controllerMap["profile_id"] != "profile-a" {
+		t.Fatalf("unexpected controller observability payload: %#v", controllerMap)
+	}
+	if phaseRecords, ok := controllerMap["phase_records"].([]map[string]any); !ok || len(phaseRecords) != 1 {
+		t.Fatalf("unexpected controller phase records payload: %#v", controllerMap["phase_records"])
+	}
+	if rawPhaseRecords, ok := state.Get("euclo.profile_phase_records"); !ok {
+		t.Fatal("expected phase records state in controller output")
+	} else if got := rawPhaseRecords.([]map[string]any); len(got) != 1 || got[0]["phase"] != "plan" {
+		t.Fatalf("unexpected profile phase records state: %#v", rawPhaseRecords)
 	}
 
 	records := buildProfileCapabilityPhaseRecords([]string{"plan", "verify"}, []euclotypes.ArtifactKind{euclotypes.ArtifactKindIntake}, artifacts)

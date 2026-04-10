@@ -2,7 +2,6 @@ package orchestrate
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
@@ -69,184 +68,7 @@ func (pc *ProfileController) ExecuteProfile(
 	mode euclotypes.ModeResolution,
 	env euclotypes.ExecutionEnvelope,
 ) (*core.Result, *ProfileControllerResult, error) {
-	phases := OrderedPhases(profile.PhaseRoutes, pc.Gates[profile.ProfileID])
-	gates := pc.Gates[profile.ProfileID]
-	artifacts := euclotypes.ArtifactStateFromContext(env.State)
-	snapshot := snapshotFromEnv(env)
-
-	pcResult := &ProfileControllerResult{}
-	recoveryStack := NewRecoveryStack()
-
-	// Try to find a profile-level capability first. Profile-level capabilities
-	// handle all phases internally, so we skip inter-phase gates before
-	// execution and only evaluate gates post-execution for verification.
-	profileCap := pc.resolveProfileCapability(profile.ProfileID, artifacts, snapshot)
-	if profileCap != nil {
-		initialConsumed := artifactKindsFromState(artifacts)
-		capResult := profileCap.Execute(ctx, env)
-		capID := profileCap.Descriptor().ID
-		pcResult.CapabilityIDs = append(pcResult.CapabilityIDs, capID)
-		pcResult.PhasesExecuted = phases
-
-		for _, art := range capResult.Artifacts {
-			pcResult.Artifacts = append(pcResult.Artifacts, art)
-		}
-		mergeCapabilityArtifactsToState(env.State, capResult.Artifacts)
-		artifacts = euclotypes.ArtifactStateFromContext(env.State)
-
-		// Evaluate all gates post-execution to verify artifact coverage.
-		for _, g := range gates {
-			eval := gate.EvaluateGate(g, mode.ModeID, artifacts)
-			pcResult.GateEvals = append(pcResult.GateEvals, eval)
-		}
-
-		if shouldAttemptRecovery(capResult) && pc.Recovery != nil {
-			recoveredResult := pc.Recovery.AttemptRecovery(ctx, *capResult.RecoveryHint, capResult, env, recoveryStack)
-			if recoveredResult.Status != euclotypes.ExecutionStatusFailed {
-				capResult = recoveredResult
-				for _, art := range recoveredResult.Artifacts {
-					pcResult.Artifacts = append(pcResult.Artifacts, art)
-				}
-				mergeCapabilityArtifactsToState(env.State, recoveredResult.Artifacts)
-			}
-		}
-
-		// Record recovery trace if any attempts were made.
-		if len(recoveryStack.Attempts) > 0 {
-			traceArt := RecoveryTraceArtifact(recoveryStack, "euclo:profile_controller")
-			pcResult.Artifacts = append(pcResult.Artifacts, traceArt)
-			pcResult.RecoveryAttempts = len(recoveryStack.Attempts)
-			if traceArt.Payload != nil {
-				env.State.Set("euclo.recovery_trace", traceArt.Payload)
-			}
-		}
-		pcResult.PhaseRecords = buildProfileCapabilityPhaseRecords(phases, initialConsumed, artifacts.All())
-
-		recordProfileControllerObservability(env.State, pcResult, mode, profile)
-
-		if capResult.Status != euclotypes.ExecutionStatusCompleted {
-			return failedResult(env.Task, capResult, pcResult), pcResult,
-				fmt.Errorf("capability %s failed: %s", capID, capResult.Summary)
-		}
-
-		return successResult(env.Task, capResult, pcResult), pcResult, nil
-	}
-
-	// Phase-by-phase execution: iterate through phases, evaluating gates
-	// at each transition and dispatching to per-phase capabilities.
-	gateIndex := 0
-	for i, phase := range phases {
-		// Evaluate entrance gate for this phase transition.
-		if gateIndex < len(gates) && i > 0 {
-			g := gates[gateIndex]
-			eval := gate.EvaluateGate(g, mode.ModeID, artifacts)
-			pcResult.GateEvals = append(pcResult.GateEvals, eval)
-			if !eval.Passed {
-				switch eval.Policy {
-				case gate.GateFailBlock:
-					pcResult.EarlyStop = true
-					pcResult.EarlyStopPhase = phase
-					recordProfileControllerObservability(env.State, pcResult, mode, profile)
-					return partialResult(env.Task, pcResult), pcResult, nil
-				case gate.GateFailWarn:
-					// continue execution
-				case gate.GateFailSkip:
-					gateIndex++
-					continue
-				}
-			}
-			gateIndex++
-		}
-
-		// Find a capability for this phase.
-		phaseCap := pc.resolveCapabilityForPhase(phase, profile.ProfileID, artifacts, snapshot)
-		if phaseCap == nil {
-			// No capability for this phase — skip it.
-			continue
-		}
-
-		// Execute the phase capability.
-		consumedKinds := artifactKindsFromState(artifacts)
-		capResult := phaseCap.Execute(ctx, env)
-		capID := phaseCap.Descriptor().ID
-		pcResult.CapabilityIDs = append(pcResult.CapabilityIDs, capID)
-		pcResult.PhasesExecuted = append(pcResult.PhasesExecuted, phase)
-		pcResult.PhaseRecords = append(pcResult.PhaseRecords, PhaseArtifactRecord{
-			Phase:             phase,
-			ArtifactsProduced: append([]euclotypes.Artifact{}, capResult.Artifacts...),
-			ArtifactsConsumed: consumedKinds,
-		})
-
-		for _, art := range capResult.Artifacts {
-			pcResult.Artifacts = append(pcResult.Artifacts, art)
-		}
-		mergeCapabilityArtifactsToState(env.State, capResult.Artifacts)
-		artifacts = euclotypes.ArtifactStateFromContext(env.State)
-
-		if capResult.Status != euclotypes.ExecutionStatusCompleted {
-			recovered := false
-
-			// First: try recovery controller if hint is available.
-			if shouldAttemptRecovery(capResult) && pc.Recovery != nil && recoveryStack.CanAttempt() {
-				recoveredResult := pc.Recovery.AttemptRecovery(ctx, *capResult.RecoveryHint, capResult, env, recoveryStack)
-				if recoveredResult.Status == euclotypes.ExecutionStatusCompleted {
-					for _, art := range recoveredResult.Artifacts {
-						pcResult.Artifacts = append(pcResult.Artifacts, art)
-					}
-					mergeCapabilityArtifactsToState(env.State, recoveredResult.Artifacts)
-					artifacts = euclotypes.ArtifactStateFromContext(env.State)
-					recovered = true
-				}
-			}
-
-			// Second: attempt single-level fallback via alternate capability.
-			if !recovered {
-				fallbackCap := pc.resolveFallbackCapability(
-					phase, profile.ProfileID, capID, artifacts, snapshot,
-				)
-				if fallbackCap != nil {
-					fallbackResult := fallbackCap.Execute(ctx, env)
-					fallbackID := fallbackCap.Descriptor().ID
-					pcResult.CapabilityIDs = append(pcResult.CapabilityIDs, fallbackID)
-					for _, art := range fallbackResult.Artifacts {
-						pcResult.Artifacts = append(pcResult.Artifacts, art)
-					}
-					mergeCapabilityArtifactsToState(env.State, fallbackResult.Artifacts)
-					artifacts = euclotypes.ArtifactStateFromContext(env.State)
-					if fallbackResult.Status != euclotypes.ExecutionStatusFailed {
-						recovered = true
-					}
-				}
-			}
-
-			if !recovered {
-				pcResult.EarlyStop = true
-				pcResult.EarlyStopPhase = phase
-				if len(recoveryStack.Attempts) > 0 {
-					traceArt := RecoveryTraceArtifact(recoveryStack, "euclo:profile_controller")
-					pcResult.Artifacts = append(pcResult.Artifacts, traceArt)
-					pcResult.RecoveryAttempts = len(recoveryStack.Attempts)
-					if traceArt.Payload != nil {
-						env.State.Set("euclo.recovery_trace", traceArt.Payload)
-					}
-				}
-				recordProfileControllerObservability(env.State, pcResult, mode, profile)
-				return failedResult(env.Task, capResult, pcResult), pcResult,
-					fmt.Errorf("capability %s failed at phase %s: %s", capID, phase, capResult.Summary)
-			}
-		}
-	}
-
-	if len(recoveryStack.Attempts) > 0 {
-		traceArt := RecoveryTraceArtifact(recoveryStack, "euclo:profile_controller")
-		pcResult.Artifacts = append(pcResult.Artifacts, traceArt)
-		pcResult.RecoveryAttempts = len(recoveryStack.Attempts)
-		if traceArt.Payload != nil {
-			env.State.Set("euclo.recovery_trace", traceArt.Payload)
-		}
-	}
-	recordProfileControllerObservability(env.State, pcResult, mode, profile)
-	return completedResult(env.Task, pcResult), pcResult, nil
+	return newProfileExecutionEngine(pc).Execute(ctx, profile, mode, env)
 }
 
 func shouldAttemptRecovery(result euclotypes.ExecutionResult) bool {
@@ -423,21 +245,7 @@ func recordProfileControllerObservability(
 	mode euclotypes.ModeResolution,
 	profile euclotypes.ExecutionProfileSelection,
 ) {
-	if state == nil || pcResult == nil {
-		return
-	}
-	state.Set("euclo.profile_controller", map[string]any{
-		"mode_id":           mode.ModeID,
-		"profile_id":        profile.ProfileID,
-		"capability_ids":    pcResult.CapabilityIDs,
-		"phases_executed":   pcResult.PhasesExecuted,
-		"phase_records":     profilePhaseRecordsState(pcResult.PhaseRecords),
-		"early_stop":        pcResult.EarlyStop,
-		"early_stop_phase":  pcResult.EarlyStopPhase,
-		"gate_evals_count":  len(pcResult.GateEvals),
-		"recovery_attempts": pcResult.RecoveryAttempts,
-	})
-	state.Set("euclo.profile_phase_records", profilePhaseRecordsState(pcResult.PhaseRecords))
+	defaultOrchestrateRecorder.recordProfileControllerObservability(state, pcResult, mode, profile)
 }
 
 func buildProfileCapabilityPhaseRecords(phases []string, consumed []euclotypes.ArtifactKind, artifacts []euclotypes.Artifact) []PhaseArtifactRecord {
@@ -459,30 +267,7 @@ func buildProfileCapabilityPhaseRecords(phases []string, consumed []euclotypes.A
 }
 
 func profilePhaseRecordsState(records []PhaseArtifactRecord) []map[string]any {
-	if len(records) == 0 {
-		return nil
-	}
-	out := make([]map[string]any, 0, len(records))
-	for _, record := range records {
-		entry := map[string]any{
-			"phase":              record.Phase,
-			"artifacts_consumed": artifactKindsToStrings(record.ArtifactsConsumed),
-			"artifacts_produced": artifactKindsToStrings(artifactKindsFromArtifacts(record.ArtifactsProduced)),
-		}
-		if len(record.ArtifactsProduced) > 0 {
-			produced := make([]map[string]any, 0, len(record.ArtifactsProduced))
-			for _, artifact := range record.ArtifactsProduced {
-				produced = append(produced, map[string]any{
-					"kind":    string(artifact.Kind),
-					"summary": artifact.Summary,
-					"payload": artifact.Payload,
-				})
-			}
-			entry["produced_artifacts"] = produced
-		}
-		out = append(out, entry)
-	}
-	return out
+	return defaultOrchestrateRecorder.profilePhaseRecordsState(records)
 }
 
 func artifactKindsFromState(state euclotypes.ArtifactState) []euclotypes.ArtifactKind {

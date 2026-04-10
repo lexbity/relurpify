@@ -127,7 +127,7 @@ func (rc *RecoveryController) attemptParadigmSwitch(
 	stack *RecoveryStack,
 ) euclotypes.ExecutionResult {
 	if hint.SuggestedParadigm == "" {
-		stack.Record(RecoveryAttempt{
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelParadigm,
 			Strategy: hint.Strategy,
 			From:     paradigmFromFailure(failedResult),
@@ -138,46 +138,29 @@ func (rc *RecoveryController) attemptParadigmSwitch(
 		return failedResult
 	}
 
-	// Find the original capability that failed.
 	producerID := producerIDFromFailure(failedResult)
-	if producerID == "" || rc.Capabilities == nil {
-		stack.Record(RecoveryAttempt{
-			Level:    RecoveryLevelParadigm,
-			Strategy: hint.Strategy,
-			From:     paradigmFromFailure(failedResult),
-			To:       hint.SuggestedParadigm,
-			Reason:   "cannot identify failed capability",
-			Success:  false,
-		})
-		return failedResult
-	}
-
-	cap, ok := rc.Capabilities.Lookup(producerID)
+	cap, ok := rc.lookupRecoveryCapability(producerID)
 	if !ok {
-		stack.Record(RecoveryAttempt{
+		reason := "cannot identify failed capability"
+		if producerID != "" && rc.Capabilities != nil {
+			reason = fmt.Sprintf("capability %s not found", producerID)
+		}
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelParadigm,
 			Strategy: hint.Strategy,
 			From:     paradigmFromFailure(failedResult),
 			To:       hint.SuggestedParadigm,
-			Reason:   fmt.Sprintf("capability %s not found", producerID),
+			Reason:   reason,
 			Success:  false,
 		})
 		return failedResult
 	}
 
-	// Annotate envelope with paradigm override.
 	retryEnv := env
-	if retryEnv.Task != nil {
-		if retryEnv.Task.Context == nil {
-			retryEnv.Task.Context = map[string]any{}
-		}
-		retryEnv.Task.Context["euclo.paradigm_override"] = hint.SuggestedParadigm
-		retryEnv.Task.Context["euclo.recovery_active"] = true
-	}
-
+	applyParadigmOverride(&retryEnv, hint.SuggestedParadigm)
 	result := cap.Execute(ctx, retryEnv)
 	success := result.Status != euclotypes.ExecutionStatusFailed
-	stack.Record(RecoveryAttempt{
+	recordRecoveryAttempt(stack, RecoveryAttempt{
 		Level:    RecoveryLevelParadigm,
 		Strategy: hint.Strategy,
 		From:     paradigmFromFailure(failedResult),
@@ -201,7 +184,7 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 	stack *RecoveryStack,
 ) euclotypes.ExecutionResult {
 	if rc.Capabilities == nil {
-		stack.Record(RecoveryAttempt{
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelCapability,
 			Strategy: hint.Strategy,
 			From:     producerIDFromFailure(failedResult),
@@ -212,13 +195,12 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 		return failedResult
 	}
 
-	// Check eligibility.
 	artifacts := euclotypes.ArtifactStateFromContext(env.State)
 	snapshot := snapshotFromEnv(env)
 
 	candidates := fallbackCapabilitiesFromHint(hint)
 	if len(candidates) == 0 {
-		stack.Record(RecoveryAttempt{
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelCapability,
 			Strategy: hint.Strategy,
 			From:     producerIDFromFailure(failedResult),
@@ -232,7 +214,7 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 	failureReason := "no eligible capability in fallback chain"
 	failureTarget := firstFallbackCapability(candidates)
 	for _, candidateID := range candidates {
-		cap, ok := rc.Capabilities.Lookup(candidateID)
+		cap, ok := rc.lookupRecoveryCapability(candidateID)
 		if !ok {
 			failureReason = fmt.Sprintf("capability %s not found", candidateID)
 			failureTarget = candidateID
@@ -245,16 +227,11 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 			continue
 		}
 		retryEnv := env
-		if retryEnv.Task != nil {
-			if retryEnv.Task.Context == nil {
-				retryEnv.Task.Context = map[string]any{}
-			}
-			retryEnv.Task.Context["euclo.recovery_active"] = true
-		}
-		result := cap.Execute(ctx, retryEnv)
+		applyRecoveryTaskContext(&retryEnv)
+		result := runRecoveryCandidate(ctx, cap, retryEnv)
 		success := result.Status != euclotypes.ExecutionStatusFailed
 		if success {
-			stack.Record(RecoveryAttempt{
+			recordRecoveryAttempt(stack, RecoveryAttempt{
 				Level:    RecoveryLevelCapability,
 				Strategy: hint.Strategy,
 				From:     producerIDFromFailure(failedResult),
@@ -268,7 +245,7 @@ func (rc *RecoveryController) attemptCapabilityFallback(
 		failureTarget = candidateID
 	}
 
-	stack.Record(RecoveryAttempt{
+	recordRecoveryAttempt(stack, RecoveryAttempt{
 		Level:    RecoveryLevelCapability,
 		Strategy: hint.Strategy,
 		From:     producerIDFromFailure(failedResult),
@@ -289,7 +266,7 @@ func (rc *RecoveryController) attemptProfileEscalation(
 	stack *RecoveryStack,
 ) euclotypes.ExecutionResult {
 	if rc.Profiles == nil {
-		stack.Record(RecoveryAttempt{
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelProfile,
 			Strategy: hint.Strategy,
 			From:     env.Profile.ProfileID,
@@ -300,10 +277,9 @@ func (rc *RecoveryController) attemptProfileEscalation(
 		return failedResult
 	}
 
-	// Get fallback profiles from the current profile's descriptor.
 	currentDesc, ok := rc.Profiles.Lookup(env.Profile.ProfileID)
 	if !ok || len(currentDesc.FallbackProfiles) == 0 {
-		stack.Record(RecoveryAttempt{
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelProfile,
 			Strategy: hint.Strategy,
 			From:     env.Profile.ProfileID,
@@ -314,11 +290,10 @@ func (rc *RecoveryController) attemptProfileEscalation(
 		return failedResult
 	}
 
-	// Try the preferred fallback profile first when provided.
 	fallbackID := preferredFallbackProfile(hint, currentDesc.FallbackProfiles)
 	fallbackDesc, ok := rc.Profiles.Lookup(fallbackID)
 	if !ok {
-		stack.Record(RecoveryAttempt{
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelProfile,
 			Strategy: hint.Strategy,
 			From:     env.Profile.ProfileID,
@@ -329,7 +304,6 @@ func (rc *RecoveryController) attemptProfileEscalation(
 		return failedResult
 	}
 
-	// Build a new profile selection for the fallback.
 	fallbackProfile := euclotypes.ExecutionProfileSelection{
 		ProfileID:            fallbackDesc.ProfileID,
 		FallbackProfileIDs:   fallbackDesc.FallbackProfiles,
@@ -340,20 +314,11 @@ func (rc *RecoveryController) attemptProfileEscalation(
 		VerificationRequired: fallbackDesc.VerificationRequired,
 	}
 
-	// Find a profile-level capability for the fallback profile.
 	artifacts := euclotypes.ArtifactStateFromContext(env.State)
 	snapshot := snapshotFromEnv(env)
-	candidates := rc.Capabilities.ForProfile(fallbackID)
-	var fallbackCap CapabilityI
-	for _, cap := range candidates {
-		if eligibility := cap.Eligible(artifacts, snapshot); eligibility.Eligible {
-			fallbackCap = cap
-			break
-		}
-	}
-
+	fallbackCap := rc.lookupEligibleRecoveryCapability(fallbackID, artifacts, snapshot)
 	if fallbackCap == nil {
-		stack.Record(RecoveryAttempt{
+		recordRecoveryAttempt(stack, RecoveryAttempt{
 			Level:    RecoveryLevelProfile,
 			Strategy: hint.Strategy,
 			From:     env.Profile.ProfileID,
@@ -364,18 +329,12 @@ func (rc *RecoveryController) attemptProfileEscalation(
 		return failedResult
 	}
 
-	// Execute with the fallback profile.
 	fallbackEnv := env
 	fallbackEnv.Profile = fallbackProfile
-	if fallbackEnv.Task != nil {
-		if fallbackEnv.Task.Context == nil {
-			fallbackEnv.Task.Context = map[string]any{}
-		}
-		fallbackEnv.Task.Context["euclo.recovery_active"] = true
-	}
-	result := fallbackCap.Execute(ctx, fallbackEnv)
+	applyRecoveryTaskContext(&fallbackEnv)
+	result := runRecoveryCandidate(ctx, fallbackCap, fallbackEnv)
 	success := result.Status != euclotypes.ExecutionStatusFailed
-	stack.Record(RecoveryAttempt{
+	recordRecoveryAttempt(stack, RecoveryAttempt{
 		Level:    RecoveryLevelProfile,
 		Strategy: hint.Strategy,
 		From:     env.Profile.ProfileID,
@@ -454,7 +413,7 @@ func (rc *RecoveryController) handleModeEscalation(
 	failedResult euclotypes.ExecutionResult,
 	stack *RecoveryStack,
 ) euclotypes.ExecutionResult {
-	stack.Record(RecoveryAttempt{
+	recordRecoveryAttempt(stack, RecoveryAttempt{
 		Level:    RecoveryLevelMode,
 		Strategy: hint.Strategy,
 		From:     "",
@@ -477,32 +436,71 @@ func (rc *RecoveryController) handleModeEscalation(
 	return result
 }
 
+func recordRecoveryAttempt(stack *RecoveryStack, attempt RecoveryAttempt) {
+	if stack != nil {
+		stack.Record(attempt)
+	}
+}
+
+func (rc *RecoveryController) lookupRecoveryCapability(id string) (CapabilityI, bool) {
+	if rc == nil || rc.Capabilities == nil || id == "" {
+		return nil, false
+	}
+	return rc.Capabilities.Lookup(id)
+}
+
+func (rc *RecoveryController) lookupEligibleRecoveryCapability(
+	profileID string,
+	artifacts euclotypes.ArtifactState,
+	snapshot euclotypes.CapabilitySnapshot,
+) CapabilityI {
+	if rc == nil || rc.Capabilities == nil {
+		return nil
+	}
+	for _, cap := range rc.Capabilities.ForProfile(profileID) {
+		if eligibility := cap.Eligible(artifacts, snapshot); eligibility.Eligible {
+			return cap
+		}
+	}
+	return nil
+}
+
+func applyRecoveryTaskContext(env *euclotypes.ExecutionEnvelope) {
+	if env == nil || env.Task == nil {
+		return
+	}
+	if env.Task.Context == nil {
+		env.Task.Context = map[string]any{}
+	}
+	env.Task.Context["euclo.recovery_active"] = true
+}
+
+func applyParadigmOverride(env *euclotypes.ExecutionEnvelope, paradigm string) {
+	if env == nil || env.Task == nil {
+		return
+	}
+	if env.Task.Context == nil {
+		env.Task.Context = map[string]any{}
+	}
+	env.Task.Context["euclo.paradigm_override"] = paradigm
+	env.Task.Context["euclo.recovery_active"] = true
+}
+
+func runRecoveryCandidate(
+	ctx context.Context,
+	cap CapabilityI,
+	env euclotypes.ExecutionEnvelope,
+) euclotypes.ExecutionResult {
+	if cap == nil {
+		return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusFailed}
+	}
+	return cap.Execute(ctx, env)
+}
+
 // RecoveryTraceArtifact creates an artifact recording the recovery stack
 // for observability and debugging.
 func RecoveryTraceArtifact(stack *RecoveryStack, producerID string) euclotypes.Artifact {
-	attempts := make([]map[string]any, 0, len(stack.Attempts))
-	for _, a := range stack.Attempts {
-		attempts = append(attempts, map[string]any{
-			"level":    string(a.Level),
-			"strategy": string(a.Strategy),
-			"from":     a.From,
-			"to":       a.To,
-			"reason":   a.Reason,
-			"success":  a.Success,
-		})
-	}
-	return euclotypes.Artifact{
-		ID:         "recovery_trace",
-		Kind:       euclotypes.ArtifactKindRecoveryTrace,
-		Summary:    fmt.Sprintf("%d recovery attempts, exhausted=%v", len(stack.Attempts), stack.Exhausted),
-		ProducerID: producerID,
-		Status:     "produced",
-		Payload: map[string]any{
-			"attempts":  attempts,
-			"max_depth": stack.MaxDepth,
-			"exhausted": stack.Exhausted,
-		},
-	}
+	return defaultOrchestrateRecorder.recoveryTraceArtifact(stack, producerID)
 }
 
 // Helper functions for extracting info from failed results.
