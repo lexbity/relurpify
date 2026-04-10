@@ -141,12 +141,13 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}
 
 	env := agents.AgentEnvironment{
-		Config:       boot.Environment.Config,
-		Model:        boot.Environment.Model,
-		Registry:     boot.Environment.Registry,
-		IndexManager: boot.Environment.IndexManager,
-		SearchEngine: boot.Environment.SearchEngine,
-		Memory:       boot.Environment.Memory,
+		Config:        boot.Environment.Config,
+		Model:         boot.Environment.Model,
+		CommandPolicy: boot.Environment.CommandPolicy,
+		Registry:      boot.Environment.Registry,
+		IndexManager:  boot.Environment.IndexManager,
+		SearchEngine:  boot.Environment.SearchEngine,
+		Memory:        boot.Environment.Memory,
 	}
 	if err := agents.RegisterAgentCapabilities(boot.Registry, env); err != nil {
 		return nil, fmt.Errorf("register agent capabilities: %w", err)

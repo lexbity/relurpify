@@ -12,6 +12,7 @@ import (
 
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/platform/browser"
 	"github.com/lexcodex/relurpify/platform/browser/bidi"
 	"github.com/lexcodex/relurpify/platform/browser/cdp"
@@ -151,6 +152,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.
 		backend, err := cdp.New(ctx, cdp.Config{
 			Headless:     true,
 			WebSocketURL: sandboxed.cdpWebSocketURL,
+			Policy:       browserLaunchPolicy(cfg),
 		})
 		if err != nil {
 			_ = sandboxed.close()
@@ -172,6 +174,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.
 			Headless:    true,
 			RemoteURL:   sandboxed.remoteURL,
 			BrowserArgs: []string{"--disable-dev-shm-usage"},
+			Policy:      browserLaunchPolicy(cfg),
 		})
 		if err != nil {
 			_ = sandboxed.close()
@@ -193,6 +196,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.
 			Headless:    true,
 			RemoteURL:   sandboxed.remoteURL,
 			BrowserArgs: []string{"--disable-dev-shm-usage"},
+			Policy:      browserLaunchPolicy(cfg),
 		})
 		if err != nil {
 			_ = sandboxed.close()
@@ -217,6 +221,13 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*browser.
 			Err:       fmt.Errorf("unsupported browser backend"),
 		}
 	}
+}
+
+func browserLaunchPolicy(cfg browserSessionConfig) sandbox.CommandPolicy {
+	if cfg.runtime == nil || cfg.runtime.Registration == nil || cfg.runtime.Registration.Permissions == nil {
+		return nil
+	}
+	return fauthorization.NewCommandAuthorizationPolicy(cfg.runtime.Registration.Permissions, cfg.runtime.Registration.ID, cfg.runtime.AgentSpec, "browser")
 }
 
 type browserTool struct {

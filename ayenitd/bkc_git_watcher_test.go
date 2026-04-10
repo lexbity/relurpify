@@ -7,6 +7,7 @@ import (
 	"time"
 
 	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 func TestGitWatcherServiceEmitsRevisionChanged(t *testing.T) {
@@ -112,5 +113,22 @@ func TestGitWatcherServiceStopCancelsLoop(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("expected git watcher to exit")
+	}
+}
+
+func TestGitWatcherServicePolicyBlocksExecution(t *testing.T) {
+	svc := &GitWatcherService{
+		WorkspaceRoot: "/tmp/workspace",
+		Policy: sandbox.CommandPolicyFunc(func(context.Context, sandbox.CommandRequest) error {
+			return context.DeadlineExceeded
+		}),
+		RunGit: func(ctx context.Context, root string, args ...string) (string, error) {
+			t.Fatal("runGit should not be called when policy blocks")
+			return "", nil
+		},
+	}
+	_, err := svc.runGit(context.Background(), "rev-parse", "HEAD")
+	if err == nil {
+		t.Fatal("expected policy error")
 	}
 }

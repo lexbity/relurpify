@@ -16,14 +16,14 @@ func skillAllowedCapabilities(skillSpec manifest.SkillSpec) []core.CapabilitySel
 	return core.CloneCapabilitySelectors(skillSpec.AllowedCapabilities)
 }
 
-// DeriveGVisorAllowlist returns the binary allowlist for the gVisor sandbox
+// DeriveSandboxAllowlist returns the binary allowlist for the sandbox
 // by walking the effective (allowed) tool set and collecting each tool's
 // declared executable permissions.
-func DeriveGVisorAllowlist(allowed []core.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
-	return deriveGVisorAllowlist(allowed, registry)
+func DeriveSandboxAllowlist(allowed []core.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
+	return deriveSandboxAllowlist(allowed, registry)
 }
 
-func deriveGVisorAllowlist(allowed []core.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
+func deriveSandboxAllowlist(allowed []core.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
 	if registry == nil {
 		return nil
 	}

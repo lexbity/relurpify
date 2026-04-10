@@ -138,6 +138,7 @@ func newStartCmd() *cobra.Command {
 				ConfigPath:        runtimeCfg.ConfigPath,
 				AgentsDir:         runtimeCfg.AgentsDir,
 				AgentName:         agentName,
+				SandboxBackend:    sandboxBackend,
 				LogPath:           logPath,
 				TelemetryPath:     telemetryPath,
 				EventsPath:        eventsLogPath,
@@ -238,12 +239,13 @@ func newStartCmd() *cobra.Command {
 				return fmt.Errorf("register relurpic capabilities: %w", err)
 			}
 			agentEnv := agents.AgentEnvironment{
-				Config:       openedWS.Environment.Config,
-				Model:        openedWS.Environment.Model,
-				Registry:     openedWS.Environment.Registry,
-				IndexManager: openedWS.Environment.IndexManager,
-				SearchEngine: openedWS.Environment.SearchEngine,
-				Memory:       openedWS.Environment.Memory,
+				Config:        openedWS.Environment.Config,
+				CommandPolicy: openedWS.Environment.CommandPolicy,
+				Model:         openedWS.Environment.Model,
+				Registry:      openedWS.Environment.Registry,
+				IndexManager:  openedWS.Environment.IndexManager,
+				SearchEngine:  openedWS.Environment.SearchEngine,
+				Memory:        openedWS.Environment.Memory,
 			}
 			if err := registerAgentCapabilitiesFn(openedWS.Environment.Registry, agentEnv); err != nil {
 				return fmt.Errorf("register agent capabilities: %w", err)
@@ -251,7 +253,7 @@ func newStartCmd() *cobra.Command {
 			cfg := &core.Config{
 				Name:              agentName,
 				Model:             modelName,
-				InferenceEndpoint:    defaultEndpoint(),
+				InferenceEndpoint: defaultEndpoint(),
 				MaxIterations:     8,
 				NativeToolCalling: spec.NativeToolCallingEnabled(),
 				AgentSpec:         spec,

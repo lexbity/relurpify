@@ -339,12 +339,24 @@ type stubSandboxRuntime struct {
 
 func (s *stubSandboxRuntime) Name() string                   { return "stub" }
 func (s *stubSandboxRuntime) Verify(_ context.Context) error { return nil }
-func (s *stubSandboxRuntime) RunConfig() SandboxConfig       { return s.config }
-func (s *stubSandboxRuntime) EnforcePolicy(p SandboxPolicy) error {
+func (s *stubSandboxRuntime) Capabilities() Capabilities {
+	return Capabilities{
+		NetworkIsolation:  true,
+		ReadOnlyRoot:      true,
+		ProtectedPaths:    true,
+		NoNewPrivileges:   true,
+		Seccomp:           true,
+		UserMapping:       true,
+		PerCommandWorkdir: true,
+	}
+}
+func (s *stubSandboxRuntime) ValidatePolicy(policy SandboxPolicy) error { return policy.Validate() }
+func (s *stubSandboxRuntime) ApplyPolicy(_ context.Context, p SandboxPolicy) error {
 	s.policy = p
 	return nil
 }
-func (s *stubSandboxRuntime) Policy() SandboxPolicy { return s.policy }
+func (s *stubSandboxRuntime) RunConfig() SandboxConfig { return s.config }
+func (s *stubSandboxRuntime) Policy() SandboxPolicy    { return s.policy }
 
 // minimalAgentManifest returns a manifest with the fields used by SandboxCommandRunner.
 func minimalAgentManifest() *manifest.AgentManifest {

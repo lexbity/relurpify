@@ -39,21 +39,22 @@ type hitlRateBucket struct {
 
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
-	basePath       string
-	declared       *core.PermissionSet
-	audit          core.AuditLogger
-	hitl           HITLProvider
-	runtime        sandbox.SandboxRuntime
-	grants         map[string]*PermissionGrant
-	mu             sync.RWMutex
-	grantClock     func() time.Time
-	netPolicy      []sandbox.NetworkRule
-	defaultPolicy  core.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
-	eventLogger    func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})
-	taskGrants     map[string]taskGrant
-	hitlRateLimits map[string]*hitlRateBucket
-	fsPermCache    map[string]*core.FileSystemPermission
-	execPermCache  map[string]*core.ExecutablePermission
+	basePath         string
+	declared         *core.PermissionSet
+	audit            core.AuditLogger
+	hitl             HITLProvider
+	runtime          sandbox.SandboxRuntime
+	grants           map[string]*PermissionGrant
+	mu               sync.RWMutex
+	grantClock       func() time.Time
+	netPolicy        []sandbox.NetworkRule
+	defaultPolicy    core.AgentPermissionLevel // governs undeclared tool permissions; default is Ask
+	eventLogger      func(context.Context, core.PermissionDescriptor, string, string, map[string]interface{})
+	runtimePolicyErr error
+	taskGrants       map[string]taskGrant
+	hitlRateLimits   map[string]*hitlRateBucket
+	fsPermCache      map[string]*core.FileSystemPermission
+	execPermCache    map[string]*core.ExecutablePermission
 }
 
 type taskGrant struct {
@@ -90,11 +91,7 @@ func (m *PermissionManager) AttachRuntime(runtime sandbox.SandboxRuntime) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runtime = runtime
-	if len(m.netPolicy) > 0 {
-		_ = runtime.EnforcePolicy(sandbox.SandboxPolicy{
-			NetworkRules: append([]sandbox.NetworkRule(nil), m.netPolicy...),
-		})
-	}
+	m.applyRuntimePolicyLocked()
 }
 
 // SetDefaultPolicy configures how undeclared permissions are handled.
@@ -466,11 +463,48 @@ func (m *PermissionManager) recordNetworkRule(direction, protocol, host string, 
 		Port:      port,
 	}
 	m.netPolicy = append(m.netPolicy, rule)
-	if m.runtime != nil {
-		_ = m.runtime.EnforcePolicy(sandbox.SandboxPolicy{
-			NetworkRules: append([]sandbox.NetworkRule(nil), m.netPolicy...),
-		})
+	m.applyRuntimePolicyLocked()
+}
+
+func (m *PermissionManager) applyRuntimePolicyLocked() {
+	if m == nil || m.runtime == nil {
+		return
 	}
+	policy := m.currentSandboxPolicyLocked()
+	m.runtimePolicyErr = m.runtime.ApplyPolicy(context.Background(), policy)
+}
+
+// Policy returns the merged sandbox policy currently known to the
+// permission manager. Callers get a copy and can inspect it without racing.
+func (m *PermissionManager) Policy() sandbox.SandboxPolicy {
+	if m == nil {
+		return sandbox.SandboxPolicy{}
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.currentSandboxPolicyLocked()
+}
+
+// RuntimePolicyError returns the last sandbox sync error, if any.
+func (m *PermissionManager) RuntimePolicyError() error {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.runtimePolicyErr
+}
+
+func (m *PermissionManager) currentSandboxPolicyLocked() sandbox.SandboxPolicy {
+	if m == nil {
+		return sandbox.SandboxPolicy{}
+	}
+	policy := sandbox.SandboxPolicy{}
+	if m.runtime != nil {
+		policy = m.runtime.Policy()
+	}
+	policy.NetworkRules = append([]sandbox.NetworkRule(nil), m.netPolicy...)
+	return policy
 }
 
 // CheckCapability verifies capability usage.

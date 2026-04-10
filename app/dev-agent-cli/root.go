@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	cfgFile   string
-	workspace string
+	cfgFile        string
+	workspace      string
+	sandboxBackend string
 
 	globalCfg *frameworkconfig.GlobalConfig
 )
@@ -60,6 +61,7 @@ func NewRootCmd() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&workspace, "workspace", "", "Workspace directory")
 	root.PersistentFlags().StringVar(&cfgFile, "config", "", "Path to development CLI config file")
+	root.PersistentFlags().StringVar(&sandboxBackend, "sandbox-backend", "", "Sandbox backend to use (gvisor or docker)")
 
 	root.AddCommand(
 		newStartCmd(),

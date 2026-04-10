@@ -147,6 +147,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	if opts.Sandbox {
 		reg, err := fauthorization.RegisterAgent(context.Background(), fauthorization.RuntimeConfig{
 			ManifestPath: manifestPath,
+			Backend:      appruntime.DefaultConfig().SandboxBackend,
 			Sandbox:      appruntime.DefaultConfig().Sandbox,
 			AuditLimit:   512,
 			BaseFS:       workspace,
@@ -155,7 +156,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		if err != nil {
 			return nil, nil, err
 		}
-		runner, err = fsandbox.NewSandboxCommandRunner(reg.Manifest, reg.Runtime, workspace)
+		runner, err = fsandbox.NewCommandRunner(reg.Manifest, reg.Runtime, workspace)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/ayenitd"
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/templates"
 	"github.com/lexcodex/relurpify/platform/llm"
 )
@@ -77,8 +78,10 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 	}
 	if _, err := os.Stat(cfg.ConfigPath); err == nil {
 		report.ConfigExists = true
-		if _, err := LoadWorkspaceConfig(cfg.ConfigPath); err != nil {
+		if loaded, err := LoadWorkspaceConfig(cfg.ConfigPath); err != nil {
 			report.ConfigError = err.Error()
+		} else if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
+			cfg.SandboxBackend = loaded.SandboxBackend
 		}
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
@@ -129,6 +132,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		MemoryPath:                 cfg.MemoryPath,
 		HITLTimeout:                cfg.HITLTimeout,
 		AuditLimit:                 cfg.AuditLimit,
+		SandboxBackend:             cfg.SandboxBackend,
 		Sandbox:                    cfg.Sandbox,
 	}
 	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg, nil)
@@ -165,7 +169,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 		Blocking:  env.Inference.State == llm.BackendHealthUnhealthy,
 		Details:   firstNonEmpty(env.Inference.SelectedModel, env.Inference.Error),
 	})
-	deps = append(deps, detectChromiumStatus(ctx))
+	deps = append(deps, detectChromiumStatus(ctx, cfg.CommandPolicy))
 	report.Dependencies = deps
 	return report
 }
@@ -228,14 +232,14 @@ func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
 	return os.WriteFile(dst, []byte(rendered), 0o644)
 }
 
-func detectChromiumStatus(ctx context.Context) DependencyStatus {
+func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {
 	binaries := []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
 	for _, name := range binaries {
 		path, err := execLookPath(name)
 		if err != nil {
 			continue
 		}
-		version, _ := runCommand(ctx, path, "--version")
+		version, _ := runCommand(ctx, policy, path, "--version")
 		return DependencyStatus{
 			Name:      "chromium",
 			Required:  false,

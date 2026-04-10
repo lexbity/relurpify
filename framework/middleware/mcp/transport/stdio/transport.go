@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 type Config struct {
@@ -14,6 +16,7 @@ type Config struct {
 	Args    []string
 	Dir     string
 	Env     []string
+	Policy  sandbox.CommandPolicy
 }
 
 func (c Config) Validate() error {
@@ -126,6 +129,15 @@ func (t *Transport) Close() error {
 type execLauncher struct{}
 
 func (execLauncher) Launch(ctx context.Context, cfg Config) (Process, error) {
+	if cfg.Policy != nil {
+		if err := cfg.Policy.AllowCommand(ctx, sandbox.CommandRequest{
+			Workdir: cfg.Dir,
+			Args:    append([]string{cfg.Command}, cfg.Args...),
+			Env:     append([]string(nil), cfg.Env...),
+		}); err != nil {
+			return nil, err
+		}
+	}
 	cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
 	if strings.TrimSpace(cfg.Dir) != "" {
 		cmd.Dir = cfg.Dir

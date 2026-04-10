@@ -51,11 +51,12 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.ManifestPath, "manifest", cfg.ManifestPath, "Agent manifest path")
 	root.PersistentFlags().StringVar(&cfg.InferenceEndpoint, "inference-endpoint", cfg.InferenceEndpoint, "Inference backend endpoint URL")
 	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name")
+	root.PersistentFlags().StringVar(&cfg.SandboxBackend, "sandbox-backend", cfg.SandboxBackend, "Sandbox backend to use (gvisor or docker)")
 	root.PersistentFlags().StringVar(&cfg.AgentName, "agent", cfg.AgentLabel(), "Agent preset (coding, planner, react, reflection)")
 	root.PersistentFlags().StringVar(&cfg.ServerAddr, "addr", cfg.ServerAddr, "HTTP server listen address")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.RunscPath, "runsc", cfg.Sandbox.RunscPath, "runsc binary path")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.ContainerRuntime, "container-runtime", cfg.Sandbox.ContainerRuntime, "Container runtime (docker/containerd)")
-	root.PersistentFlags().StringVar(&cfg.Sandbox.Platform, "sandbox-platform", cfg.Sandbox.Platform, "gVisor platform (kvm/ptrace)")
+	root.PersistentFlags().StringVar(&cfg.Sandbox.Platform, "sandbox-platform", cfg.Sandbox.Platform, "Sandbox platform hint (gVisor: kvm/ptrace)")
 	root.PersistentFlags().BoolVar(&startServer, "serve", false, "Launch the HTTP API server alongside the TUI")
 
 	root.AddCommand(newDoctorCmd(), newStatusCmd(), newChatCmd(), newServeCmd())

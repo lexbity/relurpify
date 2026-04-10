@@ -442,6 +442,9 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	}
 	wsCfg.Provider = provider
 	wsCfg.Model = model
+	if backend := strings.TrimSpace(r.rt.Config.SandboxBackend); backend != "" {
+		wsCfg.SandboxBackend = backend
+	}
 	wsCfg.LastUpdated = time.Now().Unix()
 	return runtimesvc.SaveWorkspaceConfig(cfgPath, wsCfg)
 }

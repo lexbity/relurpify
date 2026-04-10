@@ -126,13 +126,27 @@ type recordingRuntime struct {
 	policies []sandbox.SandboxPolicy
 }
 
-func (r *recordingRuntime) Name() string                     { return "recording" }
-func (r *recordingRuntime) Verify(context.Context) error     { return nil }
-func (r *recordingRuntime) RunConfig() sandbox.SandboxConfig { return sandbox.SandboxConfig{} }
-func (r *recordingRuntime) EnforcePolicy(policy sandbox.SandboxPolicy) error {
+func (r *recordingRuntime) Name() string                 { return "recording" }
+func (r *recordingRuntime) Verify(context.Context) error { return nil }
+func (r *recordingRuntime) Capabilities() sandbox.Capabilities {
+	return sandbox.Capabilities{
+		NetworkIsolation:  true,
+		ReadOnlyRoot:      true,
+		ProtectedPaths:    true,
+		NoNewPrivileges:   true,
+		Seccomp:           true,
+		UserMapping:       true,
+		PerCommandWorkdir: true,
+	}
+}
+func (r *recordingRuntime) ValidatePolicy(policy sandbox.SandboxPolicy) error {
+	return policy.Validate()
+}
+func (r *recordingRuntime) ApplyPolicy(_ context.Context, policy sandbox.SandboxPolicy) error {
 	r.policies = append(r.policies, policy)
 	return nil
 }
+func (r *recordingRuntime) RunConfig() sandbox.SandboxConfig { return sandbox.SandboxConfig{} }
 func (r *recordingRuntime) Policy() sandbox.SandboxPolicy {
 	if len(r.policies) == 0 {
 		return sandbox.SandboxPolicy{}

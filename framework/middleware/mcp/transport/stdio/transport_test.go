@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,6 +51,18 @@ func (l stubLauncher) Launch(context.Context, Config) (Process, error) {
 func TestOpenRejectsInvalidConfig(t *testing.T) {
 	_, err := Open(context.Background(), stubLauncher{}, Config{})
 	require.ErrorContains(t, err, "command required")
+}
+
+func TestOpenRejectsByPolicyBeforeLaunch(t *testing.T) {
+	policyErr := errors.New("blocked by launcher policy")
+	_, err := Open(context.Background(), nil, Config{
+		Command: "__missing_binary__",
+		Policy: sandbox.CommandPolicyFunc(func(context.Context, sandbox.CommandRequest) error {
+			return policyErr
+		}),
+	})
+	require.ErrorIs(t, err, policyErr)
+	require.ErrorContains(t, err, "blocked by launcher policy")
 }
 
 func TestTransportCloseKillsProcessOnce(t *testing.T) {

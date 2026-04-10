@@ -82,12 +82,6 @@ func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map
 	}
 	finalArgs := append([]string{}, t.cfg.DefaultArgs...)
 	finalArgs = append(finalArgs, userArgs...)
-	if err := authorization.AuthorizeCommand(ctx, t.manager, t.agentID, t.spec, authorization.CommandAuthorizationRequest{
-		Command: append([]string{t.cfg.Command}, finalArgs...),
-		Source:  "cli",
-	}); err != nil {
-		return nil, err
-	}
 	workdir := t.basePath
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		path := fmt.Sprint(raw)

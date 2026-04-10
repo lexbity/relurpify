@@ -149,12 +149,6 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*core.ToolR
 	if t.Runner == nil {
 		return nil, fmt.Errorf("command runner missing for git tool")
 	}
-	if err := authorization.AuthorizeCommand(ctx, t.manager, t.agentID, t.spec, authorization.CommandAuthorizationRequest{
-		Command: append([]string{"git"}, args...),
-		Source:  "git",
-	}); err != nil {
-		return nil, err
-	}
 	stdout, stderr, err := t.Runner.Run(ctx, sandbox.CommandRequest{
 		Workdir: t.RepoPath,
 		Args:    append([]string{"git"}, args...),

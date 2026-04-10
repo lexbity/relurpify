@@ -121,7 +121,12 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		resolvedModel = agentSpec.Model.Name
 	}
 
-	capabilities, err := BuildBuiltinCapabilityBundle(workspace, opts.Runner, CapabilityRegistryOptions{
+	runner := opts.Runner
+	if runner != nil {
+		runner = fsandbox.NewEnforcingCommandRunner(runner, fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "sandbox"))
+	}
+
+	capabilities, err := BuildBuiltinCapabilityBundle(workspace, runner, CapabilityRegistryOptions{
 		Context:           opts.Context,
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
@@ -182,6 +187,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	env := WorkspaceEnvironment{
 		Config:                        agentCfg,
 		Model:                         opts.Model,
+		CommandPolicy:                 fauthorization.NewCommandAuthorizationPolicy(opts.PermissionManager, opts.AgentID, agentSpec, "workspace"),
 		Registry:                      registry,
 		PermissionManager:             opts.PermissionManager,
 		IndexManager:                  indexManager,

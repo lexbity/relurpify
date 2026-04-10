@@ -230,6 +230,7 @@ func buildInspectionTarget(ws string) (*inspectionTarget, error) {
 		ConfigPath:        runtimeCfg.ConfigPath,
 		AgentsDir:         runtimeCfg.AgentsDir,
 		AgentName:         agentName,
+		SandboxBackend:    sandboxBackend,
 		LogPath:           frameworkconfig.New(ws).LogFile("ayenitd.log"),
 		MemoryPath:        runtimeCfg.MemoryPath,
 		SkipASTIndex:      true,

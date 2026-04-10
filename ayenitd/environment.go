@@ -13,6 +13,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/patterns"
 	"github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/framework/retrieval"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
 )
 
@@ -22,8 +23,10 @@ import (
 // scope (e.g. replace Registry for a child execution) without rebuilding.
 type WorkspaceEnvironment struct {
 	// Identity + model
-	Config *core.Config
-	Model  core.LanguageModel
+	Config        *core.Config
+	Model         core.LanguageModel
+	CommandPolicy fsandbox.CommandPolicy
+	Backend       string
 
 	// Capability + permission
 	Registry          *capability.Registry

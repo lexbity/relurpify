@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 const (
@@ -23,6 +26,7 @@ type sandboxedBrowserBackend struct {
 	cdpWebSocketURL string
 	containerID     string
 	runtimeBinary   string
+	cfg             browserSessionConfig
 }
 
 func newSandboxedBrowserBackend(ctx context.Context, cfg browserSessionConfig) (*sandboxedBrowserBackend, error) {
@@ -67,6 +71,7 @@ func newSandboxedBrowserBackend(ctx context.Context, cfg browserSessionConfig) (
 			cdpWebSocketURL: wsURL,
 			containerID:     containerID,
 			runtimeBinary:   browserContainerRuntime(cfg),
+			cfg:             cfg,
 		}, nil
 	case "webdriver", "bidi":
 		hostPort, err := reservePort()
@@ -91,6 +96,7 @@ func newSandboxedBrowserBackend(ctx context.Context, cfg browserSessionConfig) (
 			remoteURL:     remoteURL,
 			containerID:   containerID,
 			runtimeBinary: browserContainerRuntime(cfg),
+			cfg:           cfg,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported browser backend %q", backendName)
@@ -103,6 +109,9 @@ func (b *sandboxedBrowserBackend) close() error {
 	}
 	cmdCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if err := allowBrowserCommand(cmdCtx, b.cfg, b.runtimeBinary, []string{"rm", "-f", b.containerID}); err != nil {
+		return err
+	}
 	cmd := exec.CommandContext(cmdCtx, b.runtimeBinary, "rm", "-f", b.containerID)
 	err := cmd.Run()
 	b.containerID = ""
@@ -158,6 +167,9 @@ func runSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig, h
 	args = append(args, image)
 	args = append(args, command...)
 
+	if err := allowBrowserCommand(ctx, cfg, runtimeBinary, args); err != nil {
+		return "", err
+	}
 	cmd := exec.CommandContext(ctx, runtimeBinary, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -170,8 +182,28 @@ func removeSandboxBrowserContainer(ctx context.Context, cfg browserSessionConfig
 	if strings.TrimSpace(containerID) == "" {
 		return nil
 	}
+	if err := allowBrowserCommand(ctx, cfg, browserContainerRuntime(cfg), []string{"rm", "-f", containerID}); err != nil {
+		return err
+	}
 	cmd := exec.CommandContext(ctx, browserContainerRuntime(cfg), "rm", "-f", containerID)
 	return cmd.Run()
+}
+
+func allowBrowserCommand(ctx context.Context, cfg browserSessionConfig, binary string, args []string) error {
+	policy := browserCommandPolicyFromConfig(cfg)
+	if policy == nil {
+		return nil
+	}
+	return policy.AllowCommand(ctx, sandbox.CommandRequest{
+		Args: append([]string{binary}, args...),
+	})
+}
+
+func browserCommandPolicyFromConfig(cfg browserSessionConfig) sandbox.CommandPolicy {
+	if cfg.runtime == nil || cfg.runtime.Registration == nil || cfg.runtime.Registration.Permissions == nil {
+		return nil
+	}
+	return fauthorization.NewCommandAuthorizationPolicy(cfg.runtime.Registration.Permissions, cfg.runtime.Registration.ID, cfg.runtime.AgentSpec, "browser")
 }
 
 func waitForCDPWebSocket(ctx context.Context, hostPort int) (string, error) {

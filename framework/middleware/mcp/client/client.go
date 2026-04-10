@@ -14,6 +14,7 @@ import (
 	msession "github.com/lexcodex/relurpify/framework/middleware/mcp/session"
 	"github.com/lexcodex/relurpify/framework/middleware/mcp/transport/stdio"
 	"github.com/lexcodex/relurpify/framework/middleware/mcp/versioning"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 type StdioConfig struct {
@@ -28,6 +29,7 @@ type StdioConfig struct {
 	Capabilities      map[string]any
 	PreferredVersions []string
 	Recoverable       bool
+	Policy            sandbox.CommandPolicy
 }
 
 type NotificationHandler func(method string)
@@ -94,6 +96,7 @@ func ConnectStdio(ctx context.Context, launcher stdio.Launcher, cfg StdioConfig)
 		Args:    cfg.Args,
 		Dir:     cfg.Dir,
 		Env:     cfg.Env,
+		Policy:  cfg.Policy,
 	})
 	if err != nil {
 		return nil, err

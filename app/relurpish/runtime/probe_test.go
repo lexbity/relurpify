@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/platform/llm"
 )
 
@@ -180,6 +181,25 @@ func TestProbeEnvironment_PropagatesBuilderError(t *testing.T) {
 	}
 	if report.Inference.Error == "" {
 		t.Fatal("expected error on builder failure")
+	}
+}
+
+func TestInspectRunscHonorsCommandPolicy(t *testing.T) {
+	origLookPath := execLookPath
+	execLookPath = func(file string) (string, error) {
+		return "/bin/echo", nil
+	}
+	defer func() { execLookPath = origLookPath }()
+
+	denied := errors.New("blocked by policy")
+	status := inspectRunsc(context.Background(), "runsc", sandbox.CommandPolicyFunc(func(context.Context, sandbox.CommandRequest) error {
+		return denied
+	}))
+	if status.Error == "" {
+		t.Fatal("expected policy error")
+	}
+	if status.Error != denied.Error() {
+		t.Fatalf("expected policy error %q, got %q", denied.Error(), status.Error)
 	}
 }
 

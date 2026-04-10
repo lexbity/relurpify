@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	mclient "github.com/lexcodex/relurpify/framework/middleware/mcp/client"
@@ -21,6 +22,7 @@ import (
 	mserver "github.com/lexcodex/relurpify/framework/middleware/mcp/server"
 	msession "github.com/lexcodex/relurpify/framework/middleware/mcp/session"
 	mstdio "github.com/lexcodex/relurpify/framework/middleware/mcp/transport/stdio"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 type mcpClientProvider struct {
@@ -128,7 +130,7 @@ func (p *mcpClientProvider) Initialize(ctx context.Context, rt *Runtime) error {
 	p.capabilityIDs[sessionDesc.ID] = struct{}{}
 	p.capabilityIDs[catalogDesc.ID] = struct{}{}
 
-	clientCfg, err := p.clientConfig(sessionID)
+	clientCfg, err := p.clientConfig(rt, sessionID)
 	if err != nil {
 		return err
 	}
@@ -431,7 +433,7 @@ func (p *mcpClientProvider) SnapshotSessions(context.Context) ([]core.ProviderSe
 	return []core.ProviderSessionSnapshot{p.session}, nil
 }
 
-func (p *mcpClientProvider) clientConfig(sessionID string) (mclient.StdioConfig, error) {
+func (p *mcpClientProvider) clientConfig(rt *Runtime, sessionID string) (mclient.StdioConfig, error) {
 	command, ok := stringConfigValue(p.config.Config, "command")
 	if !ok || strings.TrimSpace(command) == "" {
 		return mclient.StdioConfig{}, fmt.Errorf("mcp client provider %s requires config.command for stdio transport", p.desc.ID)
@@ -448,6 +450,10 @@ func (p *mcpClientProvider) clientConfig(sessionID string) (mclient.StdioConfig,
 	if len(preferredVersions) == 0 {
 		preferredVersions = []string{protocol.Revision20250618}
 	}
+	var policy sandbox.CommandPolicy
+	if rt != nil && rt.Registration != nil && rt.Registration.Permissions != nil {
+		policy = fauthorization.NewCommandAuthorizationPolicy(rt.Registration.Permissions, rt.Registration.ID, rt.AgentSpec, "mcp")
+	}
 	return mclient.StdioConfig{
 		Command:           command,
 		Args:              args,
@@ -460,6 +466,7 @@ func (p *mcpClientProvider) clientConfig(sessionID string) (mclient.StdioConfig,
 		Capabilities:      p.localClientCapabilities(),
 		PreferredVersions: preferredVersions,
 		Recoverable:       p.desc.RecoverabilityMode != core.RecoverabilityEphemeral,
+		Policy:            policy,
 	}, nil
 }
 

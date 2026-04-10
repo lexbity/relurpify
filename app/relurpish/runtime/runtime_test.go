@@ -125,7 +125,7 @@ func TestDetectChromiumStatusMissingIsWarningOnly(t *testing.T) {
 	}
 	defer func() { execLookPath = orig }()
 
-	status := detectChromiumStatus(context.Background())
+	status := detectChromiumStatus(context.Background(), nil)
 	require.Equal(t, "chromium", status.Name)
 	require.False(t, status.Required)
 	require.False(t, status.Available)

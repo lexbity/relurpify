@@ -13,10 +13,10 @@ import (
 // CONFIG & STATE LOGIC TESTS (Pure Unit Logic - No System Calls)
 // ----------------------------------------------------------------------------
 
-func TestNewGVisorRuntimeDefaults(t *testing.T) {
+func TestNewSandboxRuntimeDefaults(t *testing.T) {
 	emptyConfig := SandboxConfig{}
 
-	gt := NewGVisorRuntime(emptyConfig)
+	gt := NewSandboxRuntime(emptyConfig)
 
 	if gt.config.RunscPath != "runsc" {
 		t.Errorf("Expected default runscPath to be 'runsc', got: %q", gt.config.RunscPath)
@@ -35,7 +35,7 @@ func TestNewGVisorRuntimeDefaults(t *testing.T) {
 	}
 }
 
-func TestNewGVisorRuntime_ExplicitConfigPreserved(t *testing.T) {
+func TestNewSandboxRuntime_ExplicitConfigPreserved(t *testing.T) {
 	customConfig := SandboxConfig{
 		RunscPath:        "custom-runsc",
 		Platform:         "ptrace",
@@ -43,7 +43,7 @@ func TestNewGVisorRuntime_ExplicitConfigPreserved(t *testing.T) {
 		NetworkIsolation: false,
 	}
 
-	gt := NewGVisorRuntime(customConfig)
+	gt := NewSandboxRuntime(customConfig)
 
 	if gt.config.RunscPath != customConfig.RunscPath {
 		t.Errorf("Explicit runscPath should be preserved")
@@ -58,8 +58,8 @@ func TestNewGVisorRuntime_ExplicitConfigPreserved(t *testing.T) {
 	}
 }
 
-func TestEnforcePolicy_StateStorage(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{})
+func TestSandboxPolicy_StateStorage(t *testing.T) {
+	gt := NewSandboxRuntime(SandboxConfig{})
 
 	expectedPolicy := SandboxPolicy{
 		NetworkRules: []NetworkRule{
@@ -67,7 +67,7 @@ func TestEnforcePolicy_StateStorage(t *testing.T) {
 		},
 	}
 
-	err := gt.EnforcePolicy(expectedPolicy)
+	err := gt.ApplyPolicy(context.Background(), expectedPolicy)
 	if err != nil {
 		t.Fatalf("EnforcePolicy should succeed without error, got: %v", err)
 	}
@@ -81,10 +81,10 @@ func TestEnforcePolicy_StateStorage(t *testing.T) {
 	}
 }
 
-func TestEnforcePolicy_ConcurrentSafe(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{})
+func TestSandboxPolicy_ConcurrentSafe(t *testing.T) {
+	gt := NewSandboxRuntime(SandboxConfig{})
 
-	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{}}}
+	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
@@ -92,7 +92,7 @@ func TestEnforcePolicy_ConcurrentSafe(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			if i%2 == 0 {
-				_ = gt.EnforcePolicy(policy1)
+				_ = gt.ApplyPolicy(context.Background(), policy1)
 			} else {
 				_ = gt.Policy()
 			}
@@ -107,23 +107,26 @@ func TestEnforcePolicy_ConcurrentSafe(t *testing.T) {
 	wg.Wait()
 }
 
-func TestPolicy_ReturnsSnapshot(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{})
-	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{Host: "v1"}}}
-	gt.EnforcePolicy(policy1)
+func TestSandboxPolicy_ReturnsSnapshot(t *testing.T) {
+	gt := NewSandboxRuntime(SandboxConfig{})
+	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v1", Port: 443}}}
+	gt.ApplyPolicy(context.Background(), policy1)
 
-	policy2 := SandboxPolicy{NetworkRules: []NetworkRule{{Host: "v2"}}}
-	gt.EnforcePolicy(policy2)
+	policy2 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v2", Port: 443}}}
+	gt.ApplyPolicy(context.Background(), policy2)
 
 	// Policy() should return the latest snapshot
 	current := gt.Policy()
 	if len(current.NetworkRules) == 0 {
 		t.Error("Expected policy to reflect last set value")
 	}
+	if current.NetworkRules[0].Host != "v2" {
+		t.Fatalf("expected latest policy host to be v2, got %q", current.NetworkRules[0].Host)
+	}
 }
 
 func TestName_Method(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(SandboxConfig{})
 	name := gt.Name()
 	if name != "gvisor" {
 		t.Errorf("Expected Name() to return 'gvisor', got: %q", name)
@@ -131,7 +134,7 @@ func TestName_Method(t *testing.T) {
 }
 
 func TestRunConfig_ReturnsStored(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{
+	gt := NewSandboxRuntime(SandboxConfig{
 		RunscPath:        "custom-runsc",
 		Platform:         "kvm",
 		ContainerRuntime: "docker",
@@ -148,7 +151,7 @@ func TestRunConfig_ReturnsStored(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestVerify_SkipsIfAlreadyVerified(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{Platform: "kvm"}) // Use kvm to pass basic checks if possible
+	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"}) // Use kvm to pass basic checks if possible
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -190,7 +193,7 @@ func TestVerify_RunsOnlyIfBinariesExist(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	gt := NewGVisorRuntime(SandboxConfig{Platform: "kvm"}) // Match platform hint if installed
+	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"}) // Match platform hint if installed
 
 	err := gt.Verify(ctx)
 	if err != nil {
@@ -210,7 +213,7 @@ func TestVerify_RunscMissing_FailsGracefully(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	gt := NewGVisorRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(SandboxConfig{})
 	err := gt.Verify(ctx)
 	if err == nil {
 		t.Error("Expected error when runsc verification fails (if docker is present)")
@@ -225,7 +228,7 @@ func TestVerify_DockerMissing_FailsGracefully(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	gt := NewGVisorRuntime(SandboxConfig{ContainerRuntime: "containerd"}) // Try containerd if docker is missing
+	gt := NewSandboxRuntime(SandboxConfig{ContainerRuntime: "containerd"}) // Try containerd if docker is missing
 	err := gt.Verify(ctx)
 	if err == nil {
 		t.Error("Expected error when docker/containerd verification fails")
@@ -236,7 +239,7 @@ func TestVerify_PlatformHintMismatchAnnotates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	gt := NewGVisorRuntime(SandboxConfig{Platform: "kvm"}) // Expect kvm in version string
+	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"}) // Expect kvm in version string
 
 	// Force platform mismatch by testing against a different platform's binary signature if possible
 	// This is a softer check - in practice, runsc reports its build type which may not match our hint
@@ -258,7 +261,7 @@ func TestVerify_PlatformHintMismatchAnnotates(t *testing.T) {
 
 // TestName_ReturnsCorrectValue
 func TestVerify_NameConsistency(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(SandboxConfig{})
 	if gt.Name() != "gvisor" {
 		t.Errorf("Name() should always return 'gvisor'")
 	}
@@ -266,7 +269,7 @@ func TestVerify_NameConsistency(t *testing.T) {
 
 // TestRunConfig_PreservesInput
 func TestVerify_RunConfigReturnsStoredConfig(t *testing.T) {
-	gt := NewGVisorRuntime(SandboxConfig{
+	gt := NewSandboxRuntime(SandboxConfig{
 		RunscPath:        "custom-runsc",
 		Platform:         "ptrace",
 		ContainerRuntime: "containerd",

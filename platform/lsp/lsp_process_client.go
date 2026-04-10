@@ -8,6 +8,7 @@ import (
 	"fmt"
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	platformshell "github.com/lexcodex/relurpify/platform/shell"
 	"github.com/sourcegraph/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -67,9 +68,9 @@ func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fauthoriz
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	if err := fauthorization.AuthorizeCommand(ctx, manager, agentID, spec, fauthorization.CommandAuthorizationRequest{
-		Command: append([]string{cfg.Command}, cfg.Args...),
-		Source:  "lsp",
+	policy := fauthorization.NewCommandAuthorizationPolicy(manager, agentID, spec, "lsp")
+	if err := policy.AllowCommand(ctx, sandbox.CommandRequest{
+		Args: append([]string{cfg.Command}, cfg.Args...),
 	}); err != nil {
 		cancel()
 		return nil, err

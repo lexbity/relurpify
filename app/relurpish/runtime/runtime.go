@@ -135,6 +135,9 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 			if workspaceCfg.Model != "" && cfg.InferenceModel == "" {
 				cfg.InferenceModel = workspaceCfg.Model
 			}
+			if workspaceCfg.SandboxBackend != "" && cfg.SandboxBackend == "" {
+				cfg.SandboxBackend = workspaceCfg.SandboxBackend
+			}
 			if len(workspaceCfg.Agents) > 0 && cfg.AgentName == "" {
 				cfg.AgentName = workspaceCfg.Agents[0]
 			}
@@ -162,6 +165,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		MaxIterations:              8,
 		HITLTimeout:                cfg.HITLTimeout,
 		AuditLimit:                 cfg.AuditLimit,
+		SandboxBackend:             cfg.SandboxBackend,
 		Sandbox:                    cfg.Sandbox,
 		AllowedCapabilities:        allowedCapabilities,
 	})
@@ -178,6 +182,13 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
 	profileResolution := ws.ProfileResolution
+	if registration != nil && registration.Permissions != nil {
+		var agentSpec *core.AgentRuntimeSpec
+		if registration.Manifest != nil {
+			agentSpec = registration.Manifest.Spec.Agent
+		}
+		cfg.CommandPolicy = fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, agentSpec, "runtime")
+	}
 
 	// Extend telemetry with an event log sink (uses app/nexus/db which ayenitd
 	// cannot import without a cycle).
@@ -239,12 +250,13 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
 	learningBroker := archaeolearning.NewBroker(0)
 	agentEnv := agents.AgentEnvironment{
-		Config:       env.Config,
-		Model:        env.Model,
-		Registry:     env.Registry,
-		IndexManager: env.IndexManager,
-		SearchEngine: env.SearchEngine,
-		Memory:       env.Memory,
+		Config:        env.Config,
+		CommandPolicy: env.CommandPolicy,
+		Model:         env.Model,
+		Registry:      env.Registry,
+		IndexManager:  env.IndexManager,
+		SearchEngine:  env.SearchEngine,
+		Memory:        env.Memory,
 	}
 	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
 		env.Registry,
@@ -525,12 +537,13 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contra
 		Telemetry:         r.Telemetry,
 	}
 	agent := instantiateAgent(cfg, agents.AgentEnvironment{
-		Model:        r.Model,
-		Registry:     r.Tools,
-		IndexManager: r.IndexManager,
-		SearchEngine: r.SearchEngine,
-		Memory:       r.Memory,
-		Config:       agentCfg,
+		Model:         r.Model,
+		Registry:      r.Tools,
+		IndexManager:  r.IndexManager,
+		SearchEngine:  r.SearchEngine,
+		Memory:        r.Memory,
+		Config:        agentCfg,
+		CommandPolicy: cfg.CommandPolicy,
 	}, agentDefs)
 	if agent == nil {
 		return fmt.Errorf("agent %s not available", name)

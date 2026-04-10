@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/platform/browser"
 )
 
@@ -31,6 +32,7 @@ type Config struct {
 	StartupTimeout time.Duration
 	DriverArgs     []string
 	BrowserArgs    []string
+	Policy         sandbox.CommandPolicy
 }
 
 type Backend struct {
@@ -499,6 +501,13 @@ func launchChromeDriver(ctx context.Context, cfg Config) (*launchedDriver, error
 	}
 	args := []string{"--port=" + strconv.Itoa(port)}
 	args = append(args, cfg.DriverArgs...)
+	if cfg.Policy != nil {
+		if err := cfg.Policy.AllowCommand(ctx, sandbox.CommandRequest{
+			Args: append([]string{driverPath}, args...),
+		}); err != nil {
+			return nil, err
+		}
+	}
 	cmd := exec.CommandContext(ctx, driverPath, args...)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard

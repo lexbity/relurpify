@@ -1,5 +1,10 @@
-// Package authorization enforces agent permission contracts at execution time
-// using a three-level policy model: Allow, Ask, and Deny.
+// Package authorization evaluates agent permission contracts and policy
+// decisions at execution time using a three-level model: Allow, Ask, and Deny.
+//
+// It decides whether an action is permitted, denied, or must be approved, but
+// it does not launch processes or enforce OS-level isolation. The sandbox
+// package owns command execution enforcement, backend selection, and process
+// launch boundaries.
 //
 // # PermissionManager
 //

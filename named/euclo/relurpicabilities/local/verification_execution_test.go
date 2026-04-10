@@ -2,10 +2,13 @@ package local
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )
 
@@ -245,6 +248,52 @@ func TestVerificationExecuteCapability_ExecutesPlanAndStoresEvidence(t *testing.
 	}
 	if record["provenance"] != "executed" {
 		t.Fatalf("expected executed provenance, got %#v", record["provenance"])
+	}
+}
+
+func TestVerificationExecuteCapability_RespectsCommandPolicy(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.verification_plan", verificationPlan{
+		ScopeKind: "explicit",
+		Commands: []verificationCommandSpec{{
+			Name:             "shell_true",
+			Command:          "sh",
+			Args:             []string{"-c", "true"},
+			WorkingDirectory: ".",
+		}},
+	})
+	env := euclotypes.ExecutionEnvelope{
+		Task: &core.Task{
+			Instruction: "verify this change",
+			Context:     map[string]any{"workspace": "."},
+		},
+		State: state,
+		RunID: "run-policy",
+		Environment: agentenv.AgentEnvironment{
+			CommandPolicy: fsandbox.CommandPolicyFunc(func(context.Context, fsandbox.CommandRequest) error {
+				return fmt.Errorf("blocked by test policy")
+			}),
+		},
+	}
+
+	result := (&verificationExecuteCapability{}).Execute(context.Background(), env)
+	if result.Status != euclotypes.ExecutionStatusCompleted {
+		t.Fatalf("expected completed status, got %q", result.Status)
+	}
+	raw, ok := state.Get("pipeline.verify")
+	if !ok || raw == nil {
+		t.Fatal("expected pipeline.verify to be stored")
+	}
+	record, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected structured verification payload, got %#v", raw)
+	}
+	checks, ok := record["checks"].([]map[string]any)
+	if !ok || len(checks) != 1 {
+		t.Fatalf("expected one recorded check, got %#v", record["checks"])
+	}
+	if details, _ := checks[0]["details"].(string); !strings.Contains(details, "execution denied") {
+		t.Fatalf("expected denial details, got %#v", details)
 	}
 }
 

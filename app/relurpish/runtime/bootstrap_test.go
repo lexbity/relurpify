@@ -465,6 +465,11 @@ func TestBootstrapAgentRuntimeIndexManagerReachesReActAgent(t *testing.T) {
 		InferenceModel: "test-model",
 	})
 	requireNoError(t, err)
+	t.Cleanup(func() {
+		if boot != nil && boot.Environment.IndexManager != nil {
+			requireNoError(t, boot.Environment.IndexManager.Close())
+		}
+	})
 
 	if boot.Environment.IndexManager == nil {
 		t.Fatal("expected non-nil IndexManager in bootstrapped AgentEnvironment")

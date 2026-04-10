@@ -10,6 +10,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -145,11 +146,10 @@ func (c *verificationExecuteCapability) Execute(ctx context.Context, env eucloty
 	}
 	checks := make([]map[string]any, 0, len(plan.Commands))
 	overallStatus := "pass"
+	policy := verificationCommandPolicy(c.env, env.Environment)
 	for _, cmd := range plan.Commands {
 		start := time.Now().UTC()
-		execCmd := exec.CommandContext(ctx, cmd.Command, cmd.Args...)
-		execCmd.Dir = cmd.WorkingDirectory
-		output, err := execCmd.CombinedOutput()
+		output, err := runVerificationCommand(ctx, policy, cmd)
 		exitStatus := 0
 		if err != nil {
 			overallStatus = "fail"
@@ -173,7 +173,7 @@ func (c *verificationExecuteCapability) Execute(ctx context.Context, env eucloty
 			"run_id":                 env.RunID,
 			"timestamp":              start.Format(time.RFC3339),
 			"provenance":             "executed",
-			"details":                strings.TrimSpace(string(output)),
+			"details":                verificationCommandDetails(output, err),
 		})
 	}
 	payload := map[string]any{
@@ -204,6 +204,42 @@ func (c *verificationExecuteCapability) Execute(ctx context.Context, env eucloty
 	}
 	mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{artifact})
 	return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "verification executed", Artifacts: []euclotypes.Artifact{artifact}}
+}
+
+func verificationCommandPolicy(capEnv, execEnv agentenv.AgentEnvironment) fsandbox.CommandPolicy {
+	if capEnv.CommandPolicy != nil {
+		return capEnv.CommandPolicy
+	}
+	return execEnv.CommandPolicy
+}
+
+func runVerificationCommand(ctx context.Context, policy fsandbox.CommandPolicy, cmd verificationCommandSpec) ([]byte, error) {
+	if policy != nil {
+		if err := policy.AllowCommand(ctx, fsandbox.CommandRequest{
+			Args: append([]string{cmd.Command}, cmd.Args...),
+		}); err != nil {
+			return nil, &fsandbox.ExecutionDeniedError{
+				Command: cmd.Command,
+				Reason:  err.Error(),
+				Policy:  "verification policy",
+				Cause:   err,
+			}
+		}
+	}
+	execCmd := exec.CommandContext(ctx, cmd.Command, cmd.Args...)
+	execCmd.Dir = cmd.WorkingDirectory
+	return execCmd.CombinedOutput()
+}
+
+func verificationCommandDetails(output []byte, err error) string {
+	detail := strings.TrimSpace(string(output))
+	if detail != "" {
+		return detail
+	}
+	if err != nil {
+		return strings.TrimSpace(err.Error())
+	}
+	return ""
 }
 
 type verificationPlan struct {

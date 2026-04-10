@@ -16,6 +16,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/platform/llm"
 )
 
@@ -117,9 +118,9 @@ func ProbeEnvironment(ctx context.Context, cfg Config, backend llm.ManagedBacken
 // detectSandbox inspects runsc/docker/containerd availability and versions.
 func detectSandbox(ctx context.Context, cfg Config) SandboxReport {
 	report := SandboxReport{
-		Runsc:      inspectRunsc(ctx, cfg.Sandbox.RunscPath),
-		Docker:     inspectDocker(ctx),
-		Containerd: inspectContainerd(ctx),
+		Runsc:      inspectRunsc(ctx, cfg.Sandbox.RunscPath, cfg.CommandPolicy),
+		Docker:     inspectDocker(ctx, cfg.CommandPolicy),
+		Containerd: inspectContainerd(ctx, cfg.CommandPolicy),
 	}
 	if report.Runsc.Error != "" {
 		report.Errors = append(report.Errors, report.Runsc.Error)
@@ -132,7 +133,7 @@ func detectSandbox(ctx context.Context, cfg Config) SandboxReport {
 	}
 	report.Verified = report.Runsc.Error == "" && (report.Docker.SupportsRunsc || report.Containerd.SupportsRunsc)
 	if !report.Verified {
-		report.Errors = append(report.Errors, "gVisor runtime not fully verified")
+		report.Errors = append(report.Errors, "sandbox runtime not fully verified")
 	}
 	return report
 }
@@ -221,9 +222,16 @@ func detectInferenceBackend(ctx context.Context, cfg Config, backend llm.Managed
 
 // runCommand executes a short-lived command and returns stdout or a formatted
 // error that includes stderr output.
-func runCommand(ctx context.Context, name string, args ...string) (string, error) {
+func runCommand(ctx context.Context, policy sandbox.CommandPolicy, name string, args ...string) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	if policy != nil {
+		if err := policy.AllowCommand(cctx, sandbox.CommandRequest{
+			Args: append([]string{name}, args...),
+		}); err != nil {
+			return "", err
+		}
+	}
 	cmd := exec.CommandContext(cctx, name, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -239,7 +247,7 @@ func runCommand(ctx context.Context, name string, args ...string) (string, error
 }
 
 // inspectRunsc checks for the runsc binary, version, and runsc support flag.
-func inspectRunsc(ctx context.Context, binary string) SandboxBinary {
+func inspectRunsc(ctx context.Context, binary string, policy sandbox.CommandPolicy) SandboxBinary {
 	if binary == "" {
 		binary = "runsc"
 	}
@@ -250,7 +258,7 @@ func inspectRunsc(ctx context.Context, binary string) SandboxBinary {
 		return res
 	}
 	res.Path = path
-	output, err := runCommand(ctx, path, "--version")
+	output, err := runCommand(ctx, policy, path, "--version")
 	if err != nil {
 		res.Error = err.Error()
 		return res
@@ -262,7 +270,7 @@ func inspectRunsc(ctx context.Context, binary string) SandboxBinary {
 
 // inspectDocker ensures docker exists, captures its version, and checks if the
 // runsc runtime is registered.
-func inspectDocker(ctx context.Context) SandboxBinary {
+func inspectDocker(ctx context.Context, policy sandbox.CommandPolicy) SandboxBinary {
 	res := SandboxBinary{Name: "docker"}
 	path, err := exec.LookPath("docker")
 	if err != nil {
@@ -270,10 +278,10 @@ func inspectDocker(ctx context.Context) SandboxBinary {
 		return res
 	}
 	res.Path = path
-	if version, err := runCommand(ctx, "docker", "--version"); err == nil {
+	if version, err := runCommand(ctx, policy, "docker", "--version"); err == nil {
 		res.Version = strings.TrimSpace(version)
 	}
-	runtimesJSON, err := runCommand(ctx, "docker", "info", "--format", "{{json .Runtimes}}")
+	runtimesJSON, err := runCommand(ctx, policy, "docker", "info", "--format", "{{json .Runtimes}}")
 	if err != nil {
 		res.Error = err.Error()
 		return res
@@ -286,7 +294,7 @@ func inspectDocker(ctx context.Context) SandboxBinary {
 }
 
 // inspectContainerd confirms containerd is installed and configured with runsc.
-func inspectContainerd(ctx context.Context) SandboxBinary {
+func inspectContainerd(ctx context.Context, policy sandbox.CommandPolicy) SandboxBinary {
 	res := SandboxBinary{Name: "containerd"}
 	path, err := exec.LookPath("containerd")
 	if err != nil {
@@ -294,10 +302,10 @@ func inspectContainerd(ctx context.Context) SandboxBinary {
 		return res
 	}
 	res.Path = path
-	if version, err := runCommand(ctx, "containerd", "--version"); err == nil {
+	if version, err := runCommand(ctx, policy, "containerd", "--version"); err == nil {
 		res.Version = strings.TrimSpace(version)
 	}
-	configDump, err := runCommand(ctx, "containerd", "config", "dump")
+	configDump, err := runCommand(ctx, policy, "containerd", "config", "dump")
 	if err != nil {
 		res.Error = err.Error()
 		return res

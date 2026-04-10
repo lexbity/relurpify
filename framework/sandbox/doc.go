@@ -1,13 +1,16 @@
-// Package sandbox abstracts command execution for agent tool invocations,
-// providing both local and gVisor-sandboxed runners behind a common interface.
+// Package sandbox abstracts command execution for agent tool invocations and
+// owns the backend-neutral policy contract used to validate and apply runtime
+// security intent.
 //
-// Sandbox is the interface all runners implement. LocalCommandRunner executes
-// commands directly on the host; the gVisor-backed runner runs commands inside
-// an isolated container, preventing agent-executed code from affecting the host
-// filesystem or network beyond what the agent manifest permits.
+// LocalCommandRunner executes commands directly on the host; sandbox backends
+// report capabilities, validate policy, and store the effective policy before
+// command execution proceeds.
 //
-// The package also carries filesystem-scope helpers used by sandbox-aware
-// host tools so protected roots are denied before any host I/O occurs.
+// EnforcingCommandRunner composes a CommandPolicy around any runner so the
+// sandbox layer can refuse execution before the backend process is launched.
+//
+// The package also carries filesystem-scope helpers used by sandbox-aware host
+// tools so protected roots are denied before any host I/O occurs.
 //
 // command_runner.go selects the appropriate implementation based on the
 // workspace configuration.

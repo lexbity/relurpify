@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/sandbox"
+	"github.com/lexcodex/relurpify/platform/sandbox/dockersandbox"
 )
 
 // RuntimeConfig wires sandbox and auditing defaults.
@@ -18,6 +21,7 @@ type RuntimeConfig struct {
 	ManifestSnapshot *manifest.AgentManifestSnapshot
 	ConfigPath       string
 	Image            string
+	Backend          string
 	Sandbox          sandbox.SandboxConfig
 	AuditLimit       int
 	BaseFS           string
@@ -66,7 +70,10 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}
 	agentManifest.Spec.Permissions = effectivePerms
 	agentManifest.Spec.Resources = effectiveResources
-	runtime := sandbox.NewGVisorRuntime(cfg.Sandbox)
+	runtime, err := selectSandboxRuntime(cfg, agentManifest)
+	if err != nil {
+		return nil, err
+	}
 	if err := runtime.Verify(ctx); err != nil {
 		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
@@ -82,12 +89,13 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		}
 	}
 	permissions.AttachRuntime(runtime)
-	networkRules := buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
-	policy := sandbox.SandboxPolicy{
-		NetworkRules: networkRules,
-		ReadOnlyRoot: agentManifest.Spec.Security.ReadOnlyRoot,
+	policy := buildSandboxPolicy(cfg.BaseFS, agentManifest)
+	if err := runtime.ValidatePolicy(policy); err != nil {
+		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
-	_ = runtime.EnforcePolicy(policy)
+	if err := runtime.ApplyPolicy(ctx, policy); err != nil {
+		return nil, fmt.Errorf("sandbox policy application failed: %w", err)
+	}
 	return &AgentRegistration{
 		ID:               agentManifest.Metadata.Name,
 		Manifest:         agentManifest,
@@ -99,9 +107,40 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}, nil
 }
 
+func selectSandboxRuntime(cfg RuntimeConfig, agentManifest *manifest.AgentManifest) (sandbox.SandboxRuntime, error) {
+	switch strings.ToLower(strings.TrimSpace(cfg.Backend)) {
+	case "", "gvisor":
+		return sandbox.NewSandboxRuntime(cfg.Sandbox), nil
+	case "docker":
+		image := cfg.Image
+		if image == "" && agentManifest != nil {
+			image = agentManifest.Spec.Image
+		}
+		return dockersandbox.NewBackend(dockersandbox.Config{
+			DockerPath: cfg.Sandbox.ContainerRuntime,
+			Image:      image,
+			Workspace:  cfg.BaseFS,
+		}), nil
+	default:
+		return nil, fmt.Errorf("unsupported sandbox backend %q", cfg.Backend)
+	}
+}
+
+func buildSandboxPolicy(baseFS string, agentManifest *manifest.AgentManifest) sandbox.SandboxPolicy {
+	policy := sandbox.SandboxPolicy{}
+	if agentManifest == nil {
+		return policy
+	}
+	policy.NetworkRules = buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
+	policy.ReadOnlyRoot = agentManifest.Spec.Security.ReadOnlyRoot
+	policy.NoNewPrivileges = agentManifest.Spec.Security.NoNewPrivileges
+	policy.ProtectedPaths = config.New(baseFS).GovernanceRoots()
+	return policy
+}
+
 // buildNetworkPolicy converts network permissions into sandbox-friendly rules
-// so gVisor enforces the same view of allowed hosts/ports as the permission
-// manager.
+// so the selected backend enforces the same view of allowed hosts/ports as the
+// permission manager.
 func buildNetworkPolicy(perms []core.NetworkPermission) []sandbox.NetworkRule {
 	var rules []sandbox.NetworkRule
 	for _, perm := range perms {

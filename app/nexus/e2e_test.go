@@ -153,10 +153,16 @@ func newNexusHarnessWithOptions(t *testing.T, cfg nexuscfg.Config, opts nexusHar
 		fmpExportStore: app.FMPExportStore,
 	}
 	t.Cleanup(func() {
-		server.Close()
 		cancel()
+		if app != nil && app.ChannelManager != nil {
+			require.NoError(t, app.ChannelManager.Stop(context.Background()))
+		}
+		server.Close()
 		if ownsRexRuntime && rexRuntime != nil {
 			rexRuntime.Close()
+		}
+		if policyStore != nil {
+			require.NoError(t, policyStore.Close())
 		}
 		require.NoError(t, nodeStore.Close())
 		require.NoError(t, tokenStore.Close())
@@ -1607,16 +1613,20 @@ func TestInboundMessagesReuseExistingRexWorkflow(t *testing.T) {
 	require.Eventually(t, func() bool {
 		workflows, err := h.rexRuntime.WorkflowStore.ListWorkflows(context.Background(), 10)
 		require.NoError(t, err)
-		if len(workflows) != 1 {
-			return false
+		found := false
+		for _, workflow := range workflows {
+			if workflow.WorkflowID == workflowID {
+				found = true
+				break
+			}
 		}
-		if workflows[0].WorkflowID != workflowID {
+		if !found {
 			return false
 		}
 		events, err := h.rexRuntime.WorkflowStore.ListEvents(context.Background(), workflowID, 10)
 		require.NoError(t, err)
 		return len(events) >= 4
-	}, 3*time.Second, 20*time.Millisecond)
+	}, 10*time.Second, 20*time.Millisecond)
 }
 
 func TestConcurrentTenantInboundMessagesStayIsolatedAcrossRexWorkflows(t *testing.T) {

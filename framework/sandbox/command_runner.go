@@ -28,7 +28,21 @@ type CommandRunner interface {
 	Run(ctx context.Context, req CommandRequest) (stdout string, stderr string, err error)
 }
 
-// SandboxCommandRunner launches commands via the configured gVisor runtime.
+// CommandRunnerProvider lets a sandbox backend supply a specialized runner.
+type CommandRunnerProvider interface {
+	NewCommandRunner(manifest *manifest.AgentManifest, workspace string) (CommandRunner, error)
+}
+
+// NewCommandRunner returns a backend-specific runner when the runtime supports
+// one, otherwise it falls back to the standard sandbox command runner.
+func NewCommandRunner(manifest *manifest.AgentManifest, runtime SandboxRuntime, workspace string) (CommandRunner, error) {
+	if provider, ok := runtime.(CommandRunnerProvider); ok {
+		return provider.NewCommandRunner(manifest, workspace)
+	}
+	return NewSandboxCommandRunner(manifest, runtime, workspace)
+}
+
+// SandboxCommandRunner launches commands via the configured sandbox runtime.
 type SandboxCommandRunner struct {
 	config          SandboxConfig
 	rt              SandboxRuntime

@@ -35,7 +35,9 @@ type Config struct {
 	AgentName                  string
 	ServerAddr                 string
 	RecordingMode              string
+	SandboxBackend             string
 	Sandbox                    fsandbox.SandboxConfig
+	CommandPolicy              fsandbox.CommandPolicy
 	AuditLimit                 int
 	HITLTimeout                time.Duration
 }
@@ -49,17 +51,18 @@ func DefaultConfig() Config {
 	}
 	paths := config.New(cwd)
 	return Config{
-		Workspace:     cwd,
-		ManifestPath:  paths.ManifestFile(),
-		AgentsDir:     paths.AgentsDir(),
-		MemoryPath:    paths.MemoryDir(),
-		LogPath:       paths.LogFile("relurpish.log"),
-		TelemetryPath: paths.TelemetryFile(""),
-		EventsPath:    paths.EventsFile(),
-		ConfigPath:    paths.ConfigFile(),
-		ServerAddr:    ":8080",
-		AuditLimit:    512,
-		HITLTimeout:   45 * time.Second,
+		Workspace:      cwd,
+		ManifestPath:   paths.ManifestFile(),
+		AgentsDir:      paths.AgentsDir(),
+		MemoryPath:     paths.MemoryDir(),
+		LogPath:        paths.LogFile("relurpish.log"),
+		TelemetryPath:  paths.TelemetryFile(""),
+		EventsPath:     paths.EventsFile(),
+		ConfigPath:     paths.ConfigFile(),
+		ServerAddr:     ":8080",
+		AuditLimit:     512,
+		HITLTimeout:    45 * time.Second,
+		SandboxBackend: "",
 		Sandbox: fsandbox.SandboxConfig{
 			RunscPath:        "runsc",
 			ContainerRuntime: "docker",
@@ -182,6 +185,7 @@ func (c Config) AgentLabel() string {
 type WorkspaceConfig struct {
 	Model               string                    `yaml:"model"`
 	Provider            string                    `yaml:"provider,omitempty"`
+	SandboxBackend      string                    `yaml:"sandbox_backend,omitempty"`
 	Agents              []string                  `yaml:"agents"`
 	AllowedCapabilities []core.CapabilitySelector `yaml:"allowed_capabilities,omitempty"`
 	Nexus               NexusConfig               `yaml:"nexus,omitempty"`

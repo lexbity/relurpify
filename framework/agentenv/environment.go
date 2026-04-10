@@ -7,6 +7,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/search"
 )
 
@@ -74,6 +75,7 @@ type AgentEnvironment struct {
 	SearchEngine                  *search.SearchEngine
 	Memory                        memory.MemoryStore
 	Config                        *core.Config
+	CommandPolicy                 sandbox.CommandPolicy
 	VerificationPlanner           VerificationPlanner
 	CompatibilitySurfaceExtractor CompatibilitySurfaceExtractor
 }

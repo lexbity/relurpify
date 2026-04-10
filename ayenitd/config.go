@@ -31,6 +31,7 @@ type WorkspaceConfig struct {
 	SkipASTIndex        bool
 	HITLTimeout         time.Duration
 	AuditLimit          int
+	SandboxBackend      string
 	Sandbox             fsandbox.SandboxConfig
 	DebugLLM            bool
 	DebugAgent          bool

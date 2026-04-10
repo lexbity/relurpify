@@ -78,6 +78,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		ManifestPath:     cfg.ManifestPath,
 		ManifestSnapshot: manifestSnapshot,
 		ConfigPath:       cfg.ConfigPath,
+		Backend:          cfg.SandboxBackend,
 		Sandbox:          cfg.Sandbox,
 		AuditLimit:       cfg.AuditLimit,
 		BaseFS:           cfg.Workspace,
@@ -140,7 +141,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase F: Capability Bundle + Agent Environment
-	runner, err := fsandbox.NewSandboxCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
+	runner, err := fsandbox.NewCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
 	if err != nil {
 		patternDB.Close()
 		workflowStore.Close()
@@ -282,6 +283,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	sm.Register("bkc.git_watcher", &GitWatcherService{
 		WorkspaceRoot: cfg.Workspace,
 		EventBus:      bkcEvents,
+		Policy:        fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, registration.Manifest.Spec.Agent, "git-watcher"),
 	})
 
 	// Register additional services here if needed:
@@ -349,6 +351,7 @@ func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
 	type yamlCfg struct {
 		Provider     string   `json:"provider" yaml:"provider"`
 		Model        string   `json:"model" yaml:"model"`
+		Backend      string   `json:"sandbox_backend" yaml:"sandbox_backend"`
 		Agent        string   `json:"agent" yaml:"agent"`
 		Agents       []string `json:"agents" yaml:"agents"`
 		DefaultModel struct {
@@ -367,6 +370,9 @@ func resolveWorkspaceConfigOverrides(cfg WorkspaceConfig) WorkspaceConfig {
 		}
 		if yc.Model != "" && cfg.InferenceModel == "" {
 			cfg.InferenceModel = yc.Model
+		}
+		if yc.Backend != "" && cfg.SandboxBackend == "" {
+			cfg.SandboxBackend = yc.Backend
 		}
 		if yc.DefaultModel.Name != "" && cfg.InferenceModel == "" {
 			cfg.InferenceModel = yc.DefaultModel.Name

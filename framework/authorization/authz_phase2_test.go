@@ -12,18 +12,26 @@ import (
 
 type stubSandboxRuntimePhase2 struct {
 	policies []sandbox.SandboxPolicy
+	err      error
 }
 
 func (s *stubSandboxRuntimePhase2) Name() string { return "stub" }
 
 func (s *stubSandboxRuntimePhase2) Verify(ctx context.Context) error { return nil }
 
-func (s *stubSandboxRuntimePhase2) RunConfig() sandbox.SandboxConfig { return sandbox.SandboxConfig{} }
+func (s *stubSandboxRuntimePhase2) Capabilities() sandbox.Capabilities { return sandbox.Capabilities{} }
 
-func (s *stubSandboxRuntimePhase2) EnforcePolicy(policy sandbox.SandboxPolicy) error {
+func (s *stubSandboxRuntimePhase2) ValidatePolicy(policy sandbox.SandboxPolicy) error { return nil }
+
+func (s *stubSandboxRuntimePhase2) ApplyPolicy(_ context.Context, policy sandbox.SandboxPolicy) error {
+	if s.err != nil {
+		return s.err
+	}
 	s.policies = append(s.policies, policy)
 	return nil
 }
+
+func (s *stubSandboxRuntimePhase2) RunConfig() sandbox.SandboxConfig { return sandbox.SandboxConfig{} }
 
 func (s *stubSandboxRuntimePhase2) Policy() sandbox.SandboxPolicy {
 	if len(s.policies) == 0 {
@@ -101,7 +109,7 @@ func TestAuthorizationPolicyEngineHelpersAndFallbacks(t *testing.T) {
 		CapabilityName:   "capability-name",
 		CapabilityID:     "capability-id",
 		ExportName:       "artifact",
-		SessionOperation:  core.SessionOperationResume,
+		SessionOperation: core.SessionOperationResume,
 		SessionID:        "session-1",
 		LineageID:        "lineage-1",
 		Actor:            core.EventActor{ID: "actor-1"},
@@ -175,15 +183,52 @@ func TestAuthorizationPolicyEngineHelpersAndFallbacks(t *testing.T) {
 	}
 }
 
+func TestPermissionManagerAttachRuntimePreservesExistingRuntimePolicy(t *testing.T) {
+	base := t.TempDir()
+	pm := newTestPM(t, base, baseAuthzPermissionSet(base))
+	runtime := &stubSandboxRuntimePhase2{}
+	if err := runtime.ApplyPolicy(context.Background(), sandbox.SandboxPolicy{
+		ReadOnlyRoot:   true,
+		ProtectedPaths: []string{filepath.Join(base, "relurpify_cfg", "agent.manifest.yaml")},
+	}); err != nil {
+		t.Fatalf("seed runtime policy: %v", err)
+	}
+	pm.AttachRuntime(runtime)
+	if len(runtime.policies) == 0 {
+		t.Fatal("expected attach runtime to apply merged policy")
+	}
+	current := runtime.Policy()
+	if !current.ReadOnlyRoot {
+		t.Fatal("expected read-only root to be preserved")
+	}
+	if len(current.ProtectedPaths) == 0 {
+		t.Fatal("expected protected paths to be preserved")
+	}
+	snapshot := pm.Policy()
+	if len(snapshot.ProtectedPaths) == 0 {
+		t.Fatal("expected snapshot to preserve protected paths")
+	}
+}
+
+func TestPermissionManagerRuntimePolicyErrorIsRecorded(t *testing.T) {
+	base := t.TempDir()
+	pm := newTestPM(t, base, baseAuthzPermissionSet(base))
+	runtime := &stubSandboxRuntimePhase2{err: context.Canceled}
+	pm.AttachRuntime(runtime)
+	if err := pm.RuntimePolicyError(); err == nil {
+		t.Fatal("expected runtime policy sync error to be recorded")
+	}
+}
+
 func TestAuthorizationCompileGlobalAndAgentSpecPolicies(t *testing.T) {
 	rules, err := CompileAgentSpecPolicyRules(&core.AgentRuntimeSpec{
 		GlobalPolicies: map[string]core.AgentPermissionLevel{
-			string(core.TrustClassBuiltinTrusted): core.AgentPermissionAllow,
+			string(core.TrustClassBuiltinTrusted):        core.AgentPermissionAllow,
 			string(core.CapabilityRuntimeFamilyProvider): core.AgentPermissionDeny,
 		},
 		CapabilityPolicies: []core.CapabilityPolicy{{
 			Selector: core.CapabilitySelector{
-				ID: "capability:one",
+				ID:   "capability:one",
 				Kind: core.CapabilityKindTool,
 			},
 			Execute: core.AgentPermissionAllow,

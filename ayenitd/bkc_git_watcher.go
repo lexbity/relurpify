@@ -8,6 +8,7 @@ import (
 	"time"
 
 	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 // GitWatcherService polls git state and emits revision change events.
@@ -17,6 +18,7 @@ type GitWatcherService struct {
 	PollInterval  time.Duration
 	LastRevision  string
 	RunGit        func(context.Context, string, ...string) (string, error)
+	Policy        sandbox.CommandPolicy
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -109,6 +111,14 @@ func (s *GitWatcherService) affectedPaths(ctx context.Context, revision string) 
 }
 
 func (s *GitWatcherService) runGit(ctx context.Context, args ...string) (string, error) {
+	if s.Policy != nil {
+		if err := s.Policy.AllowCommand(ctx, sandbox.CommandRequest{
+			Workdir: s.WorkspaceRoot,
+			Args:    append([]string{"git"}, args...),
+		}); err != nil {
+			return "", err
+		}
+	}
 	if s.RunGit != nil {
 		return s.RunGit(ctx, s.WorkspaceRoot, args...)
 	}

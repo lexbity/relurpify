@@ -136,6 +136,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	a.Environment = agentenv.AgentEnvironment{
 		Config:                        env.Config,
 		Model:                         env.Model,
+		CommandPolicy:                 env.CommandPolicy,
 		Registry:                      env.Registry,
 		IndexManager:                  env.IndexManager,
 		SearchEngine:                  env.SearchEngine,
