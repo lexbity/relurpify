@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/authorization"
-	frameworktools "github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/sandbox"
+	"github.com/lexcodex/relurpify/platform/shell/execute"
 	"io"
 	"os"
 	"path/filepath"
@@ -73,55 +73,36 @@ func (t *CommandTool) Parameters() []core.ToolParameter {
 }
 
 func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	if t.runner == nil {
-		return nil, fmt.Errorf("command runner missing")
-	}
-	userArgs, err := toStringSlice(args["args"])
+	workdir := mapStringArg(args, "working_directory")
+	stdin := mapStringArg(args, "stdin")
+	executor := execute.NewExecutor(t.basePath, execute.CommandPreset{
+		Name:         t.cfg.Name,
+		Command:      t.cfg.Command,
+		DefaultArgs:  append([]string{}, t.cfg.DefaultArgs...),
+		Description:  t.cfg.Description,
+		Category:     t.cfg.Category,
+		Tags:         append([]string{}, t.cfg.Tags...),
+		Timeout:      t.cfg.Timeout,
+		AllowStdin:   true,
+		WorkdirMode:  "workspace",
+	}, t.runner)
+	envelope, err := executor.Execute(ctx, workdir, args["args"], stdin)
 	if err != nil {
 		return nil, err
-	}
-	finalArgs := append([]string{}, t.cfg.DefaultArgs...)
-	finalArgs = append(finalArgs, userArgs...)
-	workdir := t.basePath
-	if raw, ok := args["working_directory"]; ok && raw != nil {
-		path := fmt.Sprint(raw)
-		if path != "" {
-			workdir = resolvePath(t.basePath, path)
-		}
-	}
-	cleanup := func() {}
-	workdir, finalArgs, cleanup, err = t.prepareExecution(workdir, finalArgs)
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup()
-	finalArgs = t.prepareArgsForWorkingDir(finalArgs, workdir)
-	input := ""
-	if raw, ok := args["stdin"]; ok && raw != nil {
-		input = fmt.Sprint(raw)
-	}
-	stdout, stderr, err := t.runner.Run(ctx, sandbox.CommandRequest{
-		Workdir: workdir,
-		Args:    append([]string{t.cfg.Command}, finalArgs...),
-		Input:   input,
-		Timeout: t.cfg.Timeout,
-	})
-	success := err == nil
-	errMsg := ""
-	if err != nil {
-		errMsg = err.Error()
 	}
 	return &core.ToolResult{
-		Success: success,
+		Success: envelope.Success,
 		Data: map[string]interface{}{
-			"stdout": stdout,
-			"stderr": stderr,
+			"stdout": envelope.Stdout,
+			"stderr": envelope.Stderr,
 		},
-		Error: errMsg,
+		Error: envelope.Error,
 		Metadata: map[string]interface{}{
 			"command":  t.cfg.Command,
-			"args":     finalArgs,
-			"work_dir": workdir,
+			"args":     envelope.Metadata["args"],
+			"work_dir": envelope.Workdir,
+			"preset":   envelope.Preset,
+			"elapsed":  envelope.Elapsed,
 		},
 	}, nil
 }
@@ -140,10 +121,6 @@ func (t *CommandTool) Permissions() core.ToolPermissions {
 
 func (t *CommandTool) Tags() []string { return t.cfg.Tags }
 
-func toStringSlice(value interface{}) ([]string, error) {
-	return frameworktools.NormalizeStringSlice(value)
-}
-
 func resolvePath(base, path string) string {
 	if base == "" {
 		return filepath.Clean(path)
@@ -152,6 +129,20 @@ func resolvePath(base, path string) string {
 		return path
 	}
 	return filepath.Join(base, path)
+}
+
+func mapStringArg(args map[string]interface{}, key string) string {
+	if args == nil {
+		return ""
+	}
+	raw, ok := args[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	if s, ok := raw.(string); ok {
+		return s
+	}
+	return fmt.Sprint(raw)
 }
 
 func (t *CommandTool) prepareArgsForWorkingDir(args []string, workdir string) []string {

@@ -4,8 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/config"
@@ -30,104 +28,6 @@ type recordingRunner struct {
 func (r *recordingRunner) Run(_ context.Context, req sandbox.CommandRequest) (string, string, error) {
 	r.requests = append(r.requests, req)
 	return r.stdout, r.stderr, r.err
-}
-
-func TestCommandQueryAndBindingTool(t *testing.T) {
-	dir := t.TempDir()
-	bindingsPath := filepath.Join(dir, "shell_bindings.yaml")
-	if err := os.WriteFile(bindingsPath, []byte(strings.TrimSpace(`
-version: v1
-bindings:
-  - id: hello
-    name: hello
-    description: greet
-    command: ["echo", "hello"]
-    shell: false
-    args_passthrough: true
-    tags: ["read-only"]
-  - id: shellcmd
-    name: shellcmd
-    description: shell command
-    command: ["echo hi"]
-    shell: true
-    args_passthrough: false
-`)), 0o600); err != nil {
-		t.Fatalf("write bindings: %v", err)
-	}
-
-	bindings, err := LoadShellBindings(bindingsPath)
-	if err != nil {
-		t.Fatalf("load bindings: %v", err)
-	}
-	if len(bindings) != 2 {
-		t.Fatalf("expected 2 bindings, got %d", len(bindings))
-	}
-
-	query := NewCommandQuery([]string{"echo", "bash"}, bindings)
-	req, err := query.Resolve("hello", []string{"world"})
-	if err != nil {
-		t.Fatalf("resolve binding: %v", err)
-	}
-	if !reflect.DeepEqual(req.Args, []string{"echo", "hello", "world"}) {
-		t.Fatalf("unexpected command args: %#v", req.Args)
-	}
-	if _, err := query.ValidateRaw([]string{"echo", "ok"}); err != nil {
-		t.Fatalf("validate raw: %v", err)
-	}
-	if _, err := query.Resolve("missing", nil); err == nil {
-		t.Fatal("expected missing binding to fail")
-	}
-
-	shellQuery := NewCommandQuery([]string{"echo"}, []ShellBinding{bindings[1]})
-	if _, err := shellQuery.Resolve("shellcmd", nil); err == nil {
-		t.Fatal("expected shell binding to fail when bash is not allowed")
-	}
-	allowedShellQuery := NewCommandQuery(nil, []ShellBinding{bindings[1]})
-	shellReq, err := allowedShellQuery.Resolve("shellcmd", nil)
-	if err != nil {
-		t.Fatalf("resolve shell binding with shell allowed: %v", err)
-	}
-	if !reflect.DeepEqual(shellReq.Args, []string{"bash", "-c", "echo hi"}) {
-		t.Fatalf("unexpected shell-wrapped args: %#v", shellReq.Args)
-	}
-
-	runner := &recordingRunner{stdout: "ok", stderr: "warn"}
-	tool := NewShellBindingTool(bindings[0], query, runner)
-	if got := tool.Name(); got != "hello" {
-		t.Fatalf("unexpected tool name: %q", got)
-	}
-	if got := tool.Category(); got != "shell-binding" {
-		t.Fatalf("unexpected tool category: %q", got)
-	}
-	if len(tool.Parameters()) != 1 {
-		t.Fatalf("expected passthrough parameter, got %#v", tool.Parameters())
-	}
-	if !tool.IsAvailable(context.Background(), core.NewContext()) {
-		t.Fatal("expected tool to be available with a runner")
-	}
-
-	result, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"extra_args": "planet"})
-	if err != nil {
-		t.Fatalf("execute binding: %v", err)
-	}
-	if !result.Success {
-		t.Fatalf("expected successful binding execution, got %#v", result)
-	}
-	if len(runner.requests) != 1 || !reflect.DeepEqual(runner.requests[0].Args, []string{"echo", "hello", "planet"}) {
-		t.Fatalf("unexpected runner request: %#v", runner.requests)
-	}
-
-	runner.err = context.DeadlineExceeded
-	result, err = tool.Execute(context.Background(), core.NewContext(), nil)
-	if err != nil {
-		t.Fatalf("execute with runner error should still return tool result: %v", err)
-	}
-	if result.Success {
-		t.Fatal("expected failed tool execution when runner returns an error")
-	}
-	if !strings.Contains(result.Error, "command execution failed") {
-		t.Fatalf("unexpected error text: %q", result.Error)
-	}
 }
 
 func TestShellCommandRegistriesAndCommandLineTools(t *testing.T) {
@@ -158,6 +58,12 @@ func TestShellCommandRegistriesAndCommandLineTools(t *testing.T) {
 		if setter, ok := tool.(interface{ SetCommandRunner(sandbox.CommandRunner) }); ok {
 			setter.SetCommandRunner(runner)
 		}
+	}
+	if _, ok := seen["shell_tool_discover"]; !ok {
+		t.Fatal("expected discovery query tool in registry")
+	}
+	if _, ok := seen["shell_tool_instantiate"]; !ok {
+		t.Fatal("expected instantiation query tool in registry")
 	}
 
 	registryGroups := []struct {

@@ -41,6 +41,78 @@ func TestGitToolMetadataAndHelpers(t *testing.T) {
 	require.Equal(t, 3, toInt("3abc"))
 }
 
+func TestGitToolInventorySurface(t *testing.T) {
+	cases := []struct {
+		name     string
+		command  string
+		wantName string
+		wantDesc string
+		wantTags []string
+		wantArgs []core.ToolParameter
+	}{
+		{
+			name:     "diff",
+			command:  "diff",
+			wantName: "git_diff",
+			wantDesc: "Shows changes in the working tree.",
+			wantTags: []string{core.TagReadOnly},
+			wantArgs: []core.ToolParameter{},
+		},
+		{
+			name:     "history",
+			command:  "history",
+			wantName: "git_history",
+			wantDesc: "Retrieves git history for a file.",
+			wantTags: []string{core.TagReadOnly},
+			wantArgs: []core.ToolParameter{
+				{Name: "file", Type: "string", Required: true},
+				{Name: "limit", Type: "int", Required: false, Default: 5},
+			},
+		},
+		{
+			name:     "branch",
+			command:  "branch",
+			wantName: "git_branch",
+			wantDesc: "Creates a new branch.",
+			wantTags: []string{core.TagExecute, core.TagDestructive},
+			wantArgs: []core.ToolParameter{{Name: "name", Type: "string", Required: true}},
+		},
+		{
+			name:     "commit",
+			command:  "commit",
+			wantName: "git_commit",
+			wantDesc: "Creates a commit (without pushing).",
+			wantTags: []string{core.TagExecute, core.TagDestructive},
+			wantArgs: []core.ToolParameter{
+				{Name: "message", Type: "string", Required: true},
+				{Name: "files", Type: "array", Required: false},
+			},
+		},
+		{
+			name:     "blame",
+			command:  "blame",
+			wantName: "git_blame",
+			wantDesc: "Shows blame information.",
+			wantTags: []string{core.TagReadOnly},
+			wantArgs: []core.ToolParameter{
+				{Name: "file", Type: "string", Required: true},
+				{Name: "start", Type: "int", Required: false, Default: 1},
+				{Name: "end", Type: "int", Required: false, Default: 1},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tool := &GitCommandTool{Command: tc.command}
+			require.Equal(t, tc.wantName, tool.Name())
+			require.Equal(t, tc.wantDesc, tool.Description())
+			require.Equal(t, tc.wantTags, tool.Tags())
+			require.Equal(t, tc.wantArgs, tool.Parameters())
+		})
+	}
+}
+
 func TestGitToolExecuteCoversCommonCommands(t *testing.T) {
 	dir := t.TempDir()
 	runner := &recordingRunner{}
