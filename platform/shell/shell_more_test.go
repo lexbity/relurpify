@@ -1,7 +1,6 @@
 package shell
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,18 +16,6 @@ import (
 	"github.com/lexcodex/relurpify/platform/shell/system"
 	"github.com/lexcodex/relurpify/platform/shell/text"
 )
-
-type recordingRunner struct {
-	requests []sandbox.CommandRequest
-	stdout   string
-	stderr   string
-	err      error
-}
-
-func (r *recordingRunner) Run(_ context.Context, req sandbox.CommandRequest) (string, string, error) {
-	r.requests = append(r.requests, req)
-	return r.stdout, r.stderr, r.err
-}
 
 func TestShellCommandRegistriesAndCommandLineTools(t *testing.T) {
 	dir := t.TempDir()

@@ -7,21 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
 )
-
-type recordingRunner struct {
-	requests []sandbox.CommandRequest
-	stdout   string
-	stderr   string
-	err      error
-}
-
-func (r *recordingRunner) Run(_ context.Context, req sandbox.CommandRequest) (string, string, error) {
-	r.requests = append(r.requests, req)
-	return r.stdout, r.stderr, r.err
-}
 
 func TestExecutorPreservesStdoutStderrAndMetadata(t *testing.T) {
 	runner := &recordingRunner{stdout: "out", stderr: "err"}
