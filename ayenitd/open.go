@@ -26,6 +26,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	newLLMBackendFn                   = llm.New
+	applyProfileFn                    = llm.ApplyProfile
+	probeWorkspaceFn                  = ProbeWorkspace
+	setupTelemetryFn                  = setupTelemetry
+	openRuntimeStoresFn               = openRuntimeStores
+	loadAgentManifestSnapshotFn       = manifest.LoadAgentManifestSnapshot
+	registerAgentFn                   = fauthorization.RegisterAgent
+	newCommandRunnerFn                = fsandbox.NewCommandRunner
+	newHybridMemoryFn                 = memory.NewHybridMemory
+	newProfileRegistryFn              = llm.NewProfileRegistry
+	newEmbedderFn                     = retrieval.NewEmbedder
+	newInstrumentedModelFn            = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) core.LanguageModel {
+		return llm.NewInstrumentedModel(inner, telemetry, debug)
+	}
+	bootstrapAgentRuntimeFn           = BootstrapAgentRuntime
+	registerBrowserWorkspaceServiceFn = registerBrowserWorkspaceService
+	newServiceSchedulerFn             = NewServiceScheduler
+)
+
 // Open initializes a complete workspace session: platform checks, store
 // opening, service graph construction, agent registration, and background
 // indexing. The returned *Workspace is ready for agent construction.
@@ -41,12 +61,12 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		return nil, fmt.Errorf("invalid workspace config: %w", err)
 	}
 
-	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
+	backend, err := newLLMBackendFn(llm.ProviderConfigFromRuntimeConfig(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("build inference backend: %w", err)
 	}
 	// Phase B: Platform Runtime Checks
-	results := ProbeWorkspace(cfg, backend)
+	results := probeWorkspaceFn(cfg, backend)
 	for _, r := range results {
 		if r.Required && !r.OK {
 			return nil, fmt.Errorf("platform check failed: %s", r.Message)
@@ -54,27 +74,27 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase C: Log and Telemetry Setup
-	logFile, logger, tel, err := setupTelemetry(cfg)
+	logFile, logger, tel, err := setupTelemetryFn(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// Phase D: Store Initialization
-	workflowStore, planStore, patternStore, commentStore, knowledgeStore, patternDB, err := openRuntimeStores(cfg.Workspace)
+	workflowStore, planStore, patternStore, commentStore, knowledgeStore, patternDB, err := openRuntimeStoresFn(cfg.Workspace)
 	if err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("open runtime stores: %w", err)
 	}
 
 	// Phase E: Agent Registration + Authorization
-	manifestSnapshot, err := manifest.LoadAgentManifestSnapshot(cfg.ManifestPath)
+	manifestSnapshot, err := loadAgentManifestSnapshotFn(cfg.ManifestPath)
 	if err != nil {
 		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("load manifest snapshot: %w", err)
 	}
-	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
+	registration, err := registerAgentFn(ctx, fauthorization.RuntimeConfig{
 		ManifestPath:     cfg.ManifestPath,
 		ManifestSnapshot: manifestSnapshot,
 		ConfigPath:       cfg.ConfigPath,
@@ -141,14 +161,14 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase F: Capability Bundle + Agent Environment
-	runner, err := fsandbox.NewCommandRunner(registration.Manifest, registration.Runtime, cfg.Workspace)
+	runner, err := newCommandRunnerFn(registration.Manifest, registration.Runtime, cfg.Workspace)
 	if err != nil {
 		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, err
 	}
-	memStore, err := memory.NewHybridMemory(cfg.MemoryPath)
+	memStore, err := newHybridMemoryFn(cfg.MemoryPath)
 	if err != nil {
 		patternDB.Close()
 		workflowStore.Close()
@@ -165,7 +185,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		}
 	}
 
-	profileRegistry, err := llm.NewProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir())
+	profileRegistry, err := newProfileRegistryFn(config.New(cfg.Workspace).ModelProfilesDir())
 	if err != nil {
 		patternDB.Close()
 		workflowStore.Close()
@@ -173,7 +193,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
 	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, inferenceModel)
-	_ = llm.ApplyProfile(backend, profileResolution.Profile)
+	_ = applyProfileFn(backend, profileResolution.Profile)
 
 	logLLM := cfg.DebugLLM
 	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
@@ -182,8 +202,8 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		}
 	}
 	backend.SetDebugLogging(logLLM)
-	model := llm.NewInstrumentedModel(backend.Model(), tel, logLLM)
-	_ = llm.ApplyProfile(model, profileResolution.Profile)
+	model := newInstrumentedModelFn(backend.Model(), tel, logLLM)
+	_ = applyProfileFn(model, profileResolution.Profile)
 	guidanceBroker := guidance.NewGuidanceBroker(0)
 
 	// Wire permission event logger if event telemetry is available.
@@ -198,9 +218,9 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase G: Create ServiceManager and Bootstrap
-	scheduler := NewServiceScheduler()
+	scheduler := newServiceSchedulerFn()
 
-	boot, err := BootstrapAgentRuntime(cfg.Workspace, AgentBootstrapOptions{
+	boot, err := bootstrapAgentRuntimeFn(cfg.Workspace, AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             registration.ID,
 		AgentName:           cfg.AgentName,
@@ -241,7 +261,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase H: Embedder Initialization
-	embedder, err := retrieval.NewEmbedder(backend, embedderCfgFromConfig(cfg, inferenceModel))
+	embedder, err := newEmbedderFn(backend, embedderCfgFromConfig(cfg, inferenceModel))
 	if err != nil {
 		patternDB.Close()
 		workflowStore.Close()
@@ -319,7 +339,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		ServiceManager:       sm,
 	}
 
-	if err := registerBrowserWorkspaceService(ctx, cfg, registration, env.Registry, sm, tel); err != nil {
+	if err := registerBrowserWorkspaceServiceFn(ctx, cfg, registration, env.Registry, sm, tel); err != nil {
 		_ = ws.Close()
 		return nil, err
 	}

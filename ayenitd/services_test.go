@@ -60,6 +60,19 @@ func TestServiceManager_Deregister(t *testing.T) {
 	sm.Deregister("test")
 }
 
+func TestServiceManager_DeregisterStopError(t *testing.T) {
+	sm := NewServiceManager()
+	svc := &mockService{stopErr: context.Canceled}
+	sm.Register("test", svc)
+	sm.Deregister("test")
+	if svc.stopCount.Load() != 1 {
+		t.Fatalf("stopCount = %d, want 1", svc.stopCount.Load())
+	}
+	if sm.Has("test") {
+		t.Fatal("service still registered after deregister")
+	}
+}
+
 func TestServiceManager_StartAll(t *testing.T) {
 	sm := NewServiceManager()
 	svc1 := &mockService{startCh: make(chan struct{})}
@@ -83,6 +96,21 @@ func TestServiceManager_StartAll(t *testing.T) {
 	}
 	if svc2.startCount.Load() != 1 {
 		t.Errorf("svc2 startCount = %d, want 1", svc2.startCount.Load())
+	}
+}
+
+func TestServiceManager_StartAllEmpty(t *testing.T) {
+	sm := NewServiceManager()
+	if err := sm.StartAll(context.Background()); err != nil {
+		t.Fatalf("StartAll(empty) returned %v", err)
+	}
+}
+
+func TestServiceManager_StartAllWithError(t *testing.T) {
+	sm := NewServiceManager()
+	sm.Register("svc", &mockService{startErr: context.Canceled})
+	if err := sm.StartAll(context.Background()); err != nil {
+		t.Fatalf("StartAll returned unexpected error: %v", err)
 	}
 }
 
@@ -112,6 +140,15 @@ func TestServiceManager_StopAll(t *testing.T) {
 	}
 }
 
+func TestServiceManager_StopAllWithErrors(t *testing.T) {
+	sm := NewServiceManager()
+	sm.Register("svc1", &mockService{stopErr: context.Canceled})
+	sm.Register("svc2", &mockService{stopErr: context.DeadlineExceeded})
+	if err := sm.StopAll(); err == nil {
+		t.Fatal("StopAll should return error when services fail to stop")
+	}
+}
+
 func TestServiceManager_Clear(t *testing.T) {
 	sm := NewServiceManager()
 	svc := &mockService{}
@@ -127,6 +164,17 @@ func TestServiceManager_Clear(t *testing.T) {
 	}
 	if sm.Has("svc") {
 		t.Error("Registry not cleared after Clear")
+	}
+}
+
+func TestServiceManager_ClearWithErrors(t *testing.T) {
+	sm := NewServiceManager()
+	sm.Register("svc", &mockService{stopErr: context.Canceled})
+	if err := sm.Clear(); err == nil {
+		t.Fatal("Clear should return stop error")
+	}
+	if sm.Count() != 0 {
+		t.Fatalf("Count = %d, want 0 after Clear", sm.Count())
 	}
 }
 

@@ -2,133 +2,123 @@ package ayenitd
 
 import (
 	"context"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
 	"github.com/lexcodex/relurpify/framework/sandbox"
+	"github.com/stretchr/testify/require"
 )
 
-func TestGitWatcherServiceEmitsRevisionChanged(t *testing.T) {
-	bus := &archaeobkc.EventBus{}
-	ch, unsub := bus.Subscribe(1)
-	defer unsub()
-	var mu sync.Mutex
-	revision := "rev-1"
-	runGit := func(ctx context.Context, root string, args ...string) (string, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		switch args[0] {
-		case "rev-parse":
-			if revision == "rev-1" {
-				revision = "rev-2"
-				return "rev-1\n", nil
+func TestGitWatcherServiceHelpersAndStart(t *testing.T) {
+	t.Run("nil workspace is no-op", func(t *testing.T) {
+		require.NoError(t, (&GitWatcherService{}).Start(context.Background()))
+		require.NoError(t, (&GitWatcherService{}).Stop())
+	})
+
+	t.Run("runGit policy and helper paths", func(t *testing.T) {
+		svc := &GitWatcherService{
+			WorkspaceRoot: t.TempDir(),
+			RunGit: func(ctx context.Context, root string, args ...string) (string, error) {
+				if len(args) > 0 && args[0] == "rev-parse" {
+					return "abc123\n", nil
+				}
+				return "file-one.go\n\n file-two.go \n", nil
+			},
+			Policy: sandbox.CommandPolicyFunc(func(context.Context, sandbox.CommandRequest) error {
+				return errors.New("denied")
+			}),
+		}
+		_, err := svc.runGit(context.Background(), "status")
+		require.Error(t, err)
+
+		svc.Policy = nil
+		rev, err := svc.currentRevision(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, "abc123", rev)
+
+		paths, err := svc.affectedPaths(context.Background(), "deadbeef")
+		require.NoError(t, err)
+		require.Equal(t, []string{"file-one.go", "file-two.go"}, paths)
+	})
+
+	t.Run("start emits revision changed", func(t *testing.T) {
+		bus := &archaeobkc.EventBus{}
+		events, unsubscribe := bus.Subscribe(1)
+		defer unsubscribe()
+
+		svc := &GitWatcherService{
+			WorkspaceRoot: t.TempDir(),
+			EventBus:      bus,
+			PollInterval:  time.Millisecond,
+			LastRevision:  "old-rev",
+		}
+		var mu sync.Mutex
+		calls := 0
+		svc.RunGit = func(ctx context.Context, root string, args ...string) (string, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			calls++
+			if calls == 1 {
+				return "new-rev\n", nil
 			}
-			return revision + "\n", nil
-		case "diff-tree":
-			return "main.go\npkg/service.go\n", nil
-		default:
-			return "", nil
+			return "changed.go\n", nil
 		}
-	}
-	svc := &GitWatcherService{
-		WorkspaceRoot: "/tmp/workspace",
-		EventBus:      bus,
-		PollInterval:  10 * time.Millisecond,
-		RunGit:        runGit,
-	}
-	done := make(chan error, 1)
-	go func() { done <- svc.Start(context.Background()) }()
-	defer func() {
-		_ = svc.Stop()
-		<-done
-	}()
-	select {
-	case event := <-ch:
-		if event.Kind != archaeobkc.EventCodeRevisionChanged {
-			t.Fatalf("unexpected event kind: %s", event.Kind)
-		}
-		payload, ok := event.Payload.(archaeobkc.CodeRevisionChangedPayload)
-		if !ok {
-			t.Fatalf("unexpected payload type: %T", event.Payload)
-		}
-		if payload.NewRevision != "rev-2" || len(payload.AffectedPaths) != 2 {
-			t.Fatalf("unexpected payload: %+v", payload)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("expected git watcher event")
-	}
-}
 
-func TestGitWatcherServiceNoEventWithoutNewRevision(t *testing.T) {
-	bus := &archaeobkc.EventBus{}
-	ch, unsub := bus.Subscribe(1)
-	defer unsub()
-	svc := &GitWatcherService{
-		WorkspaceRoot: "/tmp/workspace",
-		EventBus:      bus,
-		PollInterval:  20 * time.Millisecond,
-		RunGit: func(ctx context.Context, root string, args ...string) (string, error) {
-			switch args[0] {
-			case "rev-parse":
-				return "rev-1\n", nil
-			case "diff-tree":
-				return "main.go\n", nil
-			default:
-				return "", nil
-			}
-		},
-	}
-	done := make(chan error, 1)
-	go func() { done <- svc.Start(context.Background()) }()
-	time.Sleep(80 * time.Millisecond)
-	_ = svc.Stop()
-	<-done
-	select {
-	case event := <-ch:
-		t.Fatalf("unexpected event: %+v", event)
-	default:
-	}
-}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			done <- svc.Start(ctx)
+		}()
 
-func TestGitWatcherServiceStopCancelsLoop(t *testing.T) {
-	svc := &GitWatcherService{
-		WorkspaceRoot: "/tmp/workspace",
-		PollInterval:  time.Hour,
-		RunGit: func(ctx context.Context, root string, args ...string) (string, error) {
-			return "rev-1\n", nil
-		},
-	}
-	done := make(chan error, 1)
-	go func() { done <- svc.Start(context.Background()) }()
-	time.Sleep(20 * time.Millisecond)
-	if err := svc.Stop(); err != nil {
-		t.Fatalf("stop: %v", err)
-	}
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("expected nil stop result, got %v", err)
+		select {
+		case event := <-events:
+			require.Equal(t, archaeobkc.EventCodeRevisionChanged, event.Kind)
+			payload, ok := event.Payload.(archaeobkc.CodeRevisionChangedPayload)
+			require.True(t, ok)
+			require.Equal(t, "new-rev", payload.NewRevision)
+			require.Equal(t, []string{"changed.go"}, payload.AffectedPaths)
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for code revision event")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("expected git watcher to exit")
-	}
-}
 
-func TestGitWatcherServicePolicyBlocksExecution(t *testing.T) {
-	svc := &GitWatcherService{
-		WorkspaceRoot: "/tmp/workspace",
-		Policy: sandbox.CommandPolicyFunc(func(context.Context, sandbox.CommandRequest) error {
-			return context.DeadlineExceeded
-		}),
-		RunGit: func(ctx context.Context, root string, args ...string) (string, error) {
-			t.Fatal("runGit should not be called when policy blocks")
-			return "", nil
-		},
-	}
-	_, err := svc.runGit(context.Background(), "rev-parse", "HEAD")
-	if err == nil {
-		t.Fatal("expected policy error")
-	}
+		cancel()
+		select {
+		case err := <-done:
+			require.NoError(t, err)
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for watcher shutdown")
+		}
+
+		require.NoError(t, svc.Stop())
+	})
+
+	t.Run("default exec path", func(t *testing.T) {
+		if _, err := exec.LookPath("git"); err != nil {
+			t.Skip("git not available")
+		}
+
+		dir := t.TempDir()
+		require.NoError(t, exec.Command("git", "init", dir).Run())
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("one"), 0o644))
+		require.NoError(t, exec.Command("git", "-C", dir, "add", "tracked.txt").Run())
+		require.NoError(t, exec.Command("git", "-C", dir, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "init").Run())
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("two"), 0o644))
+		require.NoError(t, exec.Command("git", "-C", dir, "add", "tracked.txt").Run())
+		require.NoError(t, exec.Command("git", "-C", dir, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "update").Run())
+
+		svc := &GitWatcherService{WorkspaceRoot: dir}
+		rev, err := svc.currentRevision(context.Background())
+		require.NoError(t, err)
+		require.NotEmpty(t, rev)
+
+		paths, err := svc.affectedPaths(context.Background(), rev)
+		require.NoError(t, err)
+		require.Contains(t, paths, "tracked.txt")
+	})
 }

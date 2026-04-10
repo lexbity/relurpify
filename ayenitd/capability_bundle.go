@@ -24,6 +24,34 @@ import (
 	platformshell "github.com/lexcodex/relurpify/platform/shell"
 )
 
+var (
+	newCapabilityRegistryFn         = capability.NewRegistry
+	platformFileOperationsFn        = platformfs.FileOperations
+	newSimilarityToolFn             = func(workspace string) core.Tool { return &platformsearch.SimilarityTool{BasePath: workspace} }
+	newSemanticSearchToolFn         = func(workspace string) core.Tool { return &platformsearch.SemanticSearchTool{BasePath: workspace} }
+	newGitCommandToolFn             = func(workspace, command string, runner fsandbox.CommandRunner) core.Tool {
+		return &platformgit.GitCommandTool{RepoPath: workspace, Command: command, Runner: runner}
+	}
+	platformShellCommandLineToolsFn = platformshell.CommandLineTools
+	newASTSQLiteStoreFn             = ast.NewSQLiteStore
+	newGraphDBFn                    = graphdb.Open
+	newCodeIndexFn                  = memory.NewCodeIndex
+	buildCodeIndexFn                = func(ci *memory.CodeIndex, ctx context.Context) error { return ci.BuildIndex(ctx) }
+	saveCodeIndexFn                 = func(ci *memory.CodeIndex) error { return ci.Save() }
+	startIndexingFn                 = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
+	newSearchEngineFn               = search.NewSearchEngine
+	attachASTSymbolProviderFn       = platformast.AttachASTSymbolProvider
+	cleanupCapabilityBundleFn       = func(store *ast.SQLiteStore, manager *ast.IndexManager) {
+		if manager != nil {
+			_ = manager.Close()
+			return
+		}
+		if store != nil {
+			_ = store.Close()
+		}
+	}
+)
+
 // CapabilityBundle groups the runtime-scoped capability registry and the
 // shared indexing/search services built alongside it.
 type CapabilityBundle struct {
@@ -45,7 +73,7 @@ type CapabilityRegistryOptions struct {
 }
 
 // BuildBuiltinCapabilityBundle is extracted from runtime.BuildBuiltinCapabilityBundle.
-func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (*CapabilityBundle, error) {
+func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunner, opts ...CapabilityRegistryOptions) (bundle *CapabilityBundle, err error) {
 	if workspace == "" {
 		workspace = "."
 	}
@@ -60,7 +88,14 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if buildCtx == nil {
 		buildCtx = context.Background()
 	}
-	registry := capability.NewRegistry()
+	registry := newCapabilityRegistryFn()
+	var store *ast.SQLiteStore
+	var manager *ast.IndexManager
+	defer func() {
+		if err != nil {
+			cleanupCapabilityBundleFn(store, manager)
+		}
+	}()
 	if cfg.PermissionManager != nil {
 		registry.UsePermissionManager(cfg.AgentID, cfg.PermissionManager)
 	}
@@ -76,31 +111,31 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 		}
 		return nil
 	}
-	for _, tool := range platformfs.FileOperations(workspace) {
+	for _, tool := range platformFileOperationsFn(workspace) {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
-		&platformsearch.SimilarityTool{BasePath: workspace},
-		&platformsearch.SemanticSearchTool{BasePath: workspace},
+		newSimilarityToolFn(workspace),
+		newSemanticSearchToolFn(workspace),
 	} {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
 	}
 	for _, tool := range []core.Tool{
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "diff", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "history", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "branch", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "commit", Runner: runner},
-		&platformgit.GitCommandTool{RepoPath: workspace, Command: "blame", Runner: runner},
+		newGitCommandToolFn(workspace, "diff", runner),
+		newGitCommandToolFn(workspace, "history", runner),
+		newGitCommandToolFn(workspace, "branch", runner),
+		newGitCommandToolFn(workspace, "commit", runner),
+		newGitCommandToolFn(workspace, "blame", runner),
 	} {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
 	}
-	for _, tool := range platformshell.CommandLineTools(workspace, runner) {
+	for _, tool := range platformShellCommandLineToolsFn(workspace, runner) {
 		if err := register(tool); err != nil {
 			return nil, err
 		}
@@ -110,17 +145,16 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, err
 	}
-	store, err := ast.NewSQLiteStore(paths.ASTIndexDB())
+	store, err = newASTSQLiteStoreFn(paths.ASTIndexDB())
 	if err != nil {
 		return nil, err
 	}
-	manager := ast.NewIndexManager(store, ast.IndexConfig{
+	manager = ast.NewIndexManager(store, ast.IndexConfig{
 		WorkspacePath:   workspace,
 		ParallelWorkers: 4,
 	})
-	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(paths.MemoryDir(), "graphdb")))
+	graphEngine, err := newGraphDBFn(graphdb.DefaultOptions(filepath.Join(paths.MemoryDir(), "graphdb")))
 	if err != nil {
-		_ = store.Close()
 		return nil, err
 	}
 	manager.GraphDB = graphEngine
@@ -133,16 +167,16 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
 		})
 	}
-	platformast.AttachASTSymbolProvider(manager, registry)
+	attachASTSymbolProviderFn(manager, registry)
 	if err := register(platformast.NewASTTool(manager)); err != nil {
 		return nil, err
 	}
-	codeIndex, err := memory.NewCodeIndex(workspace, filepath.Join(paths.MemoryDir(), "code_index.json"))
+	codeIndex, err := newCodeIndexFn(workspace, filepath.Join(paths.MemoryDir(), "code_index.json"))
 	if err != nil {
 		return nil, err
 	}
 	if cfg.SkipASTIndex {
-		searchEngine := search.NewSearchEngine(nil, codeIndex)
+		searchEngine := newSearchEngineFn(nil, codeIndex)
 		if searchEngine == nil {
 			return nil, fmt.Errorf("search engine initialization failed")
 		}
@@ -161,20 +195,20 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
 		})
 	}
-	if err := codeIndex.BuildIndex(buildCtx); err != nil {
+	if err := buildCodeIndexFn(codeIndex, buildCtx); err != nil {
 		if !shouldIgnoreBootstrapIndexError(err) {
 			return nil, err
 		}
 		log.Printf("runtime bootstrap warning: code index build incomplete: %v", err)
 	}
-	if err := codeIndex.Save(); err != nil {
+	if err := saveCodeIndexFn(codeIndex); err != nil {
 		return nil, err
 	}
-	if err := manager.StartIndexing(buildCtx); err != nil {
+	if err := startIndexingFn(manager, buildCtx); err != nil {
 		return nil, err
 	}
 	// TODO: semantic store and embedder (omitted for brevity)
-	searchEngine := search.NewSearchEngine(nil, codeIndex)
+	searchEngine := newSearchEngineFn(nil, codeIndex)
 	if searchEngine == nil {
 		return nil, fmt.Errorf("search engine initialization failed")
 	}

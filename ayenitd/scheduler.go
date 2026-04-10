@@ -13,6 +13,22 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 )
 
+type schedulerTicker interface {
+	C() <-chan time.Time
+	Stop()
+}
+
+type realSchedulerTicker struct {
+	*time.Ticker
+}
+
+func (t realSchedulerTicker) C() <-chan time.Time { return t.Ticker.C }
+func (t realSchedulerTicker) Stop()               { t.Ticker.Stop() }
+
+var newTickerFn = func(d time.Duration) schedulerTicker {
+	return realSchedulerTicker{Ticker: time.NewTicker(d)}
+}
+
 // ScheduledJob represents a time-based job that the scheduler will execute.
 // Exactly one of Interval or CronExpr should be set:
 //   - Interval: fixed duration between executions (e.g. 6*time.Hour). Runs
@@ -293,13 +309,13 @@ func runIntervalJob(ctx context.Context, job ScheduledJob) {
 	if err := job.Action(ctx); err != nil {
 		log.Printf("scheduler: job %s failed: %v", job.ID, err)
 	}
-	ticker := time.NewTicker(job.Interval)
+	ticker := newTickerFn(job.Interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticker.C():
 			if err := job.Action(ctx); err != nil {
 				log.Printf("scheduler: job %s failed: %v", job.ID, err)
 			}
@@ -314,13 +330,13 @@ func runCronJob(ctx context.Context, job ScheduledJob) {
 	if expr == "" {
 		expr = "* * * * *"
 	}
-	ticker := time.NewTicker(time.Minute)
+	ticker := newTickerFn(time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case t := <-ticker.C:
+		case t := <-ticker.C():
 			matches, err := cronMatches(expr, t)
 			if err != nil {
 				log.Printf("scheduler: invalid cron expression for job %s: %v", job.ID, err)

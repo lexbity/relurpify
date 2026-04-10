@@ -2,6 +2,7 @@ package ayenitd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -63,10 +64,13 @@ func (w *Workspace) StealClosers() (logFile, patternDB, eventLog io.Closer) {
 // 1. Stopping all services via ServiceManager (clearing registry)
 // 2. Closing database stores, files, and loggers
 func (w *Workspace) Close() error {
-	// Stop all registered services first, clearing registry
+	var errs []error
+
+	// Stop all registered services first, but keep closing owned resources even
+	// if service shutdown fails.
 	if w.ServiceManager != nil {
 		if err := w.ServiceManager.Clear(); err != nil {
-			return fmt.Errorf("stop services: %w", err)
+			errs = append(errs, fmt.Errorf("stop services: %w", err))
 		}
 	}
 
@@ -75,26 +79,36 @@ func (w *Workspace) Close() error {
 	}
 
 	if w.Backend != nil {
-		_ = w.Backend.Close()
+		if err := w.Backend.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close backend: %w", err))
+		}
 	}
 
 	if c, ok := w.Environment.WorkflowStore.(io.Closer); ok {
-		c.Close()
+		if err := c.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close workflow store: %w", err))
+		}
 	}
 
 	if w.patternDB != nil {
-		w.patternDB.Close()
+		if err := w.patternDB.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close pattern db: %w", err))
+		}
 	}
 
 	if w.eventLog != nil {
-		w.eventLog.Close()
+		if err := w.eventLog.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close event log: %w", err))
+		}
 	}
 
 	if w.logFile != nil {
-		w.logFile.Close()
+		if err := w.logFile.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close log file: %w", err))
+		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // Restart cleanly stops all services and immediately re-starts them. This
@@ -104,6 +118,9 @@ func (w *Workspace) Restart(ctx context.Context) error {
 	log.Printf("workspace: stopping services for restart")
 	if err := w.stopServices(); err != nil {
 		return fmt.Errorf("stop services for restart: %w", err)
+	}
+	if w.ServiceManager == nil {
+		return fmt.Errorf("service manager unavailable")
 	}
 	log.Printf("workspace: restarting services")
 	return w.ServiceManager.StartAll(ctx)

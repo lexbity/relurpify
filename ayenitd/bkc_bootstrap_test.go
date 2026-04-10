@@ -10,6 +10,7 @@ import (
 
 	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
 	"github.com/lexcodex/relurpify/framework/ast"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWorkspaceBootstrapServiceEmitsBootstrapComplete(t *testing.T) {
@@ -131,6 +132,11 @@ func TestWorkspaceBootstrapServiceStopCancelsInProgressScan(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected bootstrap service to stop")
 	}
+}
+
+func TestWorkspaceBootstrapServiceStopNoop(t *testing.T) {
+	require.NoError(t, (&WorkspaceBootstrapService{}).Stop())
+	require.NoError(t, (&WorkspaceBootstrapService{IndexManager: &ast.IndexManager{}}).Stop())
 }
 
 func writeTestFile(t *testing.T, path, contents string) {
