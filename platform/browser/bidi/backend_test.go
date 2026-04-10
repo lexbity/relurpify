@@ -17,6 +17,7 @@ type fakeTransport struct {
 	responses   map[string]json.RawMessage
 	errors      map[string]error
 	subscribers map[string]chan json.RawMessage
+	callFunc    func(method string, params map[string]any) (json.RawMessage, error)
 }
 
 type transportCall struct {
@@ -26,6 +27,9 @@ type transportCall struct {
 
 func (f *fakeTransport) Call(_ context.Context, method string, params map[string]any) (json.RawMessage, error) {
 	f.calls = append(f.calls, transportCall{method: method, params: params})
+	if f.callFunc != nil {
+		return f.callFunc(method, params)
+	}
 	if err := f.errors[method]; err != nil {
 		return nil, err
 	}

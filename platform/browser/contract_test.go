@@ -48,9 +48,9 @@ func (f *fakeBackend) GetAccessibilityTree(context.Context) (string, error) {
 	return f.accessibility, nil
 }
 func (f *fakeBackend) GetHTML(context.Context) (string, error) { return f.html, nil }
-func (f *fakeBackend) ExecuteScript(context.Context, string) (any, error) {
+func (f *fakeBackend) ExecuteScript(_ context.Context, script string) (any, error) {
 	if f.scriptFunc != nil {
-		return f.scriptFunc("")
+		return f.scriptFunc(script)
 	}
 	return f.scriptResult, nil
 }
