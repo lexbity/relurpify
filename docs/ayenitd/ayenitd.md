@@ -40,6 +40,7 @@ ayenitd/
   probe.go               — ProbeWorkspace() + ProbeResult
   capability_bundle.go   — CapabilityBundle + BuildBuiltinCapabilityBundle
   bootstrap_extract.go   — BootstrapAgentRuntime (extracted from app/relurpish)
+  browser_service.go     — browser service wiring helper for Open()
   stores.go              — openRuntimeStores() (SQLite store opening helpers)
   scheduler.go           — ServiceScheduler, ScheduledJob, SaveJobToMemory
   agentenv_interfaces.go — re-exports VerificationPlanner, CompatibilitySurface*
@@ -47,6 +48,7 @@ ayenitd/
   authorization.go       — placeholder (authorization logic in framework/authorization)
   services.go            — placeholder (future service graph)
   workspace_test.go      — integration tests
+  workspace_test_manifest_test.go — shared integration manifest helper
   probe_test.go          — platform probe tests
   scheduler_test.go      — scheduler tests
   environment_test.go    — WithRegistry/WithMemory tests
@@ -219,6 +221,21 @@ openRuntimeStores(workspace):
 7. `BootstrapAgentRuntime(workspace, opts)` — resolves effective contract, builds capability bundle, admits skill capabilities, compiles policy bundle, constructs `WorkspaceEnvironment`.
 
 **Relurpic capability registration is intentionally NOT done in ayenitd.** Each named agent (euclo, rex, etc.) registers its own relurpic capabilities after receiving `WorkspaceEnvironment`. Registering in `ayenitd` would require importing `named/`, creating a cycle.
+
+### Browser service bootstrap
+
+If the agent manifest enables browser support, `Open()` also constructs the
+workspace-owned browser service via [`browser_service.go`](browser_service.go)
+and registers it in `ServiceManager`.
+
+That helper:
+
+- derives browser defaults from the agent spec
+- builds workspace-scoped file-scope policy
+- installs the shared permission manager and command policy
+- starts the service before `Open()` returns
+
+This keeps browser wiring out of the rest of the workspace bootstrap flow.
 
 ### Phase G: Policy Application
 

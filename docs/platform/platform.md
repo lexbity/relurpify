@@ -39,3 +39,18 @@ Use neutral runtime fields in application code:
 - `InferenceNativeToolCalling`
 
 Those values are normalized into the provider config before backend creation.
+
+## Browser Automation
+
+Browser automation is documented in
+[`browser.md`](browser.md). That page covers the transport-agnostic browser
+contract in `platform/browser`, including session behavior, backend selection,
+error normalization, and the boundary between the browser package and the
+workspace-owned browser service in `ayenitd`.
+
+## Shell Tooling
+
+Shell tooling is documented in [`platform-shell.md`](platform-shell.md). That
+page covers the local shell catalog, query tools, execution adapters, family
+inventory, and the boundary between `platform/shell` and the framework's
+sandbox and authorization layers.

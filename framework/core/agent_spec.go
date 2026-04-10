@@ -250,7 +250,9 @@ type AgentContextSpec struct {
 }
 
 // AgentBrowserSpec configures the model-facing browser tool and its action
-// policies without bypassing manifest network/filesystem enforcement.
+// policies without bypassing manifest network/filesystem enforcement. The
+// action policy map only accepts browser actions that are implemented end to
+// end by the browser service.
 type AgentBrowserSpec struct {
 	Enabled         bool                            `yaml:"enabled" json:"enabled"`
 	DefaultBackend  string                          `yaml:"default_backend,omitempty" json:"default_backend,omitempty"`
@@ -876,13 +878,6 @@ var validBrowserActions = map[string]struct{}{
 	"screenshot":             {},
 	"execute_js":             {},
 	"close":                  {},
-	"list_tabs":              {},
-	"switch_tab":             {},
-	"wait_for_download":      {},
-	"download_status":        {},
-	"download":               {},
-	"new_tab":                {},
-	"fill_credentials":       {},
 }
 
 var validBrowserBackends = map[string]struct{}{

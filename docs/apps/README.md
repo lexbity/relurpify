@@ -60,8 +60,8 @@ The runtime registers multiple capability providers before starting the agent:
   capabilities from registered remote nodes.
 - **Background delegation provider** — routes tasks explicitly marked for
   background execution to Nexus-managed agent instances.
-- **Browser provider** — registers browser automation tools when a WebDriver
-  backend is configured.
+- **Browser capability** — exposed by `ayenitd/service/browser` through the
+  shared registry.
 
 ### Starting relurpish
 

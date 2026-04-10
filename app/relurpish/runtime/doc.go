@@ -22,8 +22,8 @@
 //     gateway and exposes capabilities from registered remote nodes.
 //   - Background delegation (background_delegation_provider.go): routes tasks
 //     marked for background execution to Nexus-managed agent instances.
-//   - Browser (browser_provider.go): registers browser automation tools when
-//     a WebDriver backend is configured.
+//   - Browser capabilities are exposed by the workspace service in
+//     ayenitd/service/browser and consumed through the shared registry.
 //
 // # Delegation
 //

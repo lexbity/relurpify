@@ -43,6 +43,7 @@ This directory is organized by codebase boundary and audience.
 | Document | Description |
 |----------|-------------|
 | ayenitd/ayenitd.md | ayenitd — service lifecycle manager, Open() entry point, WorkspaceEnvironment |
+| ayenitd/browser-service.md | Browser workspace service lifecycle, policy, snapshotting, and cleanup |
 
 ## Applications
 

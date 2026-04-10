@@ -12,29 +12,6 @@ import (
 	"github.com/lexcodex/relurpify/ayenitd"
 )
 
-// testManifestYAML is a minimal agent manifest sufficient for Open().
-const testManifestYAML = `apiVersion: relurpify/v1alpha1
-kind: AgentManifest
-metadata:
-  name: test-agent
-  version: 1.0.0
-spec:
-  image: ghcr.io/lexcodex/relurpify/runtime:latest
-  runtime: gvisor
-  permissions:
-    filesystem:
-      - path: /tmp
-        action: fs:read
-  security:
-    no_new_privileges: true
-  agent:
-    implementation: react
-    mode: primary
-    model:
-      provider: ollama
-      name: qwen2.5-coder:14b
-`
-
 // TestOpenWorkspace verifies that ayenitd.Open() successfully initializes
 // a workspace session end-to-end: stores, registration, capability bundle,
 // scheduler, and environment assembly.
@@ -51,18 +28,15 @@ func main() {}
 	}
 
 	// Write the manifest.
-	manifestPath := filepath.Join(workspace, "agent.manifest.yaml")
-	if err := os.WriteFile(manifestPath, []byte(testManifestYAML), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	manifestPath := writeIntegrationManifest(t, workspace)
 
 	cfg := ayenitd.WorkspaceConfig{
-		Workspace:      workspace,
-		ManifestPath:   manifestPath,
+		Workspace:         workspace,
+		ManifestPath:      manifestPath,
 		InferenceEndpoint: "http://localhost:11434",
 		InferenceModel:    "qwen2.5-coder:14b",
-		MemoryPath:     filepath.Join(workspace, "memory"),
-		SkipASTIndex:   true, // don't block on full indexing in tests
+		MemoryPath:        filepath.Join(workspace, "memory"),
+		SkipASTIndex:      true, // don't block on full indexing in tests
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -108,24 +82,24 @@ func main() {}
 	if ws.Telemetry == nil {
 		t.Error("Telemetry is nil")
 	}
+	if ws.GetService("browser") == nil {
+		t.Error("browser service is not registered")
+	}
 }
 
 // TestOpenWorkspace_ClosesCleanly verifies that Close() releases all resources
 // without error.
 func TestOpenWorkspace_ClosesCleanly(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "agent.manifest.yaml")
-	if err := os.WriteFile(manifestPath, []byte(testManifestYAML), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	manifestPath := writeIntegrationManifest(t, workspace)
 
 	cfg := ayenitd.WorkspaceConfig{
-		Workspace:      workspace,
-		ManifestPath:   manifestPath,
+		Workspace:         workspace,
+		ManifestPath:      manifestPath,
 		InferenceEndpoint: "http://localhost:11434",
 		InferenceModel:    "qwen2.5-coder:14b",
-		MemoryPath:     filepath.Join(workspace, "memory"),
-		SkipASTIndex:   true,
+		MemoryPath:        filepath.Join(workspace, "memory"),
+		SkipASTIndex:      true,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -144,17 +118,14 @@ func TestOpenWorkspace_ClosesCleanly(t *testing.T) {
 // when Ollama is unreachable rather than blocking indefinitely.
 func TestOpenWorkspace_ProbeBlocksOnBadEndpoint(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "agent.manifest.yaml")
-	if err := os.WriteFile(manifestPath, []byte(testManifestYAML), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	manifestPath := writeIntegrationManifest(t, workspace)
 
 	cfg := ayenitd.WorkspaceConfig{
-		Workspace:      workspace,
-		ManifestPath:   manifestPath,
+		Workspace:         workspace,
+		ManifestPath:      manifestPath,
 		InferenceEndpoint: "http://127.0.0.1:19999", // deliberately wrong port
 		InferenceModel:    "qwen2.5-coder:14b",
-		MemoryPath:     filepath.Join(workspace, "memory"),
+		MemoryPath:        filepath.Join(workspace, "memory"),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

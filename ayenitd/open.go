@@ -319,6 +319,11 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		ServiceManager:       sm,
 	}
 
+	if err := registerBrowserWorkspaceService(ctx, cfg, registration, env.Registry, sm, tel); err != nil {
+		_ = ws.Close()
+		return nil, err
+	}
+
 	logger.Printf("ayenitd: workspace opened successfully")
 	return ws, nil
 }

@@ -26,6 +26,28 @@ func TestAgentBrowserSpecValidateRejectsUnknownAction(t *testing.T) {
 	}
 }
 
+func TestAgentBrowserSpecValidateRejectsUnsupportedBrowserActions(t *testing.T) {
+	for _, action := range []string{
+		"list_tabs",
+		"switch_tab",
+		"wait_for_download",
+		"download_status",
+		"download",
+		"new_tab",
+		"fill_credentials",
+	} {
+		spec := &AgentBrowserSpec{
+			Actions: map[string]AgentPermissionLevel{
+				action: AgentPermissionAllow,
+			},
+		}
+
+		if err := spec.Validate(); err == nil {
+			t.Fatalf("expected validation error for unsupported action %q", action)
+		}
+	}
+}
+
 func TestAgentBrowserSpecValidateAcceptsKnownValues(t *testing.T) {
 	spec := &AgentBrowserSpec{
 		Enabled:         true,

@@ -131,9 +131,13 @@ document symbols, workspace diagnostics.
 interactive web workflows, structured extraction, localhost app testing, and
 browser-driven research.
 
+Technical package details are documented in
+[`platform/browser.md`](../platform/browser.md).
+
 The browser layer is framework-first rather than transport-first. It exposes a
-Relurpify-owned browser session and tool model over multiple protocol backends
-instead of making CDP or WebDriver semantics the public contract.
+browser session and tool model over multiple protocol backends instead of
+making CDP or WebDriver semantics the public contract. Workspace ownership and
+service lifecycle now live in `ayenitd/service/browser`.
 
 ### Architecture
 
@@ -167,7 +171,7 @@ backend implementations underneath.
 
 ### Session and supervisor model
 
-The Relurpify-owned browser session wrapper is responsible for:
+The browser session wrapper is responsible for:
 
 - permission checks before navigation and other gated actions
 - HITL escalation where policy requires it
@@ -177,7 +181,7 @@ The Relurpify-owned browser session wrapper is responsible for:
 - normalized page snapshots and result packaging
 - mapping backend-specific failures into Relurpify browser errors
 
-A browser supervisor or runtime provider owns:
+A workspace browser service owns:
 
 - backend construction
 - browser process launch
@@ -186,8 +190,8 @@ A browser supervisor or runtime provider owns:
 - reconnect and relaunch behavior
 - cleanup on cancellation and shutdown
 
-This keeps long-lived browser state under runtime ownership rather than leaving
-process lifecycle to ad hoc tool calls.
+This keeps long-lived browser state under workspace ownership rather than
+leaving process lifecycle to ad hoc tool calls or the relurpish runtime.
 
 ### Backend model
 

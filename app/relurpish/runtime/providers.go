@@ -52,6 +52,23 @@ type runtimeProviderRecord struct {
 	desc     core.ProviderDescriptor
 }
 
+// RegisterBuiltinProviders installs builtin runtime-managed providers declared by the agent spec.
+func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
+	for _, providerCfg := range mergeConfiguredProviders(rt.AgentSpec) {
+		provider, err := providerFromConfig(providerCfg)
+		if err != nil {
+			return err
+		}
+		if provider == nil {
+			continue
+		}
+		if err := rt.RegisterProvider(ctx, provider); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // RegisterProvider initializes a provider against the runtime and records it
 // for deterministic shutdown.
 func (r *Runtime) RegisterProvider(ctx context.Context, provider RuntimeProvider) error {
