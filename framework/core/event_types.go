@@ -76,4 +76,5 @@ const (
 	FrameworkEventSystemStarted    = "system.started.v1"
 	FrameworkEventSystemCheckpoint = "system.checkpoint.v1"
 	FrameworkEventConfigChanged    = "config.changed.v1"
+	FrameworkEventManifestReloaded = "manifest.reloaded.v1"
 )

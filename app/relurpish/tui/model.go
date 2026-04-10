@@ -148,16 +148,19 @@ func newRootModel(rt RuntimeAdapter, plugins ...*EucloPlugin) RootModel {
 	}
 
 	sess := &Session{
-		ID:           fmt.Sprintf("session-%d", time.Now().UnixNano()),
-		StartTime:    time.Now(),
-		Workspace:    info.Workspace,
-		Provider:     info.Provider,
-		BackendState: info.BackendState,
-		Model:        info.Model,
-		Agent:        info.Agent,
-		Role:         info.Role,
-		Mode:         info.Mode,
-		Strategy:     info.Strategy,
+		ID:            fmt.Sprintf("session-%d", time.Now().UnixNano()),
+		StartTime:     time.Now(),
+		Workspace:     info.Workspace,
+		Provider:      info.Provider,
+		BackendState:  info.BackendState,
+		Model:         info.Model,
+		Agent:         info.Agent,
+		Role:          info.Role,
+		Mode:          info.Mode,
+		Strategy:      info.Strategy,
+		Profile:       info.Profile,
+		ProfileReason: info.ProfileReason,
+		ProfileSource: info.ProfileSource,
 	}
 
 	ctx := &AgentContext{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
@@ -36,6 +37,30 @@ func TestReadWriteListFileTools(t *testing.T) {
 	files := listRes.Data["files"].([]string)
 	assert.Len(t, files, 1)
 	assert.Equal(t, filepath.Join(dir, "hello.txt"), files[0])
+}
+
+func TestFileToolsHonorSandboxProtectedPaths(t *testing.T) {
+	dir := t.TempDir()
+	protected := filepath.Join(dir, "relurpify_cfg", "agent.manifest.yaml")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
+	assert.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
+
+	scope := sandbox.NewFileScopePolicy(dir, []string{protected})
+
+	readTool := &ReadFileTool{BasePath: dir}
+	readTool.SetSandboxScope(scope)
+	_, err := readTool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"path": protected})
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, sandbox.ErrFileScopeProtectedPath)
+
+	writeTool := &WriteFileTool{BasePath: dir}
+	writeTool.SetSandboxScope(scope)
+	_, err = writeTool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"path":    protected,
+		"content": "mutate",
+	})
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, sandbox.ErrFileScopeProtectedPath)
 }
 
 func TestSearchInFilesTool(t *testing.T) {

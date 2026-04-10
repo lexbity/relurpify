@@ -29,6 +29,7 @@ type AgentSpecOverlay struct {
 	LSPOverlay          *AgentLSPSpecOverlay            `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	SearchOverlay       *AgentSearchSpecOverlay         `yaml:"search,omitempty" json:"search,omitempty"`
 	Metadata            *AgentMetadata                  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	ToolCallingIntent   *ToolCallingIntent              `yaml:"tool_calling_intent,omitempty" json:"tool_calling_intent,omitempty"`
 	NativeToolCalling   *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
 	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
@@ -85,6 +86,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 	}
 	skillConfig := cloneAgentSkillConfig(spec.SkillConfig)
 	metadata := spec.Metadata
+	intent := resolveToolCallingIntent(spec.ToolCallingIntent, spec.NativeToolCalling)
 	toolCalling := spec.NativeToolCalling
 	var logging *AgentLoggingSpec
 	if spec.Logging != nil {
@@ -118,6 +120,7 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		LSPOverlay:          &lspOverlay,
 		SearchOverlay:       &searchOverlay,
 		Metadata:            &metadata,
+		ToolCallingIntent:   &intent,
 		NativeToolCalling:   toolCalling,
 		Logging:             logging,
 	}
@@ -214,8 +217,13 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 	if overlay.Metadata != nil {
 		spec.Metadata = *overlay.Metadata
 	}
+	if overlay.ToolCallingIntent != nil {
+		spec.ToolCallingIntent = *overlay.ToolCallingIntent
+	}
 	if overlay.NativeToolCalling != nil {
-		spec.NativeToolCalling = overlay.NativeToolCalling
+		if overlay.ToolCallingIntent == nil {
+			spec.NativeToolCalling = overlay.NativeToolCalling
+		}
 	}
 	if overlay.Logging != nil {
 		if spec.Logging == nil {
@@ -256,6 +264,7 @@ func cloneAgentSpec(spec *AgentRuntimeSpec) *AgentRuntimeSpec {
 	clone.Coordination = cloneAgentCoordinationSpec(spec.Coordination)
 	clone.Composition = cloneAgentCompositionSpec(spec.Composition)
 	clone.Metadata.Tags = append([]string{}, spec.Metadata.Tags...)
+	clone.ToolCallingIntent = spec.ToolCallingIntent
 	if spec.Logging != nil {
 		llm := spec.Logging.LLM
 		agent := spec.Logging.Agent

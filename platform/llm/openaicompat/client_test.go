@@ -142,6 +142,36 @@ func TestChatWithTools_NativeDisabled(t *testing.T) {
 	require.Equal(t, "ok", resp.Text)
 }
 
+func TestChatWithTools_ProfileDisablesNative(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		require.NotContains(t, payload, "tools")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"role": "assistant", "content": "ok"}, "finish_reason": "stop"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true})
+	client.SetProfile(&ModelProfile{
+		ToolCalling: struct {
+			NativeAPI               bool `yaml:"native_api"`
+			DoubleEncodedArgs       bool `yaml:"double_encoded_args"`
+			MultilineStringLiterals bool `yaml:"multiline_string_literals"`
+			MaxToolsPerCall         int  `yaml:"max_tools_per_call"`
+		}{
+			NativeAPI: false,
+		},
+	})
+	resp, err := client.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "ping"}}, []core.LLMToolSpec{{Name: "echo"}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, "ok", resp.Text)
+	require.False(t, client.UsesNativeToolCalling())
+}
+
 func TestBearerAuth(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "Bearer secret", r.Header.Get("Authorization"))

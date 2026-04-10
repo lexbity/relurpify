@@ -472,6 +472,21 @@ func (p *SessionPane) viewLive() string {
 	if d.ActivePhase != "" {
 		b.WriteString(dimStyle.Render("phase      ") + textStyle.Render(d.ActivePhase) + "\n")
 	}
+	if d.ActiveProfile != "" {
+		b.WriteString(dimStyle.Render("profile    ") + textStyle.Render(d.ActiveProfile) + "\n")
+	}
+	if d.ProfileReason != "" {
+		b.WriteString(dimStyle.Render("reason     ") + textStyle.Render(d.ProfileReason) + "\n")
+	}
+	if d.ManifestFingerprint != "" {
+		b.WriteString(dimStyle.Render("fingerprint") + "  " + textStyle.Render(d.ManifestFingerprint) + "\n")
+	}
+	if len(d.ProtectedPaths) > 0 {
+		b.WriteString(dimStyle.Render("sandbox    ") + textStyle.Render(strings.Join(d.ProtectedPaths, ", ")) + "\n")
+	}
+	if d.ManifestPolicy != "" {
+		b.WriteString(dimStyle.Render("policy     ") + textStyle.Render(d.ManifestPolicy) + "\n")
+	}
 	if d.DoomLoopState != "" && d.DoomLoopState != "idle" {
 		b.WriteString(dimStyle.Render("doom loop  ") + diffRemoveStyle.Render(d.DoomLoopState) + "\n")
 	}
@@ -489,6 +504,9 @@ func (p *SessionPane) viewLive() string {
 	}
 	if d.LiveProviders > 0 {
 		b.WriteString(dimStyle.Render("providers  ") + fmt.Sprintf("%d", d.LiveProviders) + "\n")
+	}
+	if len(d.DeprecationNotices) > 0 {
+		b.WriteString(dimStyle.Render("deprecate  ") + fmt.Sprintf("%d", len(d.DeprecationNotices)) + "\n")
 	}
 
 	panels := []string{
@@ -752,6 +770,9 @@ func (p *SessionPane) viewSessionSettings() string {
 			{"mode", p.session.Mode},
 			{"strategy", p.session.Strategy},
 			{"workspace", p.session.Workspace},
+			{"profile", p.session.Profile},
+			{"profile_reason", p.session.ProfileReason},
+			{"profile_source", p.session.ProfileSource},
 		}
 		for _, r := range rows {
 			if r.v == "" {
@@ -771,6 +792,22 @@ func (p *SessionPane) viewSessionSettings() string {
 			}
 		}
 		b.WriteString(dimStyle.Render(fmt.Sprintf("  budget: %d tokens", p.context.MaxTokens)) + "\n")
+	}
+
+	if p.diagnostics.ManifestFingerprint != "" || len(p.diagnostics.ProtectedPaths) > 0 || p.diagnostics.ManifestPolicy != "" {
+		b.WriteString("\n" + sectionHeaderStyle.Render("Manifest / Permissions") + "\n")
+		if p.diagnostics.ManifestFingerprint != "" {
+			b.WriteString(dimStyle.Render("  fingerprint") + "  " + textStyle.Render(p.diagnostics.ManifestFingerprint) + "\n")
+		}
+		if p.diagnostics.ManifestPolicy != "" {
+			b.WriteString(dimStyle.Render("  policy") + "  " + textStyle.Render(p.diagnostics.ManifestPolicy) + "\n")
+		}
+		if len(p.diagnostics.ProtectedPaths) > 0 {
+			b.WriteString(dimStyle.Render("  sandbox") + "  " + textStyle.Render(strings.Join(p.diagnostics.ProtectedPaths, ", ")) + "\n")
+		}
+		if len(p.diagnostics.DeprecationNotices) > 0 {
+			b.WriteString(dimStyle.Render("  deprecations") + "  " + textStyle.Render(strings.Join(p.diagnostics.DeprecationNotices, "; ")) + "\n")
+		}
 	}
 
 	b.WriteString("\n" + dimStyle.Render("full policy config → config tab"))

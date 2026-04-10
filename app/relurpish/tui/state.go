@@ -23,19 +23,25 @@ type Session struct {
 	Strategy      string
 	TotalTokens   int
 	TotalDuration time.Duration
+	Profile       string
+	ProfileReason string
+	ProfileSource string
 }
 
 // SessionInfo is a compact snapshot returned by runtime adapters.
 type SessionInfo struct {
-	Workspace    string
-	Provider     string
-	BackendState string
-	Model        string
-	Agent        string
-	Role         string
-	Mode         string
-	Strategy     string
-	MaxTokens    int
+	Workspace     string
+	Provider      string
+	BackendState  string
+	Model         string
+	Agent         string
+	Role          string
+	Mode          string
+	Strategy      string
+	MaxTokens     int
+	Profile       string
+	ProfileReason string
+	ProfileSource string
 }
 
 // SessionArtifacts provides file paths for logs/telemetry.
@@ -558,19 +564,25 @@ type LivePlanInfo struct {
 // DiagnosticsInfo is a snapshot of runtime resource and agent state for the
 // session → live subtab.
 type DiagnosticsInfo struct {
-	ContextTokensUsed int
-	ContextTokensMax  int
-	ActiveWorkflows   int
-	PatternEntries    int
-	ActiveProfile     string
-	ActiveMode        string
-	ActivePhase       string
-	DoomLoopState     string
-	CapabilitiesTotal int
-	PendingApprovals  int
-	LiveProviders     int
-	ContextStrategy   string
-	PruningEvents     int
+	ContextTokensUsed   int
+	ContextTokensMax    int
+	ActiveWorkflows     int
+	PatternEntries      int
+	ActiveProfile       string
+	ProfileReason       string
+	ProfileSource       string
+	ManifestFingerprint string
+	ProtectedPaths      []string
+	ManifestPolicy      string
+	ActiveMode          string
+	ActivePhase         string
+	DoomLoopState       string
+	CapabilitiesTotal   int
+	PendingApprovals    int
+	LiveProviders       int
+	ContextStrategy     string
+	PruningEvents       int
+	DeprecationNotices  []string
 }
 
 // MapNodeInfo describes a node in the symbol graph (explore → structure subtab).

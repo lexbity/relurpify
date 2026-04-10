@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 // UsePermissionManager enables default-deny enforcement for all tools.
@@ -41,6 +42,17 @@ func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec
 
 	r.mu.Lock()
 	r.syncAgentSpecAwareEntriesLocked(spec, agentID)
+	r.mu.Unlock()
+}
+
+// UseSandboxScope wires sandbox-enforced filesystem scope into file tools.
+func (r *CapabilityRegistry) UseSandboxScope(scope *sandbox.FileScopePolicy) {
+	if r == nil || scope == nil {
+		return
+	}
+	r.mu.Lock()
+	r.sandboxScope = scope
+	r.syncSandboxScopeAwareEntriesLocked()
 	r.mu.Unlock()
 }
 

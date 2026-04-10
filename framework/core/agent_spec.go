@@ -36,9 +36,20 @@ type AgentRuntimeSpec struct {
 	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	Search              AgentSearchSpec                 `yaml:"search,omitempty" json:"search,omitempty"`
 	Metadata            AgentMetadata                   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	ToolCallingIntent   ToolCallingIntent               `yaml:"tool_calling_intent,omitempty" json:"tool_calling_intent,omitempty"`
 	NativeToolCalling   *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
 	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
+
+// ToolCallingIntent captures the agent's preference for how tool calls should
+// be executed when the backend supports multiple calling modes.
+type ToolCallingIntent string
+
+const (
+	ToolCallingIntentAuto         ToolCallingIntent = "auto"
+	ToolCallingIntentPreferNative ToolCallingIntent = "prefer_native"
+	ToolCallingIntentPreferPrompt ToolCallingIntent = "prefer_prompt"
+)
 
 // AgentLSPSpec configures Language Server Protocol features.
 type AgentLSPSpec struct {
@@ -59,10 +70,26 @@ func (a *AgentRuntimeSpec) NativeToolCallingEnabled() bool {
 	if a == nil {
 		return true
 	}
-	if a.NativeToolCalling != nil {
-		return *a.NativeToolCalling
+	switch resolveToolCallingIntent(a.ToolCallingIntent, a.NativeToolCalling) {
+	case ToolCallingIntentPreferPrompt:
+		return false
+	case ToolCallingIntentPreferNative:
+		return true
+	default:
+		if a.NativeToolCalling != nil {
+			return *a.NativeToolCalling
+		}
+		return true
 	}
-	return true
+}
+
+// ResolveToolCallingIntent returns the effective intent after compatibility
+// fallbacks are applied.
+func (a *AgentRuntimeSpec) ResolveToolCallingIntent() ToolCallingIntent {
+	if a == nil {
+		return ToolCallingIntentAuto
+	}
+	return resolveToolCallingIntent(a.ToolCallingIntent, a.NativeToolCalling)
 }
 
 // AgentLoggingSpec controls debug logging toggles for the agent.
@@ -341,6 +368,11 @@ func (a *AgentRuntimeSpec) Validate() error {
 	if err := a.Model.Validate(); err != nil {
 		return fmt.Errorf("model invalid: %w", err)
 	}
+	switch a.ToolCallingIntent {
+	case "", ToolCallingIntentAuto, ToolCallingIntentPreferNative, ToolCallingIntentPreferPrompt:
+	default:
+		return fmt.Errorf("tool_calling_intent %q invalid", a.ToolCallingIntent)
+	}
 	for name, policy := range a.ToolExecutionPolicy {
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("tool policy contains empty tool name")
@@ -510,6 +542,23 @@ func (a *AgentRuntimeSpec) Validate() error {
 		return err
 	}
 	return nil
+}
+
+func resolveToolCallingIntent(intent ToolCallingIntent, legacy *bool) ToolCallingIntent {
+	switch intent {
+	case ToolCallingIntentAuto, ToolCallingIntentPreferNative, ToolCallingIntentPreferPrompt:
+		return intent
+	case "":
+		if legacy != nil {
+			if *legacy {
+				return ToolCallingIntentPreferNative
+			}
+			return ToolCallingIntentPreferPrompt
+		}
+		return ToolCallingIntentAuto
+	default:
+		return intent
+	}
 }
 
 func ValidateCapabilityPolicy(policy CapabilityPolicy) error {

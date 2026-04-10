@@ -32,6 +32,31 @@ func TestPathsLayout(t *testing.T) {
 	if got := paths.PolicyRulesFile(); got != filepath.Join(root, DirName, "policy_rules.yaml") {
 		t.Fatalf("PolicyRulesFile() = %q", got)
 	}
+	roots := paths.GovernanceRoots(filepath.Join(root, DirName, "agent.manifest.yaml"), filepath.Join(root, DirName, "config.yaml"))
+	if len(roots) != 7 {
+		t.Fatalf("GovernanceRoots() length = %d", len(roots))
+	}
+	if got := roots[0]; got != filepath.Join(root, DirName, "agents") {
+		t.Fatalf("GovernanceRoots()[0] = %q", got)
+	}
+	if got := roots[1]; got != filepath.Join(root, DirName, "config.yaml") {
+		t.Fatalf("GovernanceRoots()[1] = %q", got)
+	}
+	if got := roots[2]; got != filepath.Join(root, DirName, "nexus.yaml") {
+		t.Fatalf("GovernanceRoots()[2] = %q", got)
+	}
+	if got := roots[3]; got != filepath.Join(root, DirName, "policy_rules.yaml") {
+		t.Fatalf("GovernanceRoots()[3] = %q", got)
+	}
+	if got := roots[4]; got != filepath.Join(root, DirName, "model_profiles") {
+		t.Fatalf("GovernanceRoots()[4] = %q", got)
+	}
+	if got := roots[5]; got != filepath.Join(root, DirName, "agent.manifest.yaml") {
+		t.Fatalf("GovernanceRoots()[5] = %q", got)
+	}
+	if got := roots[6]; got != filepath.Join(root, DirName, "config.yaml") {
+		t.Fatalf("GovernanceRoots()[6] = %q", got)
+	}
 	if got := paths.TestRunDir("coding", "run-1"); got != filepath.Join(root, DirName, "test_runs", "coding", "run-1") {
 		t.Fatalf("TestRunDir() = %q", got)
 	}

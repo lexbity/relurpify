@@ -134,6 +134,14 @@ func (b *Backend) SetDebugLogging(enabled bool) {
 	b.client.SetDebugLogging(enabled)
 }
 
+// SetProfile attaches a resolved model profile to the underlying client.
+func (b *Backend) SetProfile(p *openaicompat.ModelProfile) {
+	if b == nil || b.client == nil {
+		return
+	}
+	b.client.SetProfile(p)
+}
+
 func nowUTC() time.Time {
 	return time.Now().UTC()
 }

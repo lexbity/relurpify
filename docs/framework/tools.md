@@ -33,7 +33,7 @@ type Tool interface {
 
 `Parameters()` returns the JSON schema that Ollama uses to understand how to call the tool. The schema is converted to Ollama's tool-calling format at the point of each LLM call.
 
-`Permissions()` declares what the tool needs — the permission manager compares this against the manifest's declared permissions before `Execute` is called.
+`Permissions()` declares what the tool needs. The sandbox file-scope policy participates before `Execute` is called: it rejects protected roots and workspace escapes, and the permission manager applies manifest policy, HITL, and matrix rules.
 
 `Tags()` is still supported as a migration fallback, but explicit capability risk/effect/trust metadata is now preferred for policy and UI surfaces.
 
@@ -47,7 +47,7 @@ type PermissionAware interface {
 }
 ```
 
-The capability registry injects the permission manager at startup via `registry.UsePermissionManager(agentID, manager)`. Inside `Execute`, the tool calls `manager.CheckFileAccess(...)` or the shared command-authorization layer before acting.
+The capability registry injects the permission manager at startup via `registry.UsePermissionManager(agentID, manager)`. The registry also injects the sandbox file scope for filesystem tools via `registry.UseSandboxScope(...)`. Inside `Execute`, file tools check the sandbox scope before any host I/O, then call `manager.CheckFileAccess(...)` for the remaining manifest policy checks.
 
 ### Manifest-Aware Tools
 
@@ -59,7 +59,23 @@ type AgentSpecAware interface {
 }
 ```
 
-The registry injects the spec alongside the permission manager.
+The registry injects the spec alongside the permission manager and sandbox scope.
+
+### Sandbox-Scope-Aware Tools
+
+Tools that touch host files implement `SandboxScopeAware` so the registry can
+hand them the sandbox-enforced filesystem boundary before they perform any host
+I/O:
+
+```go
+type SandboxScopeAware interface {
+    SetSandboxScope(*sandbox.FileScopePolicy)
+}
+```
+
+For the built-in file tools, that scope is checked before `os.ReadFile`,
+`os.WriteFile`, `os.Rename`, or directory traversal begins. Command tools get
+the same scope translated into read-only mounts for protected roots.
 
 ### The Capability Registry Surface
 

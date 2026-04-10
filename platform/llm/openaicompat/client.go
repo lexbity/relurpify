@@ -19,6 +19,7 @@ import (
 type Client struct {
 	cfg        OpenAICompatConfig
 	httpClient *http.Client
+	profile    *ModelProfile
 }
 
 func NewClient(cfg OpenAICompatConfig) *Client {
@@ -55,31 +56,42 @@ func (c *Client) Chat(ctx context.Context, messages []core.Message, options *cor
 
 func (c *Client) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
 	if options != nil && options.StreamCallback != nil {
-		return c.chat(ctx, messages, tools, options, c.cfg.NativeToolCalling, true, options.StreamCallback)
+		return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), true, options.StreamCallback)
 	}
-	return c.chat(ctx, messages, tools, options, c.cfg.NativeToolCalling, false, nil)
+	return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), false, nil)
 }
 
 // ToolRepairStrategy implements core.ProfiledModel.
 func (c *Client) ToolRepairStrategy() string {
-	return "heuristic-only"
+	if c.profile == nil || c.profile.Repair.Strategy == "" {
+		return "heuristic-only"
+	}
+	return c.profile.Repair.Strategy
 }
 
 // MaxToolsPerCall implements core.ProfiledModel.
 func (c *Client) MaxToolsPerCall() int {
-	return 0
+	if c.profile == nil {
+		return 0
+	}
+	return c.profile.ToolCalling.MaxToolsPerCall
 }
 
 // UsesNativeToolCalling implements core.ProfiledModel.
 func (c *Client) UsesNativeToolCalling() bool {
-	return c.cfg.NativeToolCalling
+	return c.nativeToolCallingEnabled()
+}
+
+// SetProfile attaches a resolved model profile to the client.
+func (c *Client) SetProfile(p *ModelProfile) {
+	c.profile = p
 }
 
 func (c *Client) ChatStream(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
 		defer close(out)
-		_, err := c.chat(ctx, messages, tools, options, c.cfg.NativeToolCalling, true, func(token string) {
+		_, err := c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), true, func(token string) {
 			out <- token
 		})
 		_ = err
@@ -119,6 +131,19 @@ func (c *Client) applyOptions(payload map[string]any, options *core.LLMOptions) 
 	if len(options.Stop) > 0 {
 		payload["stop"] = options.Stop
 	}
+}
+
+func (c *Client) nativeToolCallingEnabled() bool {
+	if c == nil {
+		return false
+	}
+	if !c.cfg.NativeToolCalling {
+		return false
+	}
+	if c.profile == nil {
+		return true
+	}
+	return c.profile.ToolCalling.NativeAPI
 }
 
 func (c *Client) doChat(ctx context.Context, payload map[string]any) (*core.LLMResponse, error) {

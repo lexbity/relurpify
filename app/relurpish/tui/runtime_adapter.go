@@ -204,6 +204,11 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info.Provider = cfg.InferenceProvider
 	info.Model = cfg.InferenceModel
 	info.Agent = cfg.AgentLabel()
+	if r.rt.ProfileResolution.Profile != nil {
+		info.Profile = r.rt.ProfileResolution.Profile.MatchPattern()
+	}
+	info.ProfileReason = r.rt.ProfileResolution.Reason
+	info.ProfileSource = r.rt.ProfileResolution.SourcePath
 	if r.rt.Backend != nil {
 		if health, err := r.rt.Backend.Health(context.Background()); err == nil && health != nil {
 			info.BackendState = string(health.State)
@@ -1616,9 +1621,51 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	// Agent mode and profile from session info.
 	info := r.SessionInfo()
 	d.ActiveMode = info.Mode
-	d.ActiveProfile = info.Agent
+	d.ActiveProfile = info.Profile
+	d.ProfileReason = info.ProfileReason
+	d.ProfileSource = info.ProfileSource
+	if r.rt.Registration != nil && r.rt.Registration.ManifestSnapshot != nil {
+		d.ManifestFingerprint = fmt.Sprintf("%x", r.rt.Registration.ManifestSnapshot.Fingerprint)
+	}
+	if r.rt.Config.Workspace != "" {
+		d.ProtectedPaths = config.New(r.rt.Config.Workspace).GovernanceRoots(
+			r.rt.Config.ManifestPath,
+			r.rt.Config.ConfigPath,
+		)
+	}
+	if r.rt.Registration != nil && r.rt.Registration.Manifest != nil {
+		d.ManifestPolicy = manifestPolicySummary(r.rt.Registration.Manifest)
+		d.DeprecationNotices = append([]string(nil), r.rt.Registration.Manifest.Spec.CompatibilityWarnings...)
+	}
 
 	return d
+}
+
+func manifestPolicySummary(m *manifest.AgentManifest) string {
+	if m == nil {
+		return ""
+	}
+	parts := []string{}
+	if m.Spec.Policy != nil {
+		policy := m.Spec.Policy
+		permCount := len(policy.Permissions.FileSystem) + len(policy.Permissions.Executables) + len(policy.Permissions.Network)
+		if permCount > 0 {
+			parts = append(parts, fmt.Sprintf("policy-perms=%d", permCount))
+		}
+		if len(policy.Policies) > 0 {
+			parts = append(parts, fmt.Sprintf("policy-rules=%d", len(policy.Policies)))
+		}
+		if policy.Defaults != nil {
+			if policy.Defaults.Permissions != nil {
+				defaultPerms := policy.Defaults.Permissions
+				parts = append(parts, fmt.Sprintf("defaults=%d/%d/%d", len(defaultPerms.FileSystem), len(defaultPerms.Executables), len(defaultPerms.Network)))
+			}
+		}
+	}
+	if m.Spec.Agent != nil {
+		parts = append(parts, fmt.Sprintf("tool-calling=%s", m.Spec.Agent.ResolveToolCallingIntent()))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	relurpic "github.com/lexcodex/relurpify/agents/relurpic"
+	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
 	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
@@ -736,6 +738,33 @@ func TestReloadEffectiveContractRejectsSkillTopologyChanges(t *testing.T) {
 	err = rt.ReloadEffectiveContract()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "skill capability topology")
+}
+
+func TestEmitManifestReloadedEventPersistsAuditRecord(t *testing.T) {
+	dir := t.TempDir()
+	eventLog, err := nexusdb.NewSQLiteEventLog(filepath.Join(dir, "events.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, eventLog.Close()) })
+
+	snapshot := &manifest.AgentManifestSnapshot{
+		SourcePath: filepath.Join(dir, "agent.manifest.yaml"),
+		Fingerprint: [32]byte{
+			0x01, 0x02, 0x03, 0x04,
+		},
+		Warnings: []string{"spec.agent.native_tool_calling is deprecated; use spec.agent.tool_calling_intent"},
+	}
+
+	emitManifestReloadedEvent(context.Background(), eventLog, "agent-1", "relurpish", snapshot)
+
+	events, err := eventLog.ReadByType(context.Background(), "local", core.FrameworkEventManifestReloaded, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(events[0].Payload, &payload))
+	require.Equal(t, snapshot.SourcePath, payload["manifest_path"])
+	require.NotEmpty(t, payload["fingerprint"])
+	require.NotEmpty(t, payload["warnings"])
 }
 
 func writeAgentDefinitionFixture(t *testing.T, path string, level core.AgentPermissionLevel) {

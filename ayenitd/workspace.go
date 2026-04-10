@@ -19,9 +19,10 @@ import (
 // resources. Close() must be called when the session ends. Restart() may
 // be used to cleanly stop and re-start services without rebuilding stores.
 type Workspace struct {
-	Environment  WorkspaceEnvironment
-	Registration *fauthorization.AgentRegistration
-	Backend      llm.ManagedBackend
+	Environment       WorkspaceEnvironment
+	Registration      *fauthorization.AgentRegistration
+	Backend           llm.ManagedBackend
+	ProfileResolution llm.ProfileResolution
 
 	// Internals held for Close()/Restart()
 	logFile   io.Closer

@@ -216,6 +216,36 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 		fmt.Fprintf(w, " (%s)", report.ManifestError)
 	}
 	fmt.Fprintln(w)
+	if len(report.ManifestWarnings) > 0 {
+		fmt.Fprintln(w, "Manifest warnings:")
+		for _, warning := range report.ManifestWarnings {
+			fmt.Fprintf(w, "  - %s\n", warning)
+		}
+	}
+	if len(report.DeprecationNotices) > 0 {
+		fmt.Fprintln(w, "Deprecation notices:")
+		for _, notice := range report.DeprecationNotices {
+			fmt.Fprintf(w, "  - %s\n", notice)
+		}
+	}
+	if report.ManifestFingerprint != "" {
+		fmt.Fprintf(w, "Manifest fingerprint: %s\n", report.ManifestFingerprint)
+	}
+	if report.ManifestPolicySummary != "" {
+		fmt.Fprintf(w, "Manifest policy: %s\n", report.ManifestPolicySummary)
+	}
+	if len(report.ProtectedPaths) > 0 {
+		fmt.Fprintf(w, "Sandbox roots: %s\n", strings.Join(report.ProtectedPaths, ", "))
+	}
+	if report.Inference.SelectedProfile != "" {
+		fmt.Fprintf(w, "  profile: %s\n", report.Inference.SelectedProfile)
+	}
+	if report.Inference.ProfileReason != "" {
+		fmt.Fprintf(w, "  profile_reason: %s\n", report.Inference.ProfileReason)
+	}
+	if report.Inference.ProfileSource != "" {
+		fmt.Fprintf(w, "  profile_source: %s\n", report.Inference.ProfileSource)
+	}
 	fmt.Fprintln(w, "Inference backend:")
 	fmt.Fprintf(w, "  provider: %s\n", firstNonEmpty(report.Inference.Provider, "unknown"))
 	fmt.Fprintf(w, "  endpoint: %s\n", firstNonEmpty(report.Inference.Endpoint, "-"))

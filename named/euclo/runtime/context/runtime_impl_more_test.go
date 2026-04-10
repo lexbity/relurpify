@@ -61,7 +61,7 @@ func TestRuntimeHelperSelectionAndPreferences(t *testing.T) {
 		PlanBinding:   &eucloruntime.UnitOfWorkPlanBinding{ActiveStepID: "step-1"},
 	})
 	if !reflect.DeepEqual(paths, []string{"/tmp/workspace", "/repo", "step-1"}) {
-		t.Fatalf("unexpected protected paths: %#v", paths)
+		t.Fatalf("unexpected sandbox file-scope governance roots: %#v", paths)
 	}
 
 	set := stringSliceSet([]string{" a ", "", "b", "a"})

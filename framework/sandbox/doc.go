@@ -6,6 +6,9 @@
 // an isolated container, preventing agent-executed code from affecting the host
 // filesystem or network beyond what the agent manifest permits.
 //
+// The package also carries filesystem-scope helpers used by sandbox-aware
+// host tools so protected roots are denied before any host I/O occurs.
+//
 // command_runner.go selects the appropriate implementation based on the
 // workspace configuration.
 package sandbox

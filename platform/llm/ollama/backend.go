@@ -18,18 +18,19 @@ type Backend struct {
 }
 
 type managedModel struct {
-	client            *Client
-	nativeToolCalling bool
+	client *Client
 }
 
 // NewBackend constructs a managed Ollama backend.
 func NewBackend(cfg Config) *Backend {
-	return &Backend{client: NewClient(cfg.Endpoint, cfg.Model), cfg: cfg}
+	client := NewClient(cfg.Endpoint, cfg.Model)
+	client.SetNativeToolCalling(cfg.NativeToolCalling)
+	return &Backend{client: client, cfg: cfg}
 }
 
 // Model returns the underlying language model client.
 func (b *Backend) Model() core.LanguageModel {
-	return managedModel{client: b.client, nativeToolCalling: b.cfg.NativeToolCalling}
+	return managedModel{client: b.client}
 }
 
 // Embedder returns a transport-backed embedder when embedding is enabled.
@@ -141,6 +142,14 @@ func (b *Backend) SetDebugLogging(enabled bool) {
 	b.client.SetDebugLogging(enabled)
 }
 
+// SetProfile attaches a resolved model profile to the underlying client.
+func (b *Backend) SetProfile(p *ModelProfile) {
+	if b == nil || b.client == nil {
+		return
+	}
+	b.client.SetProfile(p)
+}
+
 func (m managedModel) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
 	return m.client.Generate(ctx, prompt, options)
 }
@@ -154,20 +163,17 @@ func (m managedModel) Chat(ctx context.Context, messages []core.Message, options
 }
 
 func (m managedModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
-	if !m.nativeToolCalling {
-		return m.client.Chat(ctx, messages, options)
-	}
 	return m.client.ChatWithTools(ctx, messages, tools, options)
 }
 
 func (m managedModel) ToolRepairStrategy() string {
-	return "heuristic-only"
+	return m.client.ToolRepairStrategy()
 }
 
 func (m managedModel) MaxToolsPerCall() int {
-	return 0
+	return m.client.MaxToolsPerCall()
 }
 
 func (m managedModel) UsesNativeToolCalling() bool {
-	return m.nativeToolCalling
+	return m.client.UsesNativeToolCalling()
 }

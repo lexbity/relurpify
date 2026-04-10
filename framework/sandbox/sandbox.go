@@ -32,8 +32,9 @@ type SandboxConfig struct {
 
 // SandboxPolicy captures runtime adjustments derived from permissions.
 type SandboxPolicy struct {
-	NetworkRules []NetworkRule
-	ReadOnlyRoot bool
+	NetworkRules   []NetworkRule
+	ReadOnlyRoot   bool
+	ProtectedPaths []string
 }
 
 // NetworkRule represents an allowed network scope.

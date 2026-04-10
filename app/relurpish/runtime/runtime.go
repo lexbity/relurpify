@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/graphdb"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
 	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
@@ -87,6 +89,7 @@ type Runtime struct {
 	Logger               *log.Logger
 	Workspace            WorkspaceConfig
 	Backend              llm.ManagedBackend
+	ProfileResolution    llm.ProfileResolution
 	ServiceManager       *ayenitd.ServiceManager
 	NexusNodeProvider    core.NodeProvider
 	NexusClient          *NexusClient
@@ -174,6 +177,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 	registration := ws.Registration
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
+	profileResolution := ws.ProfileResolution
 
 	// Extend telemetry with an event log sink (uses app/nexus/db which ayenitd
 	// cannot import without a cycle).
@@ -209,6 +213,9 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 							}})
 						}
 					})
+				}
+				if registration.ManifestSnapshot != nil {
+					emitManifestReloadedEvent(ctx, eventLog, registration.ID, cfg.AgentLabel(), registration.ManifestSnapshot)
 				}
 			} else if logger != nil {
 				logger.Printf("warning: failed to init event log: %v", err)
@@ -289,6 +296,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		patternDB:            patternDB,
 		Workspace:            workspaceCfg,
 		Backend:              ws.Backend,
+		ProfileResolution:    profileResolution,
 		ServiceManager:       ws.ServiceManager,
 		Registration:         registration,
 		Delegations:          fauthorization.NewDelegationManager(),
@@ -510,7 +518,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contra
 	agentCfg := &core.Config{
 		Name:              cfg.AgentLabel(),
 		Model:             cfg.InferenceModel,
-		InferenceEndpoint:    cfg.InferenceEndpoint,
+		InferenceEndpoint: cfg.InferenceEndpoint,
 		MaxIterations:     8,
 		NativeToolCalling: effectiveContract.AgentSpec.NativeToolCallingEnabled(),
 		AgentSpec:         effectiveContract.AgentSpec,
@@ -597,6 +605,8 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if cfg.AgentSpec != nil {
 		registry.UseAgentSpec(cfg.AgentID, cfg.AgentSpec)
 	}
+	paths := config.New(workspace)
+	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots(paths.ManifestFile(), paths.ConfigFile(), paths.NexusConfigFile(), paths.PolicyRulesFile(), paths.ModelProfilesDir())))
 	register := func(tool core.Tool) error {
 		if err := registry.Register(tool); err != nil {
 			return err
@@ -632,7 +642,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return nil, err
 		}
 	}
-	paths := config.New(workspace)
+	paths = config.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, err
@@ -1100,6 +1110,26 @@ func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
 		return nil
 	}
 	return r.Registration.HITL.PendingRequests()
+}
+
+func emitManifestReloadedEvent(ctx context.Context, eventLog *nexusdb.SQLiteEventLog, agentID, label string, snapshot *manifest.AgentManifestSnapshot) {
+	if eventLog == nil || snapshot == nil {
+		return
+	}
+	payload := map[string]interface{}{
+		"manifest_path": snapshot.SourcePath,
+		"fingerprint":   hex.EncodeToString(snapshot.Fingerprint[:]),
+		"warnings":      append([]string(nil), snapshot.Warnings...),
+	}
+	if data, err := json.Marshal(payload); err == nil {
+		_, _ = eventLog.Append(ctx, "local", []core.FrameworkEvent{{
+			Timestamp: time.Now().UTC(),
+			Type:      core.FrameworkEventManifestReloaded,
+			Payload:   data,
+			Actor:     core.EventActor{Kind: "agent", ID: agentID, Label: label},
+			Partition: "local",
+		}})
+	}
 }
 
 // SubscribeHITL streams HITL lifecycle events (requested/resolved/expired).

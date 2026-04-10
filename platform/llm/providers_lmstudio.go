@@ -112,6 +112,13 @@ func (a lmStudioBackendAdapter) SetDebugLogging(enabled bool) {
 	a.inner.SetDebugLogging(enabled)
 }
 
+func (a lmStudioBackendAdapter) SetProfile(profile *ModelProfile) {
+	if a.inner == nil {
+		return
+	}
+	a.inner.SetProfile(profile.AsOpenAICompatProfile())
+}
+
 func convertResourceSnapshot(src *lmstudiobackend.ResourceSnapshot) *ResourceSnapshot {
 	if src == nil {
 		return nil

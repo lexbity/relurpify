@@ -13,6 +13,7 @@ import (
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/capabilityplan"
+	"github.com/lexcodex/relurpify/framework/config"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
@@ -125,6 +126,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentID:           opts.AgentID,
 		PermissionManager: opts.PermissionManager,
 		AgentSpec:         agentSpec,
+		ProtectedPaths:    config.New(workspace).GovernanceRoots(config.New(workspace).ManifestFile(), config.New(workspace).ConfigFile(), config.New(workspace).NexusConfigFile(), config.New(workspace).PolicyRulesFile(), config.New(workspace).ModelProfilesDir()),
 		SkipASTIndex:      opts.SkipASTIndex,
 	})
 	if err != nil {

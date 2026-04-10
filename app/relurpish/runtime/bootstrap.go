@@ -11,6 +11,7 @@ import (
 	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/capabilityplan"
+	"github.com/lexcodex/relurpify/framework/config"
 	contractpkg "github.com/lexcodex/relurpify/framework/contract"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graphdb"
@@ -106,6 +107,22 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	if err != nil {
 		return nil, err
 	}
+
+	profileRegistry, err := llm.NewProfileRegistry(config.New(workspace).ModelProfilesDir())
+	if err != nil {
+		return nil, fmt.Errorf("load model profiles: %w", err)
+	}
+	provider := ""
+	if boot.AgentSpec != nil {
+		provider = boot.AgentSpec.Model.Provider
+	}
+	modelName := opts.InferenceModel
+	if modelName == "" && boot.AgentConfig != nil {
+		modelName = boot.AgentConfig.Model
+	}
+	profileResolution := profileRegistry.Resolve(provider, modelName)
+	_ = llm.ApplyProfile(boot.Backend, profileResolution.Profile)
+	_ = llm.ApplyProfile(boot.Environment.Model, profileResolution.Profile)
 
 	if err := agents.RegisterBuiltinRelurpicCapabilitiesWithOptions(
 		boot.Registry,

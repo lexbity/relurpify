@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -179,5 +180,35 @@ func TestProbeEnvironment_PropagatesBuilderError(t *testing.T) {
 	}
 	if report.Inference.Error == "" {
 		t.Fatal("expected error on builder failure")
+	}
+}
+
+func TestStatusSnapshotJSONMarshals(t *testing.T) {
+	snapshot := StatusSnapshot{
+		ProtectedPaths:      []string{"/home/lex/Public/Relurpify"},
+		ManifestFingerprint: "0123456789abcdef",
+		SelectedProfile:     "qwen-profile.yaml",
+		ProfileReason:       "provider/model exact match for ollama/qwen2.5-coder:14b",
+		ProfileSource:       "/workspace/relurpify_cfg/model_profiles/qwen-profile.yaml",
+		DeprecationNotices:  []string{"spec.agent.native_tool_calling is deprecated; use spec.agent.tool_calling_intent"},
+	}
+
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("marshal status snapshot: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("expected JSON output")
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal status snapshot JSON: %v", err)
+	}
+	if _, ok := decoded["ProtectedPaths"]; !ok {
+		t.Fatal("expected sandbox file-scope governance roots in status snapshot JSON")
+	}
+	if _, ok := decoded["SelectedProfile"]; !ok {
+		t.Fatal("expected selected profile in status snapshot JSON")
 	}
 }

@@ -1,7 +1,12 @@
 package runtime
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestDoctorReportRunscDockerNotBlocking verifies that runsc and docker
@@ -147,4 +152,41 @@ func TestDoctorReportWithMissingManifest(t *testing.T) {
 	if !report.HasBlockingIssues() {
 		t.Error("expected HasBlockingIssues() to be true when manifest is missing")
 	}
+}
+
+func TestBuildDoctorReportIncludesInspectionDetails(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "agent.manifest.yaml")
+	manifestData := []byte(`apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: coding
+spec:
+  image: ghcr.io/lexcodex/relurpify/runtime:latest
+  runtime: gvisor
+  permissions:
+    filesystem:
+      - path: /tmp
+        action: fs:read
+  agent:
+    implementation: react
+    mode: primary
+    model:
+      provider: ollama
+      name: qwen2.5-coder:14b
+    native_tool_calling: true
+`)
+	require.NoError(t, os.WriteFile(manifestPath, manifestData, 0o644))
+
+	report := BuildDoctorReport(context.Background(), Config{
+		Workspace:    dir,
+		ManifestPath: manifestPath,
+		ConfigPath:   filepath.Join(dir, "relurpify.yaml"),
+	})
+
+	require.True(t, report.ManifestExists)
+	require.NotEmpty(t, report.ManifestFingerprint)
+	require.NotEmpty(t, report.ManifestPolicySummary)
+	require.NotEmpty(t, report.ProtectedPaths)
+	require.NotEmpty(t, report.DeprecationNotices)
 }

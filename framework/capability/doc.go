@@ -37,6 +37,9 @@
 // provider-level rules before invoking a capability, and wraps every result
 // in a CapabilityResultEnvelope carrying provenance and an InsertionDecision.
 //
+// Tool-aware registry hooks can inject permission, agent-spec, and sandbox
+// filesystem scope into legacy tools before they perform host I/O.
+//
 // # Tool formatting
 //
 // tool_formatting.go converts CapabilityDescriptor schemas to the JSON schema

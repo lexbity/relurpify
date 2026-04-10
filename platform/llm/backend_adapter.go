@@ -77,4 +77,11 @@ func (a managedBackendAdapter) SetDebugLogging(enabled bool) {
 	a.inner.SetDebugLogging(enabled)
 }
 
+func (a managedBackendAdapter) SetProfile(profile *ModelProfile) {
+	if a.inner == nil {
+		return
+	}
+	a.inner.SetProfile(profile.AsOllamaProfile())
+}
+
 var _ ManagedBackend = managedBackendAdapter{}

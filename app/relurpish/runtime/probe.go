@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/platform/llm"
@@ -53,13 +55,16 @@ type ManifestSummary struct {
 
 // InferenceBackendReport surfaces the health of the configured inference backend.
 type InferenceBackendReport struct {
-	Provider      string
-	Endpoint      string
-	State         llm.BackendHealthState
-	Models        []string
-	SelectedModel string
-	Error         string
-	Resources     *llm.ResourceSnapshot
+	Provider        string
+	Endpoint        string
+	State           llm.BackendHealthState
+	Models          []string
+	SelectedModel   string
+	SelectedProfile string
+	ProfileReason   string
+	ProfileSource   string
+	Error           string
+	Resources       *llm.ResourceSnapshot
 }
 
 // EnvironmentReport aggregates the runtime environment checks.
@@ -75,10 +80,17 @@ type EnvironmentReport struct {
 
 // StatusSnapshot enriches the environment report with live runtime details.
 type StatusSnapshot struct {
-	Environment  EnvironmentReport
-	PendingHITL  []*authorization.PermissionRequest
-	ServerActive bool
-	Context      *core.ContextSnapshot
+	Environment           EnvironmentReport
+	PendingHITL           []*authorization.PermissionRequest
+	ServerActive          bool
+	Context               *core.ContextSnapshot
+	ProtectedPaths        []string
+	ManifestFingerprint   string
+	ManifestPolicySummary string
+	SelectedProfile       string
+	ProfileReason         string
+	ProfileSource         string
+	DeprecationNotices    []string
 }
 
 // ProbeEnvironment inspects sandbox binaries, inference backend availability,
@@ -179,6 +191,15 @@ func detectInferenceBackend(ctx context.Context, cfg Config, backend llm.Managed
 		selected = models[0].Name
 	}
 	report.SelectedModel = selected
+	if reg, err := llm.NewProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+		resolution := reg.Resolve(cfg.InferenceProvider, selected)
+		report.SelectedProfile = filepath.Base(resolution.SourcePath)
+		if report.SelectedProfile == "." || report.SelectedProfile == "" {
+			report.SelectedProfile = resolution.MatchKind
+		}
+		report.ProfileReason = resolution.Reason
+		report.ProfileSource = resolution.SourcePath
+	}
 	for _, model := range models {
 		if model.Name == selected {
 			return report
@@ -343,6 +364,24 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 		PendingHITL:  r.PendingHITL(),
 		ServerActive: r.ServerRunning(),
 		Context:      r.Context.Snapshot(),
+	}
+	if env.Workspace != "" {
+		snapshot.ProtectedPaths = config.New(env.Workspace).GovernanceRoots(
+			r.Config.ManifestPath,
+			r.Config.ConfigPath,
+		)
+	}
+	if r.Registration != nil && r.Registration.ManifestSnapshot != nil {
+		snapshot.ManifestFingerprint = fmt.Sprintf("%x", r.Registration.ManifestSnapshot.Fingerprint)
+		snapshot.DeprecationNotices = append([]string(nil), r.Registration.ManifestSnapshot.Warnings...)
+	}
+	if r.ProfileResolution.Profile != nil {
+		snapshot.SelectedProfile = r.ProfileResolution.Profile.MatchPattern()
+	}
+	snapshot.ProfileReason = r.ProfileResolution.Reason
+	snapshot.ProfileSource = r.ProfileResolution.SourcePath
+	if r.Registration != nil && r.Registration.Manifest != nil {
+		snapshot.ManifestPolicySummary = summarizeManifestPolicy(r.Registration.Manifest)
 	}
 	return snapshot
 }

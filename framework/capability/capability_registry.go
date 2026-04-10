@@ -11,6 +11,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/authorization"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/perfstats"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 // PermissionAware allows tools to receive the permission manager for fine-grained
@@ -23,6 +24,11 @@ type PermissionAware interface {
 // additional policy enforcement (e.g. bash/file matrices).
 type AgentSpecAware interface {
 	SetAgentSpec(spec *AgentRuntimeSpec, agentID string)
+}
+
+// SandboxScopeAware allows tools to receive the sandbox-enforced file scope.
+type SandboxScopeAware interface {
+	SetSandboxScope(scope *sandbox.FileScopePolicy)
 }
 
 // CapabilityRegistry maintains framework-owned capability descriptors plus the
@@ -39,6 +45,7 @@ type CapabilityRegistry struct {
 	permissionManager   *PermissionManager
 	registeredAgentID   string
 	agentSpec           *AgentRuntimeSpec
+	sandboxScope        *sandbox.FileScopePolicy
 	runtimePolicy       *compiledRuntimePolicy
 	allowedCapabilities []core.CapabilitySelector
 	allowedMatchers     []compiledSelector
@@ -180,6 +187,20 @@ func (r *CapabilityRegistry) syncAgentSpecAwareEntriesLocked(spec *AgentRuntimeS
 	}
 }
 
+func (r *CapabilityRegistry) syncSandboxScopeAwareEntriesLocked() {
+	if r == nil || r.sandboxScope == nil {
+		return
+	}
+	for _, entry := range r.entries {
+		if entry == nil || entry.legacyTool == nil {
+			continue
+		}
+		if aware, ok := unwrapTool(entry.legacyTool).(SandboxScopeAware); ok {
+			aware.SetSandboxScope(r.sandboxScope)
+		}
+	}
+}
+
 func (r *CapabilityRegistry) rebuildIndexesLocked() {
 	if r == nil {
 		return
@@ -223,6 +244,11 @@ func (r *CapabilityRegistry) indexEntryLocked(id string, entry *capabilityEntry)
 func (r *CapabilityRegistry) registerEntryLocked(desc core.CapabilityDescriptor, entry *capabilityEntry) {
 	if r == nil || entry == nil {
 		return
+	}
+	if entry.legacyTool != nil && r.sandboxScope != nil {
+		if aware, ok := unwrapTool(entry.legacyTool).(SandboxScopeAware); ok {
+			aware.SetSandboxScope(r.sandboxScope)
+		}
 	}
 	r.capabilities[desc.ID] = desc
 	r.entries[desc.ID] = entry

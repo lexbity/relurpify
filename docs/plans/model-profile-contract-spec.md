@@ -1,363 +1,546 @@
-# Model Profile Contract Spec
+# Model Profile and Manifest Contract Spec
 
-## Purpose
+## Summary
 
-Define the contract for model-specific behavior templates in Relurpify so that
-tool-calling quirks, repair behavior, and schema limitations are loaded from a
-dedicated model-profile layer instead of being scattered through agent manifests
-or framework policy.
+Relurpify currently mixes three different configuration concerns:
 
-This document is both:
-- an architectural analysis of where the loader should live
-- a technical specification for the shape and precedence of the resulting config
+1. agent policy and permissions
+2. model compatibility behavior
+3. runtime/backend enforcement
 
----
+That overlap is acceptable only as long as the boundaries stay explicit. In the
+current codebase, the biggest concrete problem is not theoretical config soup.
+It is a security loophole: an agent can be granted file access that includes
+its own manifest and other governance files.
 
-## Problem Statement
+This spec defines the technical path to fix that loophole and then cleanly
+separate manifest policy from model-profile behavior.
 
-Relurpify currently has three distinct configuration domains that can look
-similar from the outside but serve different purposes:
+The implementation should be staged:
 
-- agent manifests in `relurpify_cfg/agents/*.yaml`
-- backend/model profiles in `relurpify_cfg/model_profiles/*.yaml`
-- runtime enforcement and policy in `framework/`
-
-The system already enforces permissions, security policy, and capability policy
-through manifests and framework code. That is correct, but it creates a risk of
-config sprawl if model-compatibility settings are mixed into the same manifest
-surface.
-
-The specific concern here is tool calling:
-
-- some models support native tool calling
-- some models need prompt-based fallback
-- some models need repair heuristics for malformed tool arguments
-- some models are limited to a single tool call per response
-
-These are model traits, not agent permissions.
+- protect governance paths first
+- make manifest reads immutable within a session
+- split manifest policy from agent behavior
+- move model quirks into `relurpify_cfg/model_profiles`
+- expose the resolved state in inspection tooling
 
 ---
 
-## Analysis
+## Existing Code Shape
 
-### What should be in `framework`
+The current code already has useful building blocks:
 
-`framework` should own:
+- `framework/manifest/manifest.go` parses agent manifests
+- `framework/core/agent.go` and `framework/core/agent_spec.go` carry runtime
+  policy and tool-calling intent
+- `framework/config/paths.go` defines the canonical `relurpify_cfg` layout
+- `framework/authorization/runtime.go` builds enforcement primitives
+- `platform/llm/model_profile.go` defines model compatibility data
+- `platform/llm/profile_registry.go` loads profile files
+- `relurpify_cfg/model_profiles/*.yaml` already exist
+- `core.ProfiledModel` is already consumed by runtime and agent code
 
-- the abstractions used by the rest of the system
-- the policy and enforcement decisions
-- the neutral types that other packages can consume without importing
-  `platform/llm`
+The missing part is a complete contract that says:
 
-That means `framework` can own:
-
-- a neutral backend capability type
-- path helpers for locating config directories
-- agent/runtime config that references a model by name or provider
-
-It should not own:
-
-- provider-specific model quirk parsing
-- transport-specific tool-call repair logic
-- backend-specific YAML profile schemas
-
-### What should be in `platform/llm`
-
-`platform/llm` should own the implementation details of loading and applying
-model profiles because the profiles describe LLM behavior, not framework policy.
-
-That means `platform/llm` should own:
-
-- the model-profile schema
-- the registry/loader for profile files
-- matching logic from model name to profile
-- adapter behavior that interprets profile fields
-
-### What should remain in manifests
-
-Agent manifests should stay focused on:
-
-- agent identity
-- allowed capabilities
-- sandbox and permission policy
-- security posture
-- resource limits
-- high-level runtime intent such as whether native tool calling is desired
-
-Manifest files should not become a catch-all for backend quirks. If a field is
-model-specific rather than agent-specific, it belongs in a model profile.
+- what is protected and cannot be mutated
+- what is immutable after bootstrap
+- what belongs in a manifest versus a model profile
+- how profile resolution is performed
+- where the runtime should consume the resolved result
 
 ---
 
-## Current State
+## Goals
 
-The codebase already has a partial model-profile system:
-
-- `platform/llm/model_profile.go`
-- `platform/llm/profile_registry.go`
-- `relurpify_cfg/model_profiles/default.yaml`
-- `relurpify_cfg/model_profiles/qwen2.5-coder.yaml`
-
-The current consumers use a `core.ProfiledModel` interface to read profile
-behavior at runtime.
-
-This is already enough to support different tool-calling behavior in principle,
-but it is not yet a fully centralized loader path. The missing piece is a clear
-bootstrap path that loads profiles from `relurpify_cfg/model_profiles/` and
-applies them consistently to the active backend and agent runtime.
+1. Agents cannot mutate their own manifests or governance config.
+2. Manifest state is stable for the lifetime of a session unless explicitly
+   reloaded.
+3. Model-specific tool-calling quirks live in model profiles, not manifests.
+4. The manifest schema is separated into policy versus agent intent.
+5. Model profiles are loaded from `relurpify_cfg/model_profiles`.
+6. Loader ownership follows package boundaries:
+   - `framework` owns enforcement and path resolution
+   - `platform/llm` owns profile loading and matching
+7. The resolved state is visible through doctor/probe/TUI surfaces.
 
 ---
 
-## Design Goals
+## Non-Goals
 
-1. Keep manifests free of backend quirks.
-2. Keep model profiles free of permissions and security policy.
-3. Keep framework enforcement neutral and provider-agnostic.
-4. Make model profile selection deterministic.
-5. Preserve backward compatibility for current manifests.
-6. Make tool-calling behavior explainable and inspectable.
+This spec does not replace the existing authorization or sandbox architecture.
+It tightens it.
+
+It also does not remove compatibility fields immediately. Migration should be
+safe and observable.
 
 ---
 
-## Proposed Boundary
+## Technical Boundaries
 
 ### `framework`
 
-Responsibilities:
+Owns:
 
-- expose neutral types for backend capabilities and runtime config
-- resolve config directory paths
-- validate and enforce policy
+- enforcement
+- permission evaluation
+- sandbox file-scope checks
+- runtime path helpers
+- manifest validation semantics
+
+Should not own:
+
+- YAML profile schemas for model quirks
+- provider-specific repair logic
 
 ### `platform/llm`
 
-Responsibilities:
+Owns:
 
-- load model profiles
-- match profiles by model name
-- apply profile behavior to backend adapters
-- expose `ProfiledModel` behavior through model wrappers
+- model profile schema
+- profile loading
+- provider/model matching
+- profile-aware backend wrapper behavior
 
-### `relurpify_cfg/model_profiles`
+Should not own:
 
-Responsibilities:
-
-- store reusable model compatibility templates
-- define tool-calling repair and schema quirks per model family
+- permissions
+- sandbox policy
+- filesystem path governance
 
 ### `relurpify_cfg/agents`
 
-Responsibilities:
+Should describe:
 
-- define agent policy and runtime intent
-- refer to a model by name/provider
-- request native tool calling at a high level when appropriate
+- agent identity
+- allowed capabilities
+- sandbox/security posture
+- resource limits
+- high-level model choice
+- high-level tool-calling intent
 
----
+Should not describe:
 
-## Configuration Domains
+- transport-specific decoding quirks
+- per-model repair workarounds
+- tool-call schema flattening rules
 
-### Agent manifest
+### `relurpify_cfg/model_profiles`
 
-Example fields:
+Should describe:
 
-- `spec.agent.model.provider`
-- `spec.agent.model.name`
-- `spec.agent.native_tool_calling`
-- permission and policy fields
+- tool-calling compatibility quirks
+- repair strategy
+- max tool call handling
+- schema flattening behavior
+- provider-scoped or model-scoped matching
 
-Semantics:
+Should not describe:
 
-- what agent is this
-- what model does it want
-- what is it allowed to do
-- should native tool calling be preferred in the agent contract
-
-### Model profile
-
-Example fields:
-
-- `pattern`
-- `tool_calling.native_api`
-- `tool_calling.double_encoded_args`
-- `tool_calling.multiline_string_literals`
-- `tool_calling.max_tools_per_call`
-- `repair.strategy`
-- `repair.max_attempts`
-- `schema.flatten_nested`
-- `schema.max_description_len`
-
-Semantics:
-
-- how does this model behave
-- what compatibility workarounds are required
-- what tool-calling constraints should be applied
-
-### Framework/runtime config
-
-Example fields:
-
-- workspace path
-- manifest path
-- inference endpoint
-- inference model
-- debug toggles
-
-Semantics:
-
-- where is the workspace
-- which agent manifest should be used
-- which backend should be contacted
-- which model should be selected
+- permissions
+- audit policy
+- sandbox policy
+- agent-specific allowed capabilities
 
 ---
 
-## Precedence Rules
+## Phase 1: Protected Config Paths
 
-These precedence rules should be used everywhere the model template is applied.
+### Objective
 
-### 1. Model profile matches by model name
+Prevent agents from modifying protected governance files even if their manifest
+appears to grant broad filesystem access.
 
-Load all profiles from `relurpify_cfg/model_profiles/`.
+### Why this is required
 
-Match order:
+Today a manifest can grant `fs:write /home/lex/Public/Relurpify/**`, which
+includes:
 
-- exact model name match
-- longest prefix/glob match
-- fallback `default.yaml`
+- its own manifest
+- `relurpify_cfg/config.yaml`
+- `relurpify_cfg/nexus.yaml`
+- `relurpify_cfg/policy_rules.yaml`
+- `relurpify_cfg/model_profiles/*.yaml`
 
-### 2. Manifest intent is higher-level than profile quirks
+That is a policy self-write channel and must be closed.
 
-If the manifest says native tool calling is disabled, that is the agent-level
-intent. The model profile may still describe what the backend can do, but the
-agent runtime should not force native tool calling on top of an explicit
-manifest disable.
+### Required code changes
 
-### 3. Backend capability gates execution
+#### `framework/authorization/permissions.go`
 
-Even if the manifest wants native tool calling, the backend must report that it
-actually supports it before the runtime uses it.
+Do not duplicate sandbox file-scope enforcement here.
 
-### 4. Framework fallback is mandatory
+Manifest policy, HITL, and ordinary filesystem permission checks remain in the
+permission manager, but protected governance roots are enforced by the sandbox
+file-scope policy before host I/O occurs.
 
-If the backend does not support native tool calling, or the profile indicates a
-repair/fallback strategy, the framework fallback path must remain available.
+#### `framework/config/paths.go`
 
-### 5. Profile settings never override permissions or security
+Use the canonical path helpers already present:
 
-Model profiles can affect response formatting and tool-call repair behavior.
-They cannot grant permissions, relax sandboxing, or bypass policy.
+- `ConfigFile()`
+- `NexusConfigFile()`
+- `PolicyRulesFile()`
+- `AgentsDir()`
+- `ModelProfilesDir()`
+
+If needed, add a small helper that returns the governance roots as a list.
+
+#### `framework/authorization/runtime.go`
+
+Keep the sandbox file-scope policy in sync with the runtime workspace roots so
+governance paths remain outside the agent-visible filesystem boundary.
+
+#### `framework/sandbox`
+
+Use file-scope or mount-scope policy to exclude governance roots from the
+agent-visible filesystem tree. This is the enforcement boundary for protected
+paths.
+
+### Tests
+
+- writing to a protected governance file is blocked by the sandbox file-scope policy
+- deleting or renaming a protected file is blocked by the sandbox file-scope policy
+- writing outside protected roots still honors manifest permissions
+- symlink traversal does not bypass the protected check
+- the sandbox file-scope error is distinguishable from ordinary permission denial
+
+### Exit criteria
+
+- an agent cannot self-modify its own manifest or governance config
+- governance path protection happens before manifest permission evaluation
 
 ---
 
-## Loader Contract
+## Phase 2: Manifest Snapshot Immutability
 
-The loader should live in `platform/llm` and use path resolution from
-`framework/config` or `ayenitd`.
+### Objective
+
+Ensure bootstrap reads the manifest once and subsequent session logic uses a
+snapshot, not a fresh file read.
+
+### Why this matters
+
+Even if the sandbox file-scope layer is correct, a long-running TUI or daemon can
+still observe a changed manifest if it re-reads from disk later in the session.
+
+### Required code changes
+
+#### `framework/manifest`
+
+Add a snapshot type that carries:
+
+- parsed manifest
+- source path
+- file fingerprint
+- load timestamp
+
+Suggested shape:
+
+```go
+type AgentManifestSnapshot struct {
+    Manifest *AgentManifest
+    Fingerprint [32]byte
+    LoadedAt time.Time
+    SourcePath string
+}
+```
+
+Provide a helper that loads bytes, hashes them, and returns the parsed manifest
+with its fingerprint.
+
+#### `ayenitd/open.go`
+
+Bootstrap should capture and retain the snapshot once.
+
+No regular post-bootstrap code path should call `LoadAgentManifest` again for
+the active session.
+
+#### `framework/authorization/runtime.go`
+
+Authorization bootstrap should accept a manifest snapshot or at least a parsed
+manifest plus fingerprint so later checks can compare against the original
+state.
+
+#### `app/relurpish/runtime`
+
+Long-running modes may optionally rehash the manifest and emit an audit event if
+the file changes.
+
+Reload should be explicit and operator-driven, not automatic.
+
+### Tests
+
+- snapshot fingerprint is stable for unchanged input
+- changed file bytes produce a different fingerprint
+- the normal startup path does not re-read the manifest after bootstrap
+- an explicit reload path returns a fresh snapshot
+
+### Exit criteria
+
+- manifest state is immutable for a session unless explicitly reloaded
+
+---
+
+## Phase 3: Manifest Schema Cleanup
+
+### Objective
+
+Make the manifest layout reflect the actual boundary between security policy
+and agent behavior.
+
+### Problem in the current schema
+
+`framework/core.AgentRuntimeSpec` currently mixes:
+
+- policy-adjacent data
+- agent identity and behavioral intent
+- model reference
+- provider policies
+- logging/debug intent
+- tool-calling intent
+
+That structure works, but it is too flat. It makes it easy to place unrelated
+concerns in the same YAML layer.
+
+### Required schema split
+
+Introduce a logical split into:
+
+- `spec.policy`
+- `spec.agent`
+
+Keep policy defaults under the policy side:
+
+- `spec.policy.defaults`
+
+### Suggested new meaning
+
+#### `spec.policy`
+
+Security and enforcement contract:
+
+- permissions
+- security
+- audit
+- resources
+- policy defaults
+
+#### `spec.agent`
+
+Runtime intent and behavior:
+
+- implementation
+- mode
+- version
+- prompt
+- model
+- logging intent
+- skills
+- tool-calling intent
+
+### Required code changes
+
+#### `framework/manifest/manifest.go`
+
+Add loader compatibility so both the old flat shape and the new split shape can
+be parsed.
+
+The new shape should win when both are present.
+
+#### `framework/core/agent_spec.go`
+
+Replace the current boolean tool-calling field with an explicit intent enum.
+
+Suggested shape:
+
+```go
+type ToolCallingIntent string
+
+const (
+    ToolCallingIntentAuto         ToolCallingIntent = "auto"
+    ToolCallingIntentPreferNative ToolCallingIntent = "prefer_native"
+    ToolCallingIntentPreferPrompt ToolCallingIntent = "prefer_prompt"
+)
+```
+
+`AgentRuntimeSpec` should carry that intent explicitly rather than a legacy
+boolean compatibility flag.
+
+#### `framework/core/agent_spec_overlay.go`
+
+Update merge logic so the new schema fields do not double-apply and the
+compatibility loader can reconcile old and new representations deterministically.
+
+### Migration rule
+
+Old manifests must remain loadable.
+
+Compatibility behavior:
+
+- old flat fields are promoted into the new internal representation
+- new nested fields win if both are set
+- deprecation reporting should flag old forms
+
+### Tests
+
+- old flat manifest still loads
+- new split manifest loads
+- old and new forms together resolve deterministically
+- tool-calling intent resolves to the enum value expected by runtime code
+- policy fields cannot be smuggled into agent behavior fields
+
+### Exit criteria
+
+- the manifest schema makes policy/behavior boundaries obvious
+- the compatibility loader preserves existing manifests
+
+---
+
+## Phase 4: Model Profile Integration
+
+### Objective
+
+Move all model-compatibility behavior into `relurpify_cfg/model_profiles` and
+make profile resolution part of the startup path.
 
 ### Required behavior
 
-- load all YAML profiles from a config directory
-- ignore non-YAML files
-- allow a missing directory
-- support deterministic matching
-- produce a profile object that adapters can consume directly
+Model profiles should own:
 
-### Suggested API
-
-```go
-type ProfileRegistry struct {
-    // loaded profiles
-}
-
-func NewProfileRegistry(configDir string) (*ProfileRegistry, error)
-func (r *ProfileRegistry) Match(modelName string) *ModelProfile
-```
-
-### Startup wiring
-
-The composition root should:
-
-- resolve `relurpify_cfg/model_profiles`
-- build a registry
-- select the profile for the chosen model
-- attach the profile to the active backend or model wrapper
-
-This should happen in bootstrap, not in agent business logic.
-
----
-
-## Manifest Impact
-
-### What stays in manifests
-
-Keep the manifest fields that describe runtime intent and policy:
-
-- agent identity
-- permissions
-- security
-- resource limits
-- model provider/name
-- canonical native tool-calling intent
-
-### What should not move into manifests
-
-Do not move the following into agent manifests:
-
-- double-encoded argument workarounds
-- multiline JSON literal workarounds
-- tool-call limit heuristics
-- repair strategy
+- native tool-calling quirks
+- tool-call repair strategy
+- max tools per call
+- argument decoding quirks
+- multiline JSON handling
 - schema flattening rules
 
-Those belong in model profiles.
+### Required code changes
 
-### Why this avoids configuration soup
+#### `platform/llm/model_profile.go`
 
-The config model is only a soup if multiple layers own the same semantics.
-This design keeps each layer accountable for a distinct question:
+Keep the model-profile schema in `platform/llm`, not in `framework`.
 
-- manifest: what is allowed?
-- model profile: how does this model behave?
-- framework: what is enforced?
+The schema should remain focused on model compatibility, not policy.
 
-That separation is the main guardrail against the “everything configurable in
-one YAML blob” problem.
+#### `platform/llm/profile_registry.go`
+
+Load profiles from the directory pointed to by `framework/config.Paths.ModelProfilesDir()`.
+
+Required matching precedence:
+
+1. exact provider + model match
+2. exact model match
+3. longest prefix or glob match
+4. `default.yaml`
+
+`provider + model` matching should be supported explicitly because the same
+model family may behave differently across providers or backends.
+
+#### `platform/llm/backend.go` and provider adapters
+
+Provider adapters should expose the resolved profile through `core.ProfiledModel`
+and/or their managed backend wrappers.
+
+The profile must drive:
+
+- `UsesNativeToolCalling()`
+- `ToolRepairStrategy()`
+- `MaxToolsPerCall()`
+
+#### `ayenitd/open.go`
+
+Bootstrap should load the profile registry once and attach the resolved profile
+to the active backend/model wrapper before agent execution begins.
+
+#### `app/relurpish/runtime/bootstrap.go`
+
+The TUI/runtime path should resolve the same profile data so the interactive and
+CLI paths behave consistently.
+
+### Required precedence
+
+The final runtime decision for tool calling should be:
+
+1. backend capability
+2. manifest intent
+3. model profile
+4. framework fallback path
+
+Interpretation:
+
+- if the backend cannot do native tool calling, it is not used
+- if the manifest explicitly prefers prompt fallback, that preference is honored
+- if the profile says the model needs repair heuristics, the adapter applies them
+- the framework fallback remains available when native calling is not viable
+
+### Important design choice
+
+The manifest should not be allowed to force native tool calling onto a backend
+that cannot support it.
+
+The explicit intent enum should be used to express the agent’s preference, not
+as a guarantee that the backend must comply.
+
+### Tests
+
+- provider-scoped profile matches before model-only fallback
+- exact match beats family match
+- family match beats default
+- backend capability blocks native calling when unsupported
+- prompt fallback remains available when native calling is disabled
+
+### Exit criteria
+
+- tool-calling quirks are removed from manifests
+- model profiles are the single source of model compatibility behavior
 
 ---
 
-## Proposed File Layout
+## Phase 5: Audit and Inspection Tooling
 
-### `framework`
+### Objective
 
-- `framework/config/paths.go`
-- `framework/core/backend_capabilities.go`
+Expose the resolved state so operators can inspect what the runtime decided.
 
-### `platform/llm`
+### Required outputs
 
-- `platform/llm/model_profile.go`
-- `platform/llm/profile_registry.go`
-- `platform/llm/backend.go`
-- `platform/llm/backendext.go`
-- provider-specific wrappers and adapters
+Inspection surfaces should report:
 
-### `relurpify_cfg`
+- sandbox file-scope governance roots
+- manifest snapshot fingerprint
+- selected model profile
+- profile resolution reason
+- manifest policy summary
+- deprecation notices for old schema or legacy intent fields
 
-- `relurpify_cfg/model_profiles/default.yaml`
-- `relurpify_cfg/model_profiles/*.yaml`
-- `relurpify_cfg/agents/*.yaml`
+### Surfaces
+
+- `relurpish doctor`
+- CLI workspace inspection
+- TUI read-only permissions/profile view
+- structured audit events
+
+### Tests
+
+- JSON output is machine-parseable
+- profile resolution is deterministic
+- manifest reload is emitted as a structured audit event
+- sandbox file-scope denials are surfaced through tool/runtime errors and inspection views
 
 ---
 
-## Migration Rules
+## Implementation Order
 
-1. Existing agent manifests remain valid.
-2. Existing `native_tool_calling` and legacy `ollama_tool_calling` values are
-   resolved through the canonical manifest accessor layer.
-3. Existing model profile files remain valid.
-4. If a profile is missing, the system falls back to the built-in safe default.
-5. Profile loader failures should surface as runtime configuration errors, not
-   silent fallback unless the directory is absent.
+Recommended order:
+
+1. Phase 1: protected config paths
+2. Phase 2: manifest snapshot immutability
+3. Phase 3: manifest schema cleanup
+4. Phase 4: model profile integration
+5. Phase 5: audit and inspection tooling
+
+Phase 1 is the security fix. The rest of the work is cleanup and normalization
+around that fix.
 
 ---
 
@@ -365,26 +548,10 @@ one YAML blob” problem.
 
 This work is complete when all of the following are true:
 
-- model profiles are loaded from `relurpify_cfg/model_profiles/`
-- backend/model selection applies a profile deterministically
-- agent manifests do not contain model-specific repair quirks
-- backend capability and manifest intent are both consulted before native tool
-  calling is enabled
-- the fallback path still works when a model lacks native tool calling
-- docs explain the separation clearly
-- tests cover matching, precedence, and fallback behavior
-
----
-
-## Open Questions
-
-1. Should a manifest be allowed to explicitly opt out of native tool calling even
-   when the model profile enables it?
-2. Should `native_tool_calling` remain on the manifest at all, or should it become
-   purely a runtime resolution detail after the model profile is loaded?
-3. Should model profiles be selected only by model name, or by provider plus name?
-4. Should profile overrides be layered by provider, family, and exact model?
-
-These questions should be resolved before any cleanup removes the last remaining
-compatibility fields from the manifest surface.
-
+- agents cannot mutate governance files
+- manifest state is immutable for a session unless explicitly reloaded
+- the manifest schema separates policy from agent behavior
+- model quirks live in `relurpify_cfg/model_profiles`
+- profile resolution is deterministic and provider-aware
+- runtime tool-calling decisions are explainable
+- the inspection surfaces show what was resolved and why

@@ -63,6 +63,50 @@ func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []core.M
 	return resp, err
 }
 
+// SetProfile forwards a resolved model profile to the wrapped model when it
+// supports profile mutation.
+func (m *InstrumentedModel) SetProfile(profile *ModelProfile) {
+	if m == nil || m.Inner == nil || profile == nil {
+		return
+	}
+	if setter, ok := m.Inner.(interface{ SetProfile(*ModelProfile) }); ok {
+		setter.SetProfile(profile)
+	}
+}
+
+// ToolRepairStrategy implements core.ProfiledModel when the wrapped model
+// exposes profile metadata.
+func (m *InstrumentedModel) ToolRepairStrategy() string {
+	if m != nil {
+		if profiled, ok := m.Inner.(core.ProfiledModel); ok {
+			return profiled.ToolRepairStrategy()
+		}
+	}
+	return "heuristic-only"
+}
+
+// MaxToolsPerCall implements core.ProfiledModel when the wrapped model
+// exposes profile metadata.
+func (m *InstrumentedModel) MaxToolsPerCall() int {
+	if m != nil {
+		if profiled, ok := m.Inner.(core.ProfiledModel); ok {
+			return profiled.MaxToolsPerCall()
+		}
+	}
+	return 0
+}
+
+// UsesNativeToolCalling implements core.ProfiledModel when the wrapped model
+// exposes profile metadata.
+func (m *InstrumentedModel) UsesNativeToolCalling() bool {
+	if m != nil {
+		if profiled, ok := m.Inner.(core.ProfiledModel); ok {
+			return profiled.UsesNativeToolCalling()
+		}
+	}
+	return false
+}
+
 type chatMetaPayload struct {
 	base  map[string]interface{}
 	debug map[string]interface{}

@@ -18,11 +18,12 @@ import (
 
 // Client implements core.LanguageModel for Ollama.
 type Client struct {
-	Endpoint string
-	Model    string
-	client   *http.Client
-	Debug    bool
-	profile  *ModelProfile
+	Endpoint          string
+	Model             string
+	client            *http.Client
+	Debug             bool
+	profile           *ModelProfile
+	nativeToolCalling bool
 }
 
 type toolFunction struct {
@@ -77,8 +78,9 @@ func NewClient(endpoint, model string) *Client {
 		endpoint = "http://localhost:11434"
 	}
 	return &Client{
-		Endpoint: endpoint,
-		Model:    model,
+		Endpoint:          endpoint,
+		Model:             model,
+		nativeToolCalling: true,
 		client: &http.Client{
 			Timeout: 3 * time.Minute,
 		},
@@ -142,6 +144,9 @@ func (c *Client) Chat(ctx context.Context, messages []core.Message, options *cor
 
 // ChatWithTools handles tool calling metadata.
 func (c *Client) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
+	if !c.nativeToolCallingEnabled() {
+		return c.Chat(ctx, messages, options)
+	}
 	payload := map[string]interface{}{
 		"model":    c.model(options),
 		"tools":    convertLLMToolSpecs(tools),
@@ -165,9 +170,17 @@ func (c *Client) SetProfile(p *ModelProfile) {
 	c.profile = p
 }
 
+// SetNativeToolCalling updates the transport capability flag.
+func (c *Client) SetNativeToolCalling(enabled bool) {
+	c.nativeToolCalling = enabled
+}
+
 // ToolRepairStrategy implements core.ProfiledModel.
 func (c *Client) ToolRepairStrategy() string {
 	if c.profile == nil {
+		return "heuristic-only"
+	}
+	if c.profile.Repair.Strategy == "" {
 		return "heuristic-only"
 	}
 	return c.profile.Repair.Strategy
@@ -183,8 +196,21 @@ func (c *Client) MaxToolsPerCall() int {
 
 // UsesNativeToolCalling implements core.ProfiledModel.
 func (c *Client) UsesNativeToolCalling() bool {
-	if c.profile == nil {
+	if !c.nativeToolCallingEnabled() {
 		return false
+	}
+	return true
+}
+
+func (c *Client) nativeToolCallingEnabled() bool {
+	if c == nil {
+		return false
+	}
+	if !c.nativeToolCalling {
+		return false
+	}
+	if c.profile == nil {
+		return true
 	}
 	return c.profile.ToolCalling.NativeAPI
 }

@@ -91,7 +91,9 @@ func (m *PermissionManager) AttachRuntime(runtime sandbox.SandboxRuntime) {
 	defer m.mu.Unlock()
 	m.runtime = runtime
 	if len(m.netPolicy) > 0 {
-		_ = runtime.EnforcePolicy(sandbox.SandboxPolicy{NetworkRules: m.netPolicy})
+		_ = runtime.EnforcePolicy(sandbox.SandboxPolicy{
+			NetworkRules: append([]sandbox.NetworkRule(nil), m.netPolicy...),
+		})
 	}
 }
 
@@ -354,6 +356,9 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 
 // CheckExecutable validates binary execution.
 func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary string, args []string, env []string) error {
+	if m == nil {
+		return errors.New("permission manager missing")
+	}
 	perm := m.findExecutablePermission(binary)
 	if perm == nil {
 		desc := core.PermissionDescriptor{
@@ -553,6 +558,36 @@ func (m *PermissionManager) normalizePath(path string) (string, error) {
 		return clean, nil
 	}
 	return filepath.ToSlash(filepath.Join(m.basePath, clean)), nil
+}
+
+func resolveCanonicalPath(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("path required")
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return filepath.Clean(resolved), nil
+	}
+	current := path
+	suffix := make([]string, 0, 4)
+	for {
+		parent := filepath.Dir(current)
+		if parent == current {
+			current = path
+			suffix = suffix[:0]
+			break
+		}
+		suffix = append([]string{filepath.Base(current)}, suffix...)
+		current = parent
+	}
+	resolvedAncestor, err := filepath.EvalSymlinks(current)
+	if err != nil {
+		resolvedAncestor = current
+	}
+	resolved := resolvedAncestor
+	for _, part := range suffix {
+		resolved = filepath.Join(resolved, part)
+	}
+	return filepath.Clean(resolved), nil
 }
 
 // findFilesystemPermission returns the first filesystem permission matching the

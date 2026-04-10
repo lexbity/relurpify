@@ -68,6 +68,19 @@ func TestSandboxCommandRunnerContainerWorkdir(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSandboxCommandRunnerProtectedMounts(t *testing.T) {
+	dir := t.TempDir()
+	protected := filepath.Join(dir, "relurpify_cfg", "agent.manifest.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
+	require.NoError(t, os.WriteFile(protected, []byte("manifest"), 0o644))
+
+	rt := &stubSandboxRuntime{policy: SandboxPolicy{ProtectedPaths: []string{protected}}}
+	runner := &SandboxCommandRunner{workspace: dir, rt: rt}
+	mounts := runner.protectedMounts()
+	require.Len(t, mounts, 1)
+	require.Contains(t, mounts[0], ":/workspace/relurpify_cfg/agent.manifest.yaml:ro")
+}
+
 func writeScript(t *testing.T, dir, name, body string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)

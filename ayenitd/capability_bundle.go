@@ -38,6 +38,7 @@ type CapabilityRegistryOptions struct {
 	AgentID           string
 	PermissionManager *fauthorization.PermissionManager
 	AgentSpec         *core.AgentRuntimeSpec
+	ProtectedPaths    []string
 	InferenceEndpoint string
 	InferenceModel    string
 	SkipASTIndex      bool
@@ -65,6 +66,9 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	}
 	if cfg.AgentSpec != nil {
 		registry.UseAgentSpec(cfg.AgentID, cfg.AgentSpec)
+	}
+	if len(cfg.ProtectedPaths) > 0 {
+		registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
 	}
 	register := func(tool core.Tool) error {
 		if err := registry.Register(tool); err != nil {

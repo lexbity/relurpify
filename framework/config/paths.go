@@ -1,6 +1,9 @@
 package config
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
 
 const DirName = "relurpify_cfg"
 
@@ -159,4 +162,23 @@ func (p Paths) ShellBlacklistFile() string {
 
 func (p Paths) ModelProfilesDir() string {
 	return filepath.Join(p.ConfigRoot(), "model_profiles")
+}
+
+// GovernanceRoots returns the canonical workspace governance paths that should
+// be protected from agent writes and executable mutation.
+func (p Paths) GovernanceRoots(extra ...string) []string {
+	roots := []string{
+		p.AgentsDir(),
+		p.ConfigFile(),
+		p.NexusConfigFile(),
+		p.PolicyRulesFile(),
+		p.ModelProfilesDir(),
+	}
+	for _, path := range extra {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		roots = append(roots, path)
+	}
+	return roots
 }

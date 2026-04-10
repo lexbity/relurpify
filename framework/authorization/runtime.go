@@ -14,34 +14,47 @@ import (
 
 // RuntimeConfig wires sandbox and auditing defaults.
 type RuntimeConfig struct {
-	ManifestPath string
-	ConfigPath   string
-	Image        string
-	Sandbox      sandbox.SandboxConfig
-	AuditLimit   int
-	BaseFS       string
-	HITLTimeout  time.Duration
+	ManifestPath     string
+	ManifestSnapshot *manifest.AgentManifestSnapshot
+	ConfigPath       string
+	Image            string
+	Sandbox          sandbox.SandboxConfig
+	AuditLimit       int
+	BaseFS           string
+	HITLTimeout      time.Duration
 }
 
 // AgentRegistration stores runtime metadata.
 type AgentRegistration struct {
-	ID          string
-	Manifest    *manifest.AgentManifest
-	Runtime     sandbox.SandboxRuntime
-	Permissions *PermissionManager
-	Policy      PolicyEngine
-	Audit       core.AuditLogger
-	HITL        *HITLBroker
+	ID               string
+	Manifest         *manifest.AgentManifest
+	ManifestSnapshot *manifest.AgentManifestSnapshot
+	Runtime          sandbox.SandboxRuntime
+	Permissions      *PermissionManager
+	Policy           PolicyEngine
+	Audit            core.AuditLogger
+	HITL             *HITLBroker
 }
 
 // RegisterAgent validates the manifest and builds enforcement primitives.
 func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, error) {
-	if cfg.ManifestPath == "" {
+	if cfg.ManifestSnapshot == nil && cfg.ManifestPath == "" {
 		return nil, errors.New("manifest path required")
 	}
-	agentManifest, err := manifest.LoadAgentManifest(cfg.ManifestPath)
+	manifestSnapshot := cfg.ManifestSnapshot
+	var err error
+	if manifestSnapshot == nil {
+		manifestSnapshot, err = manifest.LoadAgentManifestSnapshot(cfg.ManifestPath)
+		if err != nil {
+			return nil, fmt.Errorf("load manifest: %w", err)
+		}
+	}
+	agentManifest, err := manifest.CloneAgentManifest(manifestSnapshot.Manifest)
 	if err != nil {
-		return nil, fmt.Errorf("load manifest: %w", err)
+		return nil, fmt.Errorf("clone manifest: %w", err)
+	}
+	if agentManifest == nil {
+		return nil, errors.New("manifest missing")
 	}
 	effectivePerms, err := manifest.ResolveEffectivePermissions(cfg.BaseFS, agentManifest)
 	if err != nil {
@@ -76,12 +89,13 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}
 	_ = runtime.EnforcePolicy(policy)
 	return &AgentRegistration{
-		ID:          agentManifest.Metadata.Name,
-		Manifest:    agentManifest,
-		Runtime:     runtime,
-		Permissions: permissions,
-		Audit:       audit,
-		HITL:        hitl,
+		ID:               agentManifest.Metadata.Name,
+		Manifest:         agentManifest,
+		ManifestSnapshot: manifestSnapshot,
+		Runtime:          runtime,
+		Permissions:      permissions,
+		Audit:            audit,
+		HITL:             hitl,
 	}, nil
 }
 

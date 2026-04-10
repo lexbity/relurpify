@@ -72,7 +72,7 @@ The permission manager checks four categories:
 
 **Capability calls** — before any tool, prompt, or resource capability executes, compiled capability policy is evaluated first. If execution is allowed, the runtime permission manager then checks any required low-level permissions (filesystem, executable, network, session/provider approval) against the resolved contract.
 
-**File access** — `fs:read`, `fs:write`, `fs:execute`, and `fs:list` actions are checked against the filesystem permission entries in the manifest. Paths use glob matching with `**` for recursive subtrees.
+**File access** — `fs:read`, `fs:write`, `fs:execute`, and `fs:list` actions are first checked by the sandbox file-scope policy, which blocks workspace escapes and protected governance roots before any host I/O occurs. Manifest filesystem entries then apply the remaining policy and HITL rules. Paths still use glob matching with `**` for recursive subtrees.
 
 **Executable invocations** — before a binary is run, its name is matched against `spec.defaults.executables`. Argument patterns (`["*"]` for any args) and environment variable patterns are also checked.
 
@@ -223,7 +223,7 @@ The `framework/sandbox` package provides the execution backend. All commands per
 
 ### Runners
 
-**`SandboxCommandRunner`** — launches commands inside a gVisor container using `docker run --runtime=runsc` (or `containerd`). This is the default when `--no-sandbox` is not set.
+**`SandboxCommandRunner`** — launches commands inside a gVisor container using `docker run --runtime=runsc` (or `containerd`). This is the default when `--no-sandbox` is not set. File-scope policy is propagated into sandbox-aware tools so the same protected roots are not exposed through host-side file I/O or command execution.
 
 **`LocalCommandRunner`** — runs commands directly on the host. Used in development or when the sandbox runtime is unavailable. Path traversal is still enforced: the resolved working directory must remain within the declared workspace root.
 

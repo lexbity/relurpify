@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -227,6 +228,117 @@ spec:
 	require.False(t, *m.Spec.Agent.NativeToolCalling)
 }
 
+func TestLoadAgentManifest_ToolCallingIntent(t *testing.T) {
+	path := writeManifestYAML(t, `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: test-agent
+spec:
+  image: test-image:latest
+  runtime: gvisor
+  agent:
+    mode: primary
+    model:
+      provider: ollama
+      name: test-model
+    tool_calling_intent: prefer_prompt
+  policy:
+    permissions:
+      filesystem:
+        - action: fs:read
+          path: /workspace/**
+`)
+	m, err := LoadAgentManifest(path)
+	require.NoError(t, err)
+	require.NotNil(t, m.Spec.Agent)
+	require.Equal(t, core.ToolCallingIntentPreferPrompt, m.Spec.Agent.ToolCallingIntent)
+	require.False(t, m.Spec.Agent.NativeToolCallingEnabled())
+}
+
+func TestLoadAgentManifest_SplitPolicyShape(t *testing.T) {
+	path := writeManifestYAML(t, `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: split-agent
+spec:
+  image: split-image:latest
+  runtime: gvisor
+  policy:
+    permissions:
+      filesystem:
+        - action: fs:read
+          path: /workspace/**
+    security:
+      run_as_user: 1000
+      read_only_root: true
+    audit:
+      level: verbose
+      retention_days: 7
+    defaults:
+      permissions:
+        executables:
+          - binary: git
+  agent:
+    mode: primary
+    model:
+      provider: ollama
+      name: split-model
+    tool_calling_intent: prefer_native
+`)
+	m, err := LoadAgentManifest(path)
+	require.NoError(t, err)
+	require.NotNil(t, m.Spec.Policy)
+	require.Equal(t, "/workspace/**", m.Spec.Permissions.FileSystem[0].Path)
+	require.True(t, m.Spec.Security.ReadOnlyRoot)
+	require.Equal(t, "verbose", m.Spec.Audit.Level)
+	require.NotNil(t, m.Spec.Defaults)
+	require.NotNil(t, m.Spec.Defaults.Permissions)
+	require.Len(t, m.Spec.Defaults.Permissions.Executables, 1)
+	require.NotNil(t, m.Spec.Agent)
+	require.Equal(t, core.ToolCallingIntentPreferNative, m.Spec.Agent.ToolCallingIntent)
+	require.True(t, m.Spec.Agent.NativeToolCallingEnabled())
+}
+
+func TestLoadAgentManifest_LegacyPolicyWarnings(t *testing.T) {
+	path := writeManifestYAML(t, minimalValidYAML)
+	snapshot, err := LoadAgentManifestSnapshot(path)
+	require.NoError(t, err)
+	require.NotEmpty(t, snapshot.Warnings)
+	require.Contains(t, snapshot.Warnings[0], "spec.policy")
+}
+
+func TestLoadAgentManifest_MixedPolicyPrefersNested(t *testing.T) {
+	path := writeManifestYAML(t, `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: split-agent
+spec:
+  image: split-image:latest
+  runtime: gvisor
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: /flat/**
+  policy:
+    permissions:
+      filesystem:
+        - action: fs:read
+          path: /nested/**
+  agent:
+    mode: primary
+    model:
+      provider: ollama
+      name: split-model
+`)
+	m, err := LoadAgentManifest(path)
+	require.NoError(t, err)
+	require.Len(t, m.Spec.Permissions.FileSystem, 1)
+	require.Equal(t, "/nested/**", m.Spec.Permissions.FileSystem[0].Path)
+}
+
 func TestLoadAgentManifest_MissingFile(t *testing.T) {
 	_, err := LoadAgentManifest("/nonexistent/path/manifest.yaml")
 	require.Error(t, err)
@@ -256,6 +368,44 @@ spec:
 	_, err := LoadAgentManifest(path)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "image")
+}
+
+func TestLoadAgentManifestSnapshot_FingerprintAndImmutability(t *testing.T) {
+	path := writeManifestYAML(t, minimalValidYAML)
+
+	first, err := LoadAgentManifestSnapshot(path)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	require.NotNil(t, first.Manifest)
+	assert.Equal(t, path, first.SourcePath)
+	assert.Equal(t, path, first.Manifest.SourcePath)
+	assert.False(t, first.LoadedAt.IsZero())
+
+	second, err := LoadAgentManifestSnapshot(path)
+	require.NoError(t, err)
+	assert.Equal(t, first.Fingerprint, second.Fingerprint)
+	assert.True(t, bytes.Equal(first.Fingerprint[:], second.Fingerprint[:]))
+
+	updated := `
+apiVersion: relurpify/v1alpha1
+kind: AgentManifest
+metadata:
+  name: updated-agent
+spec:
+  image: test-image:latest
+  runtime: gvisor
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: /workspace/**
+`
+	require.NoError(t, os.WriteFile(path, []byte(updated), 0o644))
+
+	third, err := LoadAgentManifestSnapshot(path)
+	require.NoError(t, err)
+	assert.NotEqual(t, first.Fingerprint, third.Fingerprint)
+	assert.Equal(t, "test-agent", first.Manifest.Metadata.Name)
+	assert.Equal(t, "updated-agent", third.Manifest.Metadata.Name)
 }
 
 func TestSaveAndLoadAgentManifest_Roundtrip(t *testing.T) {

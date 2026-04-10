@@ -82,6 +82,19 @@ func TestAgentSpecOverlayFromSpecClonesCoordinationConfig(t *testing.T) {
 	require.Equal(t, "sticky", spec.Coordination.ScaleOut.Metadata["placement"])
 }
 
+func TestAgentSpecOverlayFromSpecClonesToolCallingIntent(t *testing.T) {
+	spec := &AgentRuntimeSpec{
+		ToolCallingIntent: ToolCallingIntentPreferPrompt,
+	}
+
+	overlay := AgentSpecOverlayFromSpec(spec)
+	require.NotNil(t, overlay.ToolCallingIntent)
+	require.Equal(t, ToolCallingIntentPreferPrompt, *overlay.ToolCallingIntent)
+
+	*overlay.ToolCallingIntent = ToolCallingIntentPreferNative
+	require.Equal(t, ToolCallingIntentPreferPrompt, spec.ToolCallingIntent)
+}
+
 func boolPtr(value bool) *bool {
 	return &value
 }

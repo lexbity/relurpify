@@ -28,6 +28,9 @@ type FileSystemAction string
 const (
 	FileSystemRead    FileSystemAction = "fs:read"
 	FileSystemWrite   FileSystemAction = "fs:write"
+	FileSystemDelete  FileSystemAction = "fs:delete"
+	FileSystemRename  FileSystemAction = "fs:rename"
+	FileSystemMove    FileSystemAction = "fs:move"
 	FileSystemExecute FileSystemAction = "fs:execute"
 	FileSystemList    FileSystemAction = "fs:list"
 )

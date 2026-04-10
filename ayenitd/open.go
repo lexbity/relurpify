@@ -17,6 +17,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/retrieval"
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
@@ -66,13 +67,21 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase E: Agent Registration + Authorization
+	manifestSnapshot, err := manifest.LoadAgentManifestSnapshot(cfg.ManifestPath)
+	if err != nil {
+		patternDB.Close()
+		workflowStore.Close()
+		logFile.Close()
+		return nil, fmt.Errorf("load manifest snapshot: %w", err)
+	}
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
-		ManifestPath: cfg.ManifestPath,
-		ConfigPath:   cfg.ConfigPath,
-		Sandbox:      cfg.Sandbox,
-		AuditLimit:   cfg.AuditLimit,
-		BaseFS:       cfg.Workspace,
-		HITLTimeout:  cfg.HITLTimeout,
+		ManifestPath:     cfg.ManifestPath,
+		ManifestSnapshot: manifestSnapshot,
+		ConfigPath:       cfg.ConfigPath,
+		Sandbox:          cfg.Sandbox,
+		AuditLimit:       cfg.AuditLimit,
+		BaseFS:           cfg.Workspace,
+		HITLTimeout:      cfg.HITLTimeout,
 	})
 	if err != nil {
 		patternDB.Close()
@@ -108,6 +117,22 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 						}
 					})
 				}
+				if manifestSnapshot != nil {
+					payload := map[string]interface{}{
+						"manifest_path": manifestSnapshot.SourcePath,
+						"fingerprint":   fmt.Sprintf("%x", manifestSnapshot.Fingerprint),
+						"warnings":      append([]string(nil), manifestSnapshot.Warnings...),
+					}
+					if data, err := json.Marshal(payload); err == nil {
+						_, _ = eventLog.Append(ctx, "local", []core.FrameworkEvent{{
+							Timestamp: time.Now().UTC(),
+							Type:      core.FrameworkEventManifestReloaded,
+							Payload:   data,
+							Actor:     core.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+							Partition: "local",
+						}})
+					}
+				}
 			} else if logger != nil {
 				logger.Printf("warning: failed to init event log: %v", err)
 			}
@@ -139,6 +164,16 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		}
 	}
 
+	profileRegistry, err := llm.NewProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir())
+	if err != nil {
+		patternDB.Close()
+		workflowStore.Close()
+		logFile.Close()
+		return nil, fmt.Errorf("load model profiles: %w", err)
+	}
+	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, inferenceModel)
+	_ = llm.ApplyProfile(backend, profileResolution.Profile)
+
 	logLLM := cfg.DebugLLM
 	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
 		if registration.Manifest.Spec.Agent.Logging != nil && registration.Manifest.Spec.Agent.Logging.LLM != nil {
@@ -147,6 +182,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 	backend.SetDebugLogging(logLLM)
 	model := llm.NewInstrumentedModel(backend.Model(), tel, logLLM)
+	_ = llm.ApplyProfile(model, profileResolution.Profile)
 	guidanceBroker := guidance.NewGuidanceBroker(0)
 
 	// Wire permission event logger if event telemetry is available.
@@ -266,6 +302,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		Environment:          env,
 		Registration:         registration,
 		Backend:              backend,
+		ProfileResolution:    profileResolution,
 		logFile:              logFile,
 		eventLog:             eventLog,
 		patternDB:            patternDB,

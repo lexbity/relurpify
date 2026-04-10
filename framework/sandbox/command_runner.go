@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -88,6 +89,9 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 		return "", "", err
 	}
 	args := []string{"run", "--rm", "--runtime", runtimeName, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir}
+	for _, mount := range r.protectedMounts() {
+		args = append(args, "-v", mount)
+	}
 	if r.user > 0 {
 		args = append(args, "-u", strconv.Itoa(r.user))
 	}
@@ -133,6 +137,41 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (str
 	}
 	err = cmd.Run()
 	return stdout.String(), stderr.String(), err
+}
+
+func (r *SandboxCommandRunner) protectedMounts() []string {
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	policy := r.rt.Policy()
+	if len(policy.ProtectedPaths) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(policy.ProtectedPaths))
+	var mounts []string
+	for _, path := range policy.ProtectedPaths {
+		path = filepath.Clean(path)
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(r.workspace, path)
+		if err != nil {
+			continue
+		}
+		if strings.HasPrefix(rel, "..") {
+			continue
+		}
+		containerPath := filepath.ToSlash(filepath.Join("/workspace", rel))
+		seen[path] = struct{}{}
+		mounts = append(mounts, fmt.Sprintf("%s:%s:ro", path, containerPath))
+	}
+	return mounts
 }
 
 // containerWorkdir maps the host workdir into the container mount.

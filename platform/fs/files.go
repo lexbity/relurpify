@@ -4,14 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/search"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lexcodex/relurpify/framework/authorization"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/framework/sandbox"
+	"github.com/lexcodex/relurpify/framework/search"
 )
 
 func shouldSkipGeneratedDir(name string) bool {
@@ -32,11 +35,16 @@ type ReadFileTool struct {
 	BasePath string
 	manager  *authorization.PermissionManager
 	agentID  string
+	scope    *sandbox.FileScopePolicy
 }
 
 func (t *ReadFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
+}
+
+func (t *ReadFileTool) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+	t.scope = scope
 }
 
 func (t *ReadFileTool) Name() string        { return "file_read" }
@@ -48,6 +56,9 @@ func (t *ReadFileTool) Parameters() []core.ToolParameter {
 func (t *ReadFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
+	if err := t.enforceSandboxScope(core.FileSystemRead, path); err != nil {
+		return nil, err
+	}
 	if t.manager != nil {
 		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
 			return nil, err
@@ -99,6 +110,7 @@ type WriteFileTool struct {
 	manager  *authorization.PermissionManager
 	agentID  string
 	spec     *core.AgentRuntimeSpec
+	scope    *sandbox.FileScopePolicy
 }
 
 func (t *WriteFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
@@ -109,6 +121,10 @@ func (t *WriteFileTool) SetPermissionManager(manager *authorization.PermissionMa
 func (t *WriteFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
+}
+
+func (t *WriteFileTool) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+	t.scope = scope
 }
 
 func (t *WriteFileTool) Name() string        { return "file_write" }
@@ -123,6 +139,9 @@ func (t *WriteFileTool) Parameters() []core.ToolParameter {
 func (t *WriteFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
+	if err := t.enforceSandboxScope(core.FileSystemWrite, path); err != nil {
+		return nil, err
+	}
 	if t.manager != nil {
 		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
 			return nil, err
@@ -140,6 +159,9 @@ func (t *WriteFileTool) Execute(ctx context.Context, state *core.Context, args m
 	if t.Backup {
 		if _, err := os.Stat(path); err == nil {
 			backup := path + ".bak"
+			if err := t.enforceSandboxScope(core.FileSystemWrite, backup); err != nil {
+				return nil, fmt.Errorf("backup blocked: %w", err)
+			}
 			if t.manager != nil {
 				if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, backup); err != nil {
 					return nil, fmt.Errorf("backup blocked: %w", err)
@@ -173,11 +195,16 @@ type ListFilesTool struct {
 	BasePath string
 	manager  *authorization.PermissionManager
 	agentID  string
+	scope    *sandbox.FileScopePolicy
 }
 
 func (t *ListFilesTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
+}
+
+func (t *ListFilesTool) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+	t.scope = scope
 }
 
 func (t *ListFilesTool) Name() string        { return "file_list" }
@@ -191,6 +218,9 @@ func (t *ListFilesTool) Parameters() []core.ToolParameter {
 }
 func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	dir := t.preparePath(fmt.Sprint(args["directory"]))
+	if err := t.enforceSandboxScope(core.FileSystemList, dir); err != nil {
+		return nil, err
+	}
 	permissions := newTraversalPermissionCache(t.manager, t.agentID)
 
 	if permissions != nil {
@@ -209,6 +239,12 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args m
 			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
+			if err := t.enforceSandboxScope(core.FileSystemList, path); err != nil {
+				if sandboxProtectedPath(err) {
+					return fs.SkipDir
+				}
+				return err
+			}
 			if permissions != nil {
 				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
 					return fs.SkipDir
@@ -222,6 +258,12 @@ func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args m
 				// Skip files we lack explicit read rights for rather than failing the request.
 				return nil
 			}
+		}
+		if err := t.enforceSandboxScope(core.FileSystemRead, path); err != nil {
+			if sandboxProtectedPath(err) {
+				return nil
+			}
+			return err
 		}
 
 		relPath, relErr := filepath.Rel(dir, path)
@@ -257,11 +299,16 @@ type SearchInFilesTool struct {
 	BasePath string
 	manager  *authorization.PermissionManager
 	agentID  string
+	scope    *sandbox.FileScopePolicy
 }
 
 func (t *SearchInFilesTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
+}
+
+func (t *SearchInFilesTool) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+	t.scope = scope
 }
 
 func (t *SearchInFilesTool) Name() string        { return "file_search" }
@@ -284,6 +331,9 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 		dirText = "."
 	}
 	dir := t.preparePath(dirText)
+	if err := t.enforceSandboxScope(core.FileSystemRead, dir); err != nil {
+		return nil, err
+	}
 	permissions := newTraversalPermissionCache(t.manager, t.agentID)
 
 	if permissions != nil {
@@ -312,6 +362,12 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
+			if err := t.enforceSandboxScope(core.FileSystemList, path); err != nil {
+				if sandboxProtectedPath(err) {
+					return fs.SkipDir
+				}
+				return err
+			}
 			if permissions != nil {
 				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
 					return fs.SkipDir
@@ -325,6 +381,12 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, state *core.Context, ar
 			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
 				return nil // Skip unreadable
 			}
+		}
+		if err := t.enforceSandboxScope(core.FileSystemRead, path); err != nil {
+			if sandboxProtectedPath(err) {
+				return nil
+			}
+			return err
 		}
 
 		file, err := os.Open(path)
@@ -374,6 +436,7 @@ type CreateFileTool struct {
 	manager  *authorization.PermissionManager
 	agentID  string
 	spec     *core.AgentRuntimeSpec
+	scope    *sandbox.FileScopePolicy
 }
 
 func (t *CreateFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
@@ -384,6 +447,10 @@ func (t *CreateFileTool) SetPermissionManager(manager *authorization.PermissionM
 func (t *CreateFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
+}
+
+func (t *CreateFileTool) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+	t.scope = scope
 }
 
 func (t *CreateFileTool) Name() string        { return "file_create" }
@@ -398,6 +465,9 @@ func (t *CreateFileTool) Parameters() []core.ToolParameter {
 func (t *CreateFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
+	if err := t.enforceSandboxScope(core.FileSystemWrite, path); err != nil {
+		return nil, err
+	}
 	if t.manager != nil {
 		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
 			return nil, err
@@ -434,6 +504,7 @@ type DeleteFileTool struct {
 	manager  *authorization.PermissionManager
 	agentID  string
 	spec     *core.AgentRuntimeSpec
+	scope    *sandbox.FileScopePolicy
 }
 
 func (t *DeleteFileTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
@@ -446,6 +517,10 @@ func (t *DeleteFileTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID strin
 	t.agentID = agentID
 }
 
+func (t *DeleteFileTool) SetSandboxScope(scope *sandbox.FileScopePolicy) {
+	t.scope = scope
+}
+
 func (t *DeleteFileTool) Name() string        { return "file_delete" }
 func (t *DeleteFileTool) Description() string { return "Deletes a file after confirmation." }
 func (t *DeleteFileTool) Category() string    { return "file" }
@@ -455,6 +530,9 @@ func (t *DeleteFileTool) Parameters() []core.ToolParameter {
 func (t *DeleteFileTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	path := t.preparePath(fmt.Sprint(args["path"]))
 
+	if err := t.enforceSandboxScope(core.FileSystemDelete, path); err != nil {
+		return nil, err
+	}
 	if t.manager != nil {
 		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemWrite, path); err != nil {
 			return nil, err
@@ -518,6 +596,59 @@ func (t *DeleteFileTool) enforceFileMatrix(ctx context.Context, action string, a
 		return nil
 	}
 	return enforceFileMatrix(ctx, t.manager, t.agentID, t.BasePath, action, absPath, t.spec.Files)
+}
+
+func (t *ReadFileTool) enforceSandboxScope(action core.FileSystemAction, path string) error {
+	if t == nil || t.scope == nil {
+		return nil
+	}
+	return t.scope.Check(action, path)
+}
+
+func (t *WriteFileTool) enforceSandboxScope(action core.FileSystemAction, path string) error {
+	if t == nil || t.scope == nil {
+		return nil
+	}
+	return t.scope.Check(action, path)
+}
+
+func (t *ListFilesTool) enforceSandboxScope(action core.FileSystemAction, path string) error {
+	if t == nil || t.scope == nil {
+		return nil
+	}
+	return t.scope.Check(action, path)
+}
+
+func (t *SearchInFilesTool) enforceSandboxScope(action core.FileSystemAction, path string) error {
+	if t == nil || t.scope == nil {
+		return nil
+	}
+	return t.scope.Check(action, path)
+}
+
+func (t *CreateFileTool) enforceSandboxScope(action core.FileSystemAction, path string) error {
+	if t == nil || t.scope == nil {
+		return nil
+	}
+	return t.scope.Check(action, path)
+}
+
+func (t *DeleteFileTool) enforceSandboxScope(action core.FileSystemAction, path string) error {
+	if t == nil || t.scope == nil {
+		return nil
+	}
+	return t.scope.Check(action, path)
+}
+
+func sandboxProtectedPath(err error) bool {
+	if err == nil {
+		return false
+	}
+	var scopeErr *sandbox.FileScopeError
+	if errors.As(err, &scopeErr) {
+		return scopeErr.Reason == sandbox.ErrFileScopeProtectedPath.Error()
+	}
+	return false
 }
 
 func preparePath(base, path string) string {

@@ -1,11 +1,11 @@
-package ollama
+package openaicompat
 
-// ModelProfile captures model-specific quirks and configuration for the
-// Ollama transport.
+// ModelProfile captures model-specific quirks and configuration for
+// OpenAI-compatible transports.
 type ModelProfile struct {
 	Provider string `yaml:"provider,omitempty"`
 	Model    string `yaml:"model,omitempty"`
-	Pattern  string `yaml:"pattern"`
+	Pattern  string `yaml:"pattern,omitempty"`
 
 	ToolCalling struct {
 		NativeAPI               bool `yaml:"native_api"`

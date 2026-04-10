@@ -252,8 +252,8 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *core.Task, sta
 
 func (r *Runner) callingCapabilities() core.BackendCapabilities {
 	caps := r.Options.BackendCapabilities
-	if pm, ok := r.Options.Model.(core.ProfiledModel); ok && pm.UsesNativeToolCalling() {
-		caps.NativeToolCalling = true
+	if pm, ok := r.Options.Model.(core.ProfiledModel); ok {
+		caps.NativeToolCalling = caps.NativeToolCalling && pm.UsesNativeToolCalling()
 	}
 	return caps
 }

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,16 +27,21 @@ type DependencyStatus struct {
 
 // DoctorReport summarizes workspace readiness and local dependency state.
 type DoctorReport struct {
-	Workspace        string
-	ConfigRoot       string
-	WorkspacePresent bool
-	ConfigExists     bool
-	ManifestExists   bool
-	ConfigError      string
-	ManifestError    string
-	Inference        InferenceBackendReport
-	Dependencies     []DependencyStatus
-	CheckedAt        time.Time
+	Workspace             string
+	ConfigRoot            string
+	WorkspacePresent      bool
+	ConfigExists          bool
+	ManifestExists        bool
+	ConfigError           string
+	ManifestError         string
+	ManifestWarnings      []string
+	DeprecationNotices    []string
+	ProtectedPaths        []string
+	ManifestFingerprint   string
+	ManifestPolicySummary string
+	Inference             InferenceBackendReport
+	Dependencies          []DependencyStatus
+	CheckedAt             time.Time
 }
 
 func (r DoctorReport) HasBlockingIssues() bool {
@@ -77,10 +83,18 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
 		report.ManifestExists = true
-		if _, err := manifest.LoadAgentManifest(cfg.ManifestPath); err != nil {
+		if snapshot, err := manifest.LoadAgentManifestSnapshot(cfg.ManifestPath); err != nil {
 			report.ManifestError = err.Error()
+		} else {
+			report.ManifestFingerprint = hex.EncodeToString(snapshot.Fingerprint[:])
+			report.ManifestPolicySummary = summarizeManifestPolicy(snapshot.Manifest)
+			if len(snapshot.Warnings) > 0 {
+				report.ManifestWarnings = append(report.ManifestWarnings, snapshot.Warnings...)
+				report.DeprecationNotices = append(report.DeprecationNotices, snapshot.Warnings...)
+			}
 		}
 	}
+	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath)
 
 	var env EnvironmentReport
 	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
@@ -258,6 +272,31 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func summarizeManifestPolicy(m *manifest.AgentManifest) string {
+	if m == nil {
+		return ""
+	}
+	var parts []string
+	if m.Spec.Policy != nil {
+		policy := m.Spec.Policy
+		permCount := len(policy.Permissions.FileSystem) + len(policy.Permissions.Executables) + len(policy.Permissions.Network)
+		if permCount > 0 {
+			parts = append(parts, fmt.Sprintf("policy-perms=%d", permCount))
+		}
+		if len(policy.Policies) > 0 {
+			parts = append(parts, fmt.Sprintf("policy-rules=%d", len(policy.Policies)))
+		}
+		if policy.Defaults != nil && policy.Defaults.Permissions != nil {
+			defaultPerms := policy.Defaults.Permissions
+			parts = append(parts, fmt.Sprintf("defaults=%d/%d/%d", len(defaultPerms.FileSystem), len(defaultPerms.Executables), len(defaultPerms.Network)))
+		}
+	}
+	if m.Spec.Agent != nil {
+		parts = append(parts, fmt.Sprintf("tool-calling=%s", m.Spec.Agent.ResolveToolCallingIntent()))
+	}
+	return strings.Join(parts, ", ")
 }
 
 var execLookPath = func(file string) (string, error) {
