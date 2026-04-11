@@ -38,6 +38,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 	}
 	ignoreChanges = uniqueStrings(append(ignoreChanges, defaultIgnoredGeneratedChanges()...))
+	workspace := layout.WorkspaceDir
 
 	suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
 	suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
@@ -64,7 +65,8 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModel, model.Endpoint, "", "", layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 	resolvedLayout := newRunCaseLayout(outDir, c.Name, execution.Model)
-	workspace := resolvedLayout.WorkspaceDir
+	initialTapePath := execution.TapePath
+	workspace = resolvedLayout.WorkspaceDir
 	layout = resolvedLayout
 	for _, dir := range []string{layout.ArtifactsDir, layout.TmpDir, filepath.Dir(layout.TelemetryPath), filepath.Dir(layout.LogPath)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -74,7 +76,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, templateProfile, suite.Spec.Manifest, exclude, resolveWorkspaceFiles(suite, c)); err != nil {
 		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, manifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
-	if execution.TapePath == layout.TapePath {
+	if execution.TapePath == initialTapePath {
 		execution.TapePath = resolvedLayout.TapePath
 	}
 	if logger == nil {

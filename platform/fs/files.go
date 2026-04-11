@@ -217,7 +217,15 @@ func (t *ListFilesTool) Parameters() []core.ToolParameter {
 	}
 }
 func (t *ListFilesTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
-	dir := t.preparePath(fmt.Sprint(args["directory"]))
+	dirVal, ok := args["directory"]
+	if !ok || dirVal == nil {
+		dirVal = "."
+	}
+	dirText := strings.TrimSpace(fmt.Sprint(dirVal))
+	if dirText == "" || dirText == "<nil>" {
+		dirText = "."
+	}
+	dir := t.preparePath(dirText)
 	if err := t.enforceSandboxScope(core.FileSystemList, dir); err != nil {
 		return nil, err
 	}

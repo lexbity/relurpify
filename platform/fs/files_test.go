@@ -114,6 +114,20 @@ func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
 	assert.Contains(t, files, target)
 }
 
+func TestListFilesToolDefaultsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "README.md")
+	assert.NoError(t, os.WriteFile(target, []byte("# docs\n"), 0o644))
+
+	tool := &ListFilesTool{BasePath: dir}
+	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+		"pattern": "*.md",
+	})
+	assert.NoError(t, err)
+	files := res.Data["files"].([]string)
+	assert.Contains(t, files, target)
+}
+
 func TestListFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "src", "main.rs")
