@@ -173,8 +173,35 @@ func TestNexusServerWiringAndAuthHelpers(t *testing.T) {
 	})).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/mcp", nil))
 	require.Equal(t, http.StatusUnauthorized, rr.Code)
 
+	principal := fwgateway.ConnectionPrincipal{
+		Actor:         core.EventActor{TenantID: "tenant-1", ID: "user-1"},
+		Authenticated: true,
+	}
+	store := &stubSessionStore{}
+	router := &stubSessionRouter{}
+	allowed, err := authorizeSessionEvent(context.Background(), router, store, principal, "sess-1")
+	require.NoError(t, err)
+	require.False(t, allowed)
+
+	store.boundary = &core.SessionBoundary{
+		SessionID: "sess-1",
+		TenantID:  "tenant-1",
+		Partition: "local",
+		Owner:     core.SubjectRef{TenantID: "tenant-1", Kind: core.SubjectKindUser, ID: "user-1"},
+	}
+	router.err = session.ErrSessionBoundaryViolation
+	allowed, err = authorizeSessionEvent(context.Background(), router, store, principal, "sess-1")
+	require.NoError(t, err)
+	require.False(t, allowed)
+
+	router.err = errors.New("backend unavailable")
+	allowed, err = authorizeSessionEvent(context.Background(), router, store, principal, "sess-1")
+	require.Error(t, err)
+	require.False(t, allowed)
+	require.ErrorContains(t, err, "authorize session event")
+
 	gateway := &FederatedMeshGateway{Mesh: &fwfmp.Service{}}
-	err := gateway.ImportAdvertisements(context.Background(), core.SubjectRef{}, []core.ExportAdvertisement{{
+	err = gateway.ImportAdvertisements(context.Background(), core.SubjectRef{}, []core.ExportAdvertisement{{
 		TrustDomain: "mesh.remote",
 		Export: core.ExportDescriptor{
 			ExportName:       "agent.resume",
@@ -407,6 +434,7 @@ func (s *serverNodeStore) DeleteExpiredPendingPairings(context.Context, time.Tim
 
 type stubSessionRouter struct {
 	authorized bool
+	err        error
 }
 
 func (s *stubSessionRouter) Route(context.Context, session.InboundMessage) (*core.SessionBoundary, error) {
@@ -417,17 +445,24 @@ func (s *stubSessionRouter) Authorize(_ context.Context, req session.Authorizati
 	if req.Boundary == nil {
 		return errors.New("boundary required")
 	}
+	if s.err != nil {
+		return s.err
+	}
 	return nil
 }
 
 type stubSessionStore struct {
 	boundary *core.SessionBoundary
+	err      error
 }
 
 func (s *stubSessionStore) GetBoundary(context.Context, string) (*core.SessionBoundary, error) {
 	return nil, nil
 }
 func (s *stubSessionStore) GetBoundaryBySessionID(context.Context, string) (*core.SessionBoundary, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
 	return s.boundary, nil
 }
 func (s *stubSessionStore) UpsertBoundary(context.Context, string, *core.SessionBoundary) error {

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -25,7 +24,6 @@ import (
 	nexusserver "github.com/lexcodex/relurpify/app/nexus/server"
 	nexusstatus "github.com/lexcodex/relurpify/app/nexus/status"
 	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/event"
 	"github.com/lexcodex/relurpify/framework/identity"
 	memdb "github.com/lexcodex/relurpify/framework/memory/db"
@@ -277,189 +275,6 @@ func loadOrCreateFMPSigner(path string) (*fwfmp.Ed25519Signer, error) {
 	}
 }
 
-func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore, identityStore identity.Store) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
-	if !cfg.Enabled {
-		return nil
-	}
-	// Pre-hash every static token at startup so lookups are O(1) map reads
-	// rather than an O(N) constant-time scan.  SHA-256 collision resistance
-	// provides the same security guarantee as comparing the raw tokens.
-	staticByHash := make(map[string]fwgateway.ConnectionPrincipal, len(cfg.Tokens))
-	for _, entry := range cfg.Tokens {
-		if entry.Token == "" || entry.SubjectID == "" || entry.Role == "" {
-			continue
-		}
-		tenantID := nexusserver.NormalizeTenantID(entry.TenantID)
-		subjectKind := core.SubjectKind(entry.SubjectKind)
-		if subjectKind == "" {
-			switch strings.ToLower(strings.TrimSpace(entry.Role)) {
-			case "node":
-				subjectKind = core.SubjectKindNode
-			case "agent", "operator", "admin":
-				subjectKind = core.SubjectKindServiceAccount
-			default:
-				subjectKind = core.SubjectKindUser
-			}
-		}
-		principal := core.AuthenticatedPrincipal{
-			TenantID:      tenantID,
-			AuthMethod:    core.AuthMethodBearerToken,
-			Authenticated: true,
-			Scopes:        append([]string(nil), entry.Scopes...),
-			Subject: core.SubjectRef{
-				TenantID: tenantID,
-				Kind:     subjectKind,
-				ID:       entry.SubjectID,
-			},
-		}
-		staticByHash[nexusadmin.HashToken(entry.Token)] = fwgateway.ConnectionPrincipal{
-			Role:          entry.Role,
-			Authenticated: true,
-			Principal:     &principal,
-			Actor: core.EventActor{
-				Kind:        entry.Role,
-				ID:          entry.SubjectID,
-				TenantID:    tenantID,
-				SubjectKind: subjectKind,
-			},
-		}
-	}
-	return func(ctx context.Context, token string) (fwgateway.ConnectionPrincipal, error) {
-		if token == "" {
-			return fwgateway.ConnectionPrincipal{}, fmt.Errorf("bearer token required")
-		}
-		if principal, ok := staticByHash[nexusadmin.HashToken(token)]; ok {
-			return principal, nil
-		}
-		if tokenStore != nil {
-			records, err := tokenStore.ListTokens(ctx)
-			if err != nil {
-				return fwgateway.ConnectionPrincipal{}, fmt.Errorf("lookup bearer token: %w", err)
-			}
-			hashed := nexusadmin.HashToken(token)
-			for _, record := range records {
-				if len(record.TokenHash) != len(hashed) {
-					continue
-				}
-				if record.RevokedAt != nil {
-					continue
-				}
-				if record.ExpiresAt != nil && record.ExpiresAt.Before(time.Now().UTC()) {
-					continue
-				}
-				if subtle.ConstantTimeCompare([]byte(record.TokenHash), []byte(hashed)) != 1 {
-					continue
-				}
-				principal, err := dynamicTokenPrincipal(ctx, record, identityStore)
-				if err != nil {
-					return fwgateway.ConnectionPrincipal{}, err
-				}
-				return fwgateway.ConnectionPrincipal{
-					Role:          principalRole(principal.Scopes),
-					Authenticated: true,
-					Principal:     &principal,
-					Actor: core.EventActor{
-						Kind:        principalRole(principal.Scopes),
-						ID:          principal.Subject.ID,
-						TenantID:    principal.TenantID,
-						SubjectKind: principal.Subject.Kind,
-					},
-				}, nil
-			}
-		}
-		return fwgateway.ConnectionPrincipal{}, fmt.Errorf("unknown bearer token")
-	}
-}
-
-func staticGatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {
-	return gatewayPrincipalResolver(cfg, nil, nil)
-}
-
-func dynamicTokenPrincipal(ctx context.Context, record core.AdminTokenRecord, identityStore identity.Store) (core.AuthenticatedPrincipal, error) {
-	tenantID := nexusserver.NormalizeTenantID(record.TenantID)
-	subjectID := strings.TrimSpace(record.SubjectID)
-	if subjectID == "" {
-		return core.AuthenticatedPrincipal{}, fmt.Errorf("token %s missing subject id", record.ID)
-	}
-	subjectKind := record.SubjectKind
-	if identityStore != nil {
-		tenant, err := identityStore.GetTenant(ctx, tenantID)
-		if err != nil {
-			return core.AuthenticatedPrincipal{}, fmt.Errorf("lookup token tenant: %w", err)
-		}
-		if tenant == nil {
-			return core.AuthenticatedPrincipal{}, fmt.Errorf("token tenant %s not found", tenantID)
-		}
-		if tenant.DisabledAt != nil {
-			return core.AuthenticatedPrincipal{}, fmt.Errorf("token tenant %s disabled", tenantID)
-		}
-		if subjectKind != "" {
-			subject, err := identityStore.GetSubject(ctx, tenantID, subjectKind, subjectID)
-			if err != nil {
-				return core.AuthenticatedPrincipal{}, fmt.Errorf("lookup token subject: %w", err)
-			}
-			if subject == nil {
-				return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s/%s not found", subjectKind, subjectID)
-			}
-			if subject.DisabledAt != nil {
-				return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s/%s disabled", subjectKind, subjectID)
-			}
-		} else {
-			subjects, err := identityStore.ListSubjects(ctx, tenantID)
-			if err != nil {
-				return core.AuthenticatedPrincipal{}, fmt.Errorf("list token subjects: %w", err)
-			}
-			for _, subject := range subjects {
-				if strings.EqualFold(subject.ID, subjectID) {
-					if subject.DisabledAt != nil {
-						return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s/%s disabled", subject.Kind, subjectID)
-					}
-					subjectKind = subject.Kind
-					break
-				}
-			}
-			if subjectKind == "" {
-				return core.AuthenticatedPrincipal{}, fmt.Errorf("token subject %s not found", subjectID)
-			}
-		}
-	}
-	if subjectKind == "" {
-		subjectKind = core.SubjectKindServiceAccount
-	}
-	principal := core.AuthenticatedPrincipal{
-		TenantID:      tenantID,
-		AuthMethod:    core.AuthMethodBearerToken,
-		Authenticated: true,
-		Scopes:        append([]string(nil), record.Scopes...),
-		Subject: core.SubjectRef{
-			TenantID: tenantID,
-			Kind:     subjectKind,
-			ID:       subjectID,
-		},
-	}
-	if err := principal.Validate(); err != nil {
-		return core.AuthenticatedPrincipal{}, fmt.Errorf("token principal invalid: %w", err)
-	}
-	return principal, nil
-}
-
-func principalRole(scopes []string) string {
-	role := "agent"
-	for _, scope := range scopes {
-		switch strings.ToLower(strings.TrimSpace(scope)) {
-		case "gateway:admin", "nexus:admin", "admin":
-			return "admin"
-		case "nexus:operator", "operator":
-			role = "operator"
-		case "node":
-			if role == "agent" {
-				role = "node"
-			}
-		}
-	}
-	return role
-}
-
 func runStatus(ctx context.Context, out interface{ Write([]byte) (int, error) }, workspace, configPath string) error {
 	snapshot, err := nexusstatus.Load(ctx, workspace, configPath)
 	if err != nil {
@@ -624,41 +439,6 @@ type stdioReadWriteCloser struct {
 }
 
 func (stdioReadWriteCloser) Close() error { return nil }
-
-func stdioAdminPrincipal(cfg nexuscfg.Config, tokenStore nexusadmin.TokenStore, identityStore identity.Store, token string) (core.AuthenticatedPrincipal, error) {
-	if strings.TrimSpace(token) != "" {
-		resolver := gatewayPrincipalResolver(cfg.Gateway.Auth, tokenStore, identityStore)
-		if resolver == nil {
-			return core.AuthenticatedPrincipal{}, fmt.Errorf("gateway auth disabled")
-		}
-		principal, err := resolver(context.Background(), token)
-		if err != nil || principal.Principal == nil {
-			return core.AuthenticatedPrincipal{}, fmt.Errorf("resolve admin principal: %w", err)
-		}
-		return *principal.Principal, nil
-	}
-	for _, entry := range cfg.Gateway.Auth.Tokens {
-		role := strings.ToLower(strings.TrimSpace(entry.Role))
-		if role != "admin" && role != "operator" {
-			continue
-		}
-		principal, err := stdioAdminPrincipal(cfg, tokenStore, identityStore, entry.Token)
-		if err == nil {
-			return principal, nil
-		}
-	}
-	return core.AuthenticatedPrincipal{
-		TenantID:      "default",
-		AuthMethod:    core.AuthMethodBootstrapAdmin,
-		Authenticated: true,
-		Scopes:        []string{"nexus:admin"},
-		Subject: core.SubjectRef{
-			TenantID: "default",
-			Kind:     core.SubjectKindServiceAccount,
-			ID:       "local-admin",
-		},
-	}, nil
-}
 
 func newNodePairCmd(workspace, configPath *string) *cobra.Command {
 	var deviceID string

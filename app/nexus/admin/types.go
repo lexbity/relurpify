@@ -258,6 +258,7 @@ type RexSLOProvider interface {
 type TokenStore interface {
 	ListTokens(ctx context.Context) ([]core.AdminTokenRecord, error)
 	GetToken(ctx context.Context, id string) (*core.AdminTokenRecord, error)
+	GetTokenByHash(ctx context.Context, tokenHash string) (*core.AdminTokenRecord, error)
 	CreateToken(ctx context.Context, record core.AdminTokenRecord) error
 	RevokeToken(ctx context.Context, id string, revokedAt time.Time) error
 }

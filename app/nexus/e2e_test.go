@@ -636,11 +636,11 @@ func testGatewayConfig() nexuscfg.Config {
 			Auth: nexuscfg.GatewayAuthConfig{
 				Enabled: true,
 				Tokens: []nexuscfg.GatewayTokenAuth{
-					{Token: "agent-a", TenantID: "tenant-a", Role: "agent", SubjectID: "svc-a"},
-					{Token: "agent-b", TenantID: "tenant-b", Role: "agent", SubjectID: "svc-b"},
-					{Token: "admin-a", TenantID: "tenant-a", Role: "admin", SubjectID: "admin-a", Scopes: []string{"gateway:admin"}},
-					{Token: "node-a", TenantID: "tenant-a", Role: "node", SubjectID: "node-a"},
-					{Token: "node-missing", TenantID: "tenant-a", Role: "node", SubjectID: "node-missing"},
+					{Token: "agent-a", TenantID: "tenant-a", Role: "agent", SubjectKind: string(core.SubjectKindServiceAccount), SubjectID: "svc-a"},
+					{Token: "agent-b", TenantID: "tenant-b", Role: "agent", SubjectKind: string(core.SubjectKindServiceAccount), SubjectID: "svc-b"},
+					{Token: "admin-a", TenantID: "tenant-a", Role: "admin", SubjectKind: string(core.SubjectKindServiceAccount), SubjectID: "admin-a", Scopes: []string{"gateway:admin"}},
+					{Token: "node-a", TenantID: "tenant-a", Role: "node", SubjectKind: string(core.SubjectKindNode), SubjectID: "node-a"},
+					{Token: "node-missing", TenantID: "tenant-a", Role: "node", SubjectKind: string(core.SubjectKindNode), SubjectID: "node-missing"},
 				},
 			},
 		},

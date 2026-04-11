@@ -55,6 +55,7 @@ func (s *SQLiteAdminTokenStore) init() error {
 	for _, stmt := range []string{
 		`ALTER TABLE admin_tokens ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE admin_tokens ADD COLUMN subject_kind TEXT NOT NULL DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_admin_tokens_token_hash ON admin_tokens(token_hash)`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 			return err
@@ -106,6 +107,18 @@ func (s *SQLiteAdminTokenStore) ListTokensPaged(ctx context.Context, limit, offs
 
 func (s *SQLiteAdminTokenStore) GetToken(ctx context.Context, id string) (*core.AdminTokenRecord, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT id, name, tenant_id, subject_kind, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at FROM admin_tokens WHERE id = ?`, id)
+	record, err := scanAdminToken(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+func (s *SQLiteAdminTokenStore) GetTokenByHash(ctx context.Context, tokenHash string) (*core.AdminTokenRecord, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT id, name, tenant_id, subject_kind, subject_id, token_hash, scopes_json, issued_at, expires_at, last_used_at, revoked_at FROM admin_tokens WHERE token_hash = ?`, tokenHash)
 	record, err := scanAdminToken(row.Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

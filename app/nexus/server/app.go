@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -234,22 +235,7 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 			return boundary.TenantID, nil
 		},
 		SessionEventAuthorizer: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionID string) (bool, error) {
-			boundary, err := a.SessionStore.GetBoundaryBySessionID(ctx, sessionID)
-			if err != nil {
-				return false, err
-			}
-			if boundary == nil {
-				return false, nil
-			}
-			if err := router.Authorize(ctx, session.AuthorizationRequest{
-				Actor:         principal.Actor,
-				Authenticated: principal.Authenticated,
-				Operation:     core.SessionOperationResume,
-				Boundary:      boundary,
-			}); err != nil {
-				return false, nil
-			}
-			return true, nil
+			return authorizeSessionEvent(ctx, router, a.SessionStore, principal, sessionID)
 		},
 		InvokeCapability: func(ctx context.Context, principal fwgateway.ConnectionPrincipal, sessionKey, capabilityID string, args map[string]any) (*core.CapabilityExecutionResult, error) {
 			return InvokeAuthorizedGatewayCapability(ctx, router, a.SessionStore, nodeManager, a.RexRuntime, principal, sessionKey, capabilityID, args)
@@ -324,6 +310,34 @@ func (a *NexusApp) Handler(ctx context.Context) (http.Handler, error) {
 		mux.Handle("/webchat", webchatAdapter.Handler())
 	}
 	return mux, nil
+}
+
+func authorizeSessionEvent(ctx context.Context, router session.Router, store session.Store, principal fwgateway.ConnectionPrincipal, sessionID string) (bool, error) {
+	if store == nil {
+		return false, fmt.Errorf("session store unavailable")
+	}
+	if router == nil {
+		return false, fmt.Errorf("session router unavailable")
+	}
+	boundary, err := store.GetBoundaryBySessionID(ctx, sessionID)
+	if err != nil {
+		return false, err
+	}
+	if boundary == nil {
+		return false, nil
+	}
+	if err := router.Authorize(ctx, session.AuthorizationRequest{
+		Actor:         principal.Actor,
+		Authenticated: principal.Authenticated,
+		Operation:     core.SessionOperationResume,
+		Boundary:      boundary,
+	}); err != nil {
+		if errors.Is(err, session.ErrSessionBoundaryViolation) {
+			return false, nil
+		}
+		return false, fmt.Errorf("authorize session event for %s: %w", sessionID, err)
+	}
+	return true, nil
 }
 
 func (a *NexusApp) partition() string {

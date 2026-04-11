@@ -151,16 +151,17 @@ func TestStartEventLogCompactorRunsImmediatelyAndOnInterval(t *testing.T) {
 }
 
 func TestStaticGatewayPrincipalResolver(t *testing.T) {
-	resolver := staticGatewayPrincipalResolver(nexuscfg.GatewayAuthConfig{
+	resolver := gatewayPrincipalResolver(nexuscfg.GatewayAuthConfig{
 		Enabled: true,
 		Tokens: []nexuscfg.GatewayTokenAuth{{
-			Token:     "token-1",
-			TenantID:  "tenant-1",
-			Role:      "agent",
-			SubjectID: "svc-1",
-			Scopes:    []string{"session:send"},
+			Token:       "token-1",
+			TenantID:    "tenant-1",
+			Role:        "agent",
+			SubjectKind: string(core.SubjectKindServiceAccount),
+			SubjectID:   "svc-1",
+			Scopes:      []string{"session:send"},
 		}},
-	})
+	}, nil, nil)
 	require.NotNil(t, resolver)
 
 	principal, err := resolver(context.Background(), "token-1")
@@ -191,15 +192,16 @@ func TestStaticGatewayPrincipalResolver(t *testing.T) {
 }
 
 func TestStaticGatewayPrincipalResolverRejectsUnknownToken(t *testing.T) {
-	resolver := staticGatewayPrincipalResolver(nexuscfg.GatewayAuthConfig{
+	resolver := gatewayPrincipalResolver(nexuscfg.GatewayAuthConfig{
 		Enabled: true,
 		Tokens: []nexuscfg.GatewayTokenAuth{{
-			Token:     "token-1",
-			TenantID:  "tenant-1",
-			Role:      "agent",
-			SubjectID: "svc-1",
+			Token:       "token-1",
+			TenantID:    "tenant-1",
+			Role:        "agent",
+			SubjectKind: string(core.SubjectKindServiceAccount),
+			SubjectID:   "svc-1",
 		}},
-	})
+	}, nil, nil)
 
 	_, err := resolver(context.Background(), "token-2")
 	require.ErrorContains(t, err, "unknown bearer token")
