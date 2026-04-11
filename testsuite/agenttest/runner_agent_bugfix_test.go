@@ -109,6 +109,78 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 	}
 }
 
+func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
+	workspace := t.TempDir()
+	manifestPath := writeCodingAgenttestManifest(t, workspace)
+
+	origBootstrap := bootstrapAgentRuntime
+	bootstrapAgentRuntime = func(_ string, opts appruntime.AgentBootstrapOptions) (*appruntime.BootstrappedAgentRuntime, error) {
+		bundle, err := appruntime.BuildBuiltinCapabilityBundle(workspace, fsandbox.NewLocalCommandRunner(workspace, nil), appruntime.CapabilityRegistryOptions{
+			AgentID: "coding",
+			AgentSpec: &core.AgentRuntimeSpec{
+				Implementation: "coding",
+				Model:          core.AgentModelConfig{Name: "test-model"},
+			},
+			SkipASTIndex: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		t.Cleanup(func() {
+			_ = bundle.Close()
+		})
+		registry := bundle.Registry
+		cfg := &core.Config{Name: "bootstrapped", MaxIterations: 3}
+		return &appruntime.BootstrappedAgentRuntime{
+			Registry:    registry,
+			Memory:      opts.Memory,
+			AgentConfig: cfg,
+			Environment: agentenv.AgentEnvironment{
+				Model:    opts.Model,
+				Registry: registry,
+				Memory:   opts.Memory,
+				Config:   cfg,
+			},
+		}, nil
+	}
+	defer func() { bootstrapAgentRuntime = origBootstrap }()
+
+	agent, _, err := buildAgent(
+		context.Background(),
+		workspace,
+		manifestPath,
+		"coding",
+		nil,
+		nil,
+		nil,
+		RunOptions{SkipASTIndex: true},
+		nil,
+		defaultAgenttestAllowedCapabilities(),
+		CaseSpec{},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("buildAgent: %v", err)
+	}
+
+	registry := extractCapabilityRegistry(agent)
+	if registry == nil {
+		t.Fatal("expected capability registry")
+	}
+	tool, ok := registry.Get("file_list")
+	if !ok {
+		t.Fatal("expected file_list tool")
+	}
+	_, err = tool.Execute(context.Background(), core.NewContext(), map[string]any{
+		"directory": "relurpify_cfg/model_profiles",
+		"pattern":   "*",
+	})
+	if err == nil || !strings.Contains(err.Error(), "protected path") {
+		t.Fatalf("expected protected-path error from sandbox scope, got %v", err)
+	}
+
+}
+
 func TestBuildAgentPropagatesSkipASTIndexToBootstrap(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := writeAgenttestManifest(t, workspace, "testfu")

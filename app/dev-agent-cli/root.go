@@ -65,6 +65,7 @@ func NewRootCmd() *cobra.Command {
 
 	root.AddCommand(
 		newStartCmd(),
+		newEucloCmd(),
 		newWorkspaceCmd(),
 		newServiceCmd(),
 		newArchaeoCmd(),

@@ -26,22 +26,8 @@ import (
 func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir string) CaseReport {
 	caseStartedAt := time.Now().UTC()
 	layout := newRunCaseLayout(outDir, c.Name, model.Name)
-	for _, dir := range []string{layout.ArtifactsDir, layout.TmpDir, filepath.Dir(layout.TelemetryPath), filepath.Dir(layout.LogPath)} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", "", layout.ArtifactsDir, err.Error(), "infra", 0)
-		}
-	}
 
 	logger := r.Logger
-	if logger == nil {
-		logFile, err := os.OpenFile(layout.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-		if err == nil {
-			defer logFile.Close()
-			logger = log.New(logFile, "agenttest ", log.LstdFlags|log.Lmicroseconds)
-		} else {
-			logger = log.New(os.Stderr, "agenttest ", log.LstdFlags|log.Lmicroseconds)
-		}
-	}
 
 	templateProfile := resolveTemplateProfile(suite, c)
 	exclude := resolveWorkspaceExclude(suite, c)
@@ -53,32 +39,21 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	ignoreChanges = uniqueStrings(append(ignoreChanges, defaultIgnoredGeneratedChanges()...))
 
-	workspace := layout.WorkspaceDir
-	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, templateProfile, suite.Spec.Manifest, exclude, resolveWorkspaceFiles(suite, c)); err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
-	}
-
 	suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
 	suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
-	manifestAbs := mapTargetPathToWorkspace(suiteManifestAbs, targetWorkspace, workspace)
-	manifestAbs = fallbackManifestPath(manifestAbs, workspace)
+	manifestAbs := mapTargetPathToWorkspace(suiteManifestAbs, targetWorkspace, targetWorkspace)
+	manifestAbs = fallbackManifestPath(manifestAbs, targetWorkspace)
 	loadedManifest, err := manifest.LoadAgentManifest(manifestAbs)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", "", model.Endpoint, "", "", layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 
 	timeout, err := resolveCaseTimeout(opts, suite, c)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 0)
 	}
 
 	agentName := suite.Spec.AgentName
-	telemetrySink, err := telemetry.NewJSONFileTelemetry(layout.TelemetryPath)
-	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModelName(loadedManifest), model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
-	}
-	defer telemetrySink.Close()
-	telemetryMux := telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{telemetrySink}}
 
 	manifestModel := ""
 	if loadedManifest.Spec.Agent != nil {
@@ -86,7 +61,45 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	execution, err := resolveCaseExecution(suite, c, model, manifestModel, opts, layout, targetWorkspace, workspace)
 	if err != nil {
-		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModel, model.Endpoint, "", "", workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", manifestModel, model.Endpoint, "", "", layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 0)
+	}
+	resolvedLayout := newRunCaseLayout(outDir, c.Name, execution.Model)
+	workspace := resolvedLayout.WorkspaceDir
+	layout = resolvedLayout
+	for _, dir := range []string{layout.ArtifactsDir, layout.TmpDir, filepath.Dir(layout.TelemetryPath), filepath.Dir(layout.LogPath)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, manifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+		}
+	}
+	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, templateProfile, suite.Spec.Manifest, exclude, resolveWorkspaceFiles(suite, c)); err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, manifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+	}
+	if execution.TapePath == layout.TapePath {
+		execution.TapePath = resolvedLayout.TapePath
+	}
+	if logger == nil {
+		logFile, err := os.OpenFile(layout.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err == nil {
+			defer logFile.Close()
+			logger = log.New(logFile, "agenttest ", log.LstdFlags|log.Lmicroseconds)
+		} else {
+			logger = log.New(os.Stderr, "agenttest ", log.LstdFlags|log.Lmicroseconds)
+		}
+	}
+	telemetrySink, err := telemetry.NewJSONFileTelemetry(layout.TelemetryPath)
+	if err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+	}
+	defer telemetrySink.Close()
+	telemetryMux := telemetry.MultiplexTelemetry{Sinks: []core.Telemetry{telemetrySink}}
+	modelProfileProvenance, resolvedProfile, err := resolveCaseModelProfile(targetWorkspace, execution)
+	if err != nil {
+		return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, err.Error(), "infra", 0)
+	}
+	if modelProfileProvenance != nil {
+		if data, marshalErr := json.MarshalIndent(modelProfileProvenance, "", "  "); marshalErr == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "model_profile.provenance.json"), data, 0o644)
+		}
 	}
 	modelProvenance, err := resolveCaseModelProvenance(execution)
 	if err != nil {
@@ -97,13 +110,27 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "model.provenance.json"), data, 0o644)
 		}
 	}
-
-	if opts.BackendResetBetween {
-		maybeResetBackend(logger, opts, execution.Model)
+	providerProvenance := providerProvenanceForExecution(execution)
+	if providerProvenance != nil {
+		if data, marshalErr := json.MarshalIndent(providerProvenance, "", "  "); marshalErr == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "provider.provenance.json"), data, 0o644)
+		}
 	}
 
-	client := ollama.NewClient(execution.Endpoint, execution.Model)
-	client.SetDebugLogging(opts.DebugLLM)
+	executionOpts := opts
+	executionOpts.BackendReset = firstNonEmpty(execution.ProviderResetStrategy, executionOpts.BackendReset)
+	executionOpts.BackendResetBetween = executionOpts.BackendResetBetween || execution.ProviderResetBetween
+	if executionOpts.BackendResetBetween {
+		maybeResetBackend(logger, executionOpts, execution.Model)
+	}
+
+	var client *ollama.Client
+	if resolvedProfile != nil {
+		client = ollama.NewClientWithProfile(execution.Endpoint, execution.Model, resolvedProfile.AsOllamaProfile())
+	} else {
+		client = ollama.NewClient(execution.Endpoint, execution.Model)
+	}
+	client.SetDebugLogging(executionOpts.DebugLLM)
 
 	lm := core.LanguageModel(client)
 	if execution.RecordingMode != "" && execution.RecordingMode != "off" {
@@ -124,7 +151,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		defer wrapped.Close()
 		lm = wrapped
 	}
-	instrumented := llm.NewInstrumentedModel(lm, telemetryMux, opts.DebugLLM)
+	instrumented := llm.NewInstrumentedModel(lm, telemetryMux, executionOpts.DebugLLM)
 
 	env := make([]string, 0, len(c.Overrides.ExtraEnv))
 	for k, v := range c.Overrides.ExtraEnv {
@@ -251,6 +278,12 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 	events, _ := ReadTelemetryJSONL(layout.TelemetryPath)
 	_, toolCounts := CountToolCalls(events)
+	transcript := BuildToolTranscript(events)
+	if transcript != nil {
+		if data, err := json.MarshalIndent(transcript, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "tool_transcript.json"), data, 0o644)
+		}
+	}
 	tokenUsage := CountTokenUsage(events)
 	if data, err := json.MarshalIndent(tokenUsage, "", "  "); err == nil {
 		_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "token_usage.json"), data, 0o644)
@@ -328,38 +361,40 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	}
 
 	return CaseReport{
-		Name:                c.Name,
-		Model:               execution.Model,
-		ModelDigest:         modelProvenanceDigest(modelProvenance),
-		ModelLoadedAs:       modelProvenanceName(modelProvenance),
-		ModelSource:         execution.ModelSource,
-		ManifestModel:       execution.ManifestModel,
-		Endpoint:            execution.Endpoint,
-		RecordingMode:       execution.RecordingMode,
-		TapePath:            execution.TapePath,
-		Workspace:           workspace,
-		ArtifactsDir:        layout.ArtifactsDir,
-		StartedAt:           caseStartedAt,
-		FinishedAt:          caseFinishedAt,
-		DurationMS:          caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
-		Skipped:             false,
-		SkipReason:          "",
-		Success:             success,
-		Error:               caseErr,
-		FailureKind:         failureKind,
-		Attempts:            attempts,
-		RetryCount:          len(retryReasons),
-		RetryTriggeredBy:    retryReasons,
-		Output:              output,
-		ChangedFiles:        changed,
-		ToolCalls:           toolCounts,
-		TokenUsage:          tokenUsage,
-		MemoryOutcome:       memoryOutcome,
-		FrameworkPerf:       frameworkPerf,
-		PhaseMetrics:        phaseMetrics,
-		BaselinePath:        baselinePath,
-		BaselineFound:       baselineFound,
-		PerformanceWarnings: performanceWarnings,
+		Name:                 c.Name,
+		Model:                execution.Model,
+		ModelDigest:          modelProvenanceDigest(modelProvenance),
+		ModelLoadedAs:        modelProvenanceName(modelProvenance),
+		ModelSource:          execution.ModelSource,
+		Provider:             execution.Provider,
+		ManifestModel:        execution.ManifestModel,
+		Endpoint:             execution.Endpoint,
+		RecordingMode:        execution.RecordingMode,
+		TapePath:             execution.TapePath,
+		Workspace:            workspace,
+		ArtifactsDir:         layout.ArtifactsDir,
+		StartedAt:            caseStartedAt,
+		FinishedAt:           caseFinishedAt,
+		DurationMS:           caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
+		Skipped:              false,
+		SkipReason:           "",
+		Success:              success,
+		Error:                caseErr,
+		FailureKind:          failureKind,
+		Attempts:             attempts,
+		RetryCount:           len(retryReasons),
+		RetryTriggeredBy:     retryReasons,
+		Output:               output,
+		ChangedFiles:         changed,
+		ToolCalls:            toolCounts,
+		TokenUsage:           tokenUsage,
+		MemoryOutcome:        memoryOutcome,
+		FrameworkPerf:        frameworkPerf,
+		PhaseMetrics:         phaseMetrics,
+		BaselinePath:         baselinePath,
+		BaselineFound:        baselineFound,
+		PerformanceWarnings:  performanceWarnings,
+		BackendResetStrategy: executionOpts.BackendReset,
 	}
 }
 
@@ -847,6 +882,25 @@ func modelProvenanceName(provenance *BackendModelProvenance) string {
 		return ""
 	}
 	return firstNonEmpty(provenance.LoadedName, provenance.LoadedModel)
+}
+
+type BackendProviderProvenance struct {
+	Provider      string `json:"provider,omitempty"`
+	Endpoint      string `json:"endpoint,omitempty"`
+	ResetStrategy string `json:"reset_strategy,omitempty"`
+	ResetBetween  bool   `json:"reset_between,omitempty"`
+}
+
+func providerProvenanceForExecution(execution resolvedCaseExecution) *BackendProviderProvenance {
+	if strings.TrimSpace(execution.Provider) == "" && strings.TrimSpace(execution.Endpoint) == "" {
+		return nil
+	}
+	return &BackendProviderProvenance{
+		Provider:      execution.Provider,
+		Endpoint:      execution.Endpoint,
+		ResetStrategy: execution.ProviderResetStrategy,
+		ResetBetween:  execution.ProviderResetBetween,
+	}
 }
 
 func finalOutputText(val any) string {

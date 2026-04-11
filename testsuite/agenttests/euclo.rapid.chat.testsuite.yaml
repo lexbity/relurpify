@@ -20,6 +20,10 @@ spec:
       - .gocache/**
       - .gomodcache/**
       - relurpify_cfg/test_runs/**
+    ignore_changes:
+      - relurpify_cfg/logs/skills.log
+      - relurpify_cfg/artifacts/euclo/deferred/**
+      - '**/*.bak'
   models:
     - name: qwen2.5-coder:14b
       endpoint: http://localhost:11434
@@ -73,6 +77,12 @@ spec:
         no_file_changes: true
         output_regex:
           - (?i)(user|email|enabled|newuser)
+        tool_calls_must_include:
+          - file_read
+        tool_calls_must_exclude:
+          - file_write
+          - go_test
+        max_tool_calls: 4
         euclo:
           behavior_family: direct_change_execution
           mode: chat
@@ -154,6 +164,12 @@ spec:
         no_file_changes: true
         output_regex:
           - (?i)(memorystore|nullstore|store|discard|memory)
+        tool_calls_must_include:
+          - file_read
+        tool_calls_must_exclude:
+          - file_write
+          - go_test
+        max_tool_calls: 4
         euclo:
           behavior_family: direct_change_execution
           mode: chat
@@ -213,8 +229,14 @@ spec:
         no_file_changes: true
         output_regex:
           - (?i)(nil|map|panic|initializ)
+        tool_calls_must_include:
+          - file_read
+        tool_calls_must_exclude:
+          - file_write
+          - go_test
+        max_tool_calls: 4
         euclo:
-          behavior_family: react
+          behavior_family: direct_change_execution
           mode: chat
           primary_relurpic_capability: euclo:chat.inspect
           supporting_relurpic_capabilities:
@@ -258,11 +280,15 @@ spec:
         must_succeed: true
         files_changed:
           - testsuite/fixtures/rapid_chat/implement/clamp.go
+        tool_calls_must_include:
+          - file_read
+          - file_write
+        max_tool_calls: 8
         files_contain:
           - path: testsuite/fixtures/rapid_chat/implement/clamp.go
             contains: ["if v < lo", "if v > hi", "return v"]
         euclo:
-          behavior_family: react
+          behavior_family: direct_change_execution
           mode: chat
           primary_relurpic_capability: euclo:chat.implement
           supporting_relurpic_capabilities:
@@ -334,11 +360,16 @@ spec:
         must_succeed: true
         files_changed:
           - testsuite/fixtures/rapid_chat/verify/max.go
+        tool_calls_must_include:
+          - file_read
+          - file_write
+          - go_test
+        max_tool_calls: 8
         files_contain:
           - path: testsuite/fixtures/rapid_chat/verify/max.go
             contains: ["if a > b", "return a", "return b"]
         euclo:
-          behavior_family: react
+          behavior_family: direct_change_execution
           mode: chat
           primary_relurpic_capability: euclo:chat.implement
           supporting_relurpic_capabilities:

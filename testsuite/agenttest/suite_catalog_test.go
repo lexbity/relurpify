@@ -53,3 +53,34 @@ func TestLoadAllCommittedSuites(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadEucloSuitesIncludeClassification(t *testing.T) {
+	cases := map[string]string{
+		filepath.Join("..", "agenttests", "euclo.code.testsuite.yaml"):                "capability",
+		filepath.Join("..", "agenttests", "euclo.archaeology.testsuite.yaml"):         "journey",
+		filepath.Join("..", "agenttests", "euclo.intent.journey.testsuite.yaml"):      "journey",
+		filepath.Join("..", "agenttests", "euclo.performance_context.testsuite.yaml"): "benchmark",
+	}
+	for path, want := range cases {
+		suite, err := LoadSuite(path)
+		if err != nil {
+			t.Fatalf("LoadSuite(%q) error = %v", path, err)
+		}
+		if got := suite.Metadata.Classification; got != want {
+			t.Fatalf("suite %q classification = %q, want %q", path, got, want)
+		}
+	}
+}
+
+func TestLoadBenchmarkSuitesIncludeScoringMetadata(t *testing.T) {
+	suite, err := LoadSuite(filepath.Join("..", "agenttests", "euclo.performance_context.testsuite.yaml"))
+	if err != nil {
+		t.Fatalf("LoadSuite error = %v", err)
+	}
+	if got := suite.Metadata.Benchmark.ScoreFamily; got != "context-pressure" {
+		t.Fatalf("unexpected benchmark score family %q", got)
+	}
+	if got := suite.Metadata.Benchmark.ComparisonWindow; got != "suite" {
+		t.Fatalf("unexpected benchmark comparison window %q", got)
+	}
+}

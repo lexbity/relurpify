@@ -222,3 +222,61 @@ spec:
 		t.Fatalf("expected missing tape line, got %q", got)
 	}
 }
+
+func TestPromoteAgentTestRunWritesLineage(t *testing.T) {
+	workspace := t.TempDir()
+	suitePath := filepath.Join(workspace, "testsuite", "agenttests", "euclo.code.testsuite.yaml")
+	if err := os.MkdirAll(filepath.Dir(suitePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(suitePath, []byte(`apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.code
+  classification: capability
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  cases:
+    - name: basic_edit_task
+      prompt: hello
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runDir := filepath.Join(workspace, "relurpify_cfg", "test_runs", "euclo", "run-1")
+	artifactsDir := filepath.Join(runDir, "artifacts", "basic_edit_task__qwen2_5_coder_14b")
+	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(artifactsDir, "tape.jsonl"), []byte(`{"kind":"_header","request":{"header":{"kind":"_header","model_name":"qwen2.5-coder:14b"}}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(artifactsDir, "interaction.tape.jsonl"), []byte(`{"kind":"proposal","phase":"scope"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report := agenttest.SuiteReport{
+		Cases: []agenttest.CaseReport{{
+			Name:         "basic_edit_task",
+			Model:        "qwen2.5-coder:14b",
+			Provider:     "ollama",
+			Success:      true,
+			ArtifactsDir: artifactsDir,
+		}},
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "report.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out strings.Builder
+	if err := promoteAgentTestRun(workspace, suitePath, runDir, "basic_edit_task", false, &out); err != nil {
+		t.Fatal(err)
+	}
+	lineage := filepath.Join(workspace, "testsuite", "agenttests", "tapes", "euclo.code", "basic_edit_task__qwen2_5_coder_14b.promotion.json")
+	if _, err := os.Stat(lineage); err != nil {
+		t.Fatalf("expected promotion lineage at %s: %v", lineage, err)
+	}
+}

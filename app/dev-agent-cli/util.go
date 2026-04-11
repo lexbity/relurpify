@@ -148,3 +148,54 @@ func sanitizeName(name string) string {
 	name = strings.ReplaceAll(name, " ", "_")
 	return name
 }
+
+// stringValue renders arbitrary values as trimmed strings for CLI helpers.
+func stringValue(v any) string {
+	switch typed := v.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	default:
+		return strings.TrimSpace(fmt.Sprint(typed))
+	}
+}
+
+// uniqueStrings removes duplicates while preserving the first seen order.
+func uniqueStrings(input []string) []string {
+	if len(input) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(input))
+	for _, item := range input {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+// firstNonEmpty returns the first trimmed non-empty string from the inputs.
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+// containsString reports whether target exists in items.
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}

@@ -5,6 +5,16 @@ metadata:
   description: "Performance-oriented Euclo coverage for long-running context and resume behavior."
   owner: agent-platform
   tier: stable
+  classification: benchmark
+  benchmark:
+    score_family: context-pressure
+    score_dimensions:
+      - completion
+      - context_pressure
+      - artifact_integrity
+      - stability
+    comparison_window: suite
+    variance_threshold: 0.15
   quarantined: false
 spec:
   agent_name: euclo

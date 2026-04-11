@@ -26,6 +26,12 @@ This directory is organized by codebase boundary and audience.
 | providers.md | Provider setup guide |
 | migration.md | Migration guide for neutral inference fields |
 
+## Live Testing
+
+| Document | Description |
+|----------|-------------|
+| livetesting/testsuite.md | Technical overview of the YAML-driven agent test harness |
+
 ## Agents
 
 | Document | Description |

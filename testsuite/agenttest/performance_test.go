@@ -1,6 +1,7 @@
 package agenttest
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -130,5 +131,57 @@ func TestGoldenBaselineFilename(t *testing.T) {
 	got := GoldenBaselineFilename("basic edit task", "qwen2.5-coder:14b")
 	if !strings.HasSuffix(got, ".baseline.json") || !strings.Contains(got, "basic_edit_task__qwen2_5_coder_14b") {
 		t.Fatalf("unexpected baseline filename %q", got)
+	}
+}
+
+func TestBuildBenchmarkReportWritesArtifacts(t *testing.T) {
+	workspace := t.TempDir()
+	artifactsDir := filepath.Join(workspace, "artifacts", "case__model")
+	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"tape.jsonl", "interaction.tape.jsonl", "model.provenance.json"} {
+		if err := os.WriteFile(filepath.Join(artifactsDir, name), []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	suite := &Suite{
+		SourcePath: "testsuite/agenttests/euclo.performance_context.testsuite.yaml",
+		Metadata: SuiteMeta{
+			Name:           "euclo.performance_context",
+			Classification: "benchmark",
+			Benchmark: BenchmarkMeta{
+				ScoreFamily:       "context-pressure",
+				ScoreDimensions:   []string{"completion", "context_pressure", "artifact_integrity", "stability"},
+				ComparisonWindow:  "suite",
+				VarianceThreshold: 0.15,
+			},
+		},
+	}
+	report, err := BuildBenchmarkReport(suite, &SuiteReport{
+		Cases: []CaseReport{{
+			Name:         "context_pressure_baseline",
+			Model:        "qwen2.5-coder:14b",
+			Endpoint:     "http://localhost:11434",
+			Workspace:    workspace,
+			ArtifactsDir: artifactsDir,
+			Success:      true,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("BuildBenchmarkReport: %v", err)
+	}
+	if report == nil || len(report.Cases) != 1 {
+		t.Fatalf("unexpected benchmark report: %+v", report)
+	}
+	if report.ScoreFamily != "context-pressure" {
+		t.Fatalf("unexpected score family: %+v", report)
+	}
+	if _, err := os.Stat(BenchmarkCaseScoreFilePath(artifactsDir)); err != nil {
+		t.Fatalf("expected benchmark score artifact: %v", err)
+	}
+	if _, err := os.Stat(BenchmarkCaseComparisonFilePath(artifactsDir)); err != nil {
+		t.Fatalf("expected benchmark comparison artifact: %v", err)
 	}
 }

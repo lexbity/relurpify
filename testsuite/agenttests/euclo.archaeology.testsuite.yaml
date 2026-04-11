@@ -5,6 +5,7 @@ metadata:
   description: "Euclo archaeology mode: explore → compile-plan → implement-plan capability chain."
   owner: agent-platform
   tier: stable
+  classification: journey
   quarantined: false
 spec:
   agent_name: euclo

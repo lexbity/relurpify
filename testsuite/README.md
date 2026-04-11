@@ -78,6 +78,7 @@ for cross-cutting suites.
 | `euclo.capability_interactions.testsuite.yaml` | euclo | Capability composition and contract enforcement |
 | `euclo.chat.testsuite.yaml` | euclo | Chat mode: ask, inspect, implement |
 | `euclo.archaeology.testsuite.yaml` | euclo | Archaeology mode: explore → compile-plan → implement |
+| `euclo.intent.journey.testsuite.yaml` | euclo | Intent-oriented journeys: explore/plan/implement, chat→code, resume |
 | `euclo.rapid.testsuite.yaml` | euclo | Fast live-model bug hunting across debug + archaeology |
 | `euclo.intent_fidelity.testsuite.yaml` | euclo | Intent recovery from conflicting/incomplete signals |
 | `euclo.performance_context.testsuite.yaml` | euclo | Performance and context pressure baselines |
@@ -96,6 +97,12 @@ include them:
 | `stable` | Default — included in standard CI runs |
 | `live-flaky` | Known to be LLM-non-deterministic; excluded from gates |
 | `quarantined` | Explicitly broken; excluded unless `--include-quarantined` |
+
+| Classification | Meaning |
+|---|---|
+| `capability` | Capability-level validation with exact expectations |
+| `journey` | Multi-step intent flow or transition coverage |
+| `benchmark` | Scored or performance-oriented coverage |
 
 | Lane | Cases included |
 |---|---|
@@ -190,10 +197,11 @@ GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache \
 
 ### Output Artifacts
 
-Each run writes to `relurpify_cfg/test_runs/{agent}/{run_id}/`:
+Each run writes to the active workspace's `relurpify_cfg/test_runs/{agent}/{run_id}/`:
 
 ```
 report.json                     # SuiteReport — overall results
+benchmark_report.json           # BenchmarkReport — aggregate benchmark scoring (benchmark suites)
 artifacts/{case}__{model}/
   tape.jsonl                    # LLM interaction tape (if recording enabled)
   context.snapshot.json         # Full task context state at completion
@@ -204,6 +212,9 @@ artifacts/{case}__{model}/
   changed_files.json            # Files modified during the case
   performance_warnings.json     # Baseline comparison results (if baseline exists)
   model.provenance.json         # Model name, digest, source
+  provider.provenance.json      # Provider name, endpoint, reset strategy
+  benchmark_score.json          # BenchmarkCaseScore — deterministic per-case scoring
+  benchmark_comparison.json     # BenchmarkComparisonReport — per-case baseline comparison
 tmp/{case}__{model}/workspace/  # Isolated workspace used during execution
 logs/{case}__{model}.log        # Full execution log
 ```
@@ -223,6 +234,12 @@ metadata:
   description: "..."              # optional
   owner: team-name                # optional
   tier: stable                    # smoke | stable | live-flaky | quarantined
+  classification: journey         # capability | journey | benchmark
+  benchmark:                      # optional benchmark scoring metadata
+    score_family: context-pressure
+    score_dimensions: [completion, artifact_integrity, stability]
+    comparison_window: suite      # case | suite | run | matrix
+    variance_threshold: 0.15
   quarantined: false              # true disables the entire suite
 
 spec:
@@ -233,6 +250,7 @@ spec:
     profile: ci-live              # live | record | replay | developer-live | ci-live | ci-replay
     strict: true                  # auto-enabled for ci-* profiles
     timeout: 90s                  # default per-case timeout; overridable per case
+    matrix_order: provider-first   # provider-first | model-first
 
   workspace:
     strategy: derived             # only "derived" is supported
@@ -245,6 +263,11 @@ spec:
   models:
     - name: qwen2.5-coder:14b    # model identifier
       endpoint: http://localhost:11434  # Ollama endpoint
+
+  providers:                     # optional explicit provider matrix
+    - name: ollama
+      endpoint: http://localhost:11434
+      reset_strategy: model
 
   recording:
     mode: off                     # off | record | replay
@@ -853,6 +876,9 @@ Ollama is not running. Start it: `ollama serve` or `systemctl start ollama`.
 
 ### "no such model" / model load error
 Model is not pulled: `ollama pull qwen2.5-coder:14b`.
+Model profile selection is automatic once the model is loaded. Profiles are
+resolved from `relurpify_cfg/model_profiles/` using the selected provider and
+model name.
 
 ### Case times out
 - Increase `--timeout`: `./dev-agent agenttest run --timeout 180s`

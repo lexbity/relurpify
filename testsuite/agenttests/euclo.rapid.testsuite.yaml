@@ -20,6 +20,10 @@ spec:
       - .gocache/**
       - .gomodcache/**
       - relurpify_cfg/test_runs/**
+    ignore_changes:
+      - relurpify_cfg/logs/skills.log
+      - relurpify_cfg/artifacts/euclo/deferred/**
+      - '**/*.bak'
   models:
     - name: qwen2.5-coder:14b
       endpoint: http://localhost:11434
@@ -62,10 +66,16 @@ spec:
         must_succeed: true
         files_changed:
           - testsuite/fixtures/rapid_debug/math.go
+        tool_calls_must_include:
+          - file_read
+          - file_write
+          - go_test
+        max_tool_calls: 12
         files_contain:
           - path: testsuite/fixtures/rapid_debug/math.go
             contains: ["return a / b"]
         euclo:
+          behavior_family: stale_assumption_detection
           mode: debug
           profile: reproduce_localize_patch
 
@@ -116,6 +126,10 @@ spec:
         must_succeed: true
         files_changed:
           - testsuite/fixtures/rapid_arch/handler.go
+        tool_calls_must_include:
+          - file_read
+          - file_write
+        max_tool_calls: 8
         state_key_not_empty:
           - euclo.active_exploration_id
           - euclo.active_exploration_snapshot_id
@@ -123,6 +137,7 @@ spec:
           - path: testsuite/fixtures/rapid_arch/handler.go
             contains: ['import "strings"', "strings.TrimSpace(name)"]
         euclo:
+          behavior_family: gap_analysis
           mode: planning
 
     - name: rapid_archaeology_tension_scan
@@ -164,10 +179,23 @@ spec:
       expect:
         must_succeed: true
         no_file_changes: true
+        tool_calls_must_include:
+          - file_list
+          - file_read
+          - file_search
+          - git_blame
+          - git_history
+          - search_find_similar
+          - search_semantic
+        tool_calls_must_exclude:
+          - file_write
+          - go_test
+        max_tool_calls: 8
         state_key_not_empty:
           - euclo.active_exploration_id
           - euclo.active_exploration_snapshot_id
         workflow_has_tensions:
           - wf-rapid-arch-tension
         euclo:
+          behavior_family: gap_analysis
           mode: planning

@@ -1,0 +1,151 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.baseline.debug
+  description: "Capability-baseline Euclo debug coverage for investigate and verification-repair paths."
+  owner: agent-platform
+  tier: stable
+  classification: capability
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 90s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: debug_investigate_baseline
+      description: "Debug investigate should localize the failure without changing files."
+      task_type: analysis
+      tags: [baseline, capability-baseline, debug, investigate, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/euclo_baseline_debug/server.go
+            content: |
+              package euclobaselinedebug
+
+              func GetUser(id string) string {
+                var users map[string]string
+                return users[id]
+              }
+      prompt: |
+        panic: runtime error: index out of range
+        goroutine 1 [running]:
+        euclobaselinedebug.GetUser(...)
+          testsuite/fixtures/euclo_baseline_debug/server.go:4
+        Identify the likely root cause and where it is localized. Do not modify files.
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/euclo_baseline_debug/server.go
+            content: |
+              package euclobaselinedebug
+
+              func GetUser(id string) string {
+                var users map[string]string
+                return users[id]
+              }
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        tool_calls_must_include:
+          - file_read
+          - file_search
+        tool_calls_must_exclude:
+          - file_write
+          - go_test
+        euclo:
+          behavior_family: stale_assumption_detection
+          mode: debug
+          primary_relurpic_capability: euclo:debug.investigate
+          supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.localization
+          recipe_ids:
+            - debug.investigate.reproduce
+
+    - name: debug_verification_repair_baseline
+      description: "Debug repair should fix the implementation and verify the result."
+      task_type: code_modification
+      tags: [baseline, capability-baseline, debug, verification-repair, level:2]
+      setup:
+        files:
+          - path: testsuite/fixtures/euclo_baseline_debug/abs.go
+            content: |
+              package euclobaselinedebug
+
+              func Abs(v int) int {
+                if v < 0 {
+                  return v
+                }
+                return v
+              }
+          - path: testsuite/fixtures/euclo_baseline_debug/abs_test.go
+            content: |
+              package euclobaselinedebug
+
+              import "testing"
+
+              func TestAbs(t *testing.T) {
+                if Abs(-3) != 3 {
+                  t.Fatalf("got %d, want 3", Abs(-3))
+                }
+              }
+      prompt: "Fix testsuite/fixtures/euclo_baseline_debug/abs.go so Abs returns a positive value for negative inputs."
+      context:
+        euclo.mode: debug
+        context_file_contents:
+          - path: testsuite/fixtures/euclo_baseline_debug/abs.go
+            content: |
+              package euclobaselinedebug
+
+              func Abs(v int) int {
+                if v < 0 {
+                  return v
+                }
+                return v
+              }
+          - path: testsuite/fixtures/euclo_baseline_debug/abs_test.go
+            content: |
+              package euclobaselinedebug
+
+              import "testing"
+
+              func TestAbs(t *testing.T) {
+                if Abs(-3) != 3 {
+                  t.Fatalf("got %d, want 3", Abs(-3))
+                }
+              }
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/euclo_baseline_debug/abs.go
+        files_contain:
+          - path: testsuite/fixtures/euclo_baseline_debug/abs.go
+            contains: ["return -v"]
+        tool_calls_must_include:
+          - file_read
+          - file_write
+          - go_test
+        euclo:
+          behavior_family: stale_assumption_detection
+          mode: debug
+          primary_relurpic_capability: euclo:debug.investigate
+          supporting_relurpic_capabilities:
+            - euclo:debug.root-cause
+            - euclo:debug.verification-repair
+          recipe_ids:
+            - debug.investigate.reproduce

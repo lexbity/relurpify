@@ -58,23 +58,26 @@ type SuiteReport struct {
 	AssertFailures int
 	Cases          []CaseReport
 	Performance    PerformanceSummary `json:"performance,omitempty"`
+	Benchmark      *BenchmarkReport   `json:"benchmark,omitempty"`
 }
 
 type CaseReport struct {
-	Name          string
-	Model         string
-	ModelDigest   string
-	ModelLoadedAs string
-	ModelSource   string
-	ManifestModel string
-	Endpoint      string
-	RecordingMode string
-	TapePath      string
-	Workspace     string
-	ArtifactsDir  string
-	StartedAt     time.Time
-	FinishedAt    time.Time
-	DurationMS    int64
+	Name                 string
+	Model                string
+	ModelDigest          string
+	ModelLoadedAs        string
+	ModelSource          string
+	Provider             string
+	ManifestModel        string
+	Endpoint             string
+	RecordingMode        string
+	BackendResetStrategy string
+	TapePath             string
+	Workspace            string
+	ArtifactsDir         string
+	StartedAt            time.Time
+	FinishedAt           time.Time
+	DurationMS           int64
 
 	Skipped    bool
 	SkipReason string
@@ -159,14 +162,15 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if len(models) == 0 {
 		models = []ModelSpec{{Name: "", Endpoint: ""}}
 	}
+	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 	if err := r.preflightSuite(ctx, suite, opts, targetWorkspace, models); err != nil {
 		return nil, err
 	}
 
 	for _, c := range suite.Spec.Cases {
-		caseModels := models
+		caseModels := matrixModels
 		if c.Overrides.Model != nil {
-			caseModels = []ModelSpec{*c.Overrides.Model}
+			caseModels = expandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 		}
 		for _, model := range caseModels {
 			cr := r.runCase(ctx, suite, c, model, opts, targetWorkspace, outDir)
@@ -192,6 +196,14 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 		}
 	}
 	report.Performance = SummarizePerformance(report.Cases)
+	if strings.EqualFold(strings.TrimSpace(suite.Metadata.Classification), "benchmark") || suite.Metadata.Benchmark.ScoreFamily != "" || len(suite.Metadata.Benchmark.ScoreDimensions) > 0 || strings.TrimSpace(suite.Metadata.Benchmark.ComparisonWindow) != "" || suite.Metadata.Benchmark.VarianceThreshold > 0 {
+		if benchmarkReport, err := BuildBenchmarkReport(suite, report); err == nil && benchmarkReport != nil {
+			report.Benchmark = benchmarkReport
+			if data, marshalErr := json.MarshalIndent(benchmarkReport, "", "  "); marshalErr == nil {
+				_ = os.WriteFile(BenchmarkReportFilePath(outDir), data, 0o644)
+			}
+		}
+	}
 	data, _ := json.MarshalIndent(report, "", "  ")
 	_ = os.WriteFile(filepath.Join(outDir, "report.json"), data, 0o644)
 	return report, nil
@@ -209,10 +221,11 @@ func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptio
 	}
 	checked := map[string]struct{}{}
 	layout := newRunCaseLayout(filepath.Join(targetWorkspace, "relurpify_cfg", "test_runs_preflight"), "preflight", "preflight")
+	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 	for _, c := range suite.Spec.Cases {
-		caseModels := models
+		caseModels := matrixModels
 		if c.Overrides.Model != nil {
-			caseModels = []ModelSpec{*c.Overrides.Model}
+			caseModels = expandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 		}
 		for _, model := range caseModels {
 			exec, err := resolveCaseExecution(suite, c, model, manifestModel, opts, layout, targetWorkspace, targetWorkspace)
@@ -233,6 +246,56 @@ func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptio
 		}
 	}
 	return nil
+}
+
+func expandSuiteModelMatrix(models []ModelSpec, providers []ProviderSpec, order string) []ModelSpec {
+	if len(models) == 0 {
+		models = []ModelSpec{{Name: "", Endpoint: ""}}
+	}
+	if len(providers) == 0 {
+		return append([]ModelSpec(nil), models...)
+	}
+	if strings.TrimSpace(order) == "model-first" {
+		return expandSuiteModelMatrixModelFirst(models, providers)
+	}
+	return expandSuiteModelMatrixProviderFirst(models, providers)
+}
+
+func expandSuiteModelMatrixProviderFirst(models []ModelSpec, providers []ProviderSpec) []ModelSpec {
+	rows := make([]ModelSpec, 0, len(models)*len(providers))
+	for _, provider := range providers {
+		for _, model := range models {
+			rows = append(rows, modelForProvider(model, provider))
+		}
+	}
+	return rows
+}
+
+func expandSuiteModelMatrixModelFirst(models []ModelSpec, providers []ProviderSpec) []ModelSpec {
+	rows := make([]ModelSpec, 0, len(models)*len(providers))
+	for _, model := range models {
+		for _, provider := range providers {
+			rows = append(rows, modelForProvider(model, provider))
+		}
+	}
+	return rows
+}
+
+func modelForProvider(model ModelSpec, provider ProviderSpec) ModelSpec {
+	out := model
+	if strings.TrimSpace(provider.Name) != "" {
+		out.Provider = provider.Name
+	}
+	if strings.TrimSpace(provider.Endpoint) != "" {
+		out.Endpoint = provider.Endpoint
+	}
+	if strings.TrimSpace(provider.ResetStrategy) != "" {
+		out.ResetStrategy = provider.ResetStrategy
+	}
+	if provider.ResetBetween {
+		out.ResetBetween = true
+	}
+	return out
 }
 
 func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {

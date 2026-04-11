@@ -5,6 +5,7 @@ metadata:
   description: "Euclo recovery-path tests captured from live runs and replayed via golden tapes."
   owner: agent-platform
   tier: live-flaky
+  classification: journey
   quarantined: false
 spec:
   agent_name: euclo

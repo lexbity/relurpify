@@ -1,0 +1,107 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.context.baseline
+  description: "Capability-baseline Euclo context-management coverage for resume and context-pressure flows."
+  owner: agent-platform
+  tier: stable
+  classification: benchmark
+  benchmark:
+    score_family: recovery
+    score_dimensions:
+      - completion
+      - recovery
+      - stability
+      - artifact_integrity
+    comparison_window: suite
+    variance_threshold: 0.15
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 180s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+    ignore_changes:
+      - relurpify_cfg/logs/skills.log
+      - relurpify_cfg/artifacts/euclo/deferred/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    - name: context_pressure_baseline
+      description: "Long context pressure should preserve interaction state and artifacts."
+      task_type: code_modification
+      tags: [baseline, capability-baseline, context, pressure, level:2]
+      timeout: 180s
+      setup:
+        files:
+          - path: testsuite/fixtures/euclo_context_baseline/handler.go
+            content: |
+              package euclocontextbaseline
+
+              import "fmt"
+
+              func A(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("A:%s", input), nil }
+              func B(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("B:%s", input), nil }
+              func C(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("C:%s", input), nil }
+              func D(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("D:%s", input), nil }
+              func E(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("E:%s", input), nil }
+              func F(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("F:%s", input), nil }
+              func G(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("G:%s", input), nil }
+              func H(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("H:%s", input), nil }
+              func I(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("I:%s", input), nil }
+              func J(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("J:%s", input), nil }
+      prompt: "Inspect testsuite/fixtures/euclo_context_baseline/handler.go and describe where repeated analysis or context pressure could appear. Do not modify files."
+      context:
+        euclo.mode: planning
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        state_keys_must_exist:
+          - euclo.interaction_state
+          - euclo.interaction_recording
+        euclo:
+          mode: planning
+          min_frames_emitted: 1
+
+    - name: session_resume_baseline
+      description: "Session resume should continue from the saved phase and emit a resume frame."
+      task_type: analysis
+      tags: [baseline, capability-baseline, context, resume, level:3]
+      timeout: 180s
+      prompt: "Plan a bounded retrieval strategy for large workflows."
+      context:
+        euclo.mode: planning
+        euclo.interaction_state:
+          mode: planning
+          current_phase: generate
+          phases_executed:
+            - scope
+            - clarify
+          phase_states:
+            scope.done: true
+            clarify.done: true
+        euclo.interaction_script:
+          - kind: session_resume
+            action: resume
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          mode: planning
+          phases_executed:
+            - generate
+            - commit
+          frame_kinds_emitted:
+            - session_resume

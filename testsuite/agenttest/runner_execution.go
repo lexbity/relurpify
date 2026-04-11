@@ -8,12 +8,16 @@ import (
 )
 
 type resolvedCaseExecution struct {
-	Model         string
-	ModelSource   string
-	ManifestModel string
-	Endpoint      string
-	RecordingMode string
-	TapePath      string
+	Model                 string
+	ModelSource           string
+	Provider              string
+	ProviderSource        string
+	ProviderResetStrategy string
+	ProviderResetBetween  bool
+	ManifestModel         string
+	Endpoint              string
+	RecordingMode         string
+	TapePath              string
 }
 
 func resolveCaseExecution(suite *Suite, c CaseSpec, model ModelSpec, manifestModel string, opts RunOptions, layout runCaseLayout, targetWorkspace, workspace string) (resolvedCaseExecution, error) {
@@ -22,9 +26,13 @@ func resolveCaseExecution(suite *Suite, c CaseSpec, model ModelSpec, manifestMod
 		recording = *c.Overrides.Recording
 	}
 	exec := resolvedCaseExecution{
-		ManifestModel: strings.TrimSpace(manifestModel),
-		Endpoint:      firstNonEmpty(opts.EndpointOverride, model.Endpoint, "http://localhost:11434"),
-		RecordingMode: firstNonEmpty(recording.Mode, "off"),
+		ManifestModel:         strings.TrimSpace(manifestModel),
+		Endpoint:              firstNonEmpty(opts.EndpointOverride, model.Endpoint, "http://localhost:11434"),
+		RecordingMode:         firstNonEmpty(recording.Mode, "off"),
+		Provider:              firstNonEmpty(model.Provider, "ollama"),
+		ProviderSource:        firstNonEmpty(model.Provider, "ollama"),
+		ProviderResetStrategy: firstNonEmpty(model.ResetStrategy),
+		ProviderResetBetween:  model.ResetBetween,
 	}
 	switch {
 	case strings.TrimSpace(opts.ModelOverride) != "":

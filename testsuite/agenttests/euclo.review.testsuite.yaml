@@ -5,6 +5,7 @@ metadata:
   description: "Euclo review mode interaction flow tests."
   owner: agent-platform
   tier: stable
+  classification: capability
   quarantined: false
 spec:
   agent_name: euclo

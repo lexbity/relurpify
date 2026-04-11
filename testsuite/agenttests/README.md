@@ -1,6 +1,8 @@
 `dev-agent agenttest` suites are YAML files that define prompt-based checks for a specific agent + manifest + model(s).
 
-Runs now execute inside derived temporary workspaces under `relurpify_cfg/test_runs/.../tmp/`, with a testsuite template profile materializing the temp `relurpify_cfg/` for each case.
+Runs execute inside derived temporary workspaces under `relurpify_cfg/test_runs/.../tmp/`, with a testsuite template profile materializing the temp `relurpify_cfg/` for each case.
+
+The run artifacts for a case land alongside that workspace at `relurpify_cfg/test_runs/{agent}/{run_id}/`.
 
 Suites in this directory are the canonical source. Run them directly:
 

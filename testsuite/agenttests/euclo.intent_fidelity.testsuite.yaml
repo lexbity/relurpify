@@ -5,6 +5,7 @@ metadata:
   description: "Intent fidelity: conflicting signals, symptom-only reports, and architectural constraint inference."
   owner: agent-platform
   tier: stable
+  classification: journey
   quarantined: false
 spec:
   agent_name: euclo

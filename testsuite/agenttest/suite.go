@@ -23,11 +23,20 @@ type Suite struct {
 }
 
 type SuiteMeta struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description,omitempty"`
-	Owner       string `yaml:"owner,omitempty"`
-	Tier        string `yaml:"tier,omitempty"`
-	Quarantined bool   `yaml:"quarantined,omitempty"`
+	Name           string        `yaml:"name"`
+	Description    string        `yaml:"description,omitempty"`
+	Owner          string        `yaml:"owner,omitempty"`
+	Tier           string        `yaml:"tier,omitempty"`
+	Classification string        `yaml:"classification,omitempty"`
+	Benchmark      BenchmarkMeta `yaml:"benchmark,omitempty"`
+	Quarantined    bool          `yaml:"quarantined,omitempty"`
+}
+
+type BenchmarkMeta struct {
+	ScoreFamily       string   `yaml:"score_family,omitempty"`
+	ScoreDimensions   []string `yaml:"score_dimensions,omitempty"`
+	ComparisonWindow  string   `yaml:"comparison_window,omitempty"`
+	VarianceThreshold float64  `yaml:"variance_threshold,omitempty"`
 }
 
 type SuiteSpec struct {
@@ -38,14 +47,16 @@ type SuiteSpec struct {
 	Workspace WorkspaceSpec      `yaml:"workspace"`
 	Memory    MemorySpec         `yaml:"memory,omitempty"`
 	Models    []ModelSpec        `yaml:"models,omitempty"`
+	Providers []ProviderSpec     `yaml:"providers,omitempty"`
 	Recording RecordingSpec      `yaml:"recording,omitempty"`
 	Cases     []CaseSpec         `yaml:"cases"`
 }
 
 type SuiteExecutionSpec struct {
-	Profile string `yaml:"profile,omitempty"`
-	Strict  bool   `yaml:"strict,omitempty"`
-	Timeout string `yaml:"timeout,omitempty"`
+	Profile     string `yaml:"profile,omitempty"`
+	Strict      bool   `yaml:"strict,omitempty"`
+	Timeout     string `yaml:"timeout,omitempty"`
+	MatrixOrder string `yaml:"matrix_order,omitempty"`
 }
 
 type WorkspaceSpec struct {
@@ -57,8 +68,18 @@ type WorkspaceSpec struct {
 }
 
 type ModelSpec struct {
-	Name     string `yaml:"name"`
-	Endpoint string `yaml:"endpoint,omitempty"`
+	Name          string `yaml:"name"`
+	Endpoint      string `yaml:"endpoint,omitempty"`
+	Provider      string `yaml:"provider,omitempty"`
+	ResetStrategy string `yaml:"reset_strategy,omitempty"`
+	ResetBetween  bool   `yaml:"reset_between,omitempty"`
+}
+
+type ProviderSpec struct {
+	Name          string `yaml:"name"`
+	Endpoint      string `yaml:"endpoint,omitempty"`
+	ResetStrategy string `yaml:"reset_strategy,omitempty"`
+	ResetBetween  bool   `yaml:"reset_between,omitempty"`
 }
 
 type RecordingSpec struct {
@@ -335,10 +356,19 @@ func (s *Suite) Validate() error {
 	if err := validateSuiteTier(s.Metadata.Tier); err != nil {
 		return err
 	}
+	if err := validateSuiteClassification(s.Metadata.Classification); err != nil {
+		return err
+	}
+	if err := validateBenchmarkMeta(s.Metadata.Benchmark); err != nil {
+		return err
+	}
 	if s.Spec.Execution.Profile == "" {
 		s.Spec.Execution.Profile = "live"
 	}
 	if err := validateExecutionProfile(s.Spec.Execution.Profile); err != nil {
+		return err
+	}
+	if err := validateMatrixOrder(s.Spec.Execution.MatrixOrder); err != nil {
 		return err
 	}
 	if _, err := parseCaseTimeout(s.Spec.Execution.Timeout); err != nil {
@@ -418,6 +448,14 @@ func (s *Suite) Validate() error {
 			return err
 		}
 	}
+	for i, provider := range s.Spec.Providers {
+		if strings.TrimSpace(provider.Name) == "" {
+			return fmt.Errorf("suite spec.providers[%d] missing name", i)
+		}
+		if err := validateBackendResetStrategy(provider.ResetStrategy, fmt.Sprintf("suite spec.providers[%d].reset_strategy", i)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -430,12 +468,59 @@ func validateSuiteTier(raw string) error {
 	}
 }
 
+func validateSuiteClassification(raw string) error {
+	switch strings.TrimSpace(raw) {
+	case "", "capability", "journey", "benchmark":
+		return nil
+	default:
+		return fmt.Errorf("suite metadata.classification %q unsupported", raw)
+	}
+}
+
+func validateBenchmarkMeta(meta BenchmarkMeta) error {
+	if strings.TrimSpace(meta.ScoreFamily) == "" && len(meta.ScoreDimensions) == 0 && strings.TrimSpace(meta.ComparisonWindow) == "" && meta.VarianceThreshold == 0 {
+		return nil
+	}
+	for i, dimension := range meta.ScoreDimensions {
+		if strings.TrimSpace(dimension) == "" {
+			return fmt.Errorf("suite metadata.benchmark.score_dimensions[%d] is empty", i)
+		}
+	}
+	switch strings.TrimSpace(meta.ComparisonWindow) {
+	case "", "case", "suite", "run", "matrix":
+	default:
+		return fmt.Errorf("suite metadata.benchmark.comparison_window %q unsupported", meta.ComparisonWindow)
+	}
+	if meta.VarianceThreshold < 0 {
+		return fmt.Errorf("suite metadata.benchmark.variance_threshold must be >= 0")
+	}
+	return nil
+}
+
 func validateExecutionProfile(raw string) error {
 	switch raw {
 	case "live", "record", "replay", "developer-live", "ci-live", "ci-replay":
 		return nil
 	default:
 		return fmt.Errorf("suite spec.execution.profile %q unsupported", raw)
+	}
+}
+
+func validateMatrixOrder(raw string) error {
+	switch strings.TrimSpace(raw) {
+	case "", "provider-first", "model-first":
+		return nil
+	default:
+		return fmt.Errorf("suite spec.execution.matrix_order %q unsupported", raw)
+	}
+}
+
+func validateBackendResetStrategy(raw, field string) error {
+	switch strings.TrimSpace(raw) {
+	case "", "none", "model", "server":
+		return nil
+	default:
+		return fmt.Errorf("%s %q unsupported", field, raw)
 	}
 }
 

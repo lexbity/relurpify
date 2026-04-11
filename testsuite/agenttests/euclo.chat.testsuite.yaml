@@ -5,6 +5,7 @@ metadata:
   description: "Euclo chat mode interaction tests: ask, inspect, and implement sub-modes."
   owner: agent-platform
   tier: stable
+  classification: capability
   quarantined: false
 spec:
   agent_name: euclo

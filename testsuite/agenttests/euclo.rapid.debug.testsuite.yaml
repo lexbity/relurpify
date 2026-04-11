@@ -20,6 +20,10 @@ spec:
       - .gocache/**
       - .gomodcache/**
       - relurpify_cfg/test_runs/**
+    ignore_changes:
+      - relurpify_cfg/logs/skills.log
+      - relurpify_cfg/artifacts/euclo/deferred/**
+      - '**/*.bak'
   models:
     - name: qwen2.5-coder:14b
       endpoint: http://localhost:11434
@@ -63,8 +67,15 @@ spec:
         no_file_changes: true
         output_regex:
           - (?i)(index out of range|empty slice|cache.go|first)
+        tool_calls_must_include:
+          - file_read
+          - file_search
+        tool_calls_must_exclude:
+          - file_write
+          - go_test
+        max_tool_calls: 6
         euclo:
-          behavior_family: react
+          behavior_family: stale_assumption_detection
           mode: debug
           primary_relurpic_capability: euclo:debug.investigate
           supporting_relurpic_capabilities:
@@ -110,11 +121,16 @@ spec:
         must_succeed: true
         files_changed:
           - testsuite/fixtures/rapid_debug/math.go
+        tool_calls_must_include:
+          - file_read
+          - file_write
+          - go_test
+        max_tool_calls: 12
         files_contain:
           - path: testsuite/fixtures/rapid_debug/math.go
             contains: ["return a / b"]
         euclo:
-          behavior_family: react
+          behavior_family: stale_assumption_detection
           mode: debug
           primary_relurpic_capability: euclo:debug.investigate
           profile: reproduce_localize_patch
@@ -165,11 +181,16 @@ spec:
         must_succeed: true
         files_changed:
           - testsuite/fixtures/rapid_debug_verify/abs.go
+        tool_calls_must_include:
+          - file_read
+          - file_write
+          - go_test
+        max_tool_calls: 8
         files_contain:
           - path: testsuite/fixtures/rapid_debug_verify/abs.go
             contains: ["if v < 0", "return -v"]
         euclo:
-          behavior_family: react
+          behavior_family: stale_assumption_detection
           mode: debug
           primary_relurpic_capability: euclo:debug.investigate
           profile: reproduce_localize_patch
@@ -226,8 +247,15 @@ spec:
         no_file_changes: true
         output_regex:
           - (?i)(raw < 0|negative|return raw|score.go|branch)
+        tool_calls_must_include:
+          - file_read
+          - file_search
+        tool_calls_must_exclude:
+          - file_write
+          - go_test
+        max_tool_calls: 6
         euclo:
-          behavior_family: react
+          behavior_family: stale_assumption_detection
           mode: debug
           primary_relurpic_capability: euclo:debug.investigate
           supporting_relurpic_capabilities:

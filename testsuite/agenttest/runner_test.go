@@ -122,6 +122,51 @@ func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) 
 	}
 }
 
+func TestResolveCaseModelProfileUsesWorkspaceRegistry(t *testing.T) {
+	workspace := t.TempDir()
+	profilesDir := filepath.Join(workspace, "relurpify_cfg", "model_profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profilesDir, "default.yaml"), []byte(`pattern: "*"
+repair:
+  strategy: heuristic-only
+  max_attempts: 0
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profilesDir, "gemma4.yaml"), []byte(`pattern: "gemma4*"
+tool_calling:
+  native_api: true
+  max_tools_per_call: 2
+repair:
+  strategy: llm
+  max_attempts: 1
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	provenance, profile, err := resolveCaseModelProfile(workspace, resolvedCaseExecution{
+		Provider: "ollama",
+		Model:    "gemma4:e4b",
+	})
+	if err != nil {
+		t.Fatalf("resolveCaseModelProfile: %v", err)
+	}
+	if provenance == nil || profile == nil {
+		t.Fatal("expected model profile provenance and profile")
+	}
+	if provenance.MatchKind != "glob" {
+		t.Fatalf("expected glob match kind, got %q", provenance.MatchKind)
+	}
+	if provenance.ProfileSource != filepath.ToSlash("relurpify_cfg/model_profiles/gemma4.yaml") {
+		t.Fatalf("unexpected profile source: %q", provenance.ProfileSource)
+	}
+	if profile.Repair.Strategy != "llm" || !profile.ToolCalling.NativeAPI || profile.ToolCalling.MaxToolsPerCall != 2 {
+		t.Fatalf("unexpected resolved profile: %#v", profile)
+	}
+}
+
 func TestResolveCaseExecutionFailsWithoutResolvedModel(t *testing.T) {
 	layout := newRunCaseLayout(t.TempDir(), "smoke", "model")
 	_, err := resolveCaseExecution(&Suite{Spec: SuiteSpec{}}, CaseSpec{Name: "smoke"}, ModelSpec{}, "", RunOptions{}, layout, t.TempDir(), t.TempDir())
@@ -210,6 +255,45 @@ func TestResolveCaseExecutionReplayOnlyFailsWithoutGoldenTape(t *testing.T) {
 	_, err := resolveCaseExecution(suite, CaseSpec{Name: "basic_edit_task"}, ModelSpec{Name: "qwen2.5-coder:14b"}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected replay-only without golden tape to fail")
+	}
+}
+
+func TestExpandSuiteModelMatrixUsesDeterministicOrder(t *testing.T) {
+	models := []ModelSpec{{Name: "m1"}, {Name: "m2"}}
+	providers := []ProviderSpec{{Name: "p1"}, {Name: "p2"}}
+
+	got := expandSuiteModelMatrix(models, providers, "provider-first")
+	want := []string{"p1:m1", "p1:m2", "p2:m1", "p2:m2"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected matrix length %d, want %d", len(got), len(want))
+	}
+	for i, row := range got {
+		if gotID := row.Provider + ":" + row.Name; gotID != want[i] {
+			t.Fatalf("provider-first row[%d] = %q, want %q", i, gotID, want[i])
+		}
+	}
+
+	got = expandSuiteModelMatrix(models, providers, "model-first")
+	want = []string{"p1:m1", "p2:m1", "p1:m2", "p2:m2"}
+	for i, row := range got {
+		if gotID := row.Provider + ":" + row.Name; gotID != want[i] {
+			t.Fatalf("model-first row[%d] = %q, want %q", i, gotID, want[i])
+		}
+	}
+}
+
+func TestProviderProvenanceForExecution(t *testing.T) {
+	prov := providerProvenanceForExecution(resolvedCaseExecution{
+		Provider:              "ollama",
+		Endpoint:              "http://localhost:11434",
+		ProviderResetStrategy: "model",
+		ProviderResetBetween:  true,
+	})
+	if prov == nil {
+		t.Fatal("expected provider provenance")
+	}
+	if prov.Provider != "ollama" || prov.ResetStrategy != "model" || !prov.ResetBetween {
+		t.Fatalf("unexpected provenance: %+v", prov)
 	}
 }
 

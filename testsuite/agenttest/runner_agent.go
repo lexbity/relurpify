@@ -190,6 +190,8 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		return nil, nil, err
 	}
 	registry := boot.Registry
+	paths := config.New(workspace)
+	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots(paths.ManifestFile(), paths.ConfigFile(), paths.NexusConfigFile(), paths.PolicyRulesFile(), paths.ModelProfilesDir())))
 	indexManager := boot.IndexManager
 	searchEngine := boot.SearchEngine
 	compiledPolicy := boot.CompiledPolicy
