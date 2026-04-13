@@ -3,12 +3,13 @@ package contextmgr
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/lexcodex/relurpify/framework/ast"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/search"
-	"strings"
-	"time"
 )
 
 // ContextPolicyPreferences tune how the policy compresses and expands context.
@@ -31,6 +32,11 @@ type ContextPolicyConfig struct {
 	IndexManager        *ast.IndexManager
 	SearchEngine        *search.SearchEngine
 	MemoryStore         memory.MemoryStore
+
+	// PrecomputedChunks, when non-empty, are injected into the
+	// ProgressiveLoader before InitialLoad runs. BKC session warmup
+	// chunks should be passed here.
+	PrecomputedChunks []ContextChunk
 }
 
 // ContextPolicy centralizes strategy selection, progressive loading, and compression.
@@ -82,6 +88,10 @@ func NewContextPolicy(cfg ContextPolicyConfig, spec *core.AgentContextSpec) *Con
 	}
 	if policy.Progressive == nil {
 		policy.Progressive = NewProgressiveLoader(policy.ContextManager, cfg.IndexManager, cfg.SearchEngine, cfg.MemoryStore, policy.Budget, policy.Summarizer)
+	}
+	// Inject pre-computed chunks before InitialLoad runs
+	if len(cfg.PrecomputedChunks) > 0 && policy.Progressive != nil {
+		_ = policy.Progressive.InjectPrecomputedChunks(cfg.PrecomputedChunks)
 	}
 	policy.ApplyAgentContextSpec(spec)
 	return policy

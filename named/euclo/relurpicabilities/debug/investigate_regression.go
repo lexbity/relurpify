@@ -58,7 +58,7 @@ func (c *investigateRegressionCapability) Execute(ctx context.Context, env euclo
 		env.State = core.NewContext()
 	}
 	env.State.Set("euclo.blackboard_seed_facts", map[string]any{"regression:symptom": taskInstruction(env.Task)})
-	bbResult, err := euclobb.Execute(ctx, env, regressionKnowledgeSources(), 6, func(bb *agentblackboard.Blackboard) bool {
+	bbResult, err := euclobb.Execute(ctx, env, euclotypes.ExecutorSemanticContext{}, regressionKnowledgeSources(), 6, func(bb *agentblackboard.Blackboard) bool {
 		payload, ok := boardEntryValue(bb, "regression:reproduction")
 		if !ok {
 			return false

@@ -45,7 +45,7 @@ func (s stubKnowledgeSource) CanActivate(bb *agentblackboard.Blackboard) bool {
 	}
 	return true
 }
-func (s stubKnowledgeSource) Execute(context.Context, *agentblackboard.Blackboard, *capability.Registry, core.LanguageModel) error {
+func (s stubKnowledgeSource) Execute(context.Context, *agentblackboard.Blackboard, *capability.Registry, core.LanguageModel, core.AgentSemanticContext) error {
 	return nil
 }
 func (s stubKnowledgeSource) KnowledgeSourceSpec() agentblackboard.KnowledgeSourceSpec {
@@ -59,7 +59,7 @@ type executableKnowledgeSource struct {
 	stubKnowledgeSource
 }
 
-func (s executableKnowledgeSource) Execute(_ context.Context, bb *agentblackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
+func (s executableKnowledgeSource) Execute(_ context.Context, bb *agentblackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	if s.executeFn != nil {
 		s.executeFn(bb)
 	}
@@ -73,7 +73,7 @@ func TestExecuteRunsKnowledgeSourceAndPublishesArtifacts(t *testing.T) {
 		State:       state,
 		Registry:    capability.NewRegistry(),
 		Environment: testutil.Env(t),
-	}, []agentblackboard.KnowledgeSource{
+	}, euclotypes.ExecutorSemanticContext{}, []agentblackboard.KnowledgeSource{
 		executableKnowledgeSource{stubKnowledgeSource{
 			name:     "verify",
 			priority: 100,
@@ -122,7 +122,7 @@ func TestExecuteRequiresAtLeastOneKnowledgeSource(t *testing.T) {
 		State:       core.NewContext(),
 		Registry:    capability.NewRegistry(),
 		Environment: testutil.Env(t),
-	}, nil, 1, nil)
+	}, euclotypes.ExecutorSemanticContext{}, nil, 1, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}

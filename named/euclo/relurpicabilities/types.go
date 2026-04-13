@@ -183,8 +183,8 @@ func DefaultRegistry() *Registry {
 			ModeFamily:           "debug",
 			PrimaryCapable:       true,
 			Mutability:           MutabilityInspectFirst,
-			ExecutorRecipe:       "debug.investigate.htn_drilldown",
-			ParadigmMix:          []string{"htn", "react"},
+			ExecutorRecipe:       "debug.investigate.blackboard_hypothesis",
+			ParadigmMix:          []string{"blackboard"},
 			TransitionCompatible: []string{"debug", "chat"},
 			SupportingCapabilities: []string{
 				CapabilityDebugRootCause,
@@ -194,7 +194,7 @@ func DefaultRegistry() *Registry {
 				CapabilityDebugVerificationRepair,
 				CapabilityChatInspect,
 			},
-			Summary: "Mixed debugging behavior with tool exposition and controlled implementation escalation.",
+			Summary: "Hypothesis-driven debugging using blackboard architecture with shared workspace context.",
 		},
 		{
 			ID:                CapabilityBKCCompile,

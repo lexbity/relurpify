@@ -746,7 +746,7 @@ func executeExplorationPasses(ctx context.Context, in execution.ExecuteInput) ([
 			"archaeology:exploration_id": strings.TrimSpace(in.Work.SemanticInputs.ExplorationID),
 		})
 	}
-	bbResult, err := euclobb.Execute(ctx, envelope, archaeologyKnowledgeSources(), 6, func(bb *agentblackboard.Blackboard) bool {
+	bbResult, err := euclobb.Execute(ctx, envelope, euclotypes.ExecutorSemanticContext{}, archaeologyKnowledgeSources(), 6, func(bb *agentblackboard.Blackboard) bool {
 		return boardHasFact(bb, "archaeology:convergence_assessment")
 	})
 	if err != nil {

@@ -67,7 +67,7 @@ func (c *traceAnalyzeCapability) Execute(ctx context.Context, env euclotypes.Exe
 		env.State = core.NewContext()
 	}
 	env.State.Set("euclo.blackboard_seed_facts", map[string]any{"trace:symptom": taskInstruction(env.Task)})
-	result, err := euclobb.Execute(ctx, env, traceKnowledgeSources(), 6, func(bb *agentblackboard.Blackboard) bool {
+	result, err := euclobb.Execute(ctx, env, euclotypes.ExecutorSemanticContext{}, traceKnowledgeSources(), 6, func(bb *agentblackboard.Blackboard) bool {
 		return boardHasEntry(bb, "trace:correlations")
 	})
 	if err != nil {

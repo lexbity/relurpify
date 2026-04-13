@@ -91,7 +91,7 @@ var recipeSpecs = map[RecipeID]RecipeSpec{
 	RecipeChatImplementEdit:              reactRecipe(core.TaskTypeCodeModification),
 	RecipeChatImplementVerify:            reactRecipe(core.TaskTypeAnalysis),
 	RecipeDebugInvestigateReproduce:      reactRecipe(core.TaskTypeAnalysis),
-	RecipeDebugInvestigateLocalize:       htnRecipe(core.TaskTypeAnalysis),
+	RecipeDebugInvestigateLocalize:       blackboardRecipe(core.TaskTypeAnalysis),
 	RecipeDebugInvestigatePatch:          reactRecipe(core.TaskTypeCodeModification),
 	RecipeDebugInvestigateReview:         reflectionRecipe(),
 	RecipeArchaeologyExploreShape:        plannerRecipe(),
@@ -118,6 +118,15 @@ func htnRecipe(taskType core.TaskType) RecipeSpec {
 		TaskType: taskType,
 		Run: func(ctx context.Context, in ExecuteInput, spec RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
 			return ExecuteHTNTask(ctx, in, taskID, instruction, spec.TaskType)
+		},
+	}
+}
+
+func blackboardRecipe(taskType core.TaskType) RecipeSpec {
+	return RecipeSpec{
+		TaskType: taskType,
+		Run: func(ctx context.Context, in ExecuteInput, spec RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
+			return ExecuteBlackboardTask(ctx, in, taskID, instruction, spec.TaskType)
 		},
 	}
 }
@@ -382,9 +391,22 @@ func ExecuteHTNTask(ctx context.Context, in ExecuteInput, taskID, instruction st
 	agent := htnexec.New(in.Environment)
 	task := &core.Task{ID: taskID, Instruction: instruction, Type: taskType, Context: taskContextFromInput(in)}
 	result, err := agent.Execute(ctx, task, state)
-	if err == nil {
-		mergeStateArtifacts(in.State, state)
+	return result, state, err
+}
+
+func ExecuteBlackboardTask(ctx context.Context, in ExecuteInput, taskID, instruction string, taskType core.TaskType) (*core.Result, *core.Context, error) {
+	state := in.State.Clone()
+	factory := ExecutorFactory{
+		Model:        in.Environment.Model,
+		Registry:     in.Environment.Registry,
+		Memory:       in.Environment.Memory,
+		Config:       in.Environment.Config,
+		IndexManager: in.Environment.IndexManager,
+		SearchEngine: in.Environment.SearchEngine,
 	}
+	executor := newBlackboardExecutor(factory)
+	task := &core.Task{ID: taskID, Instruction: instruction, Type: taskType, Context: taskContextFromInput(in)}
+	result, err := executor.Execute(ctx, task, state)
 	return result, state, err
 }
 

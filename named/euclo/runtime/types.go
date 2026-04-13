@@ -150,6 +150,8 @@ const (
 	ExecutorFamilyHTN        ExecutorFamily = "htn_executor"
 	ExecutorFamilyRewoo      ExecutorFamily = "rewoo_executor"
 	ExecutorFamilyReflection ExecutorFamily = "reflection_executor"
+	// NEW: Blackboard executor for hypothesis-driven workflows with shared context
+	ExecutorFamilyBlackboard ExecutorFamily = "blackboard_executor"
 )
 
 type SemanticRequestRef struct {

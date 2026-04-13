@@ -800,6 +800,38 @@ func detailLevelLabel(level DetailLevel) string {
 	}
 }
 
+// InjectPrecomputedChunks seeds the context manager with pre-computed
+// chunks before InitialLoad runs. Chunks are injected in the order
+// provided. Chunks that would exceed the budget are dropped; the
+// remaining budget is reduced accordingly.
+//
+// Must be called before InitialLoad. Calling after InitialLoad has
+// undefined behavior.
+func (pl *ProgressiveLoader) InjectPrecomputedChunks(chunks []ContextChunk) error {
+	if pl == nil || pl.contextManager == nil {
+		return nil
+	}
+	injected := 0
+	dropped := 0
+	for _, chunk := range chunks {
+		if chunk.TokenEstimate > 0 && pl.budget != nil {
+			if chunk.TokenEstimate > pl.budget.AvailableForContext {
+				dropped++
+				continue
+			}
+		}
+		if err := pl.loadChunk(chunk); err != nil {
+			dropped++
+			continue
+		}
+		injected++
+		if pl.budget != nil && chunk.TokenEstimate > 0 {
+			pl.budget.AvailableForContext -= chunk.TokenEstimate
+		}
+	}
+	return nil
+}
+
 // lossForDetailDemotion calculates information loss magnitude for demoting from one detail level to another
 func lossForDetailDemotion(from, to DetailLevel) float64 {
 	switch {

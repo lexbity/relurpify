@@ -91,10 +91,18 @@ func SelectExecutorDescriptor(mode ModeResolution, profile ExecutionProfileSelec
 		}
 		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityDebugInvestigate:
-		if classification.RequiresDeterministicStages || policy.RequireVerificationStep {
-			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.htn", Family: ExecutorFamilyHTN, RecipeID: recipeID, Reason: reason}
-		}
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
+		// NOTE: Now using blackboard instead of HTN for debug workflows.
+		// Blackboard provides shared workspace context across knowledge sources,
+		// preventing the context isolation bug that caused 17+ redundant file_list calls.
+		//
+		// The blackboard executor uses hypothesis-driven exploration with data-driven
+		// knowledge source activation, which is better suited for debugging than HTN's
+		// hierarchical task decomposition.
+		//
+		// TODO: Define debug-specific KnowledgeSources (FileExplorerKS, FaultLocalizerKS, etc.)
+		// to fully utilize the blackboard architecture.
+		// See: /docs/research/issue-blackboard-context-sharing.md
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.blackboard", Family: ExecutorFamilyBlackboard, RecipeID: recipeID, Reason: "debug workflow with shared blackboard context"}
 	case mode.ModeID == "review":
 		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.reflection", Family: ExecutorFamilyReflection, RecipeID: "review.fallback.reflection", Reason: "review mode fallback executor recipe"}
 	case planBinding != nil && planBinding.IsLongRunning:

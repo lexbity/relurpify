@@ -47,7 +47,7 @@ func (s errorKnowledgeSource) Name() string { return s.name }
 func (s errorKnowledgeSource) CanActivate(*agentblackboard.Blackboard) bool {
 	return true
 }
-func (s errorKnowledgeSource) Execute(context.Context, *agentblackboard.Blackboard, *capability.Registry, core.LanguageModel) error {
+func (s errorKnowledgeSource) Execute(context.Context, *agentblackboard.Blackboard, *capability.Registry, core.LanguageModel, core.AgentSemanticContext) error {
 	return s.err
 }
 func (s errorKnowledgeSource) Priority() int { return s.priority }
@@ -117,7 +117,7 @@ func TestKnowledgeSourceHelpersAndResponseParsing(t *testing.T) {
 			Text: `{"facts":[{"key":"fact:two","value":{"status":"done"}}],"hypotheses":[{"summary":"first","confidence":0.2},{"id":"h2","title":"second","confidence":0.9}]}`,
 		},
 	}
-	if err := tmpl.Execute(context.Background(), board, capability.NewRegistry(), model); err != nil {
+	if err := tmpl.Execute(context.Background(), board, capability.NewRegistry(), model, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if !boardHasFactKey(board, "fact:two") {
@@ -201,7 +201,7 @@ func TestExecutorBranches(t *testing.T) {
 		},
 	}
 
-	if _, err := Execute(context.Background(), env, nil, 1, nil); err == nil {
+	if _, err := Execute(context.Background(), env, euclotypes.ExecutorSemanticContext{}, nil, 1, nil); err == nil {
 		t.Fatal("expected error without knowledge sources")
 	}
 
@@ -223,7 +223,7 @@ func TestExecutorBranches(t *testing.T) {
 			},
 		}},
 	}
-	result, err := Execute(context.Background(), env, sources, 2, func(bb *agentblackboard.Blackboard) bool {
+	result, err := Execute(context.Background(), env, euclotypes.ExecutorSemanticContext{}, sources, 2, func(bb *agentblackboard.Blackboard) bool {
 		return boardHasFactKey(bb, "verify:result")
 	})
 	if err != nil {
@@ -245,7 +245,7 @@ func TestExecutorBranches(t *testing.T) {
 	noEligible := []agentblackboard.KnowledgeSource{
 		stubKnowledgeSource{name: "inactive", priority: 1, canRun: func(*agentblackboard.Blackboard) bool { return false }},
 	}
-	if res, err := Execute(context.Background(), env, noEligible, 1, nil); err != nil || res.Termination != "no_eligible_sources" {
+	if res, err := Execute(context.Background(), env, euclotypes.ExecutorSemanticContext{}, noEligible, 1, nil); err != nil || res.Termination != "no_eligible_sources" {
 		t.Fatalf("expected no eligible source termination, got res=%#v err=%v", res, err)
 	}
 
@@ -258,7 +258,7 @@ func TestExecutorBranches(t *testing.T) {
 		},
 	}
 	failure := errors.New("boom")
-	if res, err := Execute(context.Background(), failedEnv, []agentblackboard.KnowledgeSource{
+	if res, err := Execute(context.Background(), failedEnv, euclotypes.ExecutorSemanticContext{}, []agentblackboard.KnowledgeSource{
 		errorKnowledgeSource{name: "fail", priority: 10, err: failure},
 	}, 1, nil); err == nil || res != nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("expected source failure, got res=%#v err=%v", res, err)
@@ -275,7 +275,7 @@ func TestExecutorBranches(t *testing.T) {
 	limited := []agentblackboard.KnowledgeSource{
 		stubKnowledgeSource{name: "idle", priority: 1, canRun: func(*agentblackboard.Blackboard) bool { return true }},
 	}
-	if res, err := Execute(context.Background(), limitedEnv, limited, 2, nil); err != nil || res.Termination != "cycle_limit" || res.Cycles != 2 {
+	if res, err := Execute(context.Background(), limitedEnv, euclotypes.ExecutorSemanticContext{}, limited, 2, nil); err != nil || res.Termination != "cycle_limit" || res.Cycles != 2 {
 		t.Fatalf("expected cycle limit termination, got res=%#v err=%v", res, err)
 	}
 }

@@ -79,7 +79,7 @@ func (k *templateKnowledgeSource) CanActivate(bb *agentblackboard.Blackboard) bo
 	return evaluateActivationPredicate(bb, k.activationPredicate)
 }
 
-func (k *templateKnowledgeSource) Execute(ctx context.Context, bb *agentblackboard.Blackboard, _ *capability.Registry, model core.LanguageModel) error {
+func (k *templateKnowledgeSource) Execute(ctx context.Context, bb *agentblackboard.Blackboard, _ *capability.Registry, model core.LanguageModel, _ core.AgentSemanticContext) error {
 	if model == nil {
 		return fmt.Errorf("knowledge source %q requires a language model", k.Name())
 	}

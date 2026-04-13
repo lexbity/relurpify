@@ -21,6 +21,7 @@ type Result struct {
 func Execute(
 	ctx context.Context,
 	env euclotypes.ExecutionEnvelope,
+	semctx euclotypes.ExecutorSemanticContext,
 	sources []agentblackboard.KnowledgeSource,
 	maxCycles int,
 	terminationPredicate func(*agentblackboard.Blackboard) bool,
@@ -32,6 +33,12 @@ func Execute(
 		maxCycles = 20
 	}
 	board := agentblackboard.NewBlackboard(taskInstruction(env.Task))
+
+	// Seed from semantic context before other seeding and KS cycle begins
+	if !semctx.AgentSemanticContext.IsEmpty() {
+		agentblackboard.SeedBlackboardFromSemanticContext(board, semctx.AgentSemanticContext)
+	}
+
 	bridge := NewArtifactBridge(board)
 	if err := bridge.SeedFromArtifacts(collectArtifacts(env.State)); err != nil {
 		return nil, err
@@ -55,7 +62,7 @@ func Execute(
 			break
 		}
 		selected := eligible[0]
-		if err := selected.Execute(ctx, board, env.Registry, env.Environment.Model); err != nil {
+		if err := selected.Execute(ctx, board, env.Registry, env.Environment.Model, semctx.AgentSemanticContext); err != nil {
 			publishState(env.State, board, cycles+1, maxCycles, "source_failed", selected.Name())
 			return nil, fmt.Errorf("blackboard knowledge source %q failed: %w", selected.Name(), err)
 		}
