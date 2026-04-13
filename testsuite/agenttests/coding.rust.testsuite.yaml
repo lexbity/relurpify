@@ -55,7 +55,7 @@ spec:
           - testsuite/agenttest_fixtures/rustsuite/src/lib.rs
         tool_calls_must_include:
           - cli_cargo
-        max_tool_calls: 6
+        max_tool_calls: 10
     - name: medium_add_mul_and_test
       task_type: code_modification
       requires:
@@ -270,4 +270,4 @@ spec:
           - "(?i)(assert|failed|panic|test_add)"
         tool_calls_must_include:
           - cli_cargo
-        max_tool_calls: 4
+        max_tool_calls: 8

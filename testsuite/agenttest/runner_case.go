@@ -201,7 +201,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			memStore = nil
 		}
 
-		attemptEnv, attemptErr := prepareCaseAttempt(ctx, timeout, suite, c, caseOpts, workspace, targetWorkspace, manifestAbs, agentName, instrumented, telemetryMux, logger, loadedManifest, env, allowedCapabilities, exclude)
+		attemptEnv, attemptErr := prepareCaseAttempt(ctx, suite, c, caseOpts, workspace, targetWorkspace, manifestAbs, agentName, instrumented, telemetryMux, logger, loadedManifest, env, allowedCapabilities, exclude)
 		if attemptErr != nil {
 			return failedCaseReport(caseStartedAt, c.Name, execution.Model, execution.ModelSource, execution.ManifestModel, execution.Endpoint, execution.RecordingMode, execution.TapePath, workspace, layout.ArtifactsDir, attemptErr.Error(), "infra", attempt)
 		}
@@ -325,7 +325,24 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	if res != nil && !res.Success && caseErr == "" {
 		caseErr = "agent returned unsuccessful result"
 	}
-	if assertErr := evaluateExpectations(c.Expect, workspace, output, changed, toolCounts, events, tokenUsage, memoryOutcome, snapshot); assertErr != nil {
+	// Build capability coverage for tool validation
+	coverage, _ := BuildCoverageFromEvents(agent, events)
+
+	// NEW: Build latency report from transcript (Phase 5)
+	toolTranscript := BuildToolTranscript(events)
+	latencyReport := BuildLatencyReport(toolTranscript)
+	if latencyReport != nil {
+		if data, err := json.MarshalIndent(latencyReport, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "latency_report.json"), data, 0o644)
+		}
+	}
+	if coverage != nil {
+		if data, err := json.MarshalIndent(coverage, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "capability_coverage.json"), data, 0o644)
+		}
+	}
+
+	if assertErr := evaluateExpectations(c.Expect, workspace, output, changed, toolCounts, events, tokenUsage, memoryOutcome, snapshot, coverage); assertErr != nil {
 		success = false
 		if caseErr == "" {
 			caseErr = assertErr.Error()
@@ -397,6 +414,9 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		BaselineFound:        baselineFound,
 		PerformanceWarnings:  performanceWarnings,
 		BackendResetStrategy: executionOpts.BackendReset,
+		// NEW: Latency tracking (Phase 5)
+		ToolLatencies:   getLatencyMapOrEmpty(latencyReport),
+		TotalToolTimeMs: getTotalToolTimeOrZero(latencyReport),
 	}
 }
 
@@ -427,6 +447,22 @@ func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestMod
 		FailureKind:   failureKind,
 		Attempts:      attempts,
 	}
+}
+
+// getLatencyMapOrEmpty returns the ToolLatencies map or an empty map if nil
+func getLatencyMapOrEmpty(report *ToolLatencyReport) map[string]LatencyStats {
+	if report == nil {
+		return make(map[string]LatencyStats)
+	}
+	return report.ToolLatencies
+}
+
+// getTotalToolTimeOrZero returns the TotalToolTimeMs or 0 if nil
+func getTotalToolTimeOrZero(report *ToolLatencyReport) int64 {
+	if report == nil {
+		return 0
+	}
+	return report.TotalToolTimeMs
 }
 
 func resolveCaseMaxRetries(opts RunOptions) int {
@@ -494,7 +530,7 @@ type preparedCaseAttempt struct {
 	skipReason      string
 }
 
-func prepareCaseAttempt(ctx context.Context, timeout time.Duration, suite *Suite, c CaseSpec, opts RunOptions, workspace, targetWorkspace, manifestAbs, agentName string, model core.LanguageModel, telemetry core.Telemetry, logger *log.Logger, loadedManifest *manifest.AgentManifest, extraEnv []string, allowedCapabilities []core.CapabilitySelector, exclude []string) (*preparedCaseAttempt, error) {
+func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunOptions, workspace, targetWorkspace, manifestAbs, agentName string, model core.LanguageModel, telemetry core.Telemetry, logger *log.Logger, loadedManifest *manifest.AgentManifest, extraEnv []string, allowedCapabilities []core.CapabilitySelector, exclude []string) (*preparedCaseAttempt, error) {
 	if err := MaterializeDerivedWorkspace(targetWorkspace, workspace, resolveTemplateProfile(suite, c), suite.Spec.Manifest, resolveWorkspaceExclude(suite, c), resolveWorkspaceFiles(suite, c)); err != nil {
 		return nil, err
 	}

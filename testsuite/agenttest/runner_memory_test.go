@@ -179,7 +179,7 @@ func TestEvaluateExpectationsChecksStateKeys(t *testing.T) {
 
 	if err := evaluateExpectations(ExpectSpec{
 		StateKeysMustExist: []string{"pipeline.workflow_retrieval"},
-	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, snapshot); err != nil {
+	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, snapshot, nil); err != nil {
 		t.Fatalf("evaluateExpectations: %v", err)
 	}
 }
@@ -191,7 +191,7 @@ func TestEvaluateExpectationsChecksMemoryAndWorkflowOutcome(t *testing.T) {
 	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{
 		MemoryRecordsCreated: 2,
 		WorkflowStateUpdated: true,
-	}, &core.ContextSnapshot{})
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("evaluateExpectations: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestEvaluateExpectationsChecksFileContentAndTelemetry(t *testing.T) {
 		}},
 		ToolCallsInOrder: []string{"file_read", "file_write"},
 		LLMCalls:         3,
-	}, workspace, "", nil, map[string]int{"file_read": 1, "file_write": 1}, events, TokenUsageReport{}, MemoryOutcomeReport{}, &core.ContextSnapshot{})
+	}, workspace, "", nil, map[string]int{"file_read": 1, "file_write": 1}, events, TokenUsageReport{}, MemoryOutcomeReport{}, &core.ContextSnapshot{}, nil)
 	if err != nil {
 		t.Fatalf("evaluateExpectations: %v", err)
 	}

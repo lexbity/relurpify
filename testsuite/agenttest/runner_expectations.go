@@ -16,7 +16,7 @@ import (
 	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
 )
 
-func evaluateExpectations(expect ExpectSpec, workspace, output string, changed []string, toolCalls map[string]int, events []core.Event, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, snapshot *core.ContextSnapshot) error {
+func evaluateExpectations(expect ExpectSpec, workspace, output string, changed []string, toolCalls map[string]int, events []core.Event, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, snapshot *core.ContextSnapshot, coverage *CapabilityCoverage) error {
 	var failures []string
 
 	if expect.NoFileChanges && len(changed) > 0 {
@@ -133,6 +133,82 @@ func evaluateExpectations(expect ExpectSpec, workspace, output string, changed [
 		failures = append(failures, workflowFailures...)
 	}
 
+	// NEW: ToolsRequired validation - ensures tools were actually invoked during test
+	if coverage != nil && len(expect.ToolsRequired) > 0 {
+		requiredFailures := ValidateToolsRequired(coverage, expect.ToolsRequired)
+		failures = append(failures, requiredFailures...)
+	}
+
+	// NEW: Tool injection expectations - validate agent recovery and success rates
+	if expect.ToolRecoveryObserved && !HasRecoveryFromToolFailure(events) {
+		failures = append(failures, "expected agent to recover from tool failure, but no recovery observed")
+	}
+
+	if len(expect.ToolSuccessRate) > 0 {
+		for tool, constraint := range expect.ToolSuccessRate {
+			_, _, rate := ToolSuccessRate(events, tool)
+			if !evaluateSuccessRateConstraint(rate, constraint) {
+				failures = append(failures, fmt.Sprintf("tool %s success rate %.2f does not meet constraint %s", tool, rate, constraint))
+			}
+		}
+	}
+
+	// NEW: Determinism expectations (requires multi-run analysis at CLI level)
+	// Note: determinism_score and llm_response_stable require multiple runs
+	// and are evaluated in the consistency analysis framework, not single runs.
+	// StateKeysStable is also checked across multiple runs.
+	if len(expect.StateKeysStable) > 0 {
+		// Single-run check: just verify keys exist
+		for _, key := range expect.StateKeysStable {
+			if !contextSnapshotHasKey(snapshot, key) {
+				failures = append(failures, fmt.Sprintf("determinism state key %s not found for stability check", key))
+			}
+		}
+	}
+
+	// NEW: Dependency validation (Phase 4)
+	if len(expect.ToolDependencies) > 0 {
+		// Build transcript from events for dependency checking
+		transcript := BuildToolTranscript(events)
+		if transcript != nil {
+			validator := NewDependencyValidator(expect.ToolDependencies)
+			if depFailures := validator.Validate(transcript); len(depFailures) > 0 {
+				failures = append(failures, depFailures...)
+			}
+		}
+	}
+
+	// NEW: Enhanced tool ordering validation with "adjacent" modifier support
+	// The tool_calls_in_order field already exists, but we now check for
+	// adjacent modifier via syntax: "tool_name:adjacent"
+	if len(expect.ToolCallsInOrder) > 0 {
+		transcript := BuildToolTranscript(events)
+		if transcript != nil {
+			// Check if any tool has :adjacent modifier
+			adjacent := false
+			cleaned := make([]string, len(expect.ToolCallsInOrder))
+			for i, tool := range expect.ToolCallsInOrder {
+				if strings.HasSuffix(tool, ":adjacent") {
+					adjacent = true
+					cleaned[i] = strings.TrimSuffix(tool, ":adjacent")
+				} else {
+					cleaned[i] = tool
+				}
+			}
+			if orderingFailures := ValidateToolOrdering(transcript, cleaned, adjacent); len(orderingFailures) > 0 {
+				failures = append(failures, orderingFailures...)
+			}
+		}
+	}
+
+	// NEW: Latency expectations validation (Phase 5)
+	if len(expect.ToolCallLatencyMs) > 0 || expect.MaxTotalToolTimeMs > 0 {
+		transcript := BuildToolTranscript(events)
+		if latencyFailures := EvaluateLatencyExpectations(expect, transcript); len(latencyFailures) > 0 {
+			failures = append(failures, latencyFailures...)
+		}
+	}
+
 	// Euclo-specific expectations.
 	if expect.Euclo != nil {
 		failures = append(failures, evaluateEucloExpectations(expect.Euclo, snapshot)...)
@@ -142,6 +218,49 @@ func evaluateExpectations(expect ExpectSpec, workspace, output string, changed [
 		return errors.New(strings.Join(failures, "; "))
 	}
 	return nil
+}
+
+// evaluateSuccessRateConstraint checks if a success rate meets a constraint like ">0.9" or "0.8"
+func evaluateSuccessRateConstraint(rate float64, constraint string) bool {
+	constraint = strings.TrimSpace(constraint)
+	if constraint == "" {
+		return true
+	}
+
+	// Parse constraint like ">0.9", ">=0.8", "<0.5", "0.9" (implicit >=)
+	var threshold float64
+	var op string
+
+	if strings.HasPrefix(constraint, ">=") {
+		op = ">="
+		fmt.Sscanf(constraint[2:], "%f", &threshold)
+	} else if strings.HasPrefix(constraint, ">") {
+		op = ">"
+		fmt.Sscanf(constraint[1:], "%f", &threshold)
+	} else if strings.HasPrefix(constraint, "<=") {
+		op = "<="
+		fmt.Sscanf(constraint[2:], "%f", &threshold)
+	} else if strings.HasPrefix(constraint, "<") {
+		op = "<"
+		fmt.Sscanf(constraint[1:], "%f", &threshold)
+	} else {
+		// Default to >= for bare numbers
+		op = ">="
+		fmt.Sscanf(constraint, "%f", &threshold)
+	}
+
+	switch op {
+	case ">=":
+		return rate >= threshold
+	case ">":
+		return rate > threshold
+	case "<=":
+		return rate <= threshold
+	case "<":
+		return rate < threshold
+	default:
+		return true
+	}
 }
 
 func toolCallsAppearInOrder(events []core.Event, expected []string) bool {
@@ -638,15 +757,6 @@ func collectInteractionPhaseRecords(records []any) []interactionPhaseRecord {
 		})
 	}
 	return out
-}
-
-func findInteractionPhaseRecord(records []interactionPhaseRecord, phase string) (interactionPhaseRecord, bool) {
-	for _, record := range records {
-		if strings.EqualFold(strings.TrimSpace(record.Phase), strings.TrimSpace(phase)) {
-			return record, true
-		}
-	}
-	return interactionPhaseRecord{}, false
 }
 
 func findInteractionPhaseRecordForProduced(records []interactionPhaseRecord, phase, kind string) (interactionPhaseRecord, bool) {

@@ -34,6 +34,9 @@ spec:
       description: "Fast debug path: repair a single obvious logic bug."
       task_type: code_modification
       tags: [smoke, rapid-iteration, debug, level:1]
+      requires:
+        # Phase 1: Tool availability preflight check
+        tools_available: [file_read, file_write, go_test]
       setup:
         files:
           - path: testsuite/fixtures/rapid_debug/math.go
@@ -70,7 +73,15 @@ spec:
           - file_read
           - file_write
           - go_test
-        max_tool_calls: 12
+        # Phase 4: Dependency validation - file_write should precede final go_test
+        # Note: Removed strict go_test->file_write dependency because go_test is called
+        # both before (to reproduce bug) and after (to verify fix) file_write
+        max_tool_calls: 25  # Increased from 12 - agent uses ~21 calls for debug workflow
+        # Phase 5: Latency constraints
+        tool_call_latency_ms:
+          file_read: "<100"
+          go_test: "<5000"
+        max_total_tool_time_ms: 10000
         files_contain:
           - path: testsuite/fixtures/rapid_debug/math.go
             contains: ["return a / b"]

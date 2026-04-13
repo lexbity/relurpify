@@ -22,6 +22,7 @@ type ToolTranscriptEntry struct {
 	ResultMessage  string         `json:"result_message,omitempty"`
 	ResultMetadata map[string]any `json:"result_metadata,omitempty"`
 	DurationMS     int64          `json:"duration_ms,omitempty"`
+	QueueTimeMS    int64          `json:"queue_time_ms,omitempty"` // NEW: Time between LLM requesting and execution starting
 	Success        bool           `json:"success,omitempty"`
 	Error          string         `json:"error,omitempty"`
 }

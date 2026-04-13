@@ -50,17 +50,25 @@ func shouldSkipCase(req RequiresSpec, agent graph.Agent) (reason string, ok bool
 			}
 		}
 	}
-	return "", false
-}
 
-func extractCapabilityRegistry(agent graph.Agent) *capability.Registry {
-	type capabilityRegistryProvider interface {
-		CapabilityRegistry() *capability.Registry
+	// NEW: ToolsAvailable preflight check - fails fast if tool not in registry
+	if len(req.ToolsAvailable) > 0 {
+		reg := extractCapabilityRegistry(agent)
+		if reg == nil {
+			return "agent has no capability registry", true
+		}
+		for _, tool := range req.ToolsAvailable {
+			tool = strings.TrimSpace(tool)
+			if tool == "" {
+				continue
+			}
+			if _, ok := reg.Get(tool); !ok {
+				return fmt.Sprintf("tool %s not available in registry", tool), true
+			}
+		}
 	}
-	if provider, ok := agent.(capabilityRegistryProvider); ok {
-		return provider.CapabilityRegistry()
-	}
-	return nil
+
+	return "", false
 }
 
 func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.AgentRuntimeSpec {
@@ -213,6 +221,17 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	registry.SetPolicyEngine(compiledPolicy.Engine)
 	applyAgentTestCapabilityDefaults(registry, allowedCapabilities)
 	pregrantAgentTestCapabilities(permMgr, agentManifest.Metadata.Name, executionAgentName, registry)
+
+	// NEW: Wrap registry with tool injection interceptor if overrides are configured
+	if len(c.Setup.ToolOverrides) > 0 {
+		registry = WrapRegistryWithInterceptor(registry, c.Setup.ToolOverrides)
+	}
+
+	// NEW: Add precheck to block disabled tools from being invoked
+	if len(c.Requires.ToolsDisable) > 0 {
+		registry.AddPrecheck(&disabledToolPrecheck{disabled: c.Requires.ToolsDisable})
+	}
+
 	mem = boot.Memory
 
 	env := boot.Environment
@@ -334,7 +353,6 @@ func defaultAgenttestAllowedCapabilities() []core.CapabilitySelector {
 		{Name: "search_semantic", Kind: core.CapabilityKindTool},
 		{Name: "git_diff", Kind: core.CapabilityKindTool},
 		{Name: "git_history", Kind: core.CapabilityKindTool},
-		{Name: "git_blame", Kind: core.CapabilityKindTool},
 		{Name: "go_build", Kind: core.CapabilityKindTool},
 		{Name: "go_test", Kind: core.CapabilityKindTool},
 		{Name: "query_ast", Kind: core.CapabilityKindTool},
@@ -464,6 +482,25 @@ func (t *aliasTool) Permissions() core.ToolPermissions {
 	return t.target.Permissions()
 }
 func (t *aliasTool) Tags() []string { return t.target.Tags() }
+
+// disabledToolPrecheck blocks invocation of disabled tools
+type disabledToolPrecheck struct {
+	disabled []string
+}
+
+func (d *disabledToolPrecheck) Check(descriptor core.CapabilityDescriptor, args map[string]any) error {
+	for _, name := range d.disabled {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		// Check if this descriptor matches the disabled tool name (by ID or Name)
+		if strings.EqualFold(descriptor.ID, name) || strings.EqualFold(descriptor.Name, name) {
+			return fmt.Errorf("tool %s is disabled for this test case", name)
+		}
+	}
+	return nil
+}
 
 func instantiateAgentByName(workspace, name string, env agentenv.AgentEnvironment) graph.Agent {
 	return namedfactory.InstantiateByName(workspace, name, env)

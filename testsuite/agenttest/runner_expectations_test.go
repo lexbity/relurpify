@@ -337,7 +337,7 @@ func TestEvaluateExpectationsWorkflowHasTensions(t *testing.T) {
 
 	err = evaluateExpectations(ExpectSpec{
 		WorkflowHasTensions: []string{"wf-tensions"},
-	}, workspace, "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, &core.ContextSnapshot{})
+	}, workspace, "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, &core.ContextSnapshot{}, nil)
 	if err != nil {
 		t.Fatalf("expected workflow_has_tensions to pass, got %v", err)
 	}
@@ -352,7 +352,7 @@ func TestEvaluateExpectationsStateKeyNotEmpty(t *testing.T) {
 
 	err := evaluateExpectations(ExpectSpec{
 		StateKeysNotEmpty: []string{"euclo.active_exploration_id"},
-	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, snapshot)
+	}, t.TempDir(), "", nil, nil, nil, TokenUsageReport{}, MemoryOutcomeReport{}, snapshot, nil)
 	if err != nil {
 		t.Fatalf("expected state_key_not_empty to pass, got %v", err)
 	}

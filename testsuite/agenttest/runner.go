@@ -98,6 +98,9 @@ type CaseReport struct {
 	BaselinePath        string               `json:"baseline_path,omitempty"`
 	BaselineFound       bool                 `json:"baseline_found,omitempty"`
 	PerformanceWarnings []PerformanceWarning `json:"performance_warnings,omitempty"`
+	// NEW: Latency tracking (Phase 5)
+	ToolLatencies   map[string]LatencyStats `json:"tool_latencies,omitempty"`
+	TotalToolTimeMs int64                   `json:"total_tool_time_ms,omitempty"`
 }
 
 type TokenUsageReport struct {
@@ -163,7 +166,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 		models = []ModelSpec{{Name: "", Endpoint: ""}}
 	}
 	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
-	if err := r.preflightSuite(ctx, suite, opts, targetWorkspace, models); err != nil {
+	if err := r.preflightSuite(suite, opts, targetWorkspace, models); err != nil {
 		return nil, err
 	}
 
@@ -209,7 +212,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	return report, nil
 }
 
-func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
+func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
 	manifestModel := ""
 	if suite != nil {
 		suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)

@@ -124,13 +124,20 @@ type BrowserFixtureSpec struct {
 type RequiresSpec struct {
 	Executables []string `yaml:"executables,omitempty"`
 	Tools       []string `yaml:"tools,omitempty"`
+	// NEW: ToolsAvailable checks if tools exist in registry before running (fails fast)
+	ToolsAvailable []string `yaml:"tools_available,omitempty"`
+	// NEW: ToolsRequired ensures tools are actually invoked during test
+	ToolsRequired []string `yaml:"tools_required,omitempty"`
+	// NEW: ToolsDisable removes tools from the registry so agent cannot use them
+	ToolsDisable []string `yaml:"tools_disable,omitempty"`
 }
 
 type SetupSpec struct {
-	Files     []SetupFileSpec    `yaml:"files,omitempty"`
-	GitInit   bool               `yaml:"git_init,omitempty"`
-	Memory    MemorySeedSpec     `yaml:"memory,omitempty"`
-	Workflows []WorkflowSeedSpec `yaml:"workflows,omitempty"`
+	Files         []SetupFileSpec        `yaml:"files,omitempty"`
+	GitInit       bool                   `yaml:"git_init,omitempty"`
+	Memory        MemorySeedSpec         `yaml:"memory,omitempty"`
+	Workflows     []WorkflowSeedSpec     `yaml:"workflows,omitempty"`
+	ToolOverrides []ToolResponseOverride `yaml:"tool_overrides,omitempty"`
 }
 
 type SetupFileSpec struct {
@@ -162,6 +169,28 @@ type ExpectSpec struct {
 	StateKeysMustExist   []string `yaml:"state_keys_must_exist,omitempty"`
 	StateKeysNotEmpty    []string `yaml:"state_key_not_empty,omitempty"`
 	WorkflowHasTensions  []string `yaml:"workflow_has_tensions,omitempty"`
+
+	// NEW: ToolsRequired ensures tools were actually invoked during test
+	ToolsRequired []string `yaml:"tools_required,omitempty"`
+
+	// NEW: Tool injection expectations for failure mode testing
+	ToolRecoveryObserved bool              `yaml:"tool_recovery_observed,omitempty"`
+	ToolSuccessRate      map[string]string `yaml:"tool_success_rate,omitempty"`
+
+	// NEW: Determinism expectations (Phase 3)
+	DeterminismScore  string   `yaml:"determinism_score,omitempty"`
+	LLMResponseStable bool     `yaml:"llm_response_stable,omitempty"`
+	StateKeysStable   []string `yaml:"state_keys_stable,omitempty"`
+
+	// NEW: Dependency expectations (Phase 4)
+	ToolDependencies []ToolDependency `yaml:"tool_dependencies,omitempty"`
+	// ^ Rules for valid tool call ordering and prerequisites
+
+	// NEW: Latency expectations (Phase 5)
+	ToolCallLatencyMs map[string]string `yaml:"tool_call_latency_ms,omitempty"`
+	// ^ e.g., "file_read: <50", "go_test: <5000"
+	MaxTotalToolTimeMs int `yaml:"max_total_tool_time_ms,omitempty"`
+	// ^ Maximum time spent in tools overall
 
 	Euclo *EucloExpectSpec `yaml:"euclo,omitempty"`
 }

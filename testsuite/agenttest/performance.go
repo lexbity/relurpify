@@ -40,6 +40,9 @@ type PerformanceBaseline struct {
 	DurationMS  int64                    `json:"duration_ms"`
 	Phases      map[string]PhaseBaseline `json:"phases,omitempty"`
 	Framework   perfstats.Snapshot       `json:"framework,omitempty"`
+	// NEW: Latency tracking (Phase 5)
+	ToolLatencies   map[string]LatencyStats `json:"tool_latencies,omitempty"`
+	TotalToolTimeMs int64                   `json:"total_tool_time_ms,omitempty"`
 }
 
 type PerformanceWarning struct {
@@ -72,6 +75,9 @@ func BuildPerformanceBaseline(cr CaseReport, recordedAt time.Time) *PerformanceB
 		TotalTokens: cr.TokenUsage.TotalTokens,
 		DurationMS:  cr.DurationMS,
 		Framework:   cr.FrameworkPerf,
+		// NEW: Latency tracking (Phase 5)
+		ToolLatencies:   cr.ToolLatencies,
+		TotalToolTimeMs: cr.TotalToolTimeMs,
 	}
 	if len(cr.PhaseMetrics) > 0 {
 		baseline.Phases = make(map[string]PhaseBaseline, len(cr.PhaseMetrics))
@@ -182,9 +188,46 @@ func ComparePerformanceBaseline(actual CaseReport, baseline *PerformanceBaseline
 			Detail:   fmt.Sprintf("%s: %dms vs baseline %dms", actual.Name, actual.DurationMS, baseline.DurationMS),
 		})
 	}
+	// NEW: Latency comparison (Phase 5)
+	for _, warning := range compareLatencyPerformance(actual.Name, actual.ToolLatencies, baseline.ToolLatencies) {
+		warnings = append(warnings, warning)
+	}
 	for _, warning := range compareFrameworkPerformance(actual.Name, actual.FrameworkPerf, baseline.Framework) {
 		warnings = append(warnings, warning)
 	}
+	return warnings
+}
+
+// compareLatencyPerformance compares tool latency against baseline
+// Triggers warning when current latency exceeds 2x baseline (default threshold)
+func compareLatencyPerformance(caseName string, actual, baseline map[string]LatencyStats) []PerformanceWarning {
+	if baseline == nil {
+		return nil
+	}
+
+	var warnings []PerformanceWarning
+	const latencyThreshold = 2.0 // Warn when latency exceeds 2x baseline
+
+	for tool, baselineStats := range baseline {
+		if baselineStats.MaxMs <= 0 {
+			continue
+		}
+
+		actualStats, ok := actual[tool]
+		if !ok {
+			continue // Tool not used in current run
+		}
+
+		if exceededThreshold64(actualStats.MaxMs, baselineStats.MaxMs, latencyThreshold) {
+			warnings = append(warnings, PerformanceWarning{
+				Metric:   fmt.Sprintf("tool_latency.%s.max_ms", tool),
+				Actual:   actualStats.MaxMs,
+				Baseline: baselineStats.MaxMs,
+				Detail:   fmt.Sprintf("%s: %s max latency %dms exceeds %.0fx baseline (%dms)", caseName, tool, actualStats.MaxMs, latencyThreshold, baselineStats.MaxMs),
+			})
+		}
+	}
+
 	return warnings
 }
 

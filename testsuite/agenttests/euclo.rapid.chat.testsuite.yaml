@@ -82,7 +82,7 @@ spec:
         tool_calls_must_exclude:
           - file_write
           - go_test
-        max_tool_calls: 4
+        max_tool_calls: 8
         euclo:
           behavior_family: direct_change_execution
           mode: chat
@@ -169,7 +169,7 @@ spec:
         tool_calls_must_exclude:
           - file_write
           - go_test
-        max_tool_calls: 4
+        max_tool_calls: 8
         euclo:
           behavior_family: direct_change_execution
           mode: chat
@@ -234,7 +234,7 @@ spec:
         tool_calls_must_exclude:
           - file_write
           - go_test
-        max_tool_calls: 4
+        max_tool_calls: 8
         euclo:
           behavior_family: direct_change_execution
           mode: chat

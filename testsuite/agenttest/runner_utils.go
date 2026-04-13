@@ -66,13 +66,6 @@ func uniqueStrings(in []string) []string {
 	return out
 }
 
-func mergeStrings(a, b []string) []string {
-	out := make([]string, 0, len(a)+len(b))
-	out = append(out, a...)
-	out = append(out, b...)
-	return out
-}
-
 func mapTargetPathToWorkspace(absPath, targetWorkspace, workspace string) string {
 	if absPath == "" || targetWorkspace == "" || workspace == "" {
 		return absPath

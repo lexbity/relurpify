@@ -534,7 +534,7 @@ spec:
 		},
 	}
 
-	if err := (&Runner{}).preflightSuite(context.Background(), suite, RunOptions{}, workspace, suite.Spec.Models); err != nil {
+	if err := (&Runner{}).preflightSuite(suite, RunOptions{}, workspace, suite.Spec.Models); err != nil {
 		t.Fatalf("preflightSuite: %v", err)
 	}
 }
@@ -597,7 +597,7 @@ spec:
 		},
 	}
 
-	err := (&Runner{}).preflightSuite(context.Background(), suite, RunOptions{}, workspace, suite.Spec.Models)
+	err := (&Runner{}).preflightSuite(suite, RunOptions{}, workspace, suite.Spec.Models)
 	if err == nil || !strings.Contains(err.Error(), "not loaded") {
 		t.Fatalf("expected preflight model-not-loaded error, got %v", err)
 	}
