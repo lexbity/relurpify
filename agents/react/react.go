@@ -48,6 +48,11 @@ type ReActAgent struct {
 	sharedContext    *core.SharedContext
 	initialLoadDone  bool
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
+
+	// SemanticContext is the pre-resolved semantic context bundle passed
+	// to the agent at construction time. Chunks are injected into the
+	// context window before InitialLoad runs.
+	SemanticContext core.AgentSemanticContext
 }
 
 const (
@@ -123,8 +128,27 @@ func (a *ReActAgent) Initialize(config *core.Config) error {
 		}
 		a.contextPolicy.ApplyAgentContextSpec(spec)
 	}
+	// Inject pre-computed chunks from semantic context before InitialLoad runs
+	if a.contextPolicy != nil && a.contextPolicy.Progressive != nil && len(a.SemanticContext.Chunks) > 0 {
+		chunks := convertAgentChunksToContextChunks(a.SemanticContext.Chunks)
+		_ = a.contextPolicy.Progressive.InjectPrecomputedChunks(chunks)
+	}
 	a.contextPolicy.Budget.SetReservations(1000, 2000, 1000)
 	return nil
+}
+
+// convertAgentChunksToContextChunks converts core.AgentContextChunk to contextmgr.ContextChunk
+func convertAgentChunksToContextChunks(agentChunks []core.AgentContextChunk) []contextmgr.ContextChunk {
+	chunks := make([]contextmgr.ContextChunk, len(agentChunks))
+	for i, ac := range agentChunks {
+		chunks[i] = contextmgr.ContextChunk{
+			ID:            ac.ID,
+			Content:       ac.Content,
+			TokenEstimate: ac.TokenEstimate,
+			Metadata:      ac.Metadata,
+		}
+	}
+	return chunks
 }
 
 // debugf logs formatted messages whenever agent debug logging is enabled.

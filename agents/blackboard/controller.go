@@ -22,7 +22,8 @@ const defaultMaxCycles = 20
 
 // Run executes the blackboard loop until a terminal condition is met.
 // It returns the final blackboard state and an error if the loop gets stuck.
-func (c *Controller) Run(ctx context.Context, bb *Blackboard, tools *capability.Registry, model core.LanguageModel) error {
+// The semctx parameter provides pre-resolved semantic context to KS implementations.
+func (c *Controller) Run(ctx context.Context, bb *Blackboard, tools *capability.Registry, model core.LanguageModel, semctx core.AgentSemanticContext) error {
 	maxCycles := c.MaxCycles
 	if maxCycles <= 0 {
 		maxCycles = defaultMaxCycles
@@ -51,7 +52,7 @@ func (c *Controller) Run(ctx context.Context, bb *Blackboard, tools *capability.
 
 		// Select and execute the highest-priority KS.
 		selected := eligible[0]
-		if err := selected.Execute(ctx, bb, tools, model); err != nil {
+		if err := selected.Execute(ctx, bb, tools, model, semctx); err != nil {
 			return fmt.Errorf("blackboard: KS %q failed: %w", selected.Name(), err)
 		}
 	}

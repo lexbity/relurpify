@@ -149,6 +149,7 @@ type blackboardDispatchNode struct {
 	controller *Controller
 	tools      *capability.Registry
 	model      core.LanguageModel
+	semctx     core.AgentSemanticContext
 	telemetry  core.Telemetry
 }
 
@@ -187,7 +188,7 @@ func (n *blackboardDispatchNode) Execute(ctx context.Context, state *core.Contex
 		"source":   resolved.Spec.Name,
 		"priority": resolved.Spec.Priority,
 	})
-	if err := resolved.Source.Execute(ctx, bb, n.tools, n.model); err != nil {
+	if err := resolved.Source.Execute(ctx, bb, n.tools, n.model, n.semctx); err != nil {
 		state.Set(contextKeyControllerLastError, err.Error())
 		PublishToContext(state, bb, n.controller.Snapshot(bb, currentCycle(state), "dispatch_error", resolved.Spec.Name))
 		emitBlackboardEvent(n.telemetry, state, core.EventNodeError, n.id, state.GetString("task.id"), "blackboard dispatch failed", map[string]any{

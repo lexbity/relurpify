@@ -65,11 +65,11 @@ func TestExplorerKS_ActivatesWhenNoFacts(t *testing.T) {
 	ks := &blackboard.ExplorerKS{}
 	bb := blackboard.NewBlackboard("goal")
 	if !ks.CanActivate(bb) {
-		t.Error("Explorer should activate when Facts is empty")
+		t.Error("Explorer should activate when exploration.status not set")
 	}
-	bb.AddFact("k", "v", "test")
+	bb.AddFact("exploration.status", "explored", "test")
 	if ks.CanActivate(bb) {
-		t.Error("Explorer should not activate when Facts is non-empty")
+		t.Error("Explorer should not activate when exploration.status is set")
 	}
 }
 
@@ -77,11 +77,11 @@ func TestAnalyzerKS_ActivatesWithFactsButNoIssues(t *testing.T) {
 	ks := &blackboard.AnalyzerKS{}
 	bb := blackboard.NewBlackboard("goal")
 	if ks.CanActivate(bb) {
-		t.Error("Analyzer should not activate without facts")
+		t.Error("Analyzer should not activate without exploration.status")
 	}
-	bb.AddFact("k", "v", "test")
+	bb.AddFact("exploration.status", "explored", "test")
 	if !ks.CanActivate(bb) {
-		t.Error("Analyzer should activate with facts and no issues")
+		t.Error("Analyzer should activate with exploration.status and no issues")
 	}
 	if err := bb.AddIssue("i1", "desc", "low", "test"); err != nil {
 		t.Fatalf("AddIssue: %v", err)
@@ -162,7 +162,7 @@ func TestAnalyzerKS_UsesReviewerCapabilityWhenAvailable(t *testing.T) {
 	ks := &blackboard.AnalyzerKS{}
 	bb := blackboard.NewBlackboard("goal")
 	bb.AddFact("k", "v", "test")
-	if err := ks.Execute(context.Background(), bb, registry, nil); err != nil {
+	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if len(bb.Issues) != 1 || bb.Issues[0].Description != "missing validation" {
@@ -196,7 +196,7 @@ func TestController_SelectsHighestPriorityEligibleKS(t *testing.T) {
 		MaxCycles: 5,
 	}
 	bb := blackboard.NewBlackboard("goal")
-	if err := ctrl.Run(context.Background(), bb, nil, nil); err != nil {
+	if err := ctrl.Run(context.Background(), bb, nil, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(selected) == 0 || selected[0] != "high" {
@@ -232,7 +232,7 @@ func TestController_BreaksPriorityTiesByStableName(t *testing.T) {
 		},
 	}
 	ctrl := &blackboard.Controller{Sources: []blackboard.KnowledgeSource{zeta, alpha}, MaxCycles: 3}
-	if err := ctrl.Run(context.Background(), blackboard.NewBlackboard("goal"), nil, nil); err != nil {
+	if err := ctrl.Run(context.Background(), blackboard.NewBlackboard("goal"), nil, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(selected) == 0 || selected[0] != "alpha" {
@@ -252,7 +252,7 @@ func TestController_ErrorsWhenStuck(t *testing.T) {
 		MaxCycles: 5,
 	}
 	bb := blackboard.NewBlackboard("goal")
-	err := ctrl.Run(context.Background(), bb, nil, nil)
+	err := ctrl.Run(context.Background(), bb, nil, nil, core.AgentSemanticContext{})
 	if err == nil {
 		t.Error("expected error when no KS can activate")
 	}
@@ -275,7 +275,7 @@ func TestController_TerminatesWhenGoalSatisfied(t *testing.T) {
 	}
 	ctrl := &blackboard.Controller{Sources: []blackboard.KnowledgeSource{ks}, MaxCycles: 20}
 	bb := blackboard.NewBlackboard("goal")
-	if err := ctrl.Run(context.Background(), bb, nil, nil); err != nil {
+	if err := ctrl.Run(context.Background(), bb, nil, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if cycles != 1 {
@@ -539,7 +539,7 @@ func TestPlannerKS_UsesPlannerCapabilityWhenAvailable(t *testing.T) {
 	if err := bb.AddIssue("issue-1", "fix bug", "medium", "test"); err != nil {
 		t.Fatalf("AddIssue: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil); err != nil {
+	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if len(bb.PendingActions) != 1 {
@@ -578,7 +578,7 @@ func TestExecutorKS_InvokesExplicitAgentCapability(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("EnqueueAction: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil); err != nil {
+	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if called != 1 {
@@ -614,7 +614,7 @@ func TestVerifierKS_UsesVerifierCapabilityWhenAvailable(t *testing.T) {
 	if err := bb.AddArtifact("a1", "summary", "content", "Executor"); err != nil {
 		t.Fatalf("AddArtifact: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil); err != nil {
+	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if !bb.Artifacts[0].Verified {
@@ -646,7 +646,7 @@ func TestReviewKS_UsesReviewerCapabilityWhenArtifactsNeedReview(t *testing.T) {
 		t.Fatalf("AddArtifact: %v", err)
 	}
 	bb.VerifyAllArtifacts()
-	if err := ks.Execute(context.Background(), bb, registry, nil); err != nil {
+	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if len(bb.Issues) != 1 || bb.Issues[0].Description != "artifact misses changelog note" {
@@ -664,7 +664,7 @@ func TestFailureTriageKS_EnqueuesRecoveryActionForFailedExecution(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("CompleteAction: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, nil, nil); err != nil {
+	if err := ks.Execute(context.Background(), bb, nil, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if len(bb.Issues) != 1 {
@@ -704,7 +704,7 @@ func TestSummarizerKS_UsesSummarizerCapabilityWhenAvailable(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CompleteAction: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil); err != nil {
+	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if !bb.HasArtifact("blackboard-summary") {
@@ -1493,7 +1493,7 @@ type recordingKS struct {
 func (r *recordingKS) Name() string                               { return r.name }
 func (r *recordingKS) Priority() int                              { return r.priority }
 func (r *recordingKS) CanActivate(bb *blackboard.Blackboard) bool { return r.canActivate(bb) }
-func (r *recordingKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
+func (r *recordingKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	return r.exec(bb)
 }
 
@@ -1506,7 +1506,7 @@ type checkpointResumeKS struct {
 func (k *checkpointResumeKS) Name() string                              { return k.name }
 func (k *checkpointResumeKS) Priority() int                             { return k.priority }
 func (k *checkpointResumeKS) CanActivate(_ *blackboard.Blackboard) bool { return true }
-func (k *checkpointResumeKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
+func (k *checkpointResumeKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	hasResumeFact := false
 	for _, fact := range bb.Facts {
 		if fact.Key == "resume-phase" {

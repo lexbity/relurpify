@@ -25,16 +25,58 @@ type ExplorerKS struct{}
 func (k *ExplorerKS) Name() string  { return "Explorer" }
 func (k *ExplorerKS) Priority() int { return 100 }
 func (k *ExplorerKS) CanActivate(bb *Blackboard) bool {
-	return len(bb.Facts) == 0
+	return !bb.HasFact("exploration.status")
 }
-func (k *ExplorerKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
-	// Explorer remains lightweight until a dedicated retrieval strategy lands.
-	// It still records normalized goal facts that downstream capability-routed
-	// specialists can consume.
-	bb.AddFact("exploration.status", "explored", k.Name())
-	if len(bb.Goals) > 0 {
-		bb.AddFact("task.goal", bb.Goals[0], k.Name())
+func (k *ExplorerKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel, semctx core.AgentSemanticContext) error {
+	// 1. Goals as facts
+	for i, goal := range bb.Goals {
+		bb.AddFact(fmt.Sprintf("task.goal.%d", i), goal, k.Name())
 	}
+
+	// 2. AST symbols as structured facts from semantic context
+	for _, sym := range semctx.ASTSymbols {
+		sig := sym.Signature
+		if sym.DocSummary != "" {
+			sig += " // " + sym.DocSummary
+		}
+		bb.AddFactWithOrigin(
+			fmt.Sprintf("ast.symbol.%s", sanitizeKey(sym.Name)),
+			fmt.Sprintf("%s %s [%s:%d]", sym.Kind, sig, sym.File, sym.Line),
+			k.Name(),
+			&FactOrigin{
+				SourceSystem: "ast_index",
+				RecordID:     fmt.Sprintf("%s:%d", sym.File, sym.Line),
+				Kind:         sym.Kind,
+				CapturedAt:   time.Now(),
+			},
+		)
+	}
+	if len(semctx.ASTSymbols) > 0 {
+		bb.AddFact("ast.symbols_loaded", fmt.Sprintf("%d", len(semctx.ASTSymbols)), k.Name())
+	}
+
+	// 3. BKC chunks as facts from semantic context
+	for _, chunk := range semctx.Chunks {
+		origin := &FactOrigin{
+			SourceSystem: "bkc",
+			RecordID:     chunk.ID,
+			CapturedAt:   time.Now(),
+		}
+		if kind, ok := chunk.Metadata["view_kind"]; ok {
+			origin.Kind = kind
+		}
+		bb.AddFactWithOrigin(
+			fmt.Sprintf("bkc.chunk.%s", chunk.ID),
+			chunk.Content,
+			k.Name(),
+			origin,
+		)
+	}
+	if len(semctx.Chunks) > 0 {
+		bb.AddFact("bkc.chunks_loaded", fmt.Sprintf("%d", len(semctx.Chunks)), k.Name())
+	}
+
+	bb.AddFact("exploration.status", "explored", k.Name())
 	return nil
 }
 
@@ -44,9 +86,9 @@ type AnalyzerKS struct{}
 func (k *AnalyzerKS) Name() string  { return "Analyzer" }
 func (k *AnalyzerKS) Priority() int { return 90 }
 func (k *AnalyzerKS) CanActivate(bb *Blackboard) bool {
-	return len(bb.Facts) > 0 && len(bb.Issues) == 0
+	return bb.HasFact("exploration.status") && len(bb.Issues) == 0
 }
-func (k *AnalyzerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel) error {
+func (k *AnalyzerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityReviewerReview, map[string]any{
 		"instruction":         firstGoal(bb),
 		"artifact_summary":    factsSummary(bb),
@@ -76,7 +118,7 @@ func (k *PlannerKS) Priority() int { return 80 }
 func (k *PlannerKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Issues) > 0 && len(bb.PendingActions) == 0 && len(bb.CompletedActions) == 0
 }
-func (k *PlannerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel) error {
+func (k *PlannerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityPlannerPlan, map[string]any{
 		"instruction": plannerInstruction(bb),
 	}); err != nil {
@@ -111,7 +153,7 @@ func (k *ReviewKS) Priority() int { return 75 }
 func (k *ReviewKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Artifacts) > 0 && !bb.HasUnverifiedArtifacts() && len(bb.Issues) == 0
 }
-func (k *ReviewKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel) error {
+func (k *ReviewKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityReviewerReview, map[string]any{
 		"instruction":      firstGoal(bb),
 		"artifact_summary": artifactSummary(bb),
@@ -133,7 +175,7 @@ func (k *ExecutorKS) Priority() int { return 70 }
 func (k *ExecutorKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.PendingActions) > 0
 }
-func (k *ExecutorKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel) error {
+func (k *ExecutorKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	// Drain pending actions and produce artifacts.
 	pending := append([]ActionRequest(nil), bb.PendingActions...)
 	for _, req := range pending {
@@ -176,7 +218,7 @@ func (k *VerifierKS) Priority() int { return 60 }
 func (k *VerifierKS) CanActivate(bb *Blackboard) bool {
 	return bb.HasUnverifiedArtifacts()
 }
-func (k *VerifierKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel) error {
+func (k *VerifierKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityVerifierVerify, map[string]any{
 		"instruction":           firstGoal(bb),
 		"artifact_summary":      artifactSummary(bb),
@@ -218,7 +260,7 @@ func (k *FailureTriageKS) CanActivate(bb *Blackboard) bool {
 	}
 	return false
 }
-func (k *FailureTriageKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
+func (k *FailureTriageKS) Execute(_ context.Context, bb *Blackboard, _ *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	for _, result := range bb.CompletedActions {
 		if result.Success {
 			continue
@@ -258,7 +300,7 @@ func (k *SummarizerKS) CanActivate(bb *Blackboard) bool {
 	}
 	return !bb.HasArtifact("blackboard-summary")
 }
-func (k *SummarizerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel) error {
+func (k *SummarizerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
 	summary := buildBlackboardCompletionSummary(bb)
 	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilitySummarizerSummarize, map[string]any{
 		"instruction":      firstGoal(bb),
@@ -475,11 +517,33 @@ func issuesSummary(bb *Blackboard) string {
 }
 
 func factsSummary(bb *Blackboard) string {
-	parts := make([]string, 0, len(bb.Facts))
+	groups := map[string][]string{}
 	for _, fact := range bb.Facts {
-		parts = append(parts, fmt.Sprintf("%s=%s", fact.Key, fact.Value))
+		prefix := factNamespace(fact.Key)
+		groups[prefix] = append(groups[prefix], fmt.Sprintf("%s: %s", fact.Key, fact.Value))
 	}
-	return strings.Join(parts, "\n")
+	// Emit in stable order: task, ast, bkc, other
+	var parts []string
+	for _, ns := range []string{"task", "ast", "bkc"} {
+		if items, ok := groups[ns]; ok {
+			parts = append(parts, fmt.Sprintf("[%s]\n%s", ns, strings.Join(items, "\n")))
+		}
+	}
+	if other, ok := groups["other"]; ok {
+		parts = append(parts, fmt.Sprintf("[other]\n%s", strings.Join(other, "\n")))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func factNamespace(key string) string {
+	if i := strings.IndexByte(key, '.'); i > 0 {
+		ns := key[:i]
+		switch ns {
+		case "ast", "bkc", "task", "pattern", "learning", "plan":
+			return ns
+		}
+	}
+	return "other"
 }
 
 func plannerInstruction(bb *Blackboard) string {

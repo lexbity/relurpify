@@ -34,6 +34,11 @@ type BlackboardAgent struct {
 	// MaxCycles is the upper bound on control-loop iterations (default 20).
 	MaxCycles int
 
+	// SemanticContext is the pre-resolved semantic context bundle passed
+	// to the agent at construction time. It seeds the blackboard with
+	// AST symbols and BKC chunks before the first KS cycle.
+	SemanticContext core.AgentSemanticContext
+
 	initialised      bool
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
 }
@@ -98,7 +103,7 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	}
 	load := &blackboardLoadNode{id: "bb_load", goal: goal, maxCycles: maxCycles(a.MaxCycles)}
 	evaluate := &blackboardEvaluateNode{id: "bb_evaluate", controller: controller}
-	dispatch := &blackboardDispatchNode{id: "bb_dispatch", controller: controller, tools: a.Tools, model: a.Model}
+	dispatch := &blackboardDispatchNode{id: "bb_dispatch", controller: controller, tools: a.Tools, model: a.Model, semctx: a.SemanticContext}
 	if cfg := a.Config; cfg != nil {
 		load.telemetry = cfg.Telemetry
 		evaluate.telemetry = cfg.Telemetry

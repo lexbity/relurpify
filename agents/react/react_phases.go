@@ -27,6 +27,16 @@ func (a *ReActAgent) initializePhase(state *core.Context, task *core.Task) {
 	if state == nil {
 		return
 	}
+	// NEW: Inherit parent state from HTN steps to preserve workspace context
+	// This prevents React from re-discovering files already explored by previous steps
+	if task != nil && task.Context != nil {
+		if parentStateRaw, ok := task.Context["parent_state"]; ok {
+			if parentState, ok := parentStateRaw.(*core.Context); ok && parentState != nil {
+				state.Merge(parentState)
+				a.debugf("initialized phase with parent state from HTN step")
+			}
+		}
+	}
 	if phase := state.GetString("react.phase"); phase != "" {
 		return
 	}

@@ -546,6 +546,53 @@ func (bb *Blackboard) pendingActionIndex(id string) int {
 	return -1
 }
 
+// HasFact returns true if any Fact with the given key exists on the
+// blackboard, regardless of value. Used by KS CanActivate guards.
+func (bb *Blackboard) HasFact(key string) bool {
+	if bb == nil {
+		return false
+	}
+	for i := range bb.Facts {
+		if bb.Facts[i].Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// AddFactWithOrigin appends a Fact with a fully populated FactOrigin.
+// Prefer this over AddFact when the fact was derived from an external
+// knowledge source (AST index, BKC, archaeology) so provenance is tracked.
+func (bb *Blackboard) AddFactWithOrigin(key, value, source string, origin *FactOrigin) {
+	if bb == nil {
+		return
+	}
+	bb.Facts = append(bb.Facts, Fact{
+		Key:       key,
+		Value:     value,
+		Source:    source,
+		CreatedAt: time.Now(),
+		Origin:    origin,
+	})
+}
+
+// AddHypothesisWithOrigin appends a Hypothesis with a fully populated
+// FactOrigin. Used when seeding candidate explanations from pre-resolved
+// archaeology tensions or pattern matches.
+func (bb *Blackboard) AddHypothesisWithOrigin(id, description string, confidence float64, source string, origin *FactOrigin) {
+	if bb == nil {
+		return
+	}
+	bb.Hypotheses = append(bb.Hypotheses, Hypothesis{
+		ID:          id,
+		Description: description,
+		Confidence:  confidence,
+		Source:      source,
+		CreatedAt:   time.Now(),
+		Origin:      origin,
+	})
+}
+
 func normalizeSeverity(severity string) string {
 	return strings.ToLower(strings.TrimSpace(severity))
 }
@@ -591,4 +638,70 @@ func cloneMap(src map[string]any) map[string]any {
 		dst[k] = v
 	}
 	return dst
+}
+
+// sanitizeKey replaces non-alphanumeric characters with underscores
+// to produce valid fact key strings.
+func sanitizeKey(key string) string {
+	var result strings.Builder
+	for _, r := range key {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			result.WriteRune(r)
+		} else {
+			result.WriteByte('_')
+		}
+	}
+	if result.Len() == 0 {
+		return "_"
+	}
+	return result.String()
+}
+
+// SeedBlackboardFromSemanticContext seeds the blackboard with facts from
+// pre-resolved semantic context (AST symbols and BKC chunks). This is
+// exported so Euclo executors can use it directly.
+func SeedBlackboardFromSemanticContext(bb *Blackboard, semctx core.AgentSemanticContext) {
+	if bb == nil {
+		return
+	}
+	for _, sym := range semctx.ASTSymbols {
+		origin := &FactOrigin{
+			SourceSystem: "ast_index",
+			RecordID:     fmt.Sprintf("%s:%d", sym.File, sym.Line),
+			Kind:         sym.Kind,
+			CapturedAt:   time.Now(),
+		}
+		sig := sym.Signature
+		if sym.DocSummary != "" {
+			sig += " // " + sym.DocSummary
+		}
+		bb.AddFactWithOrigin(
+			fmt.Sprintf("ast.symbol.%s", sanitizeKey(sym.Name)),
+			fmt.Sprintf("%s %s [%s:%d]", sym.Kind, sig, sym.File, sym.Line),
+			"semantic_context",
+			origin,
+		)
+	}
+	if len(semctx.ASTSymbols) > 0 {
+		bb.AddFact("ast.symbols_loaded", fmt.Sprintf("%d", len(semctx.ASTSymbols)), "semantic_context")
+	}
+	for _, chunk := range semctx.Chunks {
+		origin := &FactOrigin{
+			SourceSystem: "bkc",
+			RecordID:     chunk.ID,
+			CapturedAt:   time.Now(),
+		}
+		if kind, ok := chunk.Metadata["view_kind"]; ok {
+			origin.Kind = kind
+		}
+		bb.AddFactWithOrigin(
+			fmt.Sprintf("bkc.chunk.%s", chunk.ID),
+			chunk.Content,
+			"semantic_context",
+			origin,
+		)
+	}
+	if len(semctx.Chunks) > 0 {
+		bb.AddFact("bkc.chunks_loaded", fmt.Sprintf("%d", len(semctx.Chunks)), "semantic_context")
+	}
 }

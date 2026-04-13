@@ -30,7 +30,8 @@ type KnowledgeSource interface {
 	// current blackboard state.
 	CanActivate(bb *Blackboard) bool
 	// Execute reads from bb, does work, and writes results back.
-	Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, model core.LanguageModel) error
+	// The semctx parameter provides typed access to pre-resolved semantic context.
+	Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, model core.LanguageModel, semctx core.AgentSemanticContext) error
 	// Priority breaks ties when multiple KS can activate. Higher wins.
 	Priority() int
 }
@@ -116,7 +117,7 @@ func defaultKnowledgeSourceContract() graph.NodeContract {
 		Recoverability:   graph.NodeRecoverabilityInProcess,
 		CheckpointPolicy: graph.CheckpointPolicyPreferred,
 		ContextPolicy: core.StateBoundaryPolicy{
-			ReadKeys:                 []string{"task.*", "blackboard.*"},
+			ReadKeys:                 []string{"task.*", "blackboard.*", "bkc.*", "ast.*"},
 			WriteKeys:                []string{"blackboard.*"},
 			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
 			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState, core.StateDataClassRoutingFlag},

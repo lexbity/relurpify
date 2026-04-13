@@ -44,6 +44,11 @@ type HTNAgent struct {
 	CheckpointPath string
 
 	initialised bool
+
+	// SemanticContext is the pre-resolved semantic context bundle passed
+	// to the agent at construction time. It propagates to PrimitiveExec
+	// when that executor is a *react.ReActAgent.
+	SemanticContext core.AgentSemanticContext
 }
 
 // Initialize satisfies graph.WorkflowExecutor. It wires configuration and ensures the
@@ -261,13 +266,18 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, state *core.Con
 	return result, nil
 }
 
-func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, step core.PlanStep, _ *core.Context) *core.Task {
+func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *core.Plan, step core.PlanStep, state *core.Context) *core.Task {
 	stepTask := core.CloneTask(parentTask)
 	if stepTask == nil {
 		stepTask = &core.Task{}
 	}
 	if stepTask.Context == nil {
 		stepTask.Context = map[string]any{}
+	}
+	// NEW: Pass parent state to step task for shared context access
+	// This prevents React from re-discovering workspace for each step
+	if state != nil {
+		stepTask.Context["parent_state"] = state
 	}
 	stepTask.Context["current_step"] = step
 	if plan != nil && strings.TrimSpace(plan.Goal) != "" {
