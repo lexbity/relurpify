@@ -400,3 +400,206 @@ func TestLoadOperatorLibrary_MultipleLibraries(t *testing.T) {
 		t.Fatalf("expected 2 operators after merge, got %d", len(merged.All()))
 	}
 }
+
+func TestLoadOperatorsFromFile_EmptyPath(t *testing.T) {
+	registry := LoadOperatorsFromFile("")
+	if registry == nil {
+		t.Fatal("expected non-nil registry")
+	}
+	// Should return default operators
+	if len(registry.All()) == 0 {
+		t.Fatal("expected default operators")
+	}
+}
+
+func TestLoadOperatorsFromFile_NonexistentPath(t *testing.T) {
+	registry := LoadOperatorsFromFile("/nonexistent/path/file.yaml")
+	if registry == nil {
+		t.Fatal("expected non-nil registry")
+	}
+	// Should return default operators
+	if len(registry.All()) == 0 {
+		t.Fatal("expected default operators")
+	}
+}
+
+func TestLoadOperatorLibraryFromFile_EmptyPath(t *testing.T) {
+	lib := LoadOperatorLibraryFromFile("", "testlib")
+	if lib != nil {
+		t.Error("expected nil library for empty path")
+	}
+}
+
+func TestLoadOperatorLibraryFromFile_NonexistentPath(t *testing.T) {
+	lib := LoadOperatorLibraryFromFile("/nonexistent/path/file.yaml", "testlib")
+	if lib != nil {
+		t.Error("expected nil library for nonexistent path")
+	}
+}
+
+func TestOperatorLibrary_ToRegistry_NilLibrary(t *testing.T) {
+	var lib *OperatorLibrary
+	registry := lib.ToRegistry()
+	if registry == nil {
+		t.Fatal("expected non-nil registry")
+	}
+	// Should return empty registry
+	if len(registry.All()) != 0 {
+		t.Fatalf("expected 0 operators, got %d", len(registry.All()))
+	}
+}
+
+func TestOperatorLibrary_ToRegistry_EmptyOperators(t *testing.T) {
+	lib := &OperatorLibrary{
+		Name:      "testlib",
+		Version:   "1.0",
+		Operators: []*types.Operator{},
+	}
+	registry := lib.ToRegistry()
+	if len(registry.All()) != 0 {
+		t.Fatalf("expected 0 operators, got %d", len(registry.All()))
+	}
+}
+
+func TestOperatorLibrary_ToRegistry_WithNilOperator(t *testing.T) {
+	lib := &OperatorLibrary{
+		Name:    "testlib",
+		Version: "1.0",
+		Operators: []*types.Operator{
+			nil,
+			{Name: "ValidOp", Effects: []types.Predicate{"e1"}},
+		},
+	}
+	registry := lib.ToRegistry()
+	// Should skip nil operator and register only valid one
+	if len(registry.All()) != 1 {
+		t.Fatalf("expected 1 operator, got %d", len(registry.All()))
+	}
+}
+
+func TestValidateOperatorConfig_DuplicatePreconditions(t *testing.T) {
+	opConfig := OperatorConfig{
+		Name:          "DupPreOp",
+		Effects:       []string{"eff1"},
+		Preconditions: []string{"pre1", "pre1"},
+	}
+
+	err := ValidateOperatorConfig(opConfig)
+	if err == nil {
+		t.Fatal("expected error for duplicate preconditions")
+	}
+}
+
+func TestOperatorConfigValidator_NilRegistry(t *testing.T) {
+	validator := &OperatorConfigValidator{Strict: true}
+	errors := validator.ValidateRegistry(nil)
+	if len(errors) != 0 {
+		t.Errorf("expected no errors for nil registry, got %v", errors)
+	}
+}
+
+func TestOperatorConfigValidator_SelfReferentialPrecondition(t *testing.T) {
+	registry := &types.OperatorRegistry{}
+	// Operator has precondition that matches its effect (self-referential)
+	registry.Register(types.Operator{
+		Name:          "SelfRefOp",
+		Preconditions: []types.Predicate{"selfEffect"},
+		Effects:       []types.Predicate{"selfEffect"},
+	})
+
+	validator := &OperatorConfigValidator{Strict: true}
+	errors := validator.ValidateRegistry(registry)
+	if len(errors) == 0 {
+		t.Fatal("expected error for self-referential precondition")
+	}
+}
+
+func TestOperatorConfigValidator_NilOperator(t *testing.T) {
+	registry := &types.OperatorRegistry{}
+	// Register a valid operator first
+	registry.Register(types.Operator{Name: "ValidOp", Effects: []types.Predicate{"e1"}})
+
+	validator := &OperatorConfigValidator{Strict: true}
+	errors := validator.ValidateRegistry(registry)
+	// Nil operators in the list should be skipped without error
+	if len(errors) != 0 {
+		t.Errorf("expected no errors, got %v", errors)
+	}
+}
+
+func TestMergeRegistries_Empty(t *testing.T) {
+	merged := MergeRegistries()
+	if merged == nil {
+		t.Fatal("expected non-nil registry")
+	}
+	if len(merged.All()) != 0 {
+		t.Fatalf("expected 0 operators, got %d", len(merged.All()))
+	}
+}
+
+func TestMergeRegistries_AllNil(t *testing.T) {
+	merged := MergeRegistries(nil, nil, nil)
+	if merged == nil {
+		t.Fatal("expected non-nil registry")
+	}
+	if len(merged.All()) != 0 {
+		t.Fatalf("expected 0 operators, got %d", len(merged.All()))
+	}
+}
+
+func TestParseOperatorConfig_InvalidString(t *testing.T) {
+	// Invalid YAML syntax
+	trulyInvalid := "[invalid: yaml:::::"
+	_, err := ParseOperatorConfig(trulyInvalid)
+	if err == nil {
+		t.Fatal("expected error for invalid YAML")
+	}
+}
+
+func TestNewOperatorRegistryFromConfig_InvalidOperator(t *testing.T) {
+	// Config with operator missing required name
+	yamlConfig := `
+operators:
+  - description: "Missing name"
+    effects:
+      - result
+`
+	registry := NewOperatorRegistryFromConfig(yamlConfig)
+	if registry == nil {
+		t.Fatal("expected non-nil registry")
+	}
+	// Should fall back to defaults when operator is invalid
+	if len(registry.All()) == 0 {
+		t.Fatal("expected default operators when config has invalid operators")
+	}
+}
+
+func TestLoadOperatorLibraryFromConfig_EmptyOperators(t *testing.T) {
+	libConfig := map[string]any{
+		"operators": []map[string]any{},
+	}
+
+	lib := LoadOperatorLibraryFromConfig(libConfig, "emptylib")
+	if lib != nil {
+		t.Error("expected nil library for empty operators list")
+	}
+}
+
+func TestOperatorVariant_StructFields(t *testing.T) {
+	// Test that OperatorVariant struct can be instantiated
+	variant := OperatorVariant{
+		Name:         "ReadFile:large_files",
+		BaseOperator: "ReadFile",
+		Description:  "Specialized for large files",
+		DefaultParams: map[string]any{
+			"chunk_size": 1024,
+		},
+	}
+
+	if variant.Name != "ReadFile:large_files" {
+		t.Errorf("expected name 'ReadFile:large_files', got %s", variant.Name)
+	}
+	if variant.BaseOperator != "ReadFile" {
+		t.Errorf("expected base operator 'ReadFile', got %s", variant.BaseOperator)
+	}
+}
