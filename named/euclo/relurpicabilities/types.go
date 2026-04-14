@@ -78,10 +78,7 @@ func DefaultRegistry() *Registry {
 			ExecutorRecipe:       "chat.ask.react_inquiry",
 			ParadigmMix:          []string{"react"},
 			TransitionCompatible: []string{"chat", "debug"},
-			SupportingCapabilities: []string{
-				CapabilityChatInspect,
-			},
-			Summary: "Non-mutating engineering question answering and explanation.",
+			Summary:              "Non-mutating engineering question answering and explanation.",
 		},
 		{
 			ID:                      CapabilityChatImplement,
@@ -94,7 +91,6 @@ func DefaultRegistry() *Registry {
 			ParadigmMix:             []string{"react", "architect"},
 			TransitionCompatible:    []string{"chat", "debug", "planning"},
 			SupportingCapabilities: []string{
-				CapabilityChatInspect,
 				CapabilityChatDirectEditExecution,
 				CapabilityChatLocalReview,
 				CapabilityChatTargetedVerification,
@@ -133,7 +129,6 @@ func DefaultRegistry() *Registry {
 				CapabilityArchaeologyConvergenceGuard,
 				CapabilityArchaeologyCoherenceAssess,
 				CapabilityArchaeologyScopeExpand,
-				CapabilityArchaeologyCompilePlan,
 			},
 			Summary: "Archaeo-backed semantic exploration of the codebase and candidate changes.",
 		},
@@ -171,8 +166,6 @@ func DefaultRegistry() *Registry {
 			ParadigmMix:          []string{"rewoo", "planner"},
 			TransitionCompatible: []string{"planning", "chat"},
 			SupportingCapabilities: []string{
-				CapabilityArchaeologyCompilePlan,
-				CapabilityArchaeologyExplore,
 				CapabilityArchaeologyConvergenceGuard,
 				CapabilityArchaeologyCoherenceAssess,
 			},
@@ -193,7 +186,6 @@ func DefaultRegistry() *Registry {
 				CapabilityDebugLocalization,
 				CapabilityDebugFlawSurface,
 				CapabilityDebugVerificationRepair,
-				CapabilityChatInspect,
 			},
 			Summary: "Hypothesis-driven debugging with integrated verification and repair using blackboard architecture.",
 		},

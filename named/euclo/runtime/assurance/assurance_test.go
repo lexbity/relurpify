@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
@@ -28,7 +29,7 @@ func (stubWorkflowExecutor) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 }
 
 func assuranceBehaviorInput() (euclodispatch.Dispatcher, eucloruntime.UnitOfWork, graph.WorkflowExecutor) {
-	return *euclodispatch.NewDispatcher(), eucloruntime.UnitOfWork{
+	return *euclodispatch.NewDispatcher(agentenv.AgentEnvironment{}), eucloruntime.UnitOfWork{
 		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk,
 	}, stubWorkflowExecutor{}
 }

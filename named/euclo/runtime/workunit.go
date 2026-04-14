@@ -210,24 +210,8 @@ func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnv
 	for _, id := range reg.SupportingForPrimary(primaryID) {
 		add(id)
 	}
-	switch primaryID {
-	case euclorelurpic.CapabilityChatImplement:
-		if classification.RequiresEvidenceBeforeMutation {
-			add(euclorelurpic.CapabilityDebugInvestigateRepair)
-		}
-		if classification.Scope == "cross_cutting" {
-			add(euclorelurpic.CapabilityArchaeologyExplore)
-		}
-	case euclorelurpic.CapabilityArchaeologyExplore:
-		add(euclorelurpic.CapabilityArchaeologyCompilePlan)
-	case euclorelurpic.CapabilityArchaeologyImplement:
-		add(euclorelurpic.CapabilityArchaeologyCompilePlan)
-		add(euclorelurpic.CapabilityArchaeologyExplore)
-	case euclorelurpic.CapabilityDebugInvestigateRepair:
-		if planningCompileIntent(strings.ToLower(strings.TrimSpace(envelope.Instruction))) {
-			add(euclorelurpic.CapabilityArchaeologyCompilePlan)
-		}
-	}
+	// Note: Only SupportingOnly capabilities should be added here.
+	// Primary capabilities are behaviors, not supporting routines.
 	return out
 }
 
