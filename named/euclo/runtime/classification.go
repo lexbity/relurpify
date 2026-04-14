@@ -132,6 +132,7 @@ func ClassifyTaskScored(envelope TaskEnvelope) ScoredClassification {
 		Scope:                          "local",
 		RiskLevel:                      "low",
 		ReasonCodes:                    reasons,
+		TaskType:                       core.TaskTypeAnalysis, // Default to analysis, will be overridden if needed
 	}
 	if classification.MixedIntent {
 		classification.RiskLevel = "medium"
@@ -184,6 +185,7 @@ func ResolveMode(envelope TaskEnvelope, classification TaskClassification, regis
 	} else {
 		modeID = classification.RecommendedMode
 	}
+
 	if registry != nil {
 		if _, ok := registry.Lookup(modeID); !ok {
 			modeID = classification.RecommendedMode
@@ -212,6 +214,15 @@ func SelectExecutionProfile(envelope TaskEnvelope, classification TaskClassifica
 		return selection
 	}
 	profileID := primaryProfileForMode(mode.ModeID, envelope, classification)
+
+	// Phase 2.2.2: Task-type aware profile selection for debug mode
+	// Analysis tasks should NOT use reproduce_localize_patch (which calls go_test)
+	if mode.ModeID == "debug" && classification.TaskType == core.TaskTypeAnalysis {
+		if traceDescriptor, ok := registry.Lookup("trace_execute_analyze"); ok {
+			profileID = traceDescriptor.ProfileID
+		}
+	}
+
 	descriptor, ok := registry.Lookup(profileID)
 	if !ok {
 		descriptor, _ = registry.Lookup("edit_verify_repair")
@@ -403,6 +414,7 @@ func containsAny(text string, patterns ...string) bool {
 	}
 	return false
 }
+
 
 func containsIntent(intents []string, target string) bool {
 	for _, intent := range intents {

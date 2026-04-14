@@ -11,18 +11,25 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	archaeologybehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/archaeology"
+	bkccap "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/bkc"
 	chatbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/chat"
 	debugbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/debug"
+	planningbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/planning"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
 type Dispatcher struct {
+	env       agentenv.AgentEnvironment
 	behaviors map[string]execution.Behavior
 	routines  map[string]euclorelurpic.SupportingRoutine
 }
 
-func NewDispatcher() *Dispatcher {
-	d := &Dispatcher{behaviors: map[string]execution.Behavior{}, routines: map[string]euclorelurpic.SupportingRoutine{}}
+func NewDispatcher(env agentenv.AgentEnvironment) *Dispatcher {
+	d := &Dispatcher{
+		env:       env,
+		behaviors: map[string]execution.Behavior{},
+		routines:  map[string]euclorelurpic.SupportingRoutine{},
+	}
 	for _, behavior := range []execution.Behavior{
 		chatbehavior.NewAskBehavior(),
 		chatbehavior.NewInspectBehavior(),
@@ -32,6 +39,11 @@ func NewDispatcher() *Dispatcher {
 		archaeologybehavior.NewExploreBehavior(),
 		archaeologybehavior.NewCompilePlanBehavior(),
 		archaeologybehavior.NewImplementPlanBehavior(),
+		// Phase A: Register BKC capabilities via PlanningBehavior
+		planningbehavior.New(euclorelurpic.CapabilityBKCCompile, bkccap.NewCompileCapability(env)),
+		planningbehavior.New(euclorelurpic.CapabilityBKCStream, bkccap.NewStreamCapability(env)),
+		planningbehavior.New(euclorelurpic.CapabilityBKCCheckpoint, bkccap.NewCheckpointCapability(env)),
+		planningbehavior.New(euclorelurpic.CapabilityBKCInvalidate, bkccap.NewInvalidateCapability(env)),
 	} {
 		d.behaviors[behavior.ID()] = behavior
 	}
@@ -61,7 +73,7 @@ func (d *Dispatcher) ExecuteRoutine(ctx context.Context, routineID string, task 
 	routineID = strings.TrimSpace(routineID)
 	routine, ok := d.routines[routineID]
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("routine %q not registered in dispatcher", routineID)
 	}
 	return routine.Execute(ctx, euclorelurpic.RoutineInput{
 		Task:  task,

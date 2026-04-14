@@ -180,12 +180,14 @@ func TestBehaviorFamilyStaleAssumptionFromClassification(t *testing.T) {
 }
 
 func TestPrimaryRelurpicCapabilityPrefersInspectOverAskForInspectPrompt(t *testing.T) {
+	// With signal-based routing, inspect is selected when classification has review intent.
 	envelope := TaskEnvelope{
 		Instruction:   "Inspect testsuite/fixtures/rapid_chat/inspect/store.go and compare MemoryStore with NullStore. Do not modify any files.",
 		EditPermitted: false,
 	}
 	classification := TaskClassification{
-		EditPermitted: false,
+		EditPermitted:  false,
+		IntentFamilies: []string{"review"}, // Review intent triggers inspect capability
 	}
 	mode := ModeResolution{ModeID: "chat"}
 	profile := ExecutionProfileSelection{}
@@ -209,7 +211,9 @@ func TestPrimaryRelurpicCapabilityKeepsAskForExplainPrompt(t *testing.T) {
 	require.Equal(t, "euclo:chat.ask", got)
 }
 
-func TestPrimaryRelurpicCapabilityAskPromptOverridesReviewClassification(t *testing.T) {
+func TestPrimaryRelurpicCapabilityReviewClassificationRoutesToInspect(t *testing.T) {
+	// With signal-based routing, classification signals are the single source of truth.
+	// If the classification has review intent, it routes to inspect (not ask).
 	envelope := TaskEnvelope{
 		Instruction:   "Explain what the User type represents and what NewUser does. Do not modify any files.",
 		EditPermitted: false,
@@ -222,7 +226,8 @@ func TestPrimaryRelurpicCapabilityAskPromptOverridesReviewClassification(t *test
 	profile := ExecutionProfileSelection{}
 
 	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
-	require.Equal(t, "euclo:chat.ask", got)
+	// Review intent in classification routes to inspect, regardless of prompt text.
+	require.Equal(t, "euclo:chat.inspect", got)
 }
 
 func TestPrimaryRelurpicCapabilityPlanningExplorePromptStaysExplore(t *testing.T) {

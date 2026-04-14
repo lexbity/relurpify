@@ -180,7 +180,17 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 	if payload == nil && shapeResult != nil && shapeResult.Success {
 		payload = shapeResult.Data
 	}
+
+	// If the LLM-driven shape recipe failed or produced an unready payload,
+	// fall back to semantic-input-derived plan before declaring deferred.
 	if !compiledPlanReady(payload) {
+		if fallback := execution.CompilePlanFallback(in.Work); compiledPlanReady(fallback) {
+			payload = fallback
+		}
+	}
+
+	if !compiledPlanReady(payload) {
+		// Genuinely nothing to work with — semantic inputs also empty.
 		issue := buildCompilePlanDeferredIssue(in, evidencePayload, reconcileResult, shapeResult, reviewResult)
 		if in.State != nil {
 			in.State.Set("euclo.deferred_execution_issues", []eucloruntime.DeferredExecutionIssue{issue})

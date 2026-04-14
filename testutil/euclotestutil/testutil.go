@@ -109,9 +109,11 @@ func WorkspaceEnv(t interface {
 	if err != nil {
 		t.Fatalf("failed to create memory store: %v", err)
 	}
+	reg := capability.NewRegistry()
+	_ = reg.Register(FileWriteTool{})
 	return ayenitd.WorkspaceEnvironment{
 		Model:    StubModel{},
-		Registry: capability.NewRegistry(),
+		Registry: reg,
 		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
 		Config:   &core.Config{Name: "test", Model: "stub", MaxIterations: 1},
 	}

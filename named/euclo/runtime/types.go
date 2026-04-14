@@ -26,15 +26,16 @@ type TaskEnvelope struct {
 }
 
 type TaskClassification struct {
-	IntentFamilies                 []string `json:"intent_families,omitempty"`
-	RecommendedMode                string   `json:"recommended_mode,omitempty"`
-	MixedIntent                    bool     `json:"mixed_intent"`
-	EditPermitted                  bool     `json:"edit_permitted"`
-	RequiresEvidenceBeforeMutation bool     `json:"requires_evidence_before_mutation"`
-	RequiresDeterministicStages    bool     `json:"requires_deterministic_stages"`
-	Scope                          string   `json:"scope,omitempty"`
-	RiskLevel                      string   `json:"risk_level,omitempty"`
-	ReasonCodes                    []string `json:"reason_codes,omitempty"`
+	IntentFamilies                 []string      `json:"intent_families,omitempty"`
+	RecommendedMode                string        `json:"recommended_mode,omitempty"`
+	MixedIntent                    bool          `json:"mixed_intent"`
+	EditPermitted                  bool          `json:"edit_permitted"`
+	RequiresEvidenceBeforeMutation bool          `json:"requires_evidence_before_mutation"`
+	RequiresDeterministicStages    bool          `json:"requires_deterministic_stages"`
+	Scope                          string        `json:"scope,omitempty"`
+	RiskLevel                      string        `json:"risk_level,omitempty"`
+	ReasonCodes                    []string      `json:"reason_codes,omitempty"`
+	TaskType                       core.TaskType `json:"task_type,omitempty"`
 }
 
 // ExecutionResultClass is Euclo's top-level runtime classification for a work

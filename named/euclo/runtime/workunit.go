@@ -152,15 +152,27 @@ func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, classification Task
 		default:
 			return euclorelurpic.CapabilityArchaeologyExplore
 		}
+	case "chat":
+		// Sub-capability selection based on classification signals, not re-scanning text.
+		// If review signals fired, use inspect; otherwise use ask.
+		if containsIntent(classification.IntentFamilies, "review") {
+			return euclorelurpic.CapabilityChatInspect
+		}
+		return euclorelurpic.CapabilityChatAsk
 	case "debug":
+		// Simple repair routing: check classification signals instead of re-scanning text.
+		if debugSimpleRepairIntentFromSignals(classification.ReasonCodes) {
+			return euclorelurpic.CapabilityDebugRepairSimple
+		}
 		return euclorelurpic.CapabilityDebugInvestigateRepair
 	case "review":
 		return euclorelurpic.CapabilityChatInspect
 	default:
-		if chatAskIntent(lower, classification, envelope) {
+		// For unclassified modes, use signal-based classification for sub-capability selection.
+		if containsIntent(classification.IntentFamilies, "chat") {
 			return euclorelurpic.CapabilityChatAsk
 		}
-		if chatInspectIntent(lower, classification) {
+		if containsIntent(classification.IntentFamilies, "review") {
 			return euclorelurpic.CapabilityChatInspect
 		}
 		if mode.ModeID == "code" {
@@ -219,34 +231,51 @@ func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnv
 	return out
 }
 
-func chatAskIntent(lower string, classification TaskClassification, envelope TaskEnvelope) bool {
-	if chatInspectPhraseIntent(lower) {
-		return false
-	}
-	if strings.Contains(lower, "?") {
-		return true
-	}
-	if hasAnyPhrase(lower, "how ", "what ", "why ", "explain ", "summarize ", "describe ", "tell me ", "help me understand") {
-		return true
-	}
-	if !envelope.EditPermitted && hasAnyPhrase(lower, "what is", "how does", "why does") {
-		return true
+// debugSimpleRepairIntentFromSignals checks classification signals for simple repair intent.
+// This replaces text scanning with signal-based detection from the classification pass.
+func debugSimpleRepairIntentFromSignals(reasonCodes []string) bool {
+	for _, reason := range reasonCodes {
+		if strings.HasPrefix(reason, "task_structure:simple_repair:") {
+			return true
+		}
 	}
 	return false
 }
 
-func chatInspectIntent(lower string, classification TaskClassification) bool {
-	if chatInspectPhraseIntent(lower) {
-		return true
+// debugSimpleRepairIntent detects if the prompt is asking for a simple/quick fix.
+// Deprecated: Use debugSimpleRepairIntentFromSignals with classification signals instead.
+// Kept for backward compatibility in existing tests.
+func debugSimpleRepairIntent(lower string) bool {
+	// First, check for investigative phrases - if present, this is NOT a simple repair
+	investigativePhrases := []string{"investigate", "find the", "root cause", "trace the", "debug the"}
+	for _, phrase := range investigativePhrases {
+		if strings.Contains(lower, phrase) {
+			return false
+		}
 	}
-	if containsIntent(classification.IntentFamilies, "review") {
+
+	simpleRepairPhrases := []string{
+		"fix this",
+		"apply a fix",
+		"quick repair",
+		"simple fix",
+		"quick fix",
+		"minor fix",
+		"small fix",
+		"patch this",
+		"fix the bug",
+		"fix it",
+	}
+	for _, phrase := range simpleRepairPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	// Check for patterns like "fix: <description>" or "fix - <description>"
+	if strings.HasPrefix(lower, "fix ") || strings.HasPrefix(lower, "fix: ") || strings.HasPrefix(lower, "fix - ") {
 		return true
 	}
 	return false
-}
-
-func chatInspectPhraseIntent(lower string) bool {
-	return hasAnyPhrase(lower, "inspect", "review", "audit", "look at", "check", "analyze", "examine")
 }
 
 func planningCompileIntent(lower string) bool {

@@ -45,7 +45,7 @@ func (s *stubRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) 
 }
 
 func TestNewDispatcherRegistersPrimaryCapabilities(t *testing.T) {
-	d := NewDispatcher()
+	d := NewDispatcher(agentenv.AgentEnvironment{})
 
 	for _, capabilityID := range []string{
 		euclorelurpic.CapabilityChatAsk,
@@ -127,14 +127,17 @@ func TestExecuteRoutinePassesWorkContext(t *testing.T) {
 	}
 }
 
-func TestExecuteRoutineUnknownReturnsNilArtifacts(t *testing.T) {
-	d := &Dispatcher{behaviors: map[string]execution.Behavior{}, routines: map[string]euclorelurpic.SupportingRoutine{}}
+func TestExecuteRoutineUnknownReturnsError(t *testing.T) {
+	d := NewDispatcher(agentenv.AgentEnvironment{})
 
 	artifacts, err := d.ExecuteRoutine(context.Background(), "missing", nil, nil, runtimepkg.UnitOfWork{}, agentenv.AgentEnvironment{}, execution.ServiceBundle{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for unknown routine, got nil")
 	}
 	if artifacts != nil {
 		t.Fatalf("expected nil artifacts, got %+v", artifacts)
+	}
+	if !strings.Contains(err.Error(), "not registered") {
+		t.Errorf("expected 'not registered' error, got: %v", err)
 	}
 }

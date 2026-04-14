@@ -100,6 +100,7 @@ func collectKeywordSignals(instruction string) []ClassificationSignal {
 		{[]string{"plan", "design", "architecture", "approach"}, "planning", WeightKeyword},
 		{[]string{"test first", "tdd", "write tests", "add tests", "make sure it's tested", "ensure it's tested"}, "tdd", WeightKeyword},
 		{[]string{"implement", "fix", "change", "refactor", "patch", "update", "add"}, "code", WeightKeyword},
+		{[]string{"explain", "what is", "how do", "show me", "describe", "what does", "how can", "tell me", "help me understand", "walk me through"}, "chat", WeightKeyword},
 	}
 
 	for _, g := range groups {
@@ -178,6 +179,22 @@ var (
 		{regexp.MustCompile(`(?i)\bredesign\b`), "redesign"},
 		{regexp.MustCompile(`(?i)\bacross multiple\b`), "across_multiple"},
 	}
+
+	taskStructureSimpleRepairPatterns = []struct {
+		pattern *regexp.Regexp
+		value   string
+	}{
+		{regexp.MustCompile(`(?i)^fix\s*[:\-]\s*`), "fix_prefix"},
+		{regexp.MustCompile(`(?i)^fix this\b`), "fix_this"},
+		{regexp.MustCompile(`(?i)\bapply a fix\b`), "apply_fix"},
+		{regexp.MustCompile(`(?i)\bquick (fix|repair)\b`), "quick_repair"},
+		{regexp.MustCompile(`(?i)\bsimple fix\b`), "simple_fix"},
+		{regexp.MustCompile(`(?i)\bminor fix\b`), "minor_fix"},
+		{regexp.MustCompile(`(?i)\bsmall fix\b`), "small_fix"},
+		{regexp.MustCompile(`(?i)\bpatch this\b`), "patch_this"},
+		{regexp.MustCompile(`(?i)\bfix the bug\b`), "fix_bug"},
+		{regexp.MustCompile(`(?i)\bfix it\b`), "fix_it"},
+	}
 )
 
 // collectTaskStructureSignals detects structural patterns in the instruction.
@@ -202,6 +219,19 @@ func collectTaskStructureSignals(instruction string) []ClassificationSignal {
 				Value:  p.value,
 				Weight: WeightTaskStructure,
 				Mode:   "planning",
+			})
+		}
+	}
+
+	// Simple repair patterns indicate a direct fix request without investigation.
+	// These are used for sub-capability selection within debug mode.
+	for _, p := range taskStructureSimpleRepairPatterns {
+		if p.pattern.MatchString(instruction) {
+			signals = append(signals, ClassificationSignal{
+				Kind:   "task_structure",
+				Value:  "simple_repair:" + p.value,
+				Weight: WeightTaskStructure,
+				Mode:   "debug",
 			})
 		}
 	}
