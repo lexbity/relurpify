@@ -13,3 +13,5 @@ Prestin Liu
 - Composer 2 - via (Cursor)[https://cursor.com]
 
 - Gemini 2/3 (Google) - via (Gemini Cli)[https://geminicli.com/]
+
+- Kimi K2.5  - via (Windsurf)[https://windsurf.com/]

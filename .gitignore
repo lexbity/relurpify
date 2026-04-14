@@ -22,3 +22,4 @@ testsuite/agenttest_fixtures/**/*.pyc
 /docs/website/
 /docs/specs_new_tmp/
 .aider*
+/CLAUDE.md
