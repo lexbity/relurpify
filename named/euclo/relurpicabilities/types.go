@@ -9,7 +9,8 @@ const (
 	CapabilityArchaeologyExplore     = "euclo:archaeology.explore"
 	CapabilityArchaeologyCompilePlan = "euclo:archaeology.compile-plan"
 	CapabilityArchaeologyImplement   = "euclo:archaeology.implement-plan"
-	CapabilityDebugInvestigate       = "euclo:debug.investigate"
+	CapabilityDebugInvestigateRepair = "euclo:debug.investigate-repair"
+	CapabilityDebugRepairSimple      = "euclo:debug.repair.simple"
 	CapabilityBKCCompile             = "euclo:bkc.compile"
 	CapabilityBKCStream              = "euclo:bkc.stream"
 	CapabilityBKCCheckpoint          = "euclo:bkc.checkpoint"
@@ -90,7 +91,7 @@ func DefaultRegistry() *Registry {
 			Mutability:              MutabilityPolicyConstrained,
 			LazySemanticAcquisition: true,
 			ExecutorRecipe:          "chat.implement.react_or_htn",
-			ParadigmMix:             []string{"react", "htn"},
+			ParadigmMix:             []string{"react", "architect"},
 			TransitionCompatible:    []string{"chat", "debug", "planning"},
 			SupportingCapabilities: []string{
 				CapabilityChatInspect,
@@ -178,13 +179,13 @@ func DefaultRegistry() *Registry {
 			Summary: "Execute against a compiled living plan under Euclo's single-plan run guarantees.",
 		},
 		{
-			ID:                   CapabilityDebugInvestigate,
-			DisplayName:          "Debug Investigate",
+			ID:                   CapabilityDebugInvestigateRepair,
+			DisplayName:          "Debug Investigate-Repair",
 			ModeFamily:           "debug",
 			PrimaryCapable:       true,
 			Mutability:           MutabilityInspectFirst,
-			ExecutorRecipe:       "debug.investigate.blackboard_hypothesis",
-			ParadigmMix:          []string{"blackboard"},
+			ExecutorRecipe:       "debug.investigate-repair.blackboard_hypothesis",
+			ParadigmMix:          []string{"blackboard", "react", "reflection"},
 			TransitionCompatible: []string{"debug", "chat"},
 			SupportingCapabilities: []string{
 				CapabilityDebugRootCause,
@@ -194,7 +195,7 @@ func DefaultRegistry() *Registry {
 				CapabilityDebugVerificationRepair,
 				CapabilityChatInspect,
 			},
-			Summary: "Hypothesis-driven debugging using blackboard architecture with shared workspace context.",
+			Summary: "Hypothesis-driven debugging with integrated verification and repair using blackboard architecture.",
 		},
 		{
 			ID:                CapabilityBKCCompile,
@@ -391,6 +392,20 @@ func DefaultRegistry() *Registry {
 			ParadigmMix:    []string{"htn", "react"},
 			Summary:        "Support bounded verification and repair before escalation to implementation.",
 		},
+		{
+			ID:                   CapabilityDebugRepairSimple,
+			DisplayName:          "Debug Repair Simple",
+			ModeFamily:           "debug",
+			PrimaryCapable:       true,
+			Mutability:           MutabilityPolicyConstrained,
+			ExecutorRecipe:       "debug.repair.simple.react_repair",
+			ParadigmMix:          []string{"react"},
+			TransitionCompatible: []string{"debug", "chat"},
+			SupportingCapabilities: []string{
+				CapabilityDebugFlawSurface,
+			},
+			Summary: "Direct read-patch-verify repair for well-understood or straightforward defects where root cause is already known or obvious from the defect description.",
+		},
 	} {
 		_ = r.Register(desc)
 	}
@@ -439,6 +454,20 @@ func (r *Registry) SupportingForPrimary(id string) []string {
 		return nil
 	}
 	out := append([]string(nil), desc.SupportingCapabilities...)
+	sort.Strings(out)
+	return out
+}
+
+// IDs returns all registered capability IDs.
+// Phase 5: Used by coverage gap detector.
+func (r *Registry) IDs() []string {
+	if r == nil {
+		return nil
+	}
+	out := make([]string, 0, len(r.descriptors))
+	for id := range r.descriptors {
+		out = append(out, id)
+	}
 	sort.Strings(out)
 	return out
 }

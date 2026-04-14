@@ -77,13 +77,62 @@ spec:
         euclo:
           behavior_family: stale_assumption_detection
           mode: debug
-          primary_relurpic_capability: euclo:debug.investigate
+          primary_relurpic_capability: euclo:debug.investigate-repair
           supporting_relurpic_capabilities:
             - euclo:debug.root-cause
             - euclo:debug.localization
             - euclo:debug.flaw-surface
           recipe_ids:
-            - debug.investigate.reproduce
+            - debug.investigate-repair.reproduce
+
+    - name: rapid_debug_simple_repair
+      description: "Simple repair path: apply a direct react-only patch without blackboard investigation."
+      task_type: code_modification
+      tags: [smoke, rapid-iteration, debug, simple-repair, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/rapid_debug_simple/counter.go
+            content: |
+              package rapiddebugsmall
+
+              func Increment(n int) int {
+                return n - 1
+              }
+          - path: testsuite/fixtures/rapid_debug_simple/counter_test.go
+            content: |
+              package rapiddebugsmall
+
+              import "testing"
+
+              func TestIncrement(t *testing.T) {
+                if Increment(3) != 4 {
+                  t.Fatalf("got %d, want 4", Increment(3))
+                }
+              }
+      prompt: "Fix Increment in testsuite/fixtures/rapid_debug_simple/counter.go — it subtracts instead of adding."
+      context:
+        euclo.mode: debug
+      overrides:
+        max_iterations: 4
+      expect:
+        must_succeed: true
+        files_changed:
+          - testsuite/fixtures/rapid_debug_simple/counter.go
+        tool_calls_must_include:
+          - file_read
+          - file_write
+          - go_test
+        max_tool_calls: 8
+        files_contain:
+          - path: testsuite/fixtures/rapid_debug_simple/counter.go
+            contains: ["return n + 1"]
+        euclo:
+          behavior_family: stale_assumption_detection
+          mode: debug
+          primary_relurpic_capability: euclo:debug.repair.simple
+          recipe_ids:
+            - debug.repair-simple.read
+            - debug.repair-simple.edit
 
     - name: rapid_debug_single_bug
       description: "Fast debug path: repair a single obvious logic bug."
@@ -132,13 +181,13 @@ spec:
         euclo:
           behavior_family: stale_assumption_detection
           mode: debug
-          primary_relurpic_capability: euclo:debug.investigate
+          primary_relurpic_capability: euclo:debug.investigate-repair
           profile: reproduce_localize_patch
           supporting_relurpic_capabilities:
             - euclo:debug.root-cause
             - euclo:debug.localization
           recipe_ids:
-            - debug.investigate.reproduce
+            - debug.investigate-repair.reproduce
 
     - name: rapid_debug_failed_verification_repair
       description: "Fast debug repair path: fix a small bug with explicit verification-backed repair expectations."
@@ -192,14 +241,14 @@ spec:
         euclo:
           behavior_family: stale_assumption_detection
           mode: debug
-          primary_relurpic_capability: euclo:debug.investigate
+          primary_relurpic_capability: euclo:debug.investigate-repair
           profile: reproduce_localize_patch
           supporting_relurpic_capabilities:
             - euclo:debug.root-cause
             - euclo:debug.localization
             - euclo:debug.verification-repair
           recipe_ids:
-            - debug.investigate.reproduce
+            - debug.investigate-repair.reproduce
 
     - name: rapid_debug_localize_without_patch
       description: "Fast debug localization path: identify the faulty region without applying a patch."
@@ -257,10 +306,10 @@ spec:
         euclo:
           behavior_family: stale_assumption_detection
           mode: debug
-          primary_relurpic_capability: euclo:debug.investigate
+          primary_relurpic_capability: euclo:debug.investigate-repair
           supporting_relurpic_capabilities:
             - euclo:debug.root-cause
             - euclo:debug.localization
             - euclo:debug.hypothesis-refine
           recipe_ids:
-            - debug.investigate.reproduce
+            - debug.investigate-repair.reproduce

@@ -90,7 +90,7 @@ func SelectExecutorDescriptor(mode ModeResolution, profile ExecutionProfileSelec
 			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.rewoo", Family: ExecutorFamilyRewoo, RecipeID: recipeID, Reason: reason}
 		}
 		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
-	case primaryCapabilityID == euclorelurpic.CapabilityDebugInvestigate:
+	case primaryCapabilityID == euclorelurpic.CapabilityDebugInvestigateRepair:
 		// NOTE: Now using blackboard instead of HTN for debug workflows.
 		// Blackboard provides shared workspace context across knowledge sources,
 		// preventing the context isolation bug that caused 17+ redundant file_list calls.

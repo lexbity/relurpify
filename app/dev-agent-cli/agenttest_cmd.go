@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
-	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/lexcodex/relurpify/framework/config"
+	"github.com/lexcodex/relurpify/testsuite/agenttest"
+	"github.com/spf13/cobra"
 )
 
 type agentTestRunner interface {
@@ -59,11 +60,16 @@ func newAgentTestRunCmd() *cobra.Command {
 	var backendService string
 	var backendResetBetween bool
 	var backendResetOn []string
+	var capability string
 
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run one or more agent testsuites",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if capability != "" {
+				// Phase 4: capability-targeted scan - filter to cases that match the capability
+				return runCapabilityTargeted(cmd.Context(), capability, suites, agentName)
+			}
 			preset, err := resolveAgentTestLane(lane)
 			if err != nil {
 				return err
@@ -208,7 +214,83 @@ func newAgentTestRunCmd() *cobra.Command {
 		"(?i)EOF",
 		"(?i)too many requests",
 	}, "Regex patterns that trigger backend reset+retry (repeatable)")
+	cmd.Flags().StringVar(&capability, "capability", "", "Run only cases matching the specified capability ID (Phase 4)")
 	return cmd
+}
+
+// runCapabilityTargeted scans all suites and runs only cases matching the specified capability.
+// Phase 4: Implements capability-targeted test discovery.
+func runCapabilityTargeted(ctx context.Context, capabilityID string, suites []string, agentName string) error {
+	ws := ensureWorkspace()
+	selectedSuites := suites
+	if len(selectedSuites) == 0 {
+		selectedSuites = discoverSuites(ws, agentName)
+	}
+	if len(selectedSuites) == 0 {
+		return fmt.Errorf("no testsuites found; pass --suite <path> or add suites to testsuite/agenttests/")
+	}
+
+	var matchingCases []*agenttest.Suite
+	for _, suitePath := range selectedSuites {
+		suite, err := agenttest.LoadSuite(suitePath)
+		if err != nil {
+			return err
+		}
+		var filteredCases []agenttest.CaseSpec
+		for _, c := range suite.Spec.Cases {
+			// Check if case matches capability
+			if c.CapabilityDirectRun != nil && c.CapabilityDirectRun.CapabilityID == capabilityID {
+				filteredCases = append(filteredCases, c)
+				continue
+			}
+			if c.Expect.Euclo != nil && c.Expect.Euclo.PrimaryRelurpicCapability == capabilityID {
+				filteredCases = append(filteredCases, c)
+				continue
+			}
+			// Check supporting capabilities
+			if c.Expect.Euclo != nil {
+				for _, supp := range c.Expect.Euclo.SupportingRelurpicCapabilities {
+					if supp == capabilityID {
+						filteredCases = append(filteredCases, c)
+						break
+					}
+				}
+			}
+		}
+		if len(filteredCases) > 0 {
+			// Create a copy of suite with only matching cases
+			filteredSuite := *suite
+			filteredSuite.Spec.Cases = filteredCases
+			matchingCases = append(matchingCases, &filteredSuite)
+		}
+	}
+
+	if len(matchingCases) == 0 {
+		return fmt.Errorf("no test cases found for capability %q", capabilityID)
+	}
+
+	r := newAgentTestRunnerFn()
+	opts := agenttest.RunOptions{
+		TargetWorkspace: ws,
+	}
+
+	hadFailures := false
+	for _, suite := range matchingCases {
+		rep, err := r.RunSuite(ctx, suite, opts)
+		if err != nil {
+			return err
+		}
+		passed, total := rep.PassedCases, rep.PassedCases+rep.FailedCases
+		fmt.Printf("%s: %d/%d passed for capability %s\n", filepath.Base(suite.SourcePath), passed, total, capabilityID)
+		if rep.Strict && passed != total {
+			hadFailures = true
+		}
+	}
+
+	if hadFailures {
+		return fmt.Errorf("one or more capability-targeted tests failed")
+	}
+	return nil
 }
 
 func newAgentTestPromoteCmd() *cobra.Command {

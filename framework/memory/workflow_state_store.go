@@ -343,4 +343,8 @@ type WorkflowStateStore interface {
 	ListDelegationTransitions(ctx context.Context, delegationID string) ([]WorkflowDelegationTransitionRecord, error)
 
 	LoadStepSlice(ctx context.Context, workflowID, stepID string, eventLimit int) (*WorkflowStepSlice, bool, error)
+
+	// UpdateWorkflowMetadata merges the provided fields into the workflow's
+	// Metadata map. It does not overwrite fields not present in updates.
+	UpdateWorkflowMetadata(ctx context.Context, workflowID string, updates map[string]any) error
 }

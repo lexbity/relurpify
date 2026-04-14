@@ -73,6 +73,14 @@ func frameLabel(frame interaction.InteractionFrame) string {
 		return "Mode transition"
 	case interaction.FrameHelp:
 		return "Help"
+	case interaction.FrameSessionList:
+		return "Resume Session"
+	case interaction.FrameSessionListEmpty:
+		return "Resume Session"
+	case interaction.FrameSessionResuming:
+		return "Resuming"
+	case interaction.FrameSessionResumeError:
+		return "Resume Error"
 	default:
 		return string(frame.Kind)
 	}

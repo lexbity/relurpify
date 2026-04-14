@@ -40,6 +40,7 @@ func newStartCmd() *cobra.Command {
 	var dryRun bool
 	var autoApprove bool
 	var resumeLatestWorkflow bool
+	var resumeSession bool
 	var workflowID string
 	var rerunFromStepID string
 	var skipASTIndex bool
@@ -113,6 +114,10 @@ func newStartCmd() *cobra.Command {
 			if instruction == "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "Agent %s ready in %s mode. Provide --instruction to execute a task.\n", agentName, mode)
 				return nil
+			}
+			// Prepend resume session trigger phrase if --resume-session flag is set
+			if resumeSession && !strings.Contains(strings.ToLower(instruction), "resume session") {
+				instruction = "resume session: " + instruction
 			}
 			if dryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "Dry run: %s in %s mode with instruction: %s\n", agentName, mode, instruction)
@@ -356,6 +361,7 @@ func newStartCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate configuration without executing")
 	cmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto-approve all HITL permission requests (skips interactive prompts)")
 	cmd.Flags().BoolVar(&resumeLatestWorkflow, "resume-latest-workflow", false, "Resume the latest persisted architect workflow instead of starting from scratch")
+	cmd.Flags().BoolVar(&resumeSession, "resume-session", false, "Trigger session resume flow at start")
 	cmd.Flags().StringVar(&workflowID, "workflow", "", "Resume or continue the specified workflow ID")
 	cmd.Flags().StringVar(&rerunFromStepID, "rerun-from-step", "", "Replay a workflow from the specified step ID")
 	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Default true for CLI startup: skip AST/bootstrap indexing during setup; use --skip-ast-index=false for dedicated AST-enabled end-to-end runs")

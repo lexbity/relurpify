@@ -45,6 +45,14 @@ func (r *ModeMachineRegistry) Modes() []string {
 	return out
 }
 
+// WrapFactory replaces an existing factory with a wrapped version.
+// No-op if modeID is not registered.
+func (r *ModeMachineRegistry) WrapFactory(modeID string, wrap func(ModeMachineFactory) ModeMachineFactory) {
+	if existing, ok := r.factories[modeID]; ok {
+		r.factories[modeID] = wrap(existing)
+	}
+}
+
 // InteractionState captures the interaction progress for persistence/resume.
 type InteractionState struct {
 	Mode           string            `json:"mode"`

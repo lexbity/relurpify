@@ -238,3 +238,44 @@ func TestCapturePersistRestoreAndApplyProviderRuntimeState(t *testing.T) {
 		t.Fatalf("unexpected restored providers: %#v", applied.RestoredProviders)
 	}
 }
+
+func TestEnsureWorkflowRun_WritesWorkspaceAndMode(t *testing.T) {
+	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "restore.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	state := core.NewContext()
+	state.Set("euclo.mode", "code")
+	task := &core.Task{
+		ID:          "task-ws",
+		Type:        core.TaskTypeCodeGeneration,
+		Instruction: "test with workspace",
+		Context:     map[string]any{"workspace": "/test/workspace/path"},
+	}
+
+	workflowID, runID, err := EnsureWorkflowRun(context.Background(), store, task, state)
+	if err != nil {
+		t.Fatalf("ensure workflow: %v", err)
+	}
+	if workflowID == "" || runID == "" {
+		t.Fatal("expected non-empty workflow and run IDs")
+	}
+
+	// Verify workflow metadata contains workspace and mode
+	workflow, ok, err := store.GetWorkflow(context.Background(), workflowID)
+	if err != nil || !ok {
+		t.Fatalf("expected workflow to exist: %v %v", ok, err)
+	}
+	if got := workflow.Metadata["workspace"]; got != "/test/workspace/path" {
+		t.Fatalf("expected workspace in metadata, got %v", got)
+	}
+	if got := workflow.Metadata["mode"]; got != "code" {
+		t.Fatalf("expected mode in metadata, got %v", got)
+	}
+	// Verify agent key is preserved (set during creation)
+	if got := workflow.Metadata["agent"]; got != "euclo" {
+		t.Fatalf("expected agent=euclo in metadata, got %v", got)
+	}
+}

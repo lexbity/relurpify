@@ -119,7 +119,7 @@ Planning:
 
 Debug:
 
-- `euclo:debug.investigate`
+- `euclo:debug.investigate-repair`
 
 ### Supporting capabilities
 

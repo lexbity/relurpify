@@ -420,7 +420,7 @@ func expectedArtifactKindsForCapability(id string) []string {
 		return []string{string(euclotypes.ArtifactKindPlan), string(euclotypes.ArtifactKindMigrationPlan), string(euclotypes.ArtifactKindPlanCandidates)}
 	case euclorelurpic.CapabilityArchaeologyImplement:
 		return []string{string(euclotypes.ArtifactKindCompiledExecution), string(euclotypes.ArtifactKindExecutionStatus), string(euclotypes.ArtifactKindFinalReport)}
-	case euclorelurpic.CapabilityDebugInvestigate:
+	case euclorelurpic.CapabilityDebugInvestigateRepair:
 		return []string{string(euclotypes.ArtifactKindReproduction), string(euclotypes.ArtifactKindRootCause), string(euclotypes.ArtifactKindVerificationSummary)}
 	case euclorelurpic.CapabilityBKCCompile, euclorelurpic.CapabilityBKCStream, euclorelurpic.CapabilityBKCCheckpoint, euclorelurpic.CapabilityBKCInvalidate:
 		return []string{string(euclotypes.ArtifactKindSemanticCompile), string(euclotypes.ArtifactKindSemanticContext), string(euclotypes.ArtifactKindTension), string(euclotypes.ArtifactKindContextCompaction)}

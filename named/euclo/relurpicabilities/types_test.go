@@ -160,7 +160,7 @@ func TestDefaultRegistry_ContainsPrimaryCapabilities(t *testing.T) {
 		relurpicabilities.CapabilityArchaeologyExplore,
 		relurpicabilities.CapabilityArchaeologyCompilePlan,
 		relurpicabilities.CapabilityArchaeologyImplement,
-		relurpicabilities.CapabilityDebugInvestigate,
+		relurpicabilities.CapabilityDebugInvestigateRepair,
 	}
 	for _, id := range primaries {
 		if _, ok := r.Lookup(id); !ok {
@@ -211,7 +211,7 @@ func TestDefaultRegistry_PrimaryCapabilitiesHavePrimaryCapableTrue(t *testing.T)
 	r := relurpicabilities.DefaultRegistry()
 	for _, id := range []string{
 		relurpicabilities.CapabilityChatAsk,
-		relurpicabilities.CapabilityDebugInvestigate,
+		relurpicabilities.CapabilityDebugInvestigateRepair,
 		relurpicabilities.CapabilityArchaeologyExplore,
 	} {
 		desc, _ := r.Lookup(id)
@@ -231,5 +231,68 @@ func TestDefaultRegistry_SupportingCapabilitiesHaveSupportingOnlyTrue(t *testing
 		if !desc.SupportingOnly {
 			t.Errorf("expected %q to have SupportingOnly=true", id)
 		}
+	}
+}
+
+func TestDefaultRegistry_DebugInvestigateRepairParadigmMix(t *testing.T) {
+	r := relurpicabilities.DefaultRegistry()
+	desc, ok := r.Lookup(relurpicabilities.CapabilityDebugInvestigateRepair)
+	if !ok {
+		t.Fatal("expected debug.investigate-repair in registry")
+	}
+	want := []string{"blackboard", "react", "reflection"}
+	if len(desc.ParadigmMix) != len(want) {
+		t.Fatalf("expected ParadigmMix %v, got %v", want, desc.ParadigmMix)
+	}
+	for i, v := range want {
+		if desc.ParadigmMix[i] != v {
+			t.Fatalf("expected ParadigmMix %v, got %v", want, desc.ParadigmMix)
+		}
+	}
+}
+
+func TestDefaultRegistry_ChatImplementParadigmMix(t *testing.T) {
+	r := relurpicabilities.DefaultRegistry()
+	desc, ok := r.Lookup(relurpicabilities.CapabilityChatImplement)
+	if !ok {
+		t.Fatal("expected chat.implement in registry")
+	}
+	want := []string{"react", "architect"}
+	if len(desc.ParadigmMix) != len(want) {
+		t.Fatalf("expected ParadigmMix %v, got %v", want, desc.ParadigmMix)
+	}
+	for i, v := range want {
+		if desc.ParadigmMix[i] != v {
+			t.Fatalf("expected ParadigmMix %v, got %v", want, desc.ParadigmMix)
+		}
+	}
+}
+
+func TestDefaultRegistry_DebugRepairSimplePresentAndPrimaryCapable(t *testing.T) {
+	r := relurpicabilities.DefaultRegistry()
+	desc, ok := r.Lookup(relurpicabilities.CapabilityDebugRepairSimple)
+	if !ok {
+		t.Fatal("expected debug.repair.simple in registry")
+	}
+	if !desc.PrimaryCapable {
+		t.Fatal("expected debug.repair.simple to have PrimaryCapable=true")
+	}
+	if desc.ModeFamily != "debug" {
+		t.Fatalf("expected ModeFamily=debug, got %q", desc.ModeFamily)
+	}
+}
+
+func TestDefaultRegistry_DebugModeContainsRepairSimple(t *testing.T) {
+	r := relurpicabilities.DefaultRegistry()
+	ids := r.IDsForMode("debug")
+	found := false
+	for _, id := range ids {
+		if id == relurpicabilities.CapabilityDebugRepairSimple {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected IDsForMode(debug) to contain %q, got %v", relurpicabilities.CapabilityDebugRepairSimple, ids)
 	}
 }

@@ -516,6 +516,17 @@ func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSna
 		}
 	}
 
+	// Phase 4: artifact_kind_produced - validates structural correctness
+	if len(euclo.ArtifactKindProduced) > 0 {
+		gotArtifacts := eucloArtifactsFromSnapshot(snapshot)
+		gotKinds := artifactKindsFromArtifacts(gotArtifacts)
+		for _, expected := range euclo.ArtifactKindProduced {
+			if !stringSliceContains(gotKinds, expected) {
+				failures = append(failures, fmt.Sprintf("euclo.artifact_kind_produced: missing %q", expected))
+			}
+		}
+	}
+
 	if euclo.ResultClass != "" {
 		got := firstNonEmptyString(
 			mapStringValue(executionStatus, "result_class"),
@@ -1035,4 +1046,67 @@ func includeExpectedChangedFiles(filtered []string, before, after *WorkspaceSnap
 		seen[path] = struct{}{}
 	}
 	return filtered
+}
+
+// eucloArtifactsFromSnapshot extracts Euclo artifacts from a context snapshot.
+// Phase 4: Used by artifact_kind_produced expectation.
+// Uses toAnySlice/toStringAnyMap for JSON round-trip support so it handles both
+// []map[string]any and []euclotypes.Artifact stored in state.
+func eucloArtifactsFromSnapshot(snapshot *core.ContextSnapshot) []map[string]any {
+	if snapshot == nil {
+		return nil
+	}
+	raw, ok := snapshot.State["euclo.artifacts"]
+	if !ok || raw == nil {
+		return nil
+	}
+	items := toAnySlice(raw)
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if m := toStringAnyMap(item); m != nil {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// artifactKindsFromArtifacts extracts artifact kind strings from artifact records.
+// Phase 4: Used by artifact_kind_produced expectation.
+// Checks both "kind" (JSON-serialized lowercase) and "Kind" (Go struct field name) keys.
+// Each kind is stored both with and without the "euclo." namespace prefix so YAML
+// writers can use either "euclo.analyze" or the short "analyze" form.
+func artifactKindsFromArtifacts(artifacts []map[string]any) []string {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	const prefix = "euclo."
+	seen := make(map[string]bool)
+	var kinds []string
+	add := func(k string) {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			return
+		}
+		if !seen[k] {
+			kinds = append(kinds, k)
+			seen[k] = true
+		}
+		// Also store the short form (without "euclo." prefix) so either style matches.
+		short := strings.TrimPrefix(k, prefix)
+		if short != k && !seen[short] {
+			kinds = append(kinds, short)
+			seen[short] = true
+		}
+	}
+	for _, a := range artifacts {
+		kind, _ := a["kind"].(string)
+		if kind == "" {
+			kind, _ = a["Kind"].(string)
+		}
+		add(kind)
+	}
+	return kinds
 }

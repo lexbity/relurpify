@@ -79,7 +79,7 @@ Current primary owners:
 - `euclo:chat.ask`
 - `euclo:chat.inspect`
 - `euclo:chat.implement`
-- `euclo:debug.investigate`
+- `euclo:debug.investigate-repair`
 - `euclo:archaeology.explore`
 - `euclo:archaeology.compile-plan`
 - `euclo:archaeology.implement-plan`
@@ -110,7 +110,7 @@ Those local capabilities remain separate where that separation is useful, but th
 Examples of local capability substrate use:
 - `euclo:migration.execute` now runs staged execution through `execution/pipe` over `/agents/pipeline`
 - trace and regression investigation use `execution/blackboard`
-- `euclo:debug.investigate` uses `execution/pipe` for deterministic investigation-summary and repair-readiness postpasses
+- `euclo:debug.investigate-repair` uses `execution/pipe` for deterministic investigation-summary and repair-readiness postpasses
 - `euclo:chat.inspect` uses `execution/chainer` for deterministic inspect-summary and compatibility-summary postpasses
 - `euclo:chat.implement` now attempts staged Architect execution for broad cross-cutting work before falling back to the standard implement flow
 - `euclo:archaeology.implement-plan` now attempts plan-bound execution through `execution/rewoo` before falling back to manual step execution

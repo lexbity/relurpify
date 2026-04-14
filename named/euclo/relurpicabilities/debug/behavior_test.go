@@ -11,7 +11,43 @@ import (
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
 
-func TestInvestigateBehaviorSynthesizesReproducerBeforePatchWhenMissing(t *testing.T) {
+func TestSimpleRepairBehaviorID(t *testing.T) {
+	b := NewSimpleRepairBehavior()
+	if b.ID() != SimpleRepair {
+		t.Fatalf("expected ID %q, got %q", SimpleRepair, b.ID())
+	}
+}
+
+func TestSimpleRepairBehaviorReturnsNonErrorWithMockInput(t *testing.T) {
+	env := testutil.Env(t)
+	state := core.NewContext()
+	in := execution.ExecuteInput{
+		Task: &core.Task{
+			ID:          "simple-repair-test",
+			Instruction: "Fix the bug",
+			Context: map[string]any{
+				"workspace": ".",
+			},
+		},
+		State:       state,
+		Environment: env,
+		Work: eucloruntime.UnitOfWork{
+			WorkflowID:                  "wf-simple-repair",
+			RunID:                       "run-simple-repair",
+			PrimaryRelurpicCapabilityID: SimpleRepair,
+		},
+	}
+
+	result, err := NewSimpleRepairBehavior().Execute(context.Background(), in)
+	if err != nil {
+		t.Fatalf("simple repair returned error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+func TestInvestigateRepairBehaviorSynthesizesReproducerBeforePatchWhenMissing(t *testing.T) {
 	env := testutil.Env(t)
 	state := core.NewContext()
 	in := execution.ExecuteInput{
@@ -27,11 +63,11 @@ func TestInvestigateBehaviorSynthesizesReproducerBeforePatchWhenMissing(t *testi
 		Work: eucloruntime.UnitOfWork{
 			WorkflowID:                  "wf-debug-reproducer",
 			RunID:                       "run-debug-reproducer",
-			PrimaryRelurpicCapabilityID: Investigate,
+			PrimaryRelurpicCapabilityID: InvestigateRepair,
 		},
 	}
 
-	result, err := NewInvestigateBehavior().Execute(context.Background(), in)
+	result, err := NewInvestigateRepairBehavior().Execute(context.Background(), in)
 	if err != nil {
 		t.Fatalf("debug investigate returned error: %v", err)
 	}
@@ -117,7 +153,7 @@ func TestRepairReadinessStageContract(t *testing.T) {
 	}
 }
 
-func TestInvestigateBehaviorSkipsRegressionSynthesisWhenReproductionConcrete(t *testing.T) {
+func TestInvestigateRepairBehaviorSkipsRegressionSynthesisWhenReproductionConcrete(t *testing.T) {
 	env := testutil.Env(t)
 	state := core.NewContext()
 	state.Set("euclo.reproduction", map[string]any{"method": "go test", "concrete": true})
@@ -132,11 +168,11 @@ func TestInvestigateBehaviorSkipsRegressionSynthesisWhenReproductionConcrete(t *
 		Work: eucloruntime.UnitOfWork{
 			WorkflowID:                  "wf-debug-no-synth",
 			RunID:                       "run-debug-no-synth",
-			PrimaryRelurpicCapabilityID: Investigate,
+			PrimaryRelurpicCapabilityID: InvestigateRepair,
 		},
 	}
 
-	result, err := NewInvestigateBehavior().Execute(context.Background(), in)
+	result, err := NewInvestigateRepairBehavior().Execute(context.Background(), in)
 	if err != nil {
 		t.Fatalf("debug investigate returned error: %v", err)
 	}

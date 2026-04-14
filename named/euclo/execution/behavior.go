@@ -16,6 +16,7 @@ import (
 	plannerexec "github.com/lexcodex/relurpify/named/euclo/execution/planner"
 	reactexec "github.com/lexcodex/relurpify/named/euclo/execution/react"
 	reflectionexec "github.com/lexcodex/relurpify/named/euclo/execution/reflection"
+	rewoo "github.com/lexcodex/relurpify/named/euclo/execution/rewoo"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
@@ -57,51 +58,57 @@ type RecipeSpec struct {
 }
 
 const (
-	RecipeChatAskInquiry                 RecipeID = "chat.ask.inquiry"
-	RecipeChatAskOptions                 RecipeID = "chat.ask.options"
-	RecipeChatAskReview                  RecipeID = "chat.ask.review"
-	RecipeChatInspectCollect             RecipeID = "chat.inspect.collect"
-	RecipeChatInspectReview              RecipeID = "chat.inspect.review"
-	RecipeChatImplementArchitect         RecipeID = "chat.implement.architect"
-	RecipeChatImplementExplore           RecipeID = "chat.implement.explore"
-	RecipeChatImplementEdit              RecipeID = "chat.implement.edit"
-	RecipeChatImplementVerify            RecipeID = "chat.implement.verify"
-	RecipeDebugInvestigateReproduce      RecipeID = "debug.investigate.reproduce"
-	RecipeDebugInvestigateLocalize       RecipeID = "debug.investigate.localize"
-	RecipeDebugInvestigatePatch          RecipeID = "debug.investigate.patch"
-	RecipeDebugInvestigateReview         RecipeID = "debug.investigate.review"
-	RecipeArchaeologyExploreShape        RecipeID = "archaeology.explore.shape"
-	RecipeArchaeologyExploreReview       RecipeID = "archaeology.explore.review"
-	RecipeArchaeologyCompileReconcile    RecipeID = "archaeology.compile.reconcile"
-	RecipeArchaeologyCompileShape        RecipeID = "archaeology.compile.shape"
-	RecipeArchaeologyCompileReview       RecipeID = "archaeology.compile.review"
-	RecipeArchaeologyImplementStep       RecipeID = "archaeology.implement.step"
-	RecipeArchaeologyImplementCheckpoint RecipeID = "archaeology.implement.checkpoint"
-	RecipeArchaeologyImplementGapDetect  RecipeID = "archaeology.implement.gap-detect"
+	RecipeChatAskInquiry                  RecipeID = "chat.ask.inquiry"
+	RecipeChatAskOptions                  RecipeID = "chat.ask.options"
+	RecipeChatAskReview                   RecipeID = "chat.ask.review"
+	RecipeChatInspectCollect              RecipeID = "chat.inspect.collect"
+	RecipeChatInspectReview               RecipeID = "chat.inspect.review"
+	RecipeChatImplementArchitect          RecipeID = "chat.implement.architect"
+	RecipeChatImplementExplore            RecipeID = "chat.implement.explore"
+	RecipeChatImplementEdit               RecipeID = "chat.implement.edit"
+	RecipeChatImplementVerify             RecipeID = "chat.implement.verify"
+	RecipeDebugInvestigateRepairReproduce RecipeID = "debug.investigate-repair.reproduce"
+	RecipeDebugInvestigateRepairLocalize  RecipeID = "debug.investigate-repair.localize"
+	RecipeDebugInvestigateRepairPatch     RecipeID = "debug.investigate-repair.patch"
+	RecipeDebugInvestigateRepairReview    RecipeID = "debug.investigate-repair.review"
+	RecipeArchaeologyExploreShape         RecipeID = "archaeology.explore.shape"
+	RecipeArchaeologyExploreReview        RecipeID = "archaeology.explore.review"
+	RecipeArchaeologyCompileReconcile     RecipeID = "archaeology.compile.reconcile"
+	RecipeArchaeologyCompileShape         RecipeID = "archaeology.compile.shape"
+	RecipeArchaeologyCompileReview        RecipeID = "archaeology.compile.review"
+	RecipeArchaeologyImplementStep        RecipeID = "archaeology.implement.step"
+	RecipeArchaeologyImplementCheckpoint  RecipeID = "archaeology.implement.checkpoint"
+	RecipeArchaeologyImplementGapDetect   RecipeID = "archaeology.implement.gap-detect"
+	RecipeDebugRepairSimpleRead           RecipeID = "debug.repair-simple.read"
+	RecipeDebugRepairSimpleEdit           RecipeID = "debug.repair-simple.edit"
+	RecipeDebugRepairSimpleVerify         RecipeID = "debug.repair-simple.verify"
 )
 
 var recipeSpecs = map[RecipeID]RecipeSpec{
-	RecipeChatAskInquiry:                 reactRecipe(core.TaskTypeAnalysis),
-	RecipeChatAskOptions:                 plannerRecipe(),
-	RecipeChatAskReview:                  reflectionRecipe(),
-	RecipeChatInspectCollect:             reactRecipe(core.TaskTypeAnalysis),
-	RecipeChatInspectReview:              reflectionRecipe(),
-	RecipeChatImplementArchitect:         architectRecipe(core.TaskTypeCodeModification),
-	RecipeChatImplementExplore:           reactRecipe(core.TaskTypeAnalysis),
-	RecipeChatImplementEdit:              reactRecipe(core.TaskTypeCodeModification),
-	RecipeChatImplementVerify:            reactRecipe(core.TaskTypeAnalysis),
-	RecipeDebugInvestigateReproduce:      reactRecipe(core.TaskTypeAnalysis),
-	RecipeDebugInvestigateLocalize:       blackboardRecipe(core.TaskTypeAnalysis),
-	RecipeDebugInvestigatePatch:          reactRecipe(core.TaskTypeCodeModification),
-	RecipeDebugInvestigateReview:         reflectionRecipe(),
-	RecipeArchaeologyExploreShape:        plannerRecipe(),
-	RecipeArchaeologyExploreReview:       reflectionRecipe(),
-	RecipeArchaeologyCompileReconcile:    plannerRecipe(),
-	RecipeArchaeologyCompileShape:        plannerRecipe(),
-	RecipeArchaeologyCompileReview:       reflectionRecipe(),
-	RecipeArchaeologyImplementStep:       reactRecipe(core.TaskTypeCodeModification),
-	RecipeArchaeologyImplementCheckpoint: reflectionRecipe(),
-	RecipeArchaeologyImplementGapDetect:  reflectionRecipe(),
+	RecipeChatAskInquiry:                  reactRecipe(core.TaskTypeAnalysis),
+	RecipeChatAskOptions:                  plannerRecipe(),
+	RecipeChatAskReview:                   reflectionRecipe(),
+	RecipeChatInspectCollect:              reactRecipe(core.TaskTypeAnalysis),
+	RecipeChatInspectReview:               reflectionRecipe(),
+	RecipeChatImplementArchitect:          architectRecipe(core.TaskTypeCodeModification),
+	RecipeChatImplementExplore:            reactRecipe(core.TaskTypeAnalysis),
+	RecipeChatImplementEdit:               reactRecipe(core.TaskTypeCodeModification),
+	RecipeChatImplementVerify:             reactRecipe(core.TaskTypeAnalysis),
+	RecipeDebugInvestigateRepairReproduce: reactRecipe(core.TaskTypeAnalysis),
+	RecipeDebugInvestigateRepairLocalize:  blackboardRecipe(core.TaskTypeAnalysis),
+	RecipeDebugInvestigateRepairPatch:     reactRecipe(core.TaskTypeCodeModification),
+	RecipeDebugInvestigateRepairReview:    reflectionRecipe(),
+	RecipeArchaeologyExploreShape:         plannerRecipe(),
+	RecipeArchaeologyExploreReview:        reflectionRecipe(),
+	RecipeArchaeologyCompileReconcile:     plannerRecipe(),
+	RecipeArchaeologyCompileShape:         plannerRecipe(),
+	RecipeArchaeologyCompileReview:        reflectionRecipe(),
+	RecipeArchaeologyImplementStep:        rewooRecipe(core.TaskTypeCodeModification),
+	RecipeArchaeologyImplementCheckpoint:  reflectionRecipe(),
+	RecipeArchaeologyImplementGapDetect:   reflectionRecipe(),
+	RecipeDebugRepairSimpleRead:           reactRecipe(core.TaskTypeAnalysis),
+	RecipeDebugRepairSimpleEdit:           reactRecipe(core.TaskTypeCodeModification),
+	RecipeDebugRepairSimpleVerify:         reactRecipe(core.TaskTypeAnalysis),
 }
 
 func reactRecipe(taskType core.TaskType) RecipeSpec {
@@ -154,6 +161,15 @@ func architectRecipe(taskType core.TaskType) RecipeSpec {
 		TaskType: taskType,
 		Run: func(ctx context.Context, in ExecuteInput, spec RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
 			return ExecuteArchitectTask(ctx, in, taskID, instruction, spec.TaskType)
+		},
+	}
+}
+
+func rewooRecipe(taskType core.TaskType) RecipeSpec {
+	return RecipeSpec{
+		TaskType: taskType,
+		Run: func(ctx context.Context, in ExecuteInput, spec RecipeSpec, taskID, instruction string) (*core.Result, *core.Context, error) {
+			return ExecuteReWOOTask(ctx, in, taskID, instruction, spec.TaskType)
 		},
 	}
 }
@@ -436,6 +452,16 @@ func ExecuteArchitectTask(ctx context.Context, in ExecuteInput, taskID, instruct
 	state := in.State.Clone()
 	task := &core.Task{ID: taskID, Instruction: instruction, Type: taskType, Context: taskContextFromInput(in)}
 	result, err := architectexec.ExecuteArchitect(ctx, in.Environment, task, state)
+	if err == nil {
+		mergeStateArtifacts(in.State, state)
+	}
+	return result, state, err
+}
+
+func ExecuteReWOOTask(ctx context.Context, in ExecuteInput, taskID, instruction string, taskType core.TaskType) (*core.Result, *core.Context, error) {
+	state := in.State.Clone()
+	task := &core.Task{ID: taskID, Instruction: instruction, Type: taskType, Context: taskContextFromInput(in)}
+	result, err := rewoo.Execute(ctx, in.Environment, task, state)
 	if err == nil {
 		mergeStateArtifacts(in.State, state)
 	}

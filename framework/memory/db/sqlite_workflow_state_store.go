@@ -2363,6 +2363,45 @@ func mustJSONAny(value any) string {
 	return string(data)
 }
 
+// UpdateWorkflowMetadata merges the provided fields into the workflow's metadata.
+// It uses a read-modify-write approach for compatibility with all SQLite versions.
+func (s *SQLiteWorkflowStateStore) UpdateWorkflowMetadata(ctx context.Context, workflowID string, updates map[string]any) error {
+	if workflowID == "" {
+		return errors.New("workflow id required")
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+
+	// Read current metadata
+	row := s.db.QueryRowContext(ctx, `SELECT metadata_json FROM workflows WHERE workflow_id = ?`, workflowID)
+	var metadataJSON string
+	if err := row.Scan(&metadataJSON); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil // Workflow doesn't exist, return without error (idempotent)
+		}
+		return err
+	}
+
+	// Decode existing metadata
+	metadata := decodeJSONMap(metadataJSON)
+
+	// Merge updates (updates take precedence)
+	for k, v := range updates {
+		metadata[k] = v
+	}
+
+	// Write back merged metadata
+	_, err := s.db.ExecContext(
+		ctx,
+		`UPDATE workflows SET metadata_json = ?, updated_at = ? WHERE workflow_id = ?`,
+		mustJSON(metadata),
+		timeString(time.Now().UTC()),
+		workflowID,
+	)
+	return err
+}
+
 func decodeJSONMap(value string) map[string]any {
 	if strings.TrimSpace(value) == "" {
 		return map[string]any{}

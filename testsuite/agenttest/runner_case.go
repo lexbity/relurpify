@@ -226,7 +226,12 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 			Type:        task.Type,
 			Instruction: task.Instruction,
 		})
-		res, execErr = agent.Execute(taskCtx, task, state)
+		// Phase 4: capability_direct_run bypasses full agent loop
+		if c.CapabilityDirectRun != nil {
+			res, execErr = executeCapabilityDirectRun(taskCtx, c, task, state, agent)
+		} else {
+			res, execErr = agent.Execute(taskCtx, task, state)
+		}
 		cancel()
 		if !shouldRetryCaseWithBackendReset(execErr, opts.BackendResetOn) {
 			break
@@ -587,6 +592,10 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	cancelBootstrap()
 	if err != nil {
 		return nil, err
+	}
+	// Phase 4: Inject setup.state_keys into context before agent execution
+	for key, value := range c.Setup.StateKeys {
+		state.Set(key, value)
 	}
 	attempt.agent = agent
 	attempt.state = state
@@ -984,4 +993,22 @@ func shouldRetryCaseWithBackendReset(err error, patterns []string) bool {
 		return false
 	}
 	return shouldResetBackend(err, patterns)
+}
+
+// capabilityDirectRunner is the narrow interface the test harness requires to
+// invoke a capability directly, bypassing the full agent execution loop.
+type capabilityDirectRunner interface {
+	DirectCapabilityRun(ctx context.Context, capabilityID, invokingPrimary string, task *core.Task, state *core.Context) (*core.Result, error)
+}
+
+// executeCapabilityDirectRun runs a capability directly through the agent's
+// dispatcher, bypassing the full agent loop. Used for testing supporting-only
+// capabilities in isolation.
+func executeCapabilityDirectRun(ctx context.Context, c CaseSpec, task *core.Task, state *core.Context, agent graph.Agent) (*core.Result, error) {
+	runner, ok := agent.(capabilityDirectRunner)
+	if !ok {
+		return nil, fmt.Errorf("agent does not support capability_direct_run (missing DirectCapabilityRun method)")
+	}
+	spec := c.CapabilityDirectRun
+	return runner.DirectCapabilityRun(ctx, spec.CapabilityID, spec.InvokingPrimary, task, state)
 }

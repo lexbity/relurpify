@@ -27,7 +27,7 @@ func BuildCapabilityContractRuntimeState(work UnitOfWork, state *core.Context, n
 	case euclorelurpic.CapabilityChatImplement:
 		rt.LazySemanticAcquisitionEligible = containsString(work.SupportingRelurpicCapabilityIDs, euclorelurpic.CapabilityArchaeologyExplore)
 		rt.LazySemanticAcquisitionTriggered = rt.LazySemanticAcquisitionEligible && semanticBundleMaterial(work.SemanticInputs)
-	case euclorelurpic.CapabilityDebugInvestigate:
+	case euclorelurpic.CapabilityDebugInvestigateRepair:
 		rt.DebugEscalationTarget = euclorelurpic.CapabilityChatImplement
 	}
 	if state != nil && rt.DebugEscalationTarget != "" && mutationObserved(state) {

@@ -40,6 +40,14 @@ func RenderInteractionFrame(frame interaction.InteractionFrame) tui.Message {
 		msg.Content.Text = renderTransition(frame)
 	case interaction.FrameHelp:
 		msg.Content.Text = renderHelp(frame)
+	case interaction.FrameSessionList:
+		msg.Content.Text = renderSessionList(frame)
+	case interaction.FrameSessionListEmpty:
+		msg.Content.Text = renderSessionListEmpty(frame)
+	case interaction.FrameSessionResuming:
+		msg.Content.Text = renderSessionResuming(frame)
+	case interaction.FrameSessionResumeError:
+		msg.Content.Text = renderSessionResumeError(frame)
 	default:
 		msg.Content.Text = fmt.Sprintf("[%s] %s/%s", frame.Kind, frame.Mode, frame.Phase)
 	}
@@ -336,5 +344,69 @@ func renderHelp(frame interaction.InteractionFrame) string {
 		}
 	}
 
+	return eucloFrameStyle.Render(b.String())
+}
+
+func renderSessionList(frame interaction.InteractionFrame) string {
+	content, ok := frame.Content.(interaction.SessionListContent)
+	if !ok {
+		return "[session list]"
+	}
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Resume Session") + "\n")
+	if content.Workspace != "" {
+		b.WriteString(dimStyle.Render("Workspace: ") + content.Workspace + "\n")
+	}
+	b.WriteString(dimStyle.Render("Select a previous session to resume, or skip to start new:") + "\n\n")
+	for _, s := range content.Sessions {
+		index := headerStyle.Render(fmt.Sprintf("[%d]", s.Index))
+		mode := ""
+		if s.Mode != "" {
+			mode = dimStyle.Render("(" + s.Mode + ")")
+		}
+		status := ""
+		if s.HasBKCContext {
+			status = completedStyle.Render(" ✓BKC")
+		}
+		b.WriteString(fmt.Sprintf("%s %s %s\n", index, s.Instruction, mode))
+		b.WriteString(dimStyle.Render(fmt.Sprintf("    ID: %s%s\n", s.WorkflowID, status)))
+		if s.LastActiveAt != "" {
+			b.WriteString(dimStyle.Render(fmt.Sprintf("    Last active: %s\n", s.LastActiveAt)))
+		}
+		b.WriteString("\n")
+	}
+	return eucloFrameStyle.Render(b.String())
+}
+
+func renderSessionListEmpty(frame interaction.InteractionFrame) string {
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Resume Session") + "\n")
+	if content, ok := frame.Content.(string); ok && content != "" {
+		b.WriteString(content + "\n")
+	} else {
+		b.WriteString("No previous sessions found for this workspace.\n")
+	}
+	return eucloFrameStyle.Render(b.String())
+}
+
+func renderSessionResuming(frame interaction.InteractionFrame) string {
+	content, ok := frame.Content.(string)
+	if !ok {
+		content = "Resuming session..."
+	}
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Session Resume") + "\n")
+	b.WriteString(inProgressStyle.Render("⟳ ") + content + "\n")
+	return eucloFrameStyle.Render(b.String())
+}
+
+func renderSessionResumeError(frame interaction.InteractionFrame) string {
+	content, ok := frame.Content.(string)
+	if !ok {
+		content = "Could not resume session."
+	}
+	var b strings.Builder
+	b.WriteString(sectionHeaderStyle.Render("Session Resume") + "\n")
+	b.WriteString(diffRemoveStyle.Render("✗ ") + content + "\n")
 	return eucloFrameStyle.Render(b.String())
 }

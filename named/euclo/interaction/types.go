@@ -18,6 +18,12 @@ const (
 	FrameHelp            FrameKind = "help"             // mode help surface
 	FrameSessionResume   FrameKind = "session_resume"   // resume previously persisted interaction state
 	FrameArchaeoFindings FrameKind = "archaeo_findings" // archaeology exploration findings with blob proposals
+
+	// Session interaction trigger frame kinds
+	FrameSessionList        FrameKind = "session_list"         // list of available sessions for selection
+	FrameSessionListEmpty   FrameKind = "session_list_empty"   // no sessions available
+	FrameSessionResuming    FrameKind = "session_resuming"     // session resume in progress
+	FrameSessionResumeError FrameKind = "session_resume_error" // session resume failed
 )
 
 // ActionKind identifies the type of user action available in a frame.
@@ -30,6 +36,7 @@ const (
 	ActionToggle     ActionKind = "toggle"     // on/off per-item
 	ActionBatch      ActionKind = "batch"      // apply to category
 	ActionTransition ActionKind = "transition" // propose mode switch
+	ActionResume     ActionKind = "resume"     // resume selected session
 )
 
 // InteractionFrame is the core unit of the interaction protocol.

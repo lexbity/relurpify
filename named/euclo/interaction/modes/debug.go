@@ -102,6 +102,18 @@ func RegisterDebugTriggers(resolver *interaction.AgencyResolver) {
 		Phrases:     []string{"just fix it"},
 		Description: "Skip intake and reproduction, go straight to localization",
 	})
+	// Trigger disambiguation: simple repair for direct fix imperatives
+	resolver.RegisterTrigger("debug", interaction.AgencyTrigger{
+		Phrases:      []string{"apply fix", "quick fix", "simple repair", "fix this"},
+		CapabilityID: "euclo:debug.repair.simple",
+		Description:  "Direct react-only repair for well-understood defects",
+	})
+	// Investigative vocabulary routes to investigate-repair (default behavior)
+	resolver.RegisterTrigger("debug", interaction.AgencyTrigger{
+		Phrases:      []string{"investigate", "root cause", "find the bug", "why is it failing"},
+		CapabilityID: "euclo:debug.investigate-repair",
+		Description:  "Hypothesis-driven debugging with investigation",
+	})
 }
 
 // DebugPhaseIDs returns the ordered phase IDs for debug mode.

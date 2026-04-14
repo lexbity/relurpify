@@ -101,7 +101,7 @@ main.handler(0x0)
 	if !ok {
 		t.Fatalf("expected trace type, got %#v", raw)
 	}
-	if trace.PrimaryCapabilityID != euclorelurpic.CapabilityDebugInvestigate {
+	if trace.PrimaryCapabilityID != euclorelurpic.CapabilityDebugInvestigateRepair {
 		t.Fatalf("expected debug investigate primary, got %q", trace.PrimaryCapabilityID)
 	}
 }

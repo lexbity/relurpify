@@ -222,6 +222,8 @@ spec:
             - euclo:archaeology.convergence-guard
             - euclo:archaeology.coherence-assess
           mode: planning
+          recipe_ids:
+            - archaeology.implement.step
 
     - name: rapid_archaeology_plan_execution
       description: "Fast Archaeo-backed plan execution from a seeded compiled plan with explicit plan ownership."
@@ -282,6 +284,8 @@ spec:
             - euclo:archaeology.compile-plan
             - euclo:archaeology.convergence-guard
             - euclo:archaeology.coherence-assess
+          recipe_ids:
+            - archaeology.implement.step
 
     - name: rapid_archaeology_tension_scan
       description: "Fast Archaeo-backed analysis path that should surface at least one unresolved workflow tension."

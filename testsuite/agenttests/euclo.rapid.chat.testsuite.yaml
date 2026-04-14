@@ -84,7 +84,7 @@ spec:
           - go_test
         max_tool_calls: 8
         euclo:
-          behavior_family: direct_change_execution
+          behavior_family: conversational_inquiry
           mode: chat
           primary_relurpic_capability: euclo:chat.ask
           recipe_ids:

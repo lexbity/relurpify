@@ -67,7 +67,10 @@ func (c *verificationScopeSelectCapability) Descriptor() core.CapabilityDescript
 
 func (c *verificationScopeSelectCapability) Contract() euclotypes.ArtifactContract {
 	return euclotypes.ArtifactContract{
-		RequiredInputs: []euclotypes.ArtifactRequirement{{Kind: euclotypes.ArtifactKindIntake, Required: true}},
+		RequiredInputs: []euclotypes.ArtifactRequirement{
+			{Kind: euclotypes.ArtifactKindIntake, Required: false},
+			{Kind: euclotypes.ArtifactKindEditIntent, Required: false},
+		},
 		ProducedOutputs: []euclotypes.ArtifactKind{
 			euclotypes.ArtifactKindVerificationPlan,
 		},
@@ -78,8 +81,9 @@ func (c *verificationScopeSelectCapability) Eligible(artifacts euclotypes.Artifa
 	if !snapshot.HasVerificationTools && !snapshot.HasExecuteTools {
 		return euclotypes.EligibilityResult{Eligible: false, Reason: "verification scope selection requires execute or verification tools"}
 	}
-	if !artifacts.Has(euclotypes.ArtifactKindIntake) {
-		return euclotypes.EligibilityResult{Eligible: false, Reason: "verification scope selection requires intake", MissingArtifacts: []euclotypes.ArtifactKind{euclotypes.ArtifactKindIntake}}
+	// Accept both intake (from explore) and edit_intent (from debug repair) artifacts
+	if !artifacts.Has(euclotypes.ArtifactKindIntake) && !artifacts.Has(euclotypes.ArtifactKindEditIntent) {
+		return euclotypes.EligibilityResult{Eligible: false, Reason: "verification scope selection requires intake or edit_intent", MissingArtifacts: []euclotypes.ArtifactKind{euclotypes.ArtifactKindIntake, euclotypes.ArtifactKindEditIntent}}
 	}
 	return euclotypes.EligibilityResult{Eligible: true, Reason: "verification planning is available"}
 }
@@ -116,7 +120,10 @@ func (c *verificationExecuteCapability) Descriptor() core.CapabilityDescriptor {
 
 func (c *verificationExecuteCapability) Contract() euclotypes.ArtifactContract {
 	return euclotypes.ArtifactContract{
-		RequiredInputs: []euclotypes.ArtifactRequirement{{Kind: euclotypes.ArtifactKindIntake, Required: true}},
+		RequiredInputs: []euclotypes.ArtifactRequirement{
+			{Kind: euclotypes.ArtifactKindIntake, Required: false},
+			{Kind: euclotypes.ArtifactKindEditIntent, Required: false},
+		},
 		ProducedOutputs: []euclotypes.ArtifactKind{
 			euclotypes.ArtifactKindVerification,
 		},
@@ -127,8 +134,9 @@ func (c *verificationExecuteCapability) Eligible(artifacts euclotypes.ArtifactSt
 	if !snapshot.HasExecuteTools {
 		return euclotypes.EligibilityResult{Eligible: false, Reason: "verification execution requires execute tools"}
 	}
-	if !artifacts.Has(euclotypes.ArtifactKindIntake) {
-		return euclotypes.EligibilityResult{Eligible: false, Reason: "verification execution requires intake", MissingArtifacts: []euclotypes.ArtifactKind{euclotypes.ArtifactKindIntake}}
+	// Accept both intake (from explore) and edit_intent (from debug repair) artifacts
+	if !artifacts.Has(euclotypes.ArtifactKindIntake) && !artifacts.Has(euclotypes.ArtifactKindEditIntent) {
+		return euclotypes.EligibilityResult{Eligible: false, Reason: "verification execution requires intake or edit_intent", MissingArtifacts: []euclotypes.ArtifactKind{euclotypes.ArtifactKindIntake, euclotypes.ArtifactKindEditIntent}}
 	}
 	return euclotypes.EligibilityResult{Eligible: true, Reason: "verification execution is available"}
 }

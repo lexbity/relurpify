@@ -152,16 +152,16 @@ func TestEvaluateEucloExpectationsReportsMissingBehaviorTraceFields(t *testing.T
 	snapshot := &core.ContextSnapshot{
 		State: map[string]any{
 			"euclo.relurpic_behavior_trace": map[string]any{
-				"primary_capability_id": "euclo:debug.investigate",
+				"primary_capability_id": "euclo:debug.investigate-repair",
 				"executor_family":       "react",
 			},
 		},
 	}
 
 	failures := evaluateEucloExpectations(&EucloExpectSpec{
-		PrimaryRelurpicCapability:      "euclo:debug.investigate",
+		PrimaryRelurpicCapability:      "euclo:debug.investigate-repair",
 		SupportingRelurpicCapabilities: []string{"euclo:debug.root-cause"},
-		RecipeIDs:                      []string{"debug.investigate.localize"},
+		RecipeIDs:                      []string{"debug.investigate-repair.localize"},
 	}, snapshot)
 	if len(failures) != 2 {
 		t.Fatalf("expected two missing behavior trace failures, got %v", failures)
@@ -169,7 +169,7 @@ func TestEvaluateEucloExpectationsReportsMissingBehaviorTraceFields(t *testing.T
 	if !strings.Contains(strings.Join(failures, "; "), `euclo.supporting_relurpic_capabilities: missing "euclo:debug.root-cause"`) {
 		t.Fatalf("expected missing supporting capability failure, got %v", failures)
 	}
-	if !strings.Contains(strings.Join(failures, "; "), `euclo.recipe_ids: missing "debug.investigate.localize"`) {
+	if !strings.Contains(strings.Join(failures, "; "), `euclo.recipe_ids: missing "debug.investigate-repair.localize"`) {
 		t.Fatalf("expected missing recipe failure, got %v", failures)
 	}
 }
@@ -303,6 +303,53 @@ func TestContextSnapshotKeyNotEmpty(t *testing.T) {
 	}
 	if contextSnapshotKeyNotEmpty(snapshot, "missing") {
 		t.Fatal("expected nil value to be treated as empty")
+	}
+}
+
+func TestEvaluateExpectations_ArtifactKindProduced_Missing(t *testing.T) {
+	// Phase 4: artifact_kind_produced expectation - missing kind
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.artifacts": []map[string]any{
+				{"kind": "analyze"},
+				{"kind": "review_findings"},
+			},
+		},
+	}
+	euclo := &EucloExpectSpec{
+		ArtifactKindProduced: []string{"analyze", "plan_candidates"},
+	}
+	failures := evaluateEucloExpectations(euclo, snapshot)
+	found := false
+	for _, f := range failures {
+		if strings.Contains(f, "plan_candidates") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected failure for missing plan_candidates, got %v", failures)
+	}
+}
+
+func TestEvaluateExpectations_ArtifactKindProduced_Present(t *testing.T) {
+	// Phase 4: artifact_kind_produced expectation - all kinds present
+	snapshot := &core.ContextSnapshot{
+		State: map[string]any{
+			"euclo.artifacts": []map[string]any{
+				{"kind": "analyze"},
+				{"kind": "review_findings"},
+			},
+		},
+	}
+	euclo := &EucloExpectSpec{
+		ArtifactKindProduced: []string{"analyze"},
+	}
+	failures := evaluateEucloExpectations(euclo, snapshot)
+	for _, f := range failures {
+		if strings.Contains(f, "analyze") {
+			t.Fatalf("unexpected failure for analyze: %v", f)
+		}
 	}
 }
 

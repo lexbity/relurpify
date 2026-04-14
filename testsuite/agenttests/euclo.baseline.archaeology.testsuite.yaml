@@ -169,3 +169,5 @@ spec:
           supporting_relurpic_capabilities:
             - euclo:archaeology.prospective-assess
             - euclo:archaeology.convergence-guard
+          recipe_ids:
+            - archaeology.implement.step

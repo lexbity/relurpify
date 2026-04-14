@@ -14,6 +14,7 @@ import (
 	euclocontext "github.com/lexcodex/relurpify/named/euclo/runtime/context"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
@@ -34,6 +35,12 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 	if state == nil {
 		state = core.NewContext()
 	}
+
+	// Apply session resume context if present, before runtimeState.
+	if err := a.applySessionResumeContext(ctx, task, state); err != nil {
+		return nil, &core.Result{Success: false, Error: err}, err
+	}
+
 	if workflowExecutor == nil {
 		if err := a.ensureReactDelegate(); err != nil {
 			return nil, nil, err
@@ -207,4 +214,56 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 	a.refreshRuntimeExecutionArtifacts(ctx, flow.task, flow.state, flow.work, finalStatus, err)
 	a.applyRuntimeResultMetadata(result, flow.state)
 	return result, err
+}
+
+// applySessionResumeContext injects SessionResumeContext into the task context
+// and state before runtimeState is called. This enables resumed sessions to
+// warm up with their previously anchored BKC context and semantic state.
+func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, state *core.Context) error {
+	raw, ok := state.Get("euclo.session_resume_context")
+	if !ok || raw == nil {
+		return nil // no resume context; new session path
+	}
+	resumeCtx, ok := raw.(session.SessionResumeContext)
+	if !ok || resumeCtx.IsEmpty() {
+		return nil
+	}
+
+	// Apply workflow and run IDs so EnsureWorkflowRun uses the resumed workflow.
+	if task.Context == nil {
+		task.Context = map[string]any{}
+	}
+	task.Context["workflow_id"] = resumeCtx.WorkflowID
+	task.Context["run_id"] = resumeCtx.RunID
+
+	// Apply mode hint so mode resolution resolves to the prior mode.
+	if resumeCtx.Mode != "" && task.Context["mode_hint"] == nil {
+		task.Context["mode_hint"] = resumeCtx.Mode
+	}
+
+	// Apply BKC root chunk IDs so wrapBKCStrategy receives them via
+	// bkcSeedChunks -> work.PlanBinding.RootChunkIDs.
+	if len(resumeCtx.RootChunkIDs) > 0 {
+		task.Context["root_chunk_ids"] = resumeCtx.RootChunkIDs
+		task.Context["active_plan_root_chunk_ids"] = resumeCtx.RootChunkIDs
+	}
+
+	// Apply phase state so shouldShortCircuitExecution and phase-gated
+	// behaviors pick up where the prior session left off.
+	if resumeCtx.PhaseState != nil {
+		state.Set("euclo.archaeo_phase_state", resumeCtx.PhaseState)
+	}
+
+	// Apply code revision for BKC staleness checking.
+	if resumeCtx.CodeRevision != "" {
+		state.Set("euclo.code_revision", resumeCtx.CodeRevision)
+	}
+
+	// Seed executor semantic context from resume's semantic summary.
+	if !resumeCtx.SemanticSummary.IsEmpty() {
+		semCtx := resumeCtx.SemanticSummary.ToExecutorSemanticContext(resumeCtx.ActivePlanSummary)
+		state.Set("euclo.resume_semantic_context", semCtx)
+	}
+
+	return nil
 }

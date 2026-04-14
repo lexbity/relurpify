@@ -18,7 +18,7 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 		PrimaryCapabilityID: work.PrimaryRelurpicCapabilityID,
 		UpdatedAt:           now,
 	}
-	if work.PrimaryRelurpicCapabilityID != euclorelurpic.CapabilityDebugInvestigate {
+	if work.PrimaryRelurpicCapabilityID != euclorelurpic.CapabilityDebugInvestigateRepair {
 		return rt
 	}
 	rt.SupportingCapabilityIDs = filterDebugCapabilityIDs(work.SupportingRelurpicCapabilityIDs)

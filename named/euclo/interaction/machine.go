@@ -322,6 +322,12 @@ func (m *PhaseMachine) proposeTransition(ctx context.Context, fromPhase, toMode 
 	return nil
 }
 
+// PrependPhase inserts a phase definition at position 0.
+// It must be called before Run — modifying phases after execution starts is undefined.
+func (m *PhaseMachine) PrependPhase(pd PhaseDefinition) {
+	m.phases = append([]PhaseDefinition{pd}, m.phases...)
+}
+
 // phaseIndex returns the index of the phase with the given ID, or -1.
 func (m *PhaseMachine) phaseIndex(id string) int {
 	for i, p := range m.phases {

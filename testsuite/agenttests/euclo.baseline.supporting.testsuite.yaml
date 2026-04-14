@@ -1,0 +1,335 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.baseline.supporting
+  description: "Baseline isolation tests for Euclo supporting capabilities using state seeding and direct capability invocation."
+  owner: agent-platform
+  tier: stable
+  classification: capability
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.manifest.yaml
+  execution:
+    profile: ci-live
+    strict: true
+    timeout: 60s
+  workspace:
+    strategy: derived
+    exclude:
+      - .git/**
+      - .gocache/**
+      - .gomodcache/**
+      - relurpify_cfg/test_runs/**
+    ignore_changes:
+      - relurpify_cfg/logs/skills.log
+      - relurpify_cfg/artifacts/euclo/deferred/**
+  models:
+    - name: qwen2.5-coder:14b
+      endpoint: http://localhost:11434
+  recording:
+    mode: off
+  cases:
+    # Chat Supporting Capabilities (3)
+    - name: supporting_chat_direct_edit_execution
+      description: "Isolation test for euclo:chat.direct-edit-execution supporting capability."
+      task_type: code_modification
+      prompt: "Edit the EditMe function to return 42."
+      tags: [baseline, capability-baseline, supporting, chat, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_chat/edit.go
+            content: |
+              package supportingchat
+
+              func EditMe() int { return 0 }
+        state_keys:
+          chat.edit_target: "EditMe"
+          chat.edit_value: "42"
+      capability_direct_run:
+        capability_id: euclo:chat.direct-edit-execution
+        invoking_primary: euclo:chat.implement
+      expect:
+        must_succeed: true
+        no_file_changes: true
+
+    - name: supporting_chat_local_review
+      description: "Isolation test for euclo:chat.local-review supporting capability."
+      task_type: analysis
+      prompt: "Review the ReviewMe function in the local scope."
+      tags: [baseline, capability-baseline, supporting, chat, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_chat/review.go
+            content: |
+              package supportingchat
+
+              func ReviewMe() string { return "review" }
+        state_keys:
+          chat.review_scope: "local"
+          chat.review_focus: "ReviewMe function"
+      capability_direct_run:
+        capability_id: euclo:chat.local-review
+        invoking_primary: euclo:chat.inspect
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          artifact_kind_produced: ["review_findings"]
+
+    - name: supporting_chat_targeted_verification
+      description: "Isolation test for euclo:chat.targeted-verification-repair supporting capability."
+      task_type: code_modification
+      prompt: "Fix the VerifyMe function so it returns true."
+      tags: [baseline, capability-baseline, supporting, chat, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_chat/verify.go
+            content: |
+              package supportingchat
+
+              func VerifyMe() bool { return false }
+        state_keys:
+          chat.verify_target: "VerifyMe"
+          chat.expected_result: "true"
+      capability_direct_run:
+        capability_id: euclo:chat.targeted-verification-repair
+        invoking_primary: euclo:chat.implement
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          artifact_kind_produced: ["verification_summary"]
+
+    # Archaeology Supporting Capabilities (5)
+    - name: supporting_archaeology_pattern_surface
+      description: "Isolation test for euclo:archaeology.pattern-surface supporting capability."
+      task_type: analysis
+      prompt: "Surface the function signature patterns in the supportingarch package."
+      tags: [baseline, capability-baseline, supporting, archaeology, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_arch/pattern.go
+            content: |
+              package supportingarch
+
+              func PatternA() {}
+              func PatternB() {}
+        state_keys:
+          archaeology.pattern_scope: "package supportingarch"
+          archaeology.pattern_type: "function signatures"
+      capability_direct_run:
+        capability_id: euclo:archaeology.pattern-surface
+        invoking_primary: euclo:archaeology.explore
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          artifact_kind_produced: ["explore"]
+
+    - name: supporting_archaeology_prospective_assess
+      description: "Isolation test for euclo:archaeology.prospective-assess supporting capability."
+      task_type: analysis
+      prompt: "Assess the prospective impact of modifying the Prospective function return value."
+      tags: [baseline, capability-baseline, supporting, archaeology, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_arch/prospective.go
+            content: |
+              package supportingarch
+
+              func Prospective() int { return 1 }
+        state_keys:
+          archaeology.proposed_change: "modify Prospective return"
+          archaeology.impact_scope: "package supportingarch"
+      capability_direct_run:
+        capability_id: euclo:archaeology.prospective-assess
+        invoking_primary: euclo:archaeology.compile-plan
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          artifact_kind_produced: ["plan_candidates"]
+
+    - name: supporting_archaeology_convergence_guard
+      description: "Isolation test for euclo:archaeology.convergence-guard supporting capability."
+      task_type: analysis
+      prompt: "Guard convergence for the active plan targeting the Converge function."
+      tags: [baseline, capability-baseline, supporting, archaeology, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_arch/converge.go
+            content: |
+              package supportingarch
+
+              func Converge() bool { return true }
+        state_keys:
+          archaeology.convergence_target: "Converge"
+          archaeology.plan_status: "active"
+      capability_direct_run:
+        capability_id: euclo:archaeology.convergence-guard
+        invoking_primary: euclo:archaeology.implement-plan
+      expect:
+        must_succeed: true
+        no_file_changes: true
+
+    - name: supporting_archaeology_coherence_assess
+      description: "Isolation test for euclo:archaeology.coherence-assess supporting capability."
+      task_type: analysis
+      prompt: "Assess the semantic coherence of the Coherent function against its linked contexts."
+      tags: [baseline, capability-baseline, supporting, archaeology, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_arch/coherence.go
+            content: |
+              package supportingarch
+
+              func Coherent() string { return "coherent" }
+        state_keys:
+          archaeology.coherence_target: "Coherent"
+          archaeology.semantic_links: '["link-1", "link-2"]'
+      capability_direct_run:
+        capability_id: euclo:archaeology.coherence-assess
+        invoking_primary: euclo:archaeology.compile-plan
+      expect:
+        must_succeed: true
+        no_file_changes: true
+
+    - name: supporting_archaeology_scope_expand
+      description: "Isolation test for euclo:archaeology.scope-expansion-assess supporting capability."
+      task_type: analysis
+      prompt: "Assess whether ScopeFunc should expand its scope to the package level."
+      tags: [baseline, capability-baseline, supporting, archaeology, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_arch/scope.go
+            content: |
+              package supportingarch
+
+              func ScopeFunc() {}
+        state_keys:
+          archaeology.current_scope: "ScopeFunc"
+          archaeology.expansion_candidate: "package level"
+      capability_direct_run:
+        capability_id: euclo:archaeology.scope-expansion-assess
+        invoking_primary: euclo:archaeology.explore
+      expect:
+        must_succeed: true
+        no_file_changes: true
+
+    # Debug Supporting Capabilities (5)
+    - name: supporting_debug_root_cause
+      description: "Isolation test for euclo:debug.root-cause supporting capability."
+      task_type: analysis
+      prompt: "Identify the root cause of the panic in the RootCause function."
+      tags: [baseline, capability-baseline, supporting, debug, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_debug/root.go
+            content: |
+              package supportingdebug
+
+              func RootCause() { panic("bug") }
+        state_keys:
+          debug.failure_symptom: "panic"
+          debug.failure_location: "RootCause function"
+      capability_direct_run:
+        capability_id: euclo:debug.root-cause
+        invoking_primary: euclo:debug.investigate-repair
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          artifact_kind_produced: ["root_cause_candidates"]
+
+    - name: supporting_debug_hypothesis_refine
+      description: "Isolation test for euclo:debug.hypothesis-refine supporting capability."
+      task_type: analysis
+      prompt: "Refine the off-by-one hypothesis for the Hypothesis function returning 0."
+      tags: [baseline, capability-baseline, supporting, debug, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_debug/hypothesis.go
+            content: |
+              package supportingdebug
+
+              func Hypothesis() int { return 0 }
+        state_keys:
+          debug.initial_hypothesis: "off by one error"
+          debug.evidence: "return value is 0"
+      capability_direct_run:
+        capability_id: euclo:debug.hypothesis-refine
+        invoking_primary: euclo:debug.investigate-repair
+      expect:
+        must_succeed: true
+        no_file_changes: true
+
+    - name: supporting_debug_localization
+      description: "Isolation test for euclo:debug.localization supporting capability."
+      task_type: analysis
+      prompt: "Localize the bug in LocalizeBug that returns false instead of true."
+      tags: [baseline, capability-baseline, supporting, debug, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_debug/localize.go
+            content: |
+              package supportingdebug
+
+              func LocalizeBug() bool { return false }
+        state_keys:
+          debug.bug_description: "function returns false"
+          debug.expected_behavior: "should return true"
+      capability_direct_run:
+        capability_id: euclo:debug.localization
+        invoking_primary: euclo:debug.investigate-repair
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          artifact_kind_produced: ["root_cause"]
+
+    - name: supporting_debug_flaw_surface
+      description: "Isolation test for euclo:debug.flaw-surface supporting capability."
+      task_type: analysis
+      prompt: "Surface the empty-function anti-pattern flaw in FlawSurface."
+      tags: [baseline, capability-baseline, supporting, debug, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_debug/flaw.go
+            content: |
+              package supportingdebug
+
+              func FlawSurface() { }
+        state_keys:
+          debug.anti_pattern: "empty function"
+          debug.risk_level: "low"
+      capability_direct_run:
+        capability_id: euclo:debug.flaw-surface
+        invoking_primary: euclo:debug.investigate-repair
+      expect:
+        must_succeed: true
+        no_file_changes: true
+
+    - name: supporting_debug_verification_repair
+      description: "Isolation test for euclo:debug.verification-repair supporting capability."
+      task_type: code_modification
+      prompt: "Repair the NeedsRepair function to return a valid non-negative value."
+      tags: [baseline, capability-baseline, supporting, debug, level:1]
+      setup:
+        files:
+          - path: testsuite/fixtures/supporting_debug/repair.go
+            content: |
+              package supportingdebug
+
+              func NeedsRepair() int { return -1 }
+        state_keys:
+          debug.verification_failed: "true"
+          debug.repair_strategy: "fix return value"
+      capability_direct_run:
+        capability_id: euclo:debug.verification-repair
+        invoking_primary: euclo:debug.investigate-repair
+      expect:
+        must_succeed: true
+        no_file_changes: true
+        euclo:
+          artifact_kind_produced: ["verification_summary"]

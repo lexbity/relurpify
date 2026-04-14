@@ -3,7 +3,8 @@ package debug
 import euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 
 const (
-	Investigate        = euclorelurpic.CapabilityDebugInvestigate
+	InvestigateRepair  = euclorelurpic.CapabilityDebugInvestigateRepair
+	SimpleRepair       = euclorelurpic.CapabilityDebugRepairSimple
 	RootCause          = euclorelurpic.CapabilityDebugRootCause
 	HypothesisRefine   = euclorelurpic.CapabilityDebugHypothesisRefine
 	Localization       = euclorelurpic.CapabilityDebugLocalization

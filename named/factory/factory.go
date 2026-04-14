@@ -170,7 +170,7 @@ func InstantiateByName(workspace, name string, env agentenv.AgentEnvironment) gr
 		agent := reactpkg.New(env)
 		agent.CheckpointPath = paths.CheckpointsDir()
 		return agent
-	case "coding", "euclo":
+	case "coding", "euclo", "euclo:debug", "euclo:chat", "euclo:planning":
 		agent := euclo.New(envToWorkspace(env))
 		agent.CheckpointPath = paths.CheckpointsDir()
 		_ = agent.Initialize(env.Config)

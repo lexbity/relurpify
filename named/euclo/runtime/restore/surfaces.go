@@ -79,7 +79,32 @@ func EnsureWorkflowRun(ctx context.Context, store *db.SQLiteWorkflowStateStore, 
 		state.Set("euclo.workflow_id", workflowID)
 		state.Set("euclo.run_id", runID)
 	}
+
+	// Update workflow metadata with workspace and mode for session resume support
+	workspace := workspaceFromTask(task)
+	mode := contextString(state, "euclo.mode")
+	if workspace != "" || mode != "" {
+		metadata := make(map[string]any)
+		if workspace != "" {
+			metadata["workspace"] = workspace
+		}
+		if mode != "" {
+			metadata["mode"] = mode
+		}
+		_ = store.UpdateWorkflowMetadata(ctx, workflowID, metadata)
+	}
+
 	return workflowID, runID, nil
+}
+
+func workspaceFromTask(task *core.Task) string {
+	if task == nil || task.Context == nil {
+		return ""
+	}
+	if value, ok := task.Context["workspace"].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
 }
 
 func contextString(state *core.Context, key string) string {

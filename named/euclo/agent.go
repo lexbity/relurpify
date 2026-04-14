@@ -45,6 +45,8 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	euclosession "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 	golangpkg "github.com/lexcodex/relurpify/platform/lang/go"
 	jspkg "github.com/lexcodex/relurpify/platform/lang/js"
@@ -123,6 +125,27 @@ func New(env ayenitd.WorkspaceEnvironment) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env)
 	return agent
+}
+
+// DirectCapabilityRun invokes a single relurpic capability (primary or supporting)
+// directly through the dispatcher, bypassing the full managed-execution pipeline.
+// Used by the test harness for capability-level isolation testing.
+func (a *Agent) DirectCapabilityRun(ctx context.Context, capabilityID, invokingPrimary string, task *core.Task, state *core.Context) (*core.Result, error) {
+	if a.BehaviorDispatcher == nil {
+		return nil, fmt.Errorf("behavior dispatcher not initialized")
+	}
+	work := eucloruntime.UnitOfWork{
+		PrimaryRelurpicCapabilityID: invokingPrimary,
+	}
+	if invokingPrimary == "" {
+		work.PrimaryRelurpicCapabilityID = capabilityID
+	}
+	artifacts, err := a.BehaviorDispatcher.ExecuteRoutine(ctx, capabilityID, task, state, work, a.Environment, a.serviceBundle())
+	if err != nil {
+		return &core.Result{Success: false, Error: err}, err
+	}
+	eucloexec.MergeStateArtifactsToContext(state, artifacts)
+	return &core.Result{Success: true}, nil
 }
 
 func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
@@ -1249,6 +1272,33 @@ func (a *Agent) ConfigTelemetry() core.Telemetry {
 	return a.Config.Telemetry
 }
 
+// sessionSelectPhaseDef returns a PhaseDefinition for the session_select phase.
+// Returns false if WorkflowStore is not available.
+func (a *Agent) sessionSelectPhaseDef() (interaction.PhaseDefinition, bool) {
+	if a.WorkflowStore == nil {
+		return interaction.PhaseDefinition{}, false
+	}
+	planStore := a.PlanStore // may be nil; SessionIndex handles nil gracefully
+	index := &euclosession.SessionIndex{
+		WorkflowStore: a.WorkflowStore,
+		PlanStore:     planStore,
+	}
+	resolver := &euclosession.SessionResumeResolver{
+		WorkflowStore: a.WorkflowStore,
+		PlanStore:     planStore,
+	}
+	phase := &euclosession.SessionSelectPhase{Index: index, Resolver: resolver}
+	return interaction.PhaseDefinition{
+		ID:      "session_select",
+		Label:   "Session Select",
+		Handler: phase,
+		SkipWhen: func(state map[string]any, _ *interaction.ArtifactBundle) bool {
+			triggered, _ := state["euclo.session_select.triggered"].(bool)
+			return !triggered
+		},
+	}, true
+}
+
 // createInteractionRegistry creates an interaction registry with the pipeline injected
 func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 	reg := interaction.NewModeMachineRegistry()
@@ -1290,6 +1340,20 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 	reg.Register("planning", modes.PlanningMode)
 	reg.Register("review", modes.ReviewMode)
 	reg.Register("tdd", modes.TDDMode)
+
+	// Inject session_select phase into all registered mode machines
+	if phaseDef, ok := a.sessionSelectPhaseDef(); ok {
+		for _, modeID := range reg.Modes() {
+			reg.WrapFactory(modeID, func(factory interaction.ModeMachineFactory) interaction.ModeMachineFactory {
+				return func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+					m := factory(emitter, resolver)
+					m.PrependPhase(phaseDef)
+					return m
+				}
+			})
+		}
+	}
+
 	return reg
 }
 

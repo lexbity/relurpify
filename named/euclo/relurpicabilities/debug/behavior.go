@@ -16,9 +16,9 @@ import (
 
 type investigateBehavior struct{}
 
-func NewInvestigateBehavior() execution.Behavior { return investigateBehavior{} }
+func NewInvestigateRepairBehavior() execution.Behavior { return investigateBehavior{} }
 
-func (investigateBehavior) ID() string { return Investigate }
+func (investigateBehavior) ID() string { return InvestigateRepair }
 
 func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*core.Result, error) {
 	routines := append(execution.SupportingIDs(in.Work, "euclo:debug."), execution.SupportingIDs(in.Work, "euclo:chat.")...)
@@ -44,7 +44,7 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 			"debug investigate composed specialized relurpic capabilities: "+strings.Join(specializedExecuted, ", "))
 	}
 
-	reproduceResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateReproduce, "debug-investigate-reproduce",
+	reproduceResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateRepairReproduce, "debug-investigate-repair-reproduce",
 		"Reproduce the issue by running tests or triggering the failure: "+execution.CapabilityTaskInstruction(in.Task),
 	)
 	if err != nil || reproduceResult == nil || !reproduceResult.Success {
@@ -59,7 +59,7 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		Status:     "produced",
 	})
 
-	localizeResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateLocalize, "debug-investigate-localize",
+	localizeResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateRepairLocalize, "debug-investigate-repair-localize",
 		"Localize the root cause of the issue using reproduction evidence: "+execution.CapabilityTaskInstruction(in.Task),
 	)
 	if err != nil || localizeResult == nil || !localizeResult.Success {
@@ -84,7 +84,7 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		}
 	}
 
-	patchResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigatePatch, "debug-investigate-patch",
+	patchResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateRepairPatch, "debug-investigate-repair-patch",
 		"Generate a patch to fix the localized issue: "+execution.CapabilityTaskInstruction(in.Task),
 	)
 	if err != nil || patchResult == nil || !patchResult.Success {
@@ -100,7 +100,7 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		Status:     "produced",
 	})
 
-	reviewResult, _, reviewErr := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateReview, "debug-investigate-review",
+	reviewResult, _, reviewErr := execution.ExecuteRecipe(ctx, in, execution.RecipeDebugInvestigateRepairReview, "debug-investigate-repair-review",
 		"Review the patch and verify it addresses the root cause.")
 	if reviewErr == nil && reviewResult != nil && reviewResult.Success && in.State != nil {
 		reviewPayload := debugReviewPayload(execution.ResultSummary(reviewResult), reviewResult.Data)

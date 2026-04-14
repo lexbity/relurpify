@@ -103,6 +103,8 @@ type CaseSpec struct {
 	Expect            ExpectSpec                    `yaml:"expect,omitempty"`
 	Overrides         CaseOverrideSpec              `yaml:"overrides,omitempty"`
 	Tags              []string                      `yaml:"tags,omitempty"`
+	// Phase 4: CapabilityDirectRun bypasses full agent loop for direct capability testing
+	CapabilityDirectRun *CapabilityDirectRunSpec `yaml:"capability_direct_run,omitempty"`
 }
 
 type InteractionScriptStep struct {
@@ -138,6 +140,14 @@ type SetupSpec struct {
 	Memory        MemorySeedSpec         `yaml:"memory,omitempty"`
 	Workflows     []WorkflowSeedSpec     `yaml:"workflows,omitempty"`
 	ToolOverrides []ToolResponseOverride `yaml:"tool_overrides,omitempty"`
+	// Phase 4: StateKeys injects values into core.Context before agent execution
+	StateKeys map[string]any `yaml:"state_keys,omitempty"`
+}
+
+// CapabilityDirectRunSpec defines direct capability invocation for testing supporting-only capabilities
+type CapabilityDirectRunSpec struct {
+	CapabilityID    string `yaml:"capability_id"`
+	InvokingPrimary string `yaml:"invoking_primary,omitempty"`
 }
 
 type SetupFileSpec struct {
@@ -211,7 +221,8 @@ type EucloExpectSpec struct {
 	DegradationMode                string              `yaml:"degradation_mode,omitempty"`
 	PhasesExecuted                 []string            `yaml:"phases_executed,omitempty"`
 	PhasesSkipped                  []string            `yaml:"phases_skipped,omitempty"`
-	ArtifactsProduced              []string            `yaml:"artifacts_produced,omitempty"` // artifact kinds
+	ArtifactsProduced              []string            `yaml:"artifacts_produced,omitempty"`     // artifact kinds
+	ArtifactKindProduced           []string            `yaml:"artifact_kind_produced,omitempty"` // expected artifact kinds (structural validation)
 	ArtifactChain                  []ArtifactChainSpec `yaml:"artifact_chain,omitempty"`
 	RecoveryAttempted              bool                `yaml:"recovery_attempted,omitempty"`
 	RecoveryStrategies             []string            `yaml:"recovery_strategies,omitempty"`

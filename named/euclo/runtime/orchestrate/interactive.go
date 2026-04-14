@@ -3,10 +3,12 @@ package orchestrate
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/session"
 )
 
 // InteractiveControllerResult captures the output of interactive execution.
@@ -34,6 +36,7 @@ func (pc *ProfileController) ExecuteInteractive(
 
 	resolver := interaction.NewAgencyResolver()
 	interaction.RegisterHelpTriggers(resolver)
+	resolver.RegisterTrigger("", session.SessionResumeTrigger())
 
 	recordingEmitter := wrapInteractiveEmitter(emitter)
 	machine := registry.Build(mode.ModeID, recordingEmitter, resolver)
@@ -42,6 +45,13 @@ func (pc *ProfileController) ExecuteInteractive(
 	}
 
 	seedInteractiveMachine(machine, env, mode)
+
+	// Check for initial phase jump trigger (e.g., "resume session" phrase)
+	if jumpPhase := resolveInitialPhaseJump(resolver, mode.ModeID, env.Task); jumpPhase != "" {
+		machine.State()["euclo.session_select.triggered"] = true
+		machine.JumpToPhase(jumpPhase)
+	}
+
 	if err := maybeResumeInteractiveSession(ctx, machine, env.State, mode.ModeID); err != nil {
 		return nil, nil, fmt.Errorf("interactive resume for mode %q: %w", mode.ModeID, err)
 	}
@@ -264,4 +274,17 @@ func uniqueStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+// resolveInitialPhaseJump checks if the task instruction triggers a phase jump.
+// Returns the target phase ID if a trigger fires, or empty string otherwise.
+func resolveInitialPhaseJump(resolver *interaction.AgencyResolver, modeID string, task *core.Task) string {
+	if resolver == nil || task == nil || strings.TrimSpace(task.Instruction) == "" {
+		return ""
+	}
+	trigger, ok := resolver.Resolve(modeID, strings.TrimSpace(task.Instruction))
+	if !ok || trigger == nil || trigger.PhaseJump == "" {
+		return ""
+	}
+	return trigger.PhaseJump
 }

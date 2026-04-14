@@ -122,7 +122,7 @@ func TestBuildCapabilityContractRuntimeState_DebugEscalationTriggeredAfterMutati
 	state := core.NewContext()
 	state.Set("euclo.edit_execution", EditExecutionRecord{Executed: []EditOperationRecord{{Path: "z.go", Status: "applied"}}})
 	rt := BuildCapabilityContractRuntimeState(UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigate,
+		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigateRepair,
 	}, state, time.Now().UTC())
 	if !rt.DebugEscalationTriggered || rt.DebugEscalationTarget != euclorelurpic.CapabilityChatImplement {
 		t.Fatalf("expected debug escalation toward implement, got %#v", rt)

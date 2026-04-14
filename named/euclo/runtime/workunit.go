@@ -153,7 +153,7 @@ func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, classification Task
 			return euclorelurpic.CapabilityArchaeologyExplore
 		}
 	case "debug":
-		return euclorelurpic.CapabilityDebugInvestigate
+		return euclorelurpic.CapabilityDebugInvestigateRepair
 	case "review":
 		return euclorelurpic.CapabilityChatInspect
 	default:
@@ -201,7 +201,7 @@ func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnv
 	switch primaryID {
 	case euclorelurpic.CapabilityChatImplement:
 		if classification.RequiresEvidenceBeforeMutation {
-			add(euclorelurpic.CapabilityDebugInvestigate)
+			add(euclorelurpic.CapabilityDebugInvestigateRepair)
 		}
 		if classification.Scope == "cross_cutting" {
 			add(euclorelurpic.CapabilityArchaeologyExplore)
@@ -211,7 +211,7 @@ func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnv
 	case euclorelurpic.CapabilityArchaeologyImplement:
 		add(euclorelurpic.CapabilityArchaeologyCompilePlan)
 		add(euclorelurpic.CapabilityArchaeologyExplore)
-	case euclorelurpic.CapabilityDebugInvestigate:
+	case euclorelurpic.CapabilityDebugInvestigateRepair:
 		if planningCompileIntent(strings.ToLower(strings.TrimSpace(envelope.Instruction))) {
 			add(euclorelurpic.CapabilityArchaeologyCompilePlan)
 		}

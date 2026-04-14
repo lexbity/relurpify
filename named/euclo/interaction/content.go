@@ -212,3 +212,40 @@ type ContextKnowledgeEntry struct {
 	Source          string `json:"source"`                     // "archaeo_topic" | "archaeo_expanded"
 	InsertionAction string `json:"insertion_action,omitempty"` // "direct" | "summarized" | "metadata-only"
 }
+
+// SessionListContent is the typed payload for FrameSessionList frames.
+// The session selection phase emits this to present available sessions.
+type SessionListContent struct {
+	// Sessions is the ordered list of available sessions (most recent first).
+	Sessions []SessionListEntry `json:"sessions"`
+
+	// Workspace is the workspace path sessions are filtered to.
+	Workspace string `json:"workspace,omitempty"`
+
+	// SelectedIndex is set when a session has been selected.
+	SelectedIndex int `json:"selected_index,omitempty"`
+}
+
+// SessionListEntry is a single session in the session list frame.
+type SessionListEntry struct {
+	// Index is the 1-based index for user selection (e.g., "select 2").
+	Index int `json:"index"`
+
+	// WorkflowID is the stable identifier for this session.
+	WorkflowID string `json:"workflow_id"`
+
+	// Instruction is the original task instruction.
+	Instruction string `json:"instruction"`
+
+	// Mode is the last active mode.
+	Mode string `json:"mode,omitempty"`
+
+	// Status is the workflow status.
+	Status string `json:"status"`
+
+	// HasBKCContext indicates BKC warmup is available.
+	HasBKCContext bool `json:"has_bkc_context"`
+
+	// LastActiveAt is when this session was last active.
+	LastActiveAt string `json:"last_active_at,omitempty"`
+}
