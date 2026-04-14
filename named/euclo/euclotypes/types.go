@@ -866,6 +866,20 @@ func DefaultModeRegistry() *ModeRegistry {
 			RecoveryPolicy:              "clarify_scope",
 			ReportingPolicy:             "plan_summary",
 		},
+		{
+			ModeID:                      "chat",
+			IntentFamily:                "conversational",
+			EditPolicy:                  "conditional",
+			EvidencePolicy:              "response_sufficient",
+			VerificationPolicy:          "optional",
+			ReviewPolicy:                "secondary",
+			DefaultExecutionProfiles:    []string{"chat_ask_respond"},
+			FallbackExecutionProfiles:   []string{"edit_verify_repair"},
+			PreferredCapabilityFamilies: []string{"conversational", "analysis", "bounded_implementation"},
+			ContextStrategy:             "targeted",
+			RecoveryPolicy:              "rephrase_or_clarify",
+			ReportingPolicy:             "direct_response",
+		},
 	} {
 		_ = registry.Register(descriptor)
 	}

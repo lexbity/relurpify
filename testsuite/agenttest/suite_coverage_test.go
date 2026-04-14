@@ -262,7 +262,7 @@ func TestSuiteFilesAreLoadable(t *testing.T) {
 
 // TestBKCCasesUseDirectRun verifies that BKC test cases use capability_direct_run.
 func TestBKCCasesUseDirectRun(t *testing.T) {
-	suitePath := filepath.Join("..", "agenttests", "euclo.rapid.bkc.testsuite.yaml")
+	suitePath := filepath.Join("..", "agenttests", "euclo.baseline.bkc.testsuite.yaml")
 
 	if _, err := os.Stat(suitePath); os.IsNotExist(err) {
 		t.Skip("BKC suite not found")

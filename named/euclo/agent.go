@@ -146,6 +146,7 @@ func (a *Agent) DirectCapabilityRun(ctx context.Context, capabilityID, invokingP
 		return &core.Result{Success: false, Error: err}, err
 	}
 	eucloexec.MergeStateArtifactsToContext(state, artifacts)
+	eucloexec.SetBehaviorTrace(state, work, []string{capabilityID})
 	return &core.Result{Success: true}, nil
 }
 

@@ -9,6 +9,7 @@ import (
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
 
+type directEditExecutionRoutine struct{}
 type localReviewRoutine struct{}
 type targetedVerificationRoutine struct{}
 
@@ -16,7 +17,36 @@ func NewSupportingRoutines() []euclorelurpic.SupportingRoutine {
 	return []euclorelurpic.SupportingRoutine{
 		localReviewRoutine{},
 		targetedVerificationRoutine{},
+		directEditExecutionRoutine{},
 	}
+}
+
+func (directEditExecutionRoutine) ID() string { return DirectEditExecution }
+
+func (directEditExecutionRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
+	editTarget := ""
+	if in.State != nil {
+		if raw, ok := in.State.Get("chat.edit_target"); ok && raw != nil {
+			if s, ok := raw.(string); ok {
+				editTarget = strings.TrimSpace(s)
+			}
+		}
+	}
+	payload := map[string]any{
+		"primary_capability_id": in.Work.PrimaryCapabilityID,
+		"routine_source":        DirectEditExecution,
+		"edit_target":           editTarget,
+		"status":                "prepared",
+		"summary":               "direct edit execution routine prepared patch context for chat.implement",
+	}
+	return []euclotypes.Artifact{{
+		ID:         "chat_direct_edit_execution",
+		Kind:       euclotypes.ArtifactKindExecutionStatus,
+		Summary:    "direct edit execution routine prepared patch context for chat.implement",
+		Payload:    payload,
+		ProducerID: DirectEditExecution,
+		Status:     "produced",
+	}}, nil
 }
 
 func (localReviewRoutine) ID() string { return LocalReview }

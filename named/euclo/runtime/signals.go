@@ -95,7 +95,7 @@ func collectKeywordSignals(instruction string) []ClassificationSignal {
 		weight   float64
 	}
 	groups := []keywordGroup{
-		{[]string{"review", "audit", "inspect", "look at", "pr", "pull request", "pull-request", "code review", "lgtm"}, "review", WeightKeywordReview},
+		{[]string{"review", "audit", "inspect", "look at", "pull request", "pull-request", "code review", "lgtm", "compare", "contrast", "evaluate", "examine", "assess", "analyze", "analyse"}, "review", WeightKeywordReview},
 		{[]string{"debug", "diagnose", "root cause", "failing", "failure", "trace"}, "debug", WeightKeyword},
 		{[]string{"plan", "design", "architecture", "approach"}, "planning", WeightKeyword},
 		{[]string{"test first", "tdd", "write tests", "add tests", "make sure it's tested", "ensure it's tested"}, "tdd", WeightKeyword},

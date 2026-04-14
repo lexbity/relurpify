@@ -162,12 +162,9 @@ func TestLoadCanonicalEucloCoverageMatrixSuites(t *testing.T) {
 	}
 }
 
-func TestLoadCanonicalEucloRapidSuites(t *testing.T) {
+func TestLoadCanonicalEucloBaselineBKCSuite(t *testing.T) {
 	for _, path := range []string{
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.rapid.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.rapid.chat.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.rapid.debug.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.rapid.archaeology.testsuite.yaml",
+		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.baseline.bkc.testsuite.yaml",
 	} {
 		if _, err := LoadSuite(path); err != nil {
 			t.Fatalf("LoadSuite(%q): %v", path, err)

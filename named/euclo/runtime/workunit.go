@@ -153,8 +153,11 @@ func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, classification Task
 			return euclorelurpic.CapabilityArchaeologyExplore
 		}
 	case "chat":
-		// Sub-capability selection based on classification signals, not re-scanning text.
-		// If review signals fired, use inspect; otherwise use ask.
+		// Sub-capability selection is signal-based: classification IntentFamilies are the source
+		// of truth. Code intent → implement. Review intent → inspect. Default → ask.
+		if containsIntent(classification.IntentFamilies, "code") {
+			return euclorelurpic.CapabilityChatImplement
+		}
 		if containsIntent(classification.IntentFamilies, "review") {
 			return euclorelurpic.CapabilityChatInspect
 		}
@@ -297,6 +300,7 @@ func planningImplementIntent(lower string) bool {
 		"stage and execute",
 	)
 }
+
 
 func hasAnyPhrase(lower string, phrases ...string) bool {
 	for _, phrase := range phrases {
