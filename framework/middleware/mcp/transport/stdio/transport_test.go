@@ -20,6 +20,7 @@ type stubProcess struct {
 	waitCh    chan error
 	killCount atomic.Int32
 	pid       int
+	killErr   error
 }
 
 func (p *stubProcess) Stdin() io.WriteCloser { return p.stdin }
@@ -32,6 +33,9 @@ func (p *stubProcess) Kill() error {
 	select {
 	case p.waitCh <- context.Canceled:
 	default:
+	}
+	if p.killErr != nil {
+		return p.killErr
 	}
 	return nil
 }
@@ -121,3 +125,138 @@ type nopWriteCloser struct {
 }
 
 func (nopWriteCloser) Close() error { return nil }
+
+func TestTransportNilCases(t *testing.T) {
+	t.Run("nil transport Reader", func(t *testing.T) {
+		var tr *Transport
+		require.Nil(t, tr.Reader())
+	})
+
+	t.Run("nil transport Writer", func(t *testing.T) {
+		var tr *Transport
+		require.Nil(t, tr.Writer())
+	})
+
+	t.Run("nil transport Stderr", func(t *testing.T) {
+		var tr *Transport
+		require.Nil(t, tr.Stderr())
+	})
+
+	t.Run("nil transport PID", func(t *testing.T) {
+		var tr *Transport
+		require.Equal(t, 0, tr.PID())
+	})
+
+	t.Run("nil transport Wait", func(t *testing.T) {
+		var tr *Transport
+		require.NoError(t, tr.Wait())
+	})
+
+	t.Run("nil transport Close", func(t *testing.T) {
+		var tr *Transport
+		require.NoError(t, tr.Close())
+	})
+
+	t.Run("transport with nil process PID", func(t *testing.T) {
+		tr := &Transport{}
+		require.Equal(t, 0, tr.PID())
+	})
+}
+
+func TestTransportStderr(t *testing.T) {
+	process := &stubProcess{
+		stdin:  nopWriteCloser{Writer: io.Discard},
+		stdout: io.NopCloser(strings.NewReader("")),
+		stderr: io.NopCloser(strings.NewReader("error output")),
+		waitCh: make(chan error, 1),
+		pid:    42,
+	}
+	transport, err := Open(context.Background(), stubLauncher{process: process}, Config{Command: "test"})
+	require.NoError(t, err)
+
+	stderr := transport.Stderr()
+	require.NotNil(t, stderr)
+
+	data, err := io.ReadAll(stderr)
+	require.NoError(t, err)
+	require.Equal(t, "error output", string(data))
+}
+
+func TestConfigValidate(t *testing.T) {
+	t.Run("empty command", func(t *testing.T) {
+		cfg := Config{}
+		err := cfg.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "command required")
+	})
+
+	t.Run("whitespace only command", func(t *testing.T) {
+		cfg := Config{Command: "   "}
+		err := cfg.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "command required")
+	})
+
+	t.Run("valid command", func(t *testing.T) {
+		cfg := Config{Command: "echo"}
+		err := cfg.Validate()
+		require.NoError(t, err)
+	})
+
+	t.Run("command with args", func(t *testing.T) {
+		cfg := Config{Command: "/bin/bash", Args: []string{"-c", "echo hello"}}
+		err := cfg.Validate()
+		require.NoError(t, err)
+	})
+}
+
+func TestTransportCloseKillError(t *testing.T) {
+	process := &stubProcess{
+		stdin:   nopWriteCloser{Writer: io.Discard},
+		stdout:  io.NopCloser(strings.NewReader("")),
+		stderr:  io.NopCloser(strings.NewReader("")),
+		waitCh:  make(chan error, 1),
+		pid:     42,
+		killErr: errors.New("kill failed"),
+	}
+
+	launcher := stubLauncher{process: process}
+	transport, err := Open(context.Background(), launcher, Config{Command: "test"})
+	require.NoError(t, err)
+
+	err = transport.Close()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "kill failed")
+}
+
+func TestExecLauncherPolicy(t *testing.T) {
+	t.Run("policy allows command", func(t *testing.T) {
+		policy := sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error {
+			return nil
+		})
+
+		launcher := execLauncher{}
+		_, err := launcher.Launch(context.Background(), Config{
+			Command: "echo",
+			Args:    []string{"hello"},
+			Dir:     "/tmp",
+			Env:     []string{"FOO=bar"},
+			Policy:  policy,
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("policy blocks command", func(t *testing.T) {
+		policyErr := errors.New("command not allowed")
+		policy := sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error {
+			return policyErr
+		})
+
+		launcher := execLauncher{}
+		_, err := launcher.Launch(context.Background(), Config{
+			Command: "echo",
+			Policy:  policy,
+		})
+		require.ErrorIs(t, err, policyErr)
+	})
+}

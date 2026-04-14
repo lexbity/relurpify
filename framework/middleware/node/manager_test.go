@@ -216,3 +216,121 @@ func (c capabilityConnection) Invoke(context.Context, string, map[string]any) (*
 	return &core.CapabilityExecutionResult{Success: true}, nil
 }
 func (c capabilityConnection) Close(context.Context) error { return nil }
+
+func TestManagerRejectPairing(t *testing.T) {
+	store := &memoryNodeStore{}
+	manager := &Manager{Store: store}
+
+	cred, _, err := GenerateCredential("node-1")
+	require.NoError(t, err)
+	code, err := manager.RequestPairing(context.Background(), cred)
+	require.NoError(t, err)
+
+	// Verify pairing exists
+	_, ok, err := manager.PairingStatus(context.Background(), code)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	// Reject the pairing
+	require.NoError(t, manager.RejectPairing(context.Background(), code))
+
+	// Verify pairing removed
+	_, ok, err = manager.PairingStatus(context.Background(), code)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	// Verify credential not saved
+	stored, err := store.GetCredential(context.Background(), "node-1")
+	require.NoError(t, err)
+	require.Nil(t, stored)
+}
+
+func TestManagerRejectPairingNotFound(t *testing.T) {
+	manager := &Manager{}
+	err := manager.RejectPairing(context.Background(), "invalid-code")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestManagerApprovePairingNotFound(t *testing.T) {
+	manager := &Manager{}
+	err := manager.ApprovePairing(context.Background(), "invalid-code")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestManagerInvokeCapabilityNotFound(t *testing.T) {
+	manager := &Manager{}
+	_, err := manager.InvokeCapabilityForTenant(context.Background(), "tenant-1", "unknown-capability", nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not available")
+}
+
+func TestManagerListCapabilitiesEmpty(t *testing.T) {
+	manager := &Manager{}
+	caps := manager.ListCapabilitiesForTenant("tenant-1")
+	require.Empty(t, caps)
+}
+
+func TestManagerListConnectionsEmpty(t *testing.T) {
+	manager := &Manager{}
+	conns := manager.ListConnections()
+	require.Empty(t, conns)
+}
+
+func TestManagerHandleConnectNil(t *testing.T) {
+	manager := &Manager{}
+	err := manager.HandleConnect(context.Background(), nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "connection required")
+}
+
+func TestManagerHandleConnectInvalidNode(t *testing.T) {
+	manager := &Manager{}
+	conn := testConnection{node: core.NodeDescriptor{}} // Empty node - invalid
+	err := manager.HandleConnect(context.Background(), conn)
+	require.Error(t, err)
+}
+
+func TestManagerRequestPairingInvalidCred(t *testing.T) {
+	manager := &Manager{}
+	invalidCred := core.NodeCredential{} // Empty credential - invalid
+	_, err := manager.RequestPairing(context.Background(), invalidCred)
+	require.Error(t, err)
+}
+
+func TestManagerGetConnectionNotFound(t *testing.T) {
+	manager := &Manager{}
+	_, ok := manager.GetConnection("unknown-node")
+	require.False(t, ok)
+}
+
+func TestVerifyChallengeExpired(t *testing.T) {
+	cred, _, err := GenerateCredential("node-1")
+	require.NoError(t, err)
+
+	// Set both times in the past with ExpiresAt before now but after IssuedAt
+	now := time.Now().UTC()
+	cred.IssuedAt = now.Add(-2 * time.Hour)
+	cred.ExpiresAt = now.Add(-time.Hour) // Expired 1 hour ago
+
+	challenge := []byte("test-challenge")
+	sig := []byte("test-signature")
+
+	err = VerifyChallenge(cred, challenge, sig)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expired")
+}
+
+func TestVerifyChallengeEmptyChallenge(t *testing.T) {
+	cred, _, err := GenerateCredential("node-1")
+	require.NoError(t, err)
+
+	err = VerifyChallenge(cred, nil, []byte("sig"))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "challenge required")
+
+	err = VerifyChallenge(cred, []byte{}, []byte("sig"))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "challenge required")
+}

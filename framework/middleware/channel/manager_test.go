@@ -66,3 +66,76 @@ func TestManagerRestart(t *testing.T) {
 	require.Equal(t, 1, adapter.stops)
 	require.True(t, manager.Status()["webchat"].Connected)
 }
+
+func TestManagerRegisterNilAdapter(t *testing.T) {
+	manager := &Manager{sink: eventSinkFunc(func(context.Context, core.FrameworkEvent) error { return nil })}
+	err := manager.Register(nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "adapter required")
+}
+
+func TestManagerRegisterDuplicate(t *testing.T) {
+	manager := &Manager{sink: eventSinkFunc(func(context.Context, core.FrameworkEvent) error { return nil })}
+	adapter := &testAdapter{}
+	require.NoError(t, manager.Register(adapter))
+
+	err := manager.Register(&testAdapter{}) // Same name "webchat"
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already registered")
+}
+
+func TestManagerSendUnregistered(t *testing.T) {
+	manager := &Manager{sink: eventSinkFunc(func(context.Context, core.FrameworkEvent) error { return nil })}
+	err := manager.Send(context.Background(), OutboundMessage{
+		Channel:        "unknown",
+		ConversationID: "conv-1",
+		Content:        MessageContent{Text: "hello"},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not registered")
+}
+
+func TestManagerRestartUnregistered(t *testing.T) {
+	manager := &Manager{sink: eventSinkFunc(func(context.Context, core.FrameworkEvent) error { return nil })}
+	err := manager.Restart(context.Background(), "unknown")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not registered")
+}
+
+func TestManagerStartWithNilConfigs(t *testing.T) {
+	manager := &Manager{sink: eventSinkFunc(func(context.Context, core.FrameworkEvent) error { return nil })}
+	adapter := &testAdapter{}
+	require.NoError(t, manager.Register(adapter))
+	require.NoError(t, manager.Start(context.Background(), nil))
+	require.True(t, adapter.started)
+}
+
+func TestManagerEmpty(t *testing.T) {
+	manager := &Manager{sink: eventSinkFunc(func(context.Context, core.FrameworkEvent) error { return nil })}
+
+	// Empty manager operations should not panic
+	require.NoError(t, manager.Stop(context.Background()))
+	status := manager.Status()
+	require.Empty(t, status)
+}
+
+func TestManagerNilSinkUsesLog(t *testing.T) {
+	manager := NewManager(nil, nil)
+	adapter := &testAdapter{}
+	require.NoError(t, manager.Register(adapter))
+	require.NoError(t, manager.Start(context.Background(), nil))
+	require.True(t, adapter.started)
+}
+
+func TestManagerStatusCopy(t *testing.T) {
+	manager := &Manager{sink: eventSinkFunc(func(context.Context, core.FrameworkEvent) error { return nil })}
+	adapter := &testAdapter{}
+	require.NoError(t, manager.Register(adapter))
+	require.NoError(t, manager.Start(context.Background(), nil))
+
+	status1 := manager.Status()
+	status2 := manager.Status()
+
+	// Should get independent copies
+	require.Equal(t, status1["webchat"], status2["webchat"])
+}
