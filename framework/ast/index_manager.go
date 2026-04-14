@@ -700,6 +700,9 @@ func (im *IndexManager) LastIndexedAt(path string) (time.Time, error) {
 
 // Store exposes the underlying IndexStore for advanced queries.
 func (im *IndexManager) Store() IndexStore {
+	if im == nil {
+		return nil
+	}
 	return im.store
 }
 
