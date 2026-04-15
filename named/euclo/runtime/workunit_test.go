@@ -230,6 +230,22 @@ func TestPrimaryRelurpicCapabilityReviewClassificationRoutesToInspect(t *testing
 	require.Equal(t, "euclo:chat.inspect", got)
 }
 
+func TestPrimaryRelurpicCapabilityComparePromptRoutesToInspect(t *testing.T) {
+	// End-to-end test: "Compare..." prompt should trigger review signal,
+	// resulting in classification with review intent, which routes to chat.inspect.
+	envelope := TaskEnvelope{
+		Instruction:   "Compare the behavior of MemoryStore and an in-memory null store",
+		EditPermitted: false,
+	}
+	// Use actual classification (not mocked) to verify signal detection works
+	classification := ClassifyTask(envelope)
+	mode := ModeResolution{ModeID: "chat"}
+	profile := ExecutionProfileSelection{}
+
+	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	require.Equal(t, "euclo:chat.inspect", got, "Expected chat.inspect for 'compare' prompt, got %s (IntentFamilies: %v)", got, classification.IntentFamilies)
+}
+
 func TestPrimaryRelurpicCapabilityPlanningExplorePromptStaysExplore(t *testing.T) {
 	envelope := TaskEnvelope{
 		Instruction:   "Explore testsuite/fixtures/rapid_arch_pattern and identify the dominant normalization pattern plus any inconsistent implementation. Do not modify files.",

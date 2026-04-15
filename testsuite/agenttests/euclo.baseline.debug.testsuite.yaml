@@ -21,6 +21,9 @@ spec:
       - .gocache/**
       - .gomodcache/**
       - relurpify_cfg/test_runs/**
+    ignore_changes:
+      - relurpify_cfg/logs/skills.log
+      - relurpify_cfg/artifacts/euclo/deferred/**
   models:
     - name: qwen2.5-coder:14b
       endpoint: http://localhost:11434

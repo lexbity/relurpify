@@ -59,6 +59,13 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 
 	envelope, classification, mode, profile, work := a.runtimeState(task, state)
 	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
+
+	// Capability-level classification: static keywords + fallback (Tier 1 and Tier 3 only).
+	// Result stored in state and picked up by NormalizeTaskEnvelope on the second runtimeState pass.
+	if err := a.classifyCapabilityIntent(ctx, task, state); err != nil {
+		return nil, &core.Result{Success: false, Error: err}, err
+	}
+
 	a.ensureDeferralPlan(task, state)
 	a.ensureWorkflowRun(ctx, task, state)
 	if restoreErr := a.restoreExecutionContinuity(ctx, task, state, envelope, work); restoreErr != nil {

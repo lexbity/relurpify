@@ -32,6 +32,15 @@ func TestCollectSignals_KeywordReview(t *testing.T) {
 	assertSignalMode(t, signals, "review", "keyword")
 }
 
+func TestCollectSignals_KeywordCompare(t *testing.T) {
+	env := eucloruntime.TaskEnvelope{
+		Instruction:   "Compare the behavior of MemoryStore and an in-memory null store",
+		EditPermitted: false,
+	}
+	signals := eucloruntime.CollectSignals(env)
+	assertSignalMode(t, signals, "review", "keyword")
+}
+
 func TestCollectSignals_KeywordCode(t *testing.T) {
 	env := eucloruntime.TaskEnvelope{
 		Instruction:   "implement the new cache layer",

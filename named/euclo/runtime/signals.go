@@ -194,6 +194,7 @@ var (
 		{regexp.MustCompile(`(?i)\bpatch this\b`), "patch_this"},
 		{regexp.MustCompile(`(?i)\bfix the bug\b`), "fix_bug"},
 		{regexp.MustCompile(`(?i)\bfix it\b`), "fix_it"},
+		{regexp.MustCompile(`(?i)^Fix [A-Z]\w+`), "fix_named_target"},
 	}
 )
 

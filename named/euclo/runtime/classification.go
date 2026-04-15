@@ -37,6 +37,20 @@ func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capab
 	if state != nil {
 		envelope.ResumedMode = resumedModeFromState(state)
 		envelope.PreviousArtifactKinds = previousArtifactKinds(state)
+		if raw, ok := state.Get("euclo.pre_classified_capability_sequence"); ok {
+			if seq, ok := raw.([]string); ok && len(seq) > 0 {
+				envelope.CapabilitySequence = append([]string(nil), seq...)
+			}
+		}
+		if src := state.GetString("euclo.capability_classification_source"); src != "" {
+			envelope.CapabilityClassificationSource = src
+		}
+		if meta := state.GetString("euclo.capability_classification_meta"); meta != "" {
+			envelope.CapabilityClassificationMeta = meta
+		}
+		if op := state.GetString("euclo.capability_sequence_operator"); op != "" {
+			envelope.CapabilitySequenceOperator = op
+		}
 	}
 	envelope.EditPermitted = envelope.CapabilitySnapshot.HasWriteTools
 	return envelope
@@ -414,7 +428,6 @@ func containsAny(text string, patterns ...string) bool {
 	}
 	return false
 }
-
 
 func containsIntent(intents []string, target string) bool {
 	for _, intent := range intents {

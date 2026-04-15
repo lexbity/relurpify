@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
@@ -88,4 +89,109 @@ func (a *Agent) ensureDeferralPlan(task *core.Task, state *core.Context) {
 		}
 	}
 	a.GuidanceBroker.SetDeferralPlan(a.DeferralPlan)
+}
+
+// classifyCapabilityIntent performs capability-level classification using Tier 1 (static keywords),
+// Tier 2 (LLM semantic), and Tier 3 (fallback). Result is stored in state for
+// NormalizeTaskEnvelope to pick up on the second runtimeState pass.
+func (a *Agent) classifyCapabilityIntent(ctx context.Context, task *core.Task, state *core.Context) error {
+	if state == nil {
+		return nil
+	}
+	// Idempotent: already classified for this invocation.
+	if raw, ok := state.Get("euclo.pre_classified_capability_sequence"); ok && raw != nil {
+		return nil
+	}
+
+	modeID := state.GetString("euclo.mode")
+	if modeID == "" {
+		return nil // mode not yet established; skip gracefully
+	}
+
+	classifier := &eucloruntime.CapabilityIntentClassifier{
+		Registry:      euclorelurpic.DefaultRegistry(),
+		ExtraKeywords: a.capabilityKeywordsFromManifest(),
+		Model:         a.Environment.Model, // Phase 3: Tier 2 enabled when model available
+	}
+
+	instruction := ""
+	if task != nil {
+		instruction = task.Instruction
+	}
+
+	result, err := classifier.Classify(ctx, instruction, modeID)
+	if err != nil {
+		return fmt.Errorf("euclo capability classification: %w", err)
+	}
+
+	state.Set("euclo.pre_classified_capability_sequence", result.Sequence)
+	state.Set("euclo.capability_classification_source", result.Source)
+	state.Set("euclo.capability_classification_meta", result.Meta)
+	state.Set("euclo.capability_sequence_operator", result.Operator)
+	return nil
+}
+
+// capabilityKeywordsFromManifest returns user-configured capability keywords from manifest.
+// Reads from the "euclo" extension in agent.manifest.yaml Extensions field.
+func (a *Agent) capabilityKeywordsFromManifest() map[string][]string {
+	if a == nil || a.Config == nil || a.Config.AgentSpec == nil {
+		return nil
+	}
+
+	extensions := a.Config.AgentSpec.Extensions
+	if len(extensions) == 0 {
+		return nil
+	}
+
+	eucloRaw, ok := extensions[EucloExtensionKey]
+	if !ok || eucloRaw == nil {
+		return nil
+	}
+
+	// Try to parse as EucloManifestExtension
+	ext, err := parseEucloExtension(eucloRaw)
+	if err != nil {
+		// Log error but don't fail - fall back to built-in keywords
+		return nil
+	}
+
+	return capabilityKeywordsFromManifest(ext)
+}
+
+// parseEucloExtension converts raw extension data (from YAML) into EucloManifestExtension.
+// Handles both map[string]any and EucloManifestExtension types.
+func parseEucloExtension(raw any) (*EucloManifestExtension, error) {
+	if raw == nil {
+		return nil, fmt.Errorf("nil euclo extension")
+	}
+
+	// If already the right type, return it
+	if ext, ok := raw.(*EucloManifestExtension); ok {
+		return ext, nil
+	}
+
+	// Try to convert from map[string]any (typical YAML parsing result)
+	if m, ok := raw.(map[string]any); ok {
+		ext := &EucloManifestExtension{
+			CapabilityKeywords: make(map[string][]string),
+		}
+
+		if kwRaw, ok := m["capability_keywords"]; ok && kwRaw != nil {
+			if kwMap, ok := kwRaw.(map[string]any); ok {
+				for capID, wordsRaw := range kwMap {
+					if words, ok := wordsRaw.([]any); ok {
+						for _, w := range words {
+							if s, ok := w.(string); ok {
+								ext.CapabilityKeywords[capID] = append(ext.CapabilityKeywords[capID], s)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return ext, nil
+	}
+
+	return nil, fmt.Errorf("unable to parse euclo extension from type %T", raw)
 }

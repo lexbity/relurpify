@@ -1,7 +1,7 @@
 apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
-  name: euclo.context.baseline
+  name: euclo.baseline.context
   description: "Capability-baseline Euclo context-management coverage for resume and context-pressure flows."
   owner: agent-platform
   tier: stable

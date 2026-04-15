@@ -12,17 +12,21 @@ import (
 // TaskEnvelope is the typed Euclo intake shape used to normalize coding
 // requests before routing deeper into the runtime.
 type TaskEnvelope struct {
-	TaskID                string                        `json:"task_id,omitempty"`
-	Instruction           string                        `json:"instruction,omitempty"`
-	Workspace             string                        `json:"workspace,omitempty"`
-	ModeHint              string                        `json:"mode_hint,omitempty"`
-	ResumedMode           string                        `json:"resumed_mode,omitempty"`
-	ExplicitVerification  string                        `json:"explicit_verification,omitempty"`
-	EditPermitted         bool                          `json:"edit_permitted"`
-	CapabilitySnapshot    euclotypes.CapabilitySnapshot `json:"capability_snapshot"`
-	PreviousArtifactKinds []string                      `json:"previous_artifact_kinds,omitempty"`
-	ResolvedMode          string                        `json:"resolved_mode,omitempty"`
-	ExecutionProfile      string                        `json:"execution_profile,omitempty"`
+	TaskID                         string                        `json:"task_id,omitempty"`
+	Instruction                    string                        `json:"instruction,omitempty"`
+	Workspace                      string                        `json:"workspace,omitempty"`
+	ModeHint                       string                        `json:"mode_hint,omitempty"`
+	ResumedMode                    string                        `json:"resumed_mode,omitempty"`
+	ExplicitVerification           string                        `json:"explicit_verification,omitempty"`
+	EditPermitted                  bool                          `json:"edit_permitted"`
+	CapabilitySnapshot             euclotypes.CapabilitySnapshot `json:"capability_snapshot"`
+	PreviousArtifactKinds          []string                      `json:"previous_artifact_kinds,omitempty"`
+	ResolvedMode                   string                        `json:"resolved_mode,omitempty"`
+	ExecutionProfile               string                        `json:"execution_profile,omitempty"`
+	CapabilitySequence             []string                      `json:"capability_sequence,omitempty"`
+	CapabilitySequenceOperator     string                        `json:"capability_sequence_operator,omitempty"` // "AND" | "OR"
+	CapabilityClassificationSource string                        `json:"capability_classification_source,omitempty"`
+	CapabilityClassificationMeta   string                        `json:"capability_classification_meta,omitempty"`
 }
 
 type TaskClassification struct {
@@ -542,6 +546,9 @@ type UnitOfWork struct {
 	DeferredIssueIDs        []string                  `json:"deferred_issue_ids,omitempty"`
 	CreatedAt               time.Time                 `json:"created_at,omitempty"`
 	UpdatedAt               time.Time                 `json:"updated_at,omitempty"`
+
+	CapabilityExecutionSequence []string `json:"capability_execution_sequence,omitempty"`
+	CapabilitySequenceOperator  string   `json:"capability_sequence_operator,omitempty"`
 }
 
 type ContextLifecycleState struct {

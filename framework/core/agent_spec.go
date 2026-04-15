@@ -39,6 +39,9 @@ type AgentRuntimeSpec struct {
 	ToolCallingIntent   ToolCallingIntent               `yaml:"tool_calling_intent,omitempty" json:"tool_calling_intent,omitempty"`
 	NativeToolCalling   *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
 	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
+	// Extensions holds agent-specific extension configurations.
+	// The "euclo" key contains Euclo-specific configuration (see named/euclo/euclo_manifest_extension.go).
+	Extensions map[string]any `yaml:",inline" json:"extensions,omitempty"`
 }
 
 // ToolCallingIntent captures the agent's preference for how tool calls should

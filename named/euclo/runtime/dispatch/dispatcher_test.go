@@ -141,3 +141,214 @@ func TestExecuteRoutineUnknownReturnsError(t *testing.T) {
 		t.Errorf("expected 'not registered' error, got: %v", err)
 	}
 }
+
+// TestExecuteSequence_AND_SharedState verifies AND sequence executes all steps and accumulates state
+func TestExecuteSequence_AND_SharedState(t *testing.T) {
+	behavior1 := &stubBehavior{id: "cap.test1"}
+	behavior2 := &stubBehavior{id: "cap.test2"}
+	d := &Dispatcher{
+		behaviors: map[string]execution.Behavior{
+			behavior1.id: behavior1,
+			behavior2.id: behavior2,
+		},
+		routines: map[string]euclorelurpic.SupportingRoutine{},
+	}
+
+	state := core.NewContext()
+	result, err := d.Execute(context.Background(), execution.ExecuteInput{
+		Work: runtimepkg.UnitOfWork{
+			CapabilityExecutionSequence: []string{"cap.test1", "cap.test2"},
+			CapabilitySequenceOperator:  "AND",
+		},
+		State: state,
+	})
+
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+
+	// Verify both behaviors were called
+	if behavior1.calls != 1 {
+		t.Errorf("expected behavior1 to be called once, got %d", behavior1.calls)
+	}
+	if behavior2.calls != 1 {
+		t.Errorf("expected behavior2 to be called once, got %d", behavior2.calls)
+	}
+
+	// Verify state was updated with step completion markers
+	if _, ok := state.Get("euclo.sequence_step_1_completed"); !ok {
+		t.Error("expected step 1 completion marker in state")
+	}
+	if _, ok := state.Get("euclo.sequence_step_2_completed"); !ok {
+		t.Error("expected step 2 completion marker in state")
+	}
+}
+
+// TestExecuteSequence_OR_RunsFirstOnly verifies OR sequence executes only the first step
+func TestExecuteSequence_OR_RunsFirstOnly(t *testing.T) {
+	behavior1 := &stubBehavior{id: "cap.test1"}
+	behavior2 := &stubBehavior{id: "cap.test2"}
+	d := &Dispatcher{
+		behaviors: map[string]execution.Behavior{
+			behavior1.id: behavior1,
+			behavior2.id: behavior2,
+		},
+		routines: map[string]euclorelurpic.SupportingRoutine{},
+	}
+
+	state := core.NewContext()
+	result, err := d.Execute(context.Background(), execution.ExecuteInput{
+		Work: runtimepkg.UnitOfWork{
+			CapabilityExecutionSequence: []string{"cap.test1", "cap.test2"},
+			CapabilitySequenceOperator:  "OR",
+		},
+		State: state,
+	})
+
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+
+	// Verify only first behavior was called
+	if behavior1.calls != 1 {
+		t.Errorf("expected behavior1 to be called once, got %d", behavior1.calls)
+	}
+	if behavior2.calls != 0 {
+		t.Errorf("expected behavior2 to NOT be called, got %d", behavior2.calls)
+	}
+
+	// Verify OR selection was recorded in state
+	selected := state.GetString("euclo.or_selected_capability")
+	if selected != "cap.test1" {
+		t.Errorf("expected OR selected capability marker 'cap.test1', got %v", selected)
+	}
+}
+
+// TestExecuteSequence_AND_StopsOnFailure verifies AND sequence aborts on first failure
+func TestExecuteSequence_AND_StopsOnFailure(t *testing.T) {
+	behavior1 := &stubBehavior{id: "cap.test1"}
+	failingBehavior := &stubFailingBehavior{id: "cap.failing"}
+	d := &Dispatcher{
+		behaviors: map[string]execution.Behavior{
+			behavior1.id:       behavior1,
+			failingBehavior.id: failingBehavior,
+		},
+		routines: map[string]euclorelurpic.SupportingRoutine{},
+	}
+
+	state := core.NewContext()
+	_, err := d.Execute(context.Background(), execution.ExecuteInput{
+		Work: runtimepkg.UnitOfWork{
+			CapabilityExecutionSequence: []string{"cap.test1", "cap.failing", "cap.test2"},
+			CapabilitySequenceOperator:  "AND",
+		},
+		State: state,
+	})
+
+	if err == nil {
+		t.Fatal("expected error from failing step, got nil")
+	}
+	if !strings.Contains(err.Error(), "cap.failing") {
+		t.Errorf("expected error to mention failing capability, got: %v", err)
+	}
+
+	// Verify first behavior was called but sequence stopped before step 3
+	if behavior1.calls != 1 {
+		t.Errorf("expected behavior1 to be called once, got %d", behavior1.calls)
+	}
+	if _, ok := state.Get("euclo.sequence_step_1_completed"); !ok {
+		t.Error("expected step 1 completion marker in state")
+	}
+	if _, ok := state.Get("euclo.sequence_step_2_completed"); ok {
+		t.Error("step 2 should NOT have completed marker (it failed)")
+	}
+}
+
+// TestExecuteSequence_SingleElement_CompatPath verifies single element uses existing Execute path
+func TestExecuteSequence_SingleElement_CompatPath(t *testing.T) {
+	behavior := &stubBehavior{id: "cap.single"}
+	d := &Dispatcher{
+		behaviors: map[string]execution.Behavior{behavior.id: behavior},
+		routines:  map[string]euclorelurpic.SupportingRoutine{},
+	}
+
+	result, err := d.Execute(context.Background(), execution.ExecuteInput{
+		Work: runtimepkg.UnitOfWork{
+			CapabilityExecutionSequence: []string{"cap.single"},
+			CapabilitySequenceOperator:  "AND",
+			PrimaryRelurpicCapabilityID: "cap.single",
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if behavior.calls != 1 {
+		t.Errorf("expected behavior to be called once, got %d", behavior.calls)
+	}
+}
+
+// TestExecuteSequence_EmptySequence_ReturnsError verifies empty sequence returns error
+func TestExecuteSequence_EmptySequence_ReturnsError(t *testing.T) {
+	d := &Dispatcher{
+		behaviors: map[string]execution.Behavior{},
+		routines:  map[string]euclorelurpic.SupportingRoutine{},
+	}
+
+	_, err := d.Execute(context.Background(), execution.ExecuteInput{
+		Work: runtimepkg.UnitOfWork{
+			CapabilityExecutionSequence: []string{},
+			CapabilitySequenceOperator:  "AND",
+		},
+	})
+
+	if err == nil {
+		t.Fatal("expected error for empty sequence, got nil")
+	}
+	if !strings.Contains(err.Error(), "no capability ID") {
+		t.Errorf("expected 'no capability ID' error, got: %v", err)
+	}
+}
+
+// TestExecuteSequence_UnknownCapability_ReturnsError verifies unknown capability returns error
+func TestExecuteSequence_UnknownCapability_ReturnsError(t *testing.T) {
+	behavior1 := &stubBehavior{id: "cap.known"}
+	d := &Dispatcher{
+		behaviors: map[string]execution.Behavior{
+			behavior1.id: behavior1,
+		},
+		routines: map[string]euclorelurpic.SupportingRoutine{},
+	}
+
+	_, err := d.Execute(context.Background(), execution.ExecuteInput{
+		Work: runtimepkg.UnitOfWork{
+			CapabilityExecutionSequence: []string{"cap.known", "cap.unknown"},
+			CapabilitySequenceOperator:  "AND",
+		},
+	})
+
+	if err == nil {
+		t.Fatal("expected error for unknown capability, got nil")
+	}
+	if !strings.Contains(err.Error(), "unavailable") {
+		t.Errorf("expected 'unavailable' error, got: %v", err)
+	}
+}
+
+type stubFailingBehavior struct {
+	id string
+}
+
+func (s *stubFailingBehavior) ID() string { return s.id }
+func (s *stubFailingBehavior) Execute(_ context.Context, in execution.ExecuteInput) (*core.Result, error) {
+	return nil, fmt.Errorf("intentional failure for %s", s.id)
+}

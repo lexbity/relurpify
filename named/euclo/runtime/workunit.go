@@ -36,6 +36,17 @@ func BuildUnitOfWork(
 	if primaryCapabilityID == euclorelurpic.CapabilityArchaeologyImplement && (planBinding == nil || !planBinding.IsPlanBacked) {
 		primaryCapabilityID = euclorelurpic.CapabilityArchaeologyCompilePlan
 	}
+
+	// Populate capability sequence from envelope (set by classifier) or default to primary.
+	capSeq := envelope.CapabilitySequence
+	if len(capSeq) == 0 {
+		capSeq = []string{primaryCapabilityID}
+	}
+	capOp := envelope.CapabilitySequenceOperator
+	if capOp == "" {
+		capOp = "AND"
+	}
+
 	supportingCapabilityIDs := supportingRelurpicCapabilitiesForPrimary(primaryCapabilityID, envelope, classification, mode, profile)
 	if executor.ExecutorID == "" {
 		executor = SelectExecutorDescriptor(mode, profile, classification, resolvedPolicy, planBinding, primaryCapabilityID, supportingCapabilityIDs)
@@ -69,6 +80,8 @@ func BuildUnitOfWork(
 		DeferredIssueIDs:                deferredIssueIDsFromState(state),
 		CreatedAt:                       now,
 		UpdatedAt:                       now,
+		CapabilityExecutionSequence:     append([]string(nil), capSeq...),
+		CapabilitySequenceOperator:      capOp,
 	}
 	if existing, ok := existingUnitOfWork(state); ok {
 		if !existing.CreatedAt.IsZero() {
@@ -134,6 +147,10 @@ func BuildUnitOfWork(
 }
 
 func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) string {
+	// If the classifier pre-determined a capability sequence, use the first element.
+	if len(envelope.CapabilitySequence) > 0 {
+		return envelope.CapabilitySequence[0]
+	}
 	lower := strings.ToLower(strings.TrimSpace(envelope.Instruction))
 	switch mode.ModeID {
 	case "planning":
@@ -300,7 +317,6 @@ func planningImplementIntent(lower string) bool {
 		"stage and execute",
 	)
 }
-
 
 func hasAnyPhrase(lower string, phrases ...string) bool {
 	for _, phrase := range phrases {

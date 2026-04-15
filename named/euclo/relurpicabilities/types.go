@@ -1,6 +1,9 @@
 package relurpicabilities
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 const (
 	CapabilityChatAsk                = "euclo:chat.ask"
@@ -56,10 +59,19 @@ type Descriptor struct {
 	TransitionCompatible    []string           `json:"transition_compatible,omitempty"`
 	SupportingCapabilities  []string           `json:"supporting_capabilities,omitempty"`
 	Summary                 string             `json:"summary,omitempty"`
+	Keywords                []string           `json:"keywords,omitempty"` // Tier-1 static match terms; case-insensitive substring
+	DefaultForMode          bool               `json:"default_for_mode"`   // Tier-3 fallback when no other match within ModeFamily
 }
 
 type Registry struct {
 	descriptors map[string]Descriptor
+}
+
+// KeywordMatch represents a capability descriptor that matched keywords in an instruction.
+type KeywordMatch struct {
+	Descriptor
+	MatchCount      int
+	MatchedKeywords []string
 }
 
 func NewRegistry() *Registry {
@@ -79,6 +91,8 @@ func DefaultRegistry() *Registry {
 			ParadigmMix:          []string{"react"},
 			TransitionCompatible: []string{"chat", "debug"},
 			Summary:              "Non-mutating engineering question answering and explanation.",
+			Keywords:             []string{"explain", "what is", "what does", "how does", "describe", "tell me", "walk me through", "help me understand", "what are", "how is"},
+			DefaultForMode:       true,
 		},
 		{
 			ID:                      CapabilityChatImplement,
@@ -95,7 +109,8 @@ func DefaultRegistry() *Registry {
 				CapabilityChatLocalReview,
 				CapabilityChatTargetedVerification,
 			},
-			Summary: "Direct coding and implementation with policy-constrained mutation.",
+			Summary:  "Direct coding and implementation with policy-constrained mutation.",
+			Keywords: []string{"implement", "fix", "refactor", "change", "update", "add", "create", "patch", "rewrite", "make"},
 		},
 		{
 			ID:                   CapabilityChatInspect,
@@ -109,7 +124,9 @@ func DefaultRegistry() *Registry {
 			SupportingCapabilities: []string{
 				CapabilityChatLocalReview,
 			},
-			Summary: "Inspect-first code, state, and tool-output examination.",
+			Summary:  "Inspect-first code, state, and tool-output examination.",
+			Keywords: []string{"compare", "contrast", "inspect", "examine", "evaluate", "assess", "look at", "analyze", "analyse", "review", "surface"},
+			// Note: No DefaultForMode - review mode uses explicit routing in workunit.go
 		},
 		{
 			ID:                   CapabilityArchaeologyExplore,
@@ -130,7 +147,9 @@ func DefaultRegistry() *Registry {
 				CapabilityArchaeologyCoherenceAssess,
 				CapabilityArchaeologyScopeExpand,
 			},
-			Summary: "Archaeo-backed semantic exploration of the codebase and candidate changes.",
+			Summary:        "Archaeo-backed semantic exploration of the codebase and candidate changes.",
+			Keywords:       []string{"explore", "identify patterns", "surface patterns", "find patterns", "inspect the codebase", "scan for", "survey"},
+			DefaultForMode: true,
 		},
 		{
 			ID:                   CapabilityArchaeologyCompilePlan,
@@ -151,7 +170,8 @@ func DefaultRegistry() *Registry {
 				CapabilityArchaeologyCoherenceAssess,
 				CapabilityArchaeologyScopeExpand,
 			},
-			Summary: "Compile a full executable living plan or emit deferred artifacts.",
+			Summary:  "Compile a full executable living plan or emit deferred artifacts.",
+			Keywords: []string{"compile the plan", "create the plan", "generate the plan", "produce the plan", "write the plan", "finalize the plan"},
 		},
 		{
 			ID:                   CapabilityArchaeologyImplement,
@@ -169,7 +189,8 @@ func DefaultRegistry() *Registry {
 				CapabilityArchaeologyConvergenceGuard,
 				CapabilityArchaeologyCoherenceAssess,
 			},
-			Summary: "Execute against a compiled living plan under Euclo's single-plan run guarantees.",
+			Summary:  "Execute against a compiled living plan under Euclo's single-plan run guarantees.",
+			Keywords: []string{"implement the plan", "execute the plan", "carry out", "apply the plan", "execute the compiled plan", "run the plan"},
 		},
 		{
 			ID:                   CapabilityDebugInvestigateRepair,
@@ -187,7 +208,9 @@ func DefaultRegistry() *Registry {
 				CapabilityDebugFlawSurface,
 				CapabilityDebugVerificationRepair,
 			},
-			Summary: "Hypothesis-driven debugging with integrated verification and repair using blackboard architecture.",
+			Summary:        "Hypothesis-driven debugging with integrated verification and repair using blackboard architecture.",
+			Keywords:       []string{"investigate", "root cause", "diagnose", "trace", "identify the", "identify", "localize", "why does", "why is", "what caused", "find the bug", "debug"},
+			DefaultForMode: true,
 		},
 		{
 			ID:                CapabilityBKCCompile,
@@ -396,7 +419,8 @@ func DefaultRegistry() *Registry {
 			SupportingCapabilities: []string{
 				CapabilityDebugFlawSurface,
 			},
-			Summary: "Direct read-patch-verify repair for well-understood or straightforward defects where root cause is already known or obvious from the defect description.",
+			Summary:  "Direct read-patch-verify repair for well-understood or straightforward defects where root cause is already known or obvious from the defect description.",
+			Keywords: []string{"fix this", "fix it", "quick fix", "simple fix", "apply a fix", "patch this", "fix the bug", "correct this", "wrong result", "returns wrong", "subtracts instead", "adds instead", "off by one", "off-by-one"},
 		},
 	} {
 		_ = r.Register(desc)
@@ -462,4 +486,80 @@ func (r *Registry) IDs() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// PrimaryCapabilitiesForMode returns all PrimaryCapable descriptors for modeID, sorted by ID.
+func (r *Registry) PrimaryCapabilitiesForMode(modeID string) []Descriptor {
+	if r == nil {
+		return nil
+	}
+	var out []Descriptor
+	for _, desc := range r.descriptors {
+		if desc.ModeFamily == modeID && desc.PrimaryCapable {
+			out = append(out, desc)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// FallbackCapabilityForMode returns the DefaultForMode descriptor for modeID if any.
+func (r *Registry) FallbackCapabilityForMode(modeID string) (Descriptor, bool) {
+	if r == nil {
+		return Descriptor{}, false
+	}
+	for _, desc := range r.descriptors {
+		if desc.ModeFamily == modeID && desc.DefaultForMode {
+			return desc, true
+		}
+	}
+	return Descriptor{}, false
+}
+
+// MatchByKeywords returns all primary-capable descriptors for modeID where at least
+// one Keyword (or extra keyword) is a case-insensitive substring of instruction.
+// extraKeywords maps capability ID -> additional terms (from manifest config).
+func (r *Registry) MatchByKeywords(instruction, modeID string, extraKeywords map[string][]string) []KeywordMatch {
+	if r == nil {
+		return nil
+	}
+	lowerInst := strings.ToLower(instruction)
+	var matches []KeywordMatch
+
+	for _, desc := range r.descriptors {
+		if !desc.PrimaryCapable || desc.ModeFamily != modeID {
+			continue
+		}
+
+		// Combine built-in and extra keywords
+		allKeywords := append([]string(nil), desc.Keywords...)
+		if extra, ok := extraKeywords[desc.ID]; ok {
+			allKeywords = append(allKeywords, extra...)
+		}
+
+		var matched []string
+		for _, kw := range allKeywords {
+			if strings.Contains(lowerInst, strings.ToLower(kw)) {
+				matched = append(matched, kw)
+			}
+		}
+
+		if len(matched) > 0 {
+			matches = append(matches, KeywordMatch{
+				Descriptor:      desc,
+				MatchCount:      len(matched),
+				MatchedKeywords: matched,
+			})
+		}
+	}
+
+	// Sort by MatchCount descending, then by ID for stability
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].MatchCount != matches[j].MatchCount {
+			return matches[i].MatchCount > matches[j].MatchCount
+		}
+		return matches[i].ID < matches[j].ID
+	})
+
+	return matches
 }
