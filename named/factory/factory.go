@@ -22,6 +22,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/memory"
+	"github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo"
 	"github.com/lexcodex/relurpify/named/rex"
 )
@@ -56,17 +57,25 @@ func instantiateRegisteredNamedAgent(workspace, name string, env ayenitd.Workspa
 // passing to named agent constructors. Fields not present in AgentEnvironment
 // (WorkflowStore, PlanStore, etc.) are left as zero/nil values.
 func envToWorkspace(env agentenv.AgentEnvironment) ayenitd.WorkspaceEnvironment {
-	return ayenitd.WorkspaceEnvironment{
-		Config:       env.Config,
-		Model:        env.Model,
-		Registry:     env.Registry,
-		IndexManager: env.IndexManager,
-		SearchEngine: env.SearchEngine,
-		Memory:       env.Memory,
+	ws := ayenitd.WorkspaceEnvironment{
+		Config:        env.Config,
+		Model:         env.Model,
+		Registry:      env.Registry,
+		IndexManager:  env.IndexManager,
+		SearchEngine:  env.SearchEngine,
+		Memory:        env.Memory,
+		WorkflowStore: env.WorkflowStore,
 		// VerificationPlanner and CompatibilitySurfaceExtractor are different interface
 		// types between agentenv and ayenitd packages — left nil here.
 		// Callers that need these should pass WorkspaceEnvironment directly.
 	}
+	// Type assert PlanStore from any to plan.PlanStore
+	if env.PlanStore != nil {
+		if ps, ok := env.PlanStore.(plan.PlanStore); ok {
+			ws.PlanStore = ps
+		}
+	}
+	return ws
 }
 
 type ToolScope struct {

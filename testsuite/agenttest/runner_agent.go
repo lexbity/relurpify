@@ -174,6 +174,10 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	}
 
 	maxIterations := resolveCaseMaxIterations(opts, c)
+	stores, err := newTestStoreBundle()
+	if err != nil {
+		return nil, nil, fmt.Errorf("test store init: %w", err)
+	}
 	boot, err := bootstrapAgentRuntime(workspace, appruntime.AgentBootstrapOptions{
 		Context:             ctx,
 		AgentID:             agentManifest.Metadata.Name,
@@ -193,6 +197,8 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		MaxIterations:       maxIterations,
 		DebugLLM:            opts.DebugLLM,
 		DebugAgent:          opts.DebugAgent,
+		PlanStore:           stores.PlanStore,
+		WorkflowStore:       stores.WorkflowStore,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -240,6 +246,9 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	env.Memory = mem
 	env.IndexManager = indexManager
 	env.SearchEngine = searchEngine
+	// Wire stores into environment (type assertion for PlanStore since it's any)
+	env.WorkflowStore = stores.WorkflowStore
+	env.PlanStore = stores.PlanStore
 	agent := instantiateAgentByName(workspace, executionAgentName, env)
 	if err := applyCaseControlFlowOverride(agent, c); err != nil {
 		return nil, nil, err

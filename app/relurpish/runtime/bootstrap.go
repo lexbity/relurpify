@@ -148,6 +148,9 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		IndexManager:  boot.Environment.IndexManager,
 		SearchEngine:  boot.Environment.SearchEngine,
 		Memory:        boot.Environment.Memory,
+		// New: thread stores from workspace environment
+		WorkflowStore: boot.Environment.WorkflowStore,
+		PlanStore:     boot.Environment.PlanStore,
 	}
 	if err := agents.RegisterAgentCapabilities(boot.Registry, env); err != nil {
 		return nil, fmt.Errorf("register agent capabilities: %w", err)

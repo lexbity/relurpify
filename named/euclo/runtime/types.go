@@ -27,6 +27,7 @@ type TaskEnvelope struct {
 	CapabilitySequenceOperator     string                        `json:"capability_sequence_operator,omitempty"` // "AND" | "OR"
 	CapabilityClassificationSource string                        `json:"capability_classification_source,omitempty"`
 	CapabilityClassificationMeta   string                        `json:"capability_classification_meta,omitempty"`
+	TaskType                     core.TaskType                 `json:"task_type,omitempty"`
 }
 
 type TaskClassification struct {

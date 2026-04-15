@@ -22,6 +22,11 @@ func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capab
 	}
 	envelope.TaskID = task.ID
 	envelope.Instruction = strings.TrimSpace(task.Instruction)
+	if task.Type != "" {
+		envelope.TaskType = task.Type
+	} else {
+		envelope.TaskType = core.TaskTypeAnalysis
+	}
 	if task.Context != nil {
 		envelope.Workspace = stringValue(task.Context["workspace"])
 		envelope.ModeHint = normalizedModeHint(
@@ -146,7 +151,7 @@ func ClassifyTaskScored(envelope TaskEnvelope) ScoredClassification {
 		Scope:                          "local",
 		RiskLevel:                      "low",
 		ReasonCodes:                    reasons,
-		TaskType:                       core.TaskTypeAnalysis, // Default to analysis, will be overridden if needed
+		TaskType:                       envelope.TaskType,
 	}
 	if classification.MixedIntent {
 		classification.RiskLevel = "medium"

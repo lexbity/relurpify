@@ -75,6 +75,8 @@ spec:
       description: "Chat inspect should remain read-only and surface comparison behavior."
       task_type: analysis
       tags: [baseline, capability-baseline, chat, inspect, level:1]
+      overrides:
+        max_iterations: 24
       setup:
         files:
           - path: testsuite/fixtures/euclo_baseline_chat/store.go

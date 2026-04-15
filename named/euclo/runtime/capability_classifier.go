@@ -50,12 +50,12 @@ func (c *CapabilityIntentClassifier) Classify(
 			}
 			result, err := c.llmSemanticQuery(ctx, instruction, modeID, candidates)
 			if err != nil {
-				return CapabilityClassificationResult{}, err
+				return CapabilityClassificationResult{}, err // hard provider error
 			}
-			// If LLM returned a valid result, use it; otherwise fall through to Tier 3
 			if len(result.Sequence) > 0 {
 				return result, nil
 			}
+			// LLM returned nothing or parse failed — fall through to Tier 3
 		}
 	}
 
@@ -244,11 +244,12 @@ func (c *CapabilityIntentClassifier) llmSemanticQuery(
 
 	resp, err := c.Model.Generate(ctx, prompt, &core.LLMOptions{MaxTokens: 64})
 	if err != nil {
+		// Hard provider error: surface to caller
 		return CapabilityClassificationResult{}, fmt.Errorf("llm classification query failed: %w", err)
 	}
-
 	if resp == nil || resp.Text == "" {
-		return CapabilityClassificationResult{}, fmt.Errorf("llm classification returned empty response")
+		// Empty response: fall through to Tier 3
+		return CapabilityClassificationResult{}, nil
 	}
 
 	// Build valid IDs map for validation
@@ -259,7 +260,10 @@ func (c *CapabilityIntentClassifier) llmSemanticQuery(
 
 	ids, operator, err := parseCapabilitySequenceResponse(resp.Text, validIDs)
 	if err != nil {
-		return CapabilityClassificationResult{}, fmt.Errorf("failed to parse llm response: %w", err)
+		// Parse/unknown-ID error: log and fall through to Tier 3
+		// TODO: replace with structured logger when available
+		_ = fmt.Sprintf("euclo classifier: tier 2 parse error (falling through to tier 3): %v", err)
+		return CapabilityClassificationResult{}, nil
 	}
 
 	// "none" response signals to go to Tier 3

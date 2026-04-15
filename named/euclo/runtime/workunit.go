@@ -399,6 +399,8 @@ func objectiveKindForWork(mode ModeResolution, profile ExecutionProfileSelection
 		return "investigation"
 	case mode.ModeID == "review":
 		return "review"
+	case mode.ModeID == "chat":
+		return "direct_execution"
 	case profile.ProfileID == "test_driven_generation":
 		return "tdd_execution"
 	case classification.RequiresEvidenceBeforeMutation:
@@ -436,12 +438,17 @@ func behaviorFamilyForWork(mode ModeResolution, profile ExecutionProfileSelectio
 	case "plan_stage_execute":
 		return "gap_analysis"
 	case "trace_execute_analyze":
+		// trace_execute_analyze is used for analysis-type debug tasks;
+		// it should drive stale_assumption_detection, not tension_assessment.
+		if mode.ModeID == "debug" {
+			return "stale_assumption_detection"
+		}
 		return "tension_assessment"
 	}
 	if mode.ModeID == "planning" {
 		return "gap_analysis"
 	}
-	if classification.RequiresEvidenceBeforeMutation {
+	if mode.ModeID != "chat" && classification.RequiresEvidenceBeforeMutation {
 		return "stale_assumption_detection"
 	}
 	return "direct_change_execution"
@@ -469,6 +476,8 @@ func deferralPolicyForWork(mode ModeResolution, profile ExecutionProfileSelectio
 	switch {
 	case profile.ProfileID == "plan_stage_execute" || mode.ModeID == "planning":
 		return "continue_with_artifacted_deferrals"
+	case mode.ModeID == "chat":
+		return "defer_when_nonfatal"
 	case classification.RequiresEvidenceBeforeMutation:
 		return "prefer_defer_over_replan"
 	default:

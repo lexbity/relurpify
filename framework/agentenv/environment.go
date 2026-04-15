@@ -78,6 +78,10 @@ type AgentEnvironment struct {
 	CommandPolicy                 sandbox.CommandPolicy
 	VerificationPlanner           VerificationPlanner
 	CompatibilitySurfaceExtractor CompatibilitySurfaceExtractor
+
+	// Storage (optional — nil when running outside full workspace)
+	WorkflowStore memory.WorkflowStateStore
+	PlanStore     any // framework/plan.PlanStore — stored as any to avoid import cycle
 }
 
 // WithRegistry returns a shallow copy with Registry replaced.
@@ -89,5 +93,17 @@ func (e AgentEnvironment) WithRegistry(r *capability.Registry) AgentEnvironment 
 // WithMemory returns a shallow copy with Memory replaced.
 func (e AgentEnvironment) WithMemory(m memory.MemoryStore) AgentEnvironment {
 	e.Memory = m
+	return e
+}
+
+// WithWorkflowStore returns a shallow copy with WorkflowStore replaced.
+func (e AgentEnvironment) WithWorkflowStore(s memory.WorkflowStateStore) AgentEnvironment {
+	e.WorkflowStore = s
+	return e
+}
+
+// WithPlanStore returns a shallow copy with PlanStore replaced.
+func (e AgentEnvironment) WithPlanStore(s any) AgentEnvironment {
+	e.PlanStore = s
 	return e
 }

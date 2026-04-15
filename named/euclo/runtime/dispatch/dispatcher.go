@@ -18,6 +18,47 @@ import (
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
+// behaviorRoutineAdapter wraps an execution.Behavior as a SupportingRoutine,
+// enabling it to be called via ExecuteRoutine (used by capability_direct_run).
+type behaviorRoutineAdapter struct {
+	id       string
+	behavior execution.Behavior
+}
+
+func (a *behaviorRoutineAdapter) ID() string { return a.id }
+
+func (a *behaviorRoutineAdapter) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
+	execInput := execution.ExecuteInput{
+		Task:          in.Task,
+		State:         in.State,
+		Environment:   in.Environment,
+		ServiceBundle: execution.ServiceBundle{},
+	}
+	// Type assert ServiceBundle from the any field
+	if in.ServiceBundle != nil {
+		if sb, ok := in.ServiceBundle.(execution.ServiceBundle); ok {
+			execInput.ServiceBundle = sb
+		}
+	}
+	result, err := a.behavior.Execute(ctx, execInput)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || !result.Success {
+		if result != nil && result.Error != nil {
+			return nil, result.Error
+		}
+		return nil, fmt.Errorf("behavior %q returned unsuccessful result", a.id)
+	}
+	// Extract artifacts from result data if present.
+	if result.Data != nil {
+		if artifacts, ok := result.Data["artifacts"].([]euclotypes.Artifact); ok {
+			return artifacts, nil
+		}
+	}
+	return nil, nil
+}
+
 type Dispatcher struct {
 	env       agentenv.AgentEnvironment
 	behaviors map[string]execution.Behavior
@@ -49,6 +90,18 @@ func NewDispatcher(env agentenv.AgentEnvironment) *Dispatcher {
 	}
 	for _, routine := range append(append(chatbehavior.NewSupportingRoutines(), debugbehavior.NewSupportingRoutines()...), archaeologybehavior.NewSupportingRoutines()...) {
 		d.routines[routine.ID()] = routine
+	}
+	// Register BKC behaviors as routines so capability_direct_run can reach them.
+	bkcBehaviorIDs := []string{
+		euclorelurpic.CapabilityBKCCompile,
+		euclorelurpic.CapabilityBKCStream,
+		euclorelurpic.CapabilityBKCCheckpoint,
+		euclorelurpic.CapabilityBKCInvalidate,
+	}
+	for _, id := range bkcBehaviorIDs {
+		if b, ok := d.behaviors[id]; ok {
+			d.routines[id] = &behaviorRoutineAdapter{id: id, behavior: b}
+		}
 	}
 	return d
 }
