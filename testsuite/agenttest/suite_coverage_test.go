@@ -60,20 +60,21 @@ func TestAllRegisteredCapabilitiesHaveTestCases(t *testing.T) {
 				coveredCapabilities[c.CapabilityDirectRun.CapabilityID] = true
 			}
 
-			// Check euclo expectations
-			if c.Expect.Euclo != nil {
+			// Phase 8: Updated to use Benchmark.Euclo
+			if c.Expect.Benchmark != nil && c.Expect.Benchmark.Euclo != nil {
+				euclo := c.Expect.Benchmark.Euclo
 				// Primary capability
-				if c.Expect.Euclo.PrimaryRelurpicCapability != "" {
-					coveredCapabilities[c.Expect.Euclo.PrimaryRelurpicCapability] = true
+				if euclo.PrimaryRelurpicCapability != "" {
+					coveredCapabilities[euclo.PrimaryRelurpicCapability] = true
 				}
 
 				// Supporting capabilities
-				for _, supp := range c.Expect.Euclo.SupportingRelurpicCapabilities {
+				for _, supp := range euclo.SupportingRelurpicCapabilities {
 					coveredCapabilities[supp] = true
 				}
 
 				// Specialized capabilities
-				for _, spec := range c.Expect.Euclo.SpecializedCapabilityIDs {
+				for _, spec := range euclo.SpecializedCapabilityIDs {
 					coveredCapabilities[spec] = true
 				}
 			}
@@ -138,8 +139,10 @@ func TestPrimaryCapabilitiesHaveDedicatedCases(t *testing.T) {
 		}
 
 		for _, c := range suite.Spec.Cases {
-			if c.Expect.Euclo != nil && c.Expect.Euclo.PrimaryRelurpicCapability != "" {
-				primaryCases[c.Expect.Euclo.PrimaryRelurpicCapability] = true
+			// Phase 8: Updated to use Benchmark.Euclo
+			if c.Expect.Benchmark != nil && c.Expect.Benchmark.Euclo != nil &&
+				c.Expect.Benchmark.Euclo.PrimaryRelurpicCapability != "" {
+				primaryCases[c.Expect.Benchmark.Euclo.PrimaryRelurpicCapability] = true
 			}
 
 			// capability_direct_run without invoking_primary counts as primary

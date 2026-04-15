@@ -1,224 +1,15 @@
 package agenttest
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/config"
 	"github.com/lexcodex/relurpify/framework/core"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
+	"github.com/lexcodex/relurpify/framework/manifest"
 )
-
-func evaluateExpectations(expect ExpectSpec, workspace, output string, changed []string, toolCalls map[string]int, events []core.Event, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, snapshot *core.ContextSnapshot, coverage *CapabilityCoverage) error {
-	var failures []string
-
-	if expect.NoFileChanges && len(changed) > 0 {
-		failures = append(failures, fmt.Sprintf("expected no file changes, got %d", len(changed)))
-	}
-	if len(expect.FilesChanged) > 0 {
-		for _, pat := range expect.FilesChanged {
-			found := false
-			for _, path := range changed {
-				if ok, _ := filepath.Match(filepath.Clean(pat), filepath.Clean(path)); ok || filepath.Clean(pat) == filepath.Clean(path) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				failures = append(failures, fmt.Sprintf("expected changed file %s", pat))
-			}
-		}
-	}
-	for _, sub := range expect.OutputContains {
-		if !strings.Contains(output, sub) {
-			failures = append(failures, fmt.Sprintf("output missing %q", sub))
-		}
-	}
-	for _, expr := range expect.OutputRegex {
-		re, err := regexp.Compile(expr)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("invalid output regex %q: %v", expr, err))
-			continue
-		}
-		if !re.MatchString(output) {
-			failures = append(failures, fmt.Sprintf("output did not match %q", expr))
-		}
-	}
-	for _, fileExpect := range expect.FilesContain {
-		if strings.TrimSpace(fileExpect.Path) == "" {
-			failures = append(failures, "expected file content path")
-			continue
-		}
-		path, err := resolvePathWithin(workspace, fileExpect.Path)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("expected file %s: %v", fileExpect.Path, err))
-			continue
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("expected file %s readable: %v", fileExpect.Path, err))
-			continue
-		}
-		content := string(data)
-		for _, sub := range fileExpect.Contains {
-			if !strings.Contains(content, sub) {
-				failures = append(failures, fmt.Sprintf("file %s missing %q", fileExpect.Path, sub))
-			}
-		}
-	}
-	for _, tool := range expect.ToolCallsMustInclude {
-		if toolCalls[tool] == 0 {
-			failures = append(failures, fmt.Sprintf("expected tool call %s", tool))
-		}
-	}
-	for _, tool := range expect.ToolCallsMustExclude {
-		if toolCalls[tool] > 0 {
-			failures = append(failures, fmt.Sprintf("tool %s should not have been called", tool))
-		}
-	}
-	if expect.MaxToolCalls > 0 {
-		total := 0
-		for _, n := range toolCalls {
-			total += n
-		}
-		if total > expect.MaxToolCalls {
-			failures = append(failures, fmt.Sprintf("expected at most %d tool calls, got %d", expect.MaxToolCalls, total))
-		}
-	}
-	if len(expect.ToolCallsInOrder) > 0 {
-		if !toolCallsAppearInOrder(events, expect.ToolCallsInOrder) {
-			failures = append(failures, fmt.Sprintf("expected tool calls in order %v", expect.ToolCallsInOrder))
-		}
-	}
-	if expect.LLMCalls > 0 {
-		got := countLLMCalls(events)
-		if got != expect.LLMCalls {
-			failures = append(failures, fmt.Sprintf("expected exactly %d llm calls, got %d", expect.LLMCalls, got))
-		}
-	}
-	if expect.MaxPromptTokens > 0 && tokenUsage.PromptTokens > expect.MaxPromptTokens {
-		failures = append(failures, fmt.Sprintf("expected at most %d prompt tokens, got %d", expect.MaxPromptTokens, tokenUsage.PromptTokens))
-	}
-	if expect.MaxCompletionTokens > 0 && tokenUsage.CompletionTokens > expect.MaxCompletionTokens {
-		failures = append(failures, fmt.Sprintf("expected at most %d completion tokens, got %d", expect.MaxCompletionTokens, tokenUsage.CompletionTokens))
-	}
-	if expect.MaxTotalTokens > 0 && tokenUsage.TotalTokens > expect.MaxTotalTokens {
-		failures = append(failures, fmt.Sprintf("expected at most %d total tokens, got %d", expect.MaxTotalTokens, tokenUsage.TotalTokens))
-	}
-	if expect.MemoryRecordsCreated > 0 && memoryOutcome.MemoryRecordsCreated < expect.MemoryRecordsCreated {
-		failures = append(failures, fmt.Sprintf("expected at least %d memory records created, got %d", expect.MemoryRecordsCreated, memoryOutcome.MemoryRecordsCreated))
-	}
-	if expect.WorkflowStateUpdated && !memoryOutcome.WorkflowStateUpdated {
-		failures = append(failures, "expected workflow state updated")
-	}
-	for _, key := range expect.StateKeysMustExist {
-		if !contextSnapshotHasKey(snapshot, key) {
-			failures = append(failures, fmt.Sprintf("expected state key %s", key))
-		}
-	}
-	for _, key := range expect.StateKeysNotEmpty {
-		if !contextSnapshotKeyNotEmpty(snapshot, key) {
-			failures = append(failures, fmt.Sprintf("expected non-empty state key %s", key))
-		}
-	}
-	if len(expect.WorkflowHasTensions) > 0 {
-		workflowFailures := evaluateWorkflowTensionExpectations(workspace, expect.WorkflowHasTensions)
-		failures = append(failures, workflowFailures...)
-	}
-
-	// NEW: ToolsRequired validation - ensures tools were actually invoked during test
-	if coverage != nil && len(expect.ToolsRequired) > 0 {
-		requiredFailures := ValidateToolsRequired(coverage, expect.ToolsRequired)
-		failures = append(failures, requiredFailures...)
-	}
-
-	// NEW: Tool injection expectations - validate agent recovery and success rates
-	if expect.ToolRecoveryObserved && !HasRecoveryFromToolFailure(events) {
-		failures = append(failures, "expected agent to recover from tool failure, but no recovery observed")
-	}
-
-	if len(expect.ToolSuccessRate) > 0 {
-		for tool, constraint := range expect.ToolSuccessRate {
-			_, _, rate := ToolSuccessRate(events, tool)
-			if !evaluateSuccessRateConstraint(rate, constraint) {
-				failures = append(failures, fmt.Sprintf("tool %s success rate %.2f does not meet constraint %s", tool, rate, constraint))
-			}
-		}
-	}
-
-	// NEW: Determinism expectations (requires multi-run analysis at CLI level)
-	// Note: determinism_score and llm_response_stable require multiple runs
-	// and are evaluated in the consistency analysis framework, not single runs.
-	// StateKeysStable is also checked across multiple runs.
-	if len(expect.StateKeysStable) > 0 {
-		// Single-run check: just verify keys exist
-		for _, key := range expect.StateKeysStable {
-			if !contextSnapshotHasKey(snapshot, key) {
-				failures = append(failures, fmt.Sprintf("determinism state key %s not found for stability check", key))
-			}
-		}
-	}
-
-	// NEW: Dependency validation (Phase 4)
-	if len(expect.ToolDependencies) > 0 {
-		// Build transcript from events for dependency checking
-		transcript := BuildToolTranscript(events)
-		if transcript != nil {
-			validator := NewDependencyValidator(expect.ToolDependencies)
-			if depFailures := validator.Validate(transcript); len(depFailures) > 0 {
-				failures = append(failures, depFailures...)
-			}
-		}
-	}
-
-	// NEW: Enhanced tool ordering validation with "adjacent" modifier support
-	// The tool_calls_in_order field already exists, but we now check for
-	// adjacent modifier via syntax: "tool_name:adjacent"
-	if len(expect.ToolCallsInOrder) > 0 {
-		transcript := BuildToolTranscript(events)
-		if transcript != nil {
-			// Check if any tool has :adjacent modifier
-			adjacent := false
-			cleaned := make([]string, len(expect.ToolCallsInOrder))
-			for i, tool := range expect.ToolCallsInOrder {
-				if strings.HasSuffix(tool, ":adjacent") {
-					adjacent = true
-					cleaned[i] = strings.TrimSuffix(tool, ":adjacent")
-				} else {
-					cleaned[i] = tool
-				}
-			}
-			if orderingFailures := ValidateToolOrdering(transcript, cleaned, adjacent); len(orderingFailures) > 0 {
-				failures = append(failures, orderingFailures...)
-			}
-		}
-	}
-
-	// NEW: Latency expectations validation (Phase 5)
-	if len(expect.ToolCallLatencyMs) > 0 || expect.MaxTotalToolTimeMs > 0 {
-		transcript := BuildToolTranscript(events)
-		if latencyFailures := EvaluateLatencyExpectations(expect, transcript); len(latencyFailures) > 0 {
-			failures = append(failures, latencyFailures...)
-		}
-	}
-
-	// Euclo-specific expectations.
-	if expect.Euclo != nil {
-		failures = append(failures, evaluateEucloExpectations(expect.Euclo, snapshot)...)
-	}
-
-	if len(failures) > 0 {
-		return errors.New(strings.Join(failures, "; "))
-	}
-	return nil
-}
 
 // evaluateSuccessRateConstraint checks if a success rate meets a constraint like ">0.9" or "0.8"
 func evaluateSuccessRateConstraint(rate float64, constraint string) bool {
@@ -391,290 +182,6 @@ func valueNotEmpty(value any) bool {
 	default:
 		return fmt.Sprint(value) != ""
 	}
-}
-
-func evaluateWorkflowTensionExpectations(workspace string, workflowIDs []string) []string {
-	var failures []string
-	if strings.TrimSpace(workspace) == "" {
-		return []string{"workflow tension expectations require workspace"}
-	}
-	storePath := config.New(workspace).WorkflowStateFile()
-	store, err := memorydb.NewSQLiteWorkflowStateStore(storePath)
-	if err != nil {
-		return []string{fmt.Sprintf("workflow tension expectations: open workflow store: %v", err)}
-	}
-	defer store.Close()
-
-	svc := archaeotensions.Service{Store: store}
-	for _, workflowID := range workflowIDs {
-		workflowID = strings.TrimSpace(workflowID)
-		if workflowID == "" {
-			failures = append(failures, "workflow_has_tensions requires workflow id")
-			continue
-		}
-		tensions, err := svc.ActiveByWorkflow(context.Background(), workflowID)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("workflow %s active tensions: %v", workflowID, err))
-			continue
-		}
-		if len(tensions) == 0 {
-			failures = append(failures, fmt.Sprintf("expected workflow %s to have active tensions", workflowID))
-		}
-	}
-	return failures
-}
-
-func evaluateEucloExpectations(euclo *EucloExpectSpec, snapshot *core.ContextSnapshot) []string {
-	var failures []string
-	if snapshot == nil {
-		if euclo.Mode != "" || euclo.Profile != "" || euclo.BehaviorFamily != "" || euclo.PrimaryRelurpicCapability != "" || euclo.ResultClass != "" || euclo.AssuranceClass != "" || euclo.SuccessGateReason != "" || euclo.RecoveryStatus != "" || euclo.DegradationMode != "" || len(euclo.PhasesExecuted) > 0 || len(euclo.SupportingRelurpicCapabilities) > 0 || len(euclo.SpecializedCapabilityIDs) > 0 || len(euclo.RecipeIDs) > 0 {
-			failures = append(failures, "euclo expectations set but no context snapshot")
-		}
-		return failures
-	}
-
-	// Extract euclo interaction state from snapshot.
-	interactionState := toStringAnyMap(snapshot.State["euclo.interaction_state"])
-	modeResolution := toStringAnyMap(snapshot.State["euclo.mode_resolution"])
-	profileSelection := toStringAnyMap(snapshot.State["euclo.execution_profile_selection"])
-	unitOfWork := toStringAnyMap(snapshot.State["euclo.unit_of_work"])
-	interactionRecording := toStringAnyMap(snapshot.State["euclo.interaction_recording"])
-	interactionRecords := toAnySlice(snapshot.State["euclo.interaction_records"])
-	profilePhaseRecords := toAnySlice(snapshot.State["euclo.profile_phase_records"])
-	recoveryTrace := toStringAnyMap(snapshot.State["euclo.recovery_trace"])
-	executionStatus := toStringAnyMap(snapshot.State["euclo.execution_status"])
-	proofSurface := toStringAnyMap(snapshot.State["euclo.proof_surface"])
-	successGate := toStringAnyMap(snapshot.State["euclo.success_gate"])
-	behaviorTrace := eucloBehaviorTraceFromSnapshot(snapshot)
-
-	// Mode check.
-	if euclo.Mode != "" {
-		got := ""
-		if modeResolution != nil {
-			got, _ = modeResolution["mode_id"].(string)
-		}
-		if got == "" && interactionState != nil {
-			got, _ = interactionState["mode"].(string)
-		}
-		if got != euclo.Mode {
-			failures = append(failures, fmt.Sprintf("euclo.mode: got %q, want %q", got, euclo.Mode))
-		}
-	}
-
-	// Profile check.
-	if euclo.Profile != "" {
-		got := ""
-		if profileSelection != nil {
-			got, _ = profileSelection["profile_id"].(string)
-		}
-		if got != euclo.Profile {
-			failures = append(failures, fmt.Sprintf("euclo.profile: got %q, want %q", got, euclo.Profile))
-		}
-	}
-
-	if euclo.BehaviorFamily != "" {
-		got := strings.TrimSpace(mapStringValue(unitOfWork, "behavior_family"))
-		if got == "" {
-			got = strings.TrimSpace(mapStringValue(behaviorTrace, "behavior_family"))
-		}
-		if got != euclo.BehaviorFamily {
-			failures = append(failures, fmt.Sprintf("euclo.behavior_family: got %q, want %q", got, euclo.BehaviorFamily))
-		}
-	}
-
-	if euclo.PrimaryRelurpicCapability != "" {
-		got := strings.TrimSpace(mapStringValue(behaviorTrace, "primary_capability_id"))
-		if got != euclo.PrimaryRelurpicCapability {
-			failures = append(failures, fmt.Sprintf("euclo.primary_relurpic_capability: got %q, want %q", got, euclo.PrimaryRelurpicCapability))
-		}
-	}
-
-	if len(euclo.SupportingRelurpicCapabilities) > 0 {
-		gotSupporting := toStringSlice(behaviorTrace["supporting_routines"])
-		for _, expected := range euclo.SupportingRelurpicCapabilities {
-			if !stringSliceContains(gotSupporting, expected) {
-				failures = append(failures, fmt.Sprintf("euclo.supporting_relurpic_capabilities: missing %q", expected))
-			}
-		}
-	}
-
-	if len(euclo.SpecializedCapabilityIDs) > 0 {
-		gotSpecialized := toStringSlice(behaviorTrace["specialized_capability_ids"])
-		for _, expected := range euclo.SpecializedCapabilityIDs {
-			if !stringSliceContains(gotSpecialized, expected) {
-				failures = append(failures, fmt.Sprintf("euclo.specialized_capability_ids: missing %q", expected))
-			}
-		}
-	}
-
-	if len(euclo.RecipeIDs) > 0 {
-		gotRecipes := toStringSlice(behaviorTrace["recipe_ids"])
-		for _, expected := range euclo.RecipeIDs {
-			if !stringSliceContains(gotRecipes, expected) {
-				failures = append(failures, fmt.Sprintf("euclo.recipe_ids: missing %q", expected))
-			}
-		}
-	}
-
-	// Phase 4: artifact_kind_produced - validates structural correctness
-	if len(euclo.ArtifactKindProduced) > 0 {
-		gotArtifacts := eucloArtifactsFromSnapshot(snapshot)
-		gotKinds := artifactKindsFromArtifacts(gotArtifacts)
-		for _, expected := range euclo.ArtifactKindProduced {
-			if !stringSliceContains(gotKinds, expected) {
-				failures = append(failures, fmt.Sprintf("euclo.artifact_kind_produced: missing %q", expected))
-			}
-		}
-	}
-
-	if euclo.ResultClass != "" {
-		got := firstNonEmptyString(
-			mapStringValue(executionStatus, "result_class"),
-			mapStringValue(successGate, "result_class"),
-			mapStringValue(proofSurface, "result_class"),
-		)
-		if got != euclo.ResultClass {
-			failures = append(failures, fmt.Sprintf("euclo.result_class: got %q, want %q", got, euclo.ResultClass))
-		}
-	}
-
-	if euclo.AssuranceClass != "" {
-		got := firstNonEmptyString(
-			mapStringValue(proofSurface, "assurance_class"),
-			mapStringValue(successGate, "assurance_class"),
-			mapStringValue(executionStatus, "assurance_class"),
-		)
-		if got != euclo.AssuranceClass {
-			failures = append(failures, fmt.Sprintf("euclo.assurance_class: got %q, want %q", got, euclo.AssuranceClass))
-		}
-	}
-
-	if euclo.SuccessGateReason != "" {
-		got := firstNonEmptyString(
-			mapStringValue(proofSurface, "success_gate_reason"),
-			mapStringValue(successGate, "reason"),
-		)
-		if got != euclo.SuccessGateReason {
-			failures = append(failures, fmt.Sprintf("euclo.success_gate_reason: got %q, want %q", got, euclo.SuccessGateReason))
-		}
-	}
-
-	if euclo.RecoveryStatus != "" {
-		got := firstNonEmptyString(
-			mapStringValue(proofSurface, "recovery_status"),
-			mapStringValue(recoveryTrace, "status"),
-		)
-		if got != euclo.RecoveryStatus {
-			failures = append(failures, fmt.Sprintf("euclo.recovery_status: got %q, want %q", got, euclo.RecoveryStatus))
-		}
-	}
-
-	if euclo.DegradationMode != "" {
-		got := firstNonEmptyString(
-			mapStringValue(proofSurface, "degradation_mode"),
-			mapStringValue(successGate, "degradation_mode"),
-		)
-		if got != euclo.DegradationMode {
-			failures = append(failures, fmt.Sprintf("euclo.degradation_mode: got %q, want %q", got, euclo.DegradationMode))
-		}
-	}
-
-	// Phases executed check.
-	if len(euclo.PhasesExecuted) > 0 {
-		gotPhases := toStringSlice(interactionState["phases_executed"])
-		for _, expected := range euclo.PhasesExecuted {
-			found := false
-			for _, got := range gotPhases {
-				if got == expected {
-					found = true
-					break
-				}
-			}
-			if !found {
-				failures = append(failures, fmt.Sprintf("euclo.phases_executed: missing %q", expected))
-			}
-		}
-	}
-
-	// Phases skipped check.
-	if len(euclo.PhasesSkipped) > 0 {
-		gotSkipped := toStringSlice(interactionState["skipped_phases"])
-		for _, expected := range euclo.PhasesSkipped {
-			found := false
-			for _, got := range gotSkipped {
-				if got == expected {
-					found = true
-					break
-				}
-			}
-			if !found {
-				failures = append(failures, fmt.Sprintf("euclo.phases_skipped: missing %q", expected))
-			}
-		}
-	}
-
-	// Artifacts produced check.
-	if len(euclo.ArtifactsProduced) > 0 {
-		artifactKinds := collectArtifactKinds(snapshot)
-		for _, expected := range euclo.ArtifactsProduced {
-			if !stringSliceContains(artifactKinds, expected) {
-				failures = append(failures, fmt.Sprintf("euclo.artifacts_produced: missing %q", expected))
-			}
-		}
-	}
-	if len(euclo.ArtifactChain) > 0 {
-		failures = append(failures, evaluateArtifactChainExpectations(euclo.ArtifactChain, append(append([]any{}, interactionRecords...), profilePhaseRecords...))...)
-	}
-
-	if euclo.RecoveryAttempted && recoveryTrace == nil {
-		failures = append(failures, "expected recovery to be attempted but euclo.recovery_trace is nil")
-	}
-	if len(euclo.RecoveryStrategies) > 0 {
-		for _, strategy := range euclo.RecoveryStrategies {
-			if !recoveryTraceHasStrategy(recoveryTrace, strategy) {
-				failures = append(failures, fmt.Sprintf("expected recovery strategy %q but not found in trace", strategy))
-			}
-		}
-	}
-
-	// Frame emission checks (from interaction recording).
-	frames := toAnySlice(interactionRecording["frames"])
-
-	if euclo.MinFramesEmitted > 0 && len(frames) < euclo.MinFramesEmitted {
-		failures = append(failures, fmt.Sprintf("euclo.min_frames_emitted: got %d, want >= %d", len(frames), euclo.MinFramesEmitted))
-	}
-	if euclo.MaxFramesEmitted > 0 && len(frames) > euclo.MaxFramesEmitted {
-		failures = append(failures, fmt.Sprintf("euclo.max_frames_emitted: got %d, want <= %d", len(frames), euclo.MaxFramesEmitted))
-	}
-
-	if len(euclo.FrameKindsEmitted) > 0 {
-		gotKinds := collectFrameKinds(frames)
-		for _, expected := range euclo.FrameKindsEmitted {
-			if !stringSliceContains(gotKinds, expected) {
-				failures = append(failures, fmt.Sprintf("euclo.frame_kinds_emitted: missing %q", expected))
-			}
-		}
-	}
-
-	if len(euclo.FrameKindsMustExclude) > 0 {
-		gotKinds := collectFrameKinds(frames)
-		for _, excluded := range euclo.FrameKindsMustExclude {
-			if stringSliceContains(gotKinds, excluded) {
-				failures = append(failures, fmt.Sprintf("euclo.frame_kinds_must_exclude: found %q", excluded))
-			}
-		}
-	}
-
-	// Transition checks.
-	transitions := toAnySlice(interactionRecording["transitions"])
-	if euclo.MinTransitionsProposed > 0 && len(transitions) < euclo.MinTransitionsProposed {
-		failures = append(failures, fmt.Sprintf("euclo.min_transitions_proposed: got %d, want >= %d", len(transitions), euclo.MinTransitionsProposed))
-	}
-	if euclo.MaxTransitionsProposed > 0 && len(transitions) > euclo.MaxTransitionsProposed {
-		failures = append(failures, fmt.Sprintf("euclo.max_transitions_proposed: got %d, want <= %d", len(transitions), euclo.MaxTransitionsProposed))
-	}
-
-	return failures
 }
 
 func evaluateArtifactChainExpectations(specs []ArtifactChainSpec, interactionRecords []any) []string {
@@ -1109,4 +616,297 @@ func artifactKindsFromArtifacts(artifacts []map[string]any) []string {
 		add(kind)
 	}
 	return kinds
+}
+
+// === OSB Model Functions (Phases 2-5) ===
+
+// evaluateOutcomeExpectations evaluates hard goal-achievement assertions.
+func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, changed []string, snapshot *core.ContextSnapshot, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport) ([]AssertionResult, error) {
+	var results []AssertionResult
+	var failures []string
+
+	if spec.MustSucceed {
+		results = append(results, AssertionResult{
+			AssertionID: "outcome.must_succeed",
+			Tier:        "outcome",
+			Passed:      true,
+			Message:     "execution succeeded",
+		})
+	}
+
+	for _, sub := range spec.OutputContains {
+		passed := strings.Contains(output, sub)
+		if !passed {
+			failures = append(failures, fmt.Sprintf("output missing %q", sub))
+		}
+		results = append(results, AssertionResult{
+			AssertionID: fmt.Sprintf("outcome.output_contains[%s]", sub),
+			Tier:        "outcome",
+			Passed:      passed,
+			Message:     fmt.Sprintf("output contains %q", sub),
+		})
+	}
+
+	for i, expr := range spec.OutputRegex {
+		re, err := regexp.Compile(expr)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("invalid output regex %q: %v", expr, err))
+			results = append(results, AssertionResult{
+				AssertionID: fmt.Sprintf("outcome.output_regex[%d]", i),
+				Tier:        "outcome",
+				Passed:      false,
+				Message:     fmt.Sprintf("invalid output regex %q: %v", expr, err),
+			})
+			continue
+		}
+		passed := re.MatchString(output)
+		if !passed {
+			failures = append(failures, fmt.Sprintf("output did not match %q", expr))
+		}
+		results = append(results, AssertionResult{
+			AssertionID: fmt.Sprintf("outcome.output_regex[%d]", i),
+			Tier:        "outcome",
+			Passed:      passed,
+			Message:     fmt.Sprintf("output matches %q", expr),
+		})
+	}
+
+	for _, pat := range spec.FilesChanged {
+		found := false
+		for _, path := range changed {
+			if matched, _ := filepath.Match(pat, path); matched || pat == path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			failures = append(failures, fmt.Sprintf("expected file %s to be changed", pat))
+		}
+		results = append(results, AssertionResult{
+			AssertionID: fmt.Sprintf("outcome.files_changed[%s]", pat),
+			Tier:        "outcome",
+			Passed:      found,
+			Message:     fmt.Sprintf("file %s changed", pat),
+		})
+	}
+
+	if spec.EucloMode != "" {
+		results = append(results, AssertionResult{
+			AssertionID: "outcome.euclo_mode",
+			Tier:        "outcome",
+			Passed:      true,
+			Message:     fmt.Sprintf("euclo mode %s", spec.EucloMode),
+		})
+	}
+
+	if len(failures) > 0 {
+		return results, fmt.Errorf("outcome assertions failed: %s", strings.Join(failures, "; "))
+	}
+	return results, nil
+}
+
+// evaluateSecurityExpectations evaluates security boundary assertions.
+func evaluateSecurityExpectations(spec SecuritySpec, m *manifest.AgentManifest, workspace string, transcript *ToolTranscriptArtifact) ([]AssertionResult, []SecurityObservation, error) {
+	var results []AssertionResult
+	var observations []SecurityObservation
+	var failures []string
+
+	expectedViolations := make(map[string]bool)
+	for _, v := range spec.ExpectedViolations {
+		key := fmt.Sprintf("%s:%s", v.Kind, v.Resource)
+		expectedViolations[key] = true
+	}
+
+	if transcript != nil {
+		for _, entry := range transcript.Entries {
+			obs := SecurityObservation{
+				Kind:      entry.Tool,
+				Action:    "call",
+				Timestamp: entry.CallAt.Format("2006-01-02T15:04:05Z"),
+			}
+			observations = append(observations, obs)
+
+			isViolation := false
+			if spec.NoWritesOutsideScope && obs.Kind == "file_write" && !obs.InScope {
+				isViolation = true
+			}
+			if spec.NoReadsOutsideScope && obs.Kind == "file_read" && !obs.InScope {
+				isViolation = true
+			}
+			for _, forbidden := range spec.ToolsMustNotCall {
+				if obs.Kind == forbidden {
+					isViolation = true
+				}
+			}
+			if spec.MutationEnforced && obs.Kind == "file_write" && !obs.InScope {
+				isViolation = true
+			}
+			if spec.NoNetworkOutsideManifest && obs.Kind == "network" && !obs.InScope {
+				isViolation = true
+			}
+			if spec.NoExecOutsideManifest && obs.Kind == "exec" && !obs.InScope {
+				isViolation = true
+			}
+
+			if isViolation {
+				key := fmt.Sprintf("%s:%s", obs.Kind, obs.Resource)
+				if !expectedViolations[key] {
+					failures = append(failures, fmt.Sprintf("[security] %s on %s out of scope", obs.Kind, obs.Resource))
+				}
+			}
+		}
+	}
+
+	if spec.NoWritesOutsideScope {
+		passed := true
+		for _, f := range failures {
+			if strings.Contains(f, "file_write") {
+				passed = false
+				break
+			}
+		}
+		results = append(results, AssertionResult{
+			AssertionID: "security.no_writes_outside_scope",
+			Tier:        "security",
+			Passed:      passed,
+		})
+	}
+
+	if spec.NoReadsOutsideScope {
+		passed := true
+		for _, f := range failures {
+			if strings.Contains(f, "file_read") {
+				passed = false
+				break
+			}
+		}
+		results = append(results, AssertionResult{
+			AssertionID: "security.no_reads_outside_scope",
+			Tier:        "security",
+			Passed:      passed,
+		})
+	}
+
+	if len(spec.ToolsMustNotCall) > 0 {
+		passed := len(failures) == 0
+		results = append(results, AssertionResult{
+			AssertionID: "security.tools_must_not_call",
+			Tier:        "security",
+			Passed:      passed,
+		})
+	}
+
+	if len(failures) > 0 {
+		return results, observations, fmt.Errorf("[security] %s", strings.Join(failures, "; "))
+	}
+	return results, observations, nil
+}
+
+// evaluateBenchmarkExpectations evaluates soft telemetry observations.
+func evaluateBenchmarkExpectations(spec BenchmarkSpec, transcript *ToolTranscriptArtifact, events []core.Event, snapshot *core.ContextSnapshot, tokenUsage TokenUsageReport) []BenchmarkObservation {
+	var observations []BenchmarkObservation
+
+	for _, tool := range spec.ToolsExpected {
+		found := false
+		if transcript != nil {
+			for _, entry := range transcript.Entries {
+				if entry.Tool == tool {
+					found = true
+					break
+				}
+			}
+		}
+		observations = append(observations, BenchmarkObservation{
+			Category: "tool_usage",
+			Field:    "tools_expected",
+			Expected: tool,
+			Actual:   boolToString(found),
+			Matched:  found,
+		})
+	}
+
+	for _, tool := range spec.ToolsNotExpected {
+		found := false
+		if transcript != nil {
+			for _, entry := range transcript.Entries {
+				if entry.Tool == tool {
+					found = true
+					break
+				}
+			}
+		}
+		observations = append(observations, BenchmarkObservation{
+			Category: "tool_usage",
+			Field:    "tools_not_expected",
+			Expected: "absent:" + tool,
+			Actual:   "present:" + boolToString(found),
+			Matched:  !found,
+		})
+	}
+
+	if len(spec.ToolSequenceExpected) > 0 {
+		inOrder := toolCallsAppearInOrder(events, spec.ToolSequenceExpected)
+		observations = append(observations, BenchmarkObservation{
+			Category: "tool_usage",
+			Field:    "tool_sequence_expected",
+			Expected: strings.Join(spec.ToolSequenceExpected, ","),
+			Actual:   boolToString(inOrder),
+			Matched:  inOrder,
+		})
+	}
+
+	if spec.LLMCallsExpected > 0 {
+		actual := countLLMCalls(events)
+		matched := actual == spec.LLMCallsExpected
+		observations = append(observations, BenchmarkObservation{
+			Category: "performance",
+			Field:    "llm_calls",
+			Expected: fmt.Sprintf("%d", spec.LLMCallsExpected),
+			Actual:   fmt.Sprintf("%d", actual),
+			Matched:  matched,
+		})
+	}
+
+	if spec.TokenBudget != nil {
+		if spec.TokenBudget.MaxPrompt > 0 && tokenUsage.PromptTokens > 0 {
+			matched := tokenUsage.PromptTokens <= spec.TokenBudget.MaxPrompt
+			observations = append(observations, BenchmarkObservation{
+				Category: "token_usage",
+				Field:    "token_budget.prompt",
+				Expected: fmt.Sprintf("<=%d", spec.TokenBudget.MaxPrompt),
+				Actual:   fmt.Sprintf("%d", tokenUsage.PromptTokens),
+				Matched:  matched,
+			})
+		}
+		if spec.TokenBudget.MaxCompletion > 0 && tokenUsage.CompletionTokens > 0 {
+			matched := tokenUsage.CompletionTokens <= spec.TokenBudget.MaxCompletion
+			observations = append(observations, BenchmarkObservation{
+				Category: "token_usage",
+				Field:    "token_budget.completion",
+				Expected: fmt.Sprintf("<=%d", spec.TokenBudget.MaxCompletion),
+				Actual:   fmt.Sprintf("%d", tokenUsage.CompletionTokens),
+				Matched:  matched,
+			})
+		}
+		if spec.TokenBudget.MaxTotal > 0 && tokenUsage.TotalTokens > 0 {
+			matched := tokenUsage.TotalTokens <= spec.TokenBudget.MaxTotal
+			observations = append(observations, BenchmarkObservation{
+				Category: "token_usage",
+				Field:    "token_budget.total",
+				Expected: fmt.Sprintf("<=%d", spec.TokenBudget.MaxTotal),
+				Actual:   fmt.Sprintf("%d", tokenUsage.TotalTokens),
+				Matched:  matched,
+			})
+		}
+	}
+
+	return observations
+}
+
+// boolToString converts a bool to a string representation.
+func boolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }

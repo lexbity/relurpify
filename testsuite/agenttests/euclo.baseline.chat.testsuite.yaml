@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.baseline.chat
-  description: "Capability-baseline Euclo chat coverage for ask, inspect, and implement paths."
+  description: Capability-baseline Euclo chat coverage for ask, inspect, and implement
+    paths.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -17,189 +18,157 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
     ignore_changes:
-      - relurpify_cfg/logs/skills.log
-      - relurpify_cfg/artifacts/euclo/deferred/**
+    - relurpify_cfg/logs/skills.log
+    - relurpify_cfg/artifacts/euclo/deferred/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: chat_ask_baseline
-      description: "Chat ask should stay in chat mode and use the chat.ask capability."
-      task_type: analysis
-      tags: [baseline, capability-baseline, chat, ask, level:1]
-      setup:
-        files:
-          - path: testsuite/fixtures/euclo_baseline_chat/user.go
-            content: |
-              package euclobaselinechat
-
-              type User struct {
-                ID    int
-                Email string
-              }
-      prompt: "Explain what the User type in testsuite/fixtures/euclo_baseline_chat/user.go represents."
-      context:
-        euclo.mode: chat
-        context_file_contents:
-          - path: testsuite/fixtures/euclo_baseline_chat/user.go
-            content: |
-              package euclobaselinechat
-
-              type User struct {
-                ID    int
-                Email string
-              }
-      expect:
+  - name: chat_ask_baseline
+    description: Chat ask should stay in chat mode and use the chat.ask capability.
+    task_type: analysis
+    tags:
+    - baseline
+    - capability-baseline
+    - chat
+    - ask
+    - level:1
+    setup:
+      files:
+      - path: testsuite/fixtures/euclo_baseline_chat/user.go
+        content: "package euclobaselinechat\n\ntype User struct {\n  ID    int\n \
+          \ Email string\n}\n"
+    prompt: Explain what the User type in testsuite/fixtures/euclo_baseline_chat/user.go
+      represents.
+    context:
+      euclo.mode: chat
+      context_file_contents:
+      - path: testsuite/fixtures/euclo_baseline_chat/user.go
+        content: "package euclobaselinechat\n\ntype User struct {\n  ID    int\n \
+          \ Email string\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        tool_calls_must_include:
-          - file_read
-        tool_calls_must_exclude:
-          - file_write
-          - go_test
+        euclo_mode: chat
+      security:
+        tools_must_not_call:
+        - file_write
+      benchmark:
+        tools_not_expected:
+        - go_test
+        tools_expected:
+        - file_read
         euclo:
           behavior_family: direct_change_execution
-          mode: chat
           primary_relurpic_capability: euclo:chat.ask
           recipe_ids:
-            - chat.ask.inquiry
-
-    - name: chat_inspect_baseline
-      description: "Chat inspect should remain read-only and surface comparison behavior."
-      task_type: analysis
-      tags: [baseline, capability-baseline, chat, inspect, level:1]
-      overrides:
-        max_iterations: 24
-      setup:
-        files:
-          - path: testsuite/fixtures/euclo_baseline_chat/store.go
-            content: |
-              package euclobaselinechat
-
-              type Store interface {
-                Save(key, value string) error
-                Load(key string) (string, error)
-              }
-
-              type MemoryStore struct{ data map[string]string }
-
-              func (s *MemoryStore) Save(key, value string) error {
-                s.data[key] = value
-                return nil
-              }
-
-              func (s *MemoryStore) Load(key string) (string, error) {
-                return s.data[key], nil
-              }
-      prompt: "Compare the behavior of MemoryStore and an in-memory null store in testsuite/fixtures/euclo_baseline_chat/store.go."
-      context:
-        euclo.mode: chat
-        context_file_contents:
-          - path: testsuite/fixtures/euclo_baseline_chat/store.go
-            content: |
-              package euclobaselinechat
-
-              type Store interface {
-                Save(key, value string) error
-                Load(key string) (string, error)
-              }
-
-              type MemoryStore struct{ data map[string]string }
-
-              func (s *MemoryStore) Save(key, value string) error {
-                s.data[key] = value
-                return nil
-              }
-
-              func (s *MemoryStore) Load(key string) (string, error) {
-                return s.data[key], nil
-              }
-      expect:
+          - chat.ask.inquiry
+  - name: chat_inspect_baseline
+    description: Chat inspect should remain read-only and surface comparison behavior.
+    task_type: analysis
+    tags:
+    - baseline
+    - capability-baseline
+    - chat
+    - inspect
+    - level:1
+    overrides:
+      max_iterations: 24
+    setup:
+      files:
+      - path: testsuite/fixtures/euclo_baseline_chat/store.go
+        content: "package euclobaselinechat\n\ntype Store interface {\n  Save(key,\
+          \ value string) error\n  Load(key string) (string, error)\n}\n\ntype MemoryStore\
+          \ struct{ data map[string]string }\n\nfunc (s *MemoryStore) Save(key, value\
+          \ string) error {\n  s.data[key] = value\n  return nil\n}\n\nfunc (s *MemoryStore)\
+          \ Load(key string) (string, error) {\n  return s.data[key], nil\n}\n"
+    prompt: Compare the behavior of MemoryStore and an in-memory null store in testsuite/fixtures/euclo_baseline_chat/store.go.
+    context:
+      euclo.mode: chat
+      context_file_contents:
+      - path: testsuite/fixtures/euclo_baseline_chat/store.go
+        content: "package euclobaselinechat\n\ntype Store interface {\n  Save(key,\
+          \ value string) error\n  Load(key string) (string, error)\n}\n\ntype MemoryStore\
+          \ struct{ data map[string]string }\n\nfunc (s *MemoryStore) Save(key, value\
+          \ string) error {\n  s.data[key] = value\n  return nil\n}\n\nfunc (s *MemoryStore)\
+          \ Load(key string) (string, error) {\n  return s.data[key], nil\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        tool_calls_must_include:
-          - file_read
-        tool_calls_must_exclude:
-          - file_write
-          - go_test
+        euclo_mode: chat
+      security:
+        tools_must_not_call:
+        - file_write
+      benchmark:
+        tools_not_expected:
+        - go_test
+        tools_expected:
+        - file_read
         euclo:
           behavior_family: direct_change_execution
-          mode: chat
           primary_relurpic_capability: euclo:chat.inspect
           supporting_relurpic_capabilities:
-            - euclo:chat.local-review
+          - euclo:chat.local-review
           recipe_ids:
-            - chat.inspect.collect
-
-    - name: chat_implement_baseline
-      description: "Chat implement should use the edit-and-verify capability path."
-      task_type: code_modification
-      tags: [baseline, capability-baseline, chat, implement, level:1]
-      setup:
-        files:
-          - path: testsuite/fixtures/euclo_baseline_chat/math.go
-            content: |
-              package euclobaselinechat
-
-              func Add(a, b int) int {
-                return a - b
-              }
-          - path: testsuite/fixtures/euclo_baseline_chat/math_test.go
-            content: |
-              package euclobaselinechat
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-                if Add(2, 3) != 5 {
-                  t.Fatalf("got %d, want 5", Add(2, 3))
-                }
-              }
-      prompt: "Fix testsuite/fixtures/euclo_baseline_chat/math.go so Add returns the correct sum."
-      context:
-        euclo.mode: chat
-        context_file_contents:
-          - path: testsuite/fixtures/euclo_baseline_chat/math.go
-            content: |
-              package euclobaselinechat
-
-              func Add(a, b int) int {
-                return a - b
-              }
-          - path: testsuite/fixtures/euclo_baseline_chat/math_test.go
-            content: |
-              package euclobaselinechat
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-                if Add(2, 3) != 5 {
-                  t.Fatalf("got %d, want 5", Add(2, 3))
-                }
-              }
-      expect:
+          - chat.inspect.collect
+  - name: chat_implement_baseline
+    description: Chat implement should use the edit-and-verify capability path.
+    task_type: code_modification
+    tags:
+    - baseline
+    - capability-baseline
+    - chat
+    - implement
+    - level:1
+    setup:
+      files:
+      - path: testsuite/fixtures/euclo_baseline_chat/math.go
+        content: "package euclobaselinechat\n\nfunc Add(a, b int) int {\n  return\
+          \ a - b\n}\n"
+      - path: testsuite/fixtures/euclo_baseline_chat/math_test.go
+        content: "package euclobaselinechat\n\nimport \"testing\"\n\nfunc TestAdd(t\
+          \ *testing.T) {\n  if Add(2, 3) != 5 {\n    t.Fatalf(\"got %d, want 5\"\
+          , Add(2, 3))\n  }\n}\n"
+    prompt: Fix testsuite/fixtures/euclo_baseline_chat/math.go so Add returns the
+      correct sum.
+    context:
+      euclo.mode: chat
+      context_file_contents:
+      - path: testsuite/fixtures/euclo_baseline_chat/math.go
+        content: "package euclobaselinechat\n\nfunc Add(a, b int) int {\n  return\
+          \ a - b\n}\n"
+      - path: testsuite/fixtures/euclo_baseline_chat/math_test.go
+        content: "package euclobaselinechat\n\nimport \"testing\"\n\nfunc TestAdd(t\
+          \ *testing.T) {\n  if Add(2, 3) != 5 {\n    t.Fatalf(\"got %d, want 5\"\
+          , Add(2, 3))\n  }\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/euclo_baseline_chat/math.go
+        - testsuite/fixtures/euclo_baseline_chat/math.go
         files_contain:
-          - path: testsuite/fixtures/euclo_baseline_chat/math.go
-            contains: ["a + b"]
-        tool_calls_must_include:
-          - file_read
-          - file_write
-          - go_test
+        - path: testsuite/fixtures/euclo_baseline_chat/math.go
+          contains:
+          - a + b
+        euclo_mode: chat
+      benchmark:
+        tools_expected:
+        - file_read
+        - file_write
+        - go_test
         euclo:
           behavior_family: direct_change_execution
-          mode: chat
           primary_relurpic_capability: euclo:chat.implement
           supporting_relurpic_capabilities:
-            - euclo:chat.verify
+          - euclo:chat.verify
           recipe_ids:
-            - chat.implement.edit_verify
+          - chat.implement.edit_verify

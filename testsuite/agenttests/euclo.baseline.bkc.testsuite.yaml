@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.baseline.bkc
-  description: "Capability-baseline Euclo BKC (Bootstrap Knowledge Chunk) coverage using direct capability invocation."
+  description: Capability-baseline Euclo BKC (Bootstrap Knowledge Chunk) coverage
+    using direct capability invocation.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -17,127 +18,145 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
     ignore_changes:
-      - relurpify_cfg/logs/skills.log
-      - relurpify_cfg/artifacts/euclo/deferred/**
+    - relurpify_cfg/logs/skills.log
+    - relurpify_cfg/artifacts/euclo/deferred/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: bkc_compile_baseline
-      description: "BKC compile capability baseline - invoke euclo:bkc.compile with seeded semantic context."
-      task_type: analysis
-      prompt: "Compile a BKC candidate from the semantic context describing the rapidbkc package."
-      tags: [baseline, capability-baseline, bkc, compile, level:1]
-      context:
-        workflow_id: "wf-baseline-bkc-compile"
-        exploration_id: "exp-baseline-bkc-compile"
-        workspace_id: "testsuite/fixtures/rapid_bkc"
-      setup:
-        files:
-          - path: testsuite/fixtures/rapid_bkc/types.go
-            content: |
-              package rapidbkc
-
-              type User struct {
-                ID    string
-                Email string
-              }
-        state_keys:
-          bkc.semantic_context: "package rapidbkc contains User struct with ID and Email fields"
-          bkc.target_operation: "compile_candidate"
-      capability_direct_run:
-        capability_id: euclo:bkc.compile
-        invoking_primary: euclo:archaeology.explore
-      expect:
+  - name: bkc_compile_baseline
+    description: BKC compile capability baseline - invoke euclo:bkc.compile with seeded
+      semantic context.
+    task_type: analysis
+    prompt: Compile a BKC candidate from the semantic context describing the rapidbkc
+      package.
+    tags:
+    - baseline
+    - capability-baseline
+    - bkc
+    - compile
+    - level:1
+    context:
+      workflow_id: wf-baseline-bkc-compile
+      exploration_id: exp-baseline-bkc-compile
+      workspace_id: testsuite/fixtures/rapid_bkc
+    setup:
+      files:
+      - path: testsuite/fixtures/rapid_bkc/types.go
+        content: "package rapidbkc\n\ntype User struct {\n  ID    string\n  Email\
+          \ string\n}\n"
+      state_keys:
+        bkc.semantic_context: package rapidbkc contains User struct with ID and Email
+          fields
+        bkc.target_operation: compile_candidate
+    capability_direct_run:
+      capability_id: euclo:bkc.compile
+      invoking_primary: euclo:archaeology.explore
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-
-    - name: bkc_stream_baseline
-      description: "BKC stream capability baseline - invoke euclo:bkc.stream to inject semantic context."
-      task_type: analysis
-      prompt: "Stream semantic context chunks into the BKC for the rapidbkc package."
-      tags: [baseline, capability-baseline, bkc, stream, level:1]
-      context:
-        workflow_id: "wf-baseline-bkc-stream"
-        exploration_id: "exp-baseline-bkc-stream"
-        workspace_id: "testsuite/fixtures/rapid_bkc"
-      setup:
-        files:
-          - path: testsuite/fixtures/rapid_bkc/cache.go
-            content: |
-              package rapidbkc
-
-              type Cache struct {
-                data map[string]string
-              }
-        state_keys:
-          bkc.chunk_refs: '["chunk-1", "chunk-2"]'
-          bkc.stream_target: "semantic_context"
-      capability_direct_run:
-        capability_id: euclo:bkc.stream
-        invoking_primary: euclo:archaeology.explore
-      expect:
+  - name: bkc_stream_baseline
+    description: BKC stream capability baseline - invoke euclo:bkc.stream to inject
+      semantic context.
+    task_type: analysis
+    prompt: Stream semantic context chunks into the BKC for the rapidbkc package.
+    tags:
+    - baseline
+    - capability-baseline
+    - bkc
+    - stream
+    - level:1
+    context:
+      workflow_id: wf-baseline-bkc-stream
+      exploration_id: exp-baseline-bkc-stream
+      workspace_id: testsuite/fixtures/rapid_bkc
+    setup:
+      files:
+      - path: testsuite/fixtures/rapid_bkc/cache.go
+        content: "package rapidbkc\n\ntype Cache struct {\n  data map[string]string\n\
+          }\n"
+      state_keys:
+        bkc.chunk_refs: '["chunk-1", "chunk-2"]'
+        bkc.stream_target: semantic_context
+    capability_direct_run:
+      capability_id: euclo:bkc.stream
+      invoking_primary: euclo:archaeology.explore
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-
-    - name: bkc_checkpoint_baseline
-      description: "BKC checkpoint capability baseline - invoke euclo:bkc.checkpoint to anchor plan roots."
-      task_type: code_modification
-      prompt: "Checkpoint the current plan roots in the BKC for the rapidbkc package."
-      tags: [baseline, capability-baseline, bkc, checkpoint, level:1]
-      context:
-        workflow_id: "wf-baseline-bkc-checkpoint"
-        exploration_id: "exp-baseline-bkc-checkpoint"
-        workspace_id: "testsuite/fixtures/rapid_bkc"
-      setup:
-        files:
-          - path: testsuite/fixtures/rapid_bkc/plan.go
-            content: |
-              package rapidbkc
-
-              func PlanAction() string {
-                return "action"
-              }
-        state_keys:
-          bkc.chunk_roots: '["root-1", "root-2"]'
-          bkc.plan_version: "v1.0"
-      capability_direct_run:
-        capability_id: euclo:bkc.checkpoint
-        invoking_primary: euclo:archaeology.implement-plan
-      expect:
+  - name: bkc_checkpoint_baseline
+    description: BKC checkpoint capability baseline - invoke euclo:bkc.checkpoint
+      to anchor plan roots.
+    task_type: code_modification
+    prompt: Checkpoint the current plan roots in the BKC for the rapidbkc package.
+    tags:
+    - baseline
+    - capability-baseline
+    - bkc
+    - checkpoint
+    - level:1
+    context:
+      workflow_id: wf-baseline-bkc-checkpoint
+      exploration_id: exp-baseline-bkc-checkpoint
+      workspace_id: testsuite/fixtures/rapid_bkc
+    setup:
+      files:
+      - path: testsuite/fixtures/rapid_bkc/plan.go
+        content: "package rapidbkc\n\nfunc PlanAction() string {\n  return \"action\"\
+          \n}\n"
+      state_keys:
+        bkc.chunk_roots: '["root-1", "root-2"]'
+        bkc.plan_version: v1.0
+    capability_direct_run:
+      capability_id: euclo:bkc.checkpoint
+      invoking_primary: euclo:archaeology.implement-plan
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
+  - name: bkc_invalidate_baseline
+    description: BKC invalidate capability baseline - invoke euclo:bkc.invalidate
+      to surface stale chunks.
+    task_type: analysis
+    prompt: Invalidate stale BKC chunks for the rapidbkc package where OldVersion
+      is deprecated.
+    tags:
+    - baseline
+    - capability-baseline
+    - bkc
+    - invalidate
+    - level:1
+    context:
+      workflow_id: wf-baseline-bkc-invalidate
+      exploration_id: exp-baseline-bkc-invalidate
+      workspace_id: testsuite/fixtures/rapid_bkc
+    setup:
+      files:
+      - path: testsuite/fixtures/rapid_bkc/stale.go
+        content: 'package rapidbkc
 
-    - name: bkc_invalidate_baseline
-      description: "BKC invalidate capability baseline - invoke euclo:bkc.invalidate to surface stale chunks."
-      task_type: analysis
-      prompt: "Invalidate stale BKC chunks for the rapidbkc package where OldVersion is deprecated."
-      tags: [baseline, capability-baseline, bkc, invalidate, level:1]
-      context:
-        workflow_id: "wf-baseline-bkc-invalidate"
-        exploration_id: "exp-baseline-bkc-invalidate"
-        workspace_id: "testsuite/fixtures/rapid_bkc"
-      setup:
-        files:
-          - path: testsuite/fixtures/rapid_bkc/stale.go
-            content: |
-              package rapidbkc
 
-              // OldVersion is deprecated
-              func OldVersion() {}
-        state_keys:
-          bkc.revision_drift: "true"
-          bkc.stale_chunks: '["chunk-old"]'
-      capability_direct_run:
-        capability_id: euclo:bkc.invalidate
-        invoking_primary: euclo:archaeology.compile-plan
-      expect:
+          // OldVersion is deprecated
+
+          func OldVersion() {}
+
+          '
+      state_keys:
+        bkc.revision_drift: 'true'
+        bkc.stale_chunks: '["chunk-old"]'
+    capability_direct_run:
+      capability_id: euclo:bkc.invalidate
+      invoking_primary: euclo:archaeology.compile-plan
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true

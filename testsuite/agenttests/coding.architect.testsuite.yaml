@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding.architect
-  description: "Live architect-mode workflow-store coverage for the coding agent."
+  description: Live architect-mode workflow-store coverage for the coding agent.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -15,36 +15,40 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: architect_persists_workflow_state
-      description: "Architect mode should execute a read-only task and persist workflow state in the external store."
-      task_type: analysis
-      context:
-        mode: architect
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-          - name: file_list
-            kind: tool
-          - name: file_search
-            kind: tool
-
-      prompt: "Use only the registered file_read tool to inspect README.md, then summarize the project in 3 bullets. Do not modify any source files."
-      expect:
+  - name: architect_persists_workflow_state
+    description: Architect mode should execute a read-only task and persist workflow
+      state in the external store.
+    task_type: analysis
+    context:
+      mode: architect
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+      - name: file_list
+        kind: tool
+      - name: file_search
+        kind: tool
+    prompt: Use only the registered file_read tool to inspect README.md, then summarize
+      the project in 3 bullets. Do not modify any source files.
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - relurpify_cfg/sessions/workflow_state.db
-        tool_calls_must_include:
-          - file_read
-        tool_calls_must_exclude:
-          - file_write
+        - relurpify_cfg/sessions/workflow_state.db
+      security:
+        tools_must_not_call:
+        - file_write
+      benchmark:
+        tools_expected:
+        - file_read

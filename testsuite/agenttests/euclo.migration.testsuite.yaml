@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.migration
-  description: "Euclo migration execution tests."
+  description: Euclo migration execution tests.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -16,69 +16,64 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: simple_import_migration
-      description: "Migration request should use plan-stage-execute with ordered migration steps."
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/migrate_import.go
-            content: |
-              package main
-
-              import oldsdk "example.com/oldsdk"
-
-              func Run() string {
-                return oldsdk.Version()
-              }
-      prompt: "Execute the dependency migration from example.com/oldsdk to example.com/newsdk."
-      context:
-        euclo.mode: planning
-        context_file_contents:
-          - path: testsuite/fixtures/migrate_import.go
-            content: |
-              package main
-
-              import oldsdk "example.com/oldsdk"
-
-              func Run() string {
-                return oldsdk.Version()
-              }
-      expect:
+  - name: simple_import_migration
+    description: Migration request should use plan-stage-execute with ordered migration
+      steps.
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/migrate_import.go
+        content: "package main\n\nimport oldsdk \"example.com/oldsdk\"\n\nfunc Run()\
+          \ string {\n  return oldsdk.Version()\n}\n"
+    prompt: Execute the dependency migration from example.com/oldsdk to example.com/newsdk.
+    context:
+      euclo.mode: planning
+      context_file_contents:
+      - path: testsuite/fixtures/migrate_import.go
+        content: "package main\n\nimport oldsdk \"example.com/oldsdk\"\n\nfunc Run()\
+          \ string {\n  return oldsdk.Version()\n}\n"
+    expect:
+      outcome:
         must_succeed: true
+        euclo_mode: planning
+      benchmark:
         euclo:
-          mode: planning
           profile: plan_stage_execute
+  - name: migration_postcheck_failure
+    description: Migration failures should surface rollback-oriented output.
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/migrate_fail.go
+        content: 'package main
 
-    - name: migration_postcheck_failure
-      description: "Migration failures should surface rollback-oriented output."
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/migrate_fail.go
-            content: |
-              package main
 
-              func Run() {}
-      prompt: "Execute the schema migration and verify rollback if postcheck fails."
-      context:
-        euclo.mode: planning
-        context_file_contents:
-          - path: testsuite/fixtures/migrate_fail.go
-            content: |
-              package main
+          func Run() {}
 
-              func Run() {}
-      expect:
+          '
+    prompt: Execute the schema migration and verify rollback if postcheck fails.
+    context:
+      euclo.mode: planning
+      context_file_contents:
+      - path: testsuite/fixtures/migrate_fail.go
+        content: 'package main
+
+
+          func Run() {}
+
+          '
+    expect:
+      outcome:
         must_succeed: true
         output_regex:
-          - (?i)(rollback|migration)
+        - (?i)(rollback|migration)

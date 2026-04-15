@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.resume
-  description: "Euclo context-budget and session-resume tests."
+  description: Euclo context-budget and session-resume tests.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -16,93 +16,149 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: code_under_token_pressure
-      description: "Large-input code tasks should keep interaction state and artifacts intact under prompt pressure."
-      task_type: code_modification
-      timeout: 120s
-      prompt: "add error handling to all functions in handler.go"
-      setup:
-        files:
-          - path: handler.go
-            content: |
-              package handler
+  - name: code_under_token_pressure
+    description: Large-input code tasks should keep interaction state and artifacts
+      intact under prompt pressure.
+    task_type: code_modification
+    timeout: 120s
+    prompt: add error handling to all functions in handler.go
+    setup:
+      files:
+      - path: handler.go
+        content: 'package handler
 
-              import "fmt"
 
-              func A(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("A:%s", input), nil }
-              func B(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("B:%s", input), nil }
-              func C(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("C:%s", input), nil }
-              func D(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("D:%s", input), nil }
-              func E(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("E:%s", input), nil }
-              func F(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("F:%s", input), nil }
-              func G(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("G:%s", input), nil }
-              func H(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("H:%s", input), nil }
-              func I(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("I:%s", input), nil }
-              func J(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("J:%s", input), nil }
-              func K(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("K:%s", input), nil }
-              func L(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("L:%s", input), nil }
-              func M(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("M:%s", input), nil }
-              func N(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("N:%s", input), nil }
-              func O(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("O:%s", input), nil }
-              func P(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("P:%s", input), nil }
-              func Q(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("Q:%s", input), nil }
-              func R(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("R:%s", input), nil }
-              func S(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("S:%s", input), nil }
-              func T(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("T:%s", input), nil }
-              func U(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("U:%s", input), nil }
-              func V(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("V:%s", input), nil }
-              func W(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("W:%s", input), nil }
-              func X(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("X:%s", input), nil }
-              func Y(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("Y:%s", input), nil }
-              func Z(input string) (string, error) { if input == "" { return "", nil }; return fmt.Sprintf("Z:%s", input), nil }
-      overrides:
-        max_iterations: 5
-      expect:
+          import "fmt"
+
+
+          func A(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("A:%s", input), nil }
+
+          func B(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("B:%s", input), nil }
+
+          func C(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("C:%s", input), nil }
+
+          func D(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("D:%s", input), nil }
+
+          func E(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("E:%s", input), nil }
+
+          func F(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("F:%s", input), nil }
+
+          func G(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("G:%s", input), nil }
+
+          func H(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("H:%s", input), nil }
+
+          func I(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("I:%s", input), nil }
+
+          func J(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("J:%s", input), nil }
+
+          func K(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("K:%s", input), nil }
+
+          func L(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("L:%s", input), nil }
+
+          func M(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("M:%s", input), nil }
+
+          func N(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("N:%s", input), nil }
+
+          func O(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("O:%s", input), nil }
+
+          func P(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("P:%s", input), nil }
+
+          func Q(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("Q:%s", input), nil }
+
+          func R(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("R:%s", input), nil }
+
+          func S(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("S:%s", input), nil }
+
+          func T(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("T:%s", input), nil }
+
+          func U(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("U:%s", input), nil }
+
+          func V(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("V:%s", input), nil }
+
+          func W(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("W:%s", input), nil }
+
+          func X(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("X:%s", input), nil }
+
+          func Y(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("Y:%s", input), nil }
+
+          func Z(input string) (string, error) { if input == "" { return "", nil };
+          return fmt.Sprintf("Z:%s", input), nil }
+
+          '
+    overrides:
+      max_iterations: 5
+    expect:
+      outcome:
         must_succeed: true
-        max_prompt_tokens: 8000
-        state_keys_must_exist:
-          - euclo.interaction_state
-          - euclo.interaction_recording
-          - euclo.artifacts
+        euclo_mode: code
+      benchmark:
+        token_budget:
+          max_prompt: 8000
         euclo:
-          mode: code
           min_frames_emitted: 1
-
-    - name: session_resume_from_phase
-      description: "Persisted interaction state should resume from the saved phase and emit a session resume frame."
-      task_type: analysis
-      timeout: 180s
-      prompt: "plan and implement rate limiting"
-      context:
-        euclo.mode: planning
-        euclo.interaction_state:
-          mode: planning
-          current_phase: generate
-          phases_executed:
-            - scope
-            - clarify
-          phase_states:
-            scope.done: true
-            clarify.done: true
-        euclo.interaction_script:
-          - kind: session_resume
-            action: resume
-      expect:
+  - name: session_resume_from_phase
+    description: Persisted interaction state should resume from the saved phase and
+      emit a session resume frame.
+    task_type: analysis
+    timeout: 180s
+    prompt: plan and implement rate limiting
+    context:
+      euclo.mode: planning
+      euclo.interaction_state:
+        mode: planning
+        current_phase: generate
+        phases_executed:
+        - scope
+        - clarify
+        phase_states:
+          scope.done: true
+          clarify.done: true
+      euclo.interaction_script:
+      - kind: session_resume
+        action: resume
+    expect:
+      outcome:
         must_succeed: true
+        euclo_mode: planning
+      benchmark:
         euclo:
-          mode: planning
           phases_executed:
-            - generate
-            - commit
+          - generate
+          - commit
           frame_kinds_emitted:
-            - session_resume
+          - session_resume

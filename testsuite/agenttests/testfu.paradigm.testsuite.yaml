@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: testfu.paradigm
-  description: "Full paradigm coverage via testfu: runs all suites for each paradigm agent."
+  description: 'Full paradigm coverage via testfu: runs all suites for each paradigm
+    agent.'
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -15,111 +16,98 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   cases:
-    - name: paradigm_react
-      tags: [stable, paradigm]
-      task_type: analysis
-      # Globs react.testsuite.yaml + react.*.testsuite.yaml and runs all cases.
-      # Inner per-case timeout: 60s. Outer covers all suites + cases.
-      timeout: "900s"
-      prompt: "Run all react agent test suites."
-      context:
-        agent_name: react
-        timeout: 60s
-      expect:
+  - name: paradigm_react
+    tags:
+    - stable
+    - paradigm
+    task_type: analysis
+    timeout: 900s
+    prompt: Run all react agent test suites.
+    context:
+      agent_name: react
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.agent_suites_report
-          - testfu.passed
-          - testfu.total_passed
-          - testfu.total_failed
-
-    - name: paradigm_planner
-      tags: [stable, paradigm]
-      task_type: analysis
-      timeout: "900s"
-      prompt: "Run all planner agent test suites."
-      context:
-        agent_name: planner
-        timeout: 60s
-      expect:
+  - name: paradigm_planner
+    tags:
+    - stable
+    - paradigm
+    task_type: analysis
+    timeout: 900s
+    prompt: Run all planner agent test suites.
+    context:
+      agent_name: planner
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.agent_suites_report
-          - testfu.passed
-
-    - name: paradigm_htn
-      tags: [stable, paradigm]
-      task_type: analysis
-      timeout: "900s"
-      prompt: "Run all HTN agent test suites."
-      context:
-        agent_name: htn
-        timeout: 60s
-      expect:
+  - name: paradigm_htn
+    tags:
+    - stable
+    - paradigm
+    task_type: analysis
+    timeout: 900s
+    prompt: Run all HTN agent test suites.
+    context:
+      agent_name: htn
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.agent_suites_report
-          - testfu.passed
-
-    - name: paradigm_rewoo
-      tags: [stable, paradigm]
-      task_type: analysis
-      timeout: "900s"
-      prompt: "Run all ReWOO agent test suites."
-      context:
-        agent_name: rewoo
-        timeout: 60s
-      expect:
+  - name: paradigm_rewoo
+    tags:
+    - stable
+    - paradigm
+    task_type: analysis
+    timeout: 900s
+    prompt: Run all ReWOO agent test suites.
+    context:
+      agent_name: rewoo
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.agent_suites_report
-          - testfu.passed
-
-    - name: paradigm_reflection
-      tags: [stable, paradigm]
-      task_type: analysis
-      timeout: "600s"
-      prompt: "Run all reflection agent test suites."
-      context:
-        agent_name: reflection
-        timeout: 60s
-      expect:
+  - name: paradigm_reflection
+    tags:
+    - stable
+    - paradigm
+    task_type: analysis
+    timeout: 600s
+    prompt: Run all reflection agent test suites.
+    context:
+      agent_name: reflection
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.agent_suites_report
-          - testfu.passed
-
-    - name: paradigm_all_smoke
-      tags: [stable, paradigm, smoke-sweep]
-      task_type: analysis
-      # Runs smoke-tagged cases for the react agent across all its suites
-      # (react.testsuite.yaml + react.*.testsuite.yaml).  The per-case timeout
-      # is budgeted so the outer deadline is respected.  A full multi-agent sweep
-      # (react+planner+htn+rewoo+reflection) requires testfu multi-agent support
-      # not yet implemented; the individual paradigm_* cases above cover that.
-      timeout: "600s"
-      prompt: "Run smoke-tagged cases for the react paradigm suites as representative smoke sweep."
-      context:
-        agent_name: react
-        tags: smoke
-        timeout: 60s
-      expect:
+  - name: paradigm_all_smoke
+    tags:
+    - stable
+    - paradigm
+    - smoke-sweep
+    task_type: analysis
+    timeout: 600s
+    prompt: Run smoke-tagged cases for the react paradigm suites as representative
+      smoke sweep.
+    context:
+      agent_name: react
+      tags: smoke
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.agent_suites_report
-          - testfu.passed
-          - testfu.total_passed

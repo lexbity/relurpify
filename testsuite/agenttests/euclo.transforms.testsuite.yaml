@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.transforms
-  description: "Euclo artifact transform tests."
+  description: Euclo artifact transform tests.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -16,47 +16,52 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: summarize_diff_after_edit
-      description: "A change request should be able to yield diff-oriented summary output."
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/transform_diff.go
-            content: |
-              package main
+  - name: summarize_diff_after_edit
+    description: A change request should be able to yield diff-oriented summary output.
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/transform_diff.go
+        content: 'package main
 
-              func Value() int { return 1 }
-      prompt: "Change Value to return 2 and summarize the diff."
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/transform_diff.go
-            content: |
-              package main
 
-              func Value() int { return 1 }
-      expect:
+          func Value() int { return 1 }
+
+          '
+    prompt: Change Value to return 2 and summarize the diff.
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/transform_diff.go
+        content: 'package main
+
+
+          func Value() int { return 1 }
+
+          '
+    expect:
+      outcome:
         must_succeed: true
         output_regex:
-          - (?i)(summary|diff|change)
-
-    - name: summarize_verification
-      description: "Verification-heavy prompts should normalize test/build status."
-      task_type: analysis
-      prompt: "Summarize the verification results and tell me whether to accept or investigate."
-      context:
-        euclo.mode: code
-      expect:
+        - (?i)(summary|diff|change)
+  - name: summarize_verification
+    description: Verification-heavy prompts should normalize test/build status.
+    task_type: analysis
+    prompt: Summarize the verification results and tell me whether to accept or investigate.
+    context:
+      euclo.mode: code
+    expect:
+      outcome:
         must_succeed: true
         output_regex:
-          - (?i)(accept|investigate|reject|verification)
+        - (?i)(accept|investigate|reject|verification)

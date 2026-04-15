@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.debug
-  description: "Euclo debug mode interaction flow tests."
+  description: Euclo debug mode interaction flow tests.
   owner: agent-platform
   tier: stable
   classification: journey
@@ -17,145 +17,113 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: failing_test_investigation
-      description: "Debug mode for a failing test — investigate then fix."
-      task_type: code_modification
-      tags: [coverage-matrix, debug, reproduce_localize_patch, level:1]
-      setup:
-        files:
-          - path: testsuite/fixtures/calc.go
-            content: |
-              package main
-
-              func Multiply(a, b int) int {
-                return a + b
-              }
-          - path: testsuite/fixtures/calc_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestMultiply(t *testing.T) {
-                if Multiply(3, 4) != 12 {
-                  t.Errorf("got %d, want 12", Multiply(3, 4))
-                }
-              }
-      prompt: "Debug why TestMultiply is failing and fix the issue."
-      context:
-        euclo.mode: debug
-        context_file_contents:
-          - path: testsuite/fixtures/calc.go
-            content: |
-              package main
-
-              func Multiply(a, b int) int {
-                return a + b
-              }
-          - path: testsuite/fixtures/calc_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestMultiply(t *testing.T) {
-                if Multiply(3, 4) != 12 {
-                  t.Errorf("got %d, want 12", Multiply(3, 4))
-                }
-              }
-      expect:
-        must_succeed: true
-        files_changed: ["testsuite/fixtures/calc.go"]
-        files_contain:
-          - path: testsuite/fixtures/calc.go
-            contains: ["a * b"]
-        euclo:
-          mode: debug
-          profile: reproduce_localize_patch
-
-    - name: error_with_stacktrace
-      description: "Debug auto-classified from error text in instruction."
-      tags: [level:1]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/server.go
-            content: |
-              package main
-
-              func GetUser(id string) string {
-                var users map[string]string
-                return users[id]
-              }
-      prompt: |
-        panic: runtime error: index out of range
-        goroutine 1 [running]:
-        main.GetUser(0x0)
-          testsuite/fixtures/server.go:4
-        Fix the nil map access in GetUser.
-      context:
-        context_file_contents:
-          - path: testsuite/fixtures/server.go
-            content: |
-              package main
-
-              func GetUser(id string) string {
-                var users map[string]string
-                return users[id]
-              }
-      expect:
-        must_succeed: true
-        files_changed: ["testsuite/fixtures/server.go"]
-        euclo:
-          mode: debug
-          frame_kinds_emitted:
-            - result
-
-    - name: debug_from_incident_log
-      description: "4.3 artifact-mediated: simulate log output + stack trace inline — no clean repro steps."
-      task_type: code_modification
-      tags: [stable, debug, artifact-mediated, level:3]
-      setup:
-        files:
-          - path: testsuite/fixtures/panic_handler.go
-            content: |
-              package main
-
-              func ProcessItems(items []string) string {
-                return items[0]
-              }
-      prompt: |
-        Incident log from production (2026-03-31 02:14:07 UTC):
-        goroutine 1 [running]:
-        panic: runtime error: index out of range [0] with length 0
-        github.com/example/app.ProcessItems(...)
-          testsuite/fixtures/panic_handler.go:4
-        Customers reported intermittent "500 Internal Server Error" responses.
-        The function is called with the result of a database query that can return an empty slice.
-        Fix the root cause in testsuite/fixtures/panic_handler.go.
-      context:
-        euclo.mode: debug
-        context_file_contents:
-          - path: testsuite/fixtures/panic_handler.go
-            content: |
-              package main
-
-              func ProcessItems(items []string) string {
-                return items[0]
-              }
-      expect:
+  - name: failing_test_investigation
+    description: Debug mode for a failing test — investigate then fix.
+    task_type: code_modification
+    tags:
+    - coverage-matrix
+    - debug
+    - reproduce_localize_patch
+    - level:1
+    setup:
+      files:
+      - path: testsuite/fixtures/calc.go
+        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
+          }\n"
+      - path: testsuite/fixtures/calc_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestMultiply(t *testing.T)\
+          \ {\n  if Multiply(3, 4) != 12 {\n    t.Errorf(\"got %d, want 12\", Multiply(3,\
+          \ 4))\n  }\n}\n"
+    prompt: Debug why TestMultiply is failing and fix the issue.
+    context:
+      euclo.mode: debug
+      context_file_contents:
+      - path: testsuite/fixtures/calc.go
+        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
+          }\n"
+      - path: testsuite/fixtures/calc_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestMultiply(t *testing.T)\
+          \ {\n  if Multiply(3, 4) != 12 {\n    t.Errorf(\"got %d, want 12\", Multiply(3,\
+          \ 4))\n  }\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/panic_handler.go
+        - testsuite/fixtures/calc.go
+        files_contain:
+        - path: testsuite/fixtures/calc.go
+          contains:
+          - a * b
+        euclo_mode: debug
+      benchmark:
         euclo:
-          mode: debug
+          profile: reproduce_localize_patch
+  - name: error_with_stacktrace
+    description: Debug auto-classified from error text in instruction.
+    tags:
+    - level:1
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/server.go
+        content: "package main\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
+          \  return users[id]\n}\n"
+    prompt: "panic: runtime error: index out of range\ngoroutine 1 [running]:\nmain.GetUser(0x0)\n\
+      \  testsuite/fixtures/server.go:4\nFix the nil map access in GetUser.\n"
+    context:
+      context_file_contents:
+      - path: testsuite/fixtures/server.go
+        content: "package main\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
+          \  return users[id]\n}\n"
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/fixtures/server.go
+        euclo_mode: debug
+      benchmark:
+        euclo:
+          frame_kinds_emitted:
+          - result
+  - name: debug_from_incident_log
+    description: '4.3 artifact-mediated: simulate log output + stack trace inline
+      — no clean repro steps.'
+    task_type: code_modification
+    tags:
+    - stable
+    - debug
+    - artifact-mediated
+    - level:3
+    setup:
+      files:
+      - path: testsuite/fixtures/panic_handler.go
+        content: "package main\n\nfunc ProcessItems(items []string) string {\n  return\
+          \ items[0]\n}\n"
+    prompt: "Incident log from production (2026-03-31 02:14:07 UTC):\ngoroutine 1\
+      \ [running]:\npanic: runtime error: index out of range [0] with length 0\ngithub.com/example/app.ProcessItems(...)\n\
+      \  testsuite/fixtures/panic_handler.go:4\nCustomers reported intermittent \"\
+      500 Internal Server Error\" responses.\nThe function is called with the result\
+      \ of a database query that can return an empty slice.\nFix the root cause in\
+      \ testsuite/fixtures/panic_handler.go.\n"
+    context:
+      euclo.mode: debug
+      context_file_contents:
+      - path: testsuite/fixtures/panic_handler.go
+        content: "package main\n\nfunc ProcessItems(items []string) string {\n  return\
+          \ items[0]\n}\n"
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/fixtures/panic_handler.go
+        euclo_mode: debug

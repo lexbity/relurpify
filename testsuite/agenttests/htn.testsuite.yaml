@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: htn
-  description: "Live HTN coverage for decomposition, retrieval hydration, resume, and primitive fallback."
+  description: Live HTN coverage for decomposition, retrieval hydration, resume, and
+    primitive fallback.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -19,161 +20,182 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   cases:
-    - name: htn_code_generation
-      task_type: code_generation
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-          - name: file_write
-            kind: tool
-          - name: file_create
-            kind: tool
-          - name: file_list
-            kind: tool
-      prompt: >
-        Create the file testsuite/agenttest_fixtures/htn_generated_note.txt containing exactly
-        "HTN generated artifact". Verify the file exists and do not modify any other files.
-      expect:
+  - name: htn_code_generation
+    task_type: code_generation
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+      - name: file_write
+        kind: tool
+      - name: file_create
+        kind: tool
+      - name: file_list
+        kind: tool
+    prompt: 'Create the file testsuite/agenttest_fixtures/htn_generated_note.txt containing
+      exactly "HTN generated artifact". Verify the file exists and do not modify any
+      other files.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/htn_generated_note.txt
-        tool_calls_must_include:
-          - file_write
-    - name: htn_retrieval_hydration
-      task_type: code_generation
-      context:
-        workflow_id: wf-htn-retrieval
-      setup:
-        workflows:
-          - workflow:
-              workflow_id: wf-htn-retrieval
-              task_type: code_generation
-              instruction: Use prior workflow retrieval context
-              status: running
-            runs:
-              - run_id: htn-seed-run
-                status: running
-            knowledge:
-              - record_id: htn-knowledge-1
-                kind: fact
-                title: Prior result
-                content: Known API constraint
-                status: accepted
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: >
-        Read README.md and summarize the project in 2 bullets. Do not modify any files.
-      expect:
+        - testsuite/agenttest_fixtures/htn_generated_note.txt
+      benchmark:
+        tools_expected:
+        - file_write
+  - name: htn_retrieval_hydration
+    task_type: code_generation
+    context:
+      workflow_id: wf-htn-retrieval
+    setup:
+      workflows:
+      - workflow:
+          workflow_id: wf-htn-retrieval
+          task_type: code_generation
+          instruction: Use prior workflow retrieval context
+          status: running
+        runs:
+        - run_id: htn-seed-run
+          status: running
+        knowledge:
+        - record_id: htn-knowledge-1
+          kind: fact
+          title: Prior result
+          content: Known API constraint
+          status: accepted
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: 'Read README.md and summarize the project in 2 bullets. Do not modify
+      any files.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - htn.retrieval_applied
-          - htn.workflow_retrieval
-    - name: htn_checkpoint_resume
-      task_type: analysis
-      context:
-        workflow_id: wf-htn-resume
-      setup:
-        workflows:
-          - workflow:
-              workflow_id: wf-htn-resume
-              task_type: analysis
-              instruction: Resume an HTN explanation workflow
-              status: running
-            runs:
-              - run_id: htn-resume-run
-                status: running
-            checkpoints:
-              - checkpoint_id: htn-cp-1
-                task_id: htn-resume-task
-                run_id: htn-resume-run
-                stage_name: explain.explore
-                stage_index: 0
-                context_state:
-                  plan.completed_steps:
-                    - explain.explore
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: >
-        Explain what this repository does in 2 bullets without modifying any files.
-      metadata:
-        task_id: htn-resume-task
-      expect:
+  - name: htn_checkpoint_resume
+    task_type: analysis
+    context:
+      workflow_id: wf-htn-resume
+    setup:
+      workflows:
+      - workflow:
+          workflow_id: wf-htn-resume
+          task_type: analysis
+          instruction: Resume an HTN explanation workflow
+          status: running
+        runs:
+        - run_id: htn-resume-run
+          status: running
+        checkpoints:
+        - checkpoint_id: htn-cp-1
+          task_id: htn-resume-task
+          run_id: htn-resume-run
+          stage_name: explain.explore
+          stage_index: 0
+          context_state:
+            plan.completed_steps:
+            - explain.explore
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: 'Explain what this repository does in 2 bullets without modifying any
+      files.
+
+      '
+    metadata:
+      task_id: htn-resume-task
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - htn.resume_checkpoint_id
-          - plan.completed_steps
-    - name: htn_no_method_fallback
-      task_type: totally_unknown_type
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: >
-        Read README.md and summarize the project in 2 bullets. Do not modify any files.
-      expect:
+  - name: htn_no_method_fallback
+    task_type: totally_unknown_type
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: 'Read README.md and summarize the project in 2 bullets. Do not modify
+      any files.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)relurpify
-        tool_calls_must_include:
-          - file_read
-    - name: htn_primitive_fallback
-      tags: [stable, fallback]
-      task_type: analysis
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: >
-        Decompose this task into primitives: first try reading
-        testsuite/agenttest_fixtures/htn_nonexistent_primary.txt (it does not exist and will
-        fail). On failure, fall back to reading README.md and summarize the project in 2
-        bullets. Do not modify any files.
-      expect:
-        must_succeed: true
+        - (?i)relurpify
         no_file_changes: true
-        output_regex:
-          - (?i)relurpify
-        tool_calls_must_include:
-          - file_read
-    - name: htn_multi_method_selection
-      tags: [stable, method-selection]
-      task_type: analysis
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/htn_method_context.txt
-            content: "preferred_method: summary\n"
-      context:
-        context_file_contents:
-          - path: testsuite/agenttest_fixtures/htn_method_context.txt
-            content: "preferred_method: summary\n"
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: >
-        The context file testsuite/agenttest_fixtures/htn_method_context.txt indicates the
-        preferred_method is "summary". Select the summary decomposition method: read README.md
-        and produce a 3-bullet summary. Do not modify any files.
-      expect:
+      benchmark:
+        tools_expected:
+        - file_read
+  - name: htn_primitive_fallback
+    tags:
+    - stable
+    - fallback
+    task_type: analysis
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: 'Decompose this task into primitives: first try reading testsuite/agenttest_fixtures/htn_nonexistent_primary.txt
+      (it does not exist and will fail). On failure, fall back to reading README.md
+      and summarize the project in 2 bullets. Do not modify any files.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)relurpify
-        tool_calls_must_include:
-          - file_read
+        - (?i)relurpify
+        no_file_changes: true
+      benchmark:
+        tools_expected:
+        - file_read
+  - name: htn_multi_method_selection
+    tags:
+    - stable
+    - method-selection
+    task_type: analysis
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/htn_method_context.txt
+        content: 'preferred_method: summary
+
+          '
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/htn_method_context.txt
+        content: 'preferred_method: summary
+
+          '
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: 'The context file testsuite/agenttest_fixtures/htn_method_context.txt
+      indicates the preferred_method is "summary". Select the summary decomposition
+      method: read README.md and produce a 3-bullet summary. Do not modify any files.
+
+      '
+    expect:
+      outcome:
+        must_succeed: true
+        output_regex:
+        - (?i)relurpify
+        no_file_changes: true
+      benchmark:
+        tools_expected:
+        - file_read

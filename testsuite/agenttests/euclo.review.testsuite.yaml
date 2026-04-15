@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.review
-  description: "Euclo review mode interaction flow tests."
+  description: Euclo review mode interaction flow tests.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -17,109 +17,79 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: review_with_findings
-      description: "Review mode finds issues and suggests fixes."
-      task_type: analysis
-      tags: [coverage-matrix, review, review_suggest_implement, level:2]
-      setup:
-        files:
-          - path: testsuite/fixtures/handler.go
-            content: |
-              package main
-
-              import (
-                "database/sql"
-                "fmt"
-                "net/http"
-              )
-
-              func UserHandler(w http.ResponseWriter, r *http.Request) {
-                id := r.URL.Query().Get("id")
-                db, _ := sql.Open("sqlite3", "app.db")
-                row := db.QueryRow("SELECT name FROM users WHERE id = '" + id + "'")
-                var name string
-                row.Scan(&name)
-                fmt.Fprintf(w, "Hello %s", name)
-              }
-      prompt: "Review testsuite/fixtures/handler.go for security issues and code quality."
-      context:
-        euclo.mode: review
-        context_file_contents:
-          - path: testsuite/fixtures/handler.go
-            content: |
-              package main
-
-              import (
-                "database/sql"
-                "fmt"
-                "net/http"
-              )
-
-              func UserHandler(w http.ResponseWriter, r *http.Request) {
-                id := r.URL.Query().Get("id")
-                db, _ := sql.Open("sqlite3", "app.db")
-                row := db.QueryRow("SELECT name FROM users WHERE id = '" + id + "'")
-                var name string
-                row.Scan(&name)
-                fmt.Fprintf(w, "Hello %s", name)
-              }
-      expect:
+  - name: review_with_findings
+    description: Review mode finds issues and suggests fixes.
+    task_type: analysis
+    tags:
+    - coverage-matrix
+    - review
+    - review_suggest_implement
+    - level:2
+    setup:
+      files:
+      - path: testsuite/fixtures/handler.go
+        content: "package main\n\nimport (\n  \"database/sql\"\n  \"fmt\"\n  \"net/http\"\
+          \n)\n\nfunc UserHandler(w http.ResponseWriter, r *http.Request) {\n  id\
+          \ := r.URL.Query().Get(\"id\")\n  db, _ := sql.Open(\"sqlite3\", \"app.db\"\
+          )\n  row := db.QueryRow(\"SELECT name FROM users WHERE id = '\" + id + \"\
+          '\")\n  var name string\n  row.Scan(&name)\n  fmt.Fprintf(w, \"Hello %s\"\
+          , name)\n}\n"
+    prompt: Review testsuite/fixtures/handler.go for security issues and code quality.
+    context:
+      euclo.mode: review
+      context_file_contents:
+      - path: testsuite/fixtures/handler.go
+        content: "package main\n\nimport (\n  \"database/sql\"\n  \"fmt\"\n  \"net/http\"\
+          \n)\n\nfunc UserHandler(w http.ResponseWriter, r *http.Request) {\n  id\
+          \ := r.URL.Query().Get(\"id\")\n  db, _ := sql.Open(\"sqlite3\", \"app.db\"\
+          )\n  row := db.QueryRow(\"SELECT name FROM users WHERE id = '\" + id + \"\
+          '\")\n  var name string\n  row.Scan(&name)\n  fmt.Fprintf(w, \"Hello %s\"\
+          , name)\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         output_regex:
-          - (?i)(sql.injection|inject|security|sanitiz)
+        - (?i)(sql.injection|inject|security|sanitiz)
+        euclo_mode: review
+      benchmark:
         euclo:
-          mode: review
           profile: review_suggest_implement
-
-    - name: review_clean_code
-      description: "Review mode with no major issues found."
-      tags: [level:1]
-      task_type: analysis
-      setup:
-        files:
-          - path: testsuite/fixtures/clean.go
-            content: |
-              package main
-
-              import "errors"
-
-              // ParseAge validates and parses an age value.
-              func ParseAge(v int) (int, error) {
-                if v < 0 || v > 150 {
-                  return 0, errors.New("age out of range")
-                }
-                return v, nil
-              }
-      prompt: "Review testsuite/fixtures/clean.go for issues."
-      context:
-        euclo.mode: review
-        context_file_contents:
-          - path: testsuite/fixtures/clean.go
-            content: |
-              package main
-
-              import "errors"
-
-              // ParseAge validates and parses an age value.
-              func ParseAge(v int) (int, error) {
-                if v < 0 || v > 150 {
-                  return 0, errors.New("age out of range")
-                }
-                return v, nil
-              }
-      expect:
+  - name: review_clean_code
+    description: Review mode with no major issues found.
+    tags:
+    - level:1
+    task_type: analysis
+    setup:
+      files:
+      - path: testsuite/fixtures/clean.go
+        content: "package main\n\nimport \"errors\"\n\n// ParseAge validates and parses\
+          \ an age value.\nfunc ParseAge(v int) (int, error) {\n  if v < 0 || v >\
+          \ 150 {\n    return 0, errors.New(\"age out of range\")\n  }\n  return v,\
+          \ nil\n}\n"
+    prompt: Review testsuite/fixtures/clean.go for issues.
+    context:
+      euclo.mode: review
+      context_file_contents:
+      - path: testsuite/fixtures/clean.go
+        content: "package main\n\nimport \"errors\"\n\n// ParseAge validates and parses\
+          \ an age value.\nfunc ParseAge(v int) (int, error) {\n  if v < 0 || v >\
+          \ 150 {\n    return 0, errors.New(\"age out of range\")\n  }\n  return v,\
+          \ nil\n}\n"
+    expect:
+      outcome:
         must_succeed: true
+        euclo_mode: review
+      benchmark:
         euclo:
-          mode: review
           frame_kinds_must_exclude:
-            - transition
+          - transition

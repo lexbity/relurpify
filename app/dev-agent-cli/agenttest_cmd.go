@@ -31,6 +31,7 @@ func newAgentTestCmd() *cobra.Command {
 	cmd.AddCommand(newAgentTestPromoteCmd())
 	cmd.AddCommand(newAgentTestRefreshCmd())
 	cmd.AddCommand(newAgentTestTapesCmd())
+	// Phase 8: Migration command removed - all YAML files migrated
 	return cmd
 }
 
@@ -238,18 +239,19 @@ func runCapabilityTargeted(ctx context.Context, capabilityID string, suites []st
 		}
 		var filteredCases []agenttest.CaseSpec
 		for _, c := range suite.Spec.Cases {
-			// Check if case matches capability
+			// Phase 8: Updated to use Benchmark.Euclo
 			if c.CapabilityDirectRun != nil && c.CapabilityDirectRun.CapabilityID == capabilityID {
 				filteredCases = append(filteredCases, c)
 				continue
 			}
-			if c.Expect.Euclo != nil && c.Expect.Euclo.PrimaryRelurpicCapability == capabilityID {
+			euclo := c.Expect.Benchmark
+			if euclo != nil && euclo.Euclo != nil && euclo.Euclo.PrimaryRelurpicCapability == capabilityID {
 				filteredCases = append(filteredCases, c)
 				continue
 			}
 			// Check supporting capabilities
-			if c.Expect.Euclo != nil {
-				for _, supp := range c.Expect.Euclo.SupportingRelurpicCapabilities {
+			if euclo != nil && euclo.Euclo != nil {
+				for _, supp := range euclo.Euclo.SupportingRelurpicCapabilities {
 					if supp == capabilityID {
 						filteredCases = append(filteredCases, c)
 						break

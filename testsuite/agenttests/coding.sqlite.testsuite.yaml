@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding.sqlite
-  description: "SQLite-focused prompts for the coding agent (easy→hard)."
+  description: SQLite-focused prompts for the coding agent (easy→hard).
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -15,66 +15,84 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   cases:
-    - name: easy_fix_query_and_run
-      task_type: code_modification
-      requires:
-        executables: ["sqlite3"]
-        tools: ["cli_sqlite3"]
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/sqlsuite/schema.sql
-            content: |
-              CREATE TABLE users (
-                id INTEGER PRIMARY KEY,
-                name TEXT NOT NULL
-              );
+  - name: easy_fix_query_and_run
+    task_type: code_modification
+    requires:
+      executables:
+      - sqlite3
+      tools:
+      - cli_sqlite3
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/sqlsuite/schema.sql
+        content: "CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT\
+          \ NULL\n);\n\nCREATE TABLE posts (\n  id INTEGER PRIMARY KEY,\n  user_id\
+          \ INTEGER NOT NULL,\n  title TEXT NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES\
+          \ users(id)\n);\n"
+      - path: testsuite/agenttest_fixtures/sqlsuite/seed.sql
+        content: 'INSERT INTO users (id, name) VALUES (1, ''zoe'');
 
-              CREATE TABLE posts (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-              );
-          - path: testsuite/agenttest_fixtures/sqlsuite/seed.sql
-            content: |
-              INSERT INTO users (id, name) VALUES (1, 'zoe');
-              INSERT INTO users (id, name) VALUES (2, 'alice');
+          INSERT INTO users (id, name) VALUES (2, ''alice'');
 
-              INSERT INTO posts (id, user_id, title) VALUES (1, 1, 'hello');
-              INSERT INTO posts (id, user_id, title) VALUES (2, 2, 'world');
-              INSERT INTO posts (id, user_id, title) VALUES (3, 2, 'first');
-          - path: testsuite/agenttest_fixtures/sqlsuite/query.sql
-            content: |
-              -- Return each user name and post count, descending by count then name.
-              SELECT u.name, COUNT(p.id) AS post_count
-              FROM users u
-              LEFT JOIN posts p ON p.user_id = u.id
-              GROUP BY u.id
-              ORDER BY u.name ASC;
-      overrides:
-        allowed_capabilities:
-          - name: cli_sqlite3
-            kind: tool
 
-      prompt: |
-        Fix testsuite/agenttest_fixtures/sqlsuite/query.sql so it returns results ordered by post_count DESC then name ASC.
+          INSERT INTO posts (id, user_id, title) VALUES (1, 1, ''hello'');
 
-        Verify by running cli_sqlite3 args [":memory:"] with working_directory "testsuite/agenttest_fixtures/sqlsuite" and stdin:
-        .mode list
-        .separator |
-        .read schema.sql
-        .read seed.sql
-        .read query.sql
-      expect:
+          INSERT INTO posts (id, user_id, title) VALUES (2, 2, ''world'');
+
+          INSERT INTO posts (id, user_id, title) VALUES (3, 2, ''first'');
+
+          '
+      - path: testsuite/agenttest_fixtures/sqlsuite/query.sql
+        content: '-- Return each user name and post count, descending by count then
+          name.
+
+          SELECT u.name, COUNT(p.id) AS post_count
+
+          FROM users u
+
+          LEFT JOIN posts p ON p.user_id = u.id
+
+          GROUP BY u.id
+
+          ORDER BY u.name ASC;
+
+          '
+    overrides:
+      allowed_capabilities:
+      - name: cli_sqlite3
+        kind: tool
+    prompt: 'Fix testsuite/agenttest_fixtures/sqlsuite/query.sql so it returns results
+      ordered by post_count DESC then name ASC.
+
+
+      Verify by running cli_sqlite3 args [":memory:"] with working_directory "testsuite/agenttest_fixtures/sqlsuite"
+      and stdin:
+
+      .mode list
+
+      .separator |
+
+      .read schema.sql
+
+      .read seed.sql
+
+      .read query.sql
+
+      '
+    expect:
+      outcome:
         must_succeed: true
-        files_changed: ["testsuite/agenttest_fixtures/sqlsuite/query.sql"]
         output_regex:
-          - (?m)^alice\\|2$
-          - (?m)^zoe\\|1$
-        tool_calls_must_include: ["cli_sqlite3"]
+        - (?m)^alice\\|2$
+        - (?m)^zoe\\|1$
+        files_changed:
+        - testsuite/agenttest_fixtures/sqlsuite/query.sql
+      benchmark:
+        tools_expected:
+        - cli_sqlite3

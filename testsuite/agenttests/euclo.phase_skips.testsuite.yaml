@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.phase_skips
-  description: "Euclo phase-skip and fast-path execution tests."
+  description: Euclo phase-skip and fast-path execution tests.
   owner: agent-platform
   tier: stable
   classification: journey
@@ -17,88 +17,83 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: debug_stacktrace_skips_intake
-      description: "Debug mode should auto-skip intake when the prompt already contains stacktrace evidence."
-      task_type: code_modification
-      timeout: 120s
-      setup:
-        files:
-          - path: testsuite/fixtures/handler.go
-            content: |
-              package main
-
-              type Request struct{ Name string }
-
-              func processRequest(r *Request) string {
-                return r.Name
-              }
-      prompt: |
-        Fix this error:
-        panic: runtime error: nil pointer dereference
-        goroutine 1 [running]:
-        main.processRequest(0x0)
-            testsuite/fixtures/handler.go:5 +0x1a
-      expect:
+  - name: debug_stacktrace_skips_intake
+    description: Debug mode should auto-skip intake when the prompt already contains
+      stacktrace evidence.
+    task_type: code_modification
+    timeout: 120s
+    setup:
+      files:
+      - path: testsuite/fixtures/handler.go
+        content: "package main\n\ntype Request struct{ Name string }\n\nfunc processRequest(r\
+          \ *Request) string {\n  return r.Name\n}\n"
+    prompt: "Fix this error:\npanic: runtime error: nil pointer dereference\ngoroutine\
+      \ 1 [running]:\nmain.processRequest(0x0)\n    testsuite/fixtures/handler.go:5\
+      \ +0x1a\n"
+    expect:
+      outcome:
         must_succeed: true
+        euclo_mode: debug
+      benchmark:
         euclo:
-          mode: debug
           phases_skipped:
-            - intake
+          - intake
+  - name: code_just_do_it_skips_propose
+    description: Code mode should fast-path past proposal when asked to just do it.
+    task_type: code_modification
+    timeout: 90s
+    setup:
+      files:
+      - path: testsuite/fixtures/util.go
+        content: 'package main
 
-    - name: code_just_do_it_skips_propose
-      description: "Code mode should fast-path past proposal when asked to just do it."
-      task_type: code_modification
-      timeout: 90s
-      setup:
-        files:
-          - path: testsuite/fixtures/util.go
-            content: |
-              package main
 
-              func foo() string { return "hello" }
-      prompt: "just do it and rename the function foo to bar in testsuite/fixtures/util.go"
-      context:
-        euclo.mode: code
-      expect:
+          func foo() string { return "hello" }
+
+          '
+    prompt: just do it and rename the function foo to bar in testsuite/fixtures/util.go
+    context:
+      euclo.mode: code
+    expect:
+      outcome:
         must_succeed: true
+        euclo_mode: code
+      benchmark:
         euclo:
-          mode: code
           phases_skipped:
-            - propose
+          - propose
           frame_kinds_must_exclude:
-            - proposal
-
-    - name: planning_just_plan_it_skips_refinement
-      description: "Planning mode should skip clarify/compare/refine when explicitly told to just plan it."
-      task_type: analysis
-      timeout: 120s
-      setup:
-        files:
-          - path: testsuite/fixtures/api_handler.go
-            content: |
-              package api
-
-              func HandleRequest() string {
-                return "ok"
-              }
-      prompt: "just plan it: add authentication to the API"
-      context:
-        euclo.mode: planning
-      expect:
+          - proposal
+  - name: planning_just_plan_it_skips_refinement
+    description: Planning mode should skip clarify/compare/refine when explicitly
+      told to just plan it.
+    task_type: analysis
+    timeout: 120s
+    setup:
+      files:
+      - path: testsuite/fixtures/api_handler.go
+        content: "package api\n\nfunc HandleRequest() string {\n  return \"ok\"\n\
+          }\n"
+    prompt: 'just plan it: add authentication to the API'
+    context:
+      euclo.mode: planning
+    expect:
+      outcome:
         must_succeed: true
+        euclo_mode: planning
+      benchmark:
         euclo:
-          mode: planning
           phases_skipped:
-            - clarify
-            - compare
-            - refine
+          - clarify
+          - compare
+          - refine

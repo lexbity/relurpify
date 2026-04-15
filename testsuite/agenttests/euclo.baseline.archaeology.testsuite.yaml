@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.baseline.archaeology
-  description: "Capability-baseline Euclo archaeology coverage for explore, compile-plan, and implement-plan paths."
+  description: Capability-baseline Euclo archaeology coverage for explore, compile-plan,
+    and implement-plan paths.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -17,157 +18,162 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
     ignore_changes:
-      - relurpify_cfg/logs/skills.log
-      - relurpify_cfg/artifacts/euclo/deferred/**
+    - relurpify_cfg/logs/skills.log
+    - relurpify_cfg/artifacts/euclo/deferred/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: archaeology_explore_baseline
-      description: "Exploration should surface patterns without changing files."
-      task_type: analysis
-      tags: [baseline, capability-baseline, archaeology, explore, level:2]
-      timeout: 90s
-      context:
-        workflow_id: wf-euclo-baseline-explore
-        euclo.mode: planning
-      setup:
-        files:
-          - path: testsuite/fixtures/euclo_baseline_arch/http_a.go
-            content: |
-              package euclobaselinearch
-
-              import "strings"
-
-              func NormalizeHeader(v string) string {
-                return strings.TrimSpace(strings.ToLower(v))
-              }
-          - path: testsuite/fixtures/euclo_baseline_arch/http_b.go
-            content: |
-              package euclobaselinearch
-
-              import "strings"
-
-              func NormalizeQuery(v string) string {
-                return strings.TrimSpace(strings.ToLower(v))
-              }
-      prompt: "Explore testsuite/fixtures/euclo_baseline_arch for repeated normalization patterns. Do not modify files."
-      expect:
+  - name: archaeology_explore_baseline
+    description: Exploration should surface patterns without changing files.
+    task_type: analysis
+    tags:
+    - baseline
+    - capability-baseline
+    - archaeology
+    - explore
+    - level:2
+    timeout: 90s
+    context:
+      workflow_id: wf-euclo-baseline-explore
+      euclo.mode: planning
+    setup:
+      files:
+      - path: testsuite/fixtures/euclo_baseline_arch/http_a.go
+        content: "package euclobaselinearch\n\nimport \"strings\"\n\nfunc NormalizeHeader(v\
+          \ string) string {\n  return strings.TrimSpace(strings.ToLower(v))\n}\n"
+      - path: testsuite/fixtures/euclo_baseline_arch/http_b.go
+        content: "package euclobaselinearch\n\nimport \"strings\"\n\nfunc NormalizeQuery(v\
+          \ string) string {\n  return strings.TrimSpace(strings.ToLower(v))\n}\n"
+    prompt: Explore testsuite/fixtures/euclo_baseline_arch for repeated normalization
+      patterns. Do not modify files.
+    expect:
+      state_key_not_empty:
+      - euclo.active_exploration_id
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_key_not_empty:
-          - euclo.active_exploration_id
-        tool_calls_must_include:
-          - file_list
-          - file_read
-          - file_search
-        tool_calls_must_exclude:
-          - file_write
-          - go_test
+        euclo_mode: planning
+      security:
+        tools_must_not_call:
+        - file_write
+      benchmark:
+        tools_not_expected:
+        - go_test
+        tools_expected:
+        - file_list
+        - file_read
+        - file_search
         euclo:
           behavior_family: gap_analysis
-          mode: planning
           primary_relurpic_capability: euclo:archaeology.explore
           supporting_relurpic_capabilities:
-            - euclo:archaeology.pattern-surface
-            - euclo:archaeology.coherence-assess
-
-    - name: archaeology_compile_plan_baseline
-      description: "Compile-plan should turn prior exploration into a minimal plan."
-      task_type: analysis
-      tags: [baseline, capability-baseline, archaeology, compile-plan, level:2]
-      timeout: 90s
-      context:
-        workflow_id: wf-euclo-baseline-compile
-        euclo.mode: planning
-      setup:
-        files:
-          - path: testsuite/fixtures/euclo_baseline_arch/handler.go
-            content: |
-              package euclobaselinearch
-
-              func NormalizeEmail(email string) string {
-                return email
-              }
-      prompt: "Use the exploration result to compile a minimal plan for testsuite/fixtures/euclo_baseline_arch/handler.go."
-      expect:
+          - euclo:archaeology.pattern-surface
+          - euclo:archaeology.coherence-assess
+  - name: archaeology_compile_plan_baseline
+    description: Compile-plan should turn prior exploration into a minimal plan.
+    task_type: analysis
+    tags:
+    - baseline
+    - capability-baseline
+    - archaeology
+    - compile-plan
+    - level:2
+    timeout: 90s
+    context:
+      workflow_id: wf-euclo-baseline-compile
+      euclo.mode: planning
+    setup:
+      files:
+      - path: testsuite/fixtures/euclo_baseline_arch/handler.go
+        content: "package euclobaselinearch\n\nfunc NormalizeEmail(email string) string\
+          \ {\n  return email\n}\n"
+    prompt: Use the exploration result to compile a minimal plan for testsuite/fixtures/euclo_baseline_arch/handler.go.
+    expect:
+      state_key_not_empty:
+      - euclo.active_exploration_id
+      - euclo.active_exploration_snapshot_id
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_key_not_empty:
-          - euclo.active_exploration_id
-          - euclo.active_exploration_snapshot_id
-        tool_calls_must_include:
-          - file_list
-          - file_read
-          - file_search
-        tool_calls_must_exclude:
-          - file_write
-          - go_test
+        euclo_mode: planning
+      security:
+        tools_must_not_call:
+        - file_write
+      benchmark:
+        tools_not_expected:
+        - go_test
+        tools_expected:
+        - file_list
+        - file_read
+        - file_search
         euclo:
           behavior_family: gap_analysis
-          mode: planning
           primary_relurpic_capability: euclo:archaeology.compile-plan
           supporting_relurpic_capabilities:
-            - euclo:archaeology.prospective-assess
-            - euclo:archaeology.convergence-guard
+          - euclo:archaeology.prospective-assess
+          - euclo:archaeology.convergence-guard
+  - name: archaeology_implement_baseline
+    description: Implement-plan should make the requested bounded edit.
+    task_type: code_modification
+    tags:
+    - baseline
+    - capability-baseline
+    - archaeology
+    - implement-plan
+    - level:2
+    timeout: 90s
+    context:
+      workflow_id: wf-euclo-baseline-implement
+      euclo.mode: planning
+    setup:
+      files:
+      - path: testsuite/fixtures/euclo_baseline_arch/handler.go
+        content: "package euclobaselinearch\n\nfunc NormalizeName(name string) string\
+          \ {\n  if name == \"\" {\n    return \"\"\n  }\n  return name\n}\n"
+      workflows:
+      - workflow:
+          workflow_id: wf-euclo-baseline-implement
+          task_type: code_modification
+          instruction: Normalize names by trimming whitespace before validation
+          status: running
+        knowledge:
+        - record_id: wf-euclo-baseline-implement-plan
+          kind: fact
+          title: Compiled plan
+          content: 'Trim whitespace, reject empty strings, and return the trimmed
+            value.
 
-    - name: archaeology_implement_baseline
-      description: "Implement-plan should make the requested bounded edit."
-      task_type: code_modification
-      tags: [baseline, capability-baseline, archaeology, implement-plan, level:2]
-      timeout: 90s
-      context:
-        workflow_id: wf-euclo-baseline-implement
-        euclo.mode: planning
-      setup:
-        files:
-          - path: testsuite/fixtures/euclo_baseline_arch/handler.go
-            content: |
-              package euclobaselinearch
-
-              func NormalizeName(name string) string {
-                if name == "" {
-                  return ""
-                }
-                return name
-              }
-        workflows:
-          - workflow:
-              workflow_id: wf-euclo-baseline-implement
-              task_type: code_modification
-              instruction: Normalize names by trimming whitespace before validation
-              status: running
-            knowledge:
-              - record_id: wf-euclo-baseline-implement-plan
-                kind: fact
-                title: Compiled plan
-                content: >
-                  Trim whitespace, reject empty strings, and return the trimmed value.
-                status: accepted
-      prompt: "Apply the compiled plan to testsuite/fixtures/euclo_baseline_arch/handler.go."
-      expect:
+            '
+          status: accepted
+    prompt: Apply the compiled plan to testsuite/fixtures/euclo_baseline_arch/handler.go.
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/euclo_baseline_arch/handler.go
+        - testsuite/fixtures/euclo_baseline_arch/handler.go
         files_contain:
-          - path: testsuite/fixtures/euclo_baseline_arch/handler.go
-            contains: ['import "strings"', "strings.TrimSpace(name)"]
-        tool_calls_must_include:
-          - file_read
-          - file_write
+        - path: testsuite/fixtures/euclo_baseline_arch/handler.go
+          contains:
+          - import "strings"
+          - strings.TrimSpace(name)
+        euclo_mode: planning
+      benchmark:
+        tools_expected:
+        - file_read
+        - file_write
         euclo:
           behavior_family: gap_analysis
-          mode: planning
           primary_relurpic_capability: euclo:archaeology.implement-plan
           supporting_relurpic_capabilities:
-            - euclo:archaeology.prospective-assess
-            - euclo:archaeology.convergence-guard
+          - euclo:archaeology.prospective-assess
+          - euclo:archaeology.convergence-guard
           recipe_ids:
-            - archaeology.implement.step
+          - archaeology.implement.step

@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.recovery
-  description: "Euclo recovery-path tests captured from live runs and replayed via golden tapes."
+  description: Euclo recovery-path tests captured from live runs and replayed via
+    golden tapes.
   owner: agent-platform
   tier: live-flaky
   classification: journey
@@ -17,126 +18,83 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
     strategy: replay-if-golden
-  # NOTE: Recovery tests are intentionally replay-first.
-  # Capture goldens by rerunning live refreshes until a run naturally exercises recovery:
-  #   go run ./app/dev-agent-cli agenttest refresh \
-  #     --suite testsuite/agenttests/euclo.recovery.testsuite.yaml \
-  #     --tag recovery \
-  #     --max-retries 5
-  # Then promote the successful run's tapes if needed:
-  #   go run ./app/dev-agent-cli agenttest promote \
-  #     --suite testsuite/agenttests/euclo.recovery.testsuite.yaml \
-  #     --run <run-dir> \
-  #     --all
-  # The paradigm-switch case also uses a low max_iterations cap as a deterministic forcing path.
   cases:
-    - name: recovery_paradigm_switch_iteration_cap
-      description: "Low iteration cap should force ReAct non-convergence and record paradigm-switch recovery."
-      task_type: code_modification
-      timeout: 180s
-      tags: [recovery, paradigm-switch]
-      setup:
-        files:
-          - path: testsuite/fixtures/recovery_pipeline.go
-            content: |
-              package pipeline
-
-              import "strings"
-
-              type Step struct {
-                Name string
-                Run  func(string) string
-              }
-
-              type Pipeline struct {
-                Steps []Step
-              }
-
-              func (p Pipeline) Process(input string) string {
-                value := strings.TrimSpace(input)
-                for _, step := range p.Steps {
-                  if step.Run != nil {
-                    value = step.Run(value)
-                  }
-                }
-                return value
-              }
-
-              func DefaultPipeline() Pipeline {
-                return Pipeline{
-                  Steps: []Step{
-                    {
-                      Name: "normalize",
-                      Run: func(input string) string {
-                        return strings.ToLower(strings.TrimSpace(input))
-                      },
-                    },
-                    {
-                      Name: "dedupe-spaces",
-                      Run: func(input string) string {
-                        return strings.Join(strings.Fields(input), " ")
-                      },
-                    },
-                  },
-                }
-              }
-          - path: testsuite/fixtures/recovery_pipeline_test.go
-            content: |
-              package pipeline
-
-              import "testing"
-
-              func TestDefaultPipeline(t *testing.T) {
-                got := DefaultPipeline().Process("  HELLO   STREAM  ")
-                if got != "hello stream" {
-                  t.Fatalf("got %q", got)
-                }
-              }
-      prompt: "Refactor the pipeline in testsuite/fixtures/recovery_pipeline.go to support streaming-style processing with a clearer step model. Keep the current behavior intact."
-      context:
-        euclo.mode: code
-        euclo.force_recovery: paradigm_switch
-      overrides:
-        max_iterations: 3
-      expect:
-        must_succeed: false
+  - name: recovery_paradigm_switch_iteration_cap
+    description: Low iteration cap should force ReAct non-convergence and record paradigm-switch
+      recovery.
+    task_type: code_modification
+    timeout: 180s
+    tags:
+    - recovery
+    - paradigm-switch
+    setup:
+      files:
+      - path: testsuite/fixtures/recovery_pipeline.go
+        content: "package pipeline\n\nimport \"strings\"\n\ntype Step struct {\n \
+          \ Name string\n  Run  func(string) string\n}\n\ntype Pipeline struct {\n\
+          \  Steps []Step\n}\n\nfunc (p Pipeline) Process(input string) string {\n\
+          \  value := strings.TrimSpace(input)\n  for _, step := range p.Steps {\n\
+          \    if step.Run != nil {\n      value = step.Run(value)\n    }\n  }\n \
+          \ return value\n}\n\nfunc DefaultPipeline() Pipeline {\n  return Pipeline{\n\
+          \    Steps: []Step{\n      {\n        Name: \"normalize\",\n        Run:\
+          \ func(input string) string {\n          return strings.ToLower(strings.TrimSpace(input))\n\
+          \        },\n      },\n      {\n        Name: \"dedupe-spaces\",\n     \
+          \   Run: func(input string) string {\n          return strings.Join(strings.Fields(input),\
+          \ \" \")\n        },\n      },\n    },\n  }\n}\n"
+      - path: testsuite/fixtures/recovery_pipeline_test.go
+        content: "package pipeline\n\nimport \"testing\"\n\nfunc TestDefaultPipeline(t\
+          \ *testing.T) {\n  got := DefaultPipeline().Process(\"  HELLO   STREAM \
+          \ \")\n  if got != \"hello stream\" {\n    t.Fatalf(\"got %q\", got)\n \
+          \ }\n}\n"
+    prompt: Refactor the pipeline in testsuite/fixtures/recovery_pipeline.go to support
+      streaming-style processing with a clearer step model. Keep the current behavior
+      intact.
+    context:
+      euclo.mode: code
+      euclo.force_recovery: paradigm_switch
+    overrides:
+      max_iterations: 3
+    expect:
+      outcome:
+        euclo_mode: code
+      benchmark:
         euclo:
-          mode: code
           recovery_attempted: true
           recovery_strategies:
-            - paradigm_switch
-
-    - name: recovery_capability_fallback
-      description: "Regression investigation should capture capability fallback when the first localization path is weak."
-      task_type: analysis
-      timeout: 180s
-      tags: [recovery, capability-fallback]
-      setup:
-        files:
-          - path: testsuite/fixtures/recovery_regression.go
-            content: |
-              package main
-
-              func Multiply(a, b int) int {
-                return a + b
-              }
-      prompt: "This used to work before recent changes. Investigate the regression in Multiply, and if the first investigation path is inconclusive, fall back to the stronger debug capability."
-      context:
-        euclo.mode: debug
-        euclo.force_recovery: capability_fallback
-      expect:
-        must_succeed: false
+          - paradigm_switch
+  - name: recovery_capability_fallback
+    description: Regression investigation should capture capability fallback when
+      the first localization path is weak.
+    task_type: analysis
+    timeout: 180s
+    tags:
+    - recovery
+    - capability-fallback
+    setup:
+      files:
+      - path: testsuite/fixtures/recovery_regression.go
+        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
+          }\n"
+    prompt: This used to work before recent changes. Investigate the regression in
+      Multiply, and if the first investigation path is inconclusive, fall back to
+      the stronger debug capability.
+    context:
+      euclo.mode: debug
+      euclo.force_recovery: capability_fallback
+    expect:
+      outcome:
+        euclo_mode: debug
+      benchmark:
         euclo:
-          mode: debug
           recovery_attempted: true
           recovery_strategies:
-            - capability_fallback
+          - capability_fallback

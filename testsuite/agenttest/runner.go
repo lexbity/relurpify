@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,21 +45,23 @@ type RunOptions struct {
 }
 
 type SuiteReport struct {
-	SuitePath      string
-	RunID          string
-	Profile        string
-	Strict         bool
-	StartedAt      time.Time
-	FinishedAt     time.Time
-	DurationMS     int64
-	PassedCases    int
-	FailedCases    int
-	SkippedCases   int
-	InfraFailures  int
-	AssertFailures int
-	Cases          []CaseReport
-	Performance    PerformanceSummary `json:"performance,omitempty"`
-	Benchmark      *BenchmarkReport   `json:"benchmark,omitempty"`
+	SuitePath        string
+	RunID            string
+	Profile          string
+	Strict           bool
+	StartedAt        time.Time
+	FinishedAt       time.Time
+	DurationMS       int64
+	PassedCases      int
+	FailedCases      int
+	SkippedCases     int
+	InfraFailures    int
+	AssertFailures   int
+	SecurityFailures int `json:"security_failures,omitempty"` // OSB: security assertion failures
+	Cases            []CaseReport
+	Performance      PerformanceSummary   `json:"performance,omitempty"`
+	Benchmark        *BenchmarkReport     `json:"benchmark,omitempty"`
+	OSBBenchmark     *OSBBenchmarkSummary `json:"osb_benchmark,omitempty"` // OSB: benchmark summary
 }
 
 type CaseReport struct {
@@ -101,6 +104,70 @@ type CaseReport struct {
 	// NEW: Latency tracking (Phase 5)
 	ToolLatencies   map[string]LatencyStats `json:"tool_latencies,omitempty"`
 	TotalToolTimeMs int64                   `json:"total_tool_time_ms,omitempty"`
+
+	// OSB Model: New report fields (Phase 1)
+	SecurityObservations  []SecurityObservation  `json:"security_observations,omitempty"`
+	BenchmarkObservations []BenchmarkObservation `json:"benchmark_observations,omitempty"`
+	AssertionResults      []AssertionResult      `json:"assertion_results,omitempty"`
+}
+
+// SecurityObservation records one security-relevant event observed during the run.
+// Used for both violations (unexpected boundary crossings) and grants
+// (expected boundary crossings that were permitted per manifest).
+type SecurityObservation struct {
+	Kind       string `json:"kind"`     // "file_write", "exec", "network", "read"
+	Resource   string `json:"resource"` // affected path, binary, or endpoint
+	Action     string `json:"action"`   // "write", "execute", "connect", "read"
+	InScope    bool   `json:"in_scope"` // true if within manifest-declared permissions
+	Blocked    bool   `json:"blocked"`  // true if the sandbox blocked it
+	Expected   bool   `json:"expected"` // true if listed in security.expected_violations
+	Timestamp  string `json:"timestamp"`
+	AgentID    string `json:"agent_id,omitempty"`
+	PolicyRule string `json:"policy_rule,omitempty"` // which manifest rule applied
+}
+
+// BenchmarkObservation records one soft telemetry mismatch or measurement.
+type BenchmarkObservation struct {
+	Category string `json:"category"` // "tool_usage", "euclo_routing", "token_usage", "performance"
+	Field    string `json:"field"`    // dotted field name, e.g. "euclo.behavior_family"
+	Expected string `json:"expected"` // expected value (stringified)
+	Actual   string `json:"actual"`   // actual value observed
+	Matched  bool   `json:"matched"`  // true if expected == actual
+	Note     string `json:"note,omitempty"`
+}
+
+// AssertionResult captures one outcome or security assertion result.
+type AssertionResult struct {
+	AssertionID string `json:"assertion_id"` // e.g. "outcome.must_succeed"
+	Tier        string `json:"tier"`         // "outcome" or "security"
+	Passed      bool   `json:"passed"`
+	Message     string `json:"message,omitempty"`
+}
+
+// OSBBenchmarkSummary aggregates benchmark observations across cases (Outcome-Security-Benchmark model).
+type OSBBenchmarkSummary struct {
+	TotalObservations   int                        `json:"total_observations"`
+	MatchedObservations int                        `json:"matched_observations"`
+	MatchRate           float64                    `json:"match_rate"` // matched/total
+	ByCategory          map[string]CategorySummary `json:"by_category"`
+	ByField             map[string]FieldSummary    `json:"by_field"`
+	WorstFields         []FieldSummary             `json:"worst_fields"` // lowest match rate
+}
+
+// CategorySummary summarizes observations for one category.
+type CategorySummary struct {
+	Total   int     `json:"total"`
+	Matched int     `json:"matched"`
+	Rate    float64 `json:"rate"`
+}
+
+// FieldSummary summarizes observations for one field.
+type FieldSummary struct {
+	Field        string   `json:"field"`
+	Total        int      `json:"total"`
+	Matched      int      `json:"matched"`
+	Rate         float64  `json:"rate"`
+	ActualValues []string `json:"actual_values,omitempty"` // distinct observed values
 }
 
 type TokenUsageReport struct {
@@ -191,14 +258,21 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 			report.PassedCases++
 		default:
 			report.FailedCases++
-			if c.FailureKind == "infra" {
+			switch c.FailureKind {
+			case "infra":
 				report.InfraFailures++
-			} else {
+			case "security":
+				report.SecurityFailures++
+			default:
 				report.AssertFailures++
 			}
 		}
 	}
 	report.Performance = SummarizePerformance(report.Cases)
+
+	// OSB Model: Populate benchmark summary (Phase 5)
+	report.OSBBenchmark = aggregateBenchmarkSummary(report.Cases)
+
 	if strings.EqualFold(strings.TrimSpace(suite.Metadata.Classification), "benchmark") || suite.Metadata.Benchmark.ScoreFamily != "" || len(suite.Metadata.Benchmark.ScoreDimensions) > 0 || strings.TrimSpace(suite.Metadata.Benchmark.ComparisonWindow) != "" || suite.Metadata.Benchmark.VarianceThreshold > 0 {
 		if benchmarkReport, err := BuildBenchmarkReport(suite, report); err == nil && benchmarkReport != nil {
 			report.Benchmark = benchmarkReport
@@ -207,6 +281,14 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 			}
 		}
 	}
+
+	// OSB Model: Write benchmark_summary.json (Phase 5)
+	if report.OSBBenchmark != nil {
+		if data, err := json.MarshalIndent(report.OSBBenchmark, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(outDir, "benchmark_summary.json"), data, 0o644)
+		}
+	}
+
 	data, _ := json.MarshalIndent(report, "", "  ")
 	_ = os.WriteFile(filepath.Join(outDir, "report.json"), data, 0o644)
 	return report, nil
@@ -313,5 +395,144 @@ func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {
 		TapePath:            filepath.Join(artifactsDir, "tape.jsonl"),
 		InteractionTapePath: filepath.Join(artifactsDir, "interaction.tape.jsonl"),
 		WorkspaceDir:        filepath.Join(tmpDir, "workspace"),
+	}
+}
+
+// aggregateBenchmarkSummary aggregates benchmark observations across all cases.
+// Phase 4: OSB Model benchmark summary aggregation.
+func aggregateBenchmarkSummary(cases []CaseReport) *OSBBenchmarkSummary {
+	if len(cases) == 0 {
+		return nil
+	}
+
+	summary := &OSBBenchmarkSummary{
+		ByCategory: make(map[string]CategorySummary),
+		ByField:    make(map[string]FieldSummary),
+	}
+
+	// Collect all observations from all cases
+	for _, c := range cases {
+		for _, obs := range c.BenchmarkObservations {
+			summary.TotalObservations++
+			if obs.Matched {
+				summary.MatchedObservations++
+			}
+
+			// Update category summary
+			cat := summary.ByCategory[obs.Category]
+			cat.Total++
+			if obs.Matched {
+				cat.Matched++
+			}
+			summary.ByCategory[obs.Category] = cat
+
+			// Update field summary
+			field := summary.ByField[obs.Field]
+			field.Field = obs.Field
+			field.Total++
+			if obs.Matched {
+				field.Matched++
+			}
+			// Collect distinct actual values
+			if obs.Actual != "" {
+				found := false
+				for _, v := range field.ActualValues {
+					if v == obs.Actual {
+						found = true
+						break
+					}
+				}
+				if !found {
+					field.ActualValues = append(field.ActualValues, obs.Actual)
+				}
+			}
+			summary.ByField[obs.Field] = field
+		}
+	}
+
+	// Calculate rates
+	if summary.TotalObservations > 0 {
+		summary.MatchRate = float64(summary.MatchedObservations) / float64(summary.TotalObservations)
+	}
+
+	for catName, cat := range summary.ByCategory {
+		if cat.Total > 0 {
+			cat.Rate = float64(cat.Matched) / float64(cat.Total)
+			summary.ByCategory[catName] = cat
+		}
+	}
+
+	for fieldName, field := range summary.ByField {
+		if field.Total > 0 {
+			field.Rate = float64(field.Matched) / float64(field.Total)
+			summary.ByField[fieldName] = field
+		}
+	}
+
+	// Build worst fields list (lowest match rate)
+	for _, field := range summary.ByField {
+		summary.WorstFields = append(summary.WorstFields, field)
+	}
+	// Sort by rate ascending
+	sort.Slice(summary.WorstFields, func(i, j int) bool {
+		return summary.WorstFields[i].Rate < summary.WorstFields[j].Rate
+	})
+
+	return summary
+}
+
+// === Phase 8: Types from deleted latency.go ===
+
+// LatencyStats captures statistical information about tool latency
+type LatencyStats struct {
+	MinMs int64 `json:"min_ms"`
+	MaxMs int64 `json:"max_ms"`
+	AvgMs int64 `json:"avg_ms"`
+	P95Ms int64 `json:"p95_ms"`
+}
+
+// ToolLatencyReport contains latency information for all tools
+type ToolLatencyReport struct {
+	ToolLatencies   map[string]LatencyStats `json:"tool_latencies"`
+	TotalToolTimeMs int64                   `json:"total_tool_time_ms"`
+}
+
+// BuildLatencyReport builds a latency report from tool transcript
+// Phase 8: Simplified implementation after latency.go removal
+func BuildLatencyReport(transcript *ToolTranscriptArtifact) *ToolLatencyReport {
+	if transcript == nil || len(transcript.Entries) == 0 {
+		return nil
+	}
+
+	latencies := make(map[string]LatencyStats)
+	var totalTime int64
+
+	for _, entry := range transcript.Entries {
+		duration := entry.DurationMS
+		totalTime += duration
+
+		stats, exists := latencies[entry.Tool]
+		if !exists {
+			stats = LatencyStats{
+				MinMs: duration,
+				MaxMs: duration,
+				AvgMs: duration,
+			}
+		} else {
+			if duration < stats.MinMs {
+				stats.MinMs = duration
+			}
+			if duration > stats.MaxMs {
+				stats.MaxMs = duration
+			}
+			// Simple average calculation
+			stats.AvgMs = (stats.AvgMs + duration) / 2
+		}
+		latencies[entry.Tool] = stats
+	}
+
+	return &ToolLatencyReport{
+		ToolLatencies:   latencies,
+		TotalToolTimeMs: totalTime,
 	}
 }

@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: react
-  description: "End-to-end smoke coverage for the standalone ReAct agent."
+  description: End-to-end smoke coverage for the standalone ReAct agent.
   owner: agent-platform
   tier: smoke
   quarantined: false
@@ -15,158 +15,189 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   cases:
-    - name: edit_fixture_file
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/hello.txt
-            content: "hello\n"
-      context:
-        context_file_contents:
-          - path: testsuite/agenttest_fixtures/hello.txt
-            content: "hello\n"
-      prompt: "Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt. Use file_write to apply the edit."
-      expect:
+  - name: edit_fixture_file
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/hello.txt
+        content: 'hello
+
+          '
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/hello.txt
+        content: 'hello
+
+          '
+    prompt: Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt.
+      Use file_write to apply the edit.
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/hello.txt
-        tool_calls_must_include:
-          - file_write
-    - name: verify_go_fixture_without_edits
-      task_type: analysis
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-            content: |
-              package mathutil
-
-              func Add(a, b int) int {
-              	return a + b
-              }
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
-            content: |
-              package mathutil
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-              	if Add(2, 2) != 4 {
-              		t.Fatalf("expected Add(2,2)=4")
-              	}
-              }
-      overrides:
-        allowed_capabilities:
-          - name: cli_go
-            kind: tool
-      prompt: "Run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm whether the package is already correct. Do not modify any files."
-      expect:
+        - testsuite/agenttest_fixtures/hello.txt
+      benchmark:
+        tools_expected:
+        - file_write
+  - name: verify_go_fixture_without_edits
+    task_type: analysis
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+        content: "package mathutil\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n\tif Add(2, 2) != 4 {\n\t\tt.Fatalf(\"expected Add(2,2)=4\")\n\t}\n\
+          }\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_go
+        kind: tool
+    prompt: Run cli_go args ["test","./testsuite/agenttest_fixtures/gosuite/mathutil"]
+      and confirm whether the package is already correct. Do not modify any files.
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)(correct|passes|ok)
-        tool_calls_must_include:
-          - cli_go
-    - name: multi_step_read_then_write
-      tags: [smoke, multi-step]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/react_multi_step.txt
-            content: "initial content\n"
-      context:
-        context_file_contents:
-          - path: testsuite/agenttest_fixtures/react_multi_step.txt
-            content: "initial content\n"
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-          - name: file_write
-            kind: tool
-      prompt: >
-        Read testsuite/agenttest_fixtures/react_multi_step.txt, then append the line "APPENDED"
-        to it using file_write. Both file_read and file_write must be used, in that order.
-      expect:
+        - (?i)(correct|passes|ok)
+        no_file_changes: true
+      benchmark:
+        tools_expected:
+        - cli_go
+  - name: multi_step_read_then_write
+    tags:
+    - smoke
+    - multi-step
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/react_multi_step.txt
+        content: 'initial content
+
+          '
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/react_multi_step.txt
+        content: 'initial content
+
+          '
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+      - name: file_write
+        kind: tool
+    prompt: 'Read testsuite/agenttest_fixtures/react_multi_step.txt, then append the
+      line "APPENDED" to it using file_write. Both file_read and file_write must be
+      used, in that order.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/react_multi_step.txt
-        tool_calls_must_include:
-          - file_read
-          - file_write
-    - name: tool_error_recovery
-      tags: [smoke, error-recovery]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/react_recovery_target.txt
-            content: "before\n"
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-          - name: file_write
-            kind: tool
-      prompt: >
-        First attempt to read testsuite/agenttest_fixtures/does_not_exist_xyz.txt (it does not exist and
-        will fail). After that error, write "RECOVERED" to
-        testsuite/agenttest_fixtures/react_recovery_target.txt. Must succeed overall.
-      expect:
+        - testsuite/agenttest_fixtures/react_multi_step.txt
+      benchmark:
+        tools_expected:
+        - file_read
+        - file_write
+  - name: tool_error_recovery
+    tags:
+    - smoke
+    - error-recovery
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/react_recovery_target.txt
+        content: 'before
+
+          '
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+      - name: file_write
+        kind: tool
+    prompt: 'First attempt to read testsuite/agenttest_fixtures/does_not_exist_xyz.txt
+      (it does not exist and will fail). After that error, write "RECOVERED" to testsuite/agenttest_fixtures/react_recovery_target.txt.
+      Must succeed overall.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/react_recovery_target.txt
-        tool_calls_must_include:
-          - file_write
-    - name: read_only_analysis
-      tags: [smoke, analysis]
-      task_type: analysis
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/react_file_a.txt
-            content: "The quick brown fox\n"
-          - path: testsuite/agenttest_fixtures/react_file_b.txt
-            content: "The slow grey cat\n"
-      context:
-        context_file_contents:
-          - path: testsuite/agenttest_fixtures/react_file_a.txt
-            content: "The quick brown fox\n"
-          - path: testsuite/agenttest_fixtures/react_file_b.txt
-            content: "The slow grey cat\n"
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: >
-        Read testsuite/agenttest_fixtures/react_file_a.txt and
-        testsuite/agenttest_fixtures/react_file_b.txt. Describe how the content of the two
-        files differs. Do not modify any files.
-      expect:
+        - testsuite/agenttest_fixtures/react_recovery_target.txt
+      benchmark:
+        tools_expected:
+        - file_write
+  - name: read_only_analysis
+    tags:
+    - smoke
+    - analysis
+    task_type: analysis
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/react_file_a.txt
+        content: 'The quick brown fox
+
+          '
+      - path: testsuite/agenttest_fixtures/react_file_b.txt
+        content: 'The slow grey cat
+
+          '
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/react_file_a.txt
+        content: 'The quick brown fox
+
+          '
+      - path: testsuite/agenttest_fixtures/react_file_b.txt
+        content: 'The slow grey cat
+
+          '
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: 'Read testsuite/agenttest_fixtures/react_file_a.txt and testsuite/agenttest_fixtures/react_file_b.txt.
+      Describe how the content of the two files differs. Do not modify any files.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)(differ|different|fox|cat)
-        tool_calls_must_include:
-          - file_read
-    - name: negative_unknown_tool
-      tags: [smoke, negative]
-      task_type: analysis
-      overrides:
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: >
-        Use the tool called nonexistent_tool_xyz to list the project files (this tool does not
-        exist). When that fails, fall back to using file_read on README.md and summarize the
-        project in one sentence. Do not modify any files.
-      expect:
+        - (?i)(differ|different|fox|cat)
+        no_file_changes: true
+      benchmark:
+        tools_expected:
+        - file_read
+  - name: negative_unknown_tool
+    tags:
+    - smoke
+    - negative
+    task_type: analysis
+    overrides:
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: 'Use the tool called nonexistent_tool_xyz to list the project files (this
+      tool does not exist). When that fails, fall back to using file_read on README.md
+      and summarize the project in one sentence. Do not modify any files.
+
+      '
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)relurpify
+        - (?i)relurpify
+        no_file_changes: true

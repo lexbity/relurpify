@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.classification
-  description: "Euclo mode-classification boundary and ambiguity tests."
+  description: Euclo mode-classification boundary and ambiguity tests.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -17,167 +17,165 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: ambiguous_debug_or_code
-      description: "Regression language should dominate generic code-edit language."
-      tags: [level:1]
-      task_type: analysis
-      prompt: "this test used to pass but now it doesn't after I changed the handler"
-      expect:
+  - name: ambiguous_debug_or_code
+    description: Regression language should dominate generic code-edit language.
+    tags:
+    - level:1
+    task_type: analysis
+    prompt: this test used to pass but now it doesn't after I changed the handler
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: debug
-
-    - name: ambiguous_review_or_code
-      description: "Mixed inspection-plus-fix language should remain stable under ambiguity."
-      tags: [level:1]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/parser.go
-            content: |
-              package main
-
-              func Parse(input string) string {
-                return input
-              }
-      prompt: "look at the error handling in parser.go and fix anything that's wrong"
-      context:
-        context_file_contents:
-          - path: testsuite/fixtures/parser.go
-            content: |
-              package main
-
-              func Parse(input string) string {
-                return input
-              }
-      expect:
+        euclo_mode: debug
+  - name: ambiguous_review_or_code
+    description: Mixed inspection-plus-fix language should remain stable under ambiguity.
+    tags:
+    - level:1
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/parser.go
+        content: "package main\n\nfunc Parse(input string) string {\n  return input\n\
+          }\n"
+    prompt: look at the error handling in parser.go and fix anything that's wrong
+    context:
+      context_file_contents:
+      - path: testsuite/fixtures/parser.go
+        content: "package main\n\nfunc Parse(input string) string {\n  return input\n\
+          }\n"
+    expect:
+      outcome:
         must_succeed: true
-
-    - name: ambiguous_tdd_or_code
-      description: "Test-oriented implementation requests should surface TDD signals without failing E2E."
-      tags: [level:1]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/create_user.go
-            content: |
-              package main
-
-              func CreateUser(name string) string {
-                return name
-              }
-      prompt: "add input validation to CreateUser and make sure it's tested"
-      context:
-        context_file_contents:
-          - path: testsuite/fixtures/create_user.go
-            content: |
-              package main
-
-              func CreateUser(name string) string {
-                return name
-              }
-      expect:
+  - name: ambiguous_tdd_or_code
+    description: Test-oriented implementation requests should surface TDD signals
+      without failing E2E.
+    tags:
+    - level:1
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/create_user.go
+        content: "package main\n\nfunc CreateUser(name string) string {\n  return\
+          \ name\n}\n"
+    prompt: add input validation to CreateUser and make sure it's tested
+    context:
+      context_file_contents:
+      - path: testsuite/fixtures/create_user.go
+        content: "package main\n\nfunc CreateUser(name string) string {\n  return\
+          \ name\n}\n"
+    expect:
+      outcome:
         must_succeed: true
-
-    - name: pure_question_no_mode
-      description: "A plain explanatory question should fall back to code mode."
-      tags: [level:1]
-      task_type: analysis
-      prompt: "how does the parser work?"
-      expect:
+  - name: pure_question_no_mode
+    description: A plain explanatory question should fall back to code mode.
+    tags:
+    - level:1
+    task_type: analysis
+    prompt: how does the parser work?
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: code
-
-    - name: explicit_mode_overrides_classification
-      description: "An explicit mode override should beat review-like keywords."
-      tags: [level:1]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/handler.go
-            content: |
-              package main
-
-              func Handle() string {
-                return "ok"
-              }
-      prompt: "review the code in handler.go"
-      context:
-        mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/handler.go
-            content: |
-              package main
-
-              func Handle() string {
-                return "ok"
-              }
-      expect:
+        euclo_mode: code
+  - name: explicit_mode_overrides_classification
+    description: An explicit mode override should beat review-like keywords.
+    tags:
+    - level:1
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/handler.go
+        content: "package main\n\nfunc Handle() string {\n  return \"ok\"\n}\n"
+    prompt: review the code in handler.go
+    context:
+      mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/handler.go
+        content: "package main\n\nfunc Handle() string {\n  return \"ok\"\n}\n"
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: code
-
-    - name: classify_debug_from_error
-      description: "4.4: panic/error prompt without explicit mode should auto-classify to debug."
-      tags: [stable, classification, level:1]
-      task_type: analysis
-      prompt: "Getting panic: nil pointer dereference at runtime/panic.go:1038 after the latest deploy to staging."
-      expect:
+        euclo_mode: code
+  - name: classify_debug_from_error
+    description: '4.4: panic/error prompt without explicit mode should auto-classify
+      to debug.'
+    tags:
+    - stable
+    - classification
+    - level:1
+    task_type: analysis
+    prompt: 'Getting panic: nil pointer dereference at runtime/panic.go:1038 after
+      the latest deploy to staging.'
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: debug
-
-    - name: classify_review_from_pr_request
-      description: "4.4: PR-style review request without explicit mode should auto-classify to review."
-      tags: [stable, classification, level:1]
-      task_type: analysis
-      prompt: "Please review my changes to pkg/auth — I refactored the token validation logic."
-      expect:
+        euclo_mode: debug
+  - name: classify_review_from_pr_request
+    description: '4.4: PR-style review request without explicit mode should auto-classify
+      to review.'
+    tags:
+    - stable
+    - classification
+    - level:1
+    task_type: analysis
+    prompt: Please review my changes to pkg/auth — I refactored the token validation
+      logic.
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: review
-
-    - name: classify_planning_from_scope
-      description: "4.4: broad scope migration prompt without explicit mode should auto-classify to planning."
-      tags: [stable, classification, level:2]
-      task_type: analysis
-      prompt: "We need to migrate from PostgreSQL to CockroachDB — where do we start and what are the risks?"
-      expect:
+        euclo_mode: review
+  - name: classify_planning_from_scope
+    description: '4.4: broad scope migration prompt without explicit mode should auto-classify
+      to planning.'
+    tags:
+    - stable
+    - classification
+    - level:2
+    task_type: analysis
+    prompt: We need to migrate from PostgreSQL to CockroachDB — where do we start
+      and what are the risks?
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: planning
+        euclo_mode: planning
+  - name: classify_code_from_imperative
+    description: '4.4: direct imperative edit prompt without explicit mode should
+      auto-classify to code.'
+    tags:
+    - stable
+    - classification
+    - level:1
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/classify_target.go
+        content: 'package main
 
-    - name: classify_code_from_imperative
-      description: "4.4: direct imperative edit prompt without explicit mode should auto-classify to code."
-      tags: [stable, classification, level:1]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/classify_target.go
-            content: |
-              package main
 
-              func Run() {}
-      prompt: "Add a method called Stop to the Run function's package that returns an error."
-      context:
-        context_file_contents:
-          - path: testsuite/fixtures/classify_target.go
-            content: |
-              package main
+          func Run() {}
 
-              func Run() {}
-      expect:
+          '
+    prompt: Add a method called Stop to the Run function's package that returns an
+      error.
+    context:
+      context_file_contents:
+      - path: testsuite/fixtures/classify_target.go
+        content: 'package main
+
+
+          func Run() {}
+
+          '
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: code
+        euclo_mode: code

@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: react.performance_memory
-  description: "Performance-oriented runtime-memory retrieval coverage for the standalone ReAct agent."
+  description: Performance-oriented runtime-memory retrieval coverage for the standalone
+    ReAct agent.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -20,97 +21,114 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
-      - relurpify_cfg/memory/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
+    - relurpify_cfg/memory/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: compare_multiple_runtime_memories
-      description: "Exercise retrieval-backed selection across multiple declarative and procedural runtime memories."
-      tags: [performance-baseline, memory-heavy]
-      task_type: analysis
-      setup:
-        memory:
-          declarative:
-            - record_id: runtime-memory-1
-              scope: project
-              kind: project-knowledge
-              title: Retrieval mirroring
-              summary: Declarative runtime memory is mirrored into retrieval.
-              content: The SQLite runtime memory store mirrors declarative records into retrieval tables so agents can recall them during execution.
-              tags: ["retrieval", "memory"]
-              verified: true
-            - record_id: runtime-memory-2
-              scope: project
-              kind: decision
-              title: Context hydration rule
-              summary: Only hydrate the most relevant memory into model-visible context.
-              content: Runtime memory retrieval should prefer bounded context hydration instead of eagerly inserting all stored memory.
-              tags: ["context", "hydration"]
-              verified: true
-          procedural:
-            - routine_id: runtime-routine-1
-              scope: project
-              kind: capability-composition
-              name: retrieval-review-routine
-              description: Review retrieval context before summarizing.
-              summary: A reusable retrieval review routine.
-              inline_body: Read retrieval-backed memory, compare facts, then summarize the overlap.
-              capability_dependencies:
-                - kind: tool
-                  name: file_read
-              verified: true
-              reuse_count: 3
-      overrides:
-        restrict_capabilities: true
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: "What do the project's runtime memories say about retrieval mirroring and bounded context hydration? Answer in 2 sentences and do not modify any files."
-      expect:
+  - name: compare_multiple_runtime_memories
+    description: Exercise retrieval-backed selection across multiple declarative and
+      procedural runtime memories.
+    tags:
+    - performance-baseline
+    - memory-heavy
+    task_type: analysis
+    setup:
+      memory:
+        declarative:
+        - record_id: runtime-memory-1
+          scope: project
+          kind: project-knowledge
+          title: Retrieval mirroring
+          summary: Declarative runtime memory is mirrored into retrieval.
+          content: The SQLite runtime memory store mirrors declarative records into
+            retrieval tables so agents can recall them during execution.
+          tags:
+          - retrieval
+          - memory
+          verified: true
+        - record_id: runtime-memory-2
+          scope: project
+          kind: decision
+          title: Context hydration rule
+          summary: Only hydrate the most relevant memory into model-visible context.
+          content: Runtime memory retrieval should prefer bounded context hydration
+            instead of eagerly inserting all stored memory.
+          tags:
+          - context
+          - hydration
+          verified: true
+        procedural:
+        - routine_id: runtime-routine-1
+          scope: project
+          kind: capability-composition
+          name: retrieval-review-routine
+          description: Review retrieval context before summarizing.
+          summary: A reusable retrieval review routine.
+          inline_body: Read retrieval-backed memory, compare facts, then summarize
+            the overlap.
+          capability_dependencies:
+          - kind: tool
+            name: file_read
+          verified: true
+          reuse_count: 3
+    overrides:
+      restrict_capabilities: true
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: What do the project's runtime memories say about retrieval mirroring and
+      bounded context hydration? Answer in 2 sentences and do not modify any files.
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
-        state_keys_must_exist:
-          - graph.declarative_memory
-          - react.final_output
         output_regex:
-          - (?i)retrieval
-          - (?i)(hydration|bounded)
-
-    - name: runtime_memory_with_repo_context
-      description: "Exercise runtime-memory recall alongside repository inspection in one execution."
-      tags: [performance-baseline, memory-heavy, retrieval-heavy]
-      task_type: analysis
-      setup:
-        memory:
-          declarative:
-            - record_id: runtime-memory-3
-              scope: project
-              kind: project-knowledge
-              title: Search then hydrate
-              summary: Runtime memory should be searched before hydration.
-              content: Search should rank runtime memory before selecting what to hydrate into the prompt.
-              tags: ["search", "hydrate"]
-              verified: true
-      overrides:
-        restrict_capabilities: true
-        allowed_capabilities:
-          - name: file_read
-            kind: tool
-      prompt: "Read framework/retrieval/doc.go and explain how the repository's retrieval docs align with the runtime memory guidance about search and hydration. Do not modify any files."
-      expect:
+        - (?i)retrieval
+        - (?i)(hydration|bounded)
+        no_file_changes: true
+  - name: runtime_memory_with_repo_context
+    description: Exercise runtime-memory recall alongside repository inspection in
+      one execution.
+    tags:
+    - performance-baseline
+    - memory-heavy
+    - retrieval-heavy
+    task_type: analysis
+    setup:
+      memory:
+        declarative:
+        - record_id: runtime-memory-3
+          scope: project
+          kind: project-knowledge
+          title: Search then hydrate
+          summary: Runtime memory should be searched before hydration.
+          content: Search should rank runtime memory before selecting what to hydrate
+            into the prompt.
+          tags:
+          - search
+          - hydrate
+          verified: true
+    overrides:
+      restrict_capabilities: true
+      allowed_capabilities:
+      - name: file_read
+        kind: tool
+    prompt: Read framework/retrieval/doc.go and explain how the repository's retrieval
+      docs align with the runtime memory guidance about search and hydration. Do not
+      modify any files.
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
-        state_keys_must_exist:
-          - graph.declarative_memory
-        tool_calls_must_include:
-          - file_read
         output_regex:
-          - (?i)(search|hydrate)
-          - (?i)retrieval
+        - (?i)(search|hydrate)
+        - (?i)retrieval
+        no_file_changes: true
+      benchmark:
+        tools_expected:
+        - file_read

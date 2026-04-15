@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.refactor
-  description: "Euclo API-compatible refactor tests."
+  description: Euclo API-compatible refactor tests.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -16,76 +16,53 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: internal_extract_function
-      description: "Internal extract/rename refactor should succeed under API-compatible constraints."
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/refactor_internal.go
-            content: |
-              package main
-
-              func Exported() int {
-                return helper()
-              }
-
-              func helper() int {
-                return 1
-              }
-      prompt: "Refactor by extracting a helper and renaming helper to worker while keeping the public API stable."
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/refactor_internal.go
-            content: |
-              package main
-
-              func Exported() int {
-                return helper()
-              }
-
-              func helper() int {
-                return 1
-              }
-      expect:
+  - name: internal_extract_function
+    description: Internal extract/rename refactor should succeed under API-compatible
+      constraints.
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/refactor_internal.go
+        content: "package main\n\nfunc Exported() int {\n  return helper()\n}\n\n\
+          func helper() int {\n  return 1\n}\n"
+    prompt: Refactor by extracting a helper and renaming helper to worker while keeping
+      the public API stable.
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/refactor_internal.go
+        content: "package main\n\nfunc Exported() int {\n  return helper()\n}\n\n\
+          func helper() int {\n  return 1\n}\n"
+    expect:
+      outcome:
         must_succeed: true
-        euclo:
-          mode: code
-
-    - name: exported_rename_blocked
-      description: "Renaming an exported symbol should be blocked by compatibility constraints."
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/refactor_exported.go
-            content: |
-              package main
-
-              func Exported() int {
-                return 1
-              }
-      prompt: "Refactor by renaming Exported to BetterExported while keeping the public API stable."
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/refactor_exported.go
-            content: |
-              package main
-
-              func Exported() int {
-                return 1
-              }
-      expect:
+        euclo_mode: code
+  - name: exported_rename_blocked
+    description: Renaming an exported symbol should be blocked by compatibility constraints.
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/refactor_exported.go
+        content: "package main\n\nfunc Exported() int {\n  return 1\n}\n"
+    prompt: Refactor by renaming Exported to BetterExported while keeping the public
+      API stable.
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/refactor_exported.go
+        content: "package main\n\nfunc Exported() int {\n  return 1\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         output_regex:
-          - (?i)(blocked|compatibility|public api)
+        - (?i)(blocked|compatibility|public api)

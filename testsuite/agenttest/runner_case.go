@@ -347,15 +347,70 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		}
 	}
 
-	if assertErr := evaluateExpectations(c.Expect, workspace, output, changed, toolCounts, events, tokenUsage, memoryOutcome, snapshot, coverage); assertErr != nil {
-		success = false
-		if caseErr == "" {
-			caseErr = assertErr.Error()
-		} else {
-			caseErr = caseErr + "; " + assertErr.Error()
+	// OSB Model: Unified assertion evaluation (Phases 2-5)
+	var assertionResults []AssertionResult
+
+	// Outcome block evaluation (Phase 2)
+	if c.Expect.Outcome != nil {
+		results, outcomeErr := evaluateOutcomeExpectations(*c.Expect.Outcome, workspace, output, changed, snapshot, tokenUsage, memoryOutcome)
+		assertionResults = append(assertionResults, results...)
+		if outcomeErr != nil {
+			success = false
+			if caseErr == "" {
+				caseErr = outcomeErr.Error()
+			} else {
+				caseErr = caseErr + "; " + outcomeErr.Error()
+			}
 		}
 	}
+
+	// Security block evaluation (Phase 3)
+	var securityObservations []SecurityObservation
+	if c.Expect.Security != nil {
+		secResults, secObs, secErr := evaluateSecurityExpectations(*c.Expect.Security, loadedManifest, workspace, toolTranscript)
+		securityObservations = secObs
+		assertionResults = append(assertionResults, secResults...)
+		if secErr != nil {
+			success = false
+			secErrMsg := "[security] " + secErr.Error()
+			if caseErr == "" {
+				caseErr = secErrMsg
+			} else {
+				caseErr = caseErr + "; " + secErrMsg
+			}
+		}
+		// Write security_observations.json artifact
+		if len(securityObservations) > 0 {
+			if data, err := json.MarshalIndent(securityObservations, "", "  "); err == nil {
+				_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "security_observations.json"), data, 0o644)
+			}
+		}
+	}
+
+	// Benchmark block evaluation (Phase 4) - never fails the test
+	var benchmarkObservations []BenchmarkObservation
+	if c.Expect.Benchmark != nil {
+		benchmarkObservations = evaluateBenchmarkExpectations(*c.Expect.Benchmark, toolTranscript, events, snapshot, tokenUsage)
+		// Write benchmark_observations.json artifact
+		if len(benchmarkObservations) > 0 {
+			if data, err := json.MarshalIndent(benchmarkObservations, "", "  "); err == nil {
+				_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "benchmark_observations.json"), data, 0o644)
+			}
+		}
+	}
+
+	// Write assertion_results.json artifact
+	if len(assertionResults) > 0 {
+		if data, err := json.MarshalIndent(assertionResults, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(layout.ArtifactsDir, "assertion_results.json"), data, 0o644)
+		}
+	}
+
+	// Legacy MustSucceed check (backward compat)
 	if c.Expect.MustSucceed && !success && caseErr == "" {
+		caseErr = "case marked must_succeed but failed"
+	}
+	if c.Expect.Outcome != nil && c.Expect.Outcome.MustSucceed && !success && caseErr == "" {
 		caseErr = "case marked must_succeed but failed"
 	}
 	failureKind := classifyCaseFailure(execErr, caseErr)

@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.chat
-  description: "Euclo chat mode interaction tests: ask, inspect, and implement sub-modes."
+  description: 'Euclo chat mode interaction tests: ask, inspect, and implement sub-modes.'
   owner: agent-platform
   tier: stable
   classification: capability
@@ -17,227 +17,170 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: chat_ask_analysis
-      description: "Chat ask: explain what a Go struct does."
-      task_type: analysis
-      tags: [coverage-matrix, chat, ask, level:1]
-      setup:
-        files:
-          - path: testsuite/fixtures/chat_user.go
-            content: |
-              package main
-
-              type User struct {
-                ID       int
-                Name     string
-                Email    string
-                IsAdmin  bool
-              }
-
-              func NewUser(id int, name, email string) *User {
-                return &User{ID: id, Name: name, Email: email}
-              }
-      prompt: "What does the User struct in testsuite/fixtures/chat_user.go represent, and what does NewUser do?"
-      context:
-        euclo.mode: chat
-        context_file_contents:
-          - path: testsuite/fixtures/chat_user.go
-            content: |
-              package main
-
-              type User struct {
-                ID       int
-                Name     string
-                Email    string
-                IsAdmin  bool
-              }
-
-              func NewUser(id int, name, email string) *User {
-                return &User{ID: id, Name: name, Email: email}
-              }
-      expect:
+  - name: chat_ask_analysis
+    description: 'Chat ask: explain what a Go struct does.'
+    task_type: analysis
+    tags:
+    - coverage-matrix
+    - chat
+    - ask
+    - level:1
+    setup:
+      files:
+      - path: testsuite/fixtures/chat_user.go
+        content: "package main\n\ntype User struct {\n  ID       int\n  Name     string\n\
+          \  Email    string\n  IsAdmin  bool\n}\n\nfunc NewUser(id int, name, email\
+          \ string) *User {\n  return &User{ID: id, Name: name, Email: email}\n}\n"
+    prompt: What does the User struct in testsuite/fixtures/chat_user.go represent,
+      and what does NewUser do?
+    context:
+      euclo.mode: chat
+      context_file_contents:
+      - path: testsuite/fixtures/chat_user.go
+        content: "package main\n\ntype User struct {\n  ID       int\n  Name     string\n\
+          \  Email    string\n  IsAdmin  bool\n}\n\nfunc NewUser(id int, name, email\
+          \ string) *User {\n  return &User{ID: id, Name: name, Email: email}\n}\n"
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)(user|struct|name|email|admin)
-        state_keys_must_exist:
-          - euclo.interaction_state
-          - euclo.interaction_recording
-
-    - name: chat_inspect_interface
-      description: "Chat inspect: compare two interface implementations and describe differences."
-      task_type: analysis
-      tags: [stable, chat, inspect, level:2]
-      setup:
-        files:
-          - path: testsuite/fixtures/chat_iface.go
-            content: |
-              package main
-
-              type Storer interface {
-                Save(key, value string) error
-                Load(key string) (string, error)
-              }
-
-              type MemStore struct{ m map[string]string }
-
-              func (s *MemStore) Save(k, v string) error  { s.m[k] = v; return nil }
-              func (s *MemStore) Load(k string) (string, error) { return s.m[k], nil }
-
-              type NullStore struct{}
-
-              func (s *NullStore) Save(k, v string) error          { return nil }
-              func (s *NullStore) Load(k string) (string, error)   { return "", nil }
-      prompt: "Compare MemStore and NullStore: how do they differ in behavior and when would you use each?"
-      context:
-        euclo.mode: chat
-        context_file_contents:
-          - path: testsuite/fixtures/chat_iface.go
-            content: |
-              package main
-
-              type Storer interface {
-                Save(key, value string) error
-                Load(key string) (string, error)
-              }
-
-              type MemStore struct{ m map[string]string }
-
-              func (s *MemStore) Save(k, v string) error  { s.m[k] = v; return nil }
-              func (s *MemStore) Load(k string) (string, error) { return s.m[k], nil }
-
-              type NullStore struct{}
-
-              func (s *NullStore) Save(k, v string) error          { return nil }
-              func (s *NullStore) Load(k string) (string, error)   { return "", nil }
-      expect:
+        - (?i)(user|struct|name|email|admin)
+        no_file_changes: true
+  - name: chat_inspect_interface
+    description: 'Chat inspect: compare two interface implementations and describe
+      differences.'
+    task_type: analysis
+    tags:
+    - stable
+    - chat
+    - inspect
+    - level:2
+    setup:
+      files:
+      - path: testsuite/fixtures/chat_iface.go
+        content: "package main\n\ntype Storer interface {\n  Save(key, value string)\
+          \ error\n  Load(key string) (string, error)\n}\n\ntype MemStore struct{\
+          \ m map[string]string }\n\nfunc (s *MemStore) Save(k, v string) error  {\
+          \ s.m[k] = v; return nil }\nfunc (s *MemStore) Load(k string) (string, error)\
+          \ { return s.m[k], nil }\n\ntype NullStore struct{}\n\nfunc (s *NullStore)\
+          \ Save(k, v string) error          { return nil }\nfunc (s *NullStore) Load(k\
+          \ string) (string, error)   { return \"\", nil }\n"
+    prompt: 'Compare MemStore and NullStore: how do they differ in behavior and when
+      would you use each?'
+    context:
+      euclo.mode: chat
+      context_file_contents:
+      - path: testsuite/fixtures/chat_iface.go
+        content: "package main\n\ntype Storer interface {\n  Save(key, value string)\
+          \ error\n  Load(key string) (string, error)\n}\n\ntype MemStore struct{\
+          \ m map[string]string }\n\nfunc (s *MemStore) Save(k, v string) error  {\
+          \ s.m[k] = v; return nil }\nfunc (s *MemStore) Load(k string) (string, error)\
+          \ { return s.m[k], nil }\n\ntype NullStore struct{}\n\nfunc (s *NullStore)\
+          \ Save(k, v string) error          { return nil }\nfunc (s *NullStore) Load(k\
+          \ string) (string, error)   { return \"\", nil }\n"
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)(memstore|nullstore|differ|memory|discard)
-
-    - name: chat_implement_small
-      description: "Chat implement: fill in a function stub described by its docstring."
-      task_type: code_modification
-      tags: [coverage-matrix, chat, implement, level:1]
-      setup:
-        files:
-          - path: testsuite/fixtures/chat_stub.go
-            content: |
-              package main
-
-              // Clamp returns v clamped to the range [lo, hi].
-              // If v < lo, return lo. If v > hi, return hi. Otherwise return v.
-              func Clamp(v, lo, hi int) int {
-                // TODO: implement
-                return 0
-              }
-      prompt: "Implement the Clamp function in testsuite/fixtures/chat_stub.go according to its docstring."
-      context:
-        euclo.mode: chat
-        context_file_contents:
-          - path: testsuite/fixtures/chat_stub.go
-            content: |
-              package main
-
-              // Clamp returns v clamped to the range [lo, hi].
-              // If v < lo, return lo. If v > hi, return hi. Otherwise return v.
-              func Clamp(v, lo, hi int) int {
-                // TODO: implement
-                return 0
-              }
-      expect:
+        - (?i)(memstore|nullstore|differ|memory|discard)
+        no_file_changes: true
+  - name: chat_implement_small
+    description: 'Chat implement: fill in a function stub described by its docstring.'
+    task_type: code_modification
+    tags:
+    - coverage-matrix
+    - chat
+    - implement
+    - level:1
+    setup:
+      files:
+      - path: testsuite/fixtures/chat_stub.go
+        content: "package main\n\n// Clamp returns v clamped to the range [lo, hi].\n\
+          // If v < lo, return lo. If v > hi, return hi. Otherwise return v.\nfunc\
+          \ Clamp(v, lo, hi int) int {\n  // TODO: implement\n  return 0\n}\n"
+    prompt: Implement the Clamp function in testsuite/fixtures/chat_stub.go according
+      to its docstring.
+    context:
+      euclo.mode: chat
+      context_file_contents:
+      - path: testsuite/fixtures/chat_stub.go
+        content: "package main\n\n// Clamp returns v clamped to the range [lo, hi].\n\
+          // If v < lo, return lo. If v > hi, return hi. Otherwise return v.\nfunc\
+          \ Clamp(v, lo, hi int) int {\n  // TODO: implement\n  return 0\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/chat_stub.go
+        - testsuite/fixtures/chat_stub.go
+      benchmark:
         euclo:
           phases_executed:
-            - intent
-
-    - name: chat_ask_no_context
-      description: "Chat ask without file context: answer from general knowledge."
-      task_type: analysis
-      tags: [stable, chat, ask, level:1]
-      prompt: "What is the difference between a mutex and a read-write mutex in Go?"
-      context:
-        euclo.mode: chat
-      expect:
+          - intent
+  - name: chat_ask_no_context
+    description: 'Chat ask without file context: answer from general knowledge.'
+    task_type: analysis
+    tags:
+    - stable
+    - chat
+    - ask
+    - level:1
+    prompt: What is the difference between a mutex and a read-write mutex in Go?
+    context:
+      euclo.mode: chat
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - (?i)(mutex|lock|read|write|concurrent)
-
-    - name: chat_implement_with_test
-      description: "Chat implement: stub + failing test — implementation should make the test pass."
-      task_type: code_modification
-      tags: [coverage-matrix, chat, implement, level:2]
-      setup:
-        files:
-          - path: testsuite/fixtures/chat_impl.go
-            content: |
-              package main
-
-              // Max returns the larger of a and b.
-              func Max(a, b int) int {
-                // TODO: implement
-                return 0
-              }
-          - path: testsuite/fixtures/chat_impl_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestMax(t *testing.T) {
-                if Max(3, 7) != 7 {
-                  t.Errorf("Max(3,7)=%d, want 7", Max(3, 7))
-                }
-                if Max(9, 2) != 9 {
-                  t.Errorf("Max(9,2)=%d, want 9", Max(9, 2))
-                }
-              }
-      prompt: "Implement Max in testsuite/fixtures/chat_impl.go so that the TestMax test passes."
-      context:
-        euclo.mode: chat
-        context_file_contents:
-          - path: testsuite/fixtures/chat_impl.go
-            content: |
-              package main
-
-              // Max returns the larger of a and b.
-              func Max(a, b int) int {
-                // TODO: implement
-                return 0
-              }
-          - path: testsuite/fixtures/chat_impl_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestMax(t *testing.T) {
-                if Max(3, 7) != 7 {
-                  t.Errorf("Max(3,7)=%d, want 7", Max(3, 7))
-                }
-                if Max(9, 2) != 9 {
-                  t.Errorf("Max(9,2)=%d, want 9", Max(9, 2))
-                }
-              }
-      expect:
+        - (?i)(mutex|lock|read|write|concurrent)
+        no_file_changes: true
+  - name: chat_implement_with_test
+    description: 'Chat implement: stub + failing test — implementation should make
+      the test pass.'
+    task_type: code_modification
+    tags:
+    - coverage-matrix
+    - chat
+    - implement
+    - level:2
+    setup:
+      files:
+      - path: testsuite/fixtures/chat_impl.go
+        content: "package main\n\n// Max returns the larger of a and b.\nfunc Max(a,\
+          \ b int) int {\n  // TODO: implement\n  return 0\n}\n"
+      - path: testsuite/fixtures/chat_impl_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestMax(t *testing.T)\
+          \ {\n  if Max(3, 7) != 7 {\n    t.Errorf(\"Max(3,7)=%d, want 7\", Max(3,\
+          \ 7))\n  }\n  if Max(9, 2) != 9 {\n    t.Errorf(\"Max(9,2)=%d, want 9\"\
+          , Max(9, 2))\n  }\n}\n"
+    prompt: Implement Max in testsuite/fixtures/chat_impl.go so that the TestMax test
+      passes.
+    context:
+      euclo.mode: chat
+      context_file_contents:
+      - path: testsuite/fixtures/chat_impl.go
+        content: "package main\n\n// Max returns the larger of a and b.\nfunc Max(a,\
+          \ b int) int {\n  // TODO: implement\n  return 0\n}\n"
+      - path: testsuite/fixtures/chat_impl_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestMax(t *testing.T)\
+          \ {\n  if Max(3, 7) != 7 {\n    t.Errorf(\"Max(3,7)=%d, want 7\", Max(3,\
+          \ 7))\n  }\n  if Max(9, 2) != 9 {\n    t.Errorf(\"Max(9,2)=%d, want 9\"\
+          , Max(9, 2))\n  }\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/chat_impl.go
+        - testsuite/fixtures/chat_impl.go
         files_contain:
-          - path: testsuite/fixtures/chat_impl.go
-            contains:
-              - "Max"
+        - path: testsuite/fixtures/chat_impl.go
+          contains:
+          - Max

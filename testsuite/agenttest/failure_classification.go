@@ -11,6 +11,10 @@ func classifyCaseFailure(execErr error, caseErr string) string {
 			return "infra"
 		}
 	}
+	// OSB Model: Check for security failure prefix first
+	if strings.Contains(caseErr, "[security]") {
+		return "security"
+	}
 	if isAssertionFailure(caseErr) {
 		return "assertion"
 	}

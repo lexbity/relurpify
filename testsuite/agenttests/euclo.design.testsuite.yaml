@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.design
-  description: "Euclo design alternatives and profile-selection tests."
+  description: Euclo design alternatives and profile-selection tests.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -16,39 +16,40 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: show_design_alternatives
-      description: "Alternatives request should keep Euclo in planning mode."
-      task_type: analysis
-      prompt: "Show alternatives for implementing request coalescing in the cache layer."
-      context:
-        euclo.mode: planning
-      expect:
+  - name: show_design_alternatives
+    description: Alternatives request should keep Euclo in planning mode.
+    task_type: analysis
+    prompt: Show alternatives for implementing request coalescing in the cache layer.
+    context:
+      euclo.mode: planning
+    expect:
+      outcome:
         must_succeed: true
+        euclo_mode: planning
+      benchmark:
         euclo:
-          mode: planning
           profile: plan_stage_execute
           frame_kinds_emitted:
-            - proposal
-
-    - name: explicit_profile_selection
-      description: "Explicit approach questions should trigger profile selection behavior."
-      task_type: analysis
-      prompt: "Which execution profile should we use to refactor this safely?"
-      context:
-        euclo.mode: planning
-      expect:
+          - proposal
+  - name: explicit_profile_selection
+    description: Explicit approach questions should trigger profile selection behavior.
+    task_type: analysis
+    prompt: Which execution profile should we use to refactor this safely?
+    context:
+      euclo.mode: planning
+    expect:
+      outcome:
         must_succeed: true
         output_regex:
-          - (?i)(profile|approach|refactor)
-        euclo:
-          mode: planning
+        - (?i)(profile|approach|refactor)
+        euclo_mode: planning

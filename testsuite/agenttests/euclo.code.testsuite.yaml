@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.code
-  description: "Euclo code mode interaction flow tests."
+  description: Euclo code mode interaction flow tests.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -17,232 +17,183 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: basic_edit_task
-      description: "Full code mode interaction flow for a simple edit."
-      task_type: code_modification
-      tags: [coverage-matrix, code, edit_verify_repair, level:1]
-      setup:
-        files:
-          - path: testsuite/fixtures/hello.go
-            content: |
-              package main
-
-              func Hello() string {
-                return "hello"
-              }
-      prompt: "Change the Hello function in testsuite/fixtures/hello.go to return 'hello world' instead of 'hello'."
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/hello.go
-            content: |
-              package main
-
-              func Hello() string {
-                return "hello"
-              }
-      expect:
-        must_succeed: true
-        files_changed: ["testsuite/fixtures/hello.go"]
-        files_contain:
-          - path: testsuite/fixtures/hello.go
-            contains: ["hello world"]
-        euclo:
-          mode: code
-          profile: edit_verify_repair
-          phases_executed:
-            - understand
-            - propose
-
-    - name: code_evidence_first_upgrade
-      description: "Code mode should upgrade into the evidence-first profile when failing-test evidence is present."
-      task_type: code_modification
-      tags: [coverage-matrix, code, reproduce_localize_patch, level:1]
-      setup:
-        files:
-          - path: testsuite/fixtures/calculator.go
-            content: |
-              package main
-
-              func Add(a, b int) int {
-                return a - b
-              }
-          - path: testsuite/fixtures/calculator_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-                if got := Add(2, 3); got != 5 {
-                  t.Errorf("got %d want 5", got)
-                }
-              }
-      prompt: "The API is returning wrong results. Fix the calculation in testsuite/fixtures/calculator.go so TestAdd passes."
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/calculator.go
-            content: |
-              package main
-
-              func Add(a, b int) int {
-                return a - b
-              }
-          - path: testsuite/fixtures/calculator_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-                if got := Add(2, 3); got != 5 {
-                  t.Errorf("got %d want 5", got)
-                }
-              }
-      expect:
-        must_succeed: true
-        files_changed: ["testsuite/fixtures/calculator.go"]
-        files_contain:
-          - path: testsuite/fixtures/calculator.go
-            contains: ["a + b"]
-        euclo:
-          mode: code
-          profile: reproduce_localize_patch
-
-    - name: edit_with_verification
-      description: "Code mode with verification step."
-      tags: [level:1]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/add.go
-            content: |
-              package main
-
-              func Add(a, b int) int {
-                return a - b
-              }
-          - path: testsuite/fixtures/add_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-                if Add(2, 3) != 5 {
-                  t.Error("expected 5")
-                }
-              }
-      prompt: "Fix the Add function in testsuite/fixtures/add.go so that the test passes."
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/add.go
-            content: |
-              package main
-
-              func Add(a, b int) int {
-                return a - b
-              }
-          - path: testsuite/fixtures/add_test.go
-            content: |
-              package main
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-                if Add(2, 3) != 5 {
-                  t.Error("expected 5")
-                }
-              }
-      expect:
-        must_succeed: true
-        files_changed: ["testsuite/fixtures/add.go"]
-        files_contain:
-          - path: testsuite/fixtures/add.go
-            contains: ["a + b"]
-        euclo:
-          mode: code
-          frame_kinds_emitted:
-            - proposal
-
-    - name: code_no_mode_hint
-      description: "Code mode auto-classified from instruction keywords."
-      tags: [level:1]
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/fixtures/greet.go
-            content: |
-              package main
-
-              func Greet(name string) string {
-                return "Hi"
-              }
-      prompt: "Implement the Greet function to return 'Hi, <name>' where <name> is the argument."
-      context:
-        context_file_contents:
-          - path: testsuite/fixtures/greet.go
-            content: |
-              package main
-
-              func Greet(name string) string {
-                return "Hi"
-              }
-      expect:
-        must_succeed: true
-        files_changed: ["testsuite/fixtures/greet.go"]
-        euclo:
-          mode: code
-
-    - name: code_from_messy_context
-      description: "4.3 artifact-mediated: conflicting bug report + partial spec + buggy code — euclo must recover correct intent."
-      task_type: code_modification
-      tags: [stable, code, artifact-mediated, level:3]
-      setup:
-        files:
-          - path: testsuite/fixtures/messy_calc.go
-            content: |
-              package main
-
-              // Divides a by b. Returns 0 on error.
-              func Divide(a, b float64) float64 {
-                return a * b
-              }
-      prompt: >
-        Context: Bug report #42 says "Divide returns wrong results". The spec says
-        "Divide should return a/b and handle b=0 by returning 0". The code comment
-        says "Divides a by b" but the body multiplies. Fix the implementation so
-        it correctly divides and returns 0 when b is zero.
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/messy_calc.go
-            content: |
-              package main
-
-              // Divides a by b. Returns 0 on error.
-              func Divide(a, b float64) float64 {
-                return a * b
-              }
-      expect:
+  - name: basic_edit_task
+    description: Full code mode interaction flow for a simple edit.
+    task_type: code_modification
+    tags:
+    - coverage-matrix
+    - code
+    - edit_verify_repair
+    - level:1
+    setup:
+      files:
+      - path: testsuite/fixtures/hello.go
+        content: "package main\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+    prompt: Change the Hello function in testsuite/fixtures/hello.go to return 'hello
+      world' instead of 'hello'.
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/hello.go
+        content: "package main\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/messy_calc.go
+        - testsuite/fixtures/hello.go
         files_contain:
-          - path: testsuite/fixtures/messy_calc.go
-            contains:
-              - "a / b"
+        - path: testsuite/fixtures/hello.go
+          contains:
+          - hello world
+        euclo_mode: code
+      benchmark:
         euclo:
-          mode: code
+          profile: edit_verify_repair
+          phases_executed:
+          - understand
+          - propose
+  - name: code_evidence_first_upgrade
+    description: Code mode should upgrade into the evidence-first profile when failing-test
+      evidence is present.
+    task_type: code_modification
+    tags:
+    - coverage-matrix
+    - code
+    - reproduce_localize_patch
+    - level:1
+    setup:
+      files:
+      - path: testsuite/fixtures/calculator.go
+        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+      - path: testsuite/fixtures/calculator_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n  if got := Add(2, 3); got != 5 {\n    t.Errorf(\"got %d want 5\",\
+          \ got)\n  }\n}\n"
+    prompt: The API is returning wrong results. Fix the calculation in testsuite/fixtures/calculator.go
+      so TestAdd passes.
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/calculator.go
+        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+      - path: testsuite/fixtures/calculator_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n  if got := Add(2, 3); got != 5 {\n    t.Errorf(\"got %d want 5\",\
+          \ got)\n  }\n}\n"
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/fixtures/calculator.go
+        files_contain:
+        - path: testsuite/fixtures/calculator.go
+          contains:
+          - a + b
+        euclo_mode: code
+      benchmark:
+        euclo:
+          profile: reproduce_localize_patch
+  - name: edit_with_verification
+    description: Code mode with verification step.
+    tags:
+    - level:1
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/add.go
+        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+      - path: testsuite/fixtures/add_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n  if Add(2, 3) != 5 {\n    t.Error(\"expected 5\")\n  }\n}\n"
+    prompt: Fix the Add function in testsuite/fixtures/add.go so that the test passes.
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/add.go
+        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+      - path: testsuite/fixtures/add_test.go
+        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n  if Add(2, 3) != 5 {\n    t.Error(\"expected 5\")\n  }\n}\n"
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/fixtures/add.go
+        files_contain:
+        - path: testsuite/fixtures/add.go
+          contains:
+          - a + b
+        euclo_mode: code
+      benchmark:
+        euclo:
+          frame_kinds_emitted:
+          - proposal
+  - name: code_no_mode_hint
+    description: Code mode auto-classified from instruction keywords.
+    tags:
+    - level:1
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/fixtures/greet.go
+        content: "package main\n\nfunc Greet(name string) string {\n  return \"Hi\"\
+          \n}\n"
+    prompt: Implement the Greet function to return 'Hi, <name>' where <name> is the
+      argument.
+    context:
+      context_file_contents:
+      - path: testsuite/fixtures/greet.go
+        content: "package main\n\nfunc Greet(name string) string {\n  return \"Hi\"\
+          \n}\n"
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/fixtures/greet.go
+        euclo_mode: code
+  - name: code_from_messy_context
+    description: '4.3 artifact-mediated: conflicting bug report + partial spec + buggy
+      code — euclo must recover correct intent.'
+    task_type: code_modification
+    tags:
+    - stable
+    - code
+    - artifact-mediated
+    - level:3
+    setup:
+      files:
+      - path: testsuite/fixtures/messy_calc.go
+        content: "package main\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
+          \ b float64) float64 {\n  return a * b\n}\n"
+    prompt: 'Context: Bug report #42 says "Divide returns wrong results". The spec
+      says "Divide should return a/b and handle b=0 by returning 0". The code comment
+      says "Divides a by b" but the body multiplies. Fix the implementation so it
+      correctly divides and returns 0 when b is zero.
+
+      '
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/messy_calc.go
+        content: "package main\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
+          \ b float64) float64 {\n  return a * b\n}\n"
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/fixtures/messy_calc.go
+        files_contain:
+        - path: testsuite/fixtures/messy_calc.go
+          contains:
+          - a / b
+        euclo_mode: code

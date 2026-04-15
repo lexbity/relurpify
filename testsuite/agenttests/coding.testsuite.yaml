@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding
-  description: "Baseline prompt tests for the coding agent."
+  description: Baseline prompt tests for the coding agent.
   owner: agent-platform
   tier: smoke
   quarantined: false
@@ -15,60 +15,87 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: summarize_readme
-      task_type: code_generation
-      prompt: "Summarize README.md in 5 bullets."
-      context:
-        path: README.md
-      expect:
+  - name: summarize_readme
+    task_type: code_generation
+    prompt: Summarize README.md in 5 bullets.
+    context:
+      path: README.md
+    expect:
+      outcome:
         must_succeed: true
         output_regex:
-          - (?i)relurpify
-        tool_calls_must_exclude: ["file_write", "file_edit", "file_create", "file_delete"]
-    - name: edit_fixture_file
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/hello.txt
-            content: "hello\n"
-      context:
-        context_file_contents:
-          - path: testsuite/agenttest_fixtures/hello.txt
-            content: "hello\n"
-      prompt: "Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt. Use file_write to apply the edit after reading if needed."
-      expect:
+        - (?i)relurpify
+      security:
+        tools_must_not_call:
+        - file_write
+        - file_delete
+      benchmark:
+        tools_not_expected:
+        - file_edit
+        - file_create
+  - name: edit_fixture_file
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/hello.txt
+        content: 'hello
+
+          '
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/hello.txt
+        content: 'hello
+
+          '
+    prompt: Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt.
+      Use file_write to apply the edit after reading if needed.
+    expect:
+      outcome:
         must_succeed: true
-        files_changed: ["testsuite/agenttest_fixtures/hello.txt"]
-        tool_calls_must_include: ["file_write"]
-    - name: edit_file_in_git_workspace_and_report_status
-      task_type: code_modification
-      setup:
-        git_init: true
-        files:
-          - path: testsuite/agenttest_fixtures/hello.txt
-            content: "hello\n"
-      context:
-        context_file_contents:
-          - path: testsuite/agenttest_fixtures/hello.txt
-            content: "hello\n"
-      overrides:
-        allowed_capabilities:
-          - name: cli_git
-            kind: tool
-      prompt: "Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt, then run cli_git args [\"status\",\"--short\"] and summarize the result."
-      expect:
+        files_changed:
+        - testsuite/agenttest_fixtures/hello.txt
+      benchmark:
+        tools_expected:
+        - file_write
+  - name: edit_file_in_git_workspace_and_report_status
+    task_type: code_modification
+    setup:
+      git_init: true
+      files:
+      - path: testsuite/agenttest_fixtures/hello.txt
+        content: 'hello
+
+          '
+    context:
+      context_file_contents:
+      - path: testsuite/agenttest_fixtures/hello.txt
+        content: 'hello
+
+          '
+    overrides:
+      allowed_capabilities:
+      - name: cli_git
+        kind: tool
+    prompt: Append a new line containing 'DONE' to testsuite/agenttest_fixtures/hello.txt,
+      then run cli_git args ["status","--short"] and summarize the result.
+    expect:
+      outcome:
         must_succeed: true
-        files_changed: ["testsuite/agenttest_fixtures/hello.txt"]
         output_regex:
-          - (?m)testsuite/agenttest_fixtures/hello.txt
-        tool_calls_must_include: ["cli_git", "file_write"]
+        - (?m)testsuite/agenttest_fixtures/hello.txt
+        files_changed:
+        - testsuite/agenttest_fixtures/hello.txt
+      benchmark:
+        tools_expected:
+        - cli_git
+        - file_write

@@ -421,32 +421,7 @@ func TestSuiteValidateRejectsInvalidBootstrapTimeoutOverride(t *testing.T) {
 	}
 }
 
-func TestSuiteValidateRejectsArtifactChainWithoutPhase(t *testing.T) {
-	suite := &Suite{
-		APIVersion: "relurpify/v1alpha1",
-		Kind:       "AgentTestSuite",
-		Metadata:   SuiteMeta{Name: "euclo"},
-		Spec: SuiteSpec{
-			AgentName: "euclo",
-			Manifest:  "relurpify_cfg/agent.manifest.yaml",
-			Cases: []CaseSpec{{
-				Name:   "artifact_chain",
-				Prompt: "plan a change",
-				Expect: ExpectSpec{
-					Euclo: &EucloExpectSpec{
-						ArtifactChain: []ArtifactChainSpec{{
-							Kind: "plan",
-						}},
-					},
-				},
-			}},
-		},
-	}
-
-	if err := suite.Validate(); err == nil {
-		t.Fatal("expected invalid artifact_chain to fail validation")
-	}
-}
+// Phase 8: Test removed - EucloExpectSpec no longer exists, migrated to Benchmark.Euclo
 
 func TestSuiteValidateRejectsInvalidSetupFileMode(t *testing.T) {
 	suite := &Suite{

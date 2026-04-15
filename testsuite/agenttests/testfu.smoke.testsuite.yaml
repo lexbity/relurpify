@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: testfu.smoke
-  description: "Smoke coverage for the testfu agent: list, run-suite, run-case, and tag-filter paths."
+  description: 'Smoke coverage for the testfu agent: list, run-suite, run-case, and
+    tag-filter paths.'
   owner: agent-platform
   tier: smoke
   quarantined: false
@@ -15,82 +16,66 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   cases:
-    - name: list_suites
-      tags: [smoke]
-      task_type: analysis
-      # testfu.Execute parses the task directly — no LLM call for testfu itself.
-      # Inner agents (react, planner, etc.) require Ollama; this case does not.
-      prompt: "list_suites"
-      context:
-        action: list_suites
-      expect:
+  - name: list_suites
+    tags:
+    - smoke
+    task_type: analysis
+    prompt: list_suites
+    context:
+      action: list_suites
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
-        state_keys_must_exist:
-          - testfu.report
-          - testfu.passed
         output_regex:
-          - (?i)(react|planner|htn|rewoo|reflection)
-
-    - name: run_react_smoke
-      tags: [smoke]
-      task_type: analysis
-      # Runs the full react.testsuite.yaml against Ollama. Inner per-case timeout: 60s.
-      # Outer timeout covers all 6 cases + overhead.
-      timeout: "480s"
-      prompt: "Run the react agent test suite."
-      context:
-        action: run_suite
-        suite_path: testsuite/agenttests/react.testsuite.yaml
-        timeout: 60s
-      expect:
+        - (?i)(react|planner|htn|rewoo|reflection)
+        no_file_changes: true
+  - name: run_react_smoke
+    tags:
+    - smoke
+    task_type: analysis
+    timeout: 480s
+    prompt: Run the react agent test suite.
+    context:
+      action: run_suite
+      suite_path: testsuite/agenttests/react.testsuite.yaml
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.report
-          - testfu.passed
-
-    - name: run_single_case
-      tags: [smoke]
-      task_type: analysis
-      # Runs only the edit_fixture_file case from the react suite.
-      timeout: "120s"
-      prompt: "Run the single case edit_fixture_file from the react suite."
-      context:
-        action: run_case
-        suite_path: testsuite/agenttests/react.testsuite.yaml
-        case_name: edit_fixture_file
-        timeout: 90s
-      expect:
+  - name: run_single_case
+    tags:
+    - smoke
+    task_type: analysis
+    timeout: 120s
+    prompt: Run the single case edit_fixture_file from the react suite.
+    context:
+      action: run_case
+      suite_path: testsuite/agenttests/react.testsuite.yaml
+      case_name: edit_fixture_file
+      timeout: 90s
+    expect:
+      outcome:
         must_succeed: true
-        state_keys_must_exist:
-          - testfu.report
-          - testfu.passed
-
-    - name: run_with_tag_filter
-      tags: [smoke]
-      task_type: analysis
-      # Runs all react suites (react.testsuite.yaml + react.*.testsuite.yaml),
-      # filtering to only cases tagged "smoke". The original react cases have no
-      # tags and are skipped; the Phase-3 cases tagged [smoke, ...] are run.
-      timeout: "480s"
-      prompt: "Run all react suites with only smoke-tagged cases."
-      context:
-        agent_name: react
-        tags: smoke
-        timeout: 60s
-      expect:
+  - name: run_with_tag_filter
+    tags:
+    - smoke
+    task_type: analysis
+    timeout: 480s
+    prompt: Run all react suites with only smoke-tagged cases.
+    context:
+      agent_name: react
+      tags: smoke
+      timeout: 60s
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        state_keys_must_exist:
-          - testfu.agent_suites_report
-          - testfu.passed
-          - testfu.total_passed

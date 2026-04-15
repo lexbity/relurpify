@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding.go
-  description: "Go-focused prompts for the coding agent across common workflows."
+  description: Go-focused prompts for the coding agent across common workflows.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -15,189 +15,140 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   cases:
-    - name: easy_fix_bug_and_run_tests
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-            content: |
-              package mathutil
-
-              // Add returns the sum of a and b.
-              func Add(a, b int) int {
-              	return a + b + 1
-              }
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
-            content: |
-              package mathutil
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-              	if Add(2, 2) != 4 {
-              		t.Fatalf("expected Add(2,2)=4")
-              	}
-              }
-      overrides:
-        allowed_capabilities:
-          - name: cli_go
-            kind: tool
-
-      prompt: "Fix the failing test in testsuite/agenttest_fixtures/gosuite/mathutil (do not change the test), then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
-      expect:
+  - name: easy_fix_bug_and_run_tests
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\n// Add returns the sum of a and b.\nfunc Add(a,\
+          \ b int) int {\n\treturn a + b + 1\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+        content: "package mathutil\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n\tif Add(2, 2) != 4 {\n\t\tt.Fatalf(\"expected Add(2,2)=4\")\n\t}\n\
+          }\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_go
+        kind: tool
+    prompt: Fix the failing test in testsuite/agenttest_fixtures/gosuite/mathutil
+      (do not change the test), then run cli_go args ["test","./testsuite/agenttest_fixtures/gosuite/mathutil"]
+      and confirm it passes.
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-        tool_calls_must_include:
-          - cli_go
-    - name: medium_add_function_and_test
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-            content: |
-              package mathutil
-
-              // Add returns the sum of a and b.
-              func Add(a, b int) int {
-              	return a + b
-              }
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mul_test.go
-            content: |
-              package mathutil
-
-              import "testing"
-
-              func TestMul(t *testing.T) {
-              	if Mul(3, 4) != 12 {
-              		t.Fatalf("expected Mul(3,4)=12")
-              	}
-              }
-      overrides:
-        allowed_capabilities:
-          - name: cli_go
-            kind: tool
-
-      prompt: "Implement Mul(a,b int) in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go (do not change tests), then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
-      expect:
+        - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+      benchmark:
+        tools_expected:
+        - cli_go
+  - name: medium_add_function_and_test
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\n// Add returns the sum of a and b.\nfunc Add(a,\
+          \ b int) int {\n\treturn a + b\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mul_test.go
+        content: "package mathutil\n\nimport \"testing\"\n\nfunc TestMul(t *testing.T)\
+          \ {\n\tif Mul(3, 4) != 12 {\n\t\tt.Fatalf(\"expected Mul(3,4)=12\")\n\t\
+          }\n}\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_go
+        kind: tool
+    prompt: Implement Mul(a,b int) in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+      (do not change tests), then run cli_go args ["test","./testsuite/agenttest_fixtures/gosuite/mathutil"]
+      and confirm it passes.
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-        tool_calls_must_include:
-          - cli_go
-    - name: hard_add_sumall_and_test
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-            content: |
-              package mathutil
-
-              // Add returns the sum of a and b.
-              func Add(a, b int) int {
-              	return a + b
-              }
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/sumall_test.go
-            content: |
-              package mathutil
-
-              import "testing"
-
-              func TestSumAll(t *testing.T) {
-              	if SumAll(nil) != 0 {
-              		t.Fatalf("expected SumAll(nil)=0")
-              	}
-              	if SumAll([]int{}) != 0 {
-              		t.Fatalf("expected SumAll([])=0")
-              	}
-              	if SumAll([]int{1, 2, 3}) != 6 {
-              		t.Fatalf("expected SumAll([1,2,3])=6")
-              	}
-              }
-      overrides:
-        allowed_capabilities:
-          - name: cli_go
-            kind: tool
-
-      prompt: "Implement SumAll(nums []int) int in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go (do not change tests), then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
-      expect:
+        - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+      benchmark:
+        tools_expected:
+        - cli_go
+  - name: hard_add_sumall_and_test
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\n// Add returns the sum of a and b.\nfunc Add(a,\
+          \ b int) int {\n\treturn a + b\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/sumall_test.go
+        content: "package mathutil\n\nimport \"testing\"\n\nfunc TestSumAll(t *testing.T)\
+          \ {\n\tif SumAll(nil) != 0 {\n\t\tt.Fatalf(\"expected SumAll(nil)=0\")\n\
+          \t}\n\tif SumAll([]int{}) != 0 {\n\t\tt.Fatalf(\"expected SumAll([])=0\"\
+          )\n\t}\n\tif SumAll([]int{1, 2, 3}) != 6 {\n\t\tt.Fatalf(\"expected SumAll([1,2,3])=6\"\
+          )\n\t}\n}\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_go
+        kind: tool
+    prompt: Implement SumAll(nums []int) int in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+      (do not change tests), then run cli_go args ["test","./testsuite/agenttest_fixtures/gosuite/mathutil"]
+      and confirm it passes.
+    expect:
+      outcome:
         must_succeed: true
-        tool_calls_must_include:
-          - cli_go
-    - name: compile_error_fix_and_test
-      task_type: code_modification
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-            content: |
-              package mathutil
-
-              func Add(a, b int) int {
-              	return fmt.Sprintf("%d", a+b)
-              }
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
-            content: |
-              package mathutil
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-              	if Add(2, 2) != 4 {
-              		t.Fatalf("expected Add(2,2)=4")
-              	}
-              }
-      overrides:
-        allowed_capabilities:
-          - name: cli_go
-            kind: tool
-
-      prompt: "Fix the compile error in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go, then run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm it passes."
-      expect:
+      benchmark:
+        tools_expected:
+        - cli_go
+  - name: compile_error_fix_and_test
+    task_type: code_modification
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\nfunc Add(a, b int) int {\n\treturn fmt.Sprintf(\"\
+          %d\", a+b)\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+        content: "package mathutil\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n\tif Add(2, 2) != 4 {\n\t\tt.Fatalf(\"expected Add(2,2)=4\")\n\t}\n\
+          }\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_go
+        kind: tool
+    prompt: Fix the compile error in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go,
+      then run cli_go args ["test","./testsuite/agenttest_fixtures/gosuite/mathutil"]
+      and confirm it passes.
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-        tool_calls_must_include:
-          - cli_go
-    - name: verify_already_correct_without_edits
-      task_type: analysis
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
-            content: |
-              package mathutil
-
-              func Add(a, b int) int {
-              	return a + b
-              }
-          - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
-            content: |
-              package mathutil
-
-              import "testing"
-
-              func TestAdd(t *testing.T) {
-              	if Add(2, 2) != 4 {
-              		t.Fatalf("expected Add(2,2)=4")
-              	}
-              }
-      overrides:
-        allowed_capabilities:
-          - name: cli_go
-            kind: tool
-
-      prompt: "Run cli_go args [\"test\",\"./testsuite/agenttest_fixtures/gosuite/mathutil\"] and confirm whether the package is already correct. Do not modify any files."
-      expect:
+        - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+      benchmark:
+        tools_expected:
+        - cli_go
+  - name: verify_already_correct_without_edits
+    task_type: analysis
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil_test.go
+        content: "package mathutil\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
+          \ {\n\tif Add(2, 2) != 4 {\n\t\tt.Fatalf(\"expected Add(2,2)=4\")\n\t}\n\
+          }\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_go
+        kind: tool
+    prompt: Run cli_go args ["test","./testsuite/agenttest_fixtures/gosuite/mathutil"]
+      and confirm whether the package is already correct. Do not modify any files.
+    expect:
+      outcome:
         must_succeed: true
-        no_file_changes: true
         output_regex:
-          - "(?i)(correct|passes|ok)"
-        tool_calls_must_include:
-          - cli_go
+        - (?i)(correct|passes|ok)
+        no_file_changes: true
+      benchmark:
+        tools_expected:
+        - cli_go

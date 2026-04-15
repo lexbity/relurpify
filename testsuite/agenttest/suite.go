@@ -29,7 +29,7 @@ type SuiteMeta struct {
 	Tier           string        `yaml:"tier,omitempty"`
 	Classification string        `yaml:"classification,omitempty"`
 	Benchmark      BenchmarkMeta `yaml:"benchmark,omitempty"`
-	Quarantined    bool          `yaml:"quarantined,omitempty"`
+	Quarantined    bool          `yaml:"quarantined"`
 }
 
 type BenchmarkMeta struct {
@@ -166,43 +166,16 @@ type ExpectSpec struct {
 	NoFileChanges bool     `yaml:"no_file_changes,omitempty"`
 	FilesChanged  []string `yaml:"files_changed,omitempty"`
 
-	ToolCallsMustInclude []string `yaml:"tool_calls_must_include,omitempty"`
-	ToolCallsMustExclude []string `yaml:"tool_calls_must_exclude,omitempty"`
-	ToolCallsInOrder     []string `yaml:"tool_calls_in_order,omitempty"`
-	LLMCalls             int      `yaml:"llm_calls,omitempty"`
-	MaxToolCalls         int      `yaml:"max_tool_calls,omitempty"`
-	MaxPromptTokens      int      `yaml:"max_prompt_tokens,omitempty"`
-	MaxCompletionTokens  int      `yaml:"max_completion_tokens,omitempty"`
-	MaxTotalTokens       int      `yaml:"max_total_tokens,omitempty"`
 	MemoryRecordsCreated int      `yaml:"memory_records_created,omitempty"`
 	WorkflowStateUpdated bool     `yaml:"workflow_state_updated,omitempty"`
 	StateKeysMustExist   []string `yaml:"state_keys_must_exist,omitempty"`
 	StateKeysNotEmpty    []string `yaml:"state_key_not_empty,omitempty"`
 	WorkflowHasTensions  []string `yaml:"workflow_has_tensions,omitempty"`
 
-	// NEW: ToolsRequired ensures tools were actually invoked during test
-	ToolsRequired []string `yaml:"tools_required,omitempty"`
-
-	// NEW: Tool injection expectations for failure mode testing
-	ToolRecoveryObserved bool              `yaml:"tool_recovery_observed,omitempty"`
-	ToolSuccessRate      map[string]string `yaml:"tool_success_rate,omitempty"`
-
-	// NEW: Determinism expectations (Phase 3)
-	DeterminismScore  string   `yaml:"determinism_score,omitempty"`
-	LLMResponseStable bool     `yaml:"llm_response_stable,omitempty"`
-	StateKeysStable   []string `yaml:"state_keys_stable,omitempty"`
-
-	// NEW: Dependency expectations (Phase 4)
-	ToolDependencies []ToolDependency `yaml:"tool_dependencies,omitempty"`
-	// ^ Rules for valid tool call ordering and prerequisites
-
-	// NEW: Latency expectations (Phase 5)
-	ToolCallLatencyMs map[string]string `yaml:"tool_call_latency_ms,omitempty"`
-	// ^ e.g., "file_read: <50", "go_test: <5000"
-	MaxTotalToolTimeMs int `yaml:"max_total_tool_time_ms,omitempty"`
-	// ^ Maximum time spent in tools overall
-
-	Euclo *EucloExpectSpec `yaml:"euclo,omitempty"`
+	// OSB Model: Outcome, Security, Benchmark blocks (Phase 1)
+	Outcome   *OutcomeSpec   `yaml:"outcome,omitempty"`
+	Security  *SecuritySpec  `yaml:"security,omitempty"`
+	Benchmark *BenchmarkSpec `yaml:"benchmark,omitempty"`
 }
 
 // EucloExpectSpec defines expectations specific to Euclo's interactive execution.
@@ -242,8 +215,119 @@ type ArtifactChainSpec struct {
 }
 
 type FileContentExpectation struct {
-	Path     string   `yaml:"path"`
-	Contains []string `yaml:"contains,omitempty"`
+	Path        string   `yaml:"path"`
+	Contains    []string `yaml:"contains,omitempty"`
+	NotContains []string `yaml:"not_contains,omitempty"`
+}
+
+// OutcomeSpec defines hard pass/fail assertions about goal achievement.
+type OutcomeSpec struct {
+	MustSucceed          bool                     `yaml:"must_succeed,omitempty"`
+	NoFileChanges        bool                     `yaml:"no_file_changes,omitempty"`
+	FilesChanged         []string                 `yaml:"files_changed,omitempty"`
+	FilesContain         []FileContentExpectation `yaml:"files_contain,omitempty"`
+	OutputContains       []string                 `yaml:"output_contains,omitempty"`
+	OutputRegex          []string                 `yaml:"output_regex,omitempty"`
+	StateKeyNotEmpty     []string                 `yaml:"state_key_not_empty,omitempty"`
+	StateKeysMustExist   []string                 `yaml:"state_keys_must_exist,omitempty"`
+	MemoryRecordsCreated int                      `yaml:"memory_records_created,omitempty"`
+	WorkflowStateUpdated bool                     `yaml:"workflow_state_updated,omitempty"`
+	EucloMode            string                   `yaml:"euclo_mode,omitempty"`
+}
+
+// SecuritySpec defines hard pass/fail assertions about sandbox contract enforcement.
+// Assertions here are cross-referenced against the agent manifest's PermissionSet.
+type SecuritySpec struct {
+	// Filesystem scope
+	NoWritesOutsideScope bool `yaml:"no_writes_outside_scope,omitempty"`
+	NoReadsOutsideScope  bool `yaml:"no_reads_outside_scope,omitempty"`
+
+	// Tool contract: these tools must not have been called in this context.
+	// Use for mutation tools (file_write, file_delete) in read-only contexts.
+	// Cross-referenced with manifest.Spec.Permissions.Executables.
+	ToolsMustNotCall []string `yaml:"tools_must_not_call,omitempty"`
+
+	// Profile mutation enforcement: if the resolved execution profile has
+	// mutation_allowed:false, assert that no mutation tools were called.
+	MutationEnforced bool `yaml:"mutation_enforced,omitempty"`
+
+	// Network and executable boundaries
+	NoNetworkOutsideManifest bool `yaml:"no_network_outside_manifest,omitempty"`
+	NoExecOutsideManifest    bool `yaml:"no_exec_outside_manifest,omitempty"`
+
+	// Expected violations: for negative/boundary tests that verify the
+	// sandbox correctly blocked something. These do not fail the test.
+	ExpectedViolations []ExpectedViolation `yaml:"expected_violations,omitempty"`
+}
+
+// ExpectedViolation describes a sandbox block that is explicitly expected.
+type ExpectedViolation struct {
+	Kind     string `yaml:"kind"`     // "file_write", "exec", "network"
+	Resource string `yaml:"resource"` // path or binary name (glob OK)
+	Reason   string `yaml:"reason"`   // human annotation
+}
+
+// BenchmarkSpec defines soft observations about agent routing and behavior.
+// Mismatches produce BenchmarkObservation records but never fail the test.
+type BenchmarkSpec struct {
+	// Tool usage
+	ToolsExpected        []string         `yaml:"tools_expected,omitempty"`
+	ToolsNotExpected     []string         `yaml:"tools_not_expected,omitempty"`
+	ToolSequenceExpected []string         `yaml:"tool_sequence_expected,omitempty"`
+	ToolSuccessRate      map[string]int   `yaml:"tool_success_rate,omitempty"`
+	ToolCallLatencyMs    map[string]int   `yaml:"tool_call_latency_ms,omitempty"`
+	ToolDependencies     []ToolDependency `yaml:"tool_dependencies,omitempty"`
+	ToolRecoveryObserved bool             `yaml:"tool_recovery_observed,omitempty"`
+
+	// LLM usage hints
+	LLMCallsExpected       int    `yaml:"llm_calls_expected,omitempty"`
+	MaxToolCallsHint       int    `yaml:"max_tool_calls_hint,omitempty"`
+	MaxTotalToolTimeHintMs int    `yaml:"max_total_tool_time_hint_ms,omitempty"`
+	LLMResponseStableHint  bool   `yaml:"llm_response_stable_hint,omitempty"`
+	DeterminismScoreHint   string `yaml:"determinism_score_hint,omitempty"`
+
+	// Token budget hints
+	TokenBudget *TokenBudgetHint `yaml:"token_budget,omitempty"`
+
+	// Euclo implementation telemetry
+	Euclo *EucloBenchmarkSpec `yaml:"euclo,omitempty"`
+}
+
+// TokenBudgetHint captures advisory token usage expectations.
+type TokenBudgetHint struct {
+	MaxPrompt     int `yaml:"max_prompt,omitempty"`
+	MaxCompletion int `yaml:"max_completion,omitempty"`
+	MaxTotal      int `yaml:"max_total,omitempty"`
+}
+
+// EucloBenchmarkSpec captures euclo-specific routing observations.
+// All fields are soft telemetry.
+type EucloBenchmarkSpec struct {
+	BehaviorFamily                 string              `yaml:"behavior_family,omitempty"`
+	Profile                        string              `yaml:"profile,omitempty"`
+	PrimaryRelurpicCapability      string              `yaml:"primary_relurpic_capability,omitempty"`
+	SupportingRelurpicCapabilities []string            `yaml:"supporting_relurpic_capabilities,omitempty"`
+	SpecializedCapabilityIDs       []string            `yaml:"specialized_capability_ids,omitempty"`
+	RecipeIDs                      []string            `yaml:"recipe_ids,omitempty"`
+	ArtifactsProduced              []string            `yaml:"artifacts_produced,omitempty"`
+	PhasesExecuted                 []string            `yaml:"phases_executed,omitempty"`
+	PhasesSkipped                  []string            `yaml:"phases_skipped,omitempty"`
+	ResultClass                    string              `yaml:"result_class,omitempty"`
+	AssuranceClass                 string              `yaml:"assurance_class,omitempty"`
+	RecoveryStatus                 string              `yaml:"recovery_status,omitempty"`
+	RecoveryAttempted              bool                `yaml:"recovery_attempted,omitempty"`
+	DegradationMode                string              `yaml:"degradation_mode,omitempty"`
+	SuccessGateReason              string              `yaml:"success_gate_reason,omitempty"`
+	MinTransitionsProposed         int                 `yaml:"min_transitions_proposed,omitempty"`
+	MaxTransitionsProposed         int                 `yaml:"max_transitions_proposed,omitempty"`
+	MinFramesEmitted               int                 `yaml:"min_frames_emitted,omitempty"`
+	MaxFramesEmitted               int                 `yaml:"max_frames_emitted,omitempty"`
+	FrameKindsEmitted              []string            `yaml:"frame_kinds_emitted,omitempty"`
+	FrameKindsNotExpected          []string            `yaml:"frame_kinds_not_expected,omitempty"`
+	FrameKindsMustExclude          []string            `yaml:"frame_kinds_must_exclude,omitempty"`
+	ArtifactChain                  []ArtifactChainSpec `yaml:"artifact_chain,omitempty"`
+	ArtifactKindProduced           []string            `yaml:"artifact_kind_produced,omitempty"`
+	RecoveryStrategies             []string            `yaml:"recovery_strategies,omitempty"`
 }
 
 type CaseOverrideSpec struct {
@@ -445,16 +529,6 @@ func (s *Suite) Validate() error {
 		for j, step := range c.InteractionScript {
 			if strings.TrimSpace(step.Action) == "" {
 				return fmt.Errorf("suite case[%s] interaction_script[%d] missing action", c.Name, j)
-			}
-		}
-		if c.Expect.Euclo != nil {
-			for j, chain := range c.Expect.Euclo.ArtifactChain {
-				if strings.TrimSpace(chain.Kind) == "" {
-					return fmt.Errorf("suite case[%s] expect.euclo.artifact_chain[%d] missing kind", c.Name, j)
-				}
-				if strings.TrimSpace(chain.ProducedByPhase) == "" && strings.TrimSpace(chain.ConsumedByPhase) == "" {
-					return fmt.Errorf("suite case[%s] expect.euclo.artifact_chain[%d] must set produced_by_phase and/or consumed_by_phase", c.Name, j)
-				}
 			}
 		}
 		if c.Overrides.Memory != nil {

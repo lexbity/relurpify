@@ -2,7 +2,7 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: coding.pipeline.python
-  description: "Pipeline control-flow coverage for Python coding tasks."
+  description: Pipeline control-flow coverage for Python coding tasks.
   owner: agent-platform
   tier: stable
   quarantined: false
@@ -15,80 +15,66 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   cases:
-    - name: easy_fix_bug_and_run_tests
-      task_type: code_modification
-      requires:
-        executables: ["python3"]
-        tools: ["cli_python"]
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/pysuite/calc.py
-            content: |
-              def add(a: int, b: int) -> int:
-                  return a + b + 1
-          - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
-            content: |
-              import unittest
-
-              import calc
-
-
-              class TestCalc(unittest.TestCase):
-                  def test_add(self) -> None:
-                      self.assertEqual(calc.add(2, 2), 4)
-
-
-              if __name__ == "__main__":
-                  unittest.main()
-      overrides:
-        allowed_capabilities:
-          - name: cli_python
-            kind: tool
-      prompt: "Fix the failing test in testsuite/agenttest_fixtures/pysuite without changing the test, then run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\"."
-      expect:
+  - name: easy_fix_bug_and_run_tests
+    task_type: code_modification
+    requires:
+      executables:
+      - python3
+      tools:
+      - cli_python
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/pysuite/calc.py
+        content: "def add(a: int, b: int) -> int:\n    return a + b + 1\n"
+      - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
+        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n\
+          \    def test_add(self) -> None:\n        self.assertEqual(calc.add(2, 2),\
+          \ 4)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_python
+        kind: tool
+    prompt: Fix the failing test in testsuite/agenttest_fixtures/pysuite without changing
+      the test, then run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite".
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/agenttest_fixtures/pysuite/calc.py
-        tool_calls_must_include:
-          - cli_python
-    - name: verify_already_correct_without_edits
-      task_type: analysis
-      requires:
-        executables: ["python3"]
-        tools: ["cli_python"]
-      setup:
-        files:
-          - path: testsuite/agenttest_fixtures/pysuite/calc.py
-            content: |
-              def add(a: int, b: int) -> int:
-                  return a + b
-          - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
-            content: |
-              import unittest
-
-              import calc
-
-
-              class TestCalc(unittest.TestCase):
-                  def test_add(self) -> None:
-                      self.assertEqual(calc.add(2, 2), 4)
-
-
-              if __name__ == "__main__":
-                  unittest.main()
-      overrides:
-        allowed_capabilities:
-          - name: cli_python
-            kind: tool
-      prompt: "Run cli_python args [\"test_calc.py\"] with working_directory \"testsuite/agenttest_fixtures/pysuite\" and confirm whether the module is already correct. Do not modify any files."
-      expect:
+        - testsuite/agenttest_fixtures/pysuite/calc.py
+      benchmark:
+        tools_expected:
+        - cli_python
+  - name: verify_already_correct_without_edits
+    task_type: analysis
+    requires:
+      executables:
+      - python3
+      tools:
+      - cli_python
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/pysuite/calc.py
+        content: "def add(a: int, b: int) -> int:\n    return a + b\n"
+      - path: testsuite/agenttest_fixtures/pysuite/test_calc.py
+        content: "import unittest\n\nimport calc\n\n\nclass TestCalc(unittest.TestCase):\n\
+          \    def test_add(self) -> None:\n        self.assertEqual(calc.add(2, 2),\
+          \ 4)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_python
+        kind: tool
+    prompt: Run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite"
+      and confirm whether the module is already correct. Do not modify any files.
+    expect:
+      outcome:
         must_succeed: true
         no_file_changes: true
-        tool_calls_must_include:
-          - cli_python
+      benchmark:
+        tools_expected:
+        - cli_python

@@ -2,7 +2,8 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.intent_fidelity
-  description: "Intent fidelity: conflicting signals, symptom-only reports, and architectural constraint inference."
+  description: 'Intent fidelity: conflicting signals, symptom-only reports, and architectural
+    constraint inference.'
   owner: agent-platform
   tier: stable
   classification: journey
@@ -17,215 +18,192 @@ spec:
   workspace:
     strategy: derived
     exclude:
-      - .git/**
-      - .gocache/**
-      - .gomodcache/**
-      - relurpify_cfg/test_runs/**
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
   models:
-    - name: qwen2.5-coder:14b
-      endpoint: http://localhost:11434
+  - name: qwen2.5-coder:14b
+    endpoint: http://localhost:11434
   recording:
-    mode: off
+    mode: "off"
   cases:
-    - name: recover_intent_from_conflict
-      description: "5.1 intent fidelity: bug report, code comment, and ADR carry conflicting instructions — agent must resolve to architectural guidance."
-      task_type: code_modification
-      tags: [stable, intent-fidelity, conflict-resolution, level:3]
-      timeout: 180s
-      setup:
-        files:
-          - path: testsuite/fixtures/intent_fetch.go
-            content: |
-              package intent
+  - name: recover_intent_from_conflict
+    description: '5.1 intent fidelity: bug report, code comment, and ADR carry conflicting
+      instructions — agent must resolve to architectural guidance.'
+    task_type: code_modification
+    tags:
+    - stable
+    - intent-fidelity
+    - conflict-resolution
+    - level:3
+    timeout: 180s
+    setup:
+      files:
+      - path: testsuite/fixtures/intent_fetch.go
+        content: "package intent\n\nimport \"net/http\"\n\n// FetchData retrieves\
+          \ data from the given URL.\n// WARNING: do not add a timeout parameter —\
+          \ the upstream SLA is fixed at 30s.\nfunc FetchData(url string) ([]byte,\
+          \ error) {\n  resp, err := http.Get(url)\n  if err != nil {\n    return\
+          \ nil, err\n  }\n  defer resp.Body.Close()\n  return nil, nil\n}\n"
+    prompt: 'Bug report #77: "FetchData hangs indefinitely on slow upstreams — add
+      a timeout parameter."
 
-              import "net/http"
+      Code comment in intent_fetch.go: "WARNING: do not add a timeout parameter —
+      the upstream SLA is fixed at 30s."
 
-              // FetchData retrieves data from the given URL.
-              // WARNING: do not add a timeout parameter — the upstream SLA is fixed at 30s.
-              func FetchData(url string) ([]byte, error) {
-                resp, err := http.Get(url)
-                if err != nil {
-                  return nil, err
-                }
-                defer resp.Body.Close()
-                return nil, nil
-              }
-      prompt: >
-        Bug report #77: "FetchData hangs indefinitely on slow upstreams — add a timeout parameter."
+      Architecture note from backlog item #77: "Timeout control for FetchData should
+      be implemented via context.Context propagation (not a raw duration parameter)
+      for consistent cancellation across the call chain. Targeted for v2 rollout."
 
-        Code comment in intent_fetch.go: "WARNING: do not add a timeout parameter — the upstream SLA is fixed at 30s."
+      Add timeout support to testsuite/fixtures/intent_fetch.go following the architectural
+      guidance. Resolve the conflict between the bug report and the inline comment
+      by deferring to the architectural decision.
 
-        Architecture note from backlog item #77: "Timeout control for FetchData should be implemented
-        via context.Context propagation (not a raw duration parameter) for consistent cancellation across
-        the call chain. Targeted for v2 rollout."
-
-        Add timeout support to testsuite/fixtures/intent_fetch.go following the architectural guidance.
-        Resolve the conflict between the bug report and the inline comment by deferring to the architectural decision.
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/intent_fetch.go
-            content: |
-              package intent
-
-              import "net/http"
-
-              // FetchData retrieves data from the given URL.
-              // WARNING: do not add a timeout parameter — the upstream SLA is fixed at 30s.
-              func FetchData(url string) ([]byte, error) {
-                resp, err := http.Get(url)
-                if err != nil {
-                  return nil, err
-                }
-                defer resp.Body.Close()
-                return nil, nil
-              }
-      expect:
+      '
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/intent_fetch.go
+        content: "package intent\n\nimport \"net/http\"\n\n// FetchData retrieves\
+          \ data from the given URL.\n// WARNING: do not add a timeout parameter —\
+          \ the upstream SLA is fixed at 30s.\nfunc FetchData(url string) ([]byte,\
+          \ error) {\n  resp, err := http.Get(url)\n  if err != nil {\n    return\
+          \ nil, err\n  }\n  defer resp.Body.Close()\n  return nil, nil\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/intent_fetch.go
+        - testsuite/fixtures/intent_fetch.go
         files_contain:
-          - path: testsuite/fixtures/intent_fetch.go
-            contains:
-              - context
-        euclo:
-          mode: code
+        - path: testsuite/fixtures/intent_fetch.go
+          contains:
+          - context
+        euclo_mode: code
+  - name: recover_from_symptom_report
+    description: '5.1 intent fidelity: symptom-only report (no explicit fix instruction)
+      — agent must infer the cause and apply the fix.'
+    task_type: code_modification
+    tags:
+    - stable
+    - intent-fidelity
+    - symptom-driven
+    - level:3
+    timeout: 180s
+    setup:
+      files:
+      - path: testsuite/fixtures/intent_handler.go
+        content: "package intent\n\nimport (\n  \"fmt\"\n  \"net/http\"\n)\n\nfunc\
+          \ ServeProfile(w http.ResponseWriter, r *http.Request) {\n  userID := r.URL.Query().Get(\"\
+          id\")\n  fmt.Fprintf(w, \"Profile for: %s\", userID)\n}\n"
+    prompt: 'Support ticket from production (opened 2026-03-28): "Profile page returns
+      a 500 error and a blank response body when the URL is missing the ''id'' query
+      parameter. Issue started appearing after the latest deploy. Affects approximately
+      3% of requests."
 
-    - name: recover_from_symptom_report
-      description: "5.1 intent fidelity: symptom-only report (no explicit fix instruction) — agent must infer the cause and apply the fix."
-      task_type: code_modification
-      tags: [stable, intent-fidelity, symptom-driven, level:3]
-      timeout: 180s
-      setup:
-        files:
-          - path: testsuite/fixtures/intent_handler.go
-            content: |
-              package intent
+      Identify and fix the root cause in testsuite/fixtures/intent_handler.go.
 
-              import (
-                "fmt"
-                "net/http"
-              )
-
-              func ServeProfile(w http.ResponseWriter, r *http.Request) {
-                userID := r.URL.Query().Get("id")
-                fmt.Fprintf(w, "Profile for: %s", userID)
-              }
-      prompt: >
-        Support ticket from production (opened 2026-03-28):
-        "Profile page returns a 500 error and a blank response body when the URL
-        is missing the 'id' query parameter. Issue started appearing after the latest
-        deploy. Affects approximately 3% of requests."
-
-        Identify and fix the root cause in testsuite/fixtures/intent_handler.go.
-      context:
-        euclo.mode: debug
-        context_file_contents:
-          - path: testsuite/fixtures/intent_handler.go
-            content: |
-              package intent
-
-              import (
-                "fmt"
-                "net/http"
-              )
-
-              func ServeProfile(w http.ResponseWriter, r *http.Request) {
-                userID := r.URL.Query().Get("id")
-                fmt.Fprintf(w, "Profile for: %s", userID)
-              }
-      expect:
+      '
+    context:
+      euclo.mode: debug
+      context_file_contents:
+      - path: testsuite/fixtures/intent_handler.go
+        content: "package intent\n\nimport (\n  \"fmt\"\n  \"net/http\"\n)\n\nfunc\
+          \ ServeProfile(w http.ResponseWriter, r *http.Request) {\n  userID := r.URL.Query().Get(\"\
+          id\")\n  fmt.Fprintf(w, \"Profile for: %s\", userID)\n}\n"
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/intent_handler.go
-        euclo:
-          mode: debug
+        - testsuite/fixtures/intent_handler.go
+        euclo_mode: debug
+  - name: infer_architectural_constraint
+    description: '5.1 intent fidelity: rejected PR patterns documented — agent must
+      follow accepted error-handling convention, not use panic.'
+    task_type: code_modification
+    tags:
+    - stable
+    - intent-fidelity
+    - pattern-inference
+    - level:4
+    timeout: 180s
+    setup:
+      files:
+      - path: testsuite/fixtures/intent_api.go
+        content: "package intent\n\nimport \"errors\"\n\n// GetUser retrieves a user\
+          \ by ID. Returns an error if the ID is empty or not found.\nfunc GetUser(id\
+          \ string) (string, error) {\n  if id == \"\" {\n    return \"\", errors.New(\"\
+          id required\")\n  }\n  return \"user:\" + id, nil\n}\n\n// ListUsers returns\
+          \ all user IDs.\nfunc ListUsers() ([]string, error) {\n  return []string{},\
+          \ nil\n}\n"
+      - path: testsuite/fixtures/intent_patterns.md
+        content: '# Error handling conventions — established 2026-01-15
 
-    - name: infer_architectural_constraint
-      description: "5.1 intent fidelity: rejected PR patterns documented — agent must follow accepted error-handling convention, not use panic."
-      task_type: code_modification
-      tags: [stable, intent-fidelity, pattern-inference, level:4]
-      timeout: 180s
-      setup:
-        files:
-          - path: testsuite/fixtures/intent_api.go
-            content: |
-              package intent
 
-              import "errors"
+          ## Accepted pattern
 
-              // GetUser retrieves a user by ID. Returns an error if the ID is empty or not found.
-              func GetUser(id string) (string, error) {
-                if id == "" {
-                  return "", errors.New("id required")
-                }
-                return "user:" + id, nil
-              }
+          All exported functions return (T, error). Input validation errors use errors.New().
 
-              // ListUsers returns all user IDs.
-              func ListUsers() ([]string, error) {
-                return []string{}, nil
-              }
-          - path: testsuite/fixtures/intent_patterns.md
-            content: |
-              # Error handling conventions — established 2026-01-15
+          Accepted in PR #93: `return "", errors.New("id required")` for invalid input.
 
-              ## Accepted pattern
-              All exported functions return (T, error). Input validation errors use errors.New().
-              Accepted in PR #93: `return "", errors.New("id required")` for invalid input.
 
-              ## Rejected approaches (do not use)
-              - PR #88: used log.Fatal on bad input — rejected (terminates the process)
-              - PR #91: used panic("invalid id") — rejected (unrecoverable, bypasses error chain)
+          ## Rejected approaches (do not use)
 
-              These conventions apply to all new exported functions in this package.
-      prompt: >
-        Add a DeleteUser(id string) (bool, error) function to testsuite/fixtures/intent_api.go.
-        The function should return false and an error when id is empty, and return true when
-        the deletion succeeds.
-        Follow the error handling patterns documented in testsuite/fixtures/intent_patterns.md.
-      context:
-        euclo.mode: code
-        context_file_contents:
-          - path: testsuite/fixtures/intent_api.go
-            content: |
-              package intent
+          - PR #88: used log.Fatal on bad input — rejected (terminates the process)
 
-              import "errors"
+          - PR #91: used panic("invalid id") — rejected (unrecoverable, bypasses error
+          chain)
 
-              // GetUser retrieves a user by ID. Returns an error if the ID is empty or not found.
-              func GetUser(id string) (string, error) {
-                if id == "" {
-                  return "", errors.New("id required")
-                }
-                return "user:" + id, nil
-              }
 
-              // ListUsers returns all user IDs.
-              func ListUsers() ([]string, error) {
-                return []string{}, nil
-              }
-          - path: testsuite/fixtures/intent_patterns.md
-            content: |
-              # Error handling conventions — established 2026-01-15
+          These conventions apply to all new exported functions in this package.
 
-              ## Accepted pattern
-              All exported functions return (T, error). Input validation errors use errors.New().
-              Accepted in PR #93: `return "", errors.New("id required")` for invalid input.
+          '
+    prompt: 'Add a DeleteUser(id string) (bool, error) function to testsuite/fixtures/intent_api.go.
+      The function should return false and an error when id is empty, and return true
+      when the deletion succeeds. Follow the error handling patterns documented in
+      testsuite/fixtures/intent_patterns.md.
 
-              ## Rejected approaches (do not use)
-              - PR #88: used log.Fatal on bad input — rejected (terminates the process)
-              - PR #91: used panic("invalid id") — rejected (unrecoverable, bypasses error chain)
+      '
+    context:
+      euclo.mode: code
+      context_file_contents:
+      - path: testsuite/fixtures/intent_api.go
+        content: "package intent\n\nimport \"errors\"\n\n// GetUser retrieves a user\
+          \ by ID. Returns an error if the ID is empty or not found.\nfunc GetUser(id\
+          \ string) (string, error) {\n  if id == \"\" {\n    return \"\", errors.New(\"\
+          id required\")\n  }\n  return \"user:\" + id, nil\n}\n\n// ListUsers returns\
+          \ all user IDs.\nfunc ListUsers() ([]string, error) {\n  return []string{},\
+          \ nil\n}\n"
+      - path: testsuite/fixtures/intent_patterns.md
+        content: '# Error handling conventions — established 2026-01-15
 
-              These conventions apply to all new exported functions in this package.
-      expect:
+
+          ## Accepted pattern
+
+          All exported functions return (T, error). Input validation errors use errors.New().
+
+          Accepted in PR #93: `return "", errors.New("id required")` for invalid input.
+
+
+          ## Rejected approaches (do not use)
+
+          - PR #88: used log.Fatal on bad input — rejected (terminates the process)
+
+          - PR #91: used panic("invalid id") — rejected (unrecoverable, bypasses error
+          chain)
+
+
+          These conventions apply to all new exported functions in this package.
+
+          '
+    expect:
+      outcome:
         must_succeed: true
         files_changed:
-          - testsuite/fixtures/intent_api.go
+        - testsuite/fixtures/intent_api.go
         files_contain:
-          - path: testsuite/fixtures/intent_api.go
-            contains:
-              - DeleteUser
-              - error
-        euclo:
-          mode: code
+        - path: testsuite/fixtures/intent_api.go
+          contains:
+          - DeleteUser
+          - error
+        euclo_mode: code
