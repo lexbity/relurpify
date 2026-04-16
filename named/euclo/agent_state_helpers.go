@@ -7,61 +7,9 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
-	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
-
-func (a *Agent) runtimeState(task *core.Task, state *core.Context) (eucloruntime.TaskEnvelope, eucloruntime.TaskClassification, euclotypes.ModeResolution, euclotypes.ExecutionProfileSelection, eucloruntime.UnitOfWork) {
-	envelope := eucloruntime.NormalizeTaskEnvelope(task, state, a.CapabilityRegistry())
-	classification := eucloruntime.ClassifyTask(envelope)
-	mode := eucloruntime.ResolveMode(envelope, classification, a.ModeRegistry)
-	profile := eucloruntime.SelectExecutionProfile(envelope, classification, mode, a.ProfileRegistry)
-	envelope.ResolvedMode = mode.ModeID
-	envelope.ExecutionProfile = profile.ProfileID
-	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), mode, profile)
-	semanticInputs := a.semanticInputBundle(task, state, mode)
-	work := euclowork.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, semanticInputs, skillPolicy, eucloruntime.WorkUnitExecutorDescriptor{})
-	return envelope, classification, mode, profile, work
-}
-
-func (a *Agent) seedRuntimeState(state *core.Context, envelope eucloruntime.TaskEnvelope, classification eucloruntime.TaskClassification, mode euclotypes.ModeResolution, profile euclotypes.ExecutionProfileSelection, work eucloruntime.UnitOfWork) {
-	if state == nil {
-		return
-	}
-	history := []eucloruntime.UnitOfWorkHistoryEntry(nil)
-	if raw, ok := euclostate.GetUnitOfWorkHistory(state); ok {
-		history = append(history, raw...)
-	}
-	if len(history) == 0 {
-		if existing, ok := euclostate.GetUnitOfWork(state); ok && existing.ID != "" {
-			history = eucloruntime.UpdateUnitOfWorkHistory(history, existing, existing.UpdatedAt)
-		}
-	}
-
-	// Use typed accessors for core state keys
-	euclostate.SetEnvelope(state, envelope)
-	euclostate.SetClassification(state, classification)
-	euclostate.SetMode(state, mode.ModeID)
-	euclostate.SetExecutionProfile(state, profile.ProfileID)
-	euclostate.SetUnitOfWork(state, work)
-	euclostate.SetUnitOfWorkHistory(state, eucloruntime.UpdateUnitOfWorkHistory(history, work, work.UpdatedAt))
-
-	euclostate.SetModeResolution(state, mode)
-	euclostate.SetExecutionProfileSelection(state, profile)
-	euclostate.SetSemanticInputs(state, work.SemanticInputs)
-	euclostate.SetResolvedExecutionPolicy(state, work.ResolvedPolicy)
-	euclostate.SetExecutorDescriptor(state, work.ExecutorDescriptor)
-
-	// Phase 9: Store user recipe signals for classification
-	if len(a.userRecipeSignals) > 0 {
-		euclostate.SetUserRecipeSignals(state, a.userRecipeSignals)
-	}
-}
 
 func (a *Agent) ensureWorkflowRun(ctx context.Context, task *core.Task, state *core.Context) {
 	if a == nil || state == nil {
@@ -115,46 +63,6 @@ func (a *Agent) registerLearningPromoteRoutine() {
 			return workflowIDFromState(state), explorationIDFromState(state)
 		},
 	})
-}
-
-// classifyCapabilityIntent performs capability-level classification using Tier 1 (static keywords),
-// Tier 2 (LLM semantic), and Tier 3 (fallback). Result is stored in state for
-// NormalizeTaskEnvelope to pick up on the second runtimeState pass.
-func (a *Agent) classifyCapabilityIntent(ctx context.Context, task *core.Task, state *core.Context) error {
-	if state == nil {
-		return nil
-	}
-	// Idempotent: already classified for this invocation.
-	if _, ok := euclostate.GetPreClassifiedCapabilitySequence(state); ok {
-		return nil
-	}
-
-	modeID, _ := euclostate.GetMode(state)
-	if modeID == "" {
-		return nil // mode not yet established; skip gracefully
-	}
-
-	classifier := &eucloruntime.CapabilityIntentClassifier{
-		Registry:      euclorelurpic.DefaultRegistry(),
-		ExtraKeywords: a.capabilityKeywordsFromManifest(),
-		Model:         a.Environment.Model, // Phase 3: Tier 2 enabled when model available
-	}
-
-	instruction := ""
-	if task != nil {
-		instruction = task.Instruction
-	}
-
-	result, err := classifier.Classify(ctx, instruction, modeID)
-	if err != nil {
-		return fmt.Errorf("euclo capability classification: %w", err)
-	}
-
-	euclostate.SetPreClassifiedCapabilitySequence(state, result.Sequence)
-	euclostate.SetClassificationSource(state, result.Source)
-	euclostate.SetClassificationMeta(state, result.Meta)
-	euclostate.SetCapabilitySequenceOperator(state, result.Operator)
-	return nil
 }
 
 // capabilityKeywordsFromManifest returns user-configured capability keywords from manifest.

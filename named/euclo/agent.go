@@ -43,6 +43,7 @@ import (
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
 	euclodispatch "github.com/lexcodex/relurpify/named/euclo/runtime/dispatch"
+	euclointake "github.com/lexcodex/relurpify/named/euclo/runtime/intake"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
@@ -1361,7 +1362,7 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	artifacts = euclotypes.CollectArtifactsFromState(state)
 	euclostate.SetArtifacts(state, artifacts)
 	if persistErr := a.persistArtifacts(ctx, task, state, artifacts); persistErr != nil {
-	euclostate.SetRuntimePersistError(state, persistErr.Error())
+		euclostate.SetRuntimePersistError(state, persistErr.Error())
 	}
 }
 
@@ -1583,4 +1584,17 @@ func stringValue(raw any) string {
 		return s
 	}
 	return ""
+}
+
+// newCapabilityClassifier creates a CapabilityClassifier for the intake enrichment pipeline.
+// This replaces the inline classifier construction in classifyCapabilityIntent.
+func (a *Agent) newCapabilityClassifier() euclointake.CapabilityClassifier {
+	if a == nil {
+		return nil
+	}
+	return euclointake.DefaultCapabilityClassifier(
+		euclorelurpic.DefaultRegistry(),
+		a.Environment.Model,
+		a.capabilityKeywordsFromManifest(),
+	)
 }

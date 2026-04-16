@@ -12,6 +12,7 @@ import (
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
 	euclocontext "github.com/lexcodex/relurpify/named/euclo/runtime/context"
+	euclointake "github.com/lexcodex/relurpify/named/euclo/runtime/intake"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
@@ -27,6 +28,7 @@ type managedExecutionFlow struct {
 	mode             euclotypes.ModeResolution
 	profile          euclotypes.ExecutionProfileSelection
 	work             eucloruntime.UnitOfWork
+	classified       euclointake.ClassifiedEnvelope // Keep the full envelope for rebuilds
 	contextRuntime   *euclocontext.ContextRuntime
 	prep             executionPreparation
 }
@@ -57,28 +59,35 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 		return nil, &core.Result{Success: false, Error: scopeErr}, scopeErr
 	}
 
-	envelope, classification, mode, profile, work := a.runtimeState(task, state)
-	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
+	// Single-pass enrichment: replaces the double runtimeState() call pattern
+	semanticInputs := a.semanticInputBundle(task, state, euclotypes.ModeResolution{})
+	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), euclotypes.ModeResolution{}, euclotypes.ExecutionProfileSelection{})
+	executorDescriptor := eucloruntime.WorkUnitExecutorDescriptor{}
 
-	// Capability-level classification: static keywords + fallback (Tier 1 and Tier 3 only).
-	// Result stored in state and picked up by NormalizeTaskEnvelope on the second runtimeState pass.
-	if err := a.classifyCapabilityIntent(ctx, task, state); err != nil {
+	// Create capability classifier
+	classifier := a.newCapabilityClassifier()
+
+	classified, err := euclointake.RunEnrichment(ctx, task, state, a.Environment, a.ModeRegistry, a.ProfileRegistry, classifier, semanticInputs, skillPolicy, executorDescriptor)
+	if err != nil {
 		return nil, &core.Result{Success: false, Error: err}, err
 	}
 
+	// Persist classified envelope to state (replaces seedRuntimeState)
+	euclointake.SeedClassifiedEnvelope(state, classified)
+
 	a.ensureDeferralPlan(task, state)
 	a.ensureWorkflowRun(ctx, task, state)
-	if restoreErr := a.restoreExecutionContinuity(ctx, task, state, envelope, work); restoreErr != nil {
-		work = euclowork.BuildUnitOfWork(task, state, envelope, classification, mode, profile, a.ModeRegistry, work.SemanticInputs, work.ResolvedPolicy, work.ExecutorDescriptor)
-		a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, eucloruntime.ExecutionStatusRestoreFailed, restoreErr)
+
+	// Restore execution continuity; if it fails, rebuild work with updated state
+	if restoreErr := a.restoreExecutionContinuity(ctx, task, state, classified.Envelope, classified.Work); restoreErr != nil {
+		// Rebuild work after restore failure - only UnitOfWork, no re-classification
+		classified.Work = euclointake.RebuildUnitOfWork(task, state, classified, a.ModeRegistry, classified.Work.SemanticInputs, classified.Work.ResolvedPolicy, classified.Work.ExecutorDescriptor)
+		a.refreshRuntimeExecutionArtifacts(ctx, task, state, classified.Work, eucloruntime.ExecutionStatusRestoreFailed, restoreErr)
 		result := &core.Result{Success: false, Error: restoreErr}
 		result.Metadata = map[string]any{"result_class": string(eucloruntime.ExecutionResultClassRestoreFailed)}
 		a.applyRuntimeResultMetadata(result, state)
 		return nil, result, restoreErr
 	}
-
-	envelope, classification, mode, profile, work = a.runtimeState(task, state)
-	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
 	if err := a.applyLearningResolution(ctx, task, state); err != nil {
 		return nil, &core.Result{Success: false, Error: err}, err
 	}
@@ -90,22 +99,22 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 		IndexManager:      a.Environment.IndexManager,
 		SearchEngine:      a.Environment.SearchEngine,
 		BKCBootstrapReady: a.WorkspaceEnv.BKCEvents == nil || a.WorkspaceEnv.BKCEvents.BootstrapReady(),
-	}, mode, work)
+	}, classified.Mode, classified.Work)
 	if contextRuntime != nil {
 		contextRuntime.Activate(task, state, a.Environment.Model)
-		euclostate.SetSharedContextRuntime(state, euclopolicy.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
+		euclostate.SetSharedContextRuntime(state, euclopolicy.BuildSharedContextRuntimeState(contextRuntime.Shared, classified.Work))
 	}
-	securityRuntime := euclopolicy.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work)
+	securityRuntime := euclopolicy.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, classified.Work)
 	euclostate.SetSecurityRuntime(state, securityRuntime)
-	contractRuntime := eucloruntime.BuildCapabilityContractRuntimeState(work, state, time.Now().UTC())
+	contractRuntime := eucloruntime.BuildCapabilityContractRuntimeState(classified.Work, state, time.Now().UTC())
 	euclostate.SetCapabilityContractRuntime(state, contractRuntime)
-	euclostate.SetArchaeologyCapabilityRuntime(state, eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC()))
-	euclostate.SetDebugCapabilityRuntime(state, eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
-	euclostate.SetChatCapabilityRuntime(state, eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
-	if contractErr := eucloruntime.EnforcePreExecutionCapabilityContracts(work); contractErr != nil {
-		work.Status = eucloruntime.UnitOfWorkStatusBlocked
-		work.ResultClass = eucloruntime.ExecutionResultClassBlocked
-		a.refreshRuntimeExecutionArtifacts(ctx, task, state, work, eucloruntime.ExecutionStatusBlocked, contractErr)
+	euclostate.SetArchaeologyCapabilityRuntime(state, eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(classified.Work, state, time.Now().UTC()))
+	euclostate.SetDebugCapabilityRuntime(state, eucloreporting.BuildDebugCapabilityRuntimeState(classified.Work, state, time.Now().UTC()))
+	euclostate.SetChatCapabilityRuntime(state, eucloreporting.BuildChatCapabilityRuntimeState(classified.Work, state, time.Now().UTC()))
+	if contractErr := eucloruntime.EnforcePreExecutionCapabilityContracts(classified.Work); contractErr != nil {
+		classified.Work.Status = eucloruntime.UnitOfWorkStatusBlocked
+		classified.Work.ResultClass = eucloruntime.ExecutionResultClassBlocked
+		a.refreshRuntimeExecutionArtifacts(ctx, task, state, classified.Work, eucloruntime.ExecutionStatusBlocked, contractErr)
 		result := &core.Result{Success: false, Error: contractErr}
 		result.Metadata = map[string]any{"result_class": string(eucloruntime.ExecutionResultClassBlocked)}
 		a.applyRuntimeResultMetadata(result, state)
@@ -116,11 +125,12 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 		task:             task,
 		state:            state,
 		workflowExecutor: workflowExecutor,
-		envelope:         envelope,
-		classification:   classification,
-		mode:             mode,
-		profile:          profile,
-		work:             work,
+		envelope:         classified.Envelope,
+		classification:   classified.Classification,
+		mode:             classified.Mode,
+		profile:          classified.Profile,
+		work:             classified.Work,
+		classified:       classified,
 		contextRuntime:   contextRuntime,
 		prep:             executionPreparation{},
 	}, nil, nil
@@ -137,7 +147,9 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 
 	flow.prep = prep
 	flow.work = euclowork.BuildUnitOfWork(flow.task, flow.state, flow.envelope, flow.classification, flow.mode, flow.profile, a.ModeRegistry, flow.work.SemanticInputs, flow.work.ResolvedPolicy, flow.work.ExecutorDescriptor)
-	a.seedRuntimeState(flow.state, flow.envelope, flow.classification, flow.mode, flow.profile, flow.work)
+	// Update classified envelope with rebuilt work and persist to state
+	flow.classified.Work = flow.work
+	euclointake.SeedClassifiedEnvelope(flow.state, flow.classified)
 
 	if prep.activeStep == nil && (hasTerminalExecutionPreparation(prep) || shouldShortCircuitExecution(flow.state)) {
 		flow.work.Status = eucloruntime.UnitOfWorkStatusCompleted

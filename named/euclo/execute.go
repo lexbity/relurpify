@@ -6,12 +6,26 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclointake "github.com/lexcodex/relurpify/named/euclo/runtime/intake"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {
-	_, _, _, _, work := a.runtimeState(task, nil)
-	selection, err := a.selectExecutor(work)
+	// Use single-pass enrichment for graph building
+	semanticInputs := a.semanticInputBundle(task, nil, euclotypes.ModeResolution{})
+	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), euclotypes.ModeResolution{}, euclotypes.ExecutionProfileSelection{})
+	executorDescriptor := eucloruntime.WorkUnitExecutorDescriptor{}
+
+	classifier := a.newCapabilityClassifier()
+
+	classified, err := euclointake.RunEnrichment(context.Background(), task, nil, a.Environment, a.ModeRegistry, a.ProfileRegistry, classifier, semanticInputs, skillPolicy, executorDescriptor)
+	if err != nil {
+		return nil, err
+	}
+
+	selection, err := a.selectExecutor(classified.Work)
 	if err != nil {
 		return nil, err
 	}
@@ -22,9 +36,23 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	if state == nil {
 		state = core.NewContext()
 	}
-	envelope, classification, mode, profile, work := a.runtimeState(task, state)
-	a.seedRuntimeState(state, envelope, classification, mode, profile, work)
-	selection, err := a.selectExecutor(work)
+
+	// Single-pass enrichment: replaces the double runtimeState() call pattern
+	semanticInputs := a.semanticInputBundle(task, state, euclotypes.ModeResolution{})
+	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), euclotypes.ModeResolution{}, euclotypes.ExecutionProfileSelection{})
+	executorDescriptor := eucloruntime.WorkUnitExecutorDescriptor{}
+
+	classifier := a.newCapabilityClassifier()
+
+	classified, err := euclointake.RunEnrichment(ctx, task, state, a.Environment, a.ModeRegistry, a.ProfileRegistry, classifier, semanticInputs, skillPolicy, executorDescriptor)
+	if err != nil {
+		return &core.Result{Success: false, Error: err}, err
+	}
+
+	// Persist classified envelope to state
+	euclointake.SeedClassifiedEnvelope(state, classified)
+
+	selection, err := a.selectExecutor(classified.Work)
 	if err != nil {
 		return &core.Result{Success: false, Error: err}, err
 	}

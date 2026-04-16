@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
 	"github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclointake "github.com/lexcodex/relurpify/named/euclo/runtime/intake"
 	euclopretask "github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
 )
 
@@ -72,18 +73,19 @@ func TestInteractionScriptAndTransitionHelpers(t *testing.T) {
 	}
 }
 
-func TestSeedRuntimeState(t *testing.T) {
-	agent := &Agent{}
+func TestSeedClassifiedEnvelope(t *testing.T) {
 	state := core.NewContext()
 	state.Set("euclo.unit_of_work", runtime.UnitOfWork{ID: "prev", UpdatedAt: testNow()})
 
-	envelope := runtime.TaskEnvelope{ResolvedMode: "code"}
-	classification := runtime.TaskClassification{}
-	mode := euclotypes.ModeResolution{ModeID: "code"}
-	profile := euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
-	work := runtime.UnitOfWork{ID: "uow-1", RootID: "root-1", UpdatedAt: testNow()}
+	classified := euclointake.ClassifiedEnvelope{
+		Envelope:       runtime.TaskEnvelope{ResolvedMode: "code"},
+		Classification: runtime.TaskClassification{},
+		Mode:           euclotypes.ModeResolution{ModeID: "code"},
+		Profile:        euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"},
+		Work:           runtime.UnitOfWork{ID: "uow-1", RootID: "root-1", UpdatedAt: testNow()},
+	}
 
-	agent.seedRuntimeState(state, envelope, classification, mode, profile, work)
+	euclointake.SeedClassifiedEnvelope(state, classified)
 
 	if got, ok := state.Get("euclo.unit_of_work"); !ok || got == nil {
 		t.Fatal("expected unit of work in state")
