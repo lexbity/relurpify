@@ -8,6 +8,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	"github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	bkccaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/bkc"
 	debugcaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/debug"
@@ -131,10 +132,11 @@ func supportsProfile(cap euclotypes.EucloCodingCapability, profileID string) boo
 
 // RecipeIntegrationResult holds the result of loading and registering thought recipes.
 type RecipeIntegrationResult struct {
-	Registry *thoughtrecipes.PlanRegistry
-	Executor *thoughtrecipes.Executor
-	Warnings []string
-	Errors   []error
+	Registry     *thoughtrecipes.PlanRegistry
+	Executor     *thoughtrecipes.Executor
+	Invocables   []execution.Invocable
+	Warnings     []string
+	Errors       []error
 }
 
 // LoadAndRegisterRecipes loads thought recipes from the given directory,
@@ -145,6 +147,7 @@ func LoadAndRegisterRecipes(recipeDir string, relurpicRegistry *relurpicabilitie
 	result := &RecipeIntegrationResult{
 		Registry: thoughtrecipes.NewPlanRegistry(),
 		Executor: thoughtrecipes.NewExecutor(),
+		Invocables: make([]execution.Invocable, 0),
 		Warnings: make([]string, 0),
 		Errors:   make([]error, 0),
 	}
@@ -204,6 +207,11 @@ func LoadAndRegisterRecipes(recipeDir string, relurpicRegistry *relurpicabilitie
 				result.Errors = append(result.Errors, fmt.Errorf("failed to register descriptor for %q: %w", plan.Name, err))
 			}
 		}
+
+		result.Invocables = append(result.Invocables, &thoughtrecipes.RecipeInvocable{
+			Plan:     plan,
+			Executor: result.Executor,
+		})
 	}
 
 	// Collect warnings from load result

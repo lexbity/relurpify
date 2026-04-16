@@ -8,7 +8,8 @@ import (
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/core"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+)
 
 // BuildUnitOfWork assembles Euclo's active execution bundle from intake,
 // classification, selected mode/profile, and currently available runtime state.
@@ -147,8 +148,7 @@ func BuildUnitOfWork(
 }
 
 func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, mode ModeResolution) string {
-	// Use the classifier's pre-determined capability sequence.
-	// The CapabilityIntentClassifier is the single authoritative source for capability selection.
+	// Use the pre-classified capability sequence when present.
 	if len(envelope.CapabilitySequence) > 0 {
 		return envelope.CapabilitySequence[0]
 	}

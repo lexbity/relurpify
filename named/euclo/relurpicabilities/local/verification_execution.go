@@ -13,6 +13,7 @@ import (
 	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type verificationScopeSelectCapability struct{ env agentenv.AgentEnvironment }
@@ -99,7 +100,7 @@ func (c *verificationScopeSelectCapability) Execute(ctx context.Context, env euc
 		Status:     "produced",
 	}
 	if env.State != nil {
-		env.State.Set("euclo.verification_plan", plan)
+		env.State.Set(euclostate.KeyVerificationPlan, plan)
 	}
 	mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{artifact})
 	return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "verification scope selected", Artifacts: []euclotypes.Artifact{artifact}}
@@ -208,7 +209,7 @@ func (c *verificationExecuteCapability) Execute(ctx context.Context, env eucloty
 		Status:     "produced",
 	}
 	if env.State != nil {
-		env.State.Set("pipeline.verify", payload)
+		env.State.Set(euclostate.KeyPipelineVerify, payload)
 	}
 	mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{artifact})
 	return euclotypes.ExecutionResult{Status: euclotypes.ExecutionStatusCompleted, Summary: "verification executed", Artifacts: []euclotypes.Artifact{artifact}}
@@ -328,7 +329,7 @@ func verificationPlanFromState(state *core.Context) verificationPlan {
 	if state == nil {
 		return verificationPlan{}
 	}
-	raw, ok := state.Get("euclo.verification_plan")
+	raw, ok := state.Get(euclostate.KeyVerificationPlan)
 	if !ok || raw == nil {
 		return verificationPlan{}
 	}
@@ -449,7 +450,7 @@ func explicitVerificationCommands(env euclotypes.ExecutionEnvelope, workspace st
 
 func verificationWorkspace(env euclotypes.ExecutionEnvelope) string {
 	if env.State != nil {
-		if value := strings.TrimSpace(env.State.GetString("euclo.workspace")); value != "" {
+		if value := strings.TrimSpace(env.State.GetString(euclostate.KeyWorkspace)); value != "" {
 			return value
 		}
 	}
@@ -538,7 +539,7 @@ func verificationPolicyHints(env euclotypes.ExecutionEnvelope) verificationPolic
 	if env.State == nil {
 		return verificationPolicySelection{}
 	}
-	raw, ok := env.State.Get("euclo.resolved_execution_policy")
+	raw, ok := env.State.Get(euclostate.KeyResolvedExecutionPolicy)
 	if !ok || raw == nil {
 		return verificationPolicySelection{}
 	}

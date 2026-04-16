@@ -245,6 +245,7 @@ func CompileExecutionPlan(recipe *ThoughtRecipe, sourcePath string) (*ExecutionP
 		Name:               recipe.Metadata.Name,
 		Description:        recipe.Metadata.Description,
 		Version:            recipe.Metadata.Version,
+		FilePath:           sourcePath,
 		GlobalCapabilities: recipe.Global.Capabilities.Allowed,
 		GlobalEnrichment:   globalEnrichment,
 		GlobalSharing:      sharingMode,

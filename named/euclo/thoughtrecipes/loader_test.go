@@ -36,6 +36,12 @@ sequence:
 	if len(warnings) != 0 {
 		t.Errorf("expected no warnings, got %v", warnings)
 	}
+	if plan.FilePath != tmpFile {
+		t.Errorf("expected FilePath %q, got %q", tmpFile, plan.FilePath)
+	}
+	if desc := plan.ToDescriptor(); desc.RecipePath != tmpFile {
+		t.Errorf("expected descriptor RecipePath %q, got %q", tmpFile, desc.RecipePath)
+	}
 
 	// Verify plan fields
 	if plan.Name != "test-recipe" {

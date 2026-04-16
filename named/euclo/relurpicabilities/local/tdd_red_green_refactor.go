@@ -9,6 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type tddRedGreenRefactorCapability struct{ env agentenv.AgentEnvironment }
@@ -62,7 +63,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 	}
 	requestedRefactor := shouldRunTDDRefactor(env.Task)
 	if env.State != nil {
-		env.State.Set("euclo.tdd.phase", "plan_tests")
+		env.State.Set(euclostate.KeyTDDPhase, "plan_tests")
 	}
 	lifecycle := initializeTDDLifecycle(env.State, requestedRefactor)
 	artifacts := []euclotypes.Artifact{{
@@ -128,7 +129,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 	mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{testArtifact})
 
 	if env.State != nil {
-		env.State.Set("euclo.tdd.phase", "red")
+		env.State.Set(euclostate.KeyTDDPhase, "red")
 	}
 	redArtifacts, executed, redErr := ExecuteVerificationFlow(ctx, env, eucloruntime.SnapshotCapabilities(env.Registry))
 	if redErr != nil {
@@ -145,8 +146,8 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 	redArtifact := buildTDDVerificationArtifact("red", redPayload)
 	artifacts = append(artifacts, redArtifact)
 	if env.State != nil {
-		env.State.Set("euclo.tdd.red_evidence", cloneMapAny(redPayload))
-		env.State.Set("euclo.tdd.phase", "implement")
+		env.State.Set(euclostate.KeyTDDRedEvidence, cloneMapAny(redPayload))
+		env.State.Set(euclostate.KeyTDDPhase, "implement")
 	}
 	updateTDDLifecycle(env.State, "red", "completed", map[string]any{
 		"status":       stringValue(redPayload["status"]),
@@ -189,7 +190,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 	mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{implArtifact})
 
 	if env.State != nil {
-		env.State.Set("euclo.tdd.phase", "green")
+		env.State.Set(euclostate.KeyTDDPhase, "green")
 	}
 	greenArtifacts, executed, greenErr := ExecuteVerificationFlow(ctx, env, eucloruntime.SnapshotCapabilities(env.Registry))
 	if greenErr != nil {
@@ -206,7 +207,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 	greenArtifact := buildTDDVerificationArtifact("green", greenPayload)
 	artifacts = append(artifacts, greenArtifact)
 	if env.State != nil {
-		env.State.Set("euclo.tdd.green_evidence", cloneMapAny(greenPayload))
+		env.State.Set(euclostate.KeyTDDGreenEvidence, cloneMapAny(greenPayload))
 	}
 	updateTDDLifecycle(env.State, "green", "completed", map[string]any{
 		"status":       stringValue(greenPayload["status"]),
@@ -219,7 +220,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 
 	if requestedRefactor {
 		if env.State != nil {
-			env.State.Set("euclo.tdd.phase", "refactor")
+			env.State.Set(euclostate.KeyTDDPhase, "refactor")
 		}
 		refactorTask := &core.Task{
 			ID:          firstNonEmpty(taskIdentifier(env.Task), "tdd") + "-refactor",
@@ -267,7 +268,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 		refactorEvidenceArtifact := buildTDDVerificationArtifact("refactor", refactorVerifyPayload)
 		artifacts = append(artifacts, refactorEvidenceArtifact)
 		if env.State != nil {
-			env.State.Set("euclo.tdd.refactor_evidence", cloneMapAny(refactorVerifyPayload))
+			env.State.Set(euclostate.KeyTDDRefactorEvidence, cloneMapAny(refactorVerifyPayload))
 		}
 		updateTDDLifecycle(env.State, "refactor", "completed", map[string]any{
 			"status":       stringValue(refactorVerifyPayload["status"]),
@@ -279,7 +280,7 @@ func (c *tddRedGreenRefactorCapability) Execute(ctx context.Context, env eucloty
 		mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{refactorEvidenceArtifact})
 	}
 	if env.State != nil {
-		env.State.Set("euclo.tdd.phase", "complete")
+		env.State.Set(euclostate.KeyTDDPhase, "complete")
 	}
 	updateTDDLifecycle(env.State, "complete", "completed", map[string]any{
 		"summary": "TDD lifecycle completed",
@@ -320,15 +321,15 @@ func applyRecipeCodePayloadToState(target, recipeState *core.Context, payload ma
 		return
 	}
 	if recipeState != nil {
-		if raw, ok := recipeState.Get("pipeline.code"); ok && raw != nil {
+		if raw, ok := recipeState.Get(euclostate.KeyPipelineCode); ok && raw != nil {
 			if typed, ok := raw.(map[string]any); ok {
-				target.Set("pipeline.code", cloneMapAny(typed))
+				target.Set(euclostate.KeyPipelineCode, cloneMapAny(typed))
 				return
 			}
 		}
 	}
 	if payload != nil {
-		target.Set("pipeline.code", cloneMapAny(payload))
+		target.Set(euclostate.KeyPipelineCode, cloneMapAny(payload))
 	}
 }
 
@@ -379,7 +380,7 @@ func initializeTDDLifecycle(state *core.Context, requestedRefactor bool) map[str
 		lifecycle["verification_phases"] = []string{"red", "green", "refactor"}
 	}
 	if state != nil {
-		state.Set("euclo.tdd.lifecycle", lifecycle)
+		state.Set(euclostate.KeyTDDLifecycle, lifecycle)
 	}
 	return lifecycle
 }
@@ -395,7 +396,7 @@ func updateTDDLifecycle(state *core.Context, phase, status string, details map[s
 	entry := map[string]any{
 		"phase":  strings.TrimSpace(phase),
 		"status": strings.TrimSpace(status),
-		"run_id": strings.TrimSpace(state.GetString("euclo.run_id")),
+		"run_id": strings.TrimSpace(state.GetString(euclostate.KeyRunID)),
 	}
 	for key, value := range details {
 		entry[key] = value
@@ -411,14 +412,14 @@ func updateTDDLifecycle(state *core.Context, phase, status string, details map[s
 	if phase == "complete" {
 		lifecycle["status"] = "completed"
 	}
-	state.Set("euclo.tdd.lifecycle", lifecycle)
+	state.Set(euclostate.KeyTDDLifecycle, lifecycle)
 }
 
 func tddLifecycleFromState(state *core.Context) map[string]any {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.tdd.lifecycle")
+	raw, ok := state.Get(euclostate.KeyTDDLifecycle)
 	if !ok || raw == nil {
 		return nil
 	}
@@ -527,7 +528,7 @@ func shouldSynthesizeRegressionForTDD(env euclotypes.ExecutionEnvelope) bool {
 		return false
 	}
 	if state := env.State; state != nil {
-		if payload := mapPayloadFromState(state, "euclo.reproduction"); len(payload) > 0 && !valueTruthy(payload["synthesized"]) {
+		if payload := mapPayloadFromState(state, euclostate.KeyReproduction); len(payload) > 0 && !valueTruthy(payload["synthesized"]) {
 			return false
 		}
 	}
@@ -539,7 +540,7 @@ func tddRedPhaseInstruction(env euclotypes.ExecutionEnvelope) string {
 	if guidance := tddPackageGuidance(env); guidance != "" {
 		base += " " + guidance
 	}
-	reproducer := mapPayloadFromState(env.State, "euclo.reproduction")
+	reproducer := mapPayloadFromState(env.State, euclostate.KeyReproduction)
 	if len(reproducer) == 0 {
 		return base
 	}

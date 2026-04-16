@@ -17,14 +17,12 @@ import (
 	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	planningbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/planning"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
-	"github.com/lexcodex/relurpify/named/euclo/thoughtrecipes"
+	euclokeys "github.com/lexcodex/relurpify/named/euclo/runtime/keys"
 )
 
 type Dispatcher struct {
-	env            agentenv.AgentEnvironment
-	invocables     map[string]execution.Invocable
-	recipeRegistry *thoughtrecipes.PlanRegistry
-	recipeExecutor *thoughtrecipes.Executor
+	env        agentenv.AgentEnvironment
+	invocables map[string]execution.Invocable
 }
 
 func NewDispatcher(env agentenv.AgentEnvironment) *Dispatcher {
@@ -99,19 +97,6 @@ func (d *Dispatcher) Invoke(ctx context.Context, in execution.InvokeInput) (*cor
 		return nil, fmt.Errorf("relurpic behavior unavailable: no capability ID provided")
 	}
 
-	// Check if this is a thought recipe capability ID
-	if strings.HasPrefix(invocableID, "euclo:recipe.") && d.recipeRegistry != nil && d.recipeExecutor != nil {
-		plan, ok := d.recipeRegistry.Get(invocableID)
-		if ok {
-			recipeResult, err := d.recipeExecutor.Execute(ctx, plan, in.Task, in.Environment)
-			if err != nil {
-				return &core.Result{Success: false, Error: err}, err
-			}
-			return recipeResultToCoreResult(recipeResult), nil
-		}
-		return nil, fmt.Errorf("thought recipe %q not found", invocableID)
-	}
-
 	invocable, ok := d.invocables[invocableID]
 	if !ok {
 		return nil, fmt.Errorf("relurpic behavior %q unavailable", invocableID)
@@ -119,13 +104,26 @@ func (d *Dispatcher) Invoke(ctx context.Context, in execution.InvokeInput) (*cor
 	return invocable.Invoke(ctx, in)
 }
 
-// SetRecipeRegistry sets the recipe registry and executor for thought recipe support.
-func (d *Dispatcher) SetRecipeRegistry(registry *thoughtrecipes.PlanRegistry, executor *thoughtrecipes.Executor) {
+// Register adds or replaces an invocable in the dispatcher.
+func (d *Dispatcher) Register(invocable execution.Invocable) error {
 	if d == nil {
-		return
+		return fmt.Errorf("dispatcher is nil")
 	}
-	d.recipeRegistry = registry
-	d.recipeExecutor = executor
+	if invocable == nil {
+		return fmt.Errorf("cannot register nil invocable")
+	}
+	id := strings.TrimSpace(invocable.ID())
+	if id == "" {
+		return fmt.Errorf("cannot register invocable with empty ID")
+	}
+	if d.invocables == nil {
+		d.invocables = map[string]execution.Invocable{}
+	}
+	if _, exists := d.invocables[id]; exists {
+		return fmt.Errorf("invocable %q already registered", id)
+	}
+	d.invocables[id] = invocable
+	return nil
 }
 
 // RegisterSupporting adds or replaces a supporting routine in the dispatcher.
@@ -141,34 +139,6 @@ func (d *Dispatcher) RegisterSupporting(invocable execution.Invocable) {
 		d.invocables = map[string]execution.Invocable{}
 	}
 	d.invocables[id] = invocable
-}
-
-// recipeResultToCoreResult converts a RecipeResult to a core.Result.
-func recipeResultToCoreResult(recipeResult *thoughtrecipes.RecipeResult) *core.Result {
-	if recipeResult == nil {
-		return &core.Result{Success: false, Error: fmt.Errorf("nil recipe result")}
-	}
-
-	data := map[string]any{
-		"recipe_id": recipeResult.RecipeID,
-		"artifacts": recipeResult.Artifacts,
-		"warnings":  recipeResult.Warnings,
-	}
-
-	// Include final result data if present
-	if recipeResult.FinalResult != nil && recipeResult.FinalResult.Data != nil {
-		for k, v := range recipeResult.FinalResult.Data {
-			if _, exists := data[k]; !exists {
-				data[k] = v
-			}
-		}
-	}
-
-	return &core.Result{
-		Success: recipeResult.Success,
-		Data:    data,
-		Error:   nil,
-	}
 }
 
 // ExecuteSequence executes a sequence of capabilities (AND or OR).
@@ -240,17 +210,17 @@ func (d *Dispatcher) executeANDSequence(ctx context.Context, in execution.Invoke
 		stepWork.PrimaryRelurpicCapabilityID = invocableID
 
 		stepInput := execution.InvokeInput{
-			Task:                 in.Task,
-			ExecutionTask:        in.ExecutionTask,
-			State:                in.State,
-			Mode:                 in.Mode,
-			Profile:              in.Profile,
-			Work:                 stepWork,
-			Environment:          in.Environment,
-			ServiceBundle:        in.ServiceBundle,
-			WorkflowExecutor:     in.WorkflowExecutor,
-			Telemetry:            in.Telemetry,
-			InvokeSupporting:     d.InvokeSupporting,
+			Task:             in.Task,
+			ExecutionTask:    in.ExecutionTask,
+			State:            in.State,
+			Mode:             in.Mode,
+			Profile:          in.Profile,
+			Work:             stepWork,
+			Environment:      in.Environment,
+			ServiceBundle:    in.ServiceBundle,
+			WorkflowExecutor: in.WorkflowExecutor,
+			Telemetry:        in.Telemetry,
+			InvokeSupporting: d.InvokeSupporting,
 		}
 
 		lastResult, lastErr = invocable.Invoke(ctx, stepInput)
@@ -287,17 +257,17 @@ func (d *Dispatcher) executeORSequence(ctx context.Context, in execution.InvokeI
 	stepWork.PrimaryRelurpicCapabilityID = invocableID
 
 	stepInput := execution.InvokeInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 stepWork,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     d.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             stepWork,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: d.InvokeSupporting,
 	}
 
 	result, err := invocable.Invoke(ctx, stepInput)
@@ -307,7 +277,7 @@ func (d *Dispatcher) executeORSequence(ctx context.Context, in execution.InvokeI
 
 	// Record which capability was selected in state for observability
 	if in.State != nil {
-		in.State.Set("euclo.or_selected_capability", capabilityID)
+		in.State.Set(euclokeys.KeyORSelectedCapability, capabilityID)
 	}
 
 	return result, nil

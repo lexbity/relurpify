@@ -224,7 +224,7 @@ func (verificationRepairRoutine) Invoke(_ context.Context, in execution.InvokeIn
 				status = existing
 			}
 		}
-		if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
+		if raw, ok := in.State.Get(euclostate.KeyRecoveryTrace); ok && raw != nil {
 			if record, ok := raw.(map[string]any); ok {
 				recoveryStatus = strings.TrimSpace(stringValueAny(record["status"]))
 				switch typed := record["attempt_count"].(type) {
@@ -253,7 +253,7 @@ func (verificationRepairRoutine) Invoke(_ context.Context, in execution.InvokeIn
 		Status:     "produced",
 	}}
 	if in.State != nil {
-		if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
+		if raw, ok := in.State.Get(euclostate.KeyRecoveryTrace); ok && raw != nil {
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "debug_verification_recovery_trace",
 				Kind:       euclotypes.ArtifactKindRecoveryTrace,
@@ -279,7 +279,7 @@ func (verificationRepairRoutine) Execute(_ context.Context, in euclorelurpic.Rou
 				status = existing
 			}
 		}
-		if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
+		if raw, ok := in.State.Get(euclostate.KeyRecoveryTrace); ok && raw != nil {
 			if record, ok := raw.(map[string]any); ok {
 				recoveryStatus = strings.TrimSpace(stringValueAny(record["status"]))
 				switch typed := record["attempt_count"].(type) {
@@ -308,7 +308,7 @@ func (verificationRepairRoutine) Execute(_ context.Context, in euclorelurpic.Rou
 		Status:     "produced",
 	}}
 	if in.State != nil {
-		if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
+		if raw, ok := in.State.Get(euclostate.KeyRecoveryTrace); ok && raw != nil {
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "debug_verification_recovery_trace",
 				Kind:       euclotypes.ArtifactKindRecoveryTrace,

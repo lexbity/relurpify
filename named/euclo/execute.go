@@ -37,7 +37,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		state = core.NewContext()
 	}
 
-	// Single-pass enrichment: replaces the double runtimeState() call pattern
+	// Single-pass enrichment: replaces the earlier two-step state seeding path
 	semanticInputs := a.semanticInputBundle(task, state, euclotypes.ModeResolution{})
 	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), euclotypes.ModeResolution{}, euclotypes.ExecutionProfileSelection{})
 	executorDescriptor := eucloruntime.WorkUnitExecutorDescriptor{}

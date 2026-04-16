@@ -13,6 +13,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type deferralsResolveCapability struct {
@@ -101,7 +102,7 @@ func (r DeferralsResolveRoutine) Execute(ctx context.Context, in euclorelurpic.R
 		return nil, err
 	}
 	if in.State != nil {
-		in.State.Set("euclo.deferral_resolved", artifact.Payload)
+		in.State.Set(euclostate.KeyDeferralResolved, artifact.Payload)
 	}
 	mergeStateArtifactsToContext(in.State, []euclotypes.Artifact{artifact})
 	return []euclotypes.Artifact{artifact}, nil
@@ -158,7 +159,7 @@ func resolveDeferredIssue(task *core.Task, state *core.Context, plan *guidance.D
 	target.WorkspaceArtifactPath = path
 
 	eucloruntime.SeedDeferredIssueState(state, updatedIssues)
-	state.Set("euclo.deferral_resolve_input", input)
+	state.Set(euclostate.KeyDeferralResolveInput, input)
 	if broker != nil {
 		broker.EmitResolution(input.IssueID, euclorelurpic.CapabilityDeferralsResolve)
 	}
@@ -190,7 +191,7 @@ func deferralResolveInputFromState(state *core.Context) (eucloruntime.DeferralRe
 	if state == nil {
 		return eucloruntime.DeferralResolveInput{}, false
 	}
-	raw, ok := state.Get("euclo.deferral_resolve_input")
+	raw, ok := state.Get(euclostate.KeyDeferralResolveInput)
 	if !ok || raw == nil {
 		return eucloruntime.DeferralResolveInput{}, false
 	}

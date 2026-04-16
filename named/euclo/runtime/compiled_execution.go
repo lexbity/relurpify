@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"time"
+
+	euclokeys "github.com/lexcodex/relurpify/named/euclo/runtime/keys"
 )
 
 func BuildCompiledExecution(uow UnitOfWork, status RuntimeExecutionStatus, compiledAt time.Time) CompiledExecution {
@@ -84,8 +86,8 @@ func SeedCompiledExecutionState(stateSetter interface{ Set(string, any) }, uow U
 	if compiledAt.IsZero() {
 		compiledAt = time.Now().UTC()
 	}
-	stateSetter.Set("euclo.execution_status", status)
-	stateSetter.Set("euclo.compiled_execution", BuildCompiledExecution(uow, status, compiledAt))
+	stateSetter.Set(euclokeys.KeyExecutionStatus, status)
+	stateSetter.Set(euclokeys.KeyCompiledExecution, BuildCompiledExecution(uow, status, compiledAt))
 }
 
 func ResultClassForOutcome(status ExecutionStatus, deferredIssueIDs []string, err error) ExecutionResultClass {

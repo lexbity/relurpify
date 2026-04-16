@@ -11,6 +11,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type deferralsSurfaceCapability struct {
@@ -75,7 +76,7 @@ func (r DeferralsSurfaceRoutine) ID() string {
 func (r DeferralsSurfaceRoutine) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
 	summary, artifact := buildDeferralsSurfaceArtifact(in.Task, in.State, deferralsWorkspace(in.Task, in.State))
 	if in.State != nil {
-		in.State.Set("euclo.deferrals_surface", summary)
+		in.State.Set(euclostate.KeyDeferralsSurface, summary)
 	}
 	mergeStateArtifactsToContext(in.State, []euclotypes.Artifact{artifact})
 	return &core.Result{
@@ -89,7 +90,7 @@ func (r DeferralsSurfaceRoutine) IsPrimary() bool { return false }
 func (r DeferralsSurfaceRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	summary, artifact := buildDeferralsSurfaceArtifact(in.Task, in.State, deferralsWorkspace(in.Task, in.State))
 	if in.State != nil {
-		in.State.Set("euclo.deferrals_surface", summary)
+		in.State.Set(euclostate.KeyDeferralsSurface, summary)
 	}
 	mergeStateArtifactsToContext(in.State, []euclotypes.Artifact{artifact})
 	return []euclotypes.Artifact{artifact}, nil
@@ -111,7 +112,7 @@ func buildDeferralsSurfaceArtifact(task *core.Task, state *core.Context, workspa
 		Status:     "produced",
 	}
 	if state != nil {
-		state.Set("euclo.deferrals_surface", summary)
+		state.Set(euclostate.KeyDeferralsSurface, summary)
 	}
 	return summary, artifact
 }
@@ -120,7 +121,7 @@ func deferredIssuesFromState(state *core.Context) []eucloruntime.DeferredExecuti
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.deferred_execution_issues")
+	raw, ok := state.Get(euclostate.KeyDeferredIssues)
 	if !ok || raw == nil {
 		return nil
 	}
@@ -163,7 +164,7 @@ func deferredIssuesFromState(state *core.Context) []eucloruntime.DeferredExecuti
 
 func deferralsWorkspace(task *core.Task, state *core.Context) string {
 	if state != nil {
-		if value := strings.TrimSpace(state.GetString("euclo.workspace")); value != "" {
+		if value := strings.TrimSpace(state.GetString(euclostate.KeyWorkspace)); value != "" {
 			return value
 		}
 	}
@@ -180,7 +181,7 @@ func deferralsWorkspace(task *core.Task, state *core.Context) string {
 
 func deferralsWorkflowID(task *core.Task, state *core.Context, issues []eucloruntime.DeferredExecutionIssue) string {
 	if state != nil {
-		if value := strings.TrimSpace(state.GetString("euclo.workflow_id")); value != "" {
+		if value := strings.TrimSpace(state.GetString(euclostate.KeyWorkflowID)); value != "" {
 			return value
 		}
 	}

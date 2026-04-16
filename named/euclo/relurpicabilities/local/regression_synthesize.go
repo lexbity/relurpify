@@ -9,6 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type regressionSynthesizeCapability struct {
@@ -97,9 +98,9 @@ func (c *regressionSynthesizeCapability) Execute(_ context.Context, env euclotyp
 
 func buildSynthesizedRegressionPayload(env euclotypes.ExecutionEnvelope) map[string]any {
 	symptom := strings.TrimSpace(taskInstruction(env.Task))
-	rootCause := mapPayloadFromState(env.State, "euclo.root_cause")
-	regressionAnalysis := mapPayloadFromState(env.State, "euclo.regression_analysis")
-	reproduction := mapPayloadFromState(env.State, "euclo.reproduction")
+	rootCause := mapPayloadFromState(env.State, euclostate.KeyRootCause)
+	regressionAnalysis := mapPayloadFromState(env.State, euclostate.KeyRegressionAnalysis)
+	reproduction := mapPayloadFromState(env.State, euclostate.KeyReproduction)
 	contextKeys := synthesizedRegressionContextKeys(rootCause, regressionAnalysis, reproduction)
 	acceptance := synthesizedAcceptanceCriteria(symptom, rootCause, reproduction)
 	return map[string]any{

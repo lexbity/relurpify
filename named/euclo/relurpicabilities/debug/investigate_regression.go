@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	euclobb "github.com/lexcodex/relurpify/named/euclo/execution/blackboard"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type investigateRegressionCapability struct {
@@ -57,7 +58,7 @@ func (c *investigateRegressionCapability) Execute(ctx context.Context, env euclo
 	if env.State == nil {
 		env.State = core.NewContext()
 	}
-	env.State.Set("euclo.blackboard_seed_facts", map[string]any{"regression:symptom": taskInstruction(env.Task)})
+	env.State.Set(euclostate.KeyBlackboardSeedFacts, map[string]any{"regression:symptom": taskInstruction(env.Task)})
 	bbResult, err := euclobb.Execute(ctx, env, euclotypes.ExecutorSemanticContext{}, regressionKnowledgeSources(), 6, func(bb *agentblackboard.Blackboard) bool {
 		payload, ok := boardEntryValue(bb, "regression:reproduction")
 		if !ok {

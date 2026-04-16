@@ -39,6 +39,7 @@ type ExecutionPlan struct {
 	Name        string
 	Description string
 	Version     string
+	FilePath    string
 
 	// Global settings inherited by all steps
 	GlobalCapabilities []string

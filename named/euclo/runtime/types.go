@@ -54,6 +54,14 @@ type TaskClassification struct {
 	TaskType                       core.TaskType `json:"task_type,omitempty"`
 }
 
+// CapabilityClassificationResult captures the tiered capability selection output.
+type CapabilityClassificationResult struct {
+	Sequence []string
+	Operator string
+	Source   string
+	Meta     string
+}
+
 // ExecutionResultClass is Euclo's top-level runtime classification for a work
 // unit or run. It is intentionally separate from euclotypes.ExecutionStatus,
 // which remains the capability-level outcome type.
@@ -877,6 +885,50 @@ type EditIntent struct {
 	Action  string `json:"action"`
 	Content string `json:"content,omitempty"`
 	Summary string `json:"summary,omitempty"`
+}
+
+type FinalReport struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type VerificationSummary struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type ReviewFindings struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type RootCause struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type RootCauseCandidates struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type RegressionAnalysis struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type PlanCandidates struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type BlackboardSeedFacts struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type TDDLifecycle struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type Reproduction struct {
+	Data map[string]any `json:"data,omitempty"`
+}
+
+type MigrationPlan struct {
+	Data map[string]any `json:"data,omitempty"`
 }
 
 type EditOperationRecord struct {

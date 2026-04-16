@@ -38,7 +38,7 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 		state = core.NewContext()
 	}
 
-	// Apply session resume context if present, before runtimeState.
+	// Apply session resume context if present before enrichment.
 	if err := a.applySessionResumeContext(ctx, task, state); err != nil {
 		return nil, &core.Result{Success: false, Error: err}, err
 	}
@@ -59,7 +59,7 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 		return nil, &core.Result{Success: false, Error: scopeErr}, scopeErr
 	}
 
-	// Single-pass enrichment: replaces the double runtimeState() call pattern
+	// Single-pass enrichment builds the classified envelope and unit of work together.
 	semanticInputs := a.semanticInputBundle(task, state, euclotypes.ModeResolution{})
 	skillPolicy := eucloruntime.BuildResolvedExecutionPolicy(task, a.Config, a.CapabilityRegistry(), euclotypes.ModeResolution{}, euclotypes.ExecutionProfileSelection{})
 	executorDescriptor := eucloruntime.WorkUnitExecutorDescriptor{}
@@ -72,7 +72,7 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 		return nil, &core.Result{Success: false, Error: err}, err
 	}
 
-	// Persist classified envelope to state (replaces seedRuntimeState)
+	// Persist the classified envelope to state.
 	euclointake.SeedClassifiedEnvelope(state, classified)
 
 	a.ensureDeferralPlan(task, state)
@@ -234,8 +234,8 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 }
 
 // applySessionResumeContext injects SessionResumeContext into the task context
-// and state before runtimeState is called. This enables resumed sessions to
-// warm up with their previously anchored BKC context and semantic state.
+// and state before enrichment. This enables resumed sessions to warm up with
+// their previously anchored BKC context and semantic state.
 func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, state *core.Context) error {
 	raw, ok := state.Get("euclo.session_resume_context")
 	if !ok || raw == nil {

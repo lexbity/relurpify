@@ -207,7 +207,7 @@ func (c *checkpointCapability) Execute(ctx context.Context, env euclotypes.Execu
 		rootChunkIDs = append(rootChunkIDs, taskContextStringSlice(env.Task, "root_chunk_ids")...)
 	}
 	if len(rootChunkIDs) == 0 && env.State != nil {
-		if chunks, ok := env.State.Get("euclo.bkc.context_chunks"); ok && chunks != nil {
+		if chunks, ok := env.State.Get(euclostate.KeyBKCContextChunks); ok && chunks != nil {
 			rootChunkIDs = append(rootChunkIDs, contextChunkIDsFromValue(chunks)...)
 		}
 	}
@@ -236,11 +236,11 @@ func (c *checkpointCapability) Execute(ctx context.Context, env euclotypes.Execu
 		Status:     "produced",
 	}
 	if env.State != nil {
-		env.State.Set("euclo.bkc.root_chunk_ids", rootChunkIDs)
-		env.State.Set("euclo.bkc.checkpoint_ref", checkpointRef)
-		env.State.Set("euclo.bkc.checkpoint_version", version)
+		env.State.Set(euclostate.KeyBKCRootChunkIDs, rootChunkIDs)
+		env.State.Set(euclostate.KeyBKCCheckpointRef, checkpointRef)
+		env.State.Set(euclostate.KeyBKCCheckpointVersion, version)
 		if plan != nil {
-			env.State.Set("euclo.living_plan", plan)
+			env.State.Set(euclostate.KeyLivingPlan, plan)
 		}
 	}
 	mergeStateArtifactsToContext(env.State, []euclotypes.Artifact{artifact})
@@ -301,7 +301,7 @@ func (c *invalidateCapability) Execute(ctx context.Context, env euclotypes.Execu
 	paths := append(taskContextStringSlice(env.Task, "changed_paths"), taskContextStringSlice(env.Task, "files")...)
 	revision := firstNonEmpty(taskContextString(env.Task, "based_on_revision"), taskContextString(env.Task, "code_revision"))
 	if env.State != nil {
-		if text := env.State.GetString("euclo.code_revision"); text != "" {
+		if text := env.State.GetString(euclostate.KeyCodeRevision); text != "" {
 			revision = text
 		}
 	}
@@ -319,7 +319,7 @@ func (c *invalidateCapability) Execute(ctx context.Context, env euclotypes.Execu
 			chunkIDs = append(chunkIDs, taskContextStringSlice(env.Task, "stale_chunk_ids")...)
 		}
 		if len(chunkIDs) == 0 && env.State != nil {
-			chunkIDs = append(chunkIDs, stringSlice(env.State.GetString("euclo.bkc.root_chunk_ids"))...)
+			chunkIDs = append(chunkIDs, stringSlice(env.State.GetString(euclostate.KeyBKCRootChunkIDs))...)
 		}
 		if len(chunkIDs) == 0 {
 			return failureResult("bkc_invalidate_targets_missing", "affected paths or chunk ids required")
@@ -328,7 +328,7 @@ func (c *invalidateCapability) Execute(ctx context.Context, env euclotypes.Execu
 			return failureResult("bkc_invalidate_failed", err.Error())
 		}
 		if env.State != nil {
-			env.State.Set("euclo.bkc.stale_chunk_ids", uniqueStrings(chunkIDs))
+			env.State.Set(euclostate.KeyBKCStaleChunkIDs, uniqueStrings(chunkIDs))
 		}
 	}
 	payload := map[string]any{
@@ -389,8 +389,8 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 		return failureResult("bkc_stream_failed", err.Error())
 	}
 	if len(result.StaleDuringStream) > 0 && env.State != nil {
-		env.State.Set("euclo.bkc.stale_chunk_ids", chunkIDsToStrings(result.StaleDuringStream))
-		env.State.Set("euclo.bkc.stale_gap_messages", append([]string(nil), result.StaleGapMessages...))
+		env.State.Set(euclostate.KeyBKCStaleChunkIDs, chunkIDsToStrings(result.StaleDuringStream))
+		env.State.Set(euclostate.KeyBKCStaleGapMessages, append([]string(nil), result.StaleGapMessages...))
 	}
 	if len(result.StaleDuringStream) > 0 {
 		pass := &archaeobkc.InvalidationPass{
@@ -418,7 +418,7 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 		Status:     "produced",
 	}
 	if env.State != nil {
-		env.State.Set("euclo.bkc.context_chunks", contextChunks)
+		env.State.Set(euclostate.KeyBKCContextChunks, contextChunks)
 	}
 	artifacts := []euclotypes.Artifact{artifact}
 	if len(result.StaleDuringStream) > 0 {

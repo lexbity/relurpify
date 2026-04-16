@@ -2,6 +2,8 @@ package capabilities_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/capabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/thoughtrecipes"
 )
 
 // stubCapability is a minimal EucloCodingCapability for testing.
@@ -225,6 +228,68 @@ func TestForProfile_FiltersToMatchingProfile_AnySlice(t *testing.T) {
 	}
 	if ids["no-match"] {
 		t.Error("expected 'no-match' to be excluded")
+	}
+}
+
+func TestLoadAndRegisterRecipesRegistersInvocables(t *testing.T) {
+	dir := t.TempDir()
+	recipePath := filepath.Join(dir, "demo.yaml")
+	err := os.WriteFile(recipePath, []byte(`
+apiVersion: euclo/v1alpha1
+kind: ThoughtRecipe
+metadata:
+  name: demo-recipe
+  description: demo recipe
+global:
+  capabilities:
+    allowed: []
+  context:
+    enrichment: []
+    sharing:
+      default: explicit
+    aliases: {}
+  configuration:
+    modes: [chat]
+    intent_keywords: [demo]
+    trigger_priority: 5
+  prompt: ""
+sequence:
+  - id: step-1
+    parent:
+      paradigm: react
+      prompt: "do the thing"
+      context:
+        enrichment: []
+        inherit: []
+        capture: []
+      capabilities:
+        allowed: []
+`), 0o600)
+	if err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	result := capabilities.LoadAndRegisterRecipes(dir, nil, agentenv.AgentEnvironment{})
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.Registry == nil || result.Executor == nil {
+		t.Fatal("expected registry and executor to be initialized")
+	}
+	if result.Registry.Count() != 1 {
+		t.Fatalf("expected one recipe, got %d", result.Registry.Count())
+	}
+	if len(result.Invocables) != 1 {
+		t.Fatalf("expected one invocable, got %d", len(result.Invocables))
+	}
+	if _, ok := result.Registry.Get("demo-recipe"); !ok {
+		t.Fatal("expected recipe plan to be registered")
+	}
+	if inv := result.Invocables[0]; inv == nil || inv.ID() != "euclo:recipe.demo-recipe" {
+		t.Fatalf("unexpected invocable: %#v", inv)
+	}
+	if _, ok := result.Invocables[0].(*thoughtrecipes.RecipeInvocable); !ok {
+		t.Fatalf("expected RecipeInvocable, got %T", result.Invocables[0])
 	}
 }
 

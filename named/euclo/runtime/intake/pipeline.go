@@ -1,6 +1,6 @@
 // Package intake provides the single-pass classification pipeline for Euclo.
-// It replaces the double runtimeState() call pattern with an explicit enrichment
-// step that produces a fully-resolved ClassifiedEnvelope.
+// It replaces the older two-step state seeding path with an explicit
+// enrichment step that produces a fully-resolved ClassifiedEnvelope.
 package intake
 
 import (
@@ -9,14 +9,15 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	euclokeys "github.com/lexcodex/relurpify/named/euclo/runtime/keys"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
 )
 
-// CapabilityClassifier is the interface for capability intent classification.
-// It replaces the ad-hoc classifier in runtime/capability_classifier.go.
+// CapabilityClassifier is the interface for capability intent classification
+// used by the single-pass enrichment pipeline.
 type CapabilityClassifier interface {
 	// Classify returns the recommended capability sequence for the given instruction
 	// and mode. It must not write to state.
@@ -89,51 +90,55 @@ func RunEnrichment(
 }
 
 // SeedClassifiedEnvelope persists a classified envelope to state using typed accessors.
-// This replaces the seedRuntimeState function.
+// This replaces the older seed-and-persist helper.
 func SeedClassifiedEnvelope(state *core.Context, classified ClassifiedEnvelope) {
 	if state == nil {
 		return
 	}
 
 	// Seed core state
-	euclostate.SetEnvelope(state, classified.Envelope)
-	euclostate.SetClassification(state, classified.Classification)
-	euclostate.SetMode(state, classified.Mode.ModeID)
-	euclostate.SetExecutionProfile(state, classified.Profile.ProfileID)
-	euclostate.SetUnitOfWork(state, classified.Work)
+	statebus.SetAny(state, euclokeys.KeyEnvelope, classified.Envelope)
+	statebus.SetAny(state, euclokeys.KeyClassification, classified.Classification)
+	statebus.SetAny(state, euclokeys.KeyMode, classified.Mode.ModeID)
+	statebus.SetAny(state, euclokeys.KeyExecutionProfile, classified.Profile.ProfileID)
+	statebus.SetAny(state, euclokeys.KeyUnitOfWork, classified.Work)
 
 	// Seed extended state
-	euclostate.SetModeResolution(state, classified.Mode)
-	euclostate.SetExecutionProfileSelection(state, classified.Profile)
-	euclostate.SetSemanticInputs(state, classified.Work.SemanticInputs)
-	euclostate.SetResolvedExecutionPolicy(state, classified.Work.ResolvedPolicy)
-	euclostate.SetExecutorDescriptor(state, classified.Work.ExecutorDescriptor)
+	statebus.SetAny(state, euclokeys.KeyModeResolution, classified.Mode)
+	statebus.SetAny(state, euclokeys.KeyExecutionProfileSelection, classified.Profile)
+	statebus.SetAny(state, euclokeys.KeySemanticInputs, classified.Work.SemanticInputs)
+	statebus.SetAny(state, euclokeys.KeyResolvedExecutionPolicy, classified.Work.ResolvedPolicy)
+	statebus.SetAny(state, euclokeys.KeyExecutorDescriptor, classified.Work.ExecutorDescriptor)
 
 	// Seed capability classification results
 	if len(classified.Envelope.CapabilitySequence) > 0 {
-		euclostate.SetPreClassifiedCapabilitySequence(state, classified.Envelope.CapabilitySequence)
+		statebus.SetAny(state, euclokeys.KeyPreClassifiedCapSeq, classified.Envelope.CapabilitySequence)
 	}
 	if classified.Envelope.CapabilitySequenceOperator != "" {
-		euclostate.SetCapabilitySequenceOperator(state, classified.Envelope.CapabilitySequenceOperator)
+		statebus.SetAny(state, euclokeys.KeyCapabilitySequenceOperator, classified.Envelope.CapabilitySequenceOperator)
 	}
 	if classified.Envelope.CapabilityClassificationSource != "" {
-		euclostate.SetClassificationSource(state, classified.Envelope.CapabilityClassificationSource)
+		statebus.SetAny(state, euclokeys.KeyClassificationSource, classified.Envelope.CapabilityClassificationSource)
 	}
 	if classified.Envelope.CapabilityClassificationMeta != "" {
-		euclostate.SetClassificationMeta(state, classified.Envelope.CapabilityClassificationMeta)
+		statebus.SetAny(state, euclokeys.KeyClassificationMeta, classified.Envelope.CapabilityClassificationMeta)
 	}
 
 	// Update unit of work history
 	history := []eucloruntime.UnitOfWorkHistoryEntry(nil)
-	if raw, ok := euclostate.GetUnitOfWorkHistory(state); ok {
-		history = append(history, raw...)
-	}
-	if len(history) == 0 {
-		if existing, ok := euclostate.GetUnitOfWork(state); ok && existing.ID != "" {
-			history = eucloruntime.UpdateUnitOfWorkHistory(history, existing, existing.UpdatedAt)
+	if raw, ok := statebus.GetAny(state, euclokeys.KeyUnitOfWorkHistory); ok {
+		if typed, ok := raw.([]eucloruntime.UnitOfWorkHistoryEntry); ok {
+			history = append(history, typed...)
 		}
 	}
-	euclostate.SetUnitOfWorkHistory(state, eucloruntime.UpdateUnitOfWorkHistory(history, classified.Work, classified.Work.UpdatedAt))
+	if len(history) == 0 {
+		if existing, ok := statebus.GetAny(state, euclokeys.KeyUnitOfWork); ok {
+			if typed, ok := existing.(eucloruntime.UnitOfWork); ok && typed.ID != "" {
+				history = eucloruntime.UpdateUnitOfWorkHistory(history, typed, typed.UpdatedAt)
+			}
+		}
+	}
+	statebus.SetAny(state, euclokeys.KeyUnitOfWorkHistory, eucloruntime.UpdateUnitOfWorkHistory(history, classified.Work, classified.Work.UpdatedAt))
 }
 
 // RebuildUnitOfWork rebuilds only the UnitOfWork after a state change (e.g., restore).
@@ -150,35 +155,6 @@ func RebuildUnitOfWork(
 ) eucloruntime.UnitOfWork {
 	// Rebuild work with potentially updated state (e.g., after restore)
 	return BuildUnitOfWork(task, state, classified.Envelope, classified.Classification, classified.Mode, classified.Profile, modeRegistry, semanticInputs, resolvedPolicy, executorDescriptor)
-}
-
-// capabilityClassifierAdapter adapts the runtime.CapabilityIntentClassifier to the CapabilityClassifier interface.
-// This allows the existing classifier to be used with the new intake pipeline.
-type capabilityClassifierAdapter struct {
-	classifier *eucloruntime.CapabilityIntentClassifier
-}
-
-// Classify implements the CapabilityClassifier interface.
-func (a *capabilityClassifierAdapter) Classify(ctx context.Context, instruction, modeID string) ([]string, string, error) {
-	if a.classifier == nil {
-		return nil, "", fmt.Errorf("classifier not available")
-	}
-
-	result, err := a.classifier.Classify(ctx, instruction, modeID)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return result.Sequence, result.Operator, nil
-}
-
-// NewCapabilityClassifier creates a CapabilityClassifier from a runtime.CapabilityIntentClassifier.
-// This is a temporary adapter during the transition period.
-func NewCapabilityClassifier(classifier *eucloruntime.CapabilityIntentClassifier) CapabilityClassifier {
-	if classifier == nil {
-		return nil
-	}
-	return &capabilityClassifierAdapter{classifier: classifier}
 }
 
 // SimpleCapabilityClassifier is a simple implementation of CapabilityClassifier for testing.

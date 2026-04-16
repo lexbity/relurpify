@@ -7,6 +7,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
+	euclokeys "github.com/lexcodex/relurpify/named/euclo/runtime/keys"
 )
 
 type profileExecutionPlan struct {
@@ -207,7 +208,7 @@ func (e *profileExecutionEngine) recordRecoveryTrace(
 	pcResult.Artifacts = append(pcResult.Artifacts, traceArt)
 	pcResult.RecoveryAttempts = len(recoveryStack.Attempts)
 	if env.State != nil && traceArt.Payload != nil {
-		env.State.Set("euclo.recovery_trace", traceArt.Payload)
+		env.State.Set(euclokeys.KeyRecoveryTrace, traceArt.Payload)
 	}
 }
 

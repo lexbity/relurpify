@@ -49,27 +49,21 @@ func (r *RecipeInvocable) Invoke(ctx context.Context, in execution.InvokeInput) 
 		return &core.Result{Success: false, Error: err}, err
 	}
 
-	return recipeResultToCoreResult(result), nil
-}
-
-// recipeResultToCoreResult converts a RecipeResult to a core.Result.
-// This preserves all fields including Warnings and step-level artifacts in Data.
-func recipeResultToCoreResult(recipeResult *RecipeResult) *core.Result {
-	if recipeResult == nil {
-		return &core.Result{Success: false, Error: fmt.Errorf("nil recipe result")}
+	if result == nil {
+		return &core.Result{Success: false, Error: fmt.Errorf("nil recipe result")}, nil
 	}
 
 	data := map[string]any{
-		"recipe_id":      recipeResult.RecipeID,
-		"artifacts":      recipeResult.Artifacts,
-		"warnings":       recipeResult.Warnings,
-		"final_captures": recipeResult.FinalCaptures,
-		"step_results":   recipeResult.StepResults,
+		"recipe_id":      result.RecipeID,
+		"artifacts":      result.Artifacts,
+		"warnings":       result.Warnings,
+		"final_captures": result.FinalCaptures,
+		"step_results":   result.StepResults,
 	}
 
 	// Include final result data if present
-	if recipeResult.FinalResult != nil && recipeResult.FinalResult.Data != nil {
-		for k, v := range recipeResult.FinalResult.Data {
+	if result.FinalResult != nil && result.FinalResult.Data != nil {
+		for k, v := range result.FinalResult.Data {
 			if _, exists := data[k]; !exists {
 				data[k] = v
 			}
@@ -77,10 +71,10 @@ func recipeResultToCoreResult(recipeResult *RecipeResult) *core.Result {
 	}
 
 	return &core.Result{
-		Success: recipeResult.Success,
+		Success: result.Success,
 		Data:    data,
 		Error:   nil,
-	}
+	}, nil
 }
 
 // ToDescriptor converts an ExecutionPlan to a euclorelurpic.Descriptor.
@@ -97,7 +91,7 @@ func (p *ExecutionPlan) ToDescriptor() euclorelurpic.Descriptor {
 		PrimaryCapable:         true,
 		AllowDynamicResolution: true,
 		IsUserDefined:          true,
-		RecipePath:             p.Name, // Could be enhanced to store actual file path
+		RecipePath:             p.FilePath,
 		Keywords:               p.IntentKeywords,
 		Summary:                p.Description,
 	}

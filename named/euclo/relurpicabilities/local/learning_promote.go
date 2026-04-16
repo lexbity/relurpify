@@ -9,10 +9,11 @@ import (
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
+	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type learningPromoteCapability struct {
@@ -85,13 +86,13 @@ func (c *learningPromoteCapability) promoteWorkflowResolver() func(state *core.C
 		if state == nil {
 			return "", ""
 		}
-		workflowID := strings.TrimSpace(state.GetString("euclo.workflow_id"))
+		workflowID := strings.TrimSpace(state.GetString(euclostate.KeyWorkflowID))
 		if workflowID == "" {
 			workflowID = strings.TrimSpace(state.GetString("workflow_id"))
 		}
-		explorationID := strings.TrimSpace(state.GetString("euclo.active_exploration_id"))
+		explorationID := strings.TrimSpace(state.GetString(euclostate.KeyActiveExplorationID))
 		if explorationID == "" {
-			explorationID = strings.TrimSpace(state.GetString("euclo.exploration_id"))
+			explorationID = strings.TrimSpace(state.GetString(euclostate.KeyExplorationID))
 		}
 		if explorationID == "" {
 			explorationID = strings.TrimSpace(state.GetString("exploration_id"))
@@ -116,7 +117,7 @@ func (r LearningPromoteRoutine) Invoke(ctx context.Context, in execution.InvokeI
 	if in.State != nil {
 		mergeStateArtifactsToContext(in.State, artifacts)
 		if len(artifacts) > 0 {
-			in.State.Set("euclo.promoted_learning_interaction", artifacts[0].Payload)
+			in.State.Set(euclostate.KeyPromotedLearningInteraction, artifacts[0].Payload)
 		}
 	}
 	return &core.Result{
@@ -192,7 +193,7 @@ func promoteLearningInteraction(ctx context.Context, state *core.Context, servic
 		Description:     input.Description,
 		Evidence:        evidence,
 		Blocking:        input.Blocking,
-		BasedOnRevision: strings.TrimSpace(firstNonEmpty(state.GetString("euclo.code_revision"), state.GetString("code_revision"))),
+		BasedOnRevision: strings.TrimSpace(firstNonEmpty(state.GetString(euclostate.KeyCodeRevision), state.GetString("code_revision"))),
 	})
 	if err != nil {
 		return euclotypes.ExecutionResult{}, err
@@ -216,7 +217,7 @@ func promoteLearningInteraction(ctx context.Context, state *core.Context, servic
 		Status:     "produced",
 	}
 	mergeStateArtifactsToContext(state, []euclotypes.Artifact{artifact})
-	state.Set("euclo.promoted_learning_interaction", *interaction)
+	state.Set(euclostate.KeyPromotedLearningInteraction, *interaction)
 	return euclotypes.ExecutionResult{
 		Status:    euclotypes.ExecutionStatusCompleted,
 		Summary:   fmt.Sprintf("promoted learning %s", interaction.Title),
@@ -228,7 +229,7 @@ func learningPromoteInputFromState(state *core.Context) (eucloruntime.LearningPr
 	if state == nil {
 		return eucloruntime.LearningPromoteInput{}, false
 	}
-	raw, ok := state.Get("euclo.learning_promote_input")
+	raw, ok := state.Get(euclostate.KeyLearningPromoteInput)
 	if !ok || raw == nil {
 		return eucloruntime.LearningPromoteInput{}, false
 	}
@@ -293,7 +294,7 @@ func extractEvidenceFromState(state *core.Context, input eucloruntime.LearningPr
 	if trimmedSubjectID != "" {
 		return nil
 	}
-	traceRaw, ok := state.Get("euclo.relurpic_behavior_trace")
+	traceRaw, ok := state.Get(euclostate.KeyBehaviorTrace)
 	if !ok || traceRaw == nil {
 		return nil
 	}
@@ -354,7 +355,7 @@ func semanticInputBundleFromState(state *core.Context) eucloruntime.SemanticInpu
 	if state == nil {
 		return eucloruntime.SemanticInputBundle{}
 	}
-	raw, ok := state.Get("euclo.semantic_inputs")
+	raw, ok := state.Get(euclostate.KeySemanticInputs)
 	if !ok || raw == nil {
 		return eucloruntime.SemanticInputBundle{}
 	}

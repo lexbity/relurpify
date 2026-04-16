@@ -60,7 +60,7 @@ var detectWorkspaceLanguages = langdetect.Detect
 // Dispatch model:
 //
 //	Agent.Execute
-//	  -> runtimeState(...)
+//	  -> intake.RunEnrichment(...)
 //	  -> selectExecutor(...)
 //	  -> executeManagedFlow(...)
 //	  -> named/euclo/runtime/assurance.Execute(...)
@@ -508,9 +508,13 @@ func (a *Agent) initializeThoughtRecipes() {
 		_ = err
 	}
 
-	// Wire the recipe registry and executor to the dispatcher
-	if result.Registry != nil && result.Executor != nil {
-		a.BehaviorDispatcher.SetRecipeRegistry(result.Registry, result.Executor)
+	// Register recipes as first-class invocables in the dispatcher.
+	if a.BehaviorDispatcher != nil {
+		for _, invocable := range result.Invocables {
+			if err := a.BehaviorDispatcher.Register(invocable); err != nil {
+				result.Errors = append(result.Errors, err)
+			}
+		}
 	}
 
 	// Build user recipe signals for classification using declared intent keywords and modes.
@@ -1601,8 +1605,7 @@ func stringValue(raw any) string {
 	return ""
 }
 
-// newCapabilityClassifier creates a CapabilityClassifier for the intake enrichment pipeline.
-// This replaces the inline classifier construction in classifyCapabilityIntent.
+// newCapabilityClassifier builds the classifier used by intake.RunEnrichment.
 func (a *Agent) newCapabilityClassifier() euclointake.CapabilityClassifier {
 	if a == nil {
 		return nil

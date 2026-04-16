@@ -82,6 +82,27 @@ func TestExecuteDispatchesKnownInvocable(t *testing.T) {
 	}
 }
 
+func TestExecuteDispatchesRecipeLikeInvocableViaRegistry(t *testing.T) {
+	inv := &stubInvocable{id: "euclo:recipe.demo"}
+	d := &Dispatcher{invocables: map[string]execution.Invocable{}}
+	if err := d.Register(inv); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	result, err := d.Execute(context.Background(), execution.ExecuteInput{
+		Work: runtimepkg.UnitOfWork{PrimaryRelurpicCapabilityID: inv.id},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if inv.calls != 1 {
+		t.Fatalf("expected one invocation, got %d", inv.calls)
+	}
+}
+
 func TestExecuteUnknownInvocableReturnsError(t *testing.T) {
 	d := &Dispatcher{invocables: map[string]execution.Invocable{}}
 
@@ -194,4 +215,3 @@ func TestExecuteSequence_OR_RunsFirstOnly(t *testing.T) {
 		t.Fatalf("unexpected selected capability: %#v", got)
 	}
 }
-
