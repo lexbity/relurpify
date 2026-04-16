@@ -18,6 +18,7 @@ import (
 	reflectionexec "github.com/lexcodex/relurpify/named/euclo/execution/reflection"
 	rewoo "github.com/lexcodex/relurpify/named/euclo/execution/rewoo"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type ExecuteInput struct {
@@ -186,7 +187,7 @@ func SetBehaviorTrace(state *core.Context, work eucloruntime.UnitOfWork, routine
 	if strings.TrimSpace(work.ExecutorDescriptor.RecipeID) != "" {
 		trace.RecipeIDs = UniqueStrings(append(trace.RecipeIDs, strings.TrimSpace(work.ExecutorDescriptor.RecipeID)))
 	}
-	state.Set("euclo.relurpic_behavior_trace", trace)
+	euclostate.SetBehaviorTrace(state, trace)
 }
 
 func AddSpecializedCapabilityTrace(state *core.Context, capabilityID string) {
@@ -195,19 +196,17 @@ func AddSpecializedCapabilityTrace(state *core.Context, capabilityID string) {
 	}
 	trace := readBehaviorTrace(state)
 	trace.SpecializedCapabilityIDs = UniqueStrings(append(trace.SpecializedCapabilityIDs, strings.TrimSpace(capabilityID)))
-	state.Set("euclo.relurpic_behavior_trace", trace)
+	euclostate.SetBehaviorTrace(state, trace)
 }
 
-func readBehaviorTrace(state *core.Context) Trace {
+func readBehaviorTrace(state *core.Context) euclostate.Trace {
 	if state == nil {
-		return Trace{}
+		return euclostate.Trace{}
 	}
-	if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
-		if trace, ok := raw.(Trace); ok {
-			return trace
-		}
+	if trace, ok := euclostate.GetBehaviorTrace(state); ok {
+		return trace
 	}
-	return Trace{}
+	return euclostate.Trace{}
 }
 
 func ExecuteWorkflow(ctx context.Context, in ExecuteInput) (*core.Result, error) {
@@ -383,7 +382,7 @@ func MergeStateArtifactsToContext(state *core.Context, artifacts []euclotypes.Ar
 	}
 	existing := euclotypes.ArtifactStateFromContext(state).All()
 	merged := append(existing, artifacts...)
-	state.Set("euclo.artifacts", merged)
+	euclostate.SetArtifacts(state, merged)
 	for _, artifact := range artifacts {
 		if key := euclotypes.StateKeyForArtifactKind(artifact.Kind); key != "" && artifact.Payload != nil {
 			state.Set(key, artifact.Payload)
@@ -510,8 +509,8 @@ func PropagateBehaviorTrace(dst, src *core.Context) {
 	if dst == nil || src == nil {
 		return
 	}
-	if raw, ok := src.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
-		dst.Set("euclo.relurpic_behavior_trace", raw)
+	if trace, ok := euclostate.GetBehaviorTrace(src); ok {
+		euclostate.SetBehaviorTrace(dst, trace)
 	}
 }
 
@@ -521,7 +520,7 @@ func appendRecipeTrace(state *core.Context, recipeID RecipeID) {
 	}
 	trace := readBehaviorTrace(state)
 	trace.RecipeIDs = UniqueStrings(append(trace.RecipeIDs, strings.TrimSpace(string(recipeID))))
-	state.Set("euclo.relurpic_behavior_trace", trace)
+	euclostate.SetBehaviorTrace(state, trace)
 }
 
 func ResultSummary(result *core.Result) string {
@@ -680,9 +679,29 @@ func mergeStateArtifacts(parent, child *core.Context) {
 	if parent == nil || child == nil {
 		return
 	}
+
+	// Use typed accessors for pipeline keys where available
+	if v, ok := euclostate.GetPipelineExplore(child); ok {
+		euclostate.SetPipelineExplore(parent, v)
+	}
+	if v, ok := euclostate.GetPipelineAnalyze(child); ok {
+		euclostate.SetPipelineAnalyze(parent, v)
+	}
+	if v, ok := euclostate.GetPipelinePlan(child); ok {
+		euclostate.SetPipelinePlan(parent, v)
+	}
+	if v, ok := euclostate.GetPipelineCode(child); ok {
+		euclostate.SetPipelineCode(parent, v)
+	}
+	if v, ok := euclostate.GetPipelineVerify(child); ok {
+		euclostate.SetPipelineVerify(parent, v)
+	}
+	if v, ok := euclostate.GetPipelineFinalOutput(child); ok {
+		euclostate.SetPipelineFinalOutput(parent, v)
+	}
+
+	// Direct keys that don't have typed accessors yet
 	for _, key := range []string{
-		"pipeline.explore", "pipeline.analyze", "pipeline.plan",
-		"pipeline.code", "pipeline.verify", "pipeline.final_output",
 		"euclo.review_findings", "euclo.compatibility_assessment",
 		"euclo.root_cause", "euclo.root_cause_candidates", "euclo.regression_analysis",
 	} {
@@ -726,12 +745,9 @@ func changedPathsFromPipelineCode(state *core.Context) []string {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("pipeline.code")
-	if !ok || raw == nil {
-		return nil
-	}
-	payload, ok := raw.(map[string]any)
-	if !ok {
+	// Try typed accessor first
+	payload, ok := euclostate.GetPipelineCode(state)
+	if !ok || payload == nil {
 		return nil
 	}
 	finalOutput, ok := payload["final_output"].(map[string]any)

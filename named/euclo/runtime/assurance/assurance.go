@@ -19,6 +19,7 @@ import (
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type EmitterResolver func(*core.Task, interaction.FrameEmitter) (interaction.FrameEmitter, bool, int)
@@ -168,14 +169,14 @@ func ShortCircuit(s Runtime, ctx context.Context, in ShortCircuitInput) Output {
 		out.Result.Data = map[string]any{}
 	}
 	policy := euclopolicy.ResolveVerificationPolicy(in.Mode, in.Profile)
-	in.State.Set("euclo.verification_policy", policy)
+	euclostate.SetVerificationPolicy(in.State, policy)
 	artifacts := euclotypes.CollectArtifactsFromState(in.State)
 	actionLog := eucloreporting.BuildActionLog(in.State, artifacts)
-	in.State.Set("euclo.action_log", actionLog)
+	euclostate.SetActionLog(in.State, actionLog)
 	proofSurface := eucloreporting.BuildProofSurface(in.State, artifacts)
-	in.State.Set("euclo.proof_surface", proofSurface)
+	euclostate.SetProofSurface(in.State, proofSurface)
 	artifacts = euclotypes.CollectArtifactsFromState(in.State)
-	in.State.Set("euclo.artifacts", artifacts)
+	euclostate.SetArtifacts(in.State, artifacts)
 	if s.PersistArtifacts != nil {
 		if persistErr := s.PersistArtifacts(ctx, in.Task, in.State, artifacts); persistErr != nil {
 			out.Err = persistErr
@@ -190,13 +191,13 @@ func ShortCircuit(s Runtime, ctx context.Context, in ShortCircuitInput) Output {
 	if raw, ok := in.State.Get("euclo.context_runtime"); ok && raw != nil {
 		finalReport["context_runtime"] = raw
 	}
-	if raw, ok := in.State.Get("euclo.security_runtime"); ok && raw != nil {
-		finalReport["security_runtime"] = raw
+	if runtime, ok := euclostate.GetSecurityRuntime(in.State); ok {
+		finalReport["security_runtime"] = runtime
 	}
-	if raw, ok := in.State.Get("euclo.shared_context_runtime"); ok && raw != nil {
-		finalReport["shared_context_runtime"] = raw
+	if runtime, ok := euclostate.GetSharedContextRuntime(in.State); ok {
+		finalReport["shared_context_runtime"] = runtime
 	}
-	in.State.Set("euclo.final_report", finalReport)
+	euclostate.SetFinalReport(in.State, finalReport)
 	eucloreporting.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
 	out.Result.Data["final_report"] = finalReport
 	out.Result.Data["action_log"] = actionLog
@@ -240,7 +241,7 @@ func (s Runtime) expandContext(ctx context.Context, in Input) (*core.Task, error
 		}
 	}
 	policy := euclopolicy.ResolveRetrievalPolicy(in.Mode, in.Profile)
-	in.State.Set("euclo.retrieval_policy", policy)
+	euclostate.SetRetrievalPolicy(in.State, policy)
 	if expansion, err := eucloruntime.ExpandContext(ctx, surfaces.Workflow, workflowID, executionTask, in.State, policy); err != nil {
 		return executionTask, err
 	} else {
@@ -273,19 +274,17 @@ func (s Runtime) resolveEmitter(task *core.Task) (interaction.FrameEmitter, bool
 
 func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, out *Output) {
 	policy := euclopolicy.ResolveVerificationPolicy(in.Mode, in.Profile)
-	in.State.Set("euclo.verification_policy", policy)
+	euclostate.SetVerificationPolicy(in.State, policy)
 	if out.Err == nil && in.Profile.MutationAllowed {
 		if _, applyErr := eucloruntime.ApplyEditIntentArtifacts(ctx, s.Environment.Registry, in.State); applyErr != nil {
 			out.Err = applyErr
 		}
 	}
 	evidence := eucloruntime.NormalizeVerificationEvidence(in.State)
-	in.State.Set("euclo.verification", evidence)
+	euclostate.SetVerification(in.State, evidence)
 	var editRecord *eucloruntime.EditExecutionRecord
-	if raw, ok := in.State.Get("euclo.edit_execution"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.EditExecutionRecord); ok {
-			editRecord = &typed
-		}
+	if raw, ok := euclostate.GetEditExecution(in.State); ok {
+		editRecord = &raw
 	}
 	successGate := eucloruntime.EvaluateSuccessGate(policy, evidence, editRecord, in.State)
 	if raw, ok := in.State.Get("euclo.execution_waiver"); ok && raw != nil {
@@ -305,26 +304,24 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 		successGate.DegradationMode = mode
 		successGate.DegradationReason = reason
 	}
-	if raw, ok := in.State.Get("euclo.recovery_trace"); ok && raw != nil {
-		if trace, ok := raw.(map[string]any); ok {
-			switch fmt.Sprint(trace["status"]) {
-			case "repair_exhausted":
-				successGate.AssuranceClass = eucloruntime.AssuranceClassRepairExhausted
-				if successGate.Reason == "" || successGate.Reason == "verification_status_rejected" {
-					successGate.Reason = "repair_exhausted"
-				}
-				if attempts, ok := trace["attempt_count"]; ok {
-					successGate.Details = append(successGate.Details, fmt.Sprintf("repair_attempt_count=%v", attempts))
-				}
-			case "repaired":
-				if attempts, ok := trace["attempt_count"]; ok {
-					successGate.Details = append(successGate.Details, fmt.Sprintf("repair_attempt_count=%v", attempts))
-				}
+	if trace, ok := euclostate.GetRecoveryTrace(in.State); ok {
+		switch trace.Status {
+		case "repair_exhausted":
+			successGate.AssuranceClass = eucloruntime.AssuranceClassRepairExhausted
+			if successGate.Reason == "" || successGate.Reason == "verification_status_rejected" {
+				successGate.Reason = "repair_exhausted"
+			}
+			if trace.AttemptCount > 0 {
+				successGate.Details = append(successGate.Details, fmt.Sprintf("repair_attempt_count=%d", trace.AttemptCount))
+			}
+		case "repaired":
+			if trace.AttemptCount > 0 {
+				successGate.Details = append(successGate.Details, fmt.Sprintf("repair_attempt_count=%d", trace.AttemptCount))
 			}
 		}
 	}
-	in.State.Set("euclo.success_gate", successGate)
-	in.State.Set("euclo.assurance_class", successGate.AssuranceClass)
+	euclostate.SetSuccessGate(in.State, successGate)
+	euclostate.SetAssuranceClass(in.State, successGate.AssuranceClass)
 	if raw, ok := in.State.Get("euclo.execution_waiver"); ok && raw != nil {
 		in.State.Set("euclo.waiver", raw)
 	}
@@ -352,11 +349,11 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 	}
 	artifacts := euclotypes.CollectArtifactsFromState(in.State)
 	actionLog := eucloreporting.BuildActionLog(in.State, artifacts)
-	in.State.Set("euclo.action_log", actionLog)
+	euclostate.SetActionLog(in.State, actionLog)
 	proofSurface := eucloreporting.BuildProofSurface(in.State, artifacts)
-	in.State.Set("euclo.proof_surface", proofSurface)
+	euclostate.SetProofSurface(in.State, proofSurface)
 	artifacts = euclotypes.CollectArtifactsFromState(in.State)
-	in.State.Set("euclo.artifacts", artifacts)
+	euclostate.SetArtifacts(in.State, artifacts)
 	if s.PersistArtifacts != nil {
 		if persistErr := s.PersistArtifacts(ctx, in.Task, in.State, artifacts); persistErr != nil && out.Err == nil {
 			out.Err = persistErr
@@ -367,8 +364,8 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 		}
 	}
 	finalReport := euclotypes.AssembleFinalReport(artifacts)
-	if raw, ok := in.State.Get("euclo.assurance_class"); ok && raw != nil {
-		finalReport["assurance_class"] = raw
+	if assuranceClass, ok := euclostate.GetAssuranceClass(in.State); ok {
+		finalReport["assurance_class"] = assuranceClass
 	}
 	if raw, ok := in.State.Get("euclo.waiver"); ok && raw != nil {
 		finalReport["waiver"] = raw
@@ -379,7 +376,7 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 	if successGate.DegradationReason != "" {
 		finalReport["degradation_reason"] = successGate.DegradationReason
 	}
-	in.State.Set("euclo.final_report", finalReport)
+	euclostate.SetFinalReport(in.State, finalReport)
 	eucloreporting.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
 	if out.Result != nil {
 		if out.Result.Data == nil {

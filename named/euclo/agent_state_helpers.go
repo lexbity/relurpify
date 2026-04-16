@@ -11,6 +11,7 @@ import (
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
@@ -32,32 +33,32 @@ func (a *Agent) seedRuntimeState(state *core.Context, envelope eucloruntime.Task
 		return
 	}
 	history := []eucloruntime.UnitOfWorkHistoryEntry(nil)
-	if raw, ok := state.Get("euclo.unit_of_work_history"); ok && raw != nil {
-		if typed, ok := raw.([]eucloruntime.UnitOfWorkHistoryEntry); ok {
-			history = append(history, typed...)
-		}
+	if raw, ok := euclostate.GetUnitOfWorkHistory(state); ok {
+		history = append(history, raw...)
 	}
 	if len(history) == 0 {
-		if raw, ok := state.Get("euclo.unit_of_work"); ok && raw != nil {
-			if existing, ok := raw.(eucloruntime.UnitOfWork); ok && existing.ID != "" {
-				history = eucloruntime.UpdateUnitOfWorkHistory(history, existing, existing.UpdatedAt)
-			}
+		if existing, ok := euclostate.GetUnitOfWork(state); ok && existing.ID != "" {
+			history = eucloruntime.UpdateUnitOfWorkHistory(history, existing, existing.UpdatedAt)
 		}
 	}
-	state.Set("euclo.envelope", envelope)
-	state.Set("euclo.classification", classification)
+
+	// Use typed accessors for core state keys
+	euclostate.SetEnvelope(state, envelope)
+	euclostate.SetClassification(state, classification)
+	euclostate.SetMode(state, mode.ModeID)
+	euclostate.SetExecutionProfile(state, profile.ProfileID)
+	euclostate.SetUnitOfWork(state, work)
+	euclostate.SetUnitOfWorkHistory(state, eucloruntime.UpdateUnitOfWorkHistory(history, work, work.UpdatedAt))
+
+	// Legacy direct keys for fields not yet migrated to typed accessors
 	state.Set("euclo.mode_resolution", mode)
 	state.Set("euclo.execution_profile_selection", profile)
-	state.Set("euclo.mode", mode.ModeID)
-	state.Set("euclo.execution_profile", profile.ProfileID)
 	state.Set("euclo.semantic_inputs", work.SemanticInputs)
 	state.Set("euclo.resolved_execution_policy", work.ResolvedPolicy)
 	state.Set("euclo.executor_descriptor", work.ExecutorDescriptor)
-	state.Set("euclo.unit_of_work", work)
 	state.Set("euclo.unit_of_work_id", work.ID)
 	state.Set("euclo.root_unit_of_work_id", work.RootID)
 	state.Set("euclo.unit_of_work_transition", work.TransitionState)
-	state.Set("euclo.unit_of_work_history", eucloruntime.UpdateUnitOfWorkHistory(history, work, work.UpdatedAt))
 
 	// Phase 9: Store user recipe signals for classification
 	if len(a.userRecipeSignals) > 0 {
@@ -129,10 +130,10 @@ func (a *Agent) classifyCapabilityIntent(ctx context.Context, task *core.Task, s
 		return fmt.Errorf("euclo capability classification: %w", err)
 	}
 
-	state.Set("euclo.pre_classified_capability_sequence", result.Sequence)
-	state.Set("euclo.capability_classification_source", result.Source)
-	state.Set("euclo.capability_classification_meta", result.Meta)
-	state.Set("euclo.capability_sequence_operator", result.Operator)
+	euclostate.SetPreClassifiedCapabilitySequence(state, result.Sequence)
+	euclostate.SetClassificationSource(state, result.Source)
+	euclostate.SetClassificationMeta(state, result.Meta)
+	euclostate.SetCapabilitySequenceOperator(state, result.Operator)
 	return nil
 }
 

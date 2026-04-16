@@ -13,6 +13,7 @@ import (
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 	"github.com/stretchr/testify/require"
 )
@@ -33,9 +34,8 @@ func TestAgentExecuteDispatchesThroughBehaviorDispatcher(t *testing.T) {
 	require.NotNil(t, result)
 	require.True(t, result.Success)
 
-	rawTrace, ok := state.Get("euclo.relurpic_behavior_trace")
-	require.True(t, ok)
-	trace, ok := rawTrace.(execution.Trace)
+	// Use typed accessor to retrieve behavior trace
+	trace, ok := euclostate.GetBehaviorTrace(state)
 	require.True(t, ok)
 	require.Equal(t, euclorelurpic.CapabilityChatAsk, trace.PrimaryCapabilityID)
 	require.Contains(t, trace.RecipeIDs, string(execution.RecipeChatAskInquiry))

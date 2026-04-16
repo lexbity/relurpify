@@ -6,6 +6,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {
@@ -31,7 +32,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 		err := fmt.Errorf("workflow executor unavailable")
 		return &core.Result{Success: false, Error: err}, err
 	}
-	state.Set("euclo.executor_runtime", selection.Runtime)
+	euclostate.SetExecutorRuntime(state, selection.Runtime)
 	return a.executeManagedFlow(ctx, task, state, selection.Workflow)
 }
 

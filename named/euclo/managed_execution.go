@@ -15,6 +15,7 @@ import (
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/session"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
@@ -93,15 +94,15 @@ func (a *Agent) initializeManagedExecution(ctx context.Context, task *core.Task,
 	}, mode, work)
 	if contextRuntime != nil {
 		contextRuntime.Activate(task, state, a.Environment.Model)
-		state.Set("euclo.shared_context_runtime", euclopolicy.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
+		euclostate.SetSharedContextRuntime(state, euclopolicy.BuildSharedContextRuntimeState(contextRuntime.Shared, work))
 	}
 	securityRuntime := euclopolicy.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work)
-	state.Set("euclo.security_runtime", securityRuntime)
+	euclostate.SetSecurityRuntime(state, securityRuntime)
 	contractRuntime := eucloruntime.BuildCapabilityContractRuntimeState(work, state, time.Now().UTC())
-	state.Set("euclo.capability_contract_runtime", contractRuntime)
-	state.Set("euclo.archaeology_capability_runtime", eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.debug_capability_runtime", eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.chat_capability_runtime", eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
+	euclostate.SetCapabilityContractRuntime(state, contractRuntime)
+	euclostate.SetArchaeologyCapabilityRuntime(state, eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(work, state, time.Now().UTC()))
+	euclostate.SetDebugCapabilityRuntime(state, eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
+	euclostate.SetChatCapabilityRuntime(state, eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
 	if contractErr := eucloruntime.EnforcePreExecutionCapabilityContracts(work); contractErr != nil {
 		work.Status = eucloruntime.UnitOfWorkStatusBlocked
 		work.ResultClass = eucloruntime.ExecutionResultClassBlocked
@@ -142,7 +143,7 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 	if prep.activeStep == nil && (hasTerminalExecutionPreparation(prep) || shouldShortCircuitExecution(flow.state)) {
 		flow.work.Status = eucloruntime.UnitOfWorkStatusCompleted
 		flow.work.ResultClass = euclowork.ResultClassForOutcome(euclowork.ExecutionStatusCompleted, flow.work.DeferredIssueIDs, nil)
-		flow.state.Set("euclo.unit_of_work", flow.work)
+		euclostate.SetUnitOfWork(flow.state, flow.work)
 		euclowork.SeedCompiledExecutionState(flow.state, flow.work, euclowork.BuildRuntimeExecutionStatus(flow.work, euclowork.ExecutionStatusCompleted, flow.work.ResultClass, time.Now().UTC()))
 		short := a.shortCircuitResult(flow.state, prep)
 		sessionOutput := eucloassurance.ShortCircuit(a.assuranceRuntime(), ctx, eucloassurance.ShortCircuitInput{
@@ -155,11 +156,11 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 			SkipSuccessGate: true,
 		})
 		if a.DeferralPlan != nil && !a.DeferralPlan.IsEmpty() {
-			flow.state.Set("euclo.deferral_plan", a.DeferralPlan)
+			euclostate.SetDeferralPlan(flow.state, a.DeferralPlan)
 		}
 		if flow.contextRuntime != nil {
 			flow.contextRuntime.HandleResult(flow.state, a.Environment.Model, sessionOutput.Result)
-			flow.state.Set("euclo.shared_context_runtime", euclopolicy.BuildSharedContextRuntimeState(flow.contextRuntime.Shared, flow.work))
+			euclostate.SetSharedContextRuntime(flow.state, euclopolicy.BuildSharedContextRuntimeState(flow.contextRuntime.Shared, flow.work))
 		}
 		a.phaseDriver().EnterSurfacing(ctx, flow.task, flow.state, nil, sessionOutput.Err)
 		a.phaseDriver().Complete(ctx, flow.task, flow.state, nil, sessionOutput.Err)
@@ -175,7 +176,7 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 		a.hydratePersistedArtifacts(ctx, flow.task, flow.state)
 	}
 	flow.work.Status = eucloruntime.UnitOfWorkStatusExecuting
-	flow.state.Set("euclo.unit_of_work", flow.work)
+	euclostate.SetUnitOfWork(flow.state, flow.work)
 	euclowork.SeedCompiledExecutionState(flow.state, flow.work, euclowork.BuildRuntimeExecutionStatus(flow.work, euclowork.ExecutionStatusExecuting, "", time.Now().UTC()))
 	executionTask := a.eucloTask(flow.task, flow.envelope, flow.classification, flow.mode, flow.profile, flow.work)
 	sessionOutput := eucloassurance.Execute(a.assuranceRuntime(), ctx, eucloassurance.Input{
@@ -195,20 +196,20 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 	err := sessionOutput.Err
 	if flow.contextRuntime != nil {
 		flow.contextRuntime.HandleResult(flow.state, a.Environment.Model, result)
-		flow.state.Set("euclo.shared_context_runtime", euclopolicy.BuildSharedContextRuntimeState(flow.contextRuntime.Shared, flow.work))
+		euclostate.SetSharedContextRuntime(flow.state, euclopolicy.BuildSharedContextRuntimeState(flow.contextRuntime.Shared, flow.work))
 	}
 	a.phaseDriver().EnterVerification(ctx, flow.task, flow.state, prep.activeStep, err)
 	a.executionFinalizer().FinalizeLivingPlan(ctx, flow.task, flow.state, prep.livingPlan, prep.activeStep, result, err)
 	a.phaseDriver().EnterSurfacing(ctx, flow.task, flow.state, prep.activeStep, err)
 	if a.DeferralPlan != nil && !a.DeferralPlan.IsEmpty() {
-		flow.state.Set("euclo.deferral_plan", a.DeferralPlan)
+		euclostate.SetDeferralPlan(flow.state, a.DeferralPlan)
 	}
 	a.phaseDriver().Complete(ctx, flow.task, flow.state, prep.activeStep, err)
 	postContractRuntime, contractErr := eucloruntime.EvaluatePostExecutionCapabilityContracts(flow.work, flow.state, time.Now().UTC())
-	flow.state.Set("euclo.capability_contract_runtime", postContractRuntime)
-	flow.state.Set("euclo.archaeology_capability_runtime", eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(flow.work, flow.state, time.Now().UTC()))
-	flow.state.Set("euclo.debug_capability_runtime", eucloreporting.BuildDebugCapabilityRuntimeState(flow.work, flow.state, time.Now().UTC()))
-	flow.state.Set("euclo.chat_capability_runtime", eucloreporting.BuildChatCapabilityRuntimeState(flow.work, flow.state, time.Now().UTC()))
+	euclostate.SetCapabilityContractRuntime(flow.state, postContractRuntime)
+	euclostate.SetArchaeologyCapabilityRuntime(flow.state, eucloarchaeomem.BuildArchaeologyCapabilityRuntimeState(flow.work, flow.state, time.Now().UTC()))
+	euclostate.SetDebugCapabilityRuntime(flow.state, eucloreporting.BuildDebugCapabilityRuntimeState(flow.work, flow.state, time.Now().UTC()))
+	euclostate.SetChatCapabilityRuntime(flow.state, eucloreporting.BuildChatCapabilityRuntimeState(flow.work, flow.state, time.Now().UTC()))
 	if err == nil && contractErr != nil {
 		err = contractErr
 	}
@@ -256,18 +257,18 @@ func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, 
 	// Apply phase state so shouldShortCircuitExecution and phase-gated
 	// behaviors pick up where the prior session left off.
 	if resumeCtx.PhaseState != nil {
-		state.Set("euclo.archaeo_phase_state", resumeCtx.PhaseState)
+		euclostate.SetArchaeoPhaseState(state, resumeCtx.PhaseState)
 	}
 
 	// Apply code revision for BKC staleness checking.
 	if resumeCtx.CodeRevision != "" {
-		state.Set("euclo.code_revision", resumeCtx.CodeRevision)
+		euclostate.SetCodeRevision(state, resumeCtx.CodeRevision)
 	}
 
 	// Seed executor semantic context from resume's semantic summary.
 	if !resumeCtx.SemanticSummary.IsEmpty() {
 		semCtx := resumeCtx.SemanticSummary.ToExecutorSemanticContext(resumeCtx.ActivePlanSummary)
-		state.Set("euclo.resume_semantic_context", semCtx)
+		euclostate.SetResumeSemanticContext(state, semCtx)
 	}
 
 	return nil

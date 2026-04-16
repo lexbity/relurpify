@@ -48,6 +48,7 @@ import (
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 	euclosession "github.com/lexcodex/relurpify/named/euclo/runtime/session"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 	golangpkg "github.com/lexcodex/relurpify/platform/lang/go"
 	jspkg "github.com/lexcodex/relurpify/platform/lang/js"
@@ -527,17 +528,17 @@ func (a *Agent) applyLearningResolution(ctx context.Context, task *core.Task, st
 	if err != nil {
 		return err
 	}
-	state.Set("euclo.last_learning_resolution", resolved)
+	euclostate.SetLastLearningResolution(state, resolved)
 	pending, err := a.learningService().Pending(ctx, workflowID)
 	if err != nil {
 		return err
 	}
-	state.Set("euclo.learning_queue", pending)
+	euclostate.SetLearningQueue(state, pending)
 	ids := make([]string, 0, len(pending))
 	for _, interaction := range pending {
 		ids = append(ids, interaction.ID)
 	}
-	state.Set("euclo.pending_learning_ids", ids)
+	euclostate.SetPendingLearningIDs(state, ids)
 	return nil
 }
 
@@ -1009,9 +1010,9 @@ func seedPersistedInteractionState(task *core.Task, state *core.Context) {
 	if task == nil || task.Context == nil || state == nil {
 		return
 	}
-	if _, ok := state.Get("euclo.interaction_state"); !ok {
+	if _, ok := euclostate.GetInteractionState(state); !ok {
 		if raw, ok := task.Context["euclo.interaction_state"]; ok && raw != nil {
-			state.Set("euclo.interaction_state", raw)
+			euclostate.SetInteractionState(state, raw)
 		}
 	}
 }
@@ -1091,7 +1092,7 @@ func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, 
 	if err != nil || len(artifacts) == 0 {
 		return false
 	}
-	state.Set("euclo.artifacts", artifacts)
+	euclostate.SetArtifacts(state, artifacts)
 	euclotypes.RestoreStateFromArtifacts(state, artifacts)
 	return true
 }
