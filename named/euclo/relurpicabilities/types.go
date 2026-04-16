@@ -32,6 +32,9 @@ const (
 	CapabilityDebugLocalization            = "euclo:debug.localization"
 	CapabilityDebugFlawSurface             = "euclo:debug.flaw-surface"
 	CapabilityDebugVerificationRepair      = "euclo:debug.verification-repair"
+	CapabilityDeferralsSurface             = "euclo:deferrals.surface"
+	CapabilityDeferralsResolve             = "euclo:deferrals.resolve"
+	CapabilityLearningPromote              = "euclo:learning.promote"
 )
 
 type MutabilityContract string

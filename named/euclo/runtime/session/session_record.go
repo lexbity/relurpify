@@ -41,6 +41,9 @@ type SessionRecord struct {
 	// LastActiveAt is when this session last had an active run.
 	LastActiveAt time.Time `json:"last_active_at"`
 
+	// CreatedAt is when this workflow session was first created.
+	CreatedAt time.Time `json:"created_at,omitempty"`
+
 	// WorkspaceRoot is the workspace path associated with this session.
 	WorkspaceRoot string `json:"workspace_root,omitempty"`
 }

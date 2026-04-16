@@ -92,6 +92,7 @@ func (idx *SessionIndex) enrichRecord(ctx context.Context, wf memory.WorkflowRec
 		WorkflowID:  wf.WorkflowID,
 		Instruction: wf.Instruction,
 		Status:      string(wf.Status),
+		CreatedAt:   wf.CreatedAt,
 	}
 
 	if workspace, ok := wf.Metadata["workspace"].(string); ok {

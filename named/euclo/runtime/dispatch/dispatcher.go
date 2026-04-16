@@ -14,6 +14,7 @@ import (
 	bkccap "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/bkc"
 	chatbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/chat"
 	debugbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/debug"
+	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	planningbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/planning"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
 	"github.com/lexcodex/relurpify/named/euclo/thoughtrecipes"
@@ -94,6 +95,9 @@ func NewDispatcher(env agentenv.AgentEnvironment) *Dispatcher {
 	for _, routine := range append(append(chatbehavior.NewSupportingRoutines(), debugbehavior.NewSupportingRoutines()...), archaeologybehavior.NewSupportingRoutines()...) {
 		d.routines[routine.ID()] = routine
 	}
+	for _, routine := range []euclorelurpic.SupportingRoutine{localbehavior.DeferralsSurfaceRoutine{}, localbehavior.LearningPromoteRoutine{}} {
+		d.routines[routine.ID()] = routine
+	}
 	// Register BKC behaviors as routines so capability_direct_run can reach them.
 	bkcBehaviorIDs := []string{
 		euclorelurpic.CapabilityBKCCompile,
@@ -157,6 +161,21 @@ func (d *Dispatcher) SetRecipeRegistry(registry *thoughtrecipes.PlanRegistry, ex
 	}
 	d.recipeRegistry = registry
 	d.recipeExecutor = executor
+}
+
+// RegisterSupporting adds or replaces a supporting routine in the dispatcher.
+func (d *Dispatcher) RegisterSupporting(routine euclorelurpic.SupportingRoutine) {
+	if d == nil || routine == nil {
+		return
+	}
+	id := strings.TrimSpace(routine.ID())
+	if id == "" {
+		return
+	}
+	if d.routines == nil {
+		d.routines = map[string]euclorelurpic.SupportingRoutine{}
+	}
+	d.routines[id] = routine
 }
 
 // recipeResultToCoreResult converts a RecipeResult to a core.Result.

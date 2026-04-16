@@ -735,6 +735,34 @@ type DeferredExecutionEvidence struct {
 	ShortReasoningSummary  string         `json:"short_reasoning_summary,omitempty"`
 }
 
+type DeferralsSurfaceSummary struct {
+	TotalOpen  int                         `json:"total_open"`
+	BySeverity map[string]int              `json:"by_severity"`
+	ByKind     map[string]int              `json:"by_kind"`
+	Issues     []DeferredIssueSummaryEntry `json:"issues"`
+	WorkflowID string                      `json:"workflow_id,omitempty"`
+}
+
+type DeferredIssueSummaryEntry struct {
+	IssueID               string `json:"issue_id"`
+	Kind                  string `json:"kind"`
+	Severity              string `json:"severity"`
+	Title                 string `json:"title"`
+	RecommendedNext       string `json:"recommended_next_action"`
+	WorkspaceArtifactPath string `json:"workspace_artifact_path,omitempty"`
+}
+
+// LearningPromoteInput captures the user-facing insight that should be turned
+// into a pending learning interaction.
+type LearningPromoteInput struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Kind        string `json:"kind"`
+	SubjectID   string `json:"subject_id,omitempty"`
+	SubjectType string `json:"subject_type,omitempty"`
+	Blocking    bool   `json:"blocking"`
+}
+
 // Re-export commonly used types from euclotypes for convenience
 type (
 	ModeResolution            = euclotypes.ModeResolution

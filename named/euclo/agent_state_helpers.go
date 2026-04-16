@@ -9,6 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
@@ -95,6 +96,29 @@ func (a *Agent) ensureDeferralPlan(task *core.Task, state *core.Context) {
 		}
 	}
 	a.GuidanceBroker.SetDeferralPlan(a.DeferralPlan)
+	a.registerDeferralsResolveRoutine()
+}
+
+func (a *Agent) registerDeferralsResolveRoutine() {
+	if a == nil || a.BehaviorDispatcher == nil {
+		return
+	}
+	a.BehaviorDispatcher.RegisterSupporting(&localbehavior.DeferralsResolveRoutine{
+		DeferralPlan:   a.DeferralPlan,
+		GuidanceBroker: a.GuidanceBroker,
+	})
+}
+
+func (a *Agent) registerLearningPromoteRoutine() {
+	if a == nil || a.BehaviorDispatcher == nil {
+		return
+	}
+	a.BehaviorDispatcher.RegisterSupporting(&localbehavior.LearningPromoteRoutine{
+		LearningService: a.learningService(),
+		WorkflowResolver: func(state *core.Context) (string, string) {
+			return workflowIDFromState(state), explorationIDFromState(state)
+		},
+	})
 }
 
 // classifyCapabilityIntent performs capability-level classification using Tier 1 (static keywords),

@@ -37,6 +37,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/modes"
 	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
+	"github.com/lexcodex/relurpify/named/euclo/langdetect"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
@@ -50,11 +51,9 @@ import (
 	euclosession "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
-	golangpkg "github.com/lexcodex/relurpify/platform/lang/go"
-	jspkg "github.com/lexcodex/relurpify/platform/lang/js"
-	pythonpkg "github.com/lexcodex/relurpify/platform/lang/python"
-	rustpkg "github.com/lexcodex/relurpify/platform/lang/rust"
 )
+
+var detectWorkspaceLanguages = langdetect.Detect
 
 // Dispatch model:
 //
@@ -279,21 +278,13 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	if env.PlanStore != nil && a.PlanStore == nil {
 		a.PlanStore = env.PlanStore
 	}
+	workspace := workspacePathFromEnv(env)
+	factory := langdetect.ResolverFactory{Languages: detectWorkspaceLanguages(workspace)}
 	if a.Environment.VerificationPlanner == nil {
-		a.Environment.VerificationPlanner = frameworkplan.NewVerificationScopePlanner(
-			golangpkg.NewVerificationResolver(),
-			pythonpkg.NewVerificationResolver(),
-			rustpkg.NewVerificationResolver(),
-			jspkg.NewVerificationResolver(),
-		)
+		a.Environment.VerificationPlanner = factory.VerificationPlanner()
 	}
 	if a.Environment.CompatibilitySurfaceExtractor == nil {
-		a.Environment.CompatibilitySurfaceExtractor = frameworkplan.NewCompatibilitySurfacePlanner(
-			golangpkg.NewCompatibilitySurfaceResolver(),
-			pythonpkg.NewCompatibilitySurfaceResolver(),
-			rustpkg.NewCompatibilitySurfaceResolver(),
-			jspkg.NewCompatibilitySurfaceResolver(),
-		)
+		a.Environment.CompatibilitySurfaceExtractor = factory.CompatibilitySurfacePlanner()
 	}
 	if env.IndexManager != nil && env.IndexManager.GraphDB != nil {
 		a.GraphDB = env.IndexManager.GraphDB
@@ -366,6 +357,8 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 	if a.BehaviorDispatcher == nil {
 		a.BehaviorDispatcher = euclodispatch.NewDispatcher(a.Environment)
 	}
+	a.registerDeferralsResolveRoutine()
+	a.registerLearningPromoteRoutine()
 
 	// Phase 9: Load and register thought recipes
 	a.initializeThoughtRecipes()
@@ -399,10 +392,64 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 				return reg.CapturePolicySnapshot()
 			}
 		}
-		a.ContextPipeline = pretask.NewPipeline(env, tensionQuerier, config)
+		pipeline := pretask.NewPipeline(env, tensionQuerier, config)
+		if workspace := workspacePathFromEnv(a.WorkspaceEnv); workspace != "" {
+			pipeline.PrependStep(pretask.DeferralLoader{WorkspaceDir: workspace})
+		}
+		if a.WorkspaceEnv.PatternStore != nil {
+			pipeline.AppendStep(pretask.LearningSyncStep{
+				LearningService:  a.learningService(),
+				WorkflowResolver: func(state *core.Context) string { return workflowIDFromState(state) },
+			})
+			pipeline.AppendStep(pretask.LearningDeltaStep{
+				LearningService:  a.learningService(),
+				WorkflowResolver: func(state *core.Context) string { return workflowIDFromState(state) },
+				SessionResolver: func(state *core.Context) string {
+					if state == nil {
+						return ""
+					}
+					return state.GetString("euclo.last_session_revision")
+				},
+			})
+		}
+		a.ContextPipeline = pipeline
 	}
 
 	return a.Initialize(a.Environment.Config)
+}
+
+func workspacePathFromEnv(env ayenitd.WorkspaceEnvironment) string {
+	if path := workspacePathFromConfig(env.Config); path != "" {
+		return path
+	}
+	if env.IndexManager != nil {
+		if path := strings.TrimSpace(env.IndexManager.WorkspacePath()); path != "" {
+			return path
+		}
+	}
+	if path, err := os.Getwd(); err == nil {
+		if path = strings.TrimSpace(path); path != "" {
+			return path
+		}
+	}
+	return "."
+}
+
+func workspacePathFromConfig(cfg *core.Config) string {
+	if cfg == nil || cfg.AgentSpec == nil || len(cfg.AgentSpec.Extensions) == 0 {
+		return ""
+	}
+	if value, ok := cfg.AgentSpec.Extensions["workspace"]; ok {
+		if path := strings.TrimSpace(fmt.Sprint(value)); path != "" && path != "<nil>" {
+			return path
+		}
+	}
+	if value, ok := cfg.AgentSpec.Extensions["euclo.workspace"]; ok {
+		if path := strings.TrimSpace(fmt.Sprint(value)); path != "" && path != "<nil>" {
+			return path
+		}
+	}
+	return ""
 }
 
 func (a *Agent) Initialize(cfg *core.Config) error {
@@ -969,6 +1016,35 @@ func workflowIDFromTaskState(task *core.Task, state *core.Context) string {
 	return ""
 }
 
+func workflowIDFromState(state *core.Context) string {
+	if state == nil {
+		return ""
+	}
+	if workflowID := strings.TrimSpace(state.GetString("euclo.workflow_id")); workflowID != "" {
+		return workflowID
+	}
+	if workflowID := strings.TrimSpace(state.GetString("workflow_id")); workflowID != "" {
+		return workflowID
+	}
+	return ""
+}
+
+func explorationIDFromState(state *core.Context) string {
+	if state == nil {
+		return ""
+	}
+	if explorationID := strings.TrimSpace(state.GetString("euclo.active_exploration_id")); explorationID != "" {
+		return explorationID
+	}
+	if explorationID := strings.TrimSpace(state.GetString("euclo.exploration_id")); explorationID != "" {
+		return explorationID
+	}
+	if explorationID := strings.TrimSpace(state.GetString("exploration_id")); explorationID != "" {
+		return explorationID
+	}
+	return ""
+}
+
 func gitCheckpoint(ctx context.Context, task *core.Task, registry *capability.Registry) string {
 	if task == nil || task.Context == nil {
 		return ""
@@ -1471,15 +1547,8 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 
 	// For chat mode, we need to provide the pipeline and file resolver
 	reg.Register(euclorelurpic.ModeChat, func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
-		// Resolve workspace path. core.Config has no Workspace field; fall back to
-		// the current working directory, which is set by ayenitd.Open before agents start.
-		workspacePath, _ := os.Getwd()
-		if workspacePath == "" {
-			workspacePath = "."
-		}
-
 		fileResolver := &pretask.FileResolver{
-			Workspace: workspacePath,
+			Workspace: workspacePathFromEnv(a.WorkspaceEnv),
 		}
 		if pm := a.WorkspaceEnv.PermissionManager; pm != nil {
 			agentID := ""

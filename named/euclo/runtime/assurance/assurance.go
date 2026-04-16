@@ -185,6 +185,9 @@ func ShortCircuit(s Runtime, ctx context.Context, in ShortCircuitInput) Output {
 		}
 	}
 	finalReport := euclotypes.AssembleFinalReport(artifacts)
+	if nextActions := assembleDeferredNextActions(in.State, artifacts); len(nextActions) > 0 {
+		finalReport["deferred_next_actions"] = nextActions
+	}
 	if raw, ok := in.State.Get("euclo.provider_restore"); ok && raw != nil {
 		finalReport["provider_restore"] = raw
 	}
@@ -364,8 +367,16 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 		}
 	}
 	finalReport := euclotypes.AssembleFinalReport(artifacts)
+<<<<<<< HEAD
 	if assuranceClass, ok := euclostate.GetAssuranceClass(in.State); ok {
 		finalReport["assurance_class"] = assuranceClass
+=======
+	if nextActions := assembleDeferredNextActions(in.State, artifacts); len(nextActions) > 0 {
+		finalReport["deferred_next_actions"] = nextActions
+	}
+	if raw, ok := in.State.Get("euclo.assurance_class"); ok && raw != nil {
+		finalReport["assurance_class"] = raw
+>>>>>>> 71ba95d (workspace language detection, deferred issue lifecyle, cross session learning)
 	}
 	if raw, ok := in.State.Get("euclo.waiver"); ok && raw != nil {
 		finalReport["waiver"] = raw
@@ -398,4 +409,60 @@ func (s Runtime) runCheckpoint(ctx context.Context, checkpoint archaeodomain.Mut
 		return nil
 	}
 	return s.Checkpoint(ctx, checkpoint, task, state)
+}
+
+func assembleDeferredNextActions(state *core.Context, artifacts []euclotypes.Artifact) []eucloruntime.DeferralNextAction {
+	issues := deferredIssuesFromState(state)
+	if len(issues) == 0 {
+		issues = deferredIssuesFromArtifacts(artifacts)
+	}
+	if len(issues) == 0 {
+		return nil
+	}
+	return eucloruntime.AssembleDeferralNextActions(issues)
+}
+
+func deferredIssuesFromState(state *core.Context) []eucloruntime.DeferredExecutionIssue {
+	if state == nil {
+		return nil
+	}
+	raw, ok := state.Get("euclo.deferred_execution_issues")
+	if !ok || raw == nil {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case []eucloruntime.DeferredExecutionIssue:
+		return append([]eucloruntime.DeferredExecutionIssue(nil), typed...)
+	case []any:
+		issues := make([]eucloruntime.DeferredExecutionIssue, 0, len(typed))
+		for _, item := range typed {
+			if issue, ok := item.(eucloruntime.DeferredExecutionIssue); ok {
+				issues = append(issues, issue)
+			}
+		}
+		return issues
+	default:
+		return nil
+	}
+}
+
+func deferredIssuesFromArtifacts(artifacts []euclotypes.Artifact) []eucloruntime.DeferredExecutionIssue {
+	for _, artifact := range artifacts {
+		if artifact.Kind != euclotypes.ArtifactKindDeferredExecutionIssues {
+			continue
+		}
+		switch typed := artifact.Payload.(type) {
+		case []eucloruntime.DeferredExecutionIssue:
+			return append([]eucloruntime.DeferredExecutionIssue(nil), typed...)
+		case []any:
+			issues := make([]eucloruntime.DeferredExecutionIssue, 0, len(typed))
+			for _, item := range typed {
+				if issue, ok := item.(eucloruntime.DeferredExecutionIssue); ok {
+					issues = append(issues, issue)
+				}
+			}
+			return issues
+		}
+	}
+	return nil
 }

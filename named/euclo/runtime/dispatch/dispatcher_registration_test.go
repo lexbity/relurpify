@@ -6,10 +6,25 @@ import (
 	"testing"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
+	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
+
+type registeredRoutine struct {
+	id string
+}
+
+func (r registeredRoutine) ID() string { return r.id }
+
+func (r registeredRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
+	if in.State != nil {
+		in.State.Set("dispatcher.register_supporting", r.id)
+	}
+	return []euclotypes.Artifact{{ID: "registered", Kind: euclotypes.ArtifactKindTrace, Summary: "registered", Payload: r.id, ProducerID: r.id, Status: "produced"}}, nil
+}
 
 func TestDispatcher_RegistersAllBKCCapabilities(t *testing.T) {
 	d := NewDispatcher(agentenv.AgentEnvironment{})
@@ -83,5 +98,23 @@ func TestDispatcher_BKCCapabilitiesAreBehaviors(t *testing.T) {
 		if behavior.ID() != capID {
 			t.Errorf("behavior ID mismatch: got %q, want %q", behavior.ID(), capID)
 		}
+	}
+}
+
+func TestDispatcher_RegisterSupportingAddsRoutine(t *testing.T) {
+	d := NewDispatcher(agentenv.AgentEnvironment{})
+	routine := registeredRoutine{id: "euclo:test.registered"}
+	d.RegisterSupporting(routine)
+
+	state := core.NewContext()
+	artifacts, err := d.ExecuteRoutine(context.Background(), routine.id, nil, state, eucloruntime.UnitOfWork{}, agentenv.AgentEnvironment{}, execution.ServiceBundle{})
+	if err != nil {
+		t.Fatalf("ExecuteRoutine: %v", err)
+	}
+	if len(artifacts) != 1 || artifacts[0].ProducerID != routine.id {
+		t.Fatalf("unexpected artifacts: %+v", artifacts)
+	}
+	if got, ok := state.Get("dispatcher.register_supporting"); !ok || got != routine.id {
+		t.Fatalf("expected registered routine marker, got %#v", got)
 	}
 }

@@ -395,6 +395,7 @@ func TestStateKeyForArtifactKind_KnownKinds(t *testing.T) {
 		{euclotypes.ArtifactKindRegressionAnalysis, "euclo.regression_analysis"},
 		{euclotypes.ArtifactKindExplore, "pipeline.explore"},
 		{euclotypes.ArtifactKindSuccessGate, "euclo.success_gate"},
+		{euclotypes.ArtifactKindLearningPromotion, "euclo.promoted_learning_interaction"},
 	}
 	for _, c := range cases {
 		got := euclotypes.StateKeyForArtifactKind(c.kind)

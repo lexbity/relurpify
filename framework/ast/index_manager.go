@@ -69,6 +69,14 @@ func NewIndexManager(store IndexStore, config IndexConfig) *IndexManager {
 	return manager
 }
 
+// WorkspacePath returns the configured workspace root for the index manager.
+func (im *IndexManager) WorkspacePath() string {
+	if im == nil {
+		return ""
+	}
+	return strings.TrimSpace(im.config.WorkspacePath)
+}
+
 func (im *IndexManager) registerDefaultParsers() {
 	im.RegisterParser(NewGoParser())
 	im.RegisterParser(NewMarkdownParser())

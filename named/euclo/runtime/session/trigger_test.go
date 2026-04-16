@@ -204,6 +204,7 @@ func TestSessionSelectPhase_EmitsSessionList(t *testing.T) {
 	store.workflows["wf-1"] = memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		Instruction: "test session",
+		CreatedAt:   now.Add(-time.Hour),
 		UpdatedAt:   now,
 	}
 
@@ -307,6 +308,7 @@ func TestSessionSelectPhase_AwaitResponse_SelectFirst(t *testing.T) {
 	store.workflows["wf-1"] = memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		Instruction: "test session",
+		CreatedAt:   now.Add(-time.Hour),
 		UpdatedAt:   now,
 	}
 
@@ -351,6 +353,12 @@ func TestSessionSelectPhase_AwaitResponse_SelectFirst(t *testing.T) {
 
 	if resumeCtx.WorkflowID != "wf-1" {
 		t.Errorf("ResumeContext.WorkflowID = %q, want 'wf-1'", resumeCtx.WorkflowID)
+	}
+	if resumeCtx.SessionStartTime.IsZero() {
+		t.Fatal("ResumeContext.SessionStartTime is zero, want workflow CreatedAt")
+	}
+	if !resumeCtx.SessionStartTime.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("ResumeContext.SessionStartTime = %v, want %v", resumeCtx.SessionStartTime, now.Add(-time.Hour))
 	}
 
 	// Should have emitted resuming frame
@@ -470,6 +478,7 @@ func TestSessionSelectPhase_AwaitResponse_Skip(t *testing.T) {
 	store.workflows["wf-1"] = memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		Instruction: "test session",
+		CreatedAt:   now.Add(-time.Hour),
 		UpdatedAt:   now,
 	}
 

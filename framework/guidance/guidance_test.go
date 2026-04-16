@@ -152,6 +152,30 @@ func TestGuidanceBrokerSubscribeUnsubscribeStopsDelivery(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestGuidanceBrokerEmitResolutionBroadcasts(t *testing.T) {
+	broker := newTestBroker(50 * time.Millisecond)
+	events, cancel := broker.Subscribe(2)
+	defer cancel()
+
+	broker.EmitResolution("obs-1", "external")
+
+	select {
+	case event := <-events:
+		require.Equal(t, GuidanceEventResolved, event.Type)
+		require.NotNil(t, event.Request)
+		require.Equal(t, "obs-1", event.Request.ID)
+		require.NotNil(t, event.Decision)
+		require.Equal(t, "external", event.Decision.DecidedBy)
+	case <-time.After(time.Second):
+		t.Fatal("expected resolution event")
+	}
+}
+
+func TestGuidanceBrokerEmitResolutionNoSubscribers(t *testing.T) {
+	broker := newTestBroker(50 * time.Millisecond)
+	broker.EmitResolution("obs-1", "external")
+}
+
 func TestDeferralPlanAddObservationAndIsEmpty(t *testing.T) {
 	dp := &DeferralPlan{ID: "dp-1"}
 	require.True(t, dp.IsEmpty())

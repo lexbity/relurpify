@@ -244,6 +244,35 @@ func TestAssuranceExecuteAllowsOperatorWaiverForMissingVerification(t *testing.T
 	require.Equal(t, "operator_waiver", out.FinalReport["degradation_reason"])
 }
 
+func TestAssuranceShortCircuitIncludesDeferredNextActions(t *testing.T) {
+	state := core.NewContext()
+	state.Set("euclo.deferred_execution_issues", []eucloruntime.DeferredExecutionIssue{
+		{
+			IssueID:  "issue-1",
+			Title:    "Critical ambiguity",
+			Kind:     eucloruntime.DeferredIssueAmbiguity,
+			Severity: eucloruntime.DeferredIssueSeverityCritical,
+			Status:   eucloruntime.DeferredIssueStatusOpen,
+			Summary:  "Clarify the blocker before continuing.",
+		},
+	})
+	svc := Runtime{}
+	out := svc.ShortCircuit(context.Background(), ShortCircuitInput{
+		Task:  &core.Task{},
+		State: state,
+		Mode:  euclotypes.ModeResolution{ModeID: "chat"},
+		Profile: euclotypes.ExecutionProfileSelection{
+			ProfileID: "chat_default",
+		},
+	})
+	require.NoError(t, out.Err)
+	require.NotNil(t, out.FinalReport["deferred_next_actions"])
+	actions, ok := out.FinalReport["deferred_next_actions"].([]eucloruntime.DeferralNextAction)
+	require.True(t, ok)
+	require.Len(t, actions, 1)
+	require.NotEmpty(t, actions[0].SuggestedPrompt)
+}
+
 func TestAssuranceExecuteMarksAutomaticDegradationWhenVerificationToolsUnavailable(t *testing.T) {
 	state := core.NewContext()
 	state.Set("euclo.edit_execution", eucloruntime.EditExecutionRecord{

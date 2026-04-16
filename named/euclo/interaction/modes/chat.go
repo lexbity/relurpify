@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lexcodex/relurpify/ayenitd"
+	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
@@ -19,6 +20,10 @@ type ContextEnrichmentPipeline interface {
 // file resolution. *pretask.FileResolver satisfies this interface.
 type FileResolverInterface interface {
 	Resolve(selections []string, text string) pretask.ResolvedFiles
+}
+
+type preRunStepper interface {
+	RunPreSteps(context.Context, *core.Context) error
 }
 
 // ContextProposalPhase emits a ContextProposalFrame and awaits the user's
@@ -89,6 +94,13 @@ func (p *ContextProposalPhase) Execute(
 	var bundle pretask.EnrichedContextBundle
 	var err error
 
+	if stepper, ok := p.Pipeline.(preRunStepper); ok {
+		stateCtx := stateMapToCoreContext(state)
+		if stepErr := stepper.RunPreSteps(ctx, stateCtx); stepErr == nil {
+			mergeCoreContextState(state, stateCtx)
+		}
+	}
+
 	if p.Pipeline != nil {
 		input := pretask.PipelineInput{
 			Query:            userText,
@@ -133,7 +145,7 @@ func (p *ContextProposalPhase) Execute(
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
-			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.knowledge_items": mergeKnowledgeItems(state, append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...)),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
 
@@ -207,7 +219,7 @@ func (p *ContextProposalPhase) Execute(
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
-			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.knowledge_items": mergeKnowledgeItems(state, append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...)),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
 
@@ -393,7 +405,7 @@ func (p *ContextProposalPhase) Execute(
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
-			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.knowledge_items": mergeKnowledgeItems(state, append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...)),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
 
@@ -418,7 +430,7 @@ func (p *ContextProposalPhase) Execute(
 		stateUpdates := map[string]interface{}{
 			"context.confirmed_files": confirmedPaths,
 			"context.pinned_files":    updatedPins,
-			"context.knowledge_items": append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...),
+			"context.knowledge_items": mergeKnowledgeItems(state, append(bundle.KnowledgeTopic, bundle.KnowledgeExpanded...)),
 			"context.pipeline_trace":  bundle.PipelineTrace,
 		}
 
@@ -463,6 +475,44 @@ func updateSessionPins(existing []string, newPaths []string) []string {
 	}
 
 	return result
+}
+
+func stateMapToCoreContext(state map[string]any) *core.Context {
+	ctx := core.NewContext()
+	for key, value := range state {
+		ctx.Set(key, value)
+	}
+	return ctx
+}
+
+func mergeCoreContextState(state map[string]any, ctx *core.Context) {
+	if state == nil || ctx == nil {
+		return
+	}
+	for key, value := range ctx.StateSnapshot() {
+		state[key] = value
+	}
+}
+
+func mergeKnowledgeItems(state map[string]any, current []pretask.KnowledgeEvidenceItem) []pretask.KnowledgeEvidenceItem {
+	if len(current) == 0 {
+		if existing, ok := state["context.knowledge_items"].([]pretask.KnowledgeEvidenceItem); ok {
+			return append([]pretask.KnowledgeEvidenceItem(nil), existing...)
+		}
+		return nil
+	}
+	merged := make([]pretask.KnowledgeEvidenceItem, 0, len(current))
+	if existing, ok := state["context.knowledge_items"].([]pretask.KnowledgeEvidenceItem); ok {
+		merged = append(merged, existing...)
+	} else if existingAny, ok := state["context.knowledge_items"].([]any); ok {
+		for _, raw := range existingAny {
+			if typed, ok := raw.(pretask.KnowledgeEvidenceItem); ok {
+				merged = append(merged, typed)
+			}
+		}
+	}
+	merged = append(merged, current...)
+	return merged
 }
 
 // loadSessionPinsFromMemory loads session pins from persistent memory.

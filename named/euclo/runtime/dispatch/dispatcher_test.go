@@ -64,6 +64,12 @@ func TestNewDispatcherRegistersPrimaryCapabilities(t *testing.T) {
 	if len(d.routines) == 0 {
 		t.Fatal("expected supporting routines to be registered")
 	}
+	if _, ok := d.routines[euclorelurpic.CapabilityDeferralsSurface]; !ok {
+		t.Fatal("expected deferrals surface routine to be registered")
+	}
+	if _, ok := d.routines[euclorelurpic.CapabilityLearningPromote]; !ok {
+		t.Fatal("expected learning promote routine to be registered")
+	}
 }
 
 func TestExecuteDispatchesKnownBehavior(t *testing.T) {
