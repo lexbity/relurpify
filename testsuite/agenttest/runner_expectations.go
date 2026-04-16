@@ -691,11 +691,21 @@ func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, cha
 	}
 
 	if spec.EucloMode != "" {
+		actualMode := ""
+		if snapshot != nil {
+			if val, ok := contextSnapshotValue(snapshot, "euclo.mode"); ok {
+				actualMode = toString(val)
+			}
+		}
+		passed := actualMode == spec.EucloMode
+		if !passed {
+			failures = append(failures, fmt.Sprintf("euclo mode mismatch: expected %q, got %q", spec.EucloMode, actualMode))
+		}
 		results = append(results, AssertionResult{
 			AssertionID: "outcome.euclo_mode",
 			Tier:        "outcome",
-			Passed:      true,
-			Message:     fmt.Sprintf("euclo mode %s", spec.EucloMode),
+			Passed:      passed,
+			Message:     fmt.Sprintf("euclo mode expected %q, got %q", spec.EucloMode, actualMode),
 		})
 	}
 
@@ -724,6 +734,38 @@ func evaluateSecurityExpectations(spec SecuritySpec, m *manifest.AgentManifest, 
 				Action:    "call",
 				Timestamp: entry.CallAt.Format("2006-01-02T15:04:05Z"),
 			}
+
+			// Determine resource and scope for file operations
+			if entry.Tool == "file_write" || entry.Tool == "file_create" || entry.Tool == "file_delete" || entry.Tool == "file_read" {
+				path := ""
+				if entry.CallMetadata != nil {
+					path = toString(entry.CallMetadata["path"])
+					if path == "" {
+						// Try nested path in args
+						if args, ok := entry.CallMetadata["args"].(map[string]any); ok {
+							path = toString(args["path"])
+						}
+					}
+				}
+				obs.Resource = path
+
+				// Determine action type for manifest check
+				var action core.FileSystemAction
+				switch entry.Tool {
+				case "file_write", "file_create":
+					action = core.FileSystemWrite
+				case "file_delete":
+					action = core.FileSystemDelete
+				case "file_read":
+					action = core.FileSystemRead
+				}
+
+				// Check if path is within manifest scope
+				if path != "" && m != nil {
+					obs.InScope = ManifestCoversFileAction(m, action, path, workspace)
+				}
+			}
+
 			observations = append(observations, obs)
 
 			isViolation := false

@@ -483,6 +483,56 @@ func aggregateBenchmarkSummary(cases []CaseReport) *OSBBenchmarkSummary {
 
 // === Phase 8: Types from deleted latency.go ===
 
+// latencyAccumulator tracks intermediate state for computing proper running averages
+type latencyAccumulator struct {
+	minMs  int64
+	maxMs  int64
+	sumMs  int64
+	count  int64
+	values []int64 // for p95 calculation
+}
+
+func (a *latencyAccumulator) add(duration int64) {
+	if a.count == 0 || duration < a.minMs {
+		a.minMs = duration
+	}
+	if duration > a.maxMs {
+		a.maxMs = duration
+	}
+	a.sumMs += duration
+	a.count++
+	a.values = append(a.values, duration)
+}
+
+func (a *latencyAccumulator) toStats() LatencyStats {
+	if a.count == 0 {
+		return LatencyStats{}
+	}
+	stats := LatencyStats{
+		MinMs: a.minMs,
+		MaxMs: a.maxMs,
+		AvgMs: a.sumMs / a.count,
+	}
+	if len(a.values) > 0 {
+		stats.P95Ms = calculateP95(a.values)
+	}
+	return stats
+}
+
+func calculateP95(values []int64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := make([]int64, len(values))
+	copy(sorted, values)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	idx := int(float64(len(sorted)-1) * 0.95)
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
+}
+
 // LatencyStats captures statistical information about tool latency
 type LatencyStats struct {
 	MinMs int64 `json:"min_ms"`
@@ -504,31 +554,25 @@ func BuildLatencyReport(transcript *ToolTranscriptArtifact) *ToolLatencyReport {
 		return nil
 	}
 
-	latencies := make(map[string]LatencyStats)
+	accumulators := make(map[string]*latencyAccumulator)
 	var totalTime int64
 
 	for _, entry := range transcript.Entries {
 		duration := entry.DurationMS
 		totalTime += duration
 
-		stats, exists := latencies[entry.Tool]
+		acc, exists := accumulators[entry.Tool]
 		if !exists {
-			stats = LatencyStats{
-				MinMs: duration,
-				MaxMs: duration,
-				AvgMs: duration,
-			}
-		} else {
-			if duration < stats.MinMs {
-				stats.MinMs = duration
-			}
-			if duration > stats.MaxMs {
-				stats.MaxMs = duration
-			}
-			// Simple average calculation
-			stats.AvgMs = (stats.AvgMs + duration) / 2
+			acc = &latencyAccumulator{}
+			accumulators[entry.Tool] = acc
 		}
-		latencies[entry.Tool] = stats
+		acc.add(duration)
+	}
+
+	// Convert accumulators to final stats
+	latencies := make(map[string]LatencyStats)
+	for tool, acc := range accumulators {
+		latencies[tool] = acc.toStats()
 	}
 
 	return &ToolLatencyReport{
