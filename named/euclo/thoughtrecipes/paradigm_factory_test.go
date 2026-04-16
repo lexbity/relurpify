@@ -9,6 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/agents/reflection"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/capability"
+	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // createTestEnvironment creates a minimal test environment
@@ -16,6 +17,7 @@ func createTestEnvironment(t *testing.T) agentenv.AgentEnvironment {
 	t.Helper()
 	return agentenv.AgentEnvironment{
 		Registry: capability.NewRegistry(),
+		Config:   &core.Config{MaxIterations: 10},
 	}
 }
 

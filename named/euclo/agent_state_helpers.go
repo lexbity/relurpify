@@ -58,6 +58,11 @@ func (a *Agent) seedRuntimeState(state *core.Context, envelope eucloruntime.Task
 	state.Set("euclo.root_unit_of_work_id", work.RootID)
 	state.Set("euclo.unit_of_work_transition", work.TransitionState)
 	state.Set("euclo.unit_of_work_history", eucloruntime.UpdateUnitOfWorkHistory(history, work, work.UpdatedAt))
+
+	// Phase 9: Store user recipe signals for classification
+	if len(a.userRecipeSignals) > 0 {
+		state.Set("euclo.user_recipe_signals", a.userRecipeSignals)
+	}
 }
 
 func (a *Agent) ensureWorkflowRun(ctx context.Context, task *core.Task, state *core.Context) {

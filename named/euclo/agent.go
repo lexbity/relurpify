@@ -120,6 +120,9 @@ type Agent struct {
 	RuntimeProviders    []core.Provider
 	ContextPipeline     *pretask.Pipeline            // Phase 2: context enrichment pipeline
 	WorkspaceEnv        ayenitd.WorkspaceEnvironment // Full workspace environment
+
+	// Phase 9: User recipe signals for dynamic resolution
+	userRecipeSignals []eucloruntime.UserRecipeSignalSource
 }
 
 func New(env ayenitd.WorkspaceEnvironment) *Agent {
@@ -363,6 +366,9 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		a.BehaviorDispatcher = euclodispatch.NewDispatcher(a.Environment)
 	}
 
+	// Phase 9: Load and register thought recipes
+	a.initializeThoughtRecipes()
+
 	// Initialize context enrichment pipeline (Phase 2)
 	if a.ContextPipeline == nil {
 		config := pretask.DefaultPipelineConfig()
@@ -418,6 +424,64 @@ func (a *Agent) Initialize(cfg *core.Config) error {
 		return nil
 	}
 	return nil
+}
+
+// initializeThoughtRecipes loads user-defined thought recipes from the default
+// recipe directory (.relurpify/recipes), registers them as Descriptors in the
+// relurpic registry, and wires the recipe executor to the behavior dispatcher.
+// This implements the Phase 9 startup integration for dynamic resolution.
+func (a *Agent) initializeThoughtRecipes() {
+	if a.BehaviorDispatcher == nil {
+		return
+	}
+
+	// Try default recipe directory
+	recipeDir := ".relurpify/recipes"
+	if _, err := os.Stat(recipeDir); err != nil {
+		// No recipe directory found, skip
+		return
+	}
+
+	// Create relurpic registry for user recipes
+	relurpicRegistry := euclorelurpic.NewRegistry()
+
+	// Load and register recipes
+	result := capabilities.LoadAndRegisterRecipes(recipeDir, relurpicRegistry, a.Environment)
+
+	// Log warnings and errors
+	for _, warning := range result.Warnings {
+		// Could emit to telemetry or log
+		_ = warning
+	}
+	for _, err := range result.Errors {
+		// Log errors but don't fail startup
+		_ = err
+	}
+
+	// Wire the recipe registry and executor to the dispatcher
+	if result.Registry != nil && result.Executor != nil {
+		a.BehaviorDispatcher.SetRecipeRegistry(result.Registry, result.Executor)
+	}
+
+	// Build user recipe signals for classification using declared intent keywords and modes.
+	a.userRecipeSignals = make([]eucloruntime.UserRecipeSignalSource, 0)
+	for _, name := range result.Registry.List() {
+		plan, ok := result.Registry.Get(name)
+		if !ok || plan == nil {
+			continue
+		}
+		// Only register recipes with declared intent keywords — without keywords,
+		// collectUserRecipeSignals can never match them anyway.
+		if len(plan.IntentKeywords) == 0 {
+			continue
+		}
+		signal := eucloruntime.UserRecipeSignalSource{
+			RecipeID: "euclo:recipe." + plan.Name,
+			Keywords: append([]string(nil), plan.IntentKeywords...),
+			Modes:    append([]string(nil), plan.Modes...),
+		}
+		a.userRecipeSignals = append(a.userRecipeSignals, signal)
+	}
 }
 
 func (a *Agent) Capabilities() []core.Capability {

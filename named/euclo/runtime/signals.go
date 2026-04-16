@@ -38,14 +38,15 @@ const AmbiguityThreshold = 0.15
 
 // Signal weights by kind.
 const (
-	WeightContextHint    = 1.0
-	WeightKeyword        = 0.3
-	WeightKeywordReview  = 0.45 // review signals need to beat the code default baseline
-	WeightFilePattern    = 0.4
-	WeightTaskStructure  = 0.5
-	WeightErrorText      = 0.6
-	WeightWorkspaceState = 0.35
-	WeightDefault        = 0.4 // baseline for default mode when no strong signals fire
+	WeightContextHint        = 1.0
+	WeightKeyword            = 0.3
+	WeightKeywordReview      = 0.45 // review signals need to beat the code default baseline
+	WeightFilePattern        = 0.4
+	WeightTaskStructure      = 0.5
+	WeightErrorText          = 0.6
+	WeightWorkspaceState     = 0.35
+	WeightDefault            = 0.4  // baseline for default mode when no strong signals fire
+	WeightUserRecipeKeyword  = WeightKeyword // user recipe keyword match; same weight as built-in keywords
 )
 
 // ──────────────────────────────────────────────────────────────
@@ -373,20 +374,42 @@ func IsAmbiguous(candidates []ModeCandidate) bool {
 }
 
 // collectUserRecipeSignals returns signals from user-defined thought recipes.
-// Phase 9: Dynamic Resolution Signal Injection
+// Only emits signals for recipes whose intent keywords match the instruction.
+// Each matching recipe emits one signal per mode it declares.
 func collectUserRecipeSignals(envelope TaskEnvelope) []ClassificationSignal {
 	if len(envelope.UserRecipes) == 0 {
 		return nil
 	}
 
-	signals := make([]ClassificationSignal, 0, len(envelope.UserRecipes))
+	lower := strings.ToLower(envelope.Instruction)
+	var signals []ClassificationSignal
 	for _, recipe := range envelope.UserRecipes {
-		// Each matched recipe contributes a signal with its score as weight
-		signals = append(signals, ClassificationSignal{
-			Kind:   "user_recipe",
-			Value:  recipe.RecipeID,
-			Weight: recipe.Score,
-		})
+		// Require at least one keyword match against the instruction.
+		if len(recipe.Keywords) == 0 {
+			continue
+		}
+		matched := false
+		for _, kw := range recipe.Keywords {
+			if kw != "" && strings.Contains(lower, strings.ToLower(kw)) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		// Emit one signal per declared mode so ScoreSignals routes correctly.
+		for _, mode := range recipe.Modes {
+			if mode == "" {
+				continue
+			}
+			signals = append(signals, ClassificationSignal{
+				Kind:   "user_recipe",
+				Value:  recipe.RecipeID,
+				Weight: WeightUserRecipeKeyword,
+				Mode:   mode,
+			})
+		}
 	}
 	return signals
 }

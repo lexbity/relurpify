@@ -36,8 +36,9 @@ type TaskEnvelope struct {
 // UserRecipeSignalSource represents a matched thought recipe signal for mode classification.
 type UserRecipeSignalSource struct {
 	RecipeID string   `json:"recipe_id"` // Capability ID (e.g., "euclo:recipe.my-recipe")
-	Keywords []string `json:"keywords"`  // Matched keywords
-	Score    float64  `json:"score"`     // Match score (0.0-1.0)
+	Keywords []string `json:"keywords"`  // Intent keywords for matching against instruction
+	Modes    []string `json:"modes"`     // Modes this recipe applies to (from plan.Modes)
+	Score    float64  `json:"score"`     // Normalized trigger priority (kept for future use)
 }
 
 type TaskClassification struct {

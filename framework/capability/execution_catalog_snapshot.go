@@ -55,6 +55,14 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 	if r == nil {
 		return nil
 	}
+	if r.delegate != nil {
+		// Capture from base then filter to the declared allowlist.
+		base := r.delegate.CaptureExecutionCatalogSnapshot()
+		if base == nil || r.toolIDAllowlist == nil {
+			return base
+		}
+		return base.filteredByAllowlist(r.toolIDAllowlist, r.delegate)
+	}
 	now := time.Now().UTC()
 
 	r.mu.RLock()
@@ -214,4 +222,72 @@ func (s *ExecutionCapabilityCatalogSnapshot) AllowedCapabilities() []core.Capabi
 		return nil
 	}
 	return core.CloneCapabilitySelectors(s.allowedCapabilities)
+}
+
+// filteredByAllowlist returns a copy of this snapshot with all lists restricted
+// to capabilities present in the allowlist map. reg is used to resolve IDs for
+// tool entries that only carry a name. Called by CapabilityRegistry.CaptureExecutionCatalogSnapshot
+// when the registry is a WithAllowlist-scoped view.
+func (s *ExecutionCapabilityCatalogSnapshot) filteredByAllowlist(allowed map[string]struct{}, reg *CapabilityRegistry) *ExecutionCapabilityCatalogSnapshot {
+	if s == nil {
+		return nil
+	}
+	out := &ExecutionCapabilityCatalogSnapshot{
+		ID:                  s.ID,
+		CapturedAt:          s.CapturedAt,
+		AgentID:             s.AgentID,
+		policySnapshot:      s.policySnapshot,
+		allowedCapabilities: s.allowedCapabilities,
+	}
+
+	isAllowed := func(id string) bool {
+		_, ok := allowed[id]
+		return ok
+	}
+
+	for _, e := range s.entries {
+		if !isAllowed(e.Descriptor.ID) {
+			continue
+		}
+		out.entries = append(out.entries, e)
+		if e.Inspectable {
+			out.inspectableCaps = append(out.inspectableCaps, e.Descriptor)
+		}
+		if e.Callable {
+			out.callableCapabilities = append(out.callableCapabilities, e.Descriptor)
+		}
+		if e.ModelCallable {
+			if e.LocalTool && e.localTool != nil {
+				out.modelCallableTools = append(out.modelCallableTools, e.localTool)
+				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, core.LLMToolSpecFromTool(unwrapTool(e.localTool)))
+			} else {
+				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, core.LLMToolSpecFromDescriptor(e.Descriptor))
+			}
+		}
+	}
+
+	// Also filter the standalone modelCallableTools list (tools registered via legacy path)
+	// that may not have a matching entry. Use reg for ID resolution.
+	seen := make(map[string]struct{}, len(out.modelCallableTools))
+	for _, t := range out.modelCallableTools {
+		if t != nil {
+			seen[t.Name()] = struct{}{}
+		}
+	}
+	for _, t := range s.modelCallableTools {
+		if t == nil {
+			continue
+		}
+		if _, already := seen[t.Name()]; already {
+			continue
+		}
+		if desc, ok := reg.GetCapability(t.Name()); ok {
+			if isAllowed(desc.ID) {
+				out.modelCallableTools = append(out.modelCallableTools, t)
+				out.modelCallableToolSpecs = append(out.modelCallableToolSpecs, core.LLMToolSpecFromTool(unwrapTool(t)))
+			}
+		}
+	}
+
+	return out
 }

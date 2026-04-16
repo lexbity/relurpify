@@ -58,6 +58,12 @@ type CapabilityRegistry struct {
 	safety              *runtimeSafetyController
 	policyEngine        authorization.PolicyEngine
 	nodeProviders       map[string]core.NodeProvider
+
+	// delegate and toolIDAllowlist support scoped views returned by WithAllowlist.
+	// When delegate is non-nil, this registry defers all operations to delegate
+	// while filtering ModelCallableTools/InvokeCapability to toolIDAllowlist.
+	delegate        *CapabilityRegistry
+	toolIDAllowlist map[string]struct{} // nil = allow all (only meaningful when delegate != nil)
 }
 
 // NewCapabilityRegistry builds a capability registry instance.
@@ -70,6 +76,40 @@ func NewCapabilityRegistry() *CapabilityRegistry {
 		toolPolicies:        make(map[string]ToolPolicy),
 		safety:              newRuntimeSafetyController(),
 	}
+}
+
+// WithAllowlist returns a scoped view of this registry that restricts
+// ModelCallableTools, CaptureExecutionCatalogSnapshot, and InvokeCapability
+// to the given capability IDs. All other operations delegate to the base registry.
+// An empty allowedIDs slice returns the receiver unchanged.
+// Used by the thought recipe executor to enforce per-step capability scoping.
+func (r *CapabilityRegistry) WithAllowlist(allowedIDs []string) *CapabilityRegistry {
+	if r == nil || len(allowedIDs) == 0 {
+		return r
+	}
+	allowlist := make(map[string]struct{}, len(allowedIDs))
+	for _, id := range allowedIDs {
+		if id != "" {
+			allowlist[id] = struct{}{}
+		}
+	}
+	if len(allowlist) == 0 {
+		return r
+	}
+	return &CapabilityRegistry{
+		delegate:        r,
+		toolIDAllowlist: allowlist,
+	}
+}
+
+// isAllowlisted reports whether the given capability ID is permitted by the
+// active toolIDAllowlist. Always true when toolIDAllowlist is nil.
+func (r *CapabilityRegistry) isAllowlisted(id string) bool {
+	if r.toolIDAllowlist == nil {
+		return true
+	}
+	_, ok := r.toolIDAllowlist[id]
+	return ok
 }
 
 // AddPrecheck appends a pre-invocation guard to the registry.
@@ -579,6 +619,21 @@ func (r *CapabilityRegistry) ModelCallableTools() []Tool {
 	if r == nil {
 		return nil
 	}
+	if r.delegate != nil {
+		all := r.delegate.ModelCallableTools()
+		if r.toolIDAllowlist == nil {
+			return all
+		}
+		filtered := make([]Tool, 0, len(all))
+		for _, t := range all {
+			if desc, ok := r.delegate.GetCapability(t.Name()); ok {
+				if r.isAllowlisted(desc.ID) {
+					filtered = append(filtered, t)
+				}
+			}
+		}
+		return filtered
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	entries := r.localToolEntriesLocked()
@@ -636,6 +691,12 @@ func (r *CapabilityRegistry) GetModelTool(name string) (Tool, bool) {
 
 // GetCapability resolves a tool by either capability ID or public name.
 func (r *CapabilityRegistry) GetCapability(idOrName string) (CapabilityDescriptor, bool) {
+	if r == nil {
+		return CapabilityDescriptor{}, false
+	}
+	if r.delegate != nil {
+		return r.delegate.GetCapability(idOrName)
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if capability, ok := r.capabilities[idOrName]; ok {
@@ -812,6 +873,18 @@ func cloneTool(tool Tool, registry *CapabilityRegistry) Tool {
 func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *Context, idOrName string, args map[string]interface{}) (*ToolResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
+	}
+	if r.delegate != nil {
+		if r.toolIDAllowlist != nil {
+			desc, ok := r.delegate.GetCapability(idOrName)
+			if !ok {
+				return nil, fmt.Errorf("capability %s not found", idOrName)
+			}
+			if !r.isAllowlisted(desc.ID) {
+				return nil, fmt.Errorf("capability %s is not permitted in this context", idOrName)
+			}
+		}
+		return r.delegate.InvokeCapability(ctx, state, idOrName, args)
 	}
 	entry, err := r.prepareCapabilityInvocation(ctx, state, idOrName, args)
 	if err != nil {

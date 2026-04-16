@@ -114,7 +114,7 @@ func ClassifyTaskScored(envelope TaskEnvelope) ScoredClassification {
 	hasStrongSignal := false
 	hasReviewSignal := false
 	for _, s := range signals {
-		if s.Kind == "keyword" || s.Kind == "task_structure" || s.Kind == "error_text" || s.Kind == "context_hint" {
+		if s.Kind == "keyword" || s.Kind == "task_structure" || s.Kind == "error_text" || s.Kind == "context_hint" || s.Kind == "user_recipe" {
 			hasStrongSignal = true
 		}
 		// Only suppress the code baseline for explicit review signals (keyword,

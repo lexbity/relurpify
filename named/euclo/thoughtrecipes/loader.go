@@ -223,6 +223,9 @@ func CompileExecutionPlan(recipe *ThoughtRecipe, sourcePath string) (*ExecutionP
 		}
 	}
 
+	// Compile global prompt (template not yet rendered)
+	globalPrompt := recipe.Global.Prompt
+
 	// Build execution steps
 	steps := make([]ExecutionStep, 0, len(recipe.Sequence))
 	for _, step := range recipe.Sequence {
@@ -246,9 +249,12 @@ func CompileExecutionPlan(recipe *ThoughtRecipe, sourcePath string) (*ExecutionP
 		GlobalEnrichment:   globalEnrichment,
 		GlobalSharing:      sharingMode,
 		GlobalAliases:      recipe.Global.Context.Aliases,
+		GlobalPrompt:       globalPrompt,
+		Resolver:           resolver,
 		Steps:              steps,
 		TriggerPriority:    priority,
 		Modes:              recipe.Global.Configuration.Modes,
+		IntentKeywords:     recipe.Global.Configuration.IntentKeywords,
 		Warnings:           warnings,
 	}
 

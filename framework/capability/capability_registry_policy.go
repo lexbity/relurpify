@@ -346,6 +346,9 @@ func (r *CapabilityRegistry) CapturePolicySnapshot() *core.PolicySnapshot {
 	if r == nil {
 		return nil
 	}
+	if r.delegate != nil {
+		return r.delegate.CapturePolicySnapshot()
+	}
 	now := time.Now().UTC()
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -165,37 +165,15 @@ func isParadigmWithDelegation(paradigm string) bool {
 	}
 }
 
-// applyCapabilityFilter returns a filtered registry if allowedIDs is non-empty.
+// applyCapabilityFilter returns a scoped registry view restricted to the allowed IDs.
+// When allowedIDs is empty the base registry is returned unchanged.
+// The returned *capability.Registry enforces the allowlist in ModelCallableTools,
+// CaptureExecutionCatalogSnapshot, and InvokeCapability.
 func applyCapabilityFilter(base *capability.Registry, allowedIDs []string) *capability.Registry {
 	if len(allowedIDs) == 0 {
 		return base
 	}
-	// Create filtered registry with intersection of allowed IDs
-	filtered := capability.NewFilteredRegistry(base, allowedIDs)
-	// We need to return a *capability.Registry, but filtered is *FilteredRegistry
-	// The paradigm agents expect *capability.Registry in their environment
-	// So we construct a Registry that wraps the filtered view
-	return filteredRegistryToRegistry(filtered, base)
-}
-
-// filteredRegistryToRegistry converts a FilteredRegistry to a *capability.Registry.
-// This is needed because paradigm agent constructors expect *capability.Registry.
-func filteredRegistryToRegistry(filtered *capability.FilteredRegistry, base *capability.Registry) *capability.Registry {
-	// For paradigms that use the registry from env, we need to provide
-	// a registry that enforces the filter. The simplest approach is to
-	// use the filtered registry's underlying methods.
-	//
-	// Since we can't easily wrap a FilteredRegistry as a Registry,
-	// and paradigm agents access env.Registry directly, we need to
-	// create an environment with the filtered registry.
-	//
-	// For now, we return the base registry and rely on the fact that
-	// the FilteredRegistry is passed to the agent via environment setup.
-	// The actual filtering happens at the capability invocation layer.
-	//
-	// A better approach is to modify the environment's Registry field
-	// to point to a Registry that wraps the filtered view.
-	return base
+	return base.WithAllowlist(allowedIDs)
 }
 
 // envWithRegistry returns an environment with the given registry.

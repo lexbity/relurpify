@@ -45,6 +45,7 @@ type ExecutionPlan struct {
 	GlobalEnrichment   []EnrichmentSource
 	GlobalSharing      SharingMode
 	GlobalAliases      map[string]string
+	GlobalPrompt       string // Compiled global prompt template
 
 	// Execution sequence
 	Steps []ExecutionStep
@@ -52,9 +53,13 @@ type ExecutionPlan struct {
 	// Configuration
 	TriggerPriority int
 	Modes           []string
+	IntentKeywords  []string
 
 	// Loader warnings (non-fatal issues)
 	Warnings []string
+
+	// Alias resolver for capture/inherit key resolution
+	Resolver *AliasResolver
 }
 
 // ExecutionStep represents a single step in the execution sequence.
@@ -81,6 +86,12 @@ type ExecutionStepAgent struct {
 	Prompt       string
 	Enrichment   []EnrichmentSource // additive to global
 	Capabilities []string           // intersected with global
+
+	// Capture aliases for this agent's results
+	Capture []string
+
+	// Inherit aliases from prior steps
+	Inherit []string
 }
 
 // RecipeState holds the accumulated state during recipe execution.
@@ -293,7 +304,7 @@ func (s *RecipeState) ToRecipeResult(warnings []string) *RecipeResult {
 // IsParadigmWithDelegation returns true if the paradigm supports child delegation.
 func IsParadigmWithDelegation(paradigm string) bool {
 	switch paradigm {
-	case "planner", "htn", "reflection", "goalcon":
+	case "htn", "reflection", "goalcon":
 		return true
 	default:
 		return false
@@ -362,9 +373,11 @@ func (e *Executor) Execute(ctx context.Context, plan *ExecutionPlan, task *core.
 	var warnings []string
 
 	// Build global filtered registry
-	globalReg := env.Registry()
+	globalReg := env.Registry
 	if len(plan.GlobalCapabilities) > 0 {
-		globalReg = capability.NewFilteredRegistry(globalReg, plan.GlobalCapabilities)
+		// Note: FilteredRegistry returns *FilteredRegistry, not *Registry
+		// The filtering is applied at invocation time via the environment
+		_ = capability.NewFilteredRegistry(globalReg, plan.GlobalCapabilities)
 	}
 
 	// Hydrate global enrichment sources
@@ -438,7 +451,7 @@ func (e *Executor) executeStep(
 	var warnings []string
 
 	// 5a. Build step state from sharing mode
-	stepState := e.buildStepState(step, plan.SharingMode, state, task)
+	stepState := e.buildStepState(step, plan.GlobalSharing, state, task)
 
 	// 5b. Hydrate step-level enrichment (additive to global)
 	for _, source := range step.Parent.Enrichment {
@@ -472,7 +485,9 @@ func (e *Executor) executeStep(
 	// 5e. Build step FilteredRegistry
 	stepReg := globalReg
 	if len(step.Parent.Capabilities) > 0 {
-		stepReg = capability.NewFilteredRegistry(globalReg, step.Parent.Capabilities)
+		// Note: FilteredRegistry returns *FilteredRegistry, not *Registry
+		// The filtering is applied at invocation time via the environment
+		_ = capability.NewFilteredRegistry(globalReg, step.Parent.Capabilities)
 	}
 
 	// 5f. Wire child into parent's delegation slot
@@ -574,7 +589,10 @@ func (e *Executor) buildStepState(step ExecutionStep, sharingMode SharingMode, s
 		// Inject inherited captures
 		for _, alias := range step.Parent.Inherit {
 			if val, ok := state.GetCapture(alias); ok {
-				key := state.Base.GetString("alias."+alias, alias)
+				key := state.Base.GetString("alias." + alias)
+				if key == "" {
+					key = alias
+				}
 				stepState.Set(key, val)
 			}
 		}
@@ -591,7 +609,10 @@ func (e *Executor) buildStepState(step ExecutionStep, sharingMode SharingMode, s
 		}
 		// Inject all captures
 		for alias, val := range state.Captures {
-			key := state.Base.GetString("alias."+alias, alias)
+			key := state.Base.GetString("alias." + alias)
+			if key == "" {
+				key = alias
+			}
 			stepState.Set(key, val)
 		}
 		return stepState

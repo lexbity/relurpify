@@ -806,7 +806,7 @@ func TestIsParadigmWithDelegation(t *testing.T) {
 		paradigm string
 		expected bool
 	}{
-		{"planner", true},
+		{"planner", false}, // planner has no delegation slot
 		{"htn", true},
 		{"reflection", true},
 		{"goalcon", true},

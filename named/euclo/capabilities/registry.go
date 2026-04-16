@@ -1,15 +1,18 @@
 package capabilities
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	bkccaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/bkc"
 	debugcaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/debug"
 	localcaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
+	"github.com/lexcodex/relurpify/named/euclo/thoughtrecipes"
 )
 
 type EucloCapabilityRegistry struct {
@@ -121,4 +124,109 @@ func supportsProfile(cap euclotypes.EucloCodingCapability, profileID string) boo
 	default:
 		return true
 	}
+}
+
+// RecipeIntegrationResult holds the result of loading and registering thought recipes.
+type RecipeIntegrationResult struct {
+	Registry *thoughtrecipes.PlanRegistry
+	Executor *thoughtrecipes.Executor
+	Warnings []string
+	Errors   []error
+}
+
+// LoadAndRegisterRecipes loads thought recipes from the given directory,
+// registers them as Descriptors in the relurpic registry, and returns
+// the PlanRegistry and Executor for dispatcher integration.
+// This implements the Phase 9 startup integration hook.
+func LoadAndRegisterRecipes(recipeDir string, relurpicRegistry *relurpicabilities.Registry, env agentenv.AgentEnvironment) *RecipeIntegrationResult {
+	result := &RecipeIntegrationResult{
+		Registry: thoughtrecipes.NewPlanRegistry(),
+		Executor: thoughtrecipes.NewExecutor(),
+		Warnings: make([]string, 0),
+		Errors:   make([]error, 0),
+	}
+
+	// Load all recipes from directory
+	loadResult, err := thoughtrecipes.LoadAll(recipeDir)
+	if err != nil {
+		result.Errors = append(result.Errors, fmt.Errorf("failed to load recipes: %w", err))
+		return result
+	}
+
+	// Register each plan in the PlanRegistry and create a Descriptor
+	for _, plan := range loadResult.Plans {
+		if plan == nil {
+			continue
+		}
+
+		// Register in PlanRegistry
+		if err := result.Registry.Register(plan); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("failed to register plan %q: %w", plan.Name, err))
+			continue
+		}
+
+		// Build capability ID
+		capabilityID := "euclo:recipe." + plan.Name
+
+		// Collect keywords from plan metadata if available
+		keywords := make([]string, 0)
+		if plan.Description != "" {
+			// Use description words as keywords (simplified approach)
+			words := strings.Fields(strings.ToLower(plan.Description))
+			for _, word := range words {
+				if len(word) > 3 && !isCommonWord(word) {
+					keywords = append(keywords, word)
+				}
+			}
+		}
+
+		// Create Descriptor with IsUserDefined: true
+		desc := relurpicabilities.Descriptor{
+			ID:                     capabilityID,
+			DisplayName:            plan.Name,
+			ModeFamilies:           plan.Modes,
+			TriggerPriority:        plan.TriggerPriority,
+			PrimaryCapable:         true,
+			Mutability:             relurpicabilities.MutabilityPolicyConstrained,
+			AllowDynamicResolution: true,
+			IsUserDefined:          true,
+			RecipePath:             plan.Name, // Could be enhanced to store actual path
+			Keywords:               keywords,
+			Summary:                plan.Description,
+		}
+
+		// Register in relurpic registry
+		if relurpicRegistry != nil {
+			if err := relurpicRegistry.Register(desc); err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("failed to register descriptor for %q: %w", plan.Name, err))
+			}
+		}
+	}
+
+	// Collect warnings from load result
+	result.Warnings = append(result.Warnings, loadResult.Warnings...)
+
+	// Log summary
+	if result.Registry.Count() > 0 {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("Loaded %d thought recipes", result.Registry.Count()))
+	}
+
+	return result
+}
+
+// isCommonWord returns true for common words that shouldn't be used as keywords.
+func isCommonWord(word string) bool {
+	common := map[string]bool{
+		"the": true, "and": true, "for": true, "with": true, "that": true,
+		"this": true, "from": true, "have": true, "will": true, "your": true,
+		"they": true, "been": true, "were": true, "said": true, "each": true,
+		"which": true, "their": true, "time": true, "would": true, "there": true,
+		"when": true, "where": true, "what": true, "who": true, "how": true,
+		"why": true, "all": true, "any": true, "can": true, "had": true,
+		"her": true, "was": true, "one": true, "our": true, "out": true,
+		"day": true, "get": true, "has": true, "him": true, "his": true,
+		"its": true, "may": true, "new": true, "now": true, "old": true,
+		"see": true, "two": true, "use": true, "way": true, "you": true,
+	}
+	return common[word]
 }
