@@ -853,28 +853,44 @@ func (a *Agent) executionFinalizer() archaeoexec.Finalizer {
 
 func (a *Agent) assuranceRuntime() eucloassurance.Runtime {
 	return eucloassurance.Runtime{
-		Memory:              a.Memory,
-		Environment:         a.Environment,
-		ProfileCtrl:         a.ProfileCtrl,
-		BehaviorDispatcher:  a.BehaviorDispatcher,
-		InteractionRegistry: a.InteractionRegistry,
-		Emitter:             a.Emitter,
-		ResolveEmitter: func(task *core.Task, live interaction.FrameEmitter) (interaction.FrameEmitter, bool, int) {
-			if live != nil {
-				return live, false, 0
-			}
-			emitter, withTransitions := agentstate.InteractionEmitterForTask(task)
-			return emitter, withTransitions, agentstate.InteractionMaxTransitions(task)
-		},
-		SeedInteraction:  agentstate.SeedInteractionPrepass,
-		PersistArtifacts: a.persistArtifacts,
+		Memory:             a.Memory,
+		Environment:        a.Environment,
+		BehaviorDispatcher: a.BehaviorDispatcher,
 		Checkpoint: func(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
 			return a.liveMutationCheckpoint(ctx, checkpoint, task, state)
 		},
-		ResetDoomLoop: func() {
-			if a.DoomLoop != nil {
-				a.DoomLoop.Reset()
-			}
+		// ContextExpander service
+		Expander: eucloassurance.ContextExpander{
+			Memory: a.Memory,
+		},
+		// InteractionRunner service
+		Interaction: eucloassurance.InteractionRunner{
+			ProfileCtrl:         a.ProfileCtrl,
+			InteractionRegistry: a.InteractionRegistry,
+			Emitter:             a.Emitter,
+			ResolveEmitter: func(task *core.Task, live interaction.FrameEmitter) (interaction.FrameEmitter, bool, int) {
+				if live != nil {
+					return live, false, 0
+				}
+				emitter, withTransitions := agentstate.InteractionEmitterForTask(task)
+				return emitter, withTransitions, agentstate.InteractionMaxTransitions(task)
+			},
+			SeedInteraction: agentstate.SeedInteractionPrepass,
+			ResetDoomLoop: func() {
+				if a.DoomLoop != nil {
+					a.DoomLoop.Reset()
+				}
+			},
+			Environment: a.Environment,
+		},
+		// VerificationGate service
+		Gate: eucloassurance.VerificationGate{
+			Environment: a.Environment,
+		},
+		// ExecutionRecorder service
+		Recorder: eucloassurance.ExecutionRecorder{
+			PersistArtifacts: a.persistArtifacts,
+			Telemetry:        a.ConfigTelemetry(),
 		},
 	}
 }

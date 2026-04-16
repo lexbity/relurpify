@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/graph"
@@ -15,32 +14,38 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclodispatch "github.com/lexcodex/relurpify/named/euclo/runtime/dispatch"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
-	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
-	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
+// EmitterResolver resolves the emitter for a given task.
 type EmitterResolver func(*core.Task, interaction.FrameEmitter) (interaction.FrameEmitter, bool, int)
+
+// PrepassSeeder seeds interaction prepass data.
 type PrepassSeeder func(*core.Context, *core.Task, eucloruntime.TaskClassification, euclotypes.ModeResolution)
+
+// ArtifactPersister persists artifacts to storage.
 type ArtifactPersister func(context.Context, *core.Task, *core.Context, []euclotypes.Artifact) error
+
+// BeforeVerificationHook runs before verification.
 type BeforeVerificationHook func(context.Context, *core.Task, *core.Context) error
+
+// MutationCheckpointHook runs at mutation checkpoints.
 type MutationCheckpointHook func(context.Context, archaeodomain.MutationCheckpoint, *core.Task, *core.Context) error
 
+// Runtime holds the services needed for assurance execution.
+// It is the coordination shell that wires together the four focused services.
 type Runtime struct {
-	Memory              memory.MemoryStore
-	Environment         agentenv.AgentEnvironment
-	ProfileCtrl         *orchestrate.ProfileController
-	BehaviorDispatcher  *euclodispatch.Dispatcher
-	InteractionRegistry *interaction.ModeMachineRegistry
-	Emitter             interaction.FrameEmitter
-	ResolveEmitter      EmitterResolver
-	SeedInteraction     PrepassSeeder
-	PersistArtifacts    ArtifactPersister
-	BeforeVerification  BeforeVerificationHook
-	Checkpoint          MutationCheckpointHook
-	ResetDoomLoop       func()
+	Memory             memory.MemoryStore
+	Environment        agentenv.AgentEnvironment
+	BehaviorDispatcher *euclodispatch.Dispatcher
+	Checkpoint         MutationCheckpointHook
+
+	// Services decomposed from the monolithic assurance layer
+	Expander    ContextExpander
+	Interaction InteractionRunner
+	Gate        VerificationGate
+	Recorder    ExecutionRecorder
 }
 
 type Input struct {
@@ -76,6 +81,7 @@ type ShortCircuitInput struct {
 	SkipSuccessGate bool
 }
 
+// Execute runs the full assurance execution pipeline using the decomposed services.
 func Execute(s Runtime, ctx context.Context, in Input) Output {
 	var out Output
 	if in.State == nil {
@@ -86,30 +92,27 @@ func Execute(s Runtime, ctx context.Context, in Input) Output {
 		out.Result = &core.Result{Success: false, Error: out.Err}
 		return out
 	}
-	executionTask, expandErr := s.expandContext(ctx, in)
-	if expandErr != nil {
-		out.Err = expandErr
+
+	// 1. Expand context
+	expansion := s.Expander.Expand(ctx, in)
+	executionTask := expansion.ExecutionTask
+	if expansion.Err != nil {
+		out.Err = expansion.Err
 	}
-	if s.SeedInteraction != nil {
-		s.SeedInteraction(in.State, executionTask, in.Classification, in.Mode)
+
+	// 2. Run interaction
+	if interactionErr := s.Interaction.Run(ctx, executionTask, in); interactionErr != nil && out.Err == nil {
+		out.Err = interactionErr
 	}
-	if s.ProfileCtrl != nil && s.InteractionRegistry != nil {
-		execEnvelope := eucloruntime.BuildExecutionEnvelope(
-			executionTask, in.State, in.Mode, in.Profile, s.Environment,
-			in.ServiceBundle.PlanStore, nil, "", "", in.Telemetry,
-		)
-		if interactionErr := s.runInteractive(ctx, executionTask, execEnvelope, in.Mode); interactionErr != nil && out.Err == nil {
-			out.Err = interactionErr
-		}
-		if s.ResetDoomLoop != nil {
-			s.ResetDoomLoop()
-		}
-	}
+
+	// 3. Pre-dispatch checkpoint
 	if out.Err == nil {
 		if checkpointErr := s.runCheckpoint(ctx, archaeodomain.MutationCheckpointPreDispatch, in.Task, in.State); checkpointErr != nil {
 			out.Err = checkpointErr
 		}
 	}
+
+	// 4. Dispatch
 	var (
 		result  *core.Result
 		execErr error
@@ -137,26 +140,86 @@ func Execute(s Runtime, ctx context.Context, in Input) Output {
 		out.Err = execErr
 	}
 	out.Result = result
+
+	// 5. Post-execution checkpoint
 	if out.Err == nil {
 		if checkpointErr := s.runCheckpoint(ctx, archaeodomain.MutationCheckpointPostExecution, in.Task, in.State); checkpointErr != nil {
 			out.Err = checkpointErr
 		}
 	}
+
+	// 6. Pre-verification checkpoint
 	if out.Err == nil {
 		if checkpointErr := s.runCheckpoint(ctx, archaeodomain.MutationCheckpointPreVerification, in.Task, in.State); checkpointErr != nil {
 			out.Err = checkpointErr
 		}
 	}
-	if out.Err == nil && s.BeforeVerification != nil {
-		if checkpointErr := s.BeforeVerification(ctx, in.Task, in.State); checkpointErr != nil {
+
+	// 7. Verify
+	gateResult := s.Gate.Evaluate(ctx, in, in.Profile.MutationAllowed)
+	if gateResult.Err != nil && out.Err == nil {
+		out.Err = gateResult.Err
+	}
+
+	// Gate check: block if not allowed
+	if out.Err == nil && !gateResult.SuccessGate.Allowed {
+		out.Err = fmt.Errorf("euclo success gate blocked completion: %s", gateResult.SuccessGate.Reason)
+	}
+
+	// 8. Pre-finalization checkpoint
+	if out.Err == nil {
+		if checkpointErr := s.runCheckpoint(ctx, archaeodomain.MutationCheckpointPreFinalization, in.Task, in.State); checkpointErr != nil {
 			out.Err = checkpointErr
 		}
 	}
-	s.applyVerificationAndArtifacts(ctx, in, &out)
-	out.MutationCheckpoints = archaeoexec.MutationCheckpointSummaries(in.State)
+
+	// Update result success status
+	if out.Result != nil {
+		out.Result.Success = out.Err == nil && gateResult.SuccessGate.Allowed && out.Result.Success
+		if out.Err != nil {
+			out.Result.Error = out.Err
+		}
+		// Add verification data to result
+		if out.Result.Data == nil {
+			out.Result.Data = map[string]any{}
+		}
+		out.Result.Data["verification"] = gateResult.Evidence
+		out.Result.Data["success_gate"] = gateResult.SuccessGate
+		out.Result.Data["assurance_class"] = gateResult.SuccessGate.AssuranceClass
+	}
+
+	// 9. Record
+	recorded := s.Recorder.Record(ctx, in.Task, in.State, gateResult, result)
+	if recorded.Err != nil && out.Err == nil {
+		out.Err = recorded.Err
+		if out.Result != nil {
+			out.Result.Success = false
+			out.Result.Error = out.Err
+		}
+	}
+
+	// Populate output
+	out.Artifacts = recorded.Artifacts
+	out.ActionLog = recorded.ActionLog
+	out.ProofSurface = recorded.ProofSurface
+	out.FinalReport = recorded.FinalReport
+	out.MutationCheckpoints = recorded.MutationCheckpoints
+
+	// Populate result data
+	if out.Result != nil {
+		if out.Result.Data == nil {
+			out.Result.Data = map[string]any{}
+		}
+		out.Result.Data["final_report"] = recorded.FinalReport
+		out.Result.Data["action_log"] = recorded.ActionLog
+		out.Result.Data["proof_surface"] = recorded.ProofSurface
+	}
+
 	return out
 }
 
+// ShortCircuit runs a minimal execution path using only the recorder.
+// It skips expansion, interaction, dispatch, checkpoints, and verification.
 func ShortCircuit(s Runtime, ctx context.Context, in ShortCircuitInput) Output {
 	out := Output{Result: in.Result}
 	if in.State == nil {
@@ -168,53 +231,36 @@ func ShortCircuit(s Runtime, ctx context.Context, in ShortCircuitInput) Output {
 	if out.Result.Data == nil {
 		out.Result.Data = map[string]any{}
 	}
+
+	// Set verification policy (minimal path still needs policy in state)
 	policy := euclopolicy.ResolveVerificationPolicy(in.Mode, in.Profile)
 	euclostate.SetVerificationPolicy(in.State, policy)
-	artifacts := euclotypes.CollectArtifactsFromState(in.State)
-	actionLog := eucloreporting.BuildActionLog(in.State, artifacts)
-	euclostate.SetActionLog(in.State, actionLog)
-	proofSurface := eucloreporting.BuildProofSurface(in.State, artifacts)
-	euclostate.SetProofSurface(in.State, proofSurface)
-	artifacts = euclotypes.CollectArtifactsFromState(in.State)
-	euclostate.SetArtifacts(in.State, artifacts)
-	if s.PersistArtifacts != nil {
-		if persistErr := s.PersistArtifacts(ctx, in.Task, in.State, artifacts); persistErr != nil {
-			out.Err = persistErr
-			out.Result.Success = false
-			out.Result.Error = persistErr
-		}
+
+	// Record with a permissive gate (short circuit assumes success)
+	gateResult := GateResult{
+		SuccessGate: eucloruntime.SuccessGateResult{Allowed: true},
 	}
-	finalReport := euclotypes.AssembleFinalReport(artifacts)
-	if nextActions := assembleDeferredNextActions(in.State, artifacts); len(nextActions) > 0 {
-		finalReport["deferred_next_actions"] = nextActions
-	}
-	if raw, ok := euclostate.GetProviderRestore(in.State); ok && raw != nil {
-		finalReport["provider_restore"] = raw
-	}
-	if raw, ok := euclostate.GetContextRuntime(in.State); ok {
-		finalReport["context_runtime"] = raw
-	}
-	if runtime, ok := euclostate.GetSecurityRuntime(in.State); ok {
-		finalReport["security_runtime"] = runtime
-	}
-	if runtime, ok := euclostate.GetSharedContextRuntime(in.State); ok {
-		finalReport["shared_context_runtime"] = runtime
-	}
-	euclostate.SetFinalReport(in.State, finalReport)
-	eucloreporting.EmitObservabilityTelemetry(in.Telemetry, in.Task, actionLog, proofSurface)
-	out.Result.Data["final_report"] = finalReport
-	out.Result.Data["action_log"] = actionLog
-	out.Result.Data["proof_surface"] = proofSurface
-	out.Artifacts = artifacts
-	out.ActionLog = actionLog
-	out.ProofSurface = proofSurface
-	out.FinalReport = finalReport
-	out.MutationCheckpoints = archaeoexec.MutationCheckpointSummaries(in.State)
+	recorded := s.Recorder.Record(ctx, in.Task, in.State, gateResult, in.Result)
+
+	// Populate output
+	out.Artifacts = recorded.Artifacts
+	out.ActionLog = recorded.ActionLog
+	out.ProofSurface = recorded.ProofSurface
+	out.FinalReport = recorded.FinalReport
+	out.MutationCheckpoints = recorded.MutationCheckpoints
+	out.Err = recorded.Err
+
+	// Populate result data
+	out.Result.Data["final_report"] = recorded.FinalReport
+	out.Result.Data["action_log"] = recorded.ActionLog
+	out.Result.Data["proof_surface"] = recorded.ProofSurface
+
 	if !in.SkipSuccessGate {
 		if out.Result.Success && out.Err == nil {
 			out.Result.Success = true
 		}
 	}
+
 	return out
 }
 
@@ -226,6 +272,7 @@ func (s Runtime) ShortCircuit(ctx context.Context, in ShortCircuitInput) Output 
 	return ShortCircuit(s, ctx, in)
 }
 
+<<<<<<< HEAD
 func (s Runtime) expandContext(ctx context.Context, in Input) (*core.Task, error) {
 	executionTask := in.ExecutionTask
 	if executionTask == nil {
@@ -404,52 +451,11 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 	out.MutationCheckpoints = archaeoexec.MutationCheckpointSummaries(in.State)
 }
 
+=======
+>>>>>>> 86b868e (runtime rework)
 func (s Runtime) runCheckpoint(ctx context.Context, checkpoint archaeodomain.MutationCheckpoint, task *core.Task, state *core.Context) error {
 	if s.Checkpoint == nil {
 		return nil
 	}
 	return s.Checkpoint(ctx, checkpoint, task, state)
-}
-
-func assembleDeferredNextActions(state *core.Context, artifacts []euclotypes.Artifact) []eucloruntime.DeferralNextAction {
-	issues := deferredIssuesFromState(state)
-	if len(issues) == 0 {
-		issues = deferredIssuesFromArtifacts(artifacts)
-	}
-	if len(issues) == 0 {
-		return nil
-	}
-	return eucloruntime.AssembleDeferralNextActions(issues)
-}
-
-func deferredIssuesFromState(state *core.Context) []eucloruntime.DeferredExecutionIssue {
-	if state == nil {
-		return nil
-	}
-	issues, ok := euclostate.GetDeferredIssues(state)
-	if !ok {
-		return nil
-	}
-	return append([]eucloruntime.DeferredExecutionIssue(nil), issues...)
-}
-
-func deferredIssuesFromArtifacts(artifacts []euclotypes.Artifact) []eucloruntime.DeferredExecutionIssue {
-	for _, artifact := range artifacts {
-		if artifact.Kind != euclotypes.ArtifactKindDeferredExecutionIssues {
-			continue
-		}
-		switch typed := artifact.Payload.(type) {
-		case []eucloruntime.DeferredExecutionIssue:
-			return append([]eucloruntime.DeferredExecutionIssue(nil), typed...)
-		case []any:
-			issues := make([]eucloruntime.DeferredExecutionIssue, 0, len(typed))
-			for _, item := range typed {
-				if issue, ok := item.(eucloruntime.DeferredExecutionIssue); ok {
-					issues = append(issues, issue)
-				}
-			}
-			return issues
-		}
-	}
-	return nil
 }

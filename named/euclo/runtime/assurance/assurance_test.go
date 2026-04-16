@@ -45,8 +45,9 @@ func TestAssuranceExecuteFailsWithoutBehaviorService(t *testing.T) {
 }
 
 func TestAssuranceResolveEmitterDefaults(t *testing.T) {
-	svc := Runtime{}
-	emitter, withTransitions, maxTransitions := svc.resolveEmitter(nil)
+	// resolveEmitter is now on InteractionRunner, not Runtime
+	runner := InteractionRunner{}
+	emitter, withTransitions, maxTransitions := runner.resolveEmitter(nil)
 	require.NotNil(t, emitter)
 	require.IsType(t, &interaction.NoopEmitter{}, emitter)
 	require.False(t, withTransitions)
@@ -55,10 +56,12 @@ func TestAssuranceResolveEmitterDefaults(t *testing.T) {
 
 func TestAssuranceExecuteStopsBeforeVerificationWhenCheckpointFails(t *testing.T) {
 	behaviorService, work, executor := assuranceBehaviorInput()
+	// Note: BeforeVerification hook was removed; verification failure is now handled by Gate.Evaluate
+	// This test verifies that checkpoint failures still stop execution
 	svc := Runtime{
 		Environment:        testutil.Env(t),
 		BehaviorDispatcher: &behaviorService,
-		BeforeVerification: func(context.Context, *core.Task, *core.Context) error {
+		Checkpoint: func(context.Context, archaeodomain.MutationCheckpoint, *core.Task, *core.Context) error {
 			return context.Canceled
 		},
 	}
@@ -220,10 +223,8 @@ func TestAssuranceExecuteAllowsOperatorWaiverForMissingVerification(t *testing.T
 		GrantedBy: "operator",
 		RunID:     "run-1",
 	})
-	svc := Runtime{
-		Environment: testutil.Env(t),
-	}
-	out := Output{Result: &core.Result{Success: true, Data: map[string]any{"summary": "waived success"}}}
+	// Test Gate.Evaluate directly - waiver should allow success
+	gate := VerificationGate{Environment: testutil.Env(t)}
 	in := Input{
 		Task:  &core.Task{},
 		State: state,
@@ -234,14 +235,13 @@ func TestAssuranceExecuteAllowsOperatorWaiverForMissingVerification(t *testing.T
 			MutationAllowed:      true,
 		},
 	}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := gate.Evaluate(context.Background(), in, true)
 
-	require.NoError(t, out.Err)
-	require.NotNil(t, out.Result)
-	require.True(t, out.Result.Success)
-	require.Equal(t, eucloruntime.AssuranceClassOperatorDeferred, out.Result.Data["assurance_class"])
-	require.Equal(t, "operator_waiver", out.FinalReport["degradation_mode"])
-	require.Equal(t, "operator_waiver", out.FinalReport["degradation_reason"])
+	require.NoError(t, gateResult.Err)
+	require.True(t, gateResult.SuccessGate.Allowed)
+	require.Equal(t, eucloruntime.AssuranceClassOperatorDeferred, gateResult.SuccessGate.AssuranceClass)
+	require.Equal(t, "operator_waiver", gateResult.SuccessGate.DegradationMode)
+	require.Equal(t, "operator_waiver", gateResult.SuccessGate.DegradationReason)
 }
 
 func TestAssuranceShortCircuitIncludesDeferredNextActions(t *testing.T) {
@@ -284,10 +284,8 @@ func TestAssuranceExecuteMarksAutomaticDegradationWhenVerificationToolsUnavailab
 			HasVerificationTools: false,
 		},
 	})
-	svc := Runtime{
-		Environment: testutil.Env(t),
-	}
-	out := Output{Result: &core.Result{Success: true, Data: map[string]any{"summary": "degraded failure"}}}
+	// Test automatic degradation via Gate.Evaluate
+	gate := VerificationGate{Environment: testutil.Env(t)}
 	in := Input{
 		Task:  &core.Task{},
 		State: state,
@@ -298,13 +296,11 @@ func TestAssuranceExecuteMarksAutomaticDegradationWhenVerificationToolsUnavailab
 			MutationAllowed:      true,
 		},
 	}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := gate.Evaluate(context.Background(), in, true)
 
-	require.Error(t, out.Err)
-	require.NotNil(t, out.Result)
-	require.False(t, out.Result.Success)
-	require.Equal(t, "automatic", out.FinalReport["degradation_mode"])
-	require.Equal(t, "verification_tools_unavailable", out.FinalReport["degradation_reason"])
+	require.False(t, gateResult.SuccessGate.Allowed)
+	require.Equal(t, "automatic", gateResult.SuccessGate.DegradationMode)
+	require.Equal(t, "verification_tools_unavailable", gateResult.SuccessGate.DegradationReason)
 }
 
 func TestAssuranceApplyVerificationAndArtifacts_ReproduceLocalizePatchMarksAutomaticDegradation(t *testing.T) {
@@ -318,7 +314,7 @@ func TestAssuranceApplyVerificationAndArtifacts_ReproduceLocalizePatchMarksAutom
 			HasVerificationTools: false,
 		},
 	})
-	out := Output{Result: &core.Result{Success: true, Data: map[string]any{"summary": "debug degraded failure"}}}
+	gate := VerificationGate{Environment: testutil.Env(t)}
 	in := Input{
 		Task:  &core.Task{},
 		State: state,
@@ -329,15 +325,12 @@ func TestAssuranceApplyVerificationAndArtifacts_ReproduceLocalizePatchMarksAutom
 			MutationAllowed:      true,
 		},
 	}
-	svc := Runtime{Environment: testutil.Env(t)}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := gate.Evaluate(context.Background(), in, true)
 
-	require.Error(t, out.Err)
-	require.NotNil(t, out.Result)
-	require.False(t, out.Result.Success)
-	require.Equal(t, "automatic", out.FinalReport["degradation_mode"])
-	require.Equal(t, "verification_tools_unavailable", out.FinalReport["degradation_reason"])
-	require.Equal(t, eucloruntime.AssuranceClassUnverifiedSuccess, out.FinalReport["assurance_class"])
+	require.False(t, gateResult.SuccessGate.Allowed)
+	require.Equal(t, "automatic", gateResult.SuccessGate.DegradationMode)
+	require.Equal(t, "verification_tools_unavailable", gateResult.SuccessGate.DegradationReason)
+	require.Equal(t, eucloruntime.AssuranceClassUnverifiedSuccess, gateResult.SuccessGate.AssuranceClass)
 }
 
 func TestAssuranceApplyVerificationAndArtifacts_TDDIncompleteBlocksCompletion(t *testing.T) {
@@ -368,7 +361,7 @@ func TestAssuranceApplyVerificationAndArtifacts_TDDIncompleteBlocksCompletion(t 
 		},
 	}
 	svc := Runtime{Environment: testutil.Env(t)}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := VerificationGate{Environment: testutil.Env(t)}.Evaluate(context.Background(), in, in.Profile.MutationAllowed)
 
 	require.Error(t, out.Err)
 	require.NotNil(t, out.Result)
@@ -391,7 +384,7 @@ func TestAssuranceApplyVerificationAndArtifacts_ReviewSuggestImplementDoesNotReq
 		},
 	}
 	svc := Runtime{Environment: testutil.Env(t)}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := VerificationGate{Environment: testutil.Env(t)}.Evaluate(context.Background(), in, in.Profile.MutationAllowed)
 
 	require.NoError(t, out.Err)
 	require.NotNil(t, out.Result)
@@ -419,7 +412,7 @@ func TestAssuranceApplyVerificationAndArtifacts_RejectsFallbackVerificationForFr
 		},
 	}
 	svc := Runtime{Environment: testutil.Env(t)}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := VerificationGate{Environment: testutil.Env(t)}.Evaluate(context.Background(), in, in.Profile.MutationAllowed)
 
 	require.Error(t, out.Err)
 	require.NotNil(t, out.Result)
@@ -448,7 +441,7 @@ func TestAssuranceApplyVerificationAndArtifacts_RejectsReusedVerificationForFres
 		},
 	}
 	svc := Runtime{Environment: testutil.Env(t)}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := VerificationGate{Environment: testutil.Env(t)}.Evaluate(context.Background(), in, in.Profile.MutationAllowed)
 
 	require.Error(t, out.Err)
 	require.NotNil(t, out.Result)
@@ -486,7 +479,7 @@ func TestAssuranceApplyVerificationAndArtifacts_TreatsFinalOutputFileWriteAsMuta
 		},
 	}
 	svc := Runtime{Environment: testutil.Env(t)}
-	svc.applyVerificationAndArtifacts(context.Background(), in, &out)
+	gateResult := VerificationGate{Environment: testutil.Env(t)}.Evaluate(context.Background(), in, in.Profile.MutationAllowed)
 
 	require.Error(t, out.Err)
 	require.NotNil(t, out.Result)
@@ -522,20 +515,16 @@ func TestAssuranceShortCircuitAssemblesReportAndObservability(t *testing.T) {
 	require.NotEmpty(t, rec.Events)
 }
 
-func TestAssuranceBeforeVerificationHookRunsAfterPreVerificationCheckpoint(t *testing.T) {
+// TestAssuranceCheckpointsRunInOrder verifies that checkpoints are called in the expected order.
+// Note: BeforeVerification hook was removed in Phase 3 - its functionality is now in VerificationGate.Evaluate.
+func TestAssuranceCheckpointsRunInOrder(t *testing.T) {
 	var seen []archaeodomain.MutationCheckpoint
-	var beforeRan bool
 	behaviorService, work, executor := assuranceBehaviorInput()
 	svc := Runtime{
 		Environment:        testutil.Env(t),
 		BehaviorDispatcher: &behaviorService,
 		Checkpoint: func(_ context.Context, cp archaeodomain.MutationCheckpoint, _ *core.Task, _ *core.Context) error {
 			seen = append(seen, cp)
-			return nil
-		},
-		BeforeVerification: func(context.Context, *core.Task, *core.Context) error {
-			require.Equal(t, archaeodomain.MutationCheckpointPreVerification, seen[len(seen)-1])
-			beforeRan = true
 			return nil
 		},
 	}
@@ -547,6 +536,10 @@ func TestAssuranceBeforeVerificationHookRunsAfterPreVerificationCheckpoint(t *te
 		Work:             work,
 	})
 	require.NoError(t, out.Err)
-	require.True(t, beforeRan)
-	require.Equal(t, archaeodomain.MutationCheckpointPreFinalization, seen[len(seen)-1])
+	require.Equal(t, []archaeodomain.MutationCheckpoint{
+		archaeodomain.MutationCheckpointPreDispatch,
+		archaeodomain.MutationCheckpointPostExecution,
+		archaeodomain.MutationCheckpointPreVerification,
+		archaeodomain.MutationCheckpointPreFinalization,
+	}, seen)
 }
