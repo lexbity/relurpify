@@ -16,8 +16,8 @@ import (
 
 func TestObjectiveKindPlanExecution(t *testing.T) {
 	mode := ModeResolution{ModeID: "planning"}
-	profile := ExecutionProfileSelection{}
 	class := TaskClassification{}
+	profile := ExecutionProfileSelection{}
 	require.Equal(t, "plan_execution", objectiveKindForWork(mode, profile, class))
 }
 
@@ -179,96 +179,80 @@ func TestBehaviorFamilyStaleAssumptionFromClassification(t *testing.T) {
 	require.Equal(t, "stale_assumption_detection", behaviorFamilyForWork(mode, profile, class, policy))
 }
 
-func TestPrimaryRelurpicCapabilityPrefersInspectOverAskForInspectPrompt(t *testing.T) {
-	// With signal-based routing, inspect is selected when classification has review intent.
+func TestPrimaryRelurpicCapabilityUsesCapabilitySequence(t *testing.T) {
+	// The classifier sets CapabilitySequence; primaryRelurpicCapabilityForWork
+	// should use the first element as the primary capability.
 	envelope := TaskEnvelope{
-		Instruction:   "Inspect testsuite/fixtures/rapid_chat/inspect/store.go and compare MemoryStore with NullStore. Do not modify any files.",
-		EditPermitted: false,
-	}
-	classification := TaskClassification{
-		EditPermitted:  false,
-		IntentFamilies: []string{"review"}, // Review intent triggers inspect capability
+		Instruction:        "Inspect testsuite/fixtures/rapid_chat/inspect/store.go and compare MemoryStore with NullStore.",
+		EditPermitted:      false,
+		CapabilitySequence: []string{"euclo:chat.inspect", "euclo:chat.implement"},
 	}
 	mode := ModeResolution{ModeID: "chat"}
-	profile := ExecutionProfileSelection{}
 
-	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	got := primaryRelurpicCapabilityForWork(envelope, mode)
 	require.Equal(t, "euclo:chat.inspect", got)
 }
 
-func TestPrimaryRelurpicCapabilityKeepsAskForExplainPrompt(t *testing.T) {
+func TestPrimaryRelurpicCapabilityUsesFallbackWhenSequenceEmpty(t *testing.T) {
+	// When CapabilitySequence is empty, the function falls back to the mode's
+	// default capability from the registry.
 	envelope := TaskEnvelope{
-		Instruction:   "Explain what the User type represents and what NewUser does. Do not modify any files.",
-		EditPermitted: false,
-	}
-	classification := TaskClassification{
+		Instruction:   "Explain what the User type represents.",
 		EditPermitted: false,
 	}
 	mode := ModeResolution{ModeID: "chat"}
-	profile := ExecutionProfileSelection{}
 
-	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	got := primaryRelurpicCapabilityForWork(envelope, mode)
+	// Chat mode default is CapabilityChatAsk (euclo:chat.ask)
 	require.Equal(t, "euclo:chat.ask", got)
 }
 
-func TestPrimaryRelurpicCapabilityReviewClassificationRoutesToInspect(t *testing.T) {
-	// With signal-based routing, classification signals are the single source of truth.
-	// If the classification has review intent, it routes to inspect (not ask).
+func TestPrimaryRelurpicCapabilityReturnsSequenceFirstElement(t *testing.T) {
+	// The first element of CapabilitySequence is always the primary capability.
 	envelope := TaskEnvelope{
-		Instruction:   "Explain what the User type represents and what NewUser does. Do not modify any files.",
-		EditPermitted: false,
-	}
-	classification := TaskClassification{
-		EditPermitted:  false,
-		IntentFamilies: []string{"review"},
+		Instruction:        "Any instruction here",
+		CapabilitySequence: []string{"euclo:chat.ask"},
 	}
 	mode := ModeResolution{ModeID: "chat"}
-	profile := ExecutionProfileSelection{}
 
-	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
-	// Review intent in classification routes to inspect, regardless of prompt text.
+	got := primaryRelurpicCapabilityForWork(envelope, mode)
+	require.Equal(t, "euclo:chat.ask", got)
+}
+
+func TestPrimaryRelurpicCapabilityMatchesClassifierOutput(t *testing.T) {
+	// Regression test: primaryRelurpicCapabilityForWork must produce the same
+	// capability ID as what the classifier puts in CapabilitySequence.
+	envelope := TaskEnvelope{
+		Instruction:        "Compare the behavior of MemoryStore and an in-memory null store",
+		CapabilitySequence: []string{"euclo:chat.inspect"},
+	}
+	mode := ModeResolution{ModeID: "chat"}
+
+	got := primaryRelurpicCapabilityForWork(envelope, mode)
 	require.Equal(t, "euclo:chat.inspect", got)
 }
 
-func TestPrimaryRelurpicCapabilityComparePromptRoutesToInspect(t *testing.T) {
-	// End-to-end test: "Compare..." prompt should trigger review signal,
-	// resulting in classification with review intent, which routes to chat.inspect.
+func TestPrimaryRelurpicCapabilityPlanningUsesSequence(t *testing.T) {
+	// Planning mode should use CapabilitySequence when set.
 	envelope := TaskEnvelope{
-		Instruction:   "Compare the behavior of MemoryStore and an in-memory null store",
-		EditPermitted: false,
+		Instruction:        "Explore testsuite/fixtures/rapid_arch_pattern",
+		CapabilitySequence: []string{"euclo:archaeology.explore"},
 	}
-	// Use actual classification (not mocked) to verify signal detection works
-	classification := ClassifyTask(envelope)
-	mode := ModeResolution{ModeID: "chat"}
-	profile := ExecutionProfileSelection{}
-
-	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
-	require.Equal(t, "euclo:chat.inspect", got, "Expected chat.inspect for 'compare' prompt, got %s (IntentFamilies: %v)", got, classification.IntentFamilies)
-}
-
-func TestPrimaryRelurpicCapabilityPlanningExplorePromptStaysExplore(t *testing.T) {
-	envelope := TaskEnvelope{
-		Instruction:   "Explore testsuite/fixtures/rapid_arch_pattern and identify the dominant normalization pattern plus any inconsistent implementation. Do not modify files.",
-		EditPermitted: false,
-	}
-	classification := TaskClassification{EditPermitted: false}
 	mode := ModeResolution{ModeID: "planning"}
-	profile := ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
 
-	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	got := primaryRelurpicCapabilityForWork(envelope, mode)
 	require.Equal(t, "euclo:archaeology.explore", got)
 }
 
-func TestPrimaryRelurpicCapabilityPlanningCompiledExecutionPromptUsesImplement(t *testing.T) {
+func TestPrimaryRelurpicCapabilityPlanningImplementsFromSequence(t *testing.T) {
+	// Planning mode implement capability should come from CapabilitySequence.
 	envelope := TaskEnvelope{
-		Instruction:   "Execute the compiled plan for testsuite/fixtures/rapid_arch_exec/slug.go. Keep the change limited to that file.",
-		EditPermitted: true,
+		Instruction:        "Execute the compiled plan for testsuite/fixtures/rapid_arch_exec/slug.go",
+		CapabilitySequence: []string{"euclo:archaeology.implement-plan"},
 	}
-	classification := TaskClassification{EditPermitted: true}
 	mode := ModeResolution{ModeID: "planning"}
-	profile := ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
 
-	got := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	got := primaryRelurpicCapabilityForWork(envelope, mode)
 	require.Equal(t, "euclo:archaeology.implement-plan", got)
 }
 

@@ -124,7 +124,7 @@ type eucloCatalogSnapshot struct {
 type eucloCatalogSnapshotCapability struct {
 	ID                         string   `json:"id"`
 	PrimaryOwner               string   `json:"primary_owner"`
-	ModeFamily                 string   `json:"mode_family"`
+	ModeFamilies               []string `json:"mode_families"`
 	ExecutionClass             string   `json:"execution_class"`
 	PreferredTestLayer         string   `json:"preferred_test_layer"`
 	ExpectedArtifactKinds      []string `json:"expected_artifact_kinds,omitempty"`
@@ -146,7 +146,7 @@ func filterCatalogCapability(catalog *EucloCatalog, id string) eucloCatalogSnaps
 	return eucloCatalogSnapshotCapability{
 		ID:                         entry.ID,
 		PrimaryOwner:               entry.PrimaryOwner,
-		ModeFamily:                 entry.ModeFamily,
+		ModeFamilies:               entry.ModeFamilies,
 		ExecutionClass:             entry.ExecutionClass,
 		PreferredTestLayer:         entry.PreferredTestLayer,
 		ExpectedArtifactKinds:      append([]string(nil), entry.ExpectedArtifactKinds...),

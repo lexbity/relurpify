@@ -33,7 +33,7 @@ func writeCapabilityTable(w io.Writer, entries []CapabilityCatalogEntry) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "ID\tOWNER\tMODE\tCLASS\tLAYER\tBASELINE\tSUMMARY")
 	for _, entry := range entries {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%t\t%s\n", entry.ID, entry.PrimaryOwner, entry.ModeFamily, entry.ExecutionClass, entry.PreferredTestLayer, entry.BaselineEligible, entry.Summary)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%t\t%s\n", entry.ID, entry.PrimaryOwner, entry.ModeFamilies[0], entry.ExecutionClass, entry.PreferredTestLayer, entry.BaselineEligible, entry.Summary)
 	}
 	return tw.Flush()
 }
@@ -47,7 +47,7 @@ func writeCapabilityDetail(w io.Writer, entry *CapabilityCatalogEntry) error {
 	fmt.Fprintf(tw, "id\t%s\n", entry.ID)
 	fmt.Fprintf(tw, "display_name\t%s\n", entry.DisplayName)
 	fmt.Fprintf(tw, "primary_owner\t%s\n", entry.PrimaryOwner)
-	fmt.Fprintf(tw, "mode_family\t%s\n", entry.ModeFamily)
+	fmt.Fprintf(tw, "mode_family\t%s\n", entry.ModeFamilies[0])
 	fmt.Fprintf(tw, "execution_class\t%s\n", entry.ExecutionClass)
 	fmt.Fprintf(tw, "preferred_test_layer\t%s\n", entry.PreferredTestLayer)
 	fmt.Fprintf(tw, "allowed_test_layers\t%s\n", strings.Join(entry.AllowedTestLayers, ", "))

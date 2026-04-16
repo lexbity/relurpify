@@ -3,6 +3,8 @@ package runtime
 import (
 	"regexp"
 	"strings"
+
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
 
 // ClassificationSignal represents a single piece of evidence used during classification.
@@ -95,12 +97,12 @@ func collectKeywordSignals(instruction string) []ClassificationSignal {
 		weight   float64
 	}
 	groups := []keywordGroup{
-		{[]string{"review", "audit", "inspect", "look at", "pull request", "pull-request", "code review", "lgtm", "compare", "contrast", "evaluate", "examine", "assess", "analyze", "analyse"}, "review", WeightKeywordReview},
-		{[]string{"debug", "diagnose", "root cause", "failing", "failure", "trace"}, "debug", WeightKeyword},
-		{[]string{"plan", "design", "architecture", "approach"}, "planning", WeightKeyword},
-		{[]string{"test first", "tdd", "write tests", "add tests", "make sure it's tested", "ensure it's tested"}, "tdd", WeightKeyword},
-		{[]string{"implement", "fix", "change", "refactor", "patch", "update", "add"}, "code", WeightKeyword},
-		{[]string{"explain", "what is", "how do", "show me", "describe", "what does", "how can", "tell me", "help me understand", "walk me through"}, "chat", WeightKeyword},
+		{[]string{"review", "audit", "inspect", "look at", "pull request", "pull-request", "code review", "lgtm", "compare", "contrast", "evaluate", "examine", "assess", "analyze", "analyse"}, euclorelurpic.ModeReview, WeightKeywordReview},
+		{[]string{"debug", "diagnose", "root cause", "failing", "failure", "trace"}, euclorelurpic.ModeDebug, WeightKeyword},
+		{[]string{"plan", "design", "architecture", "approach"}, euclorelurpic.ModePlanning, WeightKeyword},
+		{[]string{"test first", "tdd", "write tests", "add tests", "make sure it's tested", "ensure it's tested"}, euclorelurpic.ModeTDD, WeightKeyword},
+		{[]string{"implement", "fix", "change", "refactor", "patch", "update", "add"}, euclorelurpic.ModeCode, WeightKeyword},
+		{[]string{"explain", "what is", "how do", "show me", "describe", "what does", "how can", "tell me", "help me understand", "walk me through"}, euclorelurpic.ModeChat, WeightKeyword},
 	}
 
 	for _, g := range groups {
@@ -131,7 +133,7 @@ func collectFilePatternSignals(envelope TaskEnvelope) []ClassificationSignal {
 				Kind:   "file_pattern",
 				Value:  p,
 				Weight: WeightFilePattern,
-				Mode:   "tdd",
+				Mode:   euclorelurpic.ModeTDD,
 			})
 			break
 		}
@@ -145,7 +147,7 @@ func collectFilePatternSignals(envelope TaskEnvelope) []ClassificationSignal {
 				Kind:   "file_pattern",
 				Value:  p,
 				Weight: WeightFilePattern * 0.5,
-				Mode:   "planning",
+				Mode:   euclorelurpic.ModePlanning,
 			})
 			break
 		}
@@ -208,7 +210,7 @@ func collectTaskStructureSignals(instruction string) []ClassificationSignal {
 				Kind:   "task_structure",
 				Value:  p.value,
 				Weight: WeightTaskStructure,
-				Mode:   "debug",
+				Mode:   euclorelurpic.ModeDebug,
 			})
 		}
 	}
@@ -219,7 +221,7 @@ func collectTaskStructureSignals(instruction string) []ClassificationSignal {
 				Kind:   "task_structure",
 				Value:  p.value,
 				Weight: WeightTaskStructure,
-				Mode:   "planning",
+				Mode:   euclorelurpic.ModePlanning,
 			})
 		}
 	}
@@ -232,7 +234,7 @@ func collectTaskStructureSignals(instruction string) []ClassificationSignal {
 				Kind:   "task_structure",
 				Value:  "simple_repair:" + p.value,
 				Weight: WeightTaskStructure,
-				Mode:   "debug",
+				Mode:   euclorelurpic.ModeDebug,
 			})
 		}
 	}
@@ -265,7 +267,7 @@ func collectErrorTextSignals(instruction string) []ClassificationSignal {
 				Kind:   "error_text",
 				Value:  p.value,
 				Weight: WeightErrorText,
-				Mode:   "debug",
+				Mode:   euclorelurpic.ModeDebug,
 			})
 		}
 	}
@@ -284,21 +286,21 @@ func collectWorkspaceStateSignals(envelope TaskEnvelope) []ClassificationSignal 
 				Kind:   "workspace_state",
 				Value:  "has_verification_artifact",
 				Weight: WeightWorkspaceState,
-				Mode:   "code", // verification exists → continue coding
+				Mode:   euclorelurpic.ModeCode, // verification exists → continue coding
 			})
 		case strings.Contains(kind, "plan"):
 			signals = append(signals, ClassificationSignal{
 				Kind:   "workspace_state",
 				Value:  "has_plan_artifact",
 				Weight: WeightWorkspaceState,
-				Mode:   "code", // plan exists → execute it
+				Mode:   euclorelurpic.ModeCode, // plan exists → execute it
 			})
 		case strings.Contains(kind, "explore") || strings.Contains(kind, "analyze"):
 			signals = append(signals, ClassificationSignal{
 				Kind:   "workspace_state",
 				Value:  "has_explore_artifact",
 				Weight: WeightWorkspaceState * 0.5,
-				Mode:   "code",
+				Mode:   euclorelurpic.ModeCode,
 			})
 		}
 	}
@@ -308,7 +310,7 @@ func collectWorkspaceStateSignals(envelope TaskEnvelope) []ClassificationSignal 
 			Kind:   "workspace_state",
 			Value:  "read_only",
 			Weight: WeightWorkspaceState,
-			Mode:   "review",
+			Mode:   euclorelurpic.ModeReview,
 		})
 	}
 
@@ -367,4 +369,17 @@ func IsAmbiguous(candidates []ModeCandidate) bool {
 	}
 	gap := (candidates[0].Score - candidates[1].Score) / candidates[0].Score
 	return gap < AmbiguityThreshold
+}
+
+// collectUserRecipeSignals returns signals from user-defined thought recipes.
+// This is an extension point for Phase P0 of the thought-recipes implementation.
+// TODO: Implement when euclo-thought-recipes.md Phase P0 begins.
+// See: docs/plans/euclo-thought-recipes.md
+func collectUserRecipeSignals(envelope TaskEnvelope) []ClassificationSignal {
+	// Stub: returns empty signals until thought recipe infrastructure is ready.
+	// Future implementation will:
+	// - Parse recipe YAML from envelope.RecipeHints
+	// - Match recipe triggers against instruction
+	// - Return weighted signals for matched recipe modes
+	return nil
 }

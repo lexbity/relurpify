@@ -11,7 +11,7 @@ type CapabilityCatalogEntry struct {
 	ID                         string   `json:"id" yaml:"id"`
 	DisplayName                string   `json:"display_name,omitempty" yaml:"display_name,omitempty"`
 	PrimaryOwner               string   `json:"primary_owner,omitempty" yaml:"primary_owner,omitempty"`
-	ModeFamily                 string   `json:"mode_family,omitempty" yaml:"mode_family,omitempty"`
+	ModeFamilies               []string `json:"mode_families,omitempty" yaml:"mode_families,omitempty"`
 	PrimaryCapable             bool     `json:"primary_capable" yaml:"primary_capable"`
 	SupportingOnly             bool     `json:"supporting_only" yaml:"supporting_only"`
 	Mutability                 string   `json:"mutability,omitempty" yaml:"mutability,omitempty"`
@@ -19,7 +19,6 @@ type CapabilityCatalogEntry struct {
 	LazySemanticAcquisition    bool     `json:"lazy_semantic_acquisition,omitempty" yaml:"lazy_semantic_acquisition,omitempty"`
 	LLMDependent               bool     `json:"llm_dependent,omitempty" yaml:"llm_dependent,omitempty"`
 	ArchaeoOperation           string   `json:"archaeo_operation,omitempty" yaml:"archaeo_operation,omitempty"`
-	ExecutorRecipe             string   `json:"executor_recipe,omitempty" yaml:"executor_recipe,omitempty"`
 	ParadigmMix                []string `json:"paradigm_mix,omitempty" yaml:"paradigm_mix,omitempty"`
 	TransitionCompatible       []string `json:"transition_compatible,omitempty" yaml:"transition_compatible,omitempty"`
 	SupportingCapabilities     []string `json:"supporting_capabilities,omitempty" yaml:"supporting_capabilities,omitempty"`

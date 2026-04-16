@@ -40,14 +40,14 @@ func TestRegister_AddsDescriptor(t *testing.T) {
 	r := relurpicabilities.NewRegistry()
 	_ = r.Register(relurpicabilities.Descriptor{
 		ID:         "euclo:chat.ask",
-		ModeFamily: "chat",
+		ModeFamilies: []string{"chat"},
 	})
 	desc, ok := r.Lookup("euclo:chat.ask")
 	if !ok {
 		t.Fatal("expected to find registered descriptor")
 	}
-	if desc.ModeFamily != "chat" {
-		t.Fatalf("unexpected ModeFamily: %q", desc.ModeFamily)
+	if desc.PrimaryMode() != "chat" {
+		t.Fatalf("unexpected ModeFamily: %q", desc.PrimaryMode())
 	}
 }
 
@@ -84,9 +84,9 @@ func TestIDsForMode_NilRegistryReturnsNil(t *testing.T) {
 
 func TestIDsForMode_ReturnsSortedIDs(t *testing.T) {
 	r := relurpicabilities.NewRegistry()
-	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:chat.z", ModeFamily: "chat"})
-	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:chat.a", ModeFamily: "chat"})
-	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:debug.x", ModeFamily: "debug"})
+	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:chat.z", ModeFamilies: []string{"chat"}})
+	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:chat.a", ModeFamilies: []string{"chat"}})
+	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:debug.x", ModeFamilies: []string{"debug"}})
 	ids := r.IDsForMode("chat")
 	if len(ids) != 2 {
 		t.Fatalf("expected 2 chat capabilities, got %v", ids)
@@ -98,8 +98,8 @@ func TestIDsForMode_ReturnsSortedIDs(t *testing.T) {
 
 func TestIDsForMode_FiltersCorrectly(t *testing.T) {
 	r := relurpicabilities.NewRegistry()
-	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:chat.ask", ModeFamily: "chat"})
-	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:debug.investigate", ModeFamily: "debug"})
+	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:chat.ask", ModeFamilies: []string{"chat"}})
+	_ = r.Register(relurpicabilities.Descriptor{ID: "euclo:debug.investigate", ModeFamilies: []string{"debug"}})
 	if ids := r.IDsForMode("debug"); len(ids) != 1 || ids[0] != "euclo:debug.investigate" {
 		t.Fatalf("expected only debug capability, got %v", ids)
 	}
@@ -194,8 +194,8 @@ func TestDefaultRegistry_ChatCapabilitiesHaveChatModeFamily(t *testing.T) {
 	if !ok {
 		t.Fatal("expected chat.ask in registry")
 	}
-	if desc.ModeFamily != "chat" {
-		t.Fatalf("expected ModeFamily=chat, got %q", desc.ModeFamily)
+	if desc.PrimaryMode() != "chat" {
+		t.Fatalf("expected ModeFamily=chat, got %q", desc.PrimaryMode())
 	}
 }
 
@@ -277,8 +277,8 @@ func TestDefaultRegistry_DebugRepairSimplePresentAndPrimaryCapable(t *testing.T)
 	if !desc.PrimaryCapable {
 		t.Fatal("expected debug.repair.simple to have PrimaryCapable=true")
 	}
-	if desc.ModeFamily != "debug" {
-		t.Fatalf("expected ModeFamily=debug, got %q", desc.ModeFamily)
+	if desc.PrimaryMode() != "debug" {
+		t.Fatalf("expected ModeFamily=debug, got %q", desc.PrimaryMode())
 	}
 }
 

@@ -395,7 +395,7 @@ func capabilityEntryFromDescriptor(desc euclorelurpic.Descriptor) CapabilityCata
 		ID:                         desc.ID,
 		DisplayName:                desc.DisplayName,
 		PrimaryOwner:               ownerFromCapabilityID(desc.ID),
-		ModeFamily:                 desc.ModeFamily,
+		ModeFamilies:               desc.ModeFamilies,
 		PrimaryCapable:             desc.PrimaryCapable,
 		SupportingOnly:             desc.SupportingOnly,
 		Mutability:                 string(desc.Mutability),
@@ -403,7 +403,6 @@ func capabilityEntryFromDescriptor(desc euclorelurpic.Descriptor) CapabilityCata
 		LazySemanticAcquisition:    desc.LazySemanticAcquisition,
 		LLMDependent:               desc.LLMDependent,
 		ArchaeoOperation:           desc.ArchaeoOperation,
-		ExecutorRecipe:             desc.ExecutorRecipe,
 		ParadigmMix:                append([]string(nil), desc.ParadigmMix...),
 		TransitionCompatible:       append([]string(nil), desc.TransitionCompatible...),
 		SupportingCapabilities:     append([]string(nil), desc.SupportingCapabilities...),
@@ -430,7 +429,7 @@ func capabilityMatchesSelector(entry CapabilityCatalogEntry, selector string) bo
 	if strings.HasPrefix(entry.ID, selector) {
 		return true
 	}
-	if strings.EqualFold(entry.ModeFamily, selector) {
+	if len(entry.ModeFamilies) > 0 && strings.EqualFold(entry.ModeFamilies[0], selector) {
 		return true
 	}
 	return strings.Contains(strings.ToLower(entry.DisplayName), strings.ToLower(selector))

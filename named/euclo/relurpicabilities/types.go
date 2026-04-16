@@ -46,7 +46,8 @@ const (
 type Descriptor struct {
 	ID                      string             `json:"id,omitempty"`
 	DisplayName             string             `json:"display_name,omitempty"`
-	ModeFamily              string             `json:"mode_family,omitempty"`
+	ModeFamilies            []string           `json:"mode_families,omitempty"`    // ordered; first entry is primary mode
+	TriggerPriority         int                `json:"trigger_priority,omitempty"` // higher = considered first during keyword tie-breaking
 	PrimaryCapable          bool               `json:"primary_capable"`
 	SupportingOnly          bool               `json:"supporting_only"`
 	Mutability              MutabilityContract `json:"mutability,omitempty"`
@@ -54,7 +55,6 @@ type Descriptor struct {
 	LazySemanticAcquisition bool               `json:"lazy_semantic_acquisition"`
 	LLMDependent            bool               `json:"llm_dependent"`
 	ArchaeoOperation        string             `json:"archaeo_operation,omitempty"`
-	ExecutorRecipe          string             `json:"executor_recipe,omitempty"`
 	ParadigmMix             []string           `json:"paradigm_mix,omitempty"`
 	TransitionCompatible    []string           `json:"transition_compatible,omitempty"`
 	SupportingCapabilities  []string           `json:"supporting_capabilities,omitempty"`
@@ -63,8 +63,26 @@ type Descriptor struct {
 	DefaultForMode          bool               `json:"default_for_mode"`   // Tier-3 fallback when no other match within ModeFamily
 }
 
+// PrimaryMode returns the primary (first) mode family for backward compatibility.
+func (d Descriptor) PrimaryMode() string {
+	if len(d.ModeFamilies) == 0 {
+		return ""
+	}
+	return d.ModeFamilies[0]
+}
+
 type Registry struct {
 	descriptors map[string]Descriptor
+}
+
+// containsString checks if a string slice contains a specific value.
+func containsString(slice []string, value string) bool {
+	for _, s := range slice {
+		if s == value {
+			return true
+		}
+	}
+	return false
 }
 
 // KeywordMatch represents a capability descriptor that matched keywords in an instruction.
@@ -84,10 +102,9 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                   CapabilityChatAsk,
 			DisplayName:          "Chat Ask",
-			ModeFamily:           "chat",
+			ModeFamilies:         []string{"chat"},
 			PrimaryCapable:       true,
 			Mutability:           MutabilityNonMutating,
-			ExecutorRecipe:       "chat.ask.react_inquiry",
 			ParadigmMix:          []string{"react"},
 			TransitionCompatible: []string{"chat", "debug"},
 			Summary:              "Non-mutating engineering question answering and explanation.",
@@ -97,11 +114,10 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                      CapabilityChatImplement,
 			DisplayName:             "Chat Implement",
-			ModeFamily:              "chat",
+			ModeFamilies:            []string{"chat"},
 			PrimaryCapable:          true,
 			Mutability:              MutabilityPolicyConstrained,
 			LazySemanticAcquisition: true,
-			ExecutorRecipe:          "chat.implement.react_or_htn",
 			ParadigmMix:             []string{"react", "architect"},
 			TransitionCompatible:    []string{"chat", "debug", "planning"},
 			SupportingCapabilities: []string{
@@ -115,10 +131,9 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                   CapabilityChatInspect,
 			DisplayName:          "Chat Inspect",
-			ModeFamily:           "chat",
+			ModeFamilies:         []string{"chat"},
 			PrimaryCapable:       true,
 			Mutability:           MutabilityInspectFirst,
-			ExecutorRecipe:       "chat.inspect.react_inspect",
 			ParadigmMix:          []string{"react"},
 			TransitionCompatible: []string{"chat", "debug"},
 			SupportingCapabilities: []string{
@@ -131,13 +146,12 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                   CapabilityArchaeologyExplore,
 			DisplayName:          "Archaeology Explore",
-			ModeFamily:           "planning",
+			ModeFamilies:         []string{"planning"},
 			PrimaryCapable:       true,
 			Mutability:           MutabilityNonMutating,
 			ArchaeoAssociated:    true,
 			LLMDependent:         true,
 			ArchaeoOperation:     "explore",
-			ExecutorRecipe:       "archaeology.explore.planner_research",
 			ParadigmMix:          []string{"planner", "reflection"},
 			TransitionCompatible: []string{"planning", "debug"},
 			SupportingCapabilities: []string{
@@ -154,13 +168,12 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                   CapabilityArchaeologyCompilePlan,
 			DisplayName:          "Archaeology Compile Plan",
-			ModeFamily:           "planning",
+			ModeFamilies:         []string{"planning"},
 			PrimaryCapable:       true,
 			Mutability:           MutabilityNonMutating,
 			ArchaeoAssociated:    true,
 			LLMDependent:         true,
 			ArchaeoOperation:     "compile_plan",
-			ExecutorRecipe:       "archaeology.compile-plan.planner_compile",
 			ParadigmMix:          []string{"planner"},
 			TransitionCompatible: []string{"planning"},
 			SupportingCapabilities: []string{
@@ -176,13 +189,12 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                   CapabilityArchaeologyImplement,
 			DisplayName:          "Archaeology Implement Plan",
-			ModeFamily:           "planning",
+			ModeFamilies:         []string{"planning"},
 			PrimaryCapable:       true,
 			Mutability:           MutabilityPlanBoundExecution,
 			ArchaeoAssociated:    true,
 			LLMDependent:         true,
 			ArchaeoOperation:     "implement_plan",
-			ExecutorRecipe:       "archaeology.implement-plan.rewoo_execution",
 			ParadigmMix:          []string{"rewoo", "planner"},
 			TransitionCompatible: []string{"planning", "chat"},
 			SupportingCapabilities: []string{
@@ -195,10 +207,9 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                   CapabilityDebugInvestigateRepair,
 			DisplayName:          "Debug Investigate-Repair",
-			ModeFamily:           "debug",
+			ModeFamilies:         []string{"debug"},
 			PrimaryCapable:       true,
 			Mutability:           MutabilityInspectFirst,
-			ExecutorRecipe:       "debug.investigate-repair.blackboard_hypothesis",
 			ParadigmMix:          []string{"blackboard", "react", "reflection"},
 			TransitionCompatible: []string{"debug", "chat"},
 			SupportingCapabilities: []string{
@@ -215,205 +226,187 @@ func DefaultRegistry() *Registry {
 		{
 			ID:                CapabilityBKCCompile,
 			DisplayName:       "BKC Compile",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			LLMDependent:      true,
 			ArchaeoOperation:  "bkc_compile",
-			ExecutorRecipe:    "bkc.compile.semantic_compile",
 			ParadigmMix:       []string{"planner", "reflection"},
 			Summary:           "Compile an LLM-assisted BKC candidate and queue it for archaeology confirmation.",
 		},
 		{
 			ID:                CapabilityBKCStream,
 			DisplayName:       "BKC Stream",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			ArchaeoOperation:  "bkc_stream",
-			ExecutorRecipe:    "bkc.stream.semantic_context",
 			ParadigmMix:       []string{"planner"},
 			Summary:           "Stream chunk-backed semantic context into Euclo runtime state.",
 		},
 		{
 			ID:                CapabilityBKCCheckpoint,
 			DisplayName:       "BKC Checkpoint",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityPolicyConstrained,
 			ArchaeoAssociated: true,
 			LLMDependent:      true,
 			ArchaeoOperation:  "bkc_checkpoint",
-			ExecutorRecipe:    "bkc.checkpoint.plan_anchor",
 			ParadigmMix:       []string{"planner", "reflection"},
 			Summary:           "Anchor chunk roots to the active living plan version.",
 		},
 		{
 			ID:                CapabilityBKCInvalidate,
 			DisplayName:       "BKC Invalidate",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			ArchaeoOperation:  "bkc_invalidate",
-			ExecutorRecipe:    "bkc.invalidate.revision_staleness",
 			ParadigmMix:       []string{"planner", "reflection"},
 			Summary:           "Surface stale BKC chunks and tensions after revision drift.",
 		},
 		{
 			ID:             CapabilityChatDirectEditExecution,
 			DisplayName:    "Chat Direct Edit Execution",
-			ModeFamily:     "chat",
+			ModeFamilies:   []string{"chat"},
 			SupportingOnly: true,
 			Mutability:     MutabilityPolicyConstrained,
-			ExecutorRecipe: "chat.direct-edit-execution.react_support",
 			ParadigmMix:    []string{"react"},
 			Summary:        "Direct code editing and patch execution support under chat.implement ownership.",
 		},
 		{
 			ID:             CapabilityChatLocalReview,
 			DisplayName:    "Chat Local Review",
-			ModeFamily:     "chat",
+			ModeFamilies:   []string{"chat"},
 			SupportingOnly: true,
 			Mutability:     MutabilityInspectFirst,
-			ExecutorRecipe: "chat.local-review.reflection_support",
 			ParadigmMix:    []string{"reflection"},
 			Summary:        "Local code and artifact review without taking over execution ownership.",
 		},
 		{
 			ID:             CapabilityChatTargetedVerification,
 			DisplayName:    "Chat Targeted Verification Repair",
-			ModeFamily:     "chat",
+			ModeFamilies:   []string{"chat"},
 			SupportingOnly: true,
 			Mutability:     MutabilityPolicyConstrained,
-			ExecutorRecipe: "chat.targeted-verification.htn_support",
 			ParadigmMix:    []string{"htn", "react"},
 			Summary:        "Targeted verification and bounded repair support for direct coding work.",
 		},
 		{
 			ID:                CapabilityArchaeologyPatternSurface,
 			DisplayName:       "Archaeology Pattern Surface",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			LLMDependent:      true,
 			ArchaeoOperation:  "pattern_surface",
-			ExecutorRecipe:    "archaeology.pattern-surface.semantic_analysis",
 			ParadigmMix:       []string{"planner"},
 			Summary:           "Surface codebase patterns and pattern-bearing relationships.",
 		},
 		{
 			ID:                CapabilityArchaeologyProspectiveAssess,
 			DisplayName:       "Archaeology Prospective Assess",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			LLMDependent:      true,
 			ArchaeoOperation:  "prospective_assess",
-			ExecutorRecipe:    "archaeology.prospective-assess.semantic_analysis",
 			ParadigmMix:       []string{"planner", "reflection"},
 			Summary:           "Assess prospective structures and plausible engineering directions.",
 		},
 		{
 			ID:                CapabilityArchaeologyConvergenceGuard,
 			DisplayName:       "Archaeology Convergence Guard",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			LLMDependent:      true,
 			ArchaeoOperation:  "convergence_guard",
-			ExecutorRecipe:    "archaeology.convergence-guard.semantic_analysis",
 			ParadigmMix:       []string{"planner", "reflection"},
 			Summary:           "Protect convergence and highlight divergence pressure in planning.",
 		},
 		{
 			ID:                CapabilityArchaeologyCoherenceAssess,
 			DisplayName:       "Archaeology Coherence Assess",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			LLMDependent:      true,
 			ArchaeoOperation:  "coherence_assess",
-			ExecutorRecipe:    "archaeology.coherence-assess.semantic_analysis",
 			ParadigmMix:       []string{"reflection"},
 			Summary:           "Check coherence across explored semantics and proposed changes.",
 		},
 		{
 			ID:                CapabilityArchaeologyScopeExpand,
 			DisplayName:       "Archaeology Scope Expansion Assess",
-			ModeFamily:        "planning",
+			ModeFamilies:      []string{"planning"},
 			SupportingOnly:    true,
 			Mutability:        MutabilityNonMutating,
 			ArchaeoAssociated: true,
 			LLMDependent:      true,
 			ArchaeoOperation:  "scope_expansion_assess",
-			ExecutorRecipe:    "archaeology.scope-expansion.semantic_analysis",
 			ParadigmMix:       []string{"planner"},
 			Summary:           "Detect and report scope widening during planning and compilation.",
 		},
 		{
 			ID:             CapabilityDebugRootCause,
 			DisplayName:    "Debug Root Cause",
-			ModeFamily:     "debug",
+			ModeFamilies:   []string{"debug"},
 			SupportingOnly: true,
 			Mutability:     MutabilityInspectFirst,
-			ExecutorRecipe: "debug.root-cause.htn_support",
 			ParadigmMix:    []string{"htn"},
 			Summary:        "Drive root-cause investigation from evidence and tool output.",
 		},
 		{
 			ID:             CapabilityDebugHypothesisRefine,
 			DisplayName:    "Debug Hypothesis Refine",
-			ModeFamily:     "debug",
+			ModeFamilies:   []string{"debug"},
 			SupportingOnly: true,
 			Mutability:     MutabilityInspectFirst,
-			ExecutorRecipe: "debug.hypothesis-refine.reflective_support",
 			ParadigmMix:    []string{"reflection"},
 			Summary:        "Refine defect hypotheses from gathered evidence.",
 		},
 		{
 			ID:             CapabilityDebugLocalization,
 			DisplayName:    "Debug Localization",
-			ModeFamily:     "debug",
+			ModeFamilies:   []string{"debug"},
 			SupportingOnly: true,
 			Mutability:     MutabilityInspectFirst,
-			ExecutorRecipe: "debug.localization.htn_support",
 			ParadigmMix:    []string{"htn", "react"},
 			Summary:        "Localize faults through bounded drilling into code and execution data.",
 		},
 		{
 			ID:             CapabilityDebugFlawSurface,
 			DisplayName:    "Debug Flaw Surface",
-			ModeFamily:     "debug",
+			ModeFamilies:   []string{"debug"},
 			SupportingOnly: true,
 			Mutability:     MutabilityInspectFirst,
-			ExecutorRecipe: "debug.flaw-surface.reflective_support",
 			ParadigmMix:    []string{"reflection"},
 			Summary:        "Surface flaws, smells, anti-patterns, and vulnerabilities during investigation.",
 		},
 		{
 			ID:             CapabilityDebugVerificationRepair,
 			DisplayName:    "Debug Verification Repair",
-			ModeFamily:     "debug",
+			ModeFamilies:   []string{"debug"},
 			SupportingOnly: true,
 			Mutability:     MutabilityPolicyConstrained,
-			ExecutorRecipe: "debug.verification-repair.htn_support",
 			ParadigmMix:    []string{"htn", "react"},
 			Summary:        "Support bounded verification and repair before escalation to implementation.",
 		},
 		{
 			ID:                   CapabilityDebugRepairSimple,
 			DisplayName:          "Debug Repair Simple",
-			ModeFamily:           "debug",
+			ModeFamilies:         []string{"debug"},
 			PrimaryCapable:       true,
 			Mutability:           MutabilityPolicyConstrained,
-			ExecutorRecipe:       "debug.repair.simple.react_repair",
 			ParadigmMix:          []string{"react"},
 			TransitionCompatible: []string{"debug", "chat"},
 			SupportingCapabilities: []string{
@@ -453,7 +446,7 @@ func (r *Registry) IDsForMode(modeFamily string) []string {
 	}
 	var out []string
 	for _, desc := range r.descriptors {
-		if desc.ModeFamily == modeFamily {
+		if containsString(desc.ModeFamilies, modeFamily) {
 			out = append(out, desc.ID)
 		}
 	}
@@ -495,7 +488,7 @@ func (r *Registry) PrimaryCapabilitiesForMode(modeID string) []Descriptor {
 	}
 	var out []Descriptor
 	for _, desc := range r.descriptors {
-		if desc.ModeFamily == modeID && desc.PrimaryCapable {
+		if containsString(desc.ModeFamilies, modeID) && desc.PrimaryCapable {
 			out = append(out, desc)
 		}
 	}
@@ -509,7 +502,7 @@ func (r *Registry) FallbackCapabilityForMode(modeID string) (Descriptor, bool) {
 		return Descriptor{}, false
 	}
 	for _, desc := range r.descriptors {
-		if desc.ModeFamily == modeID && desc.DefaultForMode {
+		if containsString(desc.ModeFamilies, modeID) && desc.DefaultForMode {
 			return desc, true
 		}
 	}
@@ -527,7 +520,7 @@ func (r *Registry) MatchByKeywords(instruction, modeID string, extraKeywords map
 	var matches []KeywordMatch
 
 	for _, desc := range r.descriptors {
-		if !desc.PrimaryCapable || desc.ModeFamily != modeID {
+		if !desc.PrimaryCapable || !containsString(desc.ModeFamilies, modeID) {
 			continue
 		}
 

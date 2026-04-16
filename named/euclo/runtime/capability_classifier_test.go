@@ -161,7 +161,7 @@ func TestTier3_FallbackUsed(t *testing.T) {
 		{"chat", euclorelurpic.CapabilityChatAsk},
 		{"debug", euclorelurpic.CapabilityDebugInvestigateRepair},
 		{"planning", euclorelurpic.CapabilityArchaeologyExplore},
-		// Note: "review" mode maps to chat.inspect in workunit.go but has no ModeFamily: "review" capability
+		// Note: "review" mode maps to chat.inspect in workunit.go but has no ModeFamilies: []string{"review"} capability
 	}
 
 	for _, tc := range tests {
@@ -189,7 +189,7 @@ func TestTier3_NoFallbackRegistered(t *testing.T) {
 	registry := euclorelurpic.NewRegistry()
 	_ = registry.Register(euclorelurpic.Descriptor{
 		ID:             "test:capability",
-		ModeFamily:     "testmode",
+		ModeFamilies: []string{"testmode"},
 		PrimaryCapable: true,
 		Keywords:       []string{"test"},
 		DefaultForMode: false, // explicitly not default

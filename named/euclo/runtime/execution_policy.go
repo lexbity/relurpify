@@ -64,32 +64,29 @@ func contextPolicySummary(spec *core.AgentRuntimeSpec) ContextPolicySummary {
 }
 
 func SelectExecutorDescriptor(mode ModeResolution, profile ExecutionProfileSelection, classification TaskClassification, policy ResolvedExecutionPolicy, planBinding *UnitOfWorkPlanBinding, primaryCapabilityID string, supportingCapabilityIDs []string) WorkUnitExecutorDescriptor {
-	reg := euclorelurpic.DefaultRegistry()
-	primary, _ := reg.Lookup(primaryCapabilityID)
-	recipeID := strings.TrimSpace(primary.ExecutorRecipe)
-	reason := fmt.Sprintf("executor recipe derived from primary relurpic capability %s", primaryCapabilityID)
+	reason := fmt.Sprintf("executor derived from primary relurpic capability %s", primaryCapabilityID)
 
 	switch {
 	case primaryCapabilityID == euclorelurpic.CapabilityChatAsk:
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: "", Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityChatInspect && mode.ModeID == "review":
 		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.reflection", Family: ExecutorFamilyReflection, RecipeID: "review.chat-inspect.reflection", Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityChatInspect:
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: "", Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityChatImplement:
 		if classification.RequiresDeterministicStages || policy.RequireVerificationStep {
-			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.htn", Family: ExecutorFamilyHTN, RecipeID: recipeID, Reason: reason}
+			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.htn", Family: ExecutorFamilyHTN, RecipeID: "", Reason: reason}
 		}
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: recipeID, Reason: reason}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.react", Family: ExecutorFamilyReact, RecipeID: "", Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityArchaeologyExplore:
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: "", Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityArchaeologyCompilePlan:
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: "", Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityArchaeologyImplement:
 		if planBinding != nil && planBinding.IsLongRunning {
-			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.rewoo", Family: ExecutorFamilyRewoo, RecipeID: recipeID, Reason: reason}
+			return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.rewoo", Family: ExecutorFamilyRewoo, RecipeID: "", Reason: reason}
 		}
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: recipeID, Reason: reason}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.planner", Family: ExecutorFamilyPlanner, RecipeID: "", Reason: reason}
 	case primaryCapabilityID == euclorelurpic.CapabilityDebugInvestigateRepair:
 		// NOTE: Now using blackboard instead of HTN for debug workflows.
 		// Blackboard provides shared workspace context across knowledge sources,
@@ -102,7 +99,7 @@ func SelectExecutorDescriptor(mode ModeResolution, profile ExecutionProfileSelec
 		// TODO: Define debug-specific KnowledgeSources (FileExplorerKS, FaultLocalizerKS, etc.)
 		// to fully utilize the blackboard architecture.
 		// See: /docs/research/issue-blackboard-context-sharing.md
-		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.blackboard", Family: ExecutorFamilyBlackboard, RecipeID: recipeID, Reason: "debug workflow with shared blackboard context"}
+		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.blackboard", Family: ExecutorFamilyBlackboard, RecipeID: "", Reason: "debug workflow with shared blackboard context"}
 	case mode.ModeID == "review":
 		return WorkUnitExecutorDescriptor{ExecutorID: "euclo.executor.reflection", Family: ExecutorFamilyReflection, RecipeID: "review.fallback.reflection", Reason: "review mode fallback executor recipe"}
 	case planBinding != nil && planBinding.IsLongRunning:

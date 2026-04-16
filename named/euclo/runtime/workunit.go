@@ -32,7 +32,7 @@ func BuildUnitOfWork(
 			planBinding.IsLongRunning = true
 		}
 	}
-	primaryCapabilityID := primaryRelurpicCapabilityForWork(envelope, classification, mode, profile)
+	primaryCapabilityID := primaryRelurpicCapabilityForWork(envelope, mode)
 	if primaryCapabilityID == euclorelurpic.CapabilityArchaeologyImplement && (planBinding == nil || !planBinding.IsPlanBacked) {
 		primaryCapabilityID = euclorelurpic.CapabilityArchaeologyCompilePlan
 	}
@@ -47,7 +47,7 @@ func BuildUnitOfWork(
 		capOp = "AND"
 	}
 
-	supportingCapabilityIDs := supportingRelurpicCapabilitiesForPrimary(primaryCapabilityID, envelope, classification, mode, profile)
+	supportingCapabilityIDs := supportingRelurpicCapabilitiesForPrimary(primaryCapabilityID)
 	if executor.ExecutorID == "" {
 		executor = SelectExecutorDescriptor(mode, profile, classification, resolvedPolicy, planBinding, primaryCapabilityID, supportingCapabilityIDs)
 	}
@@ -146,73 +146,22 @@ func BuildUnitOfWork(
 	return uow
 }
 
-func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) string {
-	// If the classifier pre-determined a capability sequence, use the first element.
+func primaryRelurpicCapabilityForWork(envelope TaskEnvelope, mode ModeResolution) string {
+	// Use the classifier's pre-determined capability sequence.
+	// The CapabilityIntentClassifier is the single authoritative source for capability selection.
 	if len(envelope.CapabilitySequence) > 0 {
 		return envelope.CapabilitySequence[0]
 	}
-	lower := strings.ToLower(strings.TrimSpace(envelope.Instruction))
-	switch mode.ModeID {
-	case "planning":
-		switch {
-		case planningExploreIntent(lower):
-			return euclorelurpic.CapabilityArchaeologyExplore
-		case planningCompileIntent(lower):
-			return euclorelurpic.CapabilityArchaeologyCompilePlan
-		case planningImplementIntent(lower):
-			return euclorelurpic.CapabilityArchaeologyImplement
-		case profile.ProfileID == "plan_stage_execute":
-			if envelope.EditPermitted {
-				return euclorelurpic.CapabilityArchaeologyImplement
-			}
-			return euclorelurpic.CapabilityArchaeologyCompilePlan
-		default:
-			return euclorelurpic.CapabilityArchaeologyExplore
-		}
-	case "chat":
-		// Sub-capability selection is signal-based: classification IntentFamilies are the source
-		// of truth. Code intent → implement. Review intent → inspect. Default → ask.
-		if containsIntent(classification.IntentFamilies, "code") {
-			return euclorelurpic.CapabilityChatImplement
-		}
-		if containsIntent(classification.IntentFamilies, "review") {
-			return euclorelurpic.CapabilityChatInspect
-		}
-		return euclorelurpic.CapabilityChatAsk
-	case "debug":
-		// Simple repair routing: check classification signals instead of re-scanning text.
-		if debugSimpleRepairIntentFromSignals(classification.ReasonCodes) {
-			return euclorelurpic.CapabilityDebugRepairSimple
-		}
-		return euclorelurpic.CapabilityDebugInvestigateRepair
-	case "review":
-		return euclorelurpic.CapabilityChatInspect
-	default:
-		// For unclassified modes, use signal-based classification for sub-capability selection.
-		if containsIntent(classification.IntentFamilies, "chat") {
-			return euclorelurpic.CapabilityChatAsk
-		}
-		if containsIntent(classification.IntentFamilies, "review") {
-			return euclorelurpic.CapabilityChatInspect
-		}
-		if mode.ModeID == "code" {
-			return euclorelurpic.CapabilityChatImplement
-		}
-		if envelope.EditPermitted || profile.ProfileID == "edit_verify_repair" || profile.ProfileID == "test_driven_generation" {
-			return euclorelurpic.CapabilityChatImplement
-		}
-		if !classification.EditPermitted && len(classification.IntentFamilies) == 0 {
-			return euclorelurpic.CapabilityChatAsk
-		}
-		return euclorelurpic.CapabilityChatInspect
+	// Fallback: use mode's default capability from registry.
+	reg := euclorelurpic.DefaultRegistry()
+	if desc, ok := reg.FallbackCapabilityForMode(mode.ModeID); ok {
+		return desc.ID
 	}
+	// Ultimate fallback: ask capability for unknown modes.
+	return euclorelurpic.CapabilityChatAsk
 }
 
-func supportingRelurpicCapabilitiesForWork(envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) []string {
-	return supportingRelurpicCapabilitiesForPrimary(primaryRelurpicCapabilityForWork(envelope, classification, mode, profile), envelope, classification, mode, profile)
-}
-
-func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnvelope, classification TaskClassification, mode ModeResolution, profile ExecutionProfileSelection) []string {
+func supportingRelurpicCapabilitiesForPrimary(primaryID string) []string {
 	reg := euclorelurpic.DefaultRegistry()
 	seen := map[string]struct{}{}
 	var out []string
@@ -233,98 +182,6 @@ func supportingRelurpicCapabilitiesForPrimary(primaryID string, envelope TaskEnv
 	// Note: Only SupportingOnly capabilities should be added here.
 	// Primary capabilities are behaviors, not supporting routines.
 	return out
-}
-
-// debugSimpleRepairIntentFromSignals checks classification signals for simple repair intent.
-// This replaces text scanning with signal-based detection from the classification pass.
-func debugSimpleRepairIntentFromSignals(reasonCodes []string) bool {
-	for _, reason := range reasonCodes {
-		if strings.HasPrefix(reason, "task_structure:simple_repair:") {
-			return true
-		}
-	}
-	return false
-}
-
-// debugSimpleRepairIntent detects if the prompt is asking for a simple/quick fix.
-// Deprecated: Use debugSimpleRepairIntentFromSignals with classification signals instead.
-// Kept for backward compatibility in existing tests.
-func debugSimpleRepairIntent(lower string) bool {
-	// First, check for investigative phrases - if present, this is NOT a simple repair
-	investigativePhrases := []string{"investigate", "find the", "root cause", "trace the", "debug the"}
-	for _, phrase := range investigativePhrases {
-		if strings.Contains(lower, phrase) {
-			return false
-		}
-	}
-
-	simpleRepairPhrases := []string{
-		"fix this",
-		"apply a fix",
-		"quick repair",
-		"simple fix",
-		"quick fix",
-		"minor fix",
-		"small fix",
-		"patch this",
-		"fix the bug",
-		"fix it",
-	}
-	for _, phrase := range simpleRepairPhrases {
-		if strings.Contains(lower, phrase) {
-			return true
-		}
-	}
-	// Check for patterns like "fix: <description>" or "fix - <description>"
-	if strings.HasPrefix(lower, "fix ") || strings.HasPrefix(lower, "fix: ") || strings.HasPrefix(lower, "fix - ") {
-		return true
-	}
-	return false
-}
-
-func planningCompileIntent(lower string) bool {
-	return hasAnyPhrase(lower,
-		"compile the plan",
-		"compile plan",
-		"finalize the plan",
-		"finalize plan",
-		"produce the plan",
-		"create the plan",
-		"write the plan",
-	)
-}
-
-func planningExploreIntent(lower string) bool {
-	return hasAnyPhrase(lower,
-		"explore ",
-		"identify the dominant",
-		"surface code patterns",
-		"surface patterns",
-		"find patterns",
-		"inspect the repository",
-		"inspect the codebase",
-	)
-}
-
-func planningImplementIntent(lower string) bool {
-	return hasAnyPhrase(lower,
-		"implement the plan",
-		"implement the compiled plan",
-		"execute the plan",
-		"execute the compiled plan",
-		"carry out the plan",
-		"carry out the compiled plan",
-		"stage and execute",
-	)
-}
-
-func hasAnyPhrase(lower string, phrases ...string) bool {
-	for _, phrase := range phrases {
-		if strings.Contains(lower, phrase) {
-			return true
-		}
-	}
-	return false
 }
 
 func existingUnitOfWork(state *core.Context) (UnitOfWork, bool) {

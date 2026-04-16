@@ -133,8 +133,8 @@ func primaryArchaeoAssociated(capabilityID string) bool {
 
 func transitionCompatible(primaryCapabilityID string, next UnitOfWork) bool {
 	target := strings.TrimSpace(next.ModeID)
-	if desc, ok := euclorelurpic.DefaultRegistry().Lookup(next.PrimaryRelurpicCapabilityID); ok && strings.TrimSpace(desc.ModeFamily) != "" {
-		target = strings.TrimSpace(desc.ModeFamily)
+	if desc, ok := euclorelurpic.DefaultRegistry().Lookup(next.PrimaryRelurpicCapabilityID); ok && strings.TrimSpace(desc.PrimaryMode()) != "" {
+		target = strings.TrimSpace(desc.PrimaryMode())
 	}
 	if strings.TrimSpace(primaryCapabilityID) == "" || target == "" {
 		return true

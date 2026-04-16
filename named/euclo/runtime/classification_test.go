@@ -601,46 +601,6 @@ func TestSelectExecutionProfile_ReadOnlyEnv_MutationNotAllowed(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RouteCapabilityFamilies
-// ─────────────────────────────────────────────────────────────────────────────
-
-func TestRouteCapabilityFamilies_PlanningMode(t *testing.T) {
-	mode := euclotypes.ModeResolution{ModeID: "planning"}
-	profile := euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"}
-	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
-	if routing.PrimaryFamilyID != "planning" {
-		t.Fatalf("expected planning primary family, got %q", routing.PrimaryFamilyID)
-	}
-}
-
-func TestRouteCapabilityFamilies_DebugMode(t *testing.T) {
-	mode := euclotypes.ModeResolution{ModeID: "debug"}
-	profile := euclotypes.ExecutionProfileSelection{ProfileID: "reproduce_localize_patch"}
-	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
-	if routing.PrimaryFamilyID != "debugging" {
-		t.Fatalf("expected debugging primary family, got %q", routing.PrimaryFamilyID)
-	}
-}
-
-func TestRouteCapabilityFamilies_ReviewMode(t *testing.T) {
-	mode := euclotypes.ModeResolution{ModeID: "review"}
-	profile := euclotypes.ExecutionProfileSelection{ProfileID: "review_suggest_implement"}
-	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
-	if routing.PrimaryFamilyID != "review" {
-		t.Fatalf("expected review primary family, got %q", routing.PrimaryFamilyID)
-	}
-}
-
-func TestRouteCapabilityFamilies_CodeMode(t *testing.T) {
-	mode := euclotypes.ModeResolution{ModeID: "code"}
-	profile := euclotypes.ExecutionProfileSelection{ProfileID: "edit_verify_repair"}
-	routing := eucloruntime.RouteCapabilityFamilies(mode, profile)
-	if routing.PrimaryFamilyID != "implementation" {
-		t.Fatalf("expected implementation primary family, got %q", routing.PrimaryFamilyID)
-	}
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // SnapshotCapabilities + NormalizeTaskEnvelope — registry seam tests
 // ─────────────────────────────────────────────────────────────────────────────
 

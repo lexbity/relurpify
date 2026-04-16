@@ -130,7 +130,7 @@ func EvaluateSuccessGate(policy VerificationPolicy, evidence VerificationEvidenc
 				break
 			}
 		}
-		if !executed && editRecord != nil && len(editRecord.Executed) > 0 {
+		if !executed && len(editRecord.Executed) > 0 {
 			return SuccessGateResult{
 				Allowed:        false,
 				Reason:         "verification_check_missing",
@@ -139,7 +139,7 @@ func EvaluateSuccessGate(policy VerificationPolicy, evidence VerificationEvidenc
 			}
 		}
 	}
-	if policy.ProfileID == "test_driven_generation" && editRecord != nil && len(editRecord.Executed) > 0 {
+	if policy.ProfileID == "test_driven_generation" && len(editRecord.Executed) > 0 {
 		if !tddEvidencePresent(state, "euclo.tdd.red_evidence", "fail", evidence.RunID) {
 			return SuccessGateResult{
 				Allowed:        false,

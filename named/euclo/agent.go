@@ -37,6 +37,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/modes"
 	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	eucloassurance "github.com/lexcodex/relurpify/named/euclo/runtime/assurance"
@@ -1404,7 +1405,7 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 	reg := interaction.NewModeMachineRegistry()
 
 	// For chat mode, we need to provide the pipeline and file resolver
-	reg.Register("chat", func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
+	reg.Register(euclorelurpic.ModeChat, func(emitter interaction.FrameEmitter, resolver *interaction.AgencyResolver) *interaction.PhaseMachine {
 		// Resolve workspace path. core.Config has no Workspace field; fall back to
 		// the current working directory, which is set by ayenitd.Open before agents start.
 		workspacePath, _ := os.Getwd()
@@ -1435,11 +1436,11 @@ func (a *Agent) createInteractionRegistry() *interaction.ModeMachineRegistry {
 		showConfirmationFrame := true
 		return modes.ChatMode(emitter, resolver, pipeline, fileResolver, showConfirmationFrame, a.WorkspaceEnv.Memory)
 	})
-	reg.Register("code", modes.CodeMode)
-	reg.Register("debug", modes.DebugMode)
-	reg.Register("planning", modes.PlanningMode)
-	reg.Register("review", modes.ReviewMode)
-	reg.Register("tdd", modes.TDDMode)
+	reg.Register(euclorelurpic.ModeCode, modes.CodeMode)
+	reg.Register(euclorelurpic.ModeDebug, modes.DebugMode)
+	reg.Register(euclorelurpic.ModePlanning, modes.PlanningMode)
+	reg.Register(euclorelurpic.ModeReview, modes.ReviewMode)
+	reg.Register(euclorelurpic.ModeTDD, modes.TDDMode)
 
 	// Inject session_select phase into all registered mode machines
 	if phaseDef, ok := a.sessionSelectPhaseDef(); ok {

@@ -3,17 +3,18 @@ package euclo
 import (
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/modes"
+	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 )
 
 // defaultInteractionRegistry creates a registry without pipeline injection.
 // Used as a fallback when agent is not fully initialized.
 func defaultInteractionRegistry() *interaction.ModeMachineRegistry {
 	reg := interaction.NewModeMachineRegistry()
-	reg.Register("chat", modes.ChatModeLegacy)
-	reg.Register("code", modes.CodeMode)
-	reg.Register("debug", modes.DebugMode)
-	reg.Register("planning", modes.PlanningMode)
-	reg.Register("review", modes.ReviewMode)
-	reg.Register("tdd", modes.TDDMode)
+	reg.Register(euclorelurpic.ModeChat, modes.ChatModeLegacy)
+	reg.Register(euclorelurpic.ModeCode, modes.CodeMode)
+	reg.Register(euclorelurpic.ModeDebug, modes.DebugMode)
+	reg.Register(euclorelurpic.ModePlanning, modes.PlanningMode)
+	reg.Register(euclorelurpic.ModeReview, modes.ReviewMode)
+	reg.Register(euclorelurpic.ModeTDD, modes.TDDMode)
 	return reg
 }

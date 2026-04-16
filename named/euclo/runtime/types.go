@@ -27,7 +27,7 @@ type TaskEnvelope struct {
 	CapabilitySequenceOperator     string                        `json:"capability_sequence_operator,omitempty"` // "AND" | "OR"
 	CapabilityClassificationSource string                        `json:"capability_classification_source,omitempty"`
 	CapabilityClassificationMeta   string                        `json:"capability_classification_meta,omitempty"`
-	TaskType                     core.TaskType                 `json:"task_type,omitempty"`
+	TaskType                       core.TaskType                 `json:"task_type,omitempty"`
 }
 
 type TaskClassification struct {
@@ -858,20 +858,6 @@ type EditExecutionRecord struct {
 	Executed  []EditOperationRecord `json:"executed,omitempty"`
 	Rejected  []EditOperationRecord `json:"rejected,omitempty"`
 	Summary   string                `json:"summary,omitempty"`
-}
-
-type PhaseCapabilityRoute struct {
-	Phase  string `json:"phase"`
-	Family string `json:"family"`
-	Agent  string `json:"agent"`
-}
-
-type CapabilityFamilyRouting struct {
-	ModeID            string                 `json:"mode_id"`
-	ProfileID         string                 `json:"profile_id"`
-	PrimaryFamilyID   string                 `json:"primary_family_id"`
-	FallbackFamilyIDs []string               `json:"fallback_family_ids,omitempty"`
-	Routes            []PhaseCapabilityRoute `json:"routes,omitempty"`
 }
 
 type ActionLogEntry struct {

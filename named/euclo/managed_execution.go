@@ -174,8 +174,6 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 	if !prep.summaryFastPath && shouldHydratePersistedArtifacts(flow.task, flow.state, flow.envelope) {
 		a.hydratePersistedArtifacts(ctx, flow.task, flow.state)
 	}
-	routing := eucloruntime.RouteCapabilityFamilies(flow.mode, flow.profile)
-	flow.state.Set("euclo.capability_family_routing", routing)
 	flow.work.Status = eucloruntime.UnitOfWorkStatusExecuting
 	flow.state.Set("euclo.unit_of_work", flow.work)
 	euclowork.SeedCompiledExecutionState(flow.state, flow.work, euclowork.BuildRuntimeExecutionStatus(flow.work, euclowork.ExecutionStatusExecuting, "", time.Now().UTC()))
