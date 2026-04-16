@@ -74,6 +74,7 @@ func TestSessionResumeResolver_Resolve_PopulatesRootChunkIDs(t *testing.T) {
 	store.workflows["wf-1"] = memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		Instruction: "test task",
+		CreatedAt:   now.Add(-time.Hour),
 		UpdatedAt:   now,
 	}
 
@@ -98,6 +99,12 @@ func TestSessionResumeResolver_Resolve_PopulatesRootChunkIDs(t *testing.T) {
 	if !strings.HasPrefix(resume.RunID, "wf-1-resume-") {
 		t.Errorf("RunID = %q, want prefix 'wf-1-resume-'", resume.RunID)
 	}
+	if resume.SessionStartTime.IsZero() {
+		t.Fatal("SessionStartTime is zero, want workflow CreatedAt")
+	}
+	if !resume.SessionStartTime.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("SessionStartTime = %v, want %v", resume.SessionStartTime, now.Add(-time.Hour))
+	}
 }
 
 func TestSessionResumeResolver_Resolve_PopulatesModeFromMetadata(t *testing.T) {
@@ -108,6 +115,7 @@ func TestSessionResumeResolver_Resolve_PopulatesModeFromMetadata(t *testing.T) {
 	store.workflows["wf-1"] = memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		Instruction: "test task",
+		CreatedAt:   now.Add(-time.Hour),
 		Metadata:    map[string]any{"mode": "debug"},
 		UpdatedAt:   now,
 	}
@@ -125,6 +133,9 @@ func TestSessionResumeResolver_Resolve_PopulatesModeFromMetadata(t *testing.T) {
 	if resume.Mode != "debug" {
 		t.Errorf("Mode = %q, want 'debug'", resume.Mode)
 	}
+	if !resume.SessionStartTime.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("SessionStartTime = %v, want %v", resume.SessionStartTime, now.Add(-time.Hour))
+	}
 }
 
 func TestSessionResumeResolver_Resolve_SemanticSummaryNonFatal(t *testing.T) {
@@ -135,6 +146,7 @@ func TestSessionResumeResolver_Resolve_SemanticSummaryNonFatal(t *testing.T) {
 	store.workflows["wf-1"] = memory.WorkflowRecord{
 		WorkflowID:  "wf-1",
 		Instruction: "test task",
+		CreatedAt:   now.Add(-time.Hour),
 		UpdatedAt:   now,
 	}
 

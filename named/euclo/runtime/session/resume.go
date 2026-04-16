@@ -47,6 +47,9 @@ type SessionResumeContext struct {
 	// CodeRevision is the git SHA at which the session's BKC context
 	// was last anchored.
 	CodeRevision string
+
+	// SessionStartTime is when the workflow session was originally created.
+	SessionStartTime time.Time
 }
 
 // SessionSemanticSummary is the archaeology-domain pre-resolved content
@@ -126,9 +129,10 @@ func (r *SessionResumeResolver) Resolve(ctx context.Context, workflowID string) 
 	}
 
 	resume := SessionResumeContext{
-		WorkflowID: workflowID,
-		RunID:      fmt.Sprintf("%s-resume-%d", workflowID, time.Now().UnixNano()),
-		Mode:       "",
+		WorkflowID:       workflowID,
+		RunID:            fmt.Sprintf("%s-resume-%d", workflowID, time.Now().UnixNano()),
+		Mode:             "",
+		SessionStartTime: wf.CreatedAt,
 	}
 
 	// Try to get mode from workflow metadata (best-effort)

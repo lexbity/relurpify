@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -119,6 +120,33 @@ func (g *GuidanceBroker) Resolve(decision GuidanceDecision) error {
 	}
 	g.broadcast(GuidanceEvent{Type: GuidanceEventResolved, Request: reqCopy, Decision: cloneDecisionPtr(&decision)})
 	return nil
+}
+
+// EmitResolution broadcasts a resolved guidance event for an observation that
+// was resolved outside the request/resolve request lifecycle.
+func (g *GuidanceBroker) EmitResolution(observationID, resolvedBy string) {
+	if g == nil {
+		return
+	}
+	observationID = strings.TrimSpace(observationID)
+	if observationID == "" {
+		return
+	}
+	if strings.TrimSpace(resolvedBy) == "" {
+		resolvedBy = "external"
+	}
+	g.broadcast(GuidanceEvent{
+		Type: GuidanceEventResolved,
+		Request: &GuidanceRequest{
+			ID:    observationID,
+			State: GuidanceStateResolved,
+		},
+		Decision: &GuidanceDecision{
+			RequestID: observationID,
+			DecidedBy: resolvedBy,
+			DecidedAt: g.clock(),
+		},
+	})
 }
 
 func (g *GuidanceBroker) Subscribe(buffer int) (<-chan GuidanceEvent, func()) {

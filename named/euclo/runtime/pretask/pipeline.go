@@ -11,6 +11,12 @@ import (
 	"github.com/lexcodex/relurpify/framework/retrieval"
 )
 
+// PipelineStep runs before the main context enrichment pipeline.
+type PipelineStep interface {
+	ID() string
+	Run(context.Context, *core.Context) error
+}
+
 // PipelineEnv provides the dependencies needed by the pipeline.
 // This is a minimal interface to avoid importing ayenitd.
 type PipelineEnv struct {
@@ -34,6 +40,7 @@ type Pipeline struct {
 	hypotheticalGen  *HypotheticalGenerator
 	merger           *ResultMerger
 	config           PipelineConfig
+	preSteps         []PipelineStep
 }
 
 // PipelineInput is everything the pipeline needs from the call site.
@@ -171,6 +178,53 @@ func (p *Pipeline) Run(ctx context.Context, input PipelineInput) (EnrichedContex
 	bundle.PipelineTrace = trace
 	bundle.PolicySnapshot = policySnapshot
 	return bundle, nil
+}
+
+// PrependStep registers a pipeline step to run before the main enrichment flow.
+func (p *Pipeline) PrependStep(step PipelineStep) {
+	if p == nil || step == nil {
+		return
+	}
+	p.preSteps = append([]PipelineStep{step}, p.preSteps...)
+}
+
+// AppendStep registers a pipeline step to run after any existing pre-run steps.
+func (p *Pipeline) AppendStep(step PipelineStep) {
+	if p == nil || step == nil {
+		return
+	}
+	p.preSteps = append(p.preSteps, step)
+}
+
+// PreRunStepIDs returns the registered pre-run step IDs in execution order.
+func (p *Pipeline) PreRunStepIDs() []string {
+	if p == nil || len(p.preSteps) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(p.preSteps))
+	for _, step := range p.preSteps {
+		if step == nil {
+			continue
+		}
+		out = append(out, step.ID())
+	}
+	return out
+}
+
+// RunPreSteps executes the registered pre-run steps against the provided state.
+func (p *Pipeline) RunPreSteps(ctx context.Context, state *core.Context) error {
+	if p == nil || len(p.preSteps) == 0 || state == nil {
+		return nil
+	}
+	for _, step := range p.preSteps {
+		if step == nil {
+			continue
+		}
+		if err := step.Run(ctx, state); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NewPipeline constructs a pipeline from a PipelineEnv and an optional

@@ -57,6 +57,9 @@ const (
 	ArtifactKindCompiledExecution       ArtifactKind = "euclo.compiled_execution"
 	ArtifactKindExecutionStatus         ArtifactKind = "euclo.execution_status"
 	ArtifactKindDeferredExecutionIssues ArtifactKind = "euclo.deferred_execution_issues"
+	ArtifactKindDeferralsSurface        ArtifactKind = "euclo.deferrals_surface"
+	ArtifactKindDeferralResolved        ArtifactKind = "euclo.deferral_resolved"
+	ArtifactKindLearningPromotion       ArtifactKind = "euclo.learning_promotion"
 	ArtifactKindSemanticCompile         ArtifactKind = "euclo.semantic_compile"
 	ArtifactKindSemanticContext         ArtifactKind = "euclo.semantic_context"
 	ArtifactKindTension                 ArtifactKind = "euclo.tension"
@@ -132,6 +135,9 @@ func CollectArtifactsFromState(state *core.Context) []Artifact {
 		{Key: "euclo.compiled_execution", Kind: ArtifactKindCompiledExecution},
 		{Key: "euclo.execution_status", Kind: ArtifactKindExecutionStatus},
 		{Key: "euclo.deferred_execution_issues", Kind: ArtifactKindDeferredExecutionIssues},
+		{Key: "euclo.deferrals_surface", Kind: ArtifactKindDeferralsSurface},
+		{Key: "euclo.deferral_resolved", Kind: ArtifactKindDeferralResolved},
+		{Key: "euclo.promoted_learning_interaction", Kind: ArtifactKindLearningPromotion},
 		{Key: "euclo.semantic_compile", Kind: ArtifactKindSemanticCompile},
 		{Key: "euclo.semantic_context", Kind: ArtifactKindSemanticContext},
 		{Key: "euclo.context_compaction", Kind: ArtifactKindContextCompaction},
@@ -298,6 +304,9 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 		ArtifactKindCompiledExecution,
 		ArtifactKindExecutionStatus,
 		ArtifactKindDeferredExecutionIssues,
+		ArtifactKindDeferralsSurface,
+		ArtifactKindDeferralResolved,
+		ArtifactKindLearningPromotion,
 		ArtifactKindContextCompaction,
 		ArtifactKindSuccessGate,
 		ArtifactKindFinalReport,
@@ -403,6 +412,12 @@ func AssembleFinalReport(artifacts []Artifact) map[string]any {
 				report["execution_status"] = artifact.Payload
 			case ArtifactKindDeferredExecutionIssues:
 				report["deferred_execution_issues"] = artifact.Payload
+			case ArtifactKindDeferralsSurface:
+				report["deferrals_surface"] = artifact.Payload
+			case ArtifactKindDeferralResolved:
+				report["deferral_resolved"] = artifact.Payload
+			case ArtifactKindLearningPromotion:
+				report["learning_promotion"] = artifact.Payload
 			case ArtifactKindContextCompaction:
 				report["context_compaction"] = artifact.Payload
 			case ArtifactKindSuccessGate:
@@ -1328,6 +1343,12 @@ func StateKeyForArtifactKind(kind ArtifactKind) string {
 		return "euclo.execution_status"
 	case ArtifactKindDeferredExecutionIssues:
 		return "euclo.deferred_execution_issues"
+	case ArtifactKindDeferralsSurface:
+		return "euclo.deferrals_surface"
+	case ArtifactKindDeferralResolved:
+		return "euclo.deferral_resolved"
+	case ArtifactKindLearningPromotion:
+		return "euclo.promoted_learning_interaction"
 	case ArtifactKindSemanticCompile:
 		return "euclo.semantic_compile"
 	case ArtifactKindSemanticContext:

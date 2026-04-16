@@ -23,20 +23,74 @@ func EnrichBundleWithContextKnowledge(bundle eucloruntime.SemanticInputBundle, s
 	if !ok || raw == nil {
 		return bundle
 	}
-	items, ok := raw.([]euclopretask.KnowledgeEvidenceItem)
-	if !ok || len(items) == 0 {
-		return bundle
-	}
-	for _, item := range items {
-		finding := eucloruntime.SemanticFindingSummary{
-			RefID:       item.RefID,
-			Kind:        "context_retrieved_" + string(item.Kind),
-			Status:      "retrieved",
-			Title:       item.Title,
-			Summary:     item.Summary,
-			RelatedRefs: append([]string(nil), item.RelatedRefs...),
+	switch items := raw.(type) {
+	case []euclopretask.KnowledgeEvidenceItem:
+		if len(items) == 0 {
+			return bundle
 		}
-		bundle.PatternFindings = append(bundle.PatternFindings, finding)
+		for _, item := range items {
+			finding := eucloruntime.SemanticFindingSummary{
+				RefID:       item.RefID,
+				Kind:        "context_retrieved_" + string(item.Kind),
+				Status:      "retrieved",
+				Title:       item.Title,
+				Summary:     item.Summary,
+				RelatedRefs: append([]string(nil), item.RelatedRefs...),
+			}
+			bundle.PatternFindings = append(bundle.PatternFindings, finding)
+		}
+	case []euclopretask.ContextKnowledgeItem:
+		if len(items) == 0 {
+			return bundle
+		}
+		for i, item := range items {
+			finding := eucloruntime.SemanticFindingSummary{
+				RefID:       item.Source + ":" + item.Content,
+				Kind:        "context_retrieved_deferred_issue",
+				Status:      "retrieved",
+				Title:       item.Source,
+				Summary:     item.Content,
+				RelatedRefs: append([]string(nil), item.Tags...),
+			}
+			if finding.RefID == ":" {
+				finding.RefID = "context_knowledge_item"
+			}
+			if finding.Title == "" {
+				finding.Title = "Deferred issue"
+			}
+			finding.RefID = finding.RefID + "#" + strconv.Itoa(i)
+			bundle.PatternFindings = append(bundle.PatternFindings, finding)
+		}
+	case []any:
+		for _, rawItem := range items {
+			switch item := rawItem.(type) {
+			case euclopretask.KnowledgeEvidenceItem:
+				finding := eucloruntime.SemanticFindingSummary{
+					RefID:       item.RefID,
+					Kind:        "context_retrieved_" + string(item.Kind),
+					Status:      "retrieved",
+					Title:       item.Title,
+					Summary:     item.Summary,
+					RelatedRefs: append([]string(nil), item.RelatedRefs...),
+				}
+				bundle.PatternFindings = append(bundle.PatternFindings, finding)
+			case euclopretask.ContextKnowledgeItem:
+				finding := eucloruntime.SemanticFindingSummary{
+					RefID:       item.Source + ":" + item.Content,
+					Kind:        "context_retrieved_deferred_issue",
+					Status:      "retrieved",
+					Title:       item.Source,
+					Summary:     item.Content,
+					RelatedRefs: append([]string(nil), item.Tags...),
+				}
+				if finding.Title == "" {
+					finding.Title = "Deferred issue"
+				}
+				bundle.PatternFindings = append(bundle.PatternFindings, finding)
+			}
+		}
+	default:
+		return bundle
 	}
 	return bundle
 }

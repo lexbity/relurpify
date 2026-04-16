@@ -262,6 +262,13 @@ func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, 
 	// Apply code revision for BKC staleness checking.
 	if resumeCtx.CodeRevision != "" {
 		state.Set("euclo.code_revision", resumeCtx.CodeRevision)
+		state.Set("euclo.last_session_revision", resumeCtx.CodeRevision)
+	}
+
+	// Apply session start time so pretask learning delta can compare
+	// resolved interactions against the prior session boundary.
+	if !resumeCtx.SessionStartTime.IsZero() {
+		state.Set("euclo.session_start_time", resumeCtx.SessionStartTime)
 	}
 
 	// Seed executor semantic context from resume's semantic summary.

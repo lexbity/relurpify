@@ -48,6 +48,9 @@ func NewDefaultCapabilityRegistry(env agentenv.AgentEnvironment) *EucloCapabilit
 	_ = reg.Register(localcaps.NewReviewCompatibilityCapability(env))
 	_ = reg.Register(localcaps.NewReviewImplementIfSafeCapability(env))
 	_ = reg.Register(localcaps.NewRefactorAPICompatibleCapability(env))
+	_ = reg.Register(localcaps.NewDeferralsSurfaceCapability(env))
+	_ = reg.Register(localcaps.NewDeferralsResolveCapability(env))
+	_ = reg.Register(localcaps.NewLearningPromoteCapability(env))
 	return reg
 }
 

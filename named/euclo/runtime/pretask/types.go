@@ -66,6 +66,26 @@ const (
 	KnowledgeKindInteraction KnowledgeKind = "interaction"
 )
 
+// ContextKnowledgeItem is a minimal context enrichment item loaded before the
+// main pipeline runs.
+type ContextKnowledgeItem struct {
+	Source   string   `json:"source,omitempty"`
+	Content  string   `json:"content,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Priority int      `json:"priority,omitempty"`
+}
+
+// LearningDeltaSummary summarizes resolved learning interactions since the
+// previous session boundary.
+type LearningDeltaSummary struct {
+	TotalResolved     int            `json:"total_resolved"`
+	ByKind            map[string]int `json:"by_kind"`
+	ConfirmedPatterns []string       `json:"confirmed_pattern_ids,omitempty"`
+	ResolvedTensions  []string       `json:"resolved_tension_ids,omitempty"`
+	RefinedAnchors    []string       `json:"refined_anchor_ids,omitempty"`
+	SinceSummary      string         `json:"since_summary"`
+}
+
 // Stage1Result bundles the parallel Stage 1 retrieval outputs.
 type Stage1Result struct {
 	CodeEvidence      []CodeEvidenceItem
