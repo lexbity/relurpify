@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ThoughtRecipe
+metadata:
+  id: with-fallback
+  name: Recipe with Fallback Agent
+  version: "1.0.0"
+triggers:
+  keywords: ["fallback", "safe", "robust"]
+  priority: 55
+execution:
+  sharing_mode: isolated
+  steps:
+    - id: primary
+      prompt: "Attempt to solve: {{task.instruction}}"
+      agent:
+        paradigm: goalcon
+        capabilities:
+          - cap:file_read
+          - cap:file_write
+      child:
+        paradigm: react
+      fallback:
+        paradigm: planner
+        capabilities:
+          - cap:file_read
+        capture: [fallback_result]

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ThoughtRecipe
+metadata:
+  id: simple-react
+  name: Simple React Agent
+  version: "1.0.0"
+triggers:
+  keywords: ["react", "simple", "quick"]
+  priority: 50
+execution:
+  sharing_mode: carry_forward
+  steps:
+    - id: analyze
+      prompt: "Analyze the task: {{task.instruction}}"
+      agent:
+        paradigm: react
+        capabilities:
+          - cap:file_read
+          - cap:file_write

@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ThoughtRecipe
+metadata:
+  id: multi-step-capture
+  name: Multi-Step with Data Capture
+  version: "1.0.0"
+triggers:
+  keywords: ["multi", "step", "capture"]
+  priority: 60
+execution:
+  sharing_mode: carry_forward
+  global_prompt: |
+    You are working on a multi-step task.
+    Workspace: {{task.workspace}}
+  steps:
+    - id: explore
+      prompt: "Explore the codebase and identify files relevant to: {{task.instruction}}"
+      agent:
+        paradigm: blackboard
+        enrichment: [ast, archaeology]
+      capture: [explored_files]
+    
+    - id: analyze
+      prompt: |
+        Analyze the files found in the previous step:
+        {{context.explored_files}}
+      agent:
+        paradigm: reflection
+        capabilities:
+          - cap:file_read
+          - cap:search
+      child:
+        paradigm: react
+      capture: [analysis_result]
+    
+    - id: implement
+      prompt: |
+        Based on the analysis:
+        {{context.analysis_result}}
+        Implement the required changes.
+      agent:
+        paradigm: react
+        capabilities:
+          - cap:file_write
+          - cap:shell_exec

@@ -57,6 +57,7 @@ func CollectSignals(envelope TaskEnvelope) []ClassificationSignal {
 	var signals []ClassificationSignal
 	signals = append(signals, collectContextHints(envelope)...)
 	signals = append(signals, collectKeywordSignals(envelope.Instruction)...)
+	signals = append(signals, collectUserRecipeSignals(envelope)...)
 	signals = append(signals, collectFilePatternSignals(envelope)...)
 	signals = append(signals, collectTaskStructureSignals(envelope.Instruction)...)
 	signals = append(signals, collectErrorTextSignals(envelope.Instruction)...)
@@ -372,14 +373,20 @@ func IsAmbiguous(candidates []ModeCandidate) bool {
 }
 
 // collectUserRecipeSignals returns signals from user-defined thought recipes.
-// This is an extension point for Phase P0 of the thought-recipes implementation.
-// TODO: Implement when euclo-thought-recipes.md Phase P0 begins.
-// See: docs/plans/euclo-thought-recipes.md
+// Phase 9: Dynamic Resolution Signal Injection
 func collectUserRecipeSignals(envelope TaskEnvelope) []ClassificationSignal {
-	// Stub: returns empty signals until thought recipe infrastructure is ready.
-	// Future implementation will:
-	// - Parse recipe YAML from envelope.RecipeHints
-	// - Match recipe triggers against instruction
-	// - Return weighted signals for matched recipe modes
-	return nil
+	if len(envelope.UserRecipes) == 0 {
+		return nil
+	}
+
+	signals := make([]ClassificationSignal, 0, len(envelope.UserRecipes))
+	for _, recipe := range envelope.UserRecipes {
+		// Each matched recipe contributes a signal with its score as weight
+		signals = append(signals, ClassificationSignal{
+			Kind:   "user_recipe",
+			Value:  recipe.RecipeID,
+			Weight: recipe.Score,
+		})
+	}
+	return signals
 }

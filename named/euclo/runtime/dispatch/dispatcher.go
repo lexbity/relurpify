@@ -16,6 +16,7 @@ import (
 	debugbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/debug"
 	planningbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/planning"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"github.com/lexcodex/relurpify/named/euclo/thoughtrecipes"
 )
 
 // behaviorRoutineAdapter wraps an execution.Behavior as a SupportingRoutine,
@@ -60,9 +61,11 @@ func (a *behaviorRoutineAdapter) Execute(ctx context.Context, in euclorelurpic.R
 }
 
 type Dispatcher struct {
-	env       agentenv.AgentEnvironment
-	behaviors map[string]execution.Behavior
-	routines  map[string]euclorelurpic.SupportingRoutine
+	env            agentenv.AgentEnvironment
+	behaviors      map[string]execution.Behavior
+	routines       map[string]euclorelurpic.SupportingRoutine
+	recipeRegistry *thoughtrecipes.PlanRegistry
+	recipeExecutor *thoughtrecipes.Executor
 }
 
 func NewDispatcher(env agentenv.AgentEnvironment) *Dispatcher {
@@ -125,12 +128,63 @@ func (d *Dispatcher) Execute(ctx context.Context, in execution.ExecuteInput) (*c
 	if behaviorID == "" {
 		return nil, fmt.Errorf("relurpic behavior unavailable: no capability ID provided")
 	}
+
+	// Check if this is a thought recipe capability ID
+	if strings.HasPrefix(behaviorID, "euclo:recipe.") && d.recipeRegistry != nil && d.recipeExecutor != nil {
+		plan, ok := d.recipeRegistry.Get(behaviorID)
+		if ok {
+			recipeResult, err := d.recipeExecutor.Execute(ctx, plan, in.Task, in.Environment)
+			if err != nil {
+				return &core.Result{Success: false, Error: err}, err
+			}
+			return recipeResultToCoreResult(recipeResult), nil
+		}
+		return nil, fmt.Errorf("thought recipe %q not found", behaviorID)
+	}
+
 	behavior, ok := d.behaviors[behaviorID]
 	if !ok {
 		return nil, fmt.Errorf("relurpic behavior %q unavailable", behaviorID)
 	}
 	in.RunSupportingRoutine = d.ExecuteRoutine
 	return behavior.Execute(ctx, in)
+}
+
+// SetRecipeRegistry sets the recipe registry and executor for thought recipe support.
+func (d *Dispatcher) SetRecipeRegistry(registry *thoughtrecipes.PlanRegistry, executor *thoughtrecipes.Executor) {
+	if d == nil {
+		return
+	}
+	d.recipeRegistry = registry
+	d.recipeExecutor = executor
+}
+
+// recipeResultToCoreResult converts a RecipeResult to a core.Result.
+func recipeResultToCoreResult(recipeResult *thoughtrecipes.RecipeResult) *core.Result {
+	if recipeResult == nil {
+		return &core.Result{Success: false, Error: fmt.Errorf("nil recipe result")}
+	}
+
+	data := map[string]any{
+		"recipe_id": recipeResult.RecipeID,
+		"artifacts": recipeResult.Artifacts,
+		"warnings":  recipeResult.Warnings,
+	}
+
+	// Include final result data if present
+	if recipeResult.FinalResult != nil && recipeResult.FinalResult.Data != nil {
+		for k, v := range recipeResult.FinalResult.Data {
+			if _, exists := data[k]; !exists {
+				data[k] = v
+			}
+		}
+	}
+
+	return &core.Result{
+		Success: recipeResult.Success,
+		Data:    data,
+		Error:   nil,
+	}
 }
 
 // ExecuteSequence executes a sequence of capabilities (AND or OR).

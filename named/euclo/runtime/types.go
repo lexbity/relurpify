@@ -28,6 +28,16 @@ type TaskEnvelope struct {
 	CapabilityClassificationSource string                        `json:"capability_classification_source,omitempty"`
 	CapabilityClassificationMeta   string                        `json:"capability_classification_meta,omitempty"`
 	TaskType                       core.TaskType                 `json:"task_type,omitempty"`
+
+	// UserRecipes holds thought recipe keyword matches for dynamic resolution (Phase 9)
+	UserRecipes []UserRecipeSignalSource `json:"user_recipes,omitempty"`
+}
+
+// UserRecipeSignalSource represents a matched thought recipe signal for mode classification.
+type UserRecipeSignalSource struct {
+	RecipeID string   `json:"recipe_id"` // Capability ID (e.g., "euclo:recipe.my-recipe")
+	Keywords []string `json:"keywords"`  // Matched keywords
+	Score    float64  `json:"score"`     // Match score (0.0-1.0)
 }
 
 type TaskClassification struct {

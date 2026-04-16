@@ -31,9 +31,6 @@ func BuildActionLog(state *core.Context, artifacts []euclotypes.Artifact) []eucl
 	if raw, ok := state.Get("euclo.context_expansion"); ok && raw != nil {
 		appendEntry("context_expansion", "expanded context for execution", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.capability_family_routing"); ok && raw != nil {
-		appendEntry("capability_routing", "selected capability-family routing", map[string]any{"payload": raw})
-	}
 	if raw, ok := state.Get("euclo.profile_controller"); ok && raw != nil {
 		appendEntry("profile_controller", "profile controller execution", map[string]any{"payload": raw})
 	}
@@ -68,9 +65,9 @@ func BuildProofSurface(state *core.Context, artifacts []euclotypes.Artifact) euc
 			proof.ProfileID = typed.ProfileID
 		}
 	}
-	if raw, ok := state.Get("euclo.capability_family_routing"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.CapabilityFamilyRouting); ok {
-			proof.PrimaryFamilyID = typed.PrimaryFamilyID
+	if raw, ok := state.Get("euclo.mode_resolution"); ok && raw != nil {
+		if typed, ok := raw.(eucloruntime.ModeResolution); ok {
+			proof.PrimaryFamilyID = primaryFamilyForMode(typed.ModeID)
 		}
 	}
 	if raw, ok := state.Get("euclo.verification"); ok && raw != nil {
@@ -174,4 +171,21 @@ func proofStringValue(v any) string {
 		return s
 	}
 	return ""
+}
+
+func primaryFamilyForMode(mode string) string {
+	switch mode {
+	case "debug":
+		return "debugging"
+	case "review":
+		return "review"
+	case "planning":
+		return "planning"
+	case "tdd":
+		return "implementation"
+	case "chat":
+		return "chat"
+	default:
+		return mode
+	}
 }

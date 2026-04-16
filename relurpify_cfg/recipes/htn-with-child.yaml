@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ThoughtRecipe
+metadata:
+  id: htn-planning
+  name: HTN Planning with React Child
+  version: "1.0.0"
+triggers:
+  keywords: ["plan", "htn", "hierarchical"]
+  priority: 70
+execution:
+  sharing_mode: explicit
+  steps:
+    - id: plan
+      prompt: |
+        Create a plan for: {{task.instruction}}
+        Context: {{context.workspace}}
+      agent:
+        paradigm: htn
+        capabilities:
+          - cap:file_read
+      child:
+        paradigm: react
+        capabilities:
+          - cap:file_write
+          - cap:shell_exec

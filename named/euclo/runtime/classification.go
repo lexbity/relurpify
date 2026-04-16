@@ -56,6 +56,9 @@ func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capab
 		if op := state.GetString("euclo.capability_sequence_operator"); op != "" {
 			envelope.CapabilitySequenceOperator = op
 		}
+
+		// Phase 9: Load user recipe signals from state
+		envelope.UserRecipes = loadUserRecipeSignals(state)
 	}
 	envelope.EditPermitted = envelope.CapabilitySnapshot.HasWriteTools
 	return envelope
@@ -473,4 +476,25 @@ func cloneStringMap(input map[string]string) map[string]string {
 		out[key] = value
 	}
 	return out
+}
+
+// loadUserRecipeSignals loads user recipe signals from state.
+// Phase 9: Dynamic Resolution Signal Injection
+func loadUserRecipeSignals(state *core.Context) []UserRecipeSignalSource {
+	if state == nil {
+		return nil
+	}
+
+	// Check for pre-computed user recipe signals in state
+	raw, ok := state.Get("euclo.user_recipe_signals")
+	if !ok || raw == nil {
+		return nil
+	}
+
+	// Try to extract as slice of UserRecipeSignalSource
+	if signals, ok := raw.([]UserRecipeSignalSource); ok {
+		return signals
+	}
+
+	return nil
 }

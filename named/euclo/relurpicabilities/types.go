@@ -61,6 +61,11 @@ type Descriptor struct {
 	Summary                 string             `json:"summary,omitempty"`
 	Keywords                []string           `json:"keywords,omitempty"` // Tier-1 static match terms; case-insensitive substring
 	DefaultForMode          bool               `json:"default_for_mode"`   // Tier-3 fallback when no other match within ModeFamily
+
+	// Thought recipe fields (Phase 5)
+	AllowDynamicResolution bool   `json:"allow_dynamic_resolution,omitempty"` // allows runtime mode resolution
+	IsUserDefined          bool   `json:"is_user_defined,omitempty"`          // true for YAML-defined thought recipes
+	RecipePath             string `json:"recipe_path,omitempty"`              // path to YAML recipe file (if IsUserDefined)
 }
 
 // PrimaryMode returns the primary (first) mode family for backward compatibility.
@@ -546,10 +551,13 @@ func (r *Registry) MatchByKeywords(instruction, modeID string, extraKeywords map
 		}
 	}
 
-	// Sort by MatchCount descending, then by ID for stability
+	// Sort by MatchCount descending, then TriggerPriority descending, then ID ascending
 	sort.Slice(matches, func(i, j int) bool {
 		if matches[i].MatchCount != matches[j].MatchCount {
 			return matches[i].MatchCount > matches[j].MatchCount
+		}
+		if matches[i].TriggerPriority != matches[j].TriggerPriority {
+			return matches[i].TriggerPriority > matches[j].TriggerPriority
 		}
 		return matches[i].ID < matches[j].ID
 	})
