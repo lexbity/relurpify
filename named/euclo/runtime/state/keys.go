@@ -55,6 +55,15 @@ const (
 	KeyRegressionAnalysis          Key = "euclo.regression_analysis"
 	KeyPlanCandidates              Key = "euclo.plan_candidates"
 
+	// Chat and assessment keys
+	KeyInspectSummary              Key = "euclo.inspect_summary"
+	KeyInspectCompatibilitySummary Key = "euclo.inspect_compatibility_summary"
+	KeyCompatibilityAssessment     Key = "euclo.compatibility_assessment"
+
+	// Debug investigation keys
+	KeyDebugInvestigationSummary   Key = "euclo.debug_investigation_summary"
+	KeyDebugRepairReadiness        Key = "euclo.debug_repair_readiness"
+
 	// Edit and intent keys
 	KeyEditExecution               Key = "euclo.edit_execution"
 	KeyEditIntent                  Key = "euclo.edit_intent"
@@ -81,6 +90,8 @@ const (
 	KeyDeferralPlan                Key = "euclo.deferral_plan"
 	KeyInteractionScript           Key = "euclo.interaction_script"
 	KeyRequiresEvidencePreMutation Key = "euclo.requires_evidence_before_mutation"
+	KeyInteractionRecording        Key = "euclo.interaction_recording"
+	KeyInteractionRecords          Key = "euclo.interaction_records"
 
 	// Session resume keys
 	KeySessionResumeContext        Key = "euclo.session_resume_context"

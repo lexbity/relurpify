@@ -8,9 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/retrieval"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
-)
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
 
 type workflowRetrievalProvider interface {
 	RetrievalService() retrieval.RetrieverService
@@ -95,9 +93,9 @@ func ExpandContext(ctx context.Context, provider workflowRetrievalProvider, work
 // ApplyContextExpansion is the exported version of applyContextExpansion.
 func ApplyContextExpansion(state *core.Context, task *core.Task, expansion ContextExpansion) *core.Task {
 	if state != nil {
-		statebus.SetAny(state, statekeys.KeyContextExpansion, expansion)
+		statebus.SetAny(state, "euclo.context_expansion", expansion)
 		if len(expansion.WorkflowRetrieval) > 0 {
-			statebus.SetAny(state, statekeys.KeyPipelineWorkflowRetrieval, expansion.WorkflowRetrieval)
+			statebus.SetAny(state, "pipeline.workflow_retrieval", expansion.WorkflowRetrieval)
 		}
 	}
 	if task == nil {

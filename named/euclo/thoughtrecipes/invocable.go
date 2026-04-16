@@ -43,8 +43,8 @@ func (r *RecipeInvocable) Invoke(ctx context.Context, in execution.InvokeInput) 
 		return &core.Result{Success: false, Error: fmt.Errorf("nil Executor")}, fmt.Errorf("nil Executor")
 	}
 
-	// Execute the recipe using the new ExecuteWithInput method
-	result, err := r.Executor.ExecuteWithInput(ctx, r.Plan, in)
+	// Execute the recipe
+	result, err := r.Executor.Execute(ctx, r.Plan, in.Task, in.Environment)
 	if err != nil {
 		return &core.Result{Success: false, Error: err}, err
 	}

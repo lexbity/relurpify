@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -70,6 +71,20 @@ func (c *deferralsSurfaceCapability) Execute(_ context.Context, env euclotypes.E
 func (r DeferralsSurfaceRoutine) ID() string {
 	return euclorelurpic.CapabilityDeferralsSurface
 }
+
+func (r DeferralsSurfaceRoutine) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
+	summary, artifact := buildDeferralsSurfaceArtifact(in.Task, in.State, deferralsWorkspace(in.Task, in.State))
+	if in.State != nil {
+		in.State.Set("euclo.deferrals_surface", summary)
+	}
+	mergeStateArtifactsToContext(in.State, []euclotypes.Artifact{artifact})
+	return &core.Result{
+		Success: true,
+		Data:    map[string]any{"artifacts": []euclotypes.Artifact{artifact}},
+	}, nil
+}
+
+func (r DeferralsSurfaceRoutine) IsPrimary() bool { return false }
 
 func (r DeferralsSurfaceRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	summary, artifact := buildDeferralsSurfaceArtifact(in.Task, in.State, deferralsWorkspace(in.Task, in.State))

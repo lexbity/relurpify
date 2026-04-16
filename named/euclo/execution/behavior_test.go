@@ -529,7 +529,7 @@ func TestCompilePlanFallback_CoherenceSuggestionsProduceSteps(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ExecuteSupportingRoutines — no RunSupportingRoutine path
+// ExecuteSupportingRoutines — InvokeSupporting path
 // ---------------------------------------------------------------------------
 
 func TestExecuteSupportingRoutines_EmptyListReturnsEmpty(t *testing.T) {

@@ -8,9 +8,7 @@ import (
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/core"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
-)
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
 
 // BuildUnitOfWork assembles Euclo's active execution bundle from intake,
 // classification, selected mode/profile, and currently available runtime state.
@@ -54,11 +52,11 @@ func BuildUnitOfWork(
 		executor = SelectExecutorDescriptor(mode, profile, classification, resolvedPolicy, planBinding, primaryCapabilityID, supportingCapabilityIDs)
 	}
 	uow := UnitOfWork{
-		ID:                              firstNonEmpty(stateString(state, statekeys.KeyUnitOfWorkID), envelope.TaskID),
+		ID:                              firstNonEmpty(stateString(state, "euclo.unit_of_work_id"), envelope.TaskID),
 		WorkflowID:                      workflowIDFromTaskState(task, state),
 		RunID:                           runIDFromTaskState(task, state),
 		ExecutionID:                     executionID(task, state),
-		RootID:                          stateString(state, statekeys.KeyRootUnitOfWorkID),
+		RootID:                          stateString(state, "euclo.root_unit_of_work_id"),
 		ModeID:                          mode.ModeID,
 		ObjectiveKind:                   objectiveKindForWork(mode, profile, classification),
 		BehaviorFamily:                  behaviorFamilyForWork(mode, profile, classification, resolvedPolicy),
@@ -190,7 +188,7 @@ func existingUnitOfWork(state *core.Context) (UnitOfWork, bool) {
 	if state == nil {
 		return UnitOfWork{}, false
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyUnitOfWork)
+	raw, ok := statebus.GetAny(state, "euclo.unit_of_work")
 	if !ok || raw == nil {
 		return ReconstructUnitOfWorkFromCompiledExecution(state)
 	}
@@ -371,7 +369,7 @@ func planBindingFromState(task *core.Task, state *core.Context) *UnitOfWorkPlanB
 	}
 	binding := &UnitOfWorkPlanBinding{WorkflowID: workflowID}
 	if state != nil {
-		if stepID := strings.TrimSpace(statebus.GetString(state, statekeys.KeyCurrentPlanStepID)); stepID != "" {
+		if stepID := strings.TrimSpace(statebus.GetString(state, "euclo.current_plan_step_id")); stepID != "" {
 			binding.ActiveStepID = stepID
 		}
 	}
@@ -390,7 +388,7 @@ func planBindingFromState(task *core.Task, state *core.Context) *UnitOfWorkPlanB
 		}
 		return binding
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyActivePlanVersion)
+	raw, ok := statebus.GetAny(state, "euclo.active_plan_version")
 	if !ok || raw == nil {
 		if binding.ActiveStepID == "" {
 			return nil
@@ -415,7 +413,7 @@ func planPayloadBacked(state *core.Context) bool {
 	if state == nil {
 		return false
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyPipelinePlan)
+	raw, ok := statebus.GetAny(state, "pipeline.plan")
 	if !ok || raw == nil {
 		return false
 	}
@@ -433,7 +431,7 @@ func firstPlanStepID(state *core.Context) string {
 	if state == nil {
 		return ""
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyPipelinePlan)
+	raw, ok := statebus.GetAny(state, "pipeline.plan")
 	if !ok || raw == nil {
 		return ""
 	}
@@ -513,35 +511,35 @@ func contextBundleFromState(task *core.Task, state *core.Context, envelope TaskE
 		})
 	}
 	if state != nil {
-		if workflowID := strings.TrimSpace(statebus.GetString(state, statekeys.KeyWorkflowID)); workflowID != "" {
+		if workflowID := strings.TrimSpace(statebus.GetString(state, "euclo.workflow_id")); workflowID != "" {
 			bundle.Sources = append(bundle.Sources, UnitOfWorkContextSource{
 				Kind:    "workflow",
 				Ref:     workflowID,
 				Summary: "workflow-backed execution state",
 			})
 		}
-		if raw, ok := statebus.GetAny(state, statekeys.KeyPendingLearningIDs); ok {
+		if raw, ok := statebus.GetAny(state, "euclo.pending_learning_interactions"); ok {
 			bundle.LearningRefs = append(bundle.LearningRefs, stringSliceAny(raw)...)
 		}
-		if raw, ok := statebus.GetAny(state, statekeys.KeyBlockingLearningIDs); ok {
+		if raw, ok := statebus.GetAny(state, "euclo.has_blocking_learning"); ok {
 			bundle.LearningRefs = append(bundle.LearningRefs, stringSliceAny(raw)...)
 		}
-		if raw, ok := statebus.GetAny(state, statekeys.KeyPipelineWorkflowRetrieval); ok && raw != nil {
-			bundle.RetrievalRefs = append(bundle.RetrievalRefs, string(statekeys.KeyPipelineWorkflowRetrieval))
+		if raw, ok := statebus.GetAny(state, "pipeline.workflow_retrieval"); ok && raw != nil {
+			bundle.RetrievalRefs = append(bundle.RetrievalRefs, string("pipeline.workflow_retrieval"))
 			bundle.Sources = append(bundle.Sources, UnitOfWorkContextSource{
 				Kind:    "workflow_retrieval",
-				Ref:     string(statekeys.KeyPipelineWorkflowRetrieval),
+				Ref:     string("pipeline.workflow_retrieval"),
 				Summary: summarizeMapSummary(raw),
 			})
 		}
-		if raw, ok := statebus.GetAny(state, statekeys.KeyActiveExplorationID); ok && raw != nil {
+		if raw, ok := statebus.GetAny(state, "euclo.active_exploration_id"); ok && raw != nil {
 			ref := strings.TrimSpace(fmt.Sprint(raw))
 			if ref != "" {
 				bundle.PatternRefs = append(bundle.PatternRefs, ref)
 			}
 		}
-		if raw, ok := statebus.GetAny(state, statekeys.KeyArchaeoPhaseState); ok && raw != nil {
-			bundle.ProvenanceRefs = append(bundle.ProvenanceRefs, string(statekeys.KeyArchaeoPhaseState))
+		if raw, ok := statebus.GetAny(state, "euclo.archaeo_phase_state"); ok && raw != nil {
+			bundle.ProvenanceRefs = append(bundle.ProvenanceRefs, string("euclo.archaeo_phase_state"))
 		}
 	}
 	if task != nil && task.Context != nil {
@@ -730,7 +728,7 @@ func skillBindingsForWork(task *core.Task, state *core.Context, policy ResolvedE
 		}
 	}
 	if state != nil {
-		if raw, ok := statebus.GetAny(state, statekeys.KeySkills); ok {
+		if raw, ok := statebus.GetAny(state, "euclo.skills"); ok {
 			for _, skillID := range stringSliceAny(raw) {
 				bindings = append(bindings, UnitOfWorkSkillBinding{
 					SkillID:  skillID,
@@ -790,7 +788,7 @@ func deferredIssueIDsFromState(state *core.Context) []string {
 	if state == nil {
 		return nil
 	}
-	if raw, ok := statebus.GetAny(state, statekeys.KeyDeferredIssueIDs); ok {
+	if raw, ok := statebus.GetAny(state, "euclo.deferred_issue_ids"); ok {
 		return uniqueStrings(stringSliceAny(raw))
 	}
 	return nil

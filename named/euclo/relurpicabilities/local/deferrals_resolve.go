@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -80,6 +81,19 @@ func (c *deferralsResolveCapability) Execute(ctx context.Context, env euclotypes
 }
 
 func (r DeferralsResolveRoutine) ID() string { return euclorelurpic.CapabilityDeferralsResolve }
+
+func (r DeferralsResolveRoutine) IsPrimary() bool { return false }
+
+func (r DeferralsResolveRoutine) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	_, artifact, err := resolveDeferredIssue(in.Task, in.State, r.DeferralPlan, r.GuidanceBroker)
+	if err != nil {
+		return nil, err
+	}
+	return &core.Result{
+		Success: true,
+		Data:    map[string]any{"artifacts": []euclotypes.Artifact{artifact}},
+	}, nil
+}
 
 func (r DeferralsResolveRoutine) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	_, artifact, err := resolveDeferredIssue(in.Task, in.State, r.DeferralPlan, r.GuidanceBroker)

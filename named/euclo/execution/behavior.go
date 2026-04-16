@@ -32,12 +32,7 @@ type ExecuteInput struct {
 	ServiceBundle        ServiceBundle
 	WorkflowExecutor     graph.WorkflowExecutor
 	Telemetry            core.Telemetry
-	RunSupportingRoutine func(context.Context, string, *core.Task, *core.Context, eucloruntime.UnitOfWork, agentenv.AgentEnvironment, ServiceBundle) ([]euclotypes.Artifact, error)
-}
-
-type Behavior interface {
-	ID() string
-	Execute(context.Context, ExecuteInput) (*core.Result, error)
+	InvokeSupporting     func(context.Context, string, InvokeInput) ([]euclotypes.Artifact, error)
 }
 
 type Trace struct {
@@ -224,7 +219,7 @@ func storeBehaviorTrace(state *core.Context, trace euclostate.Trace) {
 	if state == nil {
 		return
 	}
-	statebus.SetAny(state, state.KeyBehaviorTrace, Trace{
+	statebus.SetAny(state, euclostate.KeyBehaviorTrace, Trace{
 		PrimaryCapabilityID:      trace.PrimaryCapabilityID,
 		SupportingRoutines:       append([]string(nil), trace.SupportingRoutines...),
 		RecipeIDs:                append([]string(nil), trace.RecipeIDs...),
@@ -293,8 +288,8 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 	}
 	switch routineID {
 	case "euclo:chat.local-review":
-		if !statebus.Has(state, state.KeyReviewFindings) {
-			statebus.SetAny(state, state.KeyReviewFindings, map[string]any{
+		if !statebus.Has(state, euclostate.KeyReviewFindings) {
+			statebus.SetAny(state, euclostate.KeyReviewFindings, map[string]any{
 				"review_source":         routineID,
 				"primary_capability_id": work.PrimaryRelurpicCapabilityID,
 				"summary":               "local review routine prepared inspection context",
@@ -302,24 +297,24 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 			})
 		}
 	case "euclo:chat.targeted-verification-repair":
-		if !statebus.Has(state, state.KeyVerificationSummary) {
-			statebus.SetAny(state, state.KeyVerificationSummary, map[string]any{
+		if !statebus.Has(state, euclostate.KeyVerificationSummary) {
+			statebus.SetAny(state, euclostate.KeyVerificationSummary, map[string]any{
 				"source":     routineID,
 				"summary":    "targeted verification repair routine activated",
 				"provenance": "absent",
 			})
 		}
 	case "euclo:debug.root-cause":
-		if !statebus.Has(state, state.KeyRootCauseCandidates) {
-			statebus.SetAny(state, state.KeyRootCauseCandidates, map[string]any{
+		if !statebus.Has(state, euclostate.KeyRootCauseCandidates) {
+			statebus.SetAny(state, euclostate.KeyRootCauseCandidates, map[string]any{
 				"source":       routineID,
 				"tension_refs": append([]string(nil), work.SemanticInputs.TensionRefs...),
 				"summary":      "root cause candidates derived from debug investigation context",
 			})
 		}
 	case "euclo:debug.localization":
-		if !statebus.Has(state, state.KeyRootCause) {
-			statebus.SetAny(state, state.KeyRootCause, map[string]any{
+		if !statebus.Has(state, euclostate.KeyRootCause) {
+			statebus.SetAny(state, euclostate.KeyRootCause, map[string]any{
 				"source":          routineID,
 				"pattern_refs":    append([]string(nil), work.SemanticInputs.PatternRefs...),
 				"touched_symbols": work.SemanticInputs.RequestProvenanceRefs,
@@ -327,22 +322,22 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 			})
 		}
 	case "euclo:debug.verification-repair":
-		if !statebus.Has(state, state.KeyRegressionAnalysis) {
-			statebus.SetAny(state, state.KeyRegressionAnalysis, map[string]any{
+		if !statebus.Has(state, euclostate.KeyRegressionAnalysis) {
+			statebus.SetAny(state, euclostate.KeyRegressionAnalysis, map[string]any{
 				"source":  routineID,
 				"summary": "verification repair routine activated for bounded debug repair",
 			})
 		}
 	case "euclo:archaeology.pattern-surface":
-		if !statebus.Has(state, state.KeyPipelineExplore) {
-			statebus.SetAny(state, state.KeyPipelineExplore, map[string]any{
+		if !statebus.Has(state, euclostate.KeyPipelineExplore) {
+			statebus.SetAny(state, euclostate.KeyPipelineExplore, map[string]any{
 				"source":       routineID,
 				"pattern_refs": append([]string(nil), work.SemanticInputs.PatternRefs...),
 				"summary":      "pattern surface routine grounded archaeology execution",
 			})
 		}
 	case "euclo:archaeology.prospective-assess", "euclo:archaeology.convergence-guard":
-		raw, _ := statebus.GetAny(state, state.KeyPlanCandidates)
+		raw, _ := statebus.GetAny(state, euclostate.KeyPlanCandidates)
 		payload, _ := raw.(map[string]any)
 		if payload == nil {
 			payload = map[string]any{"source": "euclo.relurpic.archaeology"}
@@ -359,7 +354,7 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 			}
 		}
 		payload["operations"] = UniqueStrings(append(ops, routineID))
-		statebus.SetAny(state, state.KeyPlanCandidates, payload)
+		statebus.SetAny(state, euclostate.KeyPlanCandidates, payload)
 	}
 }
 
@@ -374,12 +369,23 @@ func ExecuteSupportingRoutines(ctx context.Context, in ExecuteInput, routineIDs 
 		if routineID == "" {
 			continue
 		}
-		if in.RunSupportingRoutine == nil {
+		if in.InvokeSupporting == nil {
 			EnsureRoutineArtifacts(in.State, routineID, in.Work)
 			executed = append(executed, routineID)
 			continue
 		}
-		routineArtifacts, err := in.RunSupportingRoutine(ctx, routineID, in.Task, in.State, in.Work, in.Environment, in.ServiceBundle)
+		routineArtifacts, err := in.InvokeSupporting(ctx, routineID, InvokeInput{
+			Task:             in.Task,
+			ExecutionTask:    in.ExecutionTask,
+			State:            in.State,
+			Mode:             in.Mode,
+			Profile:          in.Profile,
+			Work:             in.Work,
+			Environment:      in.Environment,
+			ServiceBundle:    in.ServiceBundle,
+			WorkflowExecutor: in.WorkflowExecutor,
+			Telemetry:        in.Telemetry,
+		})
 		if err != nil {
 			return artifacts, executed, err
 		}

@@ -4,12 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
 // Invocable implementations for local routines.
@@ -118,7 +115,6 @@ func (l *learningPromoteInvocableWithDeps) Invoke(ctx context.Context, in execut
 
 func (l *learningPromoteInvocableWithDeps) IsPrimary() bool { return false }
 
-// convertInvokeInputToRoutineInput converts InvokeInput to RoutineInput for supporting routine compatibility.
 func convertInvokeInputToRoutineInput(in execution.InvokeInput) euclorelurpic.RoutineInput {
 	return euclorelurpic.RoutineInput{
 		Task:  in.Task,
@@ -134,25 +130,5 @@ func convertInvokeInputToRoutineInput(in execution.InvokeInput) euclorelurpic.Ro
 		},
 		Environment:   in.Environment,
 		ServiceBundle: in.ServiceBundle,
-	}
-}
-
-// convertInvokeSupportingToRunSupporting adapts the new InvokeSupporting signature
-// to the legacy RunSupportingRoutine signature.
-func convertInvokeSupportingToRunSupporting(
-	invokeSupporting func(context.Context, string, execution.InvokeInput) ([]euclotypes.Artifact, error),
-) func(context.Context, string, *core.Task, *core.Context, eucloruntime.UnitOfWork, agentenv.AgentEnvironment, execution.ServiceBundle) ([]euclotypes.Artifact, error) {
-	if invokeSupporting == nil {
-		return nil
-	}
-	return func(ctx context.Context, routineID string, task *core.Task, state *core.Context, work eucloruntime.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
-		in := execution.InvokeInput{
-			Task:          task,
-			State:         state,
-			Work:          work,
-			Environment:   env,
-			ServiceBundle: bundle,
-		}
-		return invokeSupporting(ctx, routineID, in)
 	}
 }

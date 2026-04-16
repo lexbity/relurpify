@@ -5,9 +5,7 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
-)
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
 
 // EnrichSemanticInputBundle derives Euclo-owned reasoning summaries over the
 // existing semantic inputs without requiring new Archaeo schema.
@@ -142,10 +140,10 @@ func touchedSymbolsFromState(state *core.Context) []string {
 		return nil
 	}
 	var out []string
-	if raw, ok := statebus.GetAny(state, statekeys.KeyTouchedSymbols); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, "euclo.touched_symbols"); ok && raw != nil {
 		out = append(out, stringSliceAny(raw)...)
 	}
-	if raw, ok := statebus.GetAny(state, statekeys.KeyEditExecution); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, "euclo.edit_execution"); ok && raw != nil {
 		switch typed := raw.(type) {
 		case EditExecutionRecord:
 			out = append(out, touchedSymbolsFromEditExecution(typed)...)

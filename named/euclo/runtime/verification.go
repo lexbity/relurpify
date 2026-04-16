@@ -6,9 +6,7 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
-)
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
 
 func ResolveVerificationPolicy(mode ModeResolution, profile ExecutionProfileSelection) VerificationPolicy {
 	policy := VerificationPolicy{
@@ -39,7 +37,7 @@ func NormalizeVerificationEvidence(state *core.Context) VerificationEvidence {
 	if state == nil {
 		return VerificationEvidence{Status: "not_verified", Source: "absent", Provenance: VerificationProvenanceAbsent}
 	}
-	if raw, ok := statebus.GetAny(state, statekeys.KeyPipelineVerify); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, "pipeline.verify"); ok && raw != nil {
 		evidence := verificationEvidenceFromRaw(raw)
 		if evidence.Status != "" {
 			if evidence.RunID == "" {
@@ -186,7 +184,7 @@ func DetectAutomaticVerificationDegradation(policy VerificationPolicy, state *co
 	if evidence.EvidencePresent && evidence.Provenance == VerificationProvenanceExecuted {
 		return "", "", false
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyEnvelope)
+	raw, ok := statebus.GetAny(state, "euclo.envelope")
 	if ok && raw != nil {
 		if envelope, ok := raw.(TaskEnvelope); ok {
 			if !envelope.CapabilitySnapshot.HasExecuteTools && !envelope.CapabilitySnapshot.HasVerificationTools {
@@ -201,7 +199,7 @@ func DetectAutomaticVerificationDegradation(policy VerificationPolicy, state *co
 			}
 		}
 	}
-	if raw, ok := statebus.GetAny(state, statekeys.KeyVerificationPlan); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, "euclo.verification_plan"); ok && raw != nil {
 		if plan, ok := raw.(map[string]any); ok {
 			commands, _ := plan["commands"].([]any)
 			if len(commands) == 0 {
@@ -249,7 +247,7 @@ func tddLifecycleSatisfied(state *core.Context, runID string) bool {
 	if state == nil {
 		return false
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyTDDLifecycle)
+	raw, ok := statebus.GetAny(state, "euclo.tdd.lifecycle")
 	if !ok || raw == nil {
 		return false
 	}
@@ -282,7 +280,7 @@ func tddLifecycleRequestedRefactor(state *core.Context) bool {
 	if state == nil {
 		return false
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyTDDLifecycle)
+	raw, ok := statebus.GetAny(state, "euclo.tdd.lifecycle")
 	if !ok || raw == nil {
 		return false
 	}

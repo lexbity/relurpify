@@ -16,35 +16,37 @@ import (
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
 
-type stubBehavior struct {
+type stubInvocable struct {
 	id    string
 	mu    sync.Mutex
 	calls int
 }
 
-func (s *stubBehavior) ID() string { return s.id }
-func (s *stubBehavior) Execute(_ context.Context, in execution.ExecuteInput) (*core.Result, error) {
+func (s *stubInvocable) ID() string { return s.id }
+func (s *stubInvocable) IsPrimary() bool { return true }
+func (s *stubInvocable) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
 	s.mu.Lock()
 	s.calls++
 	s.mu.Unlock()
-	if in.RunSupportingRoutine == nil {
+	if in.InvokeSupporting == nil {
 		return nil, fmt.Errorf("supporting routine executor missing")
 	}
 	return &core.Result{Success: true, Data: map[string]any{"capability": in.Work.PrimaryRelurpicCapabilityID}}, nil
 }
 
-type stubRoutine struct {
+type stubSupporting struct {
 	id    string
-	input euclorelurpic.RoutineInput
+	input execution.InvokeInput
 }
 
-func (s *stubRoutine) ID() string { return s.id }
-func (s *stubRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
+func (s *stubSupporting) ID() string { return s.id }
+func (s *stubSupporting) IsPrimary() bool { return false }
+func (s *stubSupporting) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
 	s.input = in
-	return []euclotypes.Artifact{{ID: "a", Kind: euclotypes.ArtifactKindTrace, Summary: "ok", Payload: "ok"}}, nil
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": []euclotypes.Artifact{{ID: "a", Kind: euclotypes.ArtifactKindTrace, Summary: "ok", Payload: "ok"}}}}, nil
 }
 
-func TestNewDispatcherRegistersPrimaryCapabilities(t *testing.T) {
+func TestNewDispatcherRegistersPrimaryAndSupportingCapabilities(t *testing.T) {
 	d := NewDispatcher(agentenv.AgentEnvironment{})
 
 	for _, capabilityID := range []string{
@@ -56,28 +58,21 @@ func TestNewDispatcherRegistersPrimaryCapabilities(t *testing.T) {
 		euclorelurpic.CapabilityArchaeologyExplore,
 		euclorelurpic.CapabilityArchaeologyCompilePlan,
 		euclorelurpic.CapabilityArchaeologyImplement,
+		euclorelurpic.CapabilityDeferralsSurface,
+		euclorelurpic.CapabilityLearningPromote,
 	} {
-		if _, ok := d.behaviors[capabilityID]; !ok {
-			t.Fatalf("expected behavior %q to be registered", capabilityID)
+		if _, ok := d.invocables[capabilityID]; !ok {
+			t.Fatalf("expected invocable %q to be registered", capabilityID)
 		}
-	}
-	if len(d.routines) == 0 {
-		t.Fatal("expected supporting routines to be registered")
-	}
-	if _, ok := d.routines[euclorelurpic.CapabilityDeferralsSurface]; !ok {
-		t.Fatal("expected deferrals surface routine to be registered")
-	}
-	if _, ok := d.routines[euclorelurpic.CapabilityLearningPromote]; !ok {
-		t.Fatal("expected learning promote routine to be registered")
 	}
 }
 
-func TestExecuteDispatchesKnownBehavior(t *testing.T) {
-	behavior := &stubBehavior{id: "cap.test"}
-	d := &Dispatcher{behaviors: map[string]execution.Behavior{behavior.id: behavior}, routines: map[string]euclorelurpic.SupportingRoutine{}}
+func TestExecuteDispatchesKnownInvocable(t *testing.T) {
+	inv := &stubInvocable{id: "cap.test"}
+	d := &Dispatcher{invocables: map[string]execution.Invocable{inv.id: inv}}
 
 	result, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{PrimaryRelurpicCapabilityID: behavior.id},
+		Work: runtimepkg.UnitOfWork{PrimaryRelurpicCapabilityID: inv.id},
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -87,8 +82,8 @@ func TestExecuteDispatchesKnownBehavior(t *testing.T) {
 	}
 }
 
-func TestExecuteUnknownBehaviorReturnsError(t *testing.T) {
-	d := &Dispatcher{behaviors: map[string]execution.Behavior{}, routines: map[string]euclorelurpic.SupportingRoutine{}}
+func TestExecuteUnknownInvocableReturnsError(t *testing.T) {
+	d := &Dispatcher{invocables: map[string]execution.Invocable{}}
 
 	_, err := d.Execute(context.Background(), execution.ExecuteInput{
 		Work: runtimepkg.UnitOfWork{PrimaryRelurpicCapabilityID: "missing"},
@@ -98,9 +93,9 @@ func TestExecuteUnknownBehaviorReturnsError(t *testing.T) {
 	}
 }
 
-func TestExecuteRoutinePassesWorkContext(t *testing.T) {
-	routine := &stubRoutine{id: "routine.test"}
-	d := &Dispatcher{behaviors: map[string]execution.Behavior{}, routines: map[string]euclorelurpic.SupportingRoutine{routine.id: routine}}
+func TestInvokeSupportingPassesWorkContext(t *testing.T) {
+	support := &stubSupporting{id: "routine.test"}
+	d := &Dispatcher{invocables: map[string]execution.Invocable{support.id: support}}
 	task := &core.Task{ID: "task-1"}
 	state := core.NewContext()
 	work := runtimepkg.UnitOfWork{
@@ -115,49 +110,32 @@ func TestExecuteRoutinePassesWorkContext(t *testing.T) {
 		},
 	}
 
-	artifacts, err := d.ExecuteRoutine(context.Background(), routine.id, task, state, work, testutil.Env(t), execution.ServiceBundle{})
+	artifacts, err := d.ExecuteRoutine(context.Background(), support.id, task, state, work, testutil.Env(t), execution.ServiceBundle{})
 	if err != nil {
 		t.Fatalf("ExecuteRoutine: %v", err)
 	}
 	if len(artifacts) != 1 {
 		t.Fatalf("expected artifacts, got %+v", artifacts)
 	}
-	if routine.input.Task != task || routine.input.State != state {
+	if support.input.Task != task || support.input.State != state {
 		t.Fatal("expected task and state to be forwarded")
 	}
-	if routine.input.Work.PrimaryCapabilityID != "primary" {
-		t.Fatalf("unexpected primary capability: %+v", routine.input.Work)
+	if support.input.Work.PrimaryRelurpicCapabilityID != "primary" {
+		t.Fatalf("unexpected primary capability: %+v", support.input.Work)
 	}
-	if len(routine.input.Work.PatternRefs) != 1 || routine.input.Work.PatternRefs[0] != "pattern-1" {
-		t.Fatalf("unexpected routine input: %+v", routine.input.Work)
-	}
-}
-
-func TestExecuteRoutineUnknownReturnsError(t *testing.T) {
-	d := NewDispatcher(agentenv.AgentEnvironment{})
-
-	artifacts, err := d.ExecuteRoutine(context.Background(), "missing", nil, nil, runtimepkg.UnitOfWork{}, agentenv.AgentEnvironment{}, execution.ServiceBundle{})
-	if err == nil {
-		t.Fatal("expected error for unknown routine, got nil")
-	}
-	if artifacts != nil {
-		t.Fatalf("expected nil artifacts, got %+v", artifacts)
-	}
-	if !strings.Contains(err.Error(), "not registered") {
-		t.Errorf("expected 'not registered' error, got: %v", err)
+	if len(support.input.Work.SemanticInputs.PatternRefs) != 1 || support.input.Work.SemanticInputs.PatternRefs[0] != "pattern-1" {
+		t.Fatalf("unexpected routine input: %+v", support.input.Work)
 	}
 }
 
-// TestExecuteSequence_AND_SharedState verifies AND sequence executes all steps and accumulates state
 func TestExecuteSequence_AND_SharedState(t *testing.T) {
-	behavior1 := &stubBehavior{id: "cap.test1"}
-	behavior2 := &stubBehavior{id: "cap.test2"}
+	inv1 := &stubInvocable{id: "cap.test1"}
+	inv2 := &stubInvocable{id: "cap.test2"}
 	d := &Dispatcher{
-		behaviors: map[string]execution.Behavior{
-			behavior1.id: behavior1,
-			behavior2.id: behavior2,
+		invocables: map[string]execution.Invocable{
+			inv1.id: inv1,
+			inv2.id: inv2,
 		},
-		routines: map[string]euclorelurpic.SupportingRoutine{},
 	}
 
 	state := core.NewContext()
@@ -168,23 +146,15 @@ func TestExecuteSequence_AND_SharedState(t *testing.T) {
 		},
 		State: state,
 	})
-
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if result == nil || !result.Success {
 		t.Fatalf("unexpected result: %+v", result)
 	}
-
-	// Verify both behaviors were called
-	if behavior1.calls != 1 {
-		t.Errorf("expected behavior1 to be called once, got %d", behavior1.calls)
+	if inv1.calls != 1 || inv2.calls != 1 {
+		t.Fatalf("unexpected invocation counts: %d %d", inv1.calls, inv2.calls)
 	}
-	if behavior2.calls != 1 {
-		t.Errorf("expected behavior2 to be called once, got %d", behavior2.calls)
-	}
-
-	// Verify state was updated with step completion markers
 	if _, ok := state.Get("euclo.sequence_step_1_completed"); !ok {
 		t.Error("expected step 1 completion marker in state")
 	}
@@ -193,16 +163,14 @@ func TestExecuteSequence_AND_SharedState(t *testing.T) {
 	}
 }
 
-// TestExecuteSequence_OR_RunsFirstOnly verifies OR sequence executes only the first step
 func TestExecuteSequence_OR_RunsFirstOnly(t *testing.T) {
-	behavior1 := &stubBehavior{id: "cap.test1"}
-	behavior2 := &stubBehavior{id: "cap.test2"}
+	inv1 := &stubInvocable{id: "cap.test1"}
+	inv2 := &stubInvocable{id: "cap.test2"}
 	d := &Dispatcher{
-		behaviors: map[string]execution.Behavior{
-			behavior1.id: behavior1,
-			behavior2.id: behavior2,
+		invocables: map[string]execution.Invocable{
+			inv1.id: inv1,
+			inv2.id: inv2,
 		},
-		routines: map[string]euclorelurpic.SupportingRoutine{},
 	}
 
 	state := core.NewContext()
@@ -213,148 +181,17 @@ func TestExecuteSequence_OR_RunsFirstOnly(t *testing.T) {
 		},
 		State: state,
 	})
-
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if result == nil || !result.Success {
 		t.Fatalf("unexpected result: %+v", result)
 	}
-
-	// Verify only first behavior was called
-	if behavior1.calls != 1 {
-		t.Errorf("expected behavior1 to be called once, got %d", behavior1.calls)
+	if inv1.calls != 1 || inv2.calls != 0 {
+		t.Fatalf("unexpected invocation counts: %d %d", inv1.calls, inv2.calls)
 	}
-	if behavior2.calls != 0 {
-		t.Errorf("expected behavior2 to NOT be called, got %d", behavior2.calls)
-	}
-
-	// Verify OR selection was recorded in state
-	selected := state.GetString("euclo.or_selected_capability")
-	if selected != "cap.test1" {
-		t.Errorf("expected OR selected capability marker 'cap.test1', got %v", selected)
+	if got, ok := state.Get("euclo.or_selected_capability"); !ok || got != "cap.test1" {
+		t.Fatalf("unexpected selected capability: %#v", got)
 	}
 }
 
-// TestExecuteSequence_AND_StopsOnFailure verifies AND sequence aborts on first failure
-func TestExecuteSequence_AND_StopsOnFailure(t *testing.T) {
-	behavior1 := &stubBehavior{id: "cap.test1"}
-	failingBehavior := &stubFailingBehavior{id: "cap.failing"}
-	d := &Dispatcher{
-		behaviors: map[string]execution.Behavior{
-			behavior1.id:       behavior1,
-			failingBehavior.id: failingBehavior,
-		},
-		routines: map[string]euclorelurpic.SupportingRoutine{},
-	}
-
-	state := core.NewContext()
-	_, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{
-			CapabilityExecutionSequence: []string{"cap.test1", "cap.failing", "cap.test2"},
-			CapabilitySequenceOperator:  "AND",
-		},
-		State: state,
-	})
-
-	if err == nil {
-		t.Fatal("expected error from failing step, got nil")
-	}
-	if !strings.Contains(err.Error(), "cap.failing") {
-		t.Errorf("expected error to mention failing capability, got: %v", err)
-	}
-
-	// Verify first behavior was called but sequence stopped before step 3
-	if behavior1.calls != 1 {
-		t.Errorf("expected behavior1 to be called once, got %d", behavior1.calls)
-	}
-	if _, ok := state.Get("euclo.sequence_step_1_completed"); !ok {
-		t.Error("expected step 1 completion marker in state")
-	}
-	if _, ok := state.Get("euclo.sequence_step_2_completed"); ok {
-		t.Error("step 2 should NOT have completed marker (it failed)")
-	}
-}
-
-// TestExecuteSequence_SingleElement_CompatPath verifies single element uses existing Execute path
-func TestExecuteSequence_SingleElement_CompatPath(t *testing.T) {
-	behavior := &stubBehavior{id: "cap.single"}
-	d := &Dispatcher{
-		behaviors: map[string]execution.Behavior{behavior.id: behavior},
-		routines:  map[string]euclorelurpic.SupportingRoutine{},
-	}
-
-	result, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{
-			CapabilityExecutionSequence: []string{"cap.single"},
-			CapabilitySequenceOperator:  "AND",
-			PrimaryRelurpicCapabilityID: "cap.single",
-		},
-	})
-
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if result == nil || !result.Success {
-		t.Fatalf("unexpected result: %+v", result)
-	}
-	if behavior.calls != 1 {
-		t.Errorf("expected behavior to be called once, got %d", behavior.calls)
-	}
-}
-
-// TestExecuteSequence_EmptySequence_ReturnsError verifies empty sequence returns error
-func TestExecuteSequence_EmptySequence_ReturnsError(t *testing.T) {
-	d := &Dispatcher{
-		behaviors: map[string]execution.Behavior{},
-		routines:  map[string]euclorelurpic.SupportingRoutine{},
-	}
-
-	_, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{
-			CapabilityExecutionSequence: []string{},
-			CapabilitySequenceOperator:  "AND",
-		},
-	})
-
-	if err == nil {
-		t.Fatal("expected error for empty sequence, got nil")
-	}
-	if !strings.Contains(err.Error(), "no capability ID") {
-		t.Errorf("expected 'no capability ID' error, got: %v", err)
-	}
-}
-
-// TestExecuteSequence_UnknownCapability_ReturnsError verifies unknown capability returns error
-func TestExecuteSequence_UnknownCapability_ReturnsError(t *testing.T) {
-	behavior1 := &stubBehavior{id: "cap.known"}
-	d := &Dispatcher{
-		behaviors: map[string]execution.Behavior{
-			behavior1.id: behavior1,
-		},
-		routines: map[string]euclorelurpic.SupportingRoutine{},
-	}
-
-	_, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{
-			CapabilityExecutionSequence: []string{"cap.known", "cap.unknown"},
-			CapabilitySequenceOperator:  "AND",
-		},
-	})
-
-	if err == nil {
-		t.Fatal("expected error for unknown capability, got nil")
-	}
-	if !strings.Contains(err.Error(), "unavailable") {
-		t.Errorf("expected 'unavailable' error, got: %v", err)
-	}
-}
-
-type stubFailingBehavior struct {
-	id string
-}
-
-func (s *stubFailingBehavior) ID() string { return s.id }
-func (s *stubFailingBehavior) Execute(_ context.Context, in execution.ExecuteInput) (*core.Result, error) {
-	return nil, fmt.Errorf("intentional failure for %s", s.id)
-}

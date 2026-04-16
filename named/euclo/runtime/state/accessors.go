@@ -1484,6 +1484,111 @@ func SetPlanCandidates(ctx *core.Context, v map[string]any) {
 	ctx.Set(KeyPlanCandidates, v)
 }
 
+// GetInspectSummary retrieves the inspect summary from context.
+func GetInspectSummary(ctx *core.Context) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	if raw, ok := ctx.Get(KeyInspectSummary); ok && raw != nil {
+		if v, ok := raw.(string); ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// SetInspectSummary sets the inspect summary in context.
+func SetInspectSummary(ctx *core.Context, v string) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(KeyInspectSummary, v)
+}
+
+// GetInspectCompatibilitySummary retrieves the inspect compatibility summary from context.
+func GetInspectCompatibilitySummary(ctx *core.Context) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	if raw, ok := ctx.Get(KeyInspectCompatibilitySummary); ok && raw != nil {
+		if v, ok := raw.(string); ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// SetInspectCompatibilitySummary sets the inspect compatibility summary in context.
+func SetInspectCompatibilitySummary(ctx *core.Context, v string) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(KeyInspectCompatibilitySummary, v)
+}
+
+// GetCompatibilityAssessment retrieves the compatibility assessment from context.
+func GetCompatibilityAssessment(ctx *core.Context) (map[string]any, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	if raw, ok := ctx.Get(KeyCompatibilityAssessment); ok && raw != nil {
+		if v, ok := raw.(map[string]any); ok {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
+// SetCompatibilityAssessment sets the compatibility assessment in context.
+func SetCompatibilityAssessment(ctx *core.Context, v map[string]any) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(KeyCompatibilityAssessment, v)
+}
+
+// GetDebugInvestigationSummary retrieves the debug investigation summary from context.
+func GetDebugInvestigationSummary(ctx *core.Context) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	if raw, ok := ctx.Get(KeyDebugInvestigationSummary); ok && raw != nil {
+		if v, ok := raw.(string); ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// SetDebugInvestigationSummary sets the debug investigation summary in context.
+func SetDebugInvestigationSummary(ctx *core.Context, v string) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(KeyDebugInvestigationSummary, v)
+}
+
+// GetDebugRepairReadiness retrieves the debug repair readiness from context.
+func GetDebugRepairReadiness(ctx *core.Context) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	if raw, ok := ctx.Get(KeyDebugRepairReadiness); ok && raw != nil {
+		if v, ok := raw.(string); ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// SetDebugRepairReadiness sets the debug repair readiness in context.
+func SetDebugRepairReadiness(ctx *core.Context, v string) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(KeyDebugRepairReadiness, v)
+}
+
 // GetVerificationSummary retrieves the verification summary from context.
 func GetVerificationSummary(ctx *core.Context) (map[string]any, bool) {
 	if ctx == nil {
@@ -1919,6 +2024,48 @@ func SetDeferralPlan(ctx *core.Context, v any) {
 		return
 	}
 	ctx.Set(KeyDeferralPlan, v)
+}
+
+// GetInteractionRecording retrieves the interaction recording from context.
+func GetInteractionRecording(ctx *core.Context) (map[string]any, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	if raw, ok := ctx.Get(KeyInteractionRecording); ok && raw != nil {
+		if v, ok := raw.(map[string]any); ok {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
+// SetInteractionRecording sets the interaction recording in context.
+func SetInteractionRecording(ctx *core.Context, v map[string]any) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(KeyInteractionRecording, v)
+}
+
+// GetInteractionRecords retrieves the interaction records from context.
+func GetInteractionRecords(ctx *core.Context) ([]any, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	if raw, ok := ctx.Get(KeyInteractionRecords); ok && raw != nil {
+		if v, ok := raw.([]any); ok {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
+// SetInteractionRecords sets the interaction records in context.
+func SetInteractionRecords(ctx *core.Context, v []any) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(KeyInteractionRecords, v)
 }
 
 // GetExecutionWaiver retrieves the execution waiver from context.

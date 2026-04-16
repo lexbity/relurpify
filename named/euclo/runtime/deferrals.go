@@ -11,7 +11,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 	"gopkg.in/yaml.v3"
 )
 
@@ -71,7 +70,7 @@ func buildWaiverDeferredExecutionIssues(uow UnitOfWork, state *core.Context, now
 	if state == nil {
 		return nil
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyExecutionWaiver)
+	raw, ok := statebus.GetAny(state, "euclo.execution_waiver")
 	if !ok || raw == nil {
 		return nil
 	}
@@ -205,17 +204,17 @@ func SeedDeferredIssueState(state *core.Context, issues []DeferredExecutionIssue
 		return
 	}
 	if len(issues) == 0 {
-		statebus.SetAny(state, statekeys.KeyDeferredIssues, []DeferredExecutionIssue{})
-		statebus.SetAny(state, statekeys.KeyDeferredIssueIDs, []string{})
+		statebus.SetAny(state, "euclo.deferred_execution_issues", []DeferredExecutionIssue{})
+		statebus.SetAny(state, "euclo.deferred_issue_ids", []string{})
 		return
 	}
-	statebus.SetAny(state, statekeys.KeyDeferredIssues, issues)
-	statebus.SetAny(state, statekeys.KeyDeferredIssueIDs, DeferredIssueIDs(issues))
+	statebus.SetAny(state, "euclo.deferred_execution_issues", issues)
+	statebus.SetAny(state, "euclo.deferred_issue_ids", DeferredIssueIDs(issues))
 }
 
 func workspacePathFromTaskState(task *core.Task, state *core.Context) string {
 	if state != nil {
-		if path := strings.TrimSpace(statebus.GetString(state, statekeys.KeyWorkspace)); path != "" {
+		if path := strings.TrimSpace(statebus.GetString(state, "euclo.workspace")); path != "" {
 			return path
 		}
 	}
@@ -357,7 +356,7 @@ func evidenceFromObservation(obs guidance.EngineeringObservation, state *core.Co
 	if provider, ok := obs.Evidence["provider_state_snapshot"].(map[string]any); ok && provider != nil {
 		evidence.ProviderStateSnapshot = cloneMapAny(provider)
 	} else if state != nil {
-		if raw, ok := statebus.GetAny(state, statekeys.KeyProviderStateSnapshot); ok {
+		if raw, ok := statebus.GetAny(state, "euclo.provider_snapshots"); ok {
 			if provider, ok := raw.(map[string]any); ok && provider != nil {
 				evidence.ProviderStateSnapshot = cloneMapAny(provider)
 			}

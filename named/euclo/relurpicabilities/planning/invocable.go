@@ -10,31 +10,31 @@ import (
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
-// PlanningBehavior wraps an EucloCodingCapability as an execution.Behavior.
+// PlanningInvocable wraps an EucloCodingCapability as an execution.Invocable.
 //
 // BKC capabilities are SupportingOnly in the capability registry — users do not
 // name them directly — but they can be the primary work in a planning session.
-// PlanningBehavior is the correct dispatch path for this "orchestrated capability"
+// PlanningInvocable is the correct invocable path for this "orchestrated capability"
 // category: selected by system context, not by user intent.
-type PlanningBehavior struct {
+type PlanningInvocable struct {
 	capabilityID string
 	capability   euclotypes.EucloCodingCapability
 }
 
-// Deprecated: Use planning.NewInvocable instead
-func New(id string, cap euclotypes.EucloCodingCapability) *PlanningBehavior {
-	return &PlanningBehavior{capabilityID: id, capability: cap}
+// NewInvocable creates a PlanningInvocable for the given capability.
+func NewInvocable(id string, cap euclotypes.EucloCodingCapability) *PlanningInvocable {
+	return &PlanningInvocable{capabilityID: id, capability: cap}
 }
 
-func (b *PlanningBehavior) ID() string { return b.capabilityID }
+func (i *PlanningInvocable) ID() string { return i.capabilityID }
 
-func (b *PlanningBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*core.Result, error) {
+func (i *PlanningInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	// Build CapabilitySnapshot from the registry tool permissions — not from
 	// WorkflowStore presence, which was the bug in the previous adapter.
 	snapshot := eucloruntime.SnapshotCapabilities(in.Environment.Registry)
 
 	artifactState := euclotypes.ArtifactStateFromContext(in.State)
-	eligibility := b.capability.Eligible(artifactState, snapshot)
+	eligibility := i.capability.Eligible(artifactState, snapshot)
 	if !eligibility.Eligible {
 		return &core.Result{
 			Success: false,
@@ -56,7 +56,7 @@ func (b *PlanningBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		Telemetry:     in.Telemetry,
 	}
 
-	result := b.capability.Execute(ctx, envelope)
+	result := i.capability.Execute(ctx, envelope)
 
 	var err error
 	if result.FailureInfo != nil {
@@ -72,3 +72,5 @@ func (b *PlanningBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		Error: err,
 	}, nil
 }
+
+func (i *PlanningInvocable) IsPrimary() bool { return true }

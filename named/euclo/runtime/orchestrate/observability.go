@@ -82,8 +82,13 @@ func (orchestrateRecorder) persistInteractiveState(
 	iState.PhasesExecuted = append([]string{}, iResult.PhasesExecuted...)
 	euclostate.SetInteractionState(env.State, iState)
 	if recordingEmitter != nil && recordingEmitter.Recording != nil {
-		env.State.Set("euclo.interaction_recording", recordingEmitter.Recording.ToStateMap())
-		env.State.Set("euclo.interaction_records", recordingEmitter.Recording.Records())
+		euclostate.SetInteractionRecording(env.State, recordingEmitter.Recording.ToStateMap())
+		records := recordingEmitter.Recording.Records()
+		anyRecords := make([]any, len(records))
+		for i, r := range records {
+			anyRecords[i] = r
+		}
+		euclostate.SetInteractionRecords(env.State, anyRecords)
 	}
 	if machine != nil {
 		if raw, ok := machine.State()["propose.items"]; ok && raw != nil {

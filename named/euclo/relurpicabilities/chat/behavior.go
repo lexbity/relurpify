@@ -15,13 +15,14 @@ import (
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
+// Deprecated: Use NewAskInvocable instead
+func NewAskBehavior() askBehavior       { return askBehavior{} }
+func NewInspectBehavior() inspectBehavior   { return inspectBehavior{} }
+func NewImplementBehavior() implementBehavior { return implementBehavior{} }
+
 type askBehavior struct{}
 type inspectBehavior struct{}
 type implementBehavior struct{}
-
-func NewAskBehavior() execution.Behavior       { return askBehavior{} }
-func NewInspectBehavior() execution.Behavior   { return inspectBehavior{} }
-func NewImplementBehavior() execution.Behavior { return implementBehavior{} }
 
 func (askBehavior) ID() string { return Ask }
 
@@ -50,7 +51,7 @@ func (askBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*cor
 		"used_reflection": false,
 	}
 	if in.State != nil {
-		in.State.Set("pipeline.analyze", answerPayload)
+		euclostate.SetPipelineAnalyze(in.State, answerPayload)
 	}
 	artifacts = append(artifacts, euclotypes.Artifact{
 		ID:         "chat_ask_answer",
@@ -71,7 +72,7 @@ func (askBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*cor
 				"candidates":    planResult.Data,
 			}
 			if in.State != nil {
-				in.State.Set("euclo.plan_candidates", planPayload)
+				euclostate.SetPlanCandidates(in.State, planPayload)
 			}
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "chat_ask_plan_candidates",
@@ -98,13 +99,11 @@ func (askBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*cor
 	if reviewErr == nil && reviewResult != nil && reviewResult.Success {
 		reviewPayload := behaviorReviewPayload("chat.ask", execution.ResultSummary(reviewResult), reviewResult.Data)
 		if in.State != nil {
-			in.State.Set("euclo.review_findings", reviewPayload)
-			if analyze, ok := in.State.Get("pipeline.analyze"); ok && analyze != nil {
-				if record, ok := analyze.(map[string]any); ok {
-					record["used_reflection"] = true
-					record["review_summary"] = execution.ResultSummary(reviewResult)
-					in.State.Set("pipeline.analyze", record)
-				}
+			euclostate.SetReviewFindings(in.State, reviewPayload)
+			if analyze, ok := euclostate.GetPipelineAnalyze(in.State); ok && len(analyze) > 0 {
+				analyze["used_reflection"] = true
+				analyze["review_summary"] = execution.ResultSummary(reviewResult)
+				euclostate.SetPipelineAnalyze(in.State, analyze)
 			}
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
@@ -149,7 +148,7 @@ func (inspectBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 		"compatibility": inspectNeedsCompatibilityAssessment(in.Task),
 	}
 	if in.State != nil {
-		in.State.Set("pipeline.analyze", inspectPayload)
+		euclostate.SetPipelineAnalyze(in.State, inspectPayload)
 	}
 	artifacts = append(artifacts, euclotypes.Artifact{
 		ID:         "chat_inspect_analysis",
@@ -171,7 +170,7 @@ func (inspectBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 		if reviewErr == nil && reviewResult != nil && reviewResult.Success {
 			reviewPayload := behaviorReviewPayload("chat.inspect", execution.ResultSummary(reviewResult), reviewResult.Data)
 			if in.State != nil {
-				in.State.Set("euclo.review_findings", reviewPayload)
+				euclostate.SetReviewFindings(in.State, reviewPayload)
 			}
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "chat_inspect_review_reflection_fallback",
@@ -186,11 +185,9 @@ func (inspectBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 
 	if summary := executeInspectChain(ctx, in); strings.TrimSpace(summary) != "" {
 		if in.State != nil {
-			if existing, ok := in.State.Get("pipeline.analyze"); ok && existing != nil {
-				if record, ok := existing.(map[string]any); ok {
-					record["inspection_summary"] = summary
-					in.State.Set("pipeline.analyze", record)
-				}
+			if existing, ok := euclostate.GetPipelineAnalyze(in.State); ok && len(existing) > 0 {
+				existing["inspection_summary"] = summary
+				euclostate.SetPipelineAnalyze(in.State, existing)
 			}
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
@@ -204,7 +201,7 @@ func (inspectBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 	}
 
 	if inspectNeedsCompatibilityAssessment(in.Task) {
-		if raw, ok := in.State.Get("euclo.compatibility_assessment"); ok && raw != nil {
+		if raw, ok := euclostate.GetCompatibilityAssessment(in.State); ok && len(raw) > 0 {
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "chat_inspect_compatibility",
 				Kind:       euclotypes.ArtifactKindCompatibilityAssessment,
@@ -218,12 +215,12 @@ func (inspectBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 		}
 		compatPayload := buildCompatibilityAssessment(in.Task, inspectResult, nil)
 		if in.State != nil {
-			if chainSummary, ok := in.State.Get("euclo.inspect_compatibility_summary"); ok && chainSummary != nil {
+			if chainSummary, ok := euclostate.GetInspectCompatibilitySummary(in.State); ok && strings.TrimSpace(chainSummary) != "" {
 				compatPayload["chainer_summary"] = chainSummary
 			}
 		}
 		if in.State != nil {
-			in.State.Set("euclo.compatibility_assessment", compatPayload)
+			euclostate.SetCompatibilityAssessment(in.State, compatPayload)
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "chat_inspect_compatibility",
@@ -253,7 +250,7 @@ func writeBehaviorFinalOutput(state *core.Context, mode string, result *core.Res
 	if reviewSummary = strings.TrimSpace(reviewSummary); reviewSummary != "" {
 		payload["review_summary"] = reviewSummary
 	}
-	state.Set("pipeline.final_output", payload)
+	euclostate.SetPipelineFinalOutput(state, payload)
 }
 
 func behaviorOutputText(result *core.Result) string {
@@ -343,10 +340,8 @@ Return a short plain-text compatibility summary covering likely breakage risk, c
 		execution.AppendDiagnostic(in.State, "euclo.review_findings", "inspect chainer synthesis degraded: "+err.Error())
 		return ""
 	}
-	if raw, ok := in.State.Get("euclo.inspect_summary"); ok && raw != nil {
-		if text, ok := raw.(string); ok {
-			return strings.TrimSpace(text)
-		}
+	if raw, ok := euclostate.GetInspectSummary(in.State); ok && strings.TrimSpace(raw) != "" {
+		return strings.TrimSpace(raw)
 	}
 	return ""
 }
@@ -435,11 +430,9 @@ func (implementBehavior) Execute(ctx context.Context, in execution.ExecuteInput)
 	}
 	editIntentPayload := editResult.Data
 	if _, hasEdits := editIntentPayload["edits"]; !hasEdits && in.State != nil {
-		if existing, ok := in.State.Get("pipeline.code"); ok && existing != nil {
-			if typed, ok := existing.(map[string]any); ok {
-				if _, existingEdits := typed["edits"]; existingEdits {
-					editIntentPayload = typed
-				}
+		if existing, ok := euclostate.GetPipelineCode(in.State); ok && len(existing) > 0 {
+			if _, existingEdits := existing["edits"]; existingEdits {
+				editIntentPayload = existing
 			}
 		}
 	}
@@ -462,23 +455,21 @@ func (implementBehavior) Execute(ctx context.Context, in execution.ExecuteInput)
 		},
 	)
 	if in.State != nil {
-		in.State.Set("pipeline.code", editIntentPayload)
+		euclostate.SetPipelineCode(in.State, editIntentPayload)
 	}
 	if verificationArtifacts, executed, execErr := localbehavior.ExecuteVerificationFlow(ctx, localExecutionEnvelope(in), eucloruntime.SnapshotCapabilities(in.Environment.Registry)); execErr != nil {
 		return &core.Result{Success: false, Error: execErr}, execErr
 	} else if executed {
 		artifacts = append(artifacts, verificationArtifacts...)
-		if rawVerify, ok := in.State.Get("pipeline.verify"); ok && rawVerify != nil {
-			if verifyPayload, ok := rawVerify.(map[string]any); ok && localbehavior.VerificationPayloadFailed(verifyPayload) {
-				repairResult := localbehavior.NewFailedVerificationRepairCapability(in.Environment).Execute(ctx, localExecutionEnvelope(in))
-				artifacts = append(artifacts, repairResult.Artifacts...)
-				execution.MergeStateArtifactsToContext(in.State, artifacts)
-				if repairResult.Status == euclotypes.ExecutionStatusFailed {
-					err := fmt.Errorf("%s", firstNonEmpty(strings.TrimSpace(repairResult.Summary), "verification repair failed"))
-					return &core.Result{Success: false, Error: err, Data: map[string]any{"artifacts": artifacts}}, err
-				}
-				return execution.SuccessResult(firstNonEmpty(strings.TrimSpace(repairResult.Summary), "chat implement repaired verification failure"), artifacts)
+		if rawVerify, ok := euclostate.GetPipelineVerify(in.State); ok && len(rawVerify) > 0 && localbehavior.VerificationPayloadFailed(rawVerify) {
+			repairResult := localbehavior.NewFailedVerificationRepairCapability(in.Environment).Execute(ctx, localExecutionEnvelope(in))
+			artifacts = append(artifacts, repairResult.Artifacts...)
+			execution.MergeStateArtifactsToContext(in.State, artifacts)
+			if repairResult.Status == euclotypes.ExecutionStatusFailed {
+				err := fmt.Errorf("%s", firstNonEmpty(strings.TrimSpace(repairResult.Summary), "verification repair failed"))
+				return &core.Result{Success: false, Error: err, Data: map[string]any{"artifacts": artifacts}}, err
 			}
+			return execution.SuccessResult(firstNonEmpty(strings.TrimSpace(repairResult.Summary), "chat implement repaired verification failure"), artifacts)
 		}
 		execution.MergeStateArtifactsToContext(in.State, artifacts)
 		return execution.SuccessResult("chat implement completed successfully", artifacts)
@@ -493,13 +484,9 @@ func (implementBehavior) Execute(ctx context.Context, in execution.ExecuteInput)
 	if in.State == nil {
 		return &core.Result{Success: false, Error: fmt.Errorf("verification state unavailable")}, fmt.Errorf("verification state unavailable")
 	}
-	rawVerify, ok := in.State.Get("pipeline.verify")
-	if !ok || rawVerify == nil {
+	verifyPayload, ok := euclostate.GetPipelineVerify(in.State)
+	if !ok || len(verifyPayload) == 0 {
 		return &core.Result{Success: false, Error: fmt.Errorf("verification recipe completed without structured verification evidence")}, fmt.Errorf("verification recipe completed without structured verification evidence")
-	}
-	verifyPayload, ok := rawVerify.(map[string]any)
-	if !ok {
-		return &core.Result{Success: false, Error: fmt.Errorf("verification evidence was not structured")}, fmt.Errorf("verification evidence was not structured")
 	}
 	if _, ok := verifyPayload["provenance"]; !ok {
 		verifyPayload["provenance"] = "executed"
@@ -507,7 +494,7 @@ func (implementBehavior) Execute(ctx context.Context, in execution.ExecuteInput)
 	if _, ok := verifyPayload["run_id"]; !ok {
 		verifyPayload["run_id"] = strings.TrimSpace(in.Work.RunID)
 	}
-	in.State.Set("pipeline.verify", verifyPayload)
+	euclostate.SetPipelineVerify(in.State, verifyPayload)
 	artifacts = append(artifacts, euclotypes.Artifact{
 		ID:         "chat_implement_verification",
 		Kind:       euclotypes.ArtifactKindVerification,

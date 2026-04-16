@@ -1,11 +1,8 @@
 package relurpicabilities
 
 import (
-	"context"
-
 	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 )
 
 type WorkContext struct {
@@ -24,9 +21,4 @@ type RoutineInput struct {
 	Work          WorkContext
 	Environment   agentenv.AgentEnvironment
 	ServiceBundle any
-}
-
-type SupportingRoutine interface {
-	ID() string
-	Execute(context.Context, RoutineInput) ([]euclotypes.Artifact, error)
 }

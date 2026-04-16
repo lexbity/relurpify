@@ -3,72 +3,105 @@ package archaeology
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
 
 // Invocable implementations for archaeology behaviors.
 
-// exploreInvocable wraps exploreBehavior as an Invocable.
-type exploreInvocable struct {
-	behavior execution.Behavior
-}
+// ExploreInvocable implements the explore capability.
+type ExploreInvocable struct{}
 
 // NewExploreInvocable creates a new Invocable for the explore capability.
 func NewExploreInvocable() execution.Invocable {
-	return &exploreInvocable{behavior: NewExploreBehavior()}
+	return &ExploreInvocable{}
 }
 
-func (e *exploreInvocable) ID() string { return e.behavior.ID() }
+func (e *ExploreInvocable) ID() string { return Explore }
 
-func (e *exploreInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
-	execInput := convertInvokeInputToExecuteInput(in)
-	return e.behavior.Execute(ctx, execInput)
+func (e *ExploreInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	execInput := execution.ExecuteInput{
+		Task:                 in.Task,
+		ExecutionTask:        in.ExecutionTask,
+		State:                in.State,
+		Mode:                 in.Mode,
+		Profile:              in.Profile,
+		Work:                 in.Work,
+		Environment:          in.Environment,
+		ServiceBundle:        in.ServiceBundle,
+		WorkflowExecutor:     in.WorkflowExecutor,
+		Telemetry:            in.Telemetry,
+		InvokeSupporting:     in.InvokeSupporting,
+	}
+	// Call the underlying behavior's Execute method
+	exploreBehavior := exploreBehavior{}
+	return exploreBehavior.Execute(ctx, execInput)
 }
 
-func (e *exploreInvocable) IsPrimary() bool { return true }
+func (e *ExploreInvocable) IsPrimary() bool { return true }
 
-// compilePlanInvocable wraps compilePlanBehavior as an Invocable.
-type compilePlanInvocable struct {
-	behavior execution.Behavior
-}
+// CompilePlanInvocable implements the compile-plan capability.
+type CompilePlanInvocable struct{}
 
 // NewCompilePlanInvocable creates a new Invocable for the compile-plan capability.
 func NewCompilePlanInvocable() execution.Invocable {
-	return &compilePlanInvocable{behavior: NewCompilePlanBehavior()}
+	return &CompilePlanInvocable{}
 }
 
-func (c *compilePlanInvocable) ID() string { return c.behavior.ID() }
+func (c *CompilePlanInvocable) ID() string { return CompilePlan }
 
-func (c *compilePlanInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
-	execInput := convertInvokeInputToExecuteInput(in)
-	return c.behavior.Execute(ctx, execInput)
+func (c *CompilePlanInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	execInput := execution.ExecuteInput{
+		Task:                 in.Task,
+		ExecutionTask:        in.ExecutionTask,
+		State:                in.State,
+		Mode:                 in.Mode,
+		Profile:              in.Profile,
+		Work:                 in.Work,
+		Environment:          in.Environment,
+		ServiceBundle:        in.ServiceBundle,
+		WorkflowExecutor:     in.WorkflowExecutor,
+		Telemetry:            in.Telemetry,
+		InvokeSupporting:     in.InvokeSupporting,
+	}
+	// Call the underlying behavior's Execute method
+	compilePlanBehavior := compilePlanBehavior{}
+	return compilePlanBehavior.Execute(ctx, execInput)
 }
 
-func (c *compilePlanInvocable) IsPrimary() bool { return true }
+func (c *CompilePlanInvocable) IsPrimary() bool { return true }
 
-// implementPlanInvocable wraps implementPlanBehavior as an Invocable.
-type implementPlanInvocable struct {
-	behavior execution.Behavior
-}
+// ImplementPlanInvocable implements the implement-plan capability.
+type ImplementPlanInvocable struct{}
 
 // NewImplementPlanInvocable creates a new Invocable for the implement-plan capability.
 func NewImplementPlanInvocable() execution.Invocable {
-	return &implementPlanInvocable{behavior: NewImplementPlanBehavior()}
+	return &ImplementPlanInvocable{}
 }
 
-func (i *implementPlanInvocable) ID() string { return i.behavior.ID() }
+func (i *ImplementPlanInvocable) ID() string { return ImplementPlan }
 
-func (i *implementPlanInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
-	execInput := convertInvokeInputToExecuteInput(in)
-	return i.behavior.Execute(ctx, execInput)
+func (i *ImplementPlanInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	execInput := execution.ExecuteInput{
+		Task:                 in.Task,
+		ExecutionTask:        in.ExecutionTask,
+		State:                in.State,
+		Mode:                 in.Mode,
+		Profile:              in.Profile,
+		Work:                 in.Work,
+		Environment:          in.Environment,
+		ServiceBundle:        in.ServiceBundle,
+		WorkflowExecutor:     in.WorkflowExecutor,
+		Telemetry:            in.Telemetry,
+		InvokeSupporting:     in.InvokeSupporting,
+	}
+	// Call the underlying behavior's Execute method
+	implementPlanBehavior := implementPlanBehavior{}
+	return implementPlanBehavior.Execute(ctx, execInput)
 }
 
-func (i *implementPlanInvocable) IsPrimary() bool { return true }
+func (i *ImplementPlanInvocable) IsPrimary() bool { return true }
 
 // NewSupportingInvocables returns all supporting invocables for the archaeology package.
 func NewSupportingInvocables() []execution.Invocable {
@@ -176,44 +209,6 @@ func (s *scopeExpandInvocable) Invoke(ctx context.Context, in execution.InvokeIn
 
 func (s *scopeExpandInvocable) IsPrimary() bool { return false }
 
-// convertInvokeInputToExecuteInput converts the new InvokeInput to the legacy ExecuteInput.
-func convertInvokeInputToExecuteInput(in execution.InvokeInput) execution.ExecuteInput {
-	return execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		RunSupportingRoutine: convertInvokeSupportingToRunSupporting(in.InvokeSupporting),
-	}
-}
-
-// convertInvokeSupportingToRunSupporting adapts the new InvokeSupporting signature
-// to the legacy RunSupportingRoutine signature.
-func convertInvokeSupportingToRunSupporting(
-	invokeSupporting func(context.Context, string, execution.InvokeInput) ([]euclotypes.Artifact, error),
-) func(context.Context, string, *core.Task, *core.Context, eucloruntime.UnitOfWork, agentenv.AgentEnvironment, execution.ServiceBundle) ([]euclotypes.Artifact, error) {
-	if invokeSupporting == nil {
-		return nil
-	}
-	return func(ctx context.Context, routineID string, task *core.Task, state *core.Context, work eucloruntime.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
-		in := execution.InvokeInput{
-			Task:          task,
-			State:         state,
-			Work:          work,
-			Environment:   env,
-			ServiceBundle: bundle,
-		}
-		return invokeSupporting(ctx, routineID, in)
-	}
-}
-
-// convertInvokeInputToRoutineInput converts InvokeInput to RoutineInput for supporting routine compatibility.
 func convertInvokeInputToRoutineInput(in execution.InvokeInput) euclorelurpic.RoutineInput {
 	return euclorelurpic.RoutineInput{
 		Task:  in.Task,

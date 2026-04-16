@@ -17,8 +17,8 @@ type convergenceGuardRoutine struct{}
 type coherenceAssessRoutine struct{}
 type scopeExpandRoutine struct{}
 
-func NewSupportingRoutines() []euclorelurpic.SupportingRoutine {
-	return []euclorelurpic.SupportingRoutine{
+func NewSupportingRoutines() []execution.Invocable {
+	return []execution.Invocable{
 		patternSurfaceRoutine{},
 		prospectiveAssessRoutine{},
 		convergenceGuardRoutine{},
@@ -28,6 +28,16 @@ func NewSupportingRoutines() []euclorelurpic.SupportingRoutine {
 }
 
 func (patternSurfaceRoutine) ID() string { return PatternSurface }
+
+func (patternSurfaceRoutine) IsPrimary() bool { return false }
+
+func (patternSurfaceRoutine) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	artifacts, err := patternSurfaceRoutine{}.Execute(ctx, routineInputFromInvokeInput(in))
+	if err != nil {
+		return nil, err
+	}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
+}
 
 func (patternSurfaceRoutine) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	patternRefs := append([]string(nil), in.Work.PatternRefs...)
@@ -65,6 +75,16 @@ func (patternSurfaceRoutine) Execute(ctx context.Context, in euclorelurpic.Routi
 
 func (prospectiveAssessRoutine) ID() string { return ProspectiveAssess }
 
+func (prospectiveAssessRoutine) IsPrimary() bool { return false }
+
+func (prospectiveAssessRoutine) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	artifacts, err := prospectiveAssessRoutine{}.Execute(ctx, routineInputFromInvokeInput(in))
+	if err != nil {
+		return nil, err
+	}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
+}
+
 func (prospectiveAssessRoutine) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	requestSummary := map[string]any{}
 	if bundle, ok := archaeologyBundle(in); ok && bundle.Archaeo != nil && strings.TrimSpace(workflowIDFromTask(in.Task)) != "" {
@@ -96,6 +116,16 @@ func (prospectiveAssessRoutine) Execute(ctx context.Context, in euclorelurpic.Ro
 
 func (convergenceGuardRoutine) ID() string { return ConvergenceGuard }
 
+func (convergenceGuardRoutine) IsPrimary() bool { return false }
+
+func (convergenceGuardRoutine) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	artifacts, err := convergenceGuardRoutine{}.Execute(ctx, routineInputFromInvokeInput(in))
+	if err != nil {
+		return nil, err
+	}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
+}
+
 func (convergenceGuardRoutine) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	learning := map[string]any{}
 	if bundle, ok := archaeologyBundle(in); ok && bundle.Archaeo != nil && strings.TrimSpace(workflowIDFromTask(in.Task)) != "" {
@@ -124,6 +154,16 @@ func (convergenceGuardRoutine) Execute(ctx context.Context, in euclorelurpic.Rou
 }
 
 func (coherenceAssessRoutine) ID() string { return CoherenceAssess }
+
+func (coherenceAssessRoutine) IsPrimary() bool { return false }
+
+func (coherenceAssessRoutine) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	artifacts, err := coherenceAssessRoutine{}.Execute(ctx, routineInputFromInvokeInput(in))
+	if err != nil {
+		return nil, err
+	}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
+}
 
 func (coherenceAssessRoutine) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	summaryPayload := map[string]any{}
@@ -156,6 +196,16 @@ func (coherenceAssessRoutine) Execute(ctx context.Context, in euclorelurpic.Rout
 }
 
 func (scopeExpandRoutine) ID() string { return ScopeExpansionAssess }
+
+func (scopeExpandRoutine) IsPrimary() bool { return false }
+
+func (scopeExpandRoutine) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	artifacts, err := scopeExpandRoutine{}.Execute(ctx, routineInputFromInvokeInput(in))
+	if err != nil {
+		return nil, err
+	}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
+}
 
 func (scopeExpandRoutine) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	activePlan := map[string]any{}
@@ -200,4 +250,22 @@ func workflowIDFromTask(task *core.Task) string {
 func archaeologyBundle(in euclorelurpic.RoutineInput) (execution.ServiceBundle, bool) {
 	bundle, ok := in.ServiceBundle.(execution.ServiceBundle)
 	return bundle, ok
+}
+
+func routineInputFromInvokeInput(in execution.InvokeInput) euclorelurpic.RoutineInput {
+	return euclorelurpic.RoutineInput{
+		Task:  in.Task,
+		State: in.State,
+		Work: euclorelurpic.WorkContext{
+			PrimaryCapabilityID:             in.Work.PrimaryRelurpicCapabilityID,
+			SupportingRelurpicCapabilityIDs: append([]string(nil), in.Work.SupportingRelurpicCapabilityIDs...),
+			PatternRefs:                     append([]string(nil), in.Work.SemanticInputs.PatternRefs...),
+			TensionRefs:                     append([]string(nil), in.Work.SemanticInputs.TensionRefs...),
+			ProspectiveRefs:                 append([]string(nil), in.Work.SemanticInputs.ProspectiveRefs...),
+			ConvergenceRefs:                 append([]string(nil), in.Work.SemanticInputs.ConvergenceRefs...),
+			RequestProvenanceRefs:           append([]string(nil), in.Work.SemanticInputs.RequestProvenanceRefs...),
+		},
+		Environment:   in.Environment,
+		ServiceBundle: in.ServiceBundle,
+	}
 }

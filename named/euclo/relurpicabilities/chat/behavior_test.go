@@ -8,7 +8,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
 )
@@ -257,7 +256,7 @@ func TestSupportingRoutinesLocalReviewEmitsReviewArtifact(t *testing.T) {
 		t.Fatal("expected supporting routines")
 	}
 	state := core.NewContext()
-	in := euclorelurpic.RoutineInput{
+	artifactsResult, err := routines[0].Invoke(context.Background(), execution.InvokeInput{
 		Task: &core.Task{
 			Instruction: "inspect security posture of the handler",
 			Context: map[string]any{
@@ -265,12 +264,17 @@ func TestSupportingRoutinesLocalReviewEmitsReviewArtifact(t *testing.T) {
 			},
 		},
 		State: state,
-		Work:  euclorelurpic.WorkContext{PrimaryCapabilityID: Ask},
-	}
-	artifacts, err := routines[0].Execute(context.Background(), in)
+		Work: eucloruntime.UnitOfWork{
+			PrimaryRelurpicCapabilityID: Ask,
+			SemanticInputs: eucloruntime.SemanticInputBundle{
+				PatternRefs: []string{"handler.go"},
+			},
+		},
+	})
 	if err != nil {
 		t.Fatalf("local review routine: %v", err)
 	}
+	artifacts, _ := artifactsResult.Data["artifacts"].([]euclotypes.Artifact)
 	if len(artifacts) != 1 || artifacts[0].Kind != euclotypes.ArtifactKindReviewFindings {
 		t.Fatalf("expected review findings artifact, got %#v", artifacts)
 	}
@@ -290,15 +294,20 @@ func TestSupportingRoutinesTargetedVerificationReadsPipelineVerify(t *testing.T)
 		"status": "fail",
 		"checks": []any{map[string]any{"name": "go_test", "status": "fail"}},
 	})
-	in := euclorelurpic.RoutineInput{
+	artifactsResult, err := routines[1].Invoke(context.Background(), execution.InvokeInput{
 		Task:  &core.Task{Instruction: "repair verification"},
 		State: state,
-		Work:  euclorelurpic.WorkContext{PrimaryCapabilityID: Implement},
-	}
-	artifacts, err := routines[1].Execute(context.Background(), in)
+		Work: eucloruntime.UnitOfWork{
+			PrimaryRelurpicCapabilityID: Implement,
+			SemanticInputs: eucloruntime.SemanticInputBundle{
+				TensionRefs: []string{"verification"},
+			},
+		},
+	})
 	if err != nil {
 		t.Fatalf("targeted verification routine: %v", err)
 	}
+	artifacts, _ := artifactsResult.Data["artifacts"].([]euclotypes.Artifact)
 	if len(artifacts) != 1 || artifacts[0].Kind != euclotypes.ArtifactKindVerificationSummary {
 		t.Fatalf("expected verification summary artifact, got %#v", artifacts)
 	}

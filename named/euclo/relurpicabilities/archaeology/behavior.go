@@ -21,6 +21,7 @@ import (
 	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
 )
 
 type exploreBehavior struct{}
@@ -43,9 +44,12 @@ type enrichedArchaeoInput struct {
 	explorationID       string
 }
 
-func NewExploreBehavior() execution.Behavior       { return exploreBehavior{} }
-func NewCompilePlanBehavior() execution.Behavior   { return compilePlanBehavior{} }
-func NewImplementPlanBehavior() execution.Behavior { return implementPlanBehavior{} }
+// Deprecated: Use NewExploreInvocable instead
+func NewExploreBehavior() exploreBehavior       { return exploreBehavior{} }
+// Deprecated: Use NewCompilePlanInvocable instead
+func NewCompilePlanBehavior() compilePlanBehavior   { return compilePlanBehavior{} }
+// Deprecated: Use NewImplementPlanInvocable instead
+func NewImplementPlanBehavior() implementPlanBehavior { return implementPlanBehavior{} }
 
 func (exploreBehavior) ID() string { return Explore }
 
@@ -357,7 +361,7 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 		)
 		if in.State != nil {
 			euclostate.SetCurrentPlanStepID(in.State, stepID)
-			euclostate.SetExecutionStatus(in.State, map[string]any{
+			statebus.SetAny(in.State, "euclo.execution_status", map[string]any{
 				"status":          "executing",
 				"active_plan_id":  activePlanID(in.Work),
 				"active_step_id":  stepID,
@@ -548,7 +552,7 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 				"status": "pass",
 			}},
 		})
-		euclostate.SetExecutionStatus(in.State, map[string]any{
+		statebus.SetAny(in.State, "euclo.execution_status", map[string]any{
 			"status":          "completed",
 			"active_plan_id":  activePlanID(in.Work),
 			"completed_steps": completedSteps,
@@ -656,7 +660,7 @@ func executeImplementPlanViaRewoo(ctx context.Context, in execution.ExecuteInput
 			"checkpoint_refs": checkpointRefs,
 			"checks":          []any{map[string]any{"name": "rewoo_plan_execution", "status": "pass"}},
 		})
-		euclostate.SetExecutionStatus(in.State, map[string]any{
+		statebus.SetAny(in.State, "euclo.execution_status", map[string]any{
 			"status":          "completed",
 			"active_plan_id":  activePlanID(in.Work),
 			"completed_steps": completedSteps,

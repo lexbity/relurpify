@@ -20,100 +20,66 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/thoughtrecipes"
 )
 
-// behaviorRoutineAdapter wraps an execution.Behavior as a SupportingRoutine,
-// enabling it to be called via ExecuteRoutine (used by capability_direct_run).
-type behaviorRoutineAdapter struct {
-	id       string
-	behavior execution.Behavior
-}
-
-func (a *behaviorRoutineAdapter) ID() string { return a.id }
-
-func (a *behaviorRoutineAdapter) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
-	execInput := execution.ExecuteInput{
-		Task:          in.Task,
-		State:         in.State,
-		Environment:   in.Environment,
-		ServiceBundle: execution.ServiceBundle{},
-	}
-	// Type assert ServiceBundle from the any field
-	if in.ServiceBundle != nil {
-		if sb, ok := in.ServiceBundle.(execution.ServiceBundle); ok {
-			execInput.ServiceBundle = sb
-		}
-	}
-	result, err := a.behavior.Execute(ctx, execInput)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil || !result.Success {
-		if result != nil && result.Error != nil {
-			return nil, result.Error
-		}
-		return nil, fmt.Errorf("behavior %q returned unsuccessful result", a.id)
-	}
-	// Extract artifacts from result data if present.
-	if result.Data != nil {
-		if artifacts, ok := result.Data["artifacts"].([]euclotypes.Artifact); ok {
-			return artifacts, nil
-		}
-	}
-	return nil, nil
-}
-
 type Dispatcher struct {
 	env            agentenv.AgentEnvironment
-	behaviors      map[string]execution.Behavior
-	routines       map[string]euclorelurpic.SupportingRoutine
+	invocables     map[string]execution.Invocable
 	recipeRegistry *thoughtrecipes.PlanRegistry
 	recipeExecutor *thoughtrecipes.Executor
 }
 
 func NewDispatcher(env agentenv.AgentEnvironment) *Dispatcher {
 	d := &Dispatcher{
-		env:       env,
-		behaviors: map[string]execution.Behavior{},
-		routines:  map[string]euclorelurpic.SupportingRoutine{},
+		env:        env,
+		invocables: map[string]execution.Invocable{},
 	}
-	for _, behavior := range []execution.Behavior{
-		chatbehavior.NewAskBehavior(),
-		chatbehavior.NewInspectBehavior(),
-		chatbehavior.NewImplementBehavior(),
-		debugbehavior.NewInvestigateRepairBehavior(),
-		debugbehavior.NewSimpleRepairBehavior(),
-		archaeologybehavior.NewExploreBehavior(),
-		archaeologybehavior.NewCompilePlanBehavior(),
-		archaeologybehavior.NewImplementPlanBehavior(),
-		// Phase A: Register BKC capabilities via PlanningBehavior
-		planningbehavior.New(euclorelurpic.CapabilityBKCCompile, bkccap.NewCompileCapability(env)),
-		planningbehavior.New(euclorelurpic.CapabilityBKCStream, bkccap.NewStreamCapability(env)),
-		planningbehavior.New(euclorelurpic.CapabilityBKCCheckpoint, bkccap.NewCheckpointCapability(env)),
-		planningbehavior.New(euclorelurpic.CapabilityBKCInvalidate, bkccap.NewInvalidateCapability(env)),
+	// Register all primary capabilities as invocables.
+	for _, invocable := range []execution.Invocable{
+		// Chat capabilities
+		chatbehavior.NewAskInvocable(),
+		chatbehavior.NewInspectInvocable(),
+		chatbehavior.NewImplementInvocable(),
+		// Debug capabilities
+		debugbehavior.NewInvestigateRepairInvocable(),
+		debugbehavior.NewSimpleRepairInvocable(),
+		// Archaeology capabilities
+		archaeologybehavior.NewExploreInvocable(),
+		archaeologybehavior.NewCompilePlanInvocable(),
+		archaeologybehavior.NewImplementPlanInvocable(),
+		// Planning capabilities (BKC)
+		planningbehavior.NewInvocable(euclorelurpic.CapabilityBKCCompile, bkccap.NewCompileCapability(env)),
+		planningbehavior.NewInvocable(euclorelurpic.CapabilityBKCStream, bkccap.NewStreamCapability(env)),
+		planningbehavior.NewInvocable(euclorelurpic.CapabilityBKCCheckpoint, bkccap.NewCheckpointCapability(env)),
+		planningbehavior.NewInvocable(euclorelurpic.CapabilityBKCInvalidate, bkccap.NewInvalidateCapability(env)),
 	} {
-		d.behaviors[behavior.ID()] = behavior
+		d.invocables[invocable.ID()] = invocable
 	}
-	for _, routine := range append(append(chatbehavior.NewSupportingRoutines(), debugbehavior.NewSupportingRoutines()...), archaeologybehavior.NewSupportingRoutines()...) {
-		d.routines[routine.ID()] = routine
+	for _, invocable := range append(append(chatbehavior.NewSupportingRoutines(), debugbehavior.NewSupportingRoutines()...), archaeologybehavior.NewSupportingInvocables()...) {
+		d.invocables[invocable.ID()] = invocable
 	}
-	for _, routine := range []euclorelurpic.SupportingRoutine{localbehavior.DeferralsSurfaceRoutine{}, localbehavior.LearningPromoteRoutine{}} {
-		d.routines[routine.ID()] = routine
-	}
-	// Register BKC behaviors as routines so capability_direct_run can reach them.
-	bkcBehaviorIDs := []string{
-		euclorelurpic.CapabilityBKCCompile,
-		euclorelurpic.CapabilityBKCStream,
-		euclorelurpic.CapabilityBKCCheckpoint,
-		euclorelurpic.CapabilityBKCInvalidate,
-	}
-	for _, id := range bkcBehaviorIDs {
-		if b, ok := d.behaviors[id]; ok {
-			d.routines[id] = &behaviorRoutineAdapter{id: id, behavior: b}
-		}
+	for _, invocable := range []execution.Invocable{localbehavior.DeferralsSurfaceRoutine{}, localbehavior.LearningPromoteRoutine{}} {
+		d.invocables[invocable.ID()] = invocable
 	}
 	return d
 }
 
 func (d *Dispatcher) Execute(ctx context.Context, in execution.ExecuteInput) (*core.Result, error) {
+	invokeInput := execution.InvokeInput{
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: d.InvokeSupporting,
+	}
+	return d.Invoke(ctx, invokeInput)
+}
+
+func (d *Dispatcher) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	if d == nil {
 		return nil, fmt.Errorf("relurpic behavior service unavailable")
 	}
@@ -128,14 +94,14 @@ func (d *Dispatcher) Execute(ctx context.Context, in execution.ExecuteInput) (*c
 		in.Work.PrimaryRelurpicCapabilityID = in.Work.CapabilityExecutionSequence[0]
 	}
 
-	behaviorID := strings.TrimSpace(in.Work.PrimaryRelurpicCapabilityID)
-	if behaviorID == "" {
+	invocableID := strings.TrimSpace(in.Work.PrimaryRelurpicCapabilityID)
+	if invocableID == "" {
 		return nil, fmt.Errorf("relurpic behavior unavailable: no capability ID provided")
 	}
 
 	// Check if this is a thought recipe capability ID
-	if strings.HasPrefix(behaviorID, "euclo:recipe.") && d.recipeRegistry != nil && d.recipeExecutor != nil {
-		plan, ok := d.recipeRegistry.Get(behaviorID)
+	if strings.HasPrefix(invocableID, "euclo:recipe.") && d.recipeRegistry != nil && d.recipeExecutor != nil {
+		plan, ok := d.recipeRegistry.Get(invocableID)
 		if ok {
 			recipeResult, err := d.recipeExecutor.Execute(ctx, plan, in.Task, in.Environment)
 			if err != nil {
@@ -143,15 +109,14 @@ func (d *Dispatcher) Execute(ctx context.Context, in execution.ExecuteInput) (*c
 			}
 			return recipeResultToCoreResult(recipeResult), nil
 		}
-		return nil, fmt.Errorf("thought recipe %q not found", behaviorID)
+		return nil, fmt.Errorf("thought recipe %q not found", invocableID)
 	}
 
-	behavior, ok := d.behaviors[behaviorID]
+	invocable, ok := d.invocables[invocableID]
 	if !ok {
-		return nil, fmt.Errorf("relurpic behavior %q unavailable", behaviorID)
+		return nil, fmt.Errorf("relurpic behavior %q unavailable", invocableID)
 	}
-	in.RunSupportingRoutine = d.ExecuteRoutine
-	return behavior.Execute(ctx, in)
+	return invocable.Invoke(ctx, in)
 }
 
 // SetRecipeRegistry sets the recipe registry and executor for thought recipe support.
@@ -164,18 +129,18 @@ func (d *Dispatcher) SetRecipeRegistry(registry *thoughtrecipes.PlanRegistry, ex
 }
 
 // RegisterSupporting adds or replaces a supporting routine in the dispatcher.
-func (d *Dispatcher) RegisterSupporting(routine euclorelurpic.SupportingRoutine) {
-	if d == nil || routine == nil {
+func (d *Dispatcher) RegisterSupporting(invocable execution.Invocable) {
+	if d == nil || invocable == nil {
 		return
 	}
-	id := strings.TrimSpace(routine.ID())
+	id := strings.TrimSpace(invocable.ID())
 	if id == "" {
 		return
 	}
-	if d.routines == nil {
-		d.routines = map[string]euclorelurpic.SupportingRoutine{}
+	if d.invocables == nil {
+		d.invocables = map[string]execution.Invocable{}
 	}
-	d.routines[id] = routine
+	d.invocables[id] = invocable
 }
 
 // recipeResultToCoreResult converts a RecipeResult to a core.Result.
@@ -209,7 +174,7 @@ func recipeResultToCoreResult(recipeResult *thoughtrecipes.RecipeResult) *core.R
 // ExecuteSequence executes a sequence of capabilities (AND or OR).
 // For AND: executes all capabilities sequentially, accumulating state.
 // For OR: executes only the first capability (the "best" one selected by classifier).
-func (d *Dispatcher) ExecuteSequence(ctx context.Context, in execution.ExecuteInput) (*core.Result, error) {
+func (d *Dispatcher) ExecuteSequence(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	if d == nil {
 		return nil, fmt.Errorf("relurpic behavior service unavailable")
 	}
@@ -221,13 +186,24 @@ func (d *Dispatcher) ExecuteSequence(ctx context.Context, in execution.ExecuteIn
 
 	// Single element: use regular Execute path
 	if len(sequence) == 1 {
-		behaviorID := strings.TrimSpace(sequence[0])
-		behavior, ok := d.behaviors[behaviorID]
+		invocableID := strings.TrimSpace(sequence[0])
+		invocable, ok := d.invocables[invocableID]
 		if !ok {
-			return nil, fmt.Errorf("relurpic behavior %q unavailable", behaviorID)
+			return nil, fmt.Errorf("relurpic behavior %q unavailable", invocableID)
 		}
-		in.RunSupportingRoutine = d.ExecuteRoutine
-		return behavior.Execute(ctx, in)
+		return invocable.Invoke(ctx, execution.InvokeInput{
+			Task:             in.Task,
+			ExecutionTask:    in.ExecutionTask,
+			State:            in.State,
+			Mode:             in.Mode,
+			Profile:          in.Profile,
+			Work:             in.Work,
+			Environment:      in.Environment,
+			ServiceBundle:    in.ServiceBundle,
+			WorkflowExecutor: in.WorkflowExecutor,
+			Telemetry:        in.Telemetry,
+			InvokeSupporting: d.InvokeSupporting,
+		})
 	}
 
 	// Multiple elements: handle according to operator
@@ -248,22 +224,22 @@ func (d *Dispatcher) ExecuteSequence(ctx context.Context, in execution.ExecuteIn
 
 // executeANDSequence executes all capabilities sequentially, accumulating state.
 // Stops on first failure.
-func (d *Dispatcher) executeANDSequence(ctx context.Context, in execution.ExecuteInput, sequence []string) (*core.Result, error) {
+func (d *Dispatcher) executeANDSequence(ctx context.Context, in execution.InvokeInput, sequence []string) (*core.Result, error) {
 	var lastResult *core.Result
 	var lastErr error
 
 	for i, capabilityID := range sequence {
-		behaviorID := strings.TrimSpace(capabilityID)
-		behavior, ok := d.behaviors[behaviorID]
+		invocableID := strings.TrimSpace(capabilityID)
+		invocable, ok := d.invocables[invocableID]
 		if !ok {
-			return nil, fmt.Errorf("relurpic behavior %q unavailable (step %d)", behaviorID, i+1)
+			return nil, fmt.Errorf("relurpic behavior %q unavailable (step %d)", invocableID, i+1)
 		}
 
 		// Update work for this step
 		stepWork := in.Work
-		stepWork.PrimaryRelurpicCapabilityID = behaviorID
+		stepWork.PrimaryRelurpicCapabilityID = invocableID
 
-		stepInput := execution.ExecuteInput{
+		stepInput := execution.InvokeInput{
 			Task:                 in.Task,
 			ExecutionTask:        in.ExecutionTask,
 			State:                in.State,
@@ -274,10 +250,10 @@ func (d *Dispatcher) executeANDSequence(ctx context.Context, in execution.Execut
 			ServiceBundle:        in.ServiceBundle,
 			WorkflowExecutor:     in.WorkflowExecutor,
 			Telemetry:            in.Telemetry,
-			RunSupportingRoutine: d.ExecuteRoutine,
+			InvokeSupporting:     d.InvokeSupporting,
 		}
 
-		lastResult, lastErr = behavior.Execute(ctx, stepInput)
+		lastResult, lastErr = invocable.Invoke(ctx, stepInput)
 		if lastErr != nil {
 			return lastResult, fmt.Errorf("capability sequence step %d (%s) failed: %w", i+1, capabilityID, lastErr)
 		}
@@ -293,24 +269,24 @@ func (d *Dispatcher) executeANDSequence(ctx context.Context, in execution.Execut
 
 // executeORSequence executes only the first (best) capability in the sequence.
 // The OR semantics mean "pick the best one" which was already determined by the classifier.
-func (d *Dispatcher) executeORSequence(ctx context.Context, in execution.ExecuteInput, sequence []string) (*core.Result, error) {
+func (d *Dispatcher) executeORSequence(ctx context.Context, in execution.InvokeInput, sequence []string) (*core.Result, error) {
 	if len(sequence) == 0 {
 		return nil, fmt.Errorf("empty capability sequence for OR execution")
 	}
 
 	// Execute only the first capability
 	capabilityID := sequence[0]
-	behaviorID := strings.TrimSpace(capabilityID)
-	behavior, ok := d.behaviors[behaviorID]
+	invocableID := strings.TrimSpace(capabilityID)
+	invocable, ok := d.invocables[invocableID]
 	if !ok {
-		return nil, fmt.Errorf("relurpic behavior %q unavailable (OR step)", behaviorID)
+		return nil, fmt.Errorf("relurpic behavior %q unavailable (OR step)", invocableID)
 	}
 
 	// Update work for this step
 	stepWork := in.Work
-	stepWork.PrimaryRelurpicCapabilityID = behaviorID
+	stepWork.PrimaryRelurpicCapabilityID = invocableID
 
-	stepInput := execution.ExecuteInput{
+	stepInput := execution.InvokeInput{
 		Task:                 in.Task,
 		ExecutionTask:        in.ExecutionTask,
 		State:                in.State,
@@ -321,10 +297,10 @@ func (d *Dispatcher) executeORSequence(ctx context.Context, in execution.Execute
 		ServiceBundle:        in.ServiceBundle,
 		WorkflowExecutor:     in.WorkflowExecutor,
 		Telemetry:            in.Telemetry,
-		RunSupportingRoutine: d.ExecuteRoutine,
+		InvokeSupporting:     d.InvokeSupporting,
 	}
 
-	result, err := behavior.Execute(ctx, stepInput)
+	result, err := invocable.Invoke(ctx, stepInput)
 	if err != nil {
 		return result, fmt.Errorf("OR capability execution (%s) failed: %w", capabilityID, err)
 	}
@@ -337,27 +313,38 @@ func (d *Dispatcher) executeORSequence(ctx context.Context, in execution.Execute
 	return result, nil
 }
 
-func (d *Dispatcher) ExecuteRoutine(ctx context.Context, routineID string, task *core.Task, state *core.Context, work runtimepkg.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
+func (d *Dispatcher) InvokeSupporting(ctx context.Context, routineID string, in execution.InvokeInput) ([]euclotypes.Artifact, error) {
 	if d == nil {
 		return nil, fmt.Errorf("relurpic behavior service unavailable")
 	}
 	routineID = strings.TrimSpace(routineID)
-	routine, ok := d.routines[routineID]
+	invocable, ok := d.invocables[routineID]
 	if !ok {
 		return nil, fmt.Errorf("routine %q not registered in dispatcher", routineID)
 	}
-	return routine.Execute(ctx, euclorelurpic.RoutineInput{
-		Task:  task,
-		State: state,
-		Work: euclorelurpic.WorkContext{
-			PrimaryCapabilityID:             work.PrimaryRelurpicCapabilityID,
-			SupportingRelurpicCapabilityIDs: append([]string(nil), work.SupportingRelurpicCapabilityIDs...),
-			PatternRefs:                     append([]string(nil), work.SemanticInputs.PatternRefs...),
-			TensionRefs:                     append([]string(nil), work.SemanticInputs.TensionRefs...),
-			ProspectiveRefs:                 append([]string(nil), work.SemanticInputs.ProspectiveRefs...),
-			ConvergenceRefs:                 append([]string(nil), work.SemanticInputs.ConvergenceRefs...),
-			RequestProvenanceRefs:           append([]string(nil), work.SemanticInputs.RequestProvenanceRefs...),
-		},
+	result, err := invocable.Invoke(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || !result.Success {
+		if result != nil && result.Error != nil {
+			return nil, result.Error
+		}
+		return nil, fmt.Errorf("routine %q returned unsuccessful result", routineID)
+	}
+	if result.Data != nil {
+		if artifacts, ok := result.Data["artifacts"].([]euclotypes.Artifact); ok {
+			return artifacts, nil
+		}
+	}
+	return nil, nil
+}
+
+func (d *Dispatcher) ExecuteRoutine(ctx context.Context, routineID string, task *core.Task, state *core.Context, work runtimepkg.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
+	return d.InvokeSupporting(ctx, routineID, execution.InvokeInput{
+		Task:          task,
+		State:         state,
+		Work:          work,
 		Environment:   env,
 		ServiceBundle: bundle,
 	})

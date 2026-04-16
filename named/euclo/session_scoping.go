@@ -21,9 +21,9 @@ func enforceSessionScoping(state *core.Context, sessionID string) error {
 	if state == nil || sessionID == "" {
 		return nil
 	}
-	existing := statebus.GetString(state, state.KeySessionID)
+	existing := statebus.GetString(state, "euclo.session_id")
 	if existing == "" {
-		statebus.SetAny(state, state.KeySessionID, sessionID)
+		statebus.SetAny(state, "euclo.session_id", sessionID)
 		return nil
 	}
 	if existing == sessionID {

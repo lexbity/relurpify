@@ -35,18 +35,20 @@ type executionReadBundle struct {
 func (a *Agent) shortCircuitResult(state *core.Context, prep executionPreparation) *core.Result {
 	data := map[string]any{}
 	if state != nil {
-		if raw, ok := statebus.GetAny(state, state.KeyLearningQueue); ok && raw != nil {
+		if raw, ok := statebus.GetAny(state, "euclo.learning_queue"); ok && raw != nil {
 			data["learning_queue"] = raw
 		}
-		if raw, ok := statebus.GetAny(state, state.KeyPendingLearningIDs); ok && raw != nil {
+		if raw, ok := statebus.GetAny(state, "euclo.pending_learning_interactions"); ok && raw != nil {
+			data["pending_learning_ids"] = raw
+		} else if raw, ok := statebus.GetAny(state, "euclo.pending_learning_ids"); ok && raw != nil {
 			data["pending_learning_ids"] = raw
 		}
-		if raw, ok := statebus.GetAny(state, state.KeyPendingGuidanceIDs); ok && raw != nil {
+		if raw, ok := statebus.GetAny(state, "euclo.pending_guidance_ids"); ok && raw != nil {
 			data["pending_guidance_ids"] = raw
 		}
-		if raw, ok := statebus.GetAny(state, state.KeyPhaseState); ok && raw != nil {
+		if raw, ok := statebus.GetAny(state, "euclo.phase_state"); ok && raw != nil {
 			data["phase_state"] = raw
-		} else if raw, ok := statebus.GetAny(state, state.KeyArchaeoPhaseState); ok && raw != nil {
+		} else if raw, ok := statebus.GetAny(state, "euclo.archaeo_phase_state"); ok && raw != nil {
 			data["phase_state"] = raw
 		}
 	}
@@ -75,7 +77,7 @@ func shouldShortCircuitExecution(state *core.Context) bool {
 	if state == nil {
 		return false
 	}
-	raw, ok := statebus.GetAny(state, state.KeyArchaeoPhaseState)
+	raw, ok := statebus.GetAny(state, "euclo.archaeo_phase_state")
 	if !ok || raw == nil {
 		return false
 	}
@@ -216,30 +218,31 @@ func (a *Agent) seedExecutionReadBundleState(state *core.Context, bundle *execut
 	if state == nil || bundle == nil {
 		return
 	}
-		statebus.SetAny(state, state.KeyExecutionReadBundle, bundle)
+		statebus.SetAny(state, "euclo.execution_read_bundle", bundle)
 	if bundle.activePlan != nil {
 		if bundle.activePlan.PhaseState != nil {
-			statebus.SetAny(state, state.KeyPhaseState, bundle.activePlan.PhaseState)
+			statebus.SetAny(state, "euclo.phase_state", bundle.activePlan.PhaseState)
 		}
 		if bundle.activePlan.ActivePlanVersion != nil {
-			statebus.SetAny(state, state.KeyActivePlanVersion, bundle.activePlan.ActivePlanVersion)
-			statebus.SetAny(state, state.KeyPreloadedActivePlanVersion, bundle.activePlan.ActivePlanVersion)
-			statebus.SetAny(state, state.KeyLivingPlan, &bundle.activePlan.ActivePlanVersion.Plan)
+			statebus.SetAny(state, "euclo.active_plan_version", bundle.activePlan.ActivePlanVersion)
+			statebus.SetAny(state, "euclo.preloaded_active_plan_version", bundle.activePlan.ActivePlanVersion)
+			statebus.SetAny(state, "euclo.living_plan", &bundle.activePlan.ActivePlanVersion.Plan)
 		}
 	}
 	if bundle.learningQueue != nil && len(bundle.learningQueue.PendingLearning) > 0 {
-		statebus.SetAny(state, state.KeyLearningQueue, bundle.learningQueue.PendingLearning)
-		statebus.SetAny(state, state.KeyPreloadedPendingLearning, bundle.learningQueue.PendingLearning)
+		statebus.SetAny(state, "euclo.learning_queue", bundle.learningQueue.PendingLearning)
+		statebus.SetAny(state, "euclo.preloaded_pending_learning", bundle.learningQueue.PendingLearning)
 		ids := make([]string, 0, len(bundle.learningQueue.PendingLearning))
 		for _, interaction := range bundle.learningQueue.PendingLearning {
 			ids = append(ids, interaction.ID)
 		}
-		statebus.SetAny(state, state.KeyPendingLearningIDs, ids)
-		statebus.SetAny(state, state.KeyBlockingLearningIDs, append([]string(nil), bundle.learningQueue.BlockingLearning...))
-		statebus.SetAny(state, state.KeyPreloadedBlockingLearningIDs, append([]string(nil), bundle.learningQueue.BlockingLearning...))
+		statebus.SetAny(state, "euclo.pending_learning_interactions", ids)
+		statebus.SetAny(state, "euclo.pending_learning_ids", ids)
+		statebus.SetAny(state, "euclo.has_blocking_learning", append([]string(nil), bundle.learningQueue.BlockingLearning...))
+		statebus.SetAny(state, "euclo.preloaded_blocking_learning", append([]string(nil), bundle.learningQueue.BlockingLearning...))
 	}
 	if bundle.learningQueue != nil && len(bundle.learningQueue.PendingGuidanceIDs) > 0 {
-		statebus.SetAny(state, state.KeyPendingGuidanceIDs, append([]string(nil), bundle.learningQueue.PendingGuidanceIDs...))
+		statebus.SetAny(state, "euclo.pending_guidance_ids", append([]string(nil), bundle.learningQueue.PendingGuidanceIDs...))
 	}
 }
 
@@ -271,7 +274,7 @@ func shouldHydratePersistedArtifacts(task *core.Task, state *core.Context, envel
 		return true
 	}
 	if state != nil {
-	if strings.TrimSpace(statebus.GetString(state, state.KeyRunID)) != "" {
+	if strings.TrimSpace(statebus.GetString(state, "euclo.run_id")) != "" {
 			return true
 		}
 	}

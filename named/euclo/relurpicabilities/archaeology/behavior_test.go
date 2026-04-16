@@ -8,7 +8,6 @@ import (
 	"time"
 
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/agentenv"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
 	"github.com/lexcodex/relurpify/framework/patterns"
@@ -816,7 +815,7 @@ func TestImplementPlanBehaviorBlocksOnLearningGateOffline(t *testing.T) {
 				TensionRefs:   []string{"tension:a"},
 			},
 		},
-		RunSupportingRoutine: func(ctx context.Context, routineID string, task *core.Task, state *core.Context, work eucloruntime.UnitOfWork, env agentenv.AgentEnvironment, bundle execution.ServiceBundle) ([]euclotypes.Artifact, error) {
+		InvokeSupporting: func(ctx context.Context, routineID string, in execution.InvokeInput) ([]euclotypes.Artifact, error) {
 			if routineID != ConvergenceGuard {
 				return nil, nil
 			}

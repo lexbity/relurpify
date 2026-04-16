@@ -12,11 +12,13 @@ import (
 	pipeexec "github.com/lexcodex/relurpify/named/euclo/execution/pipe"
 	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type investigateBehavior struct{}
 
-func NewInvestigateRepairBehavior() execution.Behavior { return investigateBehavior{} }
+// Deprecated: Use NewInvestigateRepairInvocable instead
+func NewInvestigateRepairBehavior() investigateBehavior { return investigateBehavior{} }
 
 func (investigateBehavior) ID() string { return InvestigateRepair }
 
@@ -104,7 +106,7 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		"Review the patch and verify it addresses the root cause.")
 	if reviewErr == nil && reviewResult != nil && reviewResult.Success && in.State != nil {
 		reviewPayload := debugReviewPayload(execution.ResultSummary(reviewResult), reviewResult.Data)
-		in.State.Set("euclo.review_findings", reviewPayload)
+		euclostate.SetReviewFindings(in.State, reviewPayload)
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "debug_investigate_review",
 			Kind:       euclotypes.ArtifactKindReviewFindings,
@@ -113,24 +115,22 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
 			Status:     "produced",
 		})
-		if existing, ok := in.State.Get("pipeline.verify"); ok && existing != nil {
-			if verifyPayload, ok := existing.(map[string]any); ok {
-				if _, ok := verifyPayload["provenance"]; !ok {
-					verifyPayload["provenance"] = "executed"
-				}
-				if _, ok := verifyPayload["run_id"]; !ok {
-					verifyPayload["run_id"] = strings.TrimSpace(in.Work.RunID)
-				}
-				in.State.Set("pipeline.verify", verifyPayload)
-				artifacts = append(artifacts, euclotypes.Artifact{
-					ID:         "debug_investigate_verification",
-					Kind:       euclotypes.ArtifactKindVerification,
-					Summary:    strings.TrimSpace(fmt.Sprint(verifyPayload["summary"])),
-					Payload:    verifyPayload,
-					ProducerID: in.Work.PrimaryRelurpicCapabilityID,
-					Status:     "produced",
-				})
+		if existing, ok := euclostate.GetPipelineVerify(in.State); ok && len(existing) > 0 {
+			if _, ok := existing["provenance"]; !ok {
+				existing["provenance"] = "executed"
 			}
+			if _, ok := existing["run_id"]; !ok {
+				existing["run_id"] = strings.TrimSpace(in.Work.RunID)
+			}
+			euclostate.SetPipelineVerify(in.State, existing)
+			artifacts = append(artifacts, euclotypes.Artifact{
+				ID:         "debug_investigate_verification",
+				Kind:       euclotypes.ArtifactKindVerification,
+				Summary:    strings.TrimSpace(fmt.Sprint(existing["summary"])),
+				Payload:    existing,
+				ProducerID: in.Work.PrimaryRelurpicCapabilityID,
+				Status:     "produced",
+			})
 		}
 	}
 	if verificationArtifacts, executed, execErr := localbehavior.ExecuteVerificationFlow(ctx, debugExecutionEnvelope(in), eucloruntime.SnapshotCapabilities(in.Environment.Registry)); execErr != nil {
@@ -138,15 +138,13 @@ func (investigateBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		return &core.Result{Success: false, Error: execErr}, execErr
 	} else if executed {
 		artifacts = append(artifacts, verificationArtifacts...)
-		if rawVerify, ok := in.State.Get("pipeline.verify"); ok && rawVerify != nil {
-			if verifyPayload, ok := rawVerify.(map[string]any); ok && localbehavior.VerificationPayloadFailed(verifyPayload) {
-				repairResult := localbehavior.NewFailedVerificationRepairCapability(in.Environment).Execute(ctx, debugExecutionEnvelope(in))
-				artifacts = append(artifacts, repairResult.Artifacts...)
-				execution.MergeStateArtifactsToContext(in.State, artifacts)
-				if repairResult.Status == euclotypes.ExecutionStatusFailed {
-					err := fmt.Errorf("%s", firstNonEmptyDebug(strings.TrimSpace(repairResult.Summary), "verification repair failed"))
-					return &core.Result{Success: false, Error: err, Data: map[string]any{"artifacts": artifacts}}, err
-				}
+		if rawVerify, ok := euclostate.GetPipelineVerify(in.State); ok && len(rawVerify) > 0 && localbehavior.VerificationPayloadFailed(rawVerify) {
+			repairResult := localbehavior.NewFailedVerificationRepairCapability(in.Environment).Execute(ctx, debugExecutionEnvelope(in))
+			artifacts = append(artifacts, repairResult.Artifacts...)
+			execution.MergeStateArtifactsToContext(in.State, artifacts)
+			if repairResult.Status == euclotypes.ExecutionStatusFailed {
+				err := fmt.Errorf("%s", firstNonEmptyDebug(strings.TrimSpace(repairResult.Summary), "verification repair failed"))
+				return &core.Result{Success: false, Error: err, Data: map[string]any{"artifacts": artifacts}}, err
 			}
 		}
 	}
@@ -233,22 +231,22 @@ func executeDebugPipelinePostpass(ctx context.Context, in execution.ExecuteInput
 		return nil
 	}
 	var artifacts []euclotypes.Artifact
-	if raw, ok := in.State.Get("euclo.debug_investigation_summary"); ok && raw != nil {
+	if raw, ok := euclostate.GetDebugInvestigationSummary(in.State); ok && strings.TrimSpace(raw) != "" {
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "debug_investigation_summary",
 			Kind:       euclotypes.ArtifactKindAnalyze,
-			Summary:    strings.TrimSpace(fmt.Sprint(raw)),
-			Payload:    map[string]any{"summary": strings.TrimSpace(fmt.Sprint(raw))},
+			Summary:    strings.TrimSpace(raw),
+			Payload:    map[string]any{"summary": strings.TrimSpace(raw)},
 			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
 			Status:     "produced",
 		})
 	}
-	if raw, ok := in.State.Get("euclo.debug_repair_readiness"); ok && raw != nil {
+	if raw, ok := euclostate.GetDebugRepairReadiness(in.State); ok && strings.TrimSpace(raw) != "" {
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "debug_repair_readiness",
 			Kind:       euclotypes.ArtifactKindReviewFindings,
-			Summary:    strings.TrimSpace(fmt.Sprint(raw)),
-			Payload:    debugReviewPayload(strings.TrimSpace(fmt.Sprint(raw)), map[string]any{"summary": strings.TrimSpace(fmt.Sprint(raw))}),
+			Summary:    strings.TrimSpace(raw),
+			Payload:    debugReviewPayload(strings.TrimSpace(raw), map[string]any{"summary": strings.TrimSpace(raw)}),
 			ProducerID: in.Work.PrimaryRelurpicCapabilityID,
 			Status:     "produced",
 		})

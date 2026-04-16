@@ -97,7 +97,7 @@ func seedFromState(board *agentblackboard.Blackboard, state *core.Context) {
 	if board == nil || state == nil {
 		return
 	}
-	raw, ok := statebus.GetAny(state, state.KeyBlackboardSeedFacts)
+	raw, ok := statebus.GetAny(state, "euclo.blackboard_seed_facts")
 	if !ok || raw == nil {
 		return
 	}

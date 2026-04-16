@@ -6,15 +6,17 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type directEditExecutionRoutine struct{}
 type localReviewRoutine struct{}
 type targetedVerificationRoutine struct{}
 
-func NewSupportingRoutines() []euclorelurpic.SupportingRoutine {
-	return []euclorelurpic.SupportingRoutine{
+func NewSupportingRoutines() []execution.Invocable {
+	return []execution.Invocable{
 		localReviewRoutine{},
 		targetedVerificationRoutine{},
 		directEditExecutionRoutine{},
@@ -23,7 +25,7 @@ func NewSupportingRoutines() []euclorelurpic.SupportingRoutine {
 
 func (directEditExecutionRoutine) ID() string { return DirectEditExecution }
 
-func (directEditExecutionRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
+func (directEditExecutionRoutine) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
 	editTarget := ""
 	if in.State != nil {
 		if raw, ok := in.State.Get("chat.edit_target"); ok && raw != nil {
@@ -33,23 +35,51 @@ func (directEditExecutionRoutine) Execute(_ context.Context, in euclorelurpic.Ro
 		}
 	}
 	payload := map[string]any{
-		"primary_capability_id": in.Work.PrimaryCapabilityID,
+		"primary_capability_id": in.Work.PrimaryRelurpicCapabilityID,
 		"routine_source":        DirectEditExecution,
 		"edit_target":           editTarget,
 		"status":                "prepared",
 		"summary":               "direct edit execution routine prepared patch context for chat.implement",
 	}
-	return []euclotypes.Artifact{{
+	artifacts := []euclotypes.Artifact{{
 		ID:         "chat_direct_edit_execution",
 		Kind:       euclotypes.ArtifactKindExecutionStatus,
 		Summary:    "direct edit execution routine prepared patch context for chat.implement",
 		Payload:    payload,
 		ProducerID: DirectEditExecution,
 		Status:     "produced",
-	}}, nil
+	}}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
 }
 
+func (directEditExecutionRoutine) IsPrimary() bool { return false }
+
 func (localReviewRoutine) ID() string { return LocalReview }
+
+func (localReviewRoutine) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
+	payload := map[string]any{
+		"primary_capability_id": in.Work.PrimaryRelurpicCapabilityID,
+		"review_source":         LocalReview,
+		"focus":                 chatFocusLens(in.Task),
+		"scope": map[string]any{
+			"files":      taskFiles(in.Task),
+			"focus_lens": chatFocusLens(in.Task),
+		},
+		"findings": []map[string]any{},
+		"summary":  "local review routine prepared inspection findings",
+	}
+	artifacts := []euclotypes.Artifact{{
+		ID:         "chat_local_review",
+		Kind:       euclotypes.ArtifactKindReviewFindings,
+		Summary:    "local review routine prepared inspection findings",
+		Payload:    payload,
+		ProducerID: LocalReview,
+		Status:     "produced",
+	}}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
+}
+
+func (localReviewRoutine) IsPrimary() bool { return false }
 
 func (localReviewRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	payload := map[string]any{
@@ -75,18 +105,49 @@ func (localReviewRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInp
 
 func (targetedVerificationRoutine) ID() string { return TargetedVerification }
 
+func (targetedVerificationRoutine) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
+	status := "partial"
+	checks := []any{map[string]any{"name": "targeted_verification_scope", "status": "partial"}}
+	if in.State != nil {
+		if record, ok := euclostate.GetPipelineVerify(in.State); ok && len(record) > 0 {
+			if value, ok := record["status"].(string); ok && strings.TrimSpace(value) != "" {
+				status = strings.TrimSpace(value)
+			}
+			if existingChecks, ok := record["checks"].([]any); ok && len(existingChecks) > 0 {
+				checks = existingChecks
+			}
+		}
+	}
+	payload := map[string]any{
+		"overall_status": status,
+		"checks":         checks,
+		"repairable":     true,
+		"provenance":     verificationProvenance(in.State),
+		"summary":        "targeted verification repair routine evaluated local verification posture",
+	}
+	artifacts := []euclotypes.Artifact{{
+		ID:         "chat_targeted_verification",
+		Kind:       euclotypes.ArtifactKindVerificationSummary,
+		Summary:    "targeted verification repair routine evaluated local verification posture",
+		Payload:    payload,
+		ProducerID: TargetedVerification,
+		Status:     "produced",
+	}}
+	return &core.Result{Success: true, Data: map[string]any{"artifacts": artifacts}}, nil
+}
+
+func (targetedVerificationRoutine) IsPrimary() bool { return false }
+
 func (targetedVerificationRoutine) Execute(_ context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	status := "partial"
 	checks := []any{map[string]any{"name": "targeted_verification_scope", "status": "partial"}}
 	if in.State != nil {
-		if raw, ok := in.State.Get("pipeline.verify"); ok && raw != nil {
-			if record, ok := raw.(map[string]any); ok {
-				if value, ok := record["status"].(string); ok && strings.TrimSpace(value) != "" {
-					status = strings.TrimSpace(value)
-				}
-				if existingChecks, ok := record["checks"].([]any); ok && len(existingChecks) > 0 {
-					checks = existingChecks
-				}
+		if record, ok := euclostate.GetPipelineVerify(in.State); ok && len(record) > 0 {
+			if value, ok := record["status"].(string); ok && strings.TrimSpace(value) != "" {
+				status = strings.TrimSpace(value)
+			}
+			if existingChecks, ok := record["checks"].([]any); ok && len(existingChecks) > 0 {
+				checks = existingChecks
 			}
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 )
@@ -102,6 +103,29 @@ func (c *learningPromoteCapability) promoteWorkflowResolver() func(state *core.C
 func (r LearningPromoteRoutine) ID() string {
 	return euclorelurpic.CapabilityLearningPromote
 }
+
+func (r LearningPromoteRoutine) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
+	result, err := promoteLearningInteraction(ctx, in.State, r.LearningService, r.WorkflowResolver)
+	if err != nil {
+		return nil, err
+	}
+	artifacts := result.Artifacts
+	if len(artifacts) == 0 {
+		return &core.Result{Success: true}, nil
+	}
+	if in.State != nil {
+		mergeStateArtifactsToContext(in.State, artifacts)
+		if len(artifacts) > 0 {
+			in.State.Set("euclo.promoted_learning_interaction", artifacts[0].Payload)
+		}
+	}
+	return &core.Result{
+		Success: true,
+		Data:    map[string]any{"artifacts": artifacts},
+	}, nil
+}
+
+func (r LearningPromoteRoutine) IsPrimary() bool { return false }
 
 func (r LearningPromoteRoutine) Execute(ctx context.Context, in euclorelurpic.RoutineInput) ([]euclotypes.Artifact, error) {
 	result, err := promoteLearningInteraction(ctx, in.State, r.LearningService, r.WorkflowResolver)
