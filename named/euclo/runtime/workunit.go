@@ -8,6 +8,8 @@ import (
 	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
 	"github.com/lexcodex/relurpify/framework/core"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 // BuildUnitOfWork assembles Euclo's active execution bundle from intake,
@@ -52,11 +54,11 @@ func BuildUnitOfWork(
 		executor = SelectExecutorDescriptor(mode, profile, classification, resolvedPolicy, planBinding, primaryCapabilityID, supportingCapabilityIDs)
 	}
 	uow := UnitOfWork{
-		ID:                              firstNonEmpty(stateString(state, "euclo.unit_of_work_id"), envelope.TaskID),
+		ID:                              firstNonEmpty(stateString(state, statekeys.KeyUnitOfWorkID), envelope.TaskID),
 		WorkflowID:                      workflowIDFromTaskState(task, state),
 		RunID:                           runIDFromTaskState(task, state),
 		ExecutionID:                     executionID(task, state),
-		RootID:                          stateString(state, "euclo.root_unit_of_work_id"),
+		RootID:                          stateString(state, statekeys.KeyRootUnitOfWorkID),
 		ModeID:                          mode.ModeID,
 		ObjectiveKind:                   objectiveKindForWork(mode, profile, classification),
 		BehaviorFamily:                  behaviorFamilyForWork(mode, profile, classification, resolvedPolicy),
@@ -188,7 +190,7 @@ func existingUnitOfWork(state *core.Context) (UnitOfWork, bool) {
 	if state == nil {
 		return UnitOfWork{}, false
 	}
-	raw, ok := state.Get("euclo.unit_of_work")
+	raw, ok := statebus.GetAny(state, statekeys.KeyUnitOfWork)
 	if !ok || raw == nil {
 		return ReconstructUnitOfWorkFromCompiledExecution(state)
 	}
@@ -369,7 +371,7 @@ func planBindingFromState(task *core.Task, state *core.Context) *UnitOfWorkPlanB
 	}
 	binding := &UnitOfWorkPlanBinding{WorkflowID: workflowID}
 	if state != nil {
-		if stepID := strings.TrimSpace(state.GetString("euclo.current_plan_step_id")); stepID != "" {
+		if stepID := strings.TrimSpace(statebus.GetString(state, statekeys.KeyCurrentPlanStepID)); stepID != "" {
 			binding.ActiveStepID = stepID
 		}
 	}
@@ -388,7 +390,7 @@ func planBindingFromState(task *core.Task, state *core.Context) *UnitOfWorkPlanB
 		}
 		return binding
 	}
-	raw, ok := state.Get("euclo.active_plan_version")
+	raw, ok := statebus.GetAny(state, statekeys.KeyActivePlanVersion)
 	if !ok || raw == nil {
 		if binding.ActiveStepID == "" {
 			return nil
@@ -413,7 +415,7 @@ func planPayloadBacked(state *core.Context) bool {
 	if state == nil {
 		return false
 	}
-	raw, ok := state.Get("pipeline.plan")
+	raw, ok := statebus.GetAny(state, statekeys.KeyPipelinePlan)
 	if !ok || raw == nil {
 		return false
 	}
@@ -431,7 +433,7 @@ func firstPlanStepID(state *core.Context) string {
 	if state == nil {
 		return ""
 	}
-	raw, ok := state.Get("pipeline.plan")
+	raw, ok := statebus.GetAny(state, statekeys.KeyPipelinePlan)
 	if !ok || raw == nil {
 		return ""
 	}
@@ -511,35 +513,35 @@ func contextBundleFromState(task *core.Task, state *core.Context, envelope TaskE
 		})
 	}
 	if state != nil {
-		if workflowID := strings.TrimSpace(state.GetString("euclo.workflow_id")); workflowID != "" {
+		if workflowID := strings.TrimSpace(statebus.GetString(state, statekeys.KeyWorkflowID)); workflowID != "" {
 			bundle.Sources = append(bundle.Sources, UnitOfWorkContextSource{
 				Kind:    "workflow",
 				Ref:     workflowID,
 				Summary: "workflow-backed execution state",
 			})
 		}
-		if raw, ok := state.Get("euclo.pending_learning_ids"); ok {
+		if raw, ok := statebus.GetAny(state, statekeys.KeyPendingLearningIDs); ok {
 			bundle.LearningRefs = append(bundle.LearningRefs, stringSliceAny(raw)...)
 		}
-		if raw, ok := state.Get("euclo.blocking_learning_ids"); ok {
+		if raw, ok := statebus.GetAny(state, statekeys.KeyBlockingLearningIDs); ok {
 			bundle.LearningRefs = append(bundle.LearningRefs, stringSliceAny(raw)...)
 		}
-		if raw, ok := state.Get("pipeline.workflow_retrieval"); ok && raw != nil {
-			bundle.RetrievalRefs = append(bundle.RetrievalRefs, "pipeline.workflow_retrieval")
+		if raw, ok := statebus.GetAny(state, statekeys.KeyPipelineWorkflowRetrieval); ok && raw != nil {
+			bundle.RetrievalRefs = append(bundle.RetrievalRefs, string(statekeys.KeyPipelineWorkflowRetrieval))
 			bundle.Sources = append(bundle.Sources, UnitOfWorkContextSource{
 				Kind:    "workflow_retrieval",
-				Ref:     "pipeline.workflow_retrieval",
+				Ref:     string(statekeys.KeyPipelineWorkflowRetrieval),
 				Summary: summarizeMapSummary(raw),
 			})
 		}
-		if raw, ok := state.Get("euclo.active_exploration_id"); ok && raw != nil {
+		if raw, ok := statebus.GetAny(state, statekeys.KeyActiveExplorationID); ok && raw != nil {
 			ref := strings.TrimSpace(fmt.Sprint(raw))
 			if ref != "" {
 				bundle.PatternRefs = append(bundle.PatternRefs, ref)
 			}
 		}
-		if raw, ok := state.Get("euclo.archaeo_phase_state"); ok && raw != nil {
-			bundle.ProvenanceRefs = append(bundle.ProvenanceRefs, "euclo.archaeo_phase_state")
+		if raw, ok := statebus.GetAny(state, statekeys.KeyArchaeoPhaseState); ok && raw != nil {
+			bundle.ProvenanceRefs = append(bundle.ProvenanceRefs, string(statekeys.KeyArchaeoPhaseState))
 		}
 	}
 	if task != nil && task.Context != nil {
@@ -728,7 +730,7 @@ func skillBindingsForWork(task *core.Task, state *core.Context, policy ResolvedE
 		}
 	}
 	if state != nil {
-		if raw, ok := state.Get("euclo.skills"); ok {
+		if raw, ok := statebus.GetAny(state, statekeys.KeySkills); ok {
 			for _, skillID := range stringSliceAny(raw) {
 				bindings = append(bindings, UnitOfWorkSkillBinding{
 					SkillID:  skillID,
@@ -788,7 +790,7 @@ func deferredIssueIDsFromState(state *core.Context) []string {
 	if state == nil {
 		return nil
 	}
-	if raw, ok := state.Get("euclo.deferred_issue_ids"); ok {
+	if raw, ok := statebus.GetAny(state, statekeys.KeyDeferredIssueIDs); ok {
 		return uniqueStrings(stringSliceAny(raw))
 	}
 	return nil
@@ -798,7 +800,7 @@ func stateString(state *core.Context, key string) string {
 	if state == nil {
 		return ""
 	}
-	return strings.TrimSpace(state.GetString(key))
+	return strings.TrimSpace(statebus.GetString(state, key))
 }
 
 func stringSliceAny(raw any) []string {

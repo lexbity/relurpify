@@ -6,6 +6,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 func BuildCapabilityContractRuntimeState(work UnitOfWork, state *core.Context, now time.Time) CapabilityContractRuntimeState {
@@ -107,13 +109,13 @@ func mutationObserved(state *core.Context) bool {
 	if state == nil {
 		return false
 	}
-	if raw, ok := state.Get("euclo.edit_execution"); ok && raw != nil {
+	if statebus.Has(state, statekeys.KeyEditExecution) {
 		return true
 	}
-	if raw, ok := state.Get("pipeline.code"); ok && raw != nil {
+	if statebus.Has(state, statekeys.KeyPipelineCode) {
 		return true
 	}
-	if raw, ok := state.Get("euclo.shared_context_runtime"); ok {
+	if raw, ok := statebus.GetAny(state, statekeys.KeySharedContextRuntime); ok {
 		if rt, ok := raw.(SharedContextRuntimeState); ok && rt.RecentMutationCount > 0 {
 			return true
 		}

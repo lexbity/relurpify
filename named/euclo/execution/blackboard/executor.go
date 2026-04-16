@@ -8,6 +8,8 @@ import (
 	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 type Result struct {
@@ -96,7 +98,7 @@ func seedFromState(board *agentblackboard.Blackboard, state *core.Context) {
 	if board == nil || state == nil {
 		return
 	}
-	raw, ok := state.Get("euclo.blackboard_seed_facts")
+	raw, ok := statebus.GetAny(state, statekeys.KeyBlackboardSeedFacts)
 	if !ok || raw == nil {
 		return
 	}

@@ -6,9 +6,9 @@ import (
 	"time"
 
 	frameworkcore "github.com/lexcodex/relurpify/framework/core"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type SemanticInputBundle = eucloruntime.SemanticInputBundle
@@ -55,19 +55,15 @@ func BuildArchaeologyCapabilityRuntimeState(work eucloruntime.UnitOfWork, state 
 		}
 	}
 	if state != nil {
-		if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
-			if trace, ok := raw.(eucloexec.Trace); ok {
-				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
-				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
-				rt.BehaviorPath = strings.TrimSpace(trace.Path)
-			}
+		if trace, ok := euclostate.GetBehaviorTrace(state); ok {
+			rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
+			rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
+			rt.BehaviorPath = strings.TrimSpace(trace.Path)
 		}
-		if raw, ok := state.Get("euclo.security_runtime"); ok && raw != nil {
-			if security, ok := raw.(eucloruntime.SecurityRuntimeState); ok {
-				rt.PolicySnapshotID = strings.TrimSpace(security.PolicySnapshotID)
-				rt.AdmittedCapabilityIDs = append([]string(nil), security.AdmittedCallableCaps...)
-				rt.AdmittedModelTools = append([]string(nil), security.AdmittedModelTools...)
-			}
+		if security, ok := euclostate.GetSecurityRuntime(state); ok {
+			rt.PolicySnapshotID = strings.TrimSpace(security.PolicySnapshotID)
+			rt.AdmittedCapabilityIDs = append([]string(nil), security.AdmittedCallableCaps...)
+			rt.AdmittedModelTools = append([]string(nil), security.AdmittedModelTools...)
 		}
 	}
 	if work.PlanBinding != nil {

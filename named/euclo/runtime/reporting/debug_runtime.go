@@ -5,12 +5,14 @@ import (
 	"strings"
 	"time"
 
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
 )
 
-func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGetter, now time.Time) runtimepkg.DebugCapabilityRuntimeState {
+func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state statebus.Getter, now time.Time) runtimepkg.DebugCapabilityRuntimeState {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
@@ -33,20 +35,25 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 	rt.TensionRefCount = len(work.SemanticInputs.TensionRefs)
 	rt.MutationObserved = debugMutationObserved(state)
 	if state != nil {
-		if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
-			if trace, ok := raw.(eucloexec.Trace); ok {
+		if raw, ok := statebus.GetFrom(state, "euclo.relurpic_behavior_trace"); ok && raw != nil {
+			switch trace := raw.(type) {
+			case euclostate.Trace:
+				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
+				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
+				rt.BehaviorPath = strings.TrimSpace(trace.Path)
+			case execution.Trace:
 				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
 				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
 				rt.BehaviorPath = strings.TrimSpace(trace.Path)
 			}
 		}
-		if raw, ok := state.Get("euclo.capability_contract_runtime"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.capability_contract_runtime"); ok && raw != nil {
 			if contract, ok := raw.(runtimepkg.CapabilityContractRuntimeState); ok {
 				rt.EscalationTarget = contract.DebugEscalationTarget
 				rt.EscalationTriggered = contract.DebugEscalationTriggered
 			}
 		}
-		if raw, ok := state.Get("euclo.security_runtime"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.security_runtime"); ok && raw != nil {
 			if security, ok := raw.(runtimepkg.SecurityRuntimeState); ok {
 				rt.PolicySnapshotID = strings.TrimSpace(security.PolicySnapshotID)
 				rt.AdmittedCapabilityIDs = append([]string(nil), security.AdmittedCallableCaps...)
@@ -55,7 +62,7 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 				rt.DeniedToolUsage = append([]string(nil), security.DeniedToolUsage...)
 			}
 		}
-		if raw, ok := state.Get("euclo.proof_surface"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.proof_surface"); ok && raw != nil {
 			if proof, ok := raw.(runtimepkg.ProofSurface); ok {
 				for _, capabilityID := range proof.CapabilityIDs {
 					if strings.HasPrefix(strings.TrimSpace(capabilityID), "tool:") {
@@ -64,19 +71,7 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 				}
 			}
 		}
-		if raw, ok := state.Get("pipeline.verify"); ok && raw != nil {
-			if payload, ok := raw.(map[string]any); ok {
-				rt.VerificationStatus = strings.TrimSpace(stringValue(payload["status"]))
-				if rt.VerificationStatus == "" {
-					rt.VerificationStatus = strings.TrimSpace(stringValue(payload["overall_status"]))
-				}
-				if checks, ok := payload["checks"].([]any); ok {
-					rt.VerificationCheckCount = len(checks)
-				}
-				rt.ToolOutputSources = append(rt.ToolOutputSources, "pipeline.verify")
-			}
-		}
-		if raw, ok := state.Get("euclo.verification_plan"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.verification_plan"); ok && raw != nil {
 			if record, ok := raw.(map[string]any); ok {
 				rt.VerificationPlanScope = strings.TrimSpace(stringValue(record["scope_kind"]))
 				rt.VerificationPlanSource = strings.TrimSpace(stringValue(record["source"]))
@@ -93,10 +88,22 @@ func BuildDebugCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGette
 				rt.ToolOutputSources = append(rt.ToolOutputSources, "euclo.verification_plan")
 			}
 		}
-		if raw, ok := state.Get("euclo.trace"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.trace"); ok && raw != nil {
 			rt.ToolOutputSources = append(rt.ToolOutputSources, "euclo.trace")
 		}
-		if raw, ok := state.Get("pipeline.analyze"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "pipeline.verify"); ok && raw != nil {
+			if payload, ok := raw.(map[string]any); ok {
+				rt.VerificationStatus = strings.TrimSpace(stringValue(payload["status"]))
+				if rt.VerificationStatus == "" {
+					rt.VerificationStatus = strings.TrimSpace(stringValue(payload["overall_status"]))
+				}
+				if checks, ok := payload["checks"].([]any); ok {
+					rt.VerificationCheckCount = len(checks)
+				}
+				rt.ToolOutputSources = append(rt.ToolOutputSources, "pipeline.verify")
+			}
+		}
+		if raw, ok := statebus.GetFrom(state, "pipeline.analyze"); ok && raw != nil {
 			rt.ToolOutputSources = append(rt.ToolOutputSources, "pipeline.analyze")
 		}
 	}
@@ -159,17 +166,21 @@ func debugRuntimeSummary(rt runtimepkg.DebugCapabilityRuntimeState) string {
 	return strings.Join(parts, " | ")
 }
 
-func debugMutationObserved(state mapGetter) bool {
+func debugMutationObserved(state statebus.Getter) bool {
 	if state == nil {
 		return false
 	}
-	if raw, ok := state.Get("euclo.edit_execution"); ok && raw != nil {
+	if raw, ok := statebus.GetFrom(state, "euclo.edit_execution"); ok && raw != nil {
+		if record, ok := raw.(runtimepkg.EditExecutionRecord); ok {
+			if len(record.Requested) > 0 || len(record.Approved) > 0 || len(record.Executed) > 0 || len(record.Rejected) > 0 || record.Summary != "" {
+				return true
+			}
+		}
+	}
+	if raw, ok := statebus.GetFrom(state, "pipeline.code"); ok && raw != nil {
 		return true
 	}
-	if raw, ok := state.Get("pipeline.code"); ok && raw != nil {
-		return true
-	}
-	if raw, ok := state.Get("euclo.shared_context_runtime"); ok {
+	if raw, ok := statebus.GetFrom(state, "euclo.shared_context_runtime"); ok && raw != nil {
 		if rt, ok := raw.(runtimepkg.SharedContextRuntimeState); ok && rt.RecentMutationCount > 0 {
 			return true
 		}

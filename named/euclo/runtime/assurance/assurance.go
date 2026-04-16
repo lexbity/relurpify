@@ -188,10 +188,10 @@ func ShortCircuit(s Runtime, ctx context.Context, in ShortCircuitInput) Output {
 	if nextActions := assembleDeferredNextActions(in.State, artifacts); len(nextActions) > 0 {
 		finalReport["deferred_next_actions"] = nextActions
 	}
-	if raw, ok := in.State.Get("euclo.provider_restore"); ok && raw != nil {
+	if raw, ok := euclostate.GetProviderRestore(in.State); ok && raw != nil {
 		finalReport["provider_restore"] = raw
 	}
-	if raw, ok := in.State.Get("euclo.context_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetContextRuntime(in.State); ok {
 		finalReport["context_runtime"] = raw
 	}
 	if runtime, ok := euclostate.GetSecurityRuntime(in.State); ok {
@@ -235,7 +235,7 @@ func (s Runtime) expandContext(ctx context.Context, in Input) (*core.Task, error
 	if surfaces.Workflow == nil {
 		return executionTask, nil
 	}
-	workflowID := in.State.GetString("euclo.workflow_id")
+	workflowID, _ := euclostate.GetWorkflowID(in.State)
 	if workflowID == "" && in.Task != nil && in.Task.Context != nil {
 		if value, ok := in.Task.Context["workflow_id"]; ok {
 			if id, ok := value.(string); ok {
@@ -290,7 +290,7 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 		editRecord = &raw
 	}
 	successGate := eucloruntime.EvaluateSuccessGate(policy, evidence, editRecord, in.State)
-	if raw, ok := in.State.Get("euclo.execution_waiver"); ok && raw != nil {
+	if _, ok := euclostate.GetExecutionWaiver(in.State); ok {
 		originalReason := successGate.Reason
 		successGate.WaiverApplied = true
 		successGate.DegradationMode = "operator_waiver"
@@ -325,8 +325,8 @@ func (s Runtime) applyVerificationAndArtifacts(ctx context.Context, in Input, ou
 	}
 	euclostate.SetSuccessGate(in.State, successGate)
 	euclostate.SetAssuranceClass(in.State, successGate.AssuranceClass)
-	if raw, ok := in.State.Get("euclo.execution_waiver"); ok && raw != nil {
-		in.State.Set("euclo.waiver", raw)
+	if raw, ok := euclostate.GetExecutionWaiver(in.State); ok {
+		euclostate.SetWaiver(in.State, raw)
 	}
 	if out.Result != nil {
 		if out.Result.Data == nil {
@@ -426,24 +426,11 @@ func deferredIssuesFromState(state *core.Context) []eucloruntime.DeferredExecuti
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.deferred_execution_issues")
-	if !ok || raw == nil {
+	issues, ok := euclostate.GetDeferredIssues(state)
+	if !ok {
 		return nil
 	}
-	switch typed := raw.(type) {
-	case []eucloruntime.DeferredExecutionIssue:
-		return append([]eucloruntime.DeferredExecutionIssue(nil), typed...)
-	case []any:
-		issues := make([]eucloruntime.DeferredExecutionIssue, 0, len(typed))
-		for _, item := range typed {
-			if issue, ok := item.(eucloruntime.DeferredExecutionIssue); ok {
-				issues = append(issues, issue)
-			}
-		}
-		return issues
-	default:
-		return nil
-	}
+	return append([]eucloruntime.DeferredExecutionIssue(nil), issues...)
 }
 
 func deferredIssuesFromArtifacts(artifacts []euclotypes.Artifact) []eucloruntime.DeferredExecutionIssue {

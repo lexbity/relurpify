@@ -8,6 +8,7 @@ import (
 
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/core"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 // SessionRevisionResolver extracts the last known session revision from state.
@@ -41,10 +42,10 @@ func (s LearningDeltaStep) Run(ctx context.Context, state *core.Context) error {
 	}
 	if s.SessionResolver != nil {
 		if revision := strings.TrimSpace(s.SessionResolver(state)); revision != "" {
-			state.Set("euclo.last_session_revision", revision)
+			euclostate.SetLastSessionRevision(state, revision)
 		}
 	}
-	lastSessionTime := stateTimeValue(state, "euclo.last_session_time")
+	lastSessionTime, _ := euclostate.GetLastSessionTime(state)
 	interactions, err := s.LearningService.ListByWorkflow(ctx, workflowID)
 	if err != nil {
 		return err
@@ -53,7 +54,7 @@ func (s LearningDeltaStep) Run(ctx context.Context, state *core.Context) error {
 	if delta.TotalResolved == 0 {
 		return nil
 	}
-	state.Set("euclo.learning_delta", delta)
+	euclostate.SetLearningDelta(state, delta)
 	AddContextKnowledgeItems(state, []ContextKnowledgeItem{{
 		Source:   "learning_delta",
 		Content:  delta.SinceSummary,
@@ -124,30 +125,6 @@ func summarizeLearningDeltaLine(delta LearningDeltaSummary) string {
 		appendCount(delta.TotalResolved, "learning interaction resolved", "learning interactions resolved")
 	}
 	return "Since your last session: " + strings.Join(parts, ", ") + "."
-}
-
-func stateTimeValue(state *core.Context, key string) time.Time {
-	if state == nil {
-		return time.Time{}
-	}
-	raw, ok := state.Get(key)
-	if !ok || raw == nil {
-		return time.Time{}
-	}
-	switch typed := raw.(type) {
-	case time.Time:
-		return typed.UTC()
-	case *time.Time:
-		if typed == nil {
-			return time.Time{}
-		}
-		return typed.UTC()
-	case string:
-		if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(typed)); err == nil {
-			return parsed.UTC()
-		}
-	}
-	return time.Time{}
 }
 
 func interactionResolutionKind(interaction archaeolearning.Interaction) archaeolearning.ResolutionKind {

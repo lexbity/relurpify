@@ -16,6 +16,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type compileCapability struct {
@@ -584,7 +585,7 @@ func mergeStateArtifactsToContext(state *core.Context, artifacts []euclotypes.Ar
 	}
 	existing := euclotypes.ArtifactStateFromContext(state).All()
 	merged := append(existing, artifacts...)
-	state.Set("euclo.artifacts", merged)
+	euclostate.SetArtifacts(state, merged)
 	for _, artifact := range artifacts {
 		if key := euclotypes.StateKeyForArtifactKind(artifact.Kind); key != "" && artifact.Payload != nil {
 			state.Set(key, artifact.Payload)

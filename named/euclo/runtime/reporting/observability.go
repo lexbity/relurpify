@@ -6,6 +6,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 func BuildActionLog(state *core.Context, artifacts []euclotypes.Artifact) []eucloruntime.ActionLogEntry {
@@ -19,28 +20,28 @@ func BuildActionLog(state *core.Context, artifacts []euclotypes.Artifact) []eucl
 			Metadata:  metadata,
 		})
 	}
-	if raw, ok := state.Get("euclo.mode_resolution"); ok && raw != nil {
+	if raw, ok := euclostate.GetModeResolution(state); ok {
 		appendEntry("mode_resolution", "resolved execution mode", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.execution_profile_selection"); ok && raw != nil {
+	if raw, ok := euclostate.GetExecutionProfileSelection(state); ok {
 		appendEntry("execution_profile", "selected execution profile", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.retrieval_policy"); ok && raw != nil {
+	if raw, ok := euclostate.GetRetrievalPolicy(state); ok {
 		appendEntry("retrieval_policy", "resolved retrieval policy", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.context_expansion"); ok && raw != nil {
+	if raw, ok := euclostate.GetContextExpansion(state); ok && raw != nil {
 		appendEntry("context_expansion", "expanded context for execution", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.profile_controller"); ok && raw != nil {
+	if raw, ok := euclostate.GetProfileController(state); ok && raw != nil {
 		appendEntry("profile_controller", "profile controller execution", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.verification"); ok && raw != nil {
+	if raw, ok := euclostate.GetVerification(state); ok {
 		appendEntry("verification", "normalized verification evidence", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.success_gate"); ok && raw != nil {
+	if raw, ok := euclostate.GetSuccessGate(state); ok {
 		appendEntry("success_gate", "evaluated completion gate", map[string]any{"payload": raw})
 	}
-	if raw, ok := state.Get("euclo.recovery_trace"); ok && raw != nil {
+	if raw, ok := euclostate.GetRecoveryTrace(state); ok {
 		appendEntry("recovery_trace", "recovery stack trace", map[string]any{"payload": raw})
 	}
 	if len(artifacts) > 0 {
@@ -55,62 +56,44 @@ func BuildActionLog(state *core.Context, artifacts []euclotypes.Artifact) []eucl
 
 func BuildProofSurface(state *core.Context, artifacts []euclotypes.Artifact) eucloruntime.ProofSurface {
 	proof := eucloruntime.ProofSurface{}
-	if raw, ok := state.Get("euclo.mode_resolution"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.ModeResolution); ok {
-			proof.ModeID = typed.ModeID
+	if raw, ok := euclostate.GetModeResolution(state); ok {
+		proof.ModeID = raw.ModeID
+	}
+	if raw, ok := euclostate.GetExecutionProfileSelection(state); ok {
+		proof.ProfileID = raw.ProfileID
+	}
+	if raw, ok := euclostate.GetModeResolution(state); ok {
+		proof.PrimaryFamilyID = primaryFamilyForMode(raw.ModeID)
+	}
+	if raw, ok := euclostate.GetVerification(state); ok {
+		proof.VerificationStatus = raw.Status
+		proof.VerificationProvenance = string(raw.Provenance)
+	}
+	if raw, ok := euclostate.GetSuccessGate(state); ok {
+		proof.SuccessGateReason = raw.Reason
+		proof.AssuranceClass = string(raw.AssuranceClass)
+		proof.WaiverApplied = raw.WaiverApplied
+		proof.DegradationMode = raw.DegradationMode
+		proof.DegradationReason = raw.DegradationReason
+	}
+	if raw, ok := euclostate.GetProfileController(state); ok {
+		if ids, ok := raw["capability_ids"].([]string); ok {
+			proof.CapabilityIDs = ids
+		}
+		if count, ok := raw["gate_evals_count"].(int); ok {
+			proof.GateEvalsCount = count
+		}
+		if phases, ok := raw["phases_executed"].([]string); ok {
+			proof.PhasesExecuted = phases
+		}
+		if count, ok := raw["recovery_attempts"].(int); ok {
+			proof.RecoveryAttempts = count
 		}
 	}
-	if raw, ok := state.Get("euclo.execution_profile_selection"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.ExecutionProfileSelection); ok {
-			proof.ProfileID = typed.ProfileID
-		}
-	}
-	if raw, ok := state.Get("euclo.mode_resolution"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.ModeResolution); ok {
-			proof.PrimaryFamilyID = primaryFamilyForMode(typed.ModeID)
-		}
-	}
-	if raw, ok := state.Get("euclo.verification"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.VerificationEvidence); ok {
-			proof.VerificationStatus = typed.Status
-			proof.VerificationProvenance = string(typed.Provenance)
-		}
-	}
-	if raw, ok := state.Get("euclo.success_gate"); ok && raw != nil {
-		if typed, ok := raw.(eucloruntime.SuccessGateResult); ok {
-			proof.SuccessGateReason = typed.Reason
-			proof.AssuranceClass = string(typed.AssuranceClass)
-			proof.WaiverApplied = typed.WaiverApplied
-			proof.DegradationMode = typed.DegradationMode
-			proof.DegradationReason = typed.DegradationReason
-		}
-	}
-	if raw, ok := state.Get("euclo.profile_controller"); ok && raw != nil {
-		if typed, ok := raw.(map[string]any); ok {
-			if ids, ok := typed["capability_ids"].([]string); ok {
-				proof.CapabilityIDs = ids
-			}
-			if count, ok := typed["gate_evals_count"].(int); ok {
-				proof.GateEvalsCount = count
-			}
-			if phases, ok := typed["phases_executed"].([]string); ok {
-				proof.PhasesExecuted = phases
-			}
-			if count, ok := typed["recovery_attempts"].(int); ok {
-				proof.RecoveryAttempts = count
-			}
-		}
-	}
-	if raw, ok := state.Get("euclo.recovery_trace"); ok && raw != nil {
-		if typed, ok := raw.(map[string]any); ok {
-			proof.RecoveryStatus = proofStringValue(typed["status"])
-			if count, ok := typed["attempt_count"].(int); ok {
-				proof.RecoveryAttempts = count
-			} else if attempts, ok := typed["attempts"].([]map[string]any); ok {
-				proof.RecoveryAttempts = len(attempts)
-			} else if attempts, ok := typed["attempts"].([]any); ok {
-				proof.RecoveryAttempts = len(attempts)
-			}
+	if raw, ok := euclostate.GetRecoveryTrace(state); ok {
+		proof.RecoveryStatus = raw.Status
+		if raw.AttemptCount > 0 {
+			proof.RecoveryAttempts = raw.AttemptCount
 		}
 	}
 	proof.ArtifactKinds = make([]string, 0, len(artifacts))

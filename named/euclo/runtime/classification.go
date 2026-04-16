@@ -9,6 +9,8 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capability.Registry) TaskEnvelope {
@@ -42,18 +44,16 @@ func NormalizeTaskEnvelope(task *core.Task, state *core.Context, registry *capab
 	if state != nil {
 		envelope.ResumedMode = resumedModeFromState(state)
 		envelope.PreviousArtifactKinds = previousArtifactKinds(state)
-		if raw, ok := state.Get("euclo.pre_classified_capability_sequence"); ok {
-			if seq, ok := raw.([]string); ok && len(seq) > 0 {
-				envelope.CapabilitySequence = append([]string(nil), seq...)
-			}
+		if seq, ok := statebus.Get[[]string](state, statekeys.KeyPreClassifiedCapSeq); ok && len(seq) > 0 {
+			envelope.CapabilitySequence = append([]string(nil), seq...)
 		}
-		if src := state.GetString("euclo.capability_classification_source"); src != "" {
+		if src := statebus.GetString(state, statekeys.KeyClassificationSource); src != "" {
 			envelope.CapabilityClassificationSource = src
 		}
-		if meta := state.GetString("euclo.capability_classification_meta"); meta != "" {
+		if meta := statebus.GetString(state, statekeys.KeyClassificationMeta); meta != "" {
 			envelope.CapabilityClassificationMeta = meta
 		}
-		if op := state.GetString("euclo.capability_sequence_operator"); op != "" {
+		if op := statebus.GetString(state, statekeys.KeyCapabilitySequenceOperator); op != "" {
 			envelope.CapabilitySequenceOperator = op
 		}
 
@@ -71,7 +71,7 @@ func resumedModeFromState(state *core.Context) string {
 	if mode := normalizedModeHint(state.GetString("euclo.mode")); mode != "" {
 		return mode
 	}
-	raw, ok := state.Get("euclo.interaction_state")
+	raw, ok := statebus.GetAny(state, statekeys.KeyInteractionState)
 	if !ok || raw == nil {
 		return ""
 	}
@@ -408,12 +408,8 @@ func previousArtifactKinds(state *core.Context) []string {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.artifacts")
-	if !ok || raw == nil {
-		return nil
-	}
-	artifacts, ok := raw.([]Artifact)
-	if !ok {
+	artifacts, ok := statebus.Get[[]Artifact](state, statekeys.KeyArtifacts)
+	if !ok || len(artifacts) == 0 {
 		return nil
 	}
 	out := make([]string, 0, len(artifacts))
@@ -486,15 +482,9 @@ func loadUserRecipeSignals(state *core.Context) []UserRecipeSignalSource {
 	}
 
 	// Check for pre-computed user recipe signals in state
-	raw, ok := state.Get("euclo.user_recipe_signals")
-	if !ok || raw == nil {
+	signals, ok := statebus.Get[[]UserRecipeSignalSource](state, statekeys.KeyUserRecipeSignals)
+	if !ok || len(signals) == 0 {
 		return nil
 	}
-
-	// Try to extract as slice of UserRecipeSignalSource
-	if signals, ok := raw.([]UserRecipeSignalSource); ok {
-		return signals
-	}
-
-	return nil
+	return signals
 }

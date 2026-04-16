@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 func ContextLifecycleFromState(state *core.Context) (ContextLifecycleState, bool) {
 	if state == nil {
 		return ContextLifecycleState{}, false
 	}
-	raw, ok := state.Get("euclo.context_compaction")
+	raw, ok := statebus.GetAny(state, statekeys.KeyContextCompaction)
 	if !ok || raw == nil {
 		return ContextLifecycleState{}, false
 	}
@@ -32,7 +34,7 @@ func CompiledExecutionFromState(state *core.Context) (CompiledExecution, bool) {
 	if state == nil {
 		return CompiledExecution{}, false
 	}
-	raw, ok := state.Get("euclo.compiled_execution")
+	raw, ok := statebus.GetAny(state, statekeys.KeyCompiledExecution)
 	if !ok || raw == nil {
 		return CompiledExecution{}, false
 	}
@@ -193,7 +195,7 @@ func MarkContextLifecycleRestoring(state *core.Context, now time.Time) ContextLi
 	prior.RestoreCount++
 	prior.RestoreSource = "workflow_artifacts"
 	prior.Summary = fmt.Sprintf("restoring execution continuity for workflow %s run %s", prior.WorkflowID, prior.RunID)
-	state.Set("euclo.context_compaction", prior)
+	statebus.SetAny(state, statekeys.KeyContextCompaction, prior)
 	return prior
 }
 

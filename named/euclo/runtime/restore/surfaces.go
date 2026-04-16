@@ -10,6 +10,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/memory/db"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type RuntimeSurfaces = runtimepkg.RuntimeSurfaces
@@ -76,8 +77,8 @@ func EnsureWorkflowRun(ctx context.Context, store *db.SQLiteWorkflowStateStore, 
 		}
 	}
 	if state != nil {
-		state.Set("euclo.workflow_id", workflowID)
-		state.Set("euclo.run_id", runID)
+		euclostate.SetWorkflowID(state, workflowID)
+		euclostate.SetRunID(state, runID)
 	}
 
 	// Update workflow metadata with workspace and mode for session resume support
@@ -110,6 +111,20 @@ func workspaceFromTask(task *core.Task) string {
 func contextString(state *core.Context, key string) string {
 	if state == nil {
 		return ""
+	}
+	switch key {
+	case "euclo.workflow_id":
+		if value, ok := euclostate.GetWorkflowID(state); ok {
+			return value
+		}
+	case "euclo.run_id":
+		if value, ok := euclostate.GetRunID(state); ok {
+			return value
+		}
+	case "euclo.mode":
+		if value, ok := euclostate.GetMode(state); ok {
+			return value
+		}
 	}
 	return strings.TrimSpace(state.GetString(key))
 }

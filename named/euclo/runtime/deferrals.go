@@ -10,6 +10,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/guidance"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 	"gopkg.in/yaml.v3"
 )
 
@@ -69,7 +71,7 @@ func buildWaiverDeferredExecutionIssues(uow UnitOfWork, state *core.Context, now
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.execution_waiver")
+	raw, ok := statebus.GetAny(state, statekeys.KeyExecutionWaiver)
 	if !ok || raw == nil {
 		return nil
 	}
@@ -203,17 +205,17 @@ func SeedDeferredIssueState(state *core.Context, issues []DeferredExecutionIssue
 		return
 	}
 	if len(issues) == 0 {
-		state.Set("euclo.deferred_execution_issues", []DeferredExecutionIssue{})
-		state.Set("euclo.deferred_issue_ids", []string{})
+		statebus.SetAny(state, statekeys.KeyDeferredIssues, []DeferredExecutionIssue{})
+		statebus.SetAny(state, statekeys.KeyDeferredIssueIDs, []string{})
 		return
 	}
-	state.Set("euclo.deferred_execution_issues", issues)
-	state.Set("euclo.deferred_issue_ids", DeferredIssueIDs(issues))
+	statebus.SetAny(state, statekeys.KeyDeferredIssues, issues)
+	statebus.SetAny(state, statekeys.KeyDeferredIssueIDs, DeferredIssueIDs(issues))
 }
 
 func workspacePathFromTaskState(task *core.Task, state *core.Context) string {
 	if state != nil {
-		if path := strings.TrimSpace(state.GetString("euclo.workspace")); path != "" {
+		if path := strings.TrimSpace(statebus.GetString(state, statekeys.KeyWorkspace)); path != "" {
 			return path
 		}
 	}
@@ -355,7 +357,7 @@ func evidenceFromObservation(obs guidance.EngineeringObservation, state *core.Co
 	if provider, ok := obs.Evidence["provider_state_snapshot"].(map[string]any); ok && provider != nil {
 		evidence.ProviderStateSnapshot = cloneMapAny(provider)
 	} else if state != nil {
-		if raw, ok := state.Get("euclo.provider_state_snapshot"); ok {
+		if raw, ok := statebus.GetAny(state, statekeys.KeyProviderStateSnapshot); ok {
 			if provider, ok := raw.(map[string]any); ok && provider != nil {
 				evidence.ProviderStateSnapshot = cloneMapAny(provider)
 			}

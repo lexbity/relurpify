@@ -12,6 +12,7 @@ import (
 	chainexec "github.com/lexcodex/relurpify/named/euclo/execution/chainer"
 	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type askBehavior struct{}
@@ -30,7 +31,7 @@ func (askBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (*cor
 	if err != nil {
 		return &core.Result{Success: false, Error: err}, err
 	}
-	execution.SetBehaviorTrace(in.State, in.Work, executed)
+	execution.SetBehaviorTraceWithoutRecipeID(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
 
 	answerResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeChatAskInquiry, "chat-ask-answer",
@@ -130,7 +131,7 @@ func (inspectBehavior) Execute(ctx context.Context, in execution.ExecuteInput) (
 		return &core.Result{Success: false, Error: err}, err
 	}
 	execution.AppendDiagnostic(in.State, "euclo.review_findings", "inspect-first relurpic behavior executed")
-	execution.SetBehaviorTrace(in.State, in.Work, executed)
+	execution.SetBehaviorTraceWithoutRecipeID(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
 
 	inspectResult, _, err := execution.ExecuteRecipe(ctx, in, execution.RecipeChatInspectCollect, "chat-inspect-collect",
@@ -361,7 +362,7 @@ func (implementBehavior) Execute(ctx context.Context, in execution.ExecuteInput)
 	if execution.ContainsString(in.Work.SupportingRelurpicCapabilityIDs, "euclo:archaeology.explore") {
 		execution.AppendDiagnostic(in.State, "euclo.plan_candidates", "lazy archaeology exploration support activated for chat.implement")
 	}
-	execution.SetBehaviorTrace(in.State, in.Work, executed)
+	execution.SetBehaviorTraceWithoutRecipeID(in.State, in.Work, executed)
 	artifacts := append([]euclotypes.Artifact{}, routineArtifacts...)
 
 	if delegated, handled, execErr := executeSpecializedImplementBehavior(ctx, in, artifacts); handled {
@@ -548,6 +549,18 @@ func executeSpecializedImplementBehavior(ctx context.Context, in execution.Execu
 		}
 		result := capability.Execute(ctx, envelope)
 		execution.AddSpecializedCapabilityTrace(in.State, capability.Descriptor().ID)
+		if trace, ok := euclostate.GetBehaviorTrace(in.State); ok {
+			trace.RecipeIDs = nil
+			executionTrace := execution.Trace{
+				PrimaryCapabilityID:      trace.PrimaryCapabilityID,
+				SupportingRoutines:       append([]string(nil), trace.SupportingRoutines...),
+				RecipeIDs:                append([]string(nil), trace.RecipeIDs...),
+				SpecializedCapabilityIDs: append([]string(nil), trace.SpecializedCapabilityIDs...),
+				ExecutorFamily:           trace.ExecutorFamily,
+				Path:                     trace.Path,
+			}
+			in.State.Set("euclo.relurpic_behavior_trace", executionTrace)
+		}
 		artifacts = append(artifacts, result.Artifacts...)
 		appendSpecializedArtifactSummaries(ctx, in, envelope, &artifacts)
 		execution.MergeStateArtifactsToContext(in.State, artifacts)

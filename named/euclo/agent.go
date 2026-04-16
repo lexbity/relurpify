@@ -50,6 +50,8 @@ import (
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 	euclosession "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
@@ -749,10 +751,8 @@ func (a *Agent) semanticInputBundle(task *core.Task, state *core.Context, mode e
 		return eucloruntime.SemanticInputBundle{}
 	}
 	if mode.ModeID != "planning" && mode.ModeID != "debug" && mode.ModeID != "review" {
-		if existing, ok := state.Get("euclo.semantic_inputs"); ok && existing != nil {
-			if typed, ok := existing.(eucloruntime.SemanticInputBundle); ok {
-				return agentstate.EnrichBundleWithContextKnowledge(typed, state)
-			}
+		if existing, ok := euclostate.GetSemanticInputs(state); ok {
+			return agentstate.EnrichBundleWithContextKnowledge(existing, state)
 		}
 		return agentstate.EnrichBundleWithContextKnowledge(eucloruntime.SemanticInputBundle{}, state)
 	}
@@ -890,38 +890,31 @@ func (a *Agent) liveMutationCheckpoint(ctx context.Context, checkpoint archaeodo
 	if state == nil {
 		return nil
 	}
-	rawPlan, ok := state.Get("euclo.living_plan")
+	rawPlan, ok := euclostate.GetLivingPlan(state)
 	if !ok || rawPlan == nil {
 		return nil
 	}
-	plan, ok := rawPlan.(*frameworkplan.LivingPlan)
-	if !ok || plan == nil {
-		return nil
-	}
-	stepID := strings.TrimSpace(state.GetString("euclo.current_plan_step_id"))
+	stepID, _ := euclostate.GetCurrentPlanStepID(state)
+	stepID = strings.TrimSpace(stepID)
 	if stepID == "" {
 		return nil
 	}
-	step := plan.Steps[stepID]
+	step := rawPlan.Steps[stepID]
 	if step == nil {
 		return nil
 	}
-	_, err := a.liveMutationCoordinator().CheckpointExecutionAt(ctx, checkpoint, task, state, plan, step)
+	_, err := a.liveMutationCoordinator().CheckpointExecutionAt(ctx, checkpoint, task, state, rawPlan, step)
 	return err
 }
 
 func (a *Agent) phaseDriver() archaeophases.Driver {
 	return a.archaeoBinding().PhaseDriver(archaeobindings.DriverConfig{
 		Handoff: func(ctx context.Context, task *core.Task, state *core.Context, step *frameworkplan.PlanStep) error {
-			planRaw, ok := state.Get("euclo.living_plan")
+			planRaw, ok := euclostate.GetLivingPlan(state)
 			if !ok || planRaw == nil {
 				return nil
 			}
-			plan, ok := planRaw.(*frameworkplan.LivingPlan)
-			if !ok || plan == nil {
-				return nil
-			}
-			_, err := a.executionHandoffRecorder().Record(ctx, task, state, plan, step)
+			_, err := a.executionHandoffRecorder().Record(ctx, task, state, planRaw, step)
 			return err
 		},
 	})
@@ -1142,14 +1135,14 @@ func (a *Agent) hydratePersistedArtifacts(ctx context.Context, task *core.Task, 
 	if state == nil {
 		return false
 	}
-	if raw, ok := state.Get("euclo.artifacts"); ok && raw != nil {
+	if raw, ok := euclostate.GetArtifacts(state); ok && len(raw) > 0 {
 		return false
 	}
 	surfaces := euclorestore.ResolveRuntimeSurfaces(a.Memory)
 	if surfaces.Workflow == nil {
 		return false
 	}
-	workflowID := state.GetString("euclo.workflow_id")
+	workflowID, _ := euclostate.GetWorkflowID(state)
 	if workflowID == "" && task != nil && task.Context != nil {
 		if value, ok := task.Context["workflow_id"]; ok {
 			workflowID = stringValue(value)
@@ -1192,23 +1185,21 @@ func (a *Agent) restoreExecutionContinuity(ctx context.Context, task *core.Task,
 		if explicitRestore || hydrated {
 			lifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
 			lifecycle = eucloruntime.BuildContextLifecycleState(work, lifecycle, eucloruntime.ExecutionStatusRestoreFailed, nil, time.Now().UTC())
-			state.Set("euclo.context_compaction", lifecycle)
+			euclostate.SetContextCompaction(state, lifecycle)
 			return fmt.Errorf("euclo restore failed for workflow %s run %s", work.WorkflowID, work.RunID)
 		}
 		return nil
 	}
 	if !hadCompiled || explicitRestore || hydrated {
 		if restoredWork, ok := eucloruntime.ReconstructUnitOfWorkFromCompiledExecution(state); ok {
-			state.Set("euclo.unit_of_work", restoredWork)
-			state.Set("euclo.unit_of_work_id", restoredWork.ID)
+			euclostate.SetUnitOfWork(state, restoredWork)
+			euclostate.SetUnitOfWorkID(state, restoredWork.ID)
 			work = restoredWork
 		}
 		artifactKinds := make([]string, 0)
-		if raw, ok := state.Get("euclo.artifacts"); ok && raw != nil {
-			if artifacts, ok := raw.([]euclotypes.Artifact); ok {
-				for _, artifact := range artifacts {
-					artifactKinds = append(artifactKinds, string(artifact.Kind))
-				}
+		if artifacts, ok := euclostate.GetArtifacts(state); ok {
+			for _, artifact := range artifacts {
+				artifactKinds = append(artifactKinds, string(artifact.Kind))
 			}
 		}
 		lifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
@@ -1222,7 +1213,7 @@ func (a *Agent) restoreExecutionContinuity(ctx context.Context, task *core.Task,
 			work.ExecutionID = strings.TrimSpace(compiled.ExecutionID)
 		}
 		lifecycle = eucloruntime.BuildContextLifecycleState(work, lifecycle, eucloruntime.ExecutionStatusReady, artifactKinds, time.Now().UTC())
-		state.Set("euclo.context_compaction", lifecycle)
+		euclostate.SetContextCompaction(state, lifecycle)
 	}
 	if compiled.WorkflowID != "" && compiled.RunID != "" {
 		restoreState, err := euclorestore.RestoreProviderSnapshotState(ctx, a.workflowStore(), compiled.WorkflowID, compiled.RunID, state)
@@ -1233,12 +1224,12 @@ func (a *Agent) restoreExecutionContinuity(ctx context.Context, task *core.Task,
 			if current, ok := eucloruntime.CompiledExecutionFromState(state); ok {
 				current.ProviderSnapshotRefs = append([]string(nil), restoreState.ProviderSnapshotRefs...)
 				current.ProviderSessionSnapshotRefs = append([]string(nil), restoreState.SessionSnapshotRefs...)
-				state.Set("euclo.compiled_execution", current)
+				euclostate.SetCompiledExecution(state, current)
 			}
 		} else if restoreState.MateriallyRequired {
 			lifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
 			lifecycle = eucloruntime.BuildContextLifecycleState(work, lifecycle, eucloruntime.ExecutionStatusRestoreFailed, nil, time.Now().UTC())
-			state.Set("euclo.context_compaction", lifecycle)
+			euclostate.SetContextCompaction(state, lifecycle)
 			return err
 		}
 	}
@@ -1271,10 +1262,8 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	issues = eucloruntime.PersistDeferredExecutionIssuesToWorkspace(task, state, issues)
 	eucloruntime.SeedDeferredIssueState(state, issues)
 	work.DeferredIssueIDs = deferredIssueIDsFromState(state, work.DeferredIssueIDs)
-	if raw, ok := state.Get("euclo.assurance_class"); ok && raw != nil {
-		if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" && value != "<nil>" {
-			work.AssuranceClass = eucloruntime.AssuranceClass(value)
-		}
+	if value, ok := euclostate.GetAssuranceClass(state); ok {
+		work.AssuranceClass = value
 	}
 	work.ResultClass = euclowork.ResultClassForOutcome(status, work.DeferredIssueIDs, execErr)
 	switch work.AssuranceClass {
@@ -1305,8 +1294,8 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 		work.Status = eucloruntime.UnitOfWorkStatusFailed
 	}
 	work.UpdatedAt = time.Now().UTC()
-	state.Set("euclo.semantic_inputs", work.SemanticInputs)
-	state.Set("euclo.unit_of_work", work)
+	euclostate.SetSemanticInputs(state, work.SemanticInputs)
+	euclostate.SetUnitOfWork(state, work)
 	statusRecord := euclowork.BuildRuntimeExecutionStatus(work, status, work.ResultClass, work.UpdatedAt)
 	euclowork.SeedCompiledExecutionState(state, work, statusRecord)
 	if work.WorkflowID != "" && work.RunID != "" {
@@ -1317,62 +1306,62 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 		}
 		restoreState, restoreErr := euclorestore.PersistProviderSnapshotState(ctx, a.workflowStore(), work.WorkflowID, work.RunID, state, taskID)
 		if restoreErr != nil {
-			state.Set("euclo.provider_restore_error", restoreErr.Error())
+			euclostate.SetProviderRestoreError(state, restoreErr.Error())
 		} else if current, ok := eucloruntime.CompiledExecutionFromState(state); ok {
 			current.ProviderSnapshotRefs = append([]string(nil), restoreState.ProviderSnapshotRefs...)
 			current.ProviderSessionSnapshotRefs = append([]string(nil), restoreState.SessionSnapshotRefs...)
-			state.Set("euclo.compiled_execution", current)
+			euclostate.SetCompiledExecution(state, current)
 		}
 	}
-	state.Set("euclo.security_runtime", euclopolicy.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work))
+	euclostate.SetSecurityRuntime(state, euclopolicy.BuildSecurityRuntimeState(a.Config, a.CapabilityRegistry(), a.runtimeProviders(state), state, work))
 	priorLifecycle, _ := eucloruntime.ContextLifecycleFromState(state)
 	artifactKinds := collectArtifactKindsFromState(state)
-	state.Set("euclo.context_compaction", eucloruntime.BuildContextLifecycleState(work, priorLifecycle, status, artifactKinds, work.UpdatedAt))
+	euclostate.SetContextCompaction(state, eucloruntime.BuildContextLifecycleState(work, priorLifecycle, status, artifactKinds, work.UpdatedAt))
 	artifacts := euclotypes.CollectArtifactsFromState(state)
 	actionLog := eucloreporting.BuildActionLog(state, artifacts)
 	proofSurface := eucloreporting.BuildProofSurface(state, artifacts)
-	state.Set("euclo.action_log", actionLog)
-	state.Set("euclo.proof_surface", proofSurface)
-	state.Set("euclo.debug_capability_runtime", eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
-	state.Set("euclo.chat_capability_runtime", eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
+	euclostate.SetActionLog(state, actionLog)
+	euclostate.SetProofSurface(state, proofSurface)
+	euclostate.SetDebugCapabilityRuntime(state, eucloreporting.BuildDebugCapabilityRuntimeState(work, state, time.Now().UTC()))
+	euclostate.SetChatCapabilityRuntime(state, eucloreporting.BuildChatCapabilityRuntimeState(work, state, time.Now().UTC()))
 	eucloreporting.EmitObservabilityTelemetry(a.ConfigTelemetry(), task, actionLog, proofSurface)
 	artifacts = euclotypes.CollectArtifactsFromState(state)
 	report := euclotypes.AssembleFinalReport(artifacts)
-	if raw, ok := state.Get("euclo.provider_restore"); ok && raw != nil {
+	if raw, ok := euclostate.GetProviderRestore(state); ok && raw != nil {
 		report["provider_restore"] = raw
 	}
-	if raw, ok := state.Get("euclo.context_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetContextRuntime(state); ok {
 		report["context_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.security_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetSecurityRuntime(state); ok {
 		report["security_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.capability_contract_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetCapabilityContractRuntime(state); ok {
 		report["capability_contract_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.archaeology_capability_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetArchaeologyCapabilityRuntime(state); ok {
 		report["archaeology_capability_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.debug_capability_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetDebugCapabilityRuntime(state); ok {
 		report["debug_capability_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.chat_capability_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetChatCapabilityRuntime(state); ok {
 		report["chat_capability_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.unit_of_work_transition"); ok && raw != nil {
+	if raw, ok := euclostate.GetUnitOfWorkTransition(state); ok {
 		report["unit_of_work_transition"] = raw
 	}
-	if raw, ok := state.Get("euclo.unit_of_work_history"); ok && raw != nil {
+	if raw, ok := euclostate.GetUnitOfWorkHistory(state); ok && raw != nil {
 		report["unit_of_work_history"] = raw
 	}
-	if raw, ok := state.Get("euclo.shared_context_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetSharedContextRuntime(state); ok {
 		report["shared_context_runtime"] = raw
 	}
-	state.Set("pipeline.final_output", report)
+	statebus.SetAny(state, statekeys.KeyPipelineFinalOutput, report)
 	artifacts = euclotypes.CollectArtifactsFromState(state)
-	state.Set("euclo.artifacts", artifacts)
+	euclostate.SetArtifacts(state, artifacts)
 	if persistErr := a.persistArtifacts(ctx, task, state, artifacts); persistErr != nil {
-		state.Set("euclo.runtime_persist_error", persistErr.Error())
+	euclostate.SetRuntimePersistError(state, persistErr.Error())
 	}
 }
 
@@ -1382,13 +1371,11 @@ func (a *Agent) runtimeProviders(state *core.Context) []core.Provider {
 	if state == nil {
 		return out
 	}
-	raw, ok := state.Get("euclo.runtime_providers")
-	if !ok || raw == nil {
+	raw, ok := euclostate.GetRuntimeProviders(state)
+	if !ok || len(raw) == 0 {
 		return out
 	}
-	if typed, ok := raw.([]core.Provider); ok {
-		out = append(out, typed...)
-	}
+	out = append(out, raw...)
 	return out
 }
 
@@ -1396,16 +1383,12 @@ func collectArtifactKindsFromState(state *core.Context) []string {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.artifacts")
-	if !ok || raw == nil {
+	raw, ok := euclostate.GetArtifacts(state)
+	if !ok || len(raw) == 0 {
 		return nil
 	}
-	artifacts, ok := raw.([]euclotypes.Artifact)
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(artifacts))
-	for _, artifact := range artifacts {
+	out := make([]string, 0, len(raw))
+	for _, artifact := range raw {
 		out = append(out, string(artifact.Kind))
 	}
 	return out
@@ -1421,43 +1404,51 @@ func (a *Agent) applyRuntimeResultMetadata(result *core.Result, state *core.Cont
 	if result.Data == nil {
 		result.Data = map[string]any{}
 	}
-	if raw, ok := state.Get("euclo.execution_status"); ok && raw != nil {
-		result.Metadata["execution_status"] = raw
+	if raw, ok := euclostate.GetExecutionStatus(state); ok {
+		if strings.TrimSpace(string(raw.Status)) != "" {
+			result.Metadata["execution_status"] = string(raw.Status)
+		} else {
+			result.Metadata["execution_status"] = raw
+		}
 	}
-	if raw, ok := state.Get("euclo.compiled_execution"); ok && raw != nil {
+	if raw, ok := euclostate.GetCompiledExecution(state); ok {
 		result.Metadata["compiled_execution"] = raw
 	}
-	if raw, ok := state.Get("euclo.context_compaction"); ok && raw != nil {
+	if raw, ok := euclostate.GetContextCompaction(state); ok {
 		result.Metadata["context_compaction"] = raw
 	}
-	if raw, ok := state.Get("euclo.context_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetContextRuntime(state); ok {
 		result.Metadata["context_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.security_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetSecurityRuntime(state); ok {
 		result.Metadata["security_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.shared_context_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetSharedContextRuntime(state); ok {
 		result.Metadata["shared_context_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.debug_capability_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetDebugCapabilityRuntime(state); ok {
 		result.Metadata["debug_capability_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.chat_capability_runtime"); ok && raw != nil {
+	if raw, ok := euclostate.GetChatCapabilityRuntime(state); ok {
 		result.Metadata["chat_capability_runtime"] = raw
 	}
-	if raw, ok := state.Get("euclo.unit_of_work_transition"); ok && raw != nil {
+	if raw, ok := euclostate.GetUnitOfWorkTransition(state); ok {
 		result.Metadata["unit_of_work_transition"] = raw
 	}
-	if raw, ok := state.Get("euclo.unit_of_work_history"); ok && raw != nil {
+	if raw, ok := euclostate.GetUnitOfWorkHistory(state); ok && raw != nil {
 		result.Metadata["unit_of_work_history"] = raw
 	}
-	if raw, ok := state.Get("euclo.deferred_issue_ids"); ok && raw != nil {
+	if raw, ok := euclostate.GetDeferredIssueIDs(state); ok && raw != nil {
 		result.Metadata["deferred_issue_ids"] = raw
 	}
-	if raw, ok := state.Get("euclo.assurance_class"); ok && raw != nil {
-		result.Metadata["assurance_class"] = raw
+	if raw, ok := euclostate.GetAssuranceClass(state); ok {
+		if value := strings.TrimSpace(string(raw)); value != "" {
+			result.Metadata["assurance_class"] = value
+		} else {
+			result.Metadata["assurance_class"] = raw
+		}
 	}
-	if raw, ok := state.Get("pipeline.final_output"); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, statekeys.KeyPipelineFinalOutput); ok && raw != nil {
 		result.Data["final_output"] = raw
 		if payload, ok := raw.(map[string]any); ok {
 			if _, exists := result.Metadata["result_class"]; !exists {
@@ -1479,17 +1470,8 @@ func deferredIssueIDsFromState(state *core.Context, existing []string) []string 
 	if state == nil {
 		return out
 	}
-	if raw, ok := state.Get("euclo.deferred_issue_ids"); ok && raw != nil {
-		switch typed := raw.(type) {
-		case []string:
-			out = append(out, typed...)
-		case []any:
-			for _, item := range typed {
-				if value := strings.TrimSpace(fmt.Sprint(item)); value != "" && value != "<nil>" {
-					out = append(out, value)
-				}
-			}
-		}
+	if raw, ok := euclostate.GetDeferredIssueIDs(state); ok && raw != nil {
+		out = append(out, raw...)
 	}
 	seen := make(map[string]struct{}, len(out))
 	deduped := make([]string, 0, len(out))

@@ -9,6 +9,7 @@ import (
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/session"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 // InteractiveControllerResult captures the output of interactive execution.
@@ -72,7 +73,7 @@ func maybeResumeInteractiveSession(ctx context.Context, machine *interaction.Pha
 	if machine == nil || state == nil {
 		return nil
 	}
-	if resumed, _ := state.Get("euclo.session_resume_consumed"); resumed == true {
+	if resumed, _ := euclostate.GetSessionResumeConsumed(state); resumed {
 		return nil
 	}
 	resume := interaction.ExtractSessionResume(state)
@@ -89,7 +90,7 @@ func maybeResumeInteractiveSession(ctx context.Context, machine *interaction.Pha
 	}
 	if interaction.HandleResumeResponse(resp) == "resume" {
 		interaction.ApplySessionResume(machine, resume)
-		state.Set("euclo.session_resume_consumed", true)
+		euclostate.SetSessionResumeConsumed(state, true)
 	}
 	return nil
 }

@@ -1,0 +1,28 @@
+package statekeys
+
+const (
+	KeyExecutionReadBundle      Key = "euclo.execution_read_bundle"
+	KeyBlackboardSeedFacts      Key = "euclo.blackboard_seed_facts"
+	KeyLearningQueue            Key = "euclo.learning_queue"
+	KeyPendingGuidanceIDs       Key = "euclo.pending_guidance_ids"
+	KeyLearningResolution       Key = "euclo.learning_resolution"
+	KeySeededPipelinePlan       Key = "euclo.seeded_pipeline_plan"
+	KeyReproduction             Key = "euclo.reproduction"
+	KeyPromotedLearningInteraction Key = "euclo.promoted_learning_interaction"
+	KeyLearningPromoteInput     Key = "euclo.learning_promote_input"
+	KeyDeferralsSurface         Key = "euclo.deferrals_surface"
+	KeyDeferralResolveInput     Key = "euclo.deferral_resolve_input"
+	KeyMigrationPlan            Key = "euclo.migration_plan"
+	KeyPreloadedActivePlanVersion Key = "euclo.preloaded_active_plan_version"
+	KeyPreloadedPendingLearning  Key = "euclo.preloaded_pending_learning"
+	KeyPreloadedBlockingLearningIDs Key = "euclo.preloaded_blocking_learning_ids"
+	KeyPhaseState               Key = "euclo.phase_state"
+	KeyProviderStateSnapshot Key = "euclo.provider_state_snapshot"
+	KeyDeferredIssueIDs      Key = "euclo.deferred_issue_ids"
+	KeyPendingLearningIDs    Key = "euclo.pending_learning_ids"
+	KeyBlockingLearningIDs   Key = "euclo.blocking_learning_ids"
+	KeySkills                Key = "euclo.skills"
+	KeyTouchedSymbols        Key = "euclo.touched_symbols"
+	KeyWorkspace             Key = "euclo.workspace"
+	KeyTDDLifecycle          Key = "euclo.tdd.lifecycle"
+)

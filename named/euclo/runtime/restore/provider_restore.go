@@ -8,6 +8,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/memory"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type ProviderRestoreOutcome struct {
@@ -119,15 +120,15 @@ func CaptureProviderRuntimeState(ctx context.Context, providers []core.Provider,
 		}
 	}
 	if len(providerSnapshots) > 0 {
-		state.Set("euclo.provider_snapshots", providerSnapshots)
+		euclostate.SetProviderSnapshots(state, providerSnapshots)
 	}
 	if len(sessionSnapshots) > 0 {
-		state.Set("euclo.provider_session_snapshots", sessionSnapshots)
+		euclostate.SetProviderSessionSnapshots(state, sessionSnapshots)
 	}
 	restoreState.Restored = restoreState.Restored || len(providerSnapshots) > 0 || len(sessionSnapshots) > 0
 	restoreState.Partial = restoreState.Partial || len(restoreState.FailedProviders) > 0 || len(restoreState.FailedSessions) > 0
 	if restoreState.Restored || restoreState.Partial || len(restoreState.Outcomes) > 0 {
-		state.Set("euclo.provider_restore", restoreState)
+		euclostate.SetProviderRestore(state, restoreState)
 	}
 	return restoreState
 }
@@ -167,7 +168,7 @@ func PersistProviderSnapshotState(ctx context.Context, store memory.WorkflowStat
 	}
 	restoreState.ProviderSnapshotRefs = providerSnapshotRecordRefs(providerRecords)
 	restoreState.SessionSnapshotRefs = providerSessionRecordRefs(sessionRecords)
-	state.Set("euclo.provider_restore", restoreState)
+	euclostate.SetProviderRestore(state, restoreState)
 	return restoreState, nil
 }
 
@@ -184,21 +185,21 @@ func RestoreProviderSnapshotState(ctx context.Context, store memory.WorkflowStat
 	providers, err := store.ListProviderSnapshots(ctx, workflowID, runID)
 	if err != nil {
 		restoreState.LastRestoreError = err.Error()
-		state.Set("euclo.provider_restore", restoreState)
+		euclostate.SetProviderRestore(state, restoreState)
 		return restoreState, err
 	}
 	sessions, err := store.ListProviderSessionSnapshots(ctx, workflowID, runID)
 	if err != nil {
 		restoreState.LastRestoreError = err.Error()
-		state.Set("euclo.provider_restore", restoreState)
+		euclostate.SetProviderRestore(state, restoreState)
 		return restoreState, err
 	}
-	state.Set("euclo.provider_snapshots", providerSnapshotsFromRecords(providers))
-	state.Set("euclo.provider_session_snapshots", providerSessionSnapshotsFromRecords(sessions))
+	euclostate.SetProviderSnapshots(state, providerSnapshotsFromRecords(providers))
+	euclostate.SetProviderSessionSnapshots(state, providerSessionSnapshotsFromRecords(sessions))
 	restoreState.ProviderSnapshotRefs = providerSnapshotRecordRefs(providers)
 	restoreState.SessionSnapshotRefs = providerSessionRecordRefs(sessions)
 	restoreState.Restored = len(providers) > 0 || len(sessions) > 0
-	state.Set("euclo.provider_restore", restoreState)
+	euclostate.SetProviderRestore(state, restoreState)
 	return restoreState, nil
 }
 
@@ -210,7 +211,7 @@ func ApplyProviderRuntimeRestore(ctx context.Context, providers []core.Provider,
 	providerSnapshots, _ := providerSnapshotsFromState(state)
 	sessionSnapshots, _ := providerSessionSnapshotsFromState(state)
 	if len(providerSnapshots) == 0 && len(sessionSnapshots) == 0 {
-		state.Set("euclo.provider_restore", restoreState)
+		euclostate.SetProviderRestore(state, restoreState)
 		return restoreState, nil
 	}
 	restoreState.UpdatedAt = time.Now().UTC()
@@ -327,7 +328,7 @@ func ApplyProviderRuntimeRestore(ctx context.Context, providers []core.Provider,
 	if len(requiredFailures) > 0 {
 		restoreState.LastRestoreError = strings.Join(requiredFailures, "; ")
 	}
-	state.Set("euclo.provider_restore", restoreState)
+	euclostate.SetProviderRestore(state, restoreState)
 	if len(requiredFailures) > 0 {
 		return restoreState, fmt.Errorf("%s", restoreState.LastRestoreError)
 	}
@@ -338,8 +339,8 @@ func providerRestoreStateFromContext(state *core.Context) (ProviderRestoreState,
 	if state == nil {
 		return ProviderRestoreState{}, false
 	}
-	raw, ok := state.Get("euclo.provider_restore")
-	if !ok || raw == nil {
+	raw, ok := euclostate.GetProviderRestore(state)
+	if !ok {
 		return ProviderRestoreState{}, false
 	}
 	typed, ok := raw.(ProviderRestoreState)
@@ -354,24 +355,14 @@ func providerSnapshotsFromState(state *core.Context) ([]core.ProviderSnapshot, b
 	if state == nil {
 		return nil, false
 	}
-	raw, ok := state.Get("euclo.provider_snapshots")
-	if !ok || raw == nil {
-		return nil, false
-	}
-	typed, ok := raw.([]core.ProviderSnapshot)
-	return typed, ok
+	return euclostate.GetProviderSnapshots(state)
 }
 
 func providerSessionSnapshotsFromState(state *core.Context) ([]core.ProviderSessionSnapshot, bool) {
 	if state == nil {
 		return nil, false
 	}
-	raw, ok := state.Get("euclo.provider_session_snapshots")
-	if !ok || raw == nil {
-		return nil, false
-	}
-	typed, ok := raw.([]core.ProviderSessionSnapshot)
-	return typed, ok
+	return euclostate.GetProviderSessionSnapshots(state)
 }
 
 func supportsProviderRestore(provider core.Provider) bool {
@@ -424,65 +415,51 @@ func providerSnapshotRecordsFromState(state *core.Context, workflowID, runID, ta
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.provider_snapshots")
+	raw, ok := euclostate.GetProviderSnapshots(state)
 	if !ok || raw == nil {
 		return nil
 	}
-	switch typed := raw.(type) {
-	case []core.ProviderSnapshot:
-		out := make([]memory.WorkflowProviderSnapshotRecord, 0, len(typed))
-		for _, snapshot := range typed {
-			out = append(out, memory.WorkflowProviderSnapshotRecord{
-				SnapshotID:     providerSnapshotRecordID(snapshot),
-				WorkflowID:     workflowID,
-				RunID:          runID,
-				ProviderID:     snapshot.ProviderID,
-				Recoverability: snapshot.Recoverability,
-				Descriptor:     snapshot.Descriptor,
-				Health:         snapshot.Health,
-				CapabilityIDs:  append([]string(nil), snapshot.CapabilityIDs...),
-				TaskID:         firstNonEmpty(snapshot.TaskID, taskID),
-				Metadata:       cloneAnyMap(snapshot.Metadata),
-				State:          snapshot.State,
-				CapturedAt:     parseProviderSnapshotTime(snapshot.CapturedAt),
-			})
-		}
-		return out
-	case []memory.WorkflowProviderSnapshotRecord:
-		return append([]memory.WorkflowProviderSnapshotRecord(nil), typed...)
-	default:
-		return nil
+	out := make([]memory.WorkflowProviderSnapshotRecord, 0, len(raw))
+	for _, snapshot := range raw {
+		out = append(out, memory.WorkflowProviderSnapshotRecord{
+			SnapshotID:     providerSnapshotRecordID(snapshot),
+			WorkflowID:     workflowID,
+			RunID:          runID,
+			ProviderID:     snapshot.ProviderID,
+			Recoverability: snapshot.Recoverability,
+			Descriptor:     snapshot.Descriptor,
+			Health:         snapshot.Health,
+			CapabilityIDs:  append([]string(nil), snapshot.CapabilityIDs...),
+			TaskID:         firstNonEmpty(snapshot.TaskID, taskID),
+			Metadata:       cloneAnyMap(snapshot.Metadata),
+			State:          snapshot.State,
+			CapturedAt:     parseProviderSnapshotTime(snapshot.CapturedAt),
+		})
 	}
+	return out
 }
 
 func providerSessionSnapshotRecordsFromState(state *core.Context, workflowID, runID string) []memory.WorkflowProviderSessionSnapshotRecord {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("euclo.provider_session_snapshots")
+	raw, ok := euclostate.GetProviderSessionSnapshots(state)
 	if !ok || raw == nil {
 		return nil
 	}
-	switch typed := raw.(type) {
-	case []core.ProviderSessionSnapshot:
-		out := make([]memory.WorkflowProviderSessionSnapshotRecord, 0, len(typed))
-		for _, snapshot := range typed {
-			out = append(out, memory.WorkflowProviderSessionSnapshotRecord{
-				SnapshotID: fmt.Sprintf("%s:%s", snapshot.Session.ProviderID, snapshot.Session.ID),
-				WorkflowID: workflowID,
-				RunID:      runID,
-				Session:    snapshot.Session,
-				Metadata:   cloneAnyMap(snapshot.Metadata),
-				State:      snapshot.State,
-				CapturedAt: parseProviderSnapshotTime(snapshot.CapturedAt),
-			})
-		}
-		return out
-	case []memory.WorkflowProviderSessionSnapshotRecord:
-		return append([]memory.WorkflowProviderSessionSnapshotRecord(nil), typed...)
-	default:
-		return nil
+	out := make([]memory.WorkflowProviderSessionSnapshotRecord, 0, len(raw))
+	for _, snapshot := range raw {
+		out = append(out, memory.WorkflowProviderSessionSnapshotRecord{
+			SnapshotID: fmt.Sprintf("%s:%s", snapshot.Session.ProviderID, snapshot.Session.ID),
+			WorkflowID: workflowID,
+			RunID:      runID,
+			Session:    snapshot.Session,
+			Metadata:   cloneAnyMap(snapshot.Metadata),
+			State:      snapshot.State,
+			CapturedAt: parseProviderSnapshotTime(snapshot.CapturedAt),
+		})
 	}
+	return out
 }
 
 func providerSnapshotsFromRecords(records []memory.WorkflowProviderSnapshotRecord) []core.ProviderSnapshot {

@@ -14,7 +14,6 @@ import (
 	euclocontext "github.com/lexcodex/relurpify/named/euclo/runtime/context"
 	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
 	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
@@ -262,10 +261,7 @@ func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, 
 
 	// Apply code revision for BKC staleness checking.
 	if resumeCtx.CodeRevision != "" {
-<<<<<<< HEAD
 		euclostate.SetCodeRevision(state, resumeCtx.CodeRevision)
-=======
-		state.Set("euclo.code_revision", resumeCtx.CodeRevision)
 		state.Set("euclo.last_session_revision", resumeCtx.CodeRevision)
 	}
 
@@ -273,7 +269,6 @@ func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, 
 	// resolved interactions against the prior session boundary.
 	if !resumeCtx.SessionStartTime.IsZero() {
 		state.Set("euclo.session_start_time", resumeCtx.SessionStartTime)
->>>>>>> 71ba95d (workspace language detection, deferred issue lifecyle, cross session learning)
 	}
 
 	// Seed executor semantic context from resume's semantic summary.

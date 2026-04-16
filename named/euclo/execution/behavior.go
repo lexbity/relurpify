@@ -19,6 +19,8 @@ import (
 	rewoo "github.com/lexcodex/relurpify/named/euclo/execution/rewoo"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 type ExecuteInput struct {
@@ -176,6 +178,17 @@ func rewooRecipe(taskType core.TaskType) RecipeSpec {
 }
 
 func SetBehaviorTrace(state *core.Context, work eucloruntime.UnitOfWork, routines []string) {
+	setBehaviorTrace(state, work, routines, true)
+}
+
+// SetBehaviorTraceWithoutRecipeID records a behavior trace without attaching the
+// executor descriptor's recipe ID. This is used for specialized paths where the
+// trace should reflect executed routines only.
+func SetBehaviorTraceWithoutRecipeID(state *core.Context, work eucloruntime.UnitOfWork, routines []string) {
+	setBehaviorTrace(state, work, routines, false)
+}
+
+func setBehaviorTrace(state *core.Context, work eucloruntime.UnitOfWork, routines []string, includeRecipeID bool) {
 	if state == nil {
 		return
 	}
@@ -184,10 +197,10 @@ func SetBehaviorTrace(state *core.Context, work eucloruntime.UnitOfWork, routine
 	trace.SupportingRoutines = append([]string(nil), routines...)
 	trace.ExecutorFamily = string(work.ExecutorDescriptor.Family)
 	trace.Path = "unit_of_work_behavior"
-	if strings.TrimSpace(work.ExecutorDescriptor.RecipeID) != "" {
+	if includeRecipeID && strings.TrimSpace(work.ExecutorDescriptor.RecipeID) != "" {
 		trace.RecipeIDs = UniqueStrings(append(trace.RecipeIDs, strings.TrimSpace(work.ExecutorDescriptor.RecipeID)))
 	}
-	euclostate.SetBehaviorTrace(state, trace)
+	storeBehaviorTrace(state, trace)
 }
 
 func AddSpecializedCapabilityTrace(state *core.Context, capabilityID string) {
@@ -196,7 +209,7 @@ func AddSpecializedCapabilityTrace(state *core.Context, capabilityID string) {
 	}
 	trace := readBehaviorTrace(state)
 	trace.SpecializedCapabilityIDs = UniqueStrings(append(trace.SpecializedCapabilityIDs, strings.TrimSpace(capabilityID)))
-	euclostate.SetBehaviorTrace(state, trace)
+	storeBehaviorTrace(state, trace)
 }
 
 func readBehaviorTrace(state *core.Context) euclostate.Trace {
@@ -207,6 +220,20 @@ func readBehaviorTrace(state *core.Context) euclostate.Trace {
 		return trace
 	}
 	return euclostate.Trace{}
+}
+
+func storeBehaviorTrace(state *core.Context, trace euclostate.Trace) {
+	if state == nil {
+		return
+	}
+	statebus.SetAny(state, statekeys.KeyBehaviorTrace, Trace{
+		PrimaryCapabilityID:      trace.PrimaryCapabilityID,
+		SupportingRoutines:       append([]string(nil), trace.SupportingRoutines...),
+		RecipeIDs:                append([]string(nil), trace.RecipeIDs...),
+		SpecializedCapabilityIDs: append([]string(nil), trace.SpecializedCapabilityIDs...),
+		ExecutorFamily:           trace.ExecutorFamily,
+		Path:                     trace.Path,
+	})
 }
 
 func ExecuteWorkflow(ctx context.Context, in ExecuteInput) (*core.Result, error) {
@@ -241,7 +268,7 @@ func AppendDiagnostic(state *core.Context, key, message string) {
 	if state == nil || strings.TrimSpace(key) == "" || strings.TrimSpace(message) == "" {
 		return
 	}
-	raw, _ := state.Get(key)
+	raw, _ := statebus.GetAny(state, key)
 	payload, _ := raw.(map[string]any)
 	if payload == nil {
 		payload = map[string]any{}
@@ -259,7 +286,7 @@ func AppendDiagnostic(state *core.Context, key, message string) {
 	}
 	diags = append(diags, message)
 	payload["diagnostics"] = UniqueStrings(diags)
-	state.Set(key, payload)
+	statebus.SetAny(state, key, payload)
 }
 
 func EnsureRoutineArtifacts(state *core.Context, routineID string, work eucloruntime.UnitOfWork) {
@@ -268,8 +295,8 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 	}
 	switch routineID {
 	case "euclo:chat.local-review":
-		if _, ok := state.Get("euclo.review_findings"); !ok {
-			state.Set("euclo.review_findings", map[string]any{
+		if !statebus.Has(state, statekeys.KeyReviewFindings) {
+			statebus.SetAny(state, statekeys.KeyReviewFindings, map[string]any{
 				"review_source":         routineID,
 				"primary_capability_id": work.PrimaryRelurpicCapabilityID,
 				"summary":               "local review routine prepared inspection context",
@@ -277,24 +304,24 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 			})
 		}
 	case "euclo:chat.targeted-verification-repair":
-		if _, ok := state.Get("euclo.verification_summary"); !ok {
-			state.Set("euclo.verification_summary", map[string]any{
+		if !statebus.Has(state, statekeys.KeyVerificationSummary) {
+			statebus.SetAny(state, statekeys.KeyVerificationSummary, map[string]any{
 				"source":     routineID,
 				"summary":    "targeted verification repair routine activated",
 				"provenance": "absent",
 			})
 		}
 	case "euclo:debug.root-cause":
-		if _, ok := state.Get("euclo.root_cause_candidates"); !ok {
-			state.Set("euclo.root_cause_candidates", map[string]any{
+		if !statebus.Has(state, statekeys.KeyRootCauseCandidates) {
+			statebus.SetAny(state, statekeys.KeyRootCauseCandidates, map[string]any{
 				"source":       routineID,
 				"tension_refs": append([]string(nil), work.SemanticInputs.TensionRefs...),
 				"summary":      "root cause candidates derived from debug investigation context",
 			})
 		}
 	case "euclo:debug.localization":
-		if _, ok := state.Get("euclo.root_cause"); !ok {
-			state.Set("euclo.root_cause", map[string]any{
+		if !statebus.Has(state, statekeys.KeyRootCause) {
+			statebus.SetAny(state, statekeys.KeyRootCause, map[string]any{
 				"source":          routineID,
 				"pattern_refs":    append([]string(nil), work.SemanticInputs.PatternRefs...),
 				"touched_symbols": work.SemanticInputs.RequestProvenanceRefs,
@@ -302,22 +329,22 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 			})
 		}
 	case "euclo:debug.verification-repair":
-		if _, ok := state.Get("euclo.regression_analysis"); !ok {
-			state.Set("euclo.regression_analysis", map[string]any{
+		if !statebus.Has(state, statekeys.KeyRegressionAnalysis) {
+			statebus.SetAny(state, statekeys.KeyRegressionAnalysis, map[string]any{
 				"source":  routineID,
 				"summary": "verification repair routine activated for bounded debug repair",
 			})
 		}
 	case "euclo:archaeology.pattern-surface":
-		if _, ok := state.Get("pipeline.explore"); !ok {
-			state.Set("pipeline.explore", map[string]any{
+		if !statebus.Has(state, statekeys.KeyPipelineExplore) {
+			statebus.SetAny(state, statekeys.KeyPipelineExplore, map[string]any{
 				"source":       routineID,
 				"pattern_refs": append([]string(nil), work.SemanticInputs.PatternRefs...),
 				"summary":      "pattern surface routine grounded archaeology execution",
 			})
 		}
 	case "euclo:archaeology.prospective-assess", "euclo:archaeology.convergence-guard":
-		raw, _ := state.Get("euclo.plan_candidates")
+		raw, _ := statebus.GetAny(state, statekeys.KeyPlanCandidates)
 		payload, _ := raw.(map[string]any)
 		if payload == nil {
 			payload = map[string]any{"source": "euclo.relurpic.archaeology"}
@@ -334,7 +361,7 @@ func EnsureRoutineArtifacts(state *core.Context, routineID string, work euclorun
 			}
 		}
 		payload["operations"] = UniqueStrings(append(ops, routineID))
-		state.Set("euclo.plan_candidates", payload)
+		statebus.SetAny(state, statekeys.KeyPlanCandidates, payload)
 	}
 }
 
@@ -382,7 +409,7 @@ func MergeStateArtifactsToContext(state *core.Context, artifacts []euclotypes.Ar
 	}
 	existing := euclotypes.ArtifactStateFromContext(state).All()
 	merged := append(existing, artifacts...)
-	euclostate.SetArtifacts(state, merged)
+		euclostate.SetArtifacts(state, merged)
 	for _, artifact := range artifacts {
 		if key := euclotypes.StateKeyForArtifactKind(artifact.Kind); key != "" && artifact.Payload != nil {
 			state.Set(key, artifact.Payload)
@@ -510,7 +537,7 @@ func PropagateBehaviorTrace(dst, src *core.Context) {
 		return
 	}
 	if trace, ok := euclostate.GetBehaviorTrace(src); ok {
-		euclostate.SetBehaviorTrace(dst, trace)
+		storeBehaviorTrace(dst, trace)
 	}
 }
 
@@ -520,7 +547,7 @@ func appendRecipeTrace(state *core.Context, recipeID RecipeID) {
 	}
 	trace := readBehaviorTrace(state)
 	trace.RecipeIDs = UniqueStrings(append(trace.RecipeIDs, strings.TrimSpace(string(recipeID))))
-	euclostate.SetBehaviorTrace(state, trace)
+	storeBehaviorTrace(state, trace)
 }
 
 func ResultSummary(result *core.Result) string {

@@ -50,6 +50,9 @@ func LoadFromContext(ctx *core.Context) *EucloExecutionState {
 	}
 
 	// Runtime state
+	if v, ok := GetContextRuntime(ctx); ok {
+		s.ContextRuntime = v
+	}
 	if v, ok := GetSharedContextRuntime(ctx); ok {
 		s.SharedContextRuntime = v
 	}
@@ -87,11 +90,26 @@ func LoadFromContext(ctx *core.Context) *EucloExecutionState {
 	if v, ok := GetClassification(ctx); ok {
 		s.Classification = v
 	}
+	if v, ok := GetModeResolution(ctx); ok {
+		s.ModeResolution = v
+	}
+	if v, ok := GetExecutionProfileSelection(ctx); ok {
+		s.ExecutionProfileSelection = v
+	}
 	if v, ok := GetMode(ctx); ok {
 		s.Mode = v
 	}
 	if v, ok := GetExecutionProfile(ctx); ok {
 		s.ExecutionProfile = v
+	}
+	if v, ok := GetSemanticInputs(ctx); ok {
+		s.SemanticInputs = v
+	}
+	if v, ok := GetResolvedExecutionPolicy(ctx); ok {
+		s.ResolvedExecutionPolicy = v
+	}
+	if v, ok := GetExecutorDescriptor(ctx); ok {
+		s.ExecutorDescriptor = v
 	}
 
 	// Policy
@@ -162,6 +180,12 @@ func LoadFromContext(ctx *core.Context) *EucloExecutionState {
 	if v, ok := GetEditExecution(ctx); ok {
 		s.EditExecution = v
 	}
+	if v, ok := GetExecutionStatus(ctx); ok {
+		s.ExecutionStatus = v
+	}
+	if v, ok := GetCompiledExecution(ctx); ok {
+		s.CompiledExecution = v
+	}
 
 	return s
 }
@@ -212,6 +236,9 @@ func (s *EucloExecutionState) FlushToContext(ctx *core.Context) {
 	}
 
 	// Runtime state
+	if s.ContextRuntime.ModeID != "" || s.ContextRuntime.UpdatedAt.IsZero() == false {
+		SetContextRuntime(ctx, s.ContextRuntime)
+	}
 	if s.SharedContextRuntime.ExecutorFamily != "" || s.SharedContextRuntime.Enabled {
 		SetSharedContextRuntime(ctx, s.SharedContextRuntime)
 	}
@@ -254,6 +281,21 @@ func (s *EucloExecutionState) FlushToContext(ctx *core.Context) {
 	}
 	if s.ExecutionProfile != "" {
 		SetExecutionProfile(ctx, s.ExecutionProfile)
+	}
+	if s.ModeResolution.ModeID != "" {
+		SetModeResolution(ctx, s.ModeResolution)
+	}
+	if s.ExecutionProfileSelection.ProfileID != "" {
+		SetExecutionProfileSelection(ctx, s.ExecutionProfileSelection)
+	}
+	if s.SemanticInputs.WorkflowID != "" || s.SemanticInputs.ExplorationID != "" || len(s.SemanticInputs.PatternRefs) > 0 {
+		SetSemanticInputs(ctx, s.SemanticInputs)
+	}
+	if s.ResolvedExecutionPolicy.ModeID != "" || s.ResolvedExecutionPolicy.ProfileID != "" {
+		SetResolvedExecutionPolicy(ctx, s.ResolvedExecutionPolicy)
+	}
+	if s.ExecutorDescriptor.ExecutorID != "" || s.ExecutorDescriptor.Family != "" {
+		SetExecutorDescriptor(ctx, s.ExecutorDescriptor)
 	}
 
 	// Policy
@@ -323,5 +365,11 @@ func (s *EucloExecutionState) FlushToContext(ctx *core.Context) {
 	// Edit execution
 	if len(s.EditExecution.Requested) > 0 || len(s.EditExecution.Executed) > 0 {
 		SetEditExecution(ctx, s.EditExecution)
+	}
+	if s.ExecutionStatus.WorkflowID != "" || s.ExecutionStatus.RunID != "" || s.ExecutionStatus.Status != "" || s.ExecutionStatus.AssuranceClass != "" || !s.ExecutionStatus.UpdatedAt.IsZero() {
+		SetExecutionStatus(ctx, s.ExecutionStatus)
+	}
+	if s.CompiledExecution.WorkflowID != "" || s.CompiledExecution.RunID != "" || s.CompiledExecution.ExecutionID != "" || s.CompiledExecution.UnitOfWorkID != "" || !s.CompiledExecution.CompiledAt.IsZero() {
+		SetCompiledExecution(ctx, s.CompiledExecution)
 	}
 }

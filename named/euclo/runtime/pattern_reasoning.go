@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 // EnrichSemanticInputBundle derives Euclo-owned reasoning summaries over the
@@ -140,10 +142,10 @@ func touchedSymbolsFromState(state *core.Context) []string {
 		return nil
 	}
 	var out []string
-	if raw, ok := state.Get("euclo.touched_symbols"); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, statekeys.KeyTouchedSymbols); ok && raw != nil {
 		out = append(out, stringSliceAny(raw)...)
 	}
-	if raw, ok := state.Get("euclo.edit_execution"); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, statekeys.KeyEditExecution); ok && raw != nil {
 		switch typed := raw.(type) {
 		case EditExecutionRecord:
 			out = append(out, touchedSymbolsFromEditExecution(typed)...)

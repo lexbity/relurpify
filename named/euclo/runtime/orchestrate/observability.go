@@ -6,6 +6,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 // orchestrateRecorder owns the package's observability and persistence writes.
@@ -25,7 +26,7 @@ func (orchestrateRecorder) recordProfileControllerObservability(
 		return
 	}
 	phaseRecords := defaultOrchestrateRecorder.profilePhaseRecordsState(pcResult.PhaseRecords)
-	state.Set("euclo.profile_controller", map[string]any{
+	euclostate.SetProfileController(state, map[string]any{
 		"mode_id":           mode.ModeID,
 		"profile_id":        profile.ProfileID,
 		"capability_ids":    pcResult.CapabilityIDs,
@@ -36,7 +37,7 @@ func (orchestrateRecorder) recordProfileControllerObservability(
 		"gate_evals_count":  len(pcResult.GateEvals),
 		"recovery_attempts": pcResult.RecoveryAttempts,
 	})
-	state.Set("euclo.profile_phase_records", phaseRecords)
+	euclostate.SetProfilePhaseRecords(state, phaseRecords)
 }
 
 func (orchestrateRecorder) profilePhaseRecordsState(records []PhaseArtifactRecord) []map[string]any {
@@ -79,7 +80,7 @@ func (orchestrateRecorder) persistInteractiveState(
 
 	iState := interaction.ExtractInteractionState(machine)
 	iState.PhasesExecuted = append([]string{}, iResult.PhasesExecuted...)
-	env.State.Set("euclo.interaction_state", iState)
+	euclostate.SetInteractionState(env.State, iState)
 	if recordingEmitter != nil && recordingEmitter.Recording != nil {
 		env.State.Set("euclo.interaction_recording", recordingEmitter.Recording.ToStateMap())
 		env.State.Set("euclo.interaction_records", recordingEmitter.Recording.Records())

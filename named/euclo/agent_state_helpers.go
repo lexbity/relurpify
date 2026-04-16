@@ -51,19 +51,15 @@ func (a *Agent) seedRuntimeState(state *core.Context, envelope eucloruntime.Task
 	euclostate.SetUnitOfWork(state, work)
 	euclostate.SetUnitOfWorkHistory(state, eucloruntime.UpdateUnitOfWorkHistory(history, work, work.UpdatedAt))
 
-	// Legacy direct keys for fields not yet migrated to typed accessors
-	state.Set("euclo.mode_resolution", mode)
-	state.Set("euclo.execution_profile_selection", profile)
-	state.Set("euclo.semantic_inputs", work.SemanticInputs)
-	state.Set("euclo.resolved_execution_policy", work.ResolvedPolicy)
-	state.Set("euclo.executor_descriptor", work.ExecutorDescriptor)
-	state.Set("euclo.unit_of_work_id", work.ID)
-	state.Set("euclo.root_unit_of_work_id", work.RootID)
-	state.Set("euclo.unit_of_work_transition", work.TransitionState)
+	euclostate.SetModeResolution(state, mode)
+	euclostate.SetExecutionProfileSelection(state, profile)
+	euclostate.SetSemanticInputs(state, work.SemanticInputs)
+	euclostate.SetResolvedExecutionPolicy(state, work.ResolvedPolicy)
+	euclostate.SetExecutorDescriptor(state, work.ExecutorDescriptor)
 
 	// Phase 9: Store user recipe signals for classification
 	if len(a.userRecipeSignals) > 0 {
-		state.Set("euclo.user_recipe_signals", a.userRecipeSignals)
+		euclostate.SetUserRecipeSignals(state, a.userRecipeSignals)
 	}
 }
 
@@ -129,11 +125,11 @@ func (a *Agent) classifyCapabilityIntent(ctx context.Context, task *core.Task, s
 		return nil
 	}
 	// Idempotent: already classified for this invocation.
-	if raw, ok := state.Get("euclo.pre_classified_capability_sequence"); ok && raw != nil {
+	if _, ok := euclostate.GetPreClassifiedCapabilitySequence(state); ok {
 		return nil
 	}
 
-	modeID := state.GetString("euclo.mode")
+	modeID, _ := euclostate.GetMode(state)
 	if modeID == "" {
 		return nil // mode not yet established; skip gracefully
 	}

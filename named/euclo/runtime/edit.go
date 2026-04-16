@@ -7,6 +7,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/capability"
 	"github.com/lexcodex/relurpify/framework/core"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 func ApplyEditIntentArtifacts(ctx context.Context, registry *capability.Registry, state *core.Context) (*EditExecutionRecord, error) {
@@ -19,11 +21,11 @@ func ApplyEditIntentArtifacts(ctx context.Context, registry *capability.Registry
 		if record == nil {
 			return nil, nil
 		}
-		state.Set("euclo.edit_execution", *record)
+		statebus.SetAny(state, statekeys.KeyEditExecution, *record)
 		return record, nil
 	}
 	record := ExecuteEditIntents(ctx, registry, intents, state)
-	state.Set("euclo.edit_execution", record)
+	statebus.SetAny(state, statekeys.KeyEditExecution, record)
 	return &record, nil
 }
 
@@ -109,7 +111,7 @@ func extractEditIntents(state *core.Context) []EditIntent {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("pipeline.code")
+	raw, ok := statebus.GetAny(state, statekeys.KeyPipelineCode)
 	if !ok || raw == nil {
 		return nil
 	}
@@ -178,7 +180,7 @@ func synthesizeEditExecutionFromPipelineCode(state *core.Context) *EditExecution
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.Get("pipeline.code")
+	raw, ok := statebus.GetAny(state, statekeys.KeyPipelineCode)
 	if !ok || raw == nil {
 		return nil
 	}

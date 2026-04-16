@@ -7,6 +7,8 @@ import (
 
 	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
 	"github.com/lexcodex/relurpify/framework/core"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
 )
 
 // WorkflowIDResolver extracts the active workflow ID from state.
@@ -31,36 +33,28 @@ func (s LearningSyncStep) Run(ctx context.Context, state *core.Context) error {
 	if workflowID == "" {
 		return nil
 	}
-	explorationID := firstNonEmpty(
-		strings.TrimSpace(state.GetString("euclo.active_exploration_id")),
-		strings.TrimSpace(state.GetString("exploration_id")),
-	)
-	snapshotID := firstNonEmpty(
-		strings.TrimSpace(state.GetString("euclo.active_exploration_snapshot_id")),
-		strings.TrimSpace(state.GetString("snapshot_id")),
-	)
-	corpusScope := firstNonEmpty(
-		strings.TrimSpace(state.GetString("corpus_scope")),
-		strings.TrimSpace(state.GetString("euclo.corpus_scope")),
-	)
-	codeRevision := firstNonEmpty(
-		strings.TrimSpace(state.GetString("euclo.code_revision")),
-		strings.TrimSpace(state.GetString("code_revision")),
-	)
+	explorationID, _ := euclostate.GetActiveExplorationID(state)
+	explorationID = firstNonEmpty(strings.TrimSpace(explorationID), strings.TrimSpace(statebus.GetString(state, "exploration_id")))
+	snapshotID, _ := euclostate.GetActiveExplorationSnapshotID(state)
+	snapshotID = firstNonEmpty(strings.TrimSpace(snapshotID), strings.TrimSpace(statebus.GetString(state, "snapshot_id")))
+	corpusScope, _ := euclostate.GetCorpusScope(state)
+	corpusScope = firstNonEmpty(strings.TrimSpace(corpusScope), strings.TrimSpace(statebus.GetString(state, "corpus_scope")))
+	codeRevision, _ := euclostate.GetCodeRevision(state)
+	codeRevision = firstNonEmpty(strings.TrimSpace(codeRevision), strings.TrimSpace(statebus.GetString(state, "code_revision")))
 	pending, blocking, err := s.LearningService.SyncAll(ctx, workflowID, explorationID, snapshotID, corpusScope, codeRevision)
 	if err != nil {
 		return err
 	}
 	mergedPending := appendPendingLearningInteractions(state, pending)
-	state.Set("euclo.has_blocking_learning", len(blocking) > 0)
-	state.Set("euclo.pending_learning_ids", learningInteractionIDs(mergedPending))
-	state.Set("euclo.pending_learning_interactions", mergedPending)
+	euclostate.SetHasBlockingLearning(state, len(blocking) > 0)
+	euclostate.SetPendingLearningIDs(state, learningInteractionIDs(mergedPending))
+	euclostate.SetPendingLearningInteractions(state, mergedPending)
 	AddContextKnowledgeItems(state, learningInteractionsToKnowledgeItems(mergedPending))
 	if len(blocking) > 0 {
 		AddBlockingLearningWarning(state, len(blocking))
 	}
-	if sessionStartTime, ok := state.Get("euclo.session_start_time"); ok && sessionStartTime != nil {
-		state.Set("euclo.last_session_time", sessionStartTime)
+	if sessionStartTime, ok := euclostate.GetSessionStartTime(state); ok {
+		euclostate.SetLastSessionTime(state, sessionStartTime)
 	}
 	return nil
 }
@@ -70,14 +64,14 @@ func appendPendingLearningInteractions(state *core.Context, pending []archaeolea
 		return nil
 	}
 	if len(pending) == 0 {
-		if _, ok := state.Get("euclo.pending_learning_interactions"); !ok {
-			state.Set("euclo.pending_learning_interactions", []archaeolearning.Interaction{})
+		if _, ok := euclostate.GetPendingLearningInteractions(state); !ok {
+			euclostate.SetPendingLearningInteractions(state, []archaeolearning.Interaction{})
 		}
-		if raw, ok := state.Get("euclo.pending_learning_interactions"); ok && raw != nil {
-			switch typed := raw.(type) {
-			case []archaeolearning.Interaction:
+		if raw, ok := euclostate.GetPendingLearningInteractions(state); ok {
+			if typed, ok := raw.([]archaeolearning.Interaction); ok {
 				return append([]archaeolearning.Interaction(nil), typed...)
-			case []any:
+			}
+			if typed, ok := raw.([]any); ok {
 				out := make([]archaeolearning.Interaction, 0, len(typed))
 				for _, item := range typed {
 					if interaction, ok := item.(archaeolearning.Interaction); ok {
@@ -90,7 +84,7 @@ func appendPendingLearningInteractions(state *core.Context, pending []archaeolea
 		return nil
 	}
 	existing := make([]archaeolearning.Interaction, 0, len(pending))
-	if raw, ok := state.Get("euclo.pending_learning_interactions"); ok && raw != nil {
+	if raw, ok := euclostate.GetPendingLearningInteractions(state); ok {
 		switch typed := raw.(type) {
 		case []archaeolearning.Interaction:
 			existing = append(existing, typed...)
@@ -117,7 +111,7 @@ func appendPendingLearningInteractions(state *core.Context, pending []archaeolea
 		}
 		existing = append(existing, interaction)
 	}
-	state.Set("euclo.pending_learning_interactions", existing)
+	euclostate.SetPendingLearningInteractions(state, existing)
 	return append([]archaeolearning.Interaction(nil), existing...)
 }
 
@@ -174,7 +168,7 @@ func AddBlockingLearningWarning(state *core.Context, count int) {
 	if state == nil || count <= 0 {
 		return
 	}
-	state.Set("euclo.blocking_learning_warning", map[string]any{
+	statebus.SetAny(state, "euclo.blocking_learning_warning", map[string]any{
 		"count":   count,
 		"message": fmt.Sprintf("%d blocking learning interaction(s) require review", count),
 	})

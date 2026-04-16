@@ -8,6 +8,8 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
 )
 
 // DeferralLoader loads deferred issues from the workspace before the main
@@ -32,8 +34,8 @@ func (d DeferralLoader) Run(_ context.Context, state *core.Context) error {
 	}
 	issues := eucloruntime.LoadDeferredIssuesFromWorkspace(workspaceDir)
 	if len(issues) == 0 {
-		state.Set("euclo.prior_deferred_issues", []eucloruntime.DeferredExecutionIssue{})
-		state.Set("context.knowledge_items", []KnowledgeEvidenceItem{})
+		euclostate.SetPriorDeferredIssues(state, []eucloruntime.DeferredExecutionIssue{})
+		statebus.SetAny(state, "context.knowledge_items", []KnowledgeEvidenceItem{})
 		return nil
 	}
 
@@ -64,7 +66,7 @@ func (d DeferralLoader) Run(_ context.Context, state *core.Context) error {
 		return knowledgeItems[i].RefID < knowledgeItems[j].RefID
 	})
 
-	state.Set("euclo.prior_deferred_issues", openIssues)
+	euclostate.SetPriorDeferredIssues(state, openIssues)
 	AddContextKnowledgeItems(state, knowledgeItems)
 	return nil
 }
@@ -88,13 +90,13 @@ func AddContextKnowledgeItems(state *core.Context, items any) {
 	}
 	incoming := normalizeContextKnowledgeItems(items)
 	if len(incoming) == 0 {
-		if _, ok := state.Get("context.knowledge_items"); !ok {
-			state.Set("context.knowledge_items", []any{})
+		if !statebus.Has(state, "context.knowledge_items") {
+			statebus.SetAny(state, "context.knowledge_items", []any{})
 		}
 		return
 	}
 	existing := make([]any, 0, len(incoming))
-	if raw, ok := state.Get("context.knowledge_items"); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, "context.knowledge_items"); ok && raw != nil {
 		switch typed := raw.(type) {
 		case []KnowledgeEvidenceItem:
 			for _, item := range typed {
@@ -108,7 +110,7 @@ func AddContextKnowledgeItems(state *core.Context, items any) {
 			existing = append(existing, typed...)
 		}
 	}
-	state.Set("context.knowledge_items", append(existing, incoming...))
+	statebus.SetAny(state, "context.knowledge_items", append(existing, incoming...))
 }
 
 func normalizeContextKnowledgeItems(items any) []any {

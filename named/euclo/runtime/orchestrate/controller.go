@@ -8,6 +8,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
 )
 
 // ProfileController replaces the flat buildExecutorForRouting dispatch with
@@ -226,7 +227,7 @@ func mergeCapabilityArtifactsToState(state *core.Context, artifacts []euclotypes
 	// Update the euclo.artifacts slice in state.
 	existing := euclotypes.ArtifactStateFromContext(state)
 	merged := append(existing.All(), artifacts...)
-	state.Set("euclo.artifacts", merged)
+	statebus.SetAny(state, "euclo.artifacts", merged)
 
 	// Also set individual state keys for compatibility with CollectArtifactsFromState.
 	for _, art := range artifacts {

@@ -5,16 +5,14 @@ import (
 	"strings"
 	"time"
 
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	"github.com/lexcodex/relurpify/named/euclo/execution"
 	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
 )
 
-type mapGetter interface {
-	Get(string) (any, bool)
-}
-
-func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGetter, now time.Time) runtimepkg.ChatCapabilityRuntimeState {
+func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state statebus.Getter, now time.Time) runtimepkg.ChatCapabilityRuntimeState {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
@@ -39,33 +37,38 @@ func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGetter
 	rt.ArchaeoSupportActive = containsString(work.SupportingRelurpicCapabilityIDs, euclorelurpic.CapabilityArchaeologyExplore)
 	rt.MutationObserved = debugMutationObserved(state)
 	if state != nil {
-		if raw, ok := state.Get("euclo.relurpic_behavior_trace"); ok && raw != nil {
-			if trace, ok := raw.(eucloexec.Trace); ok {
+		if raw, ok := statebus.GetFrom(state, "euclo.relurpic_behavior_trace"); ok && raw != nil {
+			switch trace := raw.(type) {
+			case euclostate.Trace:
+				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
+				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
+				rt.BehaviorPath = strings.TrimSpace(trace.Path)
+			case execution.Trace:
 				rt.ExecutedRecipeIDs = append([]string(nil), trace.RecipeIDs...)
 				rt.SpecializedCapabilityIDs = append([]string(nil), trace.SpecializedCapabilityIDs...)
 				rt.BehaviorPath = strings.TrimSpace(trace.Path)
 			}
 		}
-		if raw, ok := state.Get("euclo.capability_contract_runtime"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.capability_contract_runtime"); ok && raw != nil {
 			if contract, ok := raw.(runtimepkg.CapabilityContractRuntimeState); ok {
 				rt.LazySemanticAcquisitionEligible = contract.LazySemanticAcquisitionEligible
 				rt.LazySemanticAcquisitionTriggered = contract.LazySemanticAcquisitionTriggered
 			}
 		}
-		if raw, ok := state.Get("euclo.shared_context_runtime"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.shared_context_runtime"); ok && raw != nil {
 			if shared, ok := raw.(runtimepkg.SharedContextRuntimeState); ok {
 				rt.SharedContextEnabled = shared.Enabled
 				rt.SharedContextRecentMutationCount = shared.RecentMutationCount
 			}
 		}
-		if raw, ok := state.Get("euclo.security_runtime"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.security_runtime"); ok && raw != nil {
 			if security, ok := raw.(runtimepkg.SecurityRuntimeState); ok {
 				rt.PolicySnapshotID = strings.TrimSpace(security.PolicySnapshotID)
 				rt.AdmittedCapabilityIDs = append([]string(nil), security.AdmittedCallableCaps...)
 				rt.AdmittedModelTools = append([]string(nil), security.AdmittedModelTools...)
 			}
 		}
-		if raw, ok := state.Get("euclo.proof_surface"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.proof_surface"); ok && raw != nil {
 			if proof, ok := raw.(runtimepkg.ProofSurface); ok {
 				for _, capabilityID := range proof.CapabilityIDs {
 					if strings.HasPrefix(strings.TrimSpace(capabilityID), "tool:") {
@@ -74,7 +77,31 @@ func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGetter
 				}
 			}
 		}
-		if raw, ok := state.Get("pipeline.verify"); ok && raw != nil {
+		if raw, ok := statebus.GetFrom(state, "euclo.verification_plan"); ok && raw != nil {
+			if payload, ok := raw.(map[string]any); ok {
+				rt.VerificationPlanScope = strings.TrimSpace(stringValue(payload["scope_kind"]))
+				rt.VerificationPlanSource = strings.TrimSpace(stringValue(payload["source"]))
+				rt.VerificationPlanFiles = uniqueStrings(stringSlice(payload["files"]))
+				rt.VerificationPlanTestFiles = uniqueStrings(stringSlice(payload["test_files"]))
+				rt.VerificationPlanCommands = uniqueStrings(verificationCommandNames(payload["commands"]))
+				rt.VerificationPlanPlannerID = strings.TrimSpace(stringValue(payload["planner_id"]))
+				rt.VerificationPlanRationale = strings.TrimSpace(stringValue(payload["rationale"]))
+				rt.VerificationPlanAuditTrail = uniqueStrings(stringSlice(payload["audit_trail"]))
+				rt.VerificationPlanCompatibilitySensitive = boolValue(payload["compatibility_sensitive"])
+				rt.VerificationPlanSelectionInputs = uniqueStrings(stringSlice(payload["selection_inputs"]))
+				rt.VerificationPlanPolicyPreferences = uniqueStrings(append(stringSlice(payload["policy_preferred_capabilities"]), stringSlice(payload["policy_success_capabilities"])...))
+				rt.VerificationPlanPolicyRequiresVerification = boolValue(payload["policy_requires_verification"])
+			}
+		}
+		if raw, ok := statebus.GetFrom(state, "euclo.trace"); ok && raw != nil {
+			_ = raw
+			rt.Diagnostics = append(rt.Diagnostics, "euclo.trace")
+		}
+		if raw, ok := statebus.GetFrom(state, "euclo.context_expansion"); ok && raw != nil {
+			_ = raw
+			rt.Diagnostics = append(rt.Diagnostics, "euclo.context_expansion")
+		}
+		if raw, ok := statebus.GetFrom(state, "pipeline.verify"); ok && raw != nil {
 			if payload, ok := raw.(map[string]any); ok {
 				rt.VerificationStatus = strings.TrimSpace(stringValue(payload["status"]))
 				if rt.VerificationStatus == "" {
@@ -83,22 +110,6 @@ func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state mapGetter
 				if checks, ok := payload["checks"].([]any); ok {
 					rt.VerificationCheckCount = len(checks)
 				}
-			}
-		}
-		if raw, ok := state.Get("euclo.verification_plan"); ok && raw != nil {
-			if record, ok := raw.(map[string]any); ok {
-				rt.VerificationPlanScope = strings.TrimSpace(stringValue(record["scope_kind"]))
-				rt.VerificationPlanSource = strings.TrimSpace(stringValue(record["source"]))
-				rt.VerificationPlanFiles = uniqueStrings(stringSlice(record["files"]))
-				rt.VerificationPlanTestFiles = uniqueStrings(stringSlice(record["test_files"]))
-				rt.VerificationPlanCommands = uniqueStrings(verificationCommandNames(record["commands"]))
-				rt.VerificationPlanPlannerID = strings.TrimSpace(stringValue(record["planner_id"]))
-				rt.VerificationPlanRationale = strings.TrimSpace(stringValue(record["rationale"]))
-				rt.VerificationPlanAuditTrail = uniqueStrings(stringSlice(record["audit_trail"]))
-				rt.VerificationPlanCompatibilitySensitive = boolValue(record["compatibility_sensitive"])
-				rt.VerificationPlanSelectionInputs = uniqueStrings(stringSlice(record["selection_inputs"]))
-				rt.VerificationPlanPolicyPreferences = uniqueStrings(append(stringSlice(record["policy_preferred_capabilities"]), stringSlice(record["policy_success_capabilities"])...))
-				rt.VerificationPlanPolicyRequiresVerification = boolValue(record["policy_requires_verification"])
 			}
 		}
 	}

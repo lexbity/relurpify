@@ -12,6 +12,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	"github.com/lexcodex/relurpify/framework/search"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type ContextRuntime struct {
@@ -124,7 +125,7 @@ func (rt *ContextRuntime) Activate(task *core.Task, state *core.Context, model c
 	rt.Policy.RecordGraphMemoryPublications(state, rt.recordDebug)
 	rt.Policy.EnforceBudget(state, rt.Shared, model, nil, rt.recordDebug)
 	rt.syncState()
-	state.Set("euclo.context_runtime", rt.State)
+	euclostate.SetContextRuntime(state, rt.State)
 	return rt.State
 }
 
@@ -138,7 +139,7 @@ func (rt *ContextRuntime) HandleResult(state *core.Context, model core.LanguageM
 	rt.Policy.HandleSignals(state, rt.Shared, result)
 	rt.State.SignalsHandled = true
 	rt.syncState()
-	state.Set("euclo.context_runtime", rt.State)
+	euclostate.SetContextRuntime(state, rt.State)
 	return rt.State
 }
 
@@ -290,11 +291,11 @@ func wrapBKCStrategy(task *core.Task, state *core.Context, cfg ContextRuntimeCon
 func bkcSeedChunks(task *core.Task, state *core.Context, mode eucloruntime.ModeResolution, work eucloruntime.UnitOfWork) []contextmgr.ContextChunk {
 	var chunks []contextmgr.ContextChunk
 	if state != nil {
-		if raw, ok := state.Get("euclo.bkc.context_chunks"); ok && raw != nil {
+		if raw, ok := euclostate.GetBKCContextChunks(state); ok && raw != nil {
 			chunks = append(chunks, contextChunksFromAny(raw)...)
 		}
 		if len(chunks) == 0 {
-			if raw, ok := state.Get("euclo.semantic_context"); ok && raw != nil {
+			if raw, ok := euclostate.GetSemanticContext(state); ok && raw != nil {
 				chunks = append(chunks, contextChunksFromAny(raw)...)
 			}
 		}
