@@ -1341,6 +1341,16 @@ func SetClassificationMeta(ctx *core.Context, v string) {
 	SetString(ctx, KeyClassificationMeta, v)
 }
 
+// GetORSelectedCapability retrieves the OR sequence selected capability from context.
+func GetORSelectedCapability(ctx *core.Context) (string, bool) {
+	return GetString(ctx, KeyORSelectedCapability)
+}
+
+// SetORSelectedCapability sets the OR sequence selected capability in context.
+func SetORSelectedCapability(ctx *core.Context, v string) {
+	SetString(ctx, KeyORSelectedCapability, v)
+}
+
 // ============================================================================
 // Workflow and Session Getters/Setters
 // ============================================================================

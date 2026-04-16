@@ -20,6 +20,7 @@ import (
 	euclocap "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
 	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 type exploreBehavior struct{}
@@ -130,7 +131,7 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 			"summary":  execution.ResultSummary(reconcileResult),
 		}
 		if in.State != nil {
-			in.State.Set("euclo.plan_candidates", reconcilePayload)
+			euclostate.SetPlanCandidates(in.State, reconcilePayload)
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_compile_reconcile",
@@ -193,8 +194,8 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 		// Genuinely nothing to work with — semantic inputs also empty.
 		issue := buildCompilePlanDeferredIssue(in, evidencePayload, reconcileResult, shapeResult, reviewResult)
 		if in.State != nil {
-			in.State.Set("euclo.deferred_execution_issues", []eucloruntime.DeferredExecutionIssue{issue})
-			in.State.Set("euclo.deferred_issue_ids", []string{issue.IssueID})
+			euclostate.SetDeferredIssues(in.State, []eucloruntime.DeferredExecutionIssue{issue})
+			euclostate.SetDeferredIssueIDs(in.State, []string{issue.IssueID})
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_compile_plan_deferred",
@@ -213,8 +214,8 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 	}
 	if persisted, err := persistCompiledPlan(ctx, in, payload, enriched); err == nil && persisted != nil {
 		if in.State != nil {
-			in.State.Set("euclo.active_plan_version", persisted)
-			in.State.Set("euclo.living_plan", &persisted.Plan)
+			euclostate.SetActivePlanVersion(in.State, persisted)
+			euclostate.SetLivingPlan(in.State, &persisted.Plan)
 		}
 		// GuidanceBroker notification: if the plan review surfaced open
 		// questions, submit a non-blocking guidance request so the TUI/operator
@@ -236,7 +237,7 @@ func (compilePlanBehavior) Execute(ctx context.Context, in execution.ExecuteInpu
 	}
 
 	if in.State != nil {
-		in.State.Set("pipeline.plan", payload)
+		euclostate.SetPipelinePlan(in.State, payload)
 	}
 	artifacts = append(artifacts, euclotypes.Artifact{
 		ID:         "archaeology_compile_plan",
@@ -293,8 +294,8 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 			UpdatedAt: now,
 		}
 		if in.State != nil {
-			in.State.Set("euclo.deferred_execution_issues", []eucloruntime.DeferredExecutionIssue{issue})
-			in.State.Set("euclo.deferred_issue_ids", []string{issue.IssueID})
+			euclostate.SetDeferredIssues(in.State, []eucloruntime.DeferredExecutionIssue{issue})
+			euclostate.SetDeferredIssueIDs(in.State, []string{issue.IssueID})
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_blocking_learning_gate",
@@ -315,16 +316,16 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 	if len(compiledPlanSteps(planPayload)) == 0 {
 		planPayload = seededPlanPayload
 		if in.State != nil && planPayload != nil {
-			in.State.Set("pipeline.plan", planPayload)
+			euclostate.SetPipelinePlan(in.State, planPayload)
 		}
 	}
 	if planPayload == nil {
 		if active, err := loadBoundPlan(ctx, in); err == nil && active != nil {
 			planPayload = versionedPlanPayload(active)
 			if in.State != nil {
-				in.State.Set("euclo.active_plan_version", active)
-				in.State.Set("euclo.living_plan", &active.Plan)
-				in.State.Set("pipeline.plan", planPayload)
+				euclostate.SetActivePlanVersion(in.State, active)
+				euclostate.SetLivingPlan(in.State, &active.Plan)
+				euclostate.SetPipelinePlan(in.State, planPayload)
 			}
 		}
 	}
@@ -355,8 +356,8 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 			fmt.Sprintf("plan step %d", idx+1),
 		)
 		if in.State != nil {
-			in.State.Set("euclo.current_plan_step_id", stepID)
-			in.State.Set("euclo.execution_status", map[string]any{
+			euclostate.SetCurrentPlanStepID(in.State, stepID)
+			euclostate.SetExecutionStatus(in.State, map[string]any{
 				"status":          "executing",
 				"active_plan_id":  activePlanID(in.Work),
 				"active_step_id":  stepID,
@@ -400,8 +401,8 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 				UpdatedAt: now,
 			}
 			if in.State != nil {
-				in.State.Set("euclo.deferred_execution_issues", append(deferredIssuesFromState(in.State), issue))
-				in.State.Set("euclo.deferred_issue_ids", []string{issue.IssueID})
+				euclostate.SetDeferredIssues(in.State, append(deferredIssuesFromState(in.State), issue))
+				euclostate.SetDeferredIssueIDs(in.State, []string{issue.IssueID})
 			}
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "archaeology_confidence_gate_" + stepID,
@@ -429,8 +430,8 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 			recordStepAttempt(ctx, in, stepID, "failed", failureReason, "")
 			issue := buildImplementPlanDeferredIssue(in, stepID, stepTitle, completedSteps, checkpointRefs, stepErr, implementResult)
 			if in.State != nil {
-				in.State.Set("euclo.deferred_execution_issues", []eucloruntime.DeferredExecutionIssue{issue})
-				in.State.Set("euclo.deferred_issue_ids", []string{issue.IssueID})
+				euclostate.SetDeferredIssues(in.State, []eucloruntime.DeferredExecutionIssue{issue})
+				euclostate.SetDeferredIssueIDs(in.State, []string{issue.IssueID})
 			}
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "archaeology_implement_plan_deferred_" + stepID,
@@ -499,7 +500,7 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 			artifacts = append(artifacts, *gapArtifact)
 			gapStatus = stringValue(gapArtifact.Payload.(map[string]any)["gap_status"])
 			for _, issue := range gapIssues {
-				in.State.Set("euclo.deferred_execution_issues", append(
+				euclostate.SetDeferredIssues(in.State, append(
 					deferredIssuesFromState(in.State), issue,
 				))
 			}
@@ -538,7 +539,7 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 		"summary":         fmt.Sprintf("implemented %d plan steps", len(completedSteps)),
 	}
 	if in.State != nil {
-		in.State.Set("pipeline.verify", map[string]any{
+		euclostate.SetPipelineVerify(in.State, map[string]any{
 			"status":          "pass",
 			"summary":         finalPayload["summary"],
 			"checkpoint_refs": checkpointRefs,
@@ -547,7 +548,7 @@ func (implementPlanBehavior) Execute(ctx context.Context, in execution.ExecuteIn
 				"status": "pass",
 			}},
 		})
-		in.State.Set("euclo.execution_status", map[string]any{
+		euclostate.SetExecutionStatus(in.State, map[string]any{
 			"status":          "completed",
 			"active_plan_id":  activePlanID(in.Work),
 			"completed_steps": completedSteps,
@@ -649,13 +650,13 @@ func executeImplementPlanViaRewoo(ctx context.Context, in execution.ExecuteInput
 		"source":          "rewoo",
 	}
 	if in.State != nil {
-		in.State.Set("pipeline.verify", map[string]any{
+		euclostate.SetPipelineVerify(in.State, map[string]any{
 			"status":          "pass",
 			"summary":         summary,
 			"checkpoint_refs": checkpointRefs,
 			"checks":          []any{map[string]any{"name": "rewoo_plan_execution", "status": "pass"}},
 		})
-		in.State.Set("euclo.execution_status", map[string]any{
+		euclostate.SetExecutionStatus(in.State, map[string]any{
 			"status":          "completed",
 			"active_plan_id":  activePlanID(in.Work),
 			"completed_steps": completedSteps,
@@ -773,7 +774,7 @@ func executeExplorationPasses(ctx context.Context, in execution.ExecuteInput) ([
 		Status:     "produced",
 	}}
 	if in.State != nil {
-		in.State.Set("pipeline.explore", explorePayload)
+		euclostate.SetPipelineExplore(in.State, explorePayload)
 	}
 
 	planResult, _, planErr := execution.ExecuteRecipe(ctx, in, execution.RecipeArchaeologyExploreShape, "archaeology-explore-shape",
@@ -786,7 +787,7 @@ func executeExplorationPasses(ctx context.Context, in execution.ExecuteInput) ([
 			"summary":     execution.ResultSummary(planResult),
 		}
 		if in.State != nil {
-			in.State.Set("euclo.plan_candidates", planPayload)
+			euclostate.SetPlanCandidates(in.State, planPayload)
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_explore_candidates",
@@ -808,7 +809,7 @@ func executeExplorationPasses(ctx context.Context, in execution.ExecuteInput) ([
 			"summary":     execution.ResultSummary(reviewResult),
 		}
 		if in.State != nil {
-			in.State.Set("pipeline.analyze", reviewPayload)
+			euclostate.SetPipelineAnalyze(in.State, reviewPayload)
 		}
 		artifacts = append(artifacts, euclotypes.Artifact{
 			ID:         "archaeology_explore_review",
@@ -927,8 +928,8 @@ func ensureArchaeologyExecutionState(state *core.Context, work eucloruntime.Unit
 	if snapshotID == "" {
 		snapshotID = explorationID + ":snapshot"
 	}
-	state.Set("euclo.active_exploration_id", explorationID)
-	state.Set("euclo.active_exploration_snapshot_id", snapshotID)
+	euclostate.SetActiveExplorationID(state, explorationID)
+	euclostate.SetActiveExplorationSnapshotID(state, snapshotID)
 }
 
 func (e enrichedArchaeoInput) summary() string {

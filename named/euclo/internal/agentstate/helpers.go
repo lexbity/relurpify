@@ -13,8 +13,7 @@ import (
 	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
 	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
 	euclopretask "github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"	"github.com/lexcodex/relurpify/named/euclo/runtime/state"
 )
 
 func EnrichBundleWithContextKnowledge(bundle eucloruntime.SemanticInputBundle, state *core.Context) eucloruntime.SemanticInputBundle {
@@ -232,7 +231,7 @@ func WorkspaceIDFromTask(task *core.Task, state *core.Context) string {
 
 func ExtractLearningResolutionPayload(task *core.Task, state *core.Context) (map[string]any, bool) {
 	if state != nil {
-		if raw, ok := statebus.GetAny(state, statekeys.KeyLearningResolution); ok {
+		if raw, ok := statebus.GetAny(state, state.KeyLearningResolution); ok {
 			if payload, ok := raw.(map[string]any); ok {
 				return payload, true
 			}

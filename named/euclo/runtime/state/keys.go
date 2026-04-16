@@ -66,6 +66,8 @@ const (
 	KeyClassificationMeta            Key = "euclo.capability_classification_meta"
 	KeyPreClassifiedCapSeq         Key = "euclo.pre_classified_capability_sequence"
 	KeyCapabilitySequenceOperator  Key = "euclo.capability_sequence_operator"
+	KeySequenceStepCompleted       Key = "euclo.sequence_step_completed" // prefix; step N written as key+".N"
+	KeyORSelectedCapability        Key = "euclo.or_selected_capability"
 	KeyUserRecipeSignals           Key = "euclo.user_recipe_signals"
 
 	// Policy keys

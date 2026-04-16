@@ -51,9 +51,7 @@ import (
 	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
 	euclosession "github.com/lexcodex/relurpify/named/euclo/runtime/session"
 	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
-	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"	euclowork "github.com/lexcodex/relurpify/named/euclo/runtime/work"
 )
 
 var detectWorkspaceLanguages = langdetect.Detect
@@ -1374,7 +1372,7 @@ func (a *Agent) refreshRuntimeExecutionArtifacts(ctx context.Context, task *core
 	if raw, ok := euclostate.GetSharedContextRuntime(state); ok {
 		report["shared_context_runtime"] = raw
 	}
-	statebus.SetAny(state, statekeys.KeyPipelineFinalOutput, report)
+	statebus.SetAny(state, state.KeyPipelineFinalOutput, report)
 	artifacts = euclotypes.CollectArtifactsFromState(state)
 	euclostate.SetArtifacts(state, artifacts)
 	if persistErr := a.persistArtifacts(ctx, task, state, artifacts); persistErr != nil {
@@ -1465,7 +1463,7 @@ func (a *Agent) applyRuntimeResultMetadata(result *core.Result, state *core.Cont
 			result.Metadata["assurance_class"] = raw
 		}
 	}
-	if raw, ok := statebus.GetAny(state, statekeys.KeyPipelineFinalOutput); ok && raw != nil {
+	if raw, ok := statebus.GetAny(state, state.KeyPipelineFinalOutput); ok && raw != nil {
 		result.Data["final_output"] = raw
 		if payload, ok := raw.(map[string]any); ok {
 			if _, exists := result.Metadata["result_class"]; !exists {

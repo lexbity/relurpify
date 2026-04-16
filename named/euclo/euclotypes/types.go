@@ -13,7 +13,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/memory"
 	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 // ============================================================================
@@ -264,7 +263,7 @@ func RestoreStateFromArtifacts(state *core.Context, artifacts []Artifact) {
 		}
 		state.Set(key, artifact.Payload)
 	}
-	statebus.SetAny(state, statekeys.KeyArtifacts, append([]Artifact{}, artifacts...))
+	statebus.SetAny(state, "euclo.artifacts", append([]Artifact{}, artifacts...))
 }
 
 func AssembleFinalReport(artifacts []Artifact) map[string]any {
@@ -765,7 +764,7 @@ func ArtifactStateFromContext(state *core.Context) ArtifactState {
 	if state == nil {
 		return ArtifactState{}
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyArtifacts)
+	raw, ok := statebus.GetAny(state, "euclo.artifacts")
 	if !ok || raw == nil {
 		return ArtifactState{}
 	}

@@ -9,7 +9,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 type Result struct {
@@ -98,7 +97,7 @@ func seedFromState(board *agentblackboard.Blackboard, state *core.Context) {
 	if board == nil || state == nil {
 		return
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyBlackboardSeedFacts)
+	raw, ok := statebus.GetAny(state, state.KeyBlackboardSeedFacts)
 	if !ok || raw == nil {
 		return
 	}

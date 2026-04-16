@@ -8,7 +8,6 @@ import (
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 // SessionResume holds the information needed to resume an interactive session.
@@ -29,7 +28,7 @@ func ExtractSessionResume(state *core.Context) *SessionResume {
 	if state == nil {
 		return nil
 	}
-	raw, ok := statebus.GetAny(state, statekeys.KeyInteractionState)
+	raw, ok := statebus.GetAny(state, "euclo.interaction_state")
 	if !ok || raw == nil {
 		return nil
 	}
@@ -100,7 +99,7 @@ func sessionResumeFromState(is InteractionState, state *core.Context) *SessionRe
 
 	// Collect artifact kinds from state.
 	if state != nil {
-		if raw, ok := statebus.GetAny(state, statekeys.KeyArtifacts); ok && raw != nil {
+		if raw, ok := statebus.GetAny(state, "euclo.artifacts"); ok && raw != nil {
 			resume.HasArtifacts = true
 			// Type may vary ([]Artifact or []any after persistence).
 			switch typed := raw.(type) {

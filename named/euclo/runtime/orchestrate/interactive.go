@@ -252,7 +252,7 @@ func finalizeTransitionResult(
 	icResult.InteractionState.PhasesExecuted = append([]string{}, allPhases...)
 	icResult.InteractionState.SkippedPhases = uniqueStrings(allSkipped)
 	if env.State != nil {
-		env.State.Set("euclo.interaction_state", icResult.InteractionState)
+		euclostate.SetInteractionState(env.State, icResult.InteractionState)
 	}
 	result.Data["phases_executed"] = allPhases
 	return result

@@ -7,7 +7,6 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statekeys"
 )
 
 func generateSessionID() string {
@@ -22,9 +21,9 @@ func enforceSessionScoping(state *core.Context, sessionID string) error {
 	if state == nil || sessionID == "" {
 		return nil
 	}
-	existing := statebus.GetString(state, statekeys.KeySessionID)
+	existing := statebus.GetString(state, state.KeySessionID)
 	if existing == "" {
-		statebus.SetAny(state, statekeys.KeySessionID, sessionID)
+		statebus.SetAny(state, state.KeySessionID, sessionID)
 		return nil
 	}
 	if existing == sessionID {

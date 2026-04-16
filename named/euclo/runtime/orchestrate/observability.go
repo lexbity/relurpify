@@ -87,7 +87,7 @@ func (orchestrateRecorder) persistInteractiveState(
 	}
 	if machine != nil {
 		if raw, ok := machine.State()["propose.items"]; ok && raw != nil {
-			env.State.Set("pipeline.plan", map[string]any{
+			euclostate.SetPipelinePlan(env.State, map[string]any{
 				"source": "interaction.propose",
 				"items":  raw,
 			})
