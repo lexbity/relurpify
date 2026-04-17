@@ -2,6 +2,7 @@ package pretask
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/lexcodex/relurpify/framework/ast"
@@ -327,12 +328,37 @@ type patternStoreQuerier struct {
 }
 
 func (q *patternStoreQuerier) ListByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
-	// This is a simplified implementation
-	// In reality, we would call the appropriate method on PatternStore
-	_ = ctx
-	_ = workflowID
-	_ = q.store
-	return []interface{}{}, nil
+	if q == nil || q.store == nil {
+		return []interface{}{}, nil
+	}
+	workflowID = strings.TrimSpace(workflowID)
+	if workflowID == "" {
+		return []interface{}{}, nil
+	}
+
+	// Euclo stores workflow-local patterns under the workflow ID corpus scope.
+	// Stage 1b only needs the presence of records today, but this still performs
+	// a real store lookup so the retriever no longer silently no-ops in prod.
+	statuses := []patterns.PatternStatus{
+		patterns.PatternStatusProposed,
+		patterns.PatternStatusConfirmed,
+	}
+	seen := make(map[string]struct{})
+	out := make([]interface{}, 0)
+	for _, status := range statuses {
+		records, err := q.store.ListByStatus(ctx, status, workflowID)
+		if err != nil {
+			return nil, err
+		}
+		for _, record := range records {
+			if _, ok := seen[record.ID]; ok {
+				continue
+			}
+			seen[record.ID] = struct{}{}
+			out = append(out, record)
+		}
+	}
+	return out, nil
 }
 
 // indexManagerQuerier implements IndexQuerier using ast.IndexManager

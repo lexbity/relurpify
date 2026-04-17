@@ -3,6 +3,9 @@ package pretask
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/lexcodex/relurpify/framework/patterns"
 )
 
 type stubExpandedRetriever struct {
@@ -89,6 +92,71 @@ func TestArchaeoRetriever_RetrieveTopic(t *testing.T) {
 	// With nil dependencies, should return empty slice
 	if results == nil {
 		t.Error("Results should not be nil")
+	}
+}
+
+func TestArchaeoRetriever_RetrieveTopic_UsesPatternStoreQuerier(t *testing.T) {
+	ctx := context.Background()
+	db, err := patterns.OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store, err := patterns.NewSQLitePatternStore(db)
+	if err != nil {
+		t.Fatalf("NewSQLitePatternStore: %v", err)
+	}
+	now := time.Now().UTC().Truncate(time.Nanosecond)
+	records := []patterns.PatternRecord{
+		{
+			ID:           "pattern-1",
+			Kind:         patterns.PatternKindStructural,
+			Title:        "Workflow pattern 1",
+			Description:  "first pattern",
+			Status:       patterns.PatternStatusProposed,
+			CorpusScope:  "wf-1",
+			CorpusSource: "workspace",
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		},
+		{
+			ID:           "pattern-2",
+			Kind:         patterns.PatternKindSemantic,
+			Title:        "Workflow pattern 2",
+			Description:  "second pattern",
+			Status:       patterns.PatternStatusConfirmed,
+			CorpusScope:  "wf-1",
+			CorpusSource: "workspace",
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		},
+	}
+	for _, record := range records {
+		if err := store.Save(ctx, record); err != nil {
+			t.Fatalf("Save(%s): %v", record.ID, err)
+		}
+	}
+
+	retriever := &ArchaeoRetriever{
+		patternSvc: &patternStoreQuerier{store: store},
+		config: ArchaeoRetrieverConfig{
+			WorkflowID: "wf-1",
+			MaxItems:   4,
+			MaxTokens:  500,
+		},
+	}
+
+	results, err := retriever.RetrieveTopic(ctx, "test query", "wf-1")
+	if err != nil {
+		t.Fatalf("RetrieveTopic failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 knowledge items from pattern store, got %d: %#v", len(results), results)
+	}
+	for _, item := range results {
+		if item.Kind != KnowledgeKindPattern {
+			t.Fatalf("expected pattern knowledge item, got %#v", item)
+		}
 	}
 }
 
