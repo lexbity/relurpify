@@ -141,7 +141,7 @@ func (a *Agent) DirectCapabilityRun(ctx context.Context, capabilityID, invokingP
 		return nil, fmt.Errorf("behavior dispatcher not initialized")
 	}
 	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: invokingPrimary,
-		SemanticInputs: buildSemanticInputsFromState(state)},
+		SemanticInputs: agentstate.SemanticInputBundleFromState(state)},
 	}
 	if invokingPrimary == "" {
 		work.PrimaryRelurpicCapabilityID = capabilityID
@@ -153,104 +153,6 @@ func (a *Agent) DirectCapabilityRun(ctx context.Context, capabilityID, invokingP
 	eucloexec.MergeStateArtifactsToContext(state, artifacts)
 	eucloexec.SetBehaviorTrace(state, work, []string{capabilityID})
 	return &core.Result{Success: true}, nil
-}
-
-// buildSemanticInputsFromState extracts semantic input references from state keys
-// to support direct capability testing. This ensures supporting routines receive
-// the WorkContext fields they need (PatternRefs, TensionRefs, etc.) even in
-// capability_direct_run mode where the full agent loop hasn't populated them.
-func buildSemanticInputsFromState(state *core.Context) eucloruntime.SemanticInputBundle {
-	inputs := eucloruntime.SemanticInputBundle{}
-	if state == nil {
-		return inputs
-	}
-
-	// Extract string-slice refs from state keys that follow naming conventions
-	// These are typically set by test setup's state_keys section
-	inputs.PatternRefs = stringSliceFromState(state, "pattern_refs")
-	inputs.TensionRefs = stringSliceFromState(state, "tension_refs")
-	inputs.ProspectiveRefs = stringSliceFromState(state, "prospective_refs")
-	inputs.ConvergenceRefs = stringSliceFromState(state, "convergence_refs")
-	inputs.RequestProvenanceRefs = stringSliceFromState(state, "request_provenance_refs")
-	inputs.LearningInteractionRefs = stringSliceFromState(state, "learning_interaction_refs")
-
-	// Also check for single-value keys that might contain refs
-	if refs := stringSliceFromStateKey(state, "archaeology.pattern_refs"); len(refs) > 0 {
-		inputs.PatternRefs = append(inputs.PatternRefs, refs...)
-	}
-	if refs := stringSliceFromStateKey(state, "debug.pattern_refs"); len(refs) > 0 {
-		inputs.PatternRefs = append(inputs.PatternRefs, refs...)
-	}
-	if refs := stringSliceFromStateKey(state, "archaeology.tension_refs"); len(refs) > 0 {
-		inputs.TensionRefs = append(inputs.TensionRefs, refs...)
-	}
-	if refs := stringSliceFromStateKey(state, "debug.tension_refs"); len(refs) > 0 {
-		inputs.TensionRefs = append(inputs.TensionRefs, refs...)
-	}
-	if refs := stringSliceFromStateKey(state, "archaeology.prospective_refs"); len(refs) > 0 {
-		inputs.ProspectiveRefs = append(inputs.ProspectiveRefs, refs...)
-	}
-	if refs := stringSliceFromStateKey(state, "debug.prospective_refs"); len(refs) > 0 {
-		inputs.ProspectiveRefs = append(inputs.ProspectiveRefs, refs...)
-	}
-
-	// Extract request provenance from various possible keys
-	if refs := stringSliceFromStateKey(state, "archaeology.request_provenance_refs"); len(refs) > 0 {
-		inputs.RequestProvenanceRefs = append(inputs.RequestProvenanceRefs, refs...)
-	}
-	if refs := stringSliceFromStateKey(state, "debug.request_provenance_refs"); len(refs) > 0 {
-		inputs.RequestProvenanceRefs = append(inputs.RequestProvenanceRefs, refs...)
-	}
-
-	// Extract workflow/exploration IDs if present
-	if id, ok := stringFromState(state, "workflow_id"); ok {
-		inputs.WorkflowID = id
-	}
-	if id, ok := stringFromState(state, "exploration_id"); ok {
-		inputs.ExplorationID = id
-	}
-
-	return inputs
-}
-
-// stringSliceFromState extracts a string slice from state by key.
-func stringSliceFromState(state *core.Context, key string) []string {
-	return stringSliceFromStateKey(state, key)
-}
-
-// stringSliceFromStateKey extracts a string slice from a specific state key.
-// Handles both []string and []any (from JSON/YAML parsing) formats.
-func stringSliceFromStateKey(state *core.Context, key string) []string {
-	if raw, ok := state.Get(key); ok && raw != nil {
-		switch typed := raw.(type) {
-		case []string:
-			return append([]string(nil), typed...)
-		case []any:
-			var result []string
-			for _, v := range typed {
-				if s, ok := v.(string); ok {
-					result = append(result, s)
-				}
-			}
-			return result
-		case string:
-			// Single string value - wrap in slice
-			if typed != "" {
-				return []string{typed}
-			}
-		}
-	}
-	return nil
-}
-
-// stringFromState extracts a string value from state by key.
-func stringFromState(state *core.Context, key string) (string, bool) {
-	if raw, ok := state.Get(key); ok && raw != nil {
-		if s, ok := raw.(string); ok {
-			return s, true
-		}
-	}
-	return "", false
 }
 
 func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
