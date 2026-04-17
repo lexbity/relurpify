@@ -37,24 +37,25 @@ spec:
     - level:1
     setup:
       files:
-      - path: testsuite/fixtures/hello.go
-        content: "package main\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
-    prompt: Change the Hello function in testsuite/fixtures/hello.go to return 'hello
+      - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+    prompt: Change the Hello function in testsuite/agenttest_fixtures/gosuite/hello/hello.go to return 'hello
       world' instead of 'hello'.
     context:
       euclo.mode: code
       context_file_contents:
-      - path: testsuite/fixtures/hello.go
-        content: "package main\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/hello.go
-        files_contain:
-        - path: testsuite/fixtures/hello.go
-          contains:
-          - hello world
+        - testsuite/agenttest_fixtures/gosuite/hello/hello.go
+        verify:
+          steps:
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/hello
         euclo_mode: code
       benchmark:
         euclo:
@@ -73,32 +74,28 @@ spec:
     - level:1
     setup:
       files:
-      - path: testsuite/fixtures/calculator.go
-        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
-      - path: testsuite/fixtures/calculator_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
-          \ {\n  if got := Add(2, 3); got != 5 {\n    t.Errorf(\"got %d want 5\",\
-          \ got)\n  }\n}\n"
-    prompt: The API is returning wrong results. Fix the calculation in testsuite/fixtures/calculator.go
+      - path: testsuite/agenttest_fixtures/gosuite/calculator/calculator.go
+        content: "package calculator\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+    prompt: The API is returning wrong results. Fix the calculation in testsuite/agenttest_fixtures/gosuite/calculator/calculator.go
       so TestAdd passes.
     context:
       euclo.mode: code
       context_file_contents:
-      - path: testsuite/fixtures/calculator.go
-        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
-      - path: testsuite/fixtures/calculator_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
-          \ {\n  if got := Add(2, 3); got != 5 {\n    t.Errorf(\"got %d want 5\",\
-          \ got)\n  }\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/calculator/calculator.go
+        content: "package calculator\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/calculator.go
-        files_contain:
-        - path: testsuite/fixtures/calculator.go
-          contains:
-          - a + b
+        - testsuite/agenttest_fixtures/gosuite/calculator/calculator.go
+        verify:
+          steps:
+          - tool: go_build
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/calculator
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/calculator
         euclo_mode: code
       benchmark:
         euclo:
@@ -110,29 +107,24 @@ spec:
     task_type: code_modification
     setup:
       files:
-      - path: testsuite/fixtures/add.go
-        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
-      - path: testsuite/fixtures/add_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
-          \ {\n  if Add(2, 3) != 5 {\n    t.Error(\"expected 5\")\n  }\n}\n"
-    prompt: Fix the Add function in testsuite/fixtures/add.go so that the test passes.
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
+    prompt: Fix the Add function in testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go so that the test passes.
     context:
       euclo.mode: code
       context_file_contents:
-      - path: testsuite/fixtures/add.go
-        content: "package main\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
-      - path: testsuite/fixtures/add_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T)\
-          \ {\n  if Add(2, 3) != 5 {\n    t.Error(\"expected 5\")\n  }\n}\n"
+      - path: testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        content: "package mathutil\n\nfunc Add(a, b int) int {\n  return a - b\n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/add.go
-        files_contain:
-        - path: testsuite/fixtures/add.go
-          contains:
-          - a + b
+        - testsuite/agenttest_fixtures/gosuite/mathutil/mathutil.go
+        verify:
+          steps:
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/mathutil
         euclo_mode: code
       benchmark:
         euclo:
@@ -145,21 +137,26 @@ spec:
     task_type: code_modification
     setup:
       files:
-      - path: testsuite/fixtures/greet.go
-        content: "package main\n\nfunc Greet(name string) string {\n  return \"Hi\"\
+      - path: testsuite/agenttest_fixtures/gosuite/greet/greet.go
+        content: "package greet\n\nfunc Greet(name string) string {\n  return \"Hi\"\
           \n}\n"
-    prompt: Implement the Greet function to return 'Hi, <name>' where <name> is the
+    prompt: Implement the Greet function in testsuite/agenttest_fixtures/gosuite/greet/greet.go to return 'Hi, <name>' where <name> is the
       argument.
     context:
       context_file_contents:
-      - path: testsuite/fixtures/greet.go
-        content: "package main\n\nfunc Greet(name string) string {\n  return \"Hi\"\
+      - path: testsuite/agenttest_fixtures/gosuite/greet/greet.go
+        content: "package greet\n\nfunc Greet(name string) string {\n  return \"Hi\"\
           \n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/greet.go
+        - testsuite/agenttest_fixtures/gosuite/greet/greet.go
+        verify:
+          steps:
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/greet
         euclo_mode: code
   - name: code_from_messy_context
     description: '4.3 artifact-mediated: conflicting bug report + partial spec + buggy
@@ -172,8 +169,8 @@ spec:
     - level:3
     setup:
       files:
-      - path: testsuite/fixtures/messy_calc.go
-        content: "package main\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
+      - path: testsuite/agenttest_fixtures/gosuite/messy_calc/messy_calc.go
+        content: "package messy_calc\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
           \ b float64) float64 {\n  return a * b\n}\n"
     prompt: 'Context: Bug report #42 says "Divide returns wrong results". The spec
       says "Divide should return a/b and handle b=0 by returning 0". The code comment
@@ -184,16 +181,17 @@ spec:
     context:
       euclo.mode: code
       context_file_contents:
-      - path: testsuite/fixtures/messy_calc.go
-        content: "package main\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
+      - path: testsuite/agenttest_fixtures/gosuite/messy_calc/messy_calc.go
+        content: "package messy_calc\n\n// Divides a by b. Returns 0 on error.\nfunc Divide(a,\
           \ b float64) float64 {\n  return a * b\n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/messy_calc.go
-        files_contain:
-        - path: testsuite/fixtures/messy_calc.go
-          contains:
-          - a / b
+        - testsuite/agenttest_fixtures/gosuite/messy_calc/messy_calc.go
+        verify:
+          steps:
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/messy_calc
         euclo_mode: code

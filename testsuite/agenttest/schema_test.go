@@ -22,6 +22,12 @@ func TestOutcomeSpecRoundTrip(t *testing.T) {
 		MemoryRecordsCreated: 5,
 		WorkflowStateUpdated: true,
 		EucloMode:            "debug",
+		Verify: &VerifySpec{
+			Steps: []VerifyStepSpec{
+				{Tool: "go_test", Args: map[string]any{"package": "./...", "working_directory": "."}},
+			},
+			Script: "testsuite/agenttest_fixtures/gosuite/verify.sh",
+		},
 	}
 
 	data, err := yaml.Marshal(original)
@@ -54,15 +60,27 @@ func TestOutcomeSpecRoundTrip(t *testing.T) {
 	if roundtripped.EucloMode != original.EucloMode {
 		t.Errorf("EucloMode: got %q, want %q", roundtripped.EucloMode, original.EucloMode)
 	}
+	if roundtripped.Verify == nil {
+		t.Fatal("Verify should not be nil")
+	}
+	if len(roundtripped.Verify.Steps) != len(original.Verify.Steps) {
+		t.Fatalf("Verify.Steps length: got %d, want %d", len(roundtripped.Verify.Steps), len(original.Verify.Steps))
+	}
+	if roundtripped.Verify.Steps[0].Tool != original.Verify.Steps[0].Tool {
+		t.Errorf("Verify.Steps[0].Tool: got %q, want %q", roundtripped.Verify.Steps[0].Tool, original.Verify.Steps[0].Tool)
+	}
+	if roundtripped.Verify.Script != original.Verify.Script {
+		t.Errorf("Verify.Script: got %q, want %q", roundtripped.Verify.Script, original.Verify.Script)
+	}
 }
 
 // TestSecuritySpecRoundTrip verifies marshal/unmarshal preserves all fields
 func TestSecuritySpecRoundTrip(t *testing.T) {
 	original := &SecuritySpec{
-		NoWritesOutsideScope: true,
-		NoReadsOutsideScope:  false,
-		ToolsMustNotCall:     []string{"file_write", "file_delete"},
-		MutationEnforced:     true,
+		NoWritesOutsideScope:     true,
+		NoReadsOutsideScope:      false,
+		ToolsMustNotCall:         []string{"file_write", "file_delete"},
+		MutationEnforced:         true,
 		NoNetworkOutsideManifest: true,
 		NoExecOutsideManifest:    true,
 		ExpectedViolations: []ExpectedViolation{
@@ -97,32 +115,32 @@ func TestSecuritySpecRoundTrip(t *testing.T) {
 // TestBenchmarkSpecRoundTrip verifies marshal/unmarshal preserves all fields
 func TestBenchmarkSpecRoundTrip(t *testing.T) {
 	original := &BenchmarkSpec{
-		ToolsExpected:        []string{"file_read", "file_search"},
-		ToolsNotExpected:     []string{"go_test"},
-		ToolSequenceExpected: []string{"file_read", "file_write"},
-		LLMCallsExpected:     10,
-		MaxToolCallsHint:     20,
+		ToolsExpected:          []string{"file_read", "file_search"},
+		ToolsNotExpected:       []string{"go_test"},
+		ToolSequenceExpected:   []string{"file_read", "file_write"},
+		LLMCallsExpected:       10,
+		MaxToolCallsHint:       20,
 		MaxTotalToolTimeHintMs: 5000,
-		LLMResponseStableHint: true,
-		DeterminismScoreHint: "high",
+		LLMResponseStableHint:  true,
+		DeterminismScoreHint:   "high",
 		TokenBudget: &TokenBudgetHint{
 			MaxPrompt:     50000,
 			MaxCompletion: 8000,
 			MaxTotal:      58000,
 		},
 		Euclo: &EucloBenchmarkSpec{
-			BehaviorFamily:               "stale_assumption_detection",
-			Profile:                      "trace_execute_analyze",
-			PrimaryRelurpicCapability:    "euclo:debug.investigate-repair",
+			BehaviorFamily:                 "stale_assumption_detection",
+			Profile:                        "trace_execute_analyze",
+			PrimaryRelurpicCapability:      "euclo:debug.investigate-repair",
 			SupportingRelurpicCapabilities: []string{"euclo:debug.root-cause"},
-			RecipeIDs:                    []string{"debug.investigate-repair.reproduce"},
-			ArtifactsProduced:            []string{"euclo.explore"},
-			PhasesExecuted:               []string{"analyze", "trace"},
-			ResultClass:                  "localization_complete",
-			AssuranceClass:               "medium",
-			MinTransitionsProposed:       0,
-			MaxTransitionsProposed:       2,
-			FrameKindsEmitted:            []string{"artifact", "transition"},
+			RecipeIDs:                      []string{"debug.investigate-repair.reproduce"},
+			ArtifactsProduced:              []string{"euclo.explore"},
+			PhasesExecuted:                 []string{"analyze", "trace"},
+			ResultClass:                    "localization_complete",
+			AssuranceClass:                 "medium",
+			MinTransitionsProposed:         0,
+			MaxTransitionsProposed:         2,
+			FrameKindsEmitted:              []string{"artifact", "transition"},
 		},
 	}
 

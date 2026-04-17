@@ -183,3 +183,37 @@ spec:
       benchmark:
         tools_expected:
         - cli_python
+  - name: verify_pytest_oracle
+    task_type: code_modification
+    requires:
+      executables:
+      - python3
+      tools:
+      - cli_python
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/pysuite/calc/calc.py
+        content: "def add(a: int, b: int) -> int:\n    return a + b + 1\n\n\ndef mul(a:\
+          \ int, b: int) -> int:\n    return a * b\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_python
+        kind: tool
+    prompt: Fix testsuite/agenttest_fixtures/pysuite/calc/calc.py so the permanent pytest
+      oracle in testsuite/agenttest_fixtures/pysuite/calc/test_calc.py passes, then
+      run cli_python args ["test_calc.py"] with working_directory "testsuite/agenttest_fixtures/pysuite/calc".
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/agenttest_fixtures/pysuite/calc/calc.py
+        verify:
+          steps:
+          - tool: python_pytest
+            args:
+              working_directory: testsuite/agenttest_fixtures/pysuite/calc
+              test_path: test_calc.py
+        euclo_mode: code
+      benchmark:
+        tools_expected:
+        - cli_python

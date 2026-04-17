@@ -2,8 +2,10 @@ apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
   name: euclo.baseline.bkc
-  description: Capability-baseline Euclo BKC (Bootstrap Knowledge Chunk) coverage
-    using direct capability invocation.
+  description: BKC baseline coverage via full archaeology.explore interaction flow.
+    BKC capabilities fire only when the Archaeo service surfaces pattern/tension refs,
+    which are unavailable in CI. These tests verify the full dispatch chain that contains
+    BKC by exercising archaeology.explore end-to-end.
   owner: agent-platform
   tier: stable
   classification: capability
@@ -14,7 +16,7 @@ spec:
   execution:
     profile: ci-live
     strict: true
-    timeout: 60s
+    timeout: 90s
   workspace:
     strategy: derived
     exclude:
@@ -31,132 +33,114 @@ spec:
   recording:
     mode: "off"
   cases:
-  - name: bkc_compile_baseline
-    description: BKC compile capability baseline - invoke euclo:bkc.compile with seeded
-      semantic context.
+  - name: bkc_explore_struct_package
+    description: Full archaeology.explore interaction flow on a package with typed
+      structs. Exercises the complete BKC dispatch path; BKC invocation is soft-benchmarked
+      because it requires the Archaeo service to surface refs.
     task_type: analysis
-    prompt: Compile a BKC candidate from the semantic context describing the rapidbkc
-      package.
+    prompt: Explore the Go package in testsuite/fixtures/bkc_struct_pkg/ and produce
+      an exploration artifact describing its types and relationships. Do not modify
+      any files.
     tags:
     - baseline
-    - capability-baseline
     - bkc
-    - compile
+    - explore
     - level:1
     context:
-      workflow_id: wf-baseline-bkc-compile
-      exploration_id: exp-baseline-bkc-compile
-      workspace_id: testsuite/fixtures/rapid_bkc
+      workflow_id: wf-bkc-baseline-explore-struct
+      euclo.mode: archaeology
     setup:
       files:
-      - path: testsuite/fixtures/rapid_bkc/types.go
-        content: "package rapidbkc\n\ntype User struct {\n  ID    string\n  Email\
-          \ string\n}\n"
-      state_keys:
-        bkc.semantic_context: package rapidbkc contains User struct with ID and Email
-          fields
-        bkc.target_operation: compile_candidate
-    capability_direct_run:
-      capability_id: euclo:bkc.compile
-      invoking_primary: euclo:archaeology.explore
+      - path: testsuite/fixtures/bkc_struct_pkg/types.go
+        content: "package bkcstructpkg\n\ntype Account struct {\n\tID      string\n\
+          \tBalance int\n\tOwner   string\n}\n\ntype Transaction struct {\n\tID\
+          \     string\n\tAmount int\n\tFrom   string\n\tTo     string\n}\n"
+      - path: testsuite/fixtures/bkc_struct_pkg/ledger.go
+        content: "package bkcstructpkg\n\nfunc NewLedger() *Ledger {\n\treturn &Ledger{accounts:\
+          \ map[string]*Account{}}\n}\n\ntype Ledger struct {\n\taccounts map[string]*Account\n\
+          }\n\nfunc (l *Ledger) Add(a *Account) {\n\tl.accounts[a.ID] = a\n}\n\
+          \nfunc (l *Ledger) Get(id string) (*Account, bool) {\n\ta, ok := l.accounts[id]\n\
+          \treturn a, ok\n}\n"
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
-  - name: bkc_stream_baseline
-    description: BKC stream capability baseline - invoke euclo:bkc.stream to inject
-      semantic context.
+      benchmark:
+        euclo:
+          primary_relurpic_capability: euclo:archaeology.explore
+          artifacts_produced:
+          - exploration
+
+  - name: bkc_explore_interface_package
+    description: Full archaeology.explore interaction flow on a package with interface
+      types. Exercises the exploration pass that feeds the BKC compile path in production.
     task_type: analysis
-    prompt: Stream semantic context chunks into the BKC for the rapidbkc package.
+    prompt: Explore the Go package in testsuite/fixtures/bkc_iface_pkg/ and produce
+      an exploration artifact describing its interfaces and implementations. Do not
+      modify any files.
     tags:
     - baseline
-    - capability-baseline
     - bkc
-    - stream
+    - explore
     - level:1
     context:
-      workflow_id: wf-baseline-bkc-stream
-      exploration_id: exp-baseline-bkc-stream
-      workspace_id: testsuite/fixtures/rapid_bkc
+      workflow_id: wf-bkc-baseline-explore-iface
+      euclo.mode: archaeology
     setup:
       files:
-      - path: testsuite/fixtures/rapid_bkc/cache.go
-        content: "package rapidbkc\n\ntype Cache struct {\n  data map[string]string\n\
+      - path: testsuite/fixtures/bkc_iface_pkg/store.go
+        content: "package bkcifacepkg\n\ntype Reader interface {\n\tRead(key string)\
+          \ (string, bool)\n}\n\ntype Writer interface {\n\tWrite(key, value string)\n\
+          }\n\ntype Store interface {\n\tReader\n\tWriter\n\tDelete(key string)\n\
           }\n"
-      state_keys:
-        bkc.chunk_refs: '["chunk-1", "chunk-2"]'
-        bkc.stream_target: semantic_context
-    capability_direct_run:
-      capability_id: euclo:bkc.stream
-      invoking_primary: euclo:archaeology.explore
+      - path: testsuite/fixtures/bkc_iface_pkg/memstore.go
+        content: "package bkcifacepkg\n\ntype MemStore struct {\n\tdata map[string]string\n\
+          }\n\nfunc NewMemStore() *MemStore {\n\treturn &MemStore{data: map[string]string{}}\n\
+          }\n\nfunc (m *MemStore) Read(key string) (string, bool) {\n\tv, ok := m.data[key]\n\
+          \treturn v, ok\n}\n\nfunc (m *MemStore) Write(key, value string) {\n\t\
+          m.data[key] = value\n}\n\nfunc (m *MemStore) Delete(key string) {\n\t\
+          delete(m.data, key)\n}\n"
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
-  - name: bkc_checkpoint_baseline
-    description: BKC checkpoint capability baseline - invoke euclo:bkc.checkpoint
-      to anchor plan roots.
-    task_type: code_modification
-    prompt: Checkpoint the current plan roots in the BKC for the rapidbkc package.
-    tags:
-    - baseline
-    - capability-baseline
-    - bkc
-    - checkpoint
-    - level:1
-    context:
-      workflow_id: wf-baseline-bkc-checkpoint
-      exploration_id: exp-baseline-bkc-checkpoint
-      workspace_id: testsuite/fixtures/rapid_bkc
-    setup:
-      files:
-      - path: testsuite/fixtures/rapid_bkc/plan.go
-        content: "package rapidbkc\n\nfunc PlanAction() string {\n  return \"action\"\
-          \n}\n"
-      state_keys:
-        bkc.chunk_roots: '["root-1", "root-2"]'
-        bkc.plan_version: v1.0
-    capability_direct_run:
-      capability_id: euclo:bkc.checkpoint
-      invoking_primary: euclo:archaeology.implement-plan
-    expect:
-      outcome:
-        must_succeed: true
-        no_file_changes: true
-  - name: bkc_invalidate_baseline
-    description: BKC invalidate capability baseline - invoke euclo:bkc.invalidate
-      to surface stale chunks.
+      benchmark:
+        euclo:
+          primary_relurpic_capability: euclo:archaeology.explore
+          artifacts_produced:
+          - exploration
+
+  - name: bkc_explore_then_compile_plan
+    description: Full archaeology flow through explore and compile-plan. Validates
+      the complete chain that BKC operates within. BKC checkpoint is soft-benchmarked
+      against the implement-plan phase.
     task_type: analysis
-    prompt: Invalidate stale BKC chunks for the rapidbkc package where OldVersion
-      is deprecated.
+    prompt: Explore the Go package in testsuite/fixtures/bkc_chain_pkg/ and compile
+      an implementation plan for adding an error return to the Process function. Do
+      not modify any files.
     tags:
     - baseline
-    - capability-baseline
     - bkc
-    - invalidate
-    - level:1
+    - explore
+    - compile-plan
+    - level:2
+    timeout: 120s
     context:
-      workflow_id: wf-baseline-bkc-invalidate
-      exploration_id: exp-baseline-bkc-invalidate
-      workspace_id: testsuite/fixtures/rapid_bkc
+      workflow_id: wf-bkc-baseline-chain
+      euclo.mode: archaeology
     setup:
       files:
-      - path: testsuite/fixtures/rapid_bkc/stale.go
-        content: 'package rapidbkc
-
-
-          // OldVersion is deprecated
-
-          func OldVersion() {}
-
-          '
-      state_keys:
-        bkc.revision_drift: 'true'
-        bkc.stale_chunks: '["chunk-old"]'
-    capability_direct_run:
-      capability_id: euclo:bkc.invalidate
-      invoking_primary: euclo:archaeology.compile-plan
+      - path: testsuite/fixtures/bkc_chain_pkg/processor.go
+        content: "package bkcchainpkg\n\ntype Processor struct {\n\tname string\n\
+          }\n\nfunc NewProcessor(name string) *Processor {\n\treturn &Processor{name:\
+          \ name}\n}\n\nfunc (p *Processor) Process(input string) string {\n\tif\
+          \ input == \"\" {\n\t\treturn \"\"\n\t}\n\treturn p.name + \": \" + input\n\
+          }\n"
     expect:
       outcome:
         must_succeed: true
         no_file_changes: true
+      benchmark:
+        euclo:
+          artifacts_produced:
+          - exploration

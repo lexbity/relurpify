@@ -37,33 +37,26 @@ spec:
     - level:1
     setup:
       files:
-      - path: testsuite/fixtures/calc.go
-        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
+      - path: testsuite/agenttest_fixtures/gosuite/debug_divide/divide.go
+        content: "package debug_divide\n\nfunc Divide(a, b float64) float64 {\n  return a + b\n\
           }\n"
-      - path: testsuite/fixtures/calc_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestMultiply(t *testing.T)\
-          \ {\n  if Multiply(3, 4) != 12 {\n    t.Errorf(\"got %d, want 12\", Multiply(3,\
-          \ 4))\n  }\n}\n"
-    prompt: Debug why TestMultiply is failing and fix the issue.
+    prompt: Debug why TestDivide is failing and fix the issue.
     context:
       euclo.mode: debug
       context_file_contents:
-      - path: testsuite/fixtures/calc.go
-        content: "package main\n\nfunc Multiply(a, b int) int {\n  return a + b\n\
+      - path: testsuite/agenttest_fixtures/gosuite/debug_divide/divide.go
+        content: "package debug_divide\n\nfunc Divide(a, b float64) float64 {\n  return a + b\n\
           }\n"
-      - path: testsuite/fixtures/calc_test.go
-        content: "package main\n\nimport \"testing\"\n\nfunc TestMultiply(t *testing.T)\
-          \ {\n  if Multiply(3, 4) != 12 {\n    t.Errorf(\"got %d, want 12\", Multiply(3,\
-          \ 4))\n  }\n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/calc.go
-        files_contain:
-        - path: testsuite/fixtures/calc.go
-          contains:
-          - a * b
+        - testsuite/agenttest_fixtures/gosuite/debug_divide/divide.go
+        verify:
+          steps:
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/debug_divide
         euclo_mode: debug
       benchmark:
         euclo:
@@ -75,21 +68,26 @@ spec:
     task_type: code_modification
     setup:
       files:
-      - path: testsuite/fixtures/server.go
-        content: "package main\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
+      - path: testsuite/agenttest_fixtures/gosuite/debug_server/server.go
+        content: "package debug_server\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
           \  return users[id]\n}\n"
-    prompt: "panic: runtime error: index out of range\ngoroutine 1 [running]:\nmain.GetUser(0x0)\n\
-      \  testsuite/fixtures/server.go:4\nFix the nil map access in GetUser.\n"
+    prompt: "panic: assignment to entry in nil map\ngoroutine 1 [running]:\nmain.GetUser(0x0)\n\
+      \  testsuite/agenttest_fixtures/gosuite/debug_server/server.go:4\nFix the nil map access in GetUser.\n"
     context:
       context_file_contents:
-      - path: testsuite/fixtures/server.go
-        content: "package main\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
+      - path: testsuite/agenttest_fixtures/gosuite/debug_server/server.go
+        content: "package debug_server\n\nfunc GetUser(id string) string {\n  var users map[string]string\n\
           \  return users[id]\n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/server.go
+        - testsuite/agenttest_fixtures/gosuite/debug_server/server.go
+        verify:
+          steps:
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/debug_server
         euclo_mode: debug
       benchmark:
         euclo:
@@ -106,24 +104,29 @@ spec:
     - level:3
     setup:
       files:
-      - path: testsuite/fixtures/panic_handler.go
-        content: "package main\n\nfunc ProcessItems(items []string) string {\n  return\
+      - path: testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go
+        content: "package debug_panic_handler\n\nfunc ProcessItems(items []string) string {\n  return\
           \ items[0]\n}\n"
     prompt: "Incident log from production (2026-03-31 02:14:07 UTC):\ngoroutine 1\
       \ [running]:\npanic: runtime error: index out of range [0] with length 0\ngithub.com/example/app.ProcessItems(...)\n\
-      \  testsuite/fixtures/panic_handler.go:4\nCustomers reported intermittent \"\
+      \  testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go:4\nCustomers reported intermittent \"\
       500 Internal Server Error\" responses.\nThe function is called with the result\
       \ of a database query that can return an empty slice.\nFix the root cause in\
-      \ testsuite/fixtures/panic_handler.go.\n"
+      \ testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go.\n"
     context:
       euclo.mode: debug
       context_file_contents:
-      - path: testsuite/fixtures/panic_handler.go
-        content: "package main\n\nfunc ProcessItems(items []string) string {\n  return\
+      - path: testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go
+        content: "package debug_panic_handler\n\nfunc ProcessItems(items []string) string {\n  return\
           \ items[0]\n}\n"
     expect:
       outcome:
         must_succeed: true
         files_changed:
-        - testsuite/fixtures/panic_handler.go
+        - testsuite/agenttest_fixtures/gosuite/debug_panic_handler/panic_handler.go
+        verify:
+          steps:
+          - tool: go_test
+            args:
+              package: ./testsuite/agenttest_fixtures/gosuite/debug_panic_handler
         euclo_mode: debug

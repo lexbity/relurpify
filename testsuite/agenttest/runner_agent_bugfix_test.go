@@ -78,7 +78,7 @@ func TestBuildAgentUsesBootstrappedEnvironmentConfig(t *testing.T) {
 	}
 	defer func() { bootstrapAgentRuntime = origBootstrap }()
 
-	_, _, err := buildAgent(
+	_, _, _, err := buildAgent(
 		context.Background(),
 		workspace,
 		manifestPath,
@@ -145,7 +145,7 @@ func TestBuildAgentWiresSandboxScopeIntoFileTools(t *testing.T) {
 	}
 	defer func() { bootstrapAgentRuntime = origBootstrap }()
 
-	agent, _, err := buildAgent(
+	agent, _, _, err := buildAgent(
 		context.Background(),
 		workspace,
 		manifestPath,
@@ -205,7 +205,7 @@ func TestBuildAgentPropagatesSkipASTIndexToBootstrap(t *testing.T) {
 	}
 	defer func() { bootstrapAgentRuntime = origBootstrap }()
 
-	_, _, err := buildAgent(
+	_, _, _, err := buildAgent(
 		context.Background(),
 		workspace,
 		manifestPath,
@@ -231,7 +231,7 @@ func TestBuildAgentExposesDefaultAgenttestToolsForCoding(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := writeCodingAgenttestManifest(t, workspace)
 
-	agent, _, err := buildAgent(
+	agent, _, _, err := buildAgent(
 		context.Background(),
 		workspace,
 		manifestPath,
@@ -441,7 +441,7 @@ spec:
 		Name: "cli_git",
 		Kind: core.CapabilityKindTool,
 	}})
-	agent, _, err := buildAgent(
+	agent, _, _, err := buildAgent(
 		context.Background(),
 		workspace,
 		manifestPath,

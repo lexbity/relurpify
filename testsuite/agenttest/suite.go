@@ -204,6 +204,33 @@ type OutcomeSpec struct {
 	MemoryRecordsCreated int                      `yaml:"memory_records_created,omitempty"`
 	WorkflowStateUpdated bool                     `yaml:"workflow_state_updated,omitempty"`
 	EucloMode            string                   `yaml:"euclo_mode,omitempty"`
+	Verify               *VerifySpec              `yaml:"verify,omitempty"`
+}
+
+// VerifySpec describes runner-side post-execution verification using
+// platform/lang tools or a bash script.
+type VerifySpec struct {
+	// Steps executes a named platform/lang tool sequence in order.
+	// Execution stops at the first failing step unless ContinueOnFailure is set.
+	Steps []VerifyStepSpec `yaml:"steps,omitempty"`
+
+	// Script is a workspace-relative path to a bash script.
+	// Executed via the same CommandRunner as named tools; exit 0 = pass.
+	Script string `yaml:"script,omitempty"`
+}
+
+// VerifyStepSpec describes one step in a verification sequence.
+type VerifyStepSpec struct {
+	// Tool is a platform/lang tool name: go_test, go_build, python_pytest,
+	// rust_cargo_test, rust_cargo_check, node_npm_test, node_syntax_check, etc.
+	Tool string `yaml:"tool"`
+
+	// Args are passed directly to tool.Execute as the args map.
+	Args map[string]any `yaml:"args,omitempty"`
+
+	// ContinueOnFailure allows the sequence to continue past this step
+	// even if it fails. Subsequent steps run; the sequence still fails overall.
+	ContinueOnFailure bool `yaml:"continue_on_failure,omitempty"`
 }
 
 // SecuritySpec defines hard pass/fail assertions about sandbox contract enforcement.

@@ -108,11 +108,11 @@ func effectiveAgentSpecForCase(base *core.AgentRuntimeSpec, c CaseSpec) *core.Ag
 	return &clone
 }
 
-func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem memory.MemoryStore) (graph.Agent, *core.Context, error) {
+func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, agentSpec *core.AgentRuntimeSpec, model core.LanguageModel, telemetry core.Telemetry, opts RunOptions, extraEnv []string, allowedCapabilities []core.CapabilitySelector, c CaseSpec, mem memory.MemoryStore) (graph.Agent, *core.Context, fsandbox.CommandRunner, error) {
 	executionAgentName := resolveExecutionAgentName(agentName, c)
 	agentManifest, err := manifest.LoadAgentManifest(manifestPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if agentSpec == nil {
 		agentSpec = contractpkg.ApplyManifestDefaults(agentManifest.Spec.Agent, agentManifest.Spec.Defaults)
@@ -143,12 +143,12 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	}()
 	effectivePerms, err := manifest.ResolveEffectivePermissions(workspace, agentManifest)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	agentManifest.Spec.Permissions = effectivePerms
 	permMgr, err := fauthorization.NewPermissionManager(workspace, &agentManifest.Spec.Permissions, audit, hitl)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var runner fsandbox.CommandRunner
@@ -162,11 +162,11 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 			HITLTimeout:  30 * time.Second,
 		})
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		runner, err = fsandbox.NewCommandRunner(reg.Manifest, reg.Runtime, workspace)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		permMgr = reg.Permissions
 	} else {
@@ -176,7 +176,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	maxIterations := resolveCaseMaxIterations(opts, c)
 	stores, err := newTestStoreBundle()
 	if err != nil {
-		return nil, nil, fmt.Errorf("test store init: %w", err)
+		return nil, nil, nil, fmt.Errorf("test store init: %w", err)
 	}
 	boot, err := bootstrapAgentRuntime(workspace, appruntime.AgentBootstrapOptions{
 		Context:             ctx,
@@ -201,7 +201,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		WorkflowStore:       stores.WorkflowStore,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	registry := boot.Registry
 	paths := config.New(workspace)
@@ -221,7 +221,7 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 		}
 		compiledPolicy, err = policybundle.BuildFromSpec(contract.AgentID, contract.AgentSpec, permMgr)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	registry.SetPolicyEngine(compiledPolicy.Engine)
@@ -251,9 +251,9 @@ func buildAgent(ctx context.Context, workspace, manifestPath, agentName string, 
 	env.PlanStore = stores.PlanStore
 	agent := instantiateAgentByName(workspace, executionAgentName, env)
 	if err := applyCaseControlFlowOverride(agent, c); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return agent, core.NewContext(), nil
+	return agent, core.NewContext(), runner, nil
 }
 
 func resolveExecutionAgentName(agentName string, c CaseSpec) string {

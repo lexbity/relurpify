@@ -131,8 +131,8 @@ func TestSuiteValidateRejectsIncompleteWorkflowCheckpointSeed(t *testing.T) {
 
 func TestLoadCanonicalHTNAndRewooSuites(t *testing.T) {
 	for _, path := range []string{
-		"/home/lex/Public/Relurpify/testsuite/agenttests/htn.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/rewoo.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/htn.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/rewoo.testsuite.yaml",
 	} {
 		if _, err := LoadSuite(path); err != nil {
 			t.Fatalf("LoadSuite(%q): %v", path, err)
@@ -141,7 +141,7 @@ func TestLoadCanonicalHTNAndRewooSuites(t *testing.T) {
 }
 
 func TestLoadCanonicalRexSuite(t *testing.T) {
-	path := "/home/lex/Public/Relurpify/testsuite/agenttests/rex.testsuite.yaml"
+	path := "/home/lex/Public/relurpify/testsuite/agenttests/rex.testsuite.yaml"
 	if _, err := LoadSuite(path); err != nil {
 		t.Fatalf("LoadSuite(%q): %v", path, err)
 	}
@@ -149,12 +149,12 @@ func TestLoadCanonicalRexSuite(t *testing.T) {
 
 func TestLoadCanonicalEucloCoverageMatrixSuites(t *testing.T) {
 	for _, path := range []string{
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.code.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.debug.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.tdd.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.review.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.planning.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.transitions.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.code.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.debug.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.tdd.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.review.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.planning.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.transitions.testsuite.yaml",
 	} {
 		if _, err := LoadSuite(path); err != nil {
 			t.Fatalf("LoadSuite(%q): %v", path, err)
@@ -164,7 +164,7 @@ func TestLoadCanonicalEucloCoverageMatrixSuites(t *testing.T) {
 
 func TestLoadCanonicalEucloBaselineBKCSuite(t *testing.T) {
 	for _, path := range []string{
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.baseline.bkc.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.baseline.bkc.testsuite.yaml",
 	} {
 		if _, err := LoadSuite(path); err != nil {
 			t.Fatalf("LoadSuite(%q): %v", path, err)
@@ -174,9 +174,9 @@ func TestLoadCanonicalEucloBaselineBKCSuite(t *testing.T) {
 
 func TestLoadCanonicalPerformanceBaselineSuites(t *testing.T) {
 	for _, path := range []string{
-		"/home/lex/Public/Relurpify/testsuite/agenttests/coding.performance_retrieval.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/react.performance_memory.testsuite.yaml",
-		"/home/lex/Public/Relurpify/testsuite/agenttests/euclo.performance_context.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/coding.performance_retrieval.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/react.performance_memory.testsuite.yaml",
+		"/home/lex/Public/relurpify/testsuite/agenttests/euclo.performance_context.testsuite.yaml",
 	} {
 		if _, err := LoadSuite(path); err != nil {
 			t.Fatalf("LoadSuite(%q): %v", path, err)

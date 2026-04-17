@@ -1,6 +1,7 @@
 package agenttest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/lexcodex/relurpify/framework/manifest"
+	"github.com/lexcodex/relurpify/framework/sandbox"
 )
 
 // evaluateSuccessRateConstraint checks if a success rate meets a constraint like ">0.9" or "0.8"
@@ -621,7 +623,7 @@ func artifactKindsFromArtifacts(artifacts []map[string]any) []string {
 // === OSB Model Functions (Phases 2-5) ===
 
 // evaluateOutcomeExpectations evaluates hard goal-achievement assertions.
-func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, changed []string, snapshot *core.ContextSnapshot, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport) ([]AssertionResult, error) {
+func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, changed []string, snapshot *core.ContextSnapshot, tokenUsage TokenUsageReport, memoryOutcome MemoryOutcomeReport, runner sandbox.CommandRunner) ([]AssertionResult, error) {
 	var results []AssertionResult
 	var failures []string
 
@@ -707,6 +709,16 @@ func evaluateOutcomeExpectations(spec OutcomeSpec, workspace, output string, cha
 			Passed:      passed,
 			Message:     fmt.Sprintf("euclo mode expected %q, got %q", spec.EucloMode, actualMode),
 		})
+	}
+
+	if spec.Verify != nil && (len(spec.Verify.Steps) > 0 || spec.Verify.Script != "") {
+		verifyResults := runVerificationSteps(context.Background(), *spec.Verify, workspace, runner)
+		results = append(results, verifyResults...)
+		for _, vr := range verifyResults {
+			if !vr.Passed {
+				failures = append(failures, vr.Message)
+			}
+		}
 	}
 
 	if len(failures) > 0 {

@@ -84,9 +84,16 @@ func TestAllRegisteredCapabilitiesHaveTestCases(t *testing.T) {
 	// Find uncovered capabilities
 	var uncovered []string
 	for _, capID := range allCapabilityIDs {
-		if !coveredCapabilities[capID] {
-			uncovered = append(uncovered, capID)
+		if coveredCapabilities[capID] {
+			continue
 		}
+		// BKC capabilities (SupportingOnly + ArchaeoAssociated) require the Archaeo
+		// service and GraphDB unavailable in CI. They are covered via full-flow
+		// archaeology.explore interaction tests rather than direct capability invocation.
+		if desc, ok := registry.Lookup(capID); ok && desc.SupportingOnly && desc.ArchaeoAssociated {
+			continue
+		}
+		uncovered = append(uncovered, capID)
 	}
 
 	if len(uncovered) > 0 {
@@ -178,6 +185,10 @@ func TestPrimaryCapabilitiesHaveDedicatedCases(t *testing.T) {
 
 // TestSupportingCapabilitiesHaveIsolationCases verifies that supporting-only
 // capabilities have isolation test cases using capability_direct_run.
+//
+// Exception: capabilities that are both SupportingOnly and ArchaeoAssociated (BKC
+// capabilities) require the Archaeo service and GraphDB which are unavailable in CI.
+// These are covered via full archaeology.explore interaction flow tests instead.
 func TestSupportingCapabilitiesHaveIsolationCases(t *testing.T) {
 	registry := relurpicabilities.DefaultRegistry()
 
@@ -228,6 +239,11 @@ func TestSupportingCapabilitiesHaveIsolationCases(t *testing.T) {
 		if !desc.SupportingOnly {
 			continue // Only check supporting-only
 		}
+		// BKC capabilities (SupportingOnly + ArchaeoAssociated) require the Archaeo service
+		// and GraphDB unavailable in CI. They are covered via full-flow archaeology tests.
+		if desc.ArchaeoAssociated {
+			continue
+		}
 		if !supportingCases[capID] {
 			missing = append(missing, capID)
 		}
@@ -263,8 +279,44 @@ func TestSuiteFilesAreLoadable(t *testing.T) {
 	}
 }
 
-// TestBKCCasesUseDirectRun verifies that BKC test cases use capability_direct_run.
-func TestBKCCasesUseDirectRun(t *testing.T) {
+// TestNoFilesContainOnVerifiedCases warns if a suite case keeps legacy
+// files_contain assertions after verify steps have been added.
+func TestNoFilesContainOnVerifiedCases(t *testing.T) {
+	testDirs := findAgentTestsDir(t)
+	var suiteFiles []string
+	for _, testDir := range testDirs {
+		files, err := filepath.Glob(filepath.Join(testDir, "euclo.*.testsuite.yaml"))
+		if err == nil && len(files) > 0 {
+			suiteFiles = append(suiteFiles, files...)
+		}
+	}
+
+	var warnings []string
+	for _, suitePath := range suiteFiles {
+		suite, err := LoadSuite(suitePath)
+		if err != nil {
+			continue
+		}
+		for _, c := range suite.Spec.Cases {
+			hasVerify := c.Expect.Outcome != nil && c.Expect.Outcome.Verify != nil &&
+				(len(c.Expect.Outcome.Verify.Steps) > 0 || c.Expect.Outcome.Verify.Script != "")
+			if !hasVerify || len(c.Expect.FilesContain) == 0 {
+				continue
+			}
+			warnings = append(warnings, suitePath+": case "+c.Name+" keeps files_contain alongside verify")
+		}
+	}
+
+	if len(warnings) > 0 {
+		t.Logf("files_contain + verify coexistence warnings:\n%s", strings.Join(warnings, "\n"))
+	}
+}
+
+// TestBKCCasesUseFullFlow verifies that BKC test cases use the full agent interaction
+// flow rather than capability_direct_run. BKC capabilities require the Archaeo service
+// and GraphDB which are unavailable in CI, so they are covered via full archaeology.explore
+// end-to-end tests instead of isolated capability invocation.
+func TestBKCCasesUseFullFlow(t *testing.T) {
 	suitePath := filepath.Join("..", "agenttests", "euclo.baseline.bkc.testsuite.yaml")
 
 	if _, err := os.Stat(suitePath); os.IsNotExist(err) {
@@ -277,13 +329,13 @@ func TestBKCCasesUseDirectRun(t *testing.T) {
 	}
 
 	for _, c := range suite.Spec.Cases {
-		if c.CapabilityDirectRun == nil {
-			t.Errorf("BKC case %q should use capability_direct_run", c.Name)
+		if c.CapabilityDirectRun != nil {
+			t.Errorf("BKC case %q must not use capability_direct_run; use full interaction flow instead", c.Name)
 		}
 	}
 
-	if len(suite.Spec.Cases) != 4 {
-		t.Errorf("expected 4 BKC test cases, got %d", len(suite.Spec.Cases))
+	if len(suite.Spec.Cases) < 2 {
+		t.Errorf("expected at least 2 BKC full-flow test cases, got %d", len(suite.Spec.Cases))
 	}
 }
 

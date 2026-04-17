@@ -211,3 +211,34 @@ spec:
       benchmark:
         tools_expected:
         - cli_cargo
+  - name: verify_cargo_oracle
+    task_type: code_modification
+    requires:
+      executables:
+      - cargo
+      tools:
+      - cli_cargo
+    setup:
+      files:
+      - path: testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+        content: "pub fn add(a: i32, b: i32) -> i32 {\n    a + b + 1\n}\n"
+    overrides:
+      allowed_capabilities:
+      - name: cli_cargo
+        kind: tool
+    prompt: Fix testsuite/agenttest_fixtures/rustsuite/src/lib.rs so the permanent cargo
+      test oracle passes, then run cli_cargo args ["test"] with working_directory "testsuite/agenttest_fixtures/rustsuite".
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - testsuite/agenttest_fixtures/rustsuite/src/lib.rs
+        verify:
+          steps:
+          - tool: rust_cargo_test
+            args:
+              working_directory: testsuite/agenttest_fixtures/rustsuite
+        euclo_mode: code
+      benchmark:
+        tools_expected:
+        - cli_cargo

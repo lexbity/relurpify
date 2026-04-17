@@ -18,6 +18,7 @@ import (
 	"github.com/lexcodex/relurpify/framework/graph"
 	"github.com/lexcodex/relurpify/framework/manifest"
 	"github.com/lexcodex/relurpify/framework/perfstats"
+	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
 	"github.com/lexcodex/relurpify/framework/telemetry"
 	"github.com/lexcodex/relurpify/platform/llm"
 	ollama "github.com/lexcodex/relurpify/platform/llm/ollama"
@@ -182,6 +183,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 	var browserFixtures *browserFixtureServer
 	var memStore *preparedMemoryStore
 	var memoryBefore MemoryOutcomeReport
+	var runner fsandbox.CommandRunner
 	var cleanup func()
 	skipReason := ""
 	retryReasons := make([]string, 0, 1)
@@ -213,6 +215,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 		agent = attemptEnv.agent
 		state = attemptEnv.state
 		task = attemptEnv.task
+		runner = attemptEnv.runner
 		if reason := attemptEnv.skipReason; reason != "" {
 			skipReason = reason
 			break
@@ -352,7 +355,7 @@ func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model Mo
 
 	// Outcome block evaluation (Phase 2)
 	if c.Expect.Outcome != nil {
-		results, outcomeErr := evaluateOutcomeExpectations(*c.Expect.Outcome, workspace, output, changed, snapshot, tokenUsage, memoryOutcome)
+		results, outcomeErr := evaluateOutcomeExpectations(*c.Expect.Outcome, workspace, output, changed, snapshot, tokenUsage, memoryOutcome, runner)
 		assertionResults = append(assertionResults, results...)
 		if outcomeErr != nil {
 			success = false
@@ -588,6 +591,7 @@ type preparedCaseAttempt struct {
 	state           *core.Context
 	task            *core.Task
 	skipReason      string
+	runner          fsandbox.CommandRunner
 }
 
 func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunOptions, workspace, targetWorkspace, manifestAbs, agentName string, model core.LanguageModel, telemetry core.Telemetry, logger *log.Logger, loadedManifest *manifest.AgentManifest, extraEnv []string, allowedCapabilities []core.CapabilitySelector, exclude []string) (*preparedCaseAttempt, error) {
@@ -643,7 +647,7 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	agentSpec := effectiveAgentSpecForCase(baseSpec, c)
 
 	bootstrapCtx, cancelBootstrap := context.WithTimeout(ctx, resolveBootstrapTimeout(opts, c))
-	agent, state, err := buildAgent(bootstrapCtx, workspace, manifestAbs, agentName, agentSpec, model, telemetry, opts, extraEnv, allowedCapabilities, c, memStore.Store)
+	agent, state, runner, err := buildAgent(bootstrapCtx, workspace, manifestAbs, agentName, agentSpec, model, telemetry, opts, extraEnv, allowedCapabilities, c, memStore.Store)
 	cancelBootstrap()
 	if err != nil {
 		return nil, err
@@ -654,6 +658,7 @@ func prepareCaseAttempt(ctx context.Context, suite *Suite, c CaseSpec, opts RunO
 	}
 	attempt.agent = agent
 	attempt.state = state
+	attempt.runner = runner
 	if reason, ok := shouldSkipCase(c.Requires, agent); ok {
 		attempt.skipReason = reason
 		return attempt, nil

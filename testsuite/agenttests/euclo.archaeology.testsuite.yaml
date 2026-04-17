@@ -70,7 +70,9 @@ spec:
           - exploration
   - name: compile_plan_from_exploration
     description: 'Archaeology compile-plan: builds a structured plan from prior exploration
-      results.'
+      results seeded into pipeline.explore state. The exploration artifact is pre-seeded
+      so the compile-plan capability receives concrete evidence without requiring a
+      prior explore turn.'
     task_type: analysis
     tags:
     - stable
@@ -101,18 +103,22 @@ spec:
         runs:
         - run_id: arch-explore-run
           status: running
-        knowledge:
-        - record_id: arch-exploration-result
-          kind: fact
-          title: Exploration result
-          content: 'Package archpkg has 2 files. types.go defines Request (ID string,
-            Payload []byte) and Response (Status int, Message string). handler.go
-            implements Handle(req Request) Response which returns 400 for empty payload
-            and 200 otherwise. No error wrapping is present. Target: add fmt.Errorf
-            wrapping to handle error conditions.
-
-            '
-          status: accepted
+      state_keys:
+        pipeline.explore:
+          package: archpkg
+          workspace: testsuite/fixtures/arch_pkg
+          files:
+          - path: types.go
+            summary: Defines Request (ID string, Payload []byte) and Response (Status
+              int, Message string)
+          - path: handler.go
+            summary: Implements Handle(req Request) Response; returns Status 400 for
+              empty payload, Status 200 otherwise using fmt.Sprintf
+          findings: No error wrapping is present in the Handle function. The function
+            uses a plain string return for error cases rather than a typed error return.
+          summary: Explored 2 files in archpkg. Handle function lacks structured error
+            wrapping. Target change is to add fmt.Errorf-based error handling.
+          exploration_id: arch-explore-run
     prompt: 'Using the prior exploration results for testsuite/fixtures/arch_pkg/,
       compile an implementation plan for adding structured error wrapping to the Handle
       function. Do not modify any files.
@@ -174,7 +180,9 @@ spec:
         files_changed:
         - testsuite/fixtures/arch_impl/handler.go
   - name: archaeology_resume
-    description: 'Archaeology resume: continues from a seeded exploration phase checkpoint.'
+    description: 'Archaeology resume: continues from a seeded exploration phase checkpoint.
+      Prior exploration is injected into pipeline.explore state so compile-plan receives
+      concrete evidence without requiring a new explore turn.'
     task_type: analysis
     tags:
     - stable
@@ -215,16 +223,22 @@ spec:
         runs:
         - run_id: arch-resume-run
           status: running
-        knowledge:
-        - record_id: arch-resume-explore
-          kind: fact
-          title: Prior exploration
-          content: 'Store has no nil-check in Set and Get does not distinguish missing
-            vs empty values. Improvement opportunity: add a Delete method and return
-            (string, bool) from Get.
-
-            '
-          status: accepted
+      state_keys:
+        pipeline.explore:
+          package: archresume
+          workspace: testsuite/fixtures/arch_resume
+          files:
+          - path: store.go
+            summary: Defines Store struct with a string-to-string map; Set writes without
+              nil-check; Get returns empty string for missing keys with no ok bool
+          findings: Store.Set has no nil guard on s.data before writing. Store.Get
+            returns the zero value for missing keys and cannot distinguish between
+            a missing key and an empty-string value. No Delete method exists. Improvement
+            opportunities are to initialise data lazily, change Get to return (string,
+            bool), and add a Delete method.
+          summary: Explored 1 file in archresume. Store type has three improvement
+            opportunities identified during explore phase.
+          exploration_id: arch-resume-run
     prompt: 'Resume the archaeology session for testsuite/fixtures/arch_resume/store.go.
       The exploration phase is complete. Continue with compile-plan: generate a structured
       improvement plan from the prior exploration. Do not modify any files.
@@ -236,8 +250,8 @@ spec:
         no_file_changes: true
       benchmark:
         euclo:
-          phases_executed:
-          - explore
+          artifacts_produced:
+          - plan
   - name: archaeology_recovery
     description: 'Archaeology recovery: implement-plan with a broken step triggers
       recovery strategy.'
