@@ -26,11 +26,18 @@ Runtime ownership and lifecycle:
 Current runtime subpackages:
 - `runtime/work`
 - `runtime/policy`
+- `runtime/state`
 - `runtime/context`
+- `runtime/statebus`
 - `runtime/restore`
 - `runtime/reporting`
 - `runtime/transitions`
 - `runtime/archaeomem`
+- `runtime/assurance`
+- `runtime/dispatch`
+- `runtime/keys`
+- `runtime/intake`
+- `runtime/pretask`
 - `runtime/orchestrate`
 
 The root `runtime` package still holds shared runtime types and some cross-cutting helpers used by those subpackages.
@@ -63,6 +70,18 @@ Mode groups:
 - `relurpicabilities/debug`
 - `relurpicabilities/archaeology`
 - `relurpicabilities/local`
+
+### `interaction`
+
+UX-agnostic interaction frames and mode machines:
+- `interaction/gate`
+- `interaction/modes`
+- session resumption, telemetry, and frame emission helpers
+
+### `thoughtrecipes`
+
+Reusable recipe loaders, templates, and invocable helpers used by Euclo
+execution paths.
 
 Ownership split:
 - `chat`, `debug`, and `archaeology` own primary mode behavior

@@ -1,3 +1,3 @@
+// Package chainer provides deterministic staged chaining helpers for Euclo
+// execution recipes.
 package chainer
-
-// Package chainer is reserved for Euclo-owned paradigm chaining adapters.

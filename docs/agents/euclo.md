@@ -101,7 +101,7 @@ Relurpic capability is a framework primitive through
 `CapabilityRuntimeFamilyRelurpic`.
 
 Euclo owns the coding-specific relurpic capability catalog in
-`named/euclo/relurpic`.
+`named/euclo/relurpicabilities`.
 
 ### Primary-capable endpoints
 
@@ -343,15 +343,15 @@ full live-model end-to-end suite remains separate in `/testsuite`.
 named/euclo/
 ├── agent.go
 ├── executors.go
-├── relurpic/          # Euclo-owned relurpic capability catalog
+├── core/              # stable IDs, aliases, and shared contracts
+├── execution/         # Euclo-owned recipe execution over /agents
+├── interaction/       # UX-agnostic frames, modes, sessions, telemetry
+├── langdetect/        # workspace language detection and planner selection
+├── relurpicabilities/ # Euclo-owned relurpic capability catalog
 ├── runtime/           # UnitOfWork, semantic inputs, restore, runtime state
-├── capabilities/      # capability implementations and registry support
-├── orchestrate/       # profile/recovery/controller support
-├── interaction/       # interaction machinery and mode-facing flow
-├── gate/              # evidence and success gating
-├── euclotypes/        # shared Euclo value types and artifacts
+├── thoughtrecipes/    # reusable recipe loaders and invocable helpers
 ├── benchmark/         # deterministic local benchmarks
-└── euclotest/         # local runtime and integration tests
+└── testsuite/         # local runtime and integration tests
 ```
 
 ---
