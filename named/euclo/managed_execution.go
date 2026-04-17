@@ -237,12 +237,11 @@ func (a *Agent) executeManagedExecution(ctx context.Context, flow *managedExecut
 // and state before enrichment. This enables resumed sessions to warm up with
 // their previously anchored BKC context and semantic state.
 func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, state *core.Context) error {
-	raw, ok := state.Get("euclo.session_resume_context")
-	if !ok || raw == nil {
+	resumeCtx, ok := euclostate.GetSessionResumeContext(state)
+	if !ok {
 		return nil // no resume context; new session path
 	}
-	resumeCtx, ok := raw.(session.SessionResumeContext)
-	if !ok || resumeCtx.IsEmpty() {
+	if resumeCtx.IsEmpty() {
 		return nil
 	}
 
