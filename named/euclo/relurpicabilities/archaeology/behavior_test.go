@@ -164,9 +164,7 @@ func TestEnrichArchaeoExecutionInputUsesServiceBundle(t *testing.T) {
 	}
 	in := execution.ExecuteInput{
 		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID: "wf-1",
-		},
+		Work:          eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-1"}},
 	}
 
 	enriched := enrichArchaeoExecutionInput(context.Background(), in)
@@ -310,11 +308,10 @@ func TestRecordStepAttemptCompleted(t *testing.T) {
 
 	in := execution.ExecuteInput{
 		State: state,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID: "wf-rc",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-rc",
 			PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{
 				PlanID: "plan-rc",
-			},
+			}},
 		},
 		ServiceBundle: execution.ServiceBundle{PlanStore: store},
 	}
@@ -353,10 +350,8 @@ func TestRecordStepAttemptFailed(t *testing.T) {
 	state.Set("euclo.living_plan", plan)
 
 	in := execution.ExecuteInput{
-		State: state,
-		Work: eucloruntime.UnitOfWork{
-			PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{PlanID: "plan-rf"},
-		},
+		State:         state,
+		Work:          eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{PlanID: "plan-rf"}}},
 		ServiceBundle: execution.ServiceBundle{PlanStore: store},
 	}
 
@@ -378,9 +373,7 @@ func TestRecordStepAttemptFailed(t *testing.T) {
 // when no PlanStore is configured.
 func TestRecordStepAttemptNoPlanStore(t *testing.T) {
 	in := execution.ExecuteInput{
-		Work: eucloruntime.UnitOfWork{
-			PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{PlanID: "plan-x"},
-		},
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{PlanID: "plan-x"}}},
 	}
 	// Must not panic.
 	recordStepAttempt(context.Background(), in, "step-x", "completed", "", "")
@@ -411,7 +404,7 @@ func TestSubmitPlanReviewGuidanceNoOpenQuestions(t *testing.T) {
 func TestSubmitPlanReviewGuidanceWithOpenQuestions(t *testing.T) {
 	broker := guidance.NewGuidanceBroker(time.Second)
 	in := execution.ExecuteInput{
-		Work:          eucloruntime.UnitOfWork{WorkflowID: "wf-sq"},
+		Work:          eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-sq"}},
 		ServiceBundle: execution.ServiceBundle{GuidanceBroker: broker},
 	}
 	reviewResult := &core.Result{
@@ -437,13 +430,12 @@ func TestPersistCompiledPlanPersistsActivatedVersion(t *testing.T) {
 	mock := &mockArchaeoAccess{}
 	in := execution.ExecuteInput{
 		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID: "wf-2",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-2",
 			SemanticInputs: eucloruntime.SemanticInputBundle{
 				ExplorationID: "explore-2",
 				PatternRefs:   []string{"pattern:a"},
 				TensionRefs:   []string{"tension:a"},
-			},
+			}},
 		},
 	}
 	payload := map[string]any{
@@ -490,9 +482,8 @@ func TestPersistExplorationPatternsSavesRecordsAndQueuesLearning(t *testing.T) {
 			PatternStore:   patternStore,
 			LearningBroker: broker,
 		},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-patterns",
-			PrimaryRelurpicCapabilityID: Explore,
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-patterns",
+			PrimaryRelurpicCapabilityID: Explore},
 		},
 	}
 	artifacts := []euclotypes.Artifact{{
@@ -548,9 +539,8 @@ func TestCompilePlanReviewPersistsCommentAndGuidance(t *testing.T) {
 			CommentStore:   commentStore,
 			GuidanceBroker: guidanceBroker,
 		},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-review",
-			PrimaryRelurpicCapabilityID: CompilePlan,
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-review",
+			PrimaryRelurpicCapabilityID: CompilePlan},
 		},
 	}
 	reviewResult := &core.Result{
@@ -627,14 +617,13 @@ func TestCompilePlanBehaviorExecutesOfflineWithScenarioStubModel(t *testing.T) {
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-phase4-compile",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-phase4-compile",
 			PrimaryRelurpicCapabilityID: CompilePlan,
 			SemanticInputs: eucloruntime.SemanticInputBundle{
 				ExplorationID: "explore-1",
 				PatternRefs:   []string{"pattern:a"},
 				TensionRefs:   []string{"tension:a"},
-			},
+			}},
 		},
 		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
 	}
@@ -740,8 +729,7 @@ func TestExploreBehaviorExecutesOfflineWithScenarioStubModel(t *testing.T) {
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                      "wf-phase4-explore",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-phase4-explore",
 			PrimaryRelurpicCapabilityID:     Explore,
 			SupportingRelurpicCapabilityIDs: []string{PatternSurface, ProspectiveAssess, ConvergenceGuard, CoherenceAssess},
 			SemanticInputs: eucloruntime.SemanticInputBundle{
@@ -750,7 +738,7 @@ func TestExploreBehaviorExecutesOfflineWithScenarioStubModel(t *testing.T) {
 				PatternRefs:           []string{"pattern:a"},
 				TensionRefs:           []string{"tension:a"},
 				RequestProvenanceRefs: []string{"req-1"},
-			},
+			}},
 		},
 		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
 	}
@@ -804,8 +792,7 @@ func TestImplementPlanBehaviorBlocksOnLearningGateOffline(t *testing.T) {
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                      "wf-phase4-implement",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-phase4-implement",
 			PrimaryRelurpicCapabilityID:     ImplementPlan,
 			SupportingRelurpicCapabilityIDs: []string{ConvergenceGuard},
 			SemanticInputs: eucloruntime.SemanticInputBundle{
@@ -813,7 +800,7 @@ func TestImplementPlanBehaviorBlocksOnLearningGateOffline(t *testing.T) {
 				ExplorationID: "explore-1",
 				PatternRefs:   []string{"pattern:a"},
 				TensionRefs:   []string{"tension:a"},
-			},
+			}},
 		},
 		InvokeSupporting: func(ctx context.Context, routineID string, in execution.InvokeInput) ([]euclotypes.Artifact, error) {
 			if routineID != ConvergenceGuard {
@@ -890,11 +877,10 @@ func TestPersistCompiledPlanMergesConflictingTensionRefsUniquely(t *testing.T) {
 	mock := &mockArchaeoAccess{}
 	in := execution.ExecuteInput{
 		ServiceBundle: execution.ServiceBundle{Archaeo: mock},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID: "wf-merge",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-merge",
 			SemanticInputs: eucloruntime.SemanticInputBundle{
 				TensionRefs: []string{"t-user", "t-shared"},
-			},
+			}},
 		},
 	}
 	payload := map[string]any{

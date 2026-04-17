@@ -22,7 +22,7 @@ type stubInvocable struct {
 	calls int
 }
 
-func (s *stubInvocable) ID() string { return s.id }
+func (s *stubInvocable) ID() string      { return s.id }
 func (s *stubInvocable) IsPrimary() bool { return true }
 func (s *stubInvocable) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
 	s.mu.Lock()
@@ -39,7 +39,7 @@ type stubSupporting struct {
 	input execution.InvokeInput
 }
 
-func (s *stubSupporting) ID() string { return s.id }
+func (s *stubSupporting) ID() string      { return s.id }
 func (s *stubSupporting) IsPrimary() bool { return false }
 func (s *stubSupporting) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
 	s.input = in
@@ -72,7 +72,7 @@ func TestExecuteDispatchesKnownInvocable(t *testing.T) {
 	d := &Dispatcher{invocables: map[string]execution.Invocable{inv.id: inv}}
 
 	result, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{PrimaryRelurpicCapabilityID: inv.id},
+		Work: runtimepkg.UnitOfWork{ExecutionDescriptor: runtimepkg.ExecutionDescriptor{PrimaryRelurpicCapabilityID: inv.id}},
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -90,7 +90,7 @@ func TestExecuteDispatchesRecipeLikeInvocableViaRegistry(t *testing.T) {
 	}
 
 	result, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{PrimaryRelurpicCapabilityID: inv.id},
+		Work: runtimepkg.UnitOfWork{ExecutionDescriptor: runtimepkg.ExecutionDescriptor{PrimaryRelurpicCapabilityID: inv.id}},
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -107,7 +107,7 @@ func TestExecuteUnknownInvocableReturnsError(t *testing.T) {
 	d := &Dispatcher{invocables: map[string]execution.Invocable{}}
 
 	_, err := d.Execute(context.Background(), execution.ExecuteInput{
-		Work: runtimepkg.UnitOfWork{PrimaryRelurpicCapabilityID: "missing"},
+		Work: runtimepkg.UnitOfWork{ExecutionDescriptor: runtimepkg.ExecutionDescriptor{PrimaryRelurpicCapabilityID: "missing"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "unavailable") {
 		t.Fatalf("expected unavailable error, got %v", err)
@@ -119,8 +119,7 @@ func TestInvokeSupportingPassesWorkContext(t *testing.T) {
 	d := &Dispatcher{invocables: map[string]execution.Invocable{support.id: support}}
 	task := &core.Task{ID: "task-1"}
 	state := core.NewContext()
-	work := runtimepkg.UnitOfWork{
-		PrimaryRelurpicCapabilityID:     "primary",
+	work := runtimepkg.UnitOfWork{ExecutionDescriptor: runtimepkg.ExecutionDescriptor{PrimaryRelurpicCapabilityID: "primary",
 		SupportingRelurpicCapabilityIDs: []string{"support"},
 		SemanticInputs: runtimepkg.SemanticInputBundle{
 			PatternRefs:           []string{"pattern-1"},
@@ -128,7 +127,7 @@ func TestInvokeSupportingPassesWorkContext(t *testing.T) {
 			ProspectiveRefs:       []string{"prospective-1"},
 			ConvergenceRefs:       []string{"convergence-1"},
 			RequestProvenanceRefs: []string{"request-1"},
-		},
+		}},
 	}
 
 	artifacts, err := d.ExecuteRoutine(context.Background(), support.id, task, state, work, testutil.Env(t), execution.ServiceBundle{})

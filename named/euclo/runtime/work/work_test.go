@@ -93,7 +93,7 @@ func TestStatusForResultClass_FailedResultClass(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuildRuntimeExecutionStatus_DoesNotPanic(t *testing.T) {
-	uow := work.UnitOfWork{ID: "uow-1", ModeID: "chat"}
+	uow := work.UnitOfWork{ExecutionDescriptor: work.ExecutionDescriptor{ModeID: "chat"}, ID: "uow-1"}
 	_ = work.BuildRuntimeExecutionStatus(uow, work.ExecutionStatusCompleted, work.ExecutionResultClassCompleted, time.Now())
 }
 

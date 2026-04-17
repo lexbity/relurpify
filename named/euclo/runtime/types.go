@@ -529,12 +529,13 @@ type UnitOfWorkHistoryEntry struct {
 	UpdatedAt                   time.Time `json:"updated_at,omitempty"`
 }
 
-type UnitOfWork struct {
-	ID          string `json:"id,omitempty"`
+// ExecutionDescriptor holds the fields shared between UnitOfWork and CompiledExecution.
+// UnitOfWork embeds it for the live execution path; CompiledExecution embeds it for
+// the persisted snapshot path.
+type ExecutionDescriptor struct {
 	WorkflowID  string `json:"workflow_id,omitempty"`
 	RunID       string `json:"run_id,omitempty"`
 	ExecutionID string `json:"execution_id,omitempty"`
-	RootID      string `json:"root_id,omitempty"`
 
 	ModeID            string `json:"mode_id,omitempty"`
 	ObjectiveKind     string `json:"objective_kind,omitempty"`
@@ -560,12 +561,19 @@ type UnitOfWork struct {
 	PredecessorUnitOfWorkID string                    `json:"predecessor_unit_of_work_id,omitempty"`
 	TransitionReason        string                    `json:"transition_reason,omitempty"`
 	TransitionState         UnitOfWorkTransitionState `json:"transition_state,omitempty"`
-	Status                  UnitOfWorkStatus          `json:"status,omitempty"`
 	ResultClass             ExecutionResultClass      `json:"result_class,omitempty"`
 	AssuranceClass          AssuranceClass            `json:"assurance_class,omitempty"`
 	DeferredIssueIDs        []string                  `json:"deferred_issue_ids,omitempty"`
-	CreatedAt               time.Time                 `json:"created_at,omitempty"`
 	UpdatedAt               time.Time                 `json:"updated_at,omitempty"`
+}
+
+type UnitOfWork struct {
+	ExecutionDescriptor
+	ID     string           `json:"id,omitempty"`
+	RootID string           `json:"root_id,omitempty"`
+	Status UnitOfWorkStatus `json:"status,omitempty"`
+
+	CreatedAt time.Time `json:"created_at,omitempty"`
 
 	CapabilityExecutionSequence []string `json:"capability_execution_sequence,omitempty"`
 	CapabilitySequenceOperator  string   `json:"capability_sequence_operator,omitempty"`
@@ -651,44 +659,16 @@ type UnitOfWorkCapabilityBinding struct {
 }
 
 type CompiledExecution struct {
-	WorkflowID       string    `json:"workflow_id,omitempty"`
-	RunID            string    `json:"run_id,omitempty"`
-	ExecutionID      string    `json:"execution_id,omitempty"`
-	UnitOfWorkID     string    `json:"unit_of_work_id,omitempty"`
-	RootUnitOfWorkID string    `json:"root_unit_of_work_id,omitempty"`
-	CompiledAt       time.Time `json:"compiled_at,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at,omitempty"`
-	ModeID           string    `json:"mode_id,omitempty"`
-	ObjectiveKind    string    `json:"objective_kind,omitempty"`
-	BehaviorFamily   string    `json:"behavior_family,omitempty"`
+	ExecutionDescriptor
+	UnitOfWorkID     string          `json:"unit_of_work_id,omitempty"`
+	RootUnitOfWorkID string          `json:"root_unit_of_work_id,omitempty"`
+	Status           ExecutionStatus `json:"status,omitempty"`
 
-	ContextStrategyID               string   `json:"context_strategy_id,omitempty"`
-	VerificationPolicyID            string   `json:"verification_policy_id,omitempty"`
-	DeferralPolicyID                string   `json:"deferral_policy_id,omitempty"`
-	CheckpointPolicyID              string   `json:"checkpoint_policy_id,omitempty"`
-	PrimaryRelurpicCapabilityID     string   `json:"primary_relurpic_capability_id,omitempty"`
-	SupportingRelurpicCapabilityIDs []string `json:"supporting_relurpic_capability_ids,omitempty"`
+	CompiledAt time.Time `json:"compiled_at,omitempty"`
 
-	SemanticInputs     SemanticInputBundle           `json:"semantic_inputs,omitempty"`
-	ResolvedPolicy     ResolvedExecutionPolicy       `json:"resolved_execution_policy,omitempty"`
-	ExecutorDescriptor WorkUnitExecutorDescriptor    `json:"executor_descriptor,omitempty"`
-	PlanBinding        *UnitOfWorkPlanBinding        `json:"plan_binding,omitempty"`
-	ContextBundle      UnitOfWorkContextBundle       `json:"context_bundle,omitempty"`
-	RoutineBindings    []UnitOfWorkRoutineBinding    `json:"routine_bindings,omitempty"`
-	SkillBindings      []UnitOfWorkSkillBinding      `json:"skill_bindings,omitempty"`
-	ToolBindings       []UnitOfWorkToolBinding       `json:"tool_bindings,omitempty"`
-	CapabilityBindings []UnitOfWorkCapabilityBinding `json:"capability_bindings,omitempty"`
-
-	PredecessorUnitOfWorkID     string                    `json:"predecessor_unit_of_work_id,omitempty"`
-	TransitionReason            string                    `json:"transition_reason,omitempty"`
-	TransitionState             UnitOfWorkTransitionState `json:"transition_state,omitempty"`
-	Status                      ExecutionStatus           `json:"status,omitempty"`
-	ResultClass                 ExecutionResultClass      `json:"result_class,omitempty"`
-	AssuranceClass              AssuranceClass            `json:"assurance_class,omitempty"`
-	DeferredIssueIDs            []string                  `json:"deferred_issue_ids,omitempty"`
-	ArchaeoRefs                 map[string][]string       `json:"archaeo_refs,omitempty"`
-	ProviderSnapshotRefs        []string                  `json:"provider_snapshot_refs,omitempty"`
-	ProviderSessionSnapshotRefs []string                  `json:"provider_session_snapshot_refs,omitempty"`
+	ArchaeoRefs                 map[string][]string `json:"archaeo_refs,omitempty"`
+	ProviderSnapshotRefs        []string            `json:"provider_snapshot_refs,omitempty"`
+	ProviderSessionSnapshotRefs []string            `json:"provider_session_snapshot_refs,omitempty"`
 }
 
 type RuntimeExecutionStatus struct {

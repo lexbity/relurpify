@@ -13,14 +13,13 @@ import (
 )
 
 func BenchmarkBuildChatCapabilityRuntimeState(b *testing.B) {
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement,
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement,
 		SupportingRelurpicCapabilityIDs: []string{
 			euclorelurpic.CapabilityChatDirectEditExecution,
 			euclorelurpic.CapabilityChatLocalReview,
 			euclorelurpic.CapabilityChatTargetedVerification,
 			euclorelurpic.CapabilityArchaeologyExplore,
-		},
+		}},
 	}
 	state := core.NewContext()
 	state.Set("euclo.relurpic_behavior_trace", execution.Trace{
@@ -43,9 +42,8 @@ func BenchmarkBuildChatCapabilityRuntimeState(b *testing.B) {
 }
 
 func BenchmarkBuildArchaeologyCapabilityRuntimeState(b *testing.B) {
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement,
-		WorkflowID:                  "wf-bench",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement,
+		WorkflowID: "wf-bench",
 		SemanticInputs: eucloruntime.SemanticInputBundle{
 			ExplorationID:         "explore-bench",
 			PatternRefs:           []string{"pattern:a", "pattern:b", "pattern:c"},
@@ -64,7 +62,7 @@ func BenchmarkBuildArchaeologyCapabilityRuntimeState(b *testing.B) {
 			PlanVersion:   7,
 			IsPlanBacked:  true,
 			IsLongRunning: true,
-		},
+		}},
 	}
 	state := core.NewContext()
 	state.Set("euclo.relurpic_behavior_trace", execution.Trace{

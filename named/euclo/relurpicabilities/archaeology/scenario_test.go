@@ -45,9 +45,8 @@ func TestScenario_ExploreBehavior_PersistsPatternsAndQueuesLearning(t *testing.T
 			PatternStore:   f.PatternStore,
 			LearningBroker: broker,
 		},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-scenario-patterns",
-			PrimaryRelurpicCapabilityID: Explore,
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-scenario-patterns",
+			PrimaryRelurpicCapabilityID: Explore},
 		},
 	}
 	artifacts := []euclotypes.Artifact{{
@@ -100,9 +99,8 @@ func TestScenario_CompilePlanReview_PersistsCommentAndQueuesGuidance(t *testing.
 			CommentStore:   f.CommentStore,
 			GuidanceBroker: broker,
 		},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-scenario-review",
-			PrimaryRelurpicCapabilityID: CompilePlan,
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-scenario-review",
+			PrimaryRelurpicCapabilityID: CompilePlan},
 		},
 	}
 	reviewResult := &core.Result{
@@ -399,8 +397,7 @@ func TestScenario_ImplementPlan_PersistsStepHistoryBlastRadiusAndCheckpoint(t *t
 		Task:        f.Task("wf-scenario-implement", "Execute the compiled plan end to end", nil),
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-scenario-implement",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-scenario-implement",
 			PrimaryRelurpicCapabilityID: ImplementPlan,
 			PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{
 				WorkflowID:   "wf-scenario-implement",
@@ -413,7 +410,7 @@ func TestScenario_ImplementPlan_PersistsStepHistoryBlastRadiusAndCheckpoint(t *t
 				WorkflowID:  "wf-scenario-implement",
 				PatternRefs: []string{"pattern:service"},
 				TensionRefs: []string{"tension:boundary"},
-			},
+			}},
 		},
 		ServiceBundle: execution.ServiceBundle{
 			PlanStore: f.PlanStore,
@@ -537,8 +534,7 @@ func TestScenario_ImplementPlan_FailedStepCreatesDeferredIssueAndPersistsFailedA
 		Task:        f.Task("wf-scenario-gap", "Execute the plan and surface gap detection", nil),
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-scenario-gap",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-scenario-gap",
 			PrimaryRelurpicCapabilityID: ImplementPlan,
 			PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{
 				WorkflowID:   "wf-scenario-gap",
@@ -551,7 +547,7 @@ func TestScenario_ImplementPlan_FailedStepCreatesDeferredIssueAndPersistsFailedA
 				WorkflowID:  "wf-scenario-gap",
 				PatternRefs: []string{"pattern:boundary"},
 				TensionRefs: []string{"tension:drift"},
-			},
+			}},
 		},
 		ServiceBundle: execution.ServiceBundle{
 			PlanStore: f.PlanStore,
@@ -634,8 +630,7 @@ func TestScenario_LoadBoundPlan_UsesArchaeoServiceActiveVersion(t *testing.T) {
 	in := execution.ExecuteInput{
 		Task:  f.Task("wf-scenario-service-backed", "Load the active service-backed plan", nil),
 		State: f.NewState(),
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-scenario-service-backed",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-scenario-service-backed",
 			PrimaryRelurpicCapabilityID: ImplementPlan,
 			PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{
 				WorkflowID:   "wf-scenario-service-backed",
@@ -643,7 +638,7 @@ func TestScenario_LoadBoundPlan_UsesArchaeoServiceActiveVersion(t *testing.T) {
 				PlanVersion:  active.Version,
 				IsPlanBacked: true,
 				StepIDs:      []string{"step-service"},
-			},
+			}},
 		},
 		ServiceBundle: execution.ServiceBundle{
 			Archaeo: fixtureArchaeoAccess{fixture: f},

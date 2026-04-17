@@ -29,10 +29,9 @@ func TestInspectBehaviorPrefersSemanticReviewOverReflectionFallback(t *testing.T
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-inspect-semantic",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-inspect-semantic",
 			RunID:                       "run-inspect-semantic",
-			PrimaryRelurpicCapabilityID: Inspect,
+			PrimaryRelurpicCapabilityID: Inspect},
 		},
 	}
 
@@ -104,10 +103,9 @@ func TestImplementBehaviorReviewSuggestImplementBlocksAutomaticMutationOnSemanti
 		Profile: euclotypes.ExecutionProfileSelection{
 			ProfileID: "review_suggest_implement",
 		},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-implement-review-blocked",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-implement-review-blocked",
 			RunID:                       "run-implement-review-blocked",
-			PrimaryRelurpicCapabilityID: Implement,
+			PrimaryRelurpicCapabilityID: Implement},
 		},
 	}
 
@@ -172,10 +170,9 @@ func TestExecuteSpecializedImplementBehavior_TDDProfileSelectsTDDCapability(t *t
 		Profile: euclotypes.ExecutionProfileSelection{
 			ProfileID: "test_driven_generation",
 		},
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-implement-tdd-specialized",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-implement-tdd-specialized",
 			RunID:                       "run-implement-tdd-specialized",
-			PrimaryRelurpicCapabilityID: Implement,
+			PrimaryRelurpicCapabilityID: Implement},
 		},
 	}
 
@@ -264,11 +261,10 @@ func TestSupportingRoutinesLocalReviewEmitsReviewArtifact(t *testing.T) {
 			},
 		},
 		State: state,
-		Work: eucloruntime.UnitOfWork{
-			PrimaryRelurpicCapabilityID: Ask,
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: Ask,
 			SemanticInputs: eucloruntime.SemanticInputBundle{
 				PatternRefs: []string{"handler.go"},
-			},
+			}},
 		},
 	})
 	if err != nil {
@@ -297,11 +293,10 @@ func TestSupportingRoutinesTargetedVerificationReadsPipelineVerify(t *testing.T)
 	artifactsResult, err := routines[1].Invoke(context.Background(), execution.InvokeInput{
 		Task:  &core.Task{Instruction: "repair verification"},
 		State: state,
-		Work: eucloruntime.UnitOfWork{
-			PrimaryRelurpicCapabilityID: Implement,
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: Implement,
 			SemanticInputs: eucloruntime.SemanticInputBundle{
 				TensionRefs: []string{"verification"},
-			},
+			}},
 		},
 	})
 	if err != nil {
@@ -329,10 +324,9 @@ func TestAskBehaviorCompletesWithStubModel(t *testing.T) {
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-ask-stub",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-ask-stub",
 			RunID:                       "run-ask-stub",
-			PrimaryRelurpicCapabilityID: Ask,
+			PrimaryRelurpicCapabilityID: Ask},
 		},
 	}
 	result, err := NewAskBehavior().Execute(context.Background(), in)
@@ -363,10 +357,9 @@ func TestAskBehaviorOptionsPathAppendsPlanCandidatesWhenInstructionRequestsCompa
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-ask-options",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-ask-options",
 			RunID:                       "run-ask-options",
-			PrimaryRelurpicCapabilityID: Ask,
+			PrimaryRelurpicCapabilityID: Ask},
 		},
 	}
 	result, err := NewAskBehavior().Execute(context.Background(), in)

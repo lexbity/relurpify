@@ -10,15 +10,12 @@ import (
 )
 
 func TestEnforcePreExecutionCapabilityContracts_ArchaeologyImplementRequiresPlanBinding(t *testing.T) {
-	err := EnforcePreExecutionCapabilityContracts(UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement,
-	})
+	err := EnforcePreExecutionCapabilityContracts(UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement}})
 	if err == nil || !strings.Contains(err.Error(), "compiled living plan") {
 		t.Fatalf("expected plan binding error, got %v", err)
 	}
-	err = EnforcePreExecutionCapabilityContracts(UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement,
-		PlanBinding:                 &UnitOfWorkPlanBinding{IsPlanBacked: true},
+	err = EnforcePreExecutionCapabilityContracts(UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement,
+		PlanBinding: &UnitOfWorkPlanBinding{IsPlanBacked: true}},
 	})
 	if err != nil {
 		t.Fatalf("expected nil with plan-backed binding, got %v", err)
@@ -30,7 +27,7 @@ func TestEvaluatePostExecutionCapabilityContracts_ChatAskBlocksFileMutation(t *t
 	state.Set("euclo.edit_execution", EditExecutionRecord{
 		Executed: []EditOperationRecord{{Path: "x.go", Status: "applied"}},
 	})
-	work := UnitOfWork{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk}
+	work := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk}}
 	rt, err := EvaluatePostExecutionCapabilityContracts(work, state, time.Unix(1700000000, 0).UTC())
 	if err == nil {
 		t.Fatal("expected non-mutating contract violation")
@@ -43,7 +40,7 @@ func TestEvaluatePostExecutionCapabilityContracts_ChatAskBlocksFileMutation(t *t
 func TestEvaluatePostExecutionCapabilityContracts_ChatImplementAllowsMutation(t *testing.T) {
 	state := core.NewContext()
 	state.Set("pipeline.code", map[string]any{"summary": "planned edits"})
-	work := UnitOfWork{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement}
+	work := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement}}
 	rt, err := EvaluatePostExecutionCapabilityContracts(work, state, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -58,7 +55,7 @@ func TestEvaluatePostExecutionCapabilityContracts_InspectFirstRecordsMutationDia
 	state.Set("euclo.edit_execution", EditExecutionRecord{
 		Executed: []EditOperationRecord{{Path: "y.go", Status: "applied"}},
 	})
-	work := UnitOfWork{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatInspect}
+	work := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatInspect}}
 	rt, err := EvaluatePostExecutionCapabilityContracts(work, state, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("inspect-first allows completion with diagnostics: %v", err)
@@ -77,8 +74,7 @@ func TestEvaluatePostExecutionCapabilityContracts_InspectFirstRecordsMutationDia
 
 func TestBuildCapabilityContractDeferredIssues_CompilePlanWithoutBindingProducesIssue(t *testing.T) {
 	now := time.Unix(1700000000, 123456789).UTC()
-	work := UnitOfWork{
-		WorkflowID:                  "wf-d1",
+	work := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-d1",
 		RunID:                       "run-d1",
 		ExecutionID:                 "exec-d1",
 		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyCompilePlan,
@@ -87,7 +83,7 @@ func TestBuildCapabilityContractDeferredIssues_CompilePlanWithoutBindingProduces
 			TensionRefs:           []string{"t1"},
 			ProvenanceRefs:        []string{"pr1"},
 			RequestProvenanceRefs: []string{"rq1"},
-		},
+		}},
 	}
 	issues := BuildCapabilityContractDeferredIssues(work, core.NewContext(), now)
 	if len(issues) != 1 {
@@ -112,7 +108,7 @@ func TestBuildCapabilityContractDeferredIssues_CompilePlanWithoutBindingProduces
 }
 
 func TestBuildCapabilityContractDeferredIssues_NonCompilePlanProducesNone(t *testing.T) {
-	work := UnitOfWork{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk}
+	work := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk}}
 	if got := BuildCapabilityContractDeferredIssues(work, core.NewContext(), time.Now().UTC()); len(got) != 0 {
 		t.Fatalf("expected no issues, got %#v", got)
 	}
@@ -121,9 +117,7 @@ func TestBuildCapabilityContractDeferredIssues_NonCompilePlanProducesNone(t *tes
 func TestBuildCapabilityContractRuntimeState_DebugEscalationTriggeredAfterMutation(t *testing.T) {
 	state := core.NewContext()
 	state.Set("euclo.edit_execution", EditExecutionRecord{Executed: []EditOperationRecord{{Path: "z.go", Status: "applied"}}})
-	rt := BuildCapabilityContractRuntimeState(UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigateRepair,
-	}, state, time.Now().UTC())
+	rt := BuildCapabilityContractRuntimeState(UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigateRepair}}, state, time.Now().UTC())
 	if !rt.DebugEscalationTriggered || rt.DebugEscalationTarget != euclorelurpic.CapabilityChatImplement {
 		t.Fatalf("expected debug escalation toward implement, got %#v", rt)
 	}

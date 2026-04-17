@@ -257,12 +257,11 @@ func TestAppendDiagnostic_DeduplicatesMessages(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSupportingIDs_FiltersByPrefix(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		SupportingRelurpicCapabilityIDs: []string{
-			"euclo:chat.local-review",
-			"euclo:debug.root-cause",
-			"euclo:chat.inspect",
-		},
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{SupportingRelurpicCapabilityIDs: []string{
+		"euclo:chat.local-review",
+		"euclo:debug.root-cause",
+		"euclo:chat.inspect",
+	}},
 	}
 	got := execution.SupportingIDs(work, "euclo:chat.")
 	if len(got) != 2 {
@@ -286,12 +285,11 @@ func TestSetBehaviorTrace_NilStateDoesNotPanic(t *testing.T) {
 
 func TestSetBehaviorTrace_StoresTrace(t *testing.T) {
 	state := core.NewContext()
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: "euclo:chat.ask",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: "euclo:chat.ask",
 		ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{
 			Family:   "react",
 			RecipeID: "chat.ask.inquiry",
-		},
+		}},
 	}
 	execution.SetBehaviorTrace(state, work, []string{"euclo:chat.inspect"})
 	raw, ok := state.Get("euclo.relurpic_behavior_trace")
@@ -312,9 +310,7 @@ func TestSetBehaviorTrace_StoresTrace(t *testing.T) {
 
 func TestSetBehaviorTrace_DeduplicatesRecipeIDs(t *testing.T) {
 	state := core.NewContext()
-	work := eucloruntime.UnitOfWork{
-		ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{RecipeID: "r1"},
-	}
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{RecipeID: "r1"}}}
 	execution.SetBehaviorTrace(state, work, nil)
 	execution.SetBehaviorTrace(state, work, nil) // same recipe ID again
 	raw, _ := state.Get("euclo.relurpic_behavior_trace")
@@ -489,13 +485,12 @@ func TestCompilePlanFallback_EmptyInputsReturnsNil(t *testing.T) {
 }
 
 func TestCompilePlanFallback_PatternProposalsProduceSteps(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: "euclo:archaeology.compile-plan",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: "euclo:archaeology.compile-plan",
 		SemanticInputs: eucloruntime.SemanticInputBundle{
 			PatternProposals: []eucloruntime.PatternProposalSummary{
 				{Title: "step 1", Summary: "do first thing", PatternRefs: []string{"ref-a"}},
 			},
-		},
+		}},
 	}
 	got := execution.CompilePlanFallback(work)
 	if got == nil {
@@ -511,12 +506,11 @@ func TestCompilePlanFallback_PatternProposalsProduceSteps(t *testing.T) {
 }
 
 func TestCompilePlanFallback_CoherenceSuggestionsProduceSteps(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		SemanticInputs: eucloruntime.SemanticInputBundle{
-			CoherenceSuggestions: []eucloruntime.CoherenceSuggestion{
-				{Title: "coherence fix", Summary: "align things", SuggestedAction: "refactor"},
-			},
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{SemanticInputs: eucloruntime.SemanticInputBundle{
+		CoherenceSuggestions: []eucloruntime.CoherenceSuggestion{
+			{Title: "coherence fix", Summary: "align things", SuggestedAction: "refactor"},
 		},
+	}},
 	}
 	got := execution.CompilePlanFallback(work)
 	if got == nil {

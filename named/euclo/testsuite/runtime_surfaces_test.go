@@ -49,13 +49,12 @@ func TestAgentExecuteDispatchesThroughBehaviorDispatcher(t *testing.T) {
 }
 
 func TestChatRuntimeCarriesBehaviorTrace(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement,
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement,
 		SupportingRelurpicCapabilityIDs: []string{
 			euclorelurpic.CapabilityChatDirectEditExecution,
 			euclorelurpic.CapabilityChatLocalReview,
 			euclorelurpic.CapabilityArchaeologyExplore,
-		},
+		}},
 	}
 	state := core.NewContext()
 	state.Set("euclo.relurpic_behavior_trace", execution.Trace{
@@ -133,9 +132,8 @@ func TestProofSurfaceCarriesAutomaticDegradationState(t *testing.T) {
 }
 
 func TestArchaeologyRuntimeCarriesPolicyAndTrace(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement,
-		WorkflowID:                  "wf-1",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyImplement,
+		WorkflowID: "wf-1",
 		SemanticInputs: eucloruntime.SemanticInputBundle{
 			ExplorationID: "explore-1",
 			PatternRefs:   []string{"pattern:a", "pattern:b"},
@@ -150,7 +148,7 @@ func TestArchaeologyRuntimeCarriesPolicyAndTrace(t *testing.T) {
 			PlanVersion:   3,
 			IsPlanBacked:  true,
 			IsLongRunning: true,
-		},
+		}},
 	}
 	state := core.NewContext()
 	state.Set("euclo.relurpic_behavior_trace", execution.Trace{

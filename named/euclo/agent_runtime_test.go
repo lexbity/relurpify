@@ -12,13 +12,12 @@ func TestRefreshRuntimeExecutionArtifacts_RepairExhaustedForcesFailedExecutionSt
 	agent := &Agent{}
 	state := core.NewContext()
 	state.Set("euclo.assurance_class", eucloruntime.AssuranceClassRepairExhausted)
-	work := eucloruntime.UnitOfWork{
-		ID:                   "uow-1",
-		ExecutionID:          "exec-1",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutionID: "exec-1",
 		ModeID:               "code",
 		BehaviorFamily:       "failed_verification_repair",
-		VerificationPolicyID: "code/edit_verify_repair",
-		Status:               eucloruntime.UnitOfWorkStatusExecuting,
+		VerificationPolicyID: "code/edit_verify_repair"}, ID: "uow-1",
+
+		Status: eucloruntime.UnitOfWorkStatusExecuting,
 	}
 
 	agent.refreshRuntimeExecutionArtifacts(context.Background(), &core.Task{ID: "task-1"}, state, work, eucloruntime.ExecutionStatusCompleted, nil)
@@ -61,13 +60,12 @@ func TestRefreshRuntimeExecutionArtifacts_OperatorDeferredForcesCompletedWithDef
 	agent := &Agent{}
 	state := core.NewContext()
 	state.Set("euclo.assurance_class", eucloruntime.AssuranceClassOperatorDeferred)
-	work := eucloruntime.UnitOfWork{
-		ID:                   "uow-1",
-		ExecutionID:          "exec-1",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutionID: "exec-1",
 		ModeID:               "code",
 		BehaviorFamily:       "failed_verification_repair",
-		VerificationPolicyID: "code/edit_verify_repair",
-		Status:               eucloruntime.UnitOfWorkStatusExecuting,
+		VerificationPolicyID: "code/edit_verify_repair"}, ID: "uow-1",
+
+		Status: eucloruntime.UnitOfWorkStatusExecuting,
 	}
 
 	agent.refreshRuntimeExecutionArtifacts(context.Background(), &core.Task{ID: "task-1"}, state, work, eucloruntime.ExecutionStatusCompleted, nil)
@@ -95,13 +93,12 @@ func TestRefreshRuntimeExecutionArtifacts_ReviewBlockedForcesBlockedExecutionSta
 	agent := &Agent{}
 	state := core.NewContext()
 	state.Set("euclo.assurance_class", eucloruntime.AssuranceClassReviewBlocked)
-	work := eucloruntime.UnitOfWork{
-		ID:                   "uow-1",
-		ExecutionID:          "exec-1",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutionID: "exec-1",
 		ModeID:               "review",
 		BehaviorFamily:       "approval_assessment",
-		VerificationPolicyID: "review/review_suggest_implement",
-		Status:               eucloruntime.UnitOfWorkStatusExecuting,
+		VerificationPolicyID: "review/review_suggest_implement"}, ID: "uow-1",
+
+		Status: eucloruntime.UnitOfWorkStatusExecuting,
 	}
 
 	agent.refreshRuntimeExecutionArtifacts(context.Background(), &core.Task{ID: "task-1"}, state, work, eucloruntime.ExecutionStatusCompleted, nil)
@@ -126,13 +123,12 @@ func TestRefreshRuntimeExecutionArtifacts_TDDIncompleteForcesFailedExecutionStat
 	agent := &Agent{}
 	state := core.NewContext()
 	state.Set("euclo.assurance_class", eucloruntime.AssuranceClassTDDIncomplete)
-	work := eucloruntime.UnitOfWork{
-		ID:                   "uow-1",
-		ExecutionID:          "exec-1",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutionID: "exec-1",
 		ModeID:               "tdd",
 		BehaviorFamily:       "tdd_red_green_refactor",
-		VerificationPolicyID: "tdd/test_driven_generation",
-		Status:               eucloruntime.UnitOfWorkStatusExecuting,
+		VerificationPolicyID: "tdd/test_driven_generation"}, ID: "uow-1",
+
+		Status: eucloruntime.UnitOfWorkStatusExecuting,
 	}
 
 	agent.refreshRuntimeExecutionArtifacts(context.Background(), &core.Task{ID: "task-1"}, state, work, eucloruntime.ExecutionStatusCompleted, nil)
@@ -156,13 +152,13 @@ func TestRefreshRuntimeExecutionArtifacts_TDDIncompleteForcesFailedExecutionStat
 func TestRefreshRuntimeExecutionArtifacts_NoAssuranceClassKeepsCompletedStatus(t *testing.T) {
 	agent := &Agent{}
 	state := core.NewContext()
-	work := eucloruntime.UnitOfWork{
-		ID:             "uow-plain",
-		ExecutionID:    "exec-plain",
-		ModeID:         "code",
-		Status:         eucloruntime.UnitOfWorkStatusExecuting,
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutionID: "exec-plain",
+		ModeID: "code",
+
 		ResultClass:    eucloruntime.ExecutionResultClassCompleted,
-		AssuranceClass: "",
+		AssuranceClass: ""}, ID: "uow-plain",
+
+		Status: eucloruntime.UnitOfWorkStatusExecuting,
 	}
 
 	agent.refreshRuntimeExecutionArtifacts(context.Background(), &core.Task{ID: "task-plain"}, state, work, eucloruntime.ExecutionStatusCompleted, nil)

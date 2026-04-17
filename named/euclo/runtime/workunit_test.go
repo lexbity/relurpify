@@ -352,10 +352,7 @@ func TestStatusForResultClassCanceled(t *testing.T) {
 
 func buildTestUnitOfWork() UnitOfWork {
 	now := time.Now().UTC().Truncate(time.Second)
-	return UnitOfWork{
-		ID:                          "uow-1",
-		RootID:                      "uow-root",
-		WorkflowID:                  "wf-1",
+	return UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-1",
 		RunID:                       "run-1",
 		ExecutionID:                 "exec-1",
 		ModeID:                      "planning",
@@ -372,9 +369,12 @@ func buildTestUnitOfWork() UnitOfWork {
 		PredecessorUnitOfWorkID: "uow-0",
 		TransitionReason:        "step_advance",
 		DeferredIssueIDs:        []string{"di-1"},
-		Status:                  UnitOfWorkStatusReady,
-		CreatedAt:               now,
-		UpdatedAt:               now,
+
+		UpdatedAt: now}, ID: "uow-1",
+		RootID: "uow-root",
+
+		Status:    UnitOfWorkStatusReady,
+		CreatedAt: now,
 	}
 }
 

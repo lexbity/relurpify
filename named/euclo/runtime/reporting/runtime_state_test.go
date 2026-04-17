@@ -34,9 +34,7 @@ func TestBuildChatCapabilityRuntimeState_CapturesVerificationPlan(t *testing.T) 
 		"checks": []any{map[string]any{"name": "go_test_runtime"}},
 	})
 
-	rt := BuildChatCapabilityRuntimeState(eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement,
-	}, state, time.Now().UTC())
+	rt := BuildChatCapabilityRuntimeState(eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatImplement}}, state, time.Now().UTC())
 
 	if rt.VerificationPlanScope != "package_tests" {
 		t.Fatalf("expected plan scope, got %q", rt.VerificationPlanScope)
@@ -86,9 +84,7 @@ func TestBuildDebugCapabilityRuntimeState_CapturesVerificationPlan(t *testing.T)
 		},
 	})
 
-	rt := BuildDebugCapabilityRuntimeState(eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigateRepair,
-	}, state, time.Now().UTC())
+	rt := BuildDebugCapabilityRuntimeState(eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigateRepair}}, state, time.Now().UTC())
 
 	if rt.VerificationPlanScope != "explicit" {
 		t.Fatalf("expected plan scope, got %q", rt.VerificationPlanScope)
@@ -119,12 +115,11 @@ func TestBuildChatCapabilityRuntimeState_AskModeCapturesBehaviorTrace(t *testing
 		RecipeIDs: []string{"chat.ask.inquiry", "chat.ask.review"},
 		Path:      "ask",
 	})
-	rt := BuildChatCapabilityRuntimeState(eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk,
+	rt := BuildChatCapabilityRuntimeState(eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk,
 		SupportingRelurpicCapabilityIDs: []string{
 			euclorelurpic.CapabilityChatLocalReview,
 			euclorelurpic.CapabilityArchaeologyExplore,
-		},
+		}},
 	}, state, time.Now().UTC())
 
 	if !rt.AskActive || !rt.NonMutating || !rt.LocalReviewActive {
@@ -144,9 +139,7 @@ func TestBuildDebugCapabilityRuntimeState_IncludesEscalationInSummary(t *testing
 		DebugEscalationTarget:    euclorelurpic.CapabilityChatImplement,
 		DebugEscalationTriggered: true,
 	})
-	rt := BuildDebugCapabilityRuntimeState(eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigateRepair,
-	}, state, time.Now().UTC())
+	rt := BuildDebugCapabilityRuntimeState(eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityDebugInvestigateRepair}}, state, time.Now().UTC())
 	if !strings.Contains(rt.Summary, "escalated="+euclorelurpic.CapabilityChatImplement) {
 		t.Fatalf("expected escalation in summary, got %q", rt.Summary)
 	}

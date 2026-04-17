@@ -31,10 +31,9 @@ func TestSimpleRepairBehaviorReturnsNonErrorWithMockInput(t *testing.T) {
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-simple-repair",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-simple-repair",
 			RunID:                       "run-simple-repair",
-			PrimaryRelurpicCapabilityID: SimpleRepair,
+			PrimaryRelurpicCapabilityID: SimpleRepair},
 		},
 	}
 
@@ -60,10 +59,9 @@ func TestInvestigateRepairBehaviorSynthesizesReproducerBeforePatchWhenMissing(t 
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-debug-reproducer",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-debug-reproducer",
 			RunID:                       "run-debug-reproducer",
-			PrimaryRelurpicCapabilityID: InvestigateRepair,
+			PrimaryRelurpicCapabilityID: InvestigateRepair},
 		},
 	}
 
@@ -165,10 +163,9 @@ func TestInvestigateRepairBehaviorSkipsRegressionSynthesisWhenReproductionConcre
 		},
 		State:       state,
 		Environment: env,
-		Work: eucloruntime.UnitOfWork{
-			WorkflowID:                  "wf-debug-no-synth",
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-debug-no-synth",
 			RunID:                       "run-debug-no-synth",
-			PrimaryRelurpicCapabilityID: InvestigateRepair,
+			PrimaryRelurpicCapabilityID: InvestigateRepair},
 		},
 	}
 

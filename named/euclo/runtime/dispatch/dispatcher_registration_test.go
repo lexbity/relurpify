@@ -17,7 +17,7 @@ type registeredInvocable struct {
 	id string
 }
 
-func (r registeredInvocable) ID() string { return r.id }
+func (r registeredInvocable) ID() string      { return r.id }
 func (r registeredInvocable) IsPrimary() bool { return false }
 func (r registeredInvocable) Invoke(_ context.Context, in execution.InvokeInput) (*core.Result, error) {
 	if in.State != nil {
@@ -59,9 +59,7 @@ func TestDispatcher_Execute_ReportsUnavailableInvocable(t *testing.T) {
 	d := NewDispatcher(agentenv.AgentEnvironment{})
 
 	input := execution.ExecuteInput{
-		Work: eucloruntime.UnitOfWork{
-			PrimaryRelurpicCapabilityID: "euclo:nonexistent.behavior",
-		},
+		Work: eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: "euclo:nonexistent.behavior"}},
 	}
 	_, err := d.Execute(context.Background(), input)
 
@@ -90,4 +88,3 @@ func TestDispatcher_RegisterSupportingAddsRoutine(t *testing.T) {
 		t.Fatalf("expected registered routine marker, got %#v", got)
 	}
 }
-

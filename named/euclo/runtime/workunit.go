@@ -52,39 +52,41 @@ func BuildUnitOfWork(
 	if executor.ExecutorID == "" {
 		executor = SelectExecutorDescriptor(mode, profile, classification, resolvedPolicy, planBinding, primaryCapabilityID, supportingCapabilityIDs)
 	}
+	existing, hasExisting := existingUnitOfWork(state)
 	uow := UnitOfWork{
-		ID:                              firstNonEmpty(stateString(state, "euclo.unit_of_work_id"), envelope.TaskID),
-		WorkflowID:                      workflowIDFromTaskState(task, state),
-		RunID:                           runIDFromTaskState(task, state),
-		ExecutionID:                     executionID(task, state),
-		RootID:                          stateString(state, "euclo.root_unit_of_work_id"),
-		ModeID:                          mode.ModeID,
-		ObjectiveKind:                   objectiveKindForWork(mode, profile, classification),
-		BehaviorFamily:                  behaviorFamilyForWork(mode, profile, classification, resolvedPolicy),
-		ContextStrategyID:               contextStrategyForWork(mode, modeRegistry),
-		VerificationPolicyID:            verificationPolicyForWork(mode, profile, resolvedPolicy),
-		DeferralPolicyID:                deferralPolicyForWork(mode, profile, classification),
-		CheckpointPolicyID:              checkpointPolicyForWork(mode, profile, resolvedPolicy),
-		PrimaryRelurpicCapabilityID:     primaryCapabilityID,
-		SupportingRelurpicCapabilityIDs: supportingCapabilityIDs,
-		SemanticInputs:                  semanticInputs,
-		ResolvedPolicy:                  resolvedPolicy,
-		ExecutorDescriptor:              executor,
-		PlanBinding:                     planBinding,
-		ContextBundle:                   contextBundleFromState(task, state, envelope, semanticInputs),
-		RoutineBindings:                 routineBindingsForWork(mode, profile, classification, resolvedPolicy),
-		SkillBindings:                   skillBindingsForWork(task, state, resolvedPolicy),
-		ToolBindings:                    toolBindingsForWork(envelope),
-		CapabilityBindings:              capabilityBindingsForWork(profile, resolvedPolicy),
-		Status:                          UnitOfWorkStatusReady,
-		ResultClass:                     "",
-		DeferredIssueIDs:                deferredIssueIDsFromState(state),
-		CreatedAt:                       now,
-		UpdatedAt:                       now,
-		CapabilityExecutionSequence:     append([]string(nil), capSeq...),
-		CapabilitySequenceOperator:      capOp,
+		ExecutionDescriptor: ExecutionDescriptor{
+			WorkflowID:                      workflowIDFromTaskState(task, state),
+			RunID:                           runIDFromTaskState(task, state),
+			ExecutionID:                     executionID(task, state),
+			ModeID:                          mode.ModeID,
+			ObjectiveKind:                   objectiveKindForWork(mode, profile, classification),
+			BehaviorFamily:                  behaviorFamilyForWork(mode, profile, classification, resolvedPolicy),
+			ContextStrategyID:               contextStrategyForWork(mode, modeRegistry),
+			VerificationPolicyID:            verificationPolicyForWork(mode, profile, resolvedPolicy),
+			DeferralPolicyID:                deferralPolicyForWork(mode, profile, classification),
+			CheckpointPolicyID:              checkpointPolicyForWork(mode, profile, resolvedPolicy),
+			PrimaryRelurpicCapabilityID:     primaryCapabilityID,
+			SupportingRelurpicCapabilityIDs: supportingCapabilityIDs,
+			SemanticInputs:                  semanticInputs,
+			ResolvedPolicy:                  resolvedPolicy,
+			ExecutorDescriptor:              executor,
+			PlanBinding:                     planBinding,
+			ContextBundle:                   contextBundleFromState(task, state, envelope, semanticInputs),
+			RoutineBindings:                 routineBindingsForWork(mode, profile, classification, resolvedPolicy),
+			SkillBindings:                   skillBindingsForWork(task, state, resolvedPolicy),
+			ToolBindings:                    toolBindingsForWork(envelope),
+			CapabilityBindings:              capabilityBindingsForWork(profile, resolvedPolicy),
+			DeferredIssueIDs:                deferredIssueIDsFromState(state),
+			UpdatedAt:                       now,
+		},
+		ID:                          firstNonEmpty(stateString(state, "euclo.unit_of_work_id"), envelope.TaskID),
+		RootID:                      stateString(state, "euclo.root_unit_of_work_id"),
+		Status:                      UnitOfWorkStatusReady,
+		CreatedAt:                   now,
+		CapabilityExecutionSequence: append([]string(nil), capSeq...),
+		CapabilitySequenceOperator:  capOp,
 	}
-	if existing, ok := existingUnitOfWork(state); ok {
+	if hasExisting {
 		if !existing.CreatedAt.IsZero() {
 			uow.CreatedAt = existing.CreatedAt
 		}
@@ -135,7 +137,7 @@ func BuildUnitOfWork(
 			uow.SupportingRelurpicCapabilityIDs = append([]string(nil), existing.SupportingRelurpicCapabilityIDs...)
 		}
 	}
-	if existing, ok := existingUnitOfWork(state); ok {
+	if hasExisting {
 		ApplyUnitOfWorkTransition(existing, &uow, now)
 	}
 	if uow.ID == "" {

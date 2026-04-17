@@ -92,10 +92,10 @@ func TestRetrievalPolicyAndExpansionHelpers(t *testing.T) {
 	task := &core.Task{
 		Instruction: "inspect the repository",
 		Context: map[string]any{
-			"path":       "a.go",
-			"file":       "b.go",
-			"target_path": "c.go",
-			"paths":      []any{"d.go", "d.go", 1},
+			"path":         "a.go",
+			"file":         "b.go",
+			"target_path":  "c.go",
+			"paths":        []any{"d.go", "d.go", 1},
 			"verification": "go test ./...",
 		},
 	}
@@ -173,11 +173,11 @@ func TestUnitOfWorkAndBindingHelpers(t *testing.T) {
 		ID:          "task-1",
 		Instruction: "implement the plan for the new API",
 		Context: map[string]any{
-			"workflow_id": "wf-task",
-			"run_id":      "run-task",
-			"skills":      []any{"skill-task", "skill-task"},
-			"path":        "a.go",
-			"paths":       []any{"b.go", "b.go"},
+			"workflow_id":  "wf-task",
+			"run_id":       "run-task",
+			"skills":       []any{"skill-task", "skill-task"},
+			"path":         "a.go",
+			"paths":        []any{"b.go", "b.go"},
 			"verification": "go test ./...",
 		},
 	}
@@ -198,20 +198,18 @@ func TestUnitOfWorkAndBindingHelpers(t *testing.T) {
 	state.Set("pipeline.plan", map[string]any{
 		"steps": []any{map[string]any{"id": "step-1"}},
 	})
-	state.Set("euclo.unit_of_work", UnitOfWork{
-		ID:                         "uow-existing",
-		RootID:                     "root-existing",
-		PlanBinding:                &UnitOfWorkPlanBinding{WorkflowID: "wf-existing", PlanID: "plan-existing", ActiveStepID: "step-existing", IsPlanBacked: true},
-		ResolvedPolicy:             ResolvedExecutionPolicy{ResolvedFromSkillPolicy: true},
-		ExecutorDescriptor:         WorkUnitExecutorDescriptor{ExecutorID: "executor-existing"},
-		ContextBundle:              UnitOfWorkContextBundle{ContextBudgetClass: "legacy"},
-		RoutineBindings:            []UnitOfWorkRoutineBinding{{RoutineID: "legacy"}},
-		SkillBindings:              []UnitOfWorkSkillBinding{{SkillID: "skill-legacy"}},
-		ToolBindings:               []UnitOfWorkToolBinding{{ToolID: "tool-legacy"}},
-		CapabilityBindings:         []UnitOfWorkCapabilityBinding{{CapabilityID: "cap-legacy"}},
-		DeferredIssueIDs:           []string{"legacy"},
-		PredecessorUnitOfWorkID:    "predecessor",
-		PrimaryRelurpicCapabilityID: "cap-primary",
+	state.Set("euclo.unit_of_work", UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{PlanBinding: &UnitOfWorkPlanBinding{WorkflowID: "wf-existing", PlanID: "plan-existing", ActiveStepID: "step-existing", IsPlanBacked: true},
+		ResolvedPolicy:              ResolvedExecutionPolicy{ResolvedFromSkillPolicy: true},
+		ExecutorDescriptor:          WorkUnitExecutorDescriptor{ExecutorID: "executor-existing"},
+		ContextBundle:               UnitOfWorkContextBundle{ContextBudgetClass: "legacy"},
+		RoutineBindings:             []UnitOfWorkRoutineBinding{{RoutineID: "legacy"}},
+		SkillBindings:               []UnitOfWorkSkillBinding{{SkillID: "skill-legacy"}},
+		ToolBindings:                []UnitOfWorkToolBinding{{ToolID: "tool-legacy"}},
+		CapabilityBindings:          []UnitOfWorkCapabilityBinding{{CapabilityID: "cap-legacy"}},
+		DeferredIssueIDs:            []string{"legacy"},
+		PredecessorUnitOfWorkID:     "predecessor",
+		PrimaryRelurpicCapabilityID: "cap-primary"}, ID: "uow-existing",
+		RootID: "root-existing",
 	})
 
 	envelope := TaskEnvelope{
@@ -237,7 +235,7 @@ func TestUnitOfWorkAndBindingHelpers(t *testing.T) {
 		PhaseRoutes:          map[string]string{"plan": "planner"},
 	}
 	policy := ResolvedExecutionPolicy{
-		ResolvedFromSkillPolicy: true,
+		ResolvedFromSkillPolicy:       true,
 		PreferredPlanningCapabilities: []string{"plan-cap"},
 		PreferredVerifyCapabilities:   []string{"verify-cap"},
 		PhaseCapabilityConstraints:    map[string][]string{"plan": []string{"cap-a", "cap-a"}},
@@ -245,9 +243,9 @@ func TestUnitOfWorkAndBindingHelpers(t *testing.T) {
 	}
 	executor := WorkUnitExecutorDescriptor{}
 	uow := BuildUnitOfWork(task, state, envelope, classification, mode, profile, modeRegistry, SemanticInputBundle{
-		PatternRefs:         []string{"pattern-1"},
-		TensionRefs:         []string{"tension-1"},
-		ProvenanceRefs:      []string{"prov-1"},
+		PatternRefs:             []string{"pattern-1"},
+		TensionRefs:             []string{"tension-1"},
+		ProvenanceRefs:          []string{"prov-1"},
 		LearningInteractionRefs: []string{"learn-1"},
 	}, policy, executor)
 
@@ -379,9 +377,9 @@ func TestRuntimeClassificationVerificationAndAmbiguityHelpers(t *testing.T) {
 func TestTaskSelectionAndVerificationPolicyHelpers(t *testing.T) {
 	profileRegistry := euclotypes.DefaultExecutionProfileRegistry()
 	env := TaskEnvelope{
-		Instruction: "fix the failing test",
+		Instruction:        "fix the failing test",
 		CapabilitySnapshot: euclotypes.CapabilitySnapshot{HasWriteTools: true, HasVerificationTools: true},
-		EditPermitted: true,
+		EditPermitted:      true,
 	}
 	classification := TaskClassification{RecommendedMode: "debug", RequiresEvidenceBeforeMutation: true}
 	mode := ModeResolution{ModeID: "debug"}

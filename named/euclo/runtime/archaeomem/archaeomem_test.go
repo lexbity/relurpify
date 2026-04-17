@@ -13,8 +13,7 @@ import (
 )
 
 func TestBuildArchaeologyCapabilityRuntimeState_ExplorePrimaryPopulatesCounts(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		WorkflowID:                  "wf-arch",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-arch",
 		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyExplore,
 		SupportingRelurpicCapabilityIDs: []string{
 			euclorelurpic.CapabilityArchaeologyPatternSurface,
@@ -34,7 +33,7 @@ func TestBuildArchaeologyCapabilityRuntimeState_ExplorePrimaryPopulatesCounts(t 
 			PlanVersion:   3,
 			IsPlanBacked:  true,
 			IsLongRunning: true,
-		},
+		}},
 	}
 	state := core.NewContext()
 	state.Set("euclo.relurpic_behavior_trace", execution.Trace{
@@ -69,9 +68,7 @@ func TestBuildArchaeologyCapabilityRuntimeState_ExplorePrimaryPopulatesCounts(t 
 }
 
 func TestBuildArchaeologyCapabilityRuntimeState_NonArchaeologyPrimaryReturnsEarlyShape(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk,
-	}
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk}}
 	rt := BuildArchaeologyCapabilityRuntimeState(work, core.NewContext(), time.Now().UTC())
 	if len(rt.SupportingCapabilityIDs) != 0 {
 		t.Fatalf("chat ask should not list archaeology support, got %#v", rt.SupportingCapabilityIDs)
@@ -82,13 +79,12 @@ func TestBuildArchaeologyCapabilityRuntimeState_NonArchaeologyPrimaryReturnsEarl
 }
 
 func TestBuildArchaeologyCapabilityRuntimeState_ConcurrentReadsDoNotRace(t *testing.T) {
-	work := eucloruntime.UnitOfWork{
-		WorkflowID:                  "wf-race",
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{WorkflowID: "wf-race",
 		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityArchaeologyCompilePlan,
 		SemanticInputs: eucloruntime.SemanticInputBundle{
 			PatternRefs: []string{"a"},
 			TensionRefs: []string{"b"},
-		},
+		}},
 	}
 	state := core.NewContext()
 	var wg sync.WaitGroup

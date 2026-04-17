@@ -140,9 +140,8 @@ func (a *Agent) DirectCapabilityRun(ctx context.Context, capabilityID, invokingP
 	if a.BehaviorDispatcher == nil {
 		return nil, fmt.Errorf("behavior dispatcher not initialized")
 	}
-	work := eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: invokingPrimary,
-		SemanticInputs:              buildSemanticInputsFromState(state),
+	work := eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: invokingPrimary,
+		SemanticInputs: buildSemanticInputsFromState(state)},
 	}
 	if invokingPrimary == "" {
 		work.PrimaryRelurpicCapabilityID = capabilityID

@@ -8,7 +8,7 @@ import (
 )
 
 func TestApply_NilNextReturnsZeroState(t *testing.T) {
-	existing := transitions.UnitOfWork{ID: "uow-1", ModeID: "chat"}
+	existing := transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "chat"}, ID: "uow-1"}
 	state := transitions.Apply(existing, nil, time.Now())
 	if state.CurrentUnitOfWorkID != "" {
 		t.Fatalf("expected zero state for nil next, got %+v", state)
@@ -17,10 +17,8 @@ func TestApply_NilNextReturnsZeroState(t *testing.T) {
 
 func TestApply_NewWorkSetsRootID(t *testing.T) {
 	existing := transitions.UnitOfWork{} // empty existing = first run
-	next := &transitions.UnitOfWork{
-		ID:                          "uow-new",
-		ModeID:                      "chat",
-		PrimaryRelurpicCapabilityID: "euclo:chat.ask",
+	next := &transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "chat",
+		PrimaryRelurpicCapabilityID: "euclo:chat.ask"}, ID: "uow-new",
 	}
 	state := transitions.Apply(existing, next, time.Now())
 	if state.CurrentUnitOfWorkID != "uow-new" {
@@ -32,15 +30,11 @@ func TestApply_NewWorkSetsRootID(t *testing.T) {
 }
 
 func TestApply_SameModeAndCapabilityPreservesContinuity(t *testing.T) {
-	existing := transitions.UnitOfWork{
-		ID:                          "uow-1",
-		ModeID:                      "chat",
-		PrimaryRelurpicCapabilityID: "euclo:chat.ask",
+	existing := transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "chat",
+		PrimaryRelurpicCapabilityID: "euclo:chat.ask"}, ID: "uow-1",
 	}
-	next := &transitions.UnitOfWork{
-		ID:                          "uow-1",
-		ModeID:                      "chat",
-		PrimaryRelurpicCapabilityID: "euclo:chat.ask",
+	next := &transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "chat",
+		PrimaryRelurpicCapabilityID: "euclo:chat.ask"}, ID: "uow-1",
 	}
 	state := transitions.Apply(existing, next, time.Now())
 	if state.Rebound {
@@ -49,15 +43,11 @@ func TestApply_SameModeAndCapabilityPreservesContinuity(t *testing.T) {
 }
 
 func TestApply_IncompatibleModeRebinds(t *testing.T) {
-	existing := transitions.UnitOfWork{
-		ID:                          "uow-1",
-		ModeID:                      "debug",
-		PrimaryRelurpicCapabilityID: "euclo:debug.investigate",
+	existing := transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "debug",
+		PrimaryRelurpicCapabilityID: "euclo:debug.investigate"}, ID: "uow-1",
 	}
-	next := &transitions.UnitOfWork{
-		ID:                          "uow-2",
-		ModeID:                      "planning",
-		PrimaryRelurpicCapabilityID: "euclo:archaeology.explore",
+	next := &transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "planning",
+		PrimaryRelurpicCapabilityID: "euclo:archaeology.explore"}, ID: "uow-2",
 	}
 	state := transitions.Apply(existing, next, time.Now())
 	// Going from debug.investigate to archaeology.explore is incompatible —
@@ -75,10 +65,10 @@ func TestApply_IncompatibleModeRebinds(t *testing.T) {
 func TestApplyUnitOfWorkTransition_IsAliasForApply(t *testing.T) {
 	// Verify the re-exported ApplyUnitOfWorkTransition produces the same result as Apply.
 	existing := transitions.UnitOfWork{}
-	next := &transitions.UnitOfWork{ID: "uow-x", ModeID: "chat"}
+	next := &transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "chat"}, ID: "uow-x"}
 	now := time.Now()
 	s1 := transitions.Apply(existing, next, now)
-	next2 := &transitions.UnitOfWork{ID: "uow-x", ModeID: "chat"}
+	next2 := &transitions.UnitOfWork{ExecutionDescriptor: transitions.ExecutionDescriptor{ModeID: "chat"}, ID: "uow-x"}
 	s2 := transitions.ApplyUnitOfWorkTransition(existing, next2, now)
 	if s1.CurrentUnitOfWorkID != s2.CurrentUnitOfWorkID {
 		t.Fatalf("Apply and ApplyUnitOfWorkTransition returned different results: %v vs %v", s1, s2)

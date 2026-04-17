@@ -15,40 +15,18 @@ func BuildCompiledExecution(uow UnitOfWork, status RuntimeExecutionStatus, compi
 	if updatedAt.IsZero() {
 		updatedAt = compiledAt
 	}
+	desc := cloneExecutionDescriptor(uow.ExecutionDescriptor)
+	desc.DeferredIssueIDs = append([]string(nil), status.DeferredIssueIDs...)
+	desc.ResultClass = status.ResultClass
+	desc.AssuranceClass = status.AssuranceClass
+	desc.UpdatedAt = updatedAt
 	return CompiledExecution{
-		WorkflowID:                      uow.WorkflowID,
-		RunID:                           uow.RunID,
-		ExecutionID:                     uow.ExecutionID,
-		UnitOfWorkID:                    uow.ID,
-		RootUnitOfWorkID:                uow.RootID,
-		CompiledAt:                      compiledAt,
-		UpdatedAt:                       updatedAt,
-		ModeID:                          uow.ModeID,
-		ObjectiveKind:                   uow.ObjectiveKind,
-		BehaviorFamily:                  uow.BehaviorFamily,
-		ContextStrategyID:               uow.ContextStrategyID,
-		VerificationPolicyID:            uow.VerificationPolicyID,
-		DeferralPolicyID:                uow.DeferralPolicyID,
-		CheckpointPolicyID:              uow.CheckpointPolicyID,
-		PrimaryRelurpicCapabilityID:     uow.PrimaryRelurpicCapabilityID,
-		SupportingRelurpicCapabilityIDs: append([]string(nil), uow.SupportingRelurpicCapabilityIDs...),
-		SemanticInputs:                  uow.SemanticInputs,
-		ResolvedPolicy:                  uow.ResolvedPolicy,
-		ExecutorDescriptor:              uow.ExecutorDescriptor,
-		PlanBinding:                     uow.PlanBinding,
-		ContextBundle:                   uow.ContextBundle,
-		RoutineBindings:                 append([]UnitOfWorkRoutineBinding(nil), uow.RoutineBindings...),
-		SkillBindings:                   append([]UnitOfWorkSkillBinding(nil), uow.SkillBindings...),
-		ToolBindings:                    append([]UnitOfWorkToolBinding(nil), uow.ToolBindings...),
-		CapabilityBindings:              append([]UnitOfWorkCapabilityBinding(nil), uow.CapabilityBindings...),
-		PredecessorUnitOfWorkID:         uow.PredecessorUnitOfWorkID,
-		TransitionReason:                uow.TransitionReason,
-		TransitionState:                 uow.TransitionState,
-		Status:                          status.Status,
-		ResultClass:                     status.ResultClass,
-		AssuranceClass:                  status.AssuranceClass,
-		DeferredIssueIDs:                append([]string(nil), status.DeferredIssueIDs...),
-		ArchaeoRefs:                     archaeoRefsForCompiledExecution(uow),
+		ExecutionDescriptor: desc,
+		UnitOfWorkID:        uow.ID,
+		RootUnitOfWorkID:    firstNonEmpty(uow.RootID, uow.ID),
+		Status:              status.Status,
+		CompiledAt:          compiledAt,
+		ArchaeoRefs:         archaeoRefsForCompiledExecution(uow),
 	}
 }
 
@@ -136,4 +114,14 @@ func archaeoRefsForCompiledExecution(uow UnitOfWork) map[string][]string {
 		out[key] = append([]string(nil), refs...)
 	}
 	return out
+}
+
+func cloneExecutionDescriptor(desc ExecutionDescriptor) ExecutionDescriptor {
+	desc.SupportingRelurpicCapabilityIDs = append([]string(nil), desc.SupportingRelurpicCapabilityIDs...)
+	desc.PlanBinding = clonePlanBinding(desc.PlanBinding)
+	desc.RoutineBindings = append([]UnitOfWorkRoutineBinding(nil), desc.RoutineBindings...)
+	desc.SkillBindings = append([]UnitOfWorkSkillBinding(nil), desc.SkillBindings...)
+	desc.ToolBindings = append([]UnitOfWorkToolBinding(nil), desc.ToolBindings...)
+	desc.CapabilityBindings = append([]UnitOfWorkCapabilityBinding(nil), desc.CapabilityBindings...)
+	return desc
 }

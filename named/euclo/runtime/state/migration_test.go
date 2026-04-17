@@ -51,10 +51,7 @@ func TestLoadFlushRoundTrip(t *testing.T) {
 	})
 	SetMode(ctx1, "code")
 	SetExecutionProfile(ctx1, "default")
-	SetUnitOfWork(ctx1, runtimepkg.UnitOfWork{
-		ID:     "uow-1",
-		ModeID: "code",
-	})
+	SetUnitOfWork(ctx1, runtimepkg.UnitOfWork{ExecutionDescriptor: runtimepkg.ExecutionDescriptor{ModeID: "code"}, ID: "uow-1"})
 	SetBehaviorTrace(ctx1, Trace{
 		PrimaryCapabilityID: "euclo:chat.implement",
 		Path:                "test_path",
@@ -112,9 +109,9 @@ func TestLoadFromContext_LegacyMapRecoveryTrace(t *testing.T) {
 	ctx := core.NewContext()
 	// Simulate legacy code writing a map
 	legacyMap := map[string]any{
-		"status":       "repair_exhausted",
+		"status":        "repair_exhausted",
 		"attempt_count": 3,
-		"max_attempts": 5,
+		"max_attempts":  5,
 	}
 	ctx.Set(KeyRecoveryTrace, legacyMap)
 

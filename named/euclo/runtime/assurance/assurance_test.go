@@ -29,9 +29,7 @@ func (stubWorkflowExecutor) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 }
 
 func assuranceBehaviorInput() (euclodispatch.Dispatcher, eucloruntime.UnitOfWork, graph.WorkflowExecutor) {
-	return *euclodispatch.NewDispatcher(agentenv.AgentEnvironment{}), eucloruntime.UnitOfWork{
-		PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk,
-	}, stubWorkflowExecutor{}
+	return *euclodispatch.NewDispatcher(agentenv.AgentEnvironment{}), eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PrimaryRelurpicCapabilityID: euclorelurpic.CapabilityChatAsk}}, stubWorkflowExecutor{}
 }
 
 func TestAssuranceExecuteFailsWithoutBehaviorService(t *testing.T) {

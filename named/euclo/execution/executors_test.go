@@ -35,12 +35,11 @@ func TestSelectExecutorSupportsKnownFamiliesAndFallback(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			selection, err := SelectExecutor(factory, eucloruntime.UnitOfWork{
-				ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{
-					ExecutorID: "executor." + tc.name,
-					Family:     tc.family,
-					Reason:     "test",
-				},
+			selection, err := SelectExecutor(factory, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{
+				ExecutorID: "executor." + tc.name,
+				Family:     tc.family,
+				Reason:     "test",
+			}},
 			})
 			if err != nil {
 				t.Fatalf("SelectExecutor: %v", err)
@@ -63,10 +62,9 @@ func TestSelectExecutorReturnsEnsureReactError(t *testing.T) {
 	wantErr := errors.New("react unavailable")
 	_, err := SelectExecutor(ExecutorFactory{
 		EnsureReact: func() error { return wantErr },
-	}, eucloruntime.UnitOfWork{
-		ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{
-			Family: eucloruntime.ExecutorFamilyHTN,
-		},
+	}, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{
+		Family: eucloruntime.ExecutorFamilyHTN,
+	}},
 	})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected ensure react error, got %v", err)

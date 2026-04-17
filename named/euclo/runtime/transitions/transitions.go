@@ -9,6 +9,7 @@ import (
 type UnitOfWorkTransitionState = runtimepkg.UnitOfWorkTransitionState
 type UnitOfWorkHistoryEntry = runtimepkg.UnitOfWorkHistoryEntry
 type UnitOfWork = runtimepkg.UnitOfWork
+type ExecutionDescriptor = runtimepkg.ExecutionDescriptor
 
 var ApplyUnitOfWorkTransition = runtimepkg.ApplyUnitOfWorkTransition
 

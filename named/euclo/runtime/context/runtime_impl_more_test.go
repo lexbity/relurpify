@@ -10,7 +10,7 @@ import (
 )
 
 func TestRuntimeHelperSelectionAndPreferences(t *testing.T) {
-	strategy, name := selectContextStrategy(eucloruntime.ModeResolution{ModeID: "review"}, eucloruntime.UnitOfWork{ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{Family: eucloruntime.ExecutorFamilyReact}})
+	strategy, name := selectContextStrategy(eucloruntime.ModeResolution{ModeID: "review"}, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{Family: eucloruntime.ExecutorFamilyReact}}})
 	if strategy == nil || name != "conservative" {
 		t.Fatalf("unexpected strategy resolution: %T %q", strategy, name)
 	}
@@ -18,30 +18,30 @@ func TestRuntimeHelperSelectionAndPreferences(t *testing.T) {
 	if strategy == nil || name != "aggressive" {
 		t.Fatalf("unexpected debug strategy resolution: %T %q", strategy, name)
 	}
-	strategy, name = selectContextStrategy(eucloruntime.ModeResolution{ModeID: "code"}, eucloruntime.UnitOfWork{ContextStrategyID: "expand_carefully"})
+	strategy, name = selectContextStrategy(eucloruntime.ModeResolution{ModeID: "code"}, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ContextStrategyID: "expand_carefully"}})
 	if strategy == nil || name != "expand_carefully" {
 		t.Fatalf("unexpected explicit strategy resolution: %T %q", strategy, name)
 	}
 	if got := strategy.DetermineDetailLevel("file.go", 0.6); got != contextmgr.DetailDetailed {
 		t.Fatalf("expected explicit profile to use balanced thresholds, got %v", got)
 	}
-	if _, name = selectContextStrategy(eucloruntime.ModeResolution{ModeID: "code"}, eucloruntime.UnitOfWork{ContextStrategyID: "unknown-profile"}); name != "adaptive" {
+	if _, name = selectContextStrategy(eucloruntime.ModeResolution{ModeID: "code"}, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ContextStrategyID: "unknown-profile"}}); name != "adaptive" {
 		t.Fatalf("unexpected fallback strategy name for unknown profile: %q", name)
 	}
 
 	prefs := buildContextPolicyPreferences(
 		eucloruntime.ModeResolution{ModeID: "planning"},
-		eucloruntime.UnitOfWork{ResolvedPolicy: eucloruntime.ResolvedExecutionPolicy{ContextPolicy: eucloruntime.ContextPolicySummary{PreferredDetail: "signature_only"}}, ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{Family: eucloruntime.ExecutorFamilyPlanner}},
+		eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ResolvedPolicy: eucloruntime.ResolvedExecutionPolicy{ContextPolicy: eucloruntime.ContextPolicySummary{PreferredDetail: "signature_only"}}, ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{Family: eucloruntime.ExecutorFamilyPlanner}}},
 	)
 	if prefs.PreferredDetailLevel != contextmgr.DetailSignatureOnly || prefs.MinHistorySize != 7 || prefs.CompressionThreshold != 0.75 {
 		t.Fatalf("unexpected preferences: %#v", prefs)
 	}
 
-	system, tools, output := contextReservationsForWork(eucloruntime.UnitOfWork{ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{Family: eucloruntime.ExecutorFamilyRewoo}})
+	system, tools, output := contextReservationsForWork(eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ExecutorDescriptor: eucloruntime.WorkUnitExecutorDescriptor{Family: eucloruntime.ExecutorFamilyRewoo}}})
 	if system != 900 || tools != 1800 || output != 1200 {
 		t.Fatalf("unexpected rewoo reservations: %d %d %d", system, tools, output)
 	}
-	system, tools, output = contextReservationsForWork(eucloruntime.UnitOfWork{ModeID: "debug"})
+	system, tools, output = contextReservationsForWork(eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ModeID: "debug"}})
 	if system != 700 || tools != 1600 || output != 1000 {
 		t.Fatalf("unexpected debug reservations: %d %d %d", system, tools, output)
 	}
@@ -56,9 +56,8 @@ func TestRuntimeHelperSelectionAndPreferences(t *testing.T) {
 		t.Fatalf("unexpected budget label: %q", got)
 	}
 
-	paths := contextProtectedPaths(&core.Task{Context: map[string]any{"workspace": " /tmp/workspace "}}, eucloruntime.UnitOfWork{
-		ContextBundle: eucloruntime.UnitOfWorkContextBundle{WorkspacePaths: []string{" /tmp/workspace ", "/repo"}},
-		PlanBinding:   &eucloruntime.UnitOfWorkPlanBinding{ActiveStepID: "step-1"},
+	paths := contextProtectedPaths(&core.Task{Context: map[string]any{"workspace": " /tmp/workspace "}}, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{ContextBundle: eucloruntime.UnitOfWorkContextBundle{WorkspacePaths: []string{" /tmp/workspace ", "/repo"}},
+		PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{ActiveStepID: "step-1"}},
 	})
 	if !reflect.DeepEqual(paths, []string{"/tmp/workspace", "/repo", "step-1"}) {
 		t.Fatalf("unexpected sandbox file-scope governance roots: %#v", paths)
@@ -105,17 +104,13 @@ func TestRuntimeBKCChunkHelpers(t *testing.T) {
 		t.Fatalf("unexpected debug seed chunks: %#v", chunks)
 	}
 
-	chunks = bkcSeedChunks(task, core.NewContext(), eucloruntime.ModeResolution{ModeID: "planning"}, eucloruntime.UnitOfWork{
-		PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{RootChunkIDs: []string{"plan-root-1", "plan-root-1", "plan-root-2"}},
-	})
+	chunks = bkcSeedChunks(task, core.NewContext(), eucloruntime.ModeResolution{ModeID: "planning"}, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{RootChunkIDs: []string{"plan-root-1", "plan-root-1", "plan-root-2"}}}})
 	if !reflect.DeepEqual(chunks, []contextmgr.ContextChunk{{ID: "plan-root-1"}, {ID: "plan-root-2"}}) {
 		t.Fatalf("unexpected plan seed chunks: %#v", chunks)
 	}
 
 	base := contextmgr.NewAdaptiveStrategy()
-	wrapped, ok := wrapBKCStrategy(task, core.NewContext(), ContextRuntimeConfig{BKCBootstrapReady: true}, eucloruntime.ModeResolution{ModeID: "debug"}, eucloruntime.UnitOfWork{
-		PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{RootChunkIDs: []string{"seed-1"}},
-	}, base)
+	wrapped, ok := wrapBKCStrategy(task, core.NewContext(), ContextRuntimeConfig{BKCBootstrapReady: true}, eucloruntime.ModeResolution{ModeID: "debug"}, eucloruntime.UnitOfWork{ExecutionDescriptor: eucloruntime.ExecutionDescriptor{PlanBinding: &eucloruntime.UnitOfWorkPlanBinding{RootChunkIDs: []string{"seed-1"}}}}, base)
 	if !ok || wrapped == nil {
 		t.Fatal("expected BKC strategy wrapper to activate")
 	}

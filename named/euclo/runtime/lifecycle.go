@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
+	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+)
 
 func ContextLifecycleFromState(state *core.Context) (ContextLifecycleState, bool) {
 	if state == nil {
@@ -52,63 +53,17 @@ func ReconstructUnitOfWorkFromCompiledExecution(state *core.Context) (UnitOfWork
 	if !ok {
 		return UnitOfWork{}, false
 	}
+	desc := cloneExecutionDescriptor(compiled.ExecutionDescriptor)
+	desc.DeferredIssueIDs = append([]string(nil), compiled.DeferredIssueIDs...)
+	desc.ResultClass = compiled.ResultClass
+	desc.AssuranceClass = compiled.AssuranceClass
+	desc.UpdatedAt = compiled.UpdatedAt
 	uow := UnitOfWork{
-		ID:                              compiled.UnitOfWorkID,
-		RootID:                          firstNonEmpty(compiled.RootUnitOfWorkID, compiled.UnitOfWorkID),
-		WorkflowID:                      compiled.WorkflowID,
-		RunID:                           compiled.RunID,
-		ExecutionID:                     compiled.ExecutionID,
-		ModeID:                          compiled.ModeID,
-		ObjectiveKind:                   compiled.ObjectiveKind,
-		BehaviorFamily:                  compiled.BehaviorFamily,
-		ContextStrategyID:               compiled.ContextStrategyID,
-		VerificationPolicyID:            compiled.VerificationPolicyID,
-		DeferralPolicyID:                compiled.DeferralPolicyID,
-		CheckpointPolicyID:              compiled.CheckpointPolicyID,
-		PrimaryRelurpicCapabilityID:     compiled.PrimaryRelurpicCapabilityID,
-		SupportingRelurpicCapabilityIDs: append([]string(nil), compiled.SupportingRelurpicCapabilityIDs...),
-		SemanticInputs:                  compiled.SemanticInputs,
-		ResolvedPolicy:                  compiled.ResolvedPolicy,
-		ExecutorDescriptor:              compiled.ExecutorDescriptor,
-		PlanBinding:                     clonePlanBinding(compiled.PlanBinding),
-		ContextBundle:                   compiled.ContextBundle,
-		RoutineBindings:                 append([]UnitOfWorkRoutineBinding(nil), compiled.RoutineBindings...),
-		SkillBindings:                   append([]UnitOfWorkSkillBinding(nil), compiled.SkillBindings...),
-		ToolBindings:                    append([]UnitOfWorkToolBinding(nil), compiled.ToolBindings...),
-		CapabilityBindings:              append([]UnitOfWorkCapabilityBinding(nil), compiled.CapabilityBindings...),
-		PredecessorUnitOfWorkID:         compiled.PredecessorUnitOfWorkID,
-		TransitionReason:                compiled.TransitionReason,
-		TransitionState:                 compiled.TransitionState,
-		ResultClass:                     compiled.ResultClass,
-		DeferredIssueIDs:                append([]string(nil), compiled.DeferredIssueIDs...),
-		CreatedAt:                       compiled.CompiledAt,
-		UpdatedAt:                       compiled.UpdatedAt,
-	}
-	switch compiled.Status {
-	case ExecutionStatusRestoring:
-		uow.Status = UnitOfWorkStatusRestoring
-	case ExecutionStatusCompacted:
-		uow.Status = UnitOfWorkStatusCompacted
-	case ExecutionStatusCompletedWithDeferrals:
-		uow.Status = UnitOfWorkStatusCompletedWithDeferrals
-	case ExecutionStatusCompleted:
-		uow.Status = UnitOfWorkStatusCompleted
-	case ExecutionStatusBlocked:
-		uow.Status = UnitOfWorkStatusBlocked
-	case ExecutionStatusFailed, ExecutionStatusRestoreFailed:
-		uow.Status = UnitOfWorkStatusFailed
-	case ExecutionStatusCanceled:
-		uow.Status = UnitOfWorkStatusCanceled
-	default:
-		uow.Status = UnitOfWorkStatusReady
-	}
-	if lifecycle, ok := ContextLifecycleFromState(state); ok {
-		switch lifecycle.Stage {
-		case ContextLifecycleStageRestoring:
-			uow.Status = UnitOfWorkStatusRestoring
-		case ContextLifecycleStageCompacted:
-			uow.Status = UnitOfWorkStatusCompacted
-		}
+		ExecutionDescriptor: desc,
+		ID:                  compiled.UnitOfWorkID,
+		RootID:              firstNonEmpty(compiled.RootUnitOfWorkID, compiled.UnitOfWorkID),
+		Status:              executionStatusToUnitOfWorkStatus(compiled.Status, state),
+		CreatedAt:           compiled.CompiledAt,
 	}
 	if uow.ID == "" {
 		uow.ID = firstNonEmpty(compiled.ExecutionID, compiled.RunID, compiled.WorkflowID)
@@ -117,6 +72,40 @@ func ReconstructUnitOfWorkFromCompiledExecution(state *core.Context) (UnitOfWork
 		return UnitOfWork{}, false
 	}
 	return uow, true
+}
+
+// executionStatusToUnitOfWorkStatus converts an archived execution status back to a live
+// work-unit status, with context lifecycle overrides for restore/compaction.
+func executionStatusToUnitOfWorkStatus(s ExecutionStatus, state *core.Context) UnitOfWorkStatus {
+	status := executionStatusMap[s]
+	if status == "" {
+		status = UnitOfWorkStatusReady
+	}
+	if lifecycle, ok := ContextLifecycleFromState(state); ok {
+		switch lifecycle.Stage {
+		case ContextLifecycleStageRestoring:
+			return UnitOfWorkStatusRestoring
+		case ContextLifecycleStageCompacted:
+			return UnitOfWorkStatusCompacted
+		}
+	}
+	return status
+}
+
+var executionStatusMap = map[ExecutionStatus]UnitOfWorkStatus{
+	ExecutionStatusPreparing:              UnitOfWorkStatusAssembling,
+	ExecutionStatusReady:                  UnitOfWorkStatusReady,
+	ExecutionStatusExecuting:              UnitOfWorkStatusExecuting,
+	ExecutionStatusVerifying:              UnitOfWorkStatusVerifying,
+	ExecutionStatusSurfacing:              UnitOfWorkStatusExecuting,
+	ExecutionStatusRestoring:              UnitOfWorkStatusRestoring,
+	ExecutionStatusCompacted:              UnitOfWorkStatusCompacted,
+	ExecutionStatusCompletedWithDeferrals: UnitOfWorkStatusCompletedWithDeferrals,
+	ExecutionStatusCompleted:              UnitOfWorkStatusCompleted,
+	ExecutionStatusBlocked:                UnitOfWorkStatusBlocked,
+	ExecutionStatusFailed:                 UnitOfWorkStatusFailed,
+	ExecutionStatusRestoreFailed:          UnitOfWorkStatusFailed,
+	ExecutionStatusCanceled:               UnitOfWorkStatusCanceled,
 }
 
 func RestoreRequested(task *core.Task, state *core.Context) bool {

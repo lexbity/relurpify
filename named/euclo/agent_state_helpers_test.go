@@ -75,14 +75,14 @@ func TestInteractionScriptAndTransitionHelpers(t *testing.T) {
 
 func TestSeedClassifiedEnvelope(t *testing.T) {
 	state := core.NewContext()
-	state.Set("euclo.unit_of_work", runtime.UnitOfWork{ID: "prev", UpdatedAt: testNow()})
+	state.Set("euclo.unit_of_work", runtime.UnitOfWork{ExecutionDescriptor: runtime.ExecutionDescriptor{UpdatedAt: testNow()}, ID: "prev"})
 
 	classified := euclointake.ClassifiedEnvelope{
 		Envelope:       runtime.TaskEnvelope{ResolvedMode: "code"},
 		Classification: runtime.TaskClassification{},
 		Mode:           euclotypes.ModeResolution{ModeID: "code"},
 		Profile:        euclotypes.ExecutionProfileSelection{ProfileID: "plan_stage_execute"},
-		Work:           runtime.UnitOfWork{ID: "uow-1", RootID: "root-1", UpdatedAt: testNow()},
+		Work:           runtime.UnitOfWork{ExecutionDescriptor: runtime.ExecutionDescriptor{UpdatedAt: testNow()}, ID: "uow-1", RootID: "root-1"},
 	}
 
 	euclointake.SeedClassifiedEnvelope(state, classified)

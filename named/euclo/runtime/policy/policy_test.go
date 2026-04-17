@@ -44,11 +44,10 @@ func TestBuildSecurityRuntimeStateFlagsProviderTrustAndRestoreMismatch(t *testin
 			TrustBaseline:      core.TrustClassProviderLocalUntrusted,
 			RecoverabilityMode: core.RecoverabilityPersistedRestore,
 		}},
-	}, state, runtimepkg.UnitOfWork{
-		ModeID: "debug",
+	}, state, runtimepkg.UnitOfWork{ExecutionDescriptor: runtimepkg.ExecutionDescriptor{ModeID: "debug",
 		ExecutorDescriptor: runtimepkg.WorkUnitExecutorDescriptor{
 			Family: runtimepkg.ExecutorFamilyReact,
-		},
+		}},
 	})
 
 	if len(security.Diagnostics) < 2 {
@@ -66,13 +65,12 @@ func TestBuildSharedContextRuntimeStateCollectsParticipantsAndMutations(t *testi
 	}
 	shared.RecordMutation("pipeline.plan", "set", "agent", nil)
 
-	rt := BuildSharedContextRuntimeState(shared, runtimepkg.UnitOfWork{
-		BehaviorFamily: "debugging",
+	rt := BuildSharedContextRuntimeState(shared, runtimepkg.UnitOfWork{ExecutionDescriptor: runtimepkg.ExecutionDescriptor{BehaviorFamily: "debugging",
 		ExecutorDescriptor: runtimepkg.WorkUnitExecutorDescriptor{
 			Family: runtimepkg.ExecutorFamilyPlanner,
 		},
 		RoutineBindings: []runtimepkg.UnitOfWorkRoutineBinding{{Family: "review"}},
-		SkillBindings:   []runtimepkg.UnitOfWorkSkillBinding{{SkillID: "skill.test"}},
+		SkillBindings:   []runtimepkg.UnitOfWorkSkillBinding{{SkillID: "skill.test"}}},
 	})
 
 	if !rt.Enabled {

@@ -16,12 +16,10 @@ func TestLifecycleAndCompiledExecutionHelpers(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, ContextLifecycleStageCompacted, lifecycle.Stage)
 
-	compiled := CompiledExecution{
-		WorkflowID:   "wf-1",
-		RunID:        "run-1",
-		ExecutionID:  "exec-1",
-		UnitOfWorkID: "uow-1",
-		Status:       ExecutionStatusCompleted,
+	compiled := CompiledExecution{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-1",
+		RunID:       "run-1",
+		ExecutionID: "exec-1"}, UnitOfWorkID: "uow-1",
+		Status: ExecutionStatusCompleted,
 	}
 	state.Set("euclo.compiled_execution", compiled)
 	reconstructed, ok := ReconstructUnitOfWorkFromCompiledExecution(state)
@@ -33,7 +31,7 @@ func TestLifecycleAndCompiledExecutionHelpers(t *testing.T) {
 	require.True(t, RestoreRequested(task, state))
 
 	now := time.Now().UTC()
-	next := BuildContextLifecycleState(UnitOfWork{WorkflowID: "wf-1", RunID: "run-1", ExecutionID: "exec-1", ID: "uow-1", ContextBundle: UnitOfWorkContextBundle{CompactionEligible: true, RestoreRequired: true}, PlanBinding: &UnitOfWorkPlanBinding{PlanID: "plan-1", PlanVersion: 3}}, ContextLifecycleState{}, ExecutionStatusCompacted, []string{"artifact"}, now)
+	next := BuildContextLifecycleState(UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-1", RunID: "run-1", ExecutionID: "exec-1", ContextBundle: UnitOfWorkContextBundle{CompactionEligible: true, RestoreRequired: true}, PlanBinding: &UnitOfWorkPlanBinding{PlanID: "plan-1", PlanVersion: 3}}, ID: "uow-1"}, ContextLifecycleState{}, ExecutionStatusCompacted, []string{"artifact"}, now)
 	require.Equal(t, ContextLifecycleStageCompacted, next.Stage)
 	require.Equal(t, "plan-1", next.ActivePlanID)
 	require.Equal(t, 1, next.CompactionCount)
@@ -43,7 +41,7 @@ func TestLifecycleAndCompiledExecutionHelpers(t *testing.T) {
 	require.True(t, mark.RestoreRequired)
 
 	state.Set("euclo.execution_waiver", ExecutionWaiver{WaiverID: "waiver-1", Kind: WaiverKindReviewBlock, Reason: "ok", RunID: "run-1", ArchaeoRef: "arch-1"})
-	issues := BuildDeferredExecutionIssues(&guidance.DeferralPlan{Observations: []guidance.EngineeringObservation{{ID: "obs-1", Title: "Need review", Description: "follow up", BlastRadius: 2}}}, UnitOfWork{WorkflowID: "wf-1", RunID: "run-1", ExecutionID: "exec-1", PlanBinding: &UnitOfWorkPlanBinding{PlanID: "plan-1", PlanVersion: 2, ActiveStepID: "step-1"}}, state, now)
+	issues := BuildDeferredExecutionIssues(&guidance.DeferralPlan{Observations: []guidance.EngineeringObservation{{ID: "obs-1", Title: "Need review", Description: "follow up", BlastRadius: 2}}}, UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-1", RunID: "run-1", ExecutionID: "exec-1", PlanBinding: &UnitOfWorkPlanBinding{PlanID: "plan-1", PlanVersion: 2, ActiveStepID: "step-1"}}}, state, now)
 	require.NotEmpty(t, issues)
 	require.Equal(t, "wf-1", issues[0].WorkflowID)
 	require.Equal(t, "step-1", issues[0].StepID)
@@ -61,28 +59,25 @@ func TestLifecycleAndCompiledExecutionHelpers(t *testing.T) {
 
 func TestUnitOfWorkTransitionAndHistoryHelpers(t *testing.T) {
 	now := time.Now().UTC()
-	previous := UnitOfWork{
-		ID:                          "uow-1",
-		RootID:                      "root-1",
-		WorkflowID:                  "wf-1",
+	previous := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-1",
 		RunID:                       "run-1",
 		ExecutionID:                 "exec-1",
 		ModeID:                      "planning",
 		PrimaryRelurpicCapabilityID: "capability-a",
-		PlanBinding:                 &UnitOfWorkPlanBinding{IsPlanBacked: true},
+		PlanBinding:                 &UnitOfWorkPlanBinding{IsPlanBacked: true}}, ID: "uow-1",
+		RootID: "root-1",
 	}
-	next := UnitOfWork{
-		WorkflowID:                  "wf-1",
+	next := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-1",
 		RunID:                       "run-1",
 		ExecutionID:                 "exec-1",
 		ModeID:                      "planning",
-		PrimaryRelurpicCapabilityID: "capability-a",
+		PrimaryRelurpicCapabilityID: "capability-a"},
 	}
 	transition := ApplyUnitOfWorkTransition(previous, &next, now)
 	require.True(t, transition.Preserved || transition.Rebound)
 	require.NotEmpty(t, next.ID)
 
-	rebinding := ApplyUnitOfWorkTransition(previous, &UnitOfWork{WorkflowID: "wf-1", RunID: "run-1", ExecutionID: "exec-1", ModeID: "debug", PrimaryRelurpicCapabilityID: "capability-b"}, now)
+	rebinding := ApplyUnitOfWorkTransition(previous, &UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{WorkflowID: "wf-1", RunID: "run-1", ExecutionID: "exec-1", ModeID: "debug", PrimaryRelurpicCapabilityID: "capability-b"}}, now)
 	require.NotEmpty(t, rebinding.Reason)
 
 	history := UpdateUnitOfWorkHistory(nil, next, now)
@@ -92,7 +87,35 @@ func TestUnitOfWorkTransitionAndHistoryHelpers(t *testing.T) {
 	require.True(t, shouldRebindUnitOfWork(previous, next, true, false, true))
 	require.NotEmpty(t, transitionReason(previous, next, true, true, true))
 	require.NotEmpty(t, transitionedUnitOfWorkID(next, now))
-	preservedPrev := UnitOfWork{ID: "uow-1", ModeID: "planning", PrimaryRelurpicCapabilityID: "capability-a", TransitionState: UnitOfWorkTransitionState{PreviousUnitOfWorkID: "parent"}}
-	preservedNext := UnitOfWork{ID: "uow-1", ModeID: "planning", PrimaryRelurpicCapabilityID: "capability-a"}
+	preservedPrev := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{ModeID: "planning", PrimaryRelurpicCapabilityID: "capability-a", TransitionState: UnitOfWorkTransitionState{PreviousUnitOfWorkID: "parent"}}, ID: "uow-1"}
+	preservedNext := UnitOfWork{ExecutionDescriptor: ExecutionDescriptor{ModeID: "planning", PrimaryRelurpicCapabilityID: "capability-a"}, ID: "uow-1"}
 	require.True(t, shouldPreserveExistingTransition(preservedPrev, preservedNext))
+}
+
+func TestExecutionStatusToUnitOfWorkStatus_CoversKnownStatuses(t *testing.T) {
+	state := core.NewContext()
+	statuses := []ExecutionStatus{
+		ExecutionStatusPreparing,
+		ExecutionStatusReady,
+		ExecutionStatusExecuting,
+		ExecutionStatusVerifying,
+		ExecutionStatusSurfacing,
+		ExecutionStatusCompacted,
+		ExecutionStatusRestoring,
+		ExecutionStatusCompleted,
+		ExecutionStatusCompletedWithDeferrals,
+		ExecutionStatusBlocked,
+		ExecutionStatusFailed,
+		ExecutionStatusCanceled,
+		ExecutionStatusRestoreFailed,
+	}
+	for _, status := range statuses {
+		if got := executionStatusToUnitOfWorkStatus(status, state); got == "" {
+			t.Fatalf("expected status %q to map to a live UnitOfWorkStatus", status)
+		}
+	}
+	state.Set("euclo.context_compaction", ContextLifecycleState{Stage: ContextLifecycleStageRestoring})
+	require.Equal(t, UnitOfWorkStatusRestoring, executionStatusToUnitOfWorkStatus(ExecutionStatusCompleted, state))
+	state.Set("euclo.context_compaction", ContextLifecycleState{Stage: ContextLifecycleStageCompacted})
+	require.Equal(t, UnitOfWorkStatusCompacted, executionStatusToUnitOfWorkStatus(ExecutionStatusCompleted, state))
 }
