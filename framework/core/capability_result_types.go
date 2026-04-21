@@ -207,7 +207,7 @@ func SummarizeCapabilityResultEnvelope(source *CapabilityResultEnvelope, summary
 	switch decision.Action {
 	case InsertionActionDirect:
 		decision.Action = InsertionActionSummarized
-		decision.Reason = "summarized context insertion preserves provenance"
+		decision.Reason = "summarized insertion preserves provenance"
 	case InsertionActionSummarized, InsertionActionMetadataOnly, InsertionActionHITLRequired, InsertionActionDenied:
 	default:
 		decision = envelope.Insertion

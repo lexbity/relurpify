@@ -1,17 +1,17 @@
 package core
 
 // ASTSymbolSummary is a compact representation of an AST symbol entry
-// suitable for injection as a blackboard fact or context chunk.
+// suitable for injection as a blackboard fact or artifact chunk.
 type ASTSymbolSummary struct {
-	Name        string
-	Kind        string // "function" | "type" | "method" | "field" | "const" | etc.
-	File        string
-	Line        int
-	Signature   string
-	DocSummary  string
+	Name       string
+	Kind       string // "function" | "type" | "method" | "field" | "const" | etc.
+	File       string
+	Line       int
+	Signature  string
+	DocSummary string
 }
 
-// AgentSemanticContext is the pre-resolved semantic context bundle
+// AgentSemanticContext is the pre-resolved semantic artifact bundle
 // passed to executors before execution begins. All fields are optional;
 // an empty bundle is valid and represents a cold-start with no semantic
 // preloading.
@@ -23,7 +23,7 @@ type ASTSymbolSummary struct {
 type AgentSemanticContext struct {
 	// Chunks is the ordered sequence of BKC knowledge chunks for this
 	// session, as emitted by the BKC backward pass. Order is
-	// dependency-first (required_context edges respected).
+	// dependency-first.
 	Chunks []AgentContextChunk
 
 	// ASTSymbols is a pre-resolved set of AST symbol summaries for the
@@ -32,7 +32,7 @@ type AgentSemanticContext struct {
 	ASTSymbols []ASTSymbolSummary
 
 	// TokenBudgetUsed is the token total consumed by Chunks, for budget
-	// accounting by ContextPolicy.
+	// accounting by the streaming policy.
 	TokenBudgetUsed int
 
 	// WorkspaceID and WorkflowID are carried for provenance and for
@@ -40,13 +40,13 @@ type AgentSemanticContext struct {
 	WorkspaceID string
 	WorkflowID  string
 
-	// CodeRevision is the git SHA at which this context was assembled.
+	// CodeRevision is the git SHA at which this bundle was assembled.
 	// Used for chunk staleness validation.
 	CodeRevision string
 }
 
 // AgentContextChunk is a framework-generic semantic chunk payload
-// suitable for injection into agent context.
+// suitable for injection into agent runtime state.
 type AgentContextChunk struct {
 	ID            string
 	Content       string

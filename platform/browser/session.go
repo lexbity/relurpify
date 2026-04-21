@@ -23,7 +23,7 @@ type SessionConfig struct {
 	BackendName       string
 	PermissionManager *authorization.PermissionManager
 	AgentID           string
-	Budget            *core.ContextBudget
+	Budget            *core.ArtifactBudget
 	BudgetCategory    string
 }
 
@@ -56,7 +56,7 @@ type Session struct {
 	backendName       string
 	permissionManager *authorization.PermissionManager
 	agentID           string
-	budget            *core.ContextBudget
+	budget            *core.ArtifactBudget
 	budgetCategory    string
 
 	mu          sync.Mutex

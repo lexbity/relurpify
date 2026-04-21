@@ -70,7 +70,7 @@ func TestSessionNavigateRejectsNonNetworkSchemes(t *testing.T) {
 }
 
 func TestSessionExtractionRespectsBudgetAndMarksTruncation(t *testing.T) {
-	budget := core.NewContextBudgetWithPolicy(8, &core.AllocationPolicy{
+	budget := core.NewArtifactBudgetWithPolicy(8, &core.AllocationPolicy{
 		SystemReserved:     0,
 		Allocations:        map[string]float64{"immediate": 1.0},
 		AllowBorrowing:     false,

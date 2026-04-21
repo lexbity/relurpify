@@ -4,34 +4,34 @@ import "strings"
 
 // AgentSpecOverlay defines optional overrides for an agent spec.
 type AgentSpecOverlay struct {
-	Implementation      *string                         `yaml:"implementation,omitempty" json:"implementation,omitempty"`
-	Mode                *AgentMode                      `yaml:"mode,omitempty" json:"mode,omitempty"`
-	Version             *string                         `yaml:"version,omitempty" json:"version,omitempty"`
-	Prompt              *string                         `yaml:"prompt,omitempty" json:"prompt,omitempty"`
-	ModelOverlay        *AgentModelConfigOverlay        `yaml:"model,omitempty" json:"model,omitempty"`
-	AllowedCapabilities []CapabilitySelector            `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
-	ToolExecutionPolicy map[string]ToolPolicy           `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
-	CapabilityPolicies  []CapabilityPolicy              `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
-	ExposurePolicies    []CapabilityExposurePolicy      `yaml:"exposure_policies,omitempty" json:"exposure_policies,omitempty"`
-	InsertionPolicies   []CapabilityInsertionPolicy     `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
-	SessionPolicies     []SessionPolicy                 `yaml:"session_policies,omitempty" json:"session_policies,omitempty"`
-	GlobalPolicies      map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
-	ProviderPolicies    map[string]ProviderPolicy       `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
-	Providers           []ProviderConfig                `yaml:"providers,omitempty" json:"providers,omitempty"`
-	RuntimeSafety       *RuntimeSafetySpec              `yaml:"runtime_safety,omitempty" json:"runtime_safety,omitempty"`
-	SkillConfig         *AgentSkillConfig               `yaml:"skill_config,omitempty" json:"skill_config,omitempty"`
-	Bash                *AgentBashPermissions           `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
-	Files               *AgentFileMatrix                `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
-	Invocation          *AgentInvocationSpec            `yaml:"invocation,omitempty" json:"invocation,omitempty"`
-	Coordination        *AgentCoordinationSpec          `yaml:"coordination,omitempty" json:"coordination,omitempty"`
-	Composition         *AgentCompositionSpec           `yaml:"composition,omitempty" json:"composition,omitempty"`
-	ContextOverlay      *AgentContextSpecOverlay        `yaml:"context,omitempty" json:"context,omitempty"`
-	LSPOverlay          *AgentLSPSpecOverlay            `yaml:"lsp,omitempty" json:"lsp,omitempty"`
-	SearchOverlay       *AgentSearchSpecOverlay         `yaml:"search,omitempty" json:"search,omitempty"`
-	Metadata            *AgentMetadata                  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	ToolCallingIntent   *ToolCallingIntent              `yaml:"tool_calling_intent,omitempty" json:"tool_calling_intent,omitempty"`
-	NativeToolCalling   *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
-	Logging             *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
+	Implementation        *string                         `yaml:"implementation,omitempty" json:"implementation,omitempty"`
+	Mode                  *AgentMode                      `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Version               *string                         `yaml:"version,omitempty" json:"version,omitempty"`
+	Prompt                *string                         `yaml:"prompt,omitempty" json:"prompt,omitempty"`
+	ModelOverlay          *AgentModelConfigOverlay        `yaml:"model,omitempty" json:"model,omitempty"`
+	AllowedCapabilities   []CapabilitySelector            `yaml:"allowed_capabilities,omitempty" json:"allowed_capabilities,omitempty"`
+	ToolExecutionPolicy   map[string]ToolPolicy           `yaml:"tool_execution_policy,omitempty" json:"tool_execution_policy,omitempty"`
+	CapabilityPolicies    []CapabilityPolicy              `yaml:"capability_policies,omitempty" json:"capability_policies,omitempty"`
+	ExposurePolicies      []CapabilityExposurePolicy      `yaml:"exposure_policies,omitempty" json:"exposure_policies,omitempty"`
+	InsertionPolicies     []CapabilityInsertionPolicy     `yaml:"insertion_policies,omitempty" json:"insertion_policies,omitempty"`
+	SessionPolicies       []SessionPolicy                 `yaml:"session_policies,omitempty" json:"session_policies,omitempty"`
+	GlobalPolicies        map[string]AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
+	ProviderPolicies      map[string]ProviderPolicy       `yaml:"provider_policies,omitempty" json:"provider_policies,omitempty"`
+	Providers             []ProviderConfig                `yaml:"providers,omitempty" json:"providers,omitempty"`
+	RuntimeSafety         *RuntimeSafetySpec              `yaml:"runtime_safety,omitempty" json:"runtime_safety,omitempty"`
+	SkillConfig           *AgentSkillConfig               `yaml:"skill_config,omitempty" json:"skill_config,omitempty"`
+	Bash                  *AgentBashPermissions           `yaml:"bash_permissions,omitempty" json:"bash_permissions,omitempty"`
+	Files                 *AgentFileMatrix                `yaml:"file_permissions,omitempty" json:"file_permissions,omitempty"`
+	Invocation            *AgentInvocationSpec            `yaml:"invocation,omitempty" json:"invocation,omitempty"`
+	Coordination          *AgentCoordinationSpec          `yaml:"coordination,omitempty" json:"coordination,omitempty"`
+	Composition           *AgentCompositionSpec           `yaml:"composition,omitempty" json:"composition,omitempty"`
+	ArtifactWindowOverlay *AgentArtifactWindowOverlay     `yaml:"context,omitempty" json:"context,omitempty"`
+	LSPOverlay            *AgentLSPSpecOverlay            `yaml:"lsp,omitempty" json:"lsp,omitempty"`
+	SearchOverlay         *AgentSearchSpecOverlay         `yaml:"search,omitempty" json:"search,omitempty"`
+	Metadata              *AgentMetadata                  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	ToolCallingIntent     *ToolCallingIntent              `yaml:"tool_calling_intent,omitempty" json:"tool_calling_intent,omitempty"`
+	NativeToolCalling     *bool                           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
+	Logging               *AgentLoggingSpec               `yaml:"logging,omitempty" json:"logging,omitempty"`
 }
 
 // MergeAgentSpecs applies overlays to a base spec in order.
@@ -63,16 +63,16 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 	invocation := spec.Invocation
 	coordination := cloneAgentCoordinationSpec(spec.Coordination)
 	composition := cloneAgentCompositionSpec(spec.Composition)
-	contextOverlay := AgentContextSpecOverlay{
-		MaxFiles:            &spec.Context.MaxFiles,
-		MaxTokens:           &spec.Context.MaxTokens,
-		IncludeGitHistory:   &spec.Context.IncludeGitHistory,
-		IncludeDependencies: &spec.Context.IncludeDependencies,
-		CompressionStrategy: &spec.Context.CompressionStrategy,
+	windowOverlay := AgentArtifactWindowOverlay{
+		MaxFiles:            &spec.ArtifactWindow.MaxFiles,
+		MaxTokens:           &spec.ArtifactWindow.MaxTokens,
+		IncludeGitHistory:   &spec.ArtifactWindow.IncludeGitHistory,
+		IncludeDependencies: &spec.ArtifactWindow.IncludeDependencies,
+		CompressionStrategy: &spec.ArtifactWindow.CompressionStrategy,
 	}
-	if spec.Context.ProgressiveLoading != nil {
-		progressive := *spec.Context.ProgressiveLoading
-		contextOverlay.ProgressiveLoading = &progressive
+	if spec.ArtifactWindow.ProgressiveLoading != nil {
+		progressive := *spec.ArtifactWindow.ProgressiveLoading
+		windowOverlay.ProgressiveLoading = &progressive
 	}
 	lspOverlay := AgentLSPSpecOverlay{
 		Servers: spec.LSP.Servers,
@@ -95,34 +95,34 @@ func AgentSpecOverlayFromSpec(spec *AgentRuntimeSpec) AgentSpecOverlay {
 		logging = &AgentLoggingSpec{LLM: llm, Agent: agent}
 	}
 	return AgentSpecOverlay{
-		Implementation:      &implementation,
-		Mode:                &mode,
-		Version:             &version,
-		Prompt:              &prompt,
-		ModelOverlay:        &modelOverlay,
-		AllowedCapabilities: cloneCapabilitySelectors(spec.AllowedCapabilities),
-		ToolExecutionPolicy: cloneToolPolicies(spec.ToolExecutionPolicy),
-		CapabilityPolicies:  cloneCapabilityPolicies(spec.CapabilityPolicies),
-		ExposurePolicies:    cloneExposurePolicies(spec.ExposurePolicies),
-		InsertionPolicies:   cloneInsertionPolicies(spec.InsertionPolicies),
-		SessionPolicies:     cloneSessionPolicies(spec.SessionPolicies),
-		GlobalPolicies:      cloneGlobalPolicies(spec.GlobalPolicies),
-		ProviderPolicies:    cloneProviderPolicies(spec.ProviderPolicies),
-		Providers:           cloneProviderConfigs(spec.Providers),
-		RuntimeSafety:       cloneRuntimeSafetySpec(spec.RuntimeSafety),
-		SkillConfig:         &skillConfig,
-		Bash:                &bash,
-		Files:               &files,
-		Invocation:          &invocation,
-		Coordination:        &coordination,
-		Composition:         composition,
-		ContextOverlay:      &contextOverlay,
-		LSPOverlay:          &lspOverlay,
-		SearchOverlay:       &searchOverlay,
-		Metadata:            &metadata,
-		ToolCallingIntent:   &intent,
-		NativeToolCalling:   toolCalling,
-		Logging:             logging,
+		Implementation:        &implementation,
+		Mode:                  &mode,
+		Version:               &version,
+		Prompt:                &prompt,
+		ModelOverlay:          &modelOverlay,
+		AllowedCapabilities:   cloneCapabilitySelectors(spec.AllowedCapabilities),
+		ToolExecutionPolicy:   cloneToolPolicies(spec.ToolExecutionPolicy),
+		CapabilityPolicies:    cloneCapabilityPolicies(spec.CapabilityPolicies),
+		ExposurePolicies:      cloneExposurePolicies(spec.ExposurePolicies),
+		InsertionPolicies:     cloneInsertionPolicies(spec.InsertionPolicies),
+		SessionPolicies:       cloneSessionPolicies(spec.SessionPolicies),
+		GlobalPolicies:        cloneGlobalPolicies(spec.GlobalPolicies),
+		ProviderPolicies:      cloneProviderPolicies(spec.ProviderPolicies),
+		Providers:             cloneProviderConfigs(spec.Providers),
+		RuntimeSafety:         cloneRuntimeSafetySpec(spec.RuntimeSafety),
+		SkillConfig:           &skillConfig,
+		Bash:                  &bash,
+		Files:                 &files,
+		Invocation:            &invocation,
+		Coordination:          &coordination,
+		Composition:           composition,
+		ArtifactWindowOverlay: &windowOverlay,
+		LSPOverlay:            &lspOverlay,
+		SearchOverlay:         &searchOverlay,
+		Metadata:              &metadata,
+		ToolCallingIntent:     &intent,
+		NativeToolCalling:     toolCalling,
+		Logging:               logging,
 	}
 }
 
@@ -205,8 +205,8 @@ func applyAgentSpecOverlay(spec *AgentRuntimeSpec, overlay AgentSpecOverlay) {
 	if overlay.ModelOverlay != nil {
 		spec.Model = MergeAgentModelConfig(spec.Model, *overlay.ModelOverlay)
 	}
-	if overlay.ContextOverlay != nil {
-		spec.Context = MergeAgentContextSpec(spec.Context, *overlay.ContextOverlay)
+	if overlay.ArtifactWindowOverlay != nil {
+		spec.ArtifactWindow = MergeAgentArtifactWindowSpec(spec.ArtifactWindow, *overlay.ArtifactWindowOverlay)
 	}
 	if overlay.LSPOverlay != nil {
 		spec.LSP = MergeAgentLSPSpec(spec.LSP, *overlay.LSPOverlay)

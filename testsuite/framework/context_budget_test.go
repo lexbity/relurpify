@@ -6,30 +6,30 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-func TestContextBudgetUpdateUsage(t *testing.T) {
+func TestArtifactBudgetUpdateUsage(t *testing.T) {
 	ctx := core.NewContext()
 	ctx.AddInteraction("user", "hello world", nil)
-	budget := core.NewContextBudget(8000)
+	budget := core.NewArtifactBudget(8000)
 	budget.UpdateUsage(ctx, nil)
 	usage := budget.GetCurrentUsage()
 	if usage.ContextTokens == 0 {
-		t.Fatal("expected context tokens to be tracked")
+		t.Fatal("expected artifact tokens to be tracked")
 	}
 	if usage.TotalTokens == 0 {
 		t.Fatal("expected total tokens to be computed")
 	}
 }
 
-func TestContextBudgetReservations(t *testing.T) {
-	budget := core.NewContextBudget(4000)
+func TestArtifactBudgetReservations(t *testing.T) {
+	budget := core.NewArtifactBudget(4000)
 	budget.SetReservations(500, 500, 500)
-	if budget.AvailableForContext != 2500 {
-		t.Fatalf("expected available context 2500, got %d", budget.AvailableForContext)
+	if budget.AvailableForArtifacts != 2500 {
+		t.Fatalf("expected available artifacts 2500, got %d", budget.AvailableForArtifacts)
 	}
 }
 
-func TestContextBudgetStates(t *testing.T) {
-	budget := core.NewContextBudget(1000)
+func TestArtifactBudgetStates(t *testing.T) {
+	budget := core.NewArtifactBudget(1000)
 	usage := budget.GetCurrentUsage()
 	usage.ContextUsagePercent = 0.95
 	budget.SetCurrentUsage(usage)

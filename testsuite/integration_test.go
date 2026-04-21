@@ -165,7 +165,7 @@ func TestHybridSearchFeedsSharedContext(t *testing.T) {
 		t.Fatal("expected hybrid search results")
 	}
 
-	shared := core.NewSharedContext(core.NewContext(), core.NewContextBudget(4096), &core.SimpleSummarizer{})
+	shared := core.NewSharedContext(core.NewContext(), core.NewArtifactBudget(4096), &core.SimpleSummarizer{})
 	seen := make(map[string]struct{})
 	for _, result := range results {
 		if result.File == "" {

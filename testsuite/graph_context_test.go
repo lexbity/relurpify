@@ -90,9 +90,9 @@ func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {
 	}
 }
 
-func TestSharedContextBudgetCompressionFlow(t *testing.T) {
+func TestArtifactBudgetCompressionFlow(t *testing.T) {
 	ctx := core.NewContext()
-	budget := core.NewContextBudget(256)
+	budget := core.NewArtifactBudget(256)
 	budget.SetReservations(0, 0, 0)
 	shared := core.NewSharedContext(ctx, budget, &core.SimpleSummarizer{})
 	filePath := filepath.Join(t.TempDir(), "large.go")

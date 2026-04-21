@@ -11,7 +11,7 @@ import (
 
 func TestSharedContextDowngradesOnBudgetWarning(t *testing.T) {
 	ctx := core.NewContext()
-	budget := core.NewContextBudget(256)
+	budget := core.NewArtifactBudget(256)
 	summarizer := &core.SimpleSummarizer{}
 	sc := core.NewSharedContext(ctx, budget, summarizer)
 
@@ -46,7 +46,7 @@ func TestSharedContextRefreshConversationSummary(t *testing.T) {
 
 func TestSharedContextRehydratesFromCachedRawContent(t *testing.T) {
 	ctx := core.NewContext()
-	budget := core.NewContextBudget(512)
+	budget := core.NewArtifactBudget(512)
 	summarizer := &core.SimpleSummarizer{}
 	sc := core.NewSharedContext(ctx, budget, summarizer)
 

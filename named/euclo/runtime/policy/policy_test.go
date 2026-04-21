@@ -74,7 +74,7 @@ func TestBuildSharedContextRuntimeStateCollectsParticipantsAndMutations(t *testi
 	})
 
 	if !rt.Enabled {
-		t.Fatal("expected shared context runtime to be enabled")
+		t.Fatal("expected shared runtime state to be enabled")
 	}
 	if len(rt.WorkingSetRefs) != 1 || rt.WorkingSetRefs[0] != "main.go" {
 		t.Fatalf("unexpected working set refs: %+v", rt.WorkingSetRefs)

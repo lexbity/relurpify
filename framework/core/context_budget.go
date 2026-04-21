@@ -7,8 +7,8 @@ import (
 	"sync"
 )
 
-// BudgetItem describes any piece of context (file snippet, history chunk, etc.)
-// that competes for the limited token budget.
+// BudgetItem describes any piece of streamed runtime state (file snippet,
+// history chunk, etc.) that competes for the limited token budget.
 type BudgetItem interface {
 	GetID() string
 	GetTokenCount() int
@@ -18,7 +18,7 @@ type BudgetItem interface {
 	CanEvict() bool
 }
 
-// AllocationPolicy configures how the ContextBudget splits and protects tokens.
+// AllocationPolicy configures how the budget splits and protects tokens.
 type AllocationPolicy struct {
 	SystemReserved     int
 	Allocations        map[string]float64
@@ -36,7 +36,7 @@ type Allocation struct {
 	Items      []BudgetItem
 }
 
-// BudgetListener receives events emitted by the ContextBudget. Agents can hook
+// BudgetListener receives events emitted by the budget. Agents can hook
 // into these callbacks to log or trigger additional trimming.
 type BudgetListener interface {
 	OnBudgetWarning(usage float64)
@@ -91,37 +91,37 @@ const (
 	BudgetCritical
 )
 
-// ContextBudget enforces token allocations and coordinates compression/eviction.
-type ContextBudget struct {
-	mu                  sync.RWMutex
-	MaxTokens           int
-	ReservedForSystem   int
-	ReservedForTools    int
-	ReservedForOutput   int
-	AvailableForContext int
-	allocations         map[string]*Allocation
-	policy              *AllocationPolicy
-	warningThreshold    float64
-	listeners           []BudgetListener
-	usage               *UsageStats
-	currentUsage        TokenUsage
-	legacyPolicies      BudgetPolicies
+// ArtifactBudget enforces token allocations and coordinates compression and eviction.
+type ArtifactBudget struct {
+	mu                    sync.RWMutex
+	MaxTokens             int
+	ReservedForSystem     int
+	ReservedForTools      int
+	ReservedForOutput     int
+	AvailableForArtifacts int
+	allocations           map[string]*Allocation
+	policy                *AllocationPolicy
+	warningThreshold      float64
+	listeners             []BudgetListener
+	usage                 *UsageStats
+	currentUsage          TokenUsage
+	legacyPolicies        BudgetPolicies
 }
 
-// NewContextBudget returns a budget using the default policy.
-func NewContextBudget(maxTokens int) *ContextBudget {
-	return NewContextBudgetWithPolicy(maxTokens, nil)
+// NewArtifactBudget returns a budget using the default policy.
+func NewArtifactBudget(maxTokens int) *ArtifactBudget {
+	return NewArtifactBudgetWithPolicy(maxTokens, nil)
 }
 
-// NewContextBudgetWithPolicy exposes the full constructor for advanced callers.
-func NewContextBudgetWithPolicy(maxTokens int, policy *AllocationPolicy) *ContextBudget {
+// NewArtifactBudgetWithPolicy exposes the full constructor for advanced callers.
+func NewArtifactBudgetWithPolicy(maxTokens int, policy *AllocationPolicy) *ArtifactBudget {
 	if maxTokens <= 0 {
 		maxTokens = 8192
 	}
 	if policy == nil {
 		policy = defaultAllocationPolicy()
 	}
-	cb := &ContextBudget{
+	cb := &ArtifactBudget{
 		MaxTokens:         maxTokens,
 		ReservedForSystem: 1000,
 		ReservedForTools:  1500,
@@ -145,7 +145,7 @@ func NewContextBudgetWithPolicy(maxTokens int, policy *AllocationPolicy) *Contex
 
 // Allocate reserves tokens inside a category, optionally associating a concrete
 // item so the budget can compress or evict it later if needed.
-func (cb *ContextBudget) Allocate(category string, tokens int, item BudgetItem) error {
+func (cb *ArtifactBudget) Allocate(category string, tokens int, item BudgetItem) error {
 	if tokens < 0 {
 		return fmt.Errorf("cannot allocate negative tokens")
 	}
@@ -163,7 +163,7 @@ func (cb *ContextBudget) Allocate(category string, tokens int, item BudgetItem) 
 	}
 	if !cb.ensureCapacityLocked(alloc, tokens) {
 		cb.emitExceeded(category, tokens, alloc.MaxTokens-alloc.UsedTokens)
-		return fmt.Errorf("context budget exhausted for %s", category)
+		return fmt.Errorf("artifact budget exhausted for %s", category)
 	}
 	alloc.UsedTokens += tokens
 	if item != nil {
@@ -175,7 +175,7 @@ func (cb *ContextBudget) Allocate(category string, tokens int, item BudgetItem) 
 
 // Free releases tokens from a category. If an item ID is supplied the entry is
 // removed entirely; otherwise the raw token delta is applied.
-func (cb *ContextBudget) Free(category string, tokens int, itemID string) {
+func (cb *ArtifactBudget) Free(category string, tokens int, itemID string) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	alloc, ok := cb.allocations[category]
@@ -202,14 +202,14 @@ func (cb *ContextBudget) Free(category string, tokens int, itemID string) {
 }
 
 // GetUsage returns a copy of the current usage statistics.
-func (cb *ContextBudget) GetUsage() *UsageStats {
+func (cb *ArtifactBudget) GetUsage() *UsageStats {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	return cloneUsage(cb.usage)
 }
 
 // GetRemainingBudget reports how many tokens remain available for the category.
-func (cb *ContextBudget) GetRemainingBudget(category string) int {
+func (cb *ArtifactBudget) GetRemainingBudget(category string) int {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	alloc, ok := cb.allocations[category]
@@ -224,7 +224,7 @@ func (cb *ContextBudget) GetRemainingBudget(category string) int {
 }
 
 // ShouldCompress indicates whether the overall usage is close to the limit.
-func (cb *ContextBudget) ShouldCompress() bool {
+func (cb *ArtifactBudget) ShouldCompress() bool {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	if cb.usage == nil || cb.MaxTokens == 0 {
@@ -234,7 +234,7 @@ func (cb *ContextBudget) ShouldCompress() bool {
 }
 
 // AddListener registers a listener for budgeting events.
-func (cb *ContextBudget) AddListener(listener BudgetListener) {
+func (cb *ArtifactBudget) AddListener(listener BudgetListener) {
 	if listener == nil {
 		return
 	}
@@ -244,7 +244,7 @@ func (cb *ContextBudget) AddListener(listener BudgetListener) {
 }
 
 // Categories exposes the set of managed categories.
-func (cb *ContextBudget) Categories() []string {
+func (cb *ArtifactBudget) Categories() []string {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	names := make([]string, 0, len(cb.allocations))
@@ -255,7 +255,7 @@ func (cb *ContextBudget) Categories() []string {
 	return names
 }
 
-func (cb *ContextBudget) ensureCapacityLocked(alloc *Allocation, tokens int) bool {
+func (cb *ArtifactBudget) ensureCapacityLocked(alloc *Allocation, tokens int) bool {
 	if alloc.UsedTokens+tokens <= alloc.MaxTokens {
 		return true
 	}
@@ -272,7 +272,7 @@ func (cb *ContextBudget) ensureCapacityLocked(alloc *Allocation, tokens int) boo
 	return false
 }
 
-func (cb *ContextBudget) borrowTokensLocked(target string, tokens int) {
+func (cb *ArtifactBudget) borrowTokensLocked(target string, tokens int) {
 	if tokens <= 0 {
 		return
 	}
@@ -304,7 +304,7 @@ func (cb *ContextBudget) borrowTokensLocked(target string, tokens int) {
 	}
 }
 
-func (cb *ContextBudget) compressLocked(category string, target int) bool {
+func (cb *ArtifactBudget) compressLocked(category string, target int) bool {
 	if target <= 0 {
 		return true
 	}
@@ -344,25 +344,25 @@ func (cb *ContextBudget) compressLocked(category string, target int) bool {
 	return saved >= target
 }
 
-func (cb *ContextBudget) emitWarning(usage float64) {
+func (cb *ArtifactBudget) emitWarning(usage float64) {
 	for _, listener := range cb.listeners {
 		listener.OnBudgetWarning(usage)
 	}
 }
 
-func (cb *ContextBudget) emitExceeded(category string, requested, available int) {
+func (cb *ArtifactBudget) emitExceeded(category string, requested, available int) {
 	for _, listener := range cb.listeners {
 		listener.OnBudgetExceeded(category, requested, available)
 	}
 }
 
-func (cb *ContextBudget) emitCompression(category string, saved int) {
+func (cb *ArtifactBudget) emitCompression(category string, saved int) {
 	for _, listener := range cb.listeners {
 		listener.OnCompression(category, saved)
 	}
 }
 
-func (cb *ContextBudget) recomputeAllocations() {
+func (cb *ArtifactBudget) recomputeAllocations() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	cb.allocations = make(map[string]*Allocation, len(cb.policy.Allocations)+1)
@@ -395,7 +395,7 @@ func (cb *ContextBudget) recomputeAllocations() {
 	cb.updateUsageLocked()
 }
 
-func (cb *ContextBudget) updateUsageLocked() {
+func (cb *ArtifactBudget) updateUsageLocked() {
 	stats := &UsageStats{
 		TotalTokens: cb.MaxTokens,
 		Categories:  make(map[string]*CategoryStats, len(cb.allocations)),
@@ -466,15 +466,15 @@ func defaultAllocationPolicy() *AllocationPolicy {
 	}
 }
 
-func (cb *ContextBudget) calculateAvailableLocked() {
-	cb.AvailableForContext = cb.MaxTokens - cb.ReservedForSystem - cb.ReservedForTools - cb.ReservedForOutput
-	if cb.AvailableForContext < 0 {
-		cb.AvailableForContext = 0
+func (cb *ArtifactBudget) calculateAvailableLocked() {
+	cb.AvailableForArtifacts = cb.MaxTokens - cb.ReservedForSystem - cb.ReservedForTools - cb.ReservedForOutput
+	if cb.AvailableForArtifacts < 0 {
+		cb.AvailableForArtifacts = 0
 	}
 }
 
-// ErrInvalidBudget signals misconfiguration in the policy.
-var ErrInvalidBudget = errors.New("invalid context budget configuration")
+// ErrInvalidArtifactBudget signals misconfiguration in the policy.
+var ErrInvalidArtifactBudget = errors.New("invalid artifact budget configuration")
 
 func minInt(a, b int) int {
 	if a < b {
@@ -486,7 +486,7 @@ func minInt(a, b int) int {
 // Legacy compatibility helpers ------------------------------------------------
 
 // SetReservations mirrors the previous API for reserving system/tool/output tokens.
-func (cb *ContextBudget) SetReservations(system, tools, output int) {
+func (cb *ArtifactBudget) SetReservations(system, tools, output int) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	cb.ReservedForSystem = system
@@ -496,14 +496,14 @@ func (cb *ContextBudget) SetReservations(system, tools, output int) {
 }
 
 // SetPolicies configures the legacy warning/compression thresholds.
-func (cb *ContextBudget) SetPolicies(policies BudgetPolicies) {
+func (cb *ArtifactBudget) SetPolicies(policies BudgetPolicies) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	cb.legacyPolicies = policies
 }
 
 // UpdateUsage recomputes legacy usage metrics to keep older agents functional.
-func (cb *ContextBudget) UpdateUsage(ctx *Context, toolSchemas []Tool) {
+func (cb *ArtifactBudget) UpdateUsage(ctx *Context, toolSchemas []Tool) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	systemTokens := cb.ReservedForSystem
@@ -511,7 +511,7 @@ func (cb *ContextBudget) UpdateUsage(ctx *Context, toolSchemas []Tool) {
 	for _, tool := range toolSchemas {
 		toolTokens += estimateToolTokens(tool)
 	}
-	contextTokens := estimateContextTokens(ctx)
+	contextTokens := estimateArtifactTokens(ctx)
 	cb.currentUsage = TokenUsage{
 		SystemTokens:  systemTokens,
 		ToolTokens:    toolTokens,
@@ -519,27 +519,27 @@ func (cb *ContextBudget) UpdateUsage(ctx *Context, toolSchemas []Tool) {
 		OutputTokens:  cb.ReservedForOutput,
 		TotalTokens:   systemTokens + toolTokens + contextTokens + cb.ReservedForOutput,
 	}
-	if cb.AvailableForContext > 0 {
-		cb.currentUsage.ContextUsagePercent = float64(contextTokens) / float64(cb.AvailableForContext)
+	if cb.AvailableForArtifacts > 0 {
+		cb.currentUsage.ContextUsagePercent = float64(contextTokens) / float64(cb.AvailableForArtifacts)
 	}
 }
 
 // GetCurrentUsage exposes the legacy token accounting snapshot.
-func (cb *ContextBudget) GetCurrentUsage() TokenUsage {
+func (cb *ArtifactBudget) GetCurrentUsage() TokenUsage {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	return cb.currentUsage
 }
 
 // SetCurrentUsage overrides the legacy token accounting snapshot.
-func (cb *ContextBudget) SetCurrentUsage(usage TokenUsage) {
+func (cb *ArtifactBudget) SetCurrentUsage(usage TokenUsage) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	cb.currentUsage = usage
 }
 
 // CheckBudget returns the previous BudgetState categorization.
-func (cb *ContextBudget) CheckBudget() BudgetState {
+func (cb *ArtifactBudget) CheckBudget() BudgetState {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	usage := cb.currentUsage.ContextUsagePercent
@@ -556,18 +556,18 @@ func (cb *ContextBudget) CheckBudget() BudgetState {
 }
 
 // CanAddTokens retains the previous helper for quick capacity checks.
-func (cb *ContextBudget) CanAddTokens(tokens int) bool {
+func (cb *ArtifactBudget) CanAddTokens(tokens int) bool {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	projected := cb.currentUsage.ContextTokens + tokens
-	return projected <= cb.AvailableForContext
+	return projected <= cb.AvailableForArtifacts
 }
 
 // GetAvailableTokens reports remaining capacity in the legacy format.
-func (cb *ContextBudget) GetAvailableTokens() int {
+func (cb *ArtifactBudget) GetAvailableTokens() int {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	remaining := cb.AvailableForContext - cb.currentUsage.ContextTokens
+	remaining := cb.AvailableForArtifacts - cb.currentUsage.ContextTokens
 	if remaining < 0 {
 		return 0
 	}
@@ -584,7 +584,7 @@ func estimateToolTokens(tool Tool) int {
 	return base + paramTokens
 }
 
-func estimateContextTokens(ctx *Context) int {
+func estimateArtifactTokens(ctx *Context) int {
 	if ctx == nil {
 		return 0
 	}

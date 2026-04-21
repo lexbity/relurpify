@@ -92,7 +92,7 @@ func TestBuildAndWritePerformanceBaseline(t *testing.T) {
 			TotalTokens: 3200,
 		},
 		FrameworkPerf: perfstats.Snapshot{
-			ContextBudgetRescanCount: 2,
+			ArtifactBudgetRescanCount: 2,
 		},
 		PhaseMetrics: []PhaseMetric{{
 			Phase:      "execute",
@@ -109,7 +109,7 @@ func TestBuildAndWritePerformanceBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPerformanceBaseline: %v", err)
 	}
-	if loaded.RecordedAt != "2026-03-18" || loaded.Phases["execute"].Tokens != 1600 || loaded.Framework.ContextBudgetRescanCount != 2 {
+	if loaded.RecordedAt != "2026-03-18" || loaded.Phases["execute"].Tokens != 1600 || loaded.Framework.ArtifactBudgetRescanCount != 2 {
 		t.Fatalf("unexpected loaded baseline: %+v", loaded)
 	}
 }

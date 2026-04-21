@@ -252,7 +252,7 @@ func DefaultRegistry() *Registry {
 			ArchaeoAssociated: true,
 			ArchaeoOperation:  "bkc_stream",
 			ParadigmMix:       []string{"planner"},
-			Summary:           "Stream chunk-backed semantic context into Euclo runtime state.",
+			Summary:           "Stream chunk-backed semantic artifacts into Euclo runtime state.",
 		},
 		{
 			ID:                CapabilityBKCCheckpoint,

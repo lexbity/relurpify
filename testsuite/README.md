@@ -758,7 +758,7 @@ Example: `qwen2.5-coder:14b` → `qwen2_5_coder_14b`
     "verify":   { "llm_calls": 1, "tokens": 700 }
   },
   "framework": {
-    "ContextBudgetRescanCount": 1,
+    "ArtifactBudgetRescanCount": 1,
     "ProgressiveFileReadCount": 2
   }
 }

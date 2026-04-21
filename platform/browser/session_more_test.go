@@ -130,8 +130,8 @@ func newTestSession(t *testing.T, backend Backend, opts ...func(*SessionConfig))
 	return session
 }
 
-func newTestBudget(maxTokens int, categories map[string]float64) *core.ContextBudget {
-	budget := core.NewContextBudgetWithPolicy(maxTokens, &core.AllocationPolicy{
+func newTestBudget(maxTokens int, categories map[string]float64) *core.ArtifactBudget {
+	budget := core.NewArtifactBudgetWithPolicy(maxTokens, &core.AllocationPolicy{
 		SystemReserved:     0,
 		Allocations:        categories,
 		AllowBorrowing:     false,

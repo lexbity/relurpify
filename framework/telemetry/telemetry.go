@@ -81,7 +81,7 @@ func (t LoggerTelemetry) Emit(event core.Event) {
 	logger.Printf("[%s] node=%s task=%s meta=%v msg=%s\n", event.Type, event.NodeID, event.TaskID, event.Metadata, event.Message)
 }
 
-func (t LoggerTelemetry) OnContextCompression(taskID string, stats core.CompressionStats) {
+func (t LoggerTelemetry) OnArtifactCompression(taskID string, stats core.CompressionStats) {
 	logger := t.Logger
 	if logger == nil {
 		logger = log.Default()
@@ -89,7 +89,7 @@ func (t LoggerTelemetry) OnContextCompression(taskID string, stats core.Compress
 	logger.Printf("[context_compression] task=%s stats=%+v\n", taskID, stats)
 }
 
-func (t LoggerTelemetry) OnContextPruning(taskID string, itemsRemoved int, tokensFreed int) {
+func (t LoggerTelemetry) OnArtifactPruning(taskID string, itemsRemoved int, tokensFreed int) {
 	logger := t.Logger
 	if logger == nil {
 		logger = log.Default()

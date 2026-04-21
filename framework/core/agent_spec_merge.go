@@ -28,8 +28,8 @@ func MergeAgentModelConfig(base AgentModelConfig, overlays ...AgentModelConfigOv
 	return merged
 }
 
-// AgentContextSpecOverlay defines optional overrides for context settings.
-type AgentContextSpecOverlay struct {
+// AgentArtifactWindowOverlay defines optional overrides for artifact window settings.
+type AgentArtifactWindowOverlay struct {
 	MaxFiles            *int    `yaml:"max_files,omitempty" json:"max_files,omitempty"`
 	MaxTokens           *int    `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
 	IncludeGitHistory   *bool   `yaml:"include_git_history,omitempty" json:"include_git_history,omitempty"`
@@ -38,8 +38,8 @@ type AgentContextSpecOverlay struct {
 	ProgressiveLoading  *bool   `yaml:"progressive_loading,omitempty" json:"progressive_loading,omitempty"`
 }
 
-// MergeAgentContextSpec applies overlays to the base context spec.
-func MergeAgentContextSpec(base AgentContextSpec, overlays ...AgentContextSpecOverlay) AgentContextSpec {
+// MergeAgentArtifactWindowSpec applies overlays to the base artifact window spec.
+func MergeAgentArtifactWindowSpec(base AgentArtifactWindowSpec, overlays ...AgentArtifactWindowOverlay) AgentArtifactWindowSpec {
 	merged := base
 	for _, overlay := range overlays {
 		if overlay.MaxFiles != nil {

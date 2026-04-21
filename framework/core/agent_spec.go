@@ -31,7 +31,7 @@ type AgentRuntimeSpec struct {
 	Invocation          AgentInvocationSpec             `yaml:"invocation,omitempty" json:"invocation,omitempty"`
 	Coordination        AgentCoordinationSpec           `yaml:"coordination,omitempty" json:"coordination,omitempty"`
 	Composition         *AgentCompositionSpec           `yaml:"composition,omitempty" json:"composition,omitempty"`
-	Context             AgentContextSpec                `yaml:"context,omitempty" json:"context,omitempty"`
+	ArtifactWindow      AgentArtifactWindowSpec         `yaml:"context,omitempty" json:"context,omitempty"`
 	Browser             *AgentBrowserSpec               `yaml:"browser,omitempty" json:"browser,omitempty"`
 	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	Search              AgentSearchSpec                 `yaml:"search,omitempty" json:"search,omitempty"`
@@ -130,7 +130,7 @@ type CapabilityPolicy struct {
 	Execute  AgentPermissionLevel `yaml:"execute,omitempty" json:"execute,omitempty"`
 }
 
-// CapabilityInsertionPolicy configures how matching capability output may be inserted into model-visible context.
+// CapabilityInsertionPolicy configures how matching capability output may be inserted into the model-visible window.
 type CapabilityInsertionPolicy struct {
 	Selector CapabilitySelector `yaml:"selector" json:"selector"`
 	Action   InsertionAction    `yaml:"action" json:"action"`
@@ -242,8 +242,8 @@ type AgentScaleOutPolicy struct {
 	Metadata            map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 }
 
-// AgentContextSpec limits context window.
-type AgentContextSpec struct {
+// AgentArtifactWindowSpec limits the artifact streaming window.
+type AgentArtifactWindowSpec struct {
 	MaxFiles            int    `yaml:"max_files" json:"max_files"`
 	MaxTokens           int    `yaml:"max_tokens" json:"max_tokens"`
 	IncludeGitHistory   bool   `yaml:"include_git_history" json:"include_git_history"`

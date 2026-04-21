@@ -11,14 +11,14 @@ import (
 
 // GlobalConfig matches relurpify_cfg/config.yaml inside the workspace.
 type GlobalConfig struct {
-	Version      string            `yaml:"version"`
-	DefaultModel ModelRef          `yaml:"default_model"`
-	Models       []ModelRef        `yaml:"models"`
-	Permissions  map[string]string `yaml:"permissions"`
-	AgentPaths   []string          `yaml:"agent_paths"`
-	Features     FeatureFlags      `yaml:"features"`
-	Context      ContextConfig     `yaml:"context"`
-	Logging      LoggingConfig     `yaml:"logging"`
+	Version        string               `yaml:"version"`
+	DefaultModel   ModelRef             `yaml:"default_model"`
+	Models         []ModelRef           `yaml:"models"`
+	Permissions    map[string]string    `yaml:"permissions"`
+	AgentPaths     []string             `yaml:"agent_paths"`
+	Features       FeatureFlags         `yaml:"features"`
+	ArtifactWindow ArtifactWindowConfig `yaml:"context"`
+	Logging        LoggingConfig        `yaml:"logging"`
 }
 
 // ModelRef enumerates available models.
@@ -39,8 +39,8 @@ type FeatureFlags struct {
 	MaxConcurrent  int  `yaml:"max_concurrent"`
 }
 
-// ContextConfig controls shared context.
-type ContextConfig struct {
+// ArtifactWindowConfig controls artifact streaming limits.
+type ArtifactWindowConfig struct {
 	MaxHistoryMessages int  `yaml:"max_history_messages"`
 	MaxFilesInContext  int  `yaml:"max_files_in_context"`
 	UseEmbeddings      bool `yaml:"use_embeddings"`

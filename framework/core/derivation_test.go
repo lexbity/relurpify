@@ -46,7 +46,7 @@ func TestDeriveChain(t *testing.T) {
 	}
 
 	// Add second transformation
-	chain = chain.Derive("compress_truncate", "contextmgr", 0.3, "")
+	chain = chain.Derive("compress_truncate", "artifact_stream", 0.3, "")
 
 	if chain.Depth() != 3 {
 		t.Errorf("expected depth 3 after second derive, got %d", chain.Depth())
@@ -57,8 +57,8 @@ func TestDeriveChain(t *testing.T) {
 		t.Errorf("expected last transform 'compress_truncate', got '%s'", lastStep.Transform)
 	}
 
-	if lastStep.SourceSystem != "contextmgr" {
-		t.Errorf("expected source_system 'contextmgr', got '%s'", lastStep.SourceSystem)
+	if lastStep.SourceSystem != "artifact_stream" {
+		t.Errorf("expected source_system 'artifact_stream', got '%s'", lastStep.SourceSystem)
 	}
 }
 
@@ -200,7 +200,7 @@ func TestLastTimestamp(t *testing.T) {
 func TestDerivationSummary(t *testing.T) {
 	chain := OriginDerivation("retrieval")
 	chain = chain.Derive("chunk", "retrieval", 0.1, "")
-	chain = chain.Derive("compress_truncate", "contextmgr", 0.3, "")
+	chain = chain.Derive("compress_truncate", "artifact_stream", 0.3, "")
 
 	summary := chain.Summary()
 

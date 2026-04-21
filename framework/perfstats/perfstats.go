@@ -9,8 +9,8 @@ type snapshot struct {
 	BranchClones                     int64
 	BranchMergeCount                 int64
 	BranchMergeDurationNanos         int64
-	ContextBudgetRescanCount         int64
-	ContextBudgetRescanItems         int64
+	ArtifactBudgetRescanCount        int64
+	ArtifactBudgetRescanItems        int64
 	ProgressiveFileReadCount         int64
 	ProgressiveFileRereadCount       int64
 	ProgressiveDemotionReadCount     int64
@@ -27,8 +27,8 @@ func Reset() {
 	atomic.StoreInt64(&counters.BranchClones, 0)
 	atomic.StoreInt64(&counters.BranchMergeCount, 0)
 	atomic.StoreInt64(&counters.BranchMergeDurationNanos, 0)
-	atomic.StoreInt64(&counters.ContextBudgetRescanCount, 0)
-	atomic.StoreInt64(&counters.ContextBudgetRescanItems, 0)
+	atomic.StoreInt64(&counters.ArtifactBudgetRescanCount, 0)
+	atomic.StoreInt64(&counters.ArtifactBudgetRescanItems, 0)
 	atomic.StoreInt64(&counters.ProgressiveFileReadCount, 0)
 	atomic.StoreInt64(&counters.ProgressiveFileRereadCount, 0)
 	atomic.StoreInt64(&counters.ProgressiveDemotionReadCount, 0)
@@ -43,8 +43,8 @@ type Snapshot struct {
 	BranchClones                     int64
 	BranchMergeCount                 int64
 	BranchMergeDurationNanos         int64
-	ContextBudgetRescanCount         int64
-	ContextBudgetRescanItems         int64
+	ArtifactBudgetRescanCount        int64
+	ArtifactBudgetRescanItems        int64
 	ProgressiveFileReadCount         int64
 	ProgressiveFileRereadCount       int64
 	ProgressiveDemotionReadCount     int64
@@ -60,8 +60,8 @@ func Get() Snapshot {
 		BranchClones:                     atomic.LoadInt64(&counters.BranchClones),
 		BranchMergeCount:                 atomic.LoadInt64(&counters.BranchMergeCount),
 		BranchMergeDurationNanos:         atomic.LoadInt64(&counters.BranchMergeDurationNanos),
-		ContextBudgetRescanCount:         atomic.LoadInt64(&counters.ContextBudgetRescanCount),
-		ContextBudgetRescanItems:         atomic.LoadInt64(&counters.ContextBudgetRescanItems),
+		ArtifactBudgetRescanCount:        atomic.LoadInt64(&counters.ArtifactBudgetRescanCount),
+		ArtifactBudgetRescanItems:        atomic.LoadInt64(&counters.ArtifactBudgetRescanItems),
 		ProgressiveFileReadCount:         atomic.LoadInt64(&counters.ProgressiveFileReadCount),
 		ProgressiveFileRereadCount:       atomic.LoadInt64(&counters.ProgressiveFileRereadCount),
 		ProgressiveDemotionReadCount:     atomic.LoadInt64(&counters.ProgressiveDemotionReadCount),
@@ -82,9 +82,9 @@ func ObserveBranchMerge(duration time.Duration) {
 	atomic.AddInt64(&counters.BranchMergeDurationNanos, duration.Nanoseconds())
 }
 
-func ObserveContextBudgetRescan(itemCount int) {
-	atomic.AddInt64(&counters.ContextBudgetRescanCount, 1)
-	atomic.AddInt64(&counters.ContextBudgetRescanItems, int64(itemCount))
+func ObserveArtifactBudgetRescan(itemCount int) {
+	atomic.AddInt64(&counters.ArtifactBudgetRescanCount, 1)
+	atomic.AddInt64(&counters.ArtifactBudgetRescanItems, int64(itemCount))
 }
 
 func IncProgressiveFileRead(reread bool, demotion bool) {

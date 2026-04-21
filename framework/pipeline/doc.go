@@ -8,7 +8,7 @@
 //   - BuildPrompt: constructs the LLM prompt for this stage.
 //   - Decode: parses the raw LLM response into a typed result.
 //   - Validate: checks the result against the stage's schema contract.
-//   - Apply: writes the result into the shared context for downstream stages.
+//   - Apply: writes the result into downstream runtime state for later stages.
 //
 // # ContractDescriptor
 //
@@ -19,7 +19,7 @@
 //
 // # Runner
 //
-// Runner executes stages sequentially, threading a shared context map through
+// Runner executes stages sequentially, threading a shared runtime-state map through
 // each step. On validation failure it retries according to the stage's retry
 // policy before propagating an error.
 package pipeline

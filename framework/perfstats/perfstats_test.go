@@ -9,7 +9,7 @@ func TestResetAndSnapshot(t *testing.T) {
 	Reset()
 	IncBranchClone()
 	ObserveBranchMerge(5 * time.Millisecond)
-	ObserveContextBudgetRescan(12)
+	ObserveArtifactBudgetRescan(12)
 	IncProgressiveFileRead(true, true)
 	IncRetrievalSchemaCheck()
 	IncRetrievalCorpusStamp()
@@ -23,7 +23,7 @@ func TestResetAndSnapshot(t *testing.T) {
 	if got.BranchMergeCount != 1 || got.BranchMergeDurationNanos == 0 {
 		t.Fatalf("unexpected branch merge stats: %+v", got)
 	}
-	if got.ContextBudgetRescanCount != 1 || got.ContextBudgetRescanItems != 12 {
+	if got.ArtifactBudgetRescanCount != 1 || got.ArtifactBudgetRescanItems != 12 {
 		t.Fatalf("unexpected budget rescan stats: %+v", got)
 	}
 	if got.ProgressiveFileReadCount != 1 || got.ProgressiveFileRereadCount != 1 || got.ProgressiveDemotionReadCount != 1 {

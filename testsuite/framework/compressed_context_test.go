@@ -42,7 +42,7 @@ func TestSimpleCompressionStrategyShouldCompress(t *testing.T) {
 	if !strategy.ShouldCompress(ctx, nil) {
 		t.Fatal("expected compression recommendation when history exceeds threshold")
 	}
-	budget := core.NewContextBudget(1000)
+	budget := core.NewArtifactBudget(1000)
 	usage := budget.GetCurrentUsage()
 	usage.ContextUsagePercent = 0.5
 	budget.SetCurrentUsage(usage)

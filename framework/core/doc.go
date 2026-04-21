@@ -1,16 +1,15 @@
 // Package core defines the foundational types shared across every layer of the
 // Relurpify framework: agents, tools, capabilities, providers, and the runtime
-// context that carries state through a task execution.
+// state that carries information through a task execution.
 //
 // # Domain overview
 //
 // Agent & task — Agent, AgentRuntimeSpec, Task, Plan, and the spec merge/overlay
 // system that composes manifest-declared skill configurations at runtime.
 //
-// Context — Context is the mutable state bag threaded through every graph node
-// and tool invocation. It holds interactions, tool observations, budget signals,
-// and per-scope key/value pairs. SharedContext aggregates results across
-// parallel graph branches.
+// Execution state — Context is the mutable state bag threaded through every
+// graph node and tool invocation. It holds interactions, tool observations,
+// budget signals, and per-scope key/value pairs.
 //
 // Capabilities — CapabilityDescriptor, CapabilityKind (Tool/Prompt/Resource),
 // TrustClass, EffectClass, RiskClass, and InsertionAction model where a

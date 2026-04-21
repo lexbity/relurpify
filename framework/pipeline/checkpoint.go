@@ -31,7 +31,7 @@ func validateCheckpoint(cp *Checkpoint) error {
 		return errors.New("pipeline checkpoint required")
 	}
 	if cp.Context == nil {
-		return errors.New("pipeline checkpoint context required")
+		return errors.New("pipeline checkpoint execution state required")
 	}
 	if cp.StageIndex < 0 {
 		return errors.New("pipeline checkpoint stage index cannot be negative")

@@ -63,7 +63,7 @@ const (
 	ChunkBlock    ChunkKind = "block"
 )
 
-// CodeChunk stores snippet metadata used by search/context builders.
+// CodeChunk stores snippet metadata used by search and chunk builders.
 type CodeChunk struct {
 	ID           string
 	File         string
@@ -83,7 +83,7 @@ func (c *CodeChunk) Hash() string {
 	return hex.EncodeToString(h[:])
 }
 
-// CodeIndex defines the capabilities required by planners/context builders.
+// CodeIndex defines the capabilities required by planners and chunk builders.
 type CodeIndex interface {
 	GetFileMetadata(path string) (*FileMetadata, bool)
 	ListFiles() []string

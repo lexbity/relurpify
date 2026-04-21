@@ -37,7 +37,7 @@ func (s *stubCompressionStrategy) Compress(interactions []core.Interaction, llm 
 	return s.compressed, nil
 }
 
-func (s *stubCompressionStrategy) ShouldCompress(ctx *core.Context, budget *core.ContextBudget) bool {
+func (s *stubCompressionStrategy) ShouldCompress(ctx *core.Context, budget *core.ArtifactBudget) bool {
 	return s.should
 }
 

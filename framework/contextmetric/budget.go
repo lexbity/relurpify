@@ -2,7 +2,7 @@ package contextmetric
 
 import "codeburg.org/lexbit/relurpify/framework/core"
 
-type ContextBudget = core.ContextBudget
+type ArtifactBudget = core.ArtifactBudget
 type TokenUsage = core.TokenUsage
 type BudgetState = core.BudgetState
 type Telemetry = core.Telemetry
@@ -12,15 +12,19 @@ const (
 	BudgetCritical         = core.BudgetCritical
 )
 
-func EstimateContextTokens(ctx *core.SharedContext) int {
-	if ctx == nil {
+type tokenUsageSource interface {
+	GetTokenUsage() *core.TokenUsage
+}
+
+func EstimateArtifactTokens(source tokenUsageSource) int {
+	if source == nil {
 		return 0
 	}
-	usage := ctx.GetTokenUsage()
+	usage := source.GetTokenUsage()
 	if usage == nil {
 		return 0
 	}
-	return usage.Total
+	return usage.TotalTokens
 }
 
 var EstimateCodeTokens = core.EstimateCodeTokens

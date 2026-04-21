@@ -538,7 +538,7 @@ func SetActivePlanVersion(ctx *core.Context, v any) {
 // Runtime State Getters/Setters
 // ============================================================================
 
-// GetSharedContextRuntime retrieves the shared context runtime from context.
+// GetSharedContextRuntime retrieves the shared runtime state from execution state.
 func GetSharedContextRuntime(ctx *core.Context) (runtimepkg.SharedContextRuntimeState, bool) {
 	if ctx == nil {
 		return runtimepkg.SharedContextRuntimeState{}, false
@@ -551,7 +551,7 @@ func GetSharedContextRuntime(ctx *core.Context) (runtimepkg.SharedContextRuntime
 	return runtimepkg.SharedContextRuntimeState{}, false
 }
 
-// SetSharedContextRuntime sets the shared context runtime in context.
+// SetSharedContextRuntime stores the shared runtime state in execution state.
 func SetSharedContextRuntime(ctx *core.Context, v runtimepkg.SharedContextRuntimeState) {
 	if ctx == nil {
 		return

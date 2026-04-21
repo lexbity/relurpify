@@ -148,7 +148,7 @@ func (g *Graph) emit(event Event) {
 	telemetry.Emit(event)
 }
 
-// extractTaskID fetches the current task identifier from the shared context so
+// extractTaskID fetches the current task identifier from the execution state so
 // telemetry has stable correlation identifiers even across node boundaries.
 func (g *Graph) extractTaskID(state *Context) string {
 	if state == nil {

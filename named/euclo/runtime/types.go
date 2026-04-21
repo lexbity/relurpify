@@ -174,7 +174,7 @@ const (
 	ExecutorFamilyHTN        ExecutorFamily = "htn_executor"
 	ExecutorFamilyRewoo      ExecutorFamily = "rewoo_executor"
 	ExecutorFamilyReflection ExecutorFamily = "reflection_executor"
-	// NEW: Blackboard executor for hypothesis-driven workflows with shared context
+	// Blackboard executor for hypothesis-driven workflows with shared runtime state
 	ExecutorFamilyBlackboard ExecutorFamily = "blackboard_executor"
 )
 

@@ -47,10 +47,10 @@ type Telemetry interface {
 	Emit(event Event)
 }
 
-// ContextTelemetry extends telemetry with context-management specific signals.
-type ContextTelemetry interface {
-	OnContextCompression(taskID string, stats CompressionStats)
-	OnContextPruning(taskID string, itemsRemoved int, tokensFreed int)
+// BudgetTelemetry extends telemetry with budget-management signals.
+type BudgetTelemetry interface {
+	OnArtifactCompression(taskID string, stats CompressionStats)
+	OnArtifactPruning(taskID string, itemsRemoved int, tokensFreed int)
 	OnBudgetExceeded(taskID string, attempted int, available int)
 }
 

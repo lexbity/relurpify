@@ -123,7 +123,7 @@ func SelectExecutor(f ExecutorFactory, work eucloruntime.UnitOfWork) (Selection,
 			return Selection{}, err
 		}
 		return buildSelection("reflection_executor", agent)
-	// NEW: Blackboard executor for debug workflows with shared context
+	// Blackboard executor for debug workflows with shared runtime state
 	case eucloruntime.ExecutorFamilyBlackboard:
 		agent := newBlackboardExecutor(f)
 		return buildSelection("blackboard_executor", agent)

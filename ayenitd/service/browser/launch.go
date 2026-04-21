@@ -63,7 +63,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 			BackendName:       defaultBrowserBackend,
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
-			Budget:            core.NewContextBudget(maxTokens),
+			Budget:            core.NewArtifactBudget(maxTokens),
 		})
 	case "webdriver":
 		backend, err := webdriver.New(ctx, webdriver.Config{
@@ -81,7 +81,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 			BackendName:       "webdriver",
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
-			Budget:            core.NewContextBudget(8192),
+			Budget:            core.NewArtifactBudget(8192),
 		})
 	case "bidi":
 		backend, err := bidi.New(ctx, bidi.Config{
@@ -99,7 +99,7 @@ func newBrowserSession(ctx context.Context, cfg browserSessionConfig) (*platform
 			BackendName:       "bidi",
 			PermissionManager: cfg.manager,
 			AgentID:           cfg.agentID,
-			Budget:            core.NewContextBudget(8192),
+			Budget:            core.NewArtifactBudget(8192),
 		})
 	default:
 		return nil, &platformbrowser.Error{
