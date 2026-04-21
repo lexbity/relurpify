@@ -80,7 +80,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	}
 
 	// Phase D: Store Initialization
-	workflowStore, planStore, patternStore, commentStore, knowledgeStore, patternDB, err := openRuntimeStoresFn(cfg.Workspace)
+	workflowStore, planStore, knowledgeStore, err := openRuntimeStoresFn(cfg.Workspace)
 	if err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("open runtime stores: %w", err)
@@ -89,7 +89,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	// Phase E: Agent Registration + Authorization
 	manifestSnapshot, err := loadAgentManifestSnapshotFn(cfg.ManifestPath)
 	if err != nil {
-		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("load manifest snapshot: %w", err)
@@ -105,7 +104,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		HITLTimeout:      cfg.HITLTimeout,
 	})
 	if err != nil {
-		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("sandbox registration failed: %w", err)
@@ -163,14 +161,12 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	// Phase F: Capability Bundle + Agent Environment
 	runner, err := newCommandRunnerFn(registration.Manifest, registration.Runtime, cfg.Workspace)
 	if err != nil {
-		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, err
 	}
 	memStore, err := newHybridMemoryFn(cfg.MemoryPath)
 	if err != nil {
-		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("memory init: %w", err)
@@ -187,7 +183,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 
 	profileRegistry, err := newProfileRegistryFn(config.New(cfg.Workspace).ModelProfilesDir())
 	if err != nil {
-		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("load model profiles: %w", err)
@@ -239,8 +234,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		AllowedCapabilities: cfg.AllowedCapabilities,
 		DebugLLM:            logLLM,
 		DebugAgent:          cfg.DebugAgent,
-		PatternStore:        patternStore,
-		CommentStore:        commentStore,
 		RetrievalDB:         workflowStore.DB(),
 		PlanStore:           planStore,
 		GuidanceBroker:      guidanceBroker,
@@ -248,7 +241,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		KnowledgeStore:      knowledgeStore,
 	})
 	if err != nil {
-		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, err
@@ -263,7 +255,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	// Phase H: Embedder Initialization
 	embedder, err := newEmbedderFn(backend, embedderCfgFromConfig(cfg, inferenceModel))
 	if err != nil {
-		patternDB.Close()
 		workflowStore.Close()
 		logFile.Close()
 		return nil, fmt.Errorf("build embedder: %w", err)
@@ -327,7 +318,6 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		ProfileResolution:    profileResolution,
 		logFile:              logFile,
 		eventLog:             eventLog,
-		patternDB:            patternDB,
 		AgentSpec:            boot.AgentSpec,
 		AgentDefinitions:     boot.AgentDefinitions,
 		CompiledPolicy:       boot.CompiledPolicy,

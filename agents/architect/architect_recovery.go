@@ -9,7 +9,6 @@ import (
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextmgr"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graph"
 )
@@ -147,15 +146,7 @@ func (a *ArchitectAgent) runRecoveryMiniLoop(ctx context.Context, step core.Plan
 		}
 	}
 
-	for _, symbol := range limitStrings(uniqueStrings(extractRecoverySymbols(step)), 1) {
-		if result, execErr := a.executeRecoveryTool(ctx, tools, state, "query_ast", map[string]any{"action": "get_signature", "symbol": symbol}); execErr == nil && result != nil && result.Success {
-			signature := strings.TrimSpace(fmt.Sprint(result.Data["signature"]))
-			if signature != "" {
-				notes = append(notes, fmt.Sprintf("AST signature for %s: %s", symbol, truncateRecovery(signature, 120)))
-				appendRecoveryEvidence(evidence, "ast", map[string]any{"symbol": symbol, "signature": signature})
-			}
-		}
-	}
+	// recover from BKC instead
 
 	if len(notes) == 0 && len(evidence) == 0 {
 		return nil, nil
@@ -295,8 +286,4 @@ func recoverySearchDirectory(files []string) string {
 		return "."
 	}
 	return dir
-}
-
-func extractRecoverySymbols(step core.PlanStep) []string {
-	return contextmgr.ExtractSymbolReferences(step.Description + " " + strings.Join(step.Files, " "))
 }

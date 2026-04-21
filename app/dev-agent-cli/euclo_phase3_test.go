@@ -81,7 +81,6 @@ func stubEucloWorkspaceFn(t *testing.T, ws string, skillResults []frameworkskill
 			Registry:          capability.NewRegistry(),
 			PermissionManager: perms,
 			IndexManager:      &ast.IndexManager{},
-			PatternStore:      noopPatternStore{},
 			GuidanceBroker:    nil,
 		}
 		engine, err := authorization.FromAgentSpecWithConfig(loaded.Spec.Agent, loaded.Metadata.Name, perms)

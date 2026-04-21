@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/memory/db"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
@@ -958,8 +957,7 @@ type ProofSurface struct {
 	WaiverApplied          bool     `json:"waiver_applied"`
 }
 
-// RuntimeSurfaces abstracts access to workflow and runtime stores
+// RuntimeSurfaces abstracts access to the workflow store.
 type RuntimeSurfaces struct {
 	Workflow *db.SQLiteWorkflowStateStore
-	Runtime  memory.RuntimeMemoryStore
 }

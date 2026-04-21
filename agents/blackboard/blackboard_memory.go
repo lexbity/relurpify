@@ -182,9 +182,6 @@ func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context
 }
 
 func blackboardRuntimeStore(store memory.MemoryStore) graph.RuntimePersistenceStore {
-	if runtimeStore, ok := store.(memory.RuntimeMemoryStore); ok {
-		return memory.AdaptRuntimeStoreForGraph(runtimeStore)
-	}
 	return nil
 }
 

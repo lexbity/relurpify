@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/framework/plan"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -41,8 +40,6 @@ type WorkspaceEnvironment struct {
 	WorkflowStore   memory.WorkflowStateStore
 	CheckpointStore *memory.CheckpointStore // nil until implemented in framework
 	PlanStore       plan.PlanStore
-	PatternStore    patterns.PatternStore
-	CommentStore    patterns.CommentStore
 	KnowledgeStore  memory.KnowledgeStore
 	GuidanceBroker  *guidance.GuidanceBroker
 

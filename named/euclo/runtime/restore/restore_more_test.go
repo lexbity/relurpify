@@ -80,7 +80,7 @@ func (p *restoreBasicProvider) HealthSnapshot(context.Context) (core.ProviderHea
 func (p *restoreBasicProvider) Close(context.Context) error { return nil }
 
 func TestResolveRuntimeSurfaces(t *testing.T) {
-	if got := ResolveRuntimeSurfaces(nil); got.Workflow != nil || got.Runtime != nil {
+	if got := ResolveRuntimeSurfaces(nil); got.Workflow != nil {
 		t.Fatalf("expected zero surfaces for nil store, got %#v", got)
 	}
 
@@ -90,18 +90,10 @@ func TestResolveRuntimeSurfaces(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = workflowStore.Close() })
 
-	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	if err != nil {
-		t.Fatalf("open runtime store: %v", err)
-	}
-	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, nil)
+	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, nil)
 	surfaces := ResolveRuntimeSurfaces(composite)
-	if surfaces.Workflow == nil || surfaces.Runtime == nil {
+	if surfaces.Workflow == nil {
 		t.Fatalf("expected composite runtime surfaces, got %#v", surfaces)
-	}
-
-	if got := ResolveRuntimeSurfaces(runtimeStore); got.Runtime == nil || got.Workflow != nil {
-		t.Fatalf("expected runtime-only surface, got %#v", got)
 	}
 }
 

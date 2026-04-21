@@ -8,14 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -99,47 +97,6 @@ func TestBootstrapAgentRuntimeUsesManifestModelAndRegistersAgentCapabilities(t *
 	}
 	if !boot.Registry.HasCapability("agent:planner") {
 		t.Fatal("expected shared agent capabilities to be registered")
-	}
-}
-
-func TestBootstrapAgentRuntimeRegistersRelurpicCapabilitiesWithRuntimeDependencies(t *testing.T) {
-	workspace := t.TempDir()
-	store, err := memory.NewHybridMemory(t.TempDir())
-	requireNoError(t, err)
-	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(workspace)
-	requireNoError(t, err)
-	t.Cleanup(func() {
-		requireNoError(t, workflowStore.Close())
-		requireNoError(t, patternDB.Close())
-	})
-
-	boot, err := BootstrapAgentRuntime(workspace, AgentBootstrapOptions{
-		AgentID:        "coding",
-		AgentName:      "coding",
-		ConfigName:     "coding",
-		Manifest:       &manifest.AgentManifest{Metadata: manifest.ManifestMetadata{Name: "coding"}, Spec: manifest.ManifestSpec{Agent: &core.AgentRuntimeSpec{Model: core.AgentModelConfig{Name: "stub"}}}},
-		Runner:         fsandbox.NewLocalCommandRunner(workspace, nil),
-		Memory:         store,
-		Model:          bootstrapQueueModel{},
-		SkipASTIndex:   true,
-		PatternStore:   patternStore,
-		CommentStore:   commentStore,
-		RetrievalDB:    workflowStore.DB(),
-		PlanStore:      planStore,
-		GuidanceBroker: guidance.NewGuidanceBroker(time.Second),
-	})
-	requireNoError(t, err)
-	if !boot.Registry.HasCapability("relurpic:pattern-detector.detect") {
-		t.Fatal("expected pattern-detector capability to be registered")
-	}
-	if !boot.Registry.HasCapability("relurpic:gap-detector.detect") {
-		t.Fatal("expected gap-detector capability to be registered")
-	}
-	if !boot.Registry.HasCapability("relurpic:prospective-matcher.match") {
-		t.Fatal("expected prospective-matcher capability to be registered")
-	}
-	if !boot.Registry.HasCapability("relurpic:commenter.annotate") {
-		t.Fatal("expected commenter capability to be registered")
 	}
 }
 

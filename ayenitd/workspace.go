@@ -26,9 +26,8 @@ type Workspace struct {
 	ProfileResolution llm.ProfileResolution
 
 	// Internals held for Close()/Restart()
-	logFile   io.Closer
-	eventLog  io.Closer
-	patternDB io.Closer
+	logFile  io.Closer
+	eventLog io.Closer
 
 	// Derived fields for callers that need them
 	AgentSpec            *core.AgentRuntimeSpec
@@ -50,12 +49,10 @@ type Workspace struct {
 // Workspace to the caller. After calling, Close() will no longer close those
 // resources — the caller is responsible. This is used by app/relurpish/runtime
 // so that Runtime.Close() manages the lifecycle directly without double-close.
-func (w *Workspace) StealClosers() (logFile, patternDB, eventLog io.Closer) {
+func (w *Workspace) StealClosers() (logFile, eventLog io.Closer) {
 	logFile = w.logFile
-	patternDB = w.patternDB
 	eventLog = w.eventLog
 	w.logFile = nil
-	w.patternDB = nil
 	w.eventLog = nil
 	return
 }
@@ -87,12 +84,6 @@ func (w *Workspace) Close() error {
 	if c, ok := w.Environment.WorkflowStore.(io.Closer); ok {
 		if err := c.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close workflow store: %w", err))
-		}
-	}
-
-	if w.patternDB != nil {
-		if err := w.patternDB.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close pattern db: %w", err))
 		}
 	}
 

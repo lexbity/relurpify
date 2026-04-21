@@ -257,8 +257,6 @@ func (a *Agent) applySessionResumeContext(ctx context.Context, task *core.Task, 
 		task.Context["mode_hint"] = resumeCtx.Mode
 	}
 
-	// Apply BKC root chunk IDs so wrapBKCStrategy receives them via
-	// bkcSeedChunks -> work.PlanBinding.RootChunkIDs.
 	if len(resumeCtx.RootChunkIDs) > 0 {
 		task.Context["root_chunk_ids"] = resumeCtx.RootChunkIDs
 		task.Context["active_plan_root_chunk_ids"] = resumeCtx.RootChunkIDs

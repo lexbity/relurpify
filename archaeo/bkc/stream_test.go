@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
-	"codeburg.org/lexbit/relurpify/framework/contextmgr"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -126,35 +125,6 @@ func TestStreamerCycleSafe(t *testing.T) {
 	}
 	if len(result.Chunks) != 2 {
 		t.Fatalf("expected both chunks, got %+v", result)
-	}
-}
-
-type chunkLoadingStrategy struct {
-	request *contextmgr.ContextRequest
-	chunks  []contextmgr.ContextChunk
-}
-
-func (s chunkLoadingStrategy) SelectContext(task *core.Task, budget *core.ContextBudget) (*contextmgr.ContextRequest, error) {
-	return s.request, nil
-}
-func (s chunkLoadingStrategy) ShouldCompress(ctx *core.SharedContext) bool { return false }
-func (s chunkLoadingStrategy) DetermineDetailLevel(file string, relevance float64) contextmgr.DetailLevel {
-	return contextmgr.DetailFull
-}
-func (s chunkLoadingStrategy) ShouldExpandContext(ctx *core.SharedContext, lastResult *core.Result) bool {
-	return false
-}
-func (s chunkLoadingStrategy) PrioritizeContext(items []core.ContextItem) []core.ContextItem {
-	return items
-}
-func (s chunkLoadingStrategy) LoadChunks(task *core.Task, budget *core.ContextBudget) ([]contextmgr.ContextChunk, error) {
-	return append([]contextmgr.ContextChunk(nil), s.chunks...), nil
-}
-
-func TestToContextChunks(t *testing.T) {
-	chunks := ToContextChunks([]KnowledgeChunk{withTokens(testChunk("ctx-1", "ws", "rev"), 12)})
-	if len(chunks) != 1 || chunks[0].ID != "ctx-1" || chunks[0].TokenEstimate != 12 {
-		t.Fatalf("unexpected context chunks: %+v", chunks)
 	}
 }
 

@@ -59,11 +59,7 @@ func TestManagerRecoveryScanFindsRunningWorkflows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
 	}
-	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	if err != nil {
-		t.Fatalf("NewSQLiteRuntimeMemoryStore: %v", err)
-	}
-	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, db.NewSQLiteCheckpointStore(workflowStore.DB()))
+	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, db.NewSQLiteCheckpointStore(workflowStore.DB()))
 	ctx := context.Background()
 	if err := workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-running",

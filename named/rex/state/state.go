@@ -44,23 +44,16 @@ func ComputeIdentity(env envelope.Envelope) Identity {
 
 type RuntimeSurfaces struct {
 	Workflow *db.SQLiteWorkflowStateStore `json:"-"`
-	Runtime  memory.RuntimeMemoryStore    `json:"-"`
 }
 
-// ResolveRuntimeSurfaces exposes workflow/runtime stores when available.
+// ResolveRuntimeSurfaces exposes the workflow store when available.
 func ResolveRuntimeSurfaces(mem memory.MemoryStore) RuntimeSurfaces {
-	switch typed := mem.(type) {
-	case *memory.CompositeRuntimeStore:
-		surfaces := RuntimeSurfaces{Runtime: typed.RuntimeMemoryStore}
+	if typed, ok := mem.(*memory.CompositeRuntimeStore); ok {
 		if workflow, ok := typed.WorkflowStateStore.(*db.SQLiteWorkflowStateStore); ok {
-			surfaces.Workflow = workflow
+			return RuntimeSurfaces{Workflow: workflow}
 		}
-		return surfaces
-	case memory.RuntimeMemoryStore:
-		return RuntimeSurfaces{Runtime: typed}
-	default:
-		return RuntimeSurfaces{}
 	}
+	return RuntimeSurfaces{}
 }
 
 // RecoveryBoot scans workflow state for resumable work.

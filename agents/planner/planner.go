@@ -190,10 +190,6 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	planNode := &plannerPlanNode{id: "planner_plan", agent: a, task: task}
 	execNode := &plannerExecuteNode{id: "planner_execute", agent: a}
 	verifyNode := &plannerVerifyNode{id: "planner_verify", agent: a, task: task}
-	summarizeNode := graph.NewSummarizeContextNode("planner_summarize", plannerContextSummarizer(a))
-	summarizeNode.StateKeys = []string{"planner.plan", "planner.results", "planner.summary", "planner.skipped_tools"}
-	summarizeNode.IncludeHistory = false
-	summarizeNode.Telemetry = telemetryForConfig(a.Config)
 	done := graph.NewTerminalNode("planner_done")
 	g := graph.NewGraph()
 	if a.Tools != nil {
@@ -205,9 +201,6 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	workflowStore := plannerWorkflowStateStore(a.Memory)
 	workflowID := plannerWorkflowID(task)
 	runID := plannerRunID(task)
-	if workflowStore != nil {
-		summarizeNode.ArtifactSink = memory.AdaptWorkflowStateStoreArtifactSink(workflowStore, workflowID, runID)
-	}
 	var persistNode *graph.PersistenceWriterNode
 	if plannerUsesStructuredPersistence(a.Config) {
 		if runtimeStore := plannerRuntimeStore(a.Memory); runtimeStore != nil {
@@ -235,7 +228,7 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 			}
 		}
 	}
-	for _, node := range []graph.Node{planNode, execNode, verifyNode, summarizeNode, done} {
+	for _, node := range []graph.Node{planNode, execNode, verifyNode, done} {
 		if err := g.AddNode(node); err != nil {
 			return nil, err
 		}
@@ -250,10 +243,9 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	}
 	nextAfterPlan := execNode.ID()
 	nextAfterExecute := verifyNode.ID()
-	nextAfterVerify := summarizeNode.ID()
-	nextAfterSummarize := done.ID()
+	nextAfterVerify := done.ID()
 	if persistNode != nil {
-		nextAfterSummarize = persistNode.ID()
+		nextAfterVerify = persistNode.ID()
 	}
 	var checkpointNodes []*graph.CheckpointNode
 	if plannerUsesExplicitCheckpointNodes(a.Config) && a.CheckpointPath != "" && task != nil && task.ID != "" {
@@ -261,7 +253,6 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_plan", nextAfterPlan),
 			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_execute", nextAfterExecute),
 			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_verify", nextAfterVerify),
-			newPlannerCheckpointNode(a, task, "planner_checkpoint_after_summarize", nextAfterSummarize),
 		}
 		for _, checkpoint := range checkpointNodes {
 			if err := g.AddNode(checkpoint); err != nil {
@@ -271,7 +262,6 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		nextAfterPlan = checkpointNodes[0].ID()
 		nextAfterExecute = checkpointNodes[1].ID()
 		nextAfterVerify = checkpointNodes[2].ID()
-		nextAfterSummarize = checkpointNodes[3].ID()
 	}
 	if err := g.AddEdge(planNode.ID(), nextAfterPlan, nil, false); err != nil {
 		return nil, err
@@ -293,23 +283,15 @@ func (a *PlannerAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		return nil, err
 	}
 	if len(checkpointNodes) > 0 {
-		if err := g.AddEdge(checkpointNodes[2].ID(), summarizeNode.ID(), nil, false); err != nil {
+		if err := g.AddEdge(checkpointNodes[2].ID(), verifyNode.ID(), nil, false); err != nil {
 			return nil, err
 		}
 	}
-	if err := g.AddEdge(summarizeNode.ID(), nextAfterSummarize, nil, false); err != nil {
+	if err := g.AddEdge(verifyNode.ID(), nextAfterVerify, nil, false); err != nil {
 		return nil, err
 	}
 	if len(checkpointNodes) > 0 {
-		if persistNode != nil {
-			if err := g.AddEdge(checkpointNodes[3].ID(), persistNode.ID(), nil, false); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := g.AddEdge(checkpointNodes[3].ID(), done.ID(), nil, false); err != nil {
-				return nil, err
-			}
-		}
+		// no checkpoint after summarization anymore
 	}
 	if persistNode != nil {
 		if err := g.AddEdge(persistNode.ID(), done.ID(), nil, false); err != nil {
@@ -666,17 +648,7 @@ func plannerSkillHints(agent *PlannerAgent) string {
 	})
 }
 
-func plannerContextSummarizer(agent *PlannerAgent) core.Summarizer {
-	if agent != nil && agent.Config != nil && agent.Config.Telemetry != nil {
-		return &core.SimpleSummarizer{}
-	}
-	return &core.SimpleSummarizer{}
-}
-
 func plannerRuntimeStore(store memory.MemoryStore) graph.RuntimePersistenceStore {
-	if runtimeStore, ok := store.(memory.RuntimeMemoryStore); ok {
-		return memory.AdaptRuntimeStoreForGraph(runtimeStore)
-	}
 	return nil
 }
 

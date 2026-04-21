@@ -50,45 +50,6 @@ func (s *branchProviderStub) BranchExecutor() (graph.WorkflowExecutor, error) {
 	return s.branch, nil
 }
 
-type runtimeStoreStub struct {
-	declarative []memory.DeclarativeMemoryRecord
-}
-
-func (s *runtimeStoreStub) Remember(context.Context, string, map[string]interface{}, memory.MemoryScope) error {
-	return nil
-}
-func (s *runtimeStoreStub) Recall(context.Context, string, memory.MemoryScope) (*memory.MemoryRecord, bool, error) {
-	return nil, false, nil
-}
-func (s *runtimeStoreStub) Search(context.Context, string, memory.MemoryScope) ([]memory.MemoryRecord, error) {
-	return nil, nil
-}
-func (s *runtimeStoreStub) Forget(context.Context, string, memory.MemoryScope) error {
-	return nil
-}
-func (s *runtimeStoreStub) Summarize(context.Context, memory.MemoryScope) (string, error) {
-	return "", nil
-}
-func (s *runtimeStoreStub) PutDeclarative(_ context.Context, record memory.DeclarativeMemoryRecord) error {
-	s.declarative = append(s.declarative, record)
-	return nil
-}
-func (s *runtimeStoreStub) GetDeclarative(context.Context, string) (*memory.DeclarativeMemoryRecord, bool, error) {
-	return nil, false, nil
-}
-func (s *runtimeStoreStub) SearchDeclarative(context.Context, memory.DeclarativeMemoryQuery) ([]memory.DeclarativeMemoryRecord, error) {
-	return nil, nil
-}
-func (s *runtimeStoreStub) PutProcedural(context.Context, memory.ProceduralMemoryRecord) error {
-	return nil
-}
-func (s *runtimeStoreStub) GetProcedural(context.Context, string) (*memory.ProceduralMemoryRecord, bool, error) {
-	return nil, false, nil
-}
-func (s *runtimeStoreStub) SearchProcedural(context.Context, memory.ProceduralMemoryQuery) ([]memory.ProceduralMemoryRecord, error) {
-	return nil, nil
-}
-
 type workflowStoreStub struct {
 	knowledge []memory.KnowledgeRecord
 	events    []memory.WorkflowEventRecord
@@ -311,18 +272,16 @@ func TestHTNHelpersAndRecordingAgent(t *testing.T) {
 		t.Fatalf("BranchExecutor provider path: branch=%#v err=%v", branch, err)
 	}
 
-	runtimeStore := &runtimeStoreStub{}
 	workflowStore := &workflowStoreStub{}
 	persisting := &recordingPrimitiveAgent{
 		delegate:   &htnStubExecutor{},
-		runtime:    runtimeStore,
 		workflow:   workflowStore,
 		workflowID: "wf-1",
 		runID:      "run-1",
 	}
 	_, _ = persisting.Execute(context.Background(), metaTask, core.NewContext())
-	if len(runtimeStore.declarative) == 0 || len(workflowStore.knowledge) == 0 || len(workflowStore.events) == 0 {
-		t.Fatalf("expected persistence records, got runtime=%d knowledge=%d events=%d", len(runtimeStore.declarative), len(workflowStore.knowledge), len(workflowStore.events))
+	if len(workflowStore.knowledge) == 0 || len(workflowStore.events) == 0 {
+		t.Fatalf("expected workflow persistence records, got knowledge=%d events=%d", len(workflowStore.knowledge), len(workflowStore.events))
 	}
 }
 

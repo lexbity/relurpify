@@ -44,25 +44,3 @@ func TestHybridMemorySearchFallsBackToSubstringWithoutVectorStore(t *testing.T) 
 	require.Len(t, results, 1)
 	require.Equal(t, "release", results[0].Key)
 }
-
-func TestHybridMemoryWithVectorStoreReplaysDiskRecords(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	ctx := context.Background()
-
-	initial, err := NewHybridMemory(dir)
-	require.NoError(t, err)
-	require.NoError(t, initial.Remember(ctx, "persisted", map[string]interface{}{
-		"summary": "semantic memory survives restart and remains searchable",
-	}, MemoryScopeProject))
-
-	reloaded, err := NewHybridMemory(dir)
-	require.NoError(t, err)
-	reloaded.WithVectorStore(NewInMemoryVectorStore())
-
-	results, err := reloaded.Search(ctx, "semantic survives restart", MemoryScopeProject)
-	require.NoError(t, err)
-	require.NotEmpty(t, results)
-	require.Equal(t, "persisted", results[0].Key)
-}

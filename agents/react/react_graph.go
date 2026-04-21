@@ -31,9 +31,6 @@ func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		task:  task,
 	}
 	done := graph.NewTerminalNode("react_done")
-	summarize := graph.NewSummarizeContextNode("react_summarize", a.contextSummarizer())
-	summarize.StateKeys = []string{"react.last_tool_result", "react.tool_observations", "react.final_output", "react.incomplete_reason"}
-	summarize.Telemetry = telemetryForConfig(a.Config)
 	var persist *graph.PersistenceWriterNode
 	if reactUsesStructuredPersistence(a.Config) {
 		if runtimeStore := runtimeMemoryStore(a.Memory); runtimeStore != nil {
@@ -68,34 +65,13 @@ func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if catalog := a.executionCapabilityCatalog(); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
 		g.SetCapabilityCatalog(catalog)
 	}
-	if reactUsesDeclarativeRetrieval(a.Config) && a.Memory != nil {
-		retrieve := graph.NewRetrieveDeclarativeMemoryNode("react_retrieve_declarative", scopedMemoryRetriever{
-			store:       a.Memory,
-			scope:       memory.MemoryScopeProject,
-			memoryClass: core.MemoryClassDeclarative,
-		})
-		retrieve.Query = taskInstructionText(task)
-		if err := g.AddNode(retrieve); err != nil {
-			return nil, err
-		}
-		if err := g.SetStart(retrieve.ID()); err != nil {
-			return nil, err
-		}
-		if err := g.AddNode(think); err != nil {
-			return nil, err
-		}
-		if err := g.AddEdge(retrieve.ID(), think.ID(), nil, false); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := g.AddNode(think); err != nil {
-			return nil, err
-		}
-		if err := g.SetStart(think.ID()); err != nil {
-			return nil, err
-		}
+	if err := g.AddNode(think); err != nil {
+		return nil, err
 	}
-	for _, node := range []graph.Node{act, observe, summarize, done} {
+	if err := g.SetStart(think.ID()); err != nil {
+		return nil, err
+	}
+	for _, node := range []graph.Node{act, observe, done} {
 		if err := g.AddNode(node); err != nil {
 			return nil, err
 		}
@@ -116,25 +92,22 @@ func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if err := g.AddEdge(act.ID(), observe.ID(), nil, false); err != nil {
 		return nil, err
 	}
+	nextAfterDone := done.ID()
+	if persist != nil {
+		nextAfterDone = persist.ID()
+	} else if checkpoint != nil {
+		nextAfterDone = checkpoint.ID()
+	}
 	if err := g.AddEdge(observe.ID(), think.ID(), func(result *core.Result, ctx *core.Context) bool {
 		done, _ := ctx.Get("react.done")
 		return done == false || done == nil
 	}, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(observe.ID(), summarize.ID(), func(result *core.Result, ctx *core.Context) bool {
+	if err := g.AddEdge(observe.ID(), nextAfterDone, func(result *core.Result, ctx *core.Context) bool {
 		done, _ := ctx.Get("react.done")
 		return done == true
 	}, false); err != nil {
-		return nil, err
-	}
-	nextAfterSummarize := done.ID()
-	if persist != nil {
-		nextAfterSummarize = persist.ID()
-	} else if checkpoint != nil {
-		nextAfterSummarize = checkpoint.ID()
-	}
-	if err := g.AddEdge(summarize.ID(), nextAfterSummarize, nil, false); err != nil {
 		return nil, err
 	}
 	if persist != nil && checkpoint != nil {
@@ -156,13 +129,6 @@ func (a *ReActAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	return g, nil
 }
 
-func (a *ReActAgent) contextSummarizer() core.Summarizer {
-	if a != nil && a.contextPolicy != nil && a.contextPolicy.Summarizer != nil {
-		return a.contextPolicy.Summarizer
-	}
-	return &core.SimpleSummarizer{}
-}
-
 func telemetryForConfig(cfg *core.Config) core.Telemetry {
 	if cfg == nil {
 		return nil
@@ -178,9 +144,6 @@ func taskID(task *core.Task) string {
 }
 
 func runtimeMemoryStore(store memory.MemoryStore) graph.RuntimePersistenceStore {
-	if runtimeStore, ok := store.(memory.RuntimeMemoryStore); ok {
-		return memory.AdaptRuntimeStoreForGraph(runtimeStore)
-	}
 	return nil
 }
 
@@ -189,13 +152,6 @@ func reactUsesExplicitCheckpointNodes(cfg *core.Config) bool {
 		return true
 	}
 	return *cfg.UseExplicitCheckpointNodes
-}
-
-func reactUsesDeclarativeRetrieval(cfg *core.Config) bool {
-	if cfg == nil || cfg.UseDeclarativeRetrieval == nil {
-		return true
-	}
-	return *cfg.UseDeclarativeRetrieval
 }
 
 func reactUsesStructuredPersistence(cfg *core.Config) bool {

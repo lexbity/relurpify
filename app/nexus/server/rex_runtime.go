@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -37,7 +36,6 @@ type RexRuntimeProvider struct {
 	RuntimeEndpoint *rexnexus.RuntimeEndpoint
 	Packager        fwfmp.ContextPackager
 	WorkflowStore   *memdb.SQLiteWorkflowStateStore
-	RuntimeStore    *memdb.SQLiteRuntimeMemoryStore
 	CheckpointStore *memdb.SQLiteCheckpointStore
 	Bundle          *relruntime.CapabilityBundle
 	TrustedResolver rexctx.TrustedContextResolver
@@ -68,18 +66,12 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 	if err != nil {
 		return nil, err
 	}
-	runtimeStore, err := memdb.NewSQLiteRuntimeMemoryStore(filepath.Join(paths.MemoryDir(), "runtime_memory.db"))
-	if err != nil {
-		_ = workflowStore.Close()
-		return nil, err
-	}
 	checkpointStore := memdb.NewSQLiteCheckpointStoreWithEvents(workflowStore.DB(), workflowStore, "", "")
 	runner := sandbox.NewLocalCommandRunner(workspace, nil)
 	bundle, err := relruntime.BuildBuiltinCapabilityBundle(workspace, runner, relruntime.CapabilityRegistryOptions{
 		Context: ctx,
 	})
 	if err != nil {
-		_ = runtimeStore.Close()
 		_ = workflowStore.Close()
 		return nil, err
 	}
@@ -87,7 +79,7 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		Registry:     bundle.Registry,
 		IndexManager: bundle.IndexManager,
 		SearchEngine: bundle.SearchEngine,
-		Memory:       memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, checkpointStore),
+		Memory:       memory.NewCompositeRuntimeStore(workflowStore, nil, checkpointStore),
 		Config:       &core.Config{Name: "rex"},
 	}, workspace)
 	agent.Runtime.Start(ctx)
@@ -96,7 +88,6 @@ func NewRexRuntimeProvider(ctx context.Context, workspace string) (*RexRuntimePr
 		Adapter:         agent.ManagedAdapter(),
 		SnapshotStore:   &rexnexus.SnapshotStore{WorkflowStore: workflowStore},
 		WorkflowStore:   workflowStore,
-		RuntimeStore:    runtimeStore,
 		CheckpointStore: checkpointStore,
 		Bundle:          bundle,
 		TrustedResolver: &rexctx.DefaultTrustedContextResolver{},
@@ -128,9 +119,6 @@ func (p *RexRuntimeProvider) Close() {
 	}
 	if p.Bundle != nil && p.Bundle.IndexManager != nil {
 		_ = p.Bundle.IndexManager.Close()
-	}
-	if p.RuntimeStore != nil {
-		_ = p.RuntimeStore.Close()
 	}
 	if p.WorkflowStore != nil {
 		_ = p.WorkflowStore.Close()

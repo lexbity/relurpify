@@ -207,13 +207,7 @@ func TestRewooAgent_HydratesWorkflowRetrievalAndPersistsResults(t *testing.T) {
 		Status:     "accepted",
 	}))
 
-	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	if err != nil {
-		t.Fatalf("runtime store: %v", err)
-	}
-	t.Cleanup(func() { _ = runtimeStore.Close() })
-
-	composite := frameworkmemory.NewCompositeRuntimeStore(workflowStore, runtimeStore, nil)
+	composite := frameworkmemory.NewCompositeRuntimeStore(workflowStore, nil, nil)
 	registry := capability.NewRegistry()
 	mustRegister(t, registry, stubTool{name: "tool"})
 	model := &stubModel{responses: []string{
@@ -292,16 +286,6 @@ func TestRewooAgent_HydratesWorkflowRetrievalAndPersistsResults(t *testing.T) {
 		t.Fatal("expected synthesis knowledge record to include step results")
 	}
 
-	declarative, err := runtimeStore.SearchDeclarative(context.Background(), frameworkmemory.DeclarativeMemoryQuery{
-		WorkflowID: "workflow-rewoo",
-		Limit:      16,
-	})
-	if err != nil {
-		t.Fatalf("SearchDeclarative: %v", err)
-	}
-	if len(declarative) == 0 {
-		t.Fatal("expected runtime memory records")
-	}
 }
 
 func mustRegister(t *testing.T, registry *capability.Registry, tool core.Tool) {

@@ -16,18 +16,12 @@ import (
 type RuntimeSurfaces = runtimepkg.RuntimeSurfaces
 
 func ResolveRuntimeSurfaces(store memory.MemoryStore) RuntimeSurfaces {
-	switch typed := store.(type) {
-	case *memory.CompositeRuntimeStore:
-		surfaces := RuntimeSurfaces{Runtime: typed.RuntimeMemoryStore}
+	if typed, ok := store.(*memory.CompositeRuntimeStore); ok {
 		if workflow, ok := typed.WorkflowStateStore.(*db.SQLiteWorkflowStateStore); ok {
-			surfaces.Workflow = workflow
+			return RuntimeSurfaces{Workflow: workflow}
 		}
-		return surfaces
-	case memory.RuntimeMemoryStore:
-		return RuntimeSurfaces{Runtime: typed}
-	default:
-		return RuntimeSurfaces{}
 	}
+	return RuntimeSurfaces{}
 }
 
 func EnsureWorkflowRun(ctx context.Context, store *db.SQLiteWorkflowStateStore, task *core.Task, state *core.Context) (string, string, error) {

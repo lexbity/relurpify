@@ -1,15 +1,12 @@
-// Package memory provides a hybrid in-memory and disk-backed storage system for agents.
-// It supports session, project, and global scopes with Remember, Recall, Search, Forget,
-// and Summarise operations, persisting items as JSON files for durability across restarts.
+// Package memory provides an in-memory scratchpad for agents.
+// It supports session, project, and global scopes with Remember, Recall, Search,
+// Forget, and Summarise operations.
 package memory
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -44,34 +41,21 @@ type MemoryStore interface {
 	Summarize(ctx context.Context, scope MemoryScope) (string, error)
 }
 
-// HybridMemory combines in-memory caching with JSON persistence on disk. The
-// design keeps session data transient (great for experiments) while persisting
-// project/global scopes across runs for longer-term recall.
+// HybridMemory combines in-memory caching with optional semantic indexing.
 type HybridMemory struct {
 	mu          sync.RWMutex
 	cache       map[MemoryScope]map[string]MemoryRecord
-	basePath    string
 	vectorStore VectorStore
 }
 
-// NewHybridMemory creates a new memory store.
+// NewHybridMemory creates a new transient memory store.
 func NewHybridMemory(basePath string) (*HybridMemory, error) {
-	if basePath == "" {
-		basePath = ".memory"
-	}
-	if err := os.MkdirAll(basePath, 0o755); err != nil {
-		return nil, err
-	}
 	store := &HybridMemory{
 		cache: map[MemoryScope]map[string]MemoryRecord{
 			MemoryScopeSession: {},
 			MemoryScopeProject: {},
 			MemoryScopeGlobal:  {},
 		},
-		basePath: basePath,
-	}
-	if err := store.loadFromDisk(); err != nil {
-		return nil, err
 	}
 	return store, nil
 }
@@ -92,56 +76,7 @@ func (m *HybridMemory) WithVectorStore(vs VectorStore) *HybridMemory {
 	return m
 }
 
-// loadFromDisk hydrates the in-memory cache from JSON files previously written
-// to disk. Missing files are ignored so the store can start empty on first run.
-func (m *HybridMemory) loadFromDisk() error {
-	for scope := range m.cache {
-		path := m.scopePath(scope)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return err
-		}
-		var records []MemoryRecord
-		if err := json.Unmarshal(data, &records); err != nil {
-			return err
-		}
-		for _, r := range records {
-			m.cache[scope][r.Key] = r
-		}
-	}
-	if m.vectorStore != nil {
-		m.warmVectorStore(context.Background(), m.vectorStore, m.snapshot())
-	}
-	return nil
-}
-
-// persist writes the cached records for a scope back to disk so that project
-// and global memories survive process restarts.
-func (m *HybridMemory) persist(scope MemoryScope) error {
-	records := make([]MemoryRecord, 0, len(m.cache[scope]))
-	for _, r := range m.cache[scope] {
-		records = append(records, r)
-	}
-	data, err := json.MarshalIndent(records, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(m.scopePath(scope), data, 0o644)
-}
-
-// scopePath resolves the JSON file associated with a scope so all persistence
-// logic shares the same directory layout.
-func (m *HybridMemory) scopePath(scope MemoryScope) string {
-	filename := string(scope) + ".json"
-	return filepath.Join(m.basePath, filename)
-}
-
-// Remember stores data for a given scope. Session-scoped memories stay in RAM
-// to avoid excessive disk churn during fast agent loops, while project/global
-// scopes are flushed to JSON for durability.
+// Remember stores data for a given scope.
 func (m *HybridMemory) Remember(ctx context.Context, key string, value map[string]interface{}, scope MemoryScope) error {
 	select {
 	case <-ctx.Done():
@@ -157,19 +92,6 @@ func (m *HybridMemory) Remember(ctx context.Context, key string, value map[strin
 	}
 	m.cache[scope][key] = record
 	vectorStore := m.vectorStore
-	if scope == MemoryScopeSession {
-		m.mu.Unlock()
-		if vectorStore != nil {
-			if err := vectorStore.Upsert(ctx, memoryDocument(record)); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if err := m.persist(scope); err != nil {
-		m.mu.Unlock()
-		return err
-	}
 	m.mu.Unlock()
 	if vectorStore != nil {
 		if err := vectorStore.Upsert(ctx, memoryDocument(record)); err != nil {
@@ -195,9 +117,7 @@ func (m *HybridMemory) Recall(ctx context.Context, key string, scope MemoryScope
 	return &record, true, nil
 }
 
-// Search executes a naive semantic search by substring match. It is purposely
-// simple so that the memory subsystem feels deterministic and debuggable; you
-// can later replace it with a vector store without touching agent code.
+// Search executes a naive semantic search by substring match.
 func (m *HybridMemory) Search(ctx context.Context, query string, scope MemoryScope) ([]MemoryRecord, error) {
 	select {
 	case <-ctx.Done():
@@ -243,19 +163,6 @@ func (m *HybridMemory) Forget(ctx context.Context, key string, scope MemoryScope
 	m.mu.Lock()
 	delete(m.cache[scope], key)
 	vectorStore := m.vectorStore
-	if scope == MemoryScopeSession {
-		m.mu.Unlock()
-		if vectorStore != nil {
-			if err := vectorStore.Delete(ctx, memoryDocumentID(scope, key)); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if err := m.persist(scope); err != nil {
-		m.mu.Unlock()
-		return err
-	}
 	m.mu.Unlock()
 	if vectorStore != nil {
 		if err := vectorStore.Delete(ctx, memoryDocumentID(scope, key)); err != nil {
@@ -421,23 +328,6 @@ func (m *HybridMemory) snapshotLocked() []MemoryRecord {
 	return records
 }
 
-func (m *HybridMemory) warmVectorStore(ctx context.Context, vs VectorStore, records []MemoryRecord) {
-	for _, record := range records {
-		_ = vs.Upsert(ctx, memoryDocument(record))
-	}
-}
-
-func memoryDocument(record MemoryRecord) Document {
-	return Document{
-		ID:      memoryDocumentID(record.Scope, record.Key),
-		Content: record.Key + " " + flattenValue(record.Value),
-		Metadata: map[string]interface{}{
-			"key":   record.Key,
-			"scope": string(record.Scope),
-		},
-	}
-}
-
 func memoryDocumentID(scope MemoryScope, key string) string {
 	return fmt.Sprintf("%s:%s", scope, key)
 }
@@ -455,12 +345,4 @@ func memoryDocumentRef(doc Document) (string, MemoryScope, bool) {
 		return "", "", false
 	}
 	return parts[1], MemoryScope(parts[0]), true
-}
-
-func flattenValue(value map[string]interface{}) string {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return ""
-	}
-	return string(data)
 }

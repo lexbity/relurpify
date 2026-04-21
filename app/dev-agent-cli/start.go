@@ -231,8 +231,6 @@ func newStartCmd() *cobra.Command {
 			relurpicOpts := []agents.RelurpicOption{
 				agents.WithIndexManager(openedWS.Environment.IndexManager),
 				agents.WithGraphDB(graphDBFromEnv(openedWS.Environment)),
-				agents.WithPatternStore(openedWS.Environment.PatternStore),
-				agents.WithCommentStore(openedWS.Environment.CommentStore),
 				agents.WithRetrievalDB(retrievalDBFromEnv(openedWS.Environment)),
 				agents.WithPlanStore(openedWS.Environment.PlanStore),
 				agents.WithGuidanceBroker(openedWS.Environment.GuidanceBroker),

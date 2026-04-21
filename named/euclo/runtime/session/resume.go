@@ -27,8 +27,7 @@ type SessionResumeContext struct {
 	// Mode is the resolved mode for this session.
 	Mode string
 
-	// RootChunkIDs are the BKC root chunk IDs anchored to the active
-	// plan version. Used to seed wrapBKCStrategy.
+	// RootChunkIDs are the BKC root chunk IDs anchored to the active plan.
 	RootChunkIDs []string
 
 	// ActivePlanVersion is the version to restore.

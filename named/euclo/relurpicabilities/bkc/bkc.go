@@ -11,7 +11,6 @@ import (
 	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
 	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/contextmgr"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -208,7 +207,7 @@ func (c *checkpointCapability) Execute(ctx context.Context, env euclotypes.Execu
 	}
 	if len(rootChunkIDs) == 0 && env.State != nil {
 		if chunks, ok := env.State.Get(euclostate.KeyBKCContextChunks); ok && chunks != nil {
-			rootChunkIDs = append(rootChunkIDs, contextChunkIDsFromValue(chunks)...)
+			rootChunkIDs = append(rootChunkIDs, stringSlice(chunks)...)
 		}
 	}
 	if len(rootChunkIDs) == 0 {
@@ -401,13 +400,11 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 			_ = err
 		}
 	}
-	contextChunks := archaeobkc.ToContextChunks(result.Chunks)
 	payload := map[string]any{
 		"chunk_count":         len(result.Chunks),
 		"token_total":         result.TokenTotal,
 		"stale_during_stream": chunkIDsToStrings(result.StaleDuringStream),
 		"stale_gap_messages":  append([]string(nil), result.StaleGapMessages...),
-		"context_chunks":      contextChunks,
 	}
 	artifact := euclotypes.Artifact{
 		ID:         "bkc_stream",
@@ -418,7 +415,7 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 		Status:     "produced",
 	}
 	if env.State != nil {
-		env.State.Set(euclostate.KeyBKCContextChunks, contextChunks)
+		env.State.Set(euclostate.KeyBKCContextChunks, chunkIDsToStrings(result.Chunks))
 	}
 	artifacts := []euclotypes.Artifact{artifact}
 	if len(result.StaleDuringStream) > 0 {
@@ -688,39 +685,4 @@ func uniqueStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
-}
-
-func contextChunkIDsFromValue(raw any) []string {
-	switch typed := raw.(type) {
-	case []contextmgr.ContextChunk:
-		out := make([]string, 0, len(typed))
-		for _, chunk := range typed {
-			if id := strings.TrimSpace(chunk.ID); id != "" {
-				out = append(out, id)
-			}
-		}
-		return out
-	case []any:
-		out := make([]string, 0, len(typed))
-		for _, item := range typed {
-			switch chunk := item.(type) {
-			case contextmgr.ContextChunk:
-				if id := strings.TrimSpace(chunk.ID); id != "" {
-					out = append(out, id)
-				}
-			case map[string]any:
-				if id := strings.TrimSpace(fmt.Sprint(chunk["id"])); id != "" && id != "<nil>" {
-					out = append(out, id)
-				}
-			}
-		}
-		return out
-	case map[string]any:
-		if id := strings.TrimSpace(fmt.Sprint(typed["id"])); id != "" && id != "<nil>" {
-			return []string{id}
-		}
-		return nil
-	default:
-		return nil
-	}
 }

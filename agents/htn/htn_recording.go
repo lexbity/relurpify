@@ -15,7 +15,6 @@ import (
 // to the runtime and workflow memory stores after each execution.
 type recordingPrimitiveAgent struct {
 	delegate graph.WorkflowExecutor
-	runtime  memory.RuntimeMemoryStore
 	workflow interface {
 		PutKnowledge(context.Context, memory.KnowledgeRecord) error
 		AppendEvent(context.Context, memory.WorkflowEventRecord) error
@@ -29,7 +28,6 @@ func (a *recordingPrimitiveAgent) BranchExecutor() (graph.WorkflowExecutor, erro
 		return &recordingPrimitiveAgent{}, nil
 	}
 	branch := &recordingPrimitiveAgent{
-		runtime:    a.runtime,
 		workflow:   a.workflow,
 		workflowID: a.workflowID,
 		runID:      a.runID,
@@ -83,28 +81,6 @@ func (a *recordingPrimitiveAgent) persistStep(ctx context.Context, task *core.Ta
 	}
 	summary := htnResultSummary(result, execErr)
 	now := time.Now().UTC()
-	if a.runtime != nil {
-		record := memory.DeclarativeMemoryRecord{
-			RecordID:   fmt.Sprintf("htn_step_%d", now.UnixNano()),
-			Scope:      memory.MemoryScopeProject,
-			Kind:       memory.DeclarativeMemoryKindFact,
-			Title:      stepTitle,
-			Content:    summary,
-			Summary:    summary,
-			WorkflowID: a.workflowID,
-			TaskID:     taskID(task),
-			Verified:   execErr == nil,
-			CreatedAt:  now,
-			UpdatedAt:  now,
-			Tags:       []string{"agent:htn", "step:" + stepID},
-			Metadata: map[string]any{
-				"step_id": stepID,
-				"run_id":  a.runID,
-				"status":  htnStatus(execErr),
-			},
-		}
-		_ = a.runtime.PutDeclarative(ctx, record)
-	}
 	if a.workflow != nil && strings.TrimSpace(a.workflowID) != "" {
 		kind := memory.KnowledgeKindFact
 		title := "Primitive step result"

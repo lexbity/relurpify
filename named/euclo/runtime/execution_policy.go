@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
@@ -58,7 +58,7 @@ func contextPolicySummary(spec *core.AgentRuntimeSpec) ContextPolicySummary {
 	case "minimal", "concise", "detailed", "full":
 		summary.PreferredDetail = strings.ToLower(spec.SkillConfig.ContextHints.PreferredDetailLevel)
 	default:
-		summary.PreferredDetail = contextmgr.DetailDetailed.String()
+		summary.PreferredDetail = "detailed"
 	}
 	return summary
 }

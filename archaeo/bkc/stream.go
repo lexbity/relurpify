@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
-	"codeburg.org/lexbit/relurpify/framework/contextmgr"
 )
 
 // StreamSeed identifies starting chunk IDs for backward streaming.
@@ -216,45 +215,4 @@ func (s *Streamer) DebugSeed(files []string, tensionRefs []string) (StreamSeed, 
 		}
 	}
 	return seed, nil
-}
-
-// ToContextChunks adapts BKC chunks to framework context payloads.
-func ToContextChunks(chunks []KnowledgeChunk) []contextmgr.ContextChunk {
-	out := make([]contextmgr.ContextChunk, 0, len(chunks))
-	for _, chunk := range chunks {
-		metadata := map[string]string{
-			"workspace_id": chunk.WorkspaceID,
-			"freshness":    string(chunk.Freshness),
-			"version":      itoa(chunk.Version),
-		}
-		if chunk.Provenance.WorkflowID != "" {
-			metadata["workflow_id"] = chunk.Provenance.WorkflowID
-		}
-		out = append(out, contextmgr.ContextChunk{
-			ID:            string(chunk.ID),
-			Content:       chunk.Body.Raw,
-			TokenEstimate: chunk.TokenEstimate,
-			Metadata:      metadata,
-		})
-	}
-	return out
-}
-
-func itoa(v int) string {
-	if v == 0 {
-		return "0"
-	}
-	sign := ""
-	if v < 0 {
-		sign = "-"
-		v = -v
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for v > 0 {
-		i--
-		buf[i] = byte('0' + v%10)
-		v /= 10
-	}
-	return sign + string(buf[i:])
 }

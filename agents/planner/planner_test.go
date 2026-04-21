@@ -461,11 +461,8 @@ func TestPlannerExecuteUsesExplicitSummarizeCheckpointAndPersistenceNodes(t *tes
 	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
 	require.NoError(t, err)
 	defer workflowStore.Close()
-	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	require.NoError(t, err)
-	defer runtimeStore.Close()
 	checkpointDir := t.TempDir()
-	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, memory.NewCheckpointStore(checkpointDir))
+	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, memory.NewCheckpointStore(checkpointDir))
 
 	task := &core.Task{ID: "planner-phase8", Instruction: "Read README.md and summarize the result."}
 	now := time.Date(2026, 3, 11, 12, 0, 0, 0, time.UTC)
@@ -531,14 +528,6 @@ func TestPlannerExecuteUsesExplicitSummarizeCheckpointAndPersistenceNodes(t *tes
 	events, err := workflowStore.ListEvents(context.Background(), task.ID, 20)
 	require.NoError(t, err)
 	require.NotEmpty(t, events)
-
-	decl, err := runtimeStore.SearchDeclarative(context.Background(), memory.DeclarativeMemoryQuery{
-		TaskID: task.ID,
-		Scope:  memory.MemoryScopeProject,
-		Limit:  10,
-	})
-	require.NoError(t, err)
-	require.NotEmpty(t, decl)
 
 	checkpoints, err := composite.List(task.ID)
 	require.NoError(t, err)

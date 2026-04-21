@@ -1,14 +1,15 @@
 package pretask
 
 import (
+	"regexp"
 	"path/filepath"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/framework/contextmgr"
 )
 
+var fileReferenceRegex = regexp.MustCompile(`[\w./-]+\.[\w]+`)
+
 // FileResolver validates and normalizes file paths from user input.
-// It wraps framework/contextmgr.ExtractFileReferences for @mention parsing.
+// It extracts file-like references from @mention parsing.
 type FileResolver struct {
 	Workspace string // absolute workspace root
 
@@ -31,7 +32,7 @@ type ResolvedFiles struct {
 // Symlinks are not followed. Paths escaping workspace are dropped into Skipped.
 func (r *FileResolver) Resolve(selections []string, text string) ResolvedFiles {
 	allPaths := append([]string{}, selections...)
-	allPaths = append(allPaths, contextmgr.ExtractFileReferences(text)...)
+	allPaths = append(allPaths, extractFileReferences(text)...)
 
 	var paths []string
 	var skipped []string
@@ -58,6 +59,21 @@ func (r *FileResolver) Resolve(selections []string, text string) ResolvedFiles {
 		paths = append(paths, abs)
 	}
 	return ResolvedFiles{Paths: paths, Skipped: skipped}
+}
+
+func extractFileReferences(text string) []string {
+	matches := fileReferenceRegex.FindAllString(text, -1)
+	unique := make(map[string]struct{})
+	refs := make([]string, 0, len(matches))
+	for _, match := range matches {
+		clean := filepath.Clean(match)
+		if _, ok := unique[clean]; ok {
+			continue
+		}
+		unique[clean] = struct{}{}
+		refs = append(refs, clean)
+	}
+	return refs
 }
 
 // computeFileDelta returns the files added and removed relative to prior.

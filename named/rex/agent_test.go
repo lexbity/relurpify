@@ -55,12 +55,8 @@ func testRuntimeEnv(t *testing.T) ayenitd.WorkspaceEnvironment {
 	if err != nil {
 		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
 	}
-	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	if err != nil {
-		t.Fatalf("NewSQLiteRuntimeMemoryStore: %v", err)
-	}
 	checkpoints := db.NewSQLiteCheckpointStore(workflowStore.DB())
-	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, checkpoints)
+	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, checkpoints)
 	return ayenitd.WorkspaceEnvironment{
 		Model:    stubModel{},
 		Registry: capability.NewRegistry(),

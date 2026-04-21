@@ -15,7 +15,7 @@ spec:
     strict: true
     timeout: 180s
   memory:
-    backend: sqlite_runtime
+    backend: hybrid
     retrieval:
       embedder: test
   workspace:

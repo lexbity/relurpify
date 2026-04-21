@@ -22,7 +22,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/memory/db"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
@@ -76,13 +75,6 @@ func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model co
 
 func RegisterBuiltinRelurpicCapabilitiesWithOptions(registry *capability.Registry, model core.LanguageModel, cfg *core.Config, opts ...relurpicpkg.RelurpicOption) error {
 	return relurpicpkg.RegisterBuiltinRelurpicCapabilities(registry, model, cfg, opts...)
-}
-
-func WithPatternStore(store patterns.PatternStore) RelurpicOption {
-	return relurpicpkg.WithPatternStore(store)
-}
-func WithCommentStore(store patterns.CommentStore) RelurpicOption {
-	return relurpicpkg.WithCommentStore(store)
 }
 func WithIndexManager(manager *ast.IndexManager) RelurpicOption {
 	return relurpicpkg.WithIndexManager(manager)

@@ -42,23 +42,6 @@ func prepareCaseMemory(workspace string, suite *Suite, c CaseSpec, telemetry cor
 			return nil, err
 		}
 		return &preparedMemoryStore{Store: store, Backend: "hybrid"}, nil
-	case "sqlite_runtime":
-		opts := memorydb.SQLiteRuntimeRetrievalOptions{Telemetry: telemetry}
-		if spec.Retrieval.Embedder == "test" {
-			opts.Embedder = agenttestRetrievalEmbedder{}
-		}
-		store, err := memorydb.NewSQLiteRuntimeMemoryStoreWithRetrieval(
-			filepath.Join(paths.MemoryDir(), "runtime_memory.db"),
-			opts,
-		)
-		if err != nil {
-			return nil, err
-		}
-		return &preparedMemoryStore{
-			Store:   store,
-			Backend: "sqlite_runtime",
-			cleanup: store.Close,
-		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported memory backend %q", spec.Backend)
 	}
@@ -147,7 +130,7 @@ func seedRuntimeMemory(ctx context.Context, store memory.MemoryStore, spec Memor
 	}
 	proceduralStore, ok := store.(memory.ProceduralMemoryStore)
 	if !ok {
-		return fmt.Errorf("procedural memory seed requires runtime memory backend")
+		return fmt.Errorf("procedural memory seed requires a procedural store")
 	}
 	for _, record := range spec.Procedural {
 		if err := proceduralStore.PutProcedural(ctx, memory.ProceduralMemoryRecord{
@@ -273,19 +256,7 @@ func seedWorkflowStore(ctx context.Context, path string, workflows []WorkflowSee
 
 func collectMemoryOutcome(ctx context.Context, workspace string, store memory.MemoryStore) (MemoryOutcomeReport, error) {
 	out := MemoryOutcomeReport{}
-	if runtimeStore, ok := store.(memory.RuntimeMemoryStore); ok {
-		decl, err := runtimeStore.SearchDeclarative(ctx, memory.DeclarativeMemoryQuery{Limit: 10000})
-		if err != nil {
-			return out, err
-		}
-		proc, err := runtimeStore.SearchProcedural(ctx, memory.ProceduralMemoryQuery{Limit: 10000})
-		if err != nil {
-			return out, err
-		}
-		out.DeclarativeRecordsCreated = len(decl)
-		out.ProceduralRecordsCreated = len(proc)
-		out.MemoryRecordsCreated = out.DeclarativeRecordsCreated + out.ProceduralRecordsCreated
-	} else if store != nil {
+	if store != nil {
 		total := 0
 		for _, scope := range []memory.MemoryScope{memory.MemoryScopeSession, memory.MemoryScopeProject, memory.MemoryScopeGlobal} {
 			records, err := store.Search(ctx, "", scope)

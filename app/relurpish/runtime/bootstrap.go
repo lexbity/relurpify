@@ -18,7 +18,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"codeburg.org/lexbit/relurpify/framework/policybundle"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -47,8 +46,6 @@ type AgentBootstrapOptions struct {
 	AllowedCapabilities []core.CapabilitySelector
 	DebugLLM            bool
 	DebugAgent          bool
-	PatternStore        patterns.PatternStore
-	CommentStore        patterns.CommentStore
 	RetrievalDB         *sql.DB
 	PlanStore           frameworkplan.PlanStore
 	GuidanceBroker      *guidance.GuidanceBroker
@@ -97,8 +94,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AllowedCapabilities: opts.AllowedCapabilities,
 		DebugLLM:            opts.DebugLLM,
 		DebugAgent:          opts.DebugAgent,
-		PatternStore:        opts.PatternStore,
-		CommentStore:        opts.CommentStore,
 		RetrievalDB:         opts.RetrievalDB,
 		PlanStore:           opts.PlanStore,
 		GuidanceBroker:      opts.GuidanceBroker,
@@ -130,8 +125,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		boot.AgentConfig,
 		agents.WithIndexManager(boot.IndexManager),
 		agents.WithGraphDB(graphDBFromIndexManager(boot.IndexManager)),
-		agents.WithPatternStore(opts.PatternStore),
-		agents.WithCommentStore(opts.CommentStore),
 		agents.WithRetrievalDB(opts.RetrievalDB),
 		agents.WithPlanStore(opts.PlanStore),
 		agents.WithGuidanceBroker(opts.GuidanceBroker),

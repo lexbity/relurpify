@@ -2,7 +2,6 @@ package ayenitd
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -16,9 +15,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"github.com/stretchr/testify/require"
@@ -188,11 +184,10 @@ func TestServiceManagerListIDs(t *testing.T) {
 }
 
 func TestWorkspaceLifecycleAndClosers(t *testing.T) {
-	workflowStore, _, _, _, _, patternDB, err := openRuntimeStores(t.TempDir())
+	workflowStore, _, _, err := openRuntimeStores(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = workflowStore.Close()
-		_ = patternDB.Close()
 	})
 	backend := &fakeManagedBackend{}
 	svc := &mockService{}
@@ -209,18 +204,14 @@ func TestWorkspaceLifecycleAndClosers(t *testing.T) {
 	}
 
 	logCloser := &countCloser{}
-	patternCloser := &countCloser{}
 	eventCloser := &countCloser{}
 	ws.logFile = logCloser
-	ws.patternDB = patternCloser
 	ws.eventLog = eventCloser
 
-	logOut, patternOut, eventOut := ws.StealClosers()
+	logOut, eventOut := ws.StealClosers()
 	require.Same(t, logCloser, logOut)
-	require.Same(t, patternCloser, patternOut)
 	require.Same(t, eventCloser, eventOut)
 	require.Nil(t, ws.logFile)
-	require.Nil(t, ws.patternDB)
 	require.Nil(t, ws.eventLog)
 
 	require.Same(t, sm.Get("svc"), ws.GetService("svc"))
@@ -228,20 +219,17 @@ func TestWorkspaceLifecycleAndClosers(t *testing.T) {
 	require.NoError(t, ws.Close())
 	require.EqualValues(t, 1, backend.closeCount.Load())
 	require.EqualValues(t, 0, logCloser.closeCount.Load())
-	require.EqualValues(t, 0, patternCloser.closeCount.Load())
 	require.EqualValues(t, 0, eventCloser.closeCount.Load())
 	require.False(t, sm.Has("svc"))
 }
 
 func TestWorkspaceCloseContinuesAfterServiceError(t *testing.T) {
-	workflowStore, _, _, _, _, patternDB, err := openRuntimeStores(t.TempDir())
+	workflowStore, _, _, err := openRuntimeStores(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = workflowStore.Close()
-		_ = patternDB.Close()
 	})
 	logCloser := &countCloser{}
-	patternCloser := &countCloser{}
 	eventCloser := &countCloser{}
 	backend := &fakeManagedBackend{}
 	sm := NewServiceManager()
@@ -254,7 +242,6 @@ func TestWorkspaceCloseContinuesAfterServiceError(t *testing.T) {
 		},
 		Backend:        backend,
 		logFile:        logCloser,
-		patternDB:      patternCloser,
 		eventLog:       eventCloser,
 		ServiceManager: sm,
 	}
@@ -263,19 +250,16 @@ func TestWorkspaceCloseContinuesAfterServiceError(t *testing.T) {
 	require.Contains(t, err.Error(), "stop services")
 	require.EqualValues(t, 1, backend.closeCount.Load())
 	require.EqualValues(t, 1, logCloser.closeCount.Load())
-	require.EqualValues(t, 1, patternCloser.closeCount.Load())
 	require.EqualValues(t, 1, eventCloser.closeCount.Load())
 }
 
 func TestWorkspaceCloseAggregatesOwnedCloserErrors(t *testing.T) {
-	workflowStore, _, _, _, _, patternDB, err := openRuntimeStores(t.TempDir())
+	workflowStore, _, _, err := openRuntimeStores(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = workflowStore.Close()
-		_ = patternDB.Close()
 	})
 	logCloser := &countCloser{err: context.Canceled}
-	patternCloser := &countCloser{err: context.Canceled}
 	eventCloser := &countCloser{err: context.Canceled}
 	backend := &fakeManagedBackend{closeErr: context.Canceled}
 	sm := NewServiceManager()
@@ -288,7 +272,6 @@ func TestWorkspaceCloseAggregatesOwnedCloserErrors(t *testing.T) {
 		},
 		Backend:        backend,
 		logFile:        logCloser,
-		patternDB:      patternCloser,
 		eventLog:       eventCloser,
 		ServiceManager: sm,
 	}
@@ -296,19 +279,16 @@ func TestWorkspaceCloseAggregatesOwnedCloserErrors(t *testing.T) {
 	require.Error(t, err)
 	require.EqualValues(t, 1, backend.closeCount.Load())
 	require.EqualValues(t, 1, logCloser.closeCount.Load())
-	require.EqualValues(t, 1, patternCloser.closeCount.Load())
 	require.EqualValues(t, 1, eventCloser.closeCount.Load())
 }
 
 func TestWorkspaceCloseClosesOwnedClosers(t *testing.T) {
-	workflowStore, _, _, _, _, patternDB, err := openRuntimeStores(t.TempDir())
+	workflowStore, _, _, err := openRuntimeStores(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = workflowStore.Close()
-		_ = patternDB.Close()
 	})
 	logCloser := &countCloser{}
-	patternCloser := &countCloser{}
 	eventCloser := &countCloser{}
 	backend := &fakeManagedBackend{}
 	sm := NewServiceManager()
@@ -321,14 +301,12 @@ func TestWorkspaceCloseClosesOwnedClosers(t *testing.T) {
 		},
 		Backend:        backend,
 		logFile:        logCloser,
-		patternDB:      patternCloser,
 		eventLog:       eventCloser,
 		ServiceManager: sm,
 	}
 	require.NoError(t, ws.Close())
 	require.EqualValues(t, 1, backend.closeCount.Load())
 	require.EqualValues(t, 1, logCloser.closeCount.Load())
-	require.EqualValues(t, 1, patternCloser.closeCount.Load())
 	require.EqualValues(t, 1, eventCloser.closeCount.Load())
 }
 
@@ -389,97 +367,27 @@ func TestWorkspaceRestartNilManagerReturnsError(t *testing.T) {
 
 func TestOpenRuntimeStoresHappyPathAndFailures(t *testing.T) {
 	workspace := t.TempDir()
-	workflowStore, planStore, patternStore, commentStore, knowledgeStore, patternDB, err := openRuntimeStores(workspace)
+	workflowStore, planStore, knowledgeStore, err := openRuntimeStores(workspace)
 	require.NoError(t, err)
 	require.NotNil(t, workflowStore)
-	require.NotNil(t, planStore)
-	require.NotNil(t, patternStore)
-	require.NotNil(t, commentStore)
+	require.Nil(t, planStore)
 	require.NotNil(t, knowledgeStore)
-	require.NotNil(t, patternDB)
 	require.NoError(t, workflowStore.Close())
-	require.NoError(t, patternDB.Close())
 
 	blockedSessions := filepath.Join(t.TempDir(), config.DirName, "sessions")
 	require.NoDirExists(t, blockedSessions)
 	require.NoError(t, os.MkdirAll(filepath.Dir(blockedSessions), 0o755))
 	require.NoError(t, os.WriteFile(blockedSessions, []byte("block"), 0o644))
-	_, _, _, _, _, _, err = openRuntimeStores(filepath.Dir(filepath.Dir(blockedSessions)))
+	_, _, _, err = openRuntimeStores(filepath.Dir(filepath.Dir(blockedSessions)))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "create sessions directory")
 
 	blockedMemoryRoot := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(blockedMemoryRoot, config.DirName, "sessions"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(blockedMemoryRoot, config.DirName, "memory"), []byte("block"), 0o644))
-	_, _, _, _, _, _, err = openRuntimeStores(blockedMemoryRoot)
+	_, _, _, err = openRuntimeStores(blockedMemoryRoot)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "create memory directory")
-}
-
-func TestOpenRuntimeStoresFailureBranchesWithSeams(t *testing.T) {
-	workspace := t.TempDir()
-
-	origMkdirAllFn := mkdirAllFn
-	origNewSQLiteWorkflowStateStoreFn := newSQLiteWorkflowStateStoreFn
-	origNewSQLitePlanStoreFn := newSQLitePlanStoreFn
-	origOpenPatternsSQLiteFn := openPatternsSQLiteFn
-	origNewSQLitePatternStoreFn := newSQLitePatternStoreFn
-	origNewSQLiteCommentStoreFn := newSQLiteCommentStoreFn
-	origNewKnowledgeStoreFn := newKnowledgeStoreFn
-	t.Cleanup(func() {
-		mkdirAllFn = origMkdirAllFn
-		newSQLiteWorkflowStateStoreFn = origNewSQLiteWorkflowStateStoreFn
-		newSQLitePlanStoreFn = origNewSQLitePlanStoreFn
-		openPatternsSQLiteFn = origOpenPatternsSQLiteFn
-		newSQLitePatternStoreFn = origNewSQLitePatternStoreFn
-		newSQLiteCommentStoreFn = origNewSQLiteCommentStoreFn
-		newKnowledgeStoreFn = origNewKnowledgeStoreFn
-	})
-
-	mkdirAllFn = func(string, os.FileMode) error { return errors.New("mkdir boom") }
-	_, _, _, _, _, _, err := openRuntimeStores(workspace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "create sessions directory")
-
-	mkdirAllFn = origMkdirAllFn
-	newSQLiteWorkflowStateStoreFn = func(string) (*memorydb.SQLiteWorkflowStateStore, error) {
-		return nil, errors.New("workflow boom")
-	}
-	_, _, _, _, _, _, err = openRuntimeStores(workspace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "open workflow state store")
-
-	newSQLiteWorkflowStateStoreFn = origNewSQLiteWorkflowStateStoreFn
-	newSQLitePlanStoreFn = func(*sql.DB) (*frameworkplan.SQLitePlanStore, error) {
-		return nil, errors.New("plan boom")
-	}
-	_, _, _, _, _, _, err = openRuntimeStores(workspace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "open living plan store")
-
-	newSQLitePlanStoreFn = origNewSQLitePlanStoreFn
-	openPatternsSQLiteFn = func(string) (*sql.DB, error) {
-		return nil, errors.New("patterns boom")
-	}
-	_, _, _, _, _, _, err = openRuntimeStores(workspace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "open patterns store")
-
-	openPatternsSQLiteFn = origOpenPatternsSQLiteFn
-	newSQLitePatternStoreFn = func(*sql.DB) (*patterns.SQLitePatternStore, error) {
-		return nil, errors.New("pattern store boom")
-	}
-	_, _, _, _, _, _, err = openRuntimeStores(workspace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "open pattern catalog")
-
-	newSQLitePatternStoreFn = origNewSQLitePatternStoreFn
-	newSQLiteCommentStoreFn = func(*sql.DB) (*patterns.SQLiteCommentStore, error) {
-		return nil, errors.New("comment store boom")
-	}
-	_, _, _, _, _, _, err = openRuntimeStores(workspace)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "open comment catalog")
 }
 
 func TestProbeWorkspaceBackendEdgeCases(t *testing.T) {

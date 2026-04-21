@@ -35,13 +35,6 @@ func TestAliasWrappers(t *testing.T) {
 	if got := NewSQLitePipelineCheckpointStore(nil, "workflow", "run"); got == nil {
 		t.Fatal("expected checkpoint store adapter")
 	}
-
-	if opt := WithPatternStore(nil); opt == nil {
-		t.Fatal("expected pattern store option")
-	}
-	if opt := WithCommentStore(nil); opt == nil {
-		t.Fatal("expected comment store option")
-	}
 	if opt := WithIndexManager(&ast.IndexManager{}); opt == nil {
 		t.Fatal("expected index manager option")
 	}

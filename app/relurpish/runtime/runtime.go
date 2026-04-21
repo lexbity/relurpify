@@ -40,7 +40,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"codeburg.org/lexbit/relurpify/framework/policybundle"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -74,8 +73,6 @@ type Runtime struct {
 	SearchEngine         *search.SearchEngine
 	WorkflowStore        *memorydb.SQLiteWorkflowStateStore
 	PlanStore            frameworkplan.PlanStore
-	PatternStore         patterns.PatternStore
-	CommentStore         patterns.CommentStore
 	GuidanceBroker       *guidance.GuidanceBroker
 	LearningBroker       *archaeolearning.Broker
 	Registration         *fauthorization.AgentRegistration
@@ -94,10 +91,8 @@ type Runtime struct {
 	NexusNodeProvider    core.NodeProvider
 	NexusClient          *NexusClient
 
-	logFile   io.Closer
-	eventLog  io.Closer
-	patternDB io.Closer
-
+	logFile     io.Closer
+	eventLog    io.Closer
 	hitlCancel  func()
 	nexusCancel func()
 
@@ -175,7 +170,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 
 	// Transfer closer ownership from Workspace to Runtime so that rt.Close()
 	// manages the lifecycle directly. ws.Close() is not called.
-	logFile, patternDB, _ := ws.StealClosers()
+	logFile, _ := ws.StealClosers()
 
 	env := ws.Environment
 	registration := ws.Registration
@@ -264,20 +259,16 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		env.Config,
 		agents.WithIndexManager(env.IndexManager),
 		agents.WithGraphDB(graphDBFromIndexManager(env.IndexManager)),
-		agents.WithPatternStore(env.PatternStore),
-		agents.WithCommentStore(env.CommentStore),
 		agents.WithRetrievalDB(env.RetrievalDB),
 		agents.WithPlanStore(env.PlanStore),
 		agents.WithGuidanceBroker(env.GuidanceBroker),
 		agents.WithWorkflowStore(env.WorkflowStore),
 	); err != nil {
 		logFile.Close()
-		patternDB.Close()
 		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
 	}
 	if err := agents.RegisterAgentCapabilities(env.Registry, agentEnv); err != nil {
 		logFile.Close()
-		patternDB.Close()
 		return nil, fmt.Errorf("register agent capabilities: %w", err)
 	}
 
@@ -298,14 +289,11 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		SearchEngine:         env.SearchEngine,
 		WorkflowStore:        workflowStore,
 		PlanStore:            env.PlanStore,
-		PatternStore:         env.PatternStore,
-		CommentStore:         env.CommentStore,
 		GuidanceBroker:       env.GuidanceBroker,
 		LearningBroker:       learningBroker,
 		Logger:               logger,
 		logFile:              logFile,
 		eventLog:             eventLogCloser,
-		patternDB:            patternDB,
 		Workspace:            workspaceCfg,
 		Backend:              ws.Backend,
 		ProfileResolution:    profileResolution,
@@ -398,12 +386,6 @@ func (r *Runtime) Close() error {
 			errs = append(errs, err)
 		}
 		r.Backend = nil
-	}
-	if r.patternDB != nil {
-		if err := r.patternDB.Close(); err != nil {
-			errs = append(errs, err)
-		}
-		r.patternDB = nil
 	}
 	if r.IndexManager != nil {
 		if err := r.IndexManager.Close(); err != nil {
@@ -744,44 +726,26 @@ func embedderCfgFromRuntimeConfig(cfg Config, model string) retrieval.EmbedderCo
 	}
 }
 
-func openRuntimeStores(workspace string) (*memorydb.SQLiteWorkflowStateStore, frameworkplan.PlanStore, patterns.PatternStore, patterns.CommentStore, io.Closer, error) {
+func openRuntimeStores(workspace string) (*memorydb.SQLiteWorkflowStateStore, frameworkplan.PlanStore, io.Closer, error) {
 	paths := config.New(workspace)
 	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("create sessions directory: %w", err)
+		return nil, nil, nil, fmt.Errorf("create sessions directory: %w", err)
 	}
 	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("create memory directory: %w", err)
+		return nil, nil, nil, fmt.Errorf("create memory directory: %w", err)
 	}
 
 	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(paths.WorkflowStateFile())
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("open workflow state store: %w", err)
+		return nil, nil, nil, fmt.Errorf("open workflow state store: %w", err)
 	}
 	planStore, err := frameworkplan.NewSQLitePlanStore(workflowStore.DB())
 	if err != nil {
 		_ = workflowStore.Close()
-		return nil, nil, nil, nil, nil, fmt.Errorf("open living plan store: %w", err)
+		return nil, nil, nil, fmt.Errorf("open living plan store: %w", err)
 	}
 
-	patternDBPath := filepath.Join(paths.ConfigRoot(), "patterns.db")
-	patternDB, err := patterns.OpenSQLite(patternDBPath)
-	if err != nil {
-		_ = workflowStore.Close()
-		return nil, nil, nil, nil, nil, fmt.Errorf("open patterns store: %w", err)
-	}
-	patternStore, err := patterns.NewSQLitePatternStore(patternDB)
-	if err != nil {
-		_ = patternDB.Close()
-		_ = workflowStore.Close()
-		return nil, nil, nil, nil, nil, fmt.Errorf("open pattern catalog: %w", err)
-	}
-	commentStore, err := patterns.NewSQLiteCommentStore(patternDB)
-	if err != nil {
-		_ = patternDB.Close()
-		_ = workflowStore.Close()
-		return nil, nil, nil, nil, nil, fmt.Errorf("open comment catalog: %w", err)
-	}
-	return workflowStore, planStore, patternStore, commentStore, patternDB, nil
+	return workflowStore, planStore, nil, nil
 }
 
 func shouldIgnoreBootstrapIndexError(err error) bool {
@@ -989,22 +953,6 @@ func (r *Runtime) wireRuntimeAgentDependencies(agent graph.Agent) {
 	}
 	if eucloAgent.WorkflowStore == nil {
 		eucloAgent.WorkflowStore = r.WorkflowStore
-	}
-	if eucloAgent.PatternStore == nil {
-		eucloAgent.PatternStore = r.PatternStore
-	}
-	if eucloAgent.CommentStore == nil {
-		eucloAgent.CommentStore = r.CommentStore
-	}
-	if eucloAgent.ConvVerifier == nil && r.PatternStore != nil {
-		var tensionDetector relurpic.TensionDetector
-		if r.WorkflowStore != nil {
-			tensionDetector = archaeotensions.Service{Store: r.WorkflowStore}
-		}
-		eucloAgent.ConvVerifier = &relurpic.PatternCoherenceVerifier{
-			PatternStore:    r.PatternStore,
-			TensionDetector: tensionDetector,
-		}
 	}
 	if eucloAgent.GuidanceBroker == nil {
 		eucloAgent.GuidanceBroker = r.GuidanceBroker
@@ -1229,8 +1177,6 @@ func (r *Runtime) relurpishBinding() relurpishbindings.Runtime {
 	return relurpishbindings.Runtime{
 		WorkflowStore:  r.WorkflowStore,
 		PlanStore:      r.PlanStore,
-		PatternStore:   r.PatternStore,
-		CommentStore:   r.CommentStore,
 		Retrieval:      archaeoretrieval.NewSQLStore(workflowDB(r.WorkflowStore)),
 		LearningBroker: r.LearningBroker,
 	}

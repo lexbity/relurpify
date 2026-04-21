@@ -13,52 +13,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
-type runtimeMemoryStub struct{}
-
-func (runtimeMemoryStub) Remember(context.Context, string, map[string]interface{}, memory.MemoryScope) error {
-	return nil
-}
-
-func (runtimeMemoryStub) Recall(context.Context, string, memory.MemoryScope) (*memory.MemoryRecord, bool, error) {
-	return nil, false, nil
-}
-
-func (runtimeMemoryStub) Search(context.Context, string, memory.MemoryScope) ([]memory.MemoryRecord, error) {
-	return nil, nil
-}
-
-func (runtimeMemoryStub) Forget(context.Context, string, memory.MemoryScope) error {
-	return nil
-}
-
-func (runtimeMemoryStub) Summarize(context.Context, memory.MemoryScope) (string, error) {
-	return "", nil
-}
-
-func (runtimeMemoryStub) PutDeclarative(context.Context, memory.DeclarativeMemoryRecord) error {
-	return nil
-}
-
-func (runtimeMemoryStub) GetDeclarative(context.Context, string) (*memory.DeclarativeMemoryRecord, bool, error) {
-	return nil, false, nil
-}
-
-func (runtimeMemoryStub) SearchDeclarative(context.Context, memory.DeclarativeMemoryQuery) ([]memory.DeclarativeMemoryRecord, error) {
-	return nil, nil
-}
-
-func (runtimeMemoryStub) PutProcedural(context.Context, memory.ProceduralMemoryRecord) error {
-	return nil
-}
-
-func (runtimeMemoryStub) GetProcedural(context.Context, string) (*memory.ProceduralMemoryRecord, bool, error) {
-	return nil, false, nil
-}
-
-func (runtimeMemoryStub) SearchProcedural(context.Context, memory.ProceduralMemoryQuery) ([]memory.ProceduralMemoryRecord, error) {
-	return nil, nil
-}
-
 func newWorkflowStore(t *testing.T) *db.SQLiteWorkflowStateStore {
 	t.Helper()
 	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
@@ -72,29 +26,16 @@ func TestResolveRuntimeSurfaces(t *testing.T) {
 	t.Run("nil store", func(t *testing.T) {
 		var store memory.MemoryStore
 		surfaces := ResolveRuntimeSurfaces(store)
-		if surfaces.Workflow != nil || surfaces.Runtime != nil {
+		if surfaces.Workflow != nil {
 			t.Fatalf("expected empty surfaces, got %#v", surfaces)
 		}
 	})
 
 	t.Run("composite store", func(t *testing.T) {
 		workflowStore := newWorkflowStore(t)
-		surfaces := ResolveRuntimeSurfaces(memory.NewCompositeRuntimeStore(workflowStore, runtimeMemoryStub{}, nil))
+		surfaces := ResolveRuntimeSurfaces(memory.NewCompositeRuntimeStore(workflowStore, nil, nil))
 		if surfaces.Workflow != workflowStore {
 			t.Fatalf("expected workflow store to be preserved")
-		}
-		if _, ok := surfaces.Runtime.(runtimeMemoryStub); !ok {
-			t.Fatalf("expected runtime store to be preserved, got %#v", surfaces.Runtime)
-		}
-	})
-
-	t.Run("runtime store", func(t *testing.T) {
-		surfaces := ResolveRuntimeSurfaces(runtimeMemoryStub{})
-		if surfaces.Workflow != nil {
-			t.Fatalf("expected no workflow store, got %#v", surfaces.Workflow)
-		}
-		if _, ok := surfaces.Runtime.(runtimeMemoryStub); !ok {
-			t.Fatalf("expected runtime store to be returned, got %#v", surfaces.Runtime)
 		}
 	})
 }

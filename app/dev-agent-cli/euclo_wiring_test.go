@@ -18,27 +18,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"gopkg.in/yaml.v3"
 )
-
-type noopPatternStore struct{}
-
-func (noopPatternStore) Save(context.Context, patterns.PatternRecord) error { return nil }
-func (noopPatternStore) Load(context.Context, string) (*patterns.PatternRecord, error) {
-	return nil, nil
-}
-func (noopPatternStore) ListByStatus(context.Context, patterns.PatternStatus, string) ([]patterns.PatternRecord, error) {
-	return nil, nil
-}
-func (noopPatternStore) ListByKind(context.Context, patterns.PatternKind, string) ([]patterns.PatternRecord, error) {
-	return nil, nil
-}
-func (noopPatternStore) UpdateStatus(context.Context, string, patterns.PatternStatus, string) error {
-	return nil
-}
-func (noopPatternStore) Supersede(context.Context, string, patterns.PatternRecord) error { return nil }
 
 func writeCodingAgentManifestFixture(t *testing.T, ws, name string) string {
 	t.Helper()
@@ -106,8 +88,6 @@ func TestBuildAndWireEucloAgent_WiresWorkspaceServices(t *testing.T) {
 			IndexManager: &ast.IndexManager{
 				GraphDB: graphEngine,
 			},
-			PatternStore:   noopPatternStore{},
-			CommentStore:   nil,
 			RetrievalDB:    retrievalDB,
 			GuidanceBroker: guidance.NewGuidanceBroker(0),
 		},

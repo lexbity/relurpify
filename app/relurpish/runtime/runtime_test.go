@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	relurpic "codeburg.org/lexbit/relurpify/agents/relurpic"
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
 	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
@@ -29,7 +28,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	frameworksearch "codeburg.org/lexbit/relurpify/framework/search"
@@ -239,144 +237,14 @@ func TestBuildCapabilityRegistrySkipASTIndexSkipsSemanticBootstrap(t *testing.T)
 	require.Contains(t, results[0].File, "match.go")
 }
 
-func TestWireRuntimeAgentDependenciesConfiguresEucloAgent(t *testing.T) {
-	dir := t.TempDir()
-	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(dir, "graphdb")))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, graphEngine.Close())
-	})
-
-	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(dir)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, workflowStore.Close())
-		require.NoError(t, patternDB.Close())
-	})
-
-	rt := &Runtime{
-		GraphDB:        graphEngine,
-		PlanStore:      planStore,
-		PatternStore:   patternStore,
-		CommentStore:   commentStore,
-		WorkflowStore:  workflowStore,
-		GuidanceBroker: guidance.NewGuidanceBroker(time.Second),
-		LearningBroker: archaeolearning.NewBroker(time.Second),
-	}
-	agent := &euclo.Agent{}
-
-	rt.wireRuntimeAgentDependencies(agent)
-
-	require.Same(t, graphEngine, agent.GraphDB)
-	require.Same(t, workflowStore.DB(), agent.RetrievalDB)
-	require.Same(t, planStore, agent.PlanStore)
-	require.Same(t, workflowStore, agent.WorkflowStore)
-	require.Same(t, patternStore, agent.PatternStore)
-	require.Same(t, commentStore, agent.CommentStore)
-	require.Same(t, rt.GuidanceBroker, agent.GuidanceBroker)
-	require.Same(t, rt.LearningBroker, agent.LearningBroker)
-	require.Equal(t, guidance.DefaultDeferralPolicy(), agent.DeferralPolicy)
-	verifier, ok := agent.ConvVerifier.(*relurpic.PatternCoherenceVerifier)
-	require.True(t, ok)
-	require.NotNil(t, verifier.TensionDetector)
-}
-
-func TestOpenRuntimeStoresReturnsSharedPersistenceSurfaces(t *testing.T) {
-	dir := t.TempDir()
-
-	workflowStore, planStore, patternStore, commentStore, patternDB, err := openRuntimeStores(dir)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, workflowStore.Close())
-		require.NoError(t, patternDB.Close())
-	})
-
-	require.NotNil(t, workflowStore)
-	require.NotNil(t, workflowStore.DB())
-	require.Implements(t, (*frameworkplan.PlanStore)(nil), planStore)
-	require.Implements(t, (*patterns.PatternStore)(nil), patternStore)
-	require.Implements(t, (*patterns.CommentStore)(nil), commentStore)
-}
-
-func TestRuntimePendingAndResolveLearning(t *testing.T) {
-	ctx := context.Background()
-	dir := t.TempDir()
-
-	workflowStore, _, patternStore, commentStore, patternDB, err := openRuntimeStores(dir)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, workflowStore.Close())
-		require.NoError(t, patternDB.Close())
-	})
-	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
-		WorkflowID:  "wf-learning",
-		TaskID:      "task-learning",
-		TaskType:    core.TaskTypeCodeGeneration,
-		Instruction: "learn",
-		Status:      memory.WorkflowRunStatusRunning,
-	}))
-	require.NoError(t, patternStore.Save(ctx, patterns.PatternRecord{
-		ID:           "pattern-1",
-		Kind:         patterns.PatternKindStructural,
-		Title:        "Adapter",
-		Description:  "Use adapters",
-		Status:       patterns.PatternStatusProposed,
-		CorpusScope:  "workspace",
-		CorpusSource: "workspace",
-		CreatedAt:    time.Now().UTC(),
-		UpdatedAt:    time.Now().UTC(),
-	}))
-	learningBroker := archaeolearning.NewBroker(time.Second)
-	learnSvc := archaeolearning.Service{
-		Store:        workflowStore,
-		PatternStore: patternStore,
-		CommentStore: commentStore,
-		PlanStore:    nil,
-		Broker:       learningBroker,
-	}
-	interaction, err := learnSvc.Create(ctx, archaeolearning.CreateInput{
-		WorkflowID:    "wf-learning",
-		ExplorationID: "explore-1",
-		Kind:          archaeolearning.InteractionPatternProposal,
-		SubjectType:   archaeolearning.SubjectPattern,
-		SubjectID:     "pattern-1",
-		Title:         "Confirm pattern",
-	})
-	require.NoError(t, err)
-
-	rt := &Runtime{
-		WorkflowStore:  workflowStore,
-		PatternStore:   patternStore,
-		CommentStore:   commentStore,
-		LearningBroker: learningBroker,
-	}
-
-	pending := rt.PendingLearning()
-	require.Len(t, pending, 1)
-	require.Equal(t, interaction.ID, pending[0].ID)
-
-	require.NoError(t, rt.ResolveLearning("wf-learning", archaeolearning.ResolveInput{
-		InteractionID: interaction.ID,
-		Kind:          archaeolearning.ResolutionConfirm,
-		ResolvedBy:    "tui",
-	}))
-
-	record, err := patternStore.Load(ctx, "pattern-1")
-	require.NoError(t, err)
-	require.NotNil(t, record)
-	require.Equal(t, patterns.PatternStatusConfirmed, record.Status)
-	require.Empty(t, rt.PendingLearning())
-}
-
 func TestRuntimeExplorationAndPlanVersionQueries(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 
-	workflowStore, planStore, _, _, patternDB, err := openRuntimeStores(dir)
+	workflowStore, planStore, _, err := openRuntimeStores(dir)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, workflowStore.Close())
-		require.NoError(t, patternDB.Close())
 	})
 	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-archaeo",
@@ -480,11 +348,10 @@ func TestRuntimeTensionQueriesAndUpdates(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 
-	workflowStore, _, _, _, patternDB, err := openRuntimeStores(dir)
+	workflowStore, _, _, err := openRuntimeStores(dir)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, workflowStore.Close())
-		require.NoError(t, patternDB.Close())
 	})
 	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-tension",
@@ -541,7 +408,7 @@ func TestRuntimeWorkflowProjectionQueries(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 
-	workflowStore, planStore, _, _, _, err := openRuntimeStores(dir)
+	workflowStore, planStore, _, err := openRuntimeStores(dir)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, workflowStore.Close()) })
 	require.NoError(t, workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{

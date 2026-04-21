@@ -46,22 +46,6 @@ func buildAndWireEucloAgent(ws *ayenitd.Workspace, learningBroker *archaeolearni
 	if agent.WorkflowStore == nil {
 		agent.WorkflowStore = env.WorkflowStore
 	}
-	if agent.PatternStore == nil {
-		agent.PatternStore = env.PatternStore
-	}
-	if agent.CommentStore == nil {
-		agent.CommentStore = env.CommentStore
-	}
-	if agent.ConvVerifier == nil && env.PatternStore != nil {
-		var tensionDetector relurpic.TensionDetector
-		if env.WorkflowStore != nil {
-			tensionDetector = archaeotensions.Service{Store: env.WorkflowStore}
-		}
-		agent.ConvVerifier = &relurpic.PatternCoherenceVerifier{
-			PatternStore:    env.PatternStore,
-			TensionDetector: tensionDetector,
-		}
-	}
 	if agent.GuidanceBroker == nil {
 		agent.GuidanceBroker = env.GuidanceBroker
 	}

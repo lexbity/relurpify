@@ -13,7 +13,7 @@ spec:
     profile: ci-live
     strict: true
   memory:
-    backend: sqlite_runtime
+    backend: hybrid
     retrieval:
       embedder: test
   workspace:

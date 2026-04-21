@@ -368,12 +368,8 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 	require.NoError(t, err)
 	defer workflowStore.Close()
 
-	runtimeStore, err := memdb.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	require.NoError(t, err)
-	defer runtimeStore.Close()
-
 	checkpoints := memdb.NewSQLiteCheckpointStore(workflowStore.DB())
-	composite := memory.NewCompositeRuntimeStore(workflowStore, runtimeStore, checkpoints)
+	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, checkpoints)
 	agent := rexpkg.New(ayenitd.WorkspaceEnvironment{
 		Model:    stubModel{},
 		Registry: capability.NewRegistry(),

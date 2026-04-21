@@ -941,14 +941,7 @@ func TestHTNAgent_PersistsPrimitiveStepResultsToWorkflowMemory(t *testing.T) {
 		t.Fatalf("workflow store: %v", err)
 	}
 	t.Cleanup(func() { _ = workflowStore.Close() })
-
-	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	if err != nil {
-		t.Fatalf("runtime store: %v", err)
-	}
-	t.Cleanup(func() { _ = runtimeStore.Close() })
-
-	composite := frameworkmemory.NewCompositeRuntimeStore(workflowStore, runtimeStore, nil)
+	composite := frameworkmemory.NewCompositeRuntimeStore(workflowStore, nil, nil)
 	agent := &htn.HTNAgent{
 		Memory: composite,
 		Config: &core.Config{MaxIterations: 4},
@@ -1012,16 +1005,10 @@ func TestHTNAgent_HydratesWorkflowRetrievalAndSetsStateFlag(t *testing.T) {
 		Status:     "accepted",
 	}))
 
-	runtimeStore, err := db.NewSQLiteRuntimeMemoryStore(filepath.Join(t.TempDir(), "runtime.db"))
-	if err != nil {
-		t.Fatalf("runtime store: %v", err)
-	}
-	t.Cleanup(func() { _ = runtimeStore.Close() })
-
 	var seenRetrieval string
 	var seenMode string
 	var sawPayload bool
-	composite := frameworkmemory.NewCompositeRuntimeStore(workflowStore, runtimeStore, nil)
+	composite := frameworkmemory.NewCompositeRuntimeStore(workflowStore, nil, nil)
 	agent := &htn.HTNAgent{
 		Memory: composite,
 		Config: &core.Config{MaxIterations: 4},

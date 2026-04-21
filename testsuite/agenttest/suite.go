@@ -342,7 +342,7 @@ type CaseOverrideSpec struct {
 }
 
 type MemorySpec struct {
-	Backend   string              `yaml:"backend,omitempty"` // hybrid|sqlite_runtime
+	Backend   string              `yaml:"backend,omitempty"` // hybrid
 	Retrieval MemoryRetrievalSpec `yaml:"retrieval,omitempty"`
 }
 
@@ -736,7 +736,7 @@ func (s *Suite) MatchesProfile(profile string) bool {
 
 func validateMemorySpec(spec MemorySpec, location string) error {
 	switch spec.Backend {
-	case "", "hybrid", "sqlite_runtime":
+	case "", "hybrid":
 	default:
 		return fmt.Errorf("%s backend %q unsupported", location, spec.Backend)
 	}

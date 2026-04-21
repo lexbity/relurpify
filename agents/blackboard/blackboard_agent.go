@@ -85,22 +85,6 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		Sources:   a.Sources,
 		MaxCycles: a.MaxCycles,
 	}
-	var retrieveDeclarative *graph.RetrieveDeclarativeMemoryNode
-	var retrieveProcedural *graph.RetrieveProceduralMemoryNode
-	if blackboardUsesDeclarativeRetrieval(a.Config) && a.Memory != nil {
-		retrieveDeclarative = graph.NewRetrieveDeclarativeMemoryNode("bb_retrieve_declarative", blackboardScopedMemoryRetriever{
-			store:       a.Memory,
-			scope:       memory.MemoryScopeProject,
-			memoryClass: core.MemoryClassDeclarative,
-		})
-		retrieveDeclarative.Query = taskInstruction(task)
-		retrieveProcedural = graph.NewRetrieveProceduralMemoryNode("bb_retrieve_procedural", blackboardScopedMemoryRetriever{
-			store:       a.Memory,
-			scope:       memory.MemoryScopeProject,
-			memoryClass: core.MemoryClassProcedural,
-		})
-		retrieveProcedural.Query = taskInstruction(task)
-	}
 	load := &blackboardLoadNode{id: "bb_load", goal: goal, maxCycles: maxCycles(a.MaxCycles)}
 	evaluate := &blackboardEvaluateNode{id: "bb_evaluate", controller: controller}
 	dispatch := &blackboardDispatchNode{id: "bb_dispatch", controller: controller, tools: a.Tools, model: a.Model, semctx: a.SemanticContext}
@@ -109,23 +93,9 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		evaluate.telemetry = cfg.Telemetry
 		dispatch.telemetry = cfg.Telemetry
 	}
-	var summarize *graph.SummarizeContextNode
 	var persist *graph.PersistenceWriterNode
 	if blackboardUsesStructuredPersistence(a.Config) {
 		if runtimeStore := blackboardRuntimeStore(a.Memory); runtimeStore != nil {
-			summarize = graph.NewSummarizeContextNode("bb_summarize", &core.SimpleSummarizer{})
-			summarize.IncludeHistory = false
-			summarize.StateKeys = []string{
-				contextKeySummary,
-				contextKeyController,
-				contextKeyMetrics,
-				contextKeyPersistenceSummary,
-				contextKeyPersistenceDecision,
-				contextKeyPersistenceRoutine,
-			}
-			if cfg := a.Config; cfg != nil {
-				summarize.Telemetry = cfg.Telemetry
-			}
 			persist = graph.NewPersistenceWriterNode("bb_persist", runtimeStore)
 			persist.TaskID = taskID(task)
 			if cfg := a.Config; cfg != nil {
@@ -173,38 +143,23 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		}
 	}
 	done := graph.NewTerminalNode("bb_done")
-	nodes := make([]graph.Node, 0, 8)
-	if retrieveDeclarative != nil {
-		nodes = append(nodes, retrieveDeclarative)
-	}
-	if retrieveProcedural != nil {
-		nodes = append(nodes, retrieveProcedural)
-	}
+	nodes := make([]graph.Node, 0, 5)
 	nodes = append(nodes, load, evaluate, dispatch)
-	if summarize != nil {
-		nodes = append(nodes, summarize)
-	}
 	if persist != nil {
 		nodes = append(nodes, persist)
 	}
 	nodes = append(nodes, done)
 	nextAfterDispatch := evaluate.ID()
 	nextAfterDoneDecision := done.ID()
-	if summarize != nil {
-		nextAfterDoneDecision = summarize.ID()
-		if persist != nil {
-			nextAfterDoneDecision = summarize.ID()
-		}
-	}
 	if persist != nil {
-		nextAfterDoneDecision = summarize.ID()
+		nextAfterDoneDecision = persist.ID()
 	}
 	if blackboardUsesExplicitCheckpointNodes(a.Config) && a.CheckpointPath != "" && task != nil && task.ID != "" {
 		cycleCheckpoint := graph.NewCheckpointNode("bb_checkpoint_cycle", evaluate.ID(), memory.NewCheckpointStore(filepath.Clean(a.CheckpointPath)))
 		cycleCheckpoint.TaskID = task.ID
 		terminalNext := done.ID()
-		if summarize != nil {
-			terminalNext = summarize.ID()
+		if persist != nil {
+			terminalNext = persist.ID()
 		}
 		terminalCheckpoint := graph.NewCheckpointNode("bb_checkpoint_done", terminalNext, memory.NewCheckpointStore(filepath.Clean(a.CheckpointPath)))
 		terminalCheckpoint.TaskID = task.ID
@@ -515,13 +470,6 @@ func blackboardUsesExplicitCheckpointNodes(cfg *core.Config) bool {
 		return false
 	}
 	return *cfg.UseExplicitCheckpointNodes
-}
-
-func blackboardUsesDeclarativeRetrieval(cfg *core.Config) bool {
-	if cfg == nil || cfg.UseDeclarativeRetrieval == nil {
-		return true
-	}
-	return *cfg.UseDeclarativeRetrieval
 }
 
 func blackboardUsesStructuredPersistence(cfg *core.Config) bool {

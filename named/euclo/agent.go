@@ -28,7 +28,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
-	"codeburg.org/lexbit/relurpify/framework/patterns"
 	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -99,8 +98,6 @@ type Agent struct {
 	GraphDB        *graphdb.Engine
 	RetrievalDB    *sql.DB
 	PlanStore      frameworkplan.PlanStore
-	PatternStore   patterns.PatternStore
-	CommentStore   patterns.CommentStore
 	WorkflowStore  memory.WorkflowStateStore
 	ConvVerifier   frameworkplan.ConvergenceVerifier
 	GuidanceBroker *guidance.GuidanceBroker
@@ -287,7 +284,6 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 			IndexManager:   a.WorkspaceEnv.IndexManager,
 			Model:          a.WorkspaceEnv.Model,
 			Embedder:       a.WorkspaceEnv.Embedder,
-			PatternStore:   a.WorkspaceEnv.PatternStore,
 			KnowledgeStore: a.WorkspaceEnv.KnowledgeStore,
 		}
 		if reg := a.WorkspaceEnv.Registry; reg != nil {
@@ -298,22 +294,6 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 		pipeline := pretask.NewPipeline(env, tensionQuerier, config)
 		if workspace := workspacePathFromEnv(a.WorkspaceEnv); workspace != "" {
 			pipeline.PrependStep(pretask.DeferralLoader{WorkspaceDir: workspace})
-		}
-		if a.WorkspaceEnv.PatternStore != nil {
-			pipeline.AppendStep(pretask.LearningSyncStep{
-				LearningService:  a.learningService(),
-				WorkflowResolver: func(state *core.Context) string { return workflowIDFromState(state) },
-			})
-			pipeline.AppendStep(pretask.LearningDeltaStep{
-				LearningService:  a.learningService(),
-				WorkflowResolver: func(state *core.Context) string { return workflowIDFromState(state) },
-				SessionResolver: func(state *core.Context) string {
-					if state == nil {
-						return ""
-					}
-					return state.GetString("euclo.last_session_revision")
-				},
-			})
 		}
 		a.ContextPipeline = pipeline
 	}
@@ -849,8 +829,6 @@ func (a *Agent) archaeoBinding() archaeobindings.Runtime {
 	return archaeobindings.Runtime{
 		WorkflowStore:  workflowStore,
 		PlanStore:      a.PlanStore,
-		PatternStore:   a.PatternStore,
-		CommentStore:   a.CommentStore,
 		Retrieval:      archaeoretrieval.NewSQLStore(a.RetrievalDB),
 		ConvVerifier:   a.ConvVerifier,
 		GuidanceBroker: a.GuidanceBroker,
