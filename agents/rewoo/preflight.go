@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // PreflightIssue describes a problem found during plan validation.

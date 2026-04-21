@@ -3,7 +3,7 @@ package runtime
 import (
 	"sort"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // MethodLibrary stores the set of known decomposition methods and provides

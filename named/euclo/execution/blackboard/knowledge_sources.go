@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
+	agentblackboard "codeburg.org/lexbit/relurpify/agents/blackboard"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 func NewAnalysisKnowledgeSource(name, activationPredicate string, tools []string, promptTemplate string) agentblackboard.KnowledgeSource {

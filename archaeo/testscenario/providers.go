@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoproviders "github.com/lexcodex/relurpify/archaeo/providers"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoproviders "codeburg.org/lexbit/relurpify/archaeo/providers"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type PatternSurfacerStub struct {

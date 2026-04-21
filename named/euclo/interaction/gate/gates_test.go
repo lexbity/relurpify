@@ -3,7 +3,7 @@ package gate
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 func TestTestDrivenGenerationGates_RequireTDDLifecycleCompletion(t *testing.T) {

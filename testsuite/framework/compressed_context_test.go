@@ -1,9 +1,10 @@
 package framework_test
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestSimpleCompressionStrategyCompress(t *testing.T) {

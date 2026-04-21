@@ -25,10 +25,10 @@ full four-layer architecture overview, see [architecture.md](architecture.md).
 
 `framework/` must not import:
 
-- `github.com/lexcodex/relurpify/agents`
-- `github.com/lexcodex/relurpify/agents/...`
-- `github.com/lexcodex/relurpify/named`
-- `github.com/lexcodex/relurpify/named/...`
+- `codeburg.org/lexbit/relurpify/agents`
+- `codeburg.org/lexbit/relurpify/agents/...`
+- `codeburg.org/lexbit/relurpify/named`
+- `codeburg.org/lexbit/relurpify/named/...`
 
 `agents/` may own:
 
@@ -39,8 +39,8 @@ full four-layer architecture overview, see [architecture.md](architecture.md).
 
 `agents/` must not import:
 
-- `github.com/lexcodex/relurpify/named`
-- `github.com/lexcodex/relurpify/named/...`
+- `codeburg.org/lexbit/relurpify/named`
+- `codeburg.org/lexbit/relurpify/named/...`
 
 `named/` may own:
 

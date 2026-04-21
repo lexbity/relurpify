@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	chaintelemetry "github.com/lexcodex/relurpify/agents/chainer/telemetry"
-	"github.com/lexcodex/relurpify/framework/core"
+	chaintelemetry "codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func RequireModelExhausted(tb testing.TB, f *Fixture) {

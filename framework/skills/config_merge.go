@@ -3,8 +3,8 @@ package skills
 import (
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 func mergePromptSnippets(base string, snippets []string) string {

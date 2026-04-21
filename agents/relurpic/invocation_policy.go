@@ -1,6 +1,6 @@
 package relurpic
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 type MemoryMode = core.MemoryMode
 type StateMode = core.StateMode

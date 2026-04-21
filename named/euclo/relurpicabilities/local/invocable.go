@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 // Invocable implementations for local routines.

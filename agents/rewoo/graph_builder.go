@@ -3,10 +3,10 @@ package rewoo
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // BuildStaticGraph builds the base ReWOO execution graph structure.

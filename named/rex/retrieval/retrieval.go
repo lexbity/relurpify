@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
-	"github.com/lexcodex/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
 type Policy struct {

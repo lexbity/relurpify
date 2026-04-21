@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/runtime/policy"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // VerificationGate evaluates verification policy and success gates.

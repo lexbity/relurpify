@@ -1,10 +1,10 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
+	"strings"
 
-import "strings"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
+)
 
 // ClassifyGoal maps a task instruction to a deterministic goal condition.
 func ClassifyGoal(taskInstruction string, _ *types.OperatorRegistry) types.GoalCondition {

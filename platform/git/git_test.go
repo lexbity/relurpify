@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
 )
 

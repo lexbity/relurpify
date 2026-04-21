@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	frameworkast "github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/core"
-	platformlsp "github.com/lexcodex/relurpify/platform/lsp"
+	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	platformlsp "codeburg.org/lexbit/relurpify/platform/lsp"
 	"github.com/stretchr/testify/require"
 )
 

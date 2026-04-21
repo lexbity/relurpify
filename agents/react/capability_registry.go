@@ -1,6 +1,6 @@
 package react
 
-import "github.com/lexcodex/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/framework/capability"
 
 func (a *ReActAgent) CapabilityRegistry() *capability.Registry {
 	if a == nil {

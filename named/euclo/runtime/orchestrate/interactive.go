@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/session"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/session"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // InteractiveControllerResult captures the output of interactive execution.

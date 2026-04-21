@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 type VerificationBackendResolver interface {

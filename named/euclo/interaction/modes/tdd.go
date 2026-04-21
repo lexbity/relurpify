@@ -1,7 +1,7 @@
 package modes
 
 import (
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // TDDMode builds the phase machine for the TDD interaction mode.

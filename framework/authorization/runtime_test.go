@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 func TestSelectSandboxRuntimeDefaultsToGVisor(t *testing.T) {

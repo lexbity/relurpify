@@ -1,6 +1,6 @@
 package graph
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 type Context = core.Context
 type ContextSnapshot = core.ContextSnapshot

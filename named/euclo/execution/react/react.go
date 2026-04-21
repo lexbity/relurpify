@@ -1,8 +1,8 @@
 package react
 
 import (
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 type Runner = reactpkg.ReActAgent

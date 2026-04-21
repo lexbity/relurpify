@@ -3,7 +3,7 @@ package guidance
 import (
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 func GuidanceRequestToFrame(req GuidanceRequest) interaction.InteractionFrame {

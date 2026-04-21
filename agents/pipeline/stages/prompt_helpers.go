@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 func buildStagePrompt(stageName string, task *core.Task, state *core.Context, primaryLabel string, primaryValue any, toolNames []string, schema string) string {

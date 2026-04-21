@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func enrichCoherenceReasoning(bundle SemanticInputBundle, state *core.Context, work UnitOfWork, issues []DeferredExecutionIssue) SemanticInputBundle {

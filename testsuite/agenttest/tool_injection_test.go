@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Test that ToolResponseOverride struct fields are properly set
@@ -155,10 +155,10 @@ func TestEvaluateSuccessRateConstraint(t *testing.T) {
 		{0.9, ">=0.8", true},
 		{0.5, "<0.6", true},
 		{0.5, "<=0.5", true},
-		{0.5, "0.5", true},     // bare number = >=
-		{0.9, "0.9", true},     // bare number = >=
-		{0.8, "0.9", false},    // bare number = >=
-		{0.9, "", true},        // empty constraint
+		{0.5, "0.5", true},  // bare number = >=
+		{0.9, "0.9", true},  // bare number = >=
+		{0.8, "0.9", false}, // bare number = >=
+		{0.9, "", true},     // empty constraint
 		{0.9, ">=1.0", false},
 		{0.0, "<0.1", true},
 	}

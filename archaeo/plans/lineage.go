@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/storeutil"
 )
 
 type Lineage struct {

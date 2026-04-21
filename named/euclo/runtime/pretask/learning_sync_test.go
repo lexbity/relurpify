@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/framework/patterns"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
 )
 
 type countingPatternStore struct {

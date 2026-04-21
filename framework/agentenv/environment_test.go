@@ -3,9 +3,9 @@ package agentenv_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/capability"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestWithRegistry_ShallowCopy(t *testing.T) {

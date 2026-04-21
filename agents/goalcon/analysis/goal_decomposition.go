@@ -1,14 +1,12 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // DecompositionStrategy defines how to split a goal into sub-goals.

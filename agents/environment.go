@@ -1,8 +1,8 @@
 package agents
 
 import (
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 // WorkspaceEnvironment is the composition-root-supplied environment produced by

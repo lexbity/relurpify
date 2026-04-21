@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/identity"
-	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
-	mwidentity "github.com/lexcodex/relurpify/framework/middleware/identity"
+	nexusadmin "codeburg.org/lexbit/relurpify/app/nexus/admin"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/identity"
+	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	mwidentity "codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
 func gatewayPrincipalResolver(cfg nexuscfg.GatewayAuthConfig, tokenStore nexusadmin.TokenStore, identityStore identity.Store) func(context.Context, string) (fwgateway.ConnectionPrincipal, error) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 // TestAllRegisteredCapabilitiesHaveTestCases verifies that every capability ID

@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"strings"
 
-	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
-	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	archaeobindings "codeburg.org/lexbit/relurpify/archaeo/bindings/euclo"
+	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 type compileCapability struct {

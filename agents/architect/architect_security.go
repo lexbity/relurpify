@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 func (a *ArchitectAgent) persistStepSecurityEvents(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID, runID, stepID string, stepState *core.Context, result *core.Result, createdAt time.Time) {

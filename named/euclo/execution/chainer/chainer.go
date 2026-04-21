@@ -3,9 +3,9 @@ package chainer
 import (
 	"context"
 
-	chainerpkg "github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
+	chainerpkg "codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type Runner = chainerpkg.ChainerAgent

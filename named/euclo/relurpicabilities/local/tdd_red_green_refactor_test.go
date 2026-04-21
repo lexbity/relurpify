@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 func TestTDDRedGreenRefactorCapability_EligibleWithWriteAndExecuteTools(t *testing.T) {

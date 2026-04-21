@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/shell/catalog"
-	"github.com/lexcodex/relurpify/platform/shell/execute"
-	shelltelemetry "github.com/lexcodex/relurpify/platform/shell/telemetry"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
+	"codeburg.org/lexbit/relurpify/platform/shell/execute"
+	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -194,11 +194,11 @@ func TestQueryEngineSearchAndInstantiateCoverScoringHelpers(t *testing.T) {
 	inst, err := engine.Instantiate(InstantiationQuery{
 		ToolName: "cli_search",
 		Arguments: map[string]any{
-			"path":               "src",
-			"pattern":             "hello",
-			"stdin":               "input",
-			"working_directory":   "nested",
-			"args":                []any{"--line-number"},
+			"path":              "src",
+			"pattern":           "hello",
+			"stdin":             "input",
+			"working_directory": "nested",
+			"args":              []any{"--line-number"},
 		},
 	})
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestQueryToolsExposeMetadataAndExecute(t *testing.T) {
 			result, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
 				"tool_name": "cli_search",
 				"arguments": map[string]any{
-					"path":   "src",
+					"path":    "src",
 					"pattern": "hello",
 				},
 			})
@@ -264,14 +264,14 @@ func TestParseQueryBranchesAndValidationFailures(t *testing.T) {
 		},
 		"preferred_output": " TEXT ",
 		"workspace_context": map[string]any{
-			"has_cargo_toml":   "true",
-			"has_go_mod":       true,
-			"has_package_json": false,
-			"has_python_files": true,
+			"has_cargo_toml":     "true",
+			"has_go_mod":         true,
+			"has_package_json":   false,
+			"has_python_files":   true,
 			"has_notebook_files": false,
-			"is_git_repo":      true,
-			"language":         "Rust",
-			"project_type":     "Web",
+			"is_git_repo":        true,
+			"language":           "Rust",
+			"project_type":       "Web",
 		},
 		"max_results":      "25",
 		"allow_deprecated": "true",

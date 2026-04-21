@@ -3,9 +3,9 @@ package orchestrate
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/capabilities"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/capabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 // AdaptCapabilityRegistry wraps an EucloCapabilityRegistry so it satisfies CapabilityRegistryI.

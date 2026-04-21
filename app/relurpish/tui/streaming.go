@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // StreamTokenMsg represents a streamed token from the agent pipeline.

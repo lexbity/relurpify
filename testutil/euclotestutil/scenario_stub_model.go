@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type ScenarioModelTurn struct {

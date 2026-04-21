@@ -8,28 +8,28 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/ast"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graphdb"
-	"github.com/lexcodex/relurpify/framework/memory"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/framework/search"
-	platformast "github.com/lexcodex/relurpify/platform/ast"
-	platformfs "github.com/lexcodex/relurpify/platform/fs"
-	platformgit "github.com/lexcodex/relurpify/platform/git"
-	platformsearch "github.com/lexcodex/relurpify/platform/search"
-	platformshell "github.com/lexcodex/relurpify/platform/shell"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/search"
+	platformast "codeburg.org/lexbit/relurpify/platform/ast"
+	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
+	platformgit "codeburg.org/lexbit/relurpify/platform/git"
+	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
+	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 )
 
 var (
-	newCapabilityRegistryFn         = capability.NewRegistry
-	platformFileOperationsFn        = platformfs.FileOperations
-	newSimilarityToolFn             = func(workspace string) core.Tool { return &platformsearch.SimilarityTool{BasePath: workspace} }
-	newSemanticSearchToolFn         = func(workspace string) core.Tool { return &platformsearch.SemanticSearchTool{BasePath: workspace} }
-	newGitCommandToolFn             = func(workspace, command string, runner fsandbox.CommandRunner) core.Tool {
+	newCapabilityRegistryFn  = capability.NewRegistry
+	platformFileOperationsFn = platformfs.FileOperations
+	newSimilarityToolFn      = func(workspace string) core.Tool { return &platformsearch.SimilarityTool{BasePath: workspace} }
+	newSemanticSearchToolFn  = func(workspace string) core.Tool { return &platformsearch.SemanticSearchTool{BasePath: workspace} }
+	newGitCommandToolFn      = func(workspace, command string, runner fsandbox.CommandRunner) core.Tool {
 		return &platformgit.GitCommandTool{RepoPath: workspace, Command: command, Runner: runner}
 	}
 	platformShellCommandLineToolsFn = platformshell.CommandLineTools

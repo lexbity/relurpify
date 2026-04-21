@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 

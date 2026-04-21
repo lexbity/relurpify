@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // HypotheticalGenerator generates a grounded vocabulary sketch.

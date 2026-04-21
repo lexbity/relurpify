@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
-	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	archaeotestscenario "github.com/lexcodex/relurpify/archaeo/testscenario"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeoconvergence "codeburg.org/lexbit/relurpify/archaeo/convergence"
+	archaeodecisions "codeburg.org/lexbit/relurpify/archaeo/decisions"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	archaeotestscenario "codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,11 +23,11 @@ func TestRuntimeServiceFactories(t *testing.T) {
 
 	f := archaeotestscenario.New(t)
 	rt := Runtime{
-		WorkflowStore: f.WorkflowStore,
-		PlanStore:     f.PlanStore,
-		PatternStore:  f.PatternStore,
-		CommentStore:  f.CommentStore,
-		Retrieval:     f.Retrieval,
+		WorkflowStore:  f.WorkflowStore,
+		PlanStore:      f.PlanStore,
+		PatternStore:   f.PatternStore,
+		CommentStore:   f.CommentStore,
+		Retrieval:      f.Retrieval,
 		LearningBroker: nil,
 	}
 
@@ -236,11 +236,11 @@ func TestRuntimeDelegatesAcrossBoundaries(t *testing.T) {
 	require.Equal(t, archaeodomain.ConvergenceResolutionResolved, resolvedConvergence.Status)
 
 	decisionRecord, err := rt.CreateDecisionRecord(ctx, archaeodecisions.CreateInput{
-		WorkspaceID:  f.Workspace,
-		WorkflowID:   workflowID,
-		Kind:         archaeodomain.DecisionKindConvergence,
-		Title:        "Binding decision",
-		Summary:      "Keep the binding small",
+		WorkspaceID:   f.Workspace,
+		WorkflowID:    workflowID,
+		Kind:          archaeodomain.DecisionKindConvergence,
+		Title:         "Binding decision",
+		Summary:       "Keep the binding small",
 		RelatedPlanID: activePlan.ID,
 	})
 	require.NoError(t, err)

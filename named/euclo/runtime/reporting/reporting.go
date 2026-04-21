@@ -1,9 +1,9 @@
 package reporting
 
 import (
-	frameworkcore "github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/core"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	frameworkcore "codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/core"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 type RuntimeExecutionStatus = runtimepkg.RuntimeExecutionStatus

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"gopkg.in/yaml.v3"
 )
 

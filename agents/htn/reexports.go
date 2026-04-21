@@ -3,7 +3,7 @@ package htn
 // Re-export public types and functions from subpackages for backward compatibility.
 
 import (
-	"github.com/lexcodex/relurpify/agents/htn/runtime"
+	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
 )
 
 // Method and decomposition exports (from runtime package)

@@ -7,13 +7,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclokeys "github.com/lexcodex/relurpify/named/euclo/runtime/keys"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclokeys "codeburg.org/lexbit/relurpify/named/euclo/runtime/keys"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 // CapabilityClassifier is the interface for capability intent classification

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // IndexingListener observes ChainerAgent execution and indexes code snippets.

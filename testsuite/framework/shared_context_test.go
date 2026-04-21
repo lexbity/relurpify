@@ -1,11 +1,12 @@
 package framework_test
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestSharedContextDowngradesOnBudgetWarning(t *testing.T) {

@@ -1,6 +1,6 @@
 package testutil
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 type TurnBuilder struct {
 	turn ScenarioModelTurn

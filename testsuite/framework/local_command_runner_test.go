@@ -2,10 +2,11 @@ package framework_test
 
 import (
 	"context"
-	"github.com/lexcodex/relurpify/framework/sandbox"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 func TestLocalCommandRunnerRejectsOutsideWorkspace(t *testing.T) {

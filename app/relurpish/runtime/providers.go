@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 var ErrSessionNotManaged = errors.New("provider session not managed")

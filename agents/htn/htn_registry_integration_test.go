@@ -6,11 +6,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/htn"
-	htnruntime "github.com/lexcodex/relurpify/agents/htn/runtime"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/agents/htn"
+	htnruntime "codeburg.org/lexbit/relurpify/agents/htn/runtime"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 type instructionTool struct {

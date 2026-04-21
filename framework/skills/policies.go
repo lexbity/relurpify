@@ -3,7 +3,7 @@ package skills
 import (
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func mergeToolExecutionPolicies(dst *map[string]core.ToolPolicy, src map[string]core.ToolPolicy) {

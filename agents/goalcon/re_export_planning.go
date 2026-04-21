@@ -1,7 +1,7 @@
 package goalcon
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/planning"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/planning"
 )
 
 // Re-exports from planning package for backward compatibility

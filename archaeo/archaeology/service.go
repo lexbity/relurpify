@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/archaeo/providers"
-	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoexec "codeburg.org/lexbit/relurpify/archaeo/execution"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/archaeo/providers"
+	archaeorequests "codeburg.org/lexbit/relurpify/archaeo/requests"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type PhasePersister func(context.Context, *core.Task, *core.Context, archaeodomain.EucloPhase, string, *frameworkplan.PlanStep)

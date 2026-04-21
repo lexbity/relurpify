@@ -3,7 +3,7 @@ package relurpicabilities_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 // ---------------------------------------------------------------------------

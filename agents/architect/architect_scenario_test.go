@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 // TestArchitectAgent_Scenario_PlanThenExecute_SingleStep exercises the full

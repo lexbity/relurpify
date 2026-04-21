@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/htn"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	agenttestscenario "github.com/lexcodex/relurpify/testutil/agenttestscenario"
+	"codeburg.org/lexbit/relurpify/agents/htn"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	agenttestscenario "codeburg.org/lexbit/relurpify/testutil/agenttestscenario"
 )
 
 func TestHTNAgent_Scenario_CodeGenerationDecomposesToPlanAndCode(t *testing.T) {

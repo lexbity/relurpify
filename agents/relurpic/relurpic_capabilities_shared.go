@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/core"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func coordinatedRelurpicDescriptor(id, name, description string, kind core.CapabilityKind, role core.CoordinationRole, taskTypes []string, executionModes []core.CoordinationExecutionMode, input, output *core.Schema, annotations map[string]any, riskClasses []core.RiskClass, effectClasses []core.EffectClass) core.CapabilityDescriptor {

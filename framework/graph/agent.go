@@ -3,7 +3,7 @@ package graph
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // WorkflowExecutor is the runtime execution contract consumed by graph-level

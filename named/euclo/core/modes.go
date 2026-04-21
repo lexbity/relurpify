@@ -1,6 +1,6 @@
 package core
 
-import "github.com/lexcodex/relurpify/named/euclo/euclotypes"
+import "codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 
 type ModeDescriptor = euclotypes.ModeDescriptor
 type ModeRegistry = euclotypes.ModeRegistry

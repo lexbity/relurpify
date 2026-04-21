@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 // DeferralLoader loads deferred issues from the workspace before the main

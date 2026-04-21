@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // BehaviorSpecPhase elicits behavior specifications from the user through

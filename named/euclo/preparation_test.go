@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 func TestShouldUseSummaryStatusFastPath(t *testing.T) {

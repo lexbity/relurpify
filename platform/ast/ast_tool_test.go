@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	frameworkast "github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/core"
+	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type blockingParser struct {

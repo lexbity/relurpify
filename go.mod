@@ -1,4 +1,4 @@
-module github.com/lexcodex/relurpify
+module codeburg.org/lexbit/relurpify
 
 go 1.25.4
 

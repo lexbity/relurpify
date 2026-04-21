@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	eucloexec "codeburg.org/lexbit/relurpify/named/euclo/execution"
 )
 
 type stubArchaeoInspector struct {

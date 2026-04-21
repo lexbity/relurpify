@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func (s *service) ListSessions(ctx context.Context, req ListSessionsRequest) (ListSessionsResult, error) {

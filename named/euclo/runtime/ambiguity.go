@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // BuildAmbiguityFrame creates a FrameQuestion for ambiguous classification.

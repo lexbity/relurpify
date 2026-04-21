@@ -3,12 +3,13 @@ package testsuite
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {

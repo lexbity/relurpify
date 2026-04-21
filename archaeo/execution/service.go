@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graphdb"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	archaeoretrieval "codeburg.org/lexbit/relurpify/archaeo/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type Service struct {

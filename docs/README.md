@@ -19,7 +19,7 @@ This directory is organized by codebase boundary and audience.
 | framework/configuration.md | Workspace config, manifests, and policy surfaces |
 | framework/permission-model.md | Enforcement and HITL model |
 | framework/retrieval.md | Retrieval and embedding flow |
-| framework/middleware.md | MCP and Nexus transport layers |
+| relurpnet.md | MCP and Nexus transport layers |
 | framework/mcp.md | MCP capability model and lifecycle |
 | framework/layering.md | Dependency rules and four-layer architecture |
 | platform.md | Platform facade overview and provider selection |

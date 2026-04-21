@@ -6,12 +6,12 @@ import (
 	"sort"
 	"time"
 
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/app/nexus/gateway"
-	relconfig "github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/event"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/app/nexus/gateway"
+	relconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/event"
 )
 
 type Snapshot struct {

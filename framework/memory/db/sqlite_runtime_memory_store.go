@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/perfstats"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	_ "github.com/mattn/go-sqlite3"
 )
 

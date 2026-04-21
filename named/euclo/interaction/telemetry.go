@@ -3,7 +3,7 @@ package interaction
 import (
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Euclo interaction event types.

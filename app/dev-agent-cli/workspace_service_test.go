@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type countingService struct {

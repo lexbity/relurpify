@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type EucloPhase string

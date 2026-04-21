@@ -3,8 +3,8 @@ package llm
 import (
 	"strings"
 
-	ollamapkg "github.com/lexcodex/relurpify/platform/llm/ollama"
-	openaicompatpkg "github.com/lexcodex/relurpify/platform/llm/openaicompat"
+	ollamapkg "codeburg.org/lexbit/relurpify/platform/llm/ollama"
+	openaicompatpkg "codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 )
 
 // ModelProfile captures model-specific quirks and configuration.

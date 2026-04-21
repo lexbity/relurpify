@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // TestNewRecoveryManager tests the constructor

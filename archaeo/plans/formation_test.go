@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"github.com/stretchr/testify/require"
 )
 

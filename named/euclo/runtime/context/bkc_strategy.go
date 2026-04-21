@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
+	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type bkcContextStrategy struct {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // ClarifyPhase emits targeted questions to resolve ambiguity before planning.

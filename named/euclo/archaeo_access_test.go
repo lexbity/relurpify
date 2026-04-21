@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	eucloexec "codeburg.org/lexbit/relurpify/named/euclo/execution"
 )
 
 func TestAgentArchaeoAccessNilAgentReturnsNilViews(t *testing.T) {

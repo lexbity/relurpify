@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 )
 
 func TestMapAdapterNormalizesTrustedTaskEvent(t *testing.T) {
@@ -31,10 +31,10 @@ func TestMapAdapterNormalizesTrustedTaskEvent(t *testing.T) {
 
 func TestDefaultNormalizerRejectsUntrustedResumeIngress(t *testing.T) {
 	_, err := DefaultNormalizer{}.Normalize(CanonicalEvent{
-		ID:         "evt-2",
-		Type:       TypeWorkflowResume,
+		ID:            "evt-2",
+		Type:          TypeWorkflowResume,
 		IngressOrigin: OriginExternal,
-		Payload:    map[string]any{"workflow_id": "wf-1"},
+		Payload:       map[string]any{"workflow_id": "wf-1"},
 	})
 	if err == nil {
 		t.Fatalf("expected rejection for untrusted resume ingress")
@@ -193,8 +193,8 @@ func TestFromFrameworkEventRejectsInvalidJSON(t *testing.T) {
 
 func TestToEnvelopeAndTaskUseFallbacks(t *testing.T) {
 	event, err := DefaultNormalizer{}.Normalize(CanonicalEvent{
-		ID:         "evt-5",
-		Type:       TypeTaskRequested,
+		ID:            "evt-5",
+		Type:          TypeTaskRequested,
 		IngressOrigin: OriginPeer,
 		Payload: map[string]any{
 			"task_id":             "task-5",

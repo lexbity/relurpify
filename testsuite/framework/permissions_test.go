@@ -2,10 +2,11 @@ package framework_test
 
 import (
 	"context"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"github.com/stretchr/testify/require"
 )
 
 // TestPermissionSetValidate ensures Validate catches missing paths/binaries and

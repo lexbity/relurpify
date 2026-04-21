@@ -7,21 +7,21 @@ import (
 	"strings"
 	"time"
 
-	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclobb "github.com/lexcodex/relurpify/named/euclo/execution/blackboard"
-	rewooexec "github.com/lexcodex/relurpify/named/euclo/execution/rewoo"
-	euclocap "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	agentblackboard "codeburg.org/lexbit/relurpify/agents/blackboard"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	euclobb "codeburg.org/lexbit/relurpify/named/euclo/execution/blackboard"
+	rewooexec "codeburg.org/lexbit/relurpify/named/euclo/execution/rewoo"
+	euclocap "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	localbehavior "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 type exploreBehavior struct{}
@@ -45,9 +45,11 @@ type enrichedArchaeoInput struct {
 }
 
 // Deprecated: Use NewExploreInvocable instead
-func NewExploreBehavior() exploreBehavior       { return exploreBehavior{} }
+func NewExploreBehavior() exploreBehavior { return exploreBehavior{} }
+
 // Deprecated: Use NewCompilePlanInvocable instead
-func NewCompilePlanBehavior() compilePlanBehavior   { return compilePlanBehavior{} }
+func NewCompilePlanBehavior() compilePlanBehavior { return compilePlanBehavior{} }
+
 // Deprecated: Use NewImplementPlanInvocable instead
 func NewImplementPlanBehavior() implementPlanBehavior { return implementPlanBehavior{} }
 

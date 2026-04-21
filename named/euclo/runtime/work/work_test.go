@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/runtime/work"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/work"
 )
 
 // ---------------------------------------------------------------------------

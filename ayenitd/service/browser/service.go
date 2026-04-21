@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	platformbrowser "github.com/lexcodex/relurpify/platform/browser"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
 
 const (

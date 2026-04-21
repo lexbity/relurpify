@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 func TestInvalidationPassHandleRevisionChangedMarksAffectedChunksStale(t *testing.T) {

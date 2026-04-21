@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/platform/shell/catalog"
-	shelltelemetry "github.com/lexcodex/relurpify/platform/shell/telemetry"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
+	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
 	"github.com/stretchr/testify/require"
 )
 

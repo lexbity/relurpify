@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/config"
 )
 
 func TestSkillSpecValidation_Valid(t *testing.T) {

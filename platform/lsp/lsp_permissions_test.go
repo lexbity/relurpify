@@ -1,8 +1,9 @@
 package lsp
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestLSPToolPermissionsValidate(t *testing.T) {

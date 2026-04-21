@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	relurpicruntime "github.com/lexcodex/relurpify/agents/relurpic/runtime"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/archaeo/providers"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	relurpicruntime "codeburg.org/lexbit/relurpify/agents/relurpic/runtime"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/providers"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func newPatternSurfacingService(p PatternSurfacingProvider) relurpicruntime.PatternSurfacingService {

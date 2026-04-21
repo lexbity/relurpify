@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkmemory "github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkmemory "codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 type branchModelStub struct {
@@ -376,7 +376,7 @@ func TestRewooPlannerAndNodeBranches(t *testing.T) {
 		t.Fatalf("expected default planner context, got %q", got)
 	}
 	if got := plannerContextBlock(&core.Task{Context: map[string]any{
-		"workflow_retrieval": "raw retrieval",
+		"workflow_retrieval":   "raw retrieval",
 		"rewoo_replan_context": "replan please",
 	}}, nil, nil); !strings.Contains(got, "raw retrieval") || !strings.Contains(got, "Replan context:") {
 		t.Fatalf("expected raw workflow retrieval fallback, got %q", got)
@@ -530,8 +530,8 @@ func TestRewooAgentExecuteFailureBranch(t *testing.T) {
 	registry := capability.NewRegistry()
 	_ = registry.Register(rewooStubTool{name: "present"})
 	agent := &RewooAgent{
-		Model: &branchModelStub{responses: []string{`{"goal":"goal","steps":[{"id":"a","description":"step a","tool":"missing","params":{},"depends_on":[],"on_failure":"abort"}]}`}},
-		Tools: registry,
+		Model:  &branchModelStub{responses: []string{`{"goal":"goal","steps":[{"id":"a","description":"step a","tool":"missing","params":{},"depends_on":[],"on_failure":"abort"}]}`}},
+		Tools:  registry,
 		Memory: frameworkmemory.NewCompositeRuntimeStore(workflowStore, nil, nil),
 		Options: RewooOptions{
 			MaxSteps: 5,
@@ -611,16 +611,16 @@ func TestRewooInitializationAndAuditBranches(t *testing.T) {
 		Options: RewooOptions{
 			ContextConfig: RewooContextConfig{
 				StrategyName:         "conservative",
-				PreferredDetailLevel:  "minimal",
-				MinHistorySize:        9,
-				CompressionThreshold:  0.5,
-				BudgetSystemTokens:    100,
-				BudgetToolTokens:      200,
-				BudgetOutputTokens:    300,
+				PreferredDetailLevel: "minimal",
+				MinHistorySize:       9,
+				CompressionThreshold: 0.5,
+				BudgetSystemTokens:   100,
+				BudgetToolTokens:     200,
+				BudgetOutputTokens:   300,
 			},
 			PermConfig: RewooPermissionConfig{
 				DefaultPolicy: "deny",
-				EnableHITL:     true,
+				EnableHITL:    true,
 			},
 		},
 	}

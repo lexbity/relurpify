@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Backend implements the managed backend facade for Ollama transports.

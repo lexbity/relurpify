@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 func TestSQLiteCircuitBreakerStoreRollsWindowAndRecoversHalfOpen(t *testing.T) {

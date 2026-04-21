@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/memory"
-	memdb "github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	_ "github.com/mattn/go-sqlite3"
 )
 

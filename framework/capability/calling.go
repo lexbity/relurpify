@@ -1,6 +1,6 @@
 package capability
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 // CapabilityCallingMode determines whether a model invocation should use a
 // provider-native tool-call API or the framework-owned render/parse fallback.

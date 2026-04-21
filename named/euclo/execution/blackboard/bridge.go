@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	agentblackboard "codeburg.org/lexbit/relurpify/agents/blackboard"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 const bridgeSource = "euclo:blackboard_bridge"

@@ -5,13 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/lexcodex/relurpify/framework/core"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type stubModel struct {

@@ -3,9 +3,9 @@ package work
 import (
 	"time"
 
-	frameworkcore "github.com/lexcodex/relurpify/framework/core"
-	euclotypespkg "github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	frameworkcore "codeburg.org/lexbit/relurpify/framework/core"
+	euclotypespkg "codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 type TaskEnvelope = runtimepkg.TaskEnvelope

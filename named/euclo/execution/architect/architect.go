@@ -3,9 +3,9 @@ package execution
 import (
 	"context"
 
-	architectpkg "github.com/lexcodex/relurpify/agents/architect"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
+	architectpkg "codeburg.org/lexbit/relurpify/agents/architect"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type ArchitectRunner = architectpkg.ArchitectAgent

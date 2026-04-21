@@ -9,8 +9,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/lexcodex/relurpify/agents"
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/agents"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
 )
 
 // ensureWorkspace resolves the workspace CLI flag, defaulting to cwd.

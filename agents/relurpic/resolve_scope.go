@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 type ResolutionError struct {

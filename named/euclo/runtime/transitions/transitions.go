@@ -3,7 +3,7 @@ package transitions
 import (
 	"time"
 
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 type UnitOfWorkTransitionState = runtimepkg.UnitOfWorkTransitionState

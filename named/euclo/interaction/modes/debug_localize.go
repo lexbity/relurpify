@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // LocalizationPhase presents an evidence chain pointing to the root cause.

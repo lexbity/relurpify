@@ -1,8 +1,9 @@
 package framework_test
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestContextBudgetUpdateUsage(t *testing.T) {

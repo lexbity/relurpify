@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 func BuildChatCapabilityRuntimeState(work runtimepkg.UnitOfWork, state statebus.Getter, now time.Time) runtimepkg.ChatCapabilityRuntimeState {

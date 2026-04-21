@@ -1,6 +1,6 @@
 package golang
 
-import frameworktools "github.com/lexcodex/relurpify/framework/capability"
+import frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
 
 func firstNonEmptyLine(text string) string {
 	start := 0

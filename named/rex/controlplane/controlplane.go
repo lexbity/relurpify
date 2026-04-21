@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 type WorkloadClass string

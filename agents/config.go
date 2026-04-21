@@ -1,6 +1,6 @@
 package agents
 
-import frameworkconfig "github.com/lexcodex/relurpify/framework/config"
+import frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
 
 // Deprecated: use framework/config.New(workspace).ConfigRoot().
 // ConfigDir returns the workspace-local configuration directory.

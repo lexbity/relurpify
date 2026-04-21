@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 

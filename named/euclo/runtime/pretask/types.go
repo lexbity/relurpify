@@ -1,8 +1,8 @@
 package pretask
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // AnchorSet holds deterministic signals extracted from the query.

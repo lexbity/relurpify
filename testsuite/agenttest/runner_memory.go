@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type preparedMemoryStore struct {

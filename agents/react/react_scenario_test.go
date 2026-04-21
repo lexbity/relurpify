@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/core"
-	agenttestscenario "github.com/lexcodex/relurpify/testutil/agenttestscenario"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	agenttestscenario "codeburg.org/lexbit/relurpify/testutil/agenttestscenario"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestReActAgent_Scenario_SingleToolCall_ThenComplete(t *testing.T) {

@@ -3,8 +3,8 @@ package shell
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/platform/shell/catalog"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
 	"github.com/stretchr/testify/require"
 )
 

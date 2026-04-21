@@ -3,11 +3,11 @@ package execution
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 // Invocable is the unified interface for all euclo capabilities.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 )
 
 // TestFailureDetector_CategorizesTransientError tests detection of transient errors.

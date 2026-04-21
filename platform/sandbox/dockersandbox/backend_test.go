@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 func TestBackendCapabilitiesReportSupportedFeatures(t *testing.T) {

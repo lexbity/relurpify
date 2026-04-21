@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 func (r *Runtime) StartDelegation(ctx context.Context, request core.DelegationRequest, opts fauthorization.DelegationStartOptions) (*core.DelegationSnapshot, error) {

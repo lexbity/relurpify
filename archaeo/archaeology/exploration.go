@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	"github.com/lexcodex/relurpify/archaeo/internal/keylock"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/keylock"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 const (

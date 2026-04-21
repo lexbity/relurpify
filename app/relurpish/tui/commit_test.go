@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +47,7 @@ func (r *recordingAdapter) ResolveContextFiles(context.Context, []string) Contex
 	return ContextFileResolution{}
 }
 func (r *recordingAdapter) SessionArtifacts() SessionArtifacts                     { return SessionArtifacts{} }
-func (r *recordingAdapter) InferenceModels(context.Context) ([]string, error)         { return nil, nil }
+func (r *recordingAdapter) InferenceModels(context.Context) ([]string, error)      { return nil, nil }
 func (r *recordingAdapter) RecordingMode() string                                  { return "off" }
 func (r *recordingAdapter) SetRecordingMode(string) error                          { return nil }
 func (r *recordingAdapter) SaveModel(string) error                                 { return nil }
@@ -118,8 +118,8 @@ func (r *recordingAdapter) ListPlanVersions(context.Context, string) ([]PlanVers
 	return nil, nil
 }
 func (r *recordingAdapter) ActivatePlanVersion(context.Context, string, int) error { return nil }
-func (r *recordingAdapter) ExecutePlan(context.Context, string) error               { return nil }
-func (r *recordingAdapter) ActiveWorkflowID() string                                { return "" }
+func (r *recordingAdapter) ExecutePlan(context.Context, string) error              { return nil }
+func (r *recordingAdapter) ActiveWorkflowID() string                               { return "" }
 
 // TestGitStatusInvokesCliGit verifies gitStatusCmd routes through cli_git capability.
 func TestGitStatusInvokesCliGit(t *testing.T) {
@@ -265,8 +265,10 @@ func (m *minimalCommitTestAdapter) SessionInfo() SessionInfo  { return SessionIn
 func (m *minimalCommitTestAdapter) ResolveContextFiles(context.Context, []string) ContextFileResolution {
 	return ContextFileResolution{}
 }
-func (m *minimalCommitTestAdapter) SessionArtifacts() SessionArtifacts              { return SessionArtifacts{} }
-func (m *minimalCommitTestAdapter) InferenceModels(context.Context) ([]string, error)  { return nil, nil }
+func (m *minimalCommitTestAdapter) SessionArtifacts() SessionArtifacts { return SessionArtifacts{} }
+func (m *minimalCommitTestAdapter) InferenceModels(context.Context) ([]string, error) {
+	return nil, nil
+}
 func (m *minimalCommitTestAdapter) RecordingMode() string                           { return "off" }
 func (m *minimalCommitTestAdapter) SetRecordingMode(string) error                   { return nil }
 func (m *minimalCommitTestAdapter) SaveModel(string) error                          { return nil }

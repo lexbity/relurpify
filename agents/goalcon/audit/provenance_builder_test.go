@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // TestProvenanceCollector_BuildProvenance tests full provenance synthesis.

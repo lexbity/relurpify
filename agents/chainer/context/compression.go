@@ -3,7 +3,7 @@ package context
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // CompressionListener reacts to budget events by compressing context.

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/shell/catalog"
-	"github.com/lexcodex/relurpify/platform/shell/execute"
-	shelltelemetry "github.com/lexcodex/relurpify/platform/shell/telemetry"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
+	"codeburg.org/lexbit/relurpify/platform/shell/execute"
+	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
 )
 
 const defaultMaxResults = 10

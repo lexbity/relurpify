@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // rootHandleCheckpoint saves the current session as a named checkpoint.

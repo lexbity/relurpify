@@ -1,8 +1,8 @@
 package stages
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // CodingStageFactory builds the first concrete coding pipeline for a task.

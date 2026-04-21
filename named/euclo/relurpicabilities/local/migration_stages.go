@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 type migrationPreCheckStage struct{ step map[string]any }

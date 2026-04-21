@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
 )
 
 type stubPartitionDetector struct{ partitioned bool }

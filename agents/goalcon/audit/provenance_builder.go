@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ProvenanceSummary provides a complete audit and policy compliance view of plan execution.

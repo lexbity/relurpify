@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/platform/llm/openaicompat"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 )
 
 // Backend implements the managed backend facade for LM Studio.

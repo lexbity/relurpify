@@ -1,9 +1,9 @@
 package reflection
 
 import (
-	reflectionpkg "github.com/lexcodex/relurpify/agents/reflection"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	reactexec "github.com/lexcodex/relurpify/named/euclo/execution/react"
+	reflectionpkg "codeburg.org/lexbit/relurpify/agents/reflection"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	reactexec "codeburg.org/lexbit/relurpify/named/euclo/execution/react"
 )
 
 type Runner = reflectionpkg.ReflectionAgent

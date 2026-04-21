@@ -3,8 +3,8 @@ package core
 import (
 	"context"
 
-	frameworkcore "github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	frameworkcore "codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 type ArtifactKind = euclotypes.ArtifactKind

@@ -3,13 +3,13 @@ package assurance
 import (
 	"context"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoexec "codeburg.org/lexbit/relurpify/archaeo/execution"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	eucloreporting "codeburg.org/lexbit/relurpify/named/euclo/runtime/reporting"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // ExecutionRecorder handles artifact collection, action log assembly,

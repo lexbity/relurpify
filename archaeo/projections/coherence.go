@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoprovenance "github.com/lexcodex/relurpify/archaeo/provenance"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoprovenance "codeburg.org/lexbit/relurpify/archaeo/provenance"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 func (s *Service) Coherence(ctx context.Context, workflowID string) (*CoherenceProjection, error) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestNewArchitectReturnsConfiguredRunner(t *testing.T) {

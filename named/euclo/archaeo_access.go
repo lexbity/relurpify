@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	eucloexec "codeburg.org/lexbit/relurpify/named/euclo/execution"
 )
 
 func (a *Agent) serviceBundle() eucloexec.ServiceBundle {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -441,8 +441,8 @@ func TestDecideByPatterns_DenyFirst(t *testing.T) {
 	// target before "git *" gets a chance to allow it.
 	decision, pattern := DecideByPatterns(
 		"git push force",
-		[]string{"git *"},       // allow — also matches
-		[]string{"git push *"},  // deny — checked first, more specific
+		[]string{"git *"},      // allow — also matches
+		[]string{"git push *"}, // deny — checked first, more specific
 		core.AgentPermissionAllow,
 	)
 	assert.Equal(t, core.AgentPermissionDeny, decision)

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 // ---------------------------------------------------------------------------
@@ -77,10 +77,10 @@ type ArchaeoPane struct {
 	emojiEnabled bool
 
 	// ── explore subtab ──────────────────────────────────────────────────────
-	exploreEntries   []ExploreEntry
-	exploreSel       int // cursor in the right-hand chunk panel (blob index)
-	exploreChunkSel  int // alias kept for clarity; same as exploreSel
-	workflowID       string
+	exploreEntries  []ExploreEntry
+	exploreSel      int // cursor in the right-hand chunk panel (blob index)
+	exploreChunkSel int // alias kept for clarity; same as exploreSel
+	workflowID      string
 
 	// ── staged blobs (explore → plan) ───────────────────────────────────────
 	// Blobs staged in the explore subtab but not yet committed to archaeo.

@@ -3,7 +3,7 @@ package validation_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer/validation"
+	"codeburg.org/lexbit/relurpify/agents/chainer/validation"
 )
 
 func TestNewJSONValidator(t *testing.T) {

@@ -3,9 +3,9 @@ package archaeology
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 // Invocable implementations for archaeology behaviors.
@@ -22,17 +22,17 @@ func (e *ExploreInvocable) ID() string { return Explore }
 
 func (e *ExploreInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 	// Call the underlying behavior's Execute method
 	exploreBehavior := exploreBehavior{}
@@ -53,17 +53,17 @@ func (c *CompilePlanInvocable) ID() string { return CompilePlan }
 
 func (c *CompilePlanInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 	// Call the underlying behavior's Execute method
 	compilePlanBehavior := compilePlanBehavior{}
@@ -84,17 +84,17 @@ func (i *ImplementPlanInvocable) ID() string { return ImplementPlan }
 
 func (i *ImplementPlanInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 	// Call the underlying behavior's Execute method
 	implementPlanBehavior := implementPlanBehavior{}

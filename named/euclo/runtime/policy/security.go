@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclorestore "codeburg.org/lexbit/relurpify/named/euclo/runtime/restore"
 )
 
 func BuildSecurityRuntimeState(cfg *core.Config, registry *capability.Registry, providers []core.Provider, state *core.Context, work runtimepkg.UnitOfWork) runtimepkg.SecurityRuntimeState {

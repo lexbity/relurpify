@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task, state *core.Context, result *core.Result, err error) (*core.Result, error) {

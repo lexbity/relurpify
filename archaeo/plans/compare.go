@@ -3,7 +3,7 @@ package plans
 import (
 	"context"
 
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func (s Service) CompareVersions(ctx context.Context, workflowID string, fromVersion, toVersion int) (map[string]any, error) {

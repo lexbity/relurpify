@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	chainererrors "github.com/lexcodex/relurpify/agents/chainer/errors"
+	chainererrors "codeburg.org/lexbit/relurpify/agents/chainer/errors"
 )
 
 func TestLinkDecodeError(t *testing.T) {

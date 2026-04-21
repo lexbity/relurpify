@@ -6,14 +6,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	"github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	bkccaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/bkc"
-	debugcaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/debug"
-	localcaps "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	"github.com/lexcodex/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	bkccaps "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/bkc"
+	debugcaps "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/debug"
+	localcaps "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	"codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 type EucloCapabilityRegistry struct {
@@ -132,11 +132,11 @@ func supportsProfile(cap euclotypes.EucloCodingCapability, profileID string) boo
 
 // RecipeIntegrationResult holds the result of loading and registering thought recipes.
 type RecipeIntegrationResult struct {
-	Registry     *thoughtrecipes.PlanRegistry
-	Executor     *thoughtrecipes.Executor
-	Invocables   []execution.Invocable
-	Warnings     []string
-	Errors       []error
+	Registry   *thoughtrecipes.PlanRegistry
+	Executor   *thoughtrecipes.Executor
+	Invocables []execution.Invocable
+	Warnings   []string
+	Errors     []error
 }
 
 // LoadAndRegisterRecipes loads thought recipes from the given directory,
@@ -145,11 +145,11 @@ type RecipeIntegrationResult struct {
 // This implements the Phase 9 startup integration hook.
 func LoadAndRegisterRecipes(recipeDir string, relurpicRegistry *relurpicabilities.Registry, env agentenv.AgentEnvironment) *RecipeIntegrationResult {
 	result := &RecipeIntegrationResult{
-		Registry: thoughtrecipes.NewPlanRegistry(),
-		Executor: thoughtrecipes.NewExecutor(),
+		Registry:   thoughtrecipes.NewPlanRegistry(),
+		Executor:   thoughtrecipes.NewExecutor(),
 		Invocables: make([]execution.Invocable, 0),
-		Warnings: make([]string, 0),
-		Errors:   make([]error, 0),
+		Warnings:   make([]string, 0),
+		Errors:     make([]error, 0),
 	}
 
 	// Load all recipes from directory

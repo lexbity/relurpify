@@ -9,11 +9,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	frameworktools "github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	clinix "github.com/lexcodex/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 type RustWorkspaceDetectTool struct {

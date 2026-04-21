@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +57,7 @@ func TestLoadJobsFromMemoryRegistersValidJobs(t *testing.T) {
 		records: []memory.MemoryRecord{
 			{
 				Value: map[string]interface{}{
-					"id":       "job-1",
+					"id":        "job-1",
 					"cron_expr": "0 2 * * *",
 				},
 			},

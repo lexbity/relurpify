@@ -1,6 +1,6 @@
 package rewoo
 
-import "github.com/lexcodex/relurpify/framework/contextmgr"
+import "codeburg.org/lexbit/relurpify/framework/contextmgr"
 
 // RewooPhase identifies a phase of ReWOO execution.
 type RewooPhase string

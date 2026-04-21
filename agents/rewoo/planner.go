@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type rewooPlannerNode struct {

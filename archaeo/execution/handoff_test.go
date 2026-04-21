@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/archaeo/execution"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/archaeo/execution"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"github.com/stretchr/testify/require"
 )
 

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
-	rexproof "github.com/lexcodex/relurpify/named/rex/proof"
-	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
+	rexproof "codeburg.org/lexbit/relurpify/named/rex/proof"
+	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 	"github.com/stretchr/testify/require"
 )
 

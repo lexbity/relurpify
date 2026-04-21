@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	projections "github.com/lexcodex/relurpify/archaeo/projections"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/archaeo/testscenario"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	projections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func TestCoherenceEmptyWorkflowID(t *testing.T) {

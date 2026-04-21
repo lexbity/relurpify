@@ -1,7 +1,7 @@
 package runtime
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // OperatorSpec describes a resolved primitive step derived from a SubtaskSpec.

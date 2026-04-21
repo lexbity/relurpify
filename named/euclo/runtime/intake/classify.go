@@ -3,7 +3,7 @@ package intake
 import (
 	"strings"
 
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 // ClassifyTask performs keyword-based classification for backward compatibility.

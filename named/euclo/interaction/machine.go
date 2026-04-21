@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 // ArtifactBundle holds artifacts produced during machine execution.

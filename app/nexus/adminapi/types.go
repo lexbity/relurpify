@@ -3,8 +3,8 @@ package adminapi
 import (
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
 )
 
 const APIVersionV1Alpha1 = "v1alpha1"

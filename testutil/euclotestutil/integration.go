@@ -5,10 +5,10 @@ package testutil
 import (
 	"path/filepath"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 func EnvIntegration(t interface {

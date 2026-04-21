@@ -6,8 +6,9 @@ package contextmgr
 
 import (
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
 	"sync"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ContextManager orchestrates context items within a budget.

@@ -6,11 +6,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 var (

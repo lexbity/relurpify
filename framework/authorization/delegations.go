@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 var ErrDelegationNotFound = errors.New("delegation not found")

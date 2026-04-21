@@ -1,8 +1,8 @@
 package relurpicabilities
 
 import (
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type WorkContext struct {

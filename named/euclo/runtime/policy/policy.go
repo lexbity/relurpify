@@ -1,9 +1,9 @@
 package policy
 
 import (
-	"github.com/lexcodex/relurpify/framework/capability"
-	frameworkcore "github.com/lexcodex/relurpify/framework/core"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	frameworkcore "codeburg.org/lexbit/relurpify/framework/core"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 type TaskClassification = runtimepkg.TaskClassification

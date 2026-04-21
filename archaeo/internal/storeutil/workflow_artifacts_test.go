@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
 	"github.com/stretchr/testify/require"
 )
 
@@ -200,7 +200,7 @@ func TestWorkflowArtifactHelpersFallbackAndFiltering(t *testing.T) {
 				InlineRawText:   `{"artifact_id":"artifact-4"}`,
 				CreatedAt:       now.Add(3 * time.Minute),
 			},
-	},
+		},
 	}
 	_, ok, err := WorkflowArtifactByID(ctx, store, "artifact-1")
 	require.NoError(t, err)

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 )
 
 // IndexConfig configures the IndexManager.

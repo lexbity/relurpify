@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // RetrievalEvent records what the retriever found and why candidates were excluded.

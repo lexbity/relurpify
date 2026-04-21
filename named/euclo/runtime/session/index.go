@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 // SessionIndex provides session listing and enrichment for session

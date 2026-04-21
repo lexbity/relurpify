@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 // PolicyEngine evaluates whether a capability invocation is permitted.

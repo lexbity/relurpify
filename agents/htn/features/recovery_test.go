@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/htn/authoring"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // TestIdempotentRecoveryStrategy tests direct retry strategy.

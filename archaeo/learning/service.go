@@ -8,17 +8,17 @@ import (
 	"strings"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
-	"github.com/lexcodex/relurpify/archaeo/phases"
-	"github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoretrieval "github.com/lexcodex/relurpify/archaeo/retrieval"
-	"github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/storeutil"
+	"codeburg.org/lexbit/relurpify/archaeo/phases"
+	"codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoretrieval "codeburg.org/lexbit/relurpify/archaeo/retrieval"
+	"codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 const (

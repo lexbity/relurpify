@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	platformbrowser "github.com/lexcodex/relurpify/platform/browser"
-	"github.com/lexcodex/relurpify/platform/browser/bidi"
-	"github.com/lexcodex/relurpify/platform/browser/cdp"
-	"github.com/lexcodex/relurpify/platform/browser/webdriver"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
+	"codeburg.org/lexbit/relurpify/platform/browser/cdp"
+	"codeburg.org/lexbit/relurpify/platform/browser/webdriver"
 )
 
 const defaultBrowserTimeout = 15 * time.Second

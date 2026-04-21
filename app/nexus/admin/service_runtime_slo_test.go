@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
 	"github.com/stretchr/testify/require"
 )
 

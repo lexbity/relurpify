@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // RiskLevel models the qualitative assessment required by the HITL flow.

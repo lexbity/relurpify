@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Checkpoint captures resumable pipeline state after one completed stage.

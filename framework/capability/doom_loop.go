@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type DoomLoopKind string

@@ -11,20 +11,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents"
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/policybundle"
-	"github.com/lexcodex/relurpify/platform/llm"
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
+	"codeburg.org/lexbit/relurpify/agents"
+	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/policybundle"
+	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 	"gopkg.in/yaml.v3"
 )
 
@@ -71,7 +71,7 @@ func stubStartWorkspaceFn(t *testing.T, ws string, compiledPolicy bool) {
 			Config: &core.Config{
 				Name:              cfg.AgentName,
 				Model:             cfg.InferenceModel,
-				InferenceEndpoint:    cfg.InferenceEndpoint,
+				InferenceEndpoint: cfg.InferenceEndpoint,
 				MaxIterations:     cfg.MaxIterations,
 				NativeToolCalling: loaded.Spec.Agent != nil && loaded.Spec.Agent.NativeToolCallingEnabled(),
 				AgentSpec:         loaded.Spec.Agent,
@@ -1108,7 +1108,7 @@ func TestStartCmdPolicyAndBuildFallbackBranches(t *testing.T) {
 				Config: &core.Config{
 					Name:              cfg.AgentName,
 					Model:             cfg.InferenceModel,
-					InferenceEndpoint:    cfg.InferenceEndpoint,
+					InferenceEndpoint: cfg.InferenceEndpoint,
 					MaxIterations:     cfg.MaxIterations,
 					NativeToolCalling: loaded.Spec.Agent.NativeToolCallingEnabled(),
 					AgentSpec:         loaded.Spec.Agent,

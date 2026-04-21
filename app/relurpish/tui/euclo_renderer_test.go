@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 func TestRenderInteractionFrame_Proposal(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/lexcodex/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/ast"
 )
 
 // AnchorExtractor extracts deterministic structural signals from a query.

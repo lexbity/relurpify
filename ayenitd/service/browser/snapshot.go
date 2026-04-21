@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	platformbrowser "github.com/lexcodex/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
 )
 
 // BrowserServiceSnapshot captures the workspace-level browser service state.

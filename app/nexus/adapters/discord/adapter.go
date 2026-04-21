@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/middleware/channel"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/channel"
 )
 
 type Session interface {

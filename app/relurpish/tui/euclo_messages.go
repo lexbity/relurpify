@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/lexcodex/relurpify/named/euclo/interaction"
+import "codeburg.org/lexbit/relurpify/named/euclo/interaction"
 
 // EucloFrameMsg is sent to the TUI when an interaction frame should be rendered.
 type EucloFrameMsg struct {

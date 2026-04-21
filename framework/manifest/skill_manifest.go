@@ -2,10 +2,11 @@ package manifest
 
 import (
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
-	"gopkg.in/yaml.v3"
 	"os"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"gopkg.in/yaml.v3"
 )
 
 // SkillManifest defines a reusable skill package.

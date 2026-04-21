@@ -3,13 +3,14 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/platform/llm"
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 func reportAgentTestTapes(workspace string, suitePaths []string, stdout io.Writer, now time.Time) error {

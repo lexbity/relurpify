@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestApplyEditIntentArtifacts_SynthesizesExecutedEditsFromPipelineCodeFinalOutput(t *testing.T) {

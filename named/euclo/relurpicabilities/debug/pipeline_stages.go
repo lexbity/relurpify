@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 type investigationSummaryStage struct {

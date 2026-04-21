@@ -3,8 +3,8 @@ package route
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/rex/classify"
-	"github.com/lexcodex/relurpify/named/rex/envelope"
+	"codeburg.org/lexbit/relurpify/named/rex/classify"
+	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 )
 
 func TestBuildExecutionPlanCopiesDecisionFields(t *testing.T) {

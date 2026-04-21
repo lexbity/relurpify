@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	"github.com/stretchr/testify/require"
 )
 

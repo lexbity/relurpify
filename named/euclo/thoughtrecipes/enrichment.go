@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 // hydrateEnrichmentSource hydrates an enrichment source into the state.

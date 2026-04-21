@@ -3,9 +3,10 @@ package ast
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/core"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const astToolReadyTimeout = 2 * time.Second

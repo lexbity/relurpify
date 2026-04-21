@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	mclient "github.com/lexcodex/relurpify/framework/middleware/mcp/client"
-	"github.com/lexcodex/relurpify/framework/middleware/mcp/mapping"
-	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
-	mserver "github.com/lexcodex/relurpify/framework/middleware/mcp/server"
-	msession "github.com/lexcodex/relurpify/framework/middleware/mcp/session"
-	mstdio "github.com/lexcodex/relurpify/framework/middleware/mcp/transport/stdio"
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	mclient "codeburg.org/lexbit/relurpify/relurpnet/mcp/client"
+	"codeburg.org/lexbit/relurpify/relurpnet/mcp/mapping"
+	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
+	mserver "codeburg.org/lexbit/relurpify/relurpnet/mcp/server"
+	msession "codeburg.org/lexbit/relurpify/relurpnet/mcp/session"
+	mstdio "codeburg.org/lexbit/relurpify/relurpnet/mcp/transport/stdio"
 )
 
 type mcpClientProvider struct {

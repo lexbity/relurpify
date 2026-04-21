@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
-	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
 )
 
 func TestNexusAppEnsuresFMPPersistenceAndForwardResolver(t *testing.T) {

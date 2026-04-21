@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
 )
 

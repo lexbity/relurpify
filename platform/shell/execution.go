@@ -3,9 +3,10 @@ package shell
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // RunTestsTool executes test commands.

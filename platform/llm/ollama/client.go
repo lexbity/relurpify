@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +13,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Client implements core.LanguageModel for Ollama.

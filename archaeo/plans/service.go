@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/archaeo/internal/keylock"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/keylock"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type ActiveContext struct {

@@ -1,6 +1,6 @@
 package euclotui
 
-import "github.com/lexcodex/relurpify/app/relurpish/tui"
+import "codeburg.org/lexbit/relurpify/app/relurpish/tui"
 
 // RegisterEucloTabs adds the chat, planner, and debug tabs for the euclo agent.
 // It is called via EucloPlugin.SetupTabs from tui.newRootModel.

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
-	"github.com/lexcodex/relurpify/framework/ast"
+	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	"codeburg.org/lexbit/relurpify/framework/ast"
 )
 
 // WorkspaceBootstrapService runs a one-shot workspace indexing/bootstrap pass.

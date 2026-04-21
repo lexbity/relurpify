@@ -3,7 +3,7 @@ package identity
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Store persists tenant-scoped identities and node enrollments.

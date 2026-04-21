@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestTaskFromArgsHonorsExplicitTaskType(t *testing.T) {

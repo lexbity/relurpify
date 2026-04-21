@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/named/euclo/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
 )
 
 // InvocableRegistry holds a unified map of all invocable capabilities.

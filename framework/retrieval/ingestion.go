@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	frameworkast "github.com/lexcodex/relurpify/framework/ast"
+	frameworkast "codeburg.org/lexbit/relurpify/framework/ast"
 )
 
 const (

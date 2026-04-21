@@ -1,6 +1,6 @@
 package local
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 type migrationRollbackSnapshot struct {
 	StepID      string

@@ -7,12 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
-	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/storeutil"
+	archaeorequests "codeburg.org/lexbit/relurpify/archaeo/requests"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 const formationArtifactKind = "archaeo_plan_formation_result"

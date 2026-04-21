@@ -1,6 +1,6 @@
 package interaction
 
-import "github.com/lexcodex/relurpify/named/euclo/euclotypes"
+import "codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 
 // ModeMachineFactory builds a PhaseMachine for a given mode.
 // The emitter and resolver are provided by the caller (controller).

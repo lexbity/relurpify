@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	agentpipeline "github.com/lexcodex/relurpify/agents/pipeline"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	agentpipeline "codeburg.org/lexbit/relurpify/agents/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 const (

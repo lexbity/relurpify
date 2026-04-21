@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memdb "github.com/lexcodex/relurpify/framework/memory/db"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
-	"github.com/lexcodex/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 var _ fwfmp.RuntimeEndpoint = (*RuntimeEndpoint)(nil)

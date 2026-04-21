@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/browser"
 )
 
 const defaultStartupTimeout = 10 * time.Second

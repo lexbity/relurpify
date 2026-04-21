@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 var ErrPipelineCheckpointNotFound = errors.New("pipeline checkpoint not found")

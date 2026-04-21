@@ -3,18 +3,18 @@ package thoughtrecipes
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/agents/architect"
-	"github.com/lexcodex/relurpify/agents/blackboard"
-	"github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/agents/goalcon"
-	"github.com/lexcodex/relurpify/agents/htn"
-	"github.com/lexcodex/relurpify/agents/planner"
-	"github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/agents/reflection"
-	"github.com/lexcodex/relurpify/agents/rewoo"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/agents/architect"
+	"codeburg.org/lexbit/relurpify/agents/blackboard"
+	"codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/agents/goalcon"
+	"codeburg.org/lexbit/relurpify/agents/htn"
+	"codeburg.org/lexbit/relurpify/agents/planner"
+	"codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/agents/reflection"
+	"codeburg.org/lexbit/relurpify/agents/rewoo"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // ParadigmFactory provides construction and delegation wiring for agent paradigms.

@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/framework/core"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 

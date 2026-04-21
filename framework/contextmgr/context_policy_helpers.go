@@ -1,9 +1,10 @@
 package contextmgr
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
 	"os"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // EstimateContextTokens approximates current context usage for strategies.

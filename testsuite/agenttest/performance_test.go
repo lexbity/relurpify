@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/perfstats"
 )
 
 func TestBuildPhaseMetricsAllocatesAcrossRecordedDurations(t *testing.T) {

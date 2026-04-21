@@ -1,9 +1,9 @@
 package planning
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // PlanningResult captures the solver output.

@@ -1,6 +1,6 @@
 package ayenitd
 
-import "github.com/lexcodex/relurpify/framework/agentenv"
+import "codeburg.org/lexbit/relurpify/framework/agentenv"
 
 // Type aliases so that callers can reference ayenitd.VerificationPlanner etc.
 // without importing framework/agentenv directly. These are the same types.

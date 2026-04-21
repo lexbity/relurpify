@@ -1,16 +1,13 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ClassificationResponse is the expected LLM response structure.

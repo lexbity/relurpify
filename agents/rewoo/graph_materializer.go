@@ -3,8 +3,8 @@ package rewoo
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // ParallelGroup represents a set of steps that can execute concurrently.

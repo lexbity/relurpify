@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
+	"codeburg.org/lexbit/relurpify/framework/core"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
+)
 
 func BuildCapabilityContractRuntimeState(work UnitOfWork, state *core.Context, now time.Time) CapabilityContractRuntimeState {
 	if now.IsZero() {

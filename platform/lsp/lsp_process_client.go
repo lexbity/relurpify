@@ -6,12 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	platformshell "github.com/lexcodex/relurpify/platform/shell"
-	"github.com/sourcegraph/jsonrpc2"
-	"go.lsp.dev/protocol"
 	"io"
 	"os"
 	"os/exec"
@@ -19,6 +13,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
+	"github.com/sourcegraph/jsonrpc2"
+	"go.lsp.dev/protocol"
 )
 
 // ProcessLSPConfig defines the configuration for spinning up a language server process.

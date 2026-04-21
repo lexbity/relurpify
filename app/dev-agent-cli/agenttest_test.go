@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 func TestAgentTestRunDefaultsSkipASTIndex(t *testing.T) {

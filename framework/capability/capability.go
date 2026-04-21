@@ -1,6 +1,6 @@
 package capability
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 type Registry = CapabilityRegistry
 type Descriptor = core.CapabilityDescriptor

@@ -5,16 +5,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/shell/archive"
-	"github.com/lexcodex/relurpify/platform/shell/build"
-	"github.com/lexcodex/relurpify/platform/shell/fileops"
-	"github.com/lexcodex/relurpify/platform/shell/network"
-	"github.com/lexcodex/relurpify/platform/shell/scheduler"
-	"github.com/lexcodex/relurpify/platform/shell/system"
-	"github.com/lexcodex/relurpify/platform/shell/text"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/shell/archive"
+	"codeburg.org/lexbit/relurpify/platform/shell/build"
+	"codeburg.org/lexbit/relurpify/platform/shell/fileops"
+	"codeburg.org/lexbit/relurpify/platform/shell/network"
+	"codeburg.org/lexbit/relurpify/platform/shell/scheduler"
+	"codeburg.org/lexbit/relurpify/platform/shell/system"
+	"codeburg.org/lexbit/relurpify/platform/shell/text"
 )
 
 func TestShellCommandRegistriesAndCommandLineTools(t *testing.T) {

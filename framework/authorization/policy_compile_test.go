@@ -3,8 +3,8 @@ package authorization
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/stretchr/testify/require"
 )
 

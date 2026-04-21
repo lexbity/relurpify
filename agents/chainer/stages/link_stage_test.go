@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/agents/chainer/stages"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/agents/chainer/stages"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // mockModel is a test LanguageModel that returns predefined responses.

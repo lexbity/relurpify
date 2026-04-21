@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/stretchr/testify/require"
 )
 

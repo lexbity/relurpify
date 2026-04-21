@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/htn"
-	agentpipeline "github.com/lexcodex/relurpify/agents/pipeline"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	frameworkmemory "github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/htn"
+	agentpipeline "codeburg.org/lexbit/relurpify/agents/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	frameworkmemory "codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // --- classifier tests -------------------------------------------------------

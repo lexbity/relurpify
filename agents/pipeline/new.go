@@ -1,8 +1,8 @@
 package pipeline
 
 import (
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 type Option func(*PipelineAgent)

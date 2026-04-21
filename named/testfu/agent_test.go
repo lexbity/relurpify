@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	runnerpkg "github.com/lexcodex/relurpify/named/testfu/runner"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	runnerpkg "codeburg.org/lexbit/relurpify/named/testfu/runner"
 )
 
 type fakeRunner struct {

@@ -1,6 +1,6 @@
 package python
 
-import frameworktools "github.com/lexcodex/relurpify/framework/capability"
+import frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
 
 func atoiSafe(value string) int {
 	var total int

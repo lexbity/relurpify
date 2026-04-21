@@ -7,11 +7,12 @@ package manifest
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
-	"gopkg.in/yaml.v3"
 	"os"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"gopkg.in/yaml.v3"
 )
 
 // AgentManifest defines the security contract for an agent.

@@ -3,8 +3,8 @@ package rewoo
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // ReplanNode is a conditional node that decides whether to replan or proceed to synthesis.

@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/browser"
 	"github.com/gorilla/websocket"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/browser"
 	"github.com/stretchr/testify/require"
 )
 

@@ -1,7 +1,7 @@
 package goalcon
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 )
 
 // Re-exports from audit package for backward compatibility

@@ -9,7 +9,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // MultiplexTelemetry broadcasts events to multiple sinks.

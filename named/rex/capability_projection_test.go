@@ -3,8 +3,8 @@ package rex
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
 func TestCapabilityProjectionFromStateAndRequiredCapabilities(t *testing.T) {
@@ -53,4 +53,3 @@ func TestEnforceCapabilityProjectionBranches(t *testing.T) {
 		t.Fatalf("nil state should be ignored: %v", err)
 	}
 }
-

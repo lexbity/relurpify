@@ -1,8 +1,8 @@
 package planner
 
 import (
-	plannerpkg "github.com/lexcodex/relurpify/agents/planner"
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	plannerpkg "codeburg.org/lexbit/relurpify/agents/planner"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 type Runner = plannerpkg.PlannerAgent

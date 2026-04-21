@@ -10,12 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/ayenitd"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	eucloexec "codeburg.org/lexbit/relurpify/named/euclo/execution"
 )
 
 type archaeoInspector interface {

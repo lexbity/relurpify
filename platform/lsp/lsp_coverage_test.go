@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/sourcegraph/jsonrpc2"
 	"github.com/stretchr/testify/require"
 	"go.lsp.dev/protocol"
@@ -47,13 +47,13 @@ func TestMain(m *testing.M) {
 }
 
 type toolFakeClient struct {
-	definitionCalls       int
-	referencesCalls       int
-	hoverCalls            int
-	diagnosticsCalls      int
-	searchSymbolsCalls    int
-	documentSymbolsCalls  int
-	formatCalls           int
+	definitionCalls      int
+	referencesCalls      int
+	hoverCalls           int
+	diagnosticsCalls     int
+	searchSymbolsCalls   int
+	documentSymbolsCalls int
+	formatCalls          int
 
 	definitionResult      DefinitionResult
 	referencesResult      []Location
@@ -191,12 +191,12 @@ func TestLSPToolMetadataAndExecution(t *testing.T) {
 	proxy.Register("txt", client)
 
 	tools := []struct {
-		tool      core.Tool
-		name      string
-		desc      string
-		category  string
-		tags      []string
-		execute   func(*testing.T)
+		tool     core.Tool
+		name     string
+		desc     string
+		category string
+		tags     []string
+		execute  func(*testing.T)
 	}{
 		{
 			tool:     &DefinitionTool{Proxy: proxy},
@@ -368,8 +368,8 @@ func TestProcessLSPClientInMemory(t *testing.T) {
 	client, cleanup := newInMemoryProcessClient(t, fakeProcessServerConfig{
 		documentSymbols: []protocol.DocumentSymbol{
 			{
-				Name: "func1",
-				Kind: protocol.SymbolKindFunction,
+				Name:  "func1",
+				Kind:  protocol.SymbolKindFunction,
 				Range: protocol.Range{Start: protocol.Position{Line: 0, Character: 0}},
 				Children: []protocol.DocumentSymbol{
 					{Name: "inner", Kind: protocol.SymbolKindVariable, Range: protocol.Range{Start: protocol.Position{Line: 2, Character: 0}}},
@@ -737,11 +737,11 @@ func TestProcessLSPClientDefinitionRPCError(t *testing.T) {
 
 func TestProcessLSPClientErrorBranches(t *testing.T) {
 	client, cleanup := newInMemoryProcessClient(t, fakeProcessServerConfig{
-		hoverError:          "hover failed",
-		formatError:         "format failed",
-		documentSymbolsRaw:  json.RawMessage("123"),
-		referencesError:     "references failed",
-		searchError:         "search failed",
+		hoverError:           "hover failed",
+		formatError:          "format failed",
+		documentSymbolsRaw:   json.RawMessage("123"),
+		referencesError:      "references failed",
+		searchError:          "search failed",
 		documentSymbolsError: "document symbols failed",
 	})
 	defer cleanup.close()
@@ -857,29 +857,29 @@ func TestLanguageServerWrappers(t *testing.T) {
 }
 
 type fakeProcessServerConfig struct {
-	diagnostics        []protocol.Diagnostic
-	documentSymbols    []protocol.DocumentSymbol
-	documentSymbolInfos []protocol.SymbolInformation
-	workspaceSymbols   []protocol.SymbolInformation
-	definitions        []protocol.Location
-	references         []protocol.Location
-	hover              protocol.Hover
-	formatEdits        []protocol.TextEdit
-	hoverError         string
-	formatError        string
-	documentSymbolsRaw json.RawMessage
-	initError          string
-	referencesError    string
-	searchError        string
+	diagnostics          []protocol.Diagnostic
+	documentSymbols      []protocol.DocumentSymbol
+	documentSymbolInfos  []protocol.SymbolInformation
+	workspaceSymbols     []protocol.SymbolInformation
+	definitions          []protocol.Location
+	references           []protocol.Location
+	hover                protocol.Hover
+	formatEdits          []protocol.TextEdit
+	hoverError           string
+	formatError          string
+	documentSymbolsRaw   json.RawMessage
+	initError            string
+	referencesError      string
+	searchError          string
 	documentSymbolsError string
-	definitionError    string
+	definitionError      string
 }
 
 type inMemoryProcessCleanup struct {
-	root     string
-	file     string
-	fileURI  string
-	close    func()
+	root    string
+	file    string
+	fileURI string
+	close   func()
 }
 
 func newInMemoryProcessClient(t *testing.T, cfg fakeProcessServerConfig) (*processLSPClient, inMemoryProcessCleanup) {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/app/nexus/adminapi"
+	"codeburg.org/lexbit/relurpify/app/nexus/adminapi"
 	_ "github.com/mattn/go-sqlite3"
 )
 

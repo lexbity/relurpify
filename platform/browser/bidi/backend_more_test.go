@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/browser"
 	"github.com/gorilla/websocket"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/browser"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,8 +155,8 @@ func TestTransportCallReadLoopAndClose(t *testing.T) {
 	case evt, ok := <-sub:
 		require.True(t, ok)
 		require.Contains(t, string(evt), "ctx-1")
-		case <-time.After(time.Second):
-			t.Fatal("expected load event")
+	case <-time.After(time.Second):
+		t.Fatal("expected load event")
 	}
 
 	transport.removePending(100)
@@ -254,7 +254,7 @@ func TestNewMissingSessionMetadata(t *testing.T) {
 	missingWS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"value": map[string]any{
-				"sessionId": "session-1",
+				"sessionId":    "session-1",
 				"capabilities": map[string]any{},
 			},
 		})
@@ -374,9 +374,9 @@ func newBidiTestWebSocketServer(t *testing.T) (string, func()) {
 					}
 				default:
 					require.NoError(t, conn.WriteJSON(responseEnvelope{
-						Type:   "error",
-						ID:     req.ID,
-						Error:  "unsupported",
+						Type:    "error",
+						ID:      req.ID,
+						Error:   "unsupported",
 						Message: req.Method,
 					}))
 				}

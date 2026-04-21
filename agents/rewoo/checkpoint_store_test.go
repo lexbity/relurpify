@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkmemory "github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkmemory "codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 func TestRewooCheckpointStoreSavePrefersArtifactRefs(t *testing.T) {

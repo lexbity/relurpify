@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 func TestCollectArtifactsFromState_IncludesWaiverArtifact(t *testing.T) {

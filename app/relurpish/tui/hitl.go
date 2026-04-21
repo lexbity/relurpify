@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/authorization"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/framework/authorization"
 )
 
 // HITLServiceIface is the interface for the HITL approval service.

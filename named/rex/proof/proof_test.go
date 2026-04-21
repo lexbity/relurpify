@@ -3,9 +3,9 @@ package proof
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/rex/classify"
-	"github.com/lexcodex/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/rex/classify"
+	"codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
 func TestEvaluateCompletionBlocksMutationWithoutVerification(t *testing.T) {

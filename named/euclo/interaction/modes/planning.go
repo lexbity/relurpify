@@ -1,8 +1,8 @@
 package modes
 
 import (
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // PlanningMode builds the phase machine for the planning interaction mode.

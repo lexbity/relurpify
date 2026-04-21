@@ -8,25 +8,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 
 type testBackend struct {
-	currentURL      string
-	text            string
-	textErr         error
-	html            string
-	htmlErr         error
-	accessibility   string
+	currentURL       string
+	text             string
+	textErr          error
+	html             string
+	htmlErr          error
+	accessibility    string
 	accessibilityErr error
-	scriptFunc      func(string) (any, error)
-	scriptErr       error
-	screenshotData  []byte
-	screenshotErr   error
-	clicks          []string
-	types           []struct {
+	scriptFunc       func(string) (any, error)
+	scriptErr        error
+	screenshotData   []byte
+	screenshotErr    error
+	clicks           []string
+	types            []struct {
 		selector string
 		text     string
 	}
@@ -219,9 +219,9 @@ func TestSessionCapabilities(t *testing.T) {
 
 func TestSessionWrappersAndErrorWrapping(t *testing.T) {
 	backend := &testBackend{
-		text:          "hello",
-		html:          "<html><body>hi</body></html>",
-		accessibility: "{\"role\":\"document\"}",
+		text:           "hello",
+		html:           "<html><body>hi</body></html>",
+		accessibility:  "{\"role\":\"document\"}",
 		screenshotData: []byte{0x89, 0x50, 0x4e, 0x47},
 		scriptFunc: func(script string) (any, error) {
 			if strings.Contains(script, "document.title") {
@@ -260,14 +260,14 @@ func TestSessionWrappersAndErrorWrapping(t *testing.T) {
 	require.Empty(t, url)
 
 	errBackend := &testBackend{
-		textErr:         &Error{Code: ErrNoSuchElement, Err: errors.New("missing")},
-		htmlErr:         errors.New("html failed"),
+		textErr:          &Error{Code: ErrNoSuchElement, Err: errors.New("missing")},
+		htmlErr:          errors.New("html failed"),
 		accessibilityErr: errors.New("ax failed"),
-		scriptErr:       errors.New("script failed"),
-		screenshotErr:   errors.New("screenshot failed"),
-		waitErr:         errors.New("wait failed"),
-		currentURLErr:   errors.New("current url failed"),
-		closeErr:        errors.New("close failed"),
+		scriptErr:        errors.New("script failed"),
+		screenshotErr:    errors.New("screenshot failed"),
+		waitErr:          errors.New("wait failed"),
+		currentURLErr:    errors.New("current url failed"),
+		closeErr:         errors.New("close failed"),
 	}
 	session = newTestSession(t, errBackend)
 

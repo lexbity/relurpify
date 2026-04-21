@@ -1,6 +1,6 @@
 package blackboard
 
-import "github.com/lexcodex/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/framework/capability"
 
 func (a *BlackboardAgent) CapabilityRegistry() *capability.Registry {
 	if a == nil {

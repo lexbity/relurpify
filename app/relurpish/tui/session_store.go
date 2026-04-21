@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/config"
 )
 
 // SessionMeta holds lightweight session metadata for listing.

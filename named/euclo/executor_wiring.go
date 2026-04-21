@@ -1,8 +1,8 @@
 package euclo
 
 import (
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	eucloexec "codeburg.org/lexbit/relurpify/named/euclo/execution"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 func (a *Agent) selectExecutor(work eucloruntime.UnitOfWork) (eucloexec.Selection, error) {

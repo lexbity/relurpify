@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	eucloexec "github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	eucloexec "codeburg.org/lexbit/relurpify/named/euclo/execution"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 type learningPromoteCapability struct {

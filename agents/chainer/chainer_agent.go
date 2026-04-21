@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/agents/chainer/checkpoint"
-	chainctx "github.com/lexcodex/relurpify/agents/chainer/context"
-	"github.com/lexcodex/relurpify/agents/chainer/telemetry"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/chainer/checkpoint"
+	chainctx "codeburg.org/lexbit/relurpify/agents/chainer/context"
+	"codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // ChainerAgent executes a deterministic chain of isolated LLM links.

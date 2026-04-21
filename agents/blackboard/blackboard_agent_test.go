@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/blackboard"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/agents/blackboard"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 // --- Blackboard workspace tests ---------------------------------------------

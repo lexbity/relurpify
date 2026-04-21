@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // testEmitter is a test double for FrameEmitter

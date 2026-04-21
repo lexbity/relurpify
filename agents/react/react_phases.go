@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
 func defaultIterationsForMode(mode string) int {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lexcodex/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/framework/perfstats"
 )
 
 // SchemaVersion is the current retrieval schema version.

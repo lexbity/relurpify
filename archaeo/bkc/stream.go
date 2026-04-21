@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
 )
 
 // StreamSeed identifies starting chunk IDs for backward streaming.

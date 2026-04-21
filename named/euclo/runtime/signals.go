@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 // ClassificationSignal represents a single piece of evidence used during classification.
@@ -38,15 +38,15 @@ const AmbiguityThreshold = 0.15
 
 // Signal weights by kind.
 const (
-	WeightContextHint        = 1.0
-	WeightKeyword            = 0.3
-	WeightKeywordReview      = 0.45 // review signals need to beat the code default baseline
-	WeightFilePattern        = 0.4
-	WeightTaskStructure      = 0.5
-	WeightErrorText          = 0.6
-	WeightWorkspaceState     = 0.35
-	WeightDefault            = 0.4  // baseline for default mode when no strong signals fire
-	WeightUserRecipeKeyword  = WeightKeyword // user recipe keyword match; same weight as built-in keywords
+	WeightContextHint       = 1.0
+	WeightKeyword           = 0.3
+	WeightKeywordReview     = 0.45 // review signals need to beat the code default baseline
+	WeightFilePattern       = 0.4
+	WeightTaskStructure     = 0.5
+	WeightErrorText         = 0.6
+	WeightWorkspaceState    = 0.35
+	WeightDefault           = 0.4           // baseline for default mode when no strong signals fire
+	WeightUserRecipeKeyword = WeightKeyword // user recipe keyword match; same weight as built-in keywords
 )
 
 // ──────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 func TestVerificationResolver_BuildPlan(t *testing.T) {

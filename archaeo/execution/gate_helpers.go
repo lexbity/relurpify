@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graphdb"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 func MissingPlanSymbols(step *frameworkplan.PlanStep, graph *graphdb.Engine) []string {

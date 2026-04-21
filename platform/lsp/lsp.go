@@ -3,12 +3,13 @@ package lsp
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Position follows the LSP specification.

@@ -1,10 +1,10 @@
 package contract
 
 import (
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived

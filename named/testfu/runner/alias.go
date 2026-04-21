@@ -1,9 +1,9 @@
 package runner
 
 import (
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/graph"
-	agenttestpkg "github.com/lexcodex/relurpify/testsuite/agenttest"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	agenttestpkg "codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 type RunOptions = agenttestpkg.RunOptions

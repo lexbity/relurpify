@@ -2,9 +2,10 @@ package framework_test
 
 import (
 	"context"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 type simpleTestNode struct {

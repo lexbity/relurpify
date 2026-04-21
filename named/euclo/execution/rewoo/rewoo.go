@@ -3,9 +3,9 @@ package rewoo
 import (
 	"context"
 
-	rewoopkg "github.com/lexcodex/relurpify/agents/rewoo"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
+	rewoopkg "codeburg.org/lexbit/relurpify/agents/rewoo"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type Runner = rewoopkg.RewooAgent

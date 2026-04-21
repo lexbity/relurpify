@@ -1,7 +1,7 @@
 package euclotypes
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ExecutorSemanticContext is the pre-resolved semantic context bundle

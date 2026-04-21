@@ -158,7 +158,7 @@ package tools
 
 import (
     "context"
-    "github.com/lexcodex/relurpify/framework/core"
+    "codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type EchoTool struct{}

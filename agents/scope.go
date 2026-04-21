@@ -1,8 +1,8 @@
 package agents
 
 import (
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ToolScope defines the permission envelope used to filter a capability

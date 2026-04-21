@@ -7,13 +7,13 @@ import (
 	"io"
 	"log"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capabilityplan"
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/policybundle"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
-	"github.com/lexcodex/relurpify/platform/llm"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capabilityplan"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/policybundle"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // Workspace is a live, initialized workspace session. It holds all open

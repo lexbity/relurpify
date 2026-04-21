@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
 type httpMCPClient struct {

@@ -1,8 +1,8 @@
 package stages
 
 import (
-	"github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // SummarizeStage is a convenience wrapper for a summarization link.

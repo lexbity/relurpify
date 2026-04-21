@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/ayenitd"
 )
 
 func TestServiceScheduler_RegisterAndStop(t *testing.T) {

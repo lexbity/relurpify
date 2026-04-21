@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/memory"
-	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
 )
 
 func TestManagerExecuteItemBranchesAndMax(t *testing.T) {

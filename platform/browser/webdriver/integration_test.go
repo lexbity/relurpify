@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/browser"
 	"github.com/stretchr/testify/require"
 )
 

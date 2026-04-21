@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/ayenitd"
 )
 
 // TestOpenWorkspace verifies that ayenitd.Open() successfully initializes

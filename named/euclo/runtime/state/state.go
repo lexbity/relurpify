@@ -3,9 +3,9 @@ package state
 import (
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 // RecoveryTrace represents the recovery trace state with typed fields.

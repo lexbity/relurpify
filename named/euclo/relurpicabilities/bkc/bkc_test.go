@@ -5,16 +5,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graphdb"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestCompileCapabilityQueuesCandidate(t *testing.T) {

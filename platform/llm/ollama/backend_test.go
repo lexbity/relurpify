@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/platform/llm/conformance"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 	"github.com/stretchr/testify/require"
 )
 

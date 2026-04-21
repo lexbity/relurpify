@@ -2,10 +2,11 @@ package framework_test
 
 import (
 	"context"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/search"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/search"
 )
 
 type stubCodeIndex struct {

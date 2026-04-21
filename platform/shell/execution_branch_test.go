@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/platform/shell/execute"
+	"codeburg.org/lexbit/relurpify/platform/shell/execute"
 	"github.com/stretchr/testify/require"
 )
 

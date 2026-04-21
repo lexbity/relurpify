@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	frameworkcore "github.com/lexcodex/relurpify/framework/core"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	frameworkcore "codeburg.org/lexbit/relurpify/framework/core"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 type SemanticInputBundle = eucloruntime.SemanticInputBundle

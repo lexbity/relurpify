@@ -3,7 +3,7 @@ package envelope
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestNormalizeFromTaskAndState(t *testing.T) {

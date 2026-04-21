@@ -3,12 +3,13 @@ package ast
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	platformlsp "github.com/lexcodex/relurpify/platform/lsp"
 	"strconv"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	platformlsp "codeburg.org/lexbit/relurpify/platform/lsp"
 )
 
 // DocumentSymbolToolProvider wraps the lsp_document_symbols tool so AST

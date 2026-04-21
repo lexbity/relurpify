@@ -10,19 +10,19 @@ import (
 	"testing"
 	"time"
 
-	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memdb "github.com/lexcodex/relurpify/framework/memory/db"
-	rexpkg "github.com/lexcodex/relurpify/named/rex"
-	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
-	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
-	rexevents "github.com/lexcodex/relurpify/named/rex/events"
-	rexgateway "github.com/lexcodex/relurpify/named/rex/gateway"
-	rexctx "github.com/lexcodex/relurpify/named/rex/rexctx"
-	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
+	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	rexpkg "codeburg.org/lexbit/relurpify/named/rex"
+	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
+	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
+	rexevents "codeburg.org/lexbit/relurpify/named/rex/events"
+	rexgateway "codeburg.org/lexbit/relurpify/named/rex/gateway"
+	rexctx "codeburg.org/lexbit/relurpify/named/rex/rexctx"
+	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 	"github.com/stretchr/testify/require"
 )
 
@@ -403,9 +403,9 @@ func TestHandleEventDecisionReleasesAdmissionAfterExecution(t *testing.T) {
 		WorkflowID: "wf-1",
 		RunID:      "wf-1:run",
 	}, rexevents.CanonicalEvent{
-		ID:         "evt-1",
-		Type:       rexevents.TypeTaskRequested,
-		Partition:  "local",
+		ID:            "evt-1",
+		Type:          rexevents.TypeTaskRequested,
+		Partition:     "local",
 		IngressOrigin: rexevents.OriginInternal,
 		Payload: map[string]any{
 			"task_id":        "task-1",
@@ -448,9 +448,9 @@ func TestHandleEventDecisionReleasesAdmissionWhenQueueIsFull(t *testing.T) {
 		WorkflowID: "wf-queue",
 		RunID:      "wf-queue:run",
 	}, rexevents.CanonicalEvent{
-		ID:         "evt-queue",
-		Type:       rexevents.TypeTaskRequested,
-		Partition:  "local",
+		ID:            "evt-queue",
+		Type:          rexevents.TypeTaskRequested,
+		Partition:     "local",
 		IngressOrigin: rexevents.OriginInternal,
 		Payload: map[string]any{
 			"task_id":     "task-queue",

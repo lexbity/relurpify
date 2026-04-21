@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 const defaultBudgetCategory = "immediate"

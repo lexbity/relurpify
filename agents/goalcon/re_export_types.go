@@ -1,7 +1,7 @@
 package goalcon
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // Re-exports from types package

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // gitStatusMsg is returned when git status is queried.

@@ -1,6 +1,6 @@
 package architect
 
-import "github.com/lexcodex/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/framework/capability"
 
 func (a *ArchitectAgent) CapabilityRegistry() *capability.Registry {
 	if a == nil {

@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/archaeo/execution"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graphdb"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/archaeo/execution"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"github.com/stretchr/testify/require"
 )
 

@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	nexusadminapi "github.com/lexcodex/relurpify/app/nexus/adminapi"
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	mcpclient "github.com/lexcodex/relurpify/framework/middleware/mcp/client"
-	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	nexusadminapi "codeburg.org/lexbit/relurpify/app/nexus/adminapi"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	mcpclient "codeburg.org/lexbit/relurpify/relurpnet/mcp/client"
+	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
 type RuntimeMode string

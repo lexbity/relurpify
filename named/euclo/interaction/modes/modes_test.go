@@ -3,8 +3,8 @@ package modes_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	"github.com/lexcodex/relurpify/named/euclo/interaction/modes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction/modes"
 )
 
 // ---------------------------------------------------------------------------

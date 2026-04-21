@@ -1,14 +1,11 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"context"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ClassifierConfig controls LLM-based classification behavior.

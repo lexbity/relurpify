@@ -3,9 +3,9 @@ package euclotui
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/app/relurpish/tui"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 // TUIFrameEmitter implements interaction.FrameEmitter by rendering frames into

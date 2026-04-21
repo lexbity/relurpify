@@ -3,8 +3,8 @@ package route
 import (
 	"strings"
 
-	"github.com/lexcodex/relurpify/named/rex/classify"
-	"github.com/lexcodex/relurpify/named/rex/envelope"
+	"codeburg.org/lexbit/relurpify/named/rex/classify"
+	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 )
 
 const (

@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/chainer/checkpoint"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/chainer/checkpoint"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 func TestStore_SaveAndLoad(t *testing.T) {

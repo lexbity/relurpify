@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/channel"
 	"github.com/gorilla/websocket"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/middleware/channel"
 )
 
 type Adapter struct {

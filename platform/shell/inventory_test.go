@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/platform/shell/archive"
-	"github.com/lexcodex/relurpify/platform/shell/build"
-	"github.com/lexcodex/relurpify/platform/shell/fileops"
-	"github.com/lexcodex/relurpify/platform/shell/network"
-	"github.com/lexcodex/relurpify/platform/shell/scheduler"
-	"github.com/lexcodex/relurpify/platform/shell/system"
-	"github.com/lexcodex/relurpify/platform/shell/text"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/shell/archive"
+	"codeburg.org/lexbit/relurpify/platform/shell/build"
+	"codeburg.org/lexbit/relurpify/platform/shell/fileops"
+	"codeburg.org/lexbit/relurpify/platform/shell/network"
+	"codeburg.org/lexbit/relurpify/platform/shell/scheduler"
+	"codeburg.org/lexbit/relurpify/platform/shell/system"
+	"codeburg.org/lexbit/relurpify/platform/shell/text"
 	"github.com/stretchr/testify/require"
 )
 
@@ -271,8 +271,15 @@ func TestCommandLineToolsPreservesShellOrderAndDedupesStrace(t *testing.T) {
 
 func TestExecutionHelperInventory(t *testing.T) {
 	cases := []struct {
-		name     string
-		tool     interface{ Name() string; Description() string; Category() string; Parameters() []core.ToolParameter; Tags() []string; IsAvailable(context.Context, *core.Context) bool }
+		name string
+		tool interface {
+			Name() string
+			Description() string
+			Category() string
+			Parameters() []core.ToolParameter
+			Tags() []string
+			IsAvailable(context.Context, *core.Context) bool
+		}
 		wantName string
 		wantDesc string
 		wantCat  string

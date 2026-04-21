@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/identity"
+	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
+	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
+	"codeburg.org/lexbit/relurpify/relurpnet/session"
 	"github.com/gorilla/websocket"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/identity"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
-	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
-	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
-	"github.com/lexcodex/relurpify/framework/middleware/session"
-	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
 )
 
 const NodeDisconnectTimeout = 5 * time.Second

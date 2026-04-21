@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/rex/envelope"
-	"github.com/lexcodex/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/rex/envelope"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 )
 
 // IngressOrigin classifies the source of an inbound canonical event.

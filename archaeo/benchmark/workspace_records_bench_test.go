@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
-	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
-	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoproj "github.com/lexcodex/relurpify/archaeo/projections"
+	archaeoconvergence "codeburg.org/lexbit/relurpify/archaeo/convergence"
+	archaeodecisions "codeburg.org/lexbit/relurpify/archaeo/decisions"
+	archaeodeferred "codeburg.org/lexbit/relurpify/archaeo/deferred"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoproj "codeburg.org/lexbit/relurpify/archaeo/projections"
 )
 
 func BenchmarkWorkspaceDeferredDraftProjection(b *testing.B) {

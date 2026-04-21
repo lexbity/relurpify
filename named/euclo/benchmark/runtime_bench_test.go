@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
-	eucloreporting "github.com/lexcodex/relurpify/named/euclo/runtime/reporting"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	eucloarchaeomem "codeburg.org/lexbit/relurpify/named/euclo/runtime/archaeomem"
+	eucloreporting "codeburg.org/lexbit/relurpify/named/euclo/runtime/reporting"
 )
 
 func BenchmarkBuildChatCapabilityRuntimeState(b *testing.B) {

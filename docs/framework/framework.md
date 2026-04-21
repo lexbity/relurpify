@@ -439,7 +439,7 @@ Runtime startup, preset switching, and live reload compile through `BuildFromSpe
 
 ## middleware
 
-`framework/middleware` provides transport and protocol layers connecting agents to each other and to external systems.
+`relurpnet` provides transport and protocol layers connecting agents to each other and to external systems.
 
 ### channel
 

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ProvenanceTracker records and wraps tool invocations for audit and provenance.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // EmbedderConfig captures fallback embedder construction settings.

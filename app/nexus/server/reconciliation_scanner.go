@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/event"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/event"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 // ReconciliationScanner periodically scans expired FMP leases and orphans unresolved attempts.

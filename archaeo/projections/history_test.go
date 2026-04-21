@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/archaeo/testscenario"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func TestMutationHistoryEmpty(t *testing.T) {

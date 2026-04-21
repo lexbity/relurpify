@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // SessionAwareBackend is implemented by backends that can bind and evict

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
+	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func newLoadedOllamaServer(t *testing.T, modelName string) *httptest.Server {

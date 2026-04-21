@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func recoveryProbeArgs(agent *ReActAgent, toolName string, state *core.Context, task *core.Task, lastMap map[string]interface{}) map[string]interface{} {

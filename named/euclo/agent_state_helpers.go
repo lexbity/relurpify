@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	localbehavior "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	euclorestore "codeburg.org/lexbit/relurpify/named/euclo/runtime/restore"
 )
 
 func (a *Agent) ensureWorkflowRun(ctx context.Context, task *core.Task, state *core.Context) {

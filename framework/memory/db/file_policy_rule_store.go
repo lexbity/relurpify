@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"gopkg.in/yaml.v3"
 )
 

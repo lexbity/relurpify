@@ -3,7 +3,7 @@ package contextmgr
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestNewContextPolicyKeepsProgressiveEnabledWhenUnset(t *testing.T) {

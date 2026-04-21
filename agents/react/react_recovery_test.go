@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestReactRecoveryProbeArgsAndInferenceHelpers(t *testing.T) {

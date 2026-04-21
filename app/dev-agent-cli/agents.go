@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
+
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 // newAgentsCmd wires the `agents` command group.

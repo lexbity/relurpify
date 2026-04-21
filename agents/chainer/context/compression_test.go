@@ -3,8 +3,8 @@ package context_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer/context"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/chainer/context"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestCompressionListener_NewCompressionListener(t *testing.T) {

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type TapeMode string

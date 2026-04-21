@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // wrapTool decorates a tool with the instrumentation wrapper.

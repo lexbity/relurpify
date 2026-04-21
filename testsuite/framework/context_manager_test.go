@@ -1,11 +1,12 @@
 package framework_test
 
 import (
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/perfstats"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/perfstats"
 )
 
 type fakeContextItem struct {

@@ -3,10 +3,10 @@ package pipe
 import (
 	"context"
 
-	pipelinepkg "github.com/lexcodex/relurpify/agents/pipeline"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+	pipelinepkg "codeburg.org/lexbit/relurpify/agents/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 type Runner = pipelinepkg.PipelineAgent

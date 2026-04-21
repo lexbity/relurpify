@@ -1,6 +1,6 @@
 package rewoo
 
-import "github.com/lexcodex/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/framework/capability"
 
 func (a *RewooAgent) CapabilityRegistry() *capability.Registry {
 	if a == nil {

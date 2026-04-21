@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 )
 
 // FailureCategory classifies the nature of a failure.

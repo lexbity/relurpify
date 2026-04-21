@@ -1,7 +1,7 @@
 package operators
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // DefaultOperatorRegistry builds the default deterministic operator set.

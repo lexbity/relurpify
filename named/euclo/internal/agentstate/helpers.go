@@ -4,16 +4,16 @@ import (
 	"strconv"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	eucloarchaeomem "github.com/lexcodex/relurpify/named/euclo/runtime/archaeomem"
-	euclopretask "github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	eucloarchaeomem "codeburg.org/lexbit/relurpify/named/euclo/runtime/archaeomem"
+	euclopretask "codeburg.org/lexbit/relurpify/named/euclo/runtime/pretask"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 func EnrichBundleWithContextKnowledge(bundle eucloruntime.SemanticInputBundle, state *core.Context) eucloruntime.SemanticInputBundle {

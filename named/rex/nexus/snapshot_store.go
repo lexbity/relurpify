@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/memory"
-	memdb "github.com/lexcodex/relurpify/framework/memory/db"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 var _ fwfmp.RuntimeSnapshotStore = (*SnapshotStore)(nil)

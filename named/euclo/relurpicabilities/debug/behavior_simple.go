@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	localbehavior "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 type simpleRepairBehavior struct{}
@@ -71,13 +71,13 @@ func (simpleRepairBehavior) Execute(ctx context.Context, in execution.ExecuteInp
 		execution.MergeStateArtifactsToContext(in.State, verificationArtifacts)
 
 		if verifyPayload, ok := euclostate.GetPipelineVerify(in.State); ok && len(verifyPayload) > 0 && localbehavior.VerificationPayloadFailed(verifyPayload) {
-				repairResult := localbehavior.NewFailedVerificationRepairCapability(in.Environment).Execute(ctx, envelope)
-				artifacts = append(artifacts, repairResult.Artifacts...)
-				execution.MergeStateArtifactsToContext(in.State, artifacts)
-				if repairResult.Status == euclotypes.ExecutionStatusFailed {
-					err := fmt.Errorf("%s", execution.ErrorMessage(nil, &core.Result{Error: nil, Data: map[string]any{"summary": repairResult.Summary}}))
-					return &core.Result{Success: false, Error: err, Data: map[string]any{"artifacts": artifacts}}, err
-				}
+			repairResult := localbehavior.NewFailedVerificationRepairCapability(in.Environment).Execute(ctx, envelope)
+			artifacts = append(artifacts, repairResult.Artifacts...)
+			execution.MergeStateArtifactsToContext(in.State, artifacts)
+			if repairResult.Status == euclotypes.ExecutionStatusFailed {
+				err := fmt.Errorf("%s", execution.ErrorMessage(nil, &core.Result{Error: nil, Data: map[string]any{"summary": repairResult.Summary}}))
+				return &core.Result{Success: false, Error: err, Data: map[string]any{"artifacts": artifacts}}, err
+			}
 			artifacts = append(artifacts, euclotypes.Artifact{
 				ID:         "debug_repair_simple_recovery",
 				Kind:       euclotypes.ArtifactKindEditIntent,

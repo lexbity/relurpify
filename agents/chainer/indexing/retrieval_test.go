@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/chainer/indexing"
+	"codeburg.org/lexbit/relurpify/agents/chainer/indexing"
 )
 
 func setupTestIndex() *indexing.CodeIndex {

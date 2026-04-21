@@ -3,7 +3,7 @@ package memory
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // CheckpointSnapshotStore captures resumable graph checkpoints.

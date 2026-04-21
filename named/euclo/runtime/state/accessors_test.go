@@ -3,8 +3,8 @@ package state
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 // TestGetVerificationPolicy_EmptyContext verifies that GetVerificationPolicy on empty context returns zero value and false.

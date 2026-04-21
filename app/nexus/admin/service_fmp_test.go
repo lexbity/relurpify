@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/framework/core"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
+	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"github.com/stretchr/testify/require"
 )
 

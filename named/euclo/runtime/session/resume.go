@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 // SessionResumeContext is the fully resolved session restoration context.

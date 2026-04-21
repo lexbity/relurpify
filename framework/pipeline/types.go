@@ -3,7 +3,7 @@ package pipeline
 import (
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // TransitionKind indicates what the runtime should do after a stage finishes.

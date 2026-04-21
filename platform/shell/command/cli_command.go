@@ -3,15 +3,16 @@ package command
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/shell/execute"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/shell/execute"
 )
 
 // CommandToolConfig captures metadata for wrapping an external CLI utility.
@@ -76,15 +77,15 @@ func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map
 	workdir := mapStringArg(args, "working_directory")
 	stdin := mapStringArg(args, "stdin")
 	executor := execute.NewExecutor(t.basePath, execute.CommandPreset{
-		Name:         t.cfg.Name,
-		Command:      t.cfg.Command,
-		DefaultArgs:  append([]string{}, t.cfg.DefaultArgs...),
-		Description:  t.cfg.Description,
-		Category:     t.cfg.Category,
-		Tags:         append([]string{}, t.cfg.Tags...),
-		Timeout:      t.cfg.Timeout,
-		AllowStdin:   true,
-		WorkdirMode:  "workspace",
+		Name:        t.cfg.Name,
+		Command:     t.cfg.Command,
+		DefaultArgs: append([]string{}, t.cfg.DefaultArgs...),
+		Description: t.cfg.Description,
+		Category:    t.cfg.Category,
+		Tags:        append([]string{}, t.cfg.Tags...),
+		Timeout:     t.cfg.Timeout,
+		AllowStdin:  true,
+		WorkdirMode: "workspace",
 	}, t.runner)
 	envelope, err := executor.Execute(ctx, workdir, args["args"], stdin)
 	if err != nil {

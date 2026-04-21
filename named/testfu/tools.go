@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func (a *Agent) registerTools() {

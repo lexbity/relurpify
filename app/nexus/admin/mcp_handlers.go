@@ -3,8 +3,8 @@ package admin
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 )
 
 type listPendingPairingsArgs struct {

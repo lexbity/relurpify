@@ -1,6 +1,6 @@
 package search
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 var estimateTokens = core.EstimateTokens
 

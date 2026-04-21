@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	chainerpkg "github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/framework/core"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	chainerpkg "codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestNewReturnsConfiguredRunner(t *testing.T) {

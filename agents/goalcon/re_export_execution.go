@@ -1,7 +1,7 @@
 package goalcon
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/execution"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/execution"
 )
 
 // Re-exports from execution package for backward compatibility

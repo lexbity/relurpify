@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	projections "github.com/lexcodex/relurpify/archaeo/projections"
-	"github.com/lexcodex/relurpify/archaeo/testscenario"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	projections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	"codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func TestWorkflowEmptyID(t *testing.T) {

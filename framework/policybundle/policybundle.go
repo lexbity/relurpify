@@ -3,9 +3,9 @@ package policybundle
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // CompiledPolicyBundle captures the compiled rules and the executable policy

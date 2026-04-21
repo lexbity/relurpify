@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 type checkpointEnvelope struct {

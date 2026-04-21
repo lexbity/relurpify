@@ -2,14 +2,15 @@ package testsuite
 
 import (
 	"context"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	platformfs "github.com/lexcodex/relurpify/platform/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestFileToolGranularPermissionEnforcement(t *testing.T) {

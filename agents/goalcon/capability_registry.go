@@ -1,6 +1,6 @@
 package goalcon
 
-import "github.com/lexcodex/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/framework/capability"
 
 func (a *GoalConAgent) CapabilityRegistry() *capability.Registry {
 	if a == nil {

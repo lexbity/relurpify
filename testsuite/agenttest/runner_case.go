@@ -13,15 +13,15 @@ import (
 	"strings"
 	"time"
 
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/perfstats"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/platform/llm"
-	ollama "github.com/lexcodex/relurpify/platform/llm/ollama"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/llm"
+	ollama "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 )
 
 func (r *Runner) runCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir string) CaseReport {

@@ -6,16 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
 	"time"
+
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func SeedWorkflow(t testing.TB, store *memorydb.SQLiteWorkflowStateStore, workflowID, instruction string) {

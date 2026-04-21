@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type Store interface {

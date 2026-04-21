@@ -6,10 +6,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/goalcon"
-	"github.com/lexcodex/relurpify/framework/core"
-	agenttestscenario "github.com/lexcodex/relurpify/testutil/agenttestscenario"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/agents/goalcon"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	agenttestscenario "codeburg.org/lexbit/relurpify/testutil/agenttestscenario"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestGoalConAgent_Scenario_ClassifierDisabled_SkipsLLM(t *testing.T) {

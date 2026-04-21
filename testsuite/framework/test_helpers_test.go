@@ -3,7 +3,8 @@ package framework_test
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type stubLLM struct {

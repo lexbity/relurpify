@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	"github.com/lexcodex/relurpify/archaeo/execution"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/archaeo/testscenario"
-	"github.com/lexcodex/relurpify/framework/graphdb"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	"codeburg.org/lexbit/relurpify/archaeo/execution"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 func TestScenarioPreflightCleanGate(t *testing.T) {

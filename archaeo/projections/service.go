@@ -8,15 +8,15 @@ import (
 	"sync"
 	"time"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/event"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeophases "codeburg.org/lexbit/relurpify/archaeo/phases"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/event"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 type WorkflowReadModel struct {

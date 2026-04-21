@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // SideEffectClass describes the replay sensitivity of a node's execution.

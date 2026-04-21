@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"strings"
 
-	chainerpkg "github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	chainexec "github.com/lexcodex/relurpify/named/euclo/execution/chainer"
-	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	chainerpkg "codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	chainexec "codeburg.org/lexbit/relurpify/named/euclo/execution/chainer"
+	localbehavior "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // Deprecated: Use NewAskInvocable instead
-func NewAskBehavior() askBehavior       { return askBehavior{} }
-func NewInspectBehavior() inspectBehavior   { return inspectBehavior{} }
+func NewAskBehavior() askBehavior             { return askBehavior{} }
+func NewInspectBehavior() inspectBehavior     { return inspectBehavior{} }
 func NewImplementBehavior() implementBehavior { return implementBehavior{} }
 
 type askBehavior struct{}

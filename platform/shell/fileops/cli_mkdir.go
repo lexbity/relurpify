@@ -1,8 +1,8 @@
 package fileops
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
-	clinix "github.com/lexcodex/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewMkdirTool exposes the mkdir CLI utility for directory creation.

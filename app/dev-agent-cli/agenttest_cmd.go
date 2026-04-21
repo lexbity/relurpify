@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 	"github.com/spf13/cobra"
 )
 

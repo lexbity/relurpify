@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	pipeexec "github.com/lexcodex/relurpify/named/euclo/execution/pipe"
-	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	pipeexec "codeburg.org/lexbit/relurpify/named/euclo/execution/pipe"
+	localbehavior "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 type investigateBehavior struct{}

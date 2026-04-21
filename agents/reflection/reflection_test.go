@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/core"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/assert"
 )
 

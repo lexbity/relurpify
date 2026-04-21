@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 

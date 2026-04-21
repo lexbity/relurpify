@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 type CompatibilityBackendResolver interface {

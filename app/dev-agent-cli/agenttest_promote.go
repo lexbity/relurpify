@@ -3,14 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/lexcodex/relurpify/platform/llm"
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 func promoteAgentTestRun(workspace, suitePath, runDir, caseName string, all bool, stdout io.Writer) error {

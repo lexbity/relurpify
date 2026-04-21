@@ -4,14 +4,14 @@ import (
 	"context"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 type executionPreparation struct {
@@ -218,7 +218,7 @@ func (a *Agent) seedExecutionReadBundleState(state *core.Context, bundle *execut
 	if state == nil || bundle == nil {
 		return
 	}
-		statebus.SetAny(state, "euclo.execution_read_bundle", bundle)
+	statebus.SetAny(state, "euclo.execution_read_bundle", bundle)
 	if bundle.activePlan != nil {
 		if bundle.activePlan.PhaseState != nil {
 			statebus.SetAny(state, "euclo.phase_state", bundle.activePlan.PhaseState)
@@ -274,7 +274,7 @@ func shouldHydratePersistedArtifacts(task *core.Task, state *core.Context, envel
 		return true
 	}
 	if state != nil {
-	if strings.TrimSpace(statebus.GetString(state, "euclo.run_id")) != "" {
+		if strings.TrimSpace(statebus.GetString(state, "euclo.run_id")) != "" {
 			return true
 		}
 	}

@@ -2,13 +2,14 @@ package contextmgr
 
 import (
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 // ContextStrategy defines how an agent manages context.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // AnchorRef mirrors the retrieval.AnchorRef type to avoid import cycles.

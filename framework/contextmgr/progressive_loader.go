@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/perfstats"
-	"github.com/lexcodex/relurpify/framework/search"
-	platformast "github.com/lexcodex/relurpify/platform/ast"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/framework/search"
+	platformast "codeburg.org/lexbit/relurpify/platform/ast"
 )
 
 const astIndexReadyTimeout = 2 * time.Second

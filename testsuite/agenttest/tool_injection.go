@@ -8,19 +8,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ToolResponseOverride configures synthetic tool responses for testing failure modes
 type ToolResponseOverride struct {
-	Tool      string                 `yaml:"tool"`
-	MatchArgs map[string]interface{} `yaml:"match_args,omitempty"`
-	Response  *core.ToolResult       `yaml:"response,omitempty"`
-	Error     string                 `yaml:"error,omitempty"`
-	FailureRate float64              `yaml:"failure_rate,omitempty"`
-	LatencyMs   int                  `yaml:"latency_ms,omitempty"`
-	CallCount   int                  `yaml:"call_count,omitempty"`
+	Tool        string                 `yaml:"tool"`
+	MatchArgs   map[string]interface{} `yaml:"match_args,omitempty"`
+	Response    *core.ToolResult       `yaml:"response,omitempty"`
+	Error       string                 `yaml:"error,omitempty"`
+	FailureRate float64                `yaml:"failure_rate,omitempty"`
+	LatencyMs   int                    `yaml:"latency_ms,omitempty"`
+	CallCount   int                    `yaml:"call_count,omitempty"`
 }
 
 // InjectionInterceptor wraps tool execution with override logic

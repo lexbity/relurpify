@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // InstrumentedModel wraps a LanguageModel and emits telemetry for prompts and responses.

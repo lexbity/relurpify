@@ -1,6 +1,6 @@
 package plan
 
-import "github.com/lexcodex/relurpify/framework/retrieval"
+import "codeburg.org/lexbit/relurpify/framework/retrieval"
 
 type ConfidenceDegradation struct {
 	AnchorDriftPenalty   float64

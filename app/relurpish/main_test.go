@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"github.com/stretchr/testify/require"
 )
 

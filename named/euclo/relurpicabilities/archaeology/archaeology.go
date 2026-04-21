@@ -1,6 +1,6 @@
 package archaeology
 
-import euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+import euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 
 const (
 	Explore              = euclorelurpic.CapabilityArchaeologyExplore

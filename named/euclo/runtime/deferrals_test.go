@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestLoadDeferredIssuesFromWorkspace_RoundTripsPersistedIssues(t *testing.T) {

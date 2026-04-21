@@ -6,10 +6,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/framework/core"
-	agenttestscenario "github.com/lexcodex/relurpify/testutil/agenttestscenario"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	agenttestscenario "codeburg.org/lexbit/relurpify/testutil/agenttestscenario"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestChainerAgent_Scenario_MultiLink_StateFlowsForward(t *testing.T) {

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	euclobb "github.com/lexcodex/relurpify/named/euclo/execution/blackboard"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	agentblackboard "codeburg.org/lexbit/relurpify/agents/blackboard"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	euclobb "codeburg.org/lexbit/relurpify/named/euclo/execution/blackboard"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 type investigateRegressionCapability struct {

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type LocalNexusNodeProvider struct {

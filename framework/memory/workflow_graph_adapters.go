@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 type workflowArtifactSink struct {

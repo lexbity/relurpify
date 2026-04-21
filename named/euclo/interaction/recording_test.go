@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 func TestNewInteractionRecording(t *testing.T) {

@@ -3,7 +3,7 @@ package runtime
 import (
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ClassifyTask infers the TaskType from the task using a rule-based heuristic.

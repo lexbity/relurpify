@@ -3,7 +3,7 @@ package agentstate
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestSemanticInputBundleFromState(t *testing.T) {
@@ -38,4 +38,3 @@ func TestSemanticInputBundleFromState(t *testing.T) {
 		t.Fatalf("unexpected exploration id: %q", got)
 	}
 }
-

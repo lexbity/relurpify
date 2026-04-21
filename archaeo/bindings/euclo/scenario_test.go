@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	euclobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
-	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
-	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/archaeo/testscenario"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	euclobindings "codeburg.org/lexbit/relurpify/archaeo/bindings/euclo"
+	archaeoconvergence "codeburg.org/lexbit/relurpify/archaeo/convergence"
+	archaeodecisions "codeburg.org/lexbit/relurpify/archaeo/decisions"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	archaeoexec "codeburg.org/lexbit/relurpify/archaeo/execution"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type bindingStubVerifier struct {

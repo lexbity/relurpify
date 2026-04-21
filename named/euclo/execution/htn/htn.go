@@ -1,8 +1,8 @@
 package htn
 
 import (
-	htnpkg "github.com/lexcodex/relurpify/agents/htn"
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	htnpkg "codeburg.org/lexbit/relurpify/agents/htn"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 type Runner = htnpkg.HTNAgent

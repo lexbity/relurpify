@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/archaeo/providers"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/archaeo/providers"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func TestPatternSurfacingFuncDelegates(t *testing.T) {

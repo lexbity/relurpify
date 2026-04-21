@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer"
-	chainctx "github.com/lexcodex/relurpify/agents/chainer/context"
-	"github.com/lexcodex/relurpify/agents/chainer/telemetry"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/chainer"
+	chainctx "codeburg.org/lexbit/relurpify/agents/chainer/context"
+	"codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 type captureModel struct {

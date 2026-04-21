@@ -3,7 +3,7 @@ package state
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ExecutionObserver tracks rex workflow lifecycle transitions that need to

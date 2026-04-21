@@ -3,7 +3,7 @@ package tui
 import (
 	"time"
 
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
 )
 
 // TabID identifies one of the main TUI tabs. String-based to support

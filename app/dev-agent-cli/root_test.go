@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
 	"github.com/stretchr/testify/require"
 )
 

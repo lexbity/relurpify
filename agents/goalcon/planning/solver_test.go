@@ -3,8 +3,8 @@ package planning_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
-	"github.com/lexcodex/relurpify/agents/goalcon/planning"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/planning"
 )
 
 func TestSolver_EmptyWorldState(t *testing.T) {

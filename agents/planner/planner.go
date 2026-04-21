@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
 // PlannerAgent builds a plan before executing. It is intentionally explicit:

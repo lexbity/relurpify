@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/htn"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/htn"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestMethodValidateRejectsUnknownDependency(t *testing.T) {

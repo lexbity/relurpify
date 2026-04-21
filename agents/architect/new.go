@@ -1,8 +1,8 @@
 package architect
 
 import (
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 type Option func(*ArchitectAgent)

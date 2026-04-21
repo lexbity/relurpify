@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/identity"
-	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
-	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/identity"
+	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
 const defaultTenantID = "local"

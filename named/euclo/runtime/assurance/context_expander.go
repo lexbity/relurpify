@@ -3,12 +3,12 @@ package assurance
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclopolicy "github.com/lexcodex/relurpify/named/euclo/runtime/policy"
-	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/runtime/policy"
+	euclorestore "codeburg.org/lexbit/relurpify/named/euclo/runtime/restore"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // ContextExpander handles context expansion for execution tasks.

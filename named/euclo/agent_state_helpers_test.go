@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
-	"github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclointake "github.com/lexcodex/relurpify/named/euclo/runtime/intake"
-	euclopretask "github.com/lexcodex/relurpify/named/euclo/runtime/pretask"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	agentstate "codeburg.org/lexbit/relurpify/named/euclo/internal/agentstate"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclointake "codeburg.org/lexbit/relurpify/named/euclo/runtime/intake"
+	euclopretask "codeburg.org/lexbit/relurpify/named/euclo/runtime/pretask"
 )
 
 func TestEnrichBundleWithContextKnowledge(t *testing.T) {

@@ -3,8 +3,8 @@ package llm
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	ollamabackend "github.com/lexcodex/relurpify/platform/llm/ollama"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	ollamabackend "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 )
 
 type managedBackendAdapter struct {

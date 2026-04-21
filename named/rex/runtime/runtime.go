@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/rex/config"
-	"github.com/lexcodex/relurpify/named/rex/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/named/rex/config"
+	"codeburg.org/lexbit/relurpify/named/rex/state"
 )
 
 type Health string

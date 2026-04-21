@@ -1,6 +1,6 @@
 package runtime
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 // SubtaskSpec describes a single primitive step in a decomposition recipe.
 type SubtaskSpec struct {

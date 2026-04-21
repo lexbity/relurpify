@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/agents/chainer/stages"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/agents/chainer/stages"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type coverageModel struct{}

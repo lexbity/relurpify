@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/htn/authoring"
-	"github.com/lexcodex/relurpify/agents/htn/runtime"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
+	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,9 +38,9 @@ func TestMethodPerformanceTrackingAndRating(t *testing.T) {
 	require.Equal(t, "method", metrics.MethodName)
 
 	cases := []struct {
-		name  string
+		name    string
 		metrics *PerformanceMetrics
-		want  float64
+		want    float64
 	}{
 		{name: "untested", metrics: &PerformanceMetrics{}, want: 0.5},
 		{name: "improving boosted", metrics: &PerformanceMetrics{TotalExecutions: 101, SuccessRate: 0.96, TrendDirection: "improving"}, want: 1.0},
@@ -134,7 +134,7 @@ func TestMethodLibraryBuilderAndComposition(t *testing.T) {
 func TestRecursiveDecompositionContext(t *testing.T) {
 	ctx := &RecursiveDecompositionContext{
 		MaxDepth: 2,
-		Visited:   map[string]bool{},
+		Visited:  map[string]bool{},
 	}
 
 	require.True(t, ctx.CanDecomposeFurther("alpha"))
@@ -254,7 +254,7 @@ func TestAutomationHelpers(t *testing.T) {
 		"fast-tool":    {CostClass: authoring.CostClassFast},
 		"medium":       {CostClass: authoring.CostClassMedium},
 		"slow-tool":    {CostClass: authoring.CostClassSlow},
-		"unknown-tool":  {CostClass: authoring.CostClassUnknown},
+		"unknown-tool": {CostClass: authoring.CostClassUnknown},
 	}
 	hints := OptimizeStepOrdering(plan, metadata)
 	require.Len(t, hints, 5)

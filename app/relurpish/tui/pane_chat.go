@@ -9,12 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // ChatSystemMsg is a message to add a system line to the chat feed.

@@ -3,8 +3,8 @@ package orchestrate
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 // CapabilityI is the interface that orchestrate expects from a coding capability.

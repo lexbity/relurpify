@@ -5,10 +5,10 @@ import (
 	"log"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func (s Service) PrepareLivingPlan(ctx context.Context, task *core.Task, state *core.Context, workflowID string) PrepareResult {

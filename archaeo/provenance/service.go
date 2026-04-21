@@ -4,17 +4,17 @@ import (
 	"context"
 	"strings"
 
-	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
-	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
-	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeoconvergence "codeburg.org/lexbit/relurpify/archaeo/convergence"
+	archaeodecisions "codeburg.org/lexbit/relurpify/archaeo/decisions"
+	archaeodeferred "codeburg.org/lexbit/relurpify/archaeo/deferred"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/storeutil"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeorequests "codeburg.org/lexbit/relurpify/archaeo/requests"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 type Service struct {

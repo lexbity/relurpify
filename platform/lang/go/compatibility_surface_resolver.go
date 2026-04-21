@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 type CompatibilitySurfaceResolver struct{}

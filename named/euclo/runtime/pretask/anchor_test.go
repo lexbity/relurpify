@@ -3,7 +3,7 @@ package pretask
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/ast"
 )
 
 // stubIndexQuerier returns a pre-configured set of matching symbol names.

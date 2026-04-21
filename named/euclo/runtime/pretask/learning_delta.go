@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/core"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // SessionRevisionResolver extracts the last known session revision from state.

@@ -3,7 +3,7 @@ package agenttest
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestComputeFingerprint(t *testing.T) {

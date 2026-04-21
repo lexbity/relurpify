@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/ast"
 )
 
 // IndexRetriever performs structural retrieval from the AST index.

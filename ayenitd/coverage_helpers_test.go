@@ -2,8 +2,8 @@ package ayenitd
 
 import (
 	"context"
-	"errors"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,16 +11,16 @@ import (
 	"sync/atomic"
 	"testing"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/llm"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"github.com/stretchr/testify/require"
 )
 
@@ -130,7 +130,7 @@ func TestBrowserHelpersAndRegistrationGate(t *testing.T) {
 				Agent: &core.AgentRuntimeSpec{
 					Browser: &core.AgentBrowserSpec{
 						Enabled:         true,
-						DefaultBackend:   "  firefox  ",
+						DefaultBackend:  "  firefox  ",
 						AllowedBackends: []string{"cdp", "firefox"},
 					},
 				},
@@ -200,12 +200,12 @@ func TestWorkspaceLifecycleAndClosers(t *testing.T) {
 	sm.Register("svc", svc)
 	ws := &Workspace{
 		Environment: WorkspaceEnvironment{
-			Scheduler:     NewServiceScheduler(),
+			Scheduler:      NewServiceScheduler(),
 			WorkflowStore:  workflowStore,
 			ServiceManager: sm,
 		},
 		ServiceManager: sm,
-		Backend:       backend,
+		Backend:        backend,
 	}
 
 	logCloser := &countCloser{}
@@ -248,14 +248,14 @@ func TestWorkspaceCloseContinuesAfterServiceError(t *testing.T) {
 	sm.Register("svc", &mockService{stopErr: context.Canceled})
 	ws := &Workspace{
 		Environment: WorkspaceEnvironment{
-			Scheduler:     NewServiceScheduler(),
+			Scheduler:      NewServiceScheduler(),
 			WorkflowStore:  workflowStore,
 			ServiceManager: sm,
 		},
-		Backend:       backend,
-		logFile:       logCloser,
-		patternDB:     patternCloser,
-		eventLog:      eventCloser,
+		Backend:        backend,
+		logFile:        logCloser,
+		patternDB:      patternCloser,
+		eventLog:       eventCloser,
 		ServiceManager: sm,
 	}
 	err = ws.Close()
@@ -282,14 +282,14 @@ func TestWorkspaceCloseAggregatesOwnedCloserErrors(t *testing.T) {
 	sm.Register("svc", &mockService{})
 	ws := &Workspace{
 		Environment: WorkspaceEnvironment{
-			Scheduler:     NewServiceScheduler(),
+			Scheduler:      NewServiceScheduler(),
 			WorkflowStore:  workflowStore,
 			ServiceManager: sm,
 		},
-		Backend:       backend,
-		logFile:       logCloser,
-		patternDB:     patternCloser,
-		eventLog:      eventCloser,
+		Backend:        backend,
+		logFile:        logCloser,
+		patternDB:      patternCloser,
+		eventLog:       eventCloser,
 		ServiceManager: sm,
 	}
 	err = ws.Close()
@@ -315,14 +315,14 @@ func TestWorkspaceCloseClosesOwnedClosers(t *testing.T) {
 	sm.Register("svc", &mockService{})
 	ws := &Workspace{
 		Environment: WorkspaceEnvironment{
-			Scheduler:     NewServiceScheduler(),
+			Scheduler:      NewServiceScheduler(),
 			WorkflowStore:  workflowStore,
 			ServiceManager: sm,
 		},
-		Backend:       backend,
-		logFile:       logCloser,
-		patternDB:     patternCloser,
-		eventLog:      eventCloser,
+		Backend:        backend,
+		logFile:        logCloser,
+		patternDB:      patternCloser,
+		eventLog:       eventCloser,
 		ServiceManager: sm,
 	}
 	require.NoError(t, ws.Close())
@@ -338,7 +338,7 @@ func TestWorkspaceRestartStopsAndStartsServices(t *testing.T) {
 	sm.Register("svc", svc)
 	ws := &Workspace{
 		Environment: WorkspaceEnvironment{
-			Scheduler:     NewServiceScheduler(),
+			Scheduler:      NewServiceScheduler(),
 			ServiceManager: sm,
 		},
 		ServiceManager: sm,
@@ -354,7 +354,7 @@ func TestWorkspaceStopServicesStopsManager(t *testing.T) {
 	sm.Register("svc", svc)
 	ws := &Workspace{
 		Environment: WorkspaceEnvironment{
-			Scheduler:     NewServiceScheduler(),
+			Scheduler:      NewServiceScheduler(),
 			ServiceManager: sm,
 		},
 		ServiceManager: sm,
@@ -371,7 +371,7 @@ func TestWorkspaceGetServiceNilAndRestartError(t *testing.T) {
 	sm.Register("svc", &mockService{stopErr: context.Canceled})
 	ws := &Workspace{
 		Environment: WorkspaceEnvironment{
-			Scheduler:     NewServiceScheduler(),
+			Scheduler:      NewServiceScheduler(),
 			ServiceManager: sm,
 		},
 		ServiceManager: sm,
@@ -494,8 +494,7 @@ func TestProbeWorkspaceBackendEdgeCases(t *testing.T) {
 	_, msg = checkDiskSpace("/definitely/not/a/real/path", 1<<40)
 	require.True(t, strings.Contains(msg, "cannot check disk space") || strings.Contains(msg, "sufficient"))
 
-	results := ProbeWorkspace(WorkspaceConfig{Workspace: workspace, InferenceEndpoint: "endpoint", InferenceProvider: "stub"}, &fakeManagedBackend{
-	})
+	results := ProbeWorkspace(WorkspaceConfig{Workspace: workspace, InferenceEndpoint: "endpoint", InferenceProvider: "stub"}, &fakeManagedBackend{})
 	r := findProbeResult(t, results, "workspace_directory")
 	require.True(t, r.OK)
 	r = findProbeResult(t, results, "sqlite_writable")
@@ -528,7 +527,9 @@ func (backendWithModels) Embedder() llm.Embedder    { return nil }
 func (backendWithModels) Capabilities() core.BackendCapabilities {
 	return core.BackendCapabilities{}
 }
-func (backendWithModels) Health(context.Context) (*llm.HealthReport, error) { return &llm.HealthReport{}, nil }
+func (backendWithModels) Health(context.Context) (*llm.HealthReport, error) {
+	return &llm.HealthReport{}, nil
+}
 func (backendWithModels) ListModels(context.Context) ([]llm.ModelInfo, error) {
 	return []llm.ModelInfo{{Name: "model-a"}}, nil
 }
@@ -541,7 +542,9 @@ func (backendWithNoModels) Embedder() llm.Embedder    { return nil }
 func (backendWithNoModels) Capabilities() core.BackendCapabilities {
 	return core.BackendCapabilities{}
 }
-func (backendWithNoModels) Health(context.Context) (*llm.HealthReport, error) { return &llm.HealthReport{}, nil }
+func (backendWithNoModels) Health(context.Context) (*llm.HealthReport, error) {
+	return &llm.HealthReport{}, nil
+}
 func (backendWithNoModels) ListModels(context.Context) ([]llm.ModelInfo, error) {
 	return nil, nil
 }
@@ -556,7 +559,9 @@ func (backendWithListError) Embedder() llm.Embedder    { return nil }
 func (backendWithListError) Capabilities() core.BackendCapabilities {
 	return core.BackendCapabilities{}
 }
-func (backendWithListError) Health(context.Context) (*llm.HealthReport, error) { return &llm.HealthReport{}, nil }
+func (backendWithListError) Health(context.Context) (*llm.HealthReport, error) {
+	return &llm.HealthReport{}, nil
+}
 func (backendWithListError) ListModels(context.Context) ([]llm.ModelInfo, error) {
 	return nil, errors.New("boom")
 }

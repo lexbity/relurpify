@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
 )
 
 // FileResolver validates and normalizes file paths from user input.

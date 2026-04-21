@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	"github.com/lexcodex/relurpify/named/euclo/interaction/gate"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction/gate"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 type stubCap struct {

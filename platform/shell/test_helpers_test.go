@@ -3,7 +3,7 @@ package shell
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 type recordingRunner struct {

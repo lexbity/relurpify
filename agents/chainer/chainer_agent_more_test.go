@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer/checkpoint"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/chainer/checkpoint"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // TestSanitizeLinkName tests the sanitizeLinkName helper function

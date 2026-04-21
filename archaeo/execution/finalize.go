@@ -4,10 +4,10 @@ import (
 	"context"
 	"log"
 
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoverification "github.com/lexcodex/relurpify/archaeo/verification"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoverification "codeburg.org/lexbit/relurpify/archaeo/verification"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type Finalizer struct {

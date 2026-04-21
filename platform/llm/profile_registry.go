@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/framework/search"
 	"gopkg.in/yaml.v3"
 )
 

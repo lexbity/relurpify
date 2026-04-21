@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 type stubVerificationResolver struct {

@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
-	rexroute "github.com/lexcodex/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
+	rexroute "codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
 func newWorkflowStore(t *testing.T) *db.SQLiteWorkflowStateStore {
@@ -36,7 +36,9 @@ type fakeRetrievalProvider struct {
 	records []memory.KnowledgeRecord
 }
 
-func (f fakeRetrievalProvider) RetrievalService() frameworkretrieval.RetrieverService { return f.service }
+func (f fakeRetrievalProvider) RetrievalService() frameworkretrieval.RetrieverService {
+	return f.service
+}
 
 func (f fakeRetrievalProvider) ListKnowledge(context.Context, string, memory.KnowledgeKind, bool) ([]memory.KnowledgeRecord, error) {
 	return append([]memory.KnowledgeRecord{}, f.records...), nil

@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	localbehavior "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // Invocable implementations for debug behaviors.
@@ -28,17 +28,17 @@ func (i *InvestigateRepairInvocable) ID() string { return InvestigateRepair }
 
 func (i *InvestigateRepairInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 
 	routines := append(execution.SupportingIDs(execInput.Work, "euclo:debug."), execution.SupportingIDs(execInput.Work, "euclo:chat.")...)
@@ -189,17 +189,17 @@ func (s *SimpleRepairInvocable) ID() string { return SimpleRepair }
 
 func (s *SimpleRepairInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 
 	routines := execution.SupportingIDs(execInput.Work, "euclo:debug.")

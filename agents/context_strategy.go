@@ -1,6 +1,6 @@
 package agents
 
-import contextmgr "github.com/lexcodex/relurpify/framework/contextmgr"
+import contextmgr "codeburg.org/lexbit/relurpify/framework/contextmgr"
 
 type (
 	ContextStrategy  = contextmgr.ContextStrategy

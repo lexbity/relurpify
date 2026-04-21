@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func sharedContextPromptBlock(shared *core.SharedContext, policy *contextmgr.ContextPolicy) string {

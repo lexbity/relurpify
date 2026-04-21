@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclointake "github.com/lexcodex/relurpify/named/euclo/runtime/intake"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclointake "codeburg.org/lexbit/relurpify/named/euclo/runtime/intake"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {

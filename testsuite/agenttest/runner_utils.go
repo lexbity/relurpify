@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/config"
 )
 
 func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
 )
 
 var (

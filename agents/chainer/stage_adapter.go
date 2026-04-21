@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"text/template"
 
-	chainererrors "github.com/lexcodex/relurpify/agents/chainer/errors"
-	"github.com/lexcodex/relurpify/agents/chainer/validation"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	chainererrors "codeburg.org/lexbit/relurpify/agents/chainer/errors"
+	"codeburg.org/lexbit/relurpify/agents/chainer/validation"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // LinkStage wraps a chainer Link and implements pipeline.Stage.

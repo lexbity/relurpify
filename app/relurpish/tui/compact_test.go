@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 

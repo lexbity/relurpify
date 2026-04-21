@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
-	"github.com/lexcodex/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 func TestOperatorMetrics_RecordExecution(t *testing.T) {

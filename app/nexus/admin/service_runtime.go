@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	nexusgateway "github.com/lexcodex/relurpify/app/nexus/gateway"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/middleware/channel"
-	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
-	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
+	nexusgateway "codeburg.org/lexbit/relurpify/app/nexus/gateway"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
+	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
+	"codeburg.org/lexbit/relurpify/relurpnet/channel"
 )
 
 func (s *service) ListChannels(ctx context.Context, req ListChannelsRequest) (ListChannelsResult, error) {

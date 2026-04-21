@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
 func verificationSummaryFromSuccess(agent *ReActAgent, task *core.Task, state *core.Context, lastMap map[string]interface{}) (string, bool) {

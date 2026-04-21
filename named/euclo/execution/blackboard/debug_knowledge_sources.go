@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	agentblackboard "codeburg.org/lexbit/relurpify/agents/blackboard"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 // FileExplorerKS explores the workspace and caches file listings in the blackboard.

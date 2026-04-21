@@ -3,7 +3,7 @@ package local
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 func TestBuildVerificationSummaryPayload_TracksProvenanceCounts(t *testing.T) {

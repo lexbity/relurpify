@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	_ "github.com/mattn/go-sqlite3"
 )
 

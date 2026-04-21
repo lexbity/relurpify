@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 func BuildResolvedExecutionPolicy(task *core.Task, cfg *core.Config, registry *capability.Registry, mode ModeResolution, profile ExecutionProfileSelection) ResolvedExecutionPolicy {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/app/relurpish/tui"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // RenderInteractionFrame converts an InteractionFrame into a tui.Message.

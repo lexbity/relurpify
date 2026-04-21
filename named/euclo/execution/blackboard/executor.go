@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"sort"
 
-	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	agentblackboard "codeburg.org/lexbit/relurpify/agents/blackboard"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 type Result struct {

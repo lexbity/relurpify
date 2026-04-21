@@ -1,9 +1,9 @@
 package context
 
 import (
-	frameworkcore "github.com/lexcodex/relurpify/framework/core"
-	runtimepkg "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclorestore "github.com/lexcodex/relurpify/named/euclo/runtime/restore"
+	frameworkcore "codeburg.org/lexbit/relurpify/framework/core"
+	runtimepkg "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclorestore "codeburg.org/lexbit/relurpify/named/euclo/runtime/restore"
 )
 
 type ContextPolicySummary = runtimepkg.ContextPolicySummary

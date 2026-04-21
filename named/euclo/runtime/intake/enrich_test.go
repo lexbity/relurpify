@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 type stubLanguageModel struct {

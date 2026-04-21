@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/named/rex/events"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/named/rex/events"
 )
 
 func newGatewayStore(t *testing.T) *db.SQLiteWorkflowStateStore {
@@ -86,8 +86,8 @@ func TestResolveValidCallbackAcceptsMatchingExpectedWaitState(t *testing.T) {
 	}
 	gw := DefaultGateway{Store: store}
 	decision, err := gw.Resolve(ctx, events.CanonicalEvent{
-		ID:         "evt-2",
-		Type:       events.TypeCallbackReceived,
+		ID:            "evt-2",
+		Type:          events.TypeCallbackReceived,
 		IngressOrigin: events.OriginPeer,
 		Payload: map[string]any{
 			"workflow_id":       "wf-2",
@@ -118,8 +118,8 @@ func TestResolveRejectsStaleSignalsWithoutMutatingWorkflow(t *testing.T) {
 	}
 	gw := DefaultGateway{Store: store}
 	decision, err := gw.Resolve(ctx, events.CanonicalEvent{
-		ID:         "evt-3",
-		Type:       events.TypeWorkflowSignal,
+		ID:            "evt-3",
+		Type:          events.TypeWorkflowSignal,
 		IngressOrigin: events.OriginPeer,
 		Payload: map[string]any{
 			"workflow_id":     "wf-3",

@@ -3,13 +3,13 @@ package thoughtrecipes
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/goalcon"
-	"github.com/lexcodex/relurpify/agents/htn"
-	"github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/agents/reflection"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/goalcon"
+	"codeburg.org/lexbit/relurpify/agents/htn"
+	"codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/agents/reflection"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // createTestEnvironment creates a minimal test environment

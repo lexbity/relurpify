@@ -1,6 +1,6 @@
 package manifest
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 // ResolveEffectivePermissions merges defaults and manifest permissions.
 // Skills no longer contribute a Permissions block; that is handled by the

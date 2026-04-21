@@ -3,12 +3,13 @@ package git
 import (
 	"context"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	frameworktools "github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // GitCommandTool executes predefined git commands.

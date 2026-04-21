@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/graph"
-	rexroute "github.com/lexcodex/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	rexroute "codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
 type stubModel struct{}
@@ -80,7 +80,7 @@ type stubExecutor struct {
 	executeFn    func(context.Context, *core.Task, *core.Context) (*core.Result, error)
 }
 
-func (s stubExecutor) Initialize(*core.Config) error { return nil }
+func (s stubExecutor) Initialize(*core.Config) error   { return nil }
 func (s stubExecutor) Capabilities() []core.Capability { return nil }
 func (s stubExecutor) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if s.buildGraphFn != nil {

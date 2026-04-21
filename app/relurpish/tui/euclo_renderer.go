@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 // ──────────────────────────────────────────────────────────────

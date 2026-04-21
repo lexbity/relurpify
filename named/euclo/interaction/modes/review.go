@@ -1,7 +1,7 @@
 package modes
 
 import (
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // ReviewMode builds the phase machine for the review interaction mode.

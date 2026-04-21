@@ -7,15 +7,15 @@ import (
 	"slices"
 	"testing"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
-	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeophases "github.com/lexcodex/relurpify/archaeo/phases"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeoconvergence "codeburg.org/lexbit/relurpify/archaeo/convergence"
+	archaeodeferred "codeburg.org/lexbit/relurpify/archaeo/deferred"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeophases "codeburg.org/lexbit/relurpify/archaeo/phases"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
 )
 
 func RequireActiveTensionIDs(tb testing.TB, svc archaeotensions.Service, workflowID string, want ...string) {

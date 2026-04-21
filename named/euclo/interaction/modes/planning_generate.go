@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // GeneratePhase produces plan candidates and presents them for selection.

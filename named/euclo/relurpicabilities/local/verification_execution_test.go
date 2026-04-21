@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 type stubVerificationPlanner struct {

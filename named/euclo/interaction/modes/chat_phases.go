@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // ChatIntentPhase classifies the chat request as ask (read-only) or implement

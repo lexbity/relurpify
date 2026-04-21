@@ -1,9 +1,9 @@
 package agents
 
 import (
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 const codingRuntimeCompatEnv = "RELURPIFY_CODING_RUNTIME_COMPAT"

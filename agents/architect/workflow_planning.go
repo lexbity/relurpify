@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	plannerpkg "github.com/lexcodex/relurpify/agents/planner"
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	plannerpkg "codeburg.org/lexbit/relurpify/agents/planner"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
 // WorkflowPlanningResult captures the durable outputs of the planning phase so

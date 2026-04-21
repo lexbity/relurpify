@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/htn/runtime"
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	agentpipeline "github.com/lexcodex/relurpify/agents/pipeline"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	frameworkpipeline "github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	agentpipeline "codeburg.org/lexbit/relurpify/agents/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	frameworkpipeline "codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // HTNAgent implements graph.WorkflowExecutor using a Hierarchical Task Network (HTN)

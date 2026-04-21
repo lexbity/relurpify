@@ -12,10 +12,10 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/retrieval"
-	"github.com/lexcodex/relurpify/framework/search"
-	"github.com/lexcodex/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 type retrieverSemanticAdapter struct {

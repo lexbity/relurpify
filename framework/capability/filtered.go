@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // FilteredRegistry wraps a Registry and restricts visible capabilities to a

@@ -1,6 +1,6 @@
 package planner
 
-import "github.com/lexcodex/relurpify/framework/agentenv"
+import "codeburg.org/lexbit/relurpify/framework/agentenv"
 
 type Option func(*PlannerAgent)
 

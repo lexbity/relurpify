@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/platform/shell"
-	"github.com/lexcodex/relurpify/platform/shell/command"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/shell"
+	"codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // VerifyStepResult captures the outcome of one verification step.

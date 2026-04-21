@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 )
 
 const nodeKindChunk graphdb.NodeKind = "bkc_chunk"

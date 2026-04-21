@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/runtime/transitions"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/transitions"
 )
 
 func TestApply_NilNextReturnsZeroState(t *testing.T) {

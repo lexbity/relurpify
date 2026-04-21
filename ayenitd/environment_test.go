@@ -3,9 +3,9 @@ package ayenitd_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 func newTestMemory(t *testing.T) memory.MemoryStore {

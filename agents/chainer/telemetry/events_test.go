@@ -3,7 +3,7 @@ package telemetry_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer/telemetry"
+	"codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
 )
 
 func TestLinkStartEvent(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	tea "github.com/charmbracelet/bubbletea"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
 )
 
 // Notification tea messages emitted by NotificationBar.

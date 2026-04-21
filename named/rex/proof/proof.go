@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/rex/classify"
-	"github.com/lexcodex/relurpify/named/rex/rexkeys"
-	"github.com/lexcodex/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/rex/classify"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
 type VerificationPolicy struct {

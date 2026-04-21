@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/archaeo/providers"
-	archaeorequests "github.com/lexcodex/relurpify/archaeo/requests"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/providers"
+	archaeorequests "codeburg.org/lexbit/relurpify/archaeo/requests"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func (s Service) runProviderLifecycle(ctx context.Context, task *core.Task, state *core.Context, workflowID, explorationID string, refresh *refreshBundle) error {

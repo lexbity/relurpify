@@ -1,8 +1,8 @@
 package authoring
 
 import (
-	"github.com/lexcodex/relurpify/agents/htn/runtime"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Type aliases for convenience.

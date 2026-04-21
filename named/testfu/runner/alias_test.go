@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	agenttestpkg "github.com/lexcodex/relurpify/testsuite/agenttest"
+	agenttestpkg "codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 func TestAliasParityWithAgenttest(t *testing.T) {

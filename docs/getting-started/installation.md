@@ -74,13 +74,13 @@ curl http://localhost:11434/api/tags
 Install the primary TUI/runtime:
 
 ```bash
-go install github.com/lexcodex/relurpify/app/relurpish@latest
+go install codeburg.org/lexbit/relurpify/app/relurpish@latest
 ```
 
 Optional: install the CLI used for testsuites and utility commands:
 
 ```bash
-go install github.com/lexcodex/relurpify/app/dev-agent-cli@latest
+go install codeburg.org/lexbit/relurpify/app/dev-agent-cli@latest
 ```
 
 ---
@@ -195,7 +195,7 @@ relurpish chat \
 If you are embedding Relurpify as a Go dependency instead of running the binaries:
 
 ```bash
-go get github.com/lexcodex/relurpify@latest
+go get codeburg.org/lexbit/relurpify@latest
 ```
 
 Then import the packages you need from `framework/`, `agents/`, or `named/`.

@@ -2,7 +2,7 @@
 package operators
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // Type aliases for convenience

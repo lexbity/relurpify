@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // mockLLMModel simulates a language model for testing.

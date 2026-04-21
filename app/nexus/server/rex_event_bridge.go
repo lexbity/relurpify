@@ -9,14 +9,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/event"
-	rexcontrolplane "github.com/lexcodex/relurpify/named/rex/controlplane"
-	rexevents "github.com/lexcodex/relurpify/named/rex/events"
-	rexgateway "github.com/lexcodex/relurpify/named/rex/gateway"
-	rexctx "github.com/lexcodex/relurpify/named/rex/rexctx"
-	"github.com/lexcodex/relurpify/named/rex/rexkeys"
-	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/event"
+	rexcontrolplane "codeburg.org/lexbit/relurpify/named/rex/controlplane"
+	rexevents "codeburg.org/lexbit/relurpify/named/rex/events"
+	rexgateway "codeburg.org/lexbit/relurpify/named/rex/gateway"
+	rexctx "codeburg.org/lexbit/relurpify/named/rex/rexctx"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
+	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 )
 
 const rexEventBridgeConsumerID = "rex_event_bridge.v1"

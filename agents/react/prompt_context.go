@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/retrieval"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
 type promptContextAssembler struct {

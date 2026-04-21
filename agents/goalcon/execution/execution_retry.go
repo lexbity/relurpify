@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
-	"github.com/lexcodex/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // RetryExecutor wraps StepExecutor with retry logic and backoff.

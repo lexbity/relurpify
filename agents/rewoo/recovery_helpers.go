@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // RecoveryScenario describes a failure scenario and recovery strategy.

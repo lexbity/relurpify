@@ -1,7 +1,7 @@
 package llm
 
 import (
-	ollamabackend "github.com/lexcodex/relurpify/platform/llm/ollama"
+	ollamabackend "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 )
 
 func init() {

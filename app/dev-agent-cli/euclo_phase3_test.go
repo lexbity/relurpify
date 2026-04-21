@@ -8,20 +8,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents"
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/policybundle"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
-	euclotypes "github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/agents"
+	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/policybundle"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	euclotypes "codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
 )
 
 type eucloSummaryExecutor struct {
@@ -71,7 +71,7 @@ func stubEucloWorkspaceFn(t *testing.T, ws string, skillResults []frameworkskill
 			Config: &core.Config{
 				Name:              cfg.AgentName,
 				Model:             cfg.InferenceModel,
-				InferenceEndpoint:    cfg.InferenceEndpoint,
+				InferenceEndpoint: cfg.InferenceEndpoint,
 				MaxIterations:     cfg.MaxIterations,
 				NativeToolCalling: loaded.Spec.Agent != nil && loaded.Spec.Agent.NativeToolCallingEnabled(),
 				AgentSpec:         loaded.Spec.Agent,

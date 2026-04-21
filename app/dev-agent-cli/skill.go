@@ -12,16 +12,16 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/policybundle"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
-	"github.com/lexcodex/relurpify/framework/templates"
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
+	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/policybundle"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/framework/templates"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
 func newSkillCmd() *cobra.Command {

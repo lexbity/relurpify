@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
 )
 
 // InvalidationPass reacts to revision drift and surfaces stale chunks as tensions.

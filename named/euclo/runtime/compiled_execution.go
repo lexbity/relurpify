@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	euclokeys "github.com/lexcodex/relurpify/named/euclo/runtime/keys"
+	euclokeys "codeburg.org/lexbit/relurpify/named/euclo/runtime/keys"
 )
 
 func BuildCompiledExecution(uow UnitOfWork, status RuntimeExecutionStatus, compiledAt time.Time) CompiledExecution {

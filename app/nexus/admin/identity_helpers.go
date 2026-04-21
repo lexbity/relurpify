@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/identity"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/identity"
 )
 
 func upsertTenantAndSubject(ctx context.Context, store identity.Store, tenantID string, kind core.SubjectKind, subjectID, displayName string, roles []string, createdAt time.Time) error {

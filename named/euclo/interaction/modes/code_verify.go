@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // VerifyFailureThreshold is the number of consecutive failures before

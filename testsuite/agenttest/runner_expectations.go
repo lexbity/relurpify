@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // evaluateSuccessRateConstraint checks if a success rate meets a constraint like ">0.9" or "0.8"

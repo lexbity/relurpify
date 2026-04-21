@@ -3,7 +3,7 @@ package event
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // Log is the append-only framework event log.

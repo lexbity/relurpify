@@ -1,8 +1,8 @@
 package goalcon
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/operators"
-	"github.com/lexcodex/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/operators"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 )
 
 type Option func(*GoalConAgent)

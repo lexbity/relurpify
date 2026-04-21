@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestReactHelperParsingAndFormatting(t *testing.T) {
@@ -84,8 +84,8 @@ func TestReactHelperWarningsAndConversions(t *testing.T) {
 	}
 
 	warning := buildDerivationDepthWarning(map[string]any{
-		"depth":        5,
-		"total_loss":   0.75,
+		"depth":         5,
+		"total_loss":    0.75,
 		"origin_system": "graph",
 	})
 	if warning == "" || !strings.Contains(warning, "5 transformations") || !strings.Contains(warning, "graph") {

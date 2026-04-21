@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // WorkflowRunStatus captures the lifecycle of a workflow or run record.

@@ -6,16 +6,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/named/rex/retrieval"
-	"github.com/lexcodex/relurpify/named/rex/route"
-	"github.com/lexcodex/relurpify/named/rex/proof"
-	"github.com/lexcodex/relurpify/named/rex/reconcile"
-	"github.com/lexcodex/relurpify/named/rex/state"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/named/rex/proof"
+	"codeburg.org/lexbit/relurpify/named/rex/reconcile"
+	"codeburg.org/lexbit/relurpify/named/rex/retrieval"
+	"codeburg.org/lexbit/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/named/rex/state"
 )
 
 type stubModel struct{}

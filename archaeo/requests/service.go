@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	"github.com/lexcodex/relurpify/archaeo/internal/keylock"
-	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeodecisions "codeburg.org/lexbit/relurpify/archaeo/decisions"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/keylock"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/storeutil"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 const requestArtifactKind = "archaeo_request"

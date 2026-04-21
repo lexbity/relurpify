@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
-	"github.com/lexcodex/relurpify/named/rex/proof"
-	"github.com/lexcodex/relurpify/named/rex/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
+	"codeburg.org/lexbit/relurpify/named/rex/proof"
+	"codeburg.org/lexbit/relurpify/named/rex/runtime"
 )
 
 type stubManagedRuntime struct {

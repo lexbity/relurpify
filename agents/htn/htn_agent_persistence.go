@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/htn/persistence"
-	"github.com/lexcodex/relurpify/agents/htn/runtime"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/agents/htn/persistence"
+	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 // Persistence-related methods for HTNAgent (moved from persistence subpackage to allow method definitions)

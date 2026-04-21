@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/framework/core"
-	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
-	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
+	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 	"github.com/stretchr/testify/require"
 )
 

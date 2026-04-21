@@ -1,8 +1,8 @@
 package rewoo
 
 import (
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // DefaultPermissionSet builds a minimal permission set that allows workspace read/write

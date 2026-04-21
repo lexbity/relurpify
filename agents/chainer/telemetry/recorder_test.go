@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/agents/chainer/telemetry"
+	"codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
 )
 
 func TestEventRecorder_Record(t *testing.T) {

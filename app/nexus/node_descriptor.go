@@ -1,6 +1,6 @@
 package main
 
-import "github.com/lexcodex/relurpify/framework/core"
+import "codeburg.org/lexbit/relurpify/framework/core"
 
 func nodeDescriptorFromEnrollment(enrollment core.NodeEnrollment) core.NodeDescriptor {
 	return core.NodeDescriptor{

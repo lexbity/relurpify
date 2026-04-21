@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/platform/browser"
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/browser"
 	"github.com/stretchr/testify/require"
 )
 

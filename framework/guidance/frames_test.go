@@ -3,7 +3,7 @@ package guidance
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/stretchr/testify/require"
 )
 

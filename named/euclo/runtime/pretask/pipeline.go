@@ -5,11 +5,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // PipelineStep runs before the main context enrichment pipeline.

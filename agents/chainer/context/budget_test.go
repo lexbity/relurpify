@@ -3,7 +3,7 @@ package context_test
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer/context"
+	"codeburg.org/lexbit/relurpify/agents/chainer/context"
 )
 
 func TestBudgetManager_NewBudgetManager(t *testing.T) {

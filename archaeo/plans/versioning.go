@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	"github.com/lexcodex/relurpify/framework/memory"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 const versionArtifactKind = "archaeo_living_plan_version"

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/lexcodex/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/config"
 )
 
 // LoadSkill loads a single skill by name (flat, no inheritance chain).

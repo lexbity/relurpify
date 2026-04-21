@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/manifest"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
 const skillManifestName = "skill.manifest.yaml"

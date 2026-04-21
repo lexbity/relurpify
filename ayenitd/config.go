@@ -3,8 +3,8 @@ package ayenitd
 import (
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // WorkspaceConfig is the resolved configuration produced from CLI flags, YAML

@@ -3,8 +3,9 @@ package agenttest
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/lexcodex/relurpify/framework/core"
 	"os"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func ReadTelemetryJSONL(path string) ([]core.Event, error) {

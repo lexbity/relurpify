@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	nexusruntime "github.com/lexcodex/relurpify/app/nexusish/runtime"
-	"github.com/lexcodex/relurpify/app/nexusish/tui"
+	nexusruntime "codeburg.org/lexbit/relurpify/app/nexusish/runtime"
+	"codeburg.org/lexbit/relurpify/app/nexusish/tui"
 	"github.com/spf13/cobra"
 )
 

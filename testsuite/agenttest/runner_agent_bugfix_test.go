@@ -11,15 +11,15 @@ import (
 	"testing"
 	"time"
 
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	namedfactory "github.com/lexcodex/relurpify/named/factory"
+	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 )
 
 type agenttestApprovalStubTool struct {

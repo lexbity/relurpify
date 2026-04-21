@@ -1,15 +1,12 @@
 package operators
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 	"gopkg.in/yaml.v3"
 )
 

@@ -3,7 +3,7 @@ package classify
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/named/rex/envelope"
+	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 )
 
 func TestClassifyDetectsDeterministicMutation(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 // TestDoomLoopDetector_IdenticalCalls_BlocksViaRegistry verifies that when the

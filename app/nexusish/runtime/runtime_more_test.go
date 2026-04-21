@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/app/nexus/adminapi"
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/middleware/mcp/protocol"
+	"codeburg.org/lexbit/relurpify/app/nexus/adminapi"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/relurpnet/mcp/protocol"
 	"github.com/stretchr/testify/require"
 )
 

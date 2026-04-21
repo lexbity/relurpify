@@ -5,15 +5,15 @@ import (
 	"strings"
 	"sync"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoprovenance "github.com/lexcodex/relurpify/archaeo/provenance"
-	"github.com/lexcodex/relurpify/archaeo/providers"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoprovenance "codeburg.org/lexbit/relurpify/archaeo/provenance"
+	"codeburg.org/lexbit/relurpify/archaeo/providers"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type learningPreload struct {

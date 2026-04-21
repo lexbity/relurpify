@@ -4,10 +4,10 @@ import (
 	"errors"
 	"testing"
 
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/core"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestSelectExecutorSupportsKnownFamiliesAndFallback(t *testing.T) {

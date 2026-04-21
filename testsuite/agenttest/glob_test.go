@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/config"
 )
 
 func TestMatchGlob(t *testing.T) {

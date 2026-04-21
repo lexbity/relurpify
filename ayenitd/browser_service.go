@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	browsersvc "github.com/lexcodex/relurpify/ayenitd/service/browser"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
+	browsersvc "codeburg.org/lexbit/relurpify/ayenitd/service/browser"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 func registerBrowserWorkspaceService(ctx context.Context, cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, registry *capability.Registry, sm *ServiceManager, tel core.Telemetry) error {

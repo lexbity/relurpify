@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -15,9 +15,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/lexcodex/relurpify/app/relurpish/euclotui"
-	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 )
 
 var (

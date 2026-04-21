@@ -3,10 +3,10 @@ package agenttestscenario
 import (
 	"testing"
 
-	chaintelemetry "github.com/lexcodex/relurpify/agents/chainer/telemetry"
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/testutil/euclotestutil"
+	chaintelemetry "codeburg.org/lexbit/relurpify/agents/chainer/telemetry"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 type Fixture struct {

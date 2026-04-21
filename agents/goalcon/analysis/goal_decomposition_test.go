@@ -1,12 +1,10 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // TestNewGoalDecomposer tests decomposer creation.

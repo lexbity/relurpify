@@ -9,17 +9,17 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseExportArgs(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []string
-		format   string
-		path     string
+		name   string
+		args   []string
+		format string
+		path   string
 	}{
 		{name: "default", args: nil, format: "md"},
 		{name: "markdown alias", args: []string{"markdown", "out.md"}, format: "md", path: "out.md"},
@@ -71,7 +71,7 @@ func TestTelemetryAndExportSanitizers(t *testing.T) {
 				Details:     []string{"keep", "token-789"},
 			}},
 			Changes: []FileChange{{
-				Path: "app.go",
+				Path:   "app.go",
 				Status: StatusPending,
 				Type:   ChangeModify,
 				Diff:   "token-abc",
@@ -238,12 +238,12 @@ func TestInputBarAndPaneHelpers(t *testing.T) {
 	planner := NewPlannerPane()
 	require.Equal(t, SubTabPlannerExplore, planner.activeSubTab)
 	planner.Update(PlannerPatternsMsg{
-		Records: []PatternRecordInfo{{ID: "rec-1", Title: "Pattern A", Scope: "scope-a", IntentType: "intent"}},
+		Records:   []PatternRecordInfo{{ID: "rec-1", Title: "Pattern A", Scope: "scope-a", IntentType: "intent"}},
 		Proposals: []PatternProposalInfo{{ID: "prop-1", Title: "Proposal B", Scope: "scope-b", Confidence: 0.75}},
 	})
 	planner.Update(PlannerTensionsMsg{
 		Tensions: []TensionInfo{{ID: "ten-1", TitleA: "A", TitleB: "B", Sites: []TensionSite{{FilePath: "file.go", Line: 1}}}},
-		Gaps: []IntentGapInfo{{FilePath: "file.go", Line: 2, AnchorName: "anchor-1", Severity: "high"}},
+		Gaps:     []IntentGapInfo{{FilePath: "file.go", Line: 2, AnchorName: "anchor-1", Severity: "high"}},
 	})
 	planner.Update(PlannerPlanMsg{Plan: LivePlanInfo{WorkflowID: "wf-1", Title: "Plan", Steps: []PlanStepInfo{{ID: "step-1", Title: "Step 1", Status: "ready", Notes: []string{"note"}}}}})
 	planner.SetSubTab(SubTabPlannerExplore)

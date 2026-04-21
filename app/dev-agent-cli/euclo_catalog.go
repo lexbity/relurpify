@@ -6,11 +6,11 @@ import (
 	"sort"
 	"strings"
 
-	euclocore "github.com/lexcodex/relurpify/named/euclo/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	euclomodes "github.com/lexcodex/relurpify/named/euclo/interaction/modes"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	euclocore "codeburg.org/lexbit/relurpify/named/euclo/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclomodes "codeburg.org/lexbit/relurpify/named/euclo/interaction/modes"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
 type EucloModeCatalogEntry struct {

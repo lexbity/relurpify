@@ -3,7 +3,7 @@ package ast
 import (
 	"encoding/json"
 
-	"github.com/lexcodex/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 )
 
 const (

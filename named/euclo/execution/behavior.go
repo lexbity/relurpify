@@ -6,33 +6,34 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	capabilitypkg "github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	architectexec "github.com/lexcodex/relurpify/named/euclo/execution/architect"
-	htnexec "github.com/lexcodex/relurpify/named/euclo/execution/htn"
-	plannerexec "github.com/lexcodex/relurpify/named/euclo/execution/planner"
-	reactexec "github.com/lexcodex/relurpify/named/euclo/execution/react"
-	reflectionexec "github.com/lexcodex/relurpify/named/euclo/execution/reflection"
-	rewoo "github.com/lexcodex/relurpify/named/euclo/execution/rewoo"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus")
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	capabilitypkg "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	architectexec "codeburg.org/lexbit/relurpify/named/euclo/execution/architect"
+	htnexec "codeburg.org/lexbit/relurpify/named/euclo/execution/htn"
+	plannerexec "codeburg.org/lexbit/relurpify/named/euclo/execution/planner"
+	reactexec "codeburg.org/lexbit/relurpify/named/euclo/execution/react"
+	reflectionexec "codeburg.org/lexbit/relurpify/named/euclo/execution/reflection"
+	rewoo "codeburg.org/lexbit/relurpify/named/euclo/execution/rewoo"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
+)
 
 type ExecuteInput struct {
-	Task                 *core.Task
-	ExecutionTask        *core.Task
-	State                *core.Context
-	Mode                 euclotypes.ModeResolution
-	Profile              euclotypes.ExecutionProfileSelection
-	Work                 eucloruntime.UnitOfWork
-	Environment          agentenv.AgentEnvironment
-	ServiceBundle        ServiceBundle
-	WorkflowExecutor     graph.WorkflowExecutor
-	Telemetry            core.Telemetry
-	InvokeSupporting     func(context.Context, string, InvokeInput) ([]euclotypes.Artifact, error)
+	Task             *core.Task
+	ExecutionTask    *core.Task
+	State            *core.Context
+	Mode             euclotypes.ModeResolution
+	Profile          euclotypes.ExecutionProfileSelection
+	Work             eucloruntime.UnitOfWork
+	Environment      agentenv.AgentEnvironment
+	ServiceBundle    ServiceBundle
+	WorkflowExecutor graph.WorkflowExecutor
+	Telemetry        core.Telemetry
+	InvokeSupporting func(context.Context, string, InvokeInput) ([]euclotypes.Artifact, error)
 }
 
 type Trace struct {
@@ -413,7 +414,7 @@ func MergeStateArtifactsToContext(state *core.Context, artifacts []euclotypes.Ar
 	}
 	existing := euclotypes.ArtifactStateFromContext(state).All()
 	merged := append(existing, artifacts...)
-		euclostate.SetArtifacts(state, merged)
+	euclostate.SetArtifacts(state, merged)
 	for _, artifact := range artifacts {
 		if key := euclotypes.StateKeyForArtifactKind(artifact.Kind); key != "" && artifact.Payload != nil {
 			state.Set(key, artifact.Payload)

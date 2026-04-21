@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	nexusbootstrap "github.com/lexcodex/relurpify/app/nexus/bootstrap"
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	fwnode "github.com/lexcodex/relurpify/framework/middleware/node"
+	nexusbootstrap "codeburg.org/lexbit/relurpify/app/nexus/bootstrap"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fwnode "codeburg.org/lexbit/relurpify/relurpnet/node"
 )
 
 func ResolveConfig(workspace, configPath string) (config.Paths, nexuscfg.Config, error) {

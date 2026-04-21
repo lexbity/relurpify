@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // IndexData is the persisted representation of the code index.

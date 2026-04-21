@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
 // ReflectionAgent reviews outputs and triggers revisions when needed.

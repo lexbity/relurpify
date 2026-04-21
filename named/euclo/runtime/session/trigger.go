@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // SessionResumeTrigger returns an AgencyTrigger that fires when the user

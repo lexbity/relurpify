@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	namedfactory "github.com/lexcodex/relurpify/named/factory"
-	runnerpkg "github.com/lexcodex/relurpify/named/testfu/runner"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
+	runnerpkg "codeburg.org/lexbit/relurpify/named/testfu/runner"
 )
 
 type suiteRunner interface {

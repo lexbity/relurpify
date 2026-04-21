@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	euclomodes "github.com/lexcodex/relurpify/named/euclo/interaction/modes"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclomodes "codeburg.org/lexbit/relurpify/named/euclo/interaction/modes"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	"gopkg.in/yaml.v3"
 )
 

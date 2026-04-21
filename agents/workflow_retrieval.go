@@ -3,8 +3,8 @@ package agents
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/agents/internal/workflowutil"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/internal/workflowutil"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type WorkflowRetrievalProvider = workflowutil.RetrievalProvider

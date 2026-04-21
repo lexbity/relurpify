@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/ayenitd"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/framework/templates"
-	"github.com/lexcodex/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/templates"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // DependencyStatus captures one local dependency check.

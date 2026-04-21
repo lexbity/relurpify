@@ -1,11 +1,11 @@
 package langdetect
 
 import (
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	golangpkg "github.com/lexcodex/relurpify/platform/lang/go"
-	jspkg "github.com/lexcodex/relurpify/platform/lang/js"
-	pythonpkg "github.com/lexcodex/relurpify/platform/lang/python"
-	rustpkg "github.com/lexcodex/relurpify/platform/lang/rust"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	golangpkg "codeburg.org/lexbit/relurpify/platform/lang/go"
+	jspkg "codeburg.org/lexbit/relurpify/platform/lang/js"
+	pythonpkg "codeburg.org/lexbit/relurpify/platform/lang/python"
+	rustpkg "codeburg.org/lexbit/relurpify/platform/lang/rust"
 )
 
 // ResolverFactory builds framework planners from detected workspace languages.

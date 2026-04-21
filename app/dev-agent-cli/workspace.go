@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	appruntime "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	"github.com/lexcodex/relurpify/ayenitd"
-	frameworkconfig "github.com/lexcodex/relurpify/framework/config"
-	contractpkg "github.com/lexcodex/relurpify/framework/contract"
-	"github.com/lexcodex/relurpify/framework/core"
+	appruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/ayenitd"
+	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"gopkg.in/yaml.v3"
 )
 

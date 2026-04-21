@@ -3,7 +3,7 @@ package checkpoint
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // RecoveryManager handles resuming interrupted workflows.

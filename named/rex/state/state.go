@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/named/rex/envelope"
-	"github.com/lexcodex/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/named/rex/envelope"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 )
 
 // Identity captures the durable workflow identity used by rex.

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type commenterAnnotateCapabilityHandler struct {

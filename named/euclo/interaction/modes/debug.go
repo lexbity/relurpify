@@ -1,7 +1,7 @@
 package modes
 
 import (
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // DebugMode builds the phase machine for the debug interaction mode.

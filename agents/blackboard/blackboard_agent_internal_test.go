@@ -3,7 +3,7 @@ package blackboard
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestMirrorBlackboardArtifactReferencesUsesGraphState(t *testing.T) {

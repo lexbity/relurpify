@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	runtimesvc "github.com/lexcodex/relurpify/app/relurpish/runtime"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 // Run bootstraps the TUI without a euclo plugin. This is the public entrypoint

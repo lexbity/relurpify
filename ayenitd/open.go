@@ -10,35 +10,35 @@ import (
 	"strings"
 	"time"
 
-	nexusdb "github.com/lexcodex/relurpify/app/nexus/db"
-	archaeobindings "github.com/lexcodex/relurpify/archaeo/bindings/euclo"
-	archaeobkc "github.com/lexcodex/relurpify/archaeo/bkc"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/retrieval"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	"github.com/lexcodex/relurpify/framework/telemetry"
-	"github.com/lexcodex/relurpify/platform/llm"
+	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
+	archaeobindings "codeburg.org/lexbit/relurpify/archaeo/bindings/euclo"
+	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	newLLMBackendFn                   = llm.New
-	applyProfileFn                    = llm.ApplyProfile
-	probeWorkspaceFn                  = ProbeWorkspace
-	setupTelemetryFn                  = setupTelemetry
-	openRuntimeStoresFn               = openRuntimeStores
-	loadAgentManifestSnapshotFn       = manifest.LoadAgentManifestSnapshot
-	registerAgentFn                   = fauthorization.RegisterAgent
-	newCommandRunnerFn                = fsandbox.NewCommandRunner
-	newHybridMemoryFn                 = memory.NewHybridMemory
-	newProfileRegistryFn              = llm.NewProfileRegistry
-	newEmbedderFn                     = retrieval.NewEmbedder
-	newInstrumentedModelFn            = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) core.LanguageModel {
+	newLLMBackendFn             = llm.New
+	applyProfileFn              = llm.ApplyProfile
+	probeWorkspaceFn            = ProbeWorkspace
+	setupTelemetryFn            = setupTelemetry
+	openRuntimeStoresFn         = openRuntimeStores
+	loadAgentManifestSnapshotFn = manifest.LoadAgentManifestSnapshot
+	registerAgentFn             = fauthorization.RegisterAgent
+	newCommandRunnerFn          = fsandbox.NewCommandRunner
+	newHybridMemoryFn           = memory.NewHybridMemory
+	newProfileRegistryFn        = llm.NewProfileRegistry
+	newEmbedderFn               = retrieval.NewEmbedder
+	newInstrumentedModelFn      = func(inner core.LanguageModel, telemetry core.Telemetry, debug bool) core.LanguageModel {
 		return llm.NewInstrumentedModel(inner, telemetry, debug)
 	}
 	bootstrapAgentRuntimeFn           = BootstrapAgentRuntime

@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	nexusadmin "github.com/lexcodex/relurpify/app/nexus/admin"
-	nexuscfg "github.com/lexcodex/relurpify/app/nexus/config"
-	"github.com/lexcodex/relurpify/app/nexus/db"
-	"github.com/lexcodex/relurpify/framework/core"
-	fwgateway "github.com/lexcodex/relurpify/framework/middleware/gateway"
+	nexusadmin "codeburg.org/lexbit/relurpify/app/nexus/admin"
+	nexuscfg "codeburg.org/lexbit/relurpify/app/nexus/config"
+	"codeburg.org/lexbit/relurpify/app/nexus/db"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	fwgateway "codeburg.org/lexbit/relurpify/relurpnet/gateway"
 	"github.com/stretchr/testify/require"
 )
 

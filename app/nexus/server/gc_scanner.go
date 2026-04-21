@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/event"
-	fwfmp "github.com/lexcodex/relurpify/framework/middleware/fmp"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/event"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 // GCScanner periodically enforces TTL-based garbage collection on FMP advertisements and context objects.

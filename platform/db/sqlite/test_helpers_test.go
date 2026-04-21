@@ -3,7 +3,7 @@ package sqlite
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 type stubCommandRunner struct {

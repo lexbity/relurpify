@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	frameworktools "github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
+	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // RunnerOptions configures how a pipeline executes stages.

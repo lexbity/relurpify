@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/lexcodex/relurpify/framework/core"
 )
 
 // configSection identifies which part of the config pane is visible.

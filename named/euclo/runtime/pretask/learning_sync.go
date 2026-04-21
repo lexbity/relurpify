@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/core"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/statebus"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/statebus"
 )
 
 // WorkflowIDResolver extracts the active workflow ID from state.

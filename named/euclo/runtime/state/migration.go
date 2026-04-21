@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // LoadFromContext reads all known euclo keys from ctx into an EucloExecutionState.

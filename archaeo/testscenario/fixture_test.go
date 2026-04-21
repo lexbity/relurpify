@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoproviders "github.com/lexcodex/relurpify/archaeo/providers"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoproviders "codeburg.org/lexbit/relurpify/archaeo/providers"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func TestNewFixtureSeedsStoresAndServices(t *testing.T) {

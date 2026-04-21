@@ -1,11 +1,9 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"sync"
+
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // GoalCache is a simple LRU-like cache for goal classifications.

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 func TestExploreStageDecodeValidateApply(t *testing.T) {

@@ -3,7 +3,7 @@ package runtime
 import (
 	"time"
 
-	nexusadminapi "github.com/lexcodex/relurpify/app/nexus/adminapi"
+	nexusadminapi "codeburg.org/lexbit/relurpify/app/nexus/adminapi"
 )
 
 type RuntimeState struct {

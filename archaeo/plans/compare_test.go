@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"github.com/stretchr/testify/require"
 )
 

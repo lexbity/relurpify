@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/rex/events"
-	"github.com/lexcodex/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/named/rex/events"
+	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 )
 
 type SignalDecision string

@@ -1,6 +1,6 @@
 package core
 
-import euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
+import euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 
 type MutabilityContract = euclorelurpic.MutabilityContract
 type RelurpicDescriptor = euclorelurpic.Descriptor

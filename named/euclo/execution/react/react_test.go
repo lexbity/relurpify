@@ -3,7 +3,7 @@ package react
 import (
 	"testing"
 
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestNewInitializesRunnerFromEnvironment(t *testing.T) {

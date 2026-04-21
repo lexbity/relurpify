@@ -9,8 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/gorilla/websocket"
-	"github.com/lexcodex/relurpify/framework/core"
 )
 
 type TestGatewayClient struct {

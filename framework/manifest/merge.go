@@ -1,9 +1,10 @@
 package manifest
 
 import (
-	"github.com/lexcodex/relurpify/framework/core"
 	"strconv"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // MergePermissionSets unions multiple permission sets in order, de-duping entries.

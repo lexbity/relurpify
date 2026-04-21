@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
-	"github.com/lexcodex/relurpify/archaeo/internal/storeutil"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeodeferred "codeburg.org/lexbit/relurpify/archaeo/deferred"
+	"codeburg.org/lexbit/relurpify/archaeo/internal/storeutil"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 const chunkCandidateArtifactKind = "archaeo_bkc_chunk_candidate"

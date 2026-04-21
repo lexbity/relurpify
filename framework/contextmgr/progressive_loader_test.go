@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkmemory "github.com/lexcodex/relurpify/framework/memory"
-	frameworksearch "github.com/lexcodex/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkmemory "codeburg.org/lexbit/relurpify/framework/memory"
+	frameworksearch "codeburg.org/lexbit/relurpify/framework/search"
 )
 
 type stubContextStrategy struct {

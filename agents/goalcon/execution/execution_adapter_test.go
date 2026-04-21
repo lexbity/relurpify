@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/goalcon/audit"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 func TestNewPlanStepAgent(t *testing.T) {

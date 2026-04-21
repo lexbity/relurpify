@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
 )
 
 type SemanticLearningRef struct {

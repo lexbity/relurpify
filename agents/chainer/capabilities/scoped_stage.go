@@ -3,9 +3,9 @@ package capabilities
 import (
 	"fmt"
 
-	"github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/pipeline"
+	"codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/pipeline"
 )
 
 // ScopedLinkStage wraps a LinkStage and implements pipeline.ToolScopedStage.

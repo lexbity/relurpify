@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/chainer/indexing"
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/chainer/indexing"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestIndexingListener_NewListener(t *testing.T) {

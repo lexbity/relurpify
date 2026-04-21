@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func resolveInsertionDecision(agent *ReActAgent, task *core.Task, envelope *core.CapabilityResultEnvelope) core.InsertionDecision {

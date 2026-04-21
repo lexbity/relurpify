@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	agentblackboard "github.com/lexcodex/relurpify/agents/blackboard"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	agentblackboard "codeburg.org/lexbit/relurpify/agents/blackboard"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestApplyKnowledgeSourceResponseAcceptsFencedJSON(t *testing.T) {

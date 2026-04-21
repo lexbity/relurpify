@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 type fakeHITL struct {
@@ -123,8 +123,10 @@ func (m *minimalHITLRuntimeAdapter) SessionInfo() SessionInfo  { return SessionI
 func (m *minimalHITLRuntimeAdapter) ResolveContextFiles(context.Context, []string) ContextFileResolution {
 	return ContextFileResolution{}
 }
-func (m *minimalHITLRuntimeAdapter) SessionArtifacts() SessionArtifacts              { return SessionArtifacts{} }
-func (m *minimalHITLRuntimeAdapter) InferenceModels(context.Context) ([]string, error)  { return nil, nil }
+func (m *minimalHITLRuntimeAdapter) SessionArtifacts() SessionArtifacts { return SessionArtifacts{} }
+func (m *minimalHITLRuntimeAdapter) InferenceModels(context.Context) ([]string, error) {
+	return nil, nil
+}
 func (m *minimalHITLRuntimeAdapter) RecordingMode() string                           { return "off" }
 func (m *minimalHITLRuntimeAdapter) SetRecordingMode(string) error                   { return nil }
 func (m *minimalHITLRuntimeAdapter) SaveModel(string) error                          { return nil }

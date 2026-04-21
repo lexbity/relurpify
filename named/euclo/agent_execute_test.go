@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	euclorelurpic "github.com/lexcodex/relurpify/named/euclo/relurpicabilities"
-	testutil "github.com/lexcodex/relurpify/testutil/euclotestutil"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
+	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 // cancelOnGenerateModel blocks in Generate until the context is canceled, so

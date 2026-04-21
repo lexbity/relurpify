@@ -4,20 +4,20 @@ import (
 	"testing"
 	"time"
 
-	archaeoarch "github.com/lexcodex/relurpify/archaeo/archaeology"
-	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
-	archaeodecisions "github.com/lexcodex/relurpify/archaeo/decisions"
-	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoevents "github.com/lexcodex/relurpify/archaeo/events"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeoproj "github.com/lexcodex/relurpify/archaeo/projections"
-	"github.com/lexcodex/relurpify/archaeo/requests"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/archaeo/testscenario"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/framework/core"
+	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
+	archaeoconvergence "codeburg.org/lexbit/relurpify/archaeo/convergence"
+	archaeodecisions "codeburg.org/lexbit/relurpify/archaeo/decisions"
+	archaeodeferred "codeburg.org/lexbit/relurpify/archaeo/deferred"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoproj "codeburg.org/lexbit/relurpify/archaeo/projections"
+	"codeburg.org/lexbit/relurpify/archaeo/requests"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,8 +35,8 @@ func TestProjectionBuildersAndMaterializers(t *testing.T) {
 			"step-1": {ID: "step-1", Description: "step", Status: frameworkplan.PlanStepPending, CreatedAt: f.Now(), UpdatedAt: f.Now()},
 		},
 		StepOrder: []string{"step-1"},
-		CreatedAt:  f.Now(),
-		UpdatedAt:  f.Now(),
+		CreatedAt: f.Now(),
+		UpdatedAt: f.Now(),
 	}
 	active := f.SeedActivePlan(plan, archaeoplans.DraftVersionInput{
 		WorkflowID:             workflowID,

@@ -3,11 +3,11 @@ package assurance
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/agentenv"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	"github.com/lexcodex/relurpify/named/euclo/runtime/orchestrate"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	"codeburg.org/lexbit/relurpify/named/euclo/runtime/orchestrate"
 )
 
 // InteractionRunner handles interaction seeding and mode-machine execution.

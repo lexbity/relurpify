@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/agents/rewoo"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkmemory "github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/agents/rewoo"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkmemory "codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 type stubTool struct {

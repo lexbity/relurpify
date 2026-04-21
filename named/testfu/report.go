@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	runnerpkg "github.com/lexcodex/relurpify/named/testfu/runner"
+	runnerpkg "codeburg.org/lexbit/relurpify/named/testfu/runner"
 )
 
 func suitePassed(report *runnerpkg.SuiteReport) bool {

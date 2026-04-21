@@ -3,7 +3,7 @@ package tui
 import (
 	"context"
 
-	nexusruntime "github.com/lexcodex/relurpify/app/nexusish/runtime"
+	nexusruntime "codeburg.org/lexbit/relurpify/app/nexusish/runtime"
 )
 
 type RuntimeState = nexusruntime.RuntimeState

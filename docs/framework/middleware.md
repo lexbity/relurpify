@@ -2,7 +2,7 @@
 
 ## Synopsis
 
-`framework/middleware` provides the transport and protocol layers that connect
+`relurpnet` provides the transport and protocol layers that connect
 Relurpify agents to each other and to external systems. The middleware sits
 between the agent runtime and the network, handling connection management,
 session isolation, event routing, and the full MCP protocol stack.
@@ -12,7 +12,7 @@ session isolation, event routing, and the full MCP protocol stack.
 ## Package Map
 
 ```
-framework/middleware/
+relurpnet/
 ├── channel/    Concurrent communication channel manager
 ├── fmp/        Federated mesh protocol orchestration, context transfer, discovery, and federation policy
 ├── gateway/    HTTP server and replay recording for Nexus
@@ -46,7 +46,7 @@ outbound messages by channel name, and supports individual adapter restarts.
 
 ## gateway
 
-`framework/middleware/gateway` provides two services for the Nexus gateway:
+`relurpnet/gateway` provides two services for the Nexus gateway:
 
 **HTTP server** — routes incoming requests (node connections, capability
 requests, admin API calls, event subscriptions) to their handlers.
@@ -81,7 +81,7 @@ mesh-specific transport hardening.
 
 ## fmp
 
-`framework/middleware/fmp` is the middleware owner for federated mesh protocol
+`relurpnet/fmp` is the middleware owner for federated mesh protocol
 mechanics.
 
 It currently covers:
@@ -129,14 +129,14 @@ framed node transport carries explicit FMP chunk session messages:
 - `fmp.chunk.cancelled`
 - `fmp.chunk.error`
 
-These messages bridge the node transport in `framework/middleware/node` to the
-chunk transfer manager in `framework/middleware/fmp`.
+These messages bridge the node transport in `relurpnet/node` to the
+chunk transfer manager in `relurpnet/fmp`.
 
 ---
 
 ## node
 
-`framework/middleware/node` manages the lifecycle of WebSocket connections
+`relurpnet/node` manages the lifecycle of WebSocket connections
 to remote agent nodes registered with the Nexus gateway.
 
 **NodeManager** tracks all connected nodes: pairing, authentication, capability
@@ -164,7 +164,7 @@ during the pairing handshake.
 
 ## session
 
-`framework/middleware/session` provides session routing and event-sink
+`relurpnet/session` provides session routing and event-sink
 integration for agent conversation isolation.
 
 **Router** routes InboundMessages to existing or newly created SessionBoundary
@@ -182,7 +182,7 @@ and TTL-based expiry sweep operations.
 
 ## MCP (Model Context Protocol)
 
-Relurpify implements the full Model Context Protocol in `framework/middleware/mcp`,
+Relurpify implements the full Model Context Protocol in `relurpnet/mcp`,
 supporting protocol versions **2025-06-18** and **2025-11-25**.
 
 MCP defines how AI models discover and invoke capabilities (tools, prompts,

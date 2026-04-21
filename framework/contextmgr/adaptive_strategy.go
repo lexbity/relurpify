@@ -2,9 +2,10 @@ package contextmgr
 
 import (
 	"fmt"
-	"github.com/lexcodex/relurpify/framework/core"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // StrategyMode controls adaptive strategy personalities.

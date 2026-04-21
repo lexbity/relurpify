@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	frameworkpatterns "github.com/lexcodex/relurpify/framework/patterns"
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	frameworkpatterns "codeburg.org/lexbit/relurpify/framework/patterns"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type CompilerInputKind string

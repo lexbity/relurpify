@@ -3,8 +3,8 @@ package llm
 import (
 	"context"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	lmstudiobackend "github.com/lexcodex/relurpify/platform/llm/lmstudio"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	lmstudiobackend "codeburg.org/lexbit/relurpify/platform/llm/lmstudio"
 )
 
 func init() {

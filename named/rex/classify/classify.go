@@ -3,7 +3,7 @@ package classify
 import (
 	"strings"
 
-	"github.com/lexcodex/relurpify/named/rex/envelope"
+	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 )
 
 // Classification captures task shape and risk used by rex routing.

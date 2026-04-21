@@ -1,11 +1,11 @@
 package rewoo
 
 import (
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/contextmgr"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworksearch "github.com/lexcodex/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextmgr"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworksearch "codeburg.org/lexbit/relurpify/framework/search"
 )
 
 // WithContextPolicy injects a pre-configured ContextPolicy.

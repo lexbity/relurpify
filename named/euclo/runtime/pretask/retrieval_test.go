@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/patterns"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
 )
 
 type stubExpandedRetriever struct {

@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memdb "github.com/lexcodex/relurpify/framework/memory/db"
-	"github.com/lexcodex/relurpify/named/rex"
-	rexconfig "github.com/lexcodex/relurpify/named/rex/config"
-	rexnexus "github.com/lexcodex/relurpify/named/rex/nexus"
-	rexproof "github.com/lexcodex/relurpify/named/rex/proof"
-	rexruntime "github.com/lexcodex/relurpify/named/rex/runtime"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/named/rex"
+	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
+	rexnexus "codeburg.org/lexbit/relurpify/named/rex/nexus"
+	rexproof "codeburg.org/lexbit/relurpify/named/rex/proof"
+	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 )
 
 func TestRexRuntimeProviderRuntimeProjectionIncludesDRMetadata(t *testing.T) {

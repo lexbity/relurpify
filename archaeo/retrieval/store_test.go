@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	frameworkretrieval "github.com/lexcodex/relurpify/framework/retrieval"
+	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
 	_ "github.com/mattn/go-sqlite3"
 )
 

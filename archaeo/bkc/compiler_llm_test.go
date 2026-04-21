@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	archaeodeferred "github.com/lexcodex/relurpify/archaeo/deferred"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/memory"
-	memorydb "github.com/lexcodex/relurpify/framework/memory/db"
+	archaeodeferred "codeburg.org/lexbit/relurpify/archaeo/deferred"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 type staticModel struct {

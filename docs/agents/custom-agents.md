@@ -110,10 +110,10 @@ package myagent
 import (
     "context"
 
-    "github.com/lexcodex/relurpify/framework/agentenv"
-    "github.com/lexcodex/relurpify/framework/core"
-    "github.com/lexcodex/relurpify/framework/graph"
-    namedfactory "github.com/lexcodex/relurpify/named/factory"
+    "codeburg.org/lexbit/relurpify/framework/agentenv"
+    "codeburg.org/lexbit/relurpify/framework/core"
+    "codeburg.org/lexbit/relurpify/framework/graph"
+    namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 )
 
 type Agent struct {

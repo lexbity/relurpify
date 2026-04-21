@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	htnpkg "github.com/lexcodex/relurpify/agents/htn"
-	"github.com/lexcodex/relurpify/framework/core"
+	htnpkg "codeburg.org/lexbit/relurpify/agents/htn"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func newRefactoringMethodLibrary() *htnpkg.MethodLibrary {

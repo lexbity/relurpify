@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // ExecutionCapabilityCatalogEntry records the effective visibility of one

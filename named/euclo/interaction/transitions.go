@@ -1,6 +1,6 @@
 package interaction
 
-import "github.com/lexcodex/relurpify/named/euclo/euclotypes"
+import "codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 
 // TransitionTrigger describes what caused a mode transition.
 type TransitionTrigger string

@@ -3,24 +3,24 @@ package ayenitd
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
-	"log"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/ast"
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/config"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/manifest"
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/framework/graphdb"
-	"github.com/lexcodex/relurpify/framework/retrieval"
-	"github.com/lexcodex/relurpify/framework/search"
-	fsandbox "github.com/lexcodex/relurpify/framework/sandbox"
-	frameworkskills "github.com/lexcodex/relurpify/framework/skills"
-	"github.com/lexcodex/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
+	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/framework/search"
+	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,8 +103,8 @@ func withOpenSeams(t *testing.T, state *openTestState) {
 	loadAgentManifestSnapshotFn = manifest.LoadAgentManifestSnapshot
 	registerAgentFn = func(ctx context.Context, cfg authorization.RuntimeConfig) (*authorization.AgentRegistration, error) {
 		return &authorization.AgentRegistration{
-			ID:       "agent-1",
-			Manifest: cfg.ManifestSnapshot.Manifest,
+			ID:          "agent-1",
+			Manifest:    cfg.ManifestSnapshot.Manifest,
 			Permissions: mustOpenTestPermissionManager(t, cfg.BaseFS),
 		}, nil
 	}
@@ -444,11 +444,11 @@ spec:
 			Mode:           core.AgentModePrimary,
 			Model:          core.AgentModelConfig{Name: "override-model"},
 		},
-		Runner:           fakeCommandRunner{},
-		Memory:           mustHybridMemory(t, filepath.Join(dir, "memory")),
-		Telemetry:        noopTelemetry{},
+		Runner:            fakeCommandRunner{},
+		Memory:            mustHybridMemory(t, filepath.Join(dir, "memory")),
+		Telemetry:         noopTelemetry{},
 		PermissionManager: pm,
-		SkipASTIndex:     true,
+		SkipASTIndex:      true,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, boot)
@@ -593,7 +593,7 @@ func TestCapabilityBundleSeamBranches(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main(){}\n"), 0o644))
 
 	cases := []struct {
-		name string
+		name  string
 		apply func()
 		want  string
 	}{
@@ -659,7 +659,7 @@ func TestCapabilityBundleSeamBranches(t *testing.T) {
 			},
 			want: "start boom",
 		},
-	{
+		{
 			name: "search nil",
 			apply: func() {
 				newSearchEngineFn = func(search.SemanticStore, search.CodeIndex) *search.SearchEngine {

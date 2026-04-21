@@ -1,8 +1,8 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 // ChatPaner is the interface that euclotui.ChatPane must implement so that the

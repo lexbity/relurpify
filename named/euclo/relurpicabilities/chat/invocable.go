@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	"github.com/lexcodex/relurpify/named/euclo/execution"
-	localbehavior "github.com/lexcodex/relurpify/named/euclo/relurpicabilities/local"
-	eucloruntime "github.com/lexcodex/relurpify/named/euclo/runtime"
-	euclostate "github.com/lexcodex/relurpify/named/euclo/runtime/state"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/execution"
+	localbehavior "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities/local"
+	eucloruntime "codeburg.org/lexbit/relurpify/named/euclo/runtime"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/runtime/state"
 )
 
 // Invocable implementations for chat behaviors.
@@ -27,17 +27,17 @@ func (a *AskInvocable) ID() string { return Ask }
 
 func (a *AskInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 
 	routines := execution.SupportingIDs(execInput.Work, "euclo:chat.")
@@ -148,17 +148,17 @@ func (i *InspectInvocable) ID() string { return Inspect }
 
 func (i *InspectInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 
 	routines := execution.SupportingIDs(execInput.Work, "euclo:chat.")
@@ -288,17 +288,17 @@ func (i *ImplementInvocable) ID() string { return Implement }
 
 func (i *ImplementInvocable) Invoke(ctx context.Context, in execution.InvokeInput) (*core.Result, error) {
 	execInput := execution.ExecuteInput{
-		Task:                 in.Task,
-		ExecutionTask:        in.ExecutionTask,
-		State:                in.State,
-		Mode:                 in.Mode,
-		Profile:              in.Profile,
-		Work:                 in.Work,
-		Environment:          in.Environment,
-		ServiceBundle:        in.ServiceBundle,
-		WorkflowExecutor:     in.WorkflowExecutor,
-		Telemetry:            in.Telemetry,
-		InvokeSupporting:     in.InvokeSupporting,
+		Task:             in.Task,
+		ExecutionTask:    in.ExecutionTask,
+		State:            in.State,
+		Mode:             in.Mode,
+		Profile:          in.Profile,
+		Work:             in.Work,
+		Environment:      in.Environment,
+		ServiceBundle:    in.ServiceBundle,
+		WorkflowExecutor: in.WorkflowExecutor,
+		Telemetry:        in.Telemetry,
+		InvokeSupporting: in.InvokeSupporting,
 	}
 
 	routines := append(execution.SupportingIDs(execInput.Work, "euclo:chat."), execution.SupportingIDs(execInput.Work, "euclo:archaeology.")...)
@@ -470,7 +470,6 @@ func (i *ImplementInvocable) Invoke(ctx context.Context, in execution.InvokeInpu
 }
 
 func (i *ImplementInvocable) IsPrimary() bool { return true }
-
 
 // NewSupportingInvocables returns all supporting invocables for the chat package.
 func NewSupportingInvocables() []execution.Invocable {

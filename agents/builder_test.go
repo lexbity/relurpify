@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
-	"github.com/lexcodex/relurpify/framework/memory"
-	namedfactory "github.com/lexcodex/relurpify/named/factory"
+	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	"github.com/stretchr/testify/require"
 )
 

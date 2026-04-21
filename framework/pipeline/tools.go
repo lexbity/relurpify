@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // CapabilityInvoker routes tool calls through the registered capability path

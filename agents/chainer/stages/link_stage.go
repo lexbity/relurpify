@@ -9,8 +9,8 @@ import (
 	//   creating a circular dependency
 	//
 	// Solution: LinkStage lives in the chainer package, stages provides helpers
-	chaineradapter "github.com/lexcodex/relurpify/agents/chainer"
-	"github.com/lexcodex/relurpify/framework/core"
+	chaineradapter "codeburg.org/lexbit/relurpify/agents/chainer"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // LinkStage is re-exported from the chainer package to preserve the public API.

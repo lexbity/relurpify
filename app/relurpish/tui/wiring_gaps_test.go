@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/guidance"
-	"github.com/lexcodex/relurpify/named/euclo/interaction"
 )
 
 // fakeEucloEmitter is a minimal EucloEmitter for use in tests that cannot
@@ -683,9 +683,9 @@ func (f *fakeRuntimeAdapter) ListPlanVersions(context.Context, string) ([]PlanVe
 	return nil, nil
 }
 func (f *fakeRuntimeAdapter) ActivatePlanVersion(context.Context, string, int) error { return nil }
-func (f *fakeRuntimeAdapter) ExecutePlan(context.Context, string) error               { return nil }
-func (f *fakeRuntimeAdapter) ActiveWorkflowID() string                                { return "" }
-func (f *fakeRuntimeAdapter) UpdateSidebarFromFrame(interaction.InteractionFrame)     {}
+func (f *fakeRuntimeAdapter) ExecutePlan(context.Context, string) error              { return nil }
+func (f *fakeRuntimeAdapter) ActiveWorkflowID() string                               { return "" }
+func (f *fakeRuntimeAdapter) UpdateSidebarFromFrame(interaction.InteractionFrame)    {}
 func (f *fakeRuntimeAdapter) AddPlanNote(stepRef string, body string) error {
 	f.addedPlanNoteStep = stepRef
 	f.addedPlanNoteBody = body
@@ -1215,7 +1215,7 @@ func TestRootModelDebugRefreshOnSubtabSwitch(t *testing.T) {
 func TestRootModelDebugTestSubmissionUsesRuntimeRunner(t *testing.T) {
 	rt := &fakeRuntimeAdapter{
 		testResult: DebugTestResultMsg{
-			Package: "github.com/lexcodex/relurpify/app/relurpish/tui",
+			Package: "codeburg.org/lexbit/relurpify/app/relurpish/tui",
 			Passed:  3,
 			Output:  []string{"ok"},
 		},

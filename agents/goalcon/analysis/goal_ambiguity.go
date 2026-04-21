@@ -1,12 +1,10 @@
 package analysis
 
 import (
-	"github.com/lexcodex/relurpify/agents/goalcon/types"
-)
-
-import (
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
 )
 
 // AmbiguityIndicator identifies a potential ambiguity in a goal.

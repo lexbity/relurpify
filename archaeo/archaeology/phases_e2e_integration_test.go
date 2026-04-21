@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	archaeoconvergence "github.com/lexcodex/relurpify/archaeo/convergence"
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoexec "github.com/lexcodex/relurpify/archaeo/execution"
-	archaeolearning "github.com/lexcodex/relurpify/archaeo/learning"
-	archaeoplans "github.com/lexcodex/relurpify/archaeo/plans"
-	archaeotensions "github.com/lexcodex/relurpify/archaeo/tensions"
-	"github.com/lexcodex/relurpify/archaeo/testscenario"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
+	archaeoconvergence "codeburg.org/lexbit/relurpify/archaeo/convergence"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoexec "codeburg.org/lexbit/relurpify/archaeo/execution"
+	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	"codeburg.org/lexbit/relurpify/archaeo/testscenario"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
 func TestArchaeoPhases_SurfaceToConverge_HappyPath(t *testing.T) {

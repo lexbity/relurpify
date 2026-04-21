@@ -4,14 +4,21 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
 
 func TestExecutionHelpersAreExplicitlyShaped(t *testing.T) {
 	cases := []struct {
-		name     string
-		tool     interface{ Name() string; Description() string; Category() string; Parameters() []core.ToolParameter; Tags() []string; IsAvailable(context.Context, *core.Context) bool }
+		name string
+		tool interface {
+			Name() string
+			Description() string
+			Category() string
+			Parameters() []core.ToolParameter
+			Tags() []string
+			IsAvailable(context.Context, *core.Context) bool
+		}
 		wantName string
 		wantDesc string
 		wantTags []string

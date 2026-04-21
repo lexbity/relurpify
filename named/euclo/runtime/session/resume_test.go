@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 func TestSessionResumeContext_IsEmpty_TrueWhenNoWorkflowID(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	fauthorization "github.com/lexcodex/relurpify/framework/authorization"
-	"github.com/lexcodex/relurpify/framework/core"
+	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestStructuredResultFromCoreUsesCapabilityEnvelope(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/memory"
-	"github.com/lexcodex/relurpify/named/rex/events"
+	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/named/rex/events"
 )
 
 type stubWorkflowReader struct {
@@ -60,7 +60,7 @@ func TestDefaultGatewayResolveAndValidationHelpers(t *testing.T) {
 	}
 
 	signal, err := gw.Resolve(ctx, events.CanonicalEvent{
-		Type:       events.TypeWorkflowSignal,
+		Type:          events.TypeWorkflowSignal,
 		IngressOrigin: events.OriginPeer,
 		Payload: map[string]any{
 			"workflow_id":     "wf-1",

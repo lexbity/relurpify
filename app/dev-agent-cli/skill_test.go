@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lexcodex/relurpify/testsuite/agenttest"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 	"github.com/stretchr/testify/require"
 )
 

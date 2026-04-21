@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	reactpkg "github.com/lexcodex/relurpify/agents/react"
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/patterns"
-	"github.com/lexcodex/relurpify/framework/retrieval"
+	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/patterns"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 type prospectiveMatcherMatchCapabilityHandler struct {

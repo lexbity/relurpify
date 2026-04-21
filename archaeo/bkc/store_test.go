@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lexcodex/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 )
 
 func TestChunkStoreSaveLoadRoundTrip(t *testing.T) {

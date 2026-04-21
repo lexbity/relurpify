@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	archaeoprojections "github.com/lexcodex/relurpify/archaeo/projections"
-	"github.com/lexcodex/relurpify/framework/core"
-	frameworkplan "github.com/lexcodex/relurpify/framework/plan"
-	"github.com/lexcodex/relurpify/named/euclo/euclotypes"
-	agentstate "github.com/lexcodex/relurpify/named/euclo/internal/agentstate"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	agentstate "codeburg.org/lexbit/relurpify/named/euclo/internal/agentstate"
 )
 
 type stubProvider struct{}

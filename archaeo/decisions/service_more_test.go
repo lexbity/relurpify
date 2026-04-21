@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	archaeodomain "github.com/lexcodex/relurpify/archaeo/domain"
-	"github.com/lexcodex/relurpify/framework/memory"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,16 +32,16 @@ func TestServiceCollectionsAndHelpers(t *testing.T) {
 	require.Nil(t, rec)
 
 	open, err := svc.Create(ctx, CreateInput{
-		WorkspaceID:      "/workspace/decision-more",
-		WorkflowID:       "wf-decision-more",
-		Kind:             archaeodomain.DecisionKindStaleResult,
-		RelatedRequestID: "request-1",
-		RelatedPlanID:    "plan-1",
+		WorkspaceID:        "/workspace/decision-more",
+		WorkflowID:         "wf-decision-more",
+		Kind:               archaeodomain.DecisionKindStaleResult,
+		RelatedRequestID:   "request-1",
+		RelatedPlanID:      "plan-1",
 		RelatedPlanVersion: intPtr(1),
-		Title:            "Open decision",
-		Summary:          "open",
-		CommentRefs:      []string{" comment-1 ", "comment-1", "comment-2"},
-		Metadata:         map[string]any{"note": "keep"},
+		Title:              "Open decision",
+		Summary:            "open",
+		CommentRefs:        []string{" comment-1 ", "comment-1", "comment-2"},
+		Metadata:           map[string]any{"note": "keep"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, open)
@@ -50,13 +50,13 @@ func TestServiceCollectionsAndHelpers(t *testing.T) {
 	require.NotNil(t, open.RelatedPlanVersion)
 
 	resolved, err := svc.Create(ctx, CreateInput{
-		WorkspaceID:  "/workspace/decision-more",
-		WorkflowID:   "wf-decision-more",
-		Kind:         archaeodomain.DecisionKindDeferredDraft,
-		Title:        "Resolved decision",
-		Summary:      "resolved",
-		CommentRefs:  []string{"x"},
-		Metadata:     map[string]any{"status": "ignored"},
+		WorkspaceID: "/workspace/decision-more",
+		WorkflowID:  "wf-decision-more",
+		Kind:        archaeodomain.DecisionKindDeferredDraft,
+		Title:       "Resolved decision",
+		Summary:     "resolved",
+		CommentRefs: []string{"x"},
+		Metadata:    map[string]any{"status": "ignored"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resolved)

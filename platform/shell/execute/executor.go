@@ -9,21 +9,21 @@ import (
 	"strings"
 	"time"
 
-	frameworktools "github.com/lexcodex/relurpify/framework/capability"
-	"github.com/lexcodex/relurpify/framework/sandbox"
+	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // CommandPreset describes a reusable command wrapper.
 type CommandPreset struct {
-	Name         string
-	Command      string
-	DefaultArgs  []string
-	Description  string
-	Category     string
-	Tags         []string
-	Timeout      time.Duration
-	AllowStdin   bool
-	WorkdirMode  string
+	Name        string
+	Command     string
+	DefaultArgs []string
+	Description string
+	Category    string
+	Tags        []string
+	Timeout     time.Duration
+	AllowStdin  bool
+	WorkdirMode string
 }
 
 // ResultEnvelope normalizes execution output for callers.
@@ -112,10 +112,10 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 		Preset:  e.Preset.Name,
 		Elapsed: time.Since(start),
 		Metadata: map[string]any{
-			"command": request.Args[0],
-			"args":    append([]string(nil), finalArgs...),
+			"command":  request.Args[0],
+			"args":     append([]string(nil), finalArgs...),
 			"work_dir": selectedWorkdir,
-			"preset":  e.Preset.Name,
+			"preset":   e.Preset.Name,
 		},
 	}
 	if runErr != nil {

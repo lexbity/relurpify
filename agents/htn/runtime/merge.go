@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/lexcodex/relurpify/framework/core"
-	"github.com/lexcodex/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graph"
 )
 
 // MergeHTNBranches merges isolated HTN branch results into the parent context.

@@ -3,7 +3,7 @@ package capabilities
 import (
 	"testing"
 
-	"github.com/lexcodex/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // TestNewProvenanceTracker tests the constructor
