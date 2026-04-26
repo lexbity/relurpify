@@ -2,13 +2,21 @@
 
 ## Synopsis
 
-`framework/contextmgr` manages what goes into each LLM call. Local models have finite context windows; without active management a long session accumulates messages, file contents, and tool results until the context overflows. The context manager tracks token usage and prunes intelligently so the most relevant information is always present within the budget.
+`framework/contextmgr` is the legacy compatibility surface for what goes into each
+LLM call. Local models have finite context windows; without active management a
+long session accumulates messages, file contents, and tool results until the
+context overflows. The working-set layer tracks token usage and prunes
+intelligently so the most relevant information is always present within the
+budget.
 
 ---
 
 ## Why It Exists
 
-A naive approach sends the entire conversation history on every LLM call. This works until it doesn't: the context window fills, the call fails, and the agent crashes or loses coherence. The context manager makes context sizing an explicit, managed concern rather than an implicit failure mode.
+A naive approach sends the entire conversation history on every LLM call. This
+works until it doesn't: the context window fills, the call fails, and the agent
+crashes or loses coherence. The working-set layer makes prompt sizing an
+explicit, managed concern rather than an implicit failure mode.
 
 ---
 
@@ -49,13 +57,19 @@ Drops early and maintains a lean context at all times. Suited for small models w
 
 ### Compression
 
-When a single item is too large to fit in the remaining budget even after pruning, the context manager can compress it: the LLM is called with a summarisation prompt, and the original item is replaced with the shorter summary. A `[compressed]` marker is added to the summary so the agent knows it is working from a condensed version.
+When a single item is too large to fit in the remaining budget even after
+pruning, the working-set layer can compress it: the LLM is called with a
+summarisation prompt, and the original item is replaced with the shorter
+summary. A `[compressed]` marker is added to the summary so the agent knows it
+is working from a condensed version.
 
 ---
 
 ## Progressive Loader
 
-`ProgressiveLoader` is a lazy-loading extension used by ReActAgent. Instead of loading all potentially-relevant files upfront, it loads file content on demand as tool calls reference them:
+`ProgressiveLoader` is a lazy-loading extension used by ReActAgent. Instead of
+loading all potentially-relevant files upfront, it loads file content on demand
+as tool calls reference them:
 
 1. Agent emits a `file_read` tool call
 2. ProgressiveLoader checks if the file content is already in context
@@ -63,7 +77,8 @@ When a single item is too large to fit in the remaining budget even after prunin
 4. If adding it would exceed the budget, a pruning pass runs first
 5. File content is added to context for this turn and subsequent ones
 
-This keeps the context lean — only files the agent actually reads are included, not everything that might be relevant.
+This keeps the working set lean - only files the agent actually reads are
+included, not everything that might be relevant.
 
 > **Status:** The `IndexManager` integration (which would allow smarter symbol-level loading rather than full-file loading) is not yet wired. Progressive loading currently operates on full file contents.
 
@@ -71,7 +86,8 @@ This keeps the context lean — only files the agent actually reads are included
 
 ## Context Policies
 
-`ContextPolicy` objects sit above the pruning strategies and express higher-level rules:
+`ContextPolicy` objects sit above the pruning strategies and express
+higher-level rules:
 
 - **MaxFilesInContext** — cap on how many file contents can be held simultaneously
 - **MaxToolResultSize** — truncate tool results larger than N tokens
@@ -83,7 +99,7 @@ These are configured per-agent and composed with the pruning strategy.
 
 ## Integration Points
 
-The context manager is used by:
+The compatibility working-set layer is used by:
 
 - **ReActAgent** — wraps the shared context and calls `Prune()` before each LLM node execution
 - **Graph runtime** — passes the shared context through every node; the LLM node triggers pruning
@@ -93,7 +109,8 @@ The context manager is used by:
 
 ## Debugging Budget Issues
 
-If an agent seems to "forget" earlier context, or if tool results are being truncated:
+If an agent seems to "forget" earlier context, or if tool results are being
+truncated:
 
 1. Check `max_tokens` in the manifest — increase it if the model supports a larger context window
 2. Switch pruning strategy to `Conservative`

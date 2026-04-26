@@ -12,11 +12,11 @@ import (
 
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
 	archaeobindings "codeburg.org/lexbit/relurpify/archaeo/bindings/euclo"
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -171,7 +171,11 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 		logFile.Close()
 		return nil, fmt.Errorf("memory init: %w", err)
 	}
-	memStore = memStore.WithVectorStore(memory.NewInMemoryVectorStore())
+	if withVectorStore, ok := any(memStore).(interface {
+		WithVectorStore(memory.VectorStore) memory.MemoryStore
+	}); ok {
+		withVectorStore.WithVectorStore(memory.NewInMemoryVectorStore())
+	}
 
 	// Resolve model from manifest if not overridden in config.
 	inferenceModel := cfg.InferenceModel
@@ -266,7 +270,7 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 	// Phase I: ServiceManager Setup & Scheduler Registration
 	env := boot.Environment
 	sm := NewServiceManager()
-	bkcEvents := &archaeobkc.EventBus{}
+	bkcEvents := &knowledge.EventBus{}
 	sm.Register("scheduler", scheduler)
 	if env.IndexManager != nil {
 		sm.Register("bkc.workspace_bootstrap", &WorkspaceBootstrapService{
@@ -275,10 +279,10 @@ func Open(ctx context.Context, cfg WorkspaceConfig) (*Workspace, error) {
 			WorkspaceRoot: cfg.Workspace,
 		})
 		if env.IndexManager.GraphDB != nil && workflowStore != nil {
-			sm.Register("bkc.invalidation", &archaeobkc.InvalidationPass{
-				Store: &archaeobkc.ChunkStore{Graph: env.IndexManager.GraphDB},
-				Staleness: &archaeobkc.StalenessManager{
-					Store:     &archaeobkc.ChunkStore{Graph: env.IndexManager.GraphDB},
+			sm.Register("bkc.invalidation", &knowledge.InvalidationPass{
+				Store: &knowledge.ChunkStore{Graph: env.IndexManager.GraphDB},
+				Staleness: &knowledge.StalenessManager{
+					Store:     &knowledge.ChunkStore{Graph: env.IndexManager.GraphDB},
 					Propagate: true,
 					MaxDepth:  3,
 				},

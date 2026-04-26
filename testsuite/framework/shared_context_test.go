@@ -14,6 +14,8 @@ func TestSharedContextDowngradesOnBudgetWarning(t *testing.T) {
 	budget := core.NewArtifactBudget(256)
 	summarizer := &core.SimpleSummarizer{}
 	sc := core.NewSharedContext(ctx, budget, summarizer)
+	ctx.AddInteraction("user", "Add new API endpoint", nil)
+	ctx.AddInteraction("assistant", "Implemented handler", nil)
 
 	path := filepath.Join(t.TempDir(), "file.go")
 	content := strings.Repeat("func example() {}\n", 50)
@@ -35,8 +37,8 @@ func TestSharedContextDowngradesOnBudgetWarning(t *testing.T) {
 func TestSharedContextRefreshConversationSummary(t *testing.T) {
 	ctx := core.NewContext()
 	sc := core.NewSharedContext(ctx, nil, &core.SimpleSummarizer{})
-	sc.AddInteraction("user", "Add new API endpoint", nil)
-	sc.AddInteraction("assistant", "Implemented handler", nil)
+	ctx.AddInteraction("user", "Add new API endpoint", nil)
+	ctx.AddInteraction("assistant", "Implemented handler", nil)
 
 	sc.RefreshConversationSummary()
 	if sc.GetConversationSummary() == "" {
@@ -49,12 +51,19 @@ func TestSharedContextRehydratesFromCachedRawContent(t *testing.T) {
 	budget := core.NewArtifactBudget(512)
 	summarizer := &core.SimpleSummarizer{}
 	sc := core.NewSharedContext(ctx, budget, summarizer)
+	ctx.AddInteraction("user", "Add new API endpoint", nil)
+	ctx.AddInteraction("assistant", "Implemented handler", nil)
 
-	path := filepath.Join(t.TempDir(), "file.go")
+	dir := t.TempDir()
+	pathA := filepath.Join(dir, "file-a.go")
+	pathB := filepath.Join(dir, "file-b.go")
 	content := strings.Repeat("func example() {}\n", 50)
-	fc, err := sc.AddFile(path, content, "go", core.DetailFull)
+	fc, err := sc.AddFile(pathA, content, "go", core.DetailFull)
 	if err != nil {
 		t.Fatalf("AddFile failed: %v", err)
+	}
+	if _, err := sc.AddFile(pathB, content, "go", core.DetailFull); err != nil {
+		t.Fatalf("AddFile second file failed: %v", err)
 	}
 	if err := sc.DowngradeOldFiles(core.DetailSummary, 1); err != nil {
 		t.Fatalf("DowngradeOldFiles failed: %v", err)
@@ -62,8 +71,8 @@ func TestSharedContextRehydratesFromCachedRawContent(t *testing.T) {
 	if fc.Content != "" || fc.RawContent == "" {
 		t.Fatalf("expected downgraded file to keep raw content cached, got %+v", fc)
 	}
-	if err := os.Remove(path); err == nil {
-		if _, err := sc.EnsureFileLevel(path, core.DetailFull); err != nil {
+	if err := os.Remove(pathA); err == nil {
+		if _, err := sc.EnsureFileLevel(pathA, core.DetailFull); err != nil {
 			t.Fatalf("EnsureFileLevel should use cached raw content, got %v", err)
 		}
 		if fc.Content == "" {

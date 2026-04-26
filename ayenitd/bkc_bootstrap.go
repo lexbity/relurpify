@@ -4,14 +4,14 @@ import (
 	"context"
 	"sync"
 
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
 	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 )
 
 // WorkspaceBootstrapService runs a one-shot workspace indexing/bootstrap pass.
 type WorkspaceBootstrapService struct {
 	IndexManager   *ast.IndexManager
-	EventBus       *archaeobkc.EventBus
+	EventBus       *knowledge.EventBus
 	WorkspaceRoot  string
 	IndexWorkspace func(context.Context) error
 	LoadStats      func() (*ast.IndexStats, error)
@@ -45,7 +45,7 @@ func (s *WorkspaceBootstrapService) Start(ctx context.Context) error {
 		indexedFiles = stats.TotalFiles
 	}
 	if s.EventBus != nil {
-		s.EventBus.EmitBootstrapComplete(archaeobkc.BootstrapCompletePayload{
+		s.EventBus.EmitBootstrapComplete(knowledge.BootstrapCompletePayload{
 			WorkspaceRoot: s.WorkspaceRoot,
 			IndexedFiles:  indexedFiles,
 		})

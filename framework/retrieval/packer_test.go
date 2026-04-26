@@ -48,7 +48,9 @@ world
 	require.Len(t, items, 1)
 	retrievalItem, ok := items[0].(*core.RetrievalContextItem)
 	require.True(t, ok)
-	require.Equal(t, doc.Document.DocID, retrievalItem.Reference.URI)
+	refObj, ok := retrievalItem.Reference.(*core.ContextReference)
+	require.True(t, ok)
+	require.Equal(t, doc.Document.DocID, refObj.URI)
 }
 
 func TestContextPackerDedupesRepeatedChunkIDs(t *testing.T) {

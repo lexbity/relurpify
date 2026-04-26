@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -71,15 +71,15 @@ func TestStreamCapabilityStreamsChunkContext(t *testing.T) {
 		t.Fatalf("graphdb: %v", err)
 	}
 	defer graph.Close()
-	store := &archaeobkc.ChunkStore{Graph: graph}
-	if _, err := store.Save(archaeobkc.KnowledgeChunk{
+	store := &knowledge.ChunkStore{Graph: graph}
+	if _, err := store.Save(knowledge.KnowledgeChunk{
 		ID:            "chunk:seed",
 		WorkspaceID:   "ws-bkc",
 		ContentHash:   "hash",
 		TokenEstimate: 12,
-		Provenance:    archaeobkc.ChunkProvenance{WorkflowID: "wf-bkc", CompiledBy: archaeobkc.CompilerDeterministic},
-		Freshness:     archaeobkc.FreshnessValid,
-		Body:          archaeobkc.ChunkBody{Raw: "seed context", Fields: map[string]any{"file_path": "service.go"}},
+		Provenance:    knowledge.ChunkProvenance{WorkflowID: "wf-bkc", CompiledBy: knowledge.CompilerDeterministic},
+		Freshness:     knowledge.FreshnessValid,
+		Body:          knowledge.ChunkBody{Raw: "seed context", Fields: map[string]any{"file_path": "service.go"}},
 	}); err != nil {
 		t.Fatalf("save chunk: %v", err)
 	}
@@ -114,15 +114,15 @@ func TestStreamCapabilityReportsStaleChunkGaps(t *testing.T) {
 		t.Fatalf("graphdb: %v", err)
 	}
 	defer graph.Close()
-	store := &archaeobkc.ChunkStore{Graph: graph}
-	if _, err := store.Save(archaeobkc.KnowledgeChunk{
+	store := &knowledge.ChunkStore{Graph: graph}
+	if _, err := store.Save(knowledge.KnowledgeChunk{
 		ID:            "chunk:stale",
 		WorkspaceID:   "ws-bkc",
 		ContentHash:   "hash",
 		TokenEstimate: 12,
-		Provenance:    archaeobkc.ChunkProvenance{WorkflowID: "wf-bkc", CompiledBy: archaeobkc.CompilerDeterministic},
-		Freshness:     archaeobkc.FreshnessStale,
-		Body:          archaeobkc.ChunkBody{Raw: "stale context", Fields: map[string]any{"file_path": "service.go"}},
+		Provenance:    knowledge.ChunkProvenance{WorkflowID: "wf-bkc", CompiledBy: knowledge.CompilerDeterministic},
+		Freshness:     knowledge.FreshnessStale,
+		Body:          knowledge.ChunkBody{Raw: "stale context", Fields: map[string]any{"file_path": "service.go"}},
 	}); err != nil {
 		t.Fatalf("save chunk: %v", err)
 	}

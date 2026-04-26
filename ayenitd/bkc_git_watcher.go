@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
 
 // GitWatcherService polls git state and emits revision change events.
 type GitWatcherService struct {
 	WorkspaceRoot string
-	EventBus      *archaeobkc.EventBus
+	EventBus      *knowledge.EventBus
 	PollInterval  time.Duration
 	LastRevision  string
 	RunGit        func(context.Context, string, ...string) (string, error)
@@ -135,7 +135,7 @@ func (s *GitWatcherService) emitRevisionChanged(revision string, paths []string)
 	if s.EventBus == nil {
 		return
 	}
-	s.EventBus.EmitCodeRevisionChanged(archaeobkc.CodeRevisionChangedPayload{
+	s.EventBus.EmitCodeRevisionChanged(knowledge.CodeRevisionChangedPayload{
 		WorkspaceRoot: s.WorkspaceRoot,
 		NewRevision:   revision,
 		AffectedPaths: append([]string(nil), paths...),

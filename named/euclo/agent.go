@@ -274,11 +274,11 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 			// For now, we'll use defaults
 		}
 
-		// Get the tension service if available
-		var tensionQuerier pretask.TensionQuerier
-		// tensionService returns a struct, not a pointer; we need to check if it's usable.
-		// We'll create the querier regardless; its methods will handle nil store.
-		tensionQuerier = &tensionServiceQuerier{service: a.tensionService()}
+		// Context enrichment now sources generic chunk/stream data from
+		// framework/knowledge. We intentionally do not wire the archaeology
+		// tension service into this query pipeline; the legacy BKC path still
+		// exists for context enrichment during the transition, but this stage no
+		// longer owns that bridge.
 		// Create pipeline environment from WorkspaceEnv
 		env := pretask.PipelineEnv{
 			IndexManager:   a.WorkspaceEnv.IndexManager,
@@ -291,7 +291,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment) error {
 				return reg.CapturePolicySnapshot()
 			}
 		}
-		pipeline := pretask.NewPipeline(env, tensionQuerier, config)
+		pipeline := pretask.NewPipeline(env, nil, config)
 		if workspace := workspacePathFromEnv(a.WorkspaceEnv); workspace != "" {
 			pipeline.PrependStep(pretask.DeferralLoader{WorkspaceDir: workspace})
 		}
@@ -599,28 +599,6 @@ func (a *Agent) planService() archaeoplans.Service {
 
 func (a *Agent) tensionService() archaeotensions.Service {
 	return a.archaeoBinding().TensionService()
-}
-
-// tensionServiceQuerier implements pretask.TensionQuerier using archaeotensions.Service
-type tensionServiceQuerier struct {
-	service archaeotensions.Service
-}
-
-func (q *tensionServiceQuerier) ActiveByWorkflow(ctx context.Context, workflowID string) ([]interface{}, error) {
-	// Check if the service is usable by checking if the store is nil
-	// The service has a Store field which is a WorkflowStateStore
-	// We can use reflection or check a method, but for now, just try to call ListByWorkflow
-	// and handle errors gracefully
-	tensions, err := q.service.ListByWorkflow(ctx, workflowID)
-	if err != nil {
-		return nil, err
-	}
-	// Convert to []interface{}
-	result := make([]interface{}, len(tensions))
-	for i, t := range tensions {
-		result[i] = t
-	}
-	return result, nil
 }
 
 func (a *Agent) verificationService() archaeoverification.Service {

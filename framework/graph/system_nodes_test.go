@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,7 +59,6 @@ func TestCheckpointNodeAllowsNilPersister(t *testing.T) {
 	_, ok = raw.(core.ArtifactReference)
 	require.True(t, ok)
 }
-
 
 func TestPersistenceWriterNodePersistsArtifactAudit(t *testing.T) {
 	sink := &stubArtifactSink{}

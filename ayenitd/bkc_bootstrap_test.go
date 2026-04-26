@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
 	"codeburg.org/lexbit/relurpify/framework/ast"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +22,7 @@ func TestWorkspaceBootstrapServiceEmitsBootstrapComplete(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: workspace, ParallelWorkers: 1})
-	bus := &archaeobkc.EventBus{}
+	bus := &knowledge.EventBus{}
 	ch, unsub := bus.Subscribe(1)
 	defer unsub()
 	svc := &WorkspaceBootstrapService{
@@ -35,10 +35,10 @@ func TestWorkspaceBootstrapServiceEmitsBootstrapComplete(t *testing.T) {
 	}
 	select {
 	case event := <-ch:
-		if event.Kind != archaeobkc.EventBootstrapComplete {
+		if event.Kind != knowledge.EventBootstrapComplete {
 			t.Fatalf("unexpected event kind: %s", event.Kind)
 		}
-		payload, ok := event.Payload.(archaeobkc.BootstrapCompletePayload)
+		payload, ok := event.Payload.(knowledge.BootstrapCompletePayload)
 		if !ok {
 			t.Fatalf("unexpected payload type: %T", event.Payload)
 		}

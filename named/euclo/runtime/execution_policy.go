@@ -45,12 +45,12 @@ func contextPolicySummary(spec *core.AgentRuntimeSpec) ContextPolicySummary {
 		return ContextPolicySummary{}
 	}
 	progressive := true
-	if spec.Context.ProgressiveLoading != nil {
-		progressive = *spec.Context.ProgressiveLoading
+	if spec.ArtifactWindow.ProgressiveLoading != nil {
+		progressive = *spec.ArtifactWindow.ProgressiveLoading
 	}
 	summary := ContextPolicySummary{
-		MaxTokens:           spec.Context.MaxTokens,
-		CompressionStrategy: spec.Context.CompressionStrategy,
+		MaxTokens:           spec.ArtifactWindow.MaxTokens,
+		CompressionStrategy: spec.ArtifactWindow.CompressionStrategy,
 		ProgressiveLoading:  progressive,
 		ProtectPatterns:     append([]string(nil), spec.SkillConfig.ContextHints.ProtectPatterns...),
 	}

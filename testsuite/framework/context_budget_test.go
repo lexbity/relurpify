@@ -12,7 +12,7 @@ func TestArtifactBudgetUpdateUsage(t *testing.T) {
 	budget := core.NewArtifactBudget(8000)
 	budget.UpdateUsage(ctx, nil)
 	usage := budget.GetCurrentUsage()
-	if usage.ContextTokens == 0 {
+	if usage.ArtifactTokens == 0 {
 		t.Fatal("expected artifact tokens to be tracked")
 	}
 	if usage.TotalTokens == 0 {
@@ -31,13 +31,13 @@ func TestArtifactBudgetReservations(t *testing.T) {
 func TestArtifactBudgetStates(t *testing.T) {
 	budget := core.NewArtifactBudget(1000)
 	usage := budget.GetCurrentUsage()
-	usage.ContextUsagePercent = 0.95
+	usage.ArtifactUsagePercent = 0.95
 	budget.SetCurrentUsage(usage)
 	if budget.CheckBudget() != core.BudgetCritical {
 		t.Fatal("expected critical budget state")
 	}
 	usage = budget.GetCurrentUsage()
-	usage.ContextUsagePercent = 0.5
+	usage.ArtifactUsagePercent = 0.5
 	budget.SetCurrentUsage(usage)
 	if budget.CheckBudget() != core.BudgetOK {
 		t.Fatal("expected OK budget state")

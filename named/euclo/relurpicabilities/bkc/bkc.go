@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	archaeobindings "codeburg.org/lexbit/relurpify/archaeo/bindings/euclo"
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	archaeocompiler "codeburg.org/lexbit/relurpify/archaeo/compiler"
+	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
 	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
 	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	euclorelurpic "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
@@ -95,15 +97,15 @@ func (c *compileCapability) Execute(ctx context.Context, env euclotypes.Executio
 		return failureResult("bkc_compile_context_missing", "workflow_id, exploration_id, and workspace_id are required")
 	}
 	runtime := archaeobindings.Runtime{WorkflowStore: workflowStore}
-	compiler := &archaeobkc.LLMCompiler{
-		Store:         &archaeobkc.ChunkStore{Graph: c.env.IndexManager.GraphDB},
+	compiler := &archaeocompiler.LLMCompiler{
+		Store:         &knowledge.ChunkStore{Graph: c.env.IndexManager.GraphDB},
 		WorkflowStore: workflowStore,
 		Learning:      runtime.LearningService(),
 		Deferred:      runtime.DeferredDraftService(),
 		Model:         c.env.Model,
 	}
-	related := chunkIDsFromAny(env.Task.Context["related_chunk_ids"])
-	result, err := compiler.Propose(ctx, archaeobkc.LLMCompileInput{
+	related := knowledgeChunkIDsFromAny(env.Task.Context["related_chunk_ids"])
+	result, err := compiler.Propose(ctx, archaeocompiler.LLMCompileInput{
 		WorkspaceID:     workspaceID,
 		WorkflowID:      workflowID,
 		ExplorationID:   explorationID,
@@ -292,10 +294,13 @@ func (c *invalidateCapability) Execute(ctx context.Context, env euclotypes.Execu
 	if workflowID == "" {
 		return failureResult("bkc_invalidate_workflow_missing", "workflow_id is required")
 	}
-	store := &archaeobkc.ChunkStore{Graph: c.env.IndexManager.GraphDB}
-	pass := &archaeobkc.InvalidationPass{
-		Store:    store,
-		Tensions: archaeotensions.Service{Store: workflowStore},
+	store := &knowledge.ChunkStore{Graph: c.env.IndexManager.GraphDB}
+	pass := &knowledge.InvalidationPass{
+		Store: store,
+		Reporter: &knowledgeTensionReporter{
+			ChunkStore: store,
+			Tensions:   archaeotensions.Service{Store: workflowStore},
+		},
 	}
 	paths := append(taskContextStringSlice(env.Task, "changed_paths"), taskContextStringSlice(env.Task, "files")...)
 	revision := firstNonEmpty(taskContextString(env.Task, "based_on_revision"), taskContextString(env.Task, "code_revision"))
@@ -305,7 +310,7 @@ func (c *invalidateCapability) Execute(ctx context.Context, env euclotypes.Execu
 		}
 	}
 	if len(paths) > 0 {
-		if err := pass.HandleRevisionChanged(ctx, archaeobkc.CodeRevisionChangedPayload{
+		if err := pass.HandleRevisionChanged(ctx, knowledge.CodeRevisionChangedPayload{
 			WorkspaceRoot: taskContextString(env.Task, "workspace"),
 			NewRevision:   revision,
 			AffectedPaths: uniqueStrings(paths),
@@ -323,7 +328,7 @@ func (c *invalidateCapability) Execute(ctx context.Context, env euclotypes.Execu
 		if len(chunkIDs) == 0 {
 			return failureResult("bkc_invalidate_targets_missing", "affected paths or chunk ids required")
 		}
-		if err := pass.SurfaceStaleChunks(ctx, uniqueStrings(chunkIDs), nil, "manual_invalidation"); err != nil {
+		if err := pass.SurfaceStaleChunks(ctx, knowledgeChunkIDsFromStrings(uniqueStrings(chunkIDs)), nil, "manual_invalidation"); err != nil {
 			return failureResult("bkc_invalidate_failed", err.Error())
 		}
 		if env.State != nil {
@@ -376,8 +381,8 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 	if c.env.IndexManager == nil || c.env.IndexManager.GraphDB == nil {
 		return failureResult("bkc_stream_graph_missing", "graphdb required for bkc streaming")
 	}
-	store := &archaeobkc.ChunkStore{Graph: c.env.IndexManager.GraphDB}
-	streamer := &archaeobkc.Streamer{Store: store}
+	store := &knowledge.ChunkStore{Graph: c.env.IndexManager.GraphDB}
+	streamer := &knowledge.Streamer{Store: store}
 	seed, err := streamSeedForTask(streamer, env.Task)
 	if err != nil {
 		return failureResult("bkc_stream_seed_failed", err.Error())
@@ -388,13 +393,16 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 		return failureResult("bkc_stream_failed", err.Error())
 	}
 	if len(result.StaleDuringStream) > 0 && env.State != nil {
-		env.State.Set(euclostate.KeyBKCStaleChunkIDs, chunkIDsToStrings(result.StaleDuringStream))
+		env.State.Set(euclostate.KeyBKCStaleChunkIDs, knowledgeChunkIDsToStrings(result.StaleDuringStream))
 		env.State.Set(euclostate.KeyBKCStaleGapMessages, append([]string(nil), result.StaleGapMessages...))
 	}
 	if len(result.StaleDuringStream) > 0 {
-		pass := &archaeobkc.InvalidationPass{
-			Store:    store,
-			Tensions: archaeotensions.Service{Store: workflowStoreFromEnvelope(env)},
+		pass := &knowledge.InvalidationPass{
+			Store: store,
+			Reporter: &knowledgeTensionReporter{
+				ChunkStore: store,
+				Tensions:   archaeotensions.Service{Store: workflowStoreFromEnvelope(env)},
+			},
 		}
 		if err := pass.SurfaceStaleDuringStream(ctx, result); err != nil {
 			_ = err
@@ -403,7 +411,7 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 	payload := map[string]any{
 		"chunk_count":         len(result.Chunks),
 		"token_total":         result.TokenTotal,
-		"stale_during_stream": chunkIDsToStrings(result.StaleDuringStream),
+		"stale_during_stream": knowledgeChunkIDsToStrings(result.StaleDuringStream),
 		"stale_gap_messages":  append([]string(nil), result.StaleGapMessages...),
 	}
 	artifact := euclotypes.Artifact{
@@ -415,7 +423,7 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 		Status:     "produced",
 	}
 	if env.State != nil {
-		env.State.Set(euclostate.KeyBKCContextChunks, chunkIDsToStrings(result.Chunks))
+		env.State.Set(euclostate.KeyBKCContextChunks, knowledgeChunkIDsToStringsFromChunks(result.Chunks))
 	}
 	artifacts := []euclotypes.Artifact{artifact}
 	if len(result.StaleDuringStream) > 0 {
@@ -436,9 +444,9 @@ func (c *streamCapability) Execute(ctx context.Context, env euclotypes.Execution
 	}
 }
 
-func streamSeedForTask(streamer *archaeobkc.Streamer, task *core.Task) (archaeobkc.StreamSeed, error) {
+func streamSeedForTask(streamer *knowledge.Streamer, task *core.Task) (knowledge.StreamSeed, error) {
 	if task == nil {
-		return archaeobkc.StreamSeed{}, nil
+		return knowledge.StreamSeed{}, nil
 	}
 	modeID := strings.ToLower(taskContextString(task, "mode_id"))
 	rootChunkIDs := uniqueStrings(append(stringSlice(task.Context["root_chunk_ids"]), stringSlice(task.Context["active_plan_root_chunk_ids"])...))
@@ -475,7 +483,7 @@ func streamSeedForTask(streamer *archaeobkc.Streamer, task *core.Task) (archaeob
 			return seed, err
 		}
 	}
-	return archaeobkc.StreamSeed{}, nil
+	return knowledge.StreamSeed{}, nil
 }
 
 func failureResult(code, message string) euclotypes.ExecutionResult {
@@ -494,6 +502,61 @@ func failureResult(code, message string) euclotypes.ExecutionResult {
 func workflowStoreFromEnvelope(env euclotypes.ExecutionEnvelope) memory.WorkflowStateStore {
 	workflowStore, _ := env.WorkflowStore.(memory.WorkflowStateStore)
 	return workflowStore
+}
+
+// knowledgeTensionReporter bridges framework/knowledge stale-chunk surfacing
+// into the archaeology tension service.
+//
+// The context-enrichment pipeline still needs this bridge until the legacy
+// compiler path is fully retired.
+type knowledgeTensionReporter struct {
+	ChunkStore *knowledge.ChunkStore
+	Tensions   archaeotensions.Service
+}
+
+func (r *knowledgeTensionReporter) ReportStaleChunks(ctx context.Context, chunkIDs []knowledge.ChunkID, affectedPaths []string, reason string) error {
+	if r == nil || r.ChunkStore == nil {
+		return nil
+	}
+	seen := make(map[knowledge.ChunkID]struct{}, len(chunkIDs))
+	for _, chunkID := range chunkIDs {
+		if _, ok := seen[chunkID]; ok {
+			continue
+		}
+		seen[chunkID] = struct{}{}
+		chunk, ok, err := r.ChunkStore.Load(chunkID)
+		if err != nil {
+			return err
+		}
+		if !ok || chunk == nil {
+			continue
+		}
+		status := archaeodomain.TensionInferred
+		if chunk.Freshness == knowledge.FreshnessUnverified {
+			status = archaeodomain.TensionConfirmed
+		}
+		description := fmt.Sprintf("knowledge chunk %s became stale", chunk.ID)
+		if text := strings.TrimSpace(reason); text != "" {
+			description = fmt.Sprintf("knowledge chunk %s became stale: %s", chunk.ID, text)
+		}
+		_, err = r.Tensions.CreateOrUpdate(ctx, archaeotensions.CreateInput{
+			WorkflowID:         chunk.Provenance.WorkflowID,
+			SourceRef:          string(chunk.ID),
+			Kind:               "bkc_chunk_stale",
+			Description:        description,
+			Severity:           "medium",
+			Status:             status,
+			AnchorRefs:         knowledgeChunkAffectedPaths(chunk, affectedPaths),
+			SymbolScope:        knowledgeChunkSymbolScope(chunk),
+			BlastRadiusNodeIDs: append([]string(nil), affectedPaths...),
+			BasedOnRevision:    chunk.Provenance.CodeStateRef,
+			CommentRefs:        knowledgeChunkInvalidatedEdgeRefs(r.ChunkStore, chunk),
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func instructionFromArtifacts(artifacts euclotypes.ArtifactState) string {
@@ -645,19 +708,29 @@ func stringSlice(raw any) []string {
 	}
 }
 
-func chunkIDsFromAny(raw any) []archaeobkc.ChunkID {
+func knowledgeChunkIDsFromAny(raw any) []knowledge.ChunkID {
 	values := stringSlice(raw)
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]archaeobkc.ChunkID, 0, len(values))
+	out := make([]knowledge.ChunkID, 0, len(values))
 	for _, value := range values {
-		out = append(out, archaeobkc.ChunkID(value))
+		out = append(out, knowledge.ChunkID(value))
 	}
 	return out
 }
 
-func chunkIDsToStrings(ids []archaeobkc.ChunkID) []string {
+func knowledgeChunkIDsFromStrings(ids []string) []knowledge.ChunkID {
+	out := make([]knowledge.ChunkID, 0, len(ids))
+	for _, id := range ids {
+		if strings.TrimSpace(id) != "" {
+			out = append(out, knowledge.ChunkID(strings.TrimSpace(id)))
+		}
+	}
+	return out
+}
+
+func knowledgeChunkIDsToStrings(ids []knowledge.ChunkID) []string {
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
 		if strings.TrimSpace(string(id)) != "" {
@@ -665,6 +738,69 @@ func chunkIDsToStrings(ids []archaeobkc.ChunkID) []string {
 		}
 	}
 	return out
+}
+
+func knowledgeChunkIDsToStringsFromChunks(chunks []knowledge.KnowledgeChunk) []string {
+	out := make([]string, 0, len(chunks))
+	for _, chunk := range chunks {
+		if strings.TrimSpace(string(chunk.ID)) != "" {
+			out = append(out, string(chunk.ID))
+		}
+	}
+	return out
+}
+
+func knowledgeChunkAffectedPaths(chunk *knowledge.KnowledgeChunk, affectedPaths []string) []string {
+	if len(affectedPaths) > 0 {
+		return append([]string(nil), affectedPaths...)
+	}
+	out := make([]string, 0, 1)
+	if path, _ := chunk.Body.Fields["file_path"].(string); strings.TrimSpace(path) != "" {
+		out = append(out, strings.TrimSpace(path))
+	}
+	return out
+}
+
+func knowledgeChunkSymbolScope(chunk *knowledge.KnowledgeChunk) []string {
+	scope := stringSlice(chunk.Body.Fields["symbol_scope"])
+	if len(scope) > 0 {
+		return scope
+	}
+	if symbolID, _ := chunk.Body.Fields["symbol_id"].(string); strings.TrimSpace(symbolID) != "" {
+		return []string{strings.TrimSpace(symbolID)}
+	}
+	return nil
+}
+
+func knowledgeChunkInvalidatedEdgeRefs(store *knowledge.ChunkStore, chunk *knowledge.KnowledgeChunk) []string {
+	if store == nil || chunk == nil {
+		return nil
+	}
+	edges, err := store.LoadEdgesFrom(chunk.ID, knowledge.EdgeKindDependsOnCodeState, knowledge.EdgeKindRequiresContext, knowledge.EdgeKindAmplifies)
+	if err != nil || len(edges) == 0 {
+		return nil
+	}
+	commentRefs := make([]string, 0, len(edges))
+	for _, edge := range edges {
+		ref := strings.TrimSpace(string(edge.Kind)) + ":"
+		if edge.ToChunk != "" {
+			ref += string(edge.ToChunk)
+		} else if edge.Meta != nil {
+			if sourceRef, ok := edge.Meta["code_state_ref"].(string); ok && strings.TrimSpace(sourceRef) != "" {
+				ref += strings.TrimSpace(sourceRef)
+			} else if sourceRef, ok := edge.Meta["source_ref"].(string); ok && strings.TrimSpace(sourceRef) != "" {
+				ref += strings.TrimSpace(sourceRef)
+			}
+		}
+		if strings.TrimSpace(ref) == ":" {
+			continue
+		}
+		commentRefs = append(commentRefs, ref)
+	}
+	if len(commentRefs) == 0 {
+		return nil
+	}
+	return commentRefs
 }
 
 func uniqueStrings(values []string) []string {

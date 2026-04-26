@@ -3,12 +3,12 @@ package ayenitd
 import (
 	"database/sql"
 
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/framework/plan"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
@@ -38,7 +38,7 @@ type WorkspaceEnvironment struct {
 	// Memory + storage
 	Memory          memory.MemoryStore
 	WorkflowStore   memory.WorkflowStateStore
-	CheckpointStore *memory.CheckpointStore // nil until implemented in framework
+	CheckpointStore any
 	PlanStore       plan.PlanStore
 	KnowledgeStore  memory.KnowledgeStore
 	GuidanceBroker  *guidance.GuidanceBroker
@@ -57,7 +57,7 @@ type WorkspaceEnvironment struct {
 
 	// Service management (new for dynamic lifecycle)
 	ServiceManager *ServiceManager
-	BKCEvents      *archaeobkc.EventBus
+	BKCEvents      *knowledge.EventBus
 }
 
 // WithRegistry returns a shallow copy with Registry replaced.

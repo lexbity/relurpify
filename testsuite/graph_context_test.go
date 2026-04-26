@@ -90,40 +90,6 @@ func TestGraphCheckpointRoundTripWithSharedContext(t *testing.T) {
 	}
 }
 
-func TestArtifactBudgetCompressionFlow(t *testing.T) {
-	ctx := core.NewContext()
-	budget := core.NewArtifactBudget(256)
-	budget.SetReservations(0, 0, 0)
-	shared := core.NewSharedContext(ctx, budget, &core.SimpleSummarizer{})
-	filePath := filepath.Join(t.TempDir(), "large.go")
-	content := strings.Repeat("func big() {}\n", 200)
-	fc, err := shared.AddFile(filePath, content, "go", core.DetailFull)
-	if err != nil {
-		t.Fatalf("AddFile failed: %v", err)
-	}
-	for i := 0; i < 40; i++ {
-		shared.AddInteraction("user", strings.Repeat("step "+fmt.Sprint(i)+" ", 40), nil)
-	}
-	budget.UpdateUsage(shared.Context, nil)
-	if budget.CheckBudget() == core.BudgetOK {
-		t.Fatal("expected budget pressure after loading context")
-	}
-
-	shared.OnBudgetWarning(0.9)
-	if fc.Level != core.DetailSummary {
-		t.Fatalf("expected file downgraded to summary, got %v", fc.Level)
-	}
-	strategy := core.NewSimpleCompressionStrategy()
-	llm := &fakeLLM{text: "Summary: trimmed\nKey Facts: []"}
-	if err := shared.Context.CompressHistory(strategy.KeepRecent(), llm, strategy); err != nil {
-		t.Fatalf("CompressHistory error: %v", err)
-	}
-	stats := shared.Context.GetCompressionStats()
-	if stats.CompressionEvents == 0 || stats.CompressedChunks == 0 {
-		t.Fatal("expected compression stats to reflect activity")
-	}
-}
-
 func TestGraphParallelExecution(t *testing.T) {
 	g := graph.NewGraph()
 

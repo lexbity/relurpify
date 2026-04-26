@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"gopkg.in/yaml.v3"
 )
@@ -43,29 +44,29 @@ type ManifestMetadata struct {
 
 // ManifestSpec encodes runtime, permission, resource, and security sections.
 type ManifestSpec struct {
-	Image       string                               `yaml:"image" json:"image"`
-	Runtime     string                               `yaml:"runtime" json:"runtime"`
-	Policy      *ManifestPolicySpec                  `yaml:"policy,omitempty" json:"policy,omitempty"`
-	Permissions core.PermissionSet                   `yaml:"permissions" json:"permissions"`
-	Resources   ResourceSpec                         `yaml:"resources" json:"resources"`
-	Security    SecuritySpec                         `yaml:"security" json:"security"`
-	Audit       AuditSpec                            `yaml:"audit" json:"audit"`
-	Agent       *core.AgentRuntimeSpec               `yaml:"agent,omitempty" json:"agent,omitempty"`
-	Skills      []string                             `yaml:"skills,omitempty" json:"skills,omitempty"`
-	Policies    map[string]core.AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
-	Defaults    *ManifestDefaults                    `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	Image       string                                    `yaml:"image" json:"image"`
+	Runtime     string                                    `yaml:"runtime" json:"runtime"`
+	Policy      *ManifestPolicySpec                       `yaml:"policy,omitempty" json:"policy,omitempty"`
+	Permissions core.PermissionSet                        `yaml:"permissions" json:"permissions"`
+	Resources   ResourceSpec                              `yaml:"resources" json:"resources"`
+	Security    SecuritySpec                              `yaml:"security" json:"security"`
+	Audit       AuditSpec                                 `yaml:"audit" json:"audit"`
+	Agent       *agentspec.AgentRuntimeSpec               `yaml:"agent,omitempty" json:"agent,omitempty"`
+	Skills      []string                                  `yaml:"skills,omitempty" json:"skills,omitempty"`
+	Policies    map[string]agentspec.AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
+	Defaults    *ManifestDefaults                         `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 
 	CompatibilityWarnings []string `yaml:"-" json:"-"`
 }
 
 // ManifestPolicySpec groups policy-adjacent fields under spec.policy.
 type ManifestPolicySpec struct {
-	Permissions core.PermissionSet                   `yaml:"permissions,omitempty" json:"permissions,omitempty"`
-	Resources   ResourceSpec                         `yaml:"resources,omitempty" json:"resources,omitempty"`
-	Security    SecuritySpec                         `yaml:"security,omitempty" json:"security,omitempty"`
-	Audit       AuditSpec                            `yaml:"audit,omitempty" json:"audit,omitempty"`
-	Policies    map[string]core.AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
-	Defaults    *ManifestDefaults                    `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	Permissions core.PermissionSet                        `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	Resources   ResourceSpec                              `yaml:"resources,omitempty" json:"resources,omitempty"`
+	Security    SecuritySpec                              `yaml:"security,omitempty" json:"security,omitempty"`
+	Audit       AuditSpec                                 `yaml:"audit,omitempty" json:"audit,omitempty"`
+	Policies    map[string]agentspec.AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
+	Defaults    *ManifestDefaults                         `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 }
 
 // ManifestDefaults defines global defaults applied before skills.
@@ -245,11 +246,11 @@ func (m *ManifestSpec) UnmarshalYAML(value *yaml.Node) error {
 
 func (m ManifestSpec) MarshalYAML() (interface{}, error) {
 	type out struct {
-		Image   string                 `yaml:"image,omitempty"`
-		Runtime string                 `yaml:"runtime,omitempty"`
-		Policy  *ManifestPolicySpec    `yaml:"policy,omitempty"`
-		Agent   *core.AgentRuntimeSpec `yaml:"agent,omitempty"`
-		Skills  []string               `yaml:"skills,omitempty"`
+		Image   string                      `yaml:"image,omitempty"`
+		Runtime string                      `yaml:"runtime,omitempty"`
+		Policy  *ManifestPolicySpec         `yaml:"policy,omitempty"`
+		Agent   *agentspec.AgentRuntimeSpec `yaml:"agent,omitempty"`
+		Skills  []string                    `yaml:"skills,omitempty"`
 	}
 	policy := m.effectivePolicy().clone()
 	return out{
@@ -319,11 +320,11 @@ func (p ManifestPolicySpec) hasLegacyFlatFields() bool {
 		p.Defaults != nil
 }
 
-func cloneAgentPolicyMap(values map[string]core.AgentPermissionLevel) map[string]core.AgentPermissionLevel {
+func cloneAgentPolicyMap(values map[string]agentspec.AgentPermissionLevel) map[string]agentspec.AgentPermissionLevel {
 	if values == nil {
 		return nil
 	}
-	out := make(map[string]core.AgentPermissionLevel, len(values))
+	out := make(map[string]agentspec.AgentPermissionLevel, len(values))
 	for key, value := range values {
 		out[key] = value
 	}

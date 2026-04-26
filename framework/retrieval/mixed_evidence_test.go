@@ -22,7 +22,7 @@ func TestBuildMixedEvidenceResultsMergesKnowledgeAfterRetrievalResults(t *testin
 				},
 			}},
 		},
-		[]memory.KnowledgeRecord{
+		[]memory.KnowledgeEntry{
 			{RecordID: "knowledge-1", Kind: memory.KnowledgeKindDecision, Title: "Decision", Content: "Prefer transactional revision bumps."},
 			{RecordID: "knowledge-2", Kind: memory.KnowledgeKindFact, Title: "retrieved workflow evidence"},
 		},
@@ -47,7 +47,7 @@ func TestBuildMixedEvidenceResultsCanPromoteStrongKnowledgeMatch(t *testing.T) {
 				},
 			}},
 		},
-		[]memory.KnowledgeRecord{
+		[]memory.KnowledgeEntry{
 			{RecordID: "knowledge-1", Kind: memory.KnowledgeKindDecision, Title: "Transactional revision bumps", Content: "Prefer transactional revision bumps during ingestion."},
 		},
 	)
@@ -66,7 +66,7 @@ func TestBuildMixedEvidencePayloadSerializesMixedResults(t *testing.T) {
 				"summary": "general workflow notes",
 			}},
 		},
-		[]memory.KnowledgeRecord{
+		[]memory.KnowledgeEntry{
 			{RecordID: "knowledge-1", Kind: memory.KnowledgeKindDecision, Title: "Transactional revision bumps", Content: "Prefer transactional revision bumps during ingestion."},
 		},
 	)
@@ -156,7 +156,7 @@ func TestBuildMixedEvidenceResultsWithSupplementalSupportsNonWorkflowSources(t *
 }
 
 func TestSupplementalEvidenceFromDeclarativeMemoryBuildsRuntimeMemorySource(t *testing.T) {
-	records := SupplementalEvidenceFromDeclarativeMemory([]memory.DeclarativeMemoryRecord{{
+	records := SupplementalEvidenceFromDeclarativeMemory([]memory.DeclarativeMemoryEntry{{
 		RecordID:    "fact-1",
 		Kind:        memory.DeclarativeMemoryKindDecision,
 		Title:       "Retry policy",
@@ -174,10 +174,10 @@ func TestSupplementalEvidenceFromDeclarativeMemoryBuildsRuntimeMemorySource(t *t
 }
 
 func TestSupplementalEvidenceFromProceduralMemoryBuildsRuntimeMemorySource(t *testing.T) {
-	records := SupplementalEvidenceFromProceduralMemory([]memory.ProceduralMemoryRecord{{
+	records := SupplementalEvidenceFromProceduralMemory([]memory.ProceduralMemoryEntry{{
 		RoutineID:   "routine-1",
 		Kind:        memory.ProceduralMemoryKindRecoveryRoutine,
-		Name:        "Checkpoint recovery routine",
+		Title:       "Checkpoint recovery routine",
 		Description: "Recover interrupted pipeline execution from the latest checkpoint.",
 		Summary:     "Recover from latest checkpoint",
 		BodyRef:     "artifact://workflow/routine-1",

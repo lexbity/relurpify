@@ -87,7 +87,7 @@ func MixedEvidenceResultsFromBlocks(blocks []core.ContentBlock) []MixedEvidenceR
 }
 
 // BuildMixedEvidenceResults score-orders retrieval evidence and workflow knowledge together.
-func BuildMixedEvidenceResults(queryText string, blocks []core.ContentBlock, records []memory.KnowledgeRecord) []MixedEvidenceResult {
+func BuildMixedEvidenceResults(queryText string, blocks []core.ContentBlock, records []memory.KnowledgeEntry) []MixedEvidenceResult {
 	supplemental := make([]SupplementalEvidenceRecord, 0, len(records))
 	for _, rec := range records {
 		supplemental = append(supplemental, SupplementalEvidenceRecord{
@@ -161,7 +161,7 @@ func BuildMixedEvidenceResultsWithSupplemental(queryText string, blocks []core.C
 
 // MixedEvidenceMemoryEnvelopes converts runtime memory records into mixed-evidence results
 // suitable for inclusion in LLM prompts without requiring live database access.
-func MixedEvidenceMemoryEnvelopes(records []memory.KnowledgeRecord) []MixedEvidenceResult {
+func MixedEvidenceMemoryEnvelopes(records []memory.KnowledgeEntry) []MixedEvidenceResult {
 	return BuildMixedEvidenceResults("", nil, records)
 }
 
@@ -443,7 +443,7 @@ func MixedEvidencePayloadFromEnvelopes(queryText, scope string, envelopes []core
 }
 
 // SupplementalEvidenceFromDeclarativeMemory converts declarative memory records into supplemental evidence.
-func SupplementalEvidenceFromDeclarativeMemory(records []memory.DeclarativeMemoryRecord) []SupplementalEvidenceRecord {
+func SupplementalEvidenceFromDeclarativeMemory(records []memory.DeclarativeMemoryEntry) []SupplementalEvidenceRecord {
 	result := make([]SupplementalEvidenceRecord, 0, len(records))
 	for _, rec := range records {
 		scoreBoost := 0.1
@@ -466,7 +466,7 @@ func SupplementalEvidenceFromDeclarativeMemory(records []memory.DeclarativeMemor
 }
 
 // SupplementalEvidenceFromProceduralMemory converts procedural memory records into supplemental evidence.
-func SupplementalEvidenceFromProceduralMemory(records []memory.ProceduralMemoryRecord) []SupplementalEvidenceRecord {
+func SupplementalEvidenceFromProceduralMemory(records []memory.ProceduralMemoryEntry) []SupplementalEvidenceRecord {
 	result := make([]SupplementalEvidenceRecord, 0, len(records))
 	for _, rec := range records {
 		scoreBoost := 0.15

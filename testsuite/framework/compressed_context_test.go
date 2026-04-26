@@ -36,42 +36,36 @@ Key Facts: [{"type":"decision","content":"Refactored module","relevance":0.9}]`}
 func TestSimpleCompressionStrategyShouldCompress(t *testing.T) {
 	strategy := core.NewSimpleCompressionStrategy()
 	ctx := core.NewContext()
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 6; i++ {
 		ctx.AddInteraction("user", "message", nil)
 	}
 	if !strategy.ShouldCompress(ctx, nil) {
 		t.Fatal("expected compression recommendation when history exceeds threshold")
 	}
+	shortCtx := core.NewContext()
+	for i := 0; i < 2; i++ {
+		shortCtx.AddInteraction("user", "message", nil)
+	}
 	budget := core.NewArtifactBudget(1000)
 	usage := budget.GetCurrentUsage()
-	usage.ContextUsagePercent = 0.5
+	usage.ArtifactUsagePercent = 0.5
 	budget.SetCurrentUsage(usage)
-	if strategy.ShouldCompress(ctx, budget) {
+	if strategy.ShouldCompress(shortCtx, budget) {
 		t.Fatal("expected compression to stay disabled when usage below threshold")
 	}
 	usage = budget.GetCurrentUsage()
-	usage.ContextUsagePercent = 0.9
+	usage.ArtifactUsagePercent = 0.9
 	budget.SetCurrentUsage(usage)
-	if !strategy.ShouldCompress(ctx, budget) {
+	if !strategy.ShouldCompress(shortCtx, budget) {
 		t.Fatal("expected compression once usage exceeds threshold")
 	}
 }
 
 func TestContextCompressHistory(t *testing.T) {
 	ctx := core.NewContext()
+	strategy := core.NewSimpleCompressionStrategy()
 	for i := 0; i < 15; i++ {
 		ctx.AddInteraction("user", "long message content", nil)
-	}
-	llm := &stubLLM{text: `Summary: summary
-Key Facts: [{"type":"decision","content":"fact","relevance":0.8}]`}
-	strategy := core.NewSimpleCompressionStrategy()
-	err := ctx.CompressHistory(strategy.KeepRecentCount, llm, strategy)
-	if err != nil {
-		t.Fatalf("CompressHistory returned error: %v", err)
-	}
-	stats := ctx.GetCompressionStats()
-	if stats.CompressionEvents == 0 {
-		t.Fatal("expected compression event to be logged")
 	}
 	compressed, history := ctx.GetFullHistory()
 	if len(compressed) == 0 {

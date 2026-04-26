@@ -175,10 +175,10 @@ func (s *BrowserService) resolveBackend(args map[string]interface{}) string {
 }
 
 func (s *BrowserService) maxTokens() int {
-	if s == nil || s.agentSpec == nil || s.agentSpec.Context.MaxTokens <= 0 {
+	if s == nil || s.agentSpec == nil || s.agentSpec.ArtifactWindow.MaxTokens <= 0 {
 		return 8192
 	}
-	return s.agentSpec.Context.MaxTokens
+	return s.agentSpec.ArtifactWindow.MaxTokens
 }
 
 func (s *BrowserService) agentID() string {

@@ -52,7 +52,7 @@ and provenance cut across those layers rather than replacing one of them:
                        │
 ┌──────────────────────▼───────────────────────────────┐
 │  Framework Layer                         framework/  │
-│  Graph runtime · Pipeline runner · ContextManager    │
+│  Graph runtime · Pipeline runner · Artifact budget   │
 │  CapabilityRegistry · AuthorizationManager · Memory  │
 │  Event log · Telemetry · AST index                   │
 └──────────────────────┬───────────────────────────────┘
@@ -88,10 +88,10 @@ receive their dependencies via `ayenitd.WorkspaceEnvironment`.
 
 **Framework layer** — the infrastructure agents sit on top of. This is the
 agent framework and skill runtime. The graph runtime executes workflows as
-deterministic state machines; every node declares
-a contract (side-effect class, idempotency, placement, checkpoint policy,
-state boundaries) and the runtime validates those contracts before execution.
-Tool calls at node boundaries route through the capability registry with policy
+deterministic state machines; every node declares a contract
+(side-effect class, idempotency, placement, checkpoint policy, state
+boundaries) and the runtime validates those contracts before execution. Tool
+calls at node boundaries route through the capability registry with policy
 evaluation. Checkpoints capture transition-boundary state so interrupted graphs
 resume without replaying completed work. System nodes (`CheckpointNode`,
 `SummarizeContextNode`, `RetrieveDeclarativeMemoryNode`,
@@ -102,9 +102,10 @@ sequences with declared contracts. Runtime startup first resolves an effective
 contract from the manifest, skills, and overlays, then compiles one policy
 bundle from that contract, then admits capabilities into the registry. The
 authorization manager enforces the three-level policy (Allow/Ask/Deny) against
-that final resolved state. The context manager compresses token usage for small
-local models. Memory is separated into working, declarative (facts,
-decisions), and procedural (routines) lanes backed by SQLite.
+that final resolved state. Artifact budgeting is a supporting compatibility
+surface here; the system center remains execution, capability admission, and
+graph state. Memory is separated into working, declarative (facts, decisions),
+and procedural (routines) lanes backed by SQLite.
 
 **Middleware layer** — transport, coordination, and protocol. This is the
 distributed coordination fabric and protocol platform. The MCP client/server
@@ -200,7 +201,15 @@ If the manifest requires `runtime: gvisor` (mandatory) and gVisor isn't installe
 
 ### Token Budget Management
 
-Local models have finite context windows, so Relurpify treats context as a systems problem rather than a prompt-writing problem. The context manager tracks files, summaries, tool results, and conversation history against a token budget derived from the model's `max_tokens` setting. The live prompt is rebuilt from compact state each iteration instead of replaying the full transcript. When the budget tightens, file contents are downgraded to summaries, tool outputs are compressed, and only the most relevant working context is carried forward. Long-running plan execution can also persist checkpoints so interrupted work resumes without replaying the whole workflow.
+Local models have finite context windows, so Relurpify treats prompt assembly
+as a systems problem rather than a prompt-writing problem. The compatibility
+working-set layer tracks files, summaries, tool results, and conversation
+history against a token budget derived from the model's `max_tokens` setting.
+The live prompt is rebuilt from compact state each iteration instead of replaying
+the full transcript. When the budget tightens, file contents are downgraded to
+summaries, tool outputs are compressed, and only the most relevant working
+context is carried forward. Long-running plan execution can also persist
+checkpoints so interrupted work resumes without replaying the whole workflow.
 
 ---
 

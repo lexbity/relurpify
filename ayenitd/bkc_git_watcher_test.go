@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	archaeobkc "codeburg.org/lexbit/relurpify/archaeo/bkc"
+	"codeburg.org/lexbit/relurpify/framework/knowledge"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +48,7 @@ func TestGitWatcherServiceHelpersAndStart(t *testing.T) {
 	})
 
 	t.Run("start emits revision changed", func(t *testing.T) {
-		bus := &archaeobkc.EventBus{}
+		bus := &knowledge.EventBus{}
 		events, unsubscribe := bus.Subscribe(1)
 		defer unsubscribe()
 
@@ -78,8 +78,8 @@ func TestGitWatcherServiceHelpersAndStart(t *testing.T) {
 
 		select {
 		case event := <-events:
-			require.Equal(t, archaeobkc.EventCodeRevisionChanged, event.Kind)
-			payload, ok := event.Payload.(archaeobkc.CodeRevisionChangedPayload)
+			require.Equal(t, knowledge.EventCodeRevisionChanged, event.Kind)
+			payload, ok := event.Payload.(knowledge.CodeRevisionChangedPayload)
 			require.True(t, ok)
 			require.Equal(t, "new-rev", payload.NewRevision)
 			require.Equal(t, []string{"changed.go"}, payload.AffectedPaths)

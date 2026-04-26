@@ -40,6 +40,13 @@ type DelegationBackgroundRunner interface {
 	StartBackgroundDelegation(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts DelegationExecutionOptions) (*BackgroundDelegationHandle, error)
 }
 
+type workflowDelegationStore interface {
+	memory.WorkflowStateStore
+	UpsertDelegation(context.Context, memory.DelegationEntry) error
+	AppendDelegationTransition(context.Context, memory.DelegationTransitionEntry) error
+	UpsertWorkflowArtifact(context.Context, memory.WorkflowArtifactRecord) error
+}
+
 type DelegationExecutionOptions struct {
 	Registry         DelegationCapabilityRegistry
 	BackgroundRunner DelegationBackgroundRunner
@@ -369,14 +376,14 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, store memory
 		if strings.TrimSpace(workflowID) != "" && snapshot.Request.WorkflowID != "" && snapshot.Request.WorkflowID != workflowID {
 			continue
 		}
-		record := memory.WorkflowDelegationRecord{
+		record := memory.DelegationEntry{
 			DelegationID:   snapshot.Request.ID,
 			WorkflowID:     firstNonEmpty(snapshot.Request.WorkflowID, workflowID),
 			RunID:          strings.TrimSpace(runID),
 			TaskID:         snapshot.Request.TaskID,
-			State:          snapshot.State,
-			TrustClass:     snapshot.TrustClass,
-			Recoverability: snapshot.Recoverability,
+			State:          string(snapshot.State),
+			TrustClass:     string(snapshot.TrustClass),
+			Recoverability: string(snapshot.Recoverability),
 			Background:     snapshot.Background,
 			Request:        snapshot.Request,
 			Result:         snapshot.Result,
@@ -384,15 +391,17 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, store memory
 			StartedAt:      snapshot.StartedAt,
 			UpdatedAt:      snapshot.UpdatedAt,
 		}
-		if err := store.UpsertDelegation(ctx, record); err != nil {
-			return err
+		if typed, ok := store.(workflowDelegationStore); ok {
+			if err := typed.UpsertDelegation(ctx, record); err != nil {
+				return err
+			}
 		}
-		transition := memory.WorkflowDelegationTransitionRecord{
+		transition := memory.DelegationTransitionEntry{
 			TransitionID: delegationTransitionID(snapshot),
 			DelegationID: snapshot.Request.ID,
 			WorkflowID:   record.WorkflowID,
 			RunID:        record.RunID,
-			ToState:      snapshot.State,
+			ToState:      string(snapshot.State),
 			Metadata: map[string]any{
 				"target_capability_id": snapshot.Request.TargetCapabilityID,
 				"target_provider_id":   snapshot.Request.TargetProviderID,
@@ -403,12 +412,16 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, store memory
 		if snapshot.Result != nil {
 			transition.Metadata["has_result"] = true
 		}
-		if err := store.AppendDelegationTransition(ctx, transition); err != nil {
-			return err
+		if typed, ok := store.(workflowDelegationStore); ok {
+			if err := typed.AppendDelegationTransition(ctx, transition); err != nil {
+				return err
+			}
 		}
 		if artifact := promotedDelegationArtifact(snapshot, record.WorkflowID, runID); artifact != nil {
-			if err := store.UpsertWorkflowArtifact(ctx, *artifact); err != nil {
-				return err
+			if typed, ok := store.(workflowDelegationStore); ok {
+				if err := typed.UpsertWorkflowArtifact(ctx, *artifact); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -427,7 +440,11 @@ func resolveDelegationTarget(request core.DelegationRequest, registry Delegation
 		}
 		return target, nil
 	}
-	candidates := registry.CoordinationTargets(coordination.DelegationTargetSelectors...)
+	selectors := make([]core.CapabilitySelector, 0, len(coordination.DelegationTargetSelectors))
+	for _, selector := range coordination.DelegationTargetSelectors {
+		selectors = append(selectors, core.CapabilitySelectorFromAgentSpec(selector))
+	}
+	candidates := registry.CoordinationTargets(selectors...)
 	for _, candidate := range candidates {
 		if !core.SelectorMatchesDescriptor(core.CapabilitySelector{
 			CoordinationTaskTypes: []string{request.TaskType},

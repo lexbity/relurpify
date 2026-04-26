@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
@@ -128,48 +129,98 @@ func compileProviderPolicy(providerID string, policy core.ProviderPolicy) (core.
 	}, true
 }
 
-func compileSessionPolicy(index int, policy core.SessionPolicy) (core.PolicyRule, error) {
-	if err := core.ValidateSessionPolicy(policy); err != nil {
+func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.PolicyRule, error) {
+	corePolicy := core.SessionPolicy{
+		ID:       policy.ID,
+		Name:     policy.Name,
+		Priority: policy.Priority,
+		Enabled:  policy.Enabled,
+		Selector: core.SessionSelector{
+			Partitions:                append([]string{}, policy.Selector.Partitions...),
+			ChannelIDs:                append([]string{}, policy.Selector.ChannelIDs...),
+			Scopes:                    convertSessionScopes(policy.Selector.Scopes),
+			TrustClasses:              append([]core.TrustClass{}, policy.Selector.TrustClasses...),
+			Operations:                convertSessionOperations(policy.Selector.Operations),
+			ActorKinds:                append([]string{}, policy.Selector.ActorKinds...),
+			ActorIDs:                  append([]string{}, policy.Selector.ActorIDs...),
+			ExternalProviders:         convertExternalProviders(policy.Selector.ExternalProviders),
+			RequireOwnership:          policy.Selector.RequireOwnership,
+			RequireDelegation:         policy.Selector.RequireDelegation,
+			RequireExternalBinding:    policy.Selector.RequireExternalBinding,
+			RequireResolvedExternal:   policy.Selector.RequireResolvedExternal,
+			RequireRestrictedExternal: policy.Selector.RequireRestrictedExternal,
+			AuthenticatedOnly:         policy.Selector.AuthenticatedOnly,
+		},
+		Effect:      core.AgentPermissionLevel(policy.Effect),
+		Approvers:   append([]string{}, policy.Approvers...),
+		ApprovalTTL: policy.ApprovalTTL,
+		Reason:      policy.Reason,
+	}
+	if err := core.ValidateSessionPolicy(corePolicy); err != nil {
 		return core.PolicyRule{}, err
 	}
 	conditions := core.PolicyConditions{
-		TrustClasses:              append([]core.TrustClass{}, policy.Selector.TrustClasses...),
-		Partitions:                append([]string{}, policy.Selector.Partitions...),
-		ChannelIDs:                append([]string{}, policy.Selector.ChannelIDs...),
-		SessionScopes:             append([]core.SessionScope{}, policy.Selector.Scopes...),
-		SessionOperations:         append([]core.SessionOperation{}, policy.Selector.Operations...),
-		ExternalProviders:         append([]core.ExternalProvider{}, policy.Selector.ExternalProviders...),
-		RequireOwnership:          policy.Selector.RequireOwnership,
-		RequireDelegation:         policy.Selector.RequireDelegation,
-		RequireExternalBinding:    policy.Selector.RequireExternalBinding,
-		RequireResolvedExternal:   policy.Selector.RequireResolvedExternal,
-		RequireRestrictedExternal: policy.Selector.RequireRestrictedExternal,
+		TrustClasses:              append([]core.TrustClass{}, corePolicy.Selector.TrustClasses...),
+		Partitions:                append([]string{}, corePolicy.Selector.Partitions...),
+		ChannelIDs:                append([]string{}, corePolicy.Selector.ChannelIDs...),
+		SessionScopes:             append([]core.SessionScope{}, corePolicy.Selector.Scopes...),
+		SessionOperations:         append([]core.SessionOperation{}, corePolicy.Selector.Operations...),
+		ExternalProviders:         append([]core.ExternalProvider{}, corePolicy.Selector.ExternalProviders...),
+		RequireOwnership:          corePolicy.Selector.RequireOwnership,
+		RequireDelegation:         corePolicy.Selector.RequireDelegation,
+		RequireExternalBinding:    corePolicy.Selector.RequireExternalBinding,
+		RequireResolvedExternal:   corePolicy.Selector.RequireResolvedExternal,
+		RequireRestrictedExternal: corePolicy.Selector.RequireRestrictedExternal,
 	}
-	if len(policy.Selector.ActorKinds) > 0 || len(policy.Selector.ActorIDs) > 0 || policy.Selector.AuthenticatedOnly != nil {
+	if len(corePolicy.Selector.ActorKinds) > 0 || len(corePolicy.Selector.ActorIDs) > 0 || corePolicy.Selector.AuthenticatedOnly != nil {
 		match := core.ActorMatch{
-			IDs: append([]string{}, policy.Selector.ActorIDs...),
+			IDs: append([]string{}, corePolicy.Selector.ActorIDs...),
 		}
-		if len(policy.Selector.ActorKinds) > 0 {
-			match.Kind = policy.Selector.ActorKinds[0]
+		if len(corePolicy.Selector.ActorKinds) > 0 {
+			match.Kind = corePolicy.Selector.ActorKinds[0]
 		}
-		if policy.Selector.AuthenticatedOnly != nil {
-			match.Authenticated = *policy.Selector.AuthenticatedOnly
+		if corePolicy.Selector.AuthenticatedOnly != nil {
+			match.Authenticated = *corePolicy.Selector.AuthenticatedOnly
 		}
 		conditions.Actors = []core.ActorMatch{match}
 	}
 	return core.PolicyRule{
-		ID:         policy.ID,
-		Name:       policy.Name,
-		Priority:   policyPrioritySession + policy.Priority,
-		Enabled:    policy.Enabled,
+		ID:         corePolicy.ID,
+		Name:       corePolicy.Name,
+		Priority:   policyPrioritySession + corePolicy.Priority,
+		Enabled:    corePolicy.Enabled,
 		Conditions: conditions,
 		Effect: core.PolicyEffect{
-			Action:      permissionLevelToAction(policy.Effect),
-			Approvers:   append([]string{}, policy.Approvers...),
-			ApprovalTTL: policy.ApprovalTTL,
-			Reason:      policy.Reason,
+			Action:      permissionLevelToAction(corePolicy.Effect),
+			Approvers:   append([]string{}, corePolicy.Approvers...),
+			ApprovalTTL: corePolicy.ApprovalTTL,
+			Reason:      corePolicy.Reason,
 		},
 	}, nil
+}
+
+func convertSessionScopes(values []agentspec.SessionScope) []core.SessionScope {
+	out := make([]core.SessionScope, 0, len(values))
+	for _, value := range values {
+		out = append(out, core.SessionScope(value))
+	}
+	return out
+}
+
+func convertSessionOperations(values []agentspec.SessionOperation) []core.SessionOperation {
+	out := make([]core.SessionOperation, 0, len(values))
+	for _, value := range values {
+		out = append(out, core.SessionOperation(value))
+	}
+	return out
+}
+
+func convertExternalProviders(values []agentspec.ExternalProvider) []core.ExternalProvider {
+	out := make([]core.ExternalProvider, 0, len(values))
+	for _, value := range values {
+		out = append(out, core.ExternalProvider(value))
+	}
+	return out
 }
 
 func compileGlobalPolicy(key string, level core.AgentPermissionLevel) (*core.PolicyRule, error) {
@@ -199,26 +250,27 @@ func compileGlobalPolicy(key string, level core.AgentPermissionLevel) (*core.Pol
 	return rule, nil
 }
 
-func compileCapabilitySelector(selector core.CapabilitySelector) (core.PolicyConditions, error) {
+func compileCapabilitySelector(selector agentspec.CapabilitySelector) (core.PolicyConditions, error) {
+	legacy := core.CapabilitySelectorFromAgentSpec(selector)
 	if len(selector.ExcludeTags) > 0 || len(selector.Tags) > 0 || len(selector.SourceScopes) > 0 || len(selector.CoordinationRoles) > 0 ||
 		len(selector.CoordinationTaskTypes) > 0 || len(selector.CoordinationExecutionModes) > 0 ||
 		selector.CoordinationLongRunning != nil || selector.CoordinationDirectInsertion != nil {
 		return core.PolicyConditions{}, fmt.Errorf("selector fields require descriptor-time evaluation")
 	}
 	conditions := core.PolicyConditions{
-		TrustClasses:    append([]core.TrustClass{}, selector.TrustClasses...),
-		MinRiskClasses:  append([]core.RiskClass{}, selector.RiskClasses...),
-		RuntimeFamilies: append([]core.CapabilityRuntimeFamily{}, selector.RuntimeFamilies...),
-		EffectClasses:   append([]core.EffectClass{}, selector.EffectClasses...),
+		TrustClasses:    append([]core.TrustClass{}, legacy.TrustClasses...),
+		MinRiskClasses:  append([]core.RiskClass{}, legacy.RiskClasses...),
+		RuntimeFamilies: append([]core.CapabilityRuntimeFamily{}, legacy.RuntimeFamilies...),
+		EffectClasses:   append([]core.EffectClass{}, legacy.EffectClasses...),
 	}
-	if selector.ID != "" {
-		conditions.Capabilities = append(conditions.Capabilities, selector.ID)
+	if legacy.ID != "" {
+		conditions.Capabilities = append(conditions.Capabilities, legacy.ID)
 	}
-	if selector.Name != "" {
-		conditions.Capabilities = append(conditions.Capabilities, selector.Name)
+	if legacy.Name != "" {
+		conditions.Capabilities = append(conditions.Capabilities, legacy.Name)
 	}
-	if selector.Kind != "" {
-		conditions.CapabilityKinds = []core.CapabilityKind{selector.Kind}
+	if legacy.Kind != "" {
+		conditions.CapabilityKinds = []core.CapabilityKind{legacy.Kind}
 	}
 	return conditions, nil
 }

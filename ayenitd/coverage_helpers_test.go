@@ -370,7 +370,7 @@ func TestOpenRuntimeStoresHappyPathAndFailures(t *testing.T) {
 	workflowStore, planStore, knowledgeStore, err := openRuntimeStores(workspace)
 	require.NoError(t, err)
 	require.NotNil(t, workflowStore)
-	require.Nil(t, planStore)
+	require.NotNil(t, planStore)
 	require.NotNil(t, knowledgeStore)
 	require.NoError(t, workflowStore.Close())
 
