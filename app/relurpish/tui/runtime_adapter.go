@@ -1580,14 +1580,6 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	}
 	d := DiagnosticsInfo{}
 
-	// Context history stats.
-	if r.rt.Context != nil {
-		stats := r.rt.Context.GetCompressionStats()
-		d.ContextTokensUsed = stats.CurrentHistorySize
-		d.PruningEvents = stats.CompressionEvents
-		d.ActivePhase = r.rt.Context.ExecutionPhase()
-	}
-
 	// Capabilities.
 	if r.rt.Tools != nil {
 		d.CapabilitiesTotal = len(r.rt.Tools.AllCapabilities())
