@@ -62,17 +62,17 @@ type CategoryStats struct {
 	ItemCount  int
 }
 
-// TokenUsage preserves the legacy token accounting format used by older agents.
+// TokenUsage captures the token accounting snapshot for artifact budgeting.
 type TokenUsage struct {
-	SystemTokens        int
-	ToolTokens          int
-	ContextTokens       int
-	OutputTokens        int
-	TotalTokens         int
-	ContextUsagePercent float64
+	SystemTokens         int
+	ToolTokens           int
+	ArtifactTokens       int
+	OutputTokens         int
+	TotalTokens          int
+	ArtifactUsagePercent float64
 }
 
-// BudgetPolicies control legacy compression behaviour.
+// BudgetPolicies control artifact-budget compression behaviour.
 type BudgetPolicies struct {
 	WarningThreshold     float64
 	CompressionThreshold float64
@@ -105,7 +105,7 @@ type ArtifactBudget struct {
 	listeners             []BudgetListener
 	usage                 *UsageStats
 	currentUsage          TokenUsage
-	legacyPolicies        BudgetPolicies
+	thresholdPolicies     BudgetPolicies
 }
 
 // NewArtifactBudget returns a budget using the default policy.
@@ -130,7 +130,7 @@ func NewArtifactBudgetWithPolicy(maxTokens int, policy *AllocationPolicy) *Artif
 		warningThreshold:  0.8,
 		allocations:       make(map[string]*Allocation),
 		listeners:         make([]BudgetListener, 0),
-		legacyPolicies: BudgetPolicies{
+		thresholdPolicies: BudgetPolicies{
 			WarningThreshold:     0.70,
 			CompressionThreshold: 0.85,
 			CriticalThreshold:    0.95,
@@ -483,7 +483,7 @@ func minInt(a, b int) int {
 	return b
 }
 
-// Legacy compatibility helpers ------------------------------------------------
+// Compatibility helpers -------------------------------------------------------
 
 // SetReservations mirrors the previous API for reserving system/tool/output tokens.
 func (cb *ArtifactBudget) SetReservations(system, tools, output int) {
@@ -495,14 +495,14 @@ func (cb *ArtifactBudget) SetReservations(system, tools, output int) {
 	cb.calculateAvailableLocked()
 }
 
-// SetPolicies configures the legacy warning/compression thresholds.
+// SetPolicies configures the warning/compression thresholds.
 func (cb *ArtifactBudget) SetPolicies(policies BudgetPolicies) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	cb.legacyPolicies = policies
+	cb.thresholdPolicies = policies
 }
 
-// UpdateUsage recomputes legacy usage metrics to keep older agents functional.
+// UpdateUsage recomputes artifact usage metrics.
 func (cb *ArtifactBudget) UpdateUsage(ctx *Context, toolSchemas []Tool) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -511,27 +511,27 @@ func (cb *ArtifactBudget) UpdateUsage(ctx *Context, toolSchemas []Tool) {
 	for _, tool := range toolSchemas {
 		toolTokens += estimateToolTokens(tool)
 	}
-	contextTokens := estimateArtifactTokens(ctx)
+	artifactTokens := estimateArtifactTokens(ctx)
 	cb.currentUsage = TokenUsage{
-		SystemTokens:  systemTokens,
-		ToolTokens:    toolTokens,
-		ContextTokens: contextTokens,
-		OutputTokens:  cb.ReservedForOutput,
-		TotalTokens:   systemTokens + toolTokens + contextTokens + cb.ReservedForOutput,
+		SystemTokens:   systemTokens,
+		ToolTokens:     toolTokens,
+		ArtifactTokens: artifactTokens,
+		OutputTokens:   cb.ReservedForOutput,
+		TotalTokens:    systemTokens + toolTokens + artifactTokens + cb.ReservedForOutput,
 	}
 	if cb.AvailableForArtifacts > 0 {
-		cb.currentUsage.ContextUsagePercent = float64(contextTokens) / float64(cb.AvailableForArtifacts)
+		cb.currentUsage.ArtifactUsagePercent = float64(artifactTokens) / float64(cb.AvailableForArtifacts)
 	}
 }
 
-// GetCurrentUsage exposes the legacy token accounting snapshot.
+// GetCurrentUsage exposes the current token accounting snapshot.
 func (cb *ArtifactBudget) GetCurrentUsage() TokenUsage {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	return cb.currentUsage
 }
 
-// SetCurrentUsage overrides the legacy token accounting snapshot.
+// SetCurrentUsage overrides the current token accounting snapshot.
 func (cb *ArtifactBudget) SetCurrentUsage(usage TokenUsage) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -542,13 +542,13 @@ func (cb *ArtifactBudget) SetCurrentUsage(usage TokenUsage) {
 func (cb *ArtifactBudget) CheckBudget() BudgetState {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	usage := cb.currentUsage.ContextUsagePercent
+	usage := cb.currentUsage.ArtifactUsagePercent
 	switch {
-	case usage >= cb.legacyPolicies.CriticalThreshold:
+	case usage >= cb.thresholdPolicies.CriticalThreshold:
 		return BudgetCritical
-	case usage >= cb.legacyPolicies.CompressionThreshold:
+	case usage >= cb.thresholdPolicies.CompressionThreshold:
 		return BudgetNeedsCompression
-	case usage >= cb.legacyPolicies.WarningThreshold:
+	case usage >= cb.thresholdPolicies.WarningThreshold:
 		return BudgetWarning
 	default:
 		return BudgetOK
@@ -559,15 +559,15 @@ func (cb *ArtifactBudget) CheckBudget() BudgetState {
 func (cb *ArtifactBudget) CanAddTokens(tokens int) bool {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	projected := cb.currentUsage.ContextTokens + tokens
+	projected := cb.currentUsage.ArtifactTokens + tokens
 	return projected <= cb.AvailableForArtifacts
 }
 
-// GetAvailableTokens reports remaining capacity in the legacy format.
+// GetAvailableTokens reports remaining artifact capacity.
 func (cb *ArtifactBudget) GetAvailableTokens() int {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	remaining := cb.AvailableForArtifacts - cb.currentUsage.ContextTokens
+	remaining := cb.AvailableForArtifacts - cb.currentUsage.ArtifactTokens
 	if remaining < 0 {
 		return 0
 	}

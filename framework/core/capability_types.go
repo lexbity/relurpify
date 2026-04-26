@@ -5,73 +5,75 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 )
 
-type CapabilityKind string
+type CapabilityKind = agentspec.CapabilityKind
 
 const (
-	CapabilityKindTool         CapabilityKind = "tool"
-	CapabilityKindPrompt       CapabilityKind = "prompt"
-	CapabilityKindResource     CapabilityKind = "resource"
-	CapabilityKindSession      CapabilityKind = "session"
-	CapabilityKindSubscription CapabilityKind = "subscription"
+	CapabilityKindTool         CapabilityKind = agentspec.CapabilityKindTool
+	CapabilityKindPrompt       CapabilityKind = agentspec.CapabilityKindPrompt
+	CapabilityKindResource     CapabilityKind = agentspec.CapabilityKindResource
+	CapabilityKindSession      CapabilityKind = agentspec.CapabilityKindSession
+	CapabilityKindSubscription CapabilityKind = agentspec.CapabilityKindSubscription
 )
 
-type CapabilityScope string
+type CapabilityScope = agentspec.CapabilityScope
 
 const (
-	CapabilityScopeBuiltin   CapabilityScope = "builtin"
-	CapabilityScopeWorkspace CapabilityScope = "workspace"
-	CapabilityScopeProvider  CapabilityScope = "provider"
-	CapabilityScopeRemote    CapabilityScope = "remote"
+	CapabilityScopeBuiltin   CapabilityScope = agentspec.CapabilityScopeBuiltin
+	CapabilityScopeWorkspace CapabilityScope = agentspec.CapabilityScopeWorkspace
+	CapabilityScopeProvider  CapabilityScope = agentspec.CapabilityScopeProvider
+	CapabilityScopeRemote    CapabilityScope = agentspec.CapabilityScopeRemote
 )
 
-type CapabilityRuntimeFamily string
+type CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamily
 
 const (
 	// CapabilityRuntimeFamilyLocalTool identifies local callable tool execution.
-	CapabilityRuntimeFamilyLocalTool CapabilityRuntimeFamily = "local-tool"
+	CapabilityRuntimeFamilyLocalTool CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamilyLocalTool
 	// CapabilityRuntimeFamilyProvider identifies provider-backed capability execution.
-	CapabilityRuntimeFamilyProvider CapabilityRuntimeFamily = "provider"
+	CapabilityRuntimeFamilyProvider CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamilyProvider
 	// CapabilityRuntimeFamilyRelurpic identifies higher-order execution behavior
 	// composed from capabilities, skills, sub-agents, or multiple execution
 	// paradigms. Relurpic is a runtime-family classification inside the canonical
 	// capability model, not a separate capability system.
-	CapabilityRuntimeFamilyRelurpic CapabilityRuntimeFamily = "relurpic"
+	CapabilityRuntimeFamilyRelurpic CapabilityRuntimeFamily = agentspec.CapabilityRuntimeFamilyRelurpic
 )
 
-type TrustClass string
+type TrustClass = agentspec.TrustClass
 
 const (
-	TrustClassBuiltinTrusted         TrustClass = "builtin-trusted"
-	TrustClassWorkspaceTrusted       TrustClass = "workspace-trusted"
-	TrustClassProviderLocalUntrusted TrustClass = "provider-local-untrusted"
-	TrustClassRemoteDeclared         TrustClass = "remote-declared-untrusted"
-	TrustClassRemoteApproved         TrustClass = "remote-approved"
+	TrustClassBuiltinTrusted         TrustClass = agentspec.TrustClassBuiltinTrusted
+	TrustClassWorkspaceTrusted       TrustClass = agentspec.TrustClassWorkspaceTrusted
+	TrustClassProviderLocalUntrusted TrustClass = agentspec.TrustClassProviderLocalUntrusted
+	TrustClassRemoteDeclared         TrustClass = agentspec.TrustClassRemoteDeclared
+	TrustClassRemoteApproved         TrustClass = agentspec.TrustClassRemoteApproved
 )
 
-type RiskClass string
+type RiskClass = agentspec.RiskClass
 
 const (
-	RiskClassReadOnly     RiskClass = "read-only"
-	RiskClassDestructive  RiskClass = "destructive"
-	RiskClassExecute      RiskClass = "execute"
-	RiskClassNetwork      RiskClass = "network"
-	RiskClassCredentialed RiskClass = "credentialed"
-	RiskClassExfiltration RiskClass = "exfiltration-sensitive"
-	RiskClassSessioned    RiskClass = "sessioned"
+	RiskClassReadOnly     RiskClass = agentspec.RiskClassReadOnly
+	RiskClassDestructive  RiskClass = agentspec.RiskClassDestructive
+	RiskClassExecute      RiskClass = agentspec.RiskClassExecute
+	RiskClassNetwork      RiskClass = agentspec.RiskClassNetwork
+	RiskClassCredentialed RiskClass = agentspec.RiskClassCredentialed
+	RiskClassExfiltration RiskClass = agentspec.RiskClassExfiltration
+	RiskClassSessioned    RiskClass = agentspec.RiskClassSessioned
 )
 
-type EffectClass string
+type EffectClass = agentspec.EffectClass
 
 const (
-	EffectClassFilesystemMutation EffectClass = "filesystem-mutation"
-	EffectClassProcessSpawn       EffectClass = "process-spawn"
-	EffectClassNetworkEgress      EffectClass = "network-egress"
-	EffectClassCredentialUse      EffectClass = "credential-use"
-	EffectClassExternalState      EffectClass = "external-state-change"
-	EffectClassSessionCreation    EffectClass = "long-lived-session-creation"
-	EffectClassContextInsertion   EffectClass = "model-context-insertion"
+	EffectClassFilesystemMutation EffectClass = agentspec.EffectClassFilesystemMutation
+	EffectClassProcessSpawn       EffectClass = agentspec.EffectClassProcessSpawn
+	EffectClassNetworkEgress      EffectClass = agentspec.EffectClassNetworkEgress
+	EffectClassCredentialUse      EffectClass = agentspec.EffectClassCredentialUse
+	EffectClassExternalState      EffectClass = agentspec.EffectClassExternalState
+	EffectClassSessionCreation    EffectClass = agentspec.EffectClassSessionCreation
+	EffectClassContextInsertion   EffectClass = agentspec.EffectClassContextInsertion
 )
 
 type CapabilitySource struct {

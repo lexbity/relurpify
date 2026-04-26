@@ -49,7 +49,6 @@ type Telemetry interface {
 
 // BudgetTelemetry extends telemetry with budget-management signals.
 type BudgetTelemetry interface {
-	OnArtifactCompression(taskID string, stats CompressionStats)
 	OnArtifactPruning(taskID string, itemsRemoved int, tokensFreed int)
 	OnBudgetExceeded(taskID string, attempted int, available int)
 }

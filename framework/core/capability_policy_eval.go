@@ -1,8 +1,12 @@
 package core
 
-import "strings"
+import (
+	"strings"
 
-func EffectiveInsertionDecision(spec *AgentRuntimeSpec, envelope *CapabilityResultEnvelope) InsertionDecision {
+	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
+)
+
+func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *CapabilityResultEnvelope) InsertionDecision {
 	if envelope == nil {
 		return InsertionDecision{Action: InsertionActionDenied, Reason: "capability result envelope missing"}
 	}
@@ -15,11 +19,12 @@ func EffectiveInsertionDecision(spec *AgentRuntimeSpec, envelope *CapabilityResu
 	}
 	override := decision.Action
 	for _, policy := range spec.InsertionPolicies {
-		if !SelectorMatchesDescriptor(policy.Selector, envelope.Descriptor) {
+		if !SelectorMatchesDescriptor(CapabilitySelectorFromAgentSpec(policy.Selector), envelope.Descriptor) {
 			continue
 		}
-		if insertionRestrictiveness(policy.Action) >= insertionRestrictiveness(override) {
-			override = policy.Action
+		action := InsertionAction(policy.Action)
+		if insertionRestrictiveness(action) >= insertionRestrictiveness(override) {
+			override = action
 			decision.Reason = "manifest insertion policy override"
 		}
 	}

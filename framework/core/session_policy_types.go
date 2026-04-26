@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 	"strings"
+
+	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
 )
 
 // SessionOperation identifies the action being authorized against a session.
@@ -37,15 +39,15 @@ type SessionSelector struct {
 
 // SessionPolicy configures access to session-scoped operations.
 type SessionPolicy struct {
-	ID          string               `yaml:"id" json:"id"`
-	Name        string               `yaml:"name" json:"name"`
-	Priority    int                  `yaml:"priority,omitempty" json:"priority,omitempty"`
-	Enabled     bool                 `yaml:"enabled" json:"enabled"`
-	Selector    SessionSelector      `yaml:"selector" json:"selector"`
-	Effect      AgentPermissionLevel `yaml:"effect" json:"effect"`
-	Approvers   []string             `yaml:"approvers,omitempty" json:"approvers,omitempty"`
-	ApprovalTTL string               `yaml:"approval_ttl,omitempty" json:"approval_ttl,omitempty"`
-	Reason      string               `yaml:"reason,omitempty" json:"reason,omitempty"`
+	ID          string                         `yaml:"id" json:"id"`
+	Name        string                         `yaml:"name" json:"name"`
+	Priority    int                            `yaml:"priority,omitempty" json:"priority,omitempty"`
+	Enabled     bool                           `yaml:"enabled" json:"enabled"`
+	Selector    SessionSelector                `yaml:"selector" json:"selector"`
+	Effect      agentspec.AgentPermissionLevel `yaml:"effect" json:"effect"`
+	Approvers   []string                       `yaml:"approvers,omitempty" json:"approvers,omitempty"`
+	ApprovalTTL string                         `yaml:"approval_ttl,omitempty" json:"approval_ttl,omitempty"`
+	Reason      string                         `yaml:"reason,omitempty" json:"reason,omitempty"`
 }
 
 // ValidateSessionPolicy validates a session policy definition.
@@ -60,7 +62,7 @@ func ValidateSessionPolicy(policy SessionPolicy) error {
 		return fmt.Errorf("selector invalid: %w", err)
 	}
 	switch policy.Effect {
-	case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny:
+	case agentspec.AgentPermissionAllow, agentspec.AgentPermissionAsk, agentspec.AgentPermissionDeny:
 	default:
 		return fmt.Errorf("effect=%s invalid", policy.Effect)
 	}

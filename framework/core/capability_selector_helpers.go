@@ -1,6 +1,9 @@
 package core
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // CloneCapabilitySelectors returns a deep copy of selector slices so callers
 // can safely retain or mutate them without aliasing the source.
@@ -146,4 +149,101 @@ func coordinationExecutionModesToStrings(values []CoordinationExecutionMode) []s
 		out = append(out, string(value))
 	}
 	return out
+}
+
+func boolPointerKey(value *bool) string {
+	if value == nil {
+		return ""
+	}
+	if *value {
+		return "true"
+	}
+	return "false"
+}
+
+// ValidateCapabilitySelector checks the legacy selector for obvious structural
+// issues. The broader matching rules are handled elsewhere in the framework.
+func ValidateCapabilitySelector(selector CapabilitySelector) error {
+	if strings.TrimSpace(selector.ID) == "" &&
+		strings.TrimSpace(selector.Name) == "" &&
+		selector.Kind == "" &&
+		len(selector.RuntimeFamilies) == 0 &&
+		len(selector.Tags) == 0 &&
+		len(selector.ExcludeTags) == 0 &&
+		len(selector.SourceScopes) == 0 &&
+		len(selector.TrustClasses) == 0 &&
+		len(selector.RiskClasses) == 0 &&
+		len(selector.EffectClasses) == 0 &&
+		len(selector.CoordinationRoles) == 0 &&
+		len(selector.CoordinationTaskTypes) == 0 &&
+		len(selector.CoordinationExecutionModes) == 0 &&
+		selector.CoordinationLongRunning == nil &&
+		selector.CoordinationDirectInsertion == nil {
+		return fmt.Errorf("selector must declare at least one match field")
+	}
+	for _, tag := range append([]string{}, selector.Tags...) {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("selector contains empty tag")
+		}
+	}
+	for _, tag := range selector.ExcludeTags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("selector contains empty tag")
+		}
+	}
+	for _, taskType := range selector.CoordinationTaskTypes {
+		if strings.TrimSpace(taskType) == "" {
+			return fmt.Errorf("selector contains empty coordination task type")
+		}
+	}
+	for _, scope := range selector.SourceScopes {
+		switch scope {
+		case CapabilityScopeBuiltin, CapabilityScopeWorkspace, CapabilityScopeProvider, CapabilityScopeRemote:
+		default:
+			return fmt.Errorf("source scope %s invalid", scope)
+		}
+	}
+	for _, family := range selector.RuntimeFamilies {
+		switch family {
+		case CapabilityRuntimeFamilyLocalTool, CapabilityRuntimeFamilyProvider, CapabilityRuntimeFamilyRelurpic:
+		default:
+			return fmt.Errorf("runtime family %s invalid", family)
+		}
+	}
+	for _, trust := range selector.TrustClasses {
+		switch trust {
+		case TrustClassBuiltinTrusted, TrustClassWorkspaceTrusted, TrustClassProviderLocalUntrusted, TrustClassRemoteDeclared, TrustClassRemoteApproved:
+		default:
+			return fmt.Errorf("trust class %s invalid", trust)
+		}
+	}
+	for _, risk := range selector.RiskClasses {
+		switch risk {
+		case RiskClassReadOnly, RiskClassDestructive, RiskClassExecute, RiskClassNetwork, RiskClassCredentialed, RiskClassExfiltration, RiskClassSessioned:
+		default:
+			return fmt.Errorf("risk class %s invalid", risk)
+		}
+	}
+	for _, effect := range selector.EffectClasses {
+		switch effect {
+		case EffectClassFilesystemMutation, EffectClassProcessSpawn, EffectClassNetworkEgress, EffectClassCredentialUse, EffectClassExternalState, EffectClassSessionCreation, EffectClassContextInsertion:
+		default:
+			return fmt.Errorf("effect class %s invalid", effect)
+		}
+	}
+	for _, role := range selector.CoordinationRoles {
+		switch role {
+		case CoordinationRolePlanner, CoordinationRoleArchitect, CoordinationRoleReviewer, CoordinationRoleVerifier, CoordinationRoleExecutor, CoordinationRoleDomainPack, CoordinationRoleBackgroundAgent:
+		default:
+			return fmt.Errorf("coordination role %s invalid", role)
+		}
+	}
+	for _, mode := range selector.CoordinationExecutionModes {
+		switch mode {
+		case CoordinationExecutionModeSync, CoordinationExecutionModeSessionBacked, CoordinationExecutionModeBackgroundAgent:
+		default:
+			return fmt.Errorf("coordination execution mode %s invalid", mode)
+		}
+	}
+	return nil
 }

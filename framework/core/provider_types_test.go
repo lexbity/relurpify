@@ -3,6 +3,7 @@ package core
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,7 +52,7 @@ func TestNormalizeProviderCapabilityAppliesRemoteProviderDefaults(t *testing.T) 
 			Scope: CapabilityScopeWorkspace,
 		},
 		TrustClass: TrustClassWorkspaceTrusted,
-	}, provider, ProviderPolicy{})
+	}, provider, agentspec.ProviderPolicy{})
 
 	require.NoError(t, err)
 	require.Equal(t, CapabilityScopeRemote, desc.Source.Scope)
@@ -78,7 +79,7 @@ func TestNormalizeProviderCapabilityUsesPolicyDefaultTrustWithoutAllowingSelfEle
 		Kind:       CapabilityKindPrompt,
 		Name:       "remote.summary",
 		TrustClass: TrustClassRemoteDeclared,
-	}, provider, ProviderPolicy{DefaultTrust: TrustClassRemoteApproved})
+	}, provider, agentspec.ProviderPolicy{DefaultTrust: TrustClassRemoteApproved})
 
 	require.NoError(t, err)
 	require.Equal(t, TrustClassRemoteDeclared, desc.TrustClass)
@@ -88,7 +89,7 @@ func TestNormalizeProviderCapabilityUsesPolicyDefaultTrustWithoutAllowingSelfEle
 		Kind:          CapabilityKindPrompt,
 		Name:          "remote.summary.approved",
 		EffectClasses: []EffectClass{EffectClassContextInsertion},
-	}, provider, ProviderPolicy{DefaultTrust: TrustClassRemoteApproved})
+	}, provider, agentspec.ProviderPolicy{DefaultTrust: TrustClassRemoteApproved})
 
 	require.NoError(t, err)
 	require.Equal(t, TrustClassRemoteApproved, desc.TrustClass)
@@ -112,7 +113,7 @@ func TestNormalizeProviderCapabilityRejectsProviderMismatch(t *testing.T) {
 		Source: CapabilitySource{
 			ProviderID: "other-provider",
 		},
-	}, provider, ProviderPolicy{})
+	}, provider, agentspec.ProviderPolicy{})
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does not match provider")

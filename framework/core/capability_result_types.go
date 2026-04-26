@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
 )
 
-type InsertionAction string
+type InsertionAction = agentspec.InsertionAction
 
 const (
-	InsertionActionDirect       InsertionAction = "direct"
-	InsertionActionSummarized   InsertionAction = "summarized"
-	InsertionActionMetadataOnly InsertionAction = "metadata-only"
-	InsertionActionHITLRequired InsertionAction = "hitl-required"
-	InsertionActionDenied       InsertionAction = "denied"
+	InsertionActionDirect       InsertionAction = agentspec.InsertionActionDirect
+	InsertionActionSummarized   InsertionAction = agentspec.InsertionActionSummarized
+	InsertionActionMetadataOnly InsertionAction = agentspec.InsertionActionMetadataOnly
+	InsertionActionHITLRequired InsertionAction = agentspec.InsertionActionHITLRequired
+	InsertionActionDenied       InsertionAction = agentspec.InsertionActionDenied
 )
 
 type ContentDisposition string
@@ -87,17 +89,17 @@ func (b ApprovalBinding) PermissionMetadata() map[string]string {
 }
 
 type PolicySnapshot struct {
-	ID                 string                          `json:"id" yaml:"id"`
-	CapturedAt         time.Time                       `json:"captured_at" yaml:"captured_at"`
-	AgentID            string                          `json:"agent_id,omitempty" yaml:"agent_id,omitempty"`
-	ToolPolicies       map[string]ToolPolicy           `json:"tool_policies,omitempty" yaml:"tool_policies,omitempty"`
-	CapabilityPolicies []CapabilityPolicy              `json:"capability_policies,omitempty" yaml:"capability_policies,omitempty"`
-	ExposurePolicies   []CapabilityExposurePolicy      `json:"exposure_policies,omitempty" yaml:"exposure_policies,omitempty"`
-	InsertionPolicies  []CapabilityInsertionPolicy     `json:"insertion_policies,omitempty" yaml:"insertion_policies,omitempty"`
-	GlobalPolicies     map[string]AgentPermissionLevel `json:"global_policies,omitempty" yaml:"global_policies,omitempty"`
-	ProviderPolicies   map[string]ProviderPolicy       `json:"provider_policies,omitempty" yaml:"provider_policies,omitempty"`
-	RuntimeSafety      *RuntimeSafetySpec              `json:"runtime_safety,omitempty" yaml:"runtime_safety,omitempty"`
-	Revocations        RevocationSnapshot              `json:"revocations,omitempty" yaml:"revocations,omitempty"`
+	ID                 string                                    `json:"id" yaml:"id"`
+	CapturedAt         time.Time                                 `json:"captured_at" yaml:"captured_at"`
+	AgentID            string                                    `json:"agent_id,omitempty" yaml:"agent_id,omitempty"`
+	ToolPolicies       map[string]agentspec.ToolPolicy           `json:"tool_policies,omitempty" yaml:"tool_policies,omitempty"`
+	CapabilityPolicies []agentspec.CapabilityPolicy              `json:"capability_policies,omitempty" yaml:"capability_policies,omitempty"`
+	ExposurePolicies   []agentspec.CapabilityExposurePolicy      `json:"exposure_policies,omitempty" yaml:"exposure_policies,omitempty"`
+	InsertionPolicies  []agentspec.CapabilityInsertionPolicy     `json:"insertion_policies,omitempty" yaml:"insertion_policies,omitempty"`
+	GlobalPolicies     map[string]agentspec.AgentPermissionLevel `json:"global_policies,omitempty" yaml:"global_policies,omitempty"`
+	ProviderPolicies   map[string]agentspec.ProviderPolicy       `json:"provider_policies,omitempty" yaml:"provider_policies,omitempty"`
+	RuntimeSafety      *agentspec.RuntimeSafetySpec              `json:"runtime_safety,omitempty" yaml:"runtime_safety,omitempty"`
+	Revocations        RevocationSnapshot                        `json:"revocations,omitempty" yaml:"revocations,omitempty"`
 }
 
 type CapabilityResultEnvelope struct {
@@ -228,7 +230,7 @@ func ToolResultEnvelope(result *ToolResult) (*CapabilityResultEnvelope, bool) {
 }
 
 // CapabilityExecutionEnvelope returns the capability envelope attached to an
-// execution result. ToolResultEnvelope remains as a compatibility helper.
+// execution result.
 func CapabilityExecutionEnvelope(result *CapabilityExecutionResult) (*CapabilityResultEnvelope, bool) {
 	return ToolResultEnvelope(result)
 }

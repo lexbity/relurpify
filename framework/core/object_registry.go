@@ -137,6 +137,29 @@ func (r *ObjectRegistry) CloseAll() error {
 	return errors.Join(errs...)
 }
 
+// Clone returns a shallow copy of the registry, preserving handle identity.
+func (r *ObjectRegistry) Clone() *ObjectRegistry {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	clone := NewObjectRegistry()
+	for handle, value := range r.items {
+		clone.items[handle] = value
+	}
+	for scope, handles := range r.scopes {
+		clone.scopes[scope] = make(map[string]struct{}, len(handles))
+		for handle := range handles {
+			clone.scopes[scope][handle] = struct{}{}
+		}
+	}
+	for handle, scope := range r.handleToScope {
+		clone.handleToScope[handle] = scope
+	}
+	return clone
+}
+
 func closeRegistryValue(value interface{}) error {
 	if value == nil {
 		return nil

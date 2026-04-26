@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	agentspec "codeburg.org/lexbit/relurpify/framework/agentspec"
 )
 
 type ProviderKind string
@@ -237,11 +239,11 @@ func (p ProviderSecurityProfile) Validate() error {
 
 // NormalizeProviderCapability applies provider-owned admission defaults to a
 // capability descriptor before it enters the shared registry.
-func NormalizeProviderCapability(desc CapabilityDescriptor, provider ProviderDescriptor, policy ProviderPolicy) (CapabilityDescriptor, error) {
+func NormalizeProviderCapability(desc CapabilityDescriptor, provider ProviderDescriptor, policy agentspec.ProviderPolicy) (CapabilityDescriptor, error) {
 	if err := provider.Validate(); err != nil {
 		return CapabilityDescriptor{}, fmt.Errorf("provider invalid: %w", err)
 	}
-	if err := ValidateProviderPolicy(policy); err != nil {
+	if err := agentspec.ValidateProviderPolicy(policy); err != nil {
 		return CapabilityDescriptor{}, fmt.Errorf("provider policy invalid: %w", err)
 	}
 	desc = NormalizeCapabilityDescriptor(desc)
@@ -300,7 +302,7 @@ func normalizeProviderCapabilityScope(scope CapabilityScope, provider ProviderDe
 	}
 }
 
-func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy ProviderPolicy, scope CapabilityScope) TrustClass {
+func providerCapabilityTrustBaseline(provider ProviderDescriptor, policy agentspec.ProviderPolicy, scope CapabilityScope) TrustClass {
 	if policy.DefaultTrust != "" {
 		return policy.DefaultTrust
 	}

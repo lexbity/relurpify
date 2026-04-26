@@ -3,6 +3,7 @@ package core
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,17 +79,17 @@ func TestApprovalBindingPermissionMetadataIncludesScope(t *testing.T) {
 }
 
 func TestEffectiveInsertionDecisionAppliesMostRestrictivePolicy(t *testing.T) {
-	spec := &AgentRuntimeSpec{
-		InsertionPolicies: []CapabilityInsertionPolicy{
+	spec := &agentspec.AgentRuntimeSpec{
+		InsertionPolicies: []agentspec.CapabilityInsertionPolicy{
 			{
-				Selector: CapabilitySelector{
+				Selector: agentspec.CapabilitySelector{
 					Kind:         CapabilityKindTool,
 					TrustClasses: []TrustClass{TrustClassBuiltinTrusted},
 				},
 				Action: InsertionActionSummarized,
 			},
 			{
-				Selector: CapabilitySelector{
+				Selector: agentspec.CapabilitySelector{
 					Name: "echo",
 				},
 				Action: InsertionActionMetadataOnly,
