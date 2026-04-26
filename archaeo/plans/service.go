@@ -8,8 +8,8 @@ import (
 	"time"
 
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
-	"codeburg.org/lexbit/relurpify/archaeo/internal/keylock"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	frameworkkeylock "codeburg.org/lexbit/relurpify/framework/keylock"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
@@ -26,7 +26,7 @@ type Service struct {
 	Now           func() time.Time
 }
 
-var planMutationLocks keylock.Locker
+var planMutationLocks frameworkkeylock.Locker
 
 func (s Service) ApplyInvalidation(plan *frameworkplan.LivingPlan, event frameworkplan.InvalidationEvent, excludeStepID string) []string {
 	if plan == nil {

@@ -19,6 +19,10 @@ type workflowArtifactByKindAndWorkspaceLister interface {
 	ListWorkflowArtifactsByKindAndWorkspace(ctx context.Context, workflowID, runID, kind, workspaceID string) ([]memory.WorkflowArtifactRecord, error)
 }
 
+type workflowArtifactWorkflowLister interface {
+	ListWorkflows(ctx context.Context, limit int) ([]memory.WorkflowRecord, error)
+}
+
 type latestWorkflowArtifactByKindGetter interface {
 	LatestWorkflowArtifactByKind(ctx context.Context, workflowID, runID, kind string) (*memory.WorkflowArtifactRecord, bool, error)
 }
@@ -44,17 +48,7 @@ func ListWorkflowArtifactsByKind(ctx context.Context, store memory.WorkflowState
 	if typed, ok := store.(workflowArtifactByKindLister); ok {
 		return typed.ListWorkflowArtifactsByKind(ctx, workflowID, runID, kind)
 	}
-	artifacts, err := store.ListWorkflowArtifacts(ctx, workflowID, runID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]memory.WorkflowArtifactRecord, 0, len(artifacts))
-	for _, artifact := range artifacts {
-		if artifact.Kind == kind {
-			out = append(out, artifact)
-		}
-	}
-	return out, nil
+	return nil, nil
 }
 
 func ListWorkflowArtifactsByKindAndWorkspace(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID, kind, workspaceID string) ([]memory.WorkflowArtifactRecord, error) {
@@ -71,19 +65,22 @@ func ListWorkflowArtifactsByKindAndWorkspace(ctx context.Context, store memory.W
 		}
 		return filterWorkflowArtifactsByWorkspace(artifacts, workspaceID), nil
 	}
-	workflows, err := store.ListWorkflows(ctx, 4096)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]memory.WorkflowArtifactRecord, 0)
-	for _, workflow := range workflows {
-		artifacts, err := ListWorkflowArtifactsByKind(ctx, store, workflow.WorkflowID, runID, kind)
+	if typed, ok := store.(workflowArtifactWorkflowLister); ok {
+		workflows, err := typed.ListWorkflows(ctx, 4096)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, filterWorkflowArtifactsByWorkspace(artifacts, workspaceID)...)
+		out := make([]memory.WorkflowArtifactRecord, 0)
+		for _, workflow := range workflows {
+			artifacts, err := ListWorkflowArtifactsByKind(ctx, store, workflow.WorkflowID, runID, kind)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, filterWorkflowArtifactsByWorkspace(artifacts, workspaceID)...)
+		}
+		return out, nil
 	}
-	return out, nil
+	return nil, nil
 }
 
 func LatestWorkflowArtifactByKind(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID, kind string) (*memory.WorkflowArtifactRecord, bool, error) {

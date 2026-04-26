@@ -10,8 +10,8 @@ import (
 
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
 	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
-	"codeburg.org/lexbit/relurpify/archaeo/internal/keylock"
 	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
+	frameworkkeylock "codeburg.org/lexbit/relurpify/framework/keylock"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
@@ -39,7 +39,7 @@ type SessionView struct {
 	TensionSummary *archaeodomain.TensionSummary
 }
 
-var explorationMutationLocks keylock.Locker
+var explorationMutationLocks frameworkkeylock.Locker
 
 func (s Service) EnsureExplorationSession(ctx context.Context, workflowID, workspaceID, basedOnRevision string) (*archaeodomain.ExplorationSession, error) {
 	var (

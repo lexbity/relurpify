@@ -470,6 +470,10 @@ func uint64Value(raw any) uint64 {
 		if typed > 0 {
 			return uint64(typed)
 		}
+	case *int:
+		if typed != nil && *typed > 0 {
+			return uint64(*typed)
+		}
 	case float64:
 		if typed > 0 {
 			return uint64(typed)
@@ -551,6 +555,10 @@ func intValue(raw any) int {
 	switch typed := raw.(type) {
 	case int:
 		return typed
+	case *int:
+		if typed != nil {
+			return *typed
+		}
 	case int64:
 		return int(typed)
 	case int32:

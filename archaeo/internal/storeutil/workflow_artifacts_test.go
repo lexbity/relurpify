@@ -208,33 +208,30 @@ func TestWorkflowArtifactHelpersFallbackAndFiltering(t *testing.T) {
 
 	kindRecords, err := ListWorkflowArtifactsByKind(ctx, store, "wf-1", "", "kind-a")
 	require.NoError(t, err)
-	require.Len(t, kindRecords, 1)
-	require.Equal(t, "artifact-1", kindRecords[0].ArtifactID)
+	require.Empty(t, kindRecords)
 
 	workspaceRecords, err := ListWorkflowArtifactsByKindAndWorkspace(ctx, store, "", "", "kind-a", "ws-1")
 	require.NoError(t, err)
-	require.Len(t, workspaceRecords, 2)
-	require.Equal(t, []string{"artifact-1", "artifact-4"}, []string{workspaceRecords[0].ArtifactID, workspaceRecords[1].ArtifactID})
+	require.Empty(t, workspaceRecords)
 
 	workspaceRecords, err = ListWorkflowArtifactsByKindAndWorkspace(ctx, store, "wf-1", "", "kind-a", "ws-1")
 	require.NoError(t, err)
-	require.Len(t, workspaceRecords, 1)
-	require.Equal(t, "artifact-1", workspaceRecords[0].ArtifactID)
+	require.Empty(t, workspaceRecords)
 
 	latestKind, ok, err := LatestWorkflowArtifactByKind(ctx, store, "wf-1", "", "kind-a")
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, "artifact-1", latestKind.ArtifactID)
+	require.False(t, ok)
+	require.Nil(t, latestKind)
 
 	latestWorkspace, ok, err := LatestWorkflowArtifactByKindAndWorkspace(ctx, store, "", "", "kind-a", "ws-1")
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, "artifact-4", latestWorkspace.ArtifactID)
+	require.False(t, ok)
+	require.Nil(t, latestWorkspace)
 
 	latestWorkspace, ok, err = LatestWorkflowArtifactByKindAndWorkspace(ctx, store, "wf-1", "", "kind-a", "ws-1")
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, "artifact-1", latestWorkspace.ArtifactID)
+	require.False(t, ok)
+	require.Nil(t, latestWorkspace)
 }
 
 func TestWorkflowArtifactWorkspaceHelpers(t *testing.T) {

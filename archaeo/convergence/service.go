@@ -10,8 +10,8 @@ import (
 
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
 	archaeoevents "codeburg.org/lexbit/relurpify/archaeo/events"
-	"codeburg.org/lexbit/relurpify/archaeo/internal/keylock"
 	"codeburg.org/lexbit/relurpify/archaeo/internal/storeutil"
+	frameworkkeylock "codeburg.org/lexbit/relurpify/framework/keylock"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
@@ -47,7 +47,7 @@ type Service struct {
 	NewID func(string) string
 }
 
-var convergenceMutationLocks keylock.Locker
+var convergenceMutationLocks frameworkkeylock.Locker
 
 func (s Service) Create(ctx context.Context, input CreateInput) (*archaeodomain.ConvergenceRecord, error) {
 	var (
