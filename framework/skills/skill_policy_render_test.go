@@ -3,7 +3,7 @@ package skills
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +18,7 @@ func TestRenderPlanningPolicyIncludesSharedFields(t *testing.T) {
 			RequiredBeforeEdit:          []string{"go_workspace_detect"},
 			PreferredEditCapabilities:   []string{"file_write"},
 			PreferredVerifyCapabilities: []string{"go_test"},
-			StepTemplates:               []core.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
+			StepTemplates:               []agentspec.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
 			RequireVerificationStep:     true,
 		},
 	}
@@ -41,7 +41,7 @@ func TestRenderReviewPolicyIncludesSeveritySummary(t *testing.T) {
 		Review: ResolvedReviewPolicy{
 			Criteria:  []string{"correctness", "completeness"},
 			FocusTags: []string{"verification"},
-			ApprovalRules: core.AgentReviewApprovalRules{
+			ApprovalRules: agentspec.AgentReviewApprovalRules{
 				RequireVerificationEvidence: true,
 				RejectOnUnresolvedErrors:    true,
 			},

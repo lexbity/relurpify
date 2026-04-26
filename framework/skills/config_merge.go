@@ -3,7 +3,7 @@ package skills
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
@@ -26,30 +26,30 @@ func mergePromptSnippets(base string, snippets []string) string {
 	return builder.String()
 }
 
-func mergeSkillConfig(base core.AgentSkillConfig, skillSpec manifest.SkillSpec) core.AgentSkillConfig {
-	overlay := core.AgentSkillConfig{
-		Verification: core.AgentVerificationPolicy{
+func mergeSkillConfig(base agentspec.AgentSkillConfig, skillSpec manifest.SkillSpec) agentspec.AgentSkillConfig {
+	overlay := agentspec.AgentSkillConfig{
+		Verification: agentspec.AgentVerificationPolicy{
 			SuccessTools:               append([]string{}, skillSpec.Verification.SuccessTools...),
-			SuccessCapabilitySelectors: append([]core.SkillCapabilitySelector{}, skillSpec.Verification.SuccessCapabilitySelectors...),
+			SuccessCapabilitySelectors: append([]agentspec.SkillCapabilitySelector{}, skillSpec.Verification.SuccessCapabilitySelectors...),
 			StopOnSuccess:              skillSpec.Verification.StopOnSuccess,
 		},
-		Recovery: core.AgentRecoveryPolicy{
+		Recovery: agentspec.AgentRecoveryPolicy{
 			FailureProbeTools:               append([]string{}, skillSpec.Recovery.FailureProbeTools...),
-			FailureProbeCapabilitySelectors: append([]core.SkillCapabilitySelector{}, skillSpec.Recovery.FailureProbeCapabilitySelectors...),
+			FailureProbeCapabilitySelectors: append([]agentspec.SkillCapabilitySelector{}, skillSpec.Recovery.FailureProbeCapabilitySelectors...),
 		},
-		Planning: core.AgentPlanningPolicy{
-			RequiredBeforeEdit:          append([]core.SkillCapabilitySelector{}, skillSpec.Planning.RequiredBeforeEdit...),
-			PreferredEditCapabilities:   append([]core.SkillCapabilitySelector{}, skillSpec.Planning.PreferredEditCapabilities...),
-			PreferredVerifyCapabilities: append([]core.SkillCapabilitySelector{}, skillSpec.Planning.PreferredVerifyCapabilities...),
-			StepTemplates:               append([]core.SkillStepTemplate{}, skillSpec.Planning.StepTemplates...),
+		Planning: agentspec.AgentPlanningPolicy{
+			RequiredBeforeEdit:          append([]agentspec.SkillCapabilitySelector{}, skillSpec.Planning.RequiredBeforeEdit...),
+			PreferredEditCapabilities:   append([]agentspec.SkillCapabilitySelector{}, skillSpec.Planning.PreferredEditCapabilities...),
+			PreferredVerifyCapabilities: append([]agentspec.SkillCapabilitySelector{}, skillSpec.Planning.PreferredVerifyCapabilities...),
+			StepTemplates:               append([]agentspec.SkillStepTemplate{}, skillSpec.Planning.StepTemplates...),
 			RequireVerificationStep:     skillSpec.Planning.RequireVerificationStep,
 		},
-		Review: core.AgentReviewPolicy{
+		Review: agentspec.AgentReviewPolicy{
 			Criteria:      append([]string{}, skillSpec.Review.Criteria...),
 			FocusTags:     append([]string{}, skillSpec.Review.FocusTags...),
 			ApprovalRules: skillSpec.Review.ApprovalRules,
 		},
-		ContextHints: core.AgentSkillContextHints{
+		ContextHints: agentspec.AgentSkillContextHints{
 			PreferredDetailLevel: skillSpec.ContextHints.PreferredDetailLevel,
 			ProtectPatterns:      append([]string{}, skillSpec.ContextHints.ProtectPatterns...),
 		},
@@ -67,10 +67,10 @@ func mergeSkillConfig(base core.AgentSkillConfig, skillSpec manifest.SkillSpec) 
 		}
 	}
 	if len(skillSpec.PhaseCapabilitySelectors) > 0 {
-		overlay.PhaseCapabilitySelectors = make(map[string][]core.SkillCapabilitySelector, len(skillSpec.PhaseCapabilitySelectors))
+		overlay.PhaseCapabilitySelectors = make(map[string][]agentspec.SkillCapabilitySelector, len(skillSpec.PhaseCapabilitySelectors))
 		for phase, selectors := range skillSpec.PhaseCapabilitySelectors {
-			overlay.PhaseCapabilitySelectors[phase] = append([]core.SkillCapabilitySelector{}, selectors...)
+			overlay.PhaseCapabilitySelectors[phase] = append([]agentspec.SkillCapabilitySelector{}, selectors...)
 		}
 	}
-	return core.MergeAgentSpecs(&core.AgentRuntimeSpec{SkillConfig: base}, core.AgentSpecOverlay{SkillConfig: &overlay}).SkillConfig
+	return agentspec.MergeAgentSpecs(&agentspec.AgentRuntimeSpec{SkillConfig: base}, agentspec.AgentSpecOverlay{SkillConfig: &overlay}).SkillConfig
 }

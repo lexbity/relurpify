@@ -3,6 +3,7 @@ package skills
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
@@ -12,18 +13,18 @@ type ToolDescriptorRegistry interface {
 	CallableTools() []capability.Tool
 }
 
-func skillAllowedCapabilities(skillSpec manifest.SkillSpec) []core.CapabilitySelector {
-	return core.CloneCapabilitySelectors(skillSpec.AllowedCapabilities)
+func skillAllowedCapabilities(skillSpec manifest.SkillSpec) []agentspec.CapabilitySelector {
+	return agentspec.CloneCapabilitySelectors(skillSpec.AllowedCapabilities)
 }
 
 // DeriveSandboxAllowlist returns the binary allowlist for the sandbox
 // by walking the effective (allowed) tool set and collecting each tool's
 // declared executable permissions.
-func DeriveSandboxAllowlist(allowed []core.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
+func DeriveSandboxAllowlist(allowed []agentspec.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
 	return deriveSandboxAllowlist(allowed, registry)
 }
 
-func deriveSandboxAllowlist(allowed []core.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
+func deriveSandboxAllowlist(allowed []agentspec.CapabilitySelector, registry ToolDescriptorRegistry) []core.ExecutablePermission {
 	if registry == nil {
 		return nil
 	}
@@ -46,16 +47,16 @@ func deriveSandboxAllowlist(allowed []core.CapabilitySelector, registry ToolDesc
 	return result
 }
 
-func mergeCapabilitySelectors(base, extra []core.CapabilitySelector) []core.CapabilitySelector {
-	return core.MergeCapabilitySelectors(base, extra)
+func mergeCapabilitySelectors(base, extra []agentspec.CapabilitySelector) []agentspec.CapabilitySelector {
+	return agentspec.MergeCapabilitySelectors(base, extra)
 }
 
-func matchesAnyCapabilitySelector(selectors []core.CapabilitySelector, desc core.CapabilityDescriptor) bool {
+func matchesAnyCapabilitySelector(selectors []agentspec.CapabilitySelector, desc core.CapabilityDescriptor) bool {
 	if len(selectors) == 0 {
 		return true
 	}
 	for _, selector := range selectors {
-		if core.SelectorMatchesDescriptor(selector, desc) {
+		if core.SelectorMatchesDescriptor(core.CapabilitySelectorFromAgentSpec(selector), desc) {
 			return true
 		}
 	}

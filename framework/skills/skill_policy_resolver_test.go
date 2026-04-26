@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
@@ -46,28 +47,28 @@ func TestResolveSkillPolicyResolvesSelectorsByTags(t *testing.T) {
 	require.NoError(t, registry.Register(resolverStubTool{name: "file_read", tags: []string{"read-only", "file"}}))
 
 	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
-		PhaseCapabilitySelectors: map[string][]core.SkillCapabilitySelector{
+		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"verify": {
 				{Tags: []string{"lang:go", "test"}},
 				{Capability: "file_read"},
 			},
 		},
 		Verification: core.AgentVerificationPolicy{
-			SuccessCapabilitySelectors: []core.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
+			SuccessCapabilitySelectors: []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
 		},
 		Recovery: core.AgentRecoveryPolicy{
-			FailureProbeCapabilitySelectors: []core.SkillCapabilitySelector{{Tags: []string{"file"}}},
+			FailureProbeCapabilitySelectors: []agentspec.SkillCapabilitySelector{{Tags: []string{"file"}}},
 		},
 		Planning: core.AgentPlanningPolicy{
-			RequiredBeforeEdit:          []core.SkillCapabilitySelector{{Tags: []string{"lang:go", "test"}}},
-			PreferredVerifyCapabilities: []core.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
-			StepTemplates:               []core.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
+			RequiredBeforeEdit:          []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "test"}}},
+			PreferredVerifyCapabilities: []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
+			StepTemplates:               []agentspec.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
 			RequireVerificationStep:     true,
 		},
 		Review: core.AgentReviewPolicy{
 			Criteria:  []string{"correctness"},
 			FocusTags: []string{"verification"},
-			ApprovalRules: core.AgentReviewApprovalRules{
+			ApprovalRules: agentspec.AgentReviewApprovalRules{
 				RequireVerificationEvidence: true,
 			},
 			SeverityWeights: map[string]float64{"high": 1},
@@ -93,7 +94,7 @@ func TestResolveSkillPolicyMergesPhaseCapabilitiesAndSelectors(t *testing.T) {
 		PhaseCapabilities: map[string][]string{
 			"verify": {"cli_go"},
 		},
-		PhaseCapabilitySelectors: map[string][]core.SkillCapabilitySelector{
+		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"verify": {
 				{Tags: []string{"lang:go", "test"}},
 				{Capability: "cli_go"},
@@ -129,7 +130,7 @@ func TestResolveSkillPolicyIgnoresSecurityTagsForGrouping(t *testing.T) {
 	require.NoError(t, registry.Register(resolverStubTool{name: "go_test", tags: []string{"execute", "lang:go", "test"}}))
 
 	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
-		PhaseCapabilitySelectors: map[string][]core.SkillCapabilitySelector{
+		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"verify": {{Tags: []string{"execute"}}},
 		},
 	})
@@ -151,7 +152,7 @@ func TestResolveSkillPolicySupportsRuntimeFamilySelectors(t *testing.T) {
 	}))
 
 	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
-		PhaseCapabilitySelectors: map[string][]core.SkillCapabilitySelector{
+		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"explore": {{
 				RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic},
 			}},
@@ -176,7 +177,7 @@ func TestResolveEffectiveSkillPolicyPrefersTaskAgentSpec(t *testing.T) {
 	override := &core.AgentRuntimeSpec{
 		SkillConfig: core.AgentSkillConfig{
 			Verification: core.AgentVerificationPolicy{
-				SuccessCapabilitySelectors: []core.SkillCapabilitySelector{{Tags: []string{"lang:go", "test"}}},
+				SuccessCapabilitySelectors: []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "test"}}},
 			},
 		},
 	}

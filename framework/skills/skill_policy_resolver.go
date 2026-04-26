@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
@@ -17,7 +18,7 @@ type ResolvedSkillPolicy struct {
 }
 
 type EffectiveSkillPolicy struct {
-	Spec   *core.AgentRuntimeSpec
+	Spec   *agentspec.AgentRuntimeSpec
 	Policy ResolvedSkillPolicy
 }
 
@@ -25,18 +26,18 @@ type ResolvedPlanningPolicy struct {
 	RequiredBeforeEdit          []string
 	PreferredEditCapabilities   []string
 	PreferredVerifyCapabilities []string
-	StepTemplates               []core.SkillStepTemplate
+	StepTemplates               []agentspec.SkillStepTemplate
 	RequireVerificationStep     bool
 }
 
 type ResolvedReviewPolicy struct {
 	Criteria        []string
 	FocusTags       []string
-	ApprovalRules   core.AgentReviewApprovalRules
+	ApprovalRules   agentspec.AgentReviewApprovalRules
 	SeverityWeights map[string]float64
 }
 
-func ResolveSkillPolicy(registry *capability.Registry, config core.AgentSkillConfig) ResolvedSkillPolicy {
+func ResolveSkillPolicy(registry *capability.Registry, config agentspec.AgentSkillConfig) ResolvedSkillPolicy {
 	phaseCapabilities := resolvePhaseCapabilities(registry, config)
 	return ResolvedSkillPolicy{
 		PhaseCapabilities:               phaseCapabilities,
@@ -46,7 +47,7 @@ func ResolveSkillPolicy(registry *capability.Registry, config core.AgentSkillCon
 			RequiredBeforeEdit:          resolveCapabilityNames(registry, nil, config.Planning.RequiredBeforeEdit),
 			PreferredEditCapabilities:   resolveCapabilityNames(registry, nil, config.Planning.PreferredEditCapabilities),
 			PreferredVerifyCapabilities: resolveCapabilityNames(registry, nil, config.Planning.PreferredVerifyCapabilities),
-			StepTemplates:               append([]core.SkillStepTemplate{}, config.Planning.StepTemplates...),
+			StepTemplates:               append([]agentspec.SkillStepTemplate{}, config.Planning.StepTemplates...),
 			RequireVerificationStep:     config.Planning.RequireVerificationStep,
 		},
 		Review: ResolvedReviewPolicy{
@@ -58,7 +59,7 @@ func ResolveSkillPolicy(registry *capability.Registry, config core.AgentSkillCon
 	}
 }
 
-func ResolveEffectiveSkillPolicy(task *core.Task, fallback *core.AgentRuntimeSpec, registry *capability.Registry) EffectiveSkillPolicy {
+func ResolveEffectiveSkillPolicy(task *core.Task, fallback *agentspec.AgentRuntimeSpec, registry *capability.Registry) EffectiveSkillPolicy {
 	spec := EffectiveAgentSpec(task, fallback)
 	if spec == nil {
 		return EffectiveSkillPolicy{}
@@ -69,16 +70,16 @@ func ResolveEffectiveSkillPolicy(task *core.Task, fallback *core.AgentRuntimeSpe
 	}
 }
 
-func EffectiveAgentSpec(task *core.Task, fallback *core.AgentRuntimeSpec) *core.AgentRuntimeSpec {
+func EffectiveAgentSpec(task *core.Task, fallback *agentspec.AgentRuntimeSpec) *agentspec.AgentRuntimeSpec {
 	if task != nil && task.Context != nil {
-		if spec, ok := task.Context["agent_spec"].(*core.AgentRuntimeSpec); ok && spec != nil {
+		if spec, ok := task.Context["agent_spec"].(*agentspec.AgentRuntimeSpec); ok && spec != nil {
 			return spec
 		}
 	}
 	return fallback
 }
 
-func resolvePhaseCapabilities(registry *capability.Registry, config core.AgentSkillConfig) map[string][]string {
+func resolvePhaseCapabilities(registry *capability.Registry, config agentspec.AgentSkillConfig) map[string][]string {
 	if len(config.PhaseCapabilities) == 0 && len(config.PhaseCapabilitySelectors) == 0 {
 		return nil
 	}
@@ -92,7 +93,7 @@ func resolvePhaseCapabilities(registry *capability.Registry, config core.AgentSk
 	return out
 }
 
-func resolveCapabilityNames(registry *capability.Registry, explicit []string, selectors []core.SkillCapabilitySelector) []string {
+func resolveCapabilityNames(registry *capability.Registry, explicit []string, selectors []agentspec.SkillCapabilitySelector) []string {
 	var out []string
 	for _, name := range explicit {
 		name = strings.TrimSpace(name)

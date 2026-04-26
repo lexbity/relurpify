@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -15,13 +16,13 @@ import (
 )
 
 func TestSkillPolicyHelpersAndClones(t *testing.T) {
-	toolPolicy := map[string]core.ToolPolicy{"tool-a": {Execute: core.AgentPermissionAsk}}
-	globalPolicy := map[string]core.AgentPermissionLevel{"fs": core.AgentPermissionAllow}
-	providerPolicy := map[string]core.ProviderPolicy{"provider-a": {Activate: core.AgentPermissionAllow, DefaultTrust: core.TrustClassWorkspaceTrusted, AllowCredentialSharing: true}}
-	providers := []core.ProviderConfig{{ID: "provider-a", Config: map[string]any{"x": 1}}}
-	capPolicies := []core.CapabilityPolicy{{Selector: core.CapabilitySelector{SourceScopes: []core.CapabilityScope{core.CapabilityScopeWorkspace}}}}
-	insertPolicies := []core.CapabilityInsertionPolicy{{Selector: core.CapabilitySelector{TrustClasses: []core.TrustClass{core.TrustClassWorkspaceTrusted}}}}
-	sessionPolicies := []core.SessionPolicy{{ID: "sess-1", Selector: core.SessionSelector{ActorKinds: []string{"user"}, ActorIDs: []string{"a"}}}}
+	toolPolicy := map[string]agentspec.ToolPolicy{"tool-a": {Execute: agentspec.AgentPermissionAsk}}
+	globalPolicy := map[string]agentspec.AgentPermissionLevel{"fs": agentspec.AgentPermissionAllow}
+	providerPolicy := map[string]agentspec.ProviderPolicy{"provider-a": {Activate: agentspec.AgentPermissionAllow, DefaultTrust: agentspec.TrustClassWorkspaceTrusted, AllowCredentialSharing: true}}
+	providers := []agentspec.ProviderConfig{{ID: "provider-a", Config: map[string]any{"x": 1}}}
+	capPolicies := []agentspec.CapabilityPolicy{{Selector: agentspec.CapabilitySelector{SourceScopes: []agentspec.CapabilityScope{agentspec.CapabilityScopeWorkspace}}}}
+	insertPolicies := []agentspec.CapabilityInsertionPolicy{{Selector: agentspec.CapabilitySelector{TrustClasses: []agentspec.TrustClass{agentspec.TrustClassWorkspaceTrusted}}}}
+	sessionPolicies := []agentspec.SessionPolicy{{ID: "sess-1", Selector: agentspec.SessionSelector{ActorKinds: []string{"user"}, ActorIDs: []string{"a"}}}}
 
 	clonedTool := cloneToolPolicies(toolPolicy)
 	clonedGlobal := cloneGlobalPolicies(globalPolicy)
@@ -39,39 +40,39 @@ func TestSkillPolicyHelpersAndClones(t *testing.T) {
 	require.Len(t, clonedSession, 1)
 	require.Equal(t, sessionPolicies[0].Selector.ActorKinds, clonedSession[0].Selector.ActorKinds)
 
-	toolPolicy["tool-a"] = core.ToolPolicy{Execute: core.AgentPermissionDeny}
-	globalPolicy["fs"] = core.AgentPermissionDeny
-	providerPolicy["provider-a"] = core.ProviderPolicy{Activate: core.AgentPermissionDeny}
+	toolPolicy["tool-a"] = agentspec.ToolPolicy{Execute: agentspec.AgentPermissionDeny}
+	globalPolicy["fs"] = agentspec.AgentPermissionDeny
+	providerPolicy["provider-a"] = agentspec.ProviderPolicy{Activate: agentspec.AgentPermissionDeny}
 	providers[0].Config["x"] = 2
-	require.Equal(t, core.AgentPermissionAsk, clonedTool["tool-a"].Execute)
-	require.Equal(t, core.AgentPermissionAllow, clonedGlobal["fs"])
-	require.Equal(t, core.AgentPermissionAllow, clonedProvider["provider-a"].Activate)
+	require.Equal(t, agentspec.AgentPermissionAsk, clonedTool["tool-a"].Execute)
+	require.Equal(t, agentspec.AgentPermissionAllow, clonedGlobal["fs"])
+	require.Equal(t, agentspec.AgentPermissionAllow, clonedProvider["provider-a"].Activate)
 	require.Equal(t, 1, clonedProviders[0].Config["x"])
 
 	merged := mergeStringList([]string{"alpha", "beta"}, []string{" beta ", "", "gamma", "alpha"})
 	require.Equal(t, []string{"alpha", "beta", "gamma"}, merged)
 
-	dstTool := map[string]core.ToolPolicy{}
-	mergeToolExecutionPolicies(&dstTool, map[string]core.ToolPolicy{"tool-b": {Execute: core.AgentPermissionDeny}})
-	require.Equal(t, core.AgentPermissionDeny, dstTool["tool-b"].Execute)
+	dstTool := map[string]agentspec.ToolPolicy{}
+	mergeToolExecutionPolicies(&dstTool, map[string]agentspec.ToolPolicy{"tool-b": {Execute: agentspec.AgentPermissionDeny}})
+	require.Equal(t, agentspec.AgentPermissionDeny, dstTool["tool-b"].Execute)
 
-	dstGlobal := map[string]core.AgentPermissionLevel{}
-	mergeGlobalPolicies(&dstGlobal, map[string]core.AgentPermissionLevel{"net": core.AgentPermissionAsk})
-	require.Equal(t, core.AgentPermissionAsk, dstGlobal["net"])
+	dstGlobal := map[string]agentspec.AgentPermissionLevel{}
+	mergeGlobalPolicies(&dstGlobal, map[string]agentspec.AgentPermissionLevel{"net": agentspec.AgentPermissionAsk})
+	require.Equal(t, agentspec.AgentPermissionAsk, dstGlobal["net"])
 
-	dstProvider := map[string]core.ProviderPolicy{}
-	mergeProviderPolicies(&dstProvider, map[string]core.ProviderPolicy{"provider-b": {Activate: core.AgentPermissionAllow}})
-	require.Equal(t, core.AgentPermissionAllow, dstProvider["provider-b"].Activate)
+	dstProvider := map[string]agentspec.ProviderPolicy{}
+	mergeProviderPolicies(&dstProvider, map[string]agentspec.ProviderPolicy{"provider-b": {Activate: agentspec.AgentPermissionAllow}})
+	require.Equal(t, agentspec.AgentPermissionAllow, dstProvider["provider-b"].Activate)
 
-	mergedProviders := mergeProviderConfigs(providers, []core.ProviderConfig{{ID: "provider-b", Config: map[string]any{"y": 2}}})
+	mergedProviders := mergeProviderConfigs(providers, []agentspec.ProviderConfig{{ID: "provider-b", Config: map[string]any{"y": 2}}})
 	require.Len(t, mergedProviders, 2)
 	require.Equal(t, "provider-b", mergedProviders[1].ID)
 
-	mergedCap := appendCapabilityPolicies(capPolicies, []core.CapabilityPolicy{{Selector: core.CapabilitySelector{Name: "extra"}}})
+	mergedCap := appendCapabilityPolicies(capPolicies, []agentspec.CapabilityPolicy{{Selector: agentspec.CapabilitySelector{Name: "extra"}}})
 	require.Len(t, mergedCap, 2)
-	mergedInsert := appendInsertionPolicies(insertPolicies, []core.CapabilityInsertionPolicy{{Selector: core.CapabilitySelector{Name: "extra"}}})
+	mergedInsert := appendInsertionPolicies(insertPolicies, []agentspec.CapabilityInsertionPolicy{{Selector: agentspec.CapabilitySelector{Name: "extra"}}})
 	require.Len(t, mergedInsert, 2)
-	mergedSession := appendSessionPolicies(sessionPolicies, []core.SessionPolicy{{ID: "sess-2", Name: "two", Enabled: true, Effect: core.AgentPermissionAllow, Selector: core.SessionSelector{ActorKinds: []string{"user"}}}})
+	mergedSession := appendSessionPolicies(sessionPolicies, []agentspec.SessionPolicy{{ID: "sess-2", Name: "two", Enabled: true, Effect: agentspec.AgentPermissionAllow, Selector: agentspec.SessionSelector{ActorKinds: []string{"user"}}}})
 	require.Len(t, mergedSession, 2)
 }
 
@@ -111,10 +112,10 @@ func TestResolveSkillsAndCapabilityHelpers(t *testing.T) {
 	}
 	require.Equal(t, []string{"go_test"}, resolveCapabilityNames(registry, spec.Verification.SuccessTools, nil))
 	require.Equal(t, []string{"go_build"}, resolveCapabilityNames(registry, nil, []core.SkillCapabilitySelector{{Capability: "go_build"}}))
-	require.True(t, matchesAnyCapabilitySelector([]core.CapabilitySelector{{Tags: []string{"lang:go"}}}, core.CapabilityDescriptor{Name: "go_build", Tags: []string{"lang:go"}}))
-	require.False(t, matchesAnyCapabilitySelector([]core.CapabilitySelector{{Tags: []string{"python"}}}, core.CapabilityDescriptor{Name: "go_build", Tags: []string{"lang:go"}}))
+	require.True(t, matchesAnyCapabilitySelector([]agentspec.CapabilitySelector{{Tags: []string{"lang:go"}}}, core.CapabilityDescriptor{Name: "go_build", Tags: []string{"lang:go"}}))
+	require.False(t, matchesAnyCapabilitySelector([]agentspec.CapabilitySelector{{Tags: []string{"python"}}}, core.CapabilityDescriptor{Name: "go_build", Tags: []string{"lang:go"}}))
 
-	allowed := []core.CapabilitySelector{{Name: "go_test"}}
+	allowed := []agentspec.CapabilitySelector{{Name: "go_test"}}
 	require.Equal(t, []string{"go_test"}, mergeResolvedNames(nil, []string{"go_test", "", "go_test"}))
 	require.True(t, reflect.DeepEqual(allowed, skillAllowedCapabilities(manifest.SkillSpec{AllowedCapabilities: allowed})))
 }
@@ -180,7 +181,7 @@ func TestSkillPathAndCapabilityRenderHelpers(t *testing.T) {
 	rendered := RenderPlanningPolicy(ResolvedSkillPolicy{
 		Planning: ResolvedPlanningPolicy{
 			RequiredBeforeEdit:      []string{"a"},
-			StepTemplates:           []core.SkillStepTemplate{{Kind: "verify", Description: "Run"}},
+			StepTemplates:           []agentspec.SkillStepTemplate{{Kind: "verify", Description: "Run"}},
 			RequireVerificationStep: true,
 		},
 	}, PlanningRenderOptions{IncludePhaseCapabilities: true, IncludeVerificationSuccess: true})
