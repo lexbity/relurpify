@@ -130,7 +130,7 @@ func compileCapabilityPolicies(policies []core.CapabilityPolicy) []compiledCapab
 	for _, policy := range policies {
 		out = append(out, compiledCapabilityPolicy{
 			execute:  policy.Execute,
-			selector: compileSelector(policy.Selector),
+			selector: compileSelector(core.CapabilitySelectorFromAgentSpec(policy.Selector)),
 		})
 	}
 	return out
@@ -144,7 +144,7 @@ func compileExposurePolicies(policies []core.CapabilityExposurePolicy) []compile
 	for _, policy := range policies {
 		out = append(out, compiledExposurePolicy{
 			access:   policy.Access,
-			selector: compileSelector(policy.Selector),
+			selector: compileSelector(core.CapabilitySelectorFromAgentSpec(policy.Selector)),
 		})
 	}
 	return out

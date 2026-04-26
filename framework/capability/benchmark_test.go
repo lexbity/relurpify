@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -13,7 +14,7 @@ func BenchmarkInvokeCapability(b *testing.B) {
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		CapabilityPolicies: []core.CapabilityPolicy{
 			{
-				Selector: core.CapabilitySelector{RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic}},
+				Selector: agentspec.CapabilitySelector{RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic}},
 				Execute:  core.AgentPermissionAllow,
 			},
 		},
@@ -113,7 +114,7 @@ func BenchmarkCapturePolicySnapshot(b *testing.B) {
 	}
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		CapabilityPolicies: []core.CapabilityPolicy{{
-			Selector: core.CapabilitySelector{RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic}},
+			Selector: agentspec.CapabilitySelector{RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic}},
 			Execute:  core.AgentPermissionAllow,
 		}},
 	})
@@ -147,7 +148,7 @@ func BenchmarkCaptureExecutionCatalogSnapshot(b *testing.B) {
 	}
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		CapabilityPolicies: []core.CapabilityPolicy{{
-			Selector: core.CapabilitySelector{RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic}},
+			Selector: agentspec.CapabilitySelector{RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic}},
 			Execute:  core.AgentPermissionAllow,
 		}},
 	})

@@ -3,6 +3,7 @@ package capability
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +17,7 @@ func TestCaptureExecutionCatalogSnapshotClonesEffectiveVisibility(t *testing.T) 
 		Mode:  core.AgentModePrimary,
 		Model: core.AgentModelConfig{Provider: "test", Name: "test"},
 		ExposurePolicies: []core.CapabilityExposurePolicy{{
-			Selector: core.CapabilitySelector{
+			Selector: agentspec.CapabilitySelector{
 				Name:            "remote_echo",
 				RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
 			},
@@ -44,7 +45,7 @@ func TestCaptureExecutionCatalogSnapshotClonesEffectiveVisibility(t *testing.T) 
 	require.False(t, entry.LocalTool)
 
 	registry.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{
+		Selector: agentspec.CapabilitySelector{
 			Name:            "remote_echo",
 			RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
 		},
@@ -94,11 +95,11 @@ func TestExecutionCatalogSnapshotAllowedCapabilitiesRemainStable(t *testing.T) {
 	longRunning := true
 	registry := NewCapabilityRegistry()
 	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
-		AllowedCapabilities: []core.CapabilitySelector{{
+		AllowedCapabilities: []agentspec.CapabilitySelector{{
 			Name:                        "reviewer",
 			RuntimeFamilies:             []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic},
 			Tags:                        []string{"lang:go"},
-			CoordinationRoles:           []core.CoordinationRole{core.CoordinationRoleReviewer},
+			CoordinationRoles:           []agentspec.CoordinationRole{agentspec.CoordinationRoleReviewer},
 			CoordinationLongRunning:     &longRunning,
 			CoordinationDirectInsertion: capabilityBoolPtr(false),
 		}},

@@ -1,6 +1,9 @@
 package capability
 
-import "codeburg.org/lexbit/relurpify/framework/core"
+import (
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/core"
+)
 
 type compiledRuntimePolicy struct {
 	agentSpec                  *AgentRuntimeSpec
@@ -12,7 +15,7 @@ type compiledRuntimePolicy struct {
 	globalPolicies             map[string]AgentPermissionLevel
 	insertionPolicies          []core.CapabilityInsertionPolicy
 	providerPolicies           map[string]core.ProviderPolicy
-	runtimeSafety              *core.RuntimeSafetySpec
+	runtimeSafety              *agentspec.RuntimeSafetySpec
 }
 
 type executionRuntimeState struct {
@@ -52,11 +55,14 @@ func specProviderPolicies(spec *AgentRuntimeSpec) map[string]core.ProviderPolicy
 	return spec.ProviderPolicies
 }
 
-func specRuntimeSafety(spec *AgentRuntimeSpec) *core.RuntimeSafetySpec {
+func specRuntimeSafety(spec *AgentRuntimeSpec) *agentspec.RuntimeSafetySpec {
 	if spec == nil {
 		return nil
 	}
-	return spec.RuntimeSafety
+	if spec.RuntimeSafety == nil {
+		return nil
+	}
+	return core.RuntimeSafetySpecFromAgentSpec(spec.RuntimeSafety)
 }
 
 func (r *CapabilityRegistry) refreshRuntimePolicyLocked() {

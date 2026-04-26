@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +30,7 @@ func (s allowlistStubTool) Tags() []string { return nil }
 
 func TestAllowedCapabilitiesAppliedOnRegister(t *testing.T) {
 	registry := NewCapabilityRegistry()
-	spec := &AgentRuntimeSpec{AllowedCapabilities: []core.CapabilitySelector{{Name: "keep_tool", Kind: core.CapabilityKindTool}}}
+	spec := &AgentRuntimeSpec{AllowedCapabilities: []agentspec.CapabilitySelector{{Name: "keep_tool", Kind: core.CapabilityKindTool}}}
 	registry.UseAgentSpec("agent", spec)
 
 	require.NoError(t, registry.Register(allowlistStubTool{name: "keep_tool"}))
@@ -46,7 +47,7 @@ func TestAllowedCapabilitiesAppliedToExistingTools(t *testing.T) {
 	require.NoError(t, registry.Register(allowlistStubTool{name: "keep_tool"}))
 	require.NoError(t, registry.Register(allowlistStubTool{name: "drop_tool"}))
 
-	spec := &AgentRuntimeSpec{AllowedCapabilities: []core.CapabilitySelector{{Name: "keep_tool", Kind: core.CapabilityKindTool}}}
+	spec := &AgentRuntimeSpec{AllowedCapabilities: []agentspec.CapabilitySelector{{Name: "keep_tool", Kind: core.CapabilityKindTool}}}
 	registry.UseAgentSpec("agent", spec)
 
 	_, ok := registry.Get("keep_tool")
@@ -65,7 +66,7 @@ func TestAllowedCapabilitiesMatchDescriptorTags(t *testing.T) {
 		Tags: []string{"lang:go"},
 	}))
 
-	registry.RestrictToCapabilities([]core.CapabilitySelector{{Tags: []string{"lang:go"}}})
+	registry.RestrictToCapabilities([]core.CapabilitySelector{core.CapabilitySelectorFromAgentSpec(agentspec.CapabilitySelector{Tags: []string{"lang:go"}})})
 
 	_, ok := registry.Get("go_test")
 	require.False(t, ok)

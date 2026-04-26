@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
@@ -247,7 +248,7 @@ func TestInvocableCapabilityRespectsCapabilityPolicy(t *testing.T) {
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		CapabilityPolicies: []core.CapabilityPolicy{
 			{
-				Selector: core.CapabilitySelector{Name: "review"},
+				Selector: agentspec.CapabilitySelector{Name: "review"},
 				Execute:  core.AgentPermissionDeny,
 			},
 		},
@@ -471,7 +472,7 @@ func TestCoordinationTargetsReturnsOnlyAdmittedNonHiddenTargets(t *testing.T) {
 	}))
 
 	registry.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{Name: "reviewer.review"},
+		Selector: agentspec.CapabilitySelector{Name: "reviewer.review"},
 		Access:   core.CapabilityExposureHidden,
 	}})
 
@@ -513,7 +514,7 @@ func TestCapabilitySelectorPolicyMatchesDescriptorMetadata(t *testing.T) {
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		CapabilityPolicies: []core.CapabilityPolicy{
 			{
-				Selector: core.CapabilitySelector{
+				Selector: agentspec.CapabilitySelector{
 					Kind:        core.CapabilityKindTool,
 					RiskClasses: []core.RiskClass{core.RiskClassExecute},
 				},
@@ -538,13 +539,13 @@ func TestCapturePolicySnapshotClonesRegistryPolicies(t *testing.T) {
 		},
 		CapabilityPolicies: []core.CapabilityPolicy{
 			{
-				Selector: core.CapabilitySelector{Kind: core.CapabilityKindTool},
+				Selector: agentspec.CapabilitySelector{Kind: core.CapabilityKindTool},
 				Execute:  core.AgentPermissionAsk,
 			},
 		},
 		InsertionPolicies: []core.CapabilityInsertionPolicy{
 			{
-				Selector: core.CapabilitySelector{Name: "cli_git"},
+				Selector: agentspec.CapabilitySelector{Name: "cli_git"},
 				Action:   core.InsertionActionMetadataOnly,
 			},
 		},
@@ -554,7 +555,7 @@ func TestCapturePolicySnapshotClonesRegistryPolicies(t *testing.T) {
 		ProviderPolicies: map[string]core.ProviderPolicy{
 			"remote-mcp": {Activate: core.AgentPermissionAsk},
 		},
-		RuntimeSafety: &core.RuntimeSafetySpec{
+		RuntimeSafety: &agentspec.RuntimeSafetySpec{
 			MaxCallsPerCapability: 2,
 		},
 	})
@@ -853,7 +854,7 @@ func TestModelCallableLLMToolSpecsIncludesProviderCapability(t *testing.T) {
 		Mode:  core.AgentModePrimary,
 		Model: core.AgentModelConfig{Provider: "test", Name: "test"},
 		ExposurePolicies: []core.CapabilityExposurePolicy{{
-			Selector: core.CapabilitySelector{Name: "remote_echo", RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider}},
+			Selector: agentspec.CapabilitySelector{Name: "remote_echo", RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider}},
 			Access:   core.CapabilityExposureCallable,
 		}},
 	})
@@ -908,7 +909,7 @@ func TestExposurePolicyCanElevateProviderCapabilityToCallable(t *testing.T) {
 	require.Empty(t, registry.CallableCapabilities())
 
 	registry.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{
+		Selector: agentspec.CapabilitySelector{
 			Name:            "catalog",
 			RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
 		},
@@ -930,7 +931,7 @@ func TestLaterExposurePolicyOverridesEarlierExposurePolicy(t *testing.T) {
 		Mode:  core.AgentModePrimary,
 		Model: core.AgentModelConfig{Provider: "test", Name: "test"},
 		ExposurePolicies: []core.CapabilityExposurePolicy{{
-			Selector: core.CapabilitySelector{
+			Selector: agentspec.CapabilitySelector{
 				Name:            "catalog",
 				RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
 			},
@@ -938,7 +939,7 @@ func TestLaterExposurePolicyOverridesEarlierExposurePolicy(t *testing.T) {
 		}},
 	})
 	registry.AddExposurePolicies([]core.CapabilityExposurePolicy{{
-		Selector: core.CapabilitySelector{
+		Selector: agentspec.CapabilitySelector{
 			Name:            "catalog",
 			RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
 		},
@@ -1143,7 +1144,7 @@ func TestRuntimeSafetyCallBudgetBlocksRepeatedExecution(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.Register(capabilityStubTool{name: "cli_git"}))
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
-		RuntimeSafety: &core.RuntimeSafetySpec{MaxCallsPerCapability: 1},
+		RuntimeSafety: &agentspec.RuntimeSafetySpec{MaxCallsPerCapability: 1},
 	})
 
 	tool, ok := registry.Get("cli_git")
@@ -1159,7 +1160,7 @@ func TestRuntimeSafetySessionBudgetBlocksLargeResults(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.RegisterInvocableCapability(providerInvocableCapability("remote_echo", "remote-mcp", "session-1", "abcdefghijklmnopqrstuvwxyz")))
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
-		RuntimeSafety: &core.RuntimeSafetySpec{MaxBytesPerSession: 10},
+		RuntimeSafety: &agentspec.RuntimeSafetySpec{MaxBytesPerSession: 10},
 	})
 
 	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "remote_echo", map[string]interface{}{"token": "secret"})
@@ -1184,7 +1185,7 @@ func TestRuntimeSafetyTelemetryRedactsSensitiveMetadata(t *testing.T) {
 func TestRuntimeSafetySessionSubprocessBudgetBlocksOverage(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
-		RuntimeSafety: &core.RuntimeSafetySpec{MaxSubprocessesPerSession: 1},
+		RuntimeSafety: &agentspec.RuntimeSafetySpec{MaxSubprocessesPerSession: 1},
 	})
 
 	require.NoError(t, registry.RecordSessionSubprocess("session-1", 1))
@@ -1196,7 +1197,7 @@ func TestRuntimeSafetySessionSubprocessBudgetBlocksOverage(t *testing.T) {
 func TestRuntimeSafetySessionNetworkBudgetBlocksOverage(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
-		RuntimeSafety: &core.RuntimeSafetySpec{MaxNetworkRequestsSession: 1},
+		RuntimeSafety: &agentspec.RuntimeSafetySpec{MaxNetworkRequestsSession: 1},
 	})
 
 	require.NoError(t, registry.RecordSessionNetworkRequest("session-1", 1))
@@ -1262,7 +1263,7 @@ func TestUseAgentSpecEmitsExposureSecurityEvent(t *testing.T) {
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		ExposurePolicies: []core.CapabilityExposurePolicy{
 			{
-				Selector: core.CapabilitySelector{Name: "cli_git"},
+				Selector: agentspec.CapabilitySelector{Name: "cli_git"},
 				Access:   core.CapabilityExposureInspectable,
 			},
 		},
@@ -1320,7 +1321,7 @@ func TestInspectableExposureExcludesToolFromCallableSet(t *testing.T) {
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		ExposurePolicies: []core.CapabilityExposurePolicy{
 			{
-				Selector: core.CapabilitySelector{Name: "cli_git"},
+				Selector: agentspec.CapabilitySelector{Name: "cli_git"},
 				Access:   core.CapabilityExposureInspectable,
 			},
 		},
@@ -1348,7 +1349,7 @@ func TestHiddenExposureRemovesCapabilityFromCatalogs(t *testing.T) {
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		ExposurePolicies: []core.CapabilityExposurePolicy{
 			{
-				Selector: core.CapabilitySelector{Kind: core.CapabilityKindPrompt},
+				Selector: agentspec.CapabilitySelector{Kind: core.CapabilityKindPrompt},
 				Access:   core.CapabilityExposureHidden,
 			},
 		},

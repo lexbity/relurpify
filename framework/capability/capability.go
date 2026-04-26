@@ -1,16 +1,19 @@
 package capability
 
-import "codeburg.org/lexbit/relurpify/framework/core"
+import (
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/core"
+)
 
 type Registry = CapabilityRegistry
 type Descriptor = core.CapabilityDescriptor
 type Kind = core.CapabilityKind
 type RuntimeFamily = core.CapabilityRuntimeFamily
 type Source = core.CapabilitySource
-type Exposure = core.CapabilityExposure
-type Selector = core.CapabilitySelector
-type Policy = core.CapabilityPolicy
-type ExposurePolicy = core.CapabilityExposurePolicy
+type Exposure = agentspec.CapabilityExposure
+type Selector = agentspec.CapabilitySelector
+type Policy = agentspec.CapabilityPolicy
+type ExposurePolicy = agentspec.CapabilityExposurePolicy
 type ExecutionResult = core.CapabilityExecutionResult
 type PromptRenderResult = core.PromptRenderResult
 type ResourceReadResult = core.ResourceReadResult
@@ -29,9 +32,9 @@ const (
 )
 
 const (
-	ExposureHidden      = core.CapabilityExposureHidden
-	ExposureInspectable = core.CapabilityExposureInspectable
-	ExposureCallable    = core.CapabilityExposureCallable
+	ExposureHidden      = agentspec.CapabilityExposureHidden
+	ExposureInspectable = agentspec.CapabilityExposureInspectable
+	ExposureCallable    = agentspec.CapabilityExposureCallable
 )
 
 func NewRegistry() *Registry {

@@ -1,6 +1,7 @@
 package capability
 
 import (
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
@@ -19,11 +20,11 @@ type ToolPermissions = core.ToolPermissions
 type ToolResult = core.ToolResult
 type CapabilityExecutionResult = core.CapabilityExecutionResult
 type Telemetry = core.Telemetry
-type AgentRuntimeSpec = core.AgentRuntimeSpec
-type ToolPolicy = core.ToolPolicy
+type AgentRuntimeSpec = agentspec.AgentRuntimeSpec
+type ToolPolicy = agentspec.ToolPolicy
 type PermissionManager = authorization.PermissionManager
 type PermissionSet = core.PermissionSet
-type AgentPermissionLevel = core.AgentPermissionLevel
+type AgentPermissionLevel = agentspec.AgentPermissionLevel
 type ToolCall = core.ToolCall
 type PermissionDescriptor = core.PermissionDescriptor
 type PermissionDeniedError = core.PermissionDeniedError

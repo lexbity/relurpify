@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 )
@@ -38,7 +39,7 @@ func (r *CapabilityRegistry) UseAgentSpec(agentID string, spec *AgentRuntimeSpec
 	r.setCapabilityPolicies(spec.CapabilityPolicies)
 	r.setExposurePolicies(effectiveExposurePolicies(spec))
 	r.setClassPolicies(spec.GlobalPolicies)
-	r.configureRuntimeSafety(spec.RuntimeSafety)
+	r.configureRuntimeSafety(core.RuntimeSafetySpecToCore(spec.RuntimeSafety))
 
 	r.mu.Lock()
 	r.syncAgentSpecAwareEntriesLocked(spec, agentID)
@@ -157,7 +158,7 @@ func effectiveExposurePolicies(spec *AgentRuntimeSpec) []core.CapabilityExposure
 	policies := append([]core.CapabilityExposurePolicy{}, spec.ExposurePolicies...)
 	if spec.Browser != nil && spec.Browser.Enabled {
 		policies = append(policies, core.CapabilityExposurePolicy{
-			Selector: core.CapabilitySelector{
+			Selector: agentspec.CapabilitySelector{
 				Name:            "browser",
 				RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyProvider},
 			},
@@ -304,7 +305,7 @@ func cloneProviderPolicies(input map[string]core.ProviderPolicy) map[string]core
 	return out
 }
 
-func cloneRuntimeSafetySpec(input *core.RuntimeSafetySpec) *core.RuntimeSafetySpec {
+func cloneRuntimeSafetySpec(input *agentspec.RuntimeSafetySpec) *agentspec.RuntimeSafetySpec {
 	if input == nil {
 		return nil
 	}
@@ -640,7 +641,7 @@ func effectiveCapabilityPolicy(tool Tool, policies []core.CapabilityPolicy) Agen
 	desc := core.ToolDescriptor(context.Background(), nil, tool)
 	var result AgentPermissionLevel
 	for _, policy := range policies {
-		if !core.SelectorMatchesDescriptor(policy.Selector, desc) {
+		if !core.SelectorMatchesDescriptor(core.CapabilitySelectorFromAgentSpec(policy.Selector), desc) {
 			continue
 		}
 		switch {
