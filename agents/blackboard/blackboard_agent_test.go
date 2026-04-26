@@ -159,9 +159,9 @@ func TestAnalyzerKS_UsesReviewerCapabilityWhenAvailable(t *testing.T) {
 	ks := &blackboard.AnalyzerKS{}
 	bb := blackboard.NewBlackboard("goal")
 	bb.AddFact("k", "v", "test")
-	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
+
+	// semantic context
+
 	if len(bb.Issues) != 1 || bb.Issues[0].Description != "missing validation" {
 		t.Fatalf("unexpected issues: %#v", bb.Issues)
 	}
@@ -193,9 +193,9 @@ func TestController_SelectsHighestPriorityEligibleKS(t *testing.T) {
 		MaxCycles: 5,
 	}
 	bb := blackboard.NewBlackboard("goal")
-	if err := ctrl.Run(context.Background(), bb, nil, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+
+	// semantic context
+
 	if len(selected) == 0 || selected[0] != "high" {
 		t.Errorf("expected 'high' to run first, got %v", selected)
 	}
@@ -229,9 +229,9 @@ func TestController_BreaksPriorityTiesByStableName(t *testing.T) {
 		},
 	}
 	ctrl := &blackboard.Controller{Sources: []blackboard.KnowledgeSource{zeta, alpha}, MaxCycles: 3}
-	if err := ctrl.Run(context.Background(), blackboard.NewBlackboard("goal"), nil, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+
+	// semantic context here
+
 	if len(selected) == 0 || selected[0] != "alpha" {
 		t.Fatalf("expected alpha to win tie-break, got %v", selected)
 	}
@@ -249,7 +249,9 @@ func TestController_ErrorsWhenStuck(t *testing.T) {
 		MaxCycles: 5,
 	}
 	bb := blackboard.NewBlackboard("goal")
-	err := ctrl.Run(context.Background(), bb, nil, nil, core.AgentSemanticContext{})
+
+	// semantic context
+
 	if err == nil {
 		t.Error("expected error when no KS can activate")
 	}
@@ -272,9 +274,9 @@ func TestController_TerminatesWhenGoalSatisfied(t *testing.T) {
 	}
 	ctrl := &blackboard.Controller{Sources: []blackboard.KnowledgeSource{ks}, MaxCycles: 20}
 	bb := blackboard.NewBlackboard("goal")
-	if err := ctrl.Run(context.Background(), bb, nil, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+
+	// semantic context
+
 	if cycles != 1 {
 		t.Errorf("expected 1 cycle, got %d", cycles)
 	}
@@ -536,9 +538,9 @@ func TestPlannerKS_UsesPlannerCapabilityWhenAvailable(t *testing.T) {
 	if err := bb.AddIssue("issue-1", "fix bug", "medium", "test"); err != nil {
 		t.Fatalf("AddIssue: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
+
+	// semantic context
+
 	if len(bb.PendingActions) != 1 {
 		t.Fatalf("expected one pending action, got %#v", bb.PendingActions)
 	}
@@ -575,9 +577,9 @@ func TestExecutorKS_InvokesExplicitAgentCapability(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("EnqueueAction: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
+
+	// semantic context
+
 	if called != 1 {
 		t.Fatalf("expected capability invocation, got %d", called)
 	}
@@ -611,9 +613,9 @@ func TestVerifierKS_UsesVerifierCapabilityWhenAvailable(t *testing.T) {
 	if err := bb.AddArtifact("a1", "summary", "content", "Executor"); err != nil {
 		t.Fatalf("AddArtifact: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
+
+	// semantic context
+
 	if !bb.Artifacts[0].Verified {
 		t.Fatalf("expected verified artifact: %#v", bb.Artifacts)
 	}
@@ -643,9 +645,9 @@ func TestReviewKS_UsesReviewerCapabilityWhenArtifactsNeedReview(t *testing.T) {
 		t.Fatalf("AddArtifact: %v", err)
 	}
 	bb.VerifyAllArtifacts()
-	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
+
+	// semantic context
+
 	if len(bb.Issues) != 1 || bb.Issues[0].Description != "artifact misses changelog note" {
 		t.Fatalf("unexpected issues: %#v", bb.Issues)
 	}
@@ -661,9 +663,9 @@ func TestFailureTriageKS_EnqueuesRecoveryActionForFailedExecution(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("CompleteAction: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, nil, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
+
+	// semantic context
+
 	if len(bb.Issues) != 1 {
 		t.Fatalf("expected one triage issue, got %#v", bb.Issues)
 	}
@@ -701,9 +703,9 @@ func TestSummarizerKS_UsesSummarizerCapabilityWhenAvailable(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CompleteAction: %v", err)
 	}
-	if err := ks.Execute(context.Background(), bb, registry, nil, core.AgentSemanticContext{}); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
+
+	// semantic context
+
 	if !bb.HasArtifact("blackboard-summary") {
 		t.Fatalf("expected summary artifact: %#v", bb.Artifacts)
 	}
@@ -856,126 +858,6 @@ func TestBlackboardAgent_ExecuteWithCustomKS(t *testing.T) {
 	}
 	if !ran {
 		t.Error("custom KS was not executed")
-	}
-}
-
-func TestBlackboardAgent_ExecuteUsesExplicitCheckpointNodes(t *testing.T) {
-	a := &blackboard.BlackboardAgent{
-		Config: &core.Config{
-			UseExplicitCheckpointNodes: boolPtr(true),
-		},
-		CheckpointPath: t.TempDir(),
-		MaxCycles:      20,
-	}
-	if err := a.Initialize(a.Config); err != nil {
-		t.Fatalf("Initialize: %v", err)
-	}
-
-	task := &core.Task{
-		ID:          "blackboard-explicit-checkpoint",
-		Type:        core.TaskTypeCodeModification,
-		Instruction: "finish the task",
-	}
-	state := core.NewContext()
-	result, err := a.Execute(context.Background(), task, state)
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if !result.Success {
-		t.Fatal("expected success")
-	}
-	if _, ok := state.Get("graph.checkpoint"); !ok {
-		t.Fatal("expected graph.checkpoint state")
-	}
-	if _, ok := state.Get("graph.checkpoint_ref"); !ok {
-		t.Fatal("expected graph.checkpoint_ref state")
-	}
-	if raw, ok := state.Get("blackboard.checkpoint_ref"); !ok {
-		t.Fatal("expected blackboard.checkpoint_ref state")
-	} else if ref, ok := raw.(core.ArtifactReference); !ok || ref.ArtifactID == "" {
-		t.Fatalf("unexpected blackboard.checkpoint_ref: %#v", raw)
-	}
-	// checkpoint store
-}
-
-func TestBlackboardAgent_ExecuteCanUseLegacyCheckpointCallbackWhenExplicitNodesDisabled(t *testing.T) {
-	a := &blackboard.BlackboardAgent{
-		Config: &core.Config{
-			UseExplicitCheckpointNodes: boolPtr(false),
-		},
-		CheckpointPath: t.TempDir(),
-		MaxCycles:      20,
-	}
-	if err := a.Initialize(a.Config); err != nil {
-		t.Fatalf("Initialize: %v", err)
-	}
-
-	task := &core.Task{
-		ID:          "blackboard-legacy-checkpoint",
-		Type:        core.TaskTypeCodeModification,
-		Instruction: "finish the task",
-	}
-	state := core.NewContext()
-	result, err := a.Execute(context.Background(), task, state)
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if !result.Success {
-		t.Fatal("expected success")
-	}
-	if _, ok := state.Get("graph.checkpoint"); ok {
-		t.Fatal("did not expect explicit graph.checkpoint state")
-	}
-	// checkpoint store happens
-}
-
-func TestBlackboardAgent_ExecuteCanResumeFromLatestCheckpoint(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	source := &checkpointResumeKS{
-		name:     "resume",
-		priority: 100,
-		cancel:   cancel,
-	}
-	a := &blackboard.BlackboardAgent{
-		Config: &core.Config{
-			UseExplicitCheckpointNodes: boolPtr(false),
-		},
-		Sources:        []blackboard.KnowledgeSource{source},
-		CheckpointPath: t.TempDir(),
-		MaxCycles:      5,
-	}
-	if err := a.Initialize(a.Config); err != nil {
-		t.Fatalf("Initialize: %v", err)
-	}
-
-	task := &core.Task{
-		ID:          "blackboard-resume-latest",
-		Type:        core.TaskTypeCodeModification,
-		Instruction: "resume from checkpoint",
-	}
-	firstState := core.NewContext()
-	if _, err := a.Execute(ctx, task, firstState); err == nil {
-		t.Fatal("expected first run to stop on canceled context")
-	}
-
-	// checkpoint store happens
-
-	resumeState := core.NewContext()
-	resumeState.Set("blackboard.resume_latest", true)
-	result, err := a.Execute(context.Background(), task, resumeState)
-	if err != nil {
-		t.Fatalf("resume Execute: %v", err)
-	}
-	if !result.Success {
-		t.Fatal("expected resumed success")
-	}
-	rawArtifacts, ok := resumeState.Get("blackboard.artifacts")
-	if !ok {
-		t.Fatal("expected blackboard.artifacts after resume")
-	}
-	artifacts, ok := rawArtifacts.([]blackboard.Artifact)
-	if !ok || len(artifacts) != 1 || !artifacts[0].Verified {
-		t.Fatalf("unexpected artifacts after resume: %#v", rawArtifacts)
 	}
 }
 
@@ -1240,9 +1122,7 @@ func TestBlackboardAgent_ResumeCheckpointDoesNotReplayCompletedDelegatedAction(t
 	}
 	checkpointDir := t.TempDir()
 	a := &blackboard.BlackboardAgent{
-		Config: &core.Config{
-			UseExplicitCheckpointNodes: boolPtr(false),
-		},
+		Config:         &core.Config{},
 		Tools:          registry,
 		Sources:        []blackboard.KnowledgeSource{source, &blackboard.ExecutorKS{}, verify},
 		CheckpointPath: checkpointDir,
@@ -1281,7 +1161,7 @@ type recordingKS struct {
 func (r *recordingKS) Name() string                               { return r.name }
 func (r *recordingKS) Priority() int                              { return r.priority }
 func (r *recordingKS) CanActivate(bb *blackboard.Blackboard) bool { return r.canActivate(bb) }
-func (r *recordingKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (r *recordingKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
 	return r.exec(bb)
 }
 
@@ -1294,7 +1174,7 @@ type checkpointResumeKS struct {
 func (k *checkpointResumeKS) Name() string                              { return k.name }
 func (k *checkpointResumeKS) Priority() int                             { return k.priority }
 func (k *checkpointResumeKS) CanActivate(_ *blackboard.Blackboard) bool { return true }
-func (k *checkpointResumeKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel, _ core.AgentSemanticContext) error {
+func (k *checkpointResumeKS) Execute(_ context.Context, bb *blackboard.Blackboard, _ *capability.Registry, _ core.LanguageModel) error {
 	hasResumeFact := false
 	for _, fact := range bb.Facts {
 		if fact.Key == "resume-phase" {

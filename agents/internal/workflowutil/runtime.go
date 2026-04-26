@@ -30,27 +30,43 @@ func EnsureWorkflowRun(ctx context.Context, store *db.SQLiteWorkflowStateStore, 
 	if store == nil {
 		return "", "", nil
 	}
+	jobEnvelope, err := TaskToJob(task)
+	if err != nil {
+		return "", "", err
+	}
+	job := jobEnvelope.Job
 	workflowID := strings.TrimSpace(contextString(state, agentKey+".workflow_id"))
+	if workflowID == "" {
+		workflowID = strings.TrimSpace(job.RootWorkflowID)
+	}
 	if workflowID == "" {
 		workflowID = strings.TrimSpace(taskContextString(task, "workflow_id"))
 	}
 	if workflowID == "" {
-		workflowID = fmt.Sprintf("%s-%s", agentKey, fallbackTaskID(task))
+		workflowID = fmt.Sprintf("%s-%s", agentKey, job.ID)
 	}
 	runID := strings.TrimSpace(contextString(state, agentKey+".run_id"))
 	if runID == "" {
-		runID = fmt.Sprintf("%s-run-%d", fallbackTaskID(task), time.Now().UnixNano())
+		runID = strings.TrimSpace(job.TraceID)
+	}
+	if runID == "" {
+		runID = fmt.Sprintf("%s-run-%d", job.ID, time.Now().UnixNano())
 	}
 	if _, ok, err := store.GetWorkflow(ctx, workflowID); err != nil {
 		return "", "", err
 	} else if !ok {
 		if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 			WorkflowID:  workflowID,
-			TaskID:      fallbackTaskID(task),
-			TaskType:    fallbackTaskType(task),
-			Instruction: fallbackInstruction(task),
+			TaskID:      job.ID,
+			TaskType:    core.TaskType(job.Spec.Kind),
+			Instruction: jobEnvelope.Instruction,
 			Status:      memory.WorkflowRunStatusRunning,
-			Metadata:    map[string]any{"agent": agentKey},
+			Metadata: map[string]any{
+				"agent":                    agentKey,
+				"job_id":                   job.ID,
+				"job_queue":                job.Spec.Queue,
+				"job_resume_checkpoint_id": job.ResumeCheckpointID,
+			},
 		}); err != nil {
 			return "", "", err
 		}

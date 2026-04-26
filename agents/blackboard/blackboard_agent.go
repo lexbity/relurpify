@@ -37,7 +37,7 @@ type BlackboardAgent struct {
 	// SemanticContext is the pre-resolved semantic context bundle passed
 	// to the agent at construction time. It seeds the blackboard with
 	// AST symbols and BKC chunks before the first KS cycle.
-	SemanticContext core.AgentSemanticContext
+	//SemanticContext
 
 	initialised      bool
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot

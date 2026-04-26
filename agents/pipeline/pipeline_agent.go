@@ -304,20 +304,30 @@ func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, 
 	if err != nil {
 		return nil, "", "", err
 	}
+	jobEnvelope, err := workflowutil.TaskToJob(task)
+	if err != nil {
+		_ = store.Close()
+		return nil, "", "", err
+	}
+	job := jobEnvelope.Job
 	workflowID := strings.TrimSpace(state.GetString("pipeline.workflow_id"))
 	if workflowID == "" {
-		if task != nil && task.Context != nil {
-			if raw, ok := task.Context["workflow_id"]; ok {
-				workflowID = strings.TrimSpace(fmt.Sprint(raw))
-			}
+		workflowID = strings.TrimSpace(job.RootWorkflowID)
+	}
+	if workflowID == "" && task != nil && task.Context != nil {
+		if raw, ok := task.Context["workflow_id"]; ok {
+			workflowID = strings.TrimSpace(fmt.Sprint(raw))
 		}
 	}
 	if workflowID == "" {
-		workflowID = fmt.Sprintf("pipeline-%s", fallbackTaskID(task))
+		workflowID = fmt.Sprintf("pipeline-%s", job.ID)
 	}
 	runID := strings.TrimSpace(state.GetString("pipeline.run_id"))
 	if runID == "" {
-		runID = fmt.Sprintf("%s-run-%d", fallbackTaskID(task), time.Now().UnixNano())
+		runID = strings.TrimSpace(job.TraceID)
+	}
+	if runID == "" {
+		runID = fmt.Sprintf("%s-run-%d", job.ID, time.Now().UnixNano())
 	}
 	if _, ok, err := store.GetWorkflow(ctx, workflowID); err != nil {
 		_ = store.Close()
@@ -325,11 +335,16 @@ func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *core.Task, 
 	} else if !ok {
 		if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 			WorkflowID:  workflowID,
-			TaskID:      fallbackTaskID(task),
-			TaskType:    taskType(task),
-			Instruction: taskInstruction(task),
+			TaskID:      job.ID,
+			TaskType:    core.TaskType(job.Spec.Kind),
+			Instruction: jobEnvelope.Instruction,
 			Status:      memory.WorkflowRunStatusRunning,
-			Metadata:    map[string]any{"agent": "pipeline"},
+			Metadata: map[string]any{
+				"agent":                    "pipeline",
+				"job_id":                   job.ID,
+				"job_queue":                job.Spec.Queue,
+				"job_resume_checkpoint_id": job.ResumeCheckpointID,
+			},
 		}); err != nil {
 			_ = store.Close()
 			return nil, "", "", err

@@ -3,7 +3,6 @@ package agents
 import (
 	"database/sql"
 
-	architectpkg "codeburg.org/lexbit/relurpify/agents/architect"
 	blackboardpkg "codeburg.org/lexbit/relurpify/agents/blackboard"
 	chainerpkg "codeburg.org/lexbit/relurpify/agents/chainer"
 	goalconpkg "codeburg.org/lexbit/relurpify/agents/goalcon"
@@ -21,7 +20,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
 	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
 )
 
@@ -41,15 +39,6 @@ type ModeRuntimeProfile = reactpkg.ModeRuntimeProfile
 // ContextPreferences exposes context tuning knobs.
 type ContextPreferences = reactpkg.ContextPreferences
 
-// ArchitectAgent re-exports the architect workflow implementation.
-type ArchitectAgent = architectpkg.ArchitectAgent
-
-// WorkflowPlanningService re-exports the architect planning service.
-type WorkflowPlanningService = architectpkg.WorkflowPlanningService
-
-// WorkflowPlanningResult re-exports the architect planning result payload.
-type WorkflowPlanningResult = architectpkg.WorkflowPlanningResult
-
 // PipelineAgent re-exports the typed pipeline implementation.
 type PipelineAgent = pipelinepkg.PipelineAgent
 
@@ -58,16 +47,6 @@ type PipelineStageFactory = pipelinepkg.PipelineStageFactory
 
 // AgentInvocationPolicy re-exports composition policy state.
 type AgentInvocationPolicy = core.AgentInvocationPolicy
-
-// SQLitePipelineCheckpointStore re-exports the workflow-backed checkpoint store.
-type SQLitePipelineCheckpointStore = pipelinepkg.SQLitePipelineCheckpointStore
-type RelurpicOption = relurpicpkg.RelurpicOption
-
-var ErrPipelineCheckpointNotFound = pipelinepkg.ErrPipelineCheckpointNotFound
-
-func NewSQLitePipelineCheckpointStore(store *db.SQLiteWorkflowStateStore, workflowID, runID string) *SQLitePipelineCheckpointStore {
-	return pipelinepkg.NewSQLitePipelineCheckpointStore(store, workflowID, runID)
-}
 
 func RegisterBuiltinRelurpicCapabilities(registry *capability.Registry, model core.LanguageModel, cfg *core.Config) error {
 	return relurpicpkg.RegisterBuiltinRelurpicCapabilities(registry, model, cfg)

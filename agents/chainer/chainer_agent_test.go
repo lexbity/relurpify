@@ -301,48 +301,6 @@ func TestChainerAgent_BudgetManagerConfigurable(t *testing.T) {
 	}
 }
 
-func TestChainerAgent_CompressionListenerConfigurable(t *testing.T) {
-	// Verify that CompressionListener can be configured on ChainerAgent
-	listener := chainctx.NewCompressionListener()
-
-	agent := &chainer.ChainerAgent{
-		CompressionListener: listener,
-	}
-
-	if agent.CompressionListener == nil {
-		t.Fatal("CompressionListener not configured")
-	}
-
-	if agent.CompressionListener != listener {
-		t.Fatal("CompressionListener not properly assigned")
-	}
-}
-
-func TestChainerAgent_BudgetListenerWiredUp(t *testing.T) {
-	// Verify that BudgetManager is wired with CompressionListener in executePipeline
-	budgetManager := chainctx.NewBudgetManager(5000)
-	listener := chainctx.NewCompressionListener()
-
-	agent := &chainer.ChainerAgent{
-		BudgetManager:       budgetManager,
-		CompressionListener: listener,
-	}
-
-	// Create state to capture the wiring
-	state := core.NewContext()
-
-	// Simulate the budget wiring that happens in executePipeline
-	if agent.BudgetManager != nil && agent.CompressionListener != nil {
-		agent.BudgetManager.AddListener(agent.CompressionListener)
-		state.Set("__budget_manager", agent.BudgetManager)
-	}
-
-	// Verify state contains budget manager reference
-	if budgetMgr, ok := state.Get("__budget_manager"); !ok || budgetMgr != agent.BudgetManager {
-		t.Fatal("budget manager not properly wired in state")
-	}
-}
-
 func TestChainerAgent_BudgetMetricsInContext(t *testing.T) {
 	// Verify that budget metrics can be retrieved from BudgetManager
 	budgetManager := chainctx.NewBudgetManager(1000)
