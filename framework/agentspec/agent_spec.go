@@ -42,6 +42,8 @@ type AgentRuntimeSpec struct {
 	// Extensions holds agent-specific extension configurations.
 	// The "euclo" key contains Euclo-specific configuration (see named/euclo/euclo_manifest_extension.go).
 	Extensions map[string]any `yaml:",inline" json:"extensions,omitempty"`
+	// Context holds the context policy configuration for ingestion and persistence.
+	Context *ContextPolicySpec `yaml:"context_policy,omitempty" json:"context_policy,omitempty"`
 }
 
 // ToolCallingIntent captures the agent's preference for how tool calls should
@@ -459,83 +461,83 @@ func (a *AgentRuntimeSpec) Validate() error {
 	}
 	for phase, tools := range a.SkillConfig.PhaseCapabilities {
 		if strings.TrimSpace(phase) == "" {
-			return fmt.Errorf("skill_config.phase_capabilities contains empty phase")
+			return fmt.Errorf("skill_manifest.phase_capabilities contains empty phase")
 		}
 		for _, tool := range tools {
 			if strings.TrimSpace(tool) == "" {
-				return fmt.Errorf("skill_config.phase_capabilities[%s] contains empty capability", phase)
+				return fmt.Errorf("skill_manifest.phase_capabilities[%s] contains empty capability", phase)
 			}
 		}
 	}
 	for phase, selectors := range a.SkillConfig.PhaseCapabilitySelectors {
 		if strings.TrimSpace(phase) == "" {
-			return fmt.Errorf("skill_config.phase_capability_selectors contains empty phase")
+			return fmt.Errorf("skill_manifest.phase_capability_selectors contains empty phase")
 		}
 		for _, selector := range selectors {
 			if err := ValidateSkillCapabilitySelector(selector); err != nil {
-				return fmt.Errorf("skill_config.phase_capability_selectors[%s] invalid: %w", phase, err)
+				return fmt.Errorf("skill_manifest.phase_capability_selectors[%s] invalid: %w", phase, err)
 			}
 		}
 	}
 	for _, tool := range a.SkillConfig.Verification.SuccessTools {
 		if strings.TrimSpace(tool) == "" {
-			return fmt.Errorf("skill_config.verification.success_tools contains empty tool")
+			return fmt.Errorf("skill_manifest.verification.success_tools contains empty tool")
 		}
 	}
 	for _, selector := range a.SkillConfig.Verification.SuccessCapabilitySelectors {
 		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_config.verification.success_capability_selectors invalid: %w", err)
+			return fmt.Errorf("skill_manifest.verification.success_capability_selectors invalid: %w", err)
 		}
 	}
 	for _, tool := range a.SkillConfig.Recovery.FailureProbeTools {
 		if strings.TrimSpace(tool) == "" {
-			return fmt.Errorf("skill_config.recovery.failure_probe_tools contains empty tool")
+			return fmt.Errorf("skill_manifest.recovery.failure_probe_tools contains empty tool")
 		}
 	}
 	for _, selector := range a.SkillConfig.Recovery.FailureProbeCapabilitySelectors {
 		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_config.recovery.failure_probe_capability_selectors invalid: %w", err)
+			return fmt.Errorf("skill_manifest.recovery.failure_probe_capability_selectors invalid: %w", err)
 		}
 	}
 	for _, selector := range a.SkillConfig.Planning.RequiredBeforeEdit {
 		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_config.planning.required_before_edit invalid: %w", err)
+			return fmt.Errorf("skill_manifest.planning.required_before_edit invalid: %w", err)
 		}
 	}
 	for _, selector := range a.SkillConfig.Planning.PreferredEditCapabilities {
 		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_config.planning.preferred_edit_capabilities invalid: %w", err)
+			return fmt.Errorf("skill_manifest.planning.preferred_edit_capabilities invalid: %w", err)
 		}
 	}
 	for _, selector := range a.SkillConfig.Planning.PreferredVerifyCapabilities {
 		if err := ValidateSkillCapabilitySelector(selector); err != nil {
-			return fmt.Errorf("skill_config.planning.preferred_verify_capabilities invalid: %w", err)
+			return fmt.Errorf("skill_manifest.planning.preferred_verify_capabilities invalid: %w", err)
 		}
 	}
 	for _, step := range a.SkillConfig.Planning.StepTemplates {
 		if strings.TrimSpace(step.Kind) == "" {
-			return fmt.Errorf("skill_config.planning.step_templates contains empty kind")
+			return fmt.Errorf("skill_manifest.planning.step_templates contains empty kind")
 		}
 		if strings.TrimSpace(step.Description) == "" {
-			return fmt.Errorf("skill_config.planning.step_templates[%s] contains empty description", step.Kind)
+			return fmt.Errorf("skill_manifest.planning.step_templates[%s] contains empty description", step.Kind)
 		}
 	}
 	for _, criterion := range a.SkillConfig.Review.Criteria {
 		if strings.TrimSpace(criterion) == "" {
-			return fmt.Errorf("skill_config.review.criteria contains empty criterion")
+			return fmt.Errorf("skill_manifest.review.criteria contains empty criterion")
 		}
 	}
 	for _, tag := range a.SkillConfig.Review.FocusTags {
 		if strings.TrimSpace(tag) == "" {
-			return fmt.Errorf("skill_config.review.focus_tags contains empty tag")
+			return fmt.Errorf("skill_manifest.review.focus_tags contains empty tag")
 		}
 	}
 	for severity, weight := range a.SkillConfig.Review.SeverityWeights {
 		if strings.TrimSpace(severity) == "" {
-			return fmt.Errorf("skill_config.review.severity_weights contains empty severity")
+			return fmt.Errorf("skill_manifest.review.severity_weights contains empty severity")
 		}
 		if weight < 0 {
-			return fmt.Errorf("skill_config.review.severity_weights[%s] must be >= 0", severity)
+			return fmt.Errorf("skill_manifest.review.severity_weights[%s] must be >= 0", severity)
 		}
 	}
 	if a.Browser != nil {
@@ -1007,4 +1009,39 @@ func (set AgentFilePermissionSet) validate(label string) error {
 		return fmt.Errorf("%s permission default %s invalid", label, set.Default)
 	}
 	return nil
+}
+
+// ContextPolicySpec defines the context policy configuration for an agent.
+// This is a simplified version for agentspec; the full version is in contextpolicy.
+type ContextPolicySpec struct {
+	CompilationMode       string          `yaml:"compilation_mode,omitempty" json:"compilation_mode,omitempty"`
+	DefaultTrustClass     TrustClass      `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`
+	TrustDemotedPolicy    string          `yaml:"trust_demoted_policy,omitempty" json:"trust_demoted_policy,omitempty"`
+	DegradedChunkPolicy   string          `yaml:"degraded_chunk_policy,omitempty" json:"degraded_chunk_policy,omitempty"`
+	BudgetShortfallPolicy string          `yaml:"budget_shortfall_policy,omitempty" json:"budget_shortfall_policy,omitempty"`
+	Rankers               []RankerRef     `yaml:"rankers,omitempty" json:"rankers,omitempty"`
+	Scanners              []ScannerRef    `yaml:"scanners,omitempty" json:"scanners,omitempty"`
+	Summarizers           []SummarizerRef `yaml:"summarizers,omitempty" json:"summarizers,omitempty"`
+}
+
+// RankerRef references a ranker capability.
+type RankerRef struct {
+	ID       string         `yaml:"id" json:"id"`
+	Priority int            `yaml:"priority,omitempty" json:"priority,omitempty"`
+	Config   map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
+}
+
+// ScannerRef references a scanner capability.
+type ScannerRef struct {
+	ID       string         `yaml:"id" json:"id"`
+	Priority int            `yaml:"priority,omitempty" json:"priority,omitempty"`
+	Config   map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
+}
+
+// SummarizerRef references a summarizer capability.
+type SummarizerRef struct {
+	ID          string         `yaml:"id" json:"id"`
+	ModelRef    string         `yaml:"model_ref,omitempty" json:"model_ref,omitempty"`
+	ProseConfig map[string]any `yaml:"prose_config,omitempty" json:"prose_config,omitempty"`
+	CodeConfig  map[string]any `yaml:"code_config,omitempty" json:"code_config,omitempty"`
 }

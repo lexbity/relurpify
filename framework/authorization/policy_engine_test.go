@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/stretchr/testify/assert"
@@ -112,21 +113,21 @@ func TestPolicyEngineCompiledSessionRuleMatches(t *testing.T) {
 	engine, err := FromManifestWithConfig(&manifest.AgentManifest{
 		Metadata: manifest.ManifestMetadata{Name: "test-agent"},
 		Spec: manifest.ManifestSpec{
-			Agent: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{
+			Agent: &agentspec.AgentRuntimeSpec{
+				Mode: agentspec.AgentModePrimary,
+				Model: agentspec.AgentModelConfig{
 					Provider: "ollama",
 					Name:     "test",
 				},
-				SessionPolicies: []core.SessionPolicy{{
+				SessionPolicies: []agentspec.SessionPolicy{{
 					ID:      "owner-send",
 					Name:    "Owner send",
 					Enabled: true,
-					Selector: core.SessionSelector{
-						Operations:       []core.SessionOperation{core.SessionOperationSend},
+					Selector: agentspec.SessionSelector{
+						Operations:       []agentspec.SessionOperation{agentspec.SessionOperationSend},
 						RequireOwnership: &ownerOnly,
 					},
-					Effect: core.AgentPermissionAllow,
+					Effect: agentspec.AgentPermissionAllow,
 				}},
 			},
 		},

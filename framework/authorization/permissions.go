@@ -17,6 +17,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const permissionMatchAll = "**"
@@ -1050,4 +1051,48 @@ func matchEnv(patterns, env []string) bool {
 		}
 	}
 	return true
+}
+
+// CheckFilePermission implements contracts.FilePermissionChecker.
+// It validates a file operation against the agent's file matrix.
+func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix contracts.AgentFileMatrix) error {
+	rel := absPath
+	if basePath != "" {
+		if r, err := filepath.Rel(basePath, absPath); err == nil {
+			rel = r
+		}
+	}
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	if strings.HasPrefix(rel, "./") {
+		rel = strings.TrimPrefix(rel, "./")
+	}
+	perm := matrix.Write
+	if action == "edit" {
+		perm = matrix.Edit
+	}
+	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
+		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
+	}
+	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, perm.Default)
+	if perm.RequireApproval {
+		decision = contracts.AgentPermissionAsk
+	}
+	switch decision {
+	case contracts.AgentPermissionAllow:
+		return nil
+	case contracts.AgentPermissionDeny:
+		return fmt.Errorf("file %s blocked: denied by file_permissions", rel)
+	case contracts.AgentPermissionAsk:
+		if m == nil {
+			return fmt.Errorf("file %s blocked: approval required but permission manager missing", rel)
+		}
+		return m.RequireApproval(ctx, agentID, contracts.PermissionDescriptor{
+			Type:         contracts.PermissionTypeHITL,
+			Action:       fmt.Sprintf("file_matrix:%s", action),
+			Resource:     rel,
+			RequiresHITL: true,
+		}, "file permission matrix", GrantScopeOneTime, RiskLevelMedium, 0)
+	default:
+		return nil
+	}
 }

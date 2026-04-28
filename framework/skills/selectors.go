@@ -32,7 +32,7 @@ func deriveSandboxAllowlist(allowed []agentspec.CapabilitySelector, registry Too
 	seen := make(map[string]bool)
 	var result []core.ExecutablePermission
 	for _, tool := range registry.CallableTools() {
-		desc := core.ToolDescriptor(context.Background(), nil, tool)
+		desc := core.ToolDescriptor(context.Background(), tool)
 		if len(allowed) > 0 && !matchesAnyCapabilitySelector(allowed, desc) {
 			continue
 		}

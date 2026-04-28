@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,10 +18,12 @@ func (s allowlistStubTool) Name() string                     { return s.name }
 func (s allowlistStubTool) Description() string              { return "stub" }
 func (s allowlistStubTool) Category() string                 { return "misc" }
 func (s allowlistStubTool) Parameters() []core.ToolParameter { return nil }
-func (s allowlistStubTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (s allowlistStubTool) Execute(ctx context.Context, state *contracts.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (s allowlistStubTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
+func (s allowlistStubTool) IsAvailable(ctx context.Context, state *contracts.Context) bool {
+	return true
+}
 func (s allowlistStubTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: &core.PermissionSet{
 		FileSystem: []core.FileSystemPermission{{Action: core.FileSystemRead, Path: "/tmp/**"}},

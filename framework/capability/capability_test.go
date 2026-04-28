@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 type testInvocable struct{}
 
-func (testInvocable) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (testInvocable) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.CapabilityDescriptor{
 		ID:            "capability.test.echo",
 		Name:          "echo",
@@ -18,7 +19,7 @@ func (testInvocable) Descriptor(context.Context, *core.Context) core.CapabilityD
 	}
 }
 
-func (testInvocable) Invoke(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (testInvocable) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true, Data: map[string]interface{}{"status": "ok"}}, nil
 }
 

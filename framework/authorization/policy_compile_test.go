@@ -3,6 +3,7 @@ package authorization
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/stretchr/testify/require"
@@ -27,18 +28,18 @@ func TestCompileManifestPolicyRulesIncludesSessionAndProviderPolicies(t *testing
 				ProviderPolicies: map[string]core.ProviderPolicy{
 					"remote-mcp": {Activate: core.AgentPermissionDeny},
 				},
-				SessionPolicies: []core.SessionPolicy{{
+				SessionPolicies: []agentspec.SessionPolicy{{
 					ID:      "owner-send",
 					Name:    "Owner send",
 					Enabled: true,
-					Selector: core.SessionSelector{
-						Operations:             []core.SessionOperation{core.SessionOperationSend},
+					Selector: agentspec.SessionSelector{
+						Operations:             []agentspec.SessionOperation{agentspec.SessionOperationSend},
 						RequireOwnership:       &ownerOnly,
 						RequireDelegation:      &delegated,
 						RequireExternalBinding: &hasBinding,
-						ExternalProviders:      []core.ExternalProvider{core.ExternalProviderDiscord},
+						ExternalProviders:      []agentspec.ExternalProvider{agentspec.ExternalProviderDiscord},
 					},
-					Effect: core.AgentPermissionAllow,
+					Effect: agentspec.AgentPermissionAllow,
 				}},
 			},
 		},
@@ -51,24 +52,24 @@ func TestCompileManifestPolicyRulesIncludesSessionAndProviderPolicies(t *testing
 	require.Equal(t, &ownerOnly, rules[1].Conditions.RequireOwnership)
 	require.Equal(t, &delegated, rules[1].Conditions.RequireDelegation)
 	require.Equal(t, &hasBinding, rules[1].Conditions.RequireExternalBinding)
-	require.Equal(t, []core.ExternalProvider{core.ExternalProviderDiscord}, rules[1].Conditions.ExternalProviders)
+	require.Equal(t, []string{string(core.ExternalProviderDiscord)}, rules[1].Conditions.ExternalProviders)
 }
 
 func TestCompileManifestPolicyRulesRejectsUnsupportedCapabilitySelector(t *testing.T) {
 	_, err := CompileManifestPolicyRules(&manifest.AgentManifest{
 		Metadata: manifest.ManifestMetadata{Name: "test-agent"},
 		Spec: manifest.ManifestSpec{
-			Agent: &core.AgentRuntimeSpec{
-				Mode: core.AgentModePrimary,
-				Model: core.AgentModelConfig{
+			Agent: &agentspec.AgentRuntimeSpec{
+				Mode: agentspec.AgentModePrimary,
+				Model: agentspec.AgentModelConfig{
 					Provider: "ollama",
 					Name:     "test",
 				},
-				CapabilityPolicies: []core.CapabilityPolicy{{
-					Selector: core.CapabilitySelector{
+				CapabilityPolicies: []agentspec.CapabilityPolicy{{
+					Selector: agentspec.CapabilitySelector{
 						Tags: []string{"search"},
 					},
-					Execute: core.AgentPermissionDeny,
+					Execute: agentspec.AgentPermissionDeny,
 				}},
 			},
 		},
@@ -78,27 +79,27 @@ func TestCompileManifestPolicyRulesRejectsUnsupportedCapabilitySelector(t *testi
 }
 
 func TestCompileManifestPolicyRulesAcceptsRiskClassSelectorAfterSpecClone(t *testing.T) {
-	spec := &core.AgentRuntimeSpec{
-		Mode: core.AgentModePrimary,
-		Model: core.AgentModelConfig{
+	spec := &agentspec.AgentRuntimeSpec{
+		Mode: agentspec.AgentModePrimary,
+		Model: agentspec.AgentModelConfig{
 			Provider: "ollama",
 			Name:     "test",
 		},
-		CapabilityPolicies: []core.CapabilityPolicy{{
-			Selector: core.CapabilitySelector{
-				Kind:        core.CapabilityKindTool,
-				RiskClasses: []core.RiskClass{core.RiskClassDestructive},
+		CapabilityPolicies: []agentspec.CapabilityPolicy{{
+			Selector: agentspec.CapabilitySelector{
+				Kind:        agentspec.CapabilityKindTool,
+				RiskClasses: []agentspec.RiskClass{agentspec.RiskClassDestructive},
 			},
-			Execute: core.AgentPermissionAsk,
+			Execute: agentspec.AgentPermissionAsk,
 		}},
 	}
 
-	cloned := core.MergeAgentSpecs(spec, core.AgentSpecOverlay{})
+	cloned := agentspec.MergeAgentSpecs(spec, agentspec.AgentSpecOverlay{})
 	rules, err := CompileAgentSpecPolicyRules(cloned)
 
 	require.NoError(t, err)
 	require.Len(t, rules, 1)
 	require.Equal(t, "capability-policy:0", rules[0].ID)
-	require.Equal(t, []core.CapabilityKind{core.CapabilityKindTool}, rules[0].Conditions.CapabilityKinds)
-	require.Equal(t, []core.RiskClass{core.RiskClassDestructive}, rules[0].Conditions.MinRiskClasses)
+	require.Equal(t, []agentspec.CapabilityKind{agentspec.CapabilityKindTool}, rules[0].Conditions.CapabilityKinds)
+	require.Equal(t, []agentspec.RiskClass{agentspec.RiskClassDestructive}, rules[0].Conditions.MinRiskClasses)
 }

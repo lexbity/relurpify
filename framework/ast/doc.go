@@ -21,4 +21,12 @@
 // symbols.go defines the Symbol type hierarchy: functions, methods, types,
 // constants, variables, and Markdown headings. node.go represents the raw
 // AST node from which a symbol was extracted.
+//
+// # LSP-backed Symbol Provider
+//
+// lsp_symbol_provider.go provides DocumentSymbolToolProvider, which wraps the
+// lsp_document_symbols tool to extract symbols through the existing permission
+// and proxy infrastructure. lsp_ast_tool.go exposes the AST index as a
+// queryable tool for agents to explore symbols, callers, callees, and
+// dependencies without loading entire files.
 package ast

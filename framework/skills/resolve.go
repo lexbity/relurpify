@@ -160,3 +160,24 @@ func logSkillError(workspace, name, reason string, err error, paths SkillPaths) 
 		Paths:   paths,
 	}
 }
+
+// ExtractContextContributions extracts context contributions from resolved skills.
+// This is used by the contextpolicy compiler to merge skill contributions into the policy bundle.
+func ExtractContextContributions(resolved []ResolvedSkill) []SkillContextContribution {
+	contributions := make([]SkillContextContribution, 0, len(resolved))
+	for _, skill := range resolved {
+		if skill.Manifest == nil {
+			continue
+		}
+		contrib := skill.Manifest.Spec.ContextContributions
+		if len(contrib.IngestionSources) > 0 || len(contrib.RankerAdmission) > 0 || len(contrib.ScannerConfig.AdditionalSignatures) > 0 {
+			contributions = append(contributions, SkillContextContribution{
+				SkillName:         skill.Manifest.Metadata.Name,
+				IngestionSources:  contrib.IngestionSources,
+				RankerAdmission:   contrib.RankerAdmission,
+				ScannerSignatures: contrib.ScannerConfig.AdditionalSignatures,
+			})
+		}
+	}
+	return contributions
+}

@@ -55,6 +55,8 @@ type ManifestSpec struct {
 	Skills      []string                                  `yaml:"skills,omitempty" json:"skills,omitempty"`
 	Policies    map[string]agentspec.AgentPermissionLevel `yaml:"policies,omitempty" json:"policies,omitempty"`
 	Defaults    *ManifestDefaults                         `yaml:"defaults,omitempty" json:"defaults,omitempty"`
+	// Context holds the context policy configuration for ingestion and persistence.
+	Context *ContextPolicy `yaml:"context,omitempty" json:"context,omitempty"`
 
 	CompatibilityWarnings []string `yaml:"-" json:"-"`
 }
@@ -375,4 +377,66 @@ func hasPermissionScopes(perms core.PermissionSet) bool {
 		len(perms.Network) > 0 ||
 		len(perms.Capabilities) > 0 ||
 		len(perms.IPC) > 0
+}
+
+// ContextPolicy defines the context policy section in an agent manifest.
+// This mirrors contextpolicy.ContextPolicy to avoid import cycles.
+type ContextPolicy struct {
+	CompilationMode       string                    `yaml:"compilation_mode,omitempty" json:"compilation_mode,omitempty"`
+	DefaultTrustClass     agentspec.TrustClass      `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`
+	Rankers               []agentspec.RankerRef     `yaml:"rankers,omitempty" json:"rankers,omitempty"`
+	Scanners              []agentspec.ScannerRef    `yaml:"scanners,omitempty" json:"scanners,omitempty"`
+	Summarizers           []agentspec.SummarizerRef `yaml:"summarizers,omitempty" json:"summarizers,omitempty"`
+	Quota                 *QuotaSpec                `yaml:"quota,omitempty" json:"quota,omitempty"`
+	RateLimit             *RateLimitSpec            `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
+	TrustDemotedPolicy    string                    `yaml:"trust_demoted_policy,omitempty" json:"trust_demoted_policy,omitempty"`
+	DegradedChunkPolicy   string                    `yaml:"degraded_chunk_policy,omitempty" json:"degraded_chunk_policy,omitempty"`
+	BudgetShortfallPolicy string                    `yaml:"budget_shortfall_policy,omitempty" json:"budget_shortfall_policy,omitempty"`
+	SubstitutionPrefs     []SubstitutionPreference  `yaml:"substitution_preferences,omitempty" json:"substitution_preferences,omitempty"`
+}
+
+// QuotaSpec defines quota limits.
+type QuotaSpec struct {
+	WindowSize         string `yaml:"window_size,omitempty" json:"window_size,omitempty"`
+	MaxChunksPerWindow int    `yaml:"max_chunks_per_window,omitempty" json:"max_chunks_per_window,omitempty"`
+	MaxTokensPerWindow int    `yaml:"max_tokens_per_window,omitempty" json:"max_tokens_per_window,omitempty"`
+	PrincipalPattern   string `yaml:"principal_pattern,omitempty" json:"principal_pattern,omitempty"`
+}
+
+// RateLimitSpec defines rate limiting configuration.
+type RateLimitSpec struct {
+	RequestsPerSecond float64 `yaml:"requests_per_second,omitempty" json:"requests_per_second,omitempty"`
+	BurstSize         int     `yaml:"burst_size,omitempty" json:"burst_size,omitempty"`
+}
+
+// SubstitutionPreference defines how to substitute content.
+type SubstitutionPreference struct {
+	SourceContentType string `yaml:"source_content_type,omitempty" json:"source_content_type,omitempty"`
+	TargetContentType string `yaml:"target_content_type,omitempty" json:"target_content_type,omitempty"`
+	Strategy          string `yaml:"strategy,omitempty" json:"strategy,omitempty"`
+}
+
+// ResolvedManifest captures the result of resolving skills against a manifest.
+type ResolvedManifest struct {
+	Manifest *AgentManifest
+	Skills   []ResolvedSkill
+}
+
+// contextPolicyCompilerFn is the registered function that compiles context policy.
+// This uses dependency inversion to avoid import cycles with framework/contextpolicy.
+var contextPolicyCompilerFn func(*AgentManifest, []ResolvedSkill, any) (any, error)
+
+// RegisterContextPolicyCompiler registers the contextpolicy.Compile function for use by CompileContext.
+// Called once at initialization by the package that wires manifest and contextpolicy together.
+func RegisterContextPolicyCompiler(fn func(*AgentManifest, []ResolvedSkill, any) (any, error)) {
+	contextPolicyCompilerFn = fn
+}
+
+// CompileContext produces a ContextPolicyBundle from the resolved manifest.
+// Delegates to the registered context policy compiler (typically framework/contextpolicy.Compile).
+func CompileContext(resolved *ResolvedManifest) (any, error) {
+	if contextPolicyCompilerFn == nil {
+		return nil, fmt.Errorf("context policy compiler not registered; call manifest.RegisterContextPolicyCompiler at init")
+	}
+	return contextPolicyCompilerFn(resolved.Manifest, resolved.Skills, nil)
 }

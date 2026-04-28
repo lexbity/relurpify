@@ -1,12 +1,16 @@
 package core
 
-import "context"
+import (
+	"context"
+
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
+)
 
 // CapabilityHandler is the canonical runtime contract for registry-managed
 // capabilities. The handler is responsible for describing the capability in
 // runtime terms instead of forcing the registry to depend on tool-specific APIs.
 type CapabilityHandler interface {
-	Descriptor(ctx context.Context, state *Context) CapabilityDescriptor
+	Descriptor(ctx context.Context, env *contextdata.Envelope) CapabilityDescriptor
 }
 
 // PromptMessage is a framework-owned prompt message shape used by runtime
@@ -34,25 +38,25 @@ type ResourceReadResult struct {
 // directly executed by the framework.
 type InvocableCapabilityHandler interface {
 	CapabilityHandler
-	Invoke(ctx context.Context, state *Context, args map[string]interface{}) (*CapabilityExecutionResult, error)
+	Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*CapabilityExecutionResult, error)
 }
 
 // PromptCapabilityHandler is implemented by runtime-backed prompt capabilities.
 type PromptCapabilityHandler interface {
 	CapabilityHandler
-	RenderPrompt(ctx context.Context, state *Context, args map[string]interface{}) (*PromptRenderResult, error)
+	RenderPrompt(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*PromptRenderResult, error)
 }
 
 // ResourceCapabilityHandler is implemented by runtime-backed resource
 // capabilities.
 type ResourceCapabilityHandler interface {
 	CapabilityHandler
-	ReadResource(ctx context.Context, state *Context) (*ResourceReadResult, error)
+	ReadResource(ctx context.Context, env *contextdata.Envelope) (*ResourceReadResult, error)
 }
 
 // AvailabilityAwareCapabilityHandler allows handlers to provide dynamic
 // availability without exposing tool-specific hooks.
 type AvailabilityAwareCapabilityHandler interface {
 	CapabilityHandler
-	Availability(ctx context.Context, state *Context) AvailabilitySpec
+	Availability(ctx context.Context, env *contextdata.Envelope) AvailabilitySpec
 }

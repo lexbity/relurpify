@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,17 +18,14 @@ func TestSandboxCommandRunnerRunExecutesRuntimeBinary(t *testing.T) {
 	t.Setenv("TMPDIR", dir)
 
 	rt := &stubSandboxRuntime{config: SandboxConfig{RunscPath: fakeRunsc, ContainerRuntime: fakeDocker, NetworkIsolation: true}}
-	man := &manifest.AgentManifest{
-		Spec: manifest.ManifestSpec{
-			Image: "example/runtime:latest",
-			Security: manifest.SecuritySpec{
-				RunAsUser:       1001,
-				ReadOnlyRoot:    true,
-				NoNewPrivileges: true,
-			},
-		},
+	config := &CommandRunnerConfig{
+		Image:           "example/runtime:latest",
+		RunAsUser:       1001,
+		ReadOnlyRoot:    true,
+		NoNewPrivileges: true,
+		Workspace:       dir,
 	}
-	runner, err := NewSandboxCommandRunner(man, rt, dir)
+	runner, err := NewSandboxCommandRunner(config, rt)
 	require.NoError(t, err)
 	rt.policy = SandboxPolicy{}
 	stdout, stderr, err := runner.Run(context.Background(), CommandRequest{

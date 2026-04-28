@@ -30,6 +30,14 @@ const (
 	EventBackendWarm        EventType = "backend_warm"
 	EventBackendClose       EventType = "backend_close"
 	EventBackendRestart     EventType = "backend_restart"
+	// Phase 4: Knowledge chunk events
+	EventChunkCommitted        EventType = "chunk_committed"
+	EventSummaryCommitted      EventType = "summary_committed"
+	EventContextPolicyReloaded EventType = "context_policy_reloaded"
+	EventProviderSessionEnded  EventType = "provider_session_ended"
+
+	// Phase 6: Ingestion events
+	EventBootstrapComplete EventType = "bootstrap_complete"
 )
 
 // Event captures structured telemetry data.

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -111,33 +113,37 @@ func toolParametersFromSchema(schema *core.Schema) []core.ToolParameter {
 	return out
 }
 
-func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, state *Context) core.CapabilityDescriptor {
+func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
 	if h.descriptor.ID != "" {
 		return h.descriptor
 	}
 	if h.handler == nil {
 		return core.CapabilityDescriptor{}
 	}
-	return core.NormalizeCapabilityDescriptor(h.handler.Descriptor(ctx, state))
+	return core.NormalizeCapabilityDescriptor(h.handler.Descriptor(ctx, env))
 }
 
-func (h instrumentCapabilityHandler) Availability(ctx context.Context, state *Context) core.AvailabilitySpec {
+func (h instrumentCapabilityHandler) Availability(ctx context.Context, env *contextdata.Envelope) core.AvailabilitySpec {
 	if aware, ok := h.handler.(core.AvailabilityAwareCapabilityHandler); ok {
-		return aware.Availability(ctx, state)
+		return aware.Availability(ctx, env)
 	}
 	return core.AvailabilitySpec{Available: true}
 }
 
-func (h instrumentCapabilityHandler) Invoke(ctx context.Context, state *Context, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
+func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.CapabilityExecutionResult, error) {
 	invocable, ok := h.handler.(core.InvocableCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("capability handler unavailable")
 	}
 	desc := h.descriptor
 	if desc.ID == "" {
-		desc = h.Descriptor(ctx, state)
+		desc = h.Descriptor(ctx, env)
 	}
-	approvalBinding := core.ApprovalBindingFromCapability(desc, state, args)
+	var workingData map[string]interface{}
+	if env != nil {
+		workingData = env.WorkingData
+	}
+	approvalBinding := core.ApprovalBindingFromCapability(desc, workingData, args)
 	approvalMetadata := map[string]string(nil)
 	if approvalBinding != nil {
 		approvalMetadata = approvalBinding.PermissionMetadata()
@@ -156,7 +162,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, state *Context,
 	}
 	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
 	startedAt := time.Now().UTC()
-	result, err := invocable.Invoke(ctx, state, args)
+	result, err := invocable.Invoke(ctx, env, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
 		if schemaErr := core.ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
 			err = fmt.Errorf("capability %s blocked: output schema invalid: %w", desc.ID, schemaErr)
@@ -189,14 +195,14 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, state *Context,
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, state *Context, args map[string]interface{}) (*core.PromptRenderResult, error) {
+func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*core.PromptRenderResult, error) {
 	promptHandler, ok := h.handler.(core.PromptCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("prompt handler unavailable")
 	}
 	desc := h.descriptor
 	if desc.ID == "" {
-		desc = h.Descriptor(ctx, state)
+		desc = h.Descriptor(ctx, env)
 	}
 	stateSnapshot := h.runtimeState()
 	if err := core.ValidateValueAgainstSchema(args, desc.InputSchema); err != nil {
@@ -212,19 +218,19 @@ func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, state *Co
 	}
 	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
 	startedAt := time.Now().UTC()
-	result, err := promptHandler.RenderPrompt(ctx, state, args)
+	result, err := promptHandler.RenderPrompt(ctx, env, args)
 	emitPromptCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
-func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, state *Context) (*core.ResourceReadResult, error) {
+func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, env *contextdata.Envelope) (*core.ResourceReadResult, error) {
 	resourceHandler, ok := h.handler.(core.ResourceCapabilityHandler)
 	if !ok {
 		return nil, fmt.Errorf("resource handler unavailable")
 	}
 	desc := h.descriptor
 	if desc.ID == "" {
-		desc = h.Descriptor(ctx, state)
+		desc = h.Descriptor(ctx, env)
 	}
 	stateSnapshot := h.runtimeState()
 	if err := enforceDescriptorExecutionPoliciesWithProfile(ctx, desc, h.profile, stateSnapshot, nil); err != nil {
@@ -237,7 +243,7 @@ func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, state *Co
 	}
 	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, nil)
 	startedAt := time.Now().UTC()
-	result, err := resourceHandler.ReadResource(ctx, state)
+	result, err := resourceHandler.ReadResource(ctx, env)
 	emitResourceCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
@@ -262,27 +268,27 @@ func enforceDescriptorExecutionPolicies(ctx context.Context, desc core.Capabilit
 func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc core.CapabilityDescriptor, profile descriptorProfile, stateSnapshot executionRuntimeState, approvalMetadata map[string]string) error {
 	if desc.Kind == core.CapabilityKindTool && desc.RuntimeFamily == core.CapabilityRuntimeFamilyLocalTool && stateSnapshot.policy.agentSpec != nil {
 		switch stateSnapshot.policy.toolPolicies[desc.Name].Execute {
-		case AgentPermissionDeny:
+		case agentspec.AgentPermissionDeny:
 			return fmt.Errorf("capability %s blocked: execution denied by tool policy", desc.ID)
-		case AgentPermissionAsk:
+		case agentspec.AgentPermissionAsk:
 			return requestCapabilityApproval(ctx, desc, stateSnapshot, approvalMetadata, "tool execution approval")
 		}
 	}
 	if len(stateSnapshot.policy.compiledCapabilityPolicies) > 0 {
 		effective := effectiveCompiledCapabilityPolicyForProfile(profile, stateSnapshot.policy.compiledCapabilityPolicies)
 		switch effective {
-		case AgentPermissionDeny:
+		case agentspec.AgentPermissionDeny:
 			return fmt.Errorf("capability %s blocked: execution denied by capability selector policy", desc.ID)
-		case AgentPermissionAsk:
+		case agentspec.AgentPermissionAsk:
 			return requestCapabilityApproval(ctx, desc, stateSnapshot, approvalMetadata, "capability selector policy approval")
 		}
 	}
 	if len(stateSnapshot.policy.globalPolicies) > 0 {
 		effective := effectiveClassPolicyForProfile(profile, stateSnapshot.policy.globalPolicies)
 		switch effective {
-		case AgentPermissionDeny:
+		case agentspec.AgentPermissionDeny:
 			return fmt.Errorf("capability %s blocked: execution denied by capability policy", desc.ID)
-		case AgentPermissionAsk:
+		case agentspec.AgentPermissionAsk:
 			return requestCapabilityApproval(ctx, desc, stateSnapshot, approvalMetadata, "capability class policy approval")
 		}
 	}
@@ -290,9 +296,9 @@ func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc cor
 }
 
 // Execute authorizes the wrapped tool before delegating to the original implementation.
-func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map[string]interface{}) (*ToolResult, error) {
-	desc := core.ToolDescriptor(ctx, state, t.Tool)
-	approvalBinding := core.ApprovalBindingFromCapability(desc, state, args)
+func (t *instrumentedTool) Execute(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+	desc := core.ToolDescriptor(ctx, t.Tool)
+	approvalBinding := core.ApprovalBindingFromCapability(desc, nil, args)
 	approvalMetadata := map[string]string(nil)
 	if approvalBinding != nil {
 		approvalMetadata = approvalBinding.PermissionMetadata()
@@ -331,7 +337,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, state *Context, args map
 		})
 	}
 	startedAt := time.Now().UTC()
-	result, err := t.Tool.Execute(ctx, state, args)
+	result, err := t.Tool.Execute(ctx, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
 		if schemaErr := core.ValidateValueAgainstSchema(result.Data, desc.OutputSchema); schemaErr != nil {
 			err = fmt.Errorf("tool %s blocked: output schema invalid: %w", t.Tool.Name(), schemaErr)
@@ -459,22 +465,22 @@ type legacyToolHandler struct {
 	tool Tool
 }
 
-func (h legacyToolHandler) Descriptor(ctx context.Context, state *Context) core.CapabilityDescriptor {
-	return core.ToolDescriptor(ctx, state, unwrapTool(h.tool))
+func (h legacyToolHandler) Descriptor(ctx context.Context, env *contextdata.Envelope) core.CapabilityDescriptor {
+	return core.ToolDescriptor(ctx, unwrapTool(h.tool))
 }
 
-func (h legacyToolHandler) Invoke(ctx context.Context, state *Context, args map[string]interface{}) (*ToolResult, error) {
+func (h legacyToolHandler) Invoke(ctx context.Context, env *contextdata.Envelope, args map[string]interface{}) (*ToolResult, error) {
 	if h.tool == nil {
 		return nil, fmt.Errorf("tool handler unavailable")
 	}
-	return h.tool.Execute(ctx, state, args)
+	return h.tool.Execute(ctx, args)
 }
 
-func (h legacyToolHandler) Availability(ctx context.Context, state *Context) core.AvailabilitySpec {
+func (h legacyToolHandler) Availability(ctx context.Context, env *contextdata.Envelope) core.AvailabilitySpec {
 	if h.tool == nil {
 		return core.AvailabilitySpec{Available: false, Reason: "tool handler unavailable"}
 	}
-	if !h.tool.IsAvailable(ctx, state) {
+	if !h.tool.IsAvailable(ctx) {
 		return core.AvailabilitySpec{Available: false, Reason: "tool unavailable"}
 	}
 	return core.AvailabilitySpec{Available: true}

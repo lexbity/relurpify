@@ -28,7 +28,7 @@ type SessionSelector struct {
 	Operations                []SessionOperation `yaml:"operations,omitempty" json:"operations,omitempty"`
 	ActorKinds                []string           `yaml:"actor_kinds,omitempty" json:"actor_kinds,omitempty"`
 	ActorIDs                  []string           `yaml:"actor_ids,omitempty" json:"actor_ids,omitempty"`
-	ExternalProviders         []ExternalProvider `yaml:"external_providers,omitempty" json:"external_providers,omitempty"`
+	ExternalProviders         []string           `yaml:"external_providers,omitempty" json:"external_providers,omitempty"`
 	RequireOwnership          *bool              `yaml:"require_ownership,omitempty" json:"require_ownership,omitempty"`
 	RequireDelegation         *bool              `yaml:"require_delegation,omitempty" json:"require_delegation,omitempty"`
 	RequireExternalBinding    *bool              `yaml:"require_external_binding,omitempty" json:"require_external_binding,omitempty"`
@@ -137,8 +137,8 @@ func ValidateSessionSelector(selector SessionSelector) error {
 		}
 	}
 	for _, provider := range selector.ExternalProviders {
-		if err := provider.Validate(); err != nil {
-			return fmt.Errorf("external_providers contains invalid provider: %w", err)
+		if strings.TrimSpace(provider) == "" {
+			return fmt.Errorf("session selector external provider must not be empty")
 		}
 	}
 	return nil

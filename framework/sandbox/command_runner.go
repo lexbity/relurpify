@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CommandRequest captures process execution metadata routed through a sandbox.
@@ -31,16 +31,16 @@ type CommandRunner interface {
 
 // CommandRunnerProvider lets a sandbox backend supply a specialized runner.
 type CommandRunnerProvider interface {
-	NewCommandRunner(manifest *manifest.AgentManifest, workspace string) (CommandRunner, error)
+	NewCommandRunner(config *contracts.CommandRunnerConfig) (CommandRunner, error)
 }
 
 // NewCommandRunner returns a backend-specific runner when the runtime supports
 // one, otherwise it falls back to the standard sandbox command runner.
-func NewCommandRunner(manifest *manifest.AgentManifest, runtime SandboxRuntime, workspace string) (CommandRunner, error) {
+func NewCommandRunner(config *contracts.CommandRunnerConfig, runtime SandboxRuntime) (CommandRunner, error) {
 	if provider, ok := runtime.(CommandRunnerProvider); ok {
-		return provider.NewCommandRunner(manifest, workspace)
+		return provider.NewCommandRunner(config)
 	}
-	return NewSandboxCommandRunner(manifest, runtime, workspace)
+	return NewSandboxCommandRunner(config, runtime)
 }
 
 // SandboxCommandRunner launches commands via the configured sandbox runtime.
@@ -55,14 +55,18 @@ type SandboxCommandRunner struct {
 	noNewPrivileges bool
 }
 
-// NewSandboxCommandRunner wires the manifest/runtime metadata into a runner.
-func NewSandboxCommandRunner(manifest *manifest.AgentManifest, runtime SandboxRuntime, workspace string) (*SandboxCommandRunner, error) {
-	if manifest == nil {
-		return nil, errors.New("manifest required")
+// Note: For backward compatibility, type alias the contracts type
+type CommandRunnerConfig = contracts.CommandRunnerConfig
+
+// NewSandboxCommandRunner wires the config/runtime metadata into a runner.
+func NewSandboxCommandRunner(config *contracts.CommandRunnerConfig, runtime SandboxRuntime) (*SandboxCommandRunner, error) {
+	if config == nil {
+		return nil, errors.New("config required")
 	}
 	if runtime == nil {
 		return nil, errors.New("sandbox runtime required")
 	}
+	workspace := config.Workspace
 	if workspace == "" {
 		return nil, errors.New("workspace required")
 	}
@@ -74,12 +78,12 @@ func NewSandboxCommandRunner(manifest *manifest.AgentManifest, runtime SandboxRu
 	return &SandboxCommandRunner{
 		config:          runtime.RunConfig(),
 		rt:              runtime,
-		image:           manifest.Spec.Image,
+		image:           config.Image,
 		workspace:       absWorkspace,
 		workspaceSlash:  filepath.ToSlash(absWorkspace),
-		user:            manifest.Spec.Security.RunAsUser,
-		readOnlyRoot:    manifest.Spec.Security.ReadOnlyRoot,
-		noNewPrivileges: manifest.Spec.Security.NoNewPrivileges,
+		user:            config.RunAsUser,
+		readOnlyRoot:    config.ReadOnlyRoot,
+		noNewPrivileges: config.NoNewPrivileges,
 	}, nil
 }
 
@@ -191,6 +195,9 @@ func (r *SandboxCommandRunner) protectedMounts() []string {
 
 // containerWorkdir maps the host workdir into the container mount.
 func (r *SandboxCommandRunner) containerWorkdir(workdir string) (string, error) {
+	if r == nil {
+		return "", errors.New("sandbox command runner missing")
+	}
 	if workdir == "" {
 		return "/workspace", nil
 	}

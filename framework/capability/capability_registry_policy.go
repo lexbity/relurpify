@@ -517,12 +517,12 @@ func effectiveClassPolicy(tool Tool, policies map[string]AgentPermissionLevel) A
 			continue
 		}
 		switch {
-		case level == AgentPermissionDeny:
-			return AgentPermissionDeny
-		case level == AgentPermissionAsk && result != AgentPermissionDeny:
-			result = AgentPermissionAsk
-		case level == AgentPermissionAllow && result == "":
-			result = AgentPermissionAllow
+		case level == agentspec.AgentPermissionDeny:
+			return agentspec.AgentPermissionDeny
+		case level == agentspec.AgentPermissionAsk && result != agentspec.AgentPermissionDeny:
+			result = agentspec.AgentPermissionAsk
+		case level == agentspec.AgentPermissionAllow && result == "":
+			result = agentspec.AgentPermissionAllow
 		}
 	}
 	return result
@@ -589,7 +589,7 @@ func capabilityPolicyLabels(tool Tool) []string {
 		return nil
 	}
 	labels := make(map[string]struct{})
-	desc := core.ToolDescriptor(context.Background(), nil, tool)
+	desc := core.ToolDescriptor(context.Background(), tool)
 	for _, class := range desc.RiskClasses {
 		labels[strings.ToLower(strings.TrimSpace(string(class)))] = struct{}{}
 	}
@@ -638,19 +638,19 @@ func effectiveCapabilityPolicy(tool Tool, policies []core.CapabilityPolicy) Agen
 	if tool == nil || len(policies) == 0 {
 		return ""
 	}
-	desc := core.ToolDescriptor(context.Background(), nil, tool)
+	desc := core.ToolDescriptor(context.Background(), tool)
 	var result AgentPermissionLevel
 	for _, policy := range policies {
 		if !core.SelectorMatchesDescriptor(core.CapabilitySelectorFromAgentSpec(policy.Selector), desc) {
 			continue
 		}
 		switch {
-		case policy.Execute == AgentPermissionDeny:
-			return AgentPermissionDeny
-		case policy.Execute == AgentPermissionAsk && result != AgentPermissionDeny:
-			result = AgentPermissionAsk
-		case policy.Execute == AgentPermissionAllow && result == "":
-			result = AgentPermissionAllow
+		case policy.Execute == agentspec.AgentPermissionDeny:
+			return agentspec.AgentPermissionDeny
+		case policy.Execute == agentspec.AgentPermissionAsk && result != agentspec.AgentPermissionDeny:
+			result = agentspec.AgentPermissionAsk
+		case policy.Execute == agentspec.AgentPermissionAllow && result == "":
+			result = agentspec.AgentPermissionAllow
 		}
 	}
 	return result
@@ -670,12 +670,12 @@ func effectiveCompiledCapabilityPolicyForProfile(profile descriptorProfile, poli
 			continue
 		}
 		switch {
-		case policy.execute == AgentPermissionDeny:
-			return AgentPermissionDeny
-		case policy.execute == AgentPermissionAsk && result != AgentPermissionDeny:
-			result = AgentPermissionAsk
-		case policy.execute == AgentPermissionAllow && result == "":
-			result = AgentPermissionAllow
+		case policy.execute == agentspec.AgentPermissionDeny:
+			return agentspec.AgentPermissionDeny
+		case policy.execute == agentspec.AgentPermissionAsk && result != agentspec.AgentPermissionDeny:
+			result = agentspec.AgentPermissionAsk
+		case policy.execute == agentspec.AgentPermissionAllow && result == "":
+			result = agentspec.AgentPermissionAllow
 		}
 	}
 	return result
@@ -693,12 +693,12 @@ func effectiveClassPolicyForProfile(profile descriptorProfile, policies map[stri
 			continue
 		}
 		switch {
-		case level == AgentPermissionDeny:
-			return AgentPermissionDeny
-		case level == AgentPermissionAsk && result != AgentPermissionDeny:
-			result = AgentPermissionAsk
-		case level == AgentPermissionAllow && result == "":
-			result = AgentPermissionAllow
+		case level == agentspec.AgentPermissionDeny:
+			return agentspec.AgentPermissionDeny
+		case level == agentspec.AgentPermissionAsk && result != agentspec.AgentPermissionDeny:
+			result = agentspec.AgentPermissionAsk
+		case level == agentspec.AgentPermissionAllow && result == "":
+			result = agentspec.AgentPermissionAllow
 		}
 	}
 	return result

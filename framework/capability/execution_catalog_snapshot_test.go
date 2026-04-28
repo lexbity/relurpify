@@ -63,10 +63,10 @@ func TestExecutionCatalogSnapshotPolicySnapshotRemainsStable(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
 		ToolExecutionPolicy: map[string]ToolPolicy{
-			"cli_git": {Execute: AgentPermissionAsk},
+			"cli_git": {Execute: agentspec.AgentPermissionAsk},
 		},
 		GlobalPolicies: map[string]AgentPermissionLevel{
-			string(core.RiskClassExecute): AgentPermissionDeny,
+			string(core.RiskClassExecute): agentspec.AgentPermissionDeny,
 		},
 	})
 
@@ -76,19 +76,19 @@ func TestExecutionCatalogSnapshotPolicySnapshotRemainsStable(t *testing.T) {
 	policy := snapshot.PolicySnapshot()
 	require.NotNil(t, policy)
 	require.Equal(t, "agent-1", policy.AgentID)
-	require.Equal(t, AgentPermissionAsk, policy.ToolPolicies["cli_git"].Execute)
-	require.Equal(t, AgentPermissionDeny, policy.GlobalPolicies[string(core.RiskClassExecute)])
+	require.Equal(t, agentspec.AgentPermissionAsk, policy.ToolPolicies["cli_git"].Execute)
+	require.Equal(t, agentspec.AgentPermissionDeny, policy.GlobalPolicies[string(core.RiskClassExecute)])
 
-	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: AgentPermissionAllow})
-	registry.UpdateClassPolicy(string(core.RiskClassExecute), AgentPermissionAllow)
+	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: agentspec.AgentPermissionAllow})
+	registry.UpdateClassPolicy(string(core.RiskClassExecute), agentspec.AgentPermissionAllow)
 
 	live := registry.CapturePolicySnapshot()
-	require.Equal(t, AgentPermissionAllow, live.ToolPolicies["cli_git"].Execute)
-	require.Equal(t, AgentPermissionAllow, live.GlobalPolicies[string(core.RiskClassExecute)])
+	require.Equal(t, agentspec.AgentPermissionAllow, live.ToolPolicies["cli_git"].Execute)
+	require.Equal(t, agentspec.AgentPermissionAllow, live.GlobalPolicies[string(core.RiskClassExecute)])
 
 	policy = snapshot.PolicySnapshot()
-	require.Equal(t, AgentPermissionAsk, policy.ToolPolicies["cli_git"].Execute)
-	require.Equal(t, AgentPermissionDeny, policy.GlobalPolicies[string(core.RiskClassExecute)])
+	require.Equal(t, agentspec.AgentPermissionAsk, policy.ToolPolicies["cli_git"].Execute)
+	require.Equal(t, agentspec.AgentPermissionDeny, policy.GlobalPolicies[string(core.RiskClassExecute)])
 }
 
 func TestExecutionCatalogSnapshotAllowedCapabilitiesRemainStable(t *testing.T) {

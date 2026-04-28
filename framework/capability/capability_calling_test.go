@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,12 +22,12 @@ func (t callingTestTool) Parameters() []core.ToolParameter {
 		{Name: "content", Type: "string", Required: false, Description: "file contents"},
 	}
 }
-func (t callingTestTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (t callingTestTool) Execute(context.Context, *contracts.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (t callingTestTool) IsAvailable(context.Context, *core.Context) bool { return true }
-func (t callingTestTool) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
-func (t callingTestTool) Tags() []string                                  { return nil }
+func (t callingTestTool) IsAvailable(context.Context, *contracts.Context) bool { return true }
+func (t callingTestTool) Permissions() core.ToolPermissions                    { return core.ToolPermissions{} }
+func (t callingTestTool) Tags() []string                                       { return nil }
 
 func TestResolveCallingMode_NativeEnabled_CapsSupports(t *testing.T) {
 	spec := &core.AgentRuntimeSpec{}

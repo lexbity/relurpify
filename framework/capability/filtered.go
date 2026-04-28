@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -145,7 +146,7 @@ func (f *FilteredRegistry) ModelCallableTools() []Tool {
 }
 
 // InvokeCapability executes an invocable capability by ID if it is allowed.
-func (f *FilteredRegistry) InvokeCapability(ctx context.Context, state *core.Context, name string, args map[string]any) (*core.ToolResult, error) {
+func (f *FilteredRegistry) InvokeCapability(ctx context.Context, state *contextdata.Envelope, name string, args map[string]any) (*core.ToolResult, error) {
 	if f == nil || f.base == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}

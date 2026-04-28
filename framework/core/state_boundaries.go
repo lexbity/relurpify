@@ -11,9 +11,8 @@ import (
 type MemoryClass string
 
 const (
-	MemoryClassWorking     MemoryClass = "working"
-	MemoryClassDeclarative MemoryClass = "declarative"
-	MemoryClassProcedural  MemoryClass = "procedural"
+	MemoryClassWorking  MemoryClass = "working"
+	MemoryClassStreamed MemoryClass = "streamed"
 )
 
 // StateDataClass categorizes data written into graph-visible state.
@@ -90,7 +89,7 @@ func ValidateStateBoundaryPolicy(policy StateBoundaryPolicy) error {
 	}
 	for _, class := range policy.AllowedMemoryClasses {
 		switch class {
-		case MemoryClassWorking, MemoryClassDeclarative, MemoryClassProcedural:
+		case MemoryClassWorking, MemoryClassStreamed:
 		default:
 			return fmt.Errorf("memory class %s invalid", class)
 		}
@@ -233,8 +232,6 @@ func classifyStateValue(key string, value interface{}) StateDataClass {
 		return StateDataClassMemoryRef
 	case *MemoryReference:
 		return StateDataClassMemoryRef
-	case []Interaction:
-		return StateDataClassTranscript
 	case []MemoryRecordEnvelope:
 		return StateDataClassRetrievalDump
 	case string:
@@ -300,8 +297,6 @@ func inlineCollectionItems(value interface{}) int {
 	case []string:
 		return len(typed)
 	case []map[string]interface{}:
-		return len(typed)
-	case []Interaction:
 		return len(typed)
 	case []MemoryRecordEnvelope:
 		return len(typed)

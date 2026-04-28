@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -186,23 +187,23 @@ func TestRuleMatchesRequest_ProviderKind_Match(t *testing.T) {
 
 func TestRuleMatchesRequest_ExternalProvider_Match(t *testing.T) {
 	rule := allowRule("r1")
-	rule.Conditions.ExternalProviders = []core.ExternalProvider{core.ExternalProviderDiscord}
-	assert.True(t, ruleMatchesRequest(rule, core.PolicyRequest{ExternalProvider: core.ExternalProviderDiscord}))
-	assert.False(t, ruleMatchesRequest(rule, core.PolicyRequest{ExternalProvider: core.ExternalProviderTelegram}))
+	rule.Conditions.ExternalProviders = []string{string(core.ExternalProviderDiscord)}
+	assert.True(t, ruleMatchesRequest(rule, core.PolicyRequest{ExternalProvider: string(core.ExternalProviderDiscord)}))
+	assert.False(t, ruleMatchesRequest(rule, core.PolicyRequest{ExternalProvider: string(core.ExternalProviderTelegram)}))
 }
 
 func TestRuleMatchesRequest_SensitivityClass_Match(t *testing.T) {
 	rule := allowRule("r1")
-	rule.Conditions.SensitivityClasses = []core.SensitivityClass{core.SensitivityClassHigh}
-	assert.True(t, ruleMatchesRequest(rule, core.PolicyRequest{SensitivityClass: core.SensitivityClassHigh}))
-	assert.False(t, ruleMatchesRequest(rule, core.PolicyRequest{SensitivityClass: core.SensitivityClassLow}))
+	rule.Conditions.SensitivityClasses = []string{string(core.SensitivityClassHigh)}
+	assert.True(t, ruleMatchesRequest(rule, core.PolicyRequest{SensitivityClass: string(core.SensitivityClassHigh)}))
+	assert.False(t, ruleMatchesRequest(rule, core.PolicyRequest{SensitivityClass: string(core.SensitivityClassLow)}))
 }
 
 func TestRuleMatchesRequest_RouteMode_Match(t *testing.T) {
 	rule := allowRule("r1")
-	rule.Conditions.RouteModes = []core.RouteMode{core.RouteModeGateway}
-	assert.True(t, ruleMatchesRequest(rule, core.PolicyRequest{RouteMode: core.RouteModeGateway}))
-	assert.False(t, ruleMatchesRequest(rule, core.PolicyRequest{RouteMode: core.RouteModeDirect}))
+	rule.Conditions.RouteModes = []string{string(core.RouteModeGateway)}
+	assert.True(t, ruleMatchesRequest(rule, core.PolicyRequest{RouteMode: string(core.RouteModeGateway)}))
+	assert.False(t, ruleMatchesRequest(rule, core.PolicyRequest{RouteMode: string(core.RouteModeDirect)}))
 }
 
 func TestRuleMatchesRequest_SessionScope_Match(t *testing.T) {
@@ -443,9 +444,9 @@ func TestDecideByPatterns_DenyFirst(t *testing.T) {
 		"git push force",
 		[]string{"git *"},      // allow — also matches
 		[]string{"git push *"}, // deny — checked first, more specific
-		core.AgentPermissionAllow,
+		contracts.AgentPermissionAllow,
 	)
-	assert.Equal(t, core.AgentPermissionDeny, decision)
+	assert.Equal(t, contracts.AgentPermissionDeny, decision)
 	assert.Equal(t, "git push *", pattern)
 }
 
@@ -454,9 +455,9 @@ func TestDecideByPatterns_AllowAfterDenyMiss(t *testing.T) {
 		"go test ./...",
 		[]string{"go test **"},
 		[]string{"go build *"},
-		core.AgentPermissionDeny,
+		contracts.AgentPermissionDeny,
 	)
-	assert.Equal(t, core.AgentPermissionAllow, decision)
+	assert.Equal(t, contracts.AgentPermissionAllow, decision)
 	assert.Equal(t, "go test **", pattern)
 }
 
@@ -465,15 +466,15 @@ func TestDecideByPatterns_DefaultWhenNoMatch(t *testing.T) {
 		"npm install",
 		[]string{"go **"},
 		[]string{"rm **"},
-		core.AgentPermissionAsk,
+		contracts.AgentPermissionAsk,
 	)
-	assert.Equal(t, core.AgentPermissionAsk, decision)
+	assert.Equal(t, contracts.AgentPermissionAsk, decision)
 	assert.Empty(t, pattern)
 }
 
 func TestDecideByPatterns_EmptyDefaultBecomesAllow(t *testing.T) {
 	decision, _ := DecideByPatterns("echo hi", nil, nil, "")
-	assert.Equal(t, core.AgentPermissionAllow, decision)
+	assert.Equal(t, contracts.AgentPermissionAllow, decision)
 }
 
 func TestDecideByPatterns_BlankPatternsSkipped(t *testing.T) {
@@ -481,19 +482,19 @@ func TestDecideByPatterns_BlankPatternsSkipped(t *testing.T) {
 		"echo hi",
 		[]string{"  ", "", "echo *"},
 		[]string{"  "},
-		core.AgentPermissionDeny,
+		contracts.AgentPermissionDeny,
 	)
-	assert.Equal(t, core.AgentPermissionAllow, decision)
+	assert.Equal(t, contracts.AgentPermissionAllow, decision)
 }
 
 func TestDecideByPatterns_EmptyTarget_AllowPatternMiss(t *testing.T) {
 	// Empty target: containsFold treats empty as no-match; deny pattern with glob
 	// may or may not match depending on glob semantics.
-	decision, _ := DecideByPatterns("", []string{"*"}, nil, core.AgentPermissionDeny)
+	decision, _ := DecideByPatterns("", []string{"*"}, nil, contracts.AgentPermissionDeny)
 	// "*" would match empty string via filepath.Match on empty string — verify we
 	// get a deterministic result without panicking.
 	require.NotPanics(t, func() {
-		DecideByPatterns("", []string{"*"}, nil, core.AgentPermissionDeny)
+		DecideByPatterns("", []string{"*"}, nil, contracts.AgentPermissionDeny)
 	})
 	_ = decision
 }

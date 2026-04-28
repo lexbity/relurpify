@@ -1,6 +1,72 @@
 package knowledge
 
-import "time"
+import (
+	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
+)
+
+// MemoryClass identifies the lifecycle and storage tier for knowledge chunks.
+// This type mirrors core.MemoryClass to avoid an import cycle.
+type MemoryClass string
+
+const (
+	// MemoryClassWorking indicates the chunk is in working memory (mutable).
+	MemoryClassWorking MemoryClass = "working"
+	// MemoryClassStreamed indicates the chunk is in streamed context (read-only).
+	MemoryClassStreamed MemoryClass = "streamed"
+)
+
+// StorageMode identifies how a chunk is stored.
+type StorageMode string
+
+const (
+	StorageModeInline     StorageMode = "inline"
+	StorageModeExternal   StorageMode = "external"
+	StorageModeSummarized StorageMode = "summarized"
+)
+
+// SourceOrigin identifies the origin of a chunk.
+type SourceOrigin string
+
+const (
+	SourceOriginUser       SourceOrigin = "user"
+	SourceOriginFile       SourceOrigin = "file"
+	SourceOriginLLM        SourceOrigin = "llm"
+	SourceOriginTool       SourceOrigin = "tool"
+	SourceOriginDerivation SourceOrigin = "derivation"
+)
+
+// AcquisitionMethod identifies how a chunk was acquired.
+type AcquisitionMethod string
+
+const (
+	AcquisitionMethodDirect        AcquisitionMethod = "direct"
+	AcquisitionMethodIngestion     AcquisitionMethod = "ingestion"
+	AcquisitionMethodSummarization AcquisitionMethod = "summarization"
+	AcquisitionMethodDerivation    AcquisitionMethod = "derivation"
+	AcquisitionMethodRuntimeWrite  AcquisitionMethod = "runtime_write"
+)
+
+// DerivationMethod identifies how a derived chunk was created.
+type DerivationMethod string
+
+const (
+	DerivationMethodSummary        DerivationMethod = "summary"
+	DerivationMethodAggregation    DerivationMethod = "aggregation"
+	DerivationMethodTransformation DerivationMethod = "transformation"
+)
+
+// SuspicionFlags identifies why a chunk is suspected.
+type SuspicionFlags string
+
+const (
+	SuspicionFlagContentMismatch    SuspicionFlags = "content_mismatch"
+	SuspicionFlagProvenanceGap      SuspicionFlags = "provenance_gap"
+	SuspicionFlagFreshnessViolation SuspicionFlags = "freshness_violation"
+	SuspicionFlagTrustViolation     SuspicionFlags = "trust_violation"
+)
 
 // ChunkID is a stable artifact identifier.
 type ChunkID string
@@ -92,17 +158,44 @@ type ChunkView struct {
 
 // KnowledgeChunk is the atomic artifact unit.
 type KnowledgeChunk struct {
-	ID            ChunkID         `json:"id"`
-	Version       int             `json:"version"`
-	WorkspaceID   string          `json:"workspace_id"`
-	ContentHash   string          `json:"content_hash"`
-	TokenEstimate int             `json:"token_estimate"`
-	Provenance    ChunkProvenance `json:"provenance"`
-	Freshness     FreshnessState  `json:"freshness"`
-	Body          ChunkBody       `json:"body"`
-	Views         []ChunkView     `json:"views,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	// Identity fields
+	ID            ChunkID `json:"id"`
+	Version       int     `json:"version"`
+	WorkspaceID   string  `json:"workspace_id"`
+	ContentHash   string  `json:"content_hash"`
+	TokenEstimate int     `json:"token_estimate"`
+
+	// Three-axis model fields
+	MemoryClass  MemoryClass  `json:"memory_class,omitempty"`
+	StorageMode  StorageMode  `json:"storage_mode,omitempty"`
+	SourceOrigin SourceOrigin `json:"source_origin,omitempty"`
+
+	// Full provenance fields
+	SourcePrincipal      identity.SubjectRef  `json:"source_principal,omitempty"`
+	AcquisitionMethod    AcquisitionMethod    `json:"acquisition_method,omitempty"`
+	AcquiredAt           time.Time            `json:"acquired_at,omitempty"`
+	TrustClass           agentspec.TrustClass `json:"trust_class,omitempty"`
+	ContentSchemaVersion string               `json:"content_schema_version,omitempty"`
+	DerivedFrom          []ChunkID            `json:"derived_from,omitempty"`
+	DerivationMethod     DerivationMethod     `json:"derivation_method,omitempty"`
+	DerivationGeneration int                  `json:"derivation_generation,omitempty"`
+	CoverageHash         string               `json:"coverage_hash,omitempty"`
+
+	// Tombstoning fields
+	Tombstoned   bool    `json:"tombstoned,omitempty"`
+	SupersededBy ChunkID `json:"superseded_by,omitempty"`
+
+	// Suspicion fields
+	SuspicionScore float64          `json:"suspicion_score,omitempty"`
+	SuspicionFlags []SuspicionFlags `json:"suspicion_flags,omitempty"`
+
+	// Legacy fields (kept for backward compatibility)
+	Provenance ChunkProvenance `json:"provenance"`
+	Freshness  FreshnessState  `json:"freshness"`
+	Body       ChunkBody       `json:"body"`
+	Views      []ChunkView     `json:"views,omitempty"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
 // ChunkEdge stores a relationship between chunks.

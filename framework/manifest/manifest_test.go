@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -252,7 +253,7 @@ spec:
 	m, err := LoadAgentManifest(path)
 	require.NoError(t, err)
 	require.NotNil(t, m.Spec.Agent)
-	require.Equal(t, core.ToolCallingIntentPreferPrompt, m.Spec.Agent.ToolCallingIntent)
+	require.Equal(t, agentspec.ToolCallingIntentPreferPrompt, m.Spec.Agent.ToolCallingIntent)
 	require.False(t, m.Spec.Agent.NativeToolCallingEnabled())
 }
 
@@ -297,7 +298,7 @@ spec:
 	require.NotNil(t, m.Spec.Defaults.Permissions)
 	require.Len(t, m.Spec.Defaults.Permissions.Executables, 1)
 	require.NotNil(t, m.Spec.Agent)
-	require.Equal(t, core.ToolCallingIntentPreferNative, m.Spec.Agent.ToolCallingIntent)
+	require.Equal(t, agentspec.ToolCallingIntentPreferNative, m.Spec.Agent.ToolCallingIntent)
 	require.True(t, m.Spec.Agent.NativeToolCallingEnabled())
 }
 
@@ -340,7 +341,7 @@ spec:
 }
 
 func TestLoadAgentManifest_MissingFile(t *testing.T) {
-	_, err := LoadAgentManifest("/nonexistent/path/manifest.yaml")
+	_, err := LoadAgentManifest("/nonexistent/path/yaml")
 	require.Error(t, err)
 }
 
@@ -410,7 +411,7 @@ spec:
 
 func TestSaveAndLoadAgentManifest_Roundtrip(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "manifest.yaml")
+	path := filepath.Join(dir, "yaml")
 
 	original := validManifest()
 	original.Spec.Skills = []string{"gocoder"}
@@ -434,7 +435,7 @@ func TestSaveAndLoadAgentManifest_Roundtrip(t *testing.T) {
 
 func TestSaveAgentManifest_ToNewFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "new-manifest.yaml")
+	path := filepath.Join(dir, "new-yaml")
 
 	m := validManifest()
 	require.NoError(t, SaveAgentManifest(path, m))

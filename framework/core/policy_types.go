@@ -23,10 +23,10 @@ type PolicyConditions struct {
 	ExportNames               []string                  `json:"export_names,omitempty" yaml:"export_names,omitempty"`
 	SourceDomains             []string                  `json:"source_domains,omitempty" yaml:"source_domains,omitempty"`
 	ContextClasses            []string                  `json:"context_classes,omitempty" yaml:"context_classes,omitempty"`
-	SensitivityClasses        []SensitivityClass        `json:"sensitivity_classes,omitempty" yaml:"sensitivity_classes,omitempty"`
-	RouteModes                []RouteMode               `json:"route_modes,omitempty" yaml:"route_modes,omitempty"`
+	SensitivityClasses        []string                  `json:"sensitivity_classes,omitempty" yaml:"sensitivity_classes,omitempty"`
+	RouteModes                []string                  `json:"route_modes,omitempty" yaml:"route_modes,omitempty"`
 	ProviderKinds             []ProviderKind            `json:"provider_kinds,omitempty" yaml:"provider_kinds,omitempty"`
-	ExternalProviders         []ExternalProvider        `json:"external_providers,omitempty" yaml:"external_providers,omitempty"`
+	ExternalProviders         []string                  `json:"external_providers,omitempty" yaml:"external_providers,omitempty"`
 	MinRiskClasses            []RiskClass               `json:"min_risk_classes,omitempty" yaml:"min_risk_classes,omitempty"`
 	TrustClasses              []TrustClass              `json:"trust_classes,omitempty" yaml:"trust_classes,omitempty"`
 	CapabilityKinds           []CapabilityKind          `json:"capability_kinds,omitempty" yaml:"capability_kinds,omitempty"`
@@ -84,8 +84,8 @@ type PolicyRequest struct {
 	ExportName             string
 	SourceDomain           string
 	ContextClass           string
-	SensitivityClass       SensitivityClass
-	RouteMode              RouteMode
+	SensitivityClass       string
+	RouteMode              string
 	CapabilityKind         CapabilityKind
 	RuntimeFamily          CapabilityRuntimeFamily
 	ProviderKind           ProviderKind
@@ -101,7 +101,7 @@ type PolicyRequest struct {
 	SessionOwnerID         string
 	IsOwner                bool
 	IsDelegated            bool
-	ExternalProvider       ExternalProvider
+	ExternalProvider       string
 	ExternalAccountID      string
 	ExternalChannelID      string
 	ExternalConversationID string
@@ -175,13 +175,13 @@ func (r PolicyRule) Validate() error {
 		}
 	}
 	for _, sensitivityClass := range r.Conditions.SensitivityClasses {
-		if err := sensitivityClass.Validate(); err != nil {
-			return err
+		if strings.TrimSpace(sensitivityClass) == "" {
+			return errors.New("policy sensitivity class must not be empty")
 		}
 	}
 	for _, routeMode := range r.Conditions.RouteModes {
-		if err := routeMode.Validate(); err != nil {
-			return err
+		if strings.TrimSpace(routeMode) == "" {
+			return errors.New("policy route mode must not be empty")
 		}
 	}
 	for _, channelID := range r.Conditions.ChannelIDs {

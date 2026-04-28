@@ -7,10 +7,22 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
+
+// Helper function to create a new envelope for testing
+func newTestEnvelope() *contextdata.Envelope {
+	return contextdata.NewEnvelope("test-task", "test-session")
+}
+
+// Helper function to create a new contracts context for testing (for Tool interface)
+func newTestContractsContext() *contracts.Context {
+	return &contracts.Context{Data: make(map[string]interface{})}
+}
 
 type recordingTelemetry struct {
 	events []core.Event
@@ -31,10 +43,10 @@ func (t capabilityStubTool) Category() string    { return "testing" }
 func (t capabilityStubTool) Parameters() []core.ToolParameter {
 	return []core.ToolParameter{{Name: "path", Type: "string", Required: false}}
 }
-func (t capabilityStubTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (t capabilityStubTool) Execute(context.Context, *contracts.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (t capabilityStubTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t capabilityStubTool) IsAvailable(context.Context, *contracts.Context) bool { return true }
 func (t capabilityStubTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: &core.PermissionSet{
 		Executables: []core.ExecutablePermission{{Binary: "git"}},
@@ -54,10 +66,10 @@ func (t sessionedCapabilityTool) Category() string    { return "testing" }
 func (t sessionedCapabilityTool) Parameters() []core.ToolParameter {
 	return []core.ToolParameter{{Name: "token", Type: "string"}}
 }
-func (t sessionedCapabilityTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (t sessionedCapabilityTool) Execute(context.Context, *contracts.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true, Data: map[string]interface{}{"message": t.message}}, nil
 }
-func (t sessionedCapabilityTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t sessionedCapabilityTool) IsAvailable(context.Context, *contracts.Context) bool { return true }
 func (t sessionedCapabilityTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
 }
@@ -123,10 +135,10 @@ func (t schemaValidatedTool) Category() string    { return "testing" }
 func (t schemaValidatedTool) Parameters() []core.ToolParameter {
 	return []core.ToolParameter{{Name: "path", Type: "string", Required: true}}
 }
-func (t schemaValidatedTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (t schemaValidatedTool) Execute(context.Context, *contracts.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return t.result, nil
 }
-func (t schemaValidatedTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t schemaValidatedTool) IsAvailable(context.Context, *contracts.Context) bool { return true }
 func (t schemaValidatedTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
 }
@@ -158,37 +170,39 @@ func (t unavailableCapabilityTool) Category() string    { return "testing" }
 func (t unavailableCapabilityTool) Parameters() []core.ToolParameter {
 	return nil
 }
-func (t unavailableCapabilityTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (t unavailableCapabilityTool) Execute(context.Context, *contracts.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (t unavailableCapabilityTool) IsAvailable(context.Context, *core.Context) bool { return false }
+func (t unavailableCapabilityTool) IsAvailable(context.Context, *contracts.Context) bool {
+	return false
+}
 func (t unavailableCapabilityTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
 }
 func (t unavailableCapabilityTool) Tags() []string { return nil }
 
-func (s invocableCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (s invocableCapabilityStub) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	return s.desc
 }
 
-func (s invocableCapabilityStub) Invoke(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (s invocableCapabilityStub) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*core.ToolResult, error) {
 	return s.result, nil
 }
 
-func (s *promptCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (s *promptCapabilityStub) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	return s.desc
 }
 
-func (s *promptCapabilityStub) RenderPrompt(context.Context, *core.Context, map[string]interface{}) (*core.PromptRenderResult, error) {
+func (s *promptCapabilityStub) RenderPrompt(context.Context, *contextdata.Envelope, map[string]interface{}) (*core.PromptRenderResult, error) {
 	s.calls++
 	return s.result, nil
 }
 
-func (s *resourceCapabilityStub) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (s *resourceCapabilityStub) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	return s.desc
 }
 
-func (s *resourceCapabilityStub) ReadResource(context.Context, *core.Context) (*core.ResourceReadResult, error) {
+func (s *resourceCapabilityStub) ReadResource(context.Context, *contextdata.Envelope) (*core.ResourceReadResult, error) {
 	s.calls++
 	return s.result, nil
 }
@@ -249,12 +263,12 @@ func TestInvocableCapabilityRespectsCapabilityPolicy(t *testing.T) {
 		CapabilityPolicies: []core.CapabilityPolicy{
 			{
 				Selector: agentspec.CapabilitySelector{Name: "review"},
-				Execute:  core.AgentPermissionDeny,
+				Execute:  agentspec.AgentPermissionDeny,
 			},
 		},
 	})
 
-	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "relurpic:review", nil)
+	_, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "relurpic:review", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "selector policy")
 }
@@ -275,7 +289,7 @@ func TestInvocableCapabilityTelemetryIncludesRuntimeFamily(t *testing.T) {
 		result: &core.ToolResult{Success: true},
 	}))
 
-	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "provider:catalog", nil)
+	_, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "provider:catalog", nil)
 	require.NoError(t, err)
 	require.Len(t, sink.events, 3)
 	require.Equal(t, core.EventCapabilityCall, sink.events[1].Type)
@@ -499,10 +513,10 @@ func TestCapabilityPoliciesUseExplicitRiskClasses(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.Register(capabilityStubTool{name: "cli_git"}))
 
-	registry.UpdateClassPolicy(string(core.RiskClassExecute), AgentPermissionDeny)
+	registry.UpdateClassPolicy(string(core.RiskClassExecute), agentspec.AgentPermissionDeny)
 	tool, ok := registry.Get("cli_git")
 	require.True(t, ok)
-	_, err := tool.Execute(context.Background(), core.NewContext(), nil)
+	_, err := tool.Execute(context.Background(), newTestContractsContext(), nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "capability policy")
 }
@@ -518,14 +532,14 @@ func TestCapabilitySelectorPolicyMatchesDescriptorMetadata(t *testing.T) {
 					Kind:        core.CapabilityKindTool,
 					RiskClasses: []core.RiskClass{core.RiskClassExecute},
 				},
-				Execute: core.AgentPermissionDeny,
+				Execute: agentspec.AgentPermissionDeny,
 			},
 		},
 	})
 
 	tool, ok := registry.Get("cli_git")
 	require.True(t, ok)
-	_, err := tool.Execute(context.Background(), core.NewContext(), nil)
+	_, err := tool.Execute(context.Background(), newTestContractsContext(), nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "selector policy")
 }
@@ -535,12 +549,12 @@ func TestCapturePolicySnapshotClonesRegistryPolicies(t *testing.T) {
 	require.NoError(t, registry.Register(capabilityStubTool{name: "cli_git"}))
 	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
 		ToolExecutionPolicy: map[string]ToolPolicy{
-			"cli_git": {Execute: AgentPermissionAsk},
+			"cli_git": {Execute: agentspec.AgentPermissionAsk},
 		},
 		CapabilityPolicies: []core.CapabilityPolicy{
 			{
 				Selector: agentspec.CapabilitySelector{Kind: core.CapabilityKindTool},
-				Execute:  core.AgentPermissionAsk,
+				Execute:  agentspec.AgentPermissionAsk,
 			},
 		},
 		InsertionPolicies: []core.CapabilityInsertionPolicy{
@@ -550,10 +564,10 @@ func TestCapturePolicySnapshotClonesRegistryPolicies(t *testing.T) {
 			},
 		},
 		GlobalPolicies: map[string]core.AgentPermissionLevel{
-			string(core.RiskClassExecute): core.AgentPermissionDeny,
+			string(core.RiskClassExecute): agentspec.AgentPermissionDeny,
 		},
 		ProviderPolicies: map[string]core.ProviderPolicy{
-			"remote-mcp": {Activate: core.AgentPermissionAsk},
+			"remote-mcp": {Activate: agentspec.AgentPermissionAsk},
 		},
 		RuntimeSafety: &agentspec.RuntimeSafetySpec{
 			MaxCallsPerCapability: 2,
@@ -564,17 +578,17 @@ func TestCapturePolicySnapshotClonesRegistryPolicies(t *testing.T) {
 	snapshot := registry.CapturePolicySnapshot()
 	require.NotNil(t, snapshot)
 	require.Equal(t, "agent-1", snapshot.AgentID)
-	require.Equal(t, AgentPermissionAsk, snapshot.ToolPolicies["cli_git"].Execute)
+	require.Equal(t, agentspec.AgentPermissionAsk, snapshot.ToolPolicies["cli_git"].Execute)
 	require.Len(t, snapshot.CapabilityPolicies, 1)
 	require.Len(t, snapshot.InsertionPolicies, 1)
-	require.Equal(t, core.AgentPermissionDeny, snapshot.GlobalPolicies[string(core.RiskClassExecute)])
-	require.Equal(t, core.AgentPermissionAsk, snapshot.ProviderPolicies["remote-mcp"].Activate)
+	require.Equal(t, agentspec.AgentPermissionDeny, snapshot.GlobalPolicies[string(core.RiskClassExecute)])
+	require.Equal(t, agentspec.AgentPermissionAsk, snapshot.ProviderPolicies["remote-mcp"].Activate)
 	require.NotNil(t, snapshot.RuntimeSafety)
 	require.Equal(t, 2, snapshot.RuntimeSafety.MaxCallsPerCapability)
 	require.Equal(t, "quarantined", snapshot.Revocations.Providers["remote-mcp"])
 
-	snapshot.ToolPolicies["cli_git"] = ToolPolicy{Execute: AgentPermissionAllow}
-	require.Equal(t, AgentPermissionAsk, registry.GetToolPolicies()["cli_git"].Execute)
+	snapshot.ToolPolicies["cli_git"] = ToolPolicy{Execute: agentspec.AgentPermissionAllow}
+	require.Equal(t, agentspec.AgentPermissionAsk, registry.GetToolPolicies()["cli_git"].Execute)
 }
 
 func TestCapturePolicySnapshotReflectsLivePolicyUpdates(t *testing.T) {
@@ -582,22 +596,22 @@ func TestCapturePolicySnapshotReflectsLivePolicyUpdates(t *testing.T) {
 	require.NoError(t, registry.Register(capabilityStubTool{name: "cli_git"}))
 	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
 		ToolExecutionPolicy: map[string]ToolPolicy{
-			"cli_git": {Execute: AgentPermissionAsk},
+			"cli_git": {Execute: agentspec.AgentPermissionAsk},
 		},
 		GlobalPolicies: map[string]core.AgentPermissionLevel{
-			string(core.RiskClassExecute): core.AgentPermissionAsk,
+			string(core.RiskClassExecute): agentspec.AgentPermissionAsk,
 		},
 	})
 
-	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: AgentPermissionDeny})
-	registry.UpdateClassPolicy(string(core.RiskClassExecute), core.AgentPermissionDeny)
+	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: agentspec.AgentPermissionDeny})
+	registry.UpdateClassPolicy(string(core.RiskClassExecute), agentspec.AgentPermissionDeny)
 
 	snapshot := registry.CapturePolicySnapshot()
 	require.NotNil(t, snapshot)
-	require.Equal(t, AgentPermissionDeny, snapshot.ToolPolicies["cli_git"].Execute)
-	require.Equal(t, core.AgentPermissionDeny, snapshot.GlobalPolicies[string(core.RiskClassExecute)])
-	require.Equal(t, AgentPermissionDeny, registry.GetToolPolicies()["cli_git"].Execute)
-	require.Equal(t, core.AgentPermissionDeny, registry.GetClassPolicies()[string(core.RiskClassExecute)])
+	require.Equal(t, agentspec.AgentPermissionDeny, snapshot.ToolPolicies["cli_git"].Execute)
+	require.Equal(t, agentspec.AgentPermissionDeny, snapshot.GlobalPolicies[string(core.RiskClassExecute)])
+	require.Equal(t, agentspec.AgentPermissionDeny, registry.GetToolPolicies()["cli_git"].Execute)
+	require.Equal(t, agentspec.AgentPermissionDeny, registry.GetClassPolicies()[string(core.RiskClassExecute)])
 }
 
 func TestToolWrapperRemainsStableAcrossPolicyUpdates(t *testing.T) {
@@ -609,10 +623,10 @@ func TestToolWrapperRemainsStableAcrossPolicyUpdates(t *testing.T) {
 
 	registry.UseAgentSpec("agent-1", &AgentRuntimeSpec{
 		ToolExecutionPolicy: map[string]ToolPolicy{
-			"cli_git": {Execute: AgentPermissionAsk},
+			"cli_git": {Execute: agentspec.AgentPermissionAsk},
 		},
 	})
-	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: AgentPermissionDeny})
+	registry.UpdateToolPolicy("cli_git", ToolPolicy{Execute: agentspec.AgentPermissionDeny})
 	registry.UseTelemetry(&recordingTelemetry{})
 
 	after, ok := registry.Get("cli_git")
@@ -627,7 +641,7 @@ func TestInstrumentedToolAttachesApprovalBindingMetadata(t *testing.T) {
 	tool, ok := registry.Get("file_read")
 	require.True(t, ok)
 
-	state := core.NewContext()
+	state := newTestContractsContext()
 	state.Set("task.id", "task-1")
 	result, err := tool.Execute(context.Background(), state, map[string]interface{}{"path": "README.md"})
 	require.NoError(t, err)
@@ -691,11 +705,11 @@ func TestRegisterInvocableCapabilityInvokesByIDAndName(t *testing.T) {
 
 	require.NoError(t, registry.RegisterInvocableCapability(handler))
 
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "prompt:runtime.echo", nil)
+	result, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "prompt:runtime.echo", nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", result.Data["message"])
 
-	result, err = registry.InvokeCapability(context.Background(), core.NewContext(), "runtime.echo", nil)
+	result, err = registry.InvokeCapability(context.Background(), newTestEnvelope(), "runtime.echo", nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", result.Data["message"])
 }
@@ -722,11 +736,11 @@ func TestRegisterPromptCapabilityRendersByIDAndName(t *testing.T) {
 
 	require.NoError(t, registry.RegisterPromptCapability(handler))
 
-	rendered, err := registry.RenderPrompt(context.Background(), core.NewContext(), "prompt:runtime.summary", nil)
+	rendered, err := registry.RenderPrompt(context.Background(), newTestEnvelope(), "prompt:runtime.summary", nil)
 	require.NoError(t, err)
 	require.Equal(t, "summary prompt", rendered.Messages[0].Content[0].(core.TextContentBlock).Text)
 
-	rendered, err = registry.RenderPrompt(context.Background(), core.NewContext(), "runtime.summary", nil)
+	rendered, err = registry.RenderPrompt(context.Background(), newTestEnvelope(), "runtime.summary", nil)
 	require.NoError(t, err)
 	require.Equal(t, "summary prompt", rendered.Messages[0].Content[0].(core.TextContentBlock).Text)
 }
@@ -751,11 +765,11 @@ func TestRegisterResourceCapabilityReadsByIDAndName(t *testing.T) {
 
 	require.NoError(t, registry.RegisterResourceCapability(handler))
 
-	resource, err := registry.ReadResource(context.Background(), core.NewContext(), "resource:workspace.docs")
+	resource, err := registry.ReadResource(context.Background(), newTestEnvelope(), "resource:workspace.docs")
 	require.NoError(t, err)
 	require.Equal(t, "guide", resource.Contents[0].(core.TextContentBlock).Text)
 
-	resource, err = registry.ReadResource(context.Background(), core.NewContext(), "workspace.docs")
+	resource, err = registry.ReadResource(context.Background(), newTestEnvelope(), "workspace.docs")
 	require.NoError(t, err)
 	require.Equal(t, "guide", resource.Contents[0].(core.TextContentBlock).Text)
 }
@@ -778,7 +792,7 @@ func TestRenderPromptUsesPolicyEngineAndSkipsPrechecksWhenDenied(t *testing.T) {
 	registry.AddPrecheck(precheck)
 	require.NoError(t, registry.RegisterPromptCapability(handler))
 
-	_, err := registry.RenderPrompt(context.Background(), core.NewContext(), "runtime.summary", nil)
+	_, err := registry.RenderPrompt(context.Background(), newTestEnvelope(), "runtime.summary", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "blocked")
 	require.Equal(t, 1, engine.calls)
@@ -802,7 +816,7 @@ func TestReadResourceRunsSharedPrechecks(t *testing.T) {
 	registry.AddPrecheck(precheck)
 	require.NoError(t, registry.RegisterResourceCapability(handler))
 
-	_, err := registry.ReadResource(context.Background(), core.NewContext(), "workspace.docs")
+	_, err := registry.ReadResource(context.Background(), newTestEnvelope(), "workspace.docs")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "blocked by precheck")
 	require.Equal(t, 1, precheck.calls)
@@ -813,7 +827,7 @@ func TestInvokeCapabilitySupportsProviderCapabilitiesWithoutLegacyToolAdapter(t 
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.RegisterInvocableCapability(providerInvocableCapability("remote_echo", "remote-mcp", "session-1", "adapted")))
 
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "remote_echo", map[string]interface{}{"token": "secret"})
+	result, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "remote_echo", map[string]interface{}{"token": "secret"})
 	require.NoError(t, err)
 	require.Equal(t, "adapted", result.Data["message"])
 	require.NotNil(t, result.Metadata)
@@ -826,8 +840,8 @@ func TestInvokeCapabilityRejectsUnavailableLegacyTool(t *testing.T) {
 	registry := NewCapabilityRegistry()
 	require.NoError(t, registry.Register(unavailableCapabilityTool{name: "offline_tool"}))
 
-	require.False(t, registry.CapabilityAvailable(context.Background(), core.NewContext(), "offline_tool"))
-	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "offline_tool", nil)
+	require.False(t, registry.CapabilityAvailable(context.Background(), newTestEnvelope(), "offline_tool"))
+	_, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "offline_tool", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unavailable")
 }
@@ -869,7 +883,7 @@ func TestModelCallableLLMToolSpecsIncludesProviderCapability(t *testing.T) {
 	require.Len(t, specs, 1)
 	require.Equal(t, "remote_echo", specs[0].Name)
 	// Invocation goes through InvokeCapability, not through a Tool shim.
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "remote_echo", map[string]interface{}{"token": "secret"})
+	result, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "remote_echo", map[string]interface{}{"token": "secret"})
 	require.NoError(t, err)
 	require.Equal(t, "adapted", result.Data["message"])
 }
@@ -894,7 +908,7 @@ func TestModelCallableLLMToolSpecsIncludesRelurpicCapability(t *testing.T) {
 	specs := registry.ModelCallableLLMToolSpecs()
 	require.Len(t, specs, 1)
 	require.Equal(t, "planner.plan", specs[0].Name)
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "planner.plan", nil)
+	result, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "planner.plan", nil)
 	require.NoError(t, err)
 	require.Equal(t, "planned", result.Data["message"])
 }
@@ -975,7 +989,7 @@ func TestUseAgentSpecBrowserEnabledMakesProviderBrowserCallable(t *testing.T) {
 	registry.UseAgentSpec("agent", &AgentRuntimeSpec{
 		Mode:    core.AgentModePrimary,
 		Model:   core.AgentModelConfig{Provider: "test", Name: "test"},
-		Browser: &core.AgentBrowserSpec{Enabled: true},
+		Browser: &agentspec.AgentBrowserSpec{Enabled: true},
 	})
 
 	capability, ok := registry.GetCapability("provider:browser")
@@ -985,7 +999,7 @@ func TestUseAgentSpecBrowserEnabledMakesProviderBrowserCallable(t *testing.T) {
 	specs := registry.ModelCallableLLMToolSpecs()
 	require.Len(t, specs, 1)
 	require.Equal(t, "browser", specs[0].Name)
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "browser", nil)
+	result, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "browser", nil)
 	require.NoError(t, err)
 	require.Equal(t, "browser ok", result.Data["message"])
 }
@@ -1003,10 +1017,10 @@ func TestCloneFilteredRemovesCapabilityEntriesForDroppedTools(t *testing.T) {
 	require.False(t, ok)
 	_, ok = clone.GetCapability("tool:cli_rg")
 	require.False(t, ok)
-	_, err := clone.InvokeCapability(context.Background(), core.NewContext(), "tool:cli_rg", nil)
+	_, err := clone.InvokeCapability(context.Background(), newTestEnvelope(), "tool:cli_rg", nil)
 	require.Error(t, err)
 
-	result, err := clone.InvokeCapability(context.Background(), core.NewContext(), "tool:cli_git", nil)
+	result, err := clone.InvokeCapability(context.Background(), newTestEnvelope(), "tool:cli_git", nil)
 	require.NoError(t, err)
 	require.True(t, result.Success)
 }
@@ -1025,7 +1039,7 @@ func TestInvokeCapabilityPrecheckBlocksInvocation(t *testing.T) {
 	}))
 	registry.AddPrecheck(&recordingPrecheck{err: fmt.Errorf("blocked by precheck")})
 
-	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "relurpic:writer", nil)
+	_, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "relurpic:writer", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "blocked by precheck")
 }
@@ -1047,7 +1061,7 @@ func TestInvokeCapabilitySkipsPrecheckWhenPolicyEngineDenies(t *testing.T) {
 	registry.SetPolicyEngine(engine)
 	registry.AddPrecheck(precheck)
 
-	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "relurpic:writer", nil)
+	_, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "relurpic:writer", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "denied by policy")
 	require.Equal(t, 1, engine.calls)
@@ -1064,7 +1078,7 @@ func TestCloneFilteredCopiesPrechecks(t *testing.T) {
 		return tool.Name() == "cli_git"
 	})
 
-	_, err := clone.InvokeCapability(context.Background(), core.NewContext(), "tool:cli_git", nil)
+	_, err := clone.InvokeCapability(context.Background(), newTestEnvelope(), "tool:cli_git", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "blocked by precheck")
 	require.Equal(t, 1, precheck.calls)
@@ -1135,7 +1149,7 @@ func TestRuntimeSafetyRevocationBlocksCapabilityExecution(t *testing.T) {
 
 	tool, ok := registry.Get("cli_git")
 	require.True(t, ok)
-	_, err := tool.Execute(context.Background(), core.NewContext(), nil)
+	_, err := tool.Execute(context.Background(), newTestContractsContext(), nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "revoked")
 }
@@ -1149,9 +1163,9 @@ func TestRuntimeSafetyCallBudgetBlocksRepeatedExecution(t *testing.T) {
 
 	tool, ok := registry.Get("cli_git")
 	require.True(t, ok)
-	_, err := tool.Execute(context.Background(), core.NewContext(), nil)
+	_, err := tool.Execute(context.Background(), newTestContractsContext(), nil)
 	require.NoError(t, err)
-	_, err = tool.Execute(context.Background(), core.NewContext(), nil)
+	_, err = tool.Execute(context.Background(), newTestContractsContext(), nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "call budget exceeded")
 }
@@ -1163,7 +1177,7 @@ func TestRuntimeSafetySessionBudgetBlocksLargeResults(t *testing.T) {
 		RuntimeSafety: &agentspec.RuntimeSafetySpec{MaxBytesPerSession: 10},
 	})
 
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "remote_echo", map[string]interface{}{"token": "secret"})
+	result, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "remote_echo", map[string]interface{}{"token": "secret"})
 	require.Error(t, err)
 	require.NotNil(t, result)
 	require.Contains(t, err.Error(), "byte budget exceeded")
@@ -1175,7 +1189,7 @@ func TestRuntimeSafetyTelemetryRedactsSensitiveMetadata(t *testing.T) {
 	registry.UseTelemetry(telemetry)
 	require.NoError(t, registry.RegisterInvocableCapability(providerInvocableCapability("remote_echo", "remote-mcp", "session-1", "ok")))
 
-	_, err := registry.InvokeCapability(context.Background(), core.NewContext(), "remote_echo", map[string]interface{}{"token": "super-secret"})
+	_, err := registry.InvokeCapability(context.Background(), newTestEnvelope(), "remote_echo", map[string]interface{}{"token": "super-secret"})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(telemetry.events), 2)
 	args := telemetry.events[1].Metadata["args"].(map[string]interface{})
@@ -1288,7 +1302,7 @@ func TestToolExecutionRejectsInputSchemaMismatch(t *testing.T) {
 
 	tool, ok := registry.Get("schema_echo")
 	require.True(t, ok)
-	_, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"path": 42})
+	_, err := tool.Execute(context.Background(), newTestContractsContext(), map[string]interface{}{"path": 42})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "input schema invalid")
 }
@@ -1309,7 +1323,7 @@ func TestToolExecutionRejectsOutputSchemaMismatch(t *testing.T) {
 
 	tool, ok := registry.Get("schema_echo")
 	require.True(t, ok)
-	result, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"path": "ok"})
+	result, err := tool.Execute(context.Background(), newTestContractsContext(), map[string]interface{}{"path": "ok"})
 	require.Error(t, err)
 	require.NotNil(t, result)
 	require.Contains(t, err.Error(), "output schema invalid")

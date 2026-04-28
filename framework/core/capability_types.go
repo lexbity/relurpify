@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type CapabilityKind = agentspec.CapabilityKind
@@ -76,6 +77,9 @@ const (
 	EffectClassContextInsertion   EffectClass = agentspec.EffectClassContextInsertion
 )
 
+type CapabilitySelector = agentspec.CapabilitySelector
+type SkillCapabilitySelector = agentspec.SkillCapabilitySelector
+
 type CapabilitySource struct {
 	ProviderID string          `json:"provider_id,omitempty" yaml:"provider_id,omitempty"`
 	Scope      CapabilityScope `json:"scope,omitempty" yaml:"scope,omitempty"`
@@ -88,36 +92,28 @@ type AvailabilitySpec struct {
 	Metadata  map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
-type Schema struct {
-	Type        string             `json:"type,omitempty" yaml:"type,omitempty"`
-	Properties  map[string]*Schema `json:"properties,omitempty" yaml:"properties,omitempty"`
-	Items       *Schema            `json:"items,omitempty" yaml:"items,omitempty"`
-	Required    []string           `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     any                `json:"default,omitempty" yaml:"default,omitempty"`
-	Enum        []any              `json:"enum,omitempty" yaml:"enum,omitempty"`
-	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
-	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
-	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`
-}
+// Schema is re-exported from platform/contracts for backward compatibility.
+// The canonical definition now lives in platform/contracts.
+type Schema = contracts.Schema
 
-type CoordinationRole string
+type CoordinationRole = agentspec.CoordinationRole
 
 const (
-	CoordinationRolePlanner         CoordinationRole = "planner"
-	CoordinationRoleArchitect       CoordinationRole = "architect"
-	CoordinationRoleReviewer        CoordinationRole = "reviewer"
-	CoordinationRoleVerifier        CoordinationRole = "verifier"
-	CoordinationRoleExecutor        CoordinationRole = "executor"
-	CoordinationRoleDomainPack      CoordinationRole = "domain-pack"
-	CoordinationRoleBackgroundAgent CoordinationRole = "background-agent"
+	CoordinationRolePlanner         = agentspec.CoordinationRolePlanner
+	CoordinationRoleArchitect       = agentspec.CoordinationRoleArchitect
+	CoordinationRoleReviewer        = agentspec.CoordinationRoleReviewer
+	CoordinationRoleVerifier        = agentspec.CoordinationRoleVerifier
+	CoordinationRoleExecutor        = agentspec.CoordinationRoleExecutor
+	CoordinationRoleDomainPack      = agentspec.CoordinationRoleDomainPack
+	CoordinationRoleBackgroundAgent = agentspec.CoordinationRoleBackgroundAgent
 )
 
-type CoordinationExecutionMode string
+type CoordinationExecutionMode = agentspec.CoordinationExecutionMode
 
 const (
-	CoordinationExecutionModeSync            CoordinationExecutionMode = "sync"
-	CoordinationExecutionModeSessionBacked   CoordinationExecutionMode = "session-backed"
-	CoordinationExecutionModeBackgroundAgent CoordinationExecutionMode = "background-service"
+	CoordinationExecutionModeSync            = agentspec.CoordinationExecutionModeSync
+	CoordinationExecutionModeSessionBacked   = agentspec.CoordinationExecutionModeSessionBacked
+	CoordinationExecutionModeBackgroundAgent = agentspec.CoordinationExecutionModeBackgroundAgent
 )
 
 // CoordinationTargetMetadata is the framework-owned metadata block for
@@ -266,7 +262,7 @@ type CoordinationMetadataProvider interface {
 }
 
 // ToolDescriptor derives a framework-owned capability descriptor from a tool.
-func ToolDescriptor(ctx context.Context, state *Context, tool Tool) CapabilityDescriptor {
+func ToolDescriptor(ctx context.Context, tool Tool) CapabilityDescriptor {
 	if tool == nil {
 		return CapabilityDescriptor{}
 	}
@@ -293,7 +289,7 @@ func ToolDescriptor(ctx context.Context, state *Context, tool Tool) CapabilityDe
 		if desc.InputSchema == nil {
 			desc.InputSchema = ToolInputSchema(tool)
 		}
-		if desc.Availability.Available == false && desc.Availability.Reason == "" && tool.IsAvailable(ctx, state) {
+		if desc.Availability.Available == false && desc.Availability.Reason == "" && tool.IsAvailable(ctx) {
 			desc.Availability.Available = true
 		}
 		if desc.TrustClass == "" {
@@ -333,7 +329,7 @@ func ToolDescriptor(ctx context.Context, state *Context, tool Tool) CapabilityDe
 		EffectClasses: ToolEffectClasses(tool),
 		InputSchema:   ToolInputSchema(tool),
 		Availability: AvailabilitySpec{
-			Available: tool.IsAvailable(ctx, state),
+			Available: tool.IsAvailable(ctx),
 		},
 	}
 	if provider, ok := tool.(SessionAffinityProvider); ok {

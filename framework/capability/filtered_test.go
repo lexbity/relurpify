@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // mockTool is a minimal tool implementation for testing.
@@ -17,12 +18,12 @@ func (m *mockTool) Name() string                     { return m.name }
 func (m *mockTool) Description() string              { return "mock tool" }
 func (m *mockTool) Category() string                 { return "test" }
 func (m *mockTool) Parameters() []core.ToolParameter { return nil }
-func (m *mockTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (m *mockTool) Execute(ctx context.Context, state *contracts.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (m *mockTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
-func (m *mockTool) Permissions() core.ToolPermissions                         { return core.ToolPermissions{} }
-func (m *mockTool) Tags() []string                                            { return nil }
+func (m *mockTool) IsAvailable(ctx context.Context, state *contracts.Context) bool { return true }
+func (m *mockTool) Permissions() core.ToolPermissions                              { return core.ToolPermissions{} }
+func (m *mockTool) Tags() []string                                                 { return nil }
 
 // setupTestRegistry creates a registry with some mock tools for testing.
 func setupTestRegistry(t *testing.T) *CapabilityRegistry {

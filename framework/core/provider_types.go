@@ -121,7 +121,7 @@ type Provider interface {
 }
 
 type ProviderRuntime interface {
-	Context() *Context
+	State() map[string]interface{}
 }
 
 type ProviderSnapshotter interface {

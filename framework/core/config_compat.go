@@ -2,19 +2,6 @@ package core
 
 import "codeburg.org/lexbit/relurpify/framework/agentspec"
 
-// Capability enumerates the agent capability surface used throughout the
-// framework.
-type Capability string
-
-const (
-	CapabilityPlan        Capability = "plan"
-	CapabilityExecute     Capability = "execute"
-	CapabilityCode        Capability = "code"
-	CapabilityExplain     Capability = "explain"
-	CapabilityReview      Capability = "review"
-	CapabilityHumanInLoop Capability = "human-in-loop"
-)
-
 // Config is the agent runtime configuration surface used by the framework.
 type Config struct {
 	Name              string                      `json:"name,omitempty" yaml:"name,omitempty"`

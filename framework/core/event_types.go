@@ -3,18 +3,12 @@ package core
 import (
 	"encoding/json"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/relurpnet/identity"
 )
 
-// EventActor identifies the source of a framework event.
-type EventActor struct {
-	Kind        string      `json:"kind"`
-	ID          string      `json:"id"`
-	Label       string      `json:"label,omitempty"`
-	TenantID    string      `json:"tenant_id,omitempty"`
-	SessionID   string      `json:"session_id,omitempty"`
-	Scopes      []string    `json:"scopes,omitempty"`
-	SubjectKind SubjectKind `json:"subject_kind,omitempty"`
-}
+// EventActor is re-exported from identity to maintain backward compatibility.
+type EventActor = identity.EventActor
 
 // FrameworkEvent is the replayable framework event envelope used by the V2 event log.
 type FrameworkEvent struct {
@@ -75,6 +69,14 @@ const (
 const (
 	FrameworkEventSystemStarted    = "system.started.v1"
 	FrameworkEventSystemCheckpoint = "system.checkpoint.v1"
-	FrameworkEventConfigChanged    = "config.changed.v1"
+	FrameworkEventConfigChanged    = "manifest.changed.v1"
 	FrameworkEventManifestReloaded = "manifest.reloaded.v1"
+)
+
+// Phase 4: Knowledge chunk and context policy events
+const (
+	FrameworkEventChunkCommitted        = "chunk.committed.v1"
+	FrameworkEventSummaryCommitted      = "summary.committed.v1"
+	FrameworkEventContextPolicyReloaded = "context_policy.reloaded.v1"
+	FrameworkEventProviderSessionEnded  = "provider.session.ended.v1"
 )

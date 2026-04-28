@@ -39,6 +39,7 @@ type SkillSpec struct {
 	Planning                 SkillPlanningSpec                              `yaml:"planning,omitempty" json:"planning,omitempty"`
 	Review                   SkillReviewSpec                                `yaml:"review,omitempty" json:"review,omitempty"`
 	ContextHints             SkillContextHintsSpec                          `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
+	ContextContributions     SkillContextContributionsSpec                  `yaml:"context_contributions,omitempty" json:"context_contributions,omitempty"`
 }
 
 // SkillRequiresSpec declares binary prerequisites for a skill.
@@ -82,6 +83,30 @@ type SkillReviewSpec struct {
 type SkillContextHintsSpec struct {
 	PreferredDetailLevel string   `yaml:"preferred_detail_level,omitempty" json:"preferred_detail_level,omitempty"`
 	ProtectPatterns      []string `yaml:"protect_patterns,omitempty" json:"protect_patterns,omitempty"`
+}
+
+// SkillContextContributionsSpec defines how a skill contributes to context policy.
+type SkillContextContributionsSpec struct {
+	IngestionSources []SkillIngestionSourceSpec `yaml:"ingestion_sources,omitempty" json:"ingestion_sources,omitempty"`
+	RankerAdmission  []string                   `yaml:"ranker_admission,omitempty" json:"ranker_admission,omitempty"`
+	ScannerConfig    SkillScannerConfigSpec     `yaml:"scanner_config,omitempty" json:"scanner_config,omitempty"`
+}
+
+// SkillIngestionSourceSpec defines a path pattern for skill resource ingestion.
+type SkillIngestionSourceSpec struct {
+	Path       string `yaml:"path" json:"path"`
+	SourceType string `yaml:"source_type,omitempty" json:"source_type,omitempty"`
+}
+
+// SkillScannerConfigSpec defines scanner-specific contributions from a skill.
+type SkillScannerConfigSpec struct {
+	AdditionalSignatures []SkillScannerSignatureSpec `yaml:"additional_signatures,omitempty" json:"additional_signatures,omitempty"`
+}
+
+// SkillScannerSignatureSpec defines a pattern-based signature for the scanner.
+type SkillScannerSignatureSpec struct {
+	Pattern string `yaml:"pattern" json:"pattern"`
+	Flag    string `yaml:"flag,omitempty" json:"flag,omitempty"`
 }
 
 // LoadSkillManifest parses and validates a skill manifest file.

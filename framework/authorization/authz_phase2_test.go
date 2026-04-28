@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type stubSandboxRuntimePhase2 struct {
@@ -66,12 +67,12 @@ func (taskGrantTool) Name() string                     { return "task-grant-tool
 func (taskGrantTool) Description() string              { return "task grant tool" }
 func (taskGrantTool) Category() string                 { return "test" }
 func (taskGrantTool) Parameters() []core.ToolParameter { return nil }
-func (taskGrantTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (taskGrantTool) Execute(context.Context, *contracts.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (taskGrantTool) IsAvailable(context.Context, *core.Context) bool { return true }
-func (taskGrantTool) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
-func (taskGrantTool) Tags() []string                                  { return []string{"read-only"} }
+func (taskGrantTool) IsAvailable(context.Context, *contracts.Context) bool { return true }
+func (taskGrantTool) Permissions() core.ToolPermissions                    { return core.ToolPermissions{} }
+func (taskGrantTool) Tags() []string                                       { return []string{"read-only"} }
 
 func (s stubPolicyEnginePhase2) Evaluate(ctx context.Context, req core.PolicyRequest) (core.PolicyDecision, error) {
 	return s.decision, s.err

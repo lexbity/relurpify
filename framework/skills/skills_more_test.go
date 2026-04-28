@@ -9,7 +9,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"github.com/stretchr/testify/require"
@@ -81,22 +80,22 @@ func TestResolveSkillsAndCapabilityHelpers(t *testing.T) {
 	require.NoError(t, registry.Register(resolverStubTool{name: "go_test", tags: []string{"execute", "lang:go", "test"}}))
 	require.NoError(t, registry.Register(resolverStubTool{name: "go_build", tags: []string{"execute", "lang:go", "build"}}))
 
-	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
+	policy := ResolveSkillPolicy(registry, agentspec.AgentSkillConfig{
 		PhaseCapabilities: map[string][]string{"verify": {"go_test"}},
-		PhaseCapabilitySelectors: map[string][]core.SkillCapabilitySelector{
+		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"verify": {{Tags: []string{"lang:go", "build"}}},
 		},
-		Verification: core.AgentVerificationPolicy{
+		Verification: agentspec.AgentVerificationPolicy{
 			SuccessTools: []string{"go_test"},
 		},
-		Recovery: core.AgentRecoveryPolicy{
+		Recovery: agentspec.AgentRecoveryPolicy{
 			FailureProbeTools: []string{"go_build"},
 		},
-		Planning: core.AgentPlanningPolicy{
-			RequiredBeforeEdit:        []core.SkillCapabilitySelector{{Capability: "go_test"}},
-			PreferredEditCapabilities: []core.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
+		Planning: agentspec.AgentPlanningPolicy{
+			RequiredBeforeEdit:        []agentspec.SkillCapabilitySelector{{Capability: "go_test"}},
+			PreferredEditCapabilities: []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
 		},
-		Review: core.AgentReviewPolicy{
+		Review: agentspec.AgentReviewPolicy{
 			SeverityWeights: map[string]float64{"high": 0.9},
 		},
 	})
@@ -107,11 +106,11 @@ func TestResolveSkillsAndCapabilityHelpers(t *testing.T) {
 	require.Equal(t, []string{"go_build"}, policy.Planning.PreferredEditCapabilities)
 	require.Equal(t, 0.9, policy.Review.SeverityWeights["high"])
 
-	spec := core.AgentSkillConfig{
-		Verification: core.AgentVerificationPolicy{SuccessTools: []string{"go_test"}},
+	spec := agentspec.AgentSkillConfig{
+		Verification: agentspec.AgentVerificationPolicy{SuccessTools: []string{"go_test"}},
 	}
 	require.Equal(t, []string{"go_test"}, resolveCapabilityNames(registry, spec.Verification.SuccessTools, nil))
-	require.Equal(t, []string{"go_build"}, resolveCapabilityNames(registry, nil, []core.SkillCapabilitySelector{{Capability: "go_build"}}))
+	require.Equal(t, []string{"go_build"}, resolveCapabilityNames(registry, nil, []agentspec.SkillCapabilitySelector{{Capability: "go_build"}}))
 	require.True(t, matchesAnyCapabilitySelector([]agentspec.CapabilitySelector{{Tags: []string{"lang:go"}}}, core.CapabilityDescriptor{Name: "go_build", Tags: []string{"lang:go"}}))
 	require.False(t, matchesAnyCapabilitySelector([]agentspec.CapabilitySelector{{Tags: []string{"python"}}}, core.CapabilityDescriptor{Name: "go_build", Tags: []string{"lang:go"}}))
 
@@ -122,19 +121,19 @@ func TestResolveSkillsAndCapabilityHelpers(t *testing.T) {
 
 func TestResolveAndApplySkillsWithTempManifest(t *testing.T) {
 	workspace := t.TempDir()
-	skillRoot := filepath.Join(config.New(workspace).SkillsDir(), "gocoder")
+	skillRoot := filepath.Join(manifest.New(workspace).SkillsDir(), "gocoder")
 	require.NoError(t, os.MkdirAll(filepath.Join(skillRoot, "scripts"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(skillRoot, "resources"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(skillRoot, "templates"), 0o755))
 	data, err := os.ReadFile(filepath.Join("..", "..", "relurpify_cfg", "skills", "gocoder", "skill.manifest.yaml"))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(skillRoot, "skill.manifest.yaml"), data, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(skillRoot, "skill.yaml"), data, 0o644))
 
 	registry := capability.NewRegistry()
-	base := &core.AgentRuntimeSpec{
+	base := &agentspec.AgentRuntimeSpec{
 		Prompt: "base",
-		SkillConfig: core.AgentSkillConfig{
-			Verification: core.AgentVerificationPolicy{SuccessTools: []string{"base_tool"}},
+		SkillConfig: agentspec.AgentSkillConfig{
+			Verification: agentspec.AgentVerificationPolicy{SuccessTools: []string{"base_tool"}},
 		},
 	}
 	spec, resolved, results := ResolveSkills(workspace, base, []string{"gocoder"})
@@ -152,14 +151,14 @@ func TestResolveAndApplySkillsWithTempManifest(t *testing.T) {
 
 func TestSkillPathAndCapabilityRenderHelpers(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "ws")
-	require.Equal(t, filepath.Join(root, config.DirName, "skills", "demo"), SkillRoot(root, "demo"))
-	require.Equal(t, filepath.Join(root, config.DirName, "skills", "demo", skillManifestName), SkillManifestPath(root, "demo"))
+	require.Equal(t, filepath.Join(root, manifest.DirName, "skills", "demo"), SkillRoot(root, "demo"))
+	require.Equal(t, filepath.Join(root, manifest.DirName, "skills", "demo", skillManifestName), SkillManifestPath(root, "demo"))
 	require.Equal(t, "application/json", inferSkillResourceMIMEType("demo.json"))
 	require.Equal(t, "text/plain", inferSkillResourceMIMEType("README.txt"))
 	require.Equal(t, "hello", truncateSkillCapabilityDescription("hello"))
 	require.True(t, strings.HasSuffix(truncateSkillCapabilityDescription("hello world hello world hello world hello world hello world hello world hello world hello world hello world"), "..."))
 
-	manifest := &manifest.SkillManifest{
+	skillManifest := &manifest.SkillManifest{
 		Metadata: manifest.ManifestMetadata{Name: "demo", Version: "1.0.0"},
 		Spec: manifest.SkillSpec{
 			PromptSnippets: []string{"  hello {name}  "},
@@ -167,16 +166,16 @@ func TestSkillPathAndCapabilityRenderHelpers(t *testing.T) {
 				Resources: []string{filepath.Join(root, "snippet.txt")},
 			},
 		},
-		SourcePath: filepath.Join(root, config.DirName, "skills", "demo", "skill.manifest.yaml"),
+		SourcePath: filepath.Join(root, manifest.DirName, "skills", "demo", "skill.manifest.yaml"),
 	}
-	paths := ResolveSkillPaths(manifest)
-	require.Equal(t, filepath.Join(root, config.DirName, "skills", "demo"), paths.Root)
-	require.Equal(t, []string{filepath.Join(root, config.DirName, "skills", "demo", "scripts")}, paths.Scripts)
+	paths := ResolveSkillPaths(skillManifest)
+	require.Equal(t, filepath.Join(root, manifest.DirName, "skills", "demo"), paths.Root)
+	require.Equal(t, []string{filepath.Join(root, manifest.DirName, "skills", "demo", "scripts")}, paths.Scripts)
 
-	candidates := EnumerateSkillCapabilities([]ResolvedSkill{{Manifest: manifest, Paths: paths}})
+	candidates := EnumerateSkillCapabilities([]ResolvedSkill{{Manifest: skillManifest, Paths: paths}})
 	require.NotEmpty(t, candidates)
-	require.NotEmpty(t, skillPromptCapabilities(manifest))
-	require.NotEmpty(t, skillResourceCapabilities(manifest, paths))
+	require.NotEmpty(t, skillPromptCapabilities(skillManifest))
+	require.NotEmpty(t, skillResourceCapabilities(skillManifest, paths))
 
 	rendered := RenderPlanningPolicy(ResolvedSkillPolicy{
 		Planning: ResolvedPlanningPolicy{

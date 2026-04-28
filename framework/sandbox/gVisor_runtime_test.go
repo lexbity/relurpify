@@ -17,20 +17,21 @@ func TestNewSandboxRuntimeDefaults(t *testing.T) {
 	emptyConfig := SandboxConfig{}
 
 	gt := NewSandboxRuntime(emptyConfig)
+	cfg := gt.RunConfig()
 
-	if gt.config.RunscPath != "runsc" {
-		t.Errorf("Expected default runscPath to be 'runsc', got: %q", gt.config.RunscPath)
+	if cfg.RunscPath != "runsc" {
+		t.Errorf("Expected default runscPath to be 'runsc', got: %q", cfg.RunscPath)
 	}
 
-	if gt.config.Platform != "kvm" {
-		t.Errorf("Expected default platform to be 'kvm', got: %q", gt.config.Platform)
+	if cfg.Platform != "kvm" {
+		t.Errorf("Expected default platform to be 'kvm', got: %q", cfg.Platform)
 	}
 
-	if gt.config.ContainerRuntime != "docker" {
-		t.Errorf("Expected default container runtime to be 'docker', got: %q", gt.config.ContainerRuntime)
+	if cfg.ContainerRuntime != "docker" {
+		t.Errorf("Expected default container runtime to be 'docker', got: %q", cfg.ContainerRuntime)
 	}
 
-	if !gt.config.NetworkIsolation {
+	if !cfg.NetworkIsolation {
 		t.Error("Expected default NetworkIsolation to be true")
 	}
 }
@@ -44,16 +45,17 @@ func TestNewSandboxRuntime_ExplicitConfigPreserved(t *testing.T) {
 	}
 
 	gt := NewSandboxRuntime(customConfig)
+	cfg := gt.RunConfig()
 
-	if gt.config.RunscPath != customConfig.RunscPath {
+	if cfg.RunscPath != customConfig.RunscPath {
 		t.Errorf("Explicit runscPath should be preserved")
 	}
 
-	if gt.config.Platform != customConfig.Platform {
+	if cfg.Platform != customConfig.Platform {
 		t.Errorf("Explicit platform should be preserved")
 	}
 
-	if !gt.config.NetworkIsolation {
+	if !cfg.NetworkIsolation {
 		t.Error("Explicit NetworkIsolation=false should be preserved")
 	}
 }

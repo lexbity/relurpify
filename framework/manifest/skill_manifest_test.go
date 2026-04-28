@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"codeburg.org/lexbit/relurpify/framework/config"
 )
 
 func TestSkillSpecValidation_Valid(t *testing.T) {
@@ -247,7 +245,7 @@ spec:
 
 func TestLoadSkillFlat(t *testing.T) {
 	ws := t.TempDir()
-	skillDir := filepath.Join(config.New(ws).SkillsDir(), "mypkg")
+	skillDir := filepath.Join(New(ws).SkillsDir(), "mypkg")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -264,7 +262,7 @@ spec:
     - name: cli_python
       kind: tool
 `
-	manifestPath := filepath.Join(skillDir, "skill.manifest.yaml")
+	manifestPath := filepath.Join(skillDir, "skill.yaml")
 	if err := os.WriteFile(manifestPath, []byte(content), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -294,7 +292,7 @@ func TestLoadSkillFlat_Missing(t *testing.T) {
 
 func TestLoadSkillList_PartialLoad(t *testing.T) {
 	ws := t.TempDir()
-	skillDir := filepath.Join(config.New(ws).SkillsDir(), "goodskill")
+	skillDir := filepath.Join(New(ws).SkillsDir(), "goodskill")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -309,7 +307,7 @@ spec:
     - name: file_read
       kind: tool
 `
-	if err := os.WriteFile(filepath.Join(skillDir, "skill.manifest.yaml"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte(content), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 
@@ -338,7 +336,7 @@ func TestRepositoryLanguageSkillsCarryPlanningAndReviewPolicy(t *testing.T) {
 	for _, skill := range skills {
 		skill := skill
 		t.Run(skill, func(t *testing.T) {
-			path := filepath.Join(config.New(root).SkillsDir(), skill, "skill.manifest.yaml")
+			path := filepath.Join(New(root).SkillsDir(), skill, "skill.yaml")
 			m, err := LoadSkillManifest(path)
 			if err != nil {
 				t.Fatalf("load manifest: %v", err)

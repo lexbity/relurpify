@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
@@ -166,7 +167,7 @@ func TestCapabilityRegistryAddPostcheck(t *testing.T) {
 	}
 	require.NoError(t, registry.RegisterInvocableCapability(stub))
 
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "runtime.echo", nil)
+	result, err := registry.InvokeCapability(context.Background(), contextdata.NewEnvelope("test-task", "test-session"), "runtime.echo", nil)
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, 1, postcheck.calls)
@@ -197,12 +198,12 @@ func TestCapabilityRegistryDoomLoopGuidanceContinue(t *testing.T) {
 	require.NoError(t, registry.RegisterInvocableCapability(stub))
 
 	for i := 0; i < 2; i++ {
-		result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "runtime.echo", map[string]interface{}{"value": 1})
+		result, err := registry.InvokeCapability(context.Background(), contextdata.NewEnvelope("test-task", "test-session"), "runtime.echo", map[string]interface{}{"value": 1})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 	}
 
-	result, err := registry.InvokeCapability(context.Background(), core.NewContext(), "runtime.echo", map[string]interface{}{"value": 1})
+	result, err := registry.InvokeCapability(context.Background(), contextdata.NewEnvelope("test-task", "test-session"), "runtime.echo", map[string]interface{}{"value": 1})
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	select {

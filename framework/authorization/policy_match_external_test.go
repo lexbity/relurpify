@@ -18,7 +18,7 @@ func TestRuleMatchesRequestSupportsExternalBindingConditions(t *testing.T) {
 		Enabled: true,
 		Conditions: core.PolicyConditions{
 			RequireDelegation:         &delegated,
-			ExternalProviders:         []core.ExternalProvider{core.ExternalProviderDiscord},
+			ExternalProviders:         []string{string(core.ExternalProviderDiscord)},
 			RequireExternalBinding:    &hasBinding,
 			RequireResolvedExternal:   &resolved,
 			RequireRestrictedExternal: &restricted,
@@ -26,7 +26,7 @@ func TestRuleMatchesRequestSupportsExternalBindingConditions(t *testing.T) {
 		Effect: core.PolicyEffect{Action: "allow"},
 	}, core.PolicyRequest{
 		IsDelegated:        true,
-		ExternalProvider:   core.ExternalProviderDiscord,
+		ExternalProvider:   string(core.ExternalProviderDiscord),
 		HasExternalBinding: true,
 		ResolvedExternal:   true,
 		RestrictedExternal: false,

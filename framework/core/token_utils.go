@@ -9,18 +9,6 @@ func estimateTokens(v interface{}) int {
 	switch val := v.(type) {
 	case string:
 		return estimateTextTokens(val)
-	case []Interaction:
-		total := 0
-		for _, i := range val {
-			total += estimateTextTokens(i.Content)
-		}
-		return total
-	case []KeyFact:
-		total := 0
-		for _, kf := range val {
-			total += estimateTextTokens(kf.Content)
-		}
-		return total
 	default:
 		return 0
 	}

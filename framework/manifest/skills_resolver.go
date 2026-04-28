@@ -3,8 +3,6 @@ package manifest
 import (
 	"fmt"
 	"path/filepath"
-
-	"codeburg.org/lexbit/relurpify/framework/config"
 )
 
 // LoadSkill loads a single skill by name (flat, no inheritance chain).
@@ -12,7 +10,7 @@ func LoadSkill(workspace, name string) (*SkillManifest, error) {
 	if name == "" {
 		return nil, fmt.Errorf("skill name required")
 	}
-	manifestPath := filepath.Join(config.New(workspace).SkillsDir(), name, "skill.manifest.yaml")
+	manifestPath := filepath.Join(New(workspace).SkillsDir(), name, "skill.yaml")
 	return LoadSkillManifest(manifestPath)
 }
 

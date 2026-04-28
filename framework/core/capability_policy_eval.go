@@ -19,7 +19,7 @@ func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *Capa
 	}
 	override := decision.Action
 	for _, policy := range spec.InsertionPolicies {
-		if !SelectorMatchesDescriptor(CapabilitySelectorFromAgentSpec(policy.Selector), envelope.Descriptor) {
+		if !SelectorMatchesDescriptor(CapabilitySelector(policy.Selector), envelope.Descriptor) {
 			continue
 		}
 		action := InsertionAction(policy.Action)
@@ -36,7 +36,7 @@ func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *Capa
 	return decision
 }
 
-func SelectorMatchesDescriptor(selector CapabilitySelector, desc CapabilityDescriptor) bool {
+func SelectorMatchesDescriptor(selector agentspec.CapabilitySelector, desc CapabilityDescriptor) bool {
 	if strings.TrimSpace(selector.ID) != "" && !strings.EqualFold(strings.TrimSpace(selector.ID), desc.ID) {
 		return false
 	}

@@ -17,7 +17,7 @@
 //
 // SkillManifest defines a reusable skill package — a named set of
 // capabilities and prompt templates that can be composed into an agent
-// manifest.
+// 
 //
 // # Composition
 //

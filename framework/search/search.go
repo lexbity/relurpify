@@ -10,6 +10,80 @@ import (
 	"strings"
 )
 
+// Permission constant for glob matching.
+const permissionMatchAll = "**"
+
+// SymbolKind enumerates basic symbol categories.
+type SymbolKind string
+
+const (
+	SymbolFunction SymbolKind = "function"
+	SymbolMethod   SymbolKind = "method"
+	SymbolClass    SymbolKind = "class"
+	SymbolType     SymbolKind = "type"
+	SymbolVariable SymbolKind = "variable"
+)
+
+// Symbol records a definition discovered while indexing.
+type Symbol struct {
+	Name      string
+	Kind      SymbolKind
+	File      string
+	Line      int
+	Column    int
+	Signature string
+	DocString string
+	Scope     string
+}
+
+// SymbolLocation maps a name to specific coordinates.
+type SymbolLocation struct {
+	File   string
+	Line   int
+	Column int
+	Symbol *Symbol
+}
+
+// ChunkKind enumerates the chunk type.
+type ChunkKind string
+
+const (
+	ChunkFunction ChunkKind = "function"
+	ChunkMethod   ChunkKind = "method"
+	ChunkClass    ChunkKind = "class"
+	ChunkBlock    ChunkKind = "block"
+)
+
+// CodeChunk stores snippet metadata used by search and chunk builders.
+type CodeChunk struct {
+	ID           string
+	File         string
+	Kind         ChunkKind
+	Name         string
+	StartLine    int
+	EndLine      int
+	Summary      string
+	TokenCount   int
+	Dependencies []string
+	Preview      string
+}
+
+// CodeIndex defines the capabilities required by planners and chunk builders.
+type CodeIndex interface {
+	GetFileMetadata(path string) (any, bool)
+	ListFiles() []string
+	GetSymbolsByName(name string) ([]SymbolLocation, error)
+	GetSymbolDefinition(name string) (*SymbolLocation, error)
+	GetSymbolReferences(name string) ([]SymbolLocation, error)
+	GetFileDependencies(path string) []string
+	GetDependents(path string) []string
+	GetChunksForFile(path string) []*CodeChunk
+	GetChunkByID(id string) (*CodeChunk, bool)
+	FindChunksByName(name string) []*CodeChunk
+	FindChunksByFileAndRange(path string, start, end int) []*CodeChunk
+	SearchChunks(query string, limit int) []*CodeChunk
+}
+
 // SearchMode determines which retrieval strategy the engine should prefer.
 type SearchMode int
 
@@ -240,4 +314,13 @@ func mergeResults(a, b []SearchResult, limit int) []SearchResult {
 		return out
 	}
 	return out[:limit]
+}
+
+// estimateTokens provides a rough token count estimate for text.
+// This is a simple approximation: ~4 characters per token on average.
+func estimateTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+	return len(text) / 4
 }

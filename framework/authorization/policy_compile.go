@@ -143,7 +143,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 			Operations:                convertSessionOperations(policy.Selector.Operations),
 			ActorKinds:                append([]string{}, policy.Selector.ActorKinds...),
 			ActorIDs:                  append([]string{}, policy.Selector.ActorIDs...),
-			ExternalProviders:         convertExternalProviders(policy.Selector.ExternalProviders),
+			ExternalProviders:         convertExternalProvidersToStrings(policy.Selector.ExternalProviders),
 			RequireOwnership:          policy.Selector.RequireOwnership,
 			RequireDelegation:         policy.Selector.RequireDelegation,
 			RequireExternalBinding:    policy.Selector.RequireExternalBinding,
@@ -165,7 +165,7 @@ func compileSessionPolicy(index int, policy agentspec.SessionPolicy) (core.Polic
 		ChannelIDs:                append([]string{}, corePolicy.Selector.ChannelIDs...),
 		SessionScopes:             append([]core.SessionScope{}, corePolicy.Selector.Scopes...),
 		SessionOperations:         append([]core.SessionOperation{}, corePolicy.Selector.Operations...),
-		ExternalProviders:         append([]core.ExternalProvider{}, corePolicy.Selector.ExternalProviders...),
+		ExternalProviders:         append([]string{}, corePolicy.Selector.ExternalProviders...),
 		RequireOwnership:          corePolicy.Selector.RequireOwnership,
 		RequireDelegation:         corePolicy.Selector.RequireDelegation,
 		RequireExternalBinding:    corePolicy.Selector.RequireExternalBinding,
@@ -215,10 +215,10 @@ func convertSessionOperations(values []agentspec.SessionOperation) []core.Sessio
 	return out
 }
 
-func convertExternalProviders(values []agentspec.ExternalProvider) []core.ExternalProvider {
-	out := make([]core.ExternalProvider, 0, len(values))
+func convertExternalProvidersToStrings(values []agentspec.ExternalProvider) []string {
+	out := make([]string, 0, len(values))
 	for _, value := range values {
-		out = append(out, core.ExternalProvider(value))
+		out = append(out, string(value))
 	}
 	return out
 }

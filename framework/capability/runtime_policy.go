@@ -59,10 +59,7 @@ func specRuntimeSafety(spec *AgentRuntimeSpec) *agentspec.RuntimeSafetySpec {
 	if spec == nil {
 		return nil
 	}
-	if spec.RuntimeSafety == nil {
-		return nil
-	}
-	return core.RuntimeSafetySpecFromAgentSpec(spec.RuntimeSafety)
+	return spec.RuntimeSafety
 }
 
 func (r *CapabilityRegistry) refreshRuntimePolicyLocked() {

@@ -18,9 +18,9 @@ func TestValidateStateBoundaryPolicyRejectsInvalidMemoryClass(t *testing.T) {
 func TestLintStateMapFlagsOversizeRawPayloadAndTranscript(t *testing.T) {
 	state := map[string]interface{}{
 		"tool.raw_output": strings.Repeat("x", 1500),
-		"react.history": []Interaction{
-			{Role: "user", Content: "one"},
-			{Role: "assistant", Content: "two"},
+		"react.history": []map[string]interface{}{
+			{"role": "user", "content": "one"},
+			{"role": "assistant", "content": "two"},
 		},
 	}
 	policy := StateBoundaryPolicy{
@@ -49,13 +49,13 @@ func TestLintStateMapAllowsArtifactAndMemoryReferences(t *testing.T) {
 			URI:        "workflow://artifact/artifact-1",
 		},
 		"memory.fact": MemoryReference{
-			MemoryClass: MemoryClassDeclarative,
+			MemoryClass: MemoryClassStreamed,
 			RecordKey:   "fact-1",
 			Store:       "sqlite",
 		},
 	}
 	policy := StateBoundaryPolicy{
-		AllowedMemoryClasses: []MemoryClass{MemoryClassDeclarative},
+		AllowedMemoryClasses: []MemoryClass{MemoryClassStreamed},
 		AllowedDataClasses:   []StateDataClass{StateDataClassArtifactRef, StateDataClassMemoryRef},
 		MaxStateEntryBytes:   1024,
 	}
@@ -91,13 +91,13 @@ func TestValidateStateBoundaryPolicyRejectsInvalidDataClassAndBounds(t *testing.
 func TestLintStateMapFlagsDisallowedMemoryClassAndOversizeCollection(t *testing.T) {
 	state := map[string]interface{}{
 		"memory.routine": MemoryReference{
-			MemoryClass: MemoryClassProcedural,
+			MemoryClass: MemoryClassWorking,
 			RecordKey:   "routine-1",
 		},
 		"graph.items": []string{"a", "b", "c"},
 	}
 	policy := StateBoundaryPolicy{
-		AllowedMemoryClasses:     []MemoryClass{MemoryClassDeclarative},
+		AllowedMemoryClasses:     []MemoryClass{MemoryClassStreamed},
 		AllowedDataClasses:       []StateDataClass{StateDataClassMemoryRef, StateDataClassStructuredState},
 		MaxInlineCollectionItems: 2,
 	}
@@ -135,7 +135,7 @@ func TestLintStateMapFlagsHistoryAndRetrievalWhenNotAllowed(t *testing.T) {
 
 func TestClassifierHelpersDetectStructuredShapes(t *testing.T) {
 	require.True(t, looksLikeArtifactReference(map[string]interface{}{"artifact_id": "a-1"}))
-	require.True(t, looksLikeMemoryReference(map[string]interface{}{"memory_class": "declarative", "record_key": "r-1"}))
+	require.True(t, looksLikeMemoryReference(map[string]interface{}{"memory_class": "streamed", "record_key": "r-1"}))
 	require.True(t, looksLikeTranscript([]map[string]interface{}{{"role": "assistant", "content": "done"}}))
 	require.True(t, looksLikeRetrievalDump([]map[string]interface{}{{"record_key": "fact-1"}}))
 	require.False(t, looksLikeArtifactReference(map[string]interface{}{"summary": "x"}))

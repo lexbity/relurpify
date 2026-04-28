@@ -51,9 +51,10 @@ func TestSummarizeCapabilityResultEnvelopePreservesProvenance(t *testing.T) {
 }
 
 func TestApprovalBindingPermissionMetadataIncludesScope(t *testing.T) {
-	state := NewContext()
-	state.Set("task.id", "task-1")
-	state.Set("architect.workflow_id", "wf-1")
+	state := map[string]interface{}{
+		"task.id":               "task-1",
+		"architect.workflow_id": "wf-1",
+	}
 
 	binding := ApprovalBindingFromCapability(
 		CapabilityDescriptor{

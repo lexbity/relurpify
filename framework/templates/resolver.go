@@ -50,10 +50,10 @@ func (r Resolver) ResolveWorkspaceManifestTemplate() (string, error) {
 	)
 }
 
-// ResolveWorkspaceConfigTemplate resolves the generic starter workspace config.
+// ResolveWorkspaceConfigTemplate resolves the generic starter workspace manifest.
 func (r Resolver) ResolveWorkspaceConfigTemplate() (string, error) {
 	return r.resolve(
-		filepath.Join("templates", "workspace", "config.yaml"),
+		filepath.Join("templates", "workspace", "manifest.yaml"),
 	)
 }
 

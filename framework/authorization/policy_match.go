@@ -174,9 +174,9 @@ func containsProviderKind(values []core.ProviderKind, want core.ProviderKind) bo
 	return false
 }
 
-func containsExternalProvider(values []core.ExternalProvider, want core.ExternalProvider) bool {
+func containsExternalProvider(values []string, want string) bool {
 	for _, value := range values {
-		if value == want {
+		if strings.EqualFold(value, want) {
 			return true
 		}
 	}
@@ -239,18 +239,18 @@ func containsSessionOperation(values []core.SessionOperation, want core.SessionO
 	return false
 }
 
-func containsSensitivityClass(values []core.SensitivityClass, want core.SensitivityClass) bool {
+func containsSensitivityClass(values []string, want string) bool {
 	for _, value := range values {
-		if value == want {
+		if strings.EqualFold(value, want) {
 			return true
 		}
 	}
 	return false
 }
 
-func containsRouteMode(values []core.RouteMode, want core.RouteMode) bool {
+func containsRouteMode(values []string, want string) bool {
 	for _, value := range values {
-		if value == want {
+		if strings.EqualFold(value, want) {
 			return true
 		}
 	}

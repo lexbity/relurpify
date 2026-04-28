@@ -242,3 +242,91 @@ func decodeEdge(record graphdb.EdgeRecord) (ChunkEdge, error) {
 func defaultEdgeID(edge ChunkEdge) EdgeID {
 	return EdgeID(fmt.Sprintf("%s:%s:%s", edge.FromChunk, edge.Kind, edge.ToChunk))
 }
+
+// Tombstone marks a chunk as tombstoned and records the superseding chunk ID.
+func (s *ChunkStore) Tombstone(id ChunkID, supersededBy ChunkID) error {
+	if s == nil || s.Graph == nil {
+		return errors.New("knowledge: chunk store graph is required")
+	}
+	if id == "" {
+		return errors.New("knowledge: chunk id is required")
+	}
+
+	chunk, ok, err := s.LoadIncludingTombstoned(id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("knowledge: chunk %q not found", id)
+	}
+
+	chunk.Tombstoned = true
+	chunk.SupersededBy = supersededBy
+	chunk.UpdatedAt = time.Now().UTC()
+
+	_, err = s.Save(*chunk)
+	return err
+}
+
+// LoadIncludingTombstoned loads a chunk regardless of tombstone status.
+func (s *ChunkStore) LoadIncludingTombstoned(id ChunkID) (*KnowledgeChunk, bool, error) {
+	// For now, this is equivalent to Load since we don't filter by tombstone status yet
+	return s.Load(id)
+}
+
+// MarkStale marks chunks as stale with a reason.
+func (s *ChunkStore) MarkStale(ids []ChunkID, reason string) error {
+	if s == nil || s.Graph == nil {
+		return errors.New("knowledge: chunk store graph is required")
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	for _, id := range ids {
+		chunk, ok, err := s.Load(id)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+
+		chunk.Freshness = FreshnessStale
+		chunk.UpdatedAt = time.Now().UTC()
+		if chunk.Body.Fields == nil {
+			chunk.Body.Fields = make(map[string]any)
+		}
+		chunk.Body.Fields["stale_reason"] = reason
+
+		_, err = s.Save(*chunk)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// MarkStaleByCoverageHash marks all chunks with the given coverage hash as stale.
+func (s *ChunkStore) MarkStaleByCoverageHash(coverageHash string) error {
+	if s == nil || s.Graph == nil {
+		return errors.New("knowledge: chunk store graph is required")
+	}
+	if coverageHash == "" {
+		return nil
+	}
+
+	chunks, err := s.findMatching(func(chunk KnowledgeChunk) bool {
+		return chunk.CoverageHash == coverageHash
+	})
+	if err != nil {
+		return err
+	}
+
+	var ids []ChunkID
+	for _, chunk := range chunks {
+		ids = append(ids, chunk.ID)
+	}
+
+	return s.MarkStale(ids, "coverage_hash_changed")
+}

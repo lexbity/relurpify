@@ -8,7 +8,7 @@ type AgentModelConfigOverlay struct {
 	MaxTokens   *int     `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
 }
 
-// MergeAgentModelConfig applies overlays to the base model config.
+// MergeAgentModelConfig applies overlays to the base model manifest.
 func MergeAgentModelConfig(base AgentModelConfig, overlays ...AgentModelConfigOverlay) AgentModelConfig {
 	merged := base
 	for _, overlay := range overlays {

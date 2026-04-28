@@ -2,6 +2,17 @@ package core
 
 import "context"
 
+// TaskType categorizes tasks within the framework.
+type TaskType string
+
+const (
+	TaskTypePlan           TaskType = "plan"
+	TaskTypeExecute        TaskType = "execute"
+	TaskTypeReview         TaskType = "review"
+	TaskTypeExplain        TaskType = "explain"
+	TaskTypeCodeGeneration TaskType = "code-generation"
+)
+
 type taskContextKey struct{}
 
 // TaskContext carries the current task metadata through the execution context.

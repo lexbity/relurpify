@@ -1,49 +1,63 @@
 package core
 
-import "context"
+import (
+	"context"
+
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
+
+// Re-export tool contracts from platform/contracts for backward compatibility.
+// These type aliases allow existing code to continue using core.Tool, core.ToolParameter, etc.
 
 // Tag constants classify tools for policy enforcement.
 const (
-	TagReadOnly    = "read-only"
-	TagExecute     = "execute"
-	TagDestructive = "destructive"
-	TagNetwork     = "network"
+	TagReadOnly    = contracts.TagReadOnly
+	TagExecute     = contracts.TagExecute
+	TagDestructive = contracts.TagDestructive
+	TagNetwork     = contracts.TagNetwork
 )
 
-// Tool defines local-native capabilities accessible to agents. Tool is no
-// longer the umbrella term for every callable capability; provider-backed and
-// Relurpic capabilities may also be callable without being tools. The gVisor
-// sandbox and executable allowlist assumptions attach to this local-native
-// runtime family, not to every callable capability in the framework.
-type Tool interface {
-	Name() string
-	Description() string
-	Category() string
-	Parameters() []ToolParameter
-	Execute(ctx context.Context, state *Context, args map[string]interface{}) (*ToolResult, error)
-	IsAvailable(ctx context.Context, state *Context) bool
-	Permissions() ToolPermissions
-	Tags() []string
-}
+// Tool defines local-native capabilities accessible to agents.
+type Tool = contracts.Tool
 
 // ToolParameter describes an argument the tool accepts.
-type ToolParameter struct {
-	Name        string
-	Type        string
-	Description string
-	Required    bool
-	Default     interface{}
-}
+type ToolParameter = contracts.ToolParameter
 
 // ToolResult is returned by every tool execution.
-type ToolResult struct {
-	Success  bool
-	Data     map[string]interface{}
-	Error    string
-	Metadata map[string]interface{}
+type ToolResult = contracts.ToolResult
+
+// CapabilityExecutionResult is the capability-native name for execution results.
+type CapabilityExecutionResult = contracts.CapabilityExecutionResult
+
+// NewToolResult creates a ToolResult with the provided data.
+func NewToolResult(data map[string]interface{}) *ToolResult {
+	return &ToolResult{
+		Success: true,
+		Data:    data,
+	}
 }
 
-// CapabilityExecutionResult is the capability-native name for execution
-// results. ToolResult remains during the migration because local tools are one
-// callable capability family.
-type CapabilityExecutionResult = ToolResult
+// NewToolResultWithError creates a failed ToolResult with an error message.
+func NewToolResultWithError(err string) *ToolResult {
+	return &ToolResult{
+		Success: false,
+		Error:   err,
+	}
+}
+
+// ToolResultFromContext creates a ToolResult from execution context.
+func ToolResultFromContext(ctx context.Context, data map[string]interface{}) *ToolResult {
+	_ = ctx // reserved for future context-aware behavior
+	return NewToolResult(data)
+}
+
+// BackendClass is re-exported from platform/contracts.
+type BackendClass = contracts.BackendClass
+
+const (
+	BackendClassTransport = contracts.BackendClassTransport
+	BackendClassNative    = contracts.BackendClassNative
+)
+
+// BackendCapabilities is re-exported from platform/contracts.
+type BackendCapabilities = contracts.BackendCapabilities

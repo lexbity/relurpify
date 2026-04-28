@@ -4,9 +4,21 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-type Context = core.Context
+// Types from platform/contracts (tool infrastructure)
+type Tool = contracts.Tool
+type ToolParameter = contracts.ToolParameter
+type ToolPermissions = contracts.ToolPermissions
+type ToolResult = contracts.ToolResult
+type CapabilityExecutionResult = contracts.CapabilityExecutionResult
+type PermissionSet = contracts.PermissionSet
+type PermissionDescriptor = contracts.PermissionDescriptor
+type PermissionDeniedError = contracts.PermissionDeniedError
+type FileSystemAction = contracts.FileSystemAction
+
+// Types from framework/core (capability system)
 type CapabilityKind = core.CapabilityKind
 type CapabilityDescriptor = core.CapabilityDescriptor
 type CapabilityRuntimeFamily = core.CapabilityRuntimeFamily
@@ -14,25 +26,39 @@ type CapabilitySource = core.CapabilitySource
 type TrustClass = core.TrustClass
 type RiskClass = core.RiskClass
 type EffectClass = core.EffectClass
-type Tool = core.Tool
-type ToolParameter = core.ToolParameter
-type ToolPermissions = core.ToolPermissions
-type ToolResult = core.ToolResult
-type CapabilityExecutionResult = core.CapabilityExecutionResult
 type Telemetry = core.Telemetry
-type AgentRuntimeSpec = agentspec.AgentRuntimeSpec
-type ToolPolicy = agentspec.ToolPolicy
-type PermissionManager = authorization.PermissionManager
-type PermissionSet = core.PermissionSet
-type AgentPermissionLevel = agentspec.AgentPermissionLevel
 type ToolCall = core.ToolCall
-type PermissionDescriptor = core.PermissionDescriptor
-type PermissionDeniedError = core.PermissionDeniedError
 type Event = core.Event
 type ProviderDescriptor = core.ProviderDescriptor
 type ProviderSession = core.ProviderSession
 type ProviderHealthSnapshot = core.ProviderHealthSnapshot
 
+// Types from framework/agentspec
+type AgentRuntimeSpec = agentspec.AgentRuntimeSpec
+type ToolPolicy = agentspec.ToolPolicy
+type AgentPermissionLevel = agentspec.AgentPermissionLevel
+
+// Types from framework/authorization
+type PermissionManager = authorization.PermissionManager
+
+// Constants from platform/contracts
+type Tag = string
+
+const (
+	TagReadOnly    Tag = contracts.TagReadOnly
+	TagExecute     Tag = contracts.TagExecute
+	TagDestructive Tag = contracts.TagDestructive
+	TagNetwork     Tag = contracts.TagNetwork
+)
+
+const (
+	FileSystemRead    FileSystemAction = contracts.FileSystemRead
+	FileSystemWrite   FileSystemAction = contracts.FileSystemWrite
+	FileSystemExecute FileSystemAction = contracts.FileSystemExecute
+	FileSystemList    FileSystemAction = contracts.FileSystemList
+)
+
+// Constants from framework/core
 const (
 	CapabilityKindTool = core.CapabilityKindTool
 )
@@ -72,20 +98,7 @@ const (
 )
 
 const (
-	FileSystemRead    = core.FileSystemRead
-	FileSystemWrite   = core.FileSystemWrite
-	FileSystemExecute = core.FileSystemExecute
-	FileSystemList    = core.FileSystemList
-)
-
-const (
-	AgentPermissionAllow = core.AgentPermissionAllow
-	AgentPermissionDeny  = core.AgentPermissionDeny
-	AgentPermissionAsk   = core.AgentPermissionAsk
-)
-
-const (
-	PermissionTypeHITL = core.PermissionTypeHITL
+	PermissionTypeHITL = contracts.PermissionTypeHITL
 )
 
 const (

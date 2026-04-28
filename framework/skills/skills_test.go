@@ -3,13 +3,13 @@ package skills
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestResolveSkillPolicyUsesCapabilityRegistry(t *testing.T) {
 	registry := capability.NewRegistry()
-	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{})
+	policy := ResolveSkillPolicy(registry, agentspec.AgentSkillConfig{})
 	if policy.PhaseCapabilities != nil {
 		t.Fatalf("expected empty phase capabilities, got %#v", policy.PhaseCapabilities)
 	}

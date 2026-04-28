@@ -3,6 +3,7 @@ package core
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +18,7 @@ func TestValidateSessionPolicyAcceptsValidPolicy(t *testing.T) {
 			Scopes:           []SessionScope{SessionScopePerChannelPeer},
 			RequireOwnership: &ownerOnly,
 		},
-		Effect:      AgentPermissionAllow,
+		Effect:      agentspec.AgentPermissionAllow,
 		Approvers:   []string{"ops"},
 		ApprovalTTL: "30m",
 	})
@@ -29,7 +30,7 @@ func TestValidateSessionPolicyRejectsEmptySelector(t *testing.T) {
 		ID:      "bad",
 		Name:    "Bad",
 		Enabled: true,
-		Effect:  AgentPermissionAllow,
+		Effect:  agentspec.AgentPermissionAllow,
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "selector invalid")
@@ -52,7 +53,7 @@ func TestValidateSessionSelectorAcceptsDelegationAndExternalBindingFields(t *tes
 		RequireDelegation:       &delegated,
 		RequireExternalBinding:  &hasBinding,
 		RequireResolvedExternal: &resolved,
-		ExternalProviders:       []ExternalProvider{ExternalProviderDiscord},
+		ExternalProviders:       []string{"discord"},
 	})
 	require.NoError(t, err)
 }

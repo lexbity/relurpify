@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,10 +71,10 @@ func (s stubPermTool) Name() string                     { return s.name }
 func (s stubPermTool) Description() string              { return "stub" }
 func (s stubPermTool) Category() string                 { return "test" }
 func (s stubPermTool) Parameters() []core.ToolParameter { return nil }
-func (s stubPermTool) Execute(_ context.Context, _ *core.Context, _ map[string]interface{}) (*core.ToolResult, error) {
+func (s stubPermTool) Execute(_ context.Context, _ *contracts.Context, _ map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (s stubPermTool) IsAvailable(_ context.Context, _ *core.Context) bool { return true }
+func (s stubPermTool) IsAvailable(_ context.Context, _ *contracts.Context) bool { return true }
 func (s stubPermTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: s.perms}
 }

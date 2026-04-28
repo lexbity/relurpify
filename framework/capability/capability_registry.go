@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -515,7 +516,7 @@ func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(tool Tool, seenID
 	if tool == nil {
 		return core.CapabilityDescriptor{}, nil, fmt.Errorf("tool required")
 	}
-	desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), nil, tool))
+	desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), tool))
 	if desc.RuntimeFamily != core.CapabilityRuntimeFamilyLocalTool {
 		return core.CapabilityDescriptor{}, nil, fmt.Errorf("legacy tool registration only supports local-tool runtime family; %s is %s", desc.ID, desc.RuntimeFamily)
 	}
@@ -843,7 +844,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(Tool) bool) *CapabilityRegi
 			continue
 		}
 		clonedTool := cloneTool(entry.legacyTool, clone)
-		desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), nil, unwrapTool(clonedTool)))
+		desc := core.NormalizeCapabilityDescriptor(core.ToolDescriptor(context.Background(), unwrapTool(clonedTool)))
 		clone.capabilities[desc.ID] = desc
 		clonedEntry := *entry
 		clonedEntry.descriptor = desc
@@ -870,7 +871,7 @@ func cloneTool(tool Tool, registry *CapabilityRegistry) Tool {
 }
 
 // InvokeCapability executes an invocable capability by capability ID or public name.
-func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *Context, idOrName string, args map[string]interface{}) (*ToolResult, error) {
+func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*ToolResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -910,7 +911,7 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state *Contex
 }
 
 // RenderPrompt executes a runtime-backed prompt capability by capability ID or public name.
-func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state *Context, idOrName string, args map[string]interface{}) (*core.PromptRenderResult, error) {
+func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.PromptRenderResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -926,7 +927,7 @@ func (r *CapabilityRegistry) RenderPrompt(ctx context.Context, state *Context, i
 }
 
 // ReadResource executes a runtime-backed resource capability by capability ID or public name.
-func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *Context, idOrName string) (*core.ResourceReadResult, error) {
+func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *contextdata.Envelope, idOrName string) (*core.ResourceReadResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
 	}
@@ -941,7 +942,7 @@ func (r *CapabilityRegistry) ReadResource(ctx context.Context, state *Context, i
 	return resourceHandler.ReadResource(ctx, state)
 }
 
-func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, state *Context, idOrName string, args map[string]interface{}) (*capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*capabilityEntry, error) {
 	entry, err := r.capabilityEntry(idOrName)
 	if err != nil {
 		return nil, err
@@ -1087,7 +1088,7 @@ func (r *CapabilityRegistry) capabilityEntry(idOrName string) (*capabilityEntry,
 }
 
 // CapabilityAvailable reports whether a registered capability is currently available for invocation.
-func (r *CapabilityRegistry) CapabilityAvailable(ctx context.Context, state *Context, idOrName string) bool {
+func (r *CapabilityRegistry) CapabilityAvailable(ctx context.Context, state *contextdata.Envelope, idOrName string) bool {
 	if r == nil {
 		return false
 	}

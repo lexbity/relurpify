@@ -9,6 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
@@ -143,7 +144,7 @@ type skillPromptCapability struct {
 	snippet   string
 }
 
-func (c skillPromptCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (c skillPromptCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	name := fmt.Sprintf("%s.prompt.%d", c.skillName, c.index)
 	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
 		ID:          fmt.Sprintf("prompt:%s:%d", c.skillName, c.index),
@@ -171,7 +172,7 @@ func (c skillPromptCapability) Descriptor(context.Context, *core.Context) core.C
 	})
 }
 
-func (c skillPromptCapability) RenderPrompt(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.PromptRenderResult, error) {
+func (c skillPromptCapability) RenderPrompt(_ context.Context, _ *contextdata.Envelope, args map[string]interface{}) (*core.PromptRenderResult, error) {
 	content := c.snippet
 	for key, value := range args {
 		content = strings.ReplaceAll(content, "{"+key+"}", fmt.Sprint(value))
@@ -193,7 +194,7 @@ type skillResourceCapability struct {
 	agentID   string
 }
 
-func (c skillResourceCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (c skillResourceCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	return core.NormalizeCapabilityDescriptor(core.CapabilityDescriptor{
 		ID:          fmt.Sprintf("resource:%s:%s", c.skillName, filepath.ToSlash(c.base)),
 		Kind:        core.CapabilityKindResource,
@@ -218,7 +219,7 @@ func (c skillResourceCapability) Descriptor(context.Context, *core.Context) core
 	})
 }
 
-func (c skillResourceCapability) ReadResource(ctx context.Context, _ *core.Context) (*core.ResourceReadResult, error) {
+func (c skillResourceCapability) ReadResource(ctx context.Context, _ *contextdata.Envelope) (*core.ResourceReadResult, error) {
 	if c.manager != nil {
 		if err := c.manager.CheckFileAccess(ctx, c.agentID, core.FileSystemRead, c.path); err != nil {
 			return nil, err

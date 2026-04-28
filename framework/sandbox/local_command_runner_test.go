@@ -221,48 +221,72 @@ func TestLocalCommandRunner_ResolveWorkdir_RelativeInside_Accepted(t *testing.T)
 
 // ---- SandboxCommandRunner constructor ----
 
-func TestNewSandboxCommandRunner_NilManifest(t *testing.T) {
+func TestNewSandboxCommandRunner_NilConfig(t *testing.T) {
 	rt := &stubSandboxRuntime{}
-	_, err := NewSandboxCommandRunner(nil, rt, "/tmp/ws")
+	_, err := NewSandboxCommandRunner(nil, rt)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "manifest required")
+	assert.Contains(t, err.Error(), "config required")
 }
 
 func TestNewSandboxCommandRunner_NilRuntime(t *testing.T) {
 	m := minimalAgentManifest()
-	_, err := NewSandboxCommandRunner(m, nil, "/tmp/ws")
+	config := &CommandRunnerConfig{
+		Image:           m.Spec.Image,
+		RunAsUser:       m.Spec.Security.RunAsUser,
+		ReadOnlyRoot:    m.Spec.Security.ReadOnlyRoot,
+		NoNewPrivileges: m.Spec.Security.NoNewPrivileges,
+		Workspace:       "/tmp/ws",
+	}
+	_, err := NewSandboxCommandRunner(config, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "runtime required")
 }
 
 func TestNewSandboxCommandRunner_EmptyWorkspace(t *testing.T) {
 	m := minimalAgentManifest()
+	config := &CommandRunnerConfig{
+		Image:           m.Spec.Image,
+		RunAsUser:       m.Spec.Security.RunAsUser,
+		ReadOnlyRoot:    m.Spec.Security.ReadOnlyRoot,
+		NoNewPrivileges: m.Spec.Security.NoNewPrivileges,
+		Workspace:       "",
+	}
 	rt := &stubSandboxRuntime{}
-	_, err := NewSandboxCommandRunner(m, rt, "")
+	_, err := NewSandboxCommandRunner(config, rt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workspace required")
 }
 
 func TestNewSandboxCommandRunner_Valid(t *testing.T) {
 	m := minimalAgentManifest()
+	config := &CommandRunnerConfig{
+		Image:           m.Spec.Image,
+		RunAsUser:       m.Spec.Security.RunAsUser,
+		ReadOnlyRoot:    m.Spec.Security.ReadOnlyRoot,
+		NoNewPrivileges: m.Spec.Security.NoNewPrivileges,
+		Workspace:       "/tmp/ws",
+	}
 	rt := &stubSandboxRuntime{
 		config: SandboxConfig{ContainerRuntime: "docker", RunscPath: "/usr/bin/runsc"},
 	}
-	runner, err := NewSandboxCommandRunner(m, rt, "/tmp/ws")
+	runner, err := NewSandboxCommandRunner(config, rt)
 	require.NoError(t, err)
 	require.NotNil(t, runner)
 	assert.Equal(t, "/tmp/ws", runner.workspace)
 	assert.Equal(t, "test-image:latest", runner.image)
 }
 
-func TestNewSandboxCommandRunner_SetsSecurityFieldsFromManifest(t *testing.T) {
-	m := minimalAgentManifest()
-	m.Spec.Security.RunAsUser = 1000
-	m.Spec.Security.ReadOnlyRoot = true
-	m.Spec.Security.NoNewPrivileges = true
+func TestNewSandboxCommandRunner_SetsSecurityFieldsFromConfig(t *testing.T) {
+	config := &CommandRunnerConfig{
+		Image:           "test-image:latest",
+		RunAsUser:       1000,
+		ReadOnlyRoot:    true,
+		NoNewPrivileges: true,
+		Workspace:       "/tmp/ws",
+	}
 
 	rt := &stubSandboxRuntime{}
-	runner, err := NewSandboxCommandRunner(m, rt, "/tmp/ws")
+	runner, err := NewSandboxCommandRunner(config, rt)
 	require.NoError(t, err)
 	assert.Equal(t, 1000, runner.user)
 	assert.True(t, runner.readOnlyRoot)
@@ -379,8 +403,15 @@ func minimalAgentManifest() *manifest.AgentManifest {
 func sandboxRunnerForWorkspaceTests(t *testing.T, workspace string) *SandboxCommandRunner {
 	t.Helper()
 	m := minimalAgentManifest()
+	config := &CommandRunnerConfig{
+		Image:           m.Spec.Image,
+		RunAsUser:       m.Spec.Security.RunAsUser,
+		ReadOnlyRoot:    m.Spec.Security.ReadOnlyRoot,
+		NoNewPrivileges: m.Spec.Security.NoNewPrivileges,
+		Workspace:       workspace,
+	}
 	rt := &stubSandboxRuntime{}
-	runner, err := NewSandboxCommandRunner(m, rt, workspace)
+	runner, err := NewSandboxCommandRunner(config, rt)
 	require.NoError(t, err)
 	return runner
 }

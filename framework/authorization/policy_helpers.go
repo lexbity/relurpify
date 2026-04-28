@@ -3,12 +3,12 @@ package authorization
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // DecideByPatterns returns allow/deny/ask based on deny-first then allow list.
-func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision core.AgentPermissionLevel) (core.AgentPermissionLevel, string) {
+func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision contracts.AgentPermissionLevel) (contracts.AgentPermissionLevel, string) {
 	target = strings.TrimSpace(target)
 	for _, pattern := range denyPatterns {
 		pattern = strings.TrimSpace(pattern)
@@ -16,7 +16,7 @@ func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defau
 			continue
 		}
 		if search.MatchGlob(pattern, target) {
-			return core.AgentPermissionDeny, pattern
+			return contracts.AgentPermissionDeny, pattern
 		}
 	}
 	for _, pattern := range allowPatterns {
@@ -25,11 +25,11 @@ func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defau
 			continue
 		}
 		if search.MatchGlob(pattern, target) {
-			return core.AgentPermissionAllow, pattern
+			return contracts.AgentPermissionAllow, pattern
 		}
 	}
 	if defaultDecision == "" {
-		defaultDecision = core.AgentPermissionAllow
+		defaultDecision = contracts.AgentPermissionAllow
 	}
 	return defaultDecision, ""
 }

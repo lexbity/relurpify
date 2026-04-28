@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,10 +19,12 @@ func (descriptorTestTool) Parameters() []ToolParameter {
 		{Name: "limit", Type: "integer", Required: false, Default: 5},
 	}
 }
-func (descriptorTestTool) Execute(context.Context, *Context, map[string]interface{}) (*ToolResult, error) {
+func (descriptorTestTool) Execute(ctx context.Context, state *contracts.Context, args map[string]interface{}) (*ToolResult, error) {
 	return &ToolResult{Success: true}, nil
 }
-func (descriptorTestTool) IsAvailable(context.Context, *Context) bool { return true }
+func (descriptorTestTool) IsAvailable(ctx context.Context, state *contracts.Context) bool {
+	return true
+}
 func (descriptorTestTool) Permissions() ToolPermissions {
 	return ToolPermissions{Permissions: &PermissionSet{
 		FileSystem: []FileSystemPermission{

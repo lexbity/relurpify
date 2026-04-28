@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox"
@@ -134,7 +133,7 @@ func buildSandboxPolicy(baseFS string, agentManifest *manifest.AgentManifest) sa
 	policy.NetworkRules = buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
 	policy.ReadOnlyRoot = agentManifest.Spec.Security.ReadOnlyRoot
 	policy.NoNewPrivileges = agentManifest.Spec.Security.NoNewPrivileges
-	policy.ProtectedPaths = config.New(baseFS).GovernanceRoots()
+	policy.ProtectedPaths = manifest.New(baseFS).GovernanceRoots()
 	return policy
 }
 
@@ -158,7 +157,7 @@ func buildNetworkPolicy(perms []core.NetworkPermission) []sandbox.NetworkRule {
 }
 
 // Execute enforces permissions prior to delegating to the runtime executor.
-func (r *AgentRegistration) Execute(ctx context.Context, agent graph.WorkflowExecutor, task *core.Task, state *core.Context) (*core.Result, error) {
+func (r *AgentRegistration) Execute(ctx context.Context, agent core.AgentExecutor, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
 	if agent == nil {
 		return nil, errors.New("agent missing")
 	}

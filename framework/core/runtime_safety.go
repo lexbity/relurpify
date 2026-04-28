@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/framework/agentspec"
 )
 
 type RuntimeSafetySpec struct {
@@ -37,6 +39,22 @@ func (s RuntimeSafetySpec) RedactionEnabled() bool {
 		return true
 	}
 	return *s.RedactSensitiveMetadata
+}
+
+// RuntimeSafetySpecToCore converts an agentspec.RuntimeSafetySpec to core.RuntimeSafetySpec.
+func RuntimeSafetySpecToCore(spec *agentspec.RuntimeSafetySpec) *RuntimeSafetySpec {
+	if spec == nil {
+		return nil
+	}
+	return &RuntimeSafetySpec{
+		MaxCallsPerCapability:     spec.MaxCallsPerCapability,
+		MaxCallsPerProvider:       spec.MaxCallsPerProvider,
+		MaxBytesPerSession:        spec.MaxBytesPerSession,
+		MaxOutputTokensSession:    spec.MaxOutputTokensSession,
+		MaxSubprocessesPerSession: spec.MaxSubprocessesPerSession,
+		MaxNetworkRequestsSession: spec.MaxNetworkRequestsSession,
+		RedactSensitiveMetadata:   spec.RedactSensitiveMetadata,
+	}
 }
 
 func RedactMetadataMap(input map[string]interface{}) map[string]interface{} {

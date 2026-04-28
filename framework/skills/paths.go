@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 )
 
@@ -116,7 +115,7 @@ func workspaceRootForSkill(skillRoot string) (string, error) {
 		return "", fmt.Errorf("invalid skill root: %s", skillRoot)
 	}
 	cfgRoot := filepath.Dir(skillsDir)
-	if filepath.Base(cfgRoot) != frameworkconfig.DirName {
+	if filepath.Base(cfgRoot) != manifest.DirName {
 		return "", fmt.Errorf("invalid skill root: %s", skillRoot)
 	}
 	return filepath.Dir(cfgRoot), nil
@@ -156,7 +155,7 @@ func logSkillMessage(workspace, message string) {
 		return
 	}
 
-	logDir := filepath.Join(configDir(workspace), "logs")
+	logDir := filepath.Join(manifest.New(workspace).SkillsDir(), "logs")
 	if mkErr := os.MkdirAll(logDir, 0o755); mkErr != nil {
 		return
 	}
@@ -170,5 +169,5 @@ func logSkillMessage(workspace, message string) {
 }
 
 func configDir(workspace string) string {
-	return frameworkconfig.New(workspace).ConfigRoot()
+	return manifest.New(workspace).ConfigRoot()
 }

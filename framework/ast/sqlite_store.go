@@ -12,6 +12,9 @@ import (
 )
 
 // SQLiteStore persists AST data in a SQLite database.
+// TODO: Move this file to platform/ast/sqlite_store.go to maintain clean
+// separation between framework interfaces and storage backends. This is deferred
+// due to test dependencies that create import cycles when moved.
 type SQLiteStore struct {
 	db *sql.DB
 }

@@ -35,7 +35,7 @@ func TestResolverPrefersSharedRoot(t *testing.T) {
 
 func TestResolverWorkspaceConfigTemplate(t *testing.T) {
 	root := t.TempDir()
-	configTemplate := filepath.Join(root, "templates", "workspace", "config.yaml")
+	configTemplate := filepath.Join(root, "templates", "workspace", "manifest.yaml")
 	if err := os.MkdirAll(filepath.Dir(configTemplate), 0o755); err != nil {
 		t.Fatal(err)
 	}

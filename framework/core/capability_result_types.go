@@ -18,6 +18,24 @@ const (
 	InsertionActionDenied       InsertionAction = agentspec.InsertionActionDenied
 )
 
+// CapabilityExposure defines the exposure level of a capability.
+type CapabilityExposure = agentspec.CapabilityExposure
+
+const (
+	// CapabilityExposureHidden means the capability is not exposed.
+	CapabilityExposureHidden = agentspec.CapabilityExposureHidden
+	// CapabilityExposureInspectable means the capability can be inspected but not called.
+	CapabilityExposureInspectable = agentspec.CapabilityExposureInspectable
+	// CapabilityExposureCallable means the capability can be called.
+	CapabilityExposureCallable = agentspec.CapabilityExposureCallable
+)
+
+// CapabilityExposurePolicy configures visibility of admitted capabilities.
+type CapabilityExposurePolicy = agentspec.CapabilityExposurePolicy
+
+// CapabilityInsertionPolicy configures how capability output may be inserted.
+type CapabilityInsertionPolicy = agentspec.CapabilityInsertionPolicy
+
 type ContentDisposition string
 
 const (
@@ -307,13 +325,17 @@ func moreRestrictiveInsertionDecision(base, candidate InsertionDecision) Inserti
 	return candidate
 }
 
-func ApprovalBindingFromCapability(descriptor CapabilityDescriptor, state *Context, args map[string]interface{}) *ApprovalBinding {
+func ApprovalBindingFromCapability(descriptor CapabilityDescriptor, state map[string]interface{}, args map[string]interface{}) *ApprovalBinding {
 	targetResource := inferTargetResource(args)
 	taskID := ""
 	workflowID := ""
 	if state != nil {
-		taskID = strings.TrimSpace(state.GetString("task.id"))
-		workflowID = strings.TrimSpace(state.GetString("architect.workflow_id"))
+		if v, ok := state["task.id"].(string); ok {
+			taskID = strings.TrimSpace(v)
+		}
+		if v, ok := state["architect.workflow_id"].(string); ok {
+			workflowID = strings.TrimSpace(v)
+		}
 	}
 	if descriptor.Source.ProviderID == "" &&
 		descriptor.Source.SessionID == "" &&

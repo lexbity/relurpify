@@ -6,7 +6,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,22 +23,22 @@ func (t resolverStubTool) Category() string    { return "test" }
 func (t resolverStubTool) Parameters() []core.ToolParameter {
 	return nil
 }
-func (t resolverStubTool) Execute(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (t resolverStubTool) Execute(context.Context, *contracts.Context, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
-func (t resolverStubTool) IsAvailable(context.Context, *core.Context) bool { return true }
-func (t resolverStubTool) Permissions() core.ToolPermissions               { return core.ToolPermissions{} }
-func (t resolverStubTool) Tags() []string                                  { return t.tags }
+func (t resolverStubTool) IsAvailable(context.Context, *contracts.Context) bool { return true }
+func (t resolverStubTool) Permissions() core.ToolPermissions                    { return core.ToolPermissions{} }
+func (t resolverStubTool) Tags() []string                                       { return t.tags }
 
 type resolverInvocableCapability struct {
 	desc core.CapabilityDescriptor
 }
 
-func (c resolverInvocableCapability) Descriptor(context.Context, *core.Context) core.CapabilityDescriptor {
+func (c resolverInvocableCapability) Descriptor(context.Context, *contextdata.Envelope) core.CapabilityDescriptor {
 	return c.desc
 }
 
-func (c resolverInvocableCapability) Invoke(context.Context, *core.Context, map[string]interface{}) (*core.ToolResult, error) {
+func (c resolverInvocableCapability) Invoke(context.Context, *contextdata.Envelope, map[string]interface{}) (*core.ToolResult, error) {
 	return &core.ToolResult{Success: true}, nil
 }
 
@@ -46,26 +48,26 @@ func TestResolveSkillPolicyResolvesSelectorsByTags(t *testing.T) {
 	require.NoError(t, registry.Register(resolverStubTool{name: "go_build", tags: []string{"execute", "lang:go", "build"}}))
 	require.NoError(t, registry.Register(resolverStubTool{name: "file_read", tags: []string{"read-only", "file"}}))
 
-	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
+	policy := ResolveSkillPolicy(registry, agentspec.AgentSkillConfig{
 		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"verify": {
 				{Tags: []string{"lang:go", "test"}},
 				{Capability: "file_read"},
 			},
 		},
-		Verification: core.AgentVerificationPolicy{
+		Verification: agentspec.AgentVerificationPolicy{
 			SuccessCapabilitySelectors: []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
 		},
-		Recovery: core.AgentRecoveryPolicy{
+		Recovery: agentspec.AgentRecoveryPolicy{
 			FailureProbeCapabilitySelectors: []agentspec.SkillCapabilitySelector{{Tags: []string{"file"}}},
 		},
-		Planning: core.AgentPlanningPolicy{
+		Planning: agentspec.AgentPlanningPolicy{
 			RequiredBeforeEdit:          []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "test"}}},
 			PreferredVerifyCapabilities: []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "build"}}},
 			StepTemplates:               []agentspec.SkillStepTemplate{{Kind: "verify", Description: "Run tests"}},
 			RequireVerificationStep:     true,
 		},
-		Review: core.AgentReviewPolicy{
+		Review: agentspec.AgentReviewPolicy{
 			Criteria:  []string{"correctness"},
 			FocusTags: []string{"verification"},
 			ApprovalRules: agentspec.AgentReviewApprovalRules{
@@ -90,7 +92,7 @@ func TestResolveSkillPolicyMergesPhaseCapabilitiesAndSelectors(t *testing.T) {
 	require.NoError(t, registry.Register(resolverStubTool{name: "go_test", tags: []string{"execute", "lang:go", "test"}}))
 	require.NoError(t, registry.Register(resolverStubTool{name: "cli_go", tags: []string{"execute", "lang:go"}}))
 
-	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
+	policy := ResolveSkillPolicy(registry, agentspec.AgentSkillConfig{
 		PhaseCapabilities: map[string][]string{
 			"verify": {"cli_go"},
 		},
@@ -110,11 +112,11 @@ func TestResolveSkillPolicySupportsPhaseCapabilitiesAndCapabilitySelectors(t *te
 	require.NoError(t, registry.Register(resolverStubTool{name: "go_test", tags: []string{"execute", "lang:go", "test"}}))
 	require.NoError(t, registry.Register(resolverStubTool{name: "cli_go", tags: []string{"execute", "lang:go"}}))
 
-	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
+	policy := ResolveSkillPolicy(registry, agentspec.AgentSkillConfig{
 		PhaseCapabilities: map[string][]string{
 			"verify": {"cli_go"},
 		},
-		PhaseCapabilitySelectors: map[string][]core.SkillCapabilitySelector{
+		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"verify": {
 				{Tags: []string{"lang:go", "test"}},
 				{Capability: "cli_go"},
@@ -129,7 +131,7 @@ func TestResolveSkillPolicyIgnoresSecurityTagsForGrouping(t *testing.T) {
 	registry := capability.NewRegistry()
 	require.NoError(t, registry.Register(resolverStubTool{name: "go_test", tags: []string{"execute", "lang:go", "test"}}))
 
-	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
+	policy := ResolveSkillPolicy(registry, agentspec.AgentSkillConfig{
 		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"verify": {{Tags: []string{"execute"}}},
 		},
@@ -151,7 +153,7 @@ func TestResolveSkillPolicySupportsRuntimeFamilySelectors(t *testing.T) {
 		},
 	}))
 
-	policy := ResolveSkillPolicy(registry, core.AgentSkillConfig{
+	policy := ResolveSkillPolicy(registry, agentspec.AgentSkillConfig{
 		PhaseCapabilitySelectors: map[string][]agentspec.SkillCapabilitySelector{
 			"explore": {{
 				RuntimeFamilies: []core.CapabilityRuntimeFamily{core.CapabilityRuntimeFamilyRelurpic},
@@ -168,15 +170,15 @@ func TestResolveEffectiveSkillPolicyPrefersTaskAgentSpec(t *testing.T) {
 	require.NoError(t, registry.Register(resolverStubTool{name: "cli_go", tags: []string{"execute", "lang:go"}}))
 
 	fallback := &core.AgentRuntimeSpec{
-		SkillConfig: core.AgentSkillConfig{
-			Verification: core.AgentVerificationPolicy{
+		SkillConfig: agentspec.AgentSkillConfig{
+			Verification: agentspec.AgentVerificationPolicy{
 				SuccessTools: []string{"cli_go"},
 			},
 		},
 	}
 	override := &core.AgentRuntimeSpec{
-		SkillConfig: core.AgentSkillConfig{
-			Verification: core.AgentVerificationPolicy{
+		SkillConfig: agentspec.AgentSkillConfig{
+			Verification: agentspec.AgentVerificationPolicy{
 				SuccessCapabilitySelectors: []agentspec.SkillCapabilitySelector{{Tags: []string{"lang:go", "test"}}},
 			},
 		},

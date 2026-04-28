@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
@@ -20,7 +21,7 @@ type DelegationCapabilityRegistry interface {
 	CapturePolicySnapshot() *core.PolicySnapshot
 	GetCoordinationTarget(idOrName string) (core.CapabilityDescriptor, bool)
 	CoordinationTargets(selectors ...core.CapabilitySelector) []core.CapabilityDescriptor
-	InvokeCapability(ctx context.Context, state *core.Context, idOrName string, args map[string]interface{}) (*core.ToolResult, error)
+	InvokeCapability(ctx context.Context, state *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.ToolResult, error)
 }
 
 type BackgroundDelegationOutcome struct {
@@ -51,7 +52,7 @@ type DelegationExecutionOptions struct {
 	Registry         DelegationCapabilityRegistry
 	BackgroundRunner DelegationBackgroundRunner
 	AgentSpec        *core.AgentRuntimeSpec
-	State            *core.Context
+	State            *contextdata.Envelope
 	WorkflowStore    memory.WorkflowStateStore
 	WorkflowRunID    string
 	WorkflowStepID   string
@@ -668,11 +669,12 @@ func firstRecoverability(values ...core.RecoverabilityMode) core.RecoverabilityM
 	return ""
 }
 
-func effectiveDelegationState(state *core.Context) *core.Context {
-	if state != nil {
-		return state
+func effectiveDelegationState(env *contextdata.Envelope) *contextdata.Envelope {
+	if env != nil {
+		return env
 	}
-	return core.NewContext()
+	// Return a new empty envelope if none provided
+	return contextdata.NewEnvelope("default", "default")
 }
 
 func delegationRequestedRole(request core.DelegationRequest) core.CoordinationRole {
