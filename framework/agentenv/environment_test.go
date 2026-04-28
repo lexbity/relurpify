@@ -5,13 +5,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 	testutil "codeburg.org/lexbit/relurpify/testutil/euclotestutil"
 )
 
 func TestWithRegistry_ShallowCopy(t *testing.T) {
 	r1 := capability.NewRegistry()
 	r2 := capability.NewRegistry()
-	env := agentenv.AgentEnvironment{Registry: r1}
+	env := agentenv.WorkspaceEnvironment{Registry: r1}
 
 	got := env.WithRegistry(r2)
 	if got.Registry != r2 {
@@ -24,19 +25,19 @@ func TestWithRegistry_ShallowCopy(t *testing.T) {
 
 func TestWithMemory_ShallowCopy(t *testing.T) {
 	env := testutil.Env(t)
-	replacement := testutil.Env(t).Memory
+	replacement := memory.NewWorkingMemoryStore()
 
 	got := env.WithMemory(replacement)
-	if got.Memory != replacement {
+	if got.WorkingMemory != replacement {
 		t.Fatal("expected copied env to use replacement memory")
 	}
-	if env.Memory == replacement {
+	if env.WorkingMemory == replacement {
 		t.Fatal("expected original env memory to remain unchanged")
 	}
 }
 
 func TestWithRegistry_NilRegistry(t *testing.T) {
-	env := agentenv.AgentEnvironment{Registry: capability.NewRegistry()}
+	env := agentenv.WorkspaceEnvironment{Registry: capability.NewRegistry()}
 	got := env.WithRegistry(nil)
 	if got.Registry != nil {
 		t.Fatal("expected nil registry")
@@ -53,9 +54,9 @@ func TestEnvMinimal_RegistryNotNil(t *testing.T) {
 	}
 }
 
-func TestEnv_MemoryNotNil(t *testing.T) {
+func TestEnv_WorkingMemoryNotNil(t *testing.T) {
 	env := testutil.Env(t)
-	if env.Memory == nil {
-		t.Fatal("expected non-nil memory")
+	if env.WorkingMemory == nil {
+		t.Fatal("expected non-nil working memory")
 	}
 }
