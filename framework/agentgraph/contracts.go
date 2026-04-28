@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -213,11 +214,11 @@ func toolNodeContract(tool Tool) NodeContract {
 }
 
 // LintNodeState applies the node's declared state boundary policy to a context snapshot.
-func LintNodeState(node Node, state *Context) []core.StateBoundaryViolation {
-	if node == nil || state == nil {
+func LintNodeState(node Node, env *contextdata.Envelope) []core.StateBoundaryViolation {
+	if node == nil || env == nil {
 		return nil
 	}
-	return core.LintStateMap(GetContextSnapshot(state), ResolveNodeContract(node).ContextPolicy)
+	return core.LintStateMap(env.Snapshot(), ResolveNodeContract(node).ContextPolicy)
 }
 
 func classifyToolSideEffects(desc core.CapabilityDescriptor) SideEffectClass {

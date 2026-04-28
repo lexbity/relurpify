@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,7 @@ type internalContractNode struct {
 
 func (n internalContractNode) ID() string     { return n.id }
 func (n internalContractNode) Type() NodeType { return n.kind }
-func (n internalContractNode) Execute(context.Context, *Context) (*Result, error) {
+func (n internalContractNode) Execute(context.Context, *contextdata.Envelope) (*Result, error) {
 	return &Result{NodeID: n.id, Success: true, Data: map[string]any{}}, nil
 }
 

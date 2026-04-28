@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -111,78 +112,36 @@ func (n *CheckpointNode) Contract() NodeContract {
 	}
 }
 
-func (n *CheckpointNode) Execute(ctx context.Context, state *Context) (*Result, error) {
+func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
 	taskID := strings.TrimSpace(n.TaskID)
-	if taskID == "" && state != nil {
-		if v, ok := ContextGet(state, "task.id"); ok {
-			taskID = strings.TrimSpace(fmt.Sprint(v))
-		}
+	if taskID == "" && env != nil {
+		taskID = env.TaskID
 	}
-	checkpoint := &GraphCheckpoint{
-		CheckpointID:    generateCheckpointID(),
-		TaskID:          taskID,
-		CreatedAt:       time.Now().UTC(),
-		CurrentNodeID:   n.id,
-		CompletedNodeID: n.id,
-		NextNodeID:      n.NextNodeID,
-		LastTransition: &NodeTransitionRecord{
-			CompletedNodeID:  n.id,
-			NextNodeID:       n.NextNodeID,
-			TransitionReason: "explicit-checkpoint-node",
-			CompletedAt:      time.Now().UTC(),
-		},
-		Context:   CloneContext(state),
-		GraphHash: "",
-		Metadata:  cloneMapAny(n.Metadata),
-	}
-	if n.Persister != nil {
-		if err := n.Persister.Save(checkpoint); err != nil {
-			return nil, err
-		}
+	// Request checkpoint through the envelope - the compiler owns materialization
+	env.RequestCheckpoint("explicit-checkpoint-node", 1, n.WorkingMemoryStore != nil)
+	if env != nil {
+		env.SetWorkingValue(n.StateKey, map[string]any{
+			"checkpoint_id":     generateCheckpointID(),
+			"task_id":           taskID,
+			"completed_node_id": n.id,
+			"next_node_id":      n.NextNodeID,
+			"transition_reason": "explicit-checkpoint-node",
+			"created_at":        time.Now().UTC(),
+		}, contextdata.MemoryClassTask)
 	}
 	ref := core.ArtifactReference{
-		ArtifactID:   checkpoint.CheckpointID,
+		ArtifactID:   generateCheckpointID(),
 		Kind:         "checkpoint",
 		ContentType:  "application/json",
 		StorageKind:  "checkpoint",
-		URI:          fmt.Sprintf("workflow://checkpoint/%s", checkpoint.CheckpointID),
+		URI:          fmt.Sprintf("workflow://checkpoint/%s", generateCheckpointID()),
 		Summary:      fmt.Sprintf("checkpoint at %s -> %s", n.id, n.NextNodeID),
-		RawSizeBytes: int64(len(fmt.Sprintf("%v", checkpoint.Metadata))),
+		RawSizeBytes: 0,
 	}
-	if n.ArtifactSink != nil {
-		_ = n.ArtifactSink.SaveArtifact(ctx, ArtifactRecord{
-			ArtifactID:   checkpoint.CheckpointID,
-			Kind:         "checkpoint",
-			ContentType:  "application/json",
-			StorageKind:  "checkpoint",
-			Summary:      ref.Summary,
-			RawText:      "",
-			RawSizeBytes: ref.RawSizeBytes,
-			Metadata: map[string]any{
-				"task_id":           checkpoint.TaskID,
-				"completed_node_id": checkpoint.CompletedNodeID,
-				"next_node_id":      checkpoint.NextNodeID,
-				"transition_reason": checkpoint.LastTransition.TransitionReason,
-				"checkpoint_id":     checkpoint.CheckpointID,
-			},
-			CreatedAt: checkpoint.CreatedAt,
-		})
-	}
-	if state != nil {
-		ContextSet(state, n.StateKey, map[string]any{
-			"checkpoint_id":     checkpoint.CheckpointID,
-			"task_id":           checkpoint.TaskID,
-			"completed_node_id": checkpoint.CompletedNodeID,
-			"next_node_id":      checkpoint.NextNodeID,
-			"transition_reason": checkpoint.LastTransition.TransitionReason,
-			"created_at":        checkpoint.CreatedAt,
-		})
-		ContextSet(state, n.ArtifactStateKey, ref)
-	}
-	emitSystemNodeEvent(n.Telemetry, taskID, "checkpoint persisted", map[string]any{
-		"node":          n.id,
-		"checkpoint_id": checkpoint.CheckpointID,
-		"next_node_id":  checkpoint.NextNodeID,
+	env.SetWorkingValue(n.ArtifactStateKey, ref, contextdata.MemoryClassTask)
+	emitSystemNodeEvent(n.Telemetry, taskID, "checkpoint requested", map[string]any{
+		"node":         n.id,
+		"next_node_id": n.NextNodeID,
 	})
 
 	// Evict working memory at checkpoint boundary
@@ -194,7 +153,7 @@ func (n *CheckpointNode) Execute(ctx context.Context, state *Context) (*Result, 
 		NodeID:  n.id,
 		Success: true,
 		Data: map[string]any{
-			"checkpoint_id": checkpoint.CheckpointID,
+			"checkpoint_id": generateCheckpointID(),
 			"artifact_ref":  ref,
 		},
 	}, nil
@@ -422,20 +381,20 @@ func trimmedAnyString(value any) string {
 	}
 }
 
-func summarizeNodePayload(state *Context, keys []string, includeHistory bool) string {
-	if state == nil {
+func summarizeNodePayload(env *contextdata.Envelope, keys []string, includeHistory bool) string {
+	if env == nil {
 		return ""
 	}
 	var parts []string
 	for _, key := range keys {
-		if raw, ok := ContextGet(state, key); ok && raw != nil {
+		if raw, ok := env.GetWorkingValue(key); ok && raw != nil {
 			parts = append(parts, fmt.Sprintf("%s: %v", key, boundedSummaryValue(raw, 0)))
 		}
 	}
 	if includeHistory {
-		// History stored under "_history" key as []any
+		// History stored in working memory under "_history" key as []any
 		var history []any
-		if h, ok := (*state)["_history"]; ok {
+		if h, ok := env.GetWorkingValue("_history"); ok {
 			if hSlice, ok := h.([]any); ok {
 				history = hSlice
 			}

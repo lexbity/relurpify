@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/perfstats"
 )
@@ -31,11 +32,11 @@ const (
 type Node interface {
 	ID() string
 	Type() NodeType
-	Execute(ctx context.Context, state *Context) (*Result, error)
+	Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error)
 }
 
 // ConditionFunc determines whether an edge should be followed.
-type ConditionFunc func(result *Result, state *Context) bool
+type ConditionFunc func(result *Result, env *contextdata.Envelope) bool
 
 // Edge describes a transition between nodes.
 type Edge struct {
@@ -47,7 +48,8 @@ type Edge struct {
 
 type parallelBranchResult struct {
 	edge  Edge
-	delta BranchContextDelta
+	env   *contextdata.Envelope
+	delta contextdata.BranchDelta
 	err   error
 }
 
@@ -149,14 +151,11 @@ func (g *Graph) emit(event Event) {
 
 // extractTaskID fetches the current task identifier from the execution state so
 // telemetry has stable correlation identifiers even across node boundaries.
-func (g *Graph) extractTaskID(state *Context) string {
-	if state == nil {
+func (g *Graph) extractTaskID(env *contextdata.Envelope) string {
+	if env == nil {
 		return ""
 	}
-	if value, ok := ContextGet(state, "task.id"); ok {
-		return fmt.Sprint(value)
-	}
-	return ""
+	return env.TaskID
 }
 
 // SetStart marks the starting node.
@@ -211,7 +210,7 @@ type GraphSnapshot struct {
 }
 
 // Execute runs the graph from its start node.
-func (g *Graph) Execute(ctx context.Context, state *Context) (*Result, error) {
+func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
 	}
@@ -219,8 +218,8 @@ func (g *Graph) Execute(ctx context.Context, state *Context) (*Result, error) {
 		return nil, err
 	}
 
-	taskID := g.extractTaskID(state)
-	taskMeta := g.extractTaskMeta(state)
+	taskID := g.extractTaskID(env)
+	taskMeta := g.extractTaskMeta(env)
 	g.emit(Event{
 		Type:      EventGraphStart,
 		TaskID:    taskID,
@@ -248,12 +247,12 @@ func (g *Graph) Execute(ctx context.Context, state *Context) (*Result, error) {
 		return nil, execErr
 	}
 
-	lastResult, err := g.run(ctx, state, g.startNodeID, true, taskID)
+	lastResult, err := g.run(ctx, env, g.startNodeID, true, taskID)
 	execErr = err
 	return lastResult, err
 }
 
-func (g *Graph) run(ctx context.Context, state *Context, current string, reset bool, taskID string) (*Result, error) {
+func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current string, reset bool, taskID string) (*Result, error) {
 	g.execMu.Lock()
 	defer g.execMu.Unlock()
 	if reset {
@@ -292,10 +291,10 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 		})
-		taskType := TaskType(fmt.Sprint(taskMetaValue(state, "task.type")))
-		instruction := fmt.Sprint(taskMetaValue(state, "task.instruction"))
+		taskType := TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
+		instruction := fmt.Sprint(taskMetaValue(env, "task.instruction"))
 		nodeCtx := WithTaskContext(ctx, TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
-		result, err := node.Execute(nodeCtx, state)
+		result, err := node.Execute(nodeCtx, env)
 		if err != nil {
 			err = fmt.Errorf("node %s execution failed: %w", current, err)
 			g.emit(Event{
@@ -313,7 +312,7 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 		result.NodeID = current
 		lastResult = result
 		for key, value := range result.Data {
-			ContextSet(state, fmt.Sprintf("%s.%s", current, key), value)
+			env.SetWorkingValue(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
 		}
 		g.emit(Event{
 			Type:      EventNodeFinish,
@@ -324,44 +323,44 @@ func (g *Graph) run(ctx context.Context, state *Context, current string, reset b
 				"success": result.Success,
 			},
 		})
-		next, reason, err := g.nextNodes(ctx, state, node, result)
+		next, reason, err := g.nextNodes(ctx, env, node, result)
 		if err != nil {
 			return nil, err
 		}
-		g.maybeCheckpoint(taskID, current, next, reason, result, state)
+		g.maybeCheckpoint(taskID, current, next, reason, result, env)
 		current = next
 	}
 	return lastResult, nil
 }
 
-func taskMetaValue(state *Context, key string) interface{} {
-	if state == nil {
+func taskMetaValue(env *contextdata.Envelope, key string) interface{} {
+	if env == nil {
 		return nil
 	}
-	if v, ok := ContextGet(state, key); ok {
+	if v, ok := env.GetWorkingValue(key); ok {
 		return v
 	}
 	return nil
 }
 
-func (g *Graph) extractTaskMeta(state *Context) map[string]interface{} {
-	if state == nil {
+func (g *Graph) extractTaskMeta(env *contextdata.Envelope) map[string]interface{} {
+	if env == nil {
 		return nil
 	}
 	meta := map[string]interface{}{}
-	if v := taskMetaValue(state, "task.type"); v != nil {
+	if v := taskMetaValue(env, "task.type"); v != nil {
 		meta["task_type"] = v
 	}
-	if v := taskMetaValue(state, "task.instruction"); v != nil {
+	if v := taskMetaValue(env, "task.instruction"); v != nil {
 		meta["instruction"] = v
 	}
-	if v := taskMetaValue(state, "task.source"); v != nil {
+	if v := taskMetaValue(env, "task.source"); v != nil {
 		meta["source"] = v
 	}
 	return meta
 }
 
-func (g *Graph) maybeCheckpoint(taskID, completedNode, nextNode, transitionReason string, result *Result, state *Context) {
+func (g *Graph) maybeCheckpoint(taskID, completedNode, nextNode, transitionReason string, result *Result, env *contextdata.Envelope) {
 	if g.checkpointInterval == 0 || g.checkpointCallback == nil {
 		return
 	}
@@ -374,7 +373,7 @@ func (g *Graph) maybeCheckpoint(taskID, completedNode, nextNode, transitionReaso
 		NextNodeID:       nextNode,
 		TransitionReason: transitionReason,
 		CompletedAt:      time.Now().UTC(),
-	}, state)
+	}, env)
 	if err != nil {
 		g.emit(Event{
 			Type:      EventNodeError,
@@ -417,7 +416,7 @@ func (g *Graph) previousNodeID() string {
 // executed optimistically on cloned contexts while serial edges behave like a
 // traditional state machine transition. Returning a single node ID keeps the
 // main Execute loop simple and debuggable.
-func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result *Result) (string, string, error) {
+func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node Node, result *Result) (string, string, error) {
 	g.mu.RLock()
 	outEdges := make([]Edge, len(g.edges[node.ID()]))
 	copy(outEdges, g.edges[node.ID()])
@@ -428,7 +427,7 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 	var serialEdges []Edge
 	var parallelEdges []Edge
 	for _, edge := range outEdges {
-		if edge.Condition != nil && !edge.Condition(result, state) {
+		if edge.Condition != nil && !edge.Condition(result, env) {
 			continue
 		}
 		if edge.Parallel {
@@ -447,11 +446,13 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 			go func() {
 				defer wg.Done()
 				perfstats.IncBranchClone()
-				branchCtx := CloneContext(state)
-				_, err := g.executeBranch(ctx, edge.To, branchCtx)
+				branchID := fmt.Sprintf("branch-%s", edge.To)
+				branchEnv := contextdata.CloneEnvelope(env, branchID)
+				_, err := g.executeBranch(ctx, edge.To, branchEnv)
 				results <- parallelBranchResult{
 					edge:  edge,
-					delta: ComputeBranchDelta(state, branchCtx),
+					env:   branchEnv,
+					delta: contextdata.ComputeBranchDelta(env, branchEnv),
 					err:   err,
 				}
 			}()
@@ -466,7 +467,7 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 			branches = append(branches, result)
 		}
 		mergeStarted := time.Now()
-		if err := mergeParallelBranchDeltas(state, branches); err != nil {
+		if err := mergeParallelBranchEnvelopes(env, branches); err != nil {
 			return "", "", err
 		}
 		perfstats.ObserveBranchMerge(time.Since(mergeStarted))
@@ -489,24 +490,41 @@ func (g *Graph) nextNodes(ctx context.Context, state *Context, node Node, result
 	return serialEdges[0].To, reason, nil
 }
 
-func mergeParallelBranchDeltas(parent *Context, branches []parallelBranchResult) error {
+func mergeParallelBranchEnvelopes(parent *contextdata.Envelope, branches []parallelBranchResult) error {
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	deltas := NewBranchDeltaSet(len(branches))
+	// Collect branch envelopes for merge
+	branchEnvelopes := make([]*contextdata.Envelope, 0, len(branches))
 	for _, branch := range branches {
-		label := branch.edge.To
-		deltas.Add("branch "+label, branch.delta)
+		if branch.env != nil {
+			branchEnvelopes = append(branchEnvelopes, branch.env)
+		}
 	}
-	return deltas.ApplyTo(parent)
+	if len(branchEnvelopes) == 0 {
+		return nil
+	}
+	// Validate before merge
+	if err := contextdata.ValidateBranchMerge(branchEnvelopes); err != nil {
+		return err
+	}
+	// Merge envelopes
+	merged, err := contextdata.MergeBranchEnvelopes(parent.TaskID, parent.SessionID, branchEnvelopes)
+	if err != nil {
+		return err
+	}
+	// Update parent with merged state
+	parent.WorkingData = merged.WorkingData
+	parent.References = merged.References
+	return nil
 }
 
 // executeBranch runs a detached sub-graph that starts at the provided node.
 // The parent graph shares the node/edge definitions but each branch receives a
-// cloned Context, which preserves determinism until Merge recombines updates.
-func (g *Graph) executeBranch(ctx context.Context, start string, state *Context) (*Result, error) {
+// cloned Envelope, which preserves determinism until Merge recombines updates.
+func (g *Graph) executeBranch(ctx context.Context, start string, env *contextdata.Envelope) (*Result, error) {
 	// We reuse the same node/edge maps because branch graphs are read-only. The
-	// only mutable data lives inside the cloned Context passed to this function.
+	// only mutable data lives inside the cloned Envelope passed to this function.
 	subGraph := &Graph{
 		nodes:           g.nodes,
 		nodeContracts:   g.nodeContracts,
@@ -517,7 +535,7 @@ func (g *Graph) executeBranch(ctx context.Context, start string, state *Context)
 		preflightDirty:  g.preflightDirty,
 		validationDirty: g.validationDirty,
 	}
-	return subGraph.Execute(ctx, state)
+	return subGraph.Execute(ctx, env)
 }
 
 // Validate ensures the graph is well-formed (start node present, edges reference known nodes).
@@ -577,8 +595,8 @@ func (g *Graph) Validate() error {
 }
 
 // Pause builds a snapshot at the given node.
-func (g *Graph) Pause(currentNode string, state *Context) *GraphSnapshot {
-	snapshot := GetContextSnapshot(state)
+func (g *Graph) Pause(currentNode string, env *contextdata.Envelope) *GraphSnapshot {
+	snapshot := env.Snapshot()
 	return &GraphSnapshot{
 		NextNodeID: currentNode,
 		State:      &ContextSnapshot{State: snapshot},
@@ -596,7 +614,7 @@ type ToolNode struct {
 // CapabilityInvoker is the narrow registry contract ToolNode needs for
 // capability-routed execution without importing the concrete registry package.
 type CapabilityInvoker interface {
-	InvokeCapability(ctx context.Context, state *Context, idOrName string, args map[string]interface{}) (*core.ToolResult, error)
+	InvokeCapability(ctx context.Context, env *contextdata.Envelope, idOrName string, args map[string]interface{}) (*core.ToolResult, error)
 	CapturePolicySnapshot() *core.PolicySnapshot
 	GetCapability(idOrName string) (core.CapabilityDescriptor, bool)
 }
@@ -627,18 +645,18 @@ func (n *ToolNode) Contract() NodeContract {
 }
 
 // Execute calls the tool through the capability registry.
-func (n *ToolNode) Execute(ctx context.Context, state *Context) (*Result, error) {
+func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
 	if n.Tool == nil {
 		return nil, errors.New("tool node missing tool")
 	}
 	if n.Registry == nil {
 		return nil, fmt.Errorf("tool node %q missing capability registry", n.id)
 	}
-	res, err := n.Registry.InvokeCapability(ctx, state, n.Tool.Name(), n.Args)
+	res, err := n.Registry.InvokeCapability(ctx, env, n.Tool.Name(), n.Args)
 	if err != nil {
 		return nil, err
 	}
-	envelope := attachCapabilityEnvelope(n.Registry, n.Tool, state, res, n.Args)
+	envelope := attachCapabilityEnvelope(n.Registry, n.Tool, env, res, n.Args)
 	result := resultFromToolExecution(n.id, res)
 	if envelope != nil {
 		// Build a fresh metadata map so the envelope pointer is not written back
@@ -656,7 +674,7 @@ func (n *ToolNode) Execute(ctx context.Context, state *Context) (*Result, error)
 // ConditionalNode computes the next branch dynamically.
 type ConditionalNode struct {
 	id        string
-	Condition func(*Context) (string, error)
+	Condition func(*contextdata.Envelope) (string, error)
 }
 
 // ID implements Node.
@@ -666,8 +684,8 @@ func (n *ConditionalNode) ID() string { return n.id }
 func (n *ConditionalNode) Type() NodeType { return NodeTypeConditional }
 
 // Execute just evaluates the condition and stores the decision.
-func (n *ConditionalNode) Execute(ctx context.Context, state *Context) (*Result, error) {
-	to, err := n.Condition(state)
+func (n *ConditionalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
+	to, err := n.Condition(env)
 	if err != nil {
 		return nil, err
 	}
@@ -684,7 +702,7 @@ func (n *ConditionalNode) Execute(ctx context.Context, state *Context) (*Result,
 type HumanNode struct {
 	id       string
 	Prompt   string
-	Callback func(*Context) error
+	Callback func(*contextdata.Envelope) error
 }
 
 // ID implements Node.
@@ -711,9 +729,9 @@ func (n *HumanNode) Contract() NodeContract {
 }
 
 // Execute pauses execution until callback completes.
-func (n *HumanNode) Execute(ctx context.Context, state *Context) (*Result, error) {
+func (n *HumanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
 	if n.Callback != nil {
-		if err := n.Callback(state); err != nil {
+		if err := n.Callback(env); err != nil {
 			return nil, err
 		}
 	}
@@ -753,7 +771,7 @@ func (n *TerminalNode) Contract() NodeContract {
 }
 
 // Execute completes immediately.
-func (n *TerminalNode) Execute(ctx context.Context, state *Context) (*Result, error) {
+func (n *TerminalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
 	return &Result{NodeID: n.id, Success: true}, nil
 }
 
@@ -783,7 +801,7 @@ func resultFromToolExecution(nodeID string, res *core.ToolResult) *Result {
 	}
 }
 
-func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, state *Context, res *core.ToolResult, args map[string]interface{}) *core.CapabilityResultEnvelope {
+func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, env *contextdata.Envelope, res *core.ToolResult, args map[string]interface{}) *core.CapabilityResultEnvelope {
 	if registry == nil || tool == nil || res == nil {
 		return nil
 	}
@@ -809,7 +827,7 @@ func attachCapabilityEnvelope(registry CapabilityInvoker, tool Tool, state *Cont
 		}
 	}
 	if approval == nil {
-		approval = core.ApprovalBindingFromCapability(desc, *state, args)
+		approval = core.ApprovalBindingFromCapability(desc, env.Snapshot(), args)
 	}
 
 	envelope := core.NewCapabilityResultEnvelope(desc, res, core.ContentDispositionRaw, registry.CapturePolicySnapshot(), approval)

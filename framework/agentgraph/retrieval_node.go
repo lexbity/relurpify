@@ -3,7 +3,9 @@ package agentgraph
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
@@ -55,7 +57,7 @@ func (n *RetrievalNode) Contract() NodeContract {
 }
 
 // Execute performs the retrieval operation.
-func (n *RetrievalNode) Execute(ctx context.Context, state *Context) (*Result, error) {
+func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
 	if n.retriever == nil {
 		return &Result{
 			NodeID:  n.id,
@@ -64,10 +66,10 @@ func (n *RetrievalNode) Execute(ctx context.Context, state *Context) (*Result, e
 		}, nil
 	}
 
-	// Get query text from state
+	// Get query text from working memory
 	queryText := ""
 	if n.queryKey != "" {
-		if val, ok := (*state)[n.queryKey]; ok {
+		if val, ok := env.GetWorkingValue(n.queryKey); ok {
 			queryText = fmt.Sprint(val)
 		}
 	}
@@ -89,9 +91,9 @@ func (n *RetrievalNode) Execute(ctx context.Context, state *Context) (*Result, e
 		}, nil
 	}
 
-	// Store results in state
+	// Store results in working memory
 	if n.resultKey != "" {
-		(*state)[n.resultKey] = result
+		env.SetWorkingValue(n.resultKey, result, contextdata.MemoryClassTask)
 	}
 
 	// Also store ranked chunk IDs for easy access
@@ -99,7 +101,22 @@ func (n *RetrievalNode) Execute(ctx context.Context, state *Context) (*Result, e
 	for _, rc := range result.Ranked {
 		chunkIDs = append(chunkIDs, string(rc.ChunkID))
 	}
-	(*state)[n.resultKey+"_chunks"] = chunkIDs
+	env.SetWorkingValue(n.resultKey+"_chunks", chunkIDs, contextdata.MemoryClassTask)
+
+	// Add retrieval reference to envelope
+	ref := contextdata.RetrievalReference{
+		QueryID:     n.id,
+		QueryText:   queryText,
+		Scope:       query.Scope,
+		ChunkIDs:    make([]contextdata.ChunkID, len(chunkIDs)),
+		TotalFound:  len(result.Ranked),
+		FilteredOut: 0,
+		RetrievedAt: time.Now().UTC(),
+	}
+	for i, id := range chunkIDs {
+		ref.ChunkIDs[i] = contextdata.ChunkID(id)
+	}
+	env.AddRetrievalReference(ref)
 
 	return &Result{
 		NodeID:  n.id,

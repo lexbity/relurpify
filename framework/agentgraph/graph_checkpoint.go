@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 )
 
 // CompressedContext holds compressed checkpoint data for history restoration.
@@ -18,7 +20,7 @@ type CompressedContext struct {
 
 // CompressionStrategy defines how to compress checkpoint history.
 type CompressionStrategy interface {
-	ShouldCompress(ctx *Context, hint any) bool
+	ShouldCompress(env *contextdata.Envelope, hint any) bool
 	Compress(history []any, llm LanguageModel) (*CompressedContext, error)
 }
 
@@ -52,18 +54,18 @@ type GraphCheckpoint struct {
 	LastResultSummary *CheckpointResultSummary `json:"last_result_summary,omitempty"`
 	VisitCounts       map[string]int           `json:"visit_counts"`
 	ExecutionPath     []string                 `json:"execution_path"`
-	Context           *Context                 `json:"context"`
+	Context           *contextdata.Envelope    `json:"context"`
 	CompressedContext *CompressedContext       `json:"compressed_context,omitempty"`
 	GraphHash         string                   `json:"graph_hash"`
 	Metadata          map[string]interface{}   `json:"metadata"`
 }
 
 // CreateCheckpoint captures a transition-boundary execution state for later resumption.
-func (g *Graph) CreateCheckpoint(taskID, completedNodeID, nextNodeID string, result *Result, transition *NodeTransitionRecord, ctx *Context) (*GraphCheckpoint, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf("nil context")
+func (g *Graph) CreateCheckpoint(taskID, completedNodeID, nextNodeID string, result *Result, transition *NodeTransitionRecord, env *contextdata.Envelope) (*GraphCheckpoint, error) {
+	if env == nil {
+		return nil, fmt.Errorf("nil envelope")
 	}
-	ctxClone := checkpointContextClone(ctx)
+	ctxClone := checkpointEnvelopeClone(env)
 	if transition == nil {
 		transition = &NodeTransitionRecord{
 			CompletedNodeID: completedNodeID,
@@ -93,20 +95,20 @@ func (g *Graph) CreateCheckpoint(taskID, completedNodeID, nextNodeID string, res
 }
 
 // CreateCompressedCheckpoint captures a checkpoint while compressing history.
-func (g *Graph) CreateCompressedCheckpoint(taskID, completedNodeID, nextNodeID string, result *Result, transition *NodeTransitionRecord, ctx *Context, llm LanguageModel, strategy CompressionStrategy) (*GraphCheckpoint, error) {
-	checkpoint, err := g.CreateCheckpoint(taskID, completedNodeID, nextNodeID, result, transition, ctx)
+func (g *Graph) CreateCompressedCheckpoint(taskID, completedNodeID, nextNodeID string, result *Result, transition *NodeTransitionRecord, env *contextdata.Envelope, llm LanguageModel, strategy CompressionStrategy) (*GraphCheckpoint, error) {
+	checkpoint, err := g.CreateCheckpoint(taskID, completedNodeID, nextNodeID, result, transition, env)
 	if err != nil {
 		return nil, err
 	}
 	if strategy == nil || llm == nil {
 		return checkpoint, nil
 	}
-	if !strategy.ShouldCompress(ctx, nil) {
+	if !strategy.ShouldCompress(env, nil) {
 		return checkpoint, nil
 	}
-	// History is stored in context under "_history" key as []any
+	// History is stored in working memory under "_history" key as []any
 	var historyCopy []any
-	if h, ok := (*ctx)["_history"]; ok {
+	if h, ok := env.GetWorkingValue("_history"); ok {
 		if hSlice, ok := h.([]any); ok {
 			historyCopy = hSlice
 		}
@@ -121,7 +123,7 @@ func (g *Graph) CreateCompressedCheckpoint(taskID, completedNodeID, nextNodeID s
 	checkpoint.CompressedContext = compressed
 	// Trim history - keep only last 5 entries
 	if len(historyCopy) > 5 {
-		(*ctx)["_history"] = historyCopy[len(historyCopy)-5:]
+		env.SetWorkingValue("_history", historyCopy[len(historyCopy)-5:], contextdata.MemoryClassEphemeral)
 	}
 	return checkpoint, nil
 }
@@ -136,11 +138,11 @@ func (g *Graph) ResumeFromCheckpoint(ctx context.Context, checkpoint *GraphCheck
 	}
 	state := checkpoint.Context
 	if state == nil {
-		state = NewContext()
+		state = contextdata.NewEnvelope(checkpoint.TaskID, "")
 	}
 	if checkpoint.CompressedContext != nil {
-		// Store compressed context in the state map
-		(*state)["_compressed_context"] = *checkpoint.CompressedContext
+		// Store compressed context in working memory
+		state.SetWorkingValue("_compressed_context", *checkpoint.CompressedContext, contextdata.MemoryClassTask)
 	}
 	g.execMu.Lock()
 	g.visitCounts = make(map[string]int)
@@ -270,14 +272,10 @@ func (g *Graph) computeHash() string {
 	return hex.EncodeToString(sum[:])
 }
 
-func checkpointContextClone(ctx *Context) *Context {
-	if ctx == nil {
+func checkpointEnvelopeClone(env *contextdata.Envelope) *contextdata.Envelope {
+	if env == nil {
 		return nil
 	}
-	// Create a shallow copy of the context map
-	clone := make(Context, len(*ctx))
-	for k, v := range *ctx {
-		clone[k] = v
-	}
-	return &clone
+	// Use contextdata.CloneEnvelope for proper deep copy
+	return contextdata.CloneEnvelope(env, "checkpoint-clone")
 }

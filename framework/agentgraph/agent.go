@@ -3,6 +3,7 @@ package agentgraph
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -12,7 +13,7 @@ import (
 // oriented rather than specific to any single agent paradigm.
 type WorkflowExecutor interface {
 	Initialize(config *core.Config) error
-	Execute(ctx context.Context, task *core.Task, state *Context) (*Result, error)
+	Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*Result, error)
 	Capabilities() []string
 	BuildGraph(task *core.Task) (*Graph, error)
 }
