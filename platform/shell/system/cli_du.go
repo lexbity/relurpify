@@ -1,12 +1,12 @@
 package system
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewDUTool exposes the du CLI.
-func NewDUTool(basePath string) core.Tool {
+func NewDUTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_du",
 		Description: "Summarizes directory usage with du.",

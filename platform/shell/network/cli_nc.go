@@ -1,12 +1,12 @@
 package network
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewNCTool exposes the nc CLI.
-func NewNCTool(basePath string) core.Tool {
+func NewNCTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_nc",
 		Description: "Creates TCP/UDP connections via netcat (nc).",

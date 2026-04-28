@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type CompatibilitySurfaceResolver struct{}
@@ -17,7 +17,7 @@ func NewCompatibilitySurfaceResolver() *CompatibilitySurfaceResolver {
 
 func (r *CompatibilitySurfaceResolver) BackendID() string { return "python" }
 
-func (r *CompatibilitySurfaceResolver) Supports(req agentenv.CompatibilitySurfaceRequest) bool {
+func (r *CompatibilitySurfaceResolver) Supports(req contracts.CompatibilitySurfaceRequest) bool {
 	for _, file := range req.Files {
 		if strings.HasSuffix(strings.TrimSpace(file), ".py") {
 			return true
@@ -31,10 +31,10 @@ func (r *CompatibilitySurfaceResolver) Supports(req agentenv.CompatibilitySurfac
 	return false
 }
 
-func (r *CompatibilitySurfaceResolver) ExtractSurface(_ context.Context, req agentenv.CompatibilitySurfaceRequest) (agentenv.CompatibilitySurface, bool, error) {
+func (r *CompatibilitySurfaceResolver) Resolve(ctx context.Context, req contracts.CompatibilitySurfaceRequest) (contracts.CompatibilitySurface, bool, error) {
 	funcRe := regexp.MustCompile(`^def\s+([A-Za-z_]\w*)\s*\(`)
 	classRe := regexp.MustCompile(`^class\s+([A-Za-z_]\w*)\s*[:(]`)
-	surface := agentenv.CompatibilitySurface{Metadata: map[string]any{"language": "python", "source": "platform.lang.python"}}
+	surface := contracts.CompatibilitySurface{Metadata: map[string]any{"language": "python", "source": "platform.lang.python"}}
 	for _, file := range req.FileContents {
 		path := strings.TrimSpace(fmt.Sprint(file["path"]))
 		content := strings.TrimSpace(fmt.Sprint(file["content"]))

@@ -30,7 +30,7 @@ type RuntimeConfigSource interface {
 	InferenceNativeToolCallingValue() bool
 }
 
-// ProviderConfigFromRuntimeConfig maps a runtime config into a provider config.
+// ProviderConfigFromRuntimeConfig maps a runtime config into a provider manifest.
 func ProviderConfigFromRuntimeConfig(cfg RuntimeConfigSource) ProviderConfig {
 	if cfg == nil {
 		return ProviderConfig{}

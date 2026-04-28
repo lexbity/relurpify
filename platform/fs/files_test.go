@@ -7,30 +7,27 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestReadWriteListFileTools(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
-	state := core.NewContext()
 
 	writeTool := &WriteFileTool{BasePath: dir, Backup: true}
-	_, err := writeTool.Execute(ctx, state, map[string]interface{}{
+	_, err := writeTool.Execute(ctx, map[string]interface{}{
 		"path":    "hello.txt",
 		"content": "hi relurpify",
 	})
 	assert.NoError(t, err)
 
 	readTool := &ReadFileTool{BasePath: dir}
-	readRes, err := readTool.Execute(ctx, state, map[string]interface{}{"path": "hello.txt"})
+	readRes, err := readTool.Execute(ctx, map[string]interface{}{"path": "hello.txt"})
 	assert.NoError(t, err)
 	assert.Equal(t, "hi relurpify", readRes.Data["content"])
 
 	listTool := &ListFilesTool{BasePath: dir}
-	listRes, err := listTool.Execute(ctx, state, map[string]interface{}{
+	listRes, err := listTool.Execute(ctx, map[string]interface{}{
 		"directory": ".",
 		"pattern":   "*.txt",
 	})
@@ -46,22 +43,22 @@ func TestFileToolsHonorSandboxProtectedPaths(t *testing.T) {
 	assert.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
 	assert.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
 
-	scope := sandbox.NewFileScopePolicy(dir, []string{protected})
+	scope := NewFileScopePolicy(dir, []string{protected})
 
 	readTool := &ReadFileTool{BasePath: dir}
 	readTool.SetSandboxScope(scope)
-	_, err := readTool.Execute(context.Background(), core.NewContext(), map[string]interface{}{"path": protected})
+	_, err := readTool.Execute(context.Background(), map[string]interface{}{"path": protected})
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, sandbox.ErrFileScopeProtectedPath)
+	assert.ErrorIs(t, err, ErrFileScopeProtectedPath)
 
 	writeTool := &WriteFileTool{BasePath: dir}
 	writeTool.SetSandboxScope(scope)
-	_, err = writeTool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	_, err = writeTool.Execute(context.Background(), map[string]interface{}{
 		"path":    protected,
 		"content": "mutate",
 	})
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, sandbox.ErrFileScopeProtectedPath)
+	assert.ErrorIs(t, err, ErrFileScopeProtectedPath)
 }
 
 func TestSearchInFilesTool(t *testing.T) {
@@ -70,7 +67,7 @@ func TestSearchInFilesTool(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("package main\n// TODO: fix bug\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"directory": ".",
 		"pattern":   "TODO",
 	})
@@ -88,7 +85,7 @@ func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("#include <stdio.h>\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"pattern": "#include",
 	})
 	assert.NoError(t, err)
@@ -106,7 +103,7 @@ func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
 	assert.NoError(t, os.WriteFile(target, []byte("pub fn demo() {}\n"), 0o644))
 
 	tool := &ListFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"directory": ".",
 		"pattern":   "**/*.rs",
 	})
@@ -121,7 +118,7 @@ func TestListFilesToolDefaultsDirectory(t *testing.T) {
 	assert.NoError(t, os.WriteFile(target, []byte("# docs\n"), 0o644))
 
 	tool := &ListFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"pattern": "*.md",
 	})
 	assert.NoError(t, err)
@@ -139,7 +136,7 @@ func TestListFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	assert.NoError(t, os.WriteFile(generated, []byte("fn generated() {}\n"), 0o644))
 
 	tool := &ListFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"directory": ".",
 		"pattern":   "**/*.rs",
 	})
@@ -159,7 +156,7 @@ func TestSearchInFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	assert.NoError(t, os.WriteFile(generated, []byte("// TODO: generated\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"directory": ".",
 		"pattern":   "TODO",
 	})
@@ -178,7 +175,7 @@ func TestSearchInFilesToolDefaultsToCaseInsensitiveMatching(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"directory": ".",
 		"pattern":   "todo",
 	})
@@ -197,7 +194,7 @@ func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {
 	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
 
 	tool := &SearchInFilesTool{BasePath: dir}
-	res, err := tool.Execute(context.Background(), core.NewContext(), map[string]interface{}{
+	res, err := tool.Execute(context.Background(), map[string]interface{}{
 		"directory":      ".",
 		"pattern":        "todo",
 		"case_sensitive": true,

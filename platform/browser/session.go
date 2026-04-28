@@ -11,8 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
+		"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const defaultBudgetCategory = "immediate"
@@ -21,9 +20,9 @@ const defaultBudgetCategory = "immediate"
 type SessionConfig struct {
 	Backend           Backend
 	BackendName       string
-	PermissionManager *authorization.PermissionManager
+	PermissionManager contracts.NetworkPermissionChecker
 	AgentID           string
-	Budget            *core.ArtifactBudget
+	Budget            contracts.BudgetManager
 	BudgetCategory    string
 }
 
@@ -54,9 +53,9 @@ type PageState struct {
 type Session struct {
 	backend           Backend
 	backendName       string
-	permissionManager *authorization.PermissionManager
+	permissionManager contracts.NetworkPermissionChecker
 	agentID           string
-	budget            *core.ArtifactBudget
+	budget            contracts.BudgetManager
 	budgetCategory    string
 
 	mu          sync.Mutex
@@ -357,7 +356,7 @@ func defaultPort(scheme string) int {
 func (s *Session) allocateExtraction(key, content string) (*Extraction, error) {
 	result := &Extraction{
 		Content:        content,
-		OriginalTokens: core.EstimateTokens(content),
+		OriginalTokens: contracts.EstimateTokens(content),
 	}
 	if s.budget == nil {
 		result.FinalTokens = result.OriginalTokens
@@ -381,7 +380,7 @@ func (s *Session) allocateExtraction(key, content string) (*Extraction, error) {
 	}
 	content = truncateToTokens(content, remaining)
 	result.Content = content
-	result.FinalTokens = core.EstimateTokens(content)
+	result.FinalTokens = contracts.EstimateTokens(content)
 	result.Truncated = result.FinalTokens < result.OriginalTokens
 
 	itemID := fmt.Sprintf("browser:%s:%s", s.backendName, key)
@@ -396,7 +395,7 @@ func truncateToTokens(content string, maxTokens int) string {
 	if maxTokens <= 0 || content == "" {
 		return ""
 	}
-	if core.EstimateTokens(content) <= maxTokens {
+	if contracts.EstimateTokens(content) <= maxTokens {
 		return content
 	}
 	maxChars := maxTokens * 4
@@ -461,9 +460,9 @@ type extractionBudgetItem struct {
 	tokens int
 }
 
-func (i extractionBudgetItem) GetID() string                      { return i.id }
-func (i extractionBudgetItem) GetTokenCount() int                 { return i.tokens }
-func (i extractionBudgetItem) GetPriority() int                   { return 0 }
-func (i extractionBudgetItem) CanCompress() bool                  { return false }
-func (i extractionBudgetItem) Compress() (core.BudgetItem, error) { return i, nil }
-func (i extractionBudgetItem) CanEvict() bool                     { return true }
+func (i extractionBudgetItem) GetID() string                           { return i.id }
+func (i extractionBudgetItem) GetTokenCount() int                      { return i.tokens }
+func (i extractionBudgetItem) GetPriority() int                        { return 0 }
+func (i extractionBudgetItem) CanCompress() bool                       { return false }
+func (i extractionBudgetItem) Compress() (contracts.BudgetItem, error) { return i, nil }
+func (i extractionBudgetItem) CanEvict() bool                          { return true }

@@ -9,43 +9,29 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
+		"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // GrepTool implements plain text search.
 type GrepTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
-}
-
-func (t *GrepTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
 }
 
 func (t *GrepTool) Name() string        { return "search_grep" }
 func (t *GrepTool) Description() string { return "Searches files using substring matching." }
 func (t *GrepTool) Category() string    { return "search" }
-func (t *GrepTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *GrepTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "pattern", Type: "string", Required: true},
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	root := fmt.Sprint(args["directory"])
 	if root == "" {
 		root = "."
 	}
 	root = preparePath(t.BasePath, root)
-	permissions := newTraversalPermissionCache(t.manager, t.agentID)
-	if permissions != nil {
-		if err := permissions.Check(ctx, core.FileSystemList, root); err != nil {
-			return nil, err
-		}
-	}
 	pattern := strings.ToLower(fmt.Sprint(args["pattern"]))
 	type match struct {
 		File    string `json:"file"`
@@ -61,17 +47,7 @@ func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[st
 			if shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
-			if permissions != nil {
-				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
-					return filepath.SkipDir
-				}
-			}
 			return nil
-		}
-		if permissions != nil {
-			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
-				return nil
-			}
 		}
 		file, err := os.Open(path)
 		if err != nil {
@@ -95,45 +71,32 @@ func (t *GrepTool) Execute(ctx context.Context, state *core.Context, args map[st
 	if err != nil {
 		return nil, err
 	}
-	return &core.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
-func (t *GrepTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
+func (t *GrepTool) IsAvailable(ctx context.Context) bool { return true }
 
-func (t *GrepTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
+func (t *GrepTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
-func (t *GrepTool) Tags() []string { return []string{core.TagReadOnly, "search", "recovery"} }
+func (t *GrepTool) Tags() []string { return []string{contracts.TagReadOnly, "search", "recovery"} }
 
 // SimilarityTool finds similar snippets using a naive approach.
 type SimilarityTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
-}
-
-func (t *SimilarityTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
 }
 
 func (t *SimilarityTool) Name() string        { return "search_find_similar" }
 func (t *SimilarityTool) Description() string { return "Finds structurally similar code snippets." }
 func (t *SimilarityTool) Category() string    { return "search" }
-func (t *SimilarityTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *SimilarityTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "snippet", Type: "string", Required: true},
 		{Name: "directory", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *SimilarityTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	dirArg, _ := args["directory"].(string)
 	root := preparePath(t.BasePath, dirArg)
-	permissions := newTraversalPermissionCache(t.manager, t.agentID)
-	if permissions != nil {
-		if err := permissions.Check(ctx, core.FileSystemList, root); err != nil {
-			return nil, err
-		}
-	}
 	target := sanitizeSnippet(fmt.Sprint(args["snippet"]))
 	terms := semanticTerms(fmt.Sprint(args["snippet"]))
 	type match struct {
@@ -147,17 +110,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args 
 			if err == nil && info.IsDir() && shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
-			if err == nil && info != nil && info.IsDir() && permissions != nil {
-				if perr := permissions.Check(ctx, core.FileSystemList, path); perr != nil {
-					return filepath.SkipDir
-				}
-			}
 			return err
-		}
-		if permissions != nil {
-			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
-				return nil
-			}
 		}
 		if !isSimilarityCandidate(path) {
 			return nil
@@ -180,25 +133,18 @@ func (t *SimilarityTool) Execute(ctx context.Context, state *core.Context, args 
 		return nil, err
 	}
 	sort.Slice(matches, func(i, j int) bool { return matches[i].Score > matches[j].Score })
-	return &core.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
+	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"matches": matches}}, nil
 }
-func (t *SimilarityTool) IsAvailable(ctx context.Context, state *core.Context) bool { return true }
+func (t *SimilarityTool) IsAvailable(ctx context.Context) bool { return true }
 
-func (t *SimilarityTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
+func (t *SimilarityTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
-func (t *SimilarityTool) Tags() []string { return []string{core.TagReadOnly, "search"} }
+func (t *SimilarityTool) Tags() []string { return []string{contracts.TagReadOnly, "search"} }
 
 // SemanticSearchTool uses a vector-like heuristic (currently substring).
 type SemanticSearchTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
-}
-
-func (t *SemanticSearchTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
 }
 
 func (t *SemanticSearchTool) Name() string { return "search_semantic" }
@@ -206,19 +152,13 @@ func (t *SemanticSearchTool) Description() string {
 	return "Performs semantic search using heuristic embeddings."
 }
 func (t *SemanticSearchTool) Category() string { return "search" }
-func (t *SemanticSearchTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{{Name: "query", Type: "string", Required: true}}
+func (t *SemanticSearchTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{{Name: "query", Type: "string", Required: true}}
 }
-func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	query := strings.ToLower(fmt.Sprint(args["query"]))
 	terms := semanticTerms(query)
 	var hits []map[string]interface{}
-	permissions := newTraversalPermissionCache(t.manager, t.agentID)
-	if permissions != nil {
-		if err := permissions.Check(ctx, core.FileSystemList, t.BasePath); err != nil {
-			return nil, err
-		}
-	}
 	err := filepath.Walk(t.BasePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -227,17 +167,7 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, a
 			if shouldSkipGeneratedDir(info.Name()) {
 				return filepath.SkipDir
 			}
-			if permissions != nil {
-				if err := permissions.Check(ctx, core.FileSystemList, path); err != nil {
-					return filepath.SkipDir
-				}
-			}
 			return nil
-		}
-		if permissions != nil {
-			if err := permissions.Check(ctx, core.FileSystemRead, path); err != nil {
-				return nil
-			}
 		}
 		if !isSemanticCandidate(path) {
 			return nil
@@ -265,16 +195,16 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, state *core.Context, a
 		right, _ := hits[j]["score"].(float64)
 		return left > right
 	})
-	return &core.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
+	return &contracts.ToolResult{Success: true, Data: map[string]interface{}{"results": hits}}, nil
 }
-func (t *SemanticSearchTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+func (t *SemanticSearchTool) IsAvailable(ctx context.Context) bool {
 	return true
 }
 
-func (t *SemanticSearchTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead, core.FileSystemList)}
+func (t *SemanticSearchTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
-func (t *SemanticSearchTool) Tags() []string { return []string{core.TagReadOnly, "search"} }
+func (t *SemanticSearchTool) Tags() []string { return []string{contracts.TagReadOnly, "search"} }
 
 func sanitizeSnippet(snippet string) string {
 	return strings.ToLower(strings.ReplaceAll(snippet, " ", ""))

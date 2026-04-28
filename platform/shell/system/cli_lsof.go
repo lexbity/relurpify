@@ -1,12 +1,12 @@
 package system
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewLsofTool exposes the lsof CLI.
-func NewLsofTool(basePath string) core.Tool {
+func NewLsofTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_lsof",
 		Description: "Lists open files and sockets via lsof.",

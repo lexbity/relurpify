@@ -1,12 +1,12 @@
 package text
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewPasteTool exposes the paste CLI.
-func NewPasteTool(basePath string) core.Tool {
+func NewPasteTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_paste",
 		Description: "Combines lines from files using paste.",

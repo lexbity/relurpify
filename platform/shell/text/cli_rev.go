@@ -1,12 +1,12 @@
 package text
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewRevTool exposes the rev CLI.
-func NewRevTool(basePath string) core.Tool {
+func NewRevTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_rev",
 		Description: "Reverses lines character-wise using rev.",

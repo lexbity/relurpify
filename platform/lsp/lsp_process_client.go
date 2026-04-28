@@ -14,10 +14,8 @@ import (
 	"sync"
 	"time"
 
-	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	platformshell "codeburg.org/lexbit/relurpify/platform/shell"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+		platformshell "codeburg.org/lexbit/relurpify/platform/shell"
 	"github.com/sourcegraph/jsonrpc2"
 	"go.lsp.dev/protocol"
 )
@@ -40,18 +38,19 @@ type processLSPClient struct {
 	openedFiles map[protocol.DocumentURI]bool
 	diagnostics map[protocol.DocumentURI][]protocol.Diagnostic
 	logCh       chan string
-	manager     *fauthorization.PermissionManager
-	agentID     string
-	spec        *core.AgentRuntimeSpec
 }
 
 // NewProcessLSPClient launches the configured language server and performs the LSP handshake.
 func NewProcessLSPClient(cfg ProcessLSPConfig) (LSPClient, error) {
-	return NewProcessLSPClientWithPermissions(cfg, nil, "", nil)
+	return newProcessLSPClientInternal(cfg, nil)
 }
 
-// NewProcessLSPClientWithPermissions enforces manifest-derived policies before starting the LSP server.
-func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fauthorization.PermissionManager, agentID string, spec *core.AgentRuntimeSpec) (LSPClient, error) {
+// NewProcessLSPClientWithPermissions launches the LSP server with an optional command policy.
+func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, policy contracts.CommandPolicy) (LSPClient, error) {
+	return newProcessLSPClientInternal(cfg, policy)
+}
+
+func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy contracts.CommandPolicy) (LSPClient, error) {
 	if cfg.Command == "" {
 		return nil, errors.New("command is required for LSP client")
 	}
@@ -69,12 +68,13 @@ func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fauthoriz
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	policy := fauthorization.NewCommandAuthorizationPolicy(manager, agentID, spec, "lsp")
-	if err := policy.AllowCommand(ctx, sandbox.CommandRequest{
-		Args: append([]string{cfg.Command}, cfg.Args...),
-	}); err != nil {
-		cancel()
-		return nil, err
+	if policy != nil {
+		if err := policy.AllowCommand(ctx, contracts.CommandRequest{
+			Args: append([]string{cfg.Command}, cfg.Args...),
+		}); err != nil {
+			cancel()
+			return nil, err
+		}
 	}
 	cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
 	cmd.Dir = absRoot
@@ -106,9 +106,6 @@ func NewProcessLSPClientWithPermissions(cfg ProcessLSPConfig, manager *fauthoriz
 		openedFiles: make(map[protocol.DocumentURI]bool),
 		diagnostics: make(map[protocol.DocumentURI][]protocol.Diagnostic),
 		logCh:       make(chan string, 256),
-		manager:     manager,
-		agentID:     agentID,
-		spec:        spec,
 	}
 
 	handler := jsonrpc2.HandlerWithError(func(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) (interface{}, error) {
@@ -238,11 +235,6 @@ func (c *processLSPClient) ensureOpen(ctx context.Context, file string) error {
 	c.openedFiles[uri] = true
 	c.mu.Unlock()
 
-	if c != nil && c.manager != nil {
-		if err := c.manager.CheckFileAccess(ctx, c.agentID, core.FileSystemRead, file); err != nil {
-			return err
-		}
-	}
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
@@ -469,11 +461,6 @@ func uriToPath(uri string) string {
 }
 
 func (c *processLSPClient) readSnippet(path string, rng protocol.Range) (string, error) {
-	if c != nil && c.manager != nil {
-		if err := c.manager.CheckFileAccess(context.Background(), c.agentID, core.FileSystemRead, path); err != nil {
-			return "", err
-		}
-	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err

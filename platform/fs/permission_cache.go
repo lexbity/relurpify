@@ -3,12 +3,11 @@ package fs
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type permissionCacheKey struct {
-	action core.FileSystemAction
+	action contracts.FileSystemAction
 	path   string
 }
 
@@ -17,21 +16,27 @@ type permissionCacheEntry struct {
 	err     error
 }
 
-type fileAccessChecker func(ctx context.Context, action core.FileSystemAction, path string) error
+type fileAccessChecker func(ctx context.Context, action contracts.FileSystemAction, path string) error
 
 type traversalPermissionCache struct {
 	check  fileAccessChecker
 	cached map[permissionCacheKey]permissionCacheEntry
 }
 
-func newTraversalPermissionCache(manager *authorization.PermissionManager, agentID string) *traversalPermissionCache {
-	if manager == nil {
+// Note: newTraversalPermissionCache temporarily disabled during interface migration.
+// The permission caching functionality should be reimplemented using FilePermissionChecker
+// interface in a future update.
+/*
+func newTraversalPermissionCache(checker FilePermissionChecker, agentID string) *traversalPermissionCache {
+	if checker == nil {
 		return nil
 	}
-	return newTraversalPermissionCacheWithChecker(func(ctx context.Context, action core.FileSystemAction, path string) error {
-		return manager.CheckFileAccess(ctx, agentID, action, path)
+	return newTraversalPermissionCacheWithChecker(func(ctx context.Context, action contracts.FileSystemAction, path string) error {
+		// Cache implementation would go here
+		return nil
 	})
 }
+*/
 
 func newTraversalPermissionCacheWithChecker(check fileAccessChecker) *traversalPermissionCache {
 	if check == nil {
@@ -43,7 +48,7 @@ func newTraversalPermissionCacheWithChecker(check fileAccessChecker) *traversalP
 	}
 }
 
-func (c *traversalPermissionCache) Check(ctx context.Context, action core.FileSystemAction, path string) error {
+func (c *traversalPermissionCache) Check(ctx context.Context, action contracts.FileSystemAction, path string) error {
 	if c == nil {
 		return nil
 	}

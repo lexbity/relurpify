@@ -1,12 +1,12 @@
 package archive
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewGzipTool exposes the gzip CLI.
-func NewGzipTool(basePath string) core.Tool {
+func NewGzipTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_gzip",
 		Description: "Compresses data with gzip.",

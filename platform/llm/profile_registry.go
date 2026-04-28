@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/search"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"gopkg.in/yaml.v3"
 )
 
@@ -235,7 +235,7 @@ func matchPattern(pattern, value string) bool {
 	if !strings.ContainsAny(pattern, "*?[") {
 		return strings.EqualFold(pattern, value)
 	}
-	return search.MatchGlob(pattern, value)
+	return contracts.MatchGlob(pattern, value)
 }
 
 func specificityScore(pattern string) int {

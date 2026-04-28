@@ -8,10 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+		"codeburg.org/lexbit/relurpify/platform/contracts"
+		clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 var pythonProjectMarkers = []string{
@@ -26,8 +24,6 @@ var pythonProjectMarkers = []string{
 
 type PythonWorkspaceDetectTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
 }
 
 func (t *PythonWorkspaceDetectTool) Name() string { return "python_workspace_detect" }
@@ -35,16 +31,12 @@ func (t *PythonWorkspaceDetectTool) Description() string {
 	return "Detects the nearest Python project root and marker files for a file or directory."
 }
 func (t *PythonWorkspaceDetectTool) Category() string { return "python" }
-func (t *PythonWorkspaceDetectTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *PythonWorkspaceDetectTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *PythonWorkspaceDetectTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
-}
-func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -57,14 +49,9 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, state *core.Con
 		resolved = filepath.Join(t.BasePath, resolved)
 	}
 	resolved = filepath.Clean(resolved)
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, resolved); err != nil {
-			return nil, err
-		}
-	}
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	searchDir := resolved
 	if !info.IsDir() {
@@ -72,13 +59,13 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, state *core.Con
 	}
 	projectRoot, manifestPath, markers := detectPythonProject(searchDir, t.BasePath)
 	if projectRoot == "" {
-		return &core.ToolResult{Success: false, Error: "no Python project markers found"}, nil
+		return &contracts.ToolResult{Success: false, Error: "no Python project markers found"}, nil
 	}
 	summary := fmt.Sprintf("Python project detected at %s", projectRoot)
 	if manifestPath != "" {
 		summary += " using " + filepath.Base(manifestPath)
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"path":          resolved,
@@ -89,20 +76,16 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, state *core.Con
 		},
 	}, nil
 }
-func (t *PythonWorkspaceDetectTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return true
-}
-func (t *PythonWorkspaceDetectTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
+func (t *PythonWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
+func (t *PythonWorkspaceDetectTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
 func (t *PythonWorkspaceDetectTool) Tags() []string {
-	return []string{core.TagReadOnly, "lang:python", "workspace-detect", "recovery"}
+	return []string{contracts.TagReadOnly, "lang:python", "workspace-detect", "recovery"}
 }
 
 type PythonProjectMetadataTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
 }
 
 func (t *PythonProjectMetadataTool) Name() string { return "python_project_metadata" }
@@ -110,16 +93,12 @@ func (t *PythonProjectMetadataTool) Description() string {
 	return "Reads Python project markers and returns structured project metadata."
 }
 func (t *PythonProjectMetadataTool) Category() string { return "python" }
-func (t *PythonProjectMetadataTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *PythonProjectMetadataTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *PythonProjectMetadataTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
-}
-func (t *PythonProjectMetadataTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -134,16 +113,11 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, state *core.Con
 	resolved = filepath.Clean(resolved)
 	projectRoot, manifestPath, markers := detectPythonProject(resolved, t.BasePath)
 	if projectRoot == "" {
-		return &core.ToolResult{Success: false, Error: "no Python project markers found"}, nil
+		return &contracts.ToolResult{Success: false, Error: "no Python project markers found"}, nil
 	}
 	files := make(map[string]string)
 	for _, marker := range markers {
 		path := filepath.Join(projectRoot, marker)
-		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, path); err != nil {
-				return nil, err
-			}
-		}
 		content, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -160,7 +134,7 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, state *core.Con
 	if testTool != "" {
 		summary += " test_tool=" + testTool
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"summary":              summary,
@@ -176,14 +150,12 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, state *core.Con
 		},
 	}, nil
 }
-func (t *PythonProjectMetadataTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return true
-}
-func (t *PythonProjectMetadataTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
+func (t *PythonProjectMetadataTool) IsAvailable(ctx context.Context) bool { return true }
+func (t *PythonProjectMetadataTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
 func (t *PythonProjectMetadataTool) Tags() []string {
-	return []string{core.TagReadOnly, "lang:python", "metadata", "recovery"}
+	return []string{contracts.TagReadOnly, "lang:python", "metadata", "recovery"}
 }
 
 type PythonPytestTool struct {
@@ -199,7 +171,7 @@ func NewPythonPytestTool(basePath string) *PythonPytestTool {
 			Description: "Runs python -m pytest and returns structured Python test results.",
 			Command:     "python3",
 			Category:    "python",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -209,21 +181,15 @@ func (t *PythonPytestTool) Description() string {
 	return "Runs python -m pytest and returns structured Python test results."
 }
 func (t *PythonPytestTool) Category() string { return "python" }
-func (t *PythonPytestTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *PythonPytestTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "test_path", Type: "string", Required: false},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonPytestTool) SetCommandRunner(r sandbox.CommandRunner) { t.inner.SetCommandRunner(r) }
-func (t *PythonPytestTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *PythonPytestTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *PythonPytestTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *PythonPytestTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -239,7 +205,7 @@ func (t *PythonPytestTool) Execute(ctx context.Context, state *core.Context, arg
 			}
 		}
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              commandArgs,
 		"working_directory": workingDir,
 	})
@@ -249,7 +215,7 @@ func (t *PythonPytestTool) Execute(ctx context.Context, state *core.Context, arg
 	stdout := fmt.Sprint(result.Data["stdout"])
 	stderr := fmt.Sprint(result.Data["stderr"])
 	summary := summarizePythonPytest(stdout, stderr, result.Success)
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -264,12 +230,10 @@ func (t *PythonPytestTool) Execute(ctx context.Context, state *core.Context, arg
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *PythonPytestTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
-}
-func (t *PythonPytestTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *PythonPytestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *PythonPytestTool) Tags() []string {
-	return []string{core.TagExecute, "lang:python", "test", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
 }
 
 type PythonUnittestTool struct {
@@ -285,7 +249,7 @@ func NewPythonUnittestTool(basePath string) *PythonUnittestTool {
 			Description: "Runs python -m unittest discover and returns structured Python test results.",
 			Command:     "python3",
 			Category:    "python",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -295,22 +259,16 @@ func (t *PythonUnittestTool) Description() string {
 	return "Runs python -m unittest discover and returns structured Python test results."
 }
 func (t *PythonUnittestTool) Category() string { return "python" }
-func (t *PythonUnittestTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *PythonUnittestTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "start_directory", Type: "string", Required: false},
 		{Name: "pattern", Type: "string", Required: false},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonUnittestTool) SetCommandRunner(r sandbox.CommandRunner) { t.inner.SetCommandRunner(r) }
-func (t *PythonUnittestTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *PythonUnittestTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *PythonUnittestTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *PythonUnittestTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -329,7 +287,7 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, state *core.Context, a
 			}
 		}
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              commandArgs,
 		"working_directory": workingDir,
 	})
@@ -339,7 +297,7 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, state *core.Context, a
 	stdout := fmt.Sprint(result.Data["stdout"])
 	stderr := fmt.Sprint(result.Data["stderr"])
 	summary := summarizePythonUnittest(stdout, stderr, result.Success)
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -354,12 +312,10 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, state *core.Context, a
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *PythonUnittestTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
-}
-func (t *PythonUnittestTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *PythonUnittestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *PythonUnittestTool) Tags() []string {
-	return []string{core.TagExecute, "lang:python", "test", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:python", "test", "verification", "diagnostics"}
 }
 
 type PythonCompileCheckTool struct {
@@ -375,7 +331,7 @@ func NewPythonCompileCheckTool(basePath string) *PythonCompileCheckTool {
 			Description: "Runs python -m compileall and returns structured Python syntax-check results.",
 			Command:     "python3",
 			Category:    "python",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -385,23 +341,17 @@ func (t *PythonCompileCheckTool) Description() string {
 	return "Runs python -m compileall and returns structured Python syntax-check results."
 }
 func (t *PythonCompileCheckTool) Category() string { return "python" }
-func (t *PythonCompileCheckTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *PythonCompileCheckTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "target", Type: "string", Required: false, Default: "."},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *PythonCompileCheckTool) SetCommandRunner(r sandbox.CommandRunner) {
+func (t *PythonCompileCheckTool) SetCommandRunner(r contracts.CommandRunner) {
 	t.inner.SetCommandRunner(r)
 }
-func (t *PythonCompileCheckTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *PythonCompileCheckTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *PythonCompileCheckTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *PythonCompileCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -418,7 +368,7 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, state *core.Contex
 			}
 		}
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              commandArgs,
 		"working_directory": workingDir,
 	})
@@ -428,7 +378,7 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, state *core.Contex
 	stdout := fmt.Sprint(result.Data["stdout"])
 	stderr := fmt.Sprint(result.Data["stderr"])
 	summary := summarizePythonCompileCheck(stdout, stderr, result.Success)
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -441,12 +391,12 @@ func (t *PythonCompileCheckTool) Execute(ctx context.Context, state *core.Contex
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *PythonCompileCheckTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
+func (t *PythonCompileCheckTool) IsAvailable(ctx context.Context) bool {
+	return t.inner.IsAvailable(ctx)
 }
-func (t *PythonCompileCheckTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *PythonCompileCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *PythonCompileCheckTool) Tags() []string {
-	return []string{core.TagExecute, "lang:python", "syntax-check", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:python", "syntax-check", "verification", "diagnostics"}
 }
 
 type pythonTestSummary struct {

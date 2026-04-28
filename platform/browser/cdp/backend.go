@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	"codeburg.org/lexbit/relurpify/platform/browser"
+		"codeburg.org/lexbit/relurpify/platform/browser"
+		"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 const defaultStartupTimeout = 10 * time.Second
@@ -29,7 +29,7 @@ type Config struct {
 	Headless       bool
 	StartupTimeout time.Duration
 	ExtraArgs      []string
-	Policy         sandbox.CommandPolicy
+	Policy         contracts.CommandPolicy
 }
 
 type Backend struct {
@@ -422,7 +422,7 @@ func launchChromium(ctx context.Context, cfg Config) (*launchedBrowser, error) {
 	args = append(args, cfg.ExtraArgs...)
 
 	if cfg.Policy != nil {
-		if err := cfg.Policy.AllowCommand(ctx, sandbox.CommandRequest{
+		if err := cfg.Policy.AllowCommand(ctx, contracts.CommandRequest{
 			Args: append([]string{executable}, args...),
 		}); err != nil {
 			_ = os.RemoveAll(userDataDir)

@@ -2,9 +2,10 @@ package rust
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type VerificationResolver struct{}
@@ -15,7 +16,7 @@ func NewVerificationResolver() *VerificationResolver {
 
 func (r *VerificationResolver) BackendID() string { return "rust" }
 
-func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bool {
+func (r *VerificationResolver) Supports(req contracts.VerificationPlanRequest) bool {
 	for _, file := range append(append([]string(nil), req.Files...), req.TestFiles...) {
 		path := strings.ToLower(strings.TrimSpace(file))
 		if strings.HasSuffix(path, ".rs") || strings.HasSuffix(path, "cargo.toml") {
@@ -32,27 +33,23 @@ func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bo
 	return strings.Contains(lowerTask, "cargo") || strings.Contains(lowerTask, "rust")
 }
 
-func (r *VerificationResolver) BuildPlan(_ context.Context, req agentenv.VerificationPlanRequest) (agentenv.VerificationPlan, bool, error) {
+func (r *VerificationResolver) BuildPlan(_ context.Context, req contracts.VerificationPlanRequest) (contracts.VerificationPlan, bool, error) {
 	workspace := firstNonEmpty(strings.TrimSpace(req.Workspace), ".")
-	commands := []agentenv.VerificationCommand{{
-		Name:             "cargo_test",
-		Command:          "cargo",
-		Args:             []string{"test"},
-		WorkingDirectory: workspace,
+	commands := []contracts.VerificationCommand{{
+		Command: []string{"cargo", "test"},
+		Dir:     workspace,
 	}}
 	scopeKind := "workspace_tests"
 	if req.PublicSurfaceChanged || req.RequireVerificationStep {
-		commands = append(commands, agentenv.VerificationCommand{
-			Name:             "cargo_check",
-			Command:          "cargo",
-			Args:             []string{"check"},
-			WorkingDirectory: workspace,
+		commands = append(commands, contracts.VerificationCommand{
+			Command: []string{"cargo", "check"},
+			Dir:     workspace,
 		})
 	}
 	if req.PublicSurfaceChanged {
 		scopeKind = "compatibility_sweep"
 	}
-	return agentenv.VerificationPlan{
+	return contracts.VerificationPlan{
 		ScopeKind:              scopeKind,
 		Files:                  uniqueStrings(append(append([]string(nil), req.Files...), req.TestFiles...)),
 		TestFiles:              uniqueStrings(req.TestFiles),
@@ -68,7 +65,7 @@ func (r *VerificationResolver) BuildPlan(_ context.Context, req agentenv.Verific
 	}, true, nil
 }
 
-func rustVerificationRationale(req agentenv.VerificationPlanRequest) string {
+func rustVerificationRationale(req contracts.VerificationPlanRequest) string {
 	parts := []string{"cargo test was selected as the default Rust verification backend"}
 	if req.PublicSurfaceChanged {
 		parts = append(parts, "public surface changed, so cargo check was added")
@@ -99,14 +96,11 @@ func uniqueStrings(input []string) []string {
 	return out
 }
 
-func uniqueCommands(input []agentenv.VerificationCommand) []agentenv.VerificationCommand {
-	if len(input) == 0 {
-		return nil
-	}
-	seen := map[string]struct{}{}
-	out := make([]agentenv.VerificationCommand, 0, len(input))
+func uniqueCommands(input []contracts.VerificationCommand) []contracts.VerificationCommand {
+	seen := make(map[string]struct{}, len(input))
+	out := make([]contracts.VerificationCommand, 0, len(input))
 	for _, cmd := range input {
-		key := cmd.Command + "\x00" + strings.Join(cmd.Args, "\x00")
+		key := fmt.Sprintf("%s:%v", cmd.Command, cmd.Args)
 		if _, ok := seen[key]; ok {
 			continue
 		}

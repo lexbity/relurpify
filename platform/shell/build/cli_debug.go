@@ -1,12 +1,12 @@
 package build
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewGDBTool creates a GDB debugger wrapper.
-func NewGDBTool(basePath string) core.Tool {
+func NewGDBTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:         "cli_gdb",
 		Description:  "GNU Debugger.",
@@ -18,7 +18,7 @@ func NewGDBTool(basePath string) core.Tool {
 }
 
 // NewValgrindTool creates a Valgrind wrapper.
-func NewValgrindTool(basePath string) core.Tool {
+func NewValgrindTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_valgrind",
 		Description: "Valgrind instrumentation framework (memcheck, cachegrind, etc).",
@@ -29,7 +29,7 @@ func NewValgrindTool(basePath string) core.Tool {
 }
 
 // NewLddTool creates an ldd wrapper.
-func NewLddTool(basePath string) core.Tool {
+func NewLddTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_ldd",
 		Description: "Print shared object dependencies.",
@@ -40,7 +40,7 @@ func NewLddTool(basePath string) core.Tool {
 }
 
 // NewObjdumpTool creates an objdump wrapper.
-func NewObjdumpTool(basePath string) core.Tool {
+func NewObjdumpTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_objdump",
 		Description: "Display information from object files.",
@@ -51,7 +51,7 @@ func NewObjdumpTool(basePath string) core.Tool {
 }
 
 // NewPerfTool creates a perf wrapper.
-func NewPerfTool(basePath string) core.Tool {
+func NewPerfTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:         "cli_perf",
 		Description:  "Performance analysis tools for Linux.",
@@ -63,7 +63,7 @@ func NewPerfTool(basePath string) core.Tool {
 }
 
 // NewStraceTool creates a strace wrapper.
-func NewStraceTool(basePath string) core.Tool {
+func NewStraceTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:         "cli_strace",
 		Description:  "Trace system calls and signals.",

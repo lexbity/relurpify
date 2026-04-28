@@ -9,9 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/shell/execute"
 )
 
@@ -31,10 +29,7 @@ type CommandToolConfig struct {
 type CommandTool struct {
 	cfg      CommandToolConfig
 	basePath string
-	runner   sandbox.CommandRunner
-	manager  *authorization.PermissionManager
-	agentID  string
-	spec     *core.AgentRuntimeSpec
+	runner   contracts.CommandRunner
 }
 
 // NewCommandTool builds a reusable CLI wrapper.
@@ -51,29 +46,19 @@ func NewCommandTool(basePath string, cfg CommandToolConfig) *CommandTool {
 func (t *CommandTool) Name() string        { return t.cfg.Name }
 func (t *CommandTool) Description() string { return t.cfg.Description }
 func (t *CommandTool) Category() string    { return t.cfg.Category }
-func (t *CommandTool) SetCommandRunner(r sandbox.CommandRunner) {
+func (t *CommandTool) SetCommandRunner(r contracts.CommandRunner) {
 	t.runner = r
 }
 
-func (t *CommandTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
-}
-
-func (t *CommandTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.spec = spec
-	t.agentID = agentID
-}
-
-func (t *CommandTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *CommandTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "args", Type: "array", Required: false, Description: "Arguments passed to the CLI tool."},
 		{Name: "stdin", Type: "string", Required: false, Description: "Optional standard input piped to the command."},
 		{Name: "working_directory", Type: "string", Required: false, Description: "Directory to run the command in (relative to workspace)."},
 	}
 }
 
-func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workdir := mapStringArg(args, "working_directory")
 	stdin := mapStringArg(args, "stdin")
 	executor := execute.NewExecutor(t.basePath, execute.CommandPreset{
@@ -91,7 +76,7 @@ func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map
 	if err != nil {
 		return nil, err
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: envelope.Success,
 		Data: map[string]interface{}{
 			"stdout": envelope.Stdout,
@@ -108,16 +93,20 @@ func (t *CommandTool) Execute(ctx context.Context, state *core.Context, args map
 	}, nil
 }
 
-func (t *CommandTool) IsAvailable(ctx context.Context, state *core.Context) bool {
+func (t *CommandTool) IsAvailable(ctx context.Context) bool {
 	return t.runner != nil
 }
 
-func (t *CommandTool) Permissions() core.ToolPermissions {
-	perms := core.NewExecutionPermissionSet(t.basePath, t.cfg.Command, append([]string{}, t.cfg.DefaultArgs...))
-	if t.cfg.HITLRequired && len(perms.Executables) > 0 {
-		perms.Executables[0].HITLRequired = true
+func (t *CommandTool) Permissions() contracts.ToolPermissions {
+	perms := &contracts.PermissionSet{}
+	if t.cfg.Command != "" {
+		perms.Executables = []contracts.ExecutablePermission{{
+			Binary:       t.cfg.Command,
+			Args:         t.cfg.DefaultArgs,
+			HITLRequired: t.cfg.HITLRequired,
+		}}
 	}
-	return core.ToolPermissions{Permissions: perms}
+	return contracts.ToolPermissions{Permissions: perms}
 }
 
 func (t *CommandTool) Tags() []string { return t.cfg.Tags }

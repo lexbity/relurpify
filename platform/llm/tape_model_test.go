@@ -12,27 +12,27 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type stubModel struct {
 	streamText string
 }
 
-func (s stubModel) Generate(context.Context, string, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
+func (s stubModel) Generate(context.Context, string, *LLMOptions) (*LLMResponse, error) {
+	return &LLMResponse{Text: "ok", FinishReason: "stop"}, nil
 }
-func (s stubModel) GenerateStream(context.Context, string, *core.LLMOptions) (<-chan string, error) {
+func (s stubModel) GenerateStream(context.Context, string, *LLMOptions) (<-chan string, error) {
 	ch := make(chan string, 1)
 	ch <- s.streamText
 	close(ch)
 	return ch, nil
 }
-func (s stubModel) Chat(context.Context, []core.Message, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "chat", FinishReason: "stop"}, nil
+func (s stubModel) Chat(context.Context, []Message, *LLMOptions) (*LLMResponse, error) {
+	return &LLMResponse{Text: "chat", FinishReason: "stop"}, nil
 }
-func (s stubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSpec, *core.LLMOptions) (*core.LLMResponse, error) {
-	return &core.LLMResponse{Text: "tools", FinishReason: "stop", ToolCalls: []core.ToolCall{{Name: "file_read", Args: map[string]any{"path": "x"}}}}, nil
+func (s stubModel) ChatWithTools(context.Context, []Message, []LLMToolSpec, *LLMOptions) (*LLMResponse, error) {
+	return &LLMResponse{Text: "tools", FinishReason: "stop", ToolCalls: []contracts.ToolCall{{Name: "file_read", Args: map[string]any{"path": "x"}}}}, nil
 }
 
 func TestTapeModelRecordThenReplay(t *testing.T) {
@@ -54,13 +54,13 @@ func TestTapeModelRecordThenReplay(t *testing.T) {
 	}
 	defer rec.Close()
 
-	if _, err := rec.Generate(context.Background(), "p", &core.LLMOptions{Model: "m"}); err != nil {
+	if _, err := rec.Generate(context.Background(), "p", &LLMOptions{Model: "m"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rec.Chat(context.Background(), []core.Message{{Role: "user", Content: "hi"}}, nil); err != nil {
+	if _, err := rec.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rec.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil {
+	if _, err := rec.ChatWithTools(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	stream, err := rec.GenerateStream(context.Background(), "p", nil)
@@ -83,13 +83,13 @@ func TestTapeModelRecordThenReplay(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if resp, err := replay.Generate(context.Background(), "p", &core.LLMOptions{Model: "m"}); err != nil || resp.Text != "ok" {
+	if resp, err := replay.Generate(context.Background(), "p", &LLMOptions{Model: "m"}); err != nil || resp.Text != "ok" {
 		t.Fatalf("replay generate: resp=%+v err=%v", resp, err)
 	}
-	if resp, err := replay.Chat(context.Background(), []core.Message{{Role: "user", Content: "hi"}}, nil); err != nil || resp.Text != "chat" {
+	if resp, err := replay.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil); err != nil || resp.Text != "chat" {
 		t.Fatalf("replay chat: resp=%+v err=%v", resp, err)
 	}
-	if resp, err := replay.ChatWithTools(context.Background(), []core.Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil || resp.Text != "tools" {
+	if resp, err := replay.ChatWithTools(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil || resp.Text != "tools" {
 		t.Fatalf("replay chat_with_tools: resp=%+v err=%v", resp, err)
 	}
 	ch, err := replay.GenerateStream(context.Background(), "p", nil)
@@ -152,7 +152,7 @@ func TestTapeModelRecordWritesHeaderFirst(t *testing.T) {
 func TestTapeModelReplayWarnsOnProviderMismatch(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
 		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ProviderID: "ollama", ModelName: "model-a"}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &core.LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
 	})
 
 	var buf bytes.Buffer
@@ -175,7 +175,7 @@ func TestTapeModelReplayWarnsOnProviderMismatch(t *testing.T) {
 func TestTapeModelReplayRejectsMismatchedModelHeader(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
 		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ModelName: "model-a"}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &core.LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -191,7 +191,7 @@ func TestTapeModelReplayRejectsMismatchedModelHeader(t *testing.T) {
 func TestTapeModelReplayRejectsMismatchedDigestHeader(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
 		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ModelName: "model-a", ModelDigest: "sha256:abc123456789"}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &core.LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -206,7 +206,7 @@ func TestTapeModelReplayRejectsMismatchedDigestHeader(t *testing.T) {
 
 func TestTapeModelReplayAllowsLegacyTapeWithoutHeader(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &core.LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -231,7 +231,7 @@ func TestTapeModelReplayRejectsMismatchedFirstRequest(t *testing.T) {
 			CaseName:   "basic_edit_task",
 			RecordedAt: time.Now().UTC().Format(time.RFC3339),
 		}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "old prompt"}), Response: &core.LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "old prompt"}), Response: &LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -256,7 +256,7 @@ func TestTapeModelReplayWarnsOnStaleTapeAge(t *testing.T) {
 			CaseName:   "basic_edit_task",
 			RecordedAt: time.Now().UTC().Add(-45 * 24 * time.Hour).Format(time.RFC3339),
 		}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &core.LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
 	})
 
 	var buf bytes.Buffer
@@ -286,7 +286,7 @@ func TestInspectTapeReturnsHeaderAndRecordedAt(t *testing.T) {
 			CaseName:   "case-a",
 			RecordedAt: recordedAt,
 		}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &core.LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
 	})
 
 	inspection, err := InspectTape(tape)

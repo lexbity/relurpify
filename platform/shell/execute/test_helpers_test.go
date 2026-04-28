@@ -3,17 +3,17 @@ package execute
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type recordingRunner struct {
-	requests []sandbox.CommandRequest
+	requests []contracts.CommandRequest
 	stdout   string
 	stderr   string
 	err      error
 }
 
-func (r *recordingRunner) Run(_ context.Context, req sandbox.CommandRequest) (string, string, error) {
+func (r *recordingRunner) Run(_ context.Context, req contracts.CommandRequest) (string, string, error) {
 	r.requests = append(r.requests, req)
 	return r.stdout, r.stderr, r.err
 }

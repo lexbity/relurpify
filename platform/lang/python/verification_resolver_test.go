@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestVerificationResolver_BuildPlan(t *testing.T) {
 	resolver := NewVerificationResolver()
-	plan, ok, err := resolver.BuildPlan(context.Background(), agentenv.VerificationPlanRequest{
+	plan, ok, err := resolver.BuildPlan(context.Background(), contracts.VerificationPlanRequest{
 		TaskInstruction: "verify this Python change",
 		Workspace:       ".",
 		Files:           []string{"app/service.py"},
@@ -24,7 +24,7 @@ func TestVerificationResolver_BuildPlan(t *testing.T) {
 	if plan.ScopeKind != "test_files" {
 		t.Fatalf("expected test_files, got %q", plan.ScopeKind)
 	}
-	if len(plan.Commands) != 1 || plan.Commands[0].Command != "python" {
+	if len(plan.Commands) != 1 || plan.Commands[0].Command[0] != "python" {
 		t.Fatalf("expected python pytest command, got %#v", plan.Commands)
 	}
 }

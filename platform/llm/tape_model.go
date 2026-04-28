@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type TapeMode string
@@ -27,20 +27,20 @@ const (
 )
 
 type tapeEntry struct {
-	Timestamp   time.Time         `json:"timestamp"`
-	Kind        string            `json:"kind"`
-	Fingerprint string            `json:"fingerprint"`
-	Request     tapeRequest       `json:"request"`
-	Response    *core.LLMResponse `json:"response,omitempty"`
-	Error       string            `json:"error,omitempty"`
+	Timestamp   time.Time    `json:"timestamp"`
+	Kind        string       `json:"kind"`
+	Fingerprint string       `json:"fingerprint"`
+	Request     tapeRequest  `json:"request"`
+	Response    *LLMResponse `json:"response,omitempty"`
+	Error       string       `json:"error,omitempty"`
 }
 
 type tapeRequest struct {
-	Prompt    string           `json:"prompt,omitempty"`
-	Messages  []core.Message   `json:"messages,omitempty"`
-	ToolNames []string         `json:"tool_names,omitempty"`
-	Options   *core.LLMOptions `json:"options,omitempty"`
-	Header    *TapeHeader      `json:"header,omitempty"`
+	Prompt    string      `json:"prompt,omitempty"`
+	Messages  []Message   `json:"messages,omitempty"`
+	ToolNames []string    `json:"tool_names,omitempty"`
+	Options   *LLMOptions `json:"options,omitempty"`
+	Header    *TapeHeader `json:"header,omitempty"`
 }
 
 type TapeHeader struct {
@@ -55,7 +55,7 @@ type TapeHeader struct {
 }
 
 type TapeModel struct {
-	inner core.LanguageModel
+	inner LanguageModel
 	mode  TapeMode
 	path  string
 
@@ -79,7 +79,7 @@ type TapeInspection struct {
 
 const staleTapeWarningThreshold = 30 * 24 * time.Hour
 
-func NewTapeModel(inner core.LanguageModel, path string, mode string) (*TapeModel, error) {
+func NewTapeModel(inner LanguageModel, path string, mode string) (*TapeModel, error) {
 	if inner == nil {
 		return nil, errors.New("inner model required")
 	}
@@ -147,14 +147,14 @@ func (t *TapeModel) ConfigureHeader(header TapeHeader) error {
 	return nil
 }
 
-func (t *TapeModel) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (t *TapeModel) Generate(ctx context.Context, prompt string, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	req := tapeRequest{Prompt: prompt, Options: options}
-	return t.roundTrip(ctx, "generate", req, func() (*core.LLMResponse, error) {
+	return t.roundTrip(ctx, "generate", req, func() (*contracts.LLMResponse, error) {
 		return t.inner.Generate(ctx, prompt, options)
 	})
 }
 
-func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
+func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *contracts.LLMOptions) (<-chan string, error) {
 	req := tapeRequest{Prompt: prompt, Options: options}
 	fp := fingerprint("generate_stream", req)
 	if t.mode == TapeReplay {
@@ -202,31 +202,31 @@ func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *
 			Kind:        "generate_stream",
 			Fingerprint: fp,
 			Request:     req,
-			Response:    &core.LLMResponse{Text: buf, FinishReason: "stream"},
+			Response:    &contracts.LLMResponse{Text: buf, FinishReason: "stream"},
 		})
 	}()
 	return out, nil
 }
 
-func (t *TapeModel) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (t *TapeModel) Chat(ctx context.Context, messages []contracts.Message, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	req := tapeRequest{Messages: messages, Options: options}
-	return t.roundTrip(ctx, "chat", req, func() (*core.LLMResponse, error) {
+	return t.roundTrip(ctx, "chat", req, func() (*contracts.LLMResponse, error) {
 		return t.inner.Chat(ctx, messages, options)
 	})
 }
 
-func (t *TapeModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (t *TapeModel) ChatWithTools(ctx context.Context, messages []contracts.Message, tools []contracts.LLMToolSpec, options *contracts.LLMOptions) (*contracts.LLMResponse, error) {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		names = append(names, tool.Name)
 	}
 	req := tapeRequest{Messages: messages, ToolNames: names, Options: options}
-	return t.roundTrip(ctx, "chat_with_tools", req, func() (*core.LLMResponse, error) {
+	return t.roundTrip(ctx, "chat_with_tools", req, func() (*contracts.LLMResponse, error) {
 		return t.inner.ChatWithTools(ctx, messages, tools, options)
 	})
 }
 
-func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest, call func() (*core.LLMResponse, error)) (*core.LLMResponse, error) {
+func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest, call func() (*contracts.LLMResponse, error)) (*contracts.LLMResponse, error) {
 	fp := fingerprint(kind, req)
 	if t.mode == TapeReplay {
 		if err := t.validateFirstReplayRequest(kind, req); err != nil {
@@ -240,7 +240,7 @@ func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest,
 			return nil, errors.New(entry.Error)
 		}
 		if entry.Response == nil {
-			return &core.LLMResponse{}, nil
+			return &contracts.LLMResponse{}, nil
 		}
 		return entry.Response, nil
 	}

@@ -5,8 +5,18 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
+)
+
+// Re-export contract types for local usage
+type (
+	LanguageModel       = contracts.LanguageModel
+	BackendCapabilities = contracts.BackendCapabilities
+)
+
+const (
+	BackendClassTransport = contracts.BackendClassTransport
 )
 
 // Backend implements the managed backend facade for LM Studio.
@@ -35,7 +45,7 @@ func NewBackend(cfg Config) *Backend {
 }
 
 // Model returns the underlying language model client.
-func (b *Backend) Model() core.LanguageModel {
+func (b *Backend) Model() LanguageModel {
 	if b == nil {
 		return nil
 	}
@@ -60,16 +70,16 @@ func (b *Backend) Embedder() *openaicompat.Embedder {
 }
 
 // Capabilities reports the transport-backed feature set.
-func (b *Backend) Capabilities() core.BackendCapabilities {
+func (b *Backend) Capabilities() BackendCapabilities {
 	if b == nil {
-		return core.BackendCapabilities{}
+		return BackendCapabilities{}
 	}
-	return core.BackendCapabilities{
+	return BackendCapabilities{
 		NativeToolCalling: b.cfg.NativeToolCalling,
 		Streaming:         true,
 		Embeddings:        true,
 		ModelListing:      true,
-		BackendClass:      core.BackendClassTransport,
+		BackendClass:      BackendClassTransport,
 	}
 }
 

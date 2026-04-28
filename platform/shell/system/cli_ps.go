@@ -1,12 +1,12 @@
 package system
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewPSTool exposes the ps CLI.
-func NewPSTool(basePath string) core.Tool {
+func NewPSTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_ps",
 		Description: "Inspects running processes via ps.",

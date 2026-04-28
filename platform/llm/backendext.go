@@ -4,20 +4,28 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
+
+// Re-export contract types for local usage
+type (
+	LLMOptions  = contracts.LLMOptions
+	LLMResponse = contracts.LLMResponse
+	Message     = contracts.Message
+	LLMToolSpec = contracts.LLMToolSpec
 )
 
 // SessionAwareBackend is implemented by backends that can bind and evict
 // backend-local sessions.
 type SessionAwareBackend interface {
-	WithSession(sessionID string) core.LanguageModel
+	WithSession(sessionID string) LanguageModel
 	EvictSession(ctx context.Context, sessionID string) error
 	ActiveSessions(ctx context.Context) ([]string, error)
 }
 
 // NativeTokenStream provides token-level streaming with backend metadata.
 type NativeTokenStream interface {
-	ChatTokenStream(ctx context.Context, messages []core.Message, opts *core.LLMOptions) (<-chan Token, error)
+	ChatTokenStream(ctx context.Context, messages []Message, opts *LLMOptions) (<-chan Token, error)
 }
 
 // Token is a backend-native token stream item.
@@ -30,13 +38,13 @@ type Token struct {
 
 // BatchInferenceBackend provides coalesced batch inference.
 type BatchInferenceBackend interface {
-	ChatBatch(ctx context.Context, requests []BatchRequest, opts *core.LLMOptions) ([]*core.LLMResponse, error)
+	ChatBatch(ctx context.Context, requests []BatchRequest, opts *LLMOptions) ([]*LLMResponse, error)
 }
 
 // BatchRequest bundles a single batch inference request.
 type BatchRequest struct {
-	Messages  []core.Message
-	Tools     []core.LLMToolSpec
+	Messages  []Message
+	Tools     []LLMToolSpec
 	SessionID string
 }
 

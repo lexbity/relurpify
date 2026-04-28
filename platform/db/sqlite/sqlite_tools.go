@@ -9,18 +9,14 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+		"codeburg.org/lexbit/relurpify/platform/contracts"
+		clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 var sqliteExtensions = []string{".db", ".sqlite", ".sqlite3"}
 
 type SQLiteDatabaseDetectTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
 }
 
 func (t *SQLiteDatabaseDetectTool) Name() string { return "sqlite_database_detect" }
@@ -28,14 +24,10 @@ func (t *SQLiteDatabaseDetectTool) Description() string {
 	return "Detects a SQLite database file for a file or directory path."
 }
 func (t *SQLiteDatabaseDetectTool) Category() string { return "sqlite" }
-func (t *SQLiteDatabaseDetectTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
+func (t *SQLiteDatabaseDetectTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
 }
-func (t *SQLiteDatabaseDetectTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
-}
-func (t *SQLiteDatabaseDetectTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *SQLiteDatabaseDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -48,16 +40,11 @@ func (t *SQLiteDatabaseDetectTool) Execute(ctx context.Context, state *core.Cont
 		resolved = filepath.Join(t.BasePath, resolved)
 	}
 	resolved = filepath.Clean(resolved)
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, resolved); err != nil {
-			return nil, err
-		}
-	}
 	dbPath := findSQLiteDatabase(resolved, t.BasePath)
 	if dbPath == "" {
-		return &core.ToolResult{Success: false, Error: "no SQLite database found"}, nil
+		return &contracts.ToolResult{Success: false, Error: "no SQLite database found"}, nil
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"path":          resolved,
@@ -66,14 +53,12 @@ func (t *SQLiteDatabaseDetectTool) Execute(ctx context.Context, state *core.Cont
 		},
 	}, nil
 }
-func (t *SQLiteDatabaseDetectTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return true
-}
-func (t *SQLiteDatabaseDetectTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
+func (t *SQLiteDatabaseDetectTool) IsAvailable(ctx context.Context) bool { return true }
+func (t *SQLiteDatabaseDetectTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
 func (t *SQLiteDatabaseDetectTool) Tags() []string {
-	return []string{core.TagReadOnly, "lang:sqlite", "workspace-detect", "recovery"}
+	return []string{contracts.TagReadOnly, "lang:sqlite", "workspace-detect", "recovery"}
 }
 
 type SQLiteSchemaInspectTool struct {
@@ -89,7 +74,7 @@ func NewSQLiteSchemaInspectTool(basePath string) *SQLiteSchemaInspectTool {
 			Description: "Inspects SQLite schema and returns structured table/index metadata.",
 			Command:     "sqlite3",
 			Category:    "sqlite",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -99,24 +84,18 @@ func (t *SQLiteSchemaInspectTool) Description() string {
 	return "Inspects SQLite schema and returns structured table/index metadata."
 }
 func (t *SQLiteSchemaInspectTool) Category() string { return "sqlite" }
-func (t *SQLiteSchemaInspectTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{{Name: "database_path", Type: "string", Required: true}}
+func (t *SQLiteSchemaInspectTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{{Name: "database_path", Type: "string", Required: true}}
 }
-func (t *SQLiteSchemaInspectTool) SetCommandRunner(r sandbox.CommandRunner) {
+func (t *SQLiteSchemaInspectTool) SetCommandRunner(r contracts.CommandRunner) {
 	t.inner.SetCommandRunner(r)
 }
-func (t *SQLiteSchemaInspectTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *SQLiteSchemaInspectTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *SQLiteSchemaInspectTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *SQLiteSchemaInspectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	dbPath := strings.TrimSpace(fmt.Sprint(args["database_path"]))
 	if dbPath == "" || dbPath == "<nil>" {
-		return &core.ToolResult{Success: false, Error: "database_path is required"}, nil
+		return &contracts.ToolResult{Success: false, Error: "database_path is required"}, nil
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args": []interface{}{
 			dbPath,
 			"-json",
@@ -137,14 +116,14 @@ func (t *SQLiteSchemaInspectTool) Execute(ctx context.Context, state *core.Conte
 	for key, value := range parsed {
 		data[key] = value
 	}
-	return &core.ToolResult{Success: result.Success, Error: result.Error, Data: data, Metadata: result.Metadata}, nil
+	return &contracts.ToolResult{Success: result.Success, Error: result.Error, Data: data, Metadata: result.Metadata}, nil
 }
-func (t *SQLiteSchemaInspectTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
+func (t *SQLiteSchemaInspectTool) IsAvailable(ctx context.Context) bool {
+	return t.inner.IsAvailable(ctx)
 }
-func (t *SQLiteSchemaInspectTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *SQLiteSchemaInspectTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *SQLiteSchemaInspectTool) Tags() []string {
-	return []string{core.TagExecute, "lang:sqlite", "schema", "verification", "recovery"}
+	return []string{contracts.TagExecute, "lang:sqlite", "schema", "verification", "recovery"}
 }
 
 type SQLiteQueryTool struct {
@@ -160,7 +139,7 @@ func NewSQLiteQueryTool(basePath string) *SQLiteQueryTool {
 			Description: "Executes a SQLite query and returns structured row output.",
 			Command:     "sqlite3",
 			Category:    "sqlite",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -170,26 +149,20 @@ func (t *SQLiteQueryTool) Description() string {
 	return "Executes a SQLite query and returns structured row output."
 }
 func (t *SQLiteQueryTool) Category() string { return "sqlite" }
-func (t *SQLiteQueryTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *SQLiteQueryTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "database_path", Type: "string", Required: true},
 		{Name: "query", Type: "string", Required: true},
 	}
 }
-func (t *SQLiteQueryTool) SetCommandRunner(r sandbox.CommandRunner) { t.inner.SetCommandRunner(r) }
-func (t *SQLiteQueryTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *SQLiteQueryTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *SQLiteQueryTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *SQLiteQueryTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *SQLiteQueryTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	dbPath := strings.TrimSpace(fmt.Sprint(args["database_path"]))
 	query := strings.TrimSpace(fmt.Sprint(args["query"]))
 	if dbPath == "" || dbPath == "<nil>" || query == "" || query == "<nil>" {
-		return &core.ToolResult{Success: false, Error: "database_path and query are required"}, nil
+		return &contracts.ToolResult{Success: false, Error: "database_path and query are required"}, nil
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args": []interface{}{dbPath, "-json", query},
 	})
 	if err != nil || result == nil {
@@ -198,7 +171,7 @@ func (t *SQLiteQueryTool) Execute(ctx context.Context, state *core.Context, args
 	stdout := fmt.Sprint(result.Data["stdout"])
 	stderr := fmt.Sprint(result.Data["stderr"])
 	rows := parseJSONArray(stdout)
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -213,12 +186,10 @@ func (t *SQLiteQueryTool) Execute(ctx context.Context, state *core.Context, args
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *SQLiteQueryTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
-}
-func (t *SQLiteQueryTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *SQLiteQueryTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *SQLiteQueryTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *SQLiteQueryTool) Tags() []string {
-	return []string{core.TagExecute, "lang:sqlite", "query", "verification"}
+	return []string{contracts.TagExecute, "lang:sqlite", "query", "verification"}
 }
 
 type SQLiteIntegrityCheckTool struct {
@@ -234,7 +205,7 @@ func NewSQLiteIntegrityCheckTool(basePath string) *SQLiteIntegrityCheckTool {
 			Description: "Runs PRAGMA integrity_check on a SQLite database.",
 			Command:     "sqlite3",
 			Category:    "sqlite",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -244,24 +215,18 @@ func (t *SQLiteIntegrityCheckTool) Description() string {
 	return "Runs PRAGMA integrity_check on a SQLite database."
 }
 func (t *SQLiteIntegrityCheckTool) Category() string { return "sqlite" }
-func (t *SQLiteIntegrityCheckTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{{Name: "database_path", Type: "string", Required: true}}
+func (t *SQLiteIntegrityCheckTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{{Name: "database_path", Type: "string", Required: true}}
 }
-func (t *SQLiteIntegrityCheckTool) SetCommandRunner(r sandbox.CommandRunner) {
+func (t *SQLiteIntegrityCheckTool) SetCommandRunner(r contracts.CommandRunner) {
 	t.inner.SetCommandRunner(r)
 }
-func (t *SQLiteIntegrityCheckTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *SQLiteIntegrityCheckTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *SQLiteIntegrityCheckTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *SQLiteIntegrityCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	dbPath := strings.TrimSpace(fmt.Sprint(args["database_path"]))
 	if dbPath == "" || dbPath == "<nil>" {
-		return &core.ToolResult{Success: false, Error: "database_path is required"}, nil
+		return &contracts.ToolResult{Success: false, Error: "database_path is required"}, nil
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args": []interface{}{dbPath, "PRAGMA integrity_check;"},
 	})
 	if err != nil || result == nil {
@@ -276,7 +241,7 @@ func (t *SQLiteIntegrityCheckTool) Execute(ctx context.Context, state *core.Cont
 	} else if stdout != "" {
 		summary = "sqlite integrity check failed: " + firstNonEmptyLine(stdout)
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success && ok,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -289,12 +254,12 @@ func (t *SQLiteIntegrityCheckTool) Execute(ctx context.Context, state *core.Cont
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *SQLiteIntegrityCheckTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
+func (t *SQLiteIntegrityCheckTool) IsAvailable(ctx context.Context) bool {
+	return t.inner.IsAvailable(ctx)
 }
-func (t *SQLiteIntegrityCheckTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *SQLiteIntegrityCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *SQLiteIntegrityCheckTool) Tags() []string {
-	return []string{core.TagExecute, "lang:sqlite", "integrity-check", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:sqlite", "integrity-check", "verification", "diagnostics"}
 }
 
 func findSQLiteDatabase(start, basePath string) string {

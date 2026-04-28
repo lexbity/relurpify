@@ -1,12 +1,12 @@
 package build
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewSQLite3Tool exposes sqlite3 for running SQL scripts inside the workspace.
-func NewSQLite3Tool(basePath string) core.Tool {
+func NewSQLite3Tool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_sqlite3",
 		Description: "Executes SQLite commands using sqlite3 inside the workspace.",

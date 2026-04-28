@@ -1,12 +1,12 @@
 package system
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewHtopTool exposes the htop CLI.
-func NewHtopTool(basePath string) core.Tool {
+func NewHtopTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_htop",
 		Description: "Runs htop for interactive process monitoring.",

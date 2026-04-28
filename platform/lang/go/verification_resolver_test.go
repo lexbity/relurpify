@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 func TestVerificationResolver_BuildPlan(t *testing.T) {
 	resolver := NewVerificationResolver()
-	plan, ok, err := resolver.BuildPlan(context.Background(), agentenv.VerificationPlanRequest{
+	plan, ok, err := resolver.BuildPlan(context.Background(), contracts.VerificationPlanRequest{
 		TaskInstruction:         "verify this Go change",
 		Workspace:               ".",
 		Files:                   []string{"named/euclo/runtime/verification.go"},

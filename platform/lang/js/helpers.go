@@ -1,6 +1,6 @@
 package js
 
-import frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/platform/contracts"
 
 func atoiSafe(value string) int {
 	var total int
@@ -35,7 +35,7 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return frameworktools.NormalizeStringSlice(value)
+	return contracts.NormalizeStringSlice(value)
 }
 
 func containsString(values []string, target string) bool {

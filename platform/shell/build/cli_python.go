@@ -1,12 +1,12 @@
 package build
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewPythonTool exposes python3 for running Python inside the workspace.
-func NewPythonTool(basePath string) core.Tool {
+func NewPythonTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_python",
 		Description: "Executes Python commands using python3 inside the workspace.",

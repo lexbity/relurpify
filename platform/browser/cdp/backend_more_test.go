@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
@@ -156,7 +156,7 @@ func TestTransportCallReadLoopAndClose(t *testing.T) {
 }
 
 func TestLaunchChromiumPolicyAndPageTargetErrors(t *testing.T) {
-	deny := sandbox.CommandPolicyFunc(func(context.Context, sandbox.CommandRequest) error {
+	deny := contracts.CommandPolicyFunc(func(context.Context, contracts.CommandRequest) error {
 		return errors.New("denied")
 	})
 	_, err := launchChromium(context.Background(), Config{

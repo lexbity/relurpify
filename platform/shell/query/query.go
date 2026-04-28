@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"codeburg.org/lexbit/relurpify/platform/shell/catalog"
 	"codeburg.org/lexbit/relurpify/platform/shell/execute"
 	shelltelemetry "codeburg.org/lexbit/relurpify/platform/shell/telemetry"
@@ -75,7 +75,7 @@ type InstantiationResult struct {
 	NormalizedQuery string
 	Match           DiscoveryMatch
 	Preset          execute.CommandPreset
-	Request         sandbox.CommandRequest
+	Request         contracts.CommandRequest
 	StructuredArgs  map[string]any
 }
 
@@ -452,7 +452,7 @@ func (e *Engine) Instantiate(q InstantiationQuery) (*InstantiationResult, error)
 			AllowStdin:  entry.Preset.AllowStdin,
 			WorkdirMode: workdirMode(entry),
 		},
-		Request: sandbox.CommandRequest{
+		Request: contracts.CommandRequest{
 			Args:    args,
 			Workdir: wd,
 			Input:   stdin,

@@ -1,12 +1,12 @@
 package build
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewCargoTool exposes the cargo CLI for Rust builds.
-func NewCargoTool(basePath string) core.Tool {
+func NewCargoTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_cargo",
 		Description: "Executes Rust cargo commands inside the workspace.",

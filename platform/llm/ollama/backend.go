@@ -8,7 +8,23 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
+
+// Re-export contract types for local usage
+type (
+	LanguageModel       = contracts.LanguageModel
+	LLMOptions          = contracts.LLMOptions
+	LLMResponse         = contracts.LLMResponse
+	Message             = contracts.Message
+	LLMToolSpec         = contracts.LLMToolSpec
+	Schema              = contracts.Schema
+	BackendClass        = contracts.BackendClass
+	BackendCapabilities = contracts.BackendCapabilities
+)
+
+const (
+	BackendClassTransport = contracts.BackendClassTransport
 )
 
 // Backend implements the managed backend facade for Ollama transports.
@@ -29,7 +45,7 @@ func NewBackend(cfg Config) *Backend {
 }
 
 // Model returns the underlying language model client.
-func (b *Backend) Model() core.LanguageModel {
+func (b *Backend) Model() LanguageModel {
 	return managedModel{client: b.client}
 }
 
@@ -55,13 +71,13 @@ func (b *Backend) Embedder() *Embedder {
 }
 
 // Capabilities reports the transport-backed feature set.
-func (b *Backend) Capabilities() core.BackendCapabilities {
-	return core.BackendCapabilities{
+func (b *Backend) Capabilities() BackendCapabilities {
+	return BackendCapabilities{
 		NativeToolCalling: b.cfg.NativeToolCalling,
 		Streaming:         true,
 		Embeddings:        true,
 		ModelListing:      true,
-		BackendClass:      core.BackendClassTransport,
+		BackendClass:      BackendClassTransport,
 	}
 }
 
@@ -150,19 +166,19 @@ func (b *Backend) SetProfile(p *ModelProfile) {
 	b.client.SetProfile(p)
 }
 
-func (m managedModel) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m managedModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
 	return m.client.Generate(ctx, prompt, options)
 }
 
-func (m managedModel) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
+func (m managedModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
 	return m.client.GenerateStream(ctx, prompt, options)
 }
 
-func (m managedModel) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m managedModel) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
 	return m.client.Chat(ctx, messages, options)
 }
 
-func (m managedModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m managedModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
 	return m.client.ChatWithTools(ctx, messages, tools, options)
 }
 

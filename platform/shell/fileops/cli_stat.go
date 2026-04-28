@@ -1,12 +1,12 @@
 package fileops
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewStatTool exposes the stat CLI.
-func NewStatTool(basePath string) core.Tool {
+func NewStatTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_stat",
 		Description: "Shows file metadata with stat.",

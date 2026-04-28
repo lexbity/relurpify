@@ -10,10 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
+		"codeburg.org/lexbit/relurpify/platform/contracts"
+		clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 var nodeProjectMarkers = []string{
@@ -21,14 +19,12 @@ var nodeProjectMarkers = []string{
 	"package-lock.json",
 	"pnpm-lock.yaml",
 	"yarn.lock",
-	"tsconfig.json",
-	"jsconfig.json",
+	"tsmanifest.json",
+	"jsmanifest.json",
 }
 
 type NodeWorkspaceDetectTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
 }
 
 func (t *NodeWorkspaceDetectTool) Name() string { return "node_workspace_detect" }
@@ -36,14 +32,10 @@ func (t *NodeWorkspaceDetectTool) Description() string {
 	return "Detects the nearest Node.js/JavaScript project root and marker files for a file or directory."
 }
 func (t *NodeWorkspaceDetectTool) Category() string { return "node" }
-func (t *NodeWorkspaceDetectTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
+func (t *NodeWorkspaceDetectTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
 }
-func (t *NodeWorkspaceDetectTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
-}
-func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -56,14 +48,9 @@ func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, state *core.Conte
 		resolved = filepath.Join(t.BasePath, resolved)
 	}
 	resolved = filepath.Clean(resolved)
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, resolved); err != nil {
-			return nil, err
-		}
-	}
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	searchDir := resolved
 	if !info.IsDir() {
@@ -71,7 +58,7 @@ func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, state *core.Conte
 	}
 	projectRoot, manifestPath, markers := detectNodeProject(searchDir, t.BasePath)
 	if projectRoot == "" {
-		return &core.ToolResult{Success: false, Error: "no Node project markers found"}, nil
+		return &contracts.ToolResult{Success: false, Error: "no Node project markers found"}, nil
 	}
 	pm := inferNodePackageManager(markers)
 	summary := fmt.Sprintf("Node project detected at %s", projectRoot)
@@ -81,7 +68,7 @@ func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, state *core.Conte
 	if pm != "" {
 		summary += " package_manager=" + pm
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"path":            resolved,
@@ -93,20 +80,16 @@ func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, state *core.Conte
 		},
 	}, nil
 }
-func (t *NodeWorkspaceDetectTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return true
-}
-func (t *NodeWorkspaceDetectTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
+func (t *NodeWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
+func (t *NodeWorkspaceDetectTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
 func (t *NodeWorkspaceDetectTool) Tags() []string {
-	return []string{core.TagReadOnly, "lang:node", "workspace-detect", "recovery"}
+	return []string{contracts.TagReadOnly, "lang:node", "workspace-detect", "recovery"}
 }
 
 type NodeProjectMetadataTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
 }
 
 func (t *NodeProjectMetadataTool) Name() string { return "node_project_metadata" }
@@ -114,14 +97,10 @@ func (t *NodeProjectMetadataTool) Description() string {
 	return "Reads Node project markers and returns structured package metadata."
 }
 func (t *NodeProjectMetadataTool) Category() string { return "node" }
-func (t *NodeProjectMetadataTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
+func (t *NodeProjectMetadataTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{{Name: "path", Type: "string", Required: false, Default: "."}}
 }
-func (t *NodeProjectMetadataTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
-}
-func (t *NodeProjectMetadataTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *NodeProjectMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -136,32 +115,20 @@ func (t *NodeProjectMetadataTool) Execute(ctx context.Context, state *core.Conte
 	resolved = filepath.Clean(resolved)
 	projectRoot, manifestPath, markers := detectNodeProject(resolved, t.BasePath)
 	if projectRoot == "" {
-		return &core.ToolResult{Success: false, Error: "no Node project markers found"}, nil
-	}
-	for _, file := range []string{manifestPath, filepath.Join(projectRoot, "tsconfig.json")} {
-		if file == "" {
-			continue
-		}
-		if t.manager != nil {
-			if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, file); err != nil {
-				return nil, err
-			}
-		}
+		return &contracts.ToolResult{Success: false, Error: "no Node project markers found"}, nil
 	}
 	meta, err := parseNodeProjectMetadata(projectRoot, manifestPath, markers)
 	if err != nil {
-		return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
 	}
-	return &core.ToolResult{Success: true, Data: meta}, nil
+	return &contracts.ToolResult{Success: true, Data: meta}, nil
 }
-func (t *NodeProjectMetadataTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return true
-}
-func (t *NodeProjectMetadataTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
+func (t *NodeProjectMetadataTool) IsAvailable(ctx context.Context) bool { return true }
+func (t *NodeProjectMetadataTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
 func (t *NodeProjectMetadataTool) Tags() []string {
-	return []string{core.TagReadOnly, "lang:node", "metadata", "recovery"}
+	return []string{contracts.TagReadOnly, "lang:node", "metadata", "recovery"}
 }
 
 type NodeNPMTestTool struct {
@@ -177,7 +144,7 @@ func NewNodeNPMTestTool(basePath string) *NodeNPMTestTool {
 			Description: "Runs npm test and returns structured JavaScript/Node test results.",
 			Command:     "npm",
 			Category:    "node",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -187,20 +154,14 @@ func (t *NodeNPMTestTool) Description() string {
 	return "Runs npm test and returns structured JavaScript/Node test results."
 }
 func (t *NodeNPMTestTool) Category() string { return "node" }
-func (t *NodeNPMTestTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *NodeNPMTestTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *NodeNPMTestTool) SetCommandRunner(r sandbox.CommandRunner) { t.inner.SetCommandRunner(r) }
-func (t *NodeNPMTestTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *NodeNPMTestTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *NodeNPMTestTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *NodeNPMTestTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *NodeNPMTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -213,7 +174,7 @@ func (t *NodeNPMTestTool) Execute(ctx context.Context, state *core.Context, args
 			}
 		}
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              commandArgs,
 		"working_directory": workingDir,
 	})
@@ -223,7 +184,7 @@ func (t *NodeNPMTestTool) Execute(ctx context.Context, state *core.Context, args
 	stdout := fmt.Sprint(result.Data["stdout"])
 	stderr := fmt.Sprint(result.Data["stderr"])
 	summary := summarizeNodeNPMTest(stdout, stderr, result.Success)
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -238,12 +199,10 @@ func (t *NodeNPMTestTool) Execute(ctx context.Context, state *core.Context, args
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *NodeNPMTestTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
-}
-func (t *NodeNPMTestTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *NodeNPMTestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *NodeNPMTestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *NodeNPMTestTool) Tags() []string {
-	return []string{core.TagExecute, "lang:node", "test", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:node", "test", "verification", "diagnostics"}
 }
 
 type NodeSyntaxCheckTool struct {
@@ -259,7 +218,7 @@ func NewNodeSyntaxCheckTool(basePath string) *NodeSyntaxCheckTool {
 			Description: "Runs node --check on a JavaScript file and returns structured syntax-check results.",
 			Command:     "node",
 			Category:    "node",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -269,29 +228,23 @@ func (t *NodeSyntaxCheckTool) Description() string {
 	return "Runs node --check on a JavaScript file and returns structured syntax-check results."
 }
 func (t *NodeSyntaxCheckTool) Category() string { return "node" }
-func (t *NodeSyntaxCheckTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *NodeSyntaxCheckTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "path", Type: "string", Required: true},
 	}
 }
-func (t *NodeSyntaxCheckTool) SetCommandRunner(r sandbox.CommandRunner) { t.inner.SetCommandRunner(r) }
-func (t *NodeSyntaxCheckTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *NodeSyntaxCheckTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *NodeSyntaxCheckTool) SetCommandRunner(r contracts.CommandRunner) { t.inner.SetCommandRunner(r) }
+func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
 	target := strings.TrimSpace(fmt.Sprint(args["path"]))
 	if target == "" || target == "<nil>" {
-		return &core.ToolResult{Success: false, Error: "path is required"}, nil
+		return &contracts.ToolResult{Success: false, Error: "path is required"}, nil
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              []interface{}{"--check", target},
 		"working_directory": workingDir,
 	})
@@ -301,7 +254,7 @@ func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, state *core.Context, 
 	stdout := fmt.Sprint(result.Data["stdout"])
 	stderr := fmt.Sprint(result.Data["stderr"])
 	summary := summarizeNodeSyntaxCheck(stdout, stderr, result.Success)
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -314,12 +267,10 @@ func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, state *core.Context, 
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *NodeSyntaxCheckTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
-}
-func (t *NodeSyntaxCheckTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *NodeSyntaxCheckTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *NodeSyntaxCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *NodeSyntaxCheckTool) Tags() []string {
-	return []string{core.TagExecute, "lang:node", "syntax-check", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:node", "syntax-check", "verification", "diagnostics"}
 }
 
 type nodeTestSummary struct {
@@ -517,7 +468,7 @@ func parseNodeProjectMetadata(projectRoot, manifestPath string, markers []string
 	result["has_lint_script"] = hasScript(pkg.Scripts, "lint")
 	result["has_typecheck_script"] = hasTypecheck(pkg.Scripts, markers)
 	result["preferred_test_tool"] = preferredTestTool
-	result["is_typescript"] = containsString(markers, "tsconfig.json") || containsString(markers, "jsconfig.json")
+	result["is_typescript"] = containsString(markers, "tsmanifest.json") || containsString(markers, "jsmanifest.json")
 	result["dependency_count"] = len(pkg.Dependencies) + len(pkg.DevDeps)
 	result["summary"] = fmt.Sprintf("Node project at %s name=%s scripts=%d", projectRoot, pkg.Name, len(scriptNames))
 	return result, nil
@@ -535,7 +486,7 @@ func hasTypecheck(scripts map[string]string, markers []string) bool {
 	if hasScript(scripts, "typecheck") {
 		return true
 	}
-	return containsString(markers, "tsconfig.json")
+	return containsString(markers, "tsmanifest.json")
 }
 
 func inferNodeTestRunner(text string) string {

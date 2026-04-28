@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	ollamabackend "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 )
 
@@ -11,7 +10,7 @@ type managedBackendAdapter struct {
 	inner *ollamabackend.Backend
 }
 
-func (a managedBackendAdapter) Model() core.LanguageModel {
+func (a managedBackendAdapter) Model() LanguageModel {
 	return a.inner.Model()
 }
 
@@ -19,9 +18,9 @@ func (a managedBackendAdapter) Embedder() Embedder {
 	return a.inner.Embedder()
 }
 
-func (a managedBackendAdapter) Capabilities() core.BackendCapabilities {
+func (a managedBackendAdapter) Capabilities() BackendCapabilities {
 	caps := a.inner.Capabilities()
-	return core.BackendCapabilities{
+	return BackendCapabilities{
 		NativeToolCalling: caps.NativeToolCalling,
 		Streaming:         caps.Streaming,
 		Embeddings:        caps.Embeddings,

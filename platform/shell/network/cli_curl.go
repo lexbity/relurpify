@@ -1,12 +1,12 @@
 package network
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewCurlTool exposes the curl CLI.
-func NewCurlTool(basePath string) core.Tool {
+func NewCurlTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_curl",
 		Description: "Transfers data over HTTP(S) using curl.",

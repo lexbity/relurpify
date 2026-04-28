@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
 	lmstudiobackend "codeburg.org/lexbit/relurpify/platform/llm/lmstudio"
 )
 
@@ -29,7 +28,7 @@ type lmStudioBackendAdapter struct {
 	inner *lmstudiobackend.Backend
 }
 
-func (a lmStudioBackendAdapter) Model() core.LanguageModel {
+func (a lmStudioBackendAdapter) Model() LanguageModel {
 	if a.inner == nil {
 		return nil
 	}
@@ -43,9 +42,9 @@ func (a lmStudioBackendAdapter) Embedder() Embedder {
 	return a.inner.Embedder()
 }
 
-func (a lmStudioBackendAdapter) Capabilities() core.BackendCapabilities {
+func (a lmStudioBackendAdapter) Capabilities() BackendCapabilities {
 	if a.inner == nil {
-		return core.BackendCapabilities{}
+		return BackendCapabilities{}
 	}
 	return a.inner.Capabilities()
 }

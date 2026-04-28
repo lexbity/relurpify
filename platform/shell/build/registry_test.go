@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +19,7 @@ func TestToolsAndCatalogEntriesMirror(t *testing.T) {
 		require.Equal(t, entry.Name, tool.Name())
 		require.NotEmpty(t, tool.Description())
 		require.NotEmpty(t, tool.Tags())
-		require.False(t, tool.IsAvailable(context.Background(), core.NewContext()))
+		require.False(t, tool.IsAvailable(context.Background()))
 
 		perms := tool.Permissions()
 		require.NotNil(t, perms.Permissions)
@@ -40,7 +40,7 @@ func TestToolsAndCatalogEntriesMirror(t *testing.T) {
 		}
 	}
 
-	require.Contains(t, entries[10].Tags, core.TagDestructive)
-	require.Contains(t, entries[14].Tags, core.TagDestructive)
-	require.Contains(t, entries[15].Tags, core.TagDestructive)
+	require.Contains(t, entries[10].Tags, contracts.TagDestructive)
+	require.Contains(t, entries[14].Tags, contracts.TagDestructive)
+	require.Contains(t, entries[15].Tags, contracts.TagDestructive)
 }

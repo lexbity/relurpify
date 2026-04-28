@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type CompatibilitySurfaceResolver struct{}
@@ -17,7 +17,7 @@ func NewCompatibilitySurfaceResolver() *CompatibilitySurfaceResolver {
 
 func (r *CompatibilitySurfaceResolver) BackendID() string { return "js" }
 
-func (r *CompatibilitySurfaceResolver) Supports(req agentenv.CompatibilitySurfaceRequest) bool {
+func (r *CompatibilitySurfaceResolver) Supports(req contracts.CompatibilitySurfaceRequest) bool {
 	for _, file := range req.Files {
 		if hasJSExtension(file) {
 			return true
@@ -31,11 +31,11 @@ func (r *CompatibilitySurfaceResolver) Supports(req agentenv.CompatibilitySurfac
 	return false
 }
 
-func (r *CompatibilitySurfaceResolver) ExtractSurface(_ context.Context, req agentenv.CompatibilitySurfaceRequest) (agentenv.CompatibilitySurface, bool, error) {
+func (r *CompatibilitySurfaceResolver) Resolve(ctx context.Context, req contracts.CompatibilitySurfaceRequest) (contracts.CompatibilitySurface, bool, error) {
 	exportFuncRe := regexp.MustCompile(`^export\s+function\s+([A-Za-z_]\w*)\s*\(`)
 	exportClassRe := regexp.MustCompile(`^export\s+class\s+([A-Za-z_]\w*)`)
 	exportNamedRe := regexp.MustCompile(`^export\s+\{\s*([A-Za-z_]\w*)`)
-	surface := agentenv.CompatibilitySurface{Metadata: map[string]any{"language": "js", "source": "platform.lang.js"}}
+	surface := contracts.CompatibilitySurface{Metadata: map[string]any{"language": "javascript", "source": "platform.lang.js"}}
 	for _, file := range req.FileContents {
 		path := strings.TrimSpace(fmt.Sprint(file["path"]))
 		content := strings.TrimSpace(fmt.Sprint(file["content"]))

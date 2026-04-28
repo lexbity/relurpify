@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
-	perms := &core.PermissionSet{
-		Network: []core.NetworkPermission{
+	perms := &contracts.PermissionSet{
+		Network: []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443},
 		},
 	}
@@ -36,8 +36,8 @@ func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
 }
 
 func TestSessionNavigateAllowsDeclaredDomain(t *testing.T) {
-	perms := &core.PermissionSet{
-		Network: []core.NetworkPermission{
+	perms := &contracts.PermissionSet{
+		Network: []contracts.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443},
 		},
 	}
@@ -70,13 +70,7 @@ func TestSessionNavigateRejectsNonNetworkSchemes(t *testing.T) {
 }
 
 func TestSessionExtractionRespectsBudgetAndMarksTruncation(t *testing.T) {
-	budget := core.NewArtifactBudgetWithPolicy(8, &core.AllocationPolicy{
-		SystemReserved:     0,
-		Allocations:        map[string]float64{"immediate": 1.0},
-		AllowBorrowing:     false,
-		MinimumPerCategory: 0,
-	})
-	budget.SetReservations(0, 0, 0)
+	budget := &stubBudget{remaining: 8}
 	session, err := NewSession(SessionConfig{
 		Backend: &fakeBackend{
 			html: "<html>" + "abcdefghijklmnopqrstuvwxyz" + "</html>",
@@ -123,3 +117,26 @@ func (e *errorBackend) Screenshot(context.Context) ([]byte, error)              
 func (e *errorBackend) WaitFor(context.Context, WaitCondition, time.Duration) error { return e.err }
 func (e *errorBackend) CurrentURL(context.Context) (string, error)                  { return "", e.err }
 func (e *errorBackend) Close() error                                                { return e.err }
+
+// stubBudget implements contracts.BudgetManager for testing
+type stubBudget struct {
+	remaining int
+}
+
+func (s *stubBudget) Allocate(category string, tokens int, item contracts.BudgetItem) error {
+	if tokens > s.remaining {
+		return errors.New("budget exhausted")
+	}
+	s.remaining -= tokens
+	return nil
+}
+
+func (s *stubBudget) Free(category string, tokens int, itemID string) {}
+
+func (s *stubBudget) GetRemainingBudget(category string) int { return s.remaining }
+
+func (s *stubBudget) ShouldCompress() bool { return s.remaining < 10 }
+
+func (s *stubBudget) CanAddTokens(tokens int) bool { return tokens <= s.remaining }
+
+func (s *stubBudget) SetReservations(system, tools, output int) {}

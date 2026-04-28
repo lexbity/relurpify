@@ -7,21 +7,27 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
+
+// ProfiledModel is re-exported from contracts
+type ProfiledModel = contracts.ProfiledModel
+
+// Telemetry is re-exported from contracts
+type Telemetry = contracts.Telemetry
 
 // InstrumentedModel wraps a LanguageModel and emits telemetry for prompts and responses.
 type InstrumentedModel struct {
-	Inner     core.LanguageModel
-	Telemetry core.Telemetry
+	Inner     LanguageModel
+	Telemetry Telemetry
 	Debug     bool
 }
 
-func NewInstrumentedModel(inner core.LanguageModel, telemetry core.Telemetry, debug bool) *InstrumentedModel {
+func NewInstrumentedModel(inner LanguageModel, telemetry Telemetry, debug bool) *InstrumentedModel {
 	return &InstrumentedModel{Inner: inner, Telemetry: telemetry, Debug: debug}
 }
 
-func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
 	m.emitPrompt(ctx, "generate", map[string]interface{}{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
@@ -32,7 +38,7 @@ func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options
 	return resp, err
 }
 
-func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
+func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
 	m.emitPrompt(ctx, "generate_stream", map[string]interface{}{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
@@ -43,12 +49,12 @@ func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, o
 	if err != nil {
 		m.emitResponse(ctx, "generate_stream", nil, err)
 	} else {
-		m.emitResponse(ctx, "generate_stream", &core.LLMResponse{FinishReason: "stream"}, nil)
+		m.emitResponse(ctx, "generate_stream", &LLMResponse{FinishReason: "stream"}, nil)
 	}
 	return ch, err
 }
 
-func (m *InstrumentedModel) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *InstrumentedModel) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
 	meta := chatMeta(messages, nil, options)
 	m.emitPrompt(ctx, "chat", meta.base, m.Debug, meta.debug)
 	resp, err := m.Inner.Chat(ctx, messages, options)
@@ -56,7 +62,7 @@ func (m *InstrumentedModel) Chat(ctx context.Context, messages []core.Message, o
 	return resp, err
 }
 
-func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
 	meta := chatMeta(messages, tools, options)
 	m.emitPrompt(ctx, "chat_with_tools", meta.base, m.Debug, meta.debug)
 	resp, err := m.Inner.ChatWithTools(ctx, messages, tools, options)
@@ -75,33 +81,33 @@ func (m *InstrumentedModel) SetProfile(profile *ModelProfile) {
 	}
 }
 
-// ToolRepairStrategy implements core.ProfiledModel when the wrapped model
+// ToolRepairStrategy implements ProfiledModel when the wrapped model
 // exposes profile metadata.
 func (m *InstrumentedModel) ToolRepairStrategy() string {
 	if m != nil {
-		if profiled, ok := m.Inner.(core.ProfiledModel); ok {
+		if profiled, ok := m.Inner.(ProfiledModel); ok {
 			return profiled.ToolRepairStrategy()
 		}
 	}
 	return "heuristic-only"
 }
 
-// MaxToolsPerCall implements core.ProfiledModel when the wrapped model
+// MaxToolsPerCall implements ProfiledModel when the wrapped model
 // exposes profile metadata.
 func (m *InstrumentedModel) MaxToolsPerCall() int {
 	if m != nil {
-		if profiled, ok := m.Inner.(core.ProfiledModel); ok {
+		if profiled, ok := m.Inner.(ProfiledModel); ok {
 			return profiled.MaxToolsPerCall()
 		}
 	}
 	return 0
 }
 
-// UsesNativeToolCalling implements core.ProfiledModel when the wrapped model
+// UsesNativeToolCalling implements ProfiledModel when the wrapped model
 // exposes profile metadata.
 func (m *InstrumentedModel) UsesNativeToolCalling() bool {
 	if m != nil {
-		if profiled, ok := m.Inner.(core.ProfiledModel); ok {
+		if profiled, ok := m.Inner.(ProfiledModel); ok {
 			return profiled.UsesNativeToolCalling()
 		}
 	}
@@ -113,7 +119,7 @@ type chatMetaPayload struct {
 	debug map[string]interface{}
 }
 
-func chatMeta(messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) chatMetaPayload {
+func chatMeta(messages []Message, tools []LLMToolSpec, options *LLMOptions) chatMetaPayload {
 	var roles []string
 	preview := make([]map[string]interface{}, 0, min(len(messages), 20))
 	for i, msg := range messages {
@@ -176,8 +182,8 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 			metadata[k] = v
 		}
 	}
-	m.Telemetry.Emit(core.Event{
-		Type:      core.EventLLMPrompt,
+	m.Telemetry.Emit(contracts.Event{
+		Type:      contracts.EventLLMPrompt,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s prompt", kind),
@@ -185,7 +191,7 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 	})
 }
 
-func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *core.LLMResponse, err error) {
+func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *LLMResponse, err error) {
 	if m == nil || m.Telemetry == nil {
 		return
 	}
@@ -208,8 +214,8 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
-	m.Telemetry.Emit(core.Event{
-		Type:      core.EventLLMResponse,
+	m.Telemetry.Emit(contracts.Event{
+		Type:      contracts.EventLLMResponse,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s response", kind),
@@ -217,7 +223,7 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	})
 }
 
-func modelFromOptions(options *core.LLMOptions) string {
+func modelFromOptions(options *LLMOptions) string {
 	if options != nil && options.Model != "" {
 		return options.Model
 	}
@@ -225,17 +231,9 @@ func modelFromOptions(options *core.LLMOptions) string {
 }
 
 func taskInfo(ctx context.Context) (string, map[string]interface{}) {
-	task, ok := core.TaskContextFrom(ctx)
-	if !ok {
-		return "", nil
-	}
-	meta := map[string]interface{}{
-		"task_type": task.Type,
-	}
-	if task.Instruction != "" {
-		meta["instruction_preview"] = clip(task.Instruction, 1024)
-	}
-	return task.ID, meta
+	// Task context extraction requires framework/core.TaskContextFrom
+	// For now, return empty values to break the import cycle
+	return "", nil
 }
 
 func clip(s string, max int) string {

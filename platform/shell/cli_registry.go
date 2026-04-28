@@ -1,9 +1,8 @@
 package shell
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
-	platformsqlite "codeburg.org/lexbit/relurpify/platform/db/sqlite"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+		platformsqlite "codeburg.org/lexbit/relurpify/platform/db/sqlite"
 	platformgo "codeburg.org/lexbit/relurpify/platform/lang/go"
 	platformjs "codeburg.org/lexbit/relurpify/platform/lang/js"
 	platformpython "codeburg.org/lexbit/relurpify/platform/lang/python"
@@ -21,13 +20,13 @@ import (
 )
 
 // CommandLineTools exposes the default Unix-style CLI helpers.
-func CommandLineTools(basePath string, runner sandbox.CommandRunner) []core.Tool {
+func CommandLineTools(basePath string, runner contracts.CommandRunner) []contracts.Tool {
 	return CommandLineToolsWithTelemetry(basePath, runner, nil)
 }
 
 // CommandLineToolsWithTelemetry exposes the default Unix-style CLI helpers and emits optional telemetry.
-func CommandLineToolsWithTelemetry(basePath string, runner sandbox.CommandRunner, telemetry shelltelemetry.Sink) []core.Tool {
-	sourceGroups := [][]core.Tool{
+func CommandLineToolsWithTelemetry(basePath string, runner contracts.CommandRunner, telemetry shelltelemetry.Sink) []contracts.Tool {
+	sourceGroups := [][]contracts.Tool{
 		clitext.Tools(basePath),
 		clifileops.Tools(basePath),
 		clisystem.Tools(basePath),
@@ -37,7 +36,7 @@ func CommandLineToolsWithTelemetry(basePath string, runner sandbox.CommandRunner
 		clischeduler.Tools(basePath),
 	}
 	seen := make(map[string]struct{})
-	var res []core.Tool
+	var res []contracts.Tool
 	for _, group := range sourceGroups {
 		for _, tool := range group {
 			name := catalog.NormalizeName(tool.Name())
@@ -48,7 +47,7 @@ func CommandLineToolsWithTelemetry(basePath string, runner sandbox.CommandRunner
 			res = append(res, tool)
 		}
 	}
-	for _, tool := range []core.Tool{
+	for _, tool := range []contracts.Tool{
 		&platformrust.RustWorkspaceDetectTool{BasePath: basePath},
 		platformrust.NewRustCargoMetadataTool(basePath),
 		platformrust.NewRustCargoCheckTool(basePath),
@@ -89,7 +88,7 @@ func CommandLineToolsWithTelemetry(basePath string, runner sandbox.CommandRunner
 		}
 	}
 	for i, tool := range res {
-		if setter, ok := tool.(interface{ SetCommandRunner(sandbox.CommandRunner) }); ok {
+		if setter, ok := tool.(interface{ SetCommandRunner(contracts.CommandRunner) }); ok {
 			setter.SetCommandRunner(runner)
 			res[i] = tool
 		}

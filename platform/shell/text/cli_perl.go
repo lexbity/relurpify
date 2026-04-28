@@ -1,12 +1,12 @@
 package text
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewPerlTool exposes the perl CLI.
-func NewPerlTool(basePath string) core.Tool {
+func NewPerlTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_perl",
 		Description: "Executes Perl one-liners for transformations.",

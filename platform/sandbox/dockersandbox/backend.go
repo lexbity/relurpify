@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // Config controls the Docker sandbox backend.
@@ -29,6 +29,8 @@ type Backend struct {
 	verified bool
 	policy   sandbox.SandboxPolicy
 }
+
+var _ sandbox.Backend = (*Backend)(nil)
 
 // NewBackend constructs a Docker sandbox backend.
 func NewBackend(cfg Config) *Backend {
@@ -156,9 +158,10 @@ func (b *Backend) RunConfig() sandbox.SandboxConfig {
 
 // NewCommandRunner builds the Docker-specific command runner used by the
 // framework when this backend is selected.
-func (b *Backend) NewCommandRunner(_ *manifest.AgentManifest, workspace string) (sandbox.CommandRunner, error) {
+func (b *Backend) NewCommandRunner(config *contracts.CommandRunnerConfig) (sandbox.CommandRunner, error) {
 	clone := *b
-	clone.config.Workspace = workspace
+	clone.config.Workspace = config.Workspace
+	clone.config.Image = config.Image
 	return NewRunner(&clone)
 }
 
@@ -200,5 +203,3 @@ func clonePolicy(policy sandbox.SandboxPolicy) sandbox.SandboxPolicy {
 	}
 	return out
 }
-
-var _ sandbox.Backend = (*Backend)(nil)

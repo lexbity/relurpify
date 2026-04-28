@@ -4,7 +4,13 @@ import (
 	"context"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
+)
+
+// Re-export contract types for local usage
+type (
+	LanguageModel       = contracts.LanguageModel
+	BackendCapabilities = contracts.BackendCapabilities
 )
 
 // Embedder produces dense vector representations of text.
@@ -17,9 +23,9 @@ type Embedder interface {
 // ManagedBackend owns the lifecycle and capability surface for a local
 // inference backend.
 type ManagedBackend interface {
-	Model() core.LanguageModel
+	Model() LanguageModel
 	Embedder() Embedder
-	Capabilities() core.BackendCapabilities
+	Capabilities() BackendCapabilities
 	Health(ctx context.Context) (*HealthReport, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	Warm(ctx context.Context) error

@@ -1,12 +1,12 @@
 package text
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewColordiffTool exposes the colordiff CLI.
-func NewColordiffTool(basePath string) core.Tool {
+func NewColordiffTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_colordiff",
 		Description: "Shows colorized diffs using colordiff.",

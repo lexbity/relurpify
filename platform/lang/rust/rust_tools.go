@@ -9,17 +9,12 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/authorization"
-	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 type RustWorkspaceDetectTool struct {
 	BasePath string
-	manager  *authorization.PermissionManager
-	agentID  string
 }
 
 func (t *RustWorkspaceDetectTool) Name() string { return "rust_workspace_detect" }
@@ -27,16 +22,12 @@ func (t *RustWorkspaceDetectTool) Description() string {
 	return "Detects the nearest Rust crate/workspace manifest for a file or directory."
 }
 func (t *RustWorkspaceDetectTool) Category() string { return "rust" }
-func (t *RustWorkspaceDetectTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *RustWorkspaceDetectTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "path", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *RustWorkspaceDetectTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.manager = manager
-	t.agentID = agentID
-}
-func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	start := "."
 	if raw, ok := args["path"]; ok && raw != nil {
 		start = strings.TrimSpace(fmt.Sprint(raw))
@@ -49,14 +40,9 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, state *core.Conte
 		resolved = filepath.Join(t.BasePath, resolved)
 	}
 	resolved = filepath.Clean(resolved)
-	if t.manager != nil {
-		if err := t.manager.CheckFileAccess(ctx, t.agentID, core.FileSystemRead, resolved); err != nil {
-			return nil, err
-		}
-	}
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &core.ToolResult{Success: false, Error: err.Error()}, nil
+		return &contracts.ToolResult{Success: false, Error: err.Error()}, nil
 	}
 	searchDir := resolved
 	if !info.IsDir() {
@@ -64,9 +50,9 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, state *core.Conte
 	}
 	manifestPath, workspaceManifest := detectRustManifests(searchDir, t.BasePath)
 	if manifestPath == "" {
-		return &core.ToolResult{Success: false, Error: "no Cargo.toml found"}, nil
+		return &contracts.ToolResult{Success: false, Error: "no Cargo.toml found"}, nil
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"path":               resolved,
@@ -76,14 +62,12 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, state *core.Conte
 		},
 	}, nil
 }
-func (t *RustWorkspaceDetectTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return true
-}
-func (t *RustWorkspaceDetectTool) Permissions() core.ToolPermissions {
-	return core.ToolPermissions{Permissions: core.NewFileSystemPermissionSet(t.BasePath, core.FileSystemRead)}
+func (t *RustWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
+func (t *RustWorkspaceDetectTool) Permissions() contracts.ToolPermissions {
+	return contracts.ToolPermissions{Permissions: &contracts.PermissionSet{}}
 }
 func (t *RustWorkspaceDetectTool) Tags() []string {
-	return []string{core.TagReadOnly, "lang:rust", "workspace-detect", "recovery"}
+	return []string{contracts.TagReadOnly, "lang:rust", "workspace-detect", "recovery"}
 }
 
 type RustCargoTestTool struct {
@@ -99,7 +83,7 @@ func NewRustCargoTestTool(basePath string) *RustCargoTestTool {
 			Description: "Runs cargo test and returns structured Rust test results.",
 			Command:     "cargo",
 			Category:    "rust",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -109,23 +93,17 @@ func (t *RustCargoTestTool) Description() string {
 	return "Runs cargo test and returns structured Rust test results."
 }
 func (t *RustCargoTestTool) Category() string { return "rust" }
-func (t *RustCargoTestTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *RustCargoTestTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "test_name", Type: "string", Required: false},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *RustCargoTestTool) SetCommandRunner(r sandbox.CommandRunner) {
+func (t *RustCargoTestTool) SetCommandRunner(r contracts.CommandRunner) {
 	t.inner.SetCommandRunner(r)
 }
-func (t *RustCargoTestTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *RustCargoTestTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *RustCargoTestTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -141,7 +119,7 @@ func (t *RustCargoTestTool) Execute(ctx context.Context, state *core.Context, ar
 			}
 		}
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              commandArgs,
 		"working_directory": workingDir,
 	})
@@ -160,19 +138,17 @@ func (t *RustCargoTestTool) Execute(ctx context.Context, state *core.Context, ar
 		"stdout":        stdout,
 		"stderr":        stderr,
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success:  result.Success,
 		Error:    result.Error,
 		Data:     data,
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *RustCargoTestTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
-}
-func (t *RustCargoTestTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *RustCargoTestTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *RustCargoTestTool) Tags() []string {
-	return []string{core.TagExecute, "lang:rust", "test", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:rust", "test", "verification", "diagnostics"}
 }
 
 type RustCargoCheckTool struct {
@@ -188,7 +164,7 @@ func NewRustCargoCheckTool(basePath string) *RustCargoCheckTool {
 			Description: "Runs cargo check and returns structured Rust compile results.",
 			Command:     "cargo",
 			Category:    "rust",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -198,22 +174,16 @@ func (t *RustCargoCheckTool) Description() string {
 	return "Runs cargo check and returns structured Rust compile results."
 }
 func (t *RustCargoCheckTool) Category() string { return "rust" }
-func (t *RustCargoCheckTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *RustCargoCheckTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 		{Name: "extra_args", Type: "array", Required: false},
 	}
 }
-func (t *RustCargoCheckTool) SetCommandRunner(r sandbox.CommandRunner) {
+func (t *RustCargoCheckTool) SetCommandRunner(r contracts.CommandRunner) {
 	t.inner.SetCommandRunner(r)
 }
-func (t *RustCargoCheckTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *RustCargoCheckTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *RustCargoCheckTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
@@ -226,7 +196,7 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, state *core.Context, a
 			}
 		}
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              commandArgs,
 		"working_directory": workingDir,
 	})
@@ -236,7 +206,7 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, state *core.Context, a
 	stdout := fmt.Sprint(result.Data["stdout"])
 	stderr := fmt.Sprint(result.Data["stderr"])
 	summary := summarizeRustCargoCheck(stdout, stderr, result.Success)
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success: result.Success,
 		Error:   result.Error,
 		Data: map[string]interface{}{
@@ -250,12 +220,10 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, state *core.Context, a
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *RustCargoCheckTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
-}
-func (t *RustCargoCheckTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool { return t.inner.IsAvailable(ctx) }
+func (t *RustCargoCheckTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *RustCargoCheckTool) Tags() []string {
-	return []string{core.TagExecute, "lang:rust", "build", "verification", "diagnostics"}
+	return []string{contracts.TagExecute, "lang:rust", "build", "verification", "diagnostics"}
 }
 
 type RustCargoMetadataTool struct {
@@ -271,7 +239,7 @@ func NewRustCargoMetadataTool(basePath string) *RustCargoMetadataTool {
 			Description: "Runs cargo metadata and returns structured Rust workspace data.",
 			Command:     "cargo",
 			Category:    "rust",
-			Tags:        []string{core.TagExecute},
+			Tags:        []string{contracts.TagExecute},
 		}),
 	}
 }
@@ -281,26 +249,20 @@ func (t *RustCargoMetadataTool) Description() string {
 	return "Runs cargo metadata and returns structured Rust workspace data."
 }
 func (t *RustCargoMetadataTool) Category() string { return "rust" }
-func (t *RustCargoMetadataTool) Parameters() []core.ToolParameter {
-	return []core.ToolParameter{
+func (t *RustCargoMetadataTool) Parameters() []contracts.ToolParameter {
+	return []contracts.ToolParameter{
 		{Name: "working_directory", Type: "string", Required: false, Default: "."},
 	}
 }
-func (t *RustCargoMetadataTool) SetCommandRunner(r sandbox.CommandRunner) {
+func (t *RustCargoMetadataTool) SetCommandRunner(r contracts.CommandRunner) {
 	t.inner.SetCommandRunner(r)
 }
-func (t *RustCargoMetadataTool) SetPermissionManager(manager *authorization.PermissionManager, agentID string) {
-	t.inner.SetPermissionManager(manager, agentID)
-}
-func (t *RustCargoMetadataTool) SetAgentSpec(spec *core.AgentRuntimeSpec, agentID string) {
-	t.inner.SetAgentSpec(spec, agentID)
-}
-func (t *RustCargoMetadataTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *RustCargoMetadataTool) Execute(ctx context.Context, args map[string]interface{}) (*contracts.ToolResult, error) {
 	workingDir := "."
 	if raw, ok := args["working_directory"]; ok && raw != nil {
 		workingDir = fmt.Sprint(raw)
 	}
-	result, err := t.inner.Execute(ctx, state, map[string]interface{}{
+	result, err := t.inner.Execute(ctx, map[string]interface{}{
 		"args":              []interface{}{"metadata", "--format-version", "1", "--no-deps"},
 		"working_directory": workingDir,
 	})
@@ -318,19 +280,19 @@ func (t *RustCargoMetadataTool) Execute(ctx context.Context, state *core.Context
 	for key, value := range parsed {
 		data[key] = value
 	}
-	return &core.ToolResult{
+	return &contracts.ToolResult{
 		Success:  result.Success,
 		Error:    result.Error,
 		Data:     data,
 		Metadata: result.Metadata,
 	}, nil
 }
-func (t *RustCargoMetadataTool) IsAvailable(ctx context.Context, state *core.Context) bool {
-	return t.inner.IsAvailable(ctx, state)
+func (t *RustCargoMetadataTool) IsAvailable(ctx context.Context) bool {
+	return t.inner.IsAvailable(ctx)
 }
-func (t *RustCargoMetadataTool) Permissions() core.ToolPermissions { return t.inner.Permissions() }
+func (t *RustCargoMetadataTool) Permissions() contracts.ToolPermissions { return t.inner.Permissions() }
 func (t *RustCargoMetadataTool) Tags() []string {
-	return []string{core.TagExecute, "lang:rust", "metadata", "recovery"}
+	return []string{contracts.TagExecute, "lang:rust", "metadata", "recovery"}
 }
 
 type rustCargoSummary struct {
@@ -511,5 +473,5 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return frameworktools.NormalizeStringSlice(value)
+	return contracts.NormalizeStringSlice(value)
 }

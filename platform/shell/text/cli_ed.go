@@ -1,12 +1,12 @@
 package text
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewEdTool exposes the ed CLI.
-func NewEdTool(basePath string) core.Tool {
+func NewEdTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_ed",
 		Description: "Runs the ed line editor for scripted edits.",

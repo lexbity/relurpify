@@ -2,9 +2,10 @@ package python
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type VerificationResolver struct{}
@@ -15,7 +16,7 @@ func NewVerificationResolver() *VerificationResolver {
 
 func (r *VerificationResolver) BackendID() string { return "python" }
 
-func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bool {
+func (r *VerificationResolver) Supports(req contracts.VerificationPlanRequest) bool {
 	for _, file := range append(append([]string(nil), req.Files...), req.TestFiles...) {
 		path := strings.ToLower(strings.TrimSpace(file))
 		if strings.HasSuffix(path, ".py") || strings.HasSuffix(path, "pyproject.toml") || strings.HasSuffix(path, "pytest.ini") || strings.HasSuffix(path, "requirements.txt") {
@@ -32,48 +33,29 @@ func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bo
 	return strings.Contains(lowerTask, "python") || strings.Contains(lowerTask, "pytest")
 }
 
-func (r *VerificationResolver) BuildPlan(_ context.Context, req agentenv.VerificationPlanRequest) (agentenv.VerificationPlan, bool, error) {
+func (r *VerificationResolver) BuildPlan(_ context.Context, req contracts.VerificationPlanRequest) (contracts.VerificationPlan, bool, error) {
 	workspace := firstNonEmpty(strings.TrimSpace(req.Workspace), ".")
-	commands := []agentenv.VerificationCommand{}
-	scopeKind := "workspace_tests"
+	commands := []contracts.VerificationCommand{}
 	if len(req.TestFiles) > 0 {
-		scopeKind = "test_files"
 		args := append([]string{"-m", "pytest", "-q"}, req.TestFiles...)
-		commands = append(commands, agentenv.VerificationCommand{
-			Name:             "python_pytest_targeted",
-			Command:          "python",
-			Args:             args,
-			WorkingDirectory: workspace,
+		commands = append(commands, contracts.VerificationCommand{
+			Command: append([]string{"python"}, args...),
+			Dir:     workspace,
 		})
 	}
 	if len(commands) == 0 || req.PublicSurfaceChanged || req.RequireVerificationStep {
-		commands = append(commands, agentenv.VerificationCommand{
-			Name:             "python_pytest",
-			Command:          "python",
-			Args:             []string{"-m", "pytest", "-q"},
-			WorkingDirectory: workspace,
+		commands = append(commands, contracts.VerificationCommand{
+			Command: []string{"python", "-m", "pytest", "-q"},
+			Dir:     workspace,
 		})
 	}
-	if req.PublicSurfaceChanged {
-		scopeKind = "compatibility_sweep"
-	}
-	return agentenv.VerificationPlan{
-		ScopeKind:              scopeKind,
-		Files:                  uniqueStrings(append(append([]string(nil), req.Files...), req.TestFiles...)),
-		TestFiles:              uniqueStrings(req.TestFiles),
-		Commands:               uniqueCommands(commands),
-		Source:                 "platform.lang.python",
-		PlannerID:              "platform.lang.python.verification",
-		Rationale:              pythonVerificationRationale(req),
-		AuditTrail:             []string{"pytest_scope"},
-		CompatibilitySensitive: req.PublicSurfaceChanged,
-		Metadata: map[string]any{
-			"test_targets": append([]string(nil), req.TestFiles...),
-		},
+	return contracts.VerificationPlan{
+		Commands:  uniqueCommands(commands),
+		Rationale: pythonVerificationRationale(req),
 	}, true, nil
 }
 
-func pythonVerificationRationale(req agentenv.VerificationPlanRequest) string {
+func pythonVerificationRationale(req contracts.VerificationPlanRequest) string {
 	parts := []string{"pytest was selected as the default Python verification backend"}
 	if len(req.TestFiles) > 0 {
 		parts = append(parts, "test file changes were included in scope selection")
@@ -107,14 +89,11 @@ func uniqueStrings(input []string) []string {
 	return out
 }
 
-func uniqueCommands(input []agentenv.VerificationCommand) []agentenv.VerificationCommand {
-	if len(input) == 0 {
-		return nil
-	}
-	seen := map[string]struct{}{}
-	out := make([]agentenv.VerificationCommand, 0, len(input))
+func uniqueCommands(input []contracts.VerificationCommand) []contracts.VerificationCommand {
+	seen := make(map[string]struct{}, len(input))
+	out := make([]contracts.VerificationCommand, 0, len(input))
 	for _, cmd := range input {
-		key := cmd.Command + "\x00" + strings.Join(cmd.Args, "\x00")
+		key := fmt.Sprintf("%s:%v", cmd.Command, cmd.Args)
 		if _, ok := seen[key]; ok {
 			continue
 		}

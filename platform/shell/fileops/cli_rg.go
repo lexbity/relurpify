@@ -1,12 +1,12 @@
 package fileops
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewRGTool exposes the rg CLI.
-func NewRGTool(basePath string) core.Tool {
+func NewRGTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_rg",
 		Description: "Uses ripgrep (rg) for recursive code search.",

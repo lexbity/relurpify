@@ -1,6 +1,6 @@
 package golang
 
-import frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
+import "codeburg.org/lexbit/relurpify/platform/contracts"
 
 func firstNonEmptyLine(text string) string {
 	start := 0
@@ -24,5 +24,5 @@ func firstNonEmptyLine(text string) string {
 }
 
 func toStringSliceValue(value interface{}) ([]string, error) {
-	return frameworktools.NormalizeStringSlice(value)
+	return contracts.NormalizeStringSlice(value)
 }

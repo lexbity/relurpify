@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type VerificationResolver struct{}
@@ -15,7 +15,7 @@ func NewVerificationResolver() *VerificationResolver {
 
 func (r *VerificationResolver) BackendID() string { return "javascript" }
 
-func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bool {
+func (r *VerificationResolver) Supports(req contracts.VerificationPlanRequest) bool {
 	for _, file := range append(append([]string(nil), req.Files...), req.TestFiles...) {
 		path := strings.ToLower(strings.TrimSpace(file))
 		switch {
@@ -34,21 +34,19 @@ func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bo
 	return strings.Contains(lowerTask, "javascript") || strings.Contains(lowerTask, "typescript") || strings.Contains(lowerTask, "node") || strings.Contains(lowerTask, "npm") || strings.Contains(lowerTask, "jest") || strings.Contains(lowerTask, "vitest")
 }
 
-func (r *VerificationResolver) BuildPlan(_ context.Context, req agentenv.VerificationPlanRequest) (agentenv.VerificationPlan, bool, error) {
+func (r *VerificationResolver) BuildPlan(_ context.Context, req contracts.VerificationPlanRequest) (contracts.VerificationPlan, bool, error) {
 	workspace := jsResolverFirstNonEmpty(strings.TrimSpace(req.Workspace), ".")
 	scopeKind := "workspace_tests"
 	if req.PublicSurfaceChanged {
 		scopeKind = "compatibility_sweep"
 	}
-	return agentenv.VerificationPlan{
+	return contracts.VerificationPlan{
 		ScopeKind: scopeKind,
 		Files:     uniqueStrings(append(append([]string(nil), req.Files...), req.TestFiles...)),
 		TestFiles: uniqueStrings(req.TestFiles),
-		Commands: []agentenv.VerificationCommand{{
-			Name:             "npm_test",
-			Command:          "npm",
-			Args:             []string{"test"},
-			WorkingDirectory: workspace,
+		Commands: []contracts.VerificationCommand{{
+			Command: []string{"npm", "test"},
+			Dir:     workspace,
 		}},
 		Source:                 "platform.lang.js",
 		PlannerID:              "platform.lang.js.verification",
@@ -61,7 +59,7 @@ func (r *VerificationResolver) BuildPlan(_ context.Context, req agentenv.Verific
 	}, true, nil
 }
 
-func jsVerificationRationale(req agentenv.VerificationPlanRequest) string {
+func jsVerificationRationale(req contracts.VerificationPlanRequest) string {
 	parts := []string{"npm test was selected as the default JavaScript/TypeScript verification backend"}
 	if req.PublicSurfaceChanged {
 		parts = append(parts, "public surface changed, so the plan was marked compatibility-sensitive")

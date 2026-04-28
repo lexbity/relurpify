@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 type VerificationResolver struct{}
@@ -17,7 +17,7 @@ func NewVerificationResolver() *VerificationResolver {
 
 func (r *VerificationResolver) BackendID() string { return "go" }
 
-func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bool {
+func (r *VerificationResolver) Supports(req contracts.VerificationPlanRequest) bool {
 	for _, file := range append(append([]string(nil), req.Files...), req.TestFiles...) {
 		path := strings.ToLower(strings.TrimSpace(file))
 		if strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "go.mod") {
@@ -32,11 +32,11 @@ func (r *VerificationResolver) Supports(req agentenv.VerificationPlanRequest) bo
 	return strings.Contains(strings.ToLower(strings.TrimSpace(req.TaskInstruction)), "go")
 }
 
-func (r *VerificationResolver) BuildPlan(_ context.Context, req agentenv.VerificationPlanRequest) (agentenv.VerificationPlan, bool, error) {
+func (r *VerificationResolver) BuildPlan(ctx context.Context, req contracts.VerificationPlanRequest) (contracts.VerificationPlan, bool, error) {
 	packages := goVerificationPackages(req.Files, req.TestFiles)
 	commands := buildGoVerificationCommands(packages, req)
 	if len(commands) == 0 {
-		return agentenv.VerificationPlan{}, false, nil
+		return contracts.VerificationPlan{}, false, nil
 	}
 	scopeKind := "package_tests"
 	if len(packages) == 0 {
@@ -45,19 +45,10 @@ func (r *VerificationResolver) BuildPlan(_ context.Context, req agentenv.Verific
 	if req.PublicSurfaceChanged {
 		scopeKind = "compatibility_sweep"
 	}
-	return agentenv.VerificationPlan{
-		ScopeKind:              scopeKind,
-		Files:                  uniqueStrings(append(append([]string(nil), req.Files...), req.TestFiles...)),
-		TestFiles:              uniqueStrings(req.TestFiles),
-		Commands:               commands,
-		Source:                 "platform.lang.go",
-		PlannerID:              "platform.lang.go.verification",
-		Rationale:              goVerificationRationale(req, len(packages) > 0),
-		AuditTrail:             []string{"package_scope"},
-		CompatibilitySensitive: req.PublicSurfaceChanged,
-		Metadata: map[string]any{
-			"package_targets": append([]string(nil), packages...),
-		},
+	return contracts.VerificationPlan{
+		ScopeKind: scopeKind,
+		Commands:  commands,
+		Rationale: goVerificationRationale(req, len(packages) > 0),
 	}, true, nil
 }
 
@@ -79,37 +70,31 @@ func goVerificationPackages(files, testFiles []string) []string {
 	return uniqueStrings(packages)
 }
 
-func buildGoVerificationCommands(packages []string, req agentenv.VerificationPlanRequest) []agentenv.VerificationCommand {
+func buildGoVerificationCommands(packages []string, req contracts.VerificationPlanRequest) []contracts.VerificationCommand {
 	workspace := firstNonEmpty(strings.TrimSpace(req.Workspace), ".")
 	if len(packages) == 0 {
-		return []agentenv.VerificationCommand{{
-			Name:             "go_test_all",
-			Command:          "go",
-			Args:             []string{"test", "./..."},
-			WorkingDirectory: workspace,
+		return []contracts.VerificationCommand{{
+			Command: []string{"go", "test", "./..."},
+			Dir:     workspace,
 		}}
 	}
-	commands := make([]agentenv.VerificationCommand, 0, len(packages)+1)
+	commands := make([]contracts.VerificationCommand, 0, len(packages)+1)
 	for _, pkg := range packages {
-		commands = append(commands, agentenv.VerificationCommand{
-			Name:             "go_test_" + sanitizeName(pkg),
-			Command:          "go",
-			Args:             []string{"test", pkg},
-			WorkingDirectory: workspace,
+		commands = append(commands, contracts.VerificationCommand{
+			Command: []string{"go", "test", pkg},
+			Dir:     workspace,
 		})
 	}
 	if req.PublicSurfaceChanged || req.RequireVerificationStep {
-		commands = append(commands, agentenv.VerificationCommand{
-			Name:             "go_test_all",
-			Command:          "go",
-			Args:             []string{"test", "./..."},
-			WorkingDirectory: workspace,
+		commands = append(commands, contracts.VerificationCommand{
+			Command: []string{"go", "test", "./..."},
+			Dir:     workspace,
 		})
 	}
 	return uniqueCommands(commands)
 }
 
-func goVerificationRationale(req agentenv.VerificationPlanRequest, targeted bool) string {
+func goVerificationRationale(req contracts.VerificationPlanRequest, targeted bool) string {
 	parts := []string{}
 	if targeted {
 		parts = append(parts, "targeted Go package tests were derived from changed files")
@@ -148,14 +133,11 @@ func uniqueStrings(input []string) []string {
 	return out
 }
 
-func uniqueCommands(input []agentenv.VerificationCommand) []agentenv.VerificationCommand {
-	if len(input) == 0 {
-		return nil
-	}
-	seen := map[string]struct{}{}
-	out := make([]agentenv.VerificationCommand, 0, len(input))
+func uniqueCommands(input []contracts.VerificationCommand) []contracts.VerificationCommand {
+	seen := make(map[string]struct{}, len(input))
+	out := make([]contracts.VerificationCommand, 0, len(input))
 	for _, cmd := range input {
-		key := fmt.Sprintf("%s\x00%s", cmd.Command, strings.Join(cmd.Args, "\x00"))
+		key := fmt.Sprintf("%s:%v", cmd.Command, cmd.Args)
 		if _, ok := seen[key]; ok {
 			continue
 		}

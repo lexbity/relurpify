@@ -9,8 +9,7 @@ import (
 	"strings"
 	"time"
 
-	frameworktools "codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
 // CommandPreset describes a reusable command wrapper.
@@ -39,11 +38,11 @@ type ResultEnvelope struct {
 	Metadata map[string]any
 }
 
-// Executor runs a command preset through a sandbox.CommandRunner.
+// Executor runs a command preset through a contracts.CommandRunner.
 type Executor struct {
 	BasePath string
 	Preset   CommandPreset
-	Runner   sandbox.CommandRunner
+	Runner   contracts.CommandRunner
 }
 
 // NewPreset normalizes a preset with sensible defaults.
@@ -61,7 +60,7 @@ func NewPreset(p CommandPreset) CommandPreset {
 }
 
 // NewExecutor creates a reusable executor for a preset.
-func NewExecutor(basePath string, preset CommandPreset, runner sandbox.CommandRunner) *Executor {
+func NewExecutor(basePath string, preset CommandPreset, runner contracts.CommandRunner) *Executor {
 	return &Executor{
 		BasePath: basePath,
 		Preset:   NewPreset(preset),
@@ -92,7 +91,7 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 	defer cleanup()
 	finalArgs = e.prepareArgsForWorkingDir(finalArgs, selectedWorkdir)
 
-	request := sandbox.CommandRequest{
+	request := contracts.CommandRequest{
 		Workdir: selectedWorkdir,
 		Args:    append([]string{e.Preset.Command}, finalArgs...),
 		Timeout: e.Preset.Timeout,
@@ -125,7 +124,7 @@ func (e *Executor) Execute(ctx context.Context, workdir string, argsValue interf
 }
 
 func toStringSlice(value interface{}) ([]string, error) {
-	return frameworktools.NormalizeStringSlice(value)
+	return contracts.NormalizeStringSlice(value)
 }
 
 func resolvePath(base, path string) string {

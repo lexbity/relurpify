@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/browser"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
@@ -210,7 +210,7 @@ func TestDoEvaluateResolveContextAndLaunchErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing")
 
-	deny := sandbox.CommandPolicyFunc(func(context.Context, sandbox.CommandRequest) error {
+	deny := contracts.CommandPolicyFunc(func(context.Context, contracts.CommandRequest) error {
 		return errors.New("denied")
 	})
 	_, err = launchChromeDriver(context.Background(), Config{

@@ -1,12 +1,12 @@
 package build
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewGoTool exposes the go CLI for running builds/tests inside the workspace.
-func NewGoTool(basePath string) core.Tool {
+func NewGoTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_go",
 		Description: "Executes Go commands (go test/build/etc) inside the workspace.",

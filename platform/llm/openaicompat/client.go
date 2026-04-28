@@ -12,10 +12,20 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 )
 
-// Client implements core.LanguageModel for OpenAI-compatible backends.
+// Re-export contract types for local usage
+type (
+	LanguageModel = contracts.LanguageModel
+	LLMOptions    = contracts.LLMOptions
+	LLMResponse   = contracts.LLMResponse
+	Message       = contracts.Message
+	LLMToolSpec   = contracts.LLMToolSpec
+	Schema        = contracts.Schema
+)
+
+// Client implements LanguageModel for OpenAI-compatible backends.
 type Client struct {
 	cfg        OpenAICompatConfig
 	httpClient *http.Client
@@ -35,33 +45,33 @@ func NewClient(cfg OpenAICompatConfig) *Client {
 	}
 }
 
-func (c *Client) Generate(ctx context.Context, prompt string, options *core.LLMOptions) (*core.LLMResponse, error) {
-	return c.chat(ctx, []core.Message{{Role: "user", Content: prompt}}, nil, options, false, false, nil)
+func (c *Client) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
+	return c.chat(ctx, []Message{{Role: "user", Content: prompt}}, nil, options, false, false, nil)
 }
 
-func (c *Client) GenerateStream(ctx context.Context, prompt string, options *core.LLMOptions) (<-chan string, error) {
+func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
 		defer close(out)
-		_, _ = c.chat(ctx, []core.Message{{Role: "user", Content: prompt}}, nil, options, false, true, func(token string) {
+		_, _ = c.chat(ctx, []Message{{Role: "user", Content: prompt}}, nil, options, false, true, func(token string) {
 			out <- token
 		})
 	}()
 	return out, nil
 }
 
-func (c *Client) Chat(ctx context.Context, messages []core.Message, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (c *Client) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
 	return c.chat(ctx, messages, nil, options, false, false, nil)
 }
 
-func (c *Client) ChatWithTools(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (*core.LLMResponse, error) {
+func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
 	if options != nil && options.StreamCallback != nil {
 		return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), true, options.StreamCallback)
 	}
 	return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), false, nil)
 }
 
-// ToolRepairStrategy implements core.ProfiledModel.
+// ToolRepairStrategy implements ProfiledModel.
 func (c *Client) ToolRepairStrategy() string {
 	if c.profile == nil || c.profile.Repair.Strategy == "" {
 		return "heuristic-only"
@@ -69,7 +79,7 @@ func (c *Client) ToolRepairStrategy() string {
 	return c.profile.Repair.Strategy
 }
 
-// MaxToolsPerCall implements core.ProfiledModel.
+// MaxToolsPerCall implements ProfiledModel.
 func (c *Client) MaxToolsPerCall() int {
 	if c.profile == nil {
 		return 0
@@ -77,7 +87,7 @@ func (c *Client) MaxToolsPerCall() int {
 	return c.profile.ToolCalling.MaxToolsPerCall
 }
 
-// UsesNativeToolCalling implements core.ProfiledModel.
+// UsesNativeToolCalling implements ProfiledModel.
 func (c *Client) UsesNativeToolCalling() bool {
 	return c.nativeToolCallingEnabled()
 }
@@ -87,7 +97,7 @@ func (c *Client) SetProfile(p *ModelProfile) {
 	c.profile = p
 }
 
-func (c *Client) ChatStream(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions) (<-chan string, error) {
+func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
 		defer close(out)
@@ -99,7 +109,7 @@ func (c *Client) ChatStream(ctx context.Context, messages []core.Message, tools 
 	return out, nil
 }
 
-func (c *Client) chat(ctx context.Context, messages []core.Message, tools []core.LLMToolSpec, options *core.LLMOptions, includeTools bool, stream bool, tokenSink func(string)) (*core.LLMResponse, error) {
+func (c *Client) chat(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions, includeTools bool, stream bool, tokenSink func(string)) (*LLMResponse, error) {
 	reqBody := map[string]any{
 		"model":    modelFromOptions(options),
 		"messages": convertMessages(messages),
@@ -115,7 +125,7 @@ func (c *Client) chat(ctx context.Context, messages []core.Message, tools []core
 	return c.doChat(ctx, reqBody)
 }
 
-func (c *Client) applyOptions(payload map[string]any, options *core.LLMOptions) {
+func (c *Client) applyOptions(payload map[string]any, options *LLMOptions) {
 	if options == nil {
 		return
 	}
@@ -146,7 +156,7 @@ func (c *Client) nativeToolCallingEnabled() bool {
 	return c.profile.ToolCalling.NativeAPI
 }
 
-func (c *Client) doChat(ctx context.Context, payload map[string]any) (*core.LLMResponse, error) {
+func (c *Client) doChat(ctx context.Context, payload map[string]any) (*LLMResponse, error) {
 	req, err := c.newRequest(ctx, http.MethodPost, "/v1/chat/completions", payload)
 	if err != nil {
 		return nil, err
@@ -166,7 +176,7 @@ func (c *Client) doChat(ctx context.Context, payload map[string]any) (*core.LLMR
 	return decodeChatResponse(raw)
 }
 
-func (c *Client) doChatStream(ctx context.Context, payload map[string]any, tokenSink func(string)) (*core.LLMResponse, error) {
+func (c *Client) doChatStream(ctx context.Context, payload map[string]any, tokenSink func(string)) (*LLMResponse, error) {
 	req, err := c.newRequest(ctx, http.MethodPost, "/v1/chat/completions", payload)
 	if err != nil {
 		return nil, err
@@ -224,7 +234,7 @@ func (c *Client) doChatStream(ctx context.Context, payload map[string]any, token
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	respOut := &core.LLMResponse{
+	respOut := &LLMResponse{
 		Text:         fullText.String(),
 		FinishReason: firstFinishReason(final),
 		Usage:        normalizeUsage(final.Usage),
@@ -296,14 +306,14 @@ func (c *Client) Embedder(model string) *Embedder {
 	return &Embedder{client: c, model: model}
 }
 
-func modelFromOptions(options *core.LLMOptions) string {
+func modelFromOptions(options *LLMOptions) string {
 	if options != nil && options.Model != "" {
 		return options.Model
 	}
 	return ""
 }
 
-func convertMessages(messages []core.Message) []map[string]any {
+func convertMessages(messages []Message) []map[string]any {
 	out := make([]map[string]any, 0, len(messages))
 	for _, msg := range messages {
 		entry := map[string]any{
@@ -324,7 +334,7 @@ func convertMessages(messages []core.Message) []map[string]any {
 	return out
 }
 
-func convertMessageToolCalls(calls []core.ToolCall) []map[string]any {
+func convertMessageToolCalls(calls []contracts.ToolCall) []map[string]any {
 	out := make([]map[string]any, 0, len(calls))
 	for _, call := range calls {
 		fn := map[string]any{"name": call.Name}
@@ -345,7 +355,7 @@ func convertMessageToolCalls(calls []core.ToolCall) []map[string]any {
 	return out
 }
 
-func convertTools(tools []core.LLMToolSpec) []map[string]any {
+func convertTools(tools []LLMToolSpec) []map[string]any {
 	out := make([]map[string]any, 0, len(tools))
 	for _, tool := range tools {
 		out = append(out, map[string]any{
@@ -360,7 +370,7 @@ func convertTools(tools []core.LLMToolSpec) []map[string]any {
 	return out
 }
 
-func schemaToJSONSchema(schema *core.Schema) map[string]any {
+func schemaToJSONSchema(schema *Schema) map[string]any {
 	if schema == nil {
 		return map[string]any{"type": "object"}
 	}
@@ -396,14 +406,14 @@ func schemaToJSONSchema(schema *core.Schema) map[string]any {
 	return out
 }
 
-func parseToolCalls(message *chatMessage) []core.ToolCall {
+func parseToolCalls(message *chatMessage) []contracts.ToolCall {
 	if message == nil {
 		return nil
 	}
 	calls := message.ToolCalls
-	out := make([]core.ToolCall, 0, len(calls))
+	out := make([]contracts.ToolCall, 0, len(calls))
 	for _, call := range calls {
-		out = append(out, core.ToolCall{
+		out = append(out, contracts.ToolCall{
 			ID:   call.ID,
 			Name: call.Function.Name,
 			Args: parseArgs(call.Function.Arguments),
@@ -424,8 +434,8 @@ func parseArgs(raw string) map[string]any {
 	return map[string]any{"_raw": raw}
 }
 
-func decodeChatResponse(raw chatCompletionResponse) (*core.LLMResponse, error) {
-	resp := &core.LLMResponse{}
+func decodeChatResponse(raw chatCompletionResponse) (*LLMResponse, error) {
+	resp := &LLMResponse{}
 	if len(raw.Choices) == 0 {
 		resp.Usage = normalizeUsage(raw.Usage)
 		return resp, nil
@@ -563,7 +573,7 @@ func (b *toolCallBuilder) Merge(delta chatToolCallDelta) {
 	}
 }
 
-func buildToolCalls(builders map[int]*toolCallBuilder) []core.ToolCall {
+func buildToolCalls(builders map[int]*toolCallBuilder) []contracts.ToolCall {
 	if len(builders) == 0 {
 		return nil
 	}
@@ -572,10 +582,10 @@ func buildToolCalls(builders map[int]*toolCallBuilder) []core.ToolCall {
 		keys = append(keys, k)
 	}
 	sort.Ints(keys)
-	out := make([]core.ToolCall, 0, len(keys))
+	out := make([]contracts.ToolCall, 0, len(keys))
 	for _, k := range keys {
 		builder := builders[k]
-		out = append(out, core.ToolCall{
+		out = append(out, contracts.ToolCall{
 			ID:   builder.ID,
 			Name: builder.Name,
 			Args: parseArgs(builder.Args.String()),

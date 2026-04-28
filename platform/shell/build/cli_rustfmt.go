@@ -1,12 +1,12 @@
 package build
 
 import (
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/platform/contracts"
 	clinix "codeburg.org/lexbit/relurpify/platform/shell/command"
 )
 
 // NewRustfmtTool exposes rustfmt for formatting Rust code.
-func NewRustfmtTool(basePath string) core.Tool {
+func NewRustfmtTool(basePath string) contracts.Tool {
 	return clinix.NewCommandTool(basePath, clinix.CommandToolConfig{
 		Name:        "cli_rustfmt",
 		Description: "Formats Rust code using rustfmt.",

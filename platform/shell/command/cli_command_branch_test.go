@@ -78,11 +78,8 @@ func TestCommandToolExecuteWithNoRunnerStillReportsAvailability(t *testing.T) {
 		Description: "echo",
 		Command:     "echo",
 	})
-	require.False(t, tool.IsAvailable(nil, nil))
+	require.False(t, tool.IsAvailable(nil))
 	tool.SetCommandRunner(&responseRunner{})
-	tool.SetPermissionManager(nil, "agent")
-	tool.SetAgentSpec(nil, "agent")
-	require.True(t, tool.IsAvailable(nil, nil))
-	require.Equal(t, "agent", tool.agentID)
+	require.True(t, tool.IsAvailable(nil))
 	require.Empty(t, tool.Tags())
 }
