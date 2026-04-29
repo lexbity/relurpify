@@ -3,6 +3,7 @@ package contextdata
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -147,6 +148,32 @@ func (e *Envelope) DeleteWorkingValue(key string) {
 	e.References.WorkingMemory = newRefs
 }
 
+// ClearWorkingData removes all working memory entries for this envelope's task.
+// This is called by StateModeFresh paradigms at Execute entry.
+func (e *Envelope) ClearWorkingData() {
+	if e == nil || e.WorkingData == nil {
+		return
+	}
+	// Clear all keys for this task
+	keysToDelete := make([]string, 0)
+	for _, ref := range e.References.WorkingMemory {
+		if ref.TaskID == e.TaskID {
+			keysToDelete = append(keysToDelete, ref.Key)
+		}
+	}
+	for _, key := range keysToDelete {
+		delete(e.WorkingData, key)
+	}
+	// Remove references
+	newRefs := make([]WorkingMemoryReference, 0, len(e.References.WorkingMemory))
+	for _, ref := range e.References.WorkingMemory {
+		if ref.TaskID != e.TaskID {
+			newRefs = append(newRefs, ref)
+		}
+	}
+	e.References.WorkingMemory = newRefs
+}
+
 // RequestCheckpoint sets a checkpoint request on the envelope.
 // The compiler will materialize the checkpoint when processing this envelope.
 func (e *Envelope) RequestCheckpoint(reason string, priority int, evictMemory bool) {
@@ -268,6 +295,310 @@ func (e *Envelope) Snapshot() map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+// Clone returns a deep copy of the envelope.
+func (e *Envelope) Clone() *Envelope {
+	if e == nil {
+		return nil
+	}
+	clone := &Envelope{
+		TaskID:            e.TaskID,
+		SessionID:         e.SessionID,
+		NodeID:            e.NodeID,
+		WorkingData:       e.Snapshot(),
+		CheckpointRequest: nil, // Don't clone checkpoint requests
+		AssemblyMetadata:  e.AssemblyMetadata,
+		createdAt:         e.createdAt,
+	}
+	// Clone references (shallow copy is sufficient for references)
+	clone.References = e.References.Clone()
+	return clone
+}
+
+// HandoffPolicy controls which parts of an envelope survive a filtered handoff.
+type HandoffPolicy struct {
+	// PreserveWorkingMemory keeps selected working-memory keys.
+	PreserveWorkingMemory bool
+
+	// WorkingKeys preserves exact working-memory keys when present.
+	WorkingKeys []string
+
+	// WorkingPrefixes preserves keys with any of these prefixes.
+	WorkingPrefixes []string
+
+	// PreserveStreamedContext retains streamed-context references.
+	PreserveStreamedContext bool
+
+	// PreserveRetrieval retains retrieval references.
+	PreserveRetrieval bool
+
+	// PreserveCheckpoints retains checkpoint references.
+	PreserveCheckpoints bool
+
+	// PreserveAssemblyMetadata copies assembly metadata.
+	PreserveAssemblyMetadata bool
+
+	// PreserveNodeID copies the current node identifier.
+	PreserveNodeID bool
+}
+
+// DefaultHandoffPolicy preserves the data typically needed when handing work
+// from one agent boundary to another. It intentionally keeps references and
+// selected working memory, but it does not invent any new payload shape.
+func DefaultHandoffPolicy() HandoffPolicy {
+	return HandoffPolicy{
+		PreserveWorkingMemory:    true,
+		PreserveStreamedContext:  true,
+		PreserveRetrieval:        true,
+		PreserveCheckpoints:      true,
+		PreserveAssemblyMetadata: true,
+		PreserveNodeID:           true,
+	}
+}
+
+// HandoffClone returns a cloned envelope suitable for the default agent
+// boundary handoff. This is the common-case transfer mechanism.
+func (e *Envelope) HandoffClone() *Envelope {
+	return e.Clone()
+}
+
+// HandoffSnapshot returns a filtered envelope using the supplied policy.
+// It keeps the task/session boundary intact while dropping unlisted state.
+func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
+	if e == nil {
+		return nil
+	}
+	snapshot := &Envelope{
+		TaskID:      e.TaskID,
+		SessionID:   e.SessionID,
+		WorkingData: make(map[string]any),
+		References:  ReferenceBundle{},
+		createdAt:   e.createdAt,
+	}
+	if policy.PreserveNodeID {
+		snapshot.NodeID = e.NodeID
+	}
+	if policy.PreserveAssemblyMetadata {
+		snapshot.AssemblyMetadata = e.AssemblyMetadata
+	}
+	if policy.PreserveWorkingMemory {
+		snapshot.WorkingData = cloneWorkingDataForHandoff(e, policy)
+		snapshot.References.WorkingMemory = cloneWorkingMemoryRefsForHandoff(e, policy)
+	}
+	if policy.PreserveStreamedContext {
+		snapshot.References.StreamedContext = append([]ChunkReference(nil), e.References.StreamedContext...)
+	}
+	if policy.PreserveRetrieval {
+		snapshot.References.Retrieval = append([]RetrievalReference(nil), e.References.Retrieval...)
+	}
+	if policy.PreserveCheckpoints {
+		snapshot.References.Checkpoints = append([]CheckpointReference(nil), e.References.Checkpoints...)
+	}
+	return snapshot
+}
+
+func cloneWorkingDataForHandoff(env *Envelope, policy HandoffPolicy) map[string]any {
+	if env == nil || len(env.WorkingData) == 0 {
+		return map[string]any{}
+	}
+	keys := make(map[string]struct{}, len(policy.WorkingKeys))
+	for _, key := range policy.WorkingKeys {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			keys[key] = struct{}{}
+		}
+	}
+	prefixes := make([]string, 0, len(policy.WorkingPrefixes))
+	for _, prefix := range policy.WorkingPrefixes {
+		if prefix = strings.TrimSpace(prefix); prefix != "" {
+			prefixes = append(prefixes, prefix)
+		}
+	}
+	out := make(map[string]any)
+	for key, value := range env.WorkingData {
+		if len(keys) > 0 {
+			if _, ok := keys[key]; !ok {
+				if !hasWorkingPrefix(key, prefixes) {
+					continue
+				}
+			}
+		} else if len(prefixes) > 0 && !hasWorkingPrefix(key, prefixes) {
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func cloneWorkingMemoryRefsForHandoff(env *Envelope, policy HandoffPolicy) []WorkingMemoryReference {
+	if env == nil || len(env.References.WorkingMemory) == 0 {
+		return nil
+	}
+	keys := make(map[string]struct{}, len(policy.WorkingKeys))
+	for _, key := range policy.WorkingKeys {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			keys[key] = struct{}{}
+		}
+	}
+	prefixes := make([]string, 0, len(policy.WorkingPrefixes))
+	for _, prefix := range policy.WorkingPrefixes {
+		if prefix = strings.TrimSpace(prefix); prefix != "" {
+			prefixes = append(prefixes, prefix)
+		}
+	}
+	out := make([]WorkingMemoryReference, 0, len(env.References.WorkingMemory))
+	for _, ref := range env.References.WorkingMemory {
+		if ref.TaskID != env.TaskID {
+			continue
+		}
+		if len(keys) > 0 {
+			if _, ok := keys[ref.Key]; !ok && !hasWorkingPrefix(ref.Key, prefixes) {
+				continue
+			}
+		} else if len(prefixes) > 0 && !hasWorkingPrefix(ref.Key, prefixes) {
+			continue
+		}
+		out = append(out, ref)
+	}
+	return out
+}
+
+func hasWorkingPrefix(key string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// Merge merges working data from another envelope into this one.
+// Source envelope data takes precedence on conflicts.
+func (e *Envelope) Merge(other *Envelope) {
+	if e == nil || other == nil || other.WorkingData == nil {
+		return
+	}
+	if e.WorkingData == nil {
+		e.WorkingData = make(map[string]any)
+	}
+	for k, v := range other.WorkingData {
+		e.WorkingData[k] = v
+	}
+	// Merge working memory references
+	for _, ref := range other.References.WorkingMemory {
+		found := false
+		for i, existingRef := range e.References.WorkingMemory {
+			if existingRef.TaskID == ref.TaskID && existingRef.Key == ref.Key {
+				e.References.WorkingMemory[i] = ref
+				found = true
+				break
+			}
+		}
+		if !found {
+			e.References.WorkingMemory = append(e.References.WorkingMemory, ref)
+		}
+	}
+}
+
+// SetHandleScoped stores a value with a scope identifier.
+func (e *Envelope) SetHandleScoped(key string, value any, scope string) {
+	if e == nil || e.WorkingData == nil {
+		return
+	}
+	scopedKey := fmt.Sprintf("%s:%s", scope, key)
+	e.SetWorkingValue(scopedKey, value, MemoryClassTask)
+}
+
+// GetHandle retrieves a scoped value.
+func (e *Envelope) GetHandle(key string) (any, bool) {
+	if e == nil || e.WorkingData == nil {
+		return nil, false
+	}
+	// Try exact match first
+	if val, ok := e.WorkingData[key]; ok {
+		return val, ok
+	}
+	// Try scoped keys (find the most recent scope)
+	for i := len(e.References.WorkingMemory) - 1; i >= 0; i-- {
+		ref := e.References.WorkingMemory[i]
+		if ref.Key == key && ref.TaskID == e.TaskID {
+			if val, ok := e.WorkingData[key]; ok {
+				return val, ok
+			}
+		}
+	}
+	return nil, false
+}
+
+// SetExecutionPhase sets the current execution phase.
+func (e *Envelope) SetExecutionPhase(phase string) {
+	if e == nil {
+		return
+	}
+	e.SetWorkingValue("_execution_phase", phase, MemoryClassTask)
+}
+
+// GetExecutionPhase returns the current execution phase.
+func (e *Envelope) GetExecutionPhase() string {
+	if e == nil {
+		return ""
+	}
+	val, _ := e.GetWorkingValue("_execution_phase")
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// AddInteraction adds an interaction record to the envelope.
+func (e *Envelope) AddInteraction(interaction map[string]any) {
+	if e == nil {
+		return
+	}
+	key := "_interactions"
+	var interactions []map[string]any
+	if val, ok := e.GetWorkingValue(key); ok {
+		if arr, ok := val.([]map[string]any); ok {
+			interactions = arr
+		}
+	}
+	interactions = append(interactions, interaction)
+	e.SetWorkingValue(key, interactions, MemoryClassTask)
+}
+
+// GetInteractions returns all interactions recorded in the envelope.
+func (e *Envelope) GetInteractions() []map[string]any {
+	if e == nil {
+		return nil
+	}
+	val, _ := e.GetWorkingValue("_interactions")
+	if arr, ok := val.([]map[string]any); ok {
+		return arr
+	}
+	return nil
+}
+
+// StringSliceFromContext extracts a string slice from working memory.
+func (e *Envelope) StringSliceFromContext(key string) []string {
+	if e == nil {
+		return nil
+	}
+	val, _ := e.GetWorkingValue(key)
+	if arr, ok := val.([]string); ok {
+		return arr
+	}
+	if arr, ok := val.([]any); ok {
+		result := make([]string, 0, len(arr))
+		for _, v := range arr {
+			if s, ok := v.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+	return nil
 }
 
 // String returns a summary of the envelope for logging.

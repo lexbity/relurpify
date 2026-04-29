@@ -20,7 +20,55 @@ type WorkflowStateStore interface {
 	GetWorkflowArtifact(ctx context.Context, artifactID string) (*WorkflowArtifactRecord, error)
 	// UpsertWorkflowArtifact creates or updates a workflow artifact.
 	UpsertWorkflowArtifact(ctx context.Context, artifact WorkflowArtifactRecord) error
+	// CreateWorkflow creates a new workflow entry.
+	CreateWorkflow(ctx context.Context, workflowID string) error
+	// ListWorkflows lists all workflows.
+	ListWorkflows(ctx context.Context) ([]string, error)
+	// Close closes the store.
+	Close() error
 }
+
+// WorkflowRecord represents a workflow entity (legacy type for non-archaeo code).
+type WorkflowRecord struct {
+	WorkflowID  string
+	TaskID      string
+	TaskType    string
+	Instruction string
+	Status      WorkflowRunStatus
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Metadata    map[string]any
+}
+
+// WorkflowRunRecord represents a single execution run of a workflow (legacy type for non-archaeo code).
+type WorkflowRunRecord struct {
+	RunID          string
+	WorkflowID     string
+	Status         WorkflowRunStatus
+	AgentMode      string
+	RuntimeVersion string
+	AgentName      string
+	StartedAt      time.Time
+	CompletedAt    *time.Time
+	FinishedAt     *time.Time
+	Metadata       map[string]any
+}
+
+// WorkflowRunStatus represents the status of a workflow run.
+type WorkflowRunStatus string
+
+const (
+	// WorkflowRunStatusRunning indicates the workflow is running.
+	WorkflowRunStatusRunning WorkflowRunStatus = "running"
+	// WorkflowRunStatusCompleted indicates the workflow completed successfully.
+	WorkflowRunStatusCompleted WorkflowRunStatus = "completed"
+	// WorkflowRunStatusFailed indicates the workflow failed.
+	WorkflowRunStatusFailed WorkflowRunStatus = "failed"
+	// WorkflowRunStatusCanceled indicates the workflow was canceled.
+	WorkflowRunStatusCanceled WorkflowRunStatus = "canceled"
+	// WorkflowRunStatusNeedsReplan indicates the workflow needs replanning.
+	WorkflowRunStatusNeedsReplan WorkflowRunStatus = "needs_replan"
+)
 
 // DelegationEntry represents a persisted delegation state.
 type DelegationEntry struct {

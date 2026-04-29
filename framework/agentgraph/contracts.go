@@ -57,8 +57,8 @@ const (
 )
 
 // NodeContract describes execution requirements, replay semantics, and state
-// boundaries for a node. Placement, recoverability, and checkpoint-specific
-// fields remain placeholders for later phases.
+// boundaries for a node. Placement, recoverability, and checkpoint policy are
+// contract metadata, not runtime persistence ownership.
 type NodeContract struct {
 	RequiredCapabilities []core.CapabilitySelector `json:"required_capabilities,omitempty" yaml:"required_capabilities,omitempty"`
 	SideEffectClass      SideEffectClass           `json:"side_effect_class,omitempty" yaml:"side_effect_class,omitempty"`
@@ -120,6 +120,19 @@ func defaultNodeContract(node Node) NodeContract {
 				AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStepMetadata, core.StateDataClassRoutingFlag, core.StateDataClassStructuredState},
 				MaxStateEntryBytes:       4096,
 				MaxInlineCollectionItems: 32,
+			},
+		}
+	case NodeTypeStream:
+		return NodeContract{
+			SideEffectClass: SideEffectContext,
+			Idempotency:     IdempotencyReplaySafe,
+			ContextPolicy: core.StateBoundaryPolicy{
+				ReadKeys:                 []string{"task.*", "contextstream.*"},
+				WriteKeys:                []string{"contextstream.*"},
+				AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
+				AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassStructuredState},
+				MaxStateEntryBytes:       4096,
+				MaxInlineCollectionItems: 16,
 			},
 		}
 	case NodeTypeTool:

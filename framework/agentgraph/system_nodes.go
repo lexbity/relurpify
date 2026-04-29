@@ -12,6 +12,29 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
+// ContextReferenceKind classifies a mixed-evidence reference produced by graph
+// memory publication helpers.
+type ContextReferenceKind string
+
+const (
+	ContextReferenceKindFile     ContextReferenceKind = "file"
+	ContextReferenceKindSymbol   ContextReferenceKind = "symbol"
+	ContextReferenceKindAnchor   ContextReferenceKind = "anchor"
+	ContextReferenceKindMemory   ContextReferenceKind = "memory"
+	ContextReferenceKindExternal ContextReferenceKind = "external"
+)
+
+// ContextReference captures a lightweight publication reference used by graph
+// memory helpers.
+type ContextReference struct {
+	Kind     ContextReferenceKind
+	ID       string
+	URI      string
+	Version  string
+	Detail   string
+	Metadata map[string]string
+}
+
 // ArtifactRecord captures a durable graph artifact without binding graph to a
 // concrete persistence implementation.
 type ArtifactRecord struct {
@@ -24,16 +47,6 @@ type ArtifactRecord struct {
 	RawSizeBytes int64
 	Metadata     map[string]any
 	CreatedAt    time.Time
-}
-
-// ArtifactSink persists graph-produced artifacts.
-type ArtifactSink interface {
-	SaveArtifact(ctx context.Context, artifact ArtifactRecord) error
-}
-
-// CheckpointPersister persists graph-native checkpoints.
-type CheckpointPersister interface {
-	Save(checkpoint *GraphCheckpoint) error
 }
 
 // MemoryRetriever returns bounded, compact memory retrieval results.
@@ -60,103 +73,6 @@ type MemoryRetrievalPublication struct {
 // StateHydrator restores selected durable references into active state.
 type StateHydrator interface {
 	Hydrate(ctx context.Context, refs []string) (map[string]any, error)
-}
-
-// CheckpointNode persists a checkpoint artifact and records a reference in state.
-type CheckpointNode struct {
-	id                 string
-	TaskID             string
-	NextNodeID         string
-	Persister          CheckpointPersister
-	ArtifactSink       ArtifactSink
-	StateKey           string
-	ArtifactStateKey   string
-	Telemetry          core.Telemetry
-	Metadata           map[string]any
-	WorkingMemoryStore WorkingMemoryEvicter // Optional: evicts task working memory at checkpoint
-}
-
-// WorkingMemoryEvicter is the interface CheckpointNode needs for memory eviction.
-type WorkingMemoryEvicter interface {
-	Evict(taskID string)
-}
-
-func NewCheckpointNode(id string, nextNodeID string, persister CheckpointPersister) *CheckpointNode {
-	if id == "" {
-		id = "checkpoint"
-	}
-	return &CheckpointNode{
-		id:               id,
-		NextNodeID:       nextNodeID,
-		Persister:        persister,
-		StateKey:         "graph.checkpoint",
-		ArtifactStateKey: "graph.checkpoint_ref",
-	}
-}
-
-func (n *CheckpointNode) ID() string     { return n.id }
-func (n *CheckpointNode) Type() NodeType { return NodeTypeSystem }
-func (n *CheckpointNode) Contract() NodeContract {
-	return NodeContract{
-		SideEffectClass: SideEffectLocal,
-		Idempotency:     IdempotencyReplaySafe,
-		ContextPolicy: core.StateBoundaryPolicy{
-			ReadKeys:                 []string{"task.*", "workflow.*", "graph.*"},
-			WriteKeys:                []string{"graph.checkpoint*", "artifact.*"},
-			AllowedMemoryClasses:     []core.MemoryClass{core.MemoryClassWorking},
-			AllowedDataClasses:       []core.StateDataClass{core.StateDataClassTaskMetadata, core.StateDataClassArtifactRef, core.StateDataClassStructuredState},
-			MaxStateEntryBytes:       4096,
-			MaxInlineCollectionItems: 8,
-			PreferArtifactReferences: true,
-		},
-	}
-}
-
-func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
-	taskID := strings.TrimSpace(n.TaskID)
-	if taskID == "" && env != nil {
-		taskID = env.TaskID
-	}
-	// Request checkpoint through the envelope - the compiler owns materialization
-	env.RequestCheckpoint("explicit-checkpoint-node", 1, n.WorkingMemoryStore != nil)
-	if env != nil {
-		env.SetWorkingValue(n.StateKey, map[string]any{
-			"checkpoint_id":     generateCheckpointID(),
-			"task_id":           taskID,
-			"completed_node_id": n.id,
-			"next_node_id":      n.NextNodeID,
-			"transition_reason": "explicit-checkpoint-node",
-			"created_at":        time.Now().UTC(),
-		}, contextdata.MemoryClassTask)
-	}
-	ref := core.ArtifactReference{
-		ArtifactID:   generateCheckpointID(),
-		Kind:         "checkpoint",
-		ContentType:  "application/json",
-		StorageKind:  "checkpoint",
-		URI:          fmt.Sprintf("workflow://checkpoint/%s", generateCheckpointID()),
-		Summary:      fmt.Sprintf("checkpoint at %s -> %s", n.id, n.NextNodeID),
-		RawSizeBytes: 0,
-	}
-	env.SetWorkingValue(n.ArtifactStateKey, ref, contextdata.MemoryClassTask)
-	emitSystemNodeEvent(n.Telemetry, taskID, "checkpoint requested", map[string]any{
-		"node":         n.id,
-		"next_node_id": n.NextNodeID,
-	})
-
-	// Evict working memory at checkpoint boundary
-	if n.WorkingMemoryStore != nil && taskID != "" {
-		n.WorkingMemoryStore.Evict(taskID)
-	}
-
-	return &Result{
-		NodeID:  n.id,
-		Success: true,
-		Data: map[string]any{
-			"checkpoint_id": generateCheckpointID(),
-			"artifact_ref":  ref,
-		},
-	}, nil
 }
 
 // BuildMemoryRetrievalPublication derives the richer graph publication shape
@@ -269,7 +185,7 @@ func mixedEvidencePayloadFromEnvelopes(query string, results []core.MemoryRecord
 	}
 }
 
-func contextReferencesFromEnvelopes(results []core.MemoryRecordEnvelope, expectedClass MemoryClass) []ContextReference {
+func contextReferencesFromEnvelopes(results []core.MemoryRecordEnvelope, expectedClass core.MemoryClass) []ContextReference {
 	if len(results) == 0 {
 		return nil
 	}
@@ -299,7 +215,7 @@ type contextReferenceKey struct {
 	uri  string
 }
 
-func contextReferenceFromEnvelope(result core.MemoryRecordEnvelope, expectedClass MemoryClass) *ContextReference {
+func contextReferenceFromEnvelope(result core.MemoryRecordEnvelope, expectedClass core.MemoryClass) *ContextReference {
 	values, ok := result.Reference.(map[string]any)
 	if ok && len(values) > 0 {
 		ref := &ContextReference{
@@ -344,20 +260,20 @@ func contextReferenceFromEnvelope(result core.MemoryRecordEnvelope, expectedClas
 		ID:     key,
 		Detail: strings.TrimSpace(result.Kind),
 		Metadata: map[string]string{
-			"memory_class": string(nonEmptyMemoryClass(MemoryClass(result.MemoryClass), expectedClass)),
+			"memory_class": string(nonEmptyMemoryClass(core.MemoryClass(result.MemoryClass), expectedClass)),
 			"source":       strings.TrimSpace(result.Source),
 		},
 	}
 }
 
-func defaultContextReferenceKind(result core.MemoryRecordEnvelope, expectedClass MemoryClass) ContextReferenceKind {
+func defaultContextReferenceKind(result core.MemoryRecordEnvelope, expectedClass core.MemoryClass) ContextReferenceKind {
 	if strings.TrimSpace(result.Source) == "retrieval" {
 		return ContextReferenceKind("retrieval_evidence")
 	}
 	return ContextReferenceKind("runtime_memory")
 }
 
-func nonEmptyMemoryClass(class MemoryClass, fallback MemoryClass) MemoryClass {
+func nonEmptyMemoryClass(class core.MemoryClass, fallback core.MemoryClass) core.MemoryClass {
 	if strings.TrimSpace(string(class)) != "" {
 		return class
 	}

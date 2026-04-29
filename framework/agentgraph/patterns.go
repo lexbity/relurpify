@@ -94,32 +94,3 @@ func BuildReviewIterateGraph(execute, review Node, continueCond, doneCond Condit
 	}
 	return g, nil
 }
-
-// WrapWithCheckpointing inserts an explicit checkpoint node before the terminal node.
-func WrapWithCheckpointing(g *Graph, beforeNodeID string, checkpoint *CheckpointNode, doneNodeID string) error {
-	if g == nil || checkpoint == nil {
-		return fmt.Errorf("graph and checkpoint node required")
-	}
-	if beforeNodeID == "" || doneNodeID == "" {
-		return fmt.Errorf("before/done node ids required")
-	}
-	if err := g.AddNode(checkpoint); err != nil {
-		return err
-	}
-	g.mu.Lock()
-	edges := append([]Edge(nil), g.edges[beforeNodeID]...)
-	filtered := make([]Edge, 0, len(edges))
-	for _, edge := range edges {
-		if edge.To == doneNodeID && !edge.Parallel {
-			continue
-		}
-		filtered = append(filtered, edge)
-	}
-	g.edges[beforeNodeID] = filtered
-	g.mu.Unlock()
-	if err := g.AddEdge(beforeNodeID, checkpoint.ID(), nil, false); err != nil {
-		return err
-	}
-	return g.AddEdge(checkpoint.ID(), doneNodeID, nil, false)
-}
-

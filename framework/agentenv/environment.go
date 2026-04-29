@@ -3,6 +3,7 @@ package agentenv
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
@@ -46,6 +47,13 @@ type CompatibilitySurfaceExtractor interface {
 // composition root (ayenitd.Open()) and must not be constructed by platform code.
 // Platform packages may receive WorkspaceEnvironment as a dependency but must
 // not import framework/agentenv to construct it.
+//
+// Ownership note: WorkspaceEnvironment is a composition root only. It does not
+// define storage models or business logic. Storage concerns are delegated to:
+// - framework/compiler for compilation state
+// - framework/agentlifecycle for runtime lifecycle state
+// - framework/persistence for persistence adapters
+// - framework/graphdb for durable backend implementation
 type WorkspaceEnvironment struct {
 	// Identity + model
 	Config        *core.Config
@@ -78,6 +86,9 @@ type WorkspaceEnvironment struct {
 	KnowledgeStore *knowledge.ChunkStore
 	// PatternStore is the pattern store interface.
 	PatternStore patterns.PatternStore
+	// AgentLifecycle is the runtime agent lifecycle management interface.
+	// This handles delegation, event, and lineage persistence.
+	AgentLifecycle agentlifecycle.Repository
 
 	// Retrieval + compilation
 	// Retriever is the concrete retrieval implementation.

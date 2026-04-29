@@ -111,6 +111,123 @@ func TestCloneEnvelopeIsIndependent(t *testing.T) {
 	}
 }
 
+func TestHandoffCloneCopiesDefaultEnvelopeState(t *testing.T) {
+	env := NewEnvelope("task-1", "session-1")
+	env.NodeID = "node-1"
+	env.SetWorkingValue("key1", "value1", MemoryClassTask)
+	env.AddStreamedContextReference(ChunkReference{
+		ChunkID: ChunkID("chunk-1"),
+		Source:  "test",
+		Rank:    1,
+	})
+	env.AddRetrievalReference(RetrievalReference{
+		QueryID:    "query-1",
+		ChunkIDs:   []ChunkID{"chunk-1"},
+		TotalFound: 1,
+	})
+	env.References.Checkpoints = append(env.References.Checkpoints, CheckpointReference{
+		CheckpointID: "cp-1",
+		RequestedBy:  "node-1",
+	})
+	env.RequestCheckpoint("checkpoint for recovery", 5, true)
+
+	clone := env.HandoffClone()
+	if clone == nil {
+		t.Fatal("expected handoff clone to be created")
+	}
+	if clone.NodeID != "node-1" {
+		t.Errorf("expected node ID to be preserved, got %s", clone.NodeID)
+	}
+	if val, ok := clone.GetWorkingValue("key1"); !ok || val != "value1" {
+		t.Fatalf("expected cloned working value key1=value1, got %v, %v", val, ok)
+	}
+	if len(clone.References.StreamedContext) != 1 {
+		t.Fatalf("expected 1 streamed reference, got %d", len(clone.References.StreamedContext))
+	}
+	if len(clone.References.Retrieval) != 1 {
+		t.Fatalf("expected 1 retrieval reference, got %d", len(clone.References.Retrieval))
+	}
+	if len(clone.References.Checkpoints) != 1 {
+		t.Fatalf("expected 1 checkpoint reference, got %d", len(clone.References.Checkpoints))
+	}
+	if clone.CheckpointRequest != nil {
+		t.Error("expected checkpoint request to be dropped from handoff clone")
+	}
+}
+
+func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
+	env := NewEnvelope("task-1", "session-1")
+	env.NodeID = "node-1"
+	env.AssemblyMetadata = AssemblyMeta{
+		CompilationID:   "compile-1",
+		EventLogSeq:     7,
+		BudgetTokens:    100,
+		ShortfallTokens: 3,
+	}
+	env.SetWorkingValue("keep", "value-keep", MemoryClassTask)
+	env.SetWorkingValue("keep.local", "value-prefix", MemoryClassTask)
+	env.SetWorkingValue("drop", "value-drop", MemoryClassTask)
+	env.References.WorkingMemory = append(env.References.WorkingMemory,
+		WorkingMemoryReference{TaskID: "task-1", Key: "keep", Class: MemoryClassTask},
+		WorkingMemoryReference{TaskID: "task-1", Key: "keep.local", Class: MemoryClassTask},
+		WorkingMemoryReference{TaskID: "task-1", Key: "drop", Class: MemoryClassTask},
+		WorkingMemoryReference{TaskID: "other-task", Key: "keep", Class: MemoryClassTask},
+	)
+	env.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1", Source: "test", Rank: 1})
+	env.AddRetrievalReference(RetrievalReference{QueryID: "query-1", ChunkIDs: []ChunkID{"chunk-1"}})
+	env.References.Checkpoints = append(env.References.Checkpoints, CheckpointReference{
+		CheckpointID: "cp-1",
+		RequestedBy:  "node-1",
+	})
+
+	snapshot := env.HandoffSnapshot(HandoffPolicy{
+		PreserveWorkingMemory:    true,
+		WorkingKeys:              []string{"keep"},
+		WorkingPrefixes:          []string{"keep."},
+		PreserveStreamedContext:  true,
+		PreserveRetrieval:        true,
+		PreserveCheckpoints:      true,
+		PreserveAssemblyMetadata: false,
+		PreserveNodeID:           false,
+	})
+	if snapshot == nil {
+		t.Fatal("expected handoff snapshot to be created")
+	}
+	if snapshot.NodeID != "" {
+		t.Errorf("expected node ID to be omitted, got %s", snapshot.NodeID)
+	}
+	if snapshot.AssemblyMetadata != (AssemblyMeta{}) {
+		t.Errorf("expected assembly metadata to be omitted, got %#v", snapshot.AssemblyMetadata)
+	}
+	if _, ok := snapshot.GetWorkingValue("keep"); !ok {
+		t.Error("expected exact working key to be preserved")
+	}
+	if _, ok := snapshot.GetWorkingValue("keep.local"); !ok {
+		t.Error("expected prefix working key to be preserved")
+	}
+	if _, ok := snapshot.GetWorkingValue("drop"); ok {
+		t.Error("expected non-matching working key to be filtered out")
+	}
+	if len(snapshot.References.WorkingMemory) != 4 {
+		t.Fatalf("expected 4 working memory refs, got %d", len(snapshot.References.WorkingMemory))
+	}
+	if !snapshot.References.HasWorkingMemoryKey("task-1", "keep") {
+		t.Error("expected task-local working reference to be preserved")
+	}
+	if snapshot.References.HasWorkingMemoryKey("other-task", "keep") {
+		t.Error("expected foreign task working reference to be filtered out")
+	}
+	if len(snapshot.References.StreamedContext) != 1 {
+		t.Fatalf("expected streamed context refs to be preserved, got %d", len(snapshot.References.StreamedContext))
+	}
+	if len(snapshot.References.Retrieval) != 1 {
+		t.Fatalf("expected retrieval refs to be preserved, got %d", len(snapshot.References.Retrieval))
+	}
+	if len(snapshot.References.Checkpoints) != 1 {
+		t.Fatalf("expected checkpoint refs to be preserved, got %d", len(snapshot.References.Checkpoints))
+	}
+}
+
 func TestMergeBranchEnvelopesUnionsWorkingMemory(t *testing.T) {
 	env1 := NewEnvelope("task-1", "session-1")
 	env1.SetWorkingValue("key1", "value1", MemoryClassEphemeral)

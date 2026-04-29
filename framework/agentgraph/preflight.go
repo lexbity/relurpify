@@ -83,7 +83,6 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 		contracts[id] = contract
 	}
 	catalog := g.capabilityCatalog
-	checkpointingEnabled := g.checkpointInterval > 0
 	g.mu.RUnlock()
 
 	report := &PreflightReport{GeneratedAt: time.Now().UTC()}
@@ -94,20 +93,10 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 	sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].ID() < nodes[j].ID() })
 	sort.SliceStable(descriptors, func(i, j int) bool { return descriptors[i].ID < descriptors[j].ID })
 
-	hasCheckpointNode := false
-	for _, node := range nodes {
-		if _, ok := node.(*CheckpointNode); ok {
-			hasCheckpointNode = true
-			break
-		}
-	}
 	for _, node := range nodes {
 		contract, ok := contracts[node.ID()]
 		if !ok {
 			contract = ResolveNodeContract(node)
-		}
-		if issue := checkpointIssue(node.ID(), contract, checkpointingEnabled || hasCheckpointNode); issue != nil {
-			report.Issues = append(report.Issues, *issue)
 		}
 		if catalog == nil {
 			continue
@@ -130,21 +119,6 @@ func (g *Graph) Preflight() (*PreflightReport, error) {
 	g.preflightDirty = false
 	g.mu.Unlock()
 	return report, err
-}
-
-func checkpointIssue(nodeID string, contract NodeContract, available bool) *PreflightIssue {
-	if contract.CheckpointPolicy != CheckpointPolicyRequired && contract.Recoverability != NodeRecoverabilityPersisted {
-		return nil
-	}
-	if available {
-		return nil
-	}
-	return &PreflightIssue{
-		NodeID:   nodeID,
-		Code:     "checkpoint_unavailable",
-		Message:  "persisted recovery required but no checkpoint path is configured",
-		Blocking: true,
-	}
 }
 
 func preflightPlacementDecision(nodeID string, selector core.CapabilitySelector, contract NodeContract, descriptors []core.CapabilityDescriptor) (PlacementDecision, []PreflightIssue) {

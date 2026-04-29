@@ -1,4 +1,17 @@
 // Package compiler provides live context assembly with caching and event-driven invalidation.
+//
+// Ownership boundaries:
+// - CompilationRequest, CompilationResult, CompilationRecord are compiler-owned
+// - CacheKey, CacheEntry are compiler-owned
+// - SummarySubstitution is compiler-owned
+// - CompilerArtifact represents compiler-produced artifacts (candidates, replay metadata)
+// - Compiler state and context-streaming behavior belong to this package
+//
+// The compiler depends on framework/persistence for its persistence adapter interface.
+// It does NOT depend on agentlifecycle or generic workflow stores.
+//
+// Compiler persistence is separate from lifecycle persistence. Compiler records
+// are owned by the compiler even if persisted through another package's adapter.
 package compiler
 
 import (

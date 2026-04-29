@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 var ErrDelegationNotFound = errors.New("delegation not found")
@@ -41,19 +41,12 @@ type DelegationBackgroundRunner interface {
 	StartBackgroundDelegation(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, args map[string]any, opts DelegationExecutionOptions) (*BackgroundDelegationHandle, error)
 }
 
-type workflowDelegationStore interface {
-	memory.WorkflowStateStore
-	UpsertDelegation(context.Context, memory.DelegationEntry) error
-	AppendDelegationTransition(context.Context, memory.DelegationTransitionEntry) error
-	UpsertWorkflowArtifact(context.Context, memory.WorkflowArtifactRecord) error
-}
-
 type DelegationExecutionOptions struct {
 	Registry         DelegationCapabilityRegistry
 	BackgroundRunner DelegationBackgroundRunner
 	AgentSpec        *core.AgentRuntimeSpec
 	State            *contextdata.Envelope
-	WorkflowStore    memory.WorkflowStateStore
+	LifecycleRepo    agentlifecycle.Repository
 	WorkflowRunID    string
 	WorkflowStepID   string
 	CallerAgentID    string
@@ -363,12 +356,12 @@ func (m *DelegationManager) SnapshotDelegations() []core.DelegationSnapshot {
 	return m.ListDelegations(core.DelegationFilter{})
 }
 
-func (m *DelegationManager) PersistDelegations(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
+func (m *DelegationManager) PersistDelegations(ctx context.Context, repo agentlifecycle.Repository, workflowID, runID string) error {
 	if m == nil {
 		return fmt.Errorf("delegation manager unavailable")
 	}
-	if store == nil {
-		return fmt.Errorf("workflow state store required")
+	if repo == nil {
+		return fmt.Errorf("lifecycle repository required")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -377,7 +370,7 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, store memory
 		if strings.TrimSpace(workflowID) != "" && snapshot.Request.WorkflowID != "" && snapshot.Request.WorkflowID != workflowID {
 			continue
 		}
-		record := memory.DelegationEntry{
+		record := agentlifecycle.DelegationEntry{
 			DelegationID:   snapshot.Request.ID,
 			WorkflowID:     firstNonEmpty(snapshot.Request.WorkflowID, workflowID),
 			RunID:          strings.TrimSpace(runID),
@@ -392,12 +385,10 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, store memory
 			StartedAt:      snapshot.StartedAt,
 			UpdatedAt:      snapshot.UpdatedAt,
 		}
-		if typed, ok := store.(workflowDelegationStore); ok {
-			if err := typed.UpsertDelegation(ctx, record); err != nil {
-				return err
-			}
+		if err := repo.UpsertDelegation(ctx, record); err != nil {
+			return err
 		}
-		transition := memory.DelegationTransitionEntry{
+		transition := agentlifecycle.DelegationTransitionEntry{
 			TransitionID: delegationTransitionID(snapshot),
 			DelegationID: snapshot.Request.ID,
 			WorkflowID:   record.WorkflowID,
@@ -413,16 +404,12 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, store memory
 		if snapshot.Result != nil {
 			transition.Metadata["has_result"] = true
 		}
-		if typed, ok := store.(workflowDelegationStore); ok {
-			if err := typed.AppendDelegationTransition(ctx, transition); err != nil {
-				return err
-			}
+		if err := repo.AppendDelegationTransition(ctx, transition); err != nil {
+			return err
 		}
 		if artifact := promotedDelegationArtifact(snapshot, record.WorkflowID, runID); artifact != nil {
-			if typed, ok := store.(workflowDelegationStore); ok {
-				if err := typed.UpsertWorkflowArtifact(ctx, *artifact); err != nil {
-					return err
-				}
+			if err := repo.UpsertArtifact(ctx, *artifact); err != nil {
+				return err
 			}
 		}
 	}
@@ -489,10 +476,9 @@ func resolveDelegationResourceRefs(request core.DelegationRequest, target core.C
 	if len(request.ResourceRefs) > 0 {
 		return dedupeStringSlice(request.ResourceRefs)
 	}
-	if opts.WorkflowStore == nil || strings.TrimSpace(request.WorkflowID) == "" || target.Coordination == nil {
-		return nil
-	}
-	return memory.DefaultWorkflowProjectionRefs(request.WorkflowID, opts.WorkflowRunID, opts.WorkflowStepID, memory.WorkflowProjectionRole(target.Coordination.Role))
+	// TODO: Implement resource projection via lifecycle repository in Phase 4
+	// For now, return nil if no explicit refs provided
+	return nil
 }
 
 func buildDelegationInvocationArgs(ctx context.Context, request core.DelegationRequest, target core.CapabilityDescriptor, opts DelegationExecutionOptions) (map[string]any, error) {
@@ -505,22 +491,20 @@ func buildDelegationInvocationArgs(ctx context.Context, request core.DelegationR
 	for key, value := range request.Metadata {
 		args[key] = value
 	}
-	summaries, err := projectDelegationResources(ctx, request.ResourceRefs, opts.WorkflowStore)
-	if err != nil {
-		return nil, err
-	}
+	// TODO: Implement resource projection via lifecycle repository in Phase 4
+	// For now, skip resource summaries
 	role := core.CoordinationRole("")
 	if target.Coordination != nil {
 		role = target.Coordination.Role
 	}
 	switch role {
 	case core.CoordinationRoleArchitect:
-		args["context_summary"] = strings.Join(summaries, "\n\n")
+		args["context_summary"] = ""
 	case core.CoordinationRoleReviewer:
-		args["artifact_summary"] = strings.Join(summaries, "\n\n")
+		args["artifact_summary"] = ""
 		args["acceptance_criteria"] = normalizeStringArray(args["acceptance_criteria"])
 	case core.CoordinationRoleVerifier:
-		args["artifact_summary"] = strings.Join(summaries, "\n\n")
+		args["artifact_summary"] = ""
 		if criteria, ok := args["verification_criteria"]; ok {
 			args["verification_criteria"] = normalizeStringArray(criteria)
 		} else {
@@ -609,24 +593,10 @@ func delegationMatchesFilter(snapshot core.DelegationSnapshot, filter core.Deleg
 	return true
 }
 
-func projectDelegationResources(ctx context.Context, refs []string, store memory.WorkflowStateStore) ([]string, error) {
-	if len(refs) == 0 || store == nil {
-		return nil, nil
-	}
-	service := memory.WorkflowProjectionService{Store: store}
-	summaries := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		parsed, err := memory.ParseWorkflowResourceURI(ref)
-		if err != nil {
-			continue
-		}
-		resource, err := service.Project(ctx, parsed)
-		if err != nil {
-			return nil, err
-		}
-		summaries = append(summaries, summarizeResourceRead(resource))
-	}
-	return summaries, nil
+func projectDelegationResources(ctx context.Context, refs []string, repo agentlifecycle.Repository) ([]string, error) {
+	// TODO: Implement resource projection via lifecycle repository in Phase 4
+	// For now, return nil
+	return nil, nil
 }
 
 func summarizeResourceRead(result *core.ResourceReadResult) string {
@@ -872,17 +842,17 @@ func delegationTransitionID(snapshot core.DelegationSnapshot) string {
 	return fmt.Sprintf("%s:%s:%d", snapshot.Request.ID, snapshot.State, when.UTC().UnixNano())
 }
 
-func promotedDelegationArtifact(snapshot core.DelegationSnapshot, workflowID, runID string) *memory.WorkflowArtifactRecord {
+func promotedDelegationArtifact(snapshot core.DelegationSnapshot, workflowID, runID string) *agentlifecycle.WorkflowArtifactRecord {
 	if snapshot.Result == nil || (snapshot.State != core.DelegationStateSucceeded && snapshot.State != core.DelegationStateFailed && snapshot.State != core.DelegationStateCancelled) {
 		return nil
 	}
-	return &memory.WorkflowArtifactRecord{
+	return &agentlifecycle.WorkflowArtifactRecord{
 		ArtifactID:        "delegation-result:" + snapshot.Request.ID,
 		WorkflowID:        workflowID,
 		RunID:             strings.TrimSpace(runID),
 		Kind:              "delegation_result",
 		ContentType:       "application/json",
-		StorageKind:       memory.ArtifactStorageInline,
+		StorageKind:       agentlifecycle.ArtifactStorageInline,
 		SummaryText:       delegationSummary(snapshot),
 		SummaryMetadata:   delegationArtifactMetadata(snapshot),
 		InlineRawText:     marshalDelegationArtifact(snapshot),

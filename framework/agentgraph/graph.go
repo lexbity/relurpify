@@ -26,6 +26,7 @@ const (
 	NodeTypeTerminal    NodeType = "terminal"
 	NodeTypeSystem      NodeType = "system"
 	NodeTypeObservation NodeType = "observation"
+	NodeTypeStream      NodeType = "stream"
 )
 
 // Node describes the unit of work executed inside a graph.
@@ -58,32 +59,25 @@ type parallelBranchResult struct {
 // and Execute walks the graph while recording telemetry plus enforcing invariants
 // such as bounded node visits (to guard against accidental cycles).
 type Graph struct {
-	mu                   sync.RWMutex
-	nodes                map[string]Node
-	nodeContracts        map[string]NodeContract
-	edges                map[string][]Edge
-	startNodeID          string
-	maxNodeVisits        int
-	telemetry            Telemetry
-	execMu               sync.Mutex
-	visitCounts          map[string]int
-	executionPath        []string
-	checkpointInterval   int
-	checkpointCallback   CheckpointCallback
-	lastCheckpointNode   string
-	nodesSinceCheckpoint int
-	capabilityCatalog    CapabilityCatalog
-	lastPreflight        *PreflightReport
-	lastPreflightErr     error
-	preflightDirty       bool
-	lastValidationErr    error
-	validationDirty      bool
-	graphHash            string
-	hashDirty            bool
+	mu                sync.RWMutex
+	nodes             map[string]Node
+	nodeContracts     map[string]NodeContract
+	edges             map[string][]Edge
+	startNodeID       string
+	maxNodeVisits     int
+	telemetry         Telemetry
+	execMu            sync.Mutex
+	visitCounts       map[string]int
+	executionPath     []string
+	capabilityCatalog CapabilityCatalog
+	lastPreflight     *PreflightReport
+	lastPreflightErr  error
+	preflightDirty    bool
+	lastValidationErr error
+	validationDirty   bool
+	graphHash         string
+	hashDirty         bool
 }
-
-// CheckpointCallback receives checkpoints generated during execution.
-type CheckpointCallback func(checkpoint *GraphCheckpoint) error
 
 // NewGraph creates a graph with sane defaults.
 func NewGraph() *Graph {
@@ -98,16 +92,6 @@ func NewGraph() *Graph {
 		validationDirty: true,
 		hashDirty:       true,
 	}
-}
-
-// WithCheckpointing configures automatic checkpointing for the graph.
-func (g *Graph) WithCheckpointing(interval int, callback CheckpointCallback) *Graph {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.checkpointInterval = interval
-	g.checkpointCallback = callback
-	g.invalidatePreflightLocked()
-	return g
 }
 
 // SetTelemetry wires a telemetry sink for execution traces.
@@ -203,12 +187,6 @@ func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool)
 	return nil
 }
 
-// GraphSnapshot stores enough state to resume an execution.
-type GraphSnapshot struct {
-	NextNodeID string
-	State      *ContextSnapshot
-}
-
 // Execute runs the graph from its start node.
 func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*Result, error) {
 	if err := g.Validate(); err != nil {
@@ -258,8 +236,6 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 	if reset {
 		g.visitCounts = make(map[string]int)
 		g.executionPath = make([]string, 0)
-		g.lastCheckpointNode = ""
-		g.nodesSinceCheckpoint = 0
 	}
 	// NOTE: We intentionally do NOT hold g.mu.RLock across the entire loop.
 	// Nodes may mutate the graph during execution (e.g. MaterializePlanGraph
@@ -284,7 +260,6 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			return nil, fmt.Errorf("potential cycle detected at node %s", current)
 		}
 		g.executionPath = append(g.executionPath, current)
-		g.nodesSinceCheckpoint++
 		g.emit(Event{
 			Type:      EventNodeStart,
 			NodeID:    current,
@@ -323,11 +298,10 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 				"success": result.Success,
 			},
 		})
-		next, reason, err := g.nextNodes(ctx, env, node, result)
+		next, _, err := g.nextNodes(ctx, env, node, result)
 		if err != nil {
 			return nil, err
 		}
-		g.maybeCheckpoint(taskID, current, next, reason, result, env)
 		current = next
 	}
 	return lastResult, nil
@@ -358,58 +332,6 @@ func (g *Graph) extractTaskMeta(env *contextdata.Envelope) map[string]interface{
 		meta["source"] = v
 	}
 	return meta
-}
-
-func (g *Graph) maybeCheckpoint(taskID, completedNode, nextNode, transitionReason string, result *Result, env *contextdata.Envelope) {
-	if g.checkpointInterval == 0 || g.checkpointCallback == nil {
-		return
-	}
-	if !g.shouldCheckpoint() {
-		return
-	}
-	checkpoint, err := g.CreateCheckpoint(taskID, completedNode, nextNode, result, &NodeTransitionRecord{
-		FromNodeID:       g.previousNodeID(),
-		CompletedNodeID:  completedNode,
-		NextNodeID:       nextNode,
-		TransitionReason: transitionReason,
-		CompletedAt:      time.Now().UTC(),
-	}, env)
-	if err != nil {
-		g.emit(Event{
-			Type:      EventNodeError,
-			NodeID:    completedNode,
-			TaskID:    taskID,
-			Timestamp: time.Now().UTC(),
-			Message:   fmt.Sprintf("checkpoint creation failed: %v", err),
-		})
-		return
-	}
-	if err := g.checkpointCallback(checkpoint); err != nil {
-		g.emit(Event{
-			Type:      EventNodeError,
-			NodeID:    completedNode,
-			TaskID:    taskID,
-			Timestamp: time.Now().UTC(),
-			Message:   fmt.Sprintf("checkpoint callback failed: %v", err),
-		})
-		return
-	}
-	g.lastCheckpointNode = completedNode
-	g.nodesSinceCheckpoint = 0
-}
-
-func (g *Graph) shouldCheckpoint() bool {
-	if g.checkpointInterval == 0 {
-		return false
-	}
-	return g.nodesSinceCheckpoint >= g.checkpointInterval
-}
-
-func (g *Graph) previousNodeID() string {
-	if len(g.executionPath) < 2 {
-		return ""
-	}
-	return g.executionPath[len(g.executionPath)-2]
 }
 
 // nextNodes evaluates the outgoing edges for a node. Parallel edges are
@@ -595,14 +517,6 @@ func (g *Graph) Validate() error {
 }
 
 // Pause builds a snapshot at the given node.
-func (g *Graph) Pause(currentNode string, env *contextdata.Envelope) *GraphSnapshot {
-	snapshot := env.Snapshot()
-	return &GraphSnapshot{
-		NextNodeID: currentNode,
-		State:      &ContextSnapshot{State: snapshot},
-	}
-}
-
 // ToolNode executes a tool by name.
 type ToolNode struct {
 	id       string
