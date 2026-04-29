@@ -8,7 +8,7 @@ import (
 	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -320,7 +320,7 @@ func TestDenyHITLRootCmd(t *testing.T) {
 	hitl := newFakeHITL()
 	req := &authorization.PermissionRequest{
 		ID:            "hitl-deny",
-		Permission:    core.PermissionDescriptor{Action: "file:write", Resource: "config.toml"},
+		Permission:    core.PermissionDescriptor{Action: "file:write", Resource: "manifest.toml"},
 		Justification: "write test",
 	}
 	hitl.pending = []*authorization.PermissionRequest{req}

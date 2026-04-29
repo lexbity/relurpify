@@ -43,7 +43,7 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 		LogPath:       "logs/relurpish.log",
 		TelemetryPath: "telemetry/telemetry.jsonl",
 		EventsPath:    "events.db",
-		ConfigPath:    "config.yaml",
+		ConfigPath:    "manifest.yaml",
 		AgentName:     "",
 		ServerAddr:    "",
 		AuditLimit:    0,

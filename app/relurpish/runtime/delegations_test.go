@@ -2,16 +2,16 @@ package runtime
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/graphdb"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/framework/persistence"
 	mstdio "codeburg.org/lexbit/relurpify/relurpnet/mcp/transport/stdio"
 	"github.com/stretchr/testify/require"
 )
@@ -55,21 +55,26 @@ func TestRuntimePersistDelegations(t *testing.T) {
 	rt := &Runtime{
 		Delegations: fauthorization.NewDelegationManager(),
 	}
-	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow_state.db"))
+
+	// Create a graphdb-backed lifecycle repository
+	db, err := graphdb.Open(graphdb.Options{
+		DataDir:          t.TempDir(),
+		AOFFileName:      "test.aof",
+		SnapshotFileName: "test.snapshot",
+	})
 	require.NoError(t, err)
-	defer store.Close()
+	defer db.Close()
+
+	repo := persistence.NewLifecycleRepository(db)
 
 	ctx := context.Background()
-	require.NoError(t, store.CreateWorkflow(ctx, memory.WorkflowRecord{
-		WorkflowID:  "workflow-1",
-		TaskID:      "task-1",
-		TaskType:    core.TaskTypeCodeModification,
-		Instruction: "persist runtime delegations",
+	require.NoError(t, repo.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{
+		WorkflowID: "workflow-1",
 	}))
-	require.NoError(t, store.CreateRun(ctx, memory.WorkflowRunRecord{
+	require.NoError(t, repo.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{
 		RunID:      "run-1",
 		WorkflowID: "workflow-1",
-		Status:     memory.WorkflowRunStatusRunning,
+		Status:     "running",
 	}))
 	_, err = rt.StartDelegation(ctx, core.DelegationRequest{
 		ID:                 "delegation-1",
@@ -81,8 +86,8 @@ func TestRuntimePersistDelegations(t *testing.T) {
 	}, fauthorization.DelegationStartOptions{})
 	require.NoError(t, err)
 
-	require.NoError(t, rt.PersistDelegations(ctx, store, "workflow-1", "run-1"))
-	records, err := store.ListDelegations(ctx, "workflow-1", "run-1")
+	require.NoError(t, rt.PersistDelegations(ctx, repo, "workflow-1", "run-1"))
+	records, err := repo.ListDelegations(ctx, "workflow-1")
 	require.NoError(t, err)
 	require.Len(t, records, 1)
 	require.Equal(t, "delegation-1", records[0].DelegationID)

@@ -8,7 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"github.com/stretchr/testify/require"
 )
 

@@ -57,10 +57,10 @@ func newMCPClientProvider(config core.ProviderConfig) *mcpClientProvider {
 	provider := &mcpClientProvider{
 		config: config,
 		desc: core.ProviderDescriptor{
-			ID:                 config.ID,
+			ID:                 manifest.ID,
 			Kind:               core.ProviderKindMCPClient,
-			ConfiguredSource:   config.Target,
-			ActivationScope:    config.ActivationScope,
+			ConfiguredSource:   manifest.Target,
+			ActivationScope:    manifest.ActivationScope,
 			TrustBaseline:      defaultProviderTrust(config, core.TrustClassRemoteDeclared),
 			RecoverabilityMode: defaultProviderRecoverability(config, core.RecoverabilityPersistedRestore),
 			SupportsHealth:     true,
@@ -81,10 +81,10 @@ func newMCPServerProvider(config core.ProviderConfig) *mcpServerProvider {
 	return &mcpServerProvider{
 		config: config,
 		desc: core.ProviderDescriptor{
-			ID:                 config.ID,
+			ID:                 manifest.ID,
 			Kind:               core.ProviderKindMCPServer,
-			ConfiguredSource:   config.Target,
-			ActivationScope:    config.ActivationScope,
+			ConfiguredSource:   manifest.Target,
+			ActivationScope:    manifest.ActivationScope,
 			TrustBaseline:      defaultProviderTrust(config, core.TrustClassProviderLocalUntrusted),
 			RecoverabilityMode: defaultProviderRecoverability(config, core.RecoverabilityPersistedRestore),
 			SupportsHealth:     true,
@@ -111,8 +111,8 @@ func (p *mcpClientProvider) Initialize(ctx context.Context, rt *Runtime) error {
 		return err
 	}
 	sessionID := primarySessionID(p.desc.ID)
-	sessionDesc := sessionCapabilityDescriptor(p.desc, sessionID, p.config.Target)
-	catalogDesc := clientCatalogCapabilityDescriptor(p.desc, sessionID, p.config.Target)
+	sessionDesc := sessionCapabilityDescriptor(p.desc, sessionID, p.manifest.Target)
+	catalogDesc := clientCatalogCapabilityDescriptor(p.desc, sessionID, p.manifest.Target)
 	if batchRegistrar, ok := registrar.(interface {
 		RegisterCapabilitiesBatch([]core.CapabilityDescriptor) error
 	}); ok {
@@ -188,7 +188,7 @@ func (p *mcpClientProvider) syncCatalog(ctx context.Context, rt *Runtime, regist
 		if err != nil {
 			return err
 		}
-		if coordination := importedToolCoordinationMetadata(p.config.Config, remoteTool.Name); coordination != nil {
+		if coordination := importedToolCoordinationMetadata(p.manifest.Config, remoteTool.Name); coordination != nil {
 			desc.Coordination = coordination
 			desc.Category = "mcp-coordination"
 			desc.Tags = append(desc.Tags, "coordination", "remote-task-service")
@@ -306,7 +306,7 @@ func (p *mcpClientProvider) refreshSessionSnapshot(snapshot msession.Snapshot) {
 			LastActivityAt: now,
 			Health:         fmt.Sprint(snapshot.State),
 			Metadata: map[string]any{
-				"target":              p.config.Target,
+				"target":              p.manifest.Target,
 				"kind":                string(p.desc.Kind),
 				"protocol_version":    snapshot.NegotiatedVersion,
 				"transport":           snapshot.TransportKind,
@@ -315,7 +315,7 @@ func (p *mcpClientProvider) refreshSessionSnapshot(snapshot msession.Snapshot) {
 			},
 		},
 		State: map[string]any{
-			"target":               p.config.Target,
+			"target":               p.manifest.Target,
 			"requested_version":    snapshot.RequestedVersion,
 			"negotiated_version":   snapshot.NegotiatedVersion,
 			"transport":            snapshot.TransportKind,
@@ -384,7 +384,7 @@ func (p *mcpClientProvider) HealthSnapshot(context.Context) (core.ProviderHealth
 	}
 	metadata := map[string]any{
 		"provider_kind":   string(p.desc.Kind),
-		"configured_from": p.config.Target,
+		"configured_from": p.manifest.Target,
 		"session_count":   0,
 	}
 	if p.session.Session.ID != "" {
@@ -414,11 +414,11 @@ func (p *mcpClientProvider) SnapshotProvider(ctx context.Context) (*core.Provide
 		Health:         health,
 		CapabilityIDs:  p.sortedCapabilityIDs(),
 		Metadata: map[string]any{
-			"target":        p.config.Target,
+			"target":        p.manifest.Target,
 			"provider_kind": string(p.desc.Kind),
 		},
 		State: map[string]any{
-			"config": p.config.Config,
+			"config": p.manifest.Config,
 		},
 		CapturedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}, nil
@@ -434,16 +434,16 @@ func (p *mcpClientProvider) SnapshotSessions(context.Context) ([]core.ProviderSe
 }
 
 func (p *mcpClientProvider) clientConfig(rt *Runtime, sessionID string) (mclient.StdioConfig, error) {
-	command, ok := stringConfigValue(p.config.Config, "command")
+	command, ok := stringConfigValue(p.manifest.Config, "command")
 	if !ok || strings.TrimSpace(command) == "" {
-		return mclient.StdioConfig{}, fmt.Errorf("mcp client provider %s requires config.command for stdio transport", p.desc.ID)
+		return mclient.StdioConfig{}, fmt.Errorf("mcp client provider %s requires manifest.command for stdio transport", p.desc.ID)
 	}
-	args := stringSliceConfigValue(p.config.Config, "args")
-	env := stringSliceConfigValue(p.config.Config, "env")
-	workdir, _ := stringConfigValue(p.config.Config, "workdir")
-	preferredVersions := stringSliceConfigValue(p.config.Config, "protocol_versions")
+	args := stringSliceConfigValue(p.manifest.Config, "args")
+	env := stringSliceConfigValue(p.manifest.Config, "env")
+	workdir, _ := stringConfigValue(p.manifest.Config, "workdir")
+	preferredVersions := stringSliceConfigValue(p.manifest.Config, "protocol_versions")
 	if len(preferredVersions) == 0 {
-		if version, ok := stringConfigValue(p.config.Config, "protocol_version"); ok && strings.TrimSpace(version) != "" {
+		if version, ok := stringConfigValue(p.manifest.Config, "protocol_version"); ok && strings.TrimSpace(version) != "" {
 			preferredVersions = []string{version}
 		}
 	}
@@ -461,7 +461,7 @@ func (p *mcpClientProvider) clientConfig(rt *Runtime, sessionID string) (mclient
 		Env:               env,
 		ProviderID:        p.desc.ID,
 		SessionID:         sessionID,
-		RemoteTarget:      p.config.Target,
+		RemoteTarget:      p.manifest.Target,
 		LocalPeer:         protocol.PeerInfo{Name: "relurpify", Version: "dev"},
 		Capabilities:      p.localClientCapabilities(),
 		PreferredVersions: preferredVersions,
@@ -472,13 +472,13 @@ func (p *mcpClientProvider) clientConfig(rt *Runtime, sessionID string) (mclient
 
 func (p *mcpClientProvider) localClientCapabilities() map[string]any {
 	capabilities := map[string]any{}
-	if boolConfigValue(p.config.Config, "enable_sampling") {
+	if boolConfigValue(p.manifest.Config, "enable_sampling") {
 		capabilities["sampling"] = map[string]any{}
 	}
-	if boolConfigValue(p.config.Config, "enable_elicitation") {
+	if boolConfigValue(p.manifest.Config, "enable_elicitation") {
 		capabilities["elicitation"] = map[string]any{}
 	}
-	if boolConfigValue(p.config.Config, "enable_resource_subscriptions") {
+	if boolConfigValue(p.manifest.Config, "enable_resource_subscriptions") {
 		capabilities["resources"] = map[string]any{"subscribe": true}
 	}
 	return capabilities
@@ -670,7 +670,7 @@ func (p *mcpServerProvider) Initialize(ctx context.Context, rt *Runtime) error {
 		return err
 	}
 	sessionID := primarySessionID(p.desc.ID)
-	for _, desc := range serverBaselineCapabilities(p.desc, sessionID, p.config.Target) {
+	for _, desc := range serverBaselineCapabilities(p.desc, sessionID, p.manifest.Target) {
 		if err := registrar.RegisterCapability(desc); err != nil && !isAlreadyRegistered(err) {
 			return err
 		}
@@ -688,13 +688,13 @@ func (p *mcpServerProvider) Initialize(ctx context.Context, rt *Runtime) error {
 			LastActivityAt: now,
 			Health:         "active",
 			Metadata: map[string]any{
-				"target": p.config.Target,
+				"target": p.manifest.Target,
 				"kind":   string(p.desc.Kind),
 			},
 		},
 		State: map[string]any{
-			"target": p.config.Target,
-			"config": p.config.Config,
+			"target": p.manifest.Target,
+			"config": p.manifest.Config,
 		},
 		CapturedAt: now,
 	}
@@ -770,7 +770,7 @@ func (p *mcpServerProvider) HealthSnapshot(context.Context) (core.ProviderHealth
 		Message: "mcp server configured",
 		Metadata: map[string]any{
 			"provider_kind":   string(p.desc.Kind),
-			"configured_from": p.config.Target,
+			"configured_from": p.manifest.Target,
 			"session_count":   len(p.sessions),
 		},
 	}, nil
@@ -791,12 +791,12 @@ func (p *mcpServerProvider) SnapshotProvider(ctx context.Context) (*core.Provide
 		Health:         health,
 		CapabilityIDs:  []string{sessionCapabilityID(p.desc.ID), serverCatalogCapabilityID(p.desc)},
 		Metadata: map[string]any{
-			"target":        p.config.Target,
+			"target":        p.manifest.Target,
 			"provider_kind": string(p.desc.Kind),
 			"session_count": sessionCount,
 		},
 		State: map[string]any{
-			"config": p.config.Config,
+			"config": p.manifest.Config,
 		},
 		CapturedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}, nil
@@ -843,7 +843,7 @@ func (p *mcpServerProvider) trackPeerOpen(peerID, requested string) {
 			LastActivityAt: now,
 			Health:         "connecting",
 			Metadata: map[string]any{
-				"target":            p.config.Target,
+				"target":            p.manifest.Target,
 				"kind":              string(p.desc.Kind),
 				"requested_version": requested,
 			},
@@ -997,8 +997,8 @@ func (p *mcpServerProvider) exportableDescriptors(ctx context.Context, kind core
 	if p.runtime == nil || p.runtime.Tools == nil {
 		return nil, fmt.Errorf("runtime tools unavailable")
 	}
-	selectors := exportSelectorsFromConfig(p.config.Config, kind)
-	allowedNames := exportNamesFromConfig(p.config.Config, exportConfigKey(kind))
+	selectors := exportSelectorsFromConfig(p.manifest.Config, kind)
+	allowedNames := exportNamesFromConfig(p.manifest.Config, exportConfigKey(kind))
 	if len(selectors) == 0 && len(allowedNames) == 0 {
 		return nil, nil
 	}
@@ -1255,15 +1255,15 @@ func sessionCapabilityID(providerID string) string {
 }
 
 func defaultProviderTrust(config core.ProviderConfig, fallback core.TrustClass) core.TrustClass {
-	if config.TrustBaseline != "" {
-		return config.TrustBaseline
+	if manifest.TrustBaseline != "" {
+		return manifest.TrustBaseline
 	}
 	return fallback
 }
 
 func defaultProviderRecoverability(config core.ProviderConfig, fallback core.RecoverabilityMode) core.RecoverabilityMode {
-	if config.Recoverability != "" {
-		return config.Recoverability
+	if manifest.Recoverability != "" {
+		return manifest.Recoverability
 	}
 	return fallback
 }
@@ -1316,19 +1316,19 @@ func importedToolCoordinationMetadata(values map[string]any, toolName string) *c
 }
 
 func providerFromConfig(config core.ProviderConfig) (RuntimeProvider, error) {
-	if err := config.Validate(); err != nil {
+	if err := manifest.Validate(); err != nil {
 		return nil, err
 	}
-	if !config.Enabled {
+	if !manifest.Enabled {
 		return nil, nil
 	}
-	switch config.Kind {
+	switch manifest.Kind {
 	case core.ProviderKindMCPClient:
 		return newMCPClientProvider(config), nil
 	case core.ProviderKindMCPServer:
 		return newMCPServerProvider(config), nil
 	default:
-		return nil, fmt.Errorf("provider kind %s not supported by runtime provider factory", config.Kind)
+		return nil, fmt.Errorf("provider kind %s not supported by runtime provider factory", manifest.Kind)
 	}
 }
 

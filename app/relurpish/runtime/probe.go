@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
@@ -192,7 +192,7 @@ func detectInferenceBackend(ctx context.Context, cfg Config, backend llm.Managed
 		selected = models[0].Name
 	}
 	report.SelectedModel = selected
-	if reg, err := llm.NewProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if reg, err := llm.NewProfileRegistry(manifest.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, selected)
 		report.SelectedProfile = filepath.Base(resolution.SourcePath)
 		if report.SelectedProfile == "." || report.SelectedProfile == "" {
@@ -374,7 +374,7 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 		Context:      r.Context.Snapshot(),
 	}
 	if env.Workspace != "" {
-		snapshot.ProtectedPaths = config.New(env.Workspace).GovernanceRoots(
+		snapshot.ProtectedPaths = manifest.New(env.Workspace).GovernanceRoots(
 			r.Config.ManifestPath,
 			r.Config.ConfigPath,
 		)

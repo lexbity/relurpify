@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
+	contractpkg "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
@@ -355,7 +355,7 @@ spec:
 			Mode:           core.AgentModePrimary,
 			Model:          core.AgentModelConfig{Provider: "ollama", Name: "manifest-model"},
 		},
-		EffectiveContract: &contractpkg.EffectiveAgentContract{
+		EffectiveContract: &manifest.EffectiveAgentContract{
 			AgentID: "coding",
 			AgentSpec: &core.AgentRuntimeSpec{
 				Implementation: "react",

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/templates"
@@ -67,7 +67,7 @@ func (r DoctorReport) NeedsInitialization() bool {
 // BuildDoctorReport checks workspace state and local runtime dependencies
 // without requiring the runtime to start successfully.
 func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
-	paths := config.New(cfg.Workspace)
+	paths := manifest.New(cfg.Workspace)
 	report := DoctorReport{
 		Workspace:  cfg.Workspace,
 		ConfigRoot: paths.ConfigRoot(),
@@ -97,7 +97,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config) DoctorReport {
 			}
 		}
 	}
-	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath)
+	report.ProtectedPaths = manifest.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath)
 
 	var env EnvironmentReport
 	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg))
@@ -180,7 +180,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if cfg.Workspace == "" {
 		return fmt.Errorf("workspace path required")
 	}
-	paths := config.New(cfg.Workspace)
+	paths := manifest.New(cfg.Workspace)
 	if err := os.MkdirAll(paths.ConfigRoot(), 0o755); err != nil {
 		return err
 	}

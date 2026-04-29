@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

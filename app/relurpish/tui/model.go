@@ -10,7 +10,7 @@ import (
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -638,7 +638,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Config refresh — forward to config pane regardless of active tab.
 	case configRefreshMsg:
-		cp, cmd := m.config.Update(msg)
+		cp, cmd := m.manifest.Update(msg)
 		m.config = cp
 		return m, cmd
 
@@ -859,7 +859,7 @@ func (m RootModel) routeToActivePanes(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case TabConfig:
-		cp, cmd := m.config.Update(msg)
+		cp, cmd := m.manifest.Update(msg)
 		m.config = cp
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -939,7 +939,7 @@ func (m RootModel) activePaneView() string {
 	case TabArchaeo:
 		return m.archaeo.View()
 	case TabConfig:
-		return m.config.View()
+		return m.manifest.View()
 	default:
 		return m.chat.View()
 	}
@@ -966,7 +966,7 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.planner.SetSize(msg.Width, paneH)
 	m.debug.SetSize(msg.Width, paneH)
 	m.archaeo.SetSize(msg.Width, paneH)
-	m.config.SetSize(msg.Width, paneH)
+	m.manifest.SetSize(msg.Width, paneH)
 
 	return m, nil
 }
@@ -1080,7 +1080,7 @@ func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
 		m.session.SetSize(m.width, paneH)
 		m.planner.SetSize(m.width, paneH)
 		m.debug.SetSize(m.width, paneH)
-		m.config.SetSize(m.width, paneH)
+		m.manifest.SetSize(m.width, paneH)
 	case "ctrl+f":
 		m.searchActive = !m.searchActive
 		m.inputBar.SetSearchMode(m.searchActive)

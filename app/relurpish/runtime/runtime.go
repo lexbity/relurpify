@@ -17,31 +17,25 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents"
-	relurpic "codeburg.org/lexbit/relurpify/agents/relurpic"
 	nexusdb "codeburg.org/lexbit/relurpify/app/nexus/db"
 	archaeoarch "codeburg.org/lexbit/relurpify/archaeo/archaeology"
 	relurpishbindings "codeburg.org/lexbit/relurpify/archaeo/bindings/relurpish"
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
 	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 	archaeoprojections "codeburg.org/lexbit/relurpify/archaeo/projections"
-	archaeoretrieval "codeburg.org/lexbit/relurpify/archaeo/retrieval"
-	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/capabilityplan"
-	"codeburg.org/lexbit/relurpify/framework/config"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	memorydb "codeburg.org/lexbit/relurpify/framework/memory/db"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
-	"codeburg.org/lexbit/relurpify/framework/policybundle"
+
+	// // memorydb "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist // TODO: package does not exist
 	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
@@ -49,7 +43,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/telemetry"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	platformast "codeburg.org/lexbit/relurpify/platform/ast"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	platformgit "codeburg.org/lexbit/relurpify/platform/git"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -71,7 +64,7 @@ type Runtime struct {
 	IndexManager         *ast.IndexManager
 	GraphDB              *graphdb.Engine
 	SearchEngine         *search.SearchEngine
-	WorkflowStore        *memorydb.SQLiteWorkflowStateStore
+	AgentLifecycle       agentlifecycle.Repository
 	PlanStore            frameworkplan.PlanStore
 	GuidanceBroker       *guidance.GuidanceBroker
 	LearningBroker       *archaeolearning.Broker
@@ -80,8 +73,8 @@ type Runtime struct {
 	AgentSpec            *core.AgentRuntimeSpec
 	AgentDefinitions     map[string]*core.AgentDefinition
 	CapabilityAdmissions []capabilityplan.AdmissionResult
-	EffectiveContract    *contractpkg.EffectiveAgentContract
-	CompiledPolicy       *policybundle.CompiledPolicyBundle
+	EffectiveContract    *manifest.EffectiveAgentContract
+	CompiledPolicy       *manifest.CompiledPolicyBundle
 	Telemetry            core.Telemetry
 	Logger               *log.Logger
 	Workspace            WorkspaceConfig
@@ -259,10 +252,10 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		env.Config,
 		agents.WithIndexManager(env.IndexManager),
 		agents.WithGraphDB(graphDBFromIndexManager(env.IndexManager)),
-		agents.WithRetrievalDB(env.RetrievalDB),
-		agents.WithPlanStore(env.PlanStore),
-		agents.WithGuidanceBroker(env.GuidanceBroker),
-		agents.WithWorkflowStore(env.WorkflowStore),
+		// TODO: agents.WithRetrievalDB(env.RetrievalDB), // option doesn't exist
+		// TODO: agents.WithPlanStore(env.PlanStore), // option doesn't exist
+		// TODO: agents.WithGuidanceBroker(env.GuidanceBroker), // option doesn't exist
+		// TODO: agents.WithWorkflowStore(env.WorkflowStore), // option doesn't exist
 	); err != nil {
 		logFile.Close()
 		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
@@ -272,12 +265,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("register agent capabilities: %w", err)
 	}
 
-	// Type-assert WorkflowStore to the concrete SQLite type for rt.WorkflowStore.
-	var workflowStore *memorydb.SQLiteWorkflowStateStore
-	if ws, ok := env.WorkflowStore.(*memorydb.SQLiteWorkflowStateStore); ok {
-		workflowStore = ws
-	}
-
+	// Use WorkflowStore interface directly
 	rt := &Runtime{
 		Config:               cfg,
 		Tools:                env.Registry,
@@ -287,7 +275,7 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 		IndexManager:         env.IndexManager,
 		GraphDB:              graphDBFromIndexManager(env.IndexManager),
 		SearchEngine:         env.SearchEngine,
-		WorkflowStore:        workflowStore,
+		AgentLifecycle:       env.AgentLifecycle,
 		PlanStore:            env.PlanStore,
 		GuidanceBroker:       env.GuidanceBroker,
 		LearningBroker:       learningBroker,
@@ -375,11 +363,11 @@ func (r *Runtime) Close() error {
 			errs = append(errs, err)
 		}
 	}
-	if r.WorkflowStore != nil {
-		if err := r.WorkflowStore.Close(); err != nil {
+	if r.AgentLifecycle != nil {
+		if err := r.AgentLifecycle.Close(); err != nil {
 			errs = append(errs, err)
 		}
-		r.WorkflowStore = nil
+		r.AgentLifecycle = nil
 	}
 	if r.Backend != nil {
 		if err := r.Backend.Close(); err != nil {
@@ -491,7 +479,7 @@ func (r *Runtime) ReloadEffectiveContract() error {
 	return r.applyResolvedAgentState(name, effectiveContract, compiledPolicy, agentDefs)
 }
 
-func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *contractpkg.EffectiveAgentContract, compiledPolicy *policybundle.CompiledPolicyBundle, agentDefs map[string]*core.AgentDefinition) error {
+func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *manifest.EffectiveAgentContract, compiledPolicy *manifest.CompiledPolicyBundle, agentDefs map[string]*core.AgentDefinition) error {
 	if r == nil {
 		return errors.New("runtime unavailable")
 	}
@@ -600,7 +588,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 	if cfg.AgentSpec != nil {
 		registry.UseAgentSpec(cfg.AgentID, cfg.AgentSpec)
 	}
-	paths := config.New(workspace)
+	paths := manifest.New(workspace)
 	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, paths.GovernanceRoots(paths.ManifestFile(), paths.ConfigFile(), paths.NexusConfigFile(), paths.PolicyRulesFile(), paths.ModelProfilesDir())))
 	register := func(tool core.Tool) error {
 		if err := registry.Register(tool); err != nil {
@@ -637,7 +625,7 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return nil, err
 		}
 	}
-	paths = config.New(workspace)
+	paths = manifest.New(workspace)
 	indexDir := paths.ASTIndexDir()
 	if err := os.MkdirAll(indexDir, 0o755); err != nil {
 		return nil, err
@@ -665,8 +653,8 @@ func BuildBuiltinCapabilityBundle(workspace string, runner fsandbox.CommandRunne
 			return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
 		})
 	}
-	platformast.AttachASTSymbolProvider(manager, registry)
-	if err := register(platformast.NewASTTool(manager)); err != nil {
+	ast.AttachASTSymbolProvider(manager, registry)
+	if err := register(ast.NewASTTool(manager)); err != nil {
 		return nil, err
 	}
 	codeIndex, err := memory.NewCodeIndex(workspace, filepath.Join(paths.MemoryDir(), "code_index.json"))
@@ -726,27 +714,28 @@ func embedderCfgFromRuntimeConfig(cfg Config, model string) retrieval.EmbedderCo
 	}
 }
 
-func openRuntimeStores(workspace string) (*memorydb.SQLiteWorkflowStateStore, frameworkplan.PlanStore, io.Closer, error) {
-	paths := config.New(workspace)
-	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
-		return nil, nil, nil, fmt.Errorf("create sessions directory: %w", err)
-	}
-	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
-		return nil, nil, nil, fmt.Errorf("create memory directory: %w", err)
-	}
-
-	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(paths.WorkflowStateFile())
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("open workflow state store: %w", err)
-	}
-	planStore, err := frameworkplan.NewSQLitePlanStore(workflowStore.DB())
-	if err != nil {
-		_ = workflowStore.Close()
-		return nil, nil, nil, fmt.Errorf("open living plan store: %w", err)
-	}
-
-	return workflowStore, planStore, nil, nil
-}
+// TODO: openRuntimeStores uses memorydb which doesn't exist - needs to be rewritten
+// func openRuntimeStores(workspace string) (*memory.WorkflowStateStore, frameworkplan.PlanStore, io.Closer, error) {
+// 	paths := manifest.New(workspace)
+// 	if err := os.MkdirAll(paths.SessionsDir(), 0o755); err != nil {
+// 		return nil, nil, nil, fmt.Errorf("create sessions directory: %w", err)
+// 	}
+// 	if err := os.MkdirAll(paths.MemoryDir(), 0o755); err != nil {
+// 		return nil, nil, nil, fmt.Errorf("create memory directory: %w", err)
+// 	}
+//
+// 	workflowStore, err := memorydb.NewSQLiteWorkflowStateStore(paths.WorkflowStateFile())
+// 	if err != nil {
+// 		return nil, nil, nil, fmt.Errorf("open workflow state store: %w", err)
+// 	}
+// 	planStore, err := frameworkplan.NewSQLitePlanStore(workflowStore.DB())
+// 	if err != nil {
+// 		_ = workflowStore.Close()
+// 		return nil, nil, nil, fmt.Errorf("open living plan store: %w", err)
+// 	}
+//
+// 	return workflowStore, planStore, nil, nil
+// }
 
 func shouldIgnoreBootstrapIndexError(err error) bool {
 	if err == nil {
@@ -798,7 +787,7 @@ func LoadAgentDefinitions(dir string) (map[string]*core.AgentDefinition, error) 
 
 // instantiateAgent picks the concrete agent implementation for the CLI preset.
 func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*core.AgentDefinition) graph.Agent {
-	paths := config.New(cfg.Workspace)
+	paths := manifest.New(cfg.Workspace)
 	// Check file-based definitions first
 	if def, ok := defs[cfg.AgentName]; ok {
 		spec := env.Config.AgentSpec
@@ -814,7 +803,8 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*
 		return instantiateDefinitionAgent(cfg, def, env)
 	}
 
-	builder := agents.NewAgentBuilder().WithEnvironment(&env)
+	workspaceEnv := agents.ToWorkspace(env)
+	builder := agents.NewAgentBuilder().WithEnvironment(&workspaceEnv)
 	switch cfg.AgentLabel() {
 	case "planner":
 		agent, _ := builder.Build("planner")
@@ -832,19 +822,20 @@ func instantiateAgent(cfg Config, env agents.AgentEnvironment, defs map[string]*
 }
 
 func instantiateDefinitionAgent(cfg Config, def *core.AgentDefinition, env agents.AgentEnvironment) graph.Agent {
-	paths := config.New(cfg.Workspace)
+	paths := manifest.New(cfg.Workspace)
 	spec := def.Spec
 	if env.Config != nil && env.Config.AgentSpec != nil {
 		spec = *env.Config.AgentSpec
 	}
-	agent, err := agents.BuildFromSpec(env, spec)
+	workspaceEnv := agents.ToWorkspace(env)
+	agent, err := agents.BuildFromSpec(&workspaceEnv, spec)
 	if err != nil {
-		agent, _ = agents.BuildFromSpec(env, core.AgentRuntimeSpec{Implementation: "react"})
+		agent, _ = agents.BuildFromSpec(&workspaceEnv, core.AgentRuntimeSpec{Implementation: "react"})
 	}
 	return configureBuiltAgent(agent, paths)
 }
 
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*contractpkg.EffectiveAgentContract, *policybundle.CompiledPolicyBundle, map[string]*core.AgentDefinition, error) {
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*manifest.EffectiveAgentContract, *manifest.CompiledPolicyBundle, map[string]*core.AgentDefinition, error) {
 	agentDefs := r.AgentDefinitions
 	if r.Config.AgentsDir != "" {
 		loaded, err := LoadAgentDefinitions(r.Config.AgentsDir)
@@ -855,20 +846,20 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*contractpkg.Ef
 			agentDefs = loaded
 		}
 	}
-	effectiveContract, err := contractpkg.ResolveEffectiveAgentContract(r.Config.Workspace, r.Registration.Manifest, contractpkg.ResolveOptions{
+	effectiveContract, err := manifest.ResolveEffectiveAgentContract(r.Config.Workspace, r.Registration.Manifest, manifest.ResolveOptions{
 		AgentOverlays: selectedAgentDefinitionOverlays(name, agentDefs),
 	})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
-	compiledPolicy, err := policybundle.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, r.Registration.Permissions)
+	compiledPolicy, err := manifest.BuildFromSpec(effectiveContract.AgentID, effectiveContract.AgentSpec, r.Registration.Permissions)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("compile effective policy: %w", err)
 	}
 	return effectiveContract, compiledPolicy, agentDefs, nil
 }
 
-func ensureStableSkillCapabilityTopology(current, next *contractpkg.EffectiveAgentContract) error {
+func ensureStableSkillCapabilityTopology(current, next *manifest.EffectiveAgentContract) error {
 	currentIDs := skillCapabilityIDSet(current)
 	nextIDs := skillCapabilityIDSet(next)
 	if len(currentIDs) != len(nextIDs) {
@@ -882,7 +873,7 @@ func ensureStableSkillCapabilityTopology(current, next *contractpkg.EffectiveAge
 	return nil
 }
 
-func skillCapabilityIDSet(contract *contractpkg.EffectiveAgentContract) map[string]struct{} {
+func skillCapabilityIDSet(contract *manifest.EffectiveAgentContract) map[string]struct{} {
 	if contract == nil {
 		return nil
 	}
@@ -912,7 +903,7 @@ func (r *Runtime) syncSkillContextPaths(results []frameworkskills.SkillResolutio
 	}
 }
 
-func configureBuiltAgent(agent graph.Agent, paths config.Paths) graph.Agent {
+func configureBuiltAgent(agent graph.Agent, paths manifest.Paths) graph.Agent {
 	switch typed := agent.(type) {
 	case *agents.ReActAgent:
 		typed.CheckpointPath = paths.CheckpointsDir()
@@ -945,14 +936,15 @@ func (r *Runtime) wireRuntimeAgentDependencies(agent graph.Agent) {
 	if eucloAgent.GraphDB == nil {
 		eucloAgent.GraphDB = r.GraphDB
 	}
-	if eucloAgent.RetrievalDB == nil && r.WorkflowStore != nil {
-		eucloAgent.RetrievalDB = r.WorkflowStore.DB()
+	if eucloAgent.RetrievalDB == nil && r.AgentLifecycle != nil {
+		// TODO: AgentLifecycle doesn't have DB() method, need to handle retrieval DB differently
+		// eucloAgent.RetrievalDB = r.AgentLifecycle.DB()
 	}
 	if eucloAgent.PlanStore == nil {
 		eucloAgent.PlanStore = r.PlanStore
 	}
 	if eucloAgent.WorkflowStore == nil {
-		eucloAgent.WorkflowStore = r.WorkflowStore
+		eucloAgent.WorkflowStore = r.AgentLifecycle
 	}
 	if eucloAgent.GuidanceBroker == nil {
 		eucloAgent.GuidanceBroker = r.GuidanceBroker
@@ -1175,18 +1167,20 @@ func (r *Runtime) relurpishBinding() relurpishbindings.Runtime {
 		return relurpishbindings.Runtime{}
 	}
 	return relurpishbindings.Runtime{
-		WorkflowStore:  r.WorkflowStore,
-		PlanStore:      r.PlanStore,
-		Retrieval:      archaeoretrieval.NewSQLStore(workflowDB(r.WorkflowStore)),
+		WorkflowStore: r.AgentLifecycle,
+		PlanStore:     r.PlanStore,
+		// Retrieval removed - archaeo/retrieval package deleted
 		LearningBroker: r.LearningBroker,
 	}
 }
 
-func workflowDB(store *memorydb.SQLiteWorkflowStateStore) *sql.DB {
+func workflowDB(store agentlifecycle.Repository) *sql.DB {
 	if store == nil {
 		return nil
 	}
-	return store.DB()
+	// TODO: AgentLifecycle doesn't have DB() method, need to handle this differently
+	// return store.DB()
+	return nil
 }
 
 func (r *Runtime) ActiveExploration(workspaceID string) (*archaeoarch.SessionView, error) {
@@ -1453,14 +1447,11 @@ func (r *Runtime) resolveWorkflowID(ctx context.Context, workflowID string) (str
 	if workflowID != "" {
 		return workflowID, nil
 	}
-	if r.WorkflowStore == nil {
+	if r.AgentLifecycle == nil {
 		return "", fmt.Errorf("workflow store unavailable")
 	}
-	records, err := r.WorkflowStore.ListWorkflows(ctx, 1)
-	if err != nil || len(records) == 0 {
-		return "", fmt.Errorf("no active workflow")
-	}
-	return records[0].WorkflowID, nil
+	// TODO: AgentLifecycle.ListWorkflows has different signature
+	return "", fmt.Errorf("workflow ID resolution not yet migrated to AgentLifecycle interface")
 }
 
 func appendStringUnique(slice []string, s string) []string {

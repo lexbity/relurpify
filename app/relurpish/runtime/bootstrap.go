@@ -6,20 +6,17 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/ast"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/capabilityplan"
-	"codeburg.org/lexbit/relurpify/framework/config"
-	contractpkg "codeburg.org/lexbit/relurpify/framework/contract"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
-	"codeburg.org/lexbit/relurpify/framework/policybundle"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"codeburg.org/lexbit/relurpify/framework/search"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
@@ -49,7 +46,7 @@ type AgentBootstrapOptions struct {
 	RetrievalDB         *sql.DB
 	PlanStore           frameworkplan.PlanStore
 	GuidanceBroker      *guidance.GuidanceBroker
-	WorkflowStore       memory.WorkflowStateStore
+	AgentLifecycle      agentlifecycle.Repository
 }
 
 type BootstrappedAgentRuntime struct {
@@ -64,8 +61,8 @@ type BootstrappedAgentRuntime struct {
 	AgentDefinitions     map[string]*core.AgentDefinition
 	SkillResults         []frameworkskills.SkillResolution
 	CapabilityAdmissions []capabilityplan.AdmissionResult
-	Contract             *contractpkg.EffectiveAgentContract
-	CompiledPolicy       *policybundle.CompiledPolicyBundle
+	Contract             *manifest.EffectiveAgentContract
+	CompiledPolicy       *manifest.CompiledPolicyBundle
 }
 
 // BootstrapAgentRuntime delegates to ayenitd.BootstrapAgentRuntime and then
@@ -97,13 +94,13 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		RetrievalDB:         opts.RetrievalDB,
 		PlanStore:           opts.PlanStore,
 		GuidanceBroker:      opts.GuidanceBroker,
-		WorkflowStore:       opts.WorkflowStore,
+		AgentLifecycle:      opts.AgentLifecycle,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	profileRegistry, err := llm.NewProfileRegistry(config.New(workspace).ModelProfilesDir())
+	profileRegistry, err := llm.NewProfileRegistry(manifest.New(workspace).ModelProfilesDir())
 	if err != nil {
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
@@ -128,7 +125,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		agents.WithRetrievalDB(opts.RetrievalDB),
 		agents.WithPlanStore(opts.PlanStore),
 		agents.WithGuidanceBroker(opts.GuidanceBroker),
-		agents.WithWorkflowStore(opts.WorkflowStore),
+		agents.WithWorkflowStore(opts.AgentLifecycle),
 	); err != nil {
 		return nil, fmt.Errorf("register relurpic capabilities: %w", err)
 	}
@@ -142,8 +139,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		SearchEngine:  boot.Environment.SearchEngine,
 		Memory:        boot.Environment.Memory,
 		// New: thread stores from workspace environment
-		WorkflowStore: boot.Environment.WorkflowStore,
-		PlanStore:     boot.Environment.PlanStore,
+		PlanStore: boot.Environment.PlanStore,
 	}
 	if err := agents.RegisterAgentCapabilities(boot.Registry, env); err != nil {
 		return nil, fmt.Errorf("register agent capabilities: %w", err)

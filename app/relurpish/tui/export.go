@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -79,7 +79,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 			root = "."
 		}
 		base := "session-" + time.Now().Format("20060102-150405")
-		outPath = filepath.Join(config.New(root).ExportsDir(), base+"."+format)
+		outPath = filepath.Join(manifest.New(root).ExportsDir(), base+"."+format)
 	}
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return "", err

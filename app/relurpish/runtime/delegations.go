@@ -6,11 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	fauthorization "codeburg.org/lexbit/relurpify/framework/authorization"
-	"codeburg.org/lexbit/relurpify/framework/config"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
 )
 
 func (r *Runtime) StartDelegation(ctx context.Context, request core.DelegationRequest, opts fauthorization.DelegationStartOptions) (*core.DelegationSnapshot, error) {
@@ -35,13 +33,8 @@ func (r *Runtime) ExecuteDelegation(ctx context.Context, request core.Delegation
 		opts.Background = true
 		opts.BackgroundRunner = runner
 	}
-	if opts.WorkflowStore == nil && strings.TrimSpace(request.WorkflowID) != "" {
-		store, err := db.NewSQLiteWorkflowStateStore(config.New(r.Config.Workspace).WorkflowStateFile())
-		if err != nil {
-			return nil, err
-		}
-		defer store.Close()
-		opts.WorkflowStore = store
+	if opts.LifecycleRepo == nil && strings.TrimSpace(request.WorkflowID) != "" {
+		// TODO: Wire up lifecycle repository from environment
 		return r.Delegations.ExecuteDelegation(ctx, request, opts)
 	}
 	return r.Delegations.ExecuteDelegation(ctx, request, opts)
@@ -75,11 +68,11 @@ func (r *Runtime) SnapshotDelegations() []core.DelegationSnapshot {
 	return r.Delegations.SnapshotDelegations()
 }
 
-func (r *Runtime) PersistDelegations(ctx context.Context, store memory.WorkflowStateStore, workflowID, runID string) error {
+func (r *Runtime) PersistDelegations(ctx context.Context, repo agentlifecycle.Repository, workflowID, runID string) error {
 	if r == nil || r.Delegations == nil {
 		return fmt.Errorf("runtime delegations unavailable")
 	}
-	return r.Delegations.PersistDelegations(ctx, store, workflowID, runID)
+	return r.Delegations.PersistDelegations(ctx, repo, workflowID, runID)
 }
 
 func firstDelegationContext(values ...*core.Context) *core.Context {

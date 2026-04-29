@@ -17,18 +17,18 @@ import (
 	archaeodomain "codeburg.org/lexbit/relurpify/archaeo/domain"
 	archaeolearning "codeburg.org/lexbit/relurpify/archaeo/learning"
 	archaeophases "codeburg.org/lexbit/relurpify/archaeo/phases"
-	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plans"
+	archaeoplans "codeburg.org/lexbit/relurpify/archaeo/plan"
 	archaeotensions "codeburg.org/lexbit/relurpify/archaeo/tensions"
 	"codeburg.org/lexbit/relurpify/framework/authorization"
 	"codeburg.org/lexbit/relurpify/framework/capability"
-	"codeburg.org/lexbit/relurpify/framework/config"
-	contract "codeburg.org/lexbit/relurpify/framework/contract"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
+	contract "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/graphdb"
-	"codeburg.org/lexbit/relurpify/framework/guidance"
+	"codeburg.org/lexbit/relurpify/archaeo/guidance"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	frameworkplan "codeburg.org/lexbit/relurpify/framework/plan"
+	frameworkplan "codeburg.org/lexbit/relurpify/archaeo/plan"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	frameworksearch "codeburg.org/lexbit/relurpify/framework/search"
 	"codeburg.org/lexbit/relurpify/named/euclo"
@@ -42,7 +42,7 @@ func TestProbeEnvironmentHandlesMissingRunsc(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Workspace = dir
 	cfg.ManifestPath = filepath.Join(dir, "agent.manifest.yaml")
-	cfg.ConfigPath = config.New(dir).ConfigFile()
+	cfg.ConfigPath = manifest.New(dir).ConfigFile()
 	cfg.Sandbox.RunscPath = "runsc-missing"
 	report := ProbeEnvironment(context.Background(), cfg, nil)
 	require.Contains(t, strings.Join(report.Sandbox.Errors, " "), "runsc not found")
@@ -59,7 +59,7 @@ func TestSummarizeManifestMissingFile(t *testing.T) {
 func TestInitializeWorkspaceFromTemplatesCreatesWorkspaceFiles(t *testing.T) {
 	shared := t.TempDir()
 	t.Setenv("RELURPIFY_SHARED_DIR", shared)
-	configTemplate := filepath.Join(shared, "templates", "workspace", "config.yaml")
+	configTemplate := filepath.Join(shared, "templates", "workspace", "manifest.yaml")
 	manifestTemplate := filepath.Join(shared, "templates", "workspace", "agent.manifest.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configTemplate), 0o755))
 	require.NoError(t, os.WriteFile(configTemplate, []byte("model: test-model\n"), 0o644))
@@ -77,13 +77,13 @@ func TestInitializeWorkspaceFromTemplatesCreatesWorkspaceFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(manifestData), filepath.ToSlash(dir))
 	for _, path := range []string{
-		config.New(dir).AgentsDir(),
-		config.New(dir).SkillsDir(),
-		config.New(dir).LogsDir(),
-		config.New(dir).TelemetryDir(),
-		config.New(dir).MemoryDir(),
-		config.New(dir).SessionsDir(),
-		config.New(dir).TestRunsDir(),
+		manifest.New(dir).AgentsDir(),
+		manifest.New(dir).SkillsDir(),
+		manifest.New(dir).LogsDir(),
+		manifest.New(dir).TelemetryDir(),
+		manifest.New(dir).MemoryDir(),
+		manifest.New(dir).SessionsDir(),
+		manifest.New(dir).TestRunsDir(),
 	} {
 		info, err := os.Stat(path)
 		require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestInitializeWorkspaceFromTemplatesCreatesWorkspaceFiles(t *testing.T) {
 func TestInitializeWorkspaceFromTemplatesDoesNotOverwriteWithoutFix(t *testing.T) {
 	shared := t.TempDir()
 	t.Setenv("RELURPIFY_SHARED_DIR", shared)
-	configTemplate := filepath.Join(shared, "templates", "workspace", "config.yaml")
+	configTemplate := filepath.Join(shared, "templates", "workspace", "manifest.yaml")
 	manifestTemplate := filepath.Join(shared, "templates", "workspace", "agent.manifest.yaml")
 	require.NoError(t, os.MkdirAll(filepath.Dir(configTemplate), 0o755))
 	require.NoError(t, os.WriteFile(configTemplate, []byte("model: replacement\n"), 0o644))

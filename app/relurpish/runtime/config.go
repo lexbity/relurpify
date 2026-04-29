@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	fsandbox "codeburg.org/lexbit/relurpify/framework/sandbox"
 	"gopkg.in/yaml.v3"
@@ -49,7 +49,7 @@ func DefaultConfig() Config {
 	if err != nil {
 		cwd = "."
 	}
-	paths := config.New(cwd)
+	paths := manifest.New(cwd)
 	return Config{
 		Workspace:      cwd,
 		ManifestPath:   paths.ManifestFile(),
@@ -84,7 +84,7 @@ func (c *Config) Normalize() error {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
 	c.Workspace = absWorkspace
-	paths := config.New(c.Workspace)
+	paths := manifest.New(c.Workspace)
 	if c.ManifestPath == "" {
 		c.ManifestPath = paths.ManifestFile()
 	}
