@@ -324,11 +324,19 @@ type ChunkCommittedEvent struct {
 
 func (c *Compiler) buildCacheKey(request CompilationRequest) CacheKey {
 	return CacheKey{
-		QueryFingerprint:        c.fingerprint(request.Query.Text),
+		QueryFingerprint:        c.fingerprint(mustJSON(request.Query)),
 		ManifestFingerprint:     c.fingerprint(request.ManifestID),
 		PolicyBundleFingerprint: c.fingerprint(request.PolicyBundleID),
 		EventLogSeq:             request.EventLogSeq,
 	}
+}
+
+func mustJSON(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 func (c *Compiler) fingerprint(s string) string {

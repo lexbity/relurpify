@@ -96,6 +96,29 @@ func TestCompilerBuildCacheKey(t *testing.T) {
 	}
 }
 
+func TestCompilerBuildCacheKeyIncludesAnchors(t *testing.T) {
+	c := NewCompiler(nil, nil, nil)
+
+	base := CompilationRequest{
+		Query: retrieval.RetrievalQuery{Text: "test query"},
+	}
+	withAnchors := CompilationRequest{
+		Query: retrieval.RetrievalQuery{
+			Text: "test query",
+			Anchors: []retrieval.AnchorRef{
+				{AnchorID: "file:main.go", Term: "main.go", Class: "user_file", Active: true},
+			},
+		},
+	}
+
+	keyA := c.buildCacheKey(base)
+	keyB := c.buildCacheKey(withAnchors)
+
+	if keyA.QueryFingerprint == keyB.QueryFingerprint {
+		t.Fatal("expected anchor-bearing query to produce a different cache key")
+	}
+}
+
 func TestCompilerFingerprint(t *testing.T) {
 	c := NewCompiler(nil, nil, nil)
 

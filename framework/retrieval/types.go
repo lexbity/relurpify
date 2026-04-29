@@ -56,6 +56,7 @@ type RetrievalQuery struct {
 	Text        string
 	Scope       string
 	SourceTypes []knowledge.SourceOrigin
+	Anchors     []AnchorRef
 	Limit       int
 	AfterSeq    uint64 // event log sequence; for cache coherence
 }

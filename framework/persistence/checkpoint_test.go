@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"testing"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -113,4 +114,37 @@ func TestSaveAndLoadCheckpointArtifact(t *testing.T) {
 	require.NotNil(t, loaded)
 	require.Equal(t, "checkpoint-1", loaded.ArtifactID)
 	require.Equal(t, "checkpoint summary", loaded.SummaryText)
+}
+
+func TestLoadLatestCheckpointArtifactReturnsNewestMatch(t *testing.T) {
+	repo := &checkpointRepoStub{
+		artifacts: []agentlifecycle.WorkflowArtifactRecord{
+			{
+				ArtifactID:  "checkpoint-old",
+				RunID:       "run-1",
+				Kind:        "checkpoint",
+				CreatedAt:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				SummaryText: "old",
+			},
+			{
+				ArtifactID:  "checkpoint-new",
+				RunID:       "run-1",
+				Kind:        "checkpoint",
+				CreatedAt:   time.Date(2024, time.January, 1, 11, 0, 0, 0, time.UTC),
+				SummaryText: "new",
+			},
+			{
+				ArtifactID:  "other-kind",
+				RunID:       "run-1",
+				Kind:        "summary",
+				CreatedAt:   time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC),
+				SummaryText: "ignored",
+			},
+		},
+	}
+
+	loaded, err := LoadLatestCheckpointArtifact(context.Background(), repo, "run-1", "checkpoint")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, "checkpoint-new", loaded.ArtifactID)
 }

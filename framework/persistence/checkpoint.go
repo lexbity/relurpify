@@ -68,10 +68,16 @@ func LoadLatestCheckpointArtifact(ctx context.Context, repo agentlifecycle.Repos
 	if err != nil {
 		return nil, err
 	}
+	var latest *agentlifecycle.WorkflowArtifactRecord
+	var latestAt time.Time
 	for i := range artifacts {
-		if kind == "" || strings.TrimSpace(artifacts[i].Kind) == strings.TrimSpace(kind) {
-			return &artifacts[i], nil
+		if kind != "" && strings.TrimSpace(artifacts[i].Kind) != strings.TrimSpace(kind) {
+			continue
+		}
+		if latest == nil || artifacts[i].CreatedAt.After(latestAt) {
+			latest = &artifacts[i]
+			latestAt = artifacts[i].CreatedAt
 		}
 	}
-	return nil, nil
+	return latest, nil
 }

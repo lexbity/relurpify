@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/compiler"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,7 +35,7 @@ func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
 			AssemblyMetadata: contextdata.AssemblyMeta{CompilationID: "comp-1"},
 		},
 	}
-	node := NewContextStreamNode("stream-node", contextstream.NewTrigger(compilerStub), "workspace query", 256)
+	node := NewContextStreamNode("stream-node", contextstream.NewTrigger(compilerStub), retrieval.RetrievalQuery{Text: "workspace query"}, 256)
 	node.Mode = contextstream.ModeBlocking
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
@@ -66,7 +67,7 @@ func TestContextStreamNodeBackgroundAppliesEventually(t *testing.T) {
 			AssemblyMetadata: contextdata.AssemblyMeta{CompilationID: "comp-2"},
 		},
 	}
-	node := NewContextStreamNode("stream-node-bg", contextstream.NewTrigger(compilerStub), "background query", 64)
+	node := NewContextStreamNode("stream-node-bg", contextstream.NewTrigger(compilerStub), retrieval.RetrievalQuery{Text: "background query"}, 64)
 	node.Mode = contextstream.ModeBackground
 
 	env := contextdata.NewEnvelope("task-2", "session-2")

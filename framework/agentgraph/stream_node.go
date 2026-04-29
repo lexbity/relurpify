@@ -16,7 +16,7 @@ import (
 type StreamTriggerNode struct {
 	id                    string
 	Trigger               *contextstream.Trigger
-	Query                 string
+	Query                 retrieval.RetrievalQuery
 	MaxTokens             int
 	Mode                  contextstream.Mode
 	BudgetShortfallPolicy string
@@ -24,7 +24,7 @@ type StreamTriggerNode struct {
 }
 
 // NewContextStreamNode creates a streaming trigger node.
-func NewContextStreamNode(id string, trigger *contextstream.Trigger, query string, maxTokens int) *StreamTriggerNode {
+func NewContextStreamNode(id string, trigger *contextstream.Trigger, query retrieval.RetrievalQuery, maxTokens int) *StreamTriggerNode {
 	return &StreamTriggerNode{
 		id:                    id,
 		Trigger:               trigger,
@@ -56,7 +56,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 
 	req := contextstream.Request{
 		ID:                    n.requestID(env),
-		Query:                 retrieval.RetrievalQuery{Text: n.Query},
+		Query:                 n.Query,
 		MaxTokens:             n.MaxTokens,
 		EventLogSeq:           env.AssemblyMetadata.EventLogSeq,
 		BudgetShortfallPolicy: n.BudgetShortfallPolicy,
@@ -91,7 +91,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 			Data: map[string]any{
 				"contextstream_job_id": job.ID,
 				"mode":                 string(req.Mode),
-				"requested_query":      n.Query,
+				"requested_query":      n.Query.Text,
 			},
 		}, nil
 	default:
@@ -104,7 +104,7 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		}
 		data := map[string]any{
 			"mode":             string(req.Mode),
-			"requested_query":  n.Query,
+			"requested_query":  n.Query.Text,
 			"shortfall_tokens": 0,
 		}
 		if result != nil {
