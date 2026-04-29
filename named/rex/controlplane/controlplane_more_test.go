@@ -17,16 +17,16 @@ func (s workflowListerStub) ListWorkflows(context.Context, int) ([]memory.Workfl
 	return append([]memory.WorkflowRecord(nil), s.workflows...), nil
 }
 
-func (s workflowListerStub) GetRun(_ context.Context, runID string) (*memory.WorkflowRunRecord, bool, error) {
+func (s workflowListerStub) GetRun(_ context.Context, runID string) (memory.WorkflowRunRecord, bool, error) {
 	if s.runs == nil {
-		return nil, false, nil
+		return memory.WorkflowRunRecord{}, false, nil
 	}
 	run, ok := s.runs[runID]
 	if !ok {
-		return nil, false, nil
+		return memory.WorkflowRunRecord{}, false, nil
 	}
 	copy := *run
-	return &copy, true, nil
+	return copy, true, nil
 }
 
 func TestFairnessAndLoadControllersReleaseBranches(t *testing.T) {

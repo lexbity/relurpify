@@ -52,7 +52,7 @@ func (r DefaultTrustedContextResolver) Resolve(ctx context.Context, actor core.E
 		TenantID:          firstNonEmpty(actor.TenantID, "default"),
 		SessionID:         firstNonEmpty(actor.SessionID, actor.ID),
 		WorkloadClass:     deriveWorkloadClass(actor),
-		SensitivityClass:  core.SensitivityClassModerate,
+		SensitivityClass:  core.SensitivityClassMedium,
 		FederationTargets: nil,
 	}
 	if r.PolicyReader != nil && strings.TrimSpace(trusted.TenantID) != "" {

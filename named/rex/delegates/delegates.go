@@ -12,6 +12,7 @@ import (
 	plannerpkg "codeburg.org/lexbit/relurpify/agents/planner"
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	rewoopkg "codeburg.org/lexbit/relurpify/agents/rewoo"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -22,17 +23,17 @@ import (
 // Delegate executes rex work for a specific orchestration family.
 type Delegate interface {
 	Family() string
-	BuildGraph(task *core.Task) (*graph.Graph, error)
+	BuildGraph(task *core.Task) (*agentgraph.Graph, error)
 	Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error)
 }
 
 type agentDelegate struct {
 	family string
-	agent  graph.WorkflowExecutor
+	agent  agentgraph.WorkflowExecutor
 }
 
 func (d agentDelegate) Family() string { return d.family }
-func (d agentDelegate) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (d agentDelegate) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	return d.agent.BuildGraph(task)
 }
 func (d agentDelegate) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
@@ -71,19 +72,19 @@ func (r *Registry) Resolve(plan rexroute.ExecutionPlan) (Delegate, error) {
 	return nil, fmt.Errorf("rex delegate %q unavailable", plan.PrimaryFamily)
 }
 
-func reactWithPaths(env *agentenv.WorkspaceEnvironment, _ string) graph.WorkflowExecutor {
+func reactWithPaths(env *agentenv.WorkspaceEnvironment, _ string) agentgraph.WorkflowExecutor {
 	agent := reactpkg.New(env)
 	return agent
 }
 
-func architectWithPaths(env *agentenv.WorkspaceEnvironment, _, workflowStatePath string) graph.WorkflowExecutor {
+func architectWithPaths(env *agentenv.WorkspaceEnvironment, _, workflowStatePath string) agentgraph.WorkflowExecutor {
 	_ = workflowStatePath
 	// Architect agent temporarily unavailable - using react as fallback
 	agent := reactpkg.New(env)
 	return agent
 }
 
-func pipelineWithPaths(env *agentenv.WorkspaceEnvironment, workflowStatePath string) graph.WorkflowExecutor {
+func pipelineWithPaths(env *agentenv.WorkspaceEnvironment, workflowStatePath string) agentgraph.WorkflowExecutor {
 	agent := pipelinepkg.New(env)
 	agent.WorkflowStatePath = workflowStatePath
 	return agent

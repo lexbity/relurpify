@@ -93,7 +93,7 @@ func TestToEnvelopeAndTaskPreserveIngressMetadata(t *testing.T) {
 	if env.WorkflowID != "wf-3" || env.RunID != "run-3" {
 		t.Fatalf("unexpected envelope: %+v", env)
 	}
-	if task.ID != "task-3" || task.Type != core.TaskTypeCodeModification {
+	if task.ID != "task-3" || task.Type != string(core.TaskTypeCodeGeneration) {
 		t.Fatalf("unexpected task: %+v", task)
 	}
 	if task.Context[rexkeys.RexEventPartition] != "tenant-a" || task.Context["idempotency_key"] != "idem-3" {
@@ -159,19 +159,19 @@ func TestEventHelpersCoverFallbacksAndBranches(t *testing.T) {
 	if got := timeValue("not-a-timestamp"); !got.IsZero() {
 		t.Fatalf("timeValue(invalid) = %v", got)
 	}
-	if got := taskTypeForEvent(TypeWorkflowResume, true); got != core.TaskTypeAnalysis {
+	if got := taskTypeForEvent(TypeWorkflowResume, true); got != string(core.TaskTypePlan) {
 		t.Fatalf("taskTypeForEvent resume = %v", got)
 	}
-	if got := taskTypeForEvent(TypeTaskRequested, true); got != core.TaskTypeCodeModification {
+	if got := taskTypeForEvent(TypeTaskRequested, true); got != string(core.TaskTypeCodeGeneration) {
 		t.Fatalf("taskTypeForEvent task requested/edit = %v", got)
 	}
-	if got := taskTypeForEvent(TypeTaskRequested, false); got != core.TaskTypeAnalysis {
+	if got := taskTypeForEvent(TypeTaskRequested, false); got != string(core.TaskTypeReview) {
 		t.Fatalf("taskTypeForEvent task requested/read-only = %v", got)
 	}
-	if got := taskTypeForEvent("custom.event", true); got != core.TaskTypeCodeGeneration {
+	if got := taskTypeForEvent("custom.event", true); got != string(core.TaskTypeCodeGeneration) {
 		t.Fatalf("taskTypeForEvent default/edit = %v", got)
 	}
-	if got := taskTypeForEvent("custom.event", false); got != core.TaskTypeAnalysis {
+	if got := taskTypeForEvent("custom.event", false); got != string(core.TaskTypeReview) {
 		t.Fatalf("taskTypeForEvent default/read-only = %v", got)
 	}
 }
@@ -215,7 +215,7 @@ func TestToEnvelopeAndTaskUseFallbacks(t *testing.T) {
 		t.Fatalf("expected mutation fallback to permit edits: %+v", env)
 	}
 	task := ToTask(event)
-	if task.Type != core.TaskTypeCodeModification {
+	if task.Type != string(core.TaskTypeCodeGeneration) {
 		t.Fatalf("unexpected task type: %+v", task)
 	}
 	if len(task.Context["capability_snapshot"].([]string)) != 2 {

@@ -44,16 +44,16 @@ func capabilityProjectionFromEnvelope(env *contextdata.Envelope) (fmp.Capability
 }
 
 func requiredCapabilities(decision route.RouteDecision, task *core.Task) []string {
-	required := []string{string(core.CapabilityExecute)}
+	required := []string{"execute"}
 	if decision.Family == route.FamilyPlanner || decision.Mode == "planning" {
-		required = append(required, string(core.CapabilityPlan))
+		required = append(required, "plan")
 	}
 	if task != nil {
 		switch task.Type {
-		case core.TaskTypeCodeGeneration, core.TaskTypeCodeModification:
-			required = append(required, string(core.CapabilityCode))
-		case core.TaskTypeReview, core.TaskTypeAnalysis:
-			required = append(required, string(core.CapabilityExplain))
+		case string(core.TaskTypeCodeGeneration), string(core.TaskTypeExecute):
+			required = append(required, "code")
+		case string(core.TaskTypeReview), string(core.TaskTypePlan), string(core.TaskTypeExplain):
+			required = append(required, "explain")
 		}
 	}
 	return uniqueStrings(required)

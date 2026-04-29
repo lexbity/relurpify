@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex/classify"
@@ -18,12 +19,14 @@ import (
 	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 	"codeburg.org/lexbit/relurpify/named/rex/nexus"
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
+	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
 	"codeburg.org/lexbit/relurpify/named/rex/reconcile"
 	"codeburg.org/lexbit/relurpify/named/rex/retrieval"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 	"codeburg.org/lexbit/relurpify/named/rex/route"
 	rexruntime "codeburg.org/lexbit/relurpify/named/rex/runtime"
 	"codeburg.org/lexbit/relurpify/named/rex/state"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
 // Agent is the Nexus-managed named runtime for rex.
@@ -31,7 +34,7 @@ type Agent struct {
 	Config      *core.Config
 	Environment *agentenv.WorkspaceEnvironment
 	Workspace   string
-	RexConfig   rexmanifest.Config
+	RexConfig   rexconfig.Config
 	Delegates   *delegates.Registry
 	Runtime     *rexruntime.Manager
 	Reconciler  reconcile.Reconciler
@@ -52,7 +55,7 @@ func NewWithWorkspace(env *agentenv.WorkspaceEnvironment, workspace string) *Age
 func (a *Agent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment, workspace string) error {
 	a.Environment = env
 	a.Config = env.Config
-	a.RexConfig = rexmanifest.Default()
+	a.RexConfig = rexconfig.Default()
 	a.Workspace = resolveWorkspaceRoot(workspace)
 	a.Delegates = delegates.NewRegistry(env, a.Workspace)
 	a.Runtime = rexruntime.New(a.RexConfig, env.WorkingMemory)
@@ -68,17 +71,17 @@ func (a *Agent) Initialize(cfg *core.Config) error {
 	return nil
 }
 
-func (a *Agent) Capabilities() []core.Capability {
-	return []core.Capability{
-		core.CapabilityPlan,
-		core.CapabilityExecute,
-		core.CapabilityCode,
-		core.CapabilityExplain,
-		core.CapabilityHumanInLoop,
+func (a *Agent) Capabilities() []string {
+	return []string{
+		"plan",
+		"execute",
+		"code",
+		"explain",
+		"human-in-loop",
 	}
 }
 
-func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (a *Agent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	env := envelope.Normalize(task, nil)
 	class := classify.Classify(env)
 	decision := route.Decide(env, class)
@@ -131,7 +134,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 			execErr = err
 			return nil, err
 		}
-		_ = surfaces.Workflow.AppendEvent(ctx, memory.WorkflowEventRecord{
+		_ = surfaces.Workflow.AppendEvent(ctx, store.WorkflowEventRecord{
 			EventID:    identity.RunID + ":" + eventSuffix + ":start",
 			WorkflowID: identity.WorkflowID,
 			RunID:      identity.RunID,
@@ -205,7 +208,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 		}
 		_ = surfaces.Workflow.UpdateRunStatus(ctx, identity.RunID, status, finishedAt)
 		_, _ = surfaces.Workflow.UpdateWorkflowStatus(ctx, identity.WorkflowID, 0, status, "")
-		_ = surfaces.Workflow.AppendEvent(ctx, memory.WorkflowEventRecord{
+		_ = surfaces.Workflow.AppendEvent(ctx, store.WorkflowEventRecord{
 			EventID:    identity.RunID + ":" + eventSuffix + ":finish",
 			WorkflowID: identity.WorkflowID,
 			RunID:      identity.RunID,
@@ -218,12 +221,12 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.E
 	if !completion.Allowed {
 		result.Success = false
 		blockErr := fmt.Errorf("rex completion blocked: %s", completion.Reason)
-		result.Error = blockErr
+		result.Error = blockErr.Error()
 		execErr = blockErr
 		return result, blockErr
 	}
 	if err != nil {
-		result.Error = err
+		result.Error = err.Error()
 	}
 	execErr = err
 	return result, err

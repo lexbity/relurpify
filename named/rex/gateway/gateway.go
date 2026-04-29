@@ -29,8 +29,8 @@ type Decision struct {
 }
 
 type WorkflowStateReader interface {
-	GetWorkflow(context.Context, string) (*memory.WorkflowRecord, bool, error)
-	GetRun(context.Context, string) (*memory.WorkflowRunRecord, bool, error)
+	GetWorkflow(context.Context, string) (memory.WorkflowRecord, bool, error)
+	GetRun(context.Context, string) (memory.WorkflowRunRecord, bool, error)
 }
 
 // WorkflowGateway is the v2 rex gateway contract.

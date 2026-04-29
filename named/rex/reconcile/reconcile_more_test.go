@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestInMemoryReconcilerGetAndDefaultResolveOutcome(t *testing.T) {
@@ -37,15 +35,15 @@ func TestValidateProtectedWriteAndAttemptRetryable(t *testing.T) {
 	if err := ValidateProtectedWrite(ProtectedWrite{}, ProtectedWrite{Resource: "x", Token: 1}); err == nil {
 		t.Fatalf("expected missing resource rejection")
 	}
-	if !attemptRetryable(AttemptView{State: core.AttemptStateRunning}) {
+	if !attemptRetryable(AttemptView{State: AttemptStateRunning}) {
 		t.Fatalf("running attempt should be retryable")
 	}
-	for _, state := range []core.AttemptState{core.AttemptStateCompleted, core.AttemptStateFailed, core.AttemptStateOrphaned, core.AttemptStateCommittedRemote, core.AttemptStateFenced} {
+	for _, state := range []AttemptState{AttemptStateCompleted, AttemptStateFailed, AttemptStateOrphaned, AttemptStateCommittedRemote, AttemptStateFenced} {
 		if attemptRetryable(AttemptView{State: state}) {
 			t.Fatalf("state %s should not be retryable", state)
 		}
 	}
-	if attemptRetryable(AttemptView{State: core.AttemptStateRunning, Fenced: true}) {
+	if attemptRetryable(AttemptView{State: AttemptStateRunning, Fenced: true}) {
 		t.Fatalf("fenced attempt should not be retryable")
 	}
 }
@@ -71,7 +69,7 @@ func TestFMPBackedReconcilerShouldRetryBranches(t *testing.T) {
 	r = &FMPBackedReconciler{
 		Base: &InMemoryReconciler{},
 		ResolveAttempt: func(context.Context, string, string) (*AttemptView, error) {
-			return &AttemptView{State: core.AttemptStateCompleted}, nil
+			return &AttemptView{State: AttemptStateCompleted}, nil
 		},
 	}
 	if r.ShouldRetry(Record{LineageID: "lineage-1", AttemptID: "attempt-1"}) {

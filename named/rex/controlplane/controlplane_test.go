@@ -2,13 +2,12 @@ package controlplane
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
+	rexstore "codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
 func TestFairnessControllerEnforcesTenantLimit(t *testing.T) {
@@ -58,15 +57,15 @@ func TestAuthorizeOperatorActionRequiresPrivilegedRoleAndAudits(t *testing.T) {
 }
 
 func TestCollectSLOSignalsAggregatesWorkflowClasses(t *testing.T) {
-	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	store, err := rexstore.NewSQLiteWorkflowStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
+		t.Fatalf("NewSQLiteWorkflowStore: %v", err)
 	}
 	ctx := context.Background()
 	if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-running",
 		TaskID:      "task-running",
-		TaskType:    core.TaskTypeAnalysis,
+		TaskType:    string(core.TaskTypePlan),
 		Instruction: "running workflow",
 		Status:      memory.WorkflowRunStatusRunning,
 	}); err != nil {
@@ -85,7 +84,7 @@ func TestCollectSLOSignalsAggregatesWorkflowClasses(t *testing.T) {
 	if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-failed",
 		TaskID:      "task-failed",
-		TaskType:    core.TaskTypeReview,
+		TaskType:    string(core.TaskTypeReview),
 		Instruction: "failed workflow",
 		Status:      memory.WorkflowRunStatusFailed,
 	}); err != nil {

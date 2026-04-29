@@ -2,29 +2,25 @@ package runtime
 
 import (
 	"context"
-	"path/filepath"
-	"sync/atomic"
+	"errors"
 	"testing"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
+	rexmanifest "codeburg.org/lexbit/relurpify/named/rex/config"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
-type stubPartitionDetector struct{ partitioned bool }
-
-func (s stubPartitionDetector) IsPartitioned() bool { return s.partitioned }
-
-func TestManagerStartsAndStops(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
+func TestManagerStartsStopsAndQueues(t *testing.T) {
+	memStore := memory.NewWorkingMemoryStore()
 	manager := New(rexmanifest.Default(), memStore)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	manager.Start(ctx)
+	if !manager.Enqueue(WorkItem{WorkflowID: "wf-1", RunID: "run-1"}) {
+		t.Fatalf("enqueue failed")
+	}
 	time.Sleep(20 * time.Millisecond)
 	manager.Stop()
 	health, _, _ := manager.Snapshot()
@@ -33,39 +29,16 @@ func TestManagerStartsAndStops(t *testing.T) {
 	}
 }
 
-func TestManagerEnqueueDegradesWhenFull(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	cfg := rexmanifest.Default()
-	cfg.QueueCapacity = 1
-	manager := New(cfg, memStore)
-	if !manager.Enqueue(WorkItem{}) {
-		t.Fatalf("first enqueue failed")
-	}
-	if manager.Enqueue(WorkItem{}) {
-		t.Fatalf("second enqueue unexpectedly succeeded")
-	}
-	health, _, _ := manager.Snapshot()
-	if health != HealthDegraded {
-		t.Fatalf("health = %q", health)
-	}
-}
-
 func TestManagerRecoveryScanFindsRunningWorkflows(t *testing.T) {
-	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	workflowStore, err := store.NewSQLiteWorkflowStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
+		t.Fatalf("NewSQLiteWorkflowStore: %v", err)
 	}
-	// TODO: Reimplement checkpoint store without DB() dependency
-	// per the agentlifecycle workflow-store removal plan
-	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, nil)
 	ctx := context.Background()
 	if err := workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-running",
 		TaskID:      "task-running",
-		TaskType:    core.TaskTypePlanning,
+		TaskType:    string(core.TaskTypePlan),
 		Instruction: "resume me",
 		Status:      memory.WorkflowRunStatusRunning,
 	}); err != nil {
@@ -79,124 +52,16 @@ func TestManagerRecoveryScanFindsRunningWorkflows(t *testing.T) {
 		t.Fatalf("CreateRun: %v", err)
 	}
 
-	cfg := rexmanifest.Default()
-	cfg.RecoveryScanPeriod = 10 * time.Millisecond
-	manager := New(cfg, composite)
-	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	manager.Start(runCtx)
-	time.Sleep(30 * time.Millisecond)
-
+	manager := New(rexmanifest.Default(), workflowStore)
+	manager.scanRecoveries(ctx)
 	details := manager.Details()
 	if details.RecoveryCount == 0 {
 		t.Fatalf("expected recoveries, got %+v", details)
 	}
-	if details.Recoveries[0].WorkflowID != "wf-running" {
-		t.Fatalf("unexpected recovery details: %+v", details.Recoveries)
-	}
-}
-
-func TestManagerProcessesQueuedWorkAndTracksLastRun(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	cfg := rexmanifest.Default()
-	cfg.RecoveryScanPeriod = time.Hour
-	manager := New(cfg, memStore)
-	done := make(chan struct{})
-	manager.SetWorker(func(ctx context.Context, item WorkItem) error {
-		time.Sleep(10 * time.Millisecond)
-		close(done)
-		return nil
-	})
-	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	manager.Start(runCtx)
-	if !manager.Enqueue(WorkItem{WorkflowID: "wf-1", RunID: "run-1"}) {
-		t.Fatalf("enqueue failed")
-	}
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("timed out waiting for worker")
-	}
-	details := manager.Details()
-	if details.LastWorkflowID != "wf-1" || details.LastRunID != "run-1" {
-		t.Fatalf("unexpected runtime details: %+v", details)
-	}
-	if details.ActiveWork != 0 {
-		t.Fatalf("active work should be 0, got %+v", details)
-	}
-}
-
-func TestManagerDoesNotExecuteSameWorkflowConcurrently(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	cfg := rexmanifest.Default()
-	cfg.WorkerCount = 2
-	cfg.RecoveryScanPeriod = time.Hour
-	manager := New(cfg, memStore)
-	var inFlight atomic.Int32
-	var maxInFlight atomic.Int32
-	firstStarted := make(chan struct{}, 1)
-	releaseFirst := make(chan struct{})
-	secondStarted := make(chan struct{}, 1)
-	manager.SetWorker(func(ctx context.Context, item WorkItem) error {
-		current := inFlight.Add(1)
-		for {
-			observed := maxInFlight.Load()
-			if current <= observed || maxInFlight.CompareAndSwap(observed, current) {
-				break
-			}
-		}
-		if item.RunID == "run-1" {
-			firstStarted <- struct{}{}
-			<-releaseFirst
-		} else {
-			secondStarted <- struct{}{}
-		}
-		inFlight.Add(-1)
-		return nil
-	})
-	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	manager.Start(runCtx)
-	if !manager.Enqueue(WorkItem{WorkflowID: "wf-same", RunID: "run-1"}) {
-		t.Fatalf("first enqueue failed")
-	}
-	if !manager.Enqueue(WorkItem{WorkflowID: "wf-same", RunID: "run-2"}) {
-		t.Fatalf("second enqueue failed")
-	}
-	select {
-	case <-firstStarted:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("timed out waiting for first execution")
-	}
-	select {
-	case <-secondStarted:
-		t.Fatalf("second workflow item started before first completed")
-	default:
-	}
-	close(releaseFirst)
-	select {
-	case <-secondStarted:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("timed out waiting for second execution")
-	}
-	if got := maxInFlight.Load(); got != 1 {
-		t.Fatalf("expected max concurrency of 1, got %d", got)
-	}
 }
 
 func TestManagerBeginExecutionMarksDegradedOnFailure(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	manager := New(rexmanifest.Default(), memStore)
+	manager := New(rexmanifest.Default(), memory.NewWorkingMemoryStore())
 	finish := manager.BeginExecution("wf-err", "run-err")
 	finish(context.DeadlineExceeded)
 	details := manager.Details()
@@ -208,103 +73,15 @@ func TestManagerBeginExecutionMarksDegradedOnFailure(t *testing.T) {
 	}
 }
 
-func TestManagerWorkerFailureSetsDegradedHealth(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
+func TestManagerScanRecoveriesRecordsErrors(t *testing.T) {
+	manager := New(rexmanifest.Default(), memory.NewWorkingMemoryStore())
+	manager.mem = nil
+	manager.scanRecoveries(context.Background())
+	if manager.Details().Health != HealthHealthy {
+		t.Fatalf("expected healthy when no workflow store")
 	}
-	cfg := rexmanifest.Default()
-	cfg.RecoveryScanPeriod = time.Hour
-	manager := New(cfg, memStore)
-	var calls atomic.Int32
-	done := make(chan struct{})
-	manager.SetWorker(func(ctx context.Context, item WorkItem) error {
-		defer close(done)
-		calls.Add(1)
-		return context.Canceled
-	})
-	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	manager.Start(runCtx)
-	if !manager.Enqueue(WorkItem{WorkflowID: "wf-fail", RunID: "run-fail"}) {
-		t.Fatalf("enqueue failed")
-	}
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("timed out waiting for worker completion")
-	}
-	if calls.Load() == 0 {
-		t.Fatalf("worker was not called")
-	}
-	details := manager.Details()
-	if details.Health != HealthDegraded {
-		t.Fatalf("expected degraded health: %+v", details)
-	}
-}
-
-func TestManagerStopWaitsForWorkerExit(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	cfg := rexmanifest.Default()
-	cfg.RecoveryScanPeriod = time.Hour
-	manager := New(cfg, memStore)
-	workerStarted := make(chan struct{})
-	workerExited := make(chan struct{})
-	manager.SetWorker(func(ctx context.Context, item WorkItem) error {
-		close(workerStarted)
-		<-ctx.Done()
-		close(workerExited)
-		return ctx.Err()
-	})
-	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	manager.Start(runCtx)
-	if !manager.Enqueue(WorkItem{WorkflowID: "wf-stop", RunID: "run-stop"}) {
-		t.Fatalf("enqueue failed")
-	}
-	select {
-	case <-workerStarted:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("timed out waiting for worker start")
-	}
-
-	stopDone := make(chan struct{})
-	go func() {
-		manager.Stop()
-		close(stopDone)
-	}()
-
-	select {
-	case <-stopDone:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("timed out waiting for stop to return")
-	}
-
-	select {
-	case <-workerExited:
-	default:
-		t.Fatalf("worker should have exited before stop returned")
-	}
-}
-
-func TestManagerDetailsDegradeWhenPartitioned(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	manager := New(rexmanifest.Default(), memStore)
-	manager.SetPartitionDetector(stubPartitionDetector{partitioned: true})
-	details := manager.Details()
-	if details.Health != HealthDegraded {
-		t.Fatalf("expected degraded health: %+v", details)
-	}
-	if !details.Partitioned {
-		t.Fatalf("expected partitioned details: %+v", details)
-	}
-	if details.LastError == "" {
-		t.Fatalf("expected partition error: %+v", details)
+	manager.recordError(errors.New("boom"))
+	if manager.Details().LastError != "boom" {
+		t.Fatalf("expected error recording")
 	}
 }

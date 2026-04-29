@@ -2,16 +2,14 @@ package runtime
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
+	rexmanifest "codeburg.org/lexbit/relurpify/named/rex/config"
 )
 
 func TestManagerExecuteItemBranchesAndMax(t *testing.T) {
-	cfg := rexmanifest.Default()
-	manager := New(cfg, nil)
+	manager := New(rexmanifest.Default(), memory.NewWorkingMemoryStore())
 
 	workerCalled := false
 	if err := manager.executeItem(context.Background(), func(context.Context, WorkItem) error {
@@ -40,32 +38,8 @@ func TestManagerExecuteItemBranchesAndMax(t *testing.T) {
 	}
 }
 
-func TestManagerScanRecoveriesSetsHealthAndSnapshotCopies(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	manager := New(rexmanifest.Default(), memStore)
-	manager.scanRecoveries(context.Background())
-	health, active, recoveries := manager.Snapshot()
-	if health != HealthHealthy {
-		t.Fatalf("expected healthy, got %s", health)
-	}
-	if active != 0 || len(recoveries) != 0 {
-		t.Fatalf("unexpected snapshot: active=%d recoveries=%v", active, recoveries)
-	}
-	manager.recordError(errors.New("boom"))
-	if manager.Details().LastError != "boom" {
-		t.Fatalf("expected error recording")
-	}
-}
-
 func TestManagerBeginExecutionSuccessKeepsHealthHealthy(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	manager := New(rexmanifest.Default(), memStore)
+	manager := New(rexmanifest.Default(), memory.NewWorkingMemoryStore())
 	finish := manager.BeginExecution("wf-1", "run-1")
 	finish(nil)
 	details := manager.Details()

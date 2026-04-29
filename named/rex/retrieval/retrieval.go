@@ -7,10 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-
-	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
-	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 	"codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
@@ -33,17 +30,8 @@ type Expansion struct {
 	Summary           string         `json:"summary,omitempty"`
 }
 
-type workflowRetrievalProvider interface {
-	RetrievalService() frameworkretrieval.RetrieverService
-}
-
-type workflowKnowledgeLister interface {
-	ListKnowledge(ctx context.Context, workflowID string, kind memory.KnowledgeKind, unresolvedOnly bool) ([]memory.KnowledgeRecord, error)
-}
-
-type workflowRetrievalResult struct {
-	Text      string                              `json:"text"`
-	Citations []frameworkretrieval.PackedCitation `json:"citations,omitempty"`
+type workflowArtifactLister interface {
+	ListWorkflowArtifacts(context.Context, string, string) ([]store.WorkflowArtifactRecord, error)
 }
 
 // ResolvePolicy maps rex route decisions to workflow-aware retrieval policy.
@@ -78,8 +66,8 @@ func ResolvePolicy(decision route.RouteDecision) Policy {
 }
 
 // ExpandWithWorkflowStore expands rex context using workflow retrieval surfaces.
-func ExpandWithWorkflowStore(ctx context.Context, store any, workflowID string, task *core.Task, env *contextdata.Envelope, decision route.RouteDecision) (Expansion, error) {
-	provider, ok := store.(workflowRetrievalProvider)
+func ExpandWithWorkflowStore(ctx context.Context, workflowStore any, workflowID string, task *core.Task, env *contextdata.Envelope, decision route.RouteDecision) (Expansion, error) {
+	provider, ok := workflowStore.(workflowArtifactLister)
 	if !ok {
 		return Expansion{}, nil
 	}
@@ -97,9 +85,28 @@ func Apply(env *contextdata.Envelope, task *core.Task, expansion Expansion) *cor
 	if task == nil {
 		return task
 	}
-	cloned := core.CloneTask(task)
-	if cloned == nil {
-		cloned = &core.Task{}
+	cloned := &core.Task{
+		ID:          task.ID,
+		Type:        task.Type,
+		Instruction: task.Instruction,
+	}
+	if len(task.Data) > 0 {
+		cloned.Data = map[string]any{}
+		for k, v := range task.Data {
+			cloned.Data[k] = v
+		}
+	}
+	if len(task.Context) > 0 {
+		cloned.Context = map[string]any{}
+		for k, v := range task.Context {
+			cloned.Context[k] = v
+		}
+	}
+	if len(task.Metadata) > 0 {
+		cloned.Metadata = map[string]any{}
+		for k, v := range task.Metadata {
+			cloned.Metadata[k] = v
+		}
 	}
 	if cloned.Context == nil {
 		cloned.Context = map[string]any{}
@@ -114,7 +121,7 @@ func Apply(env *contextdata.Envelope, task *core.Task, expansion Expansion) *cor
 	return cloned
 }
 
-func expandContext(ctx context.Context, provider workflowRetrievalProvider, workflowID string, task *core.Task, _ *contextdata.Envelope, policy Policy) (Expansion, error) {
+func expandContext(ctx context.Context, provider workflowArtifactLister, workflowID string, task *core.Task, _ *contextdata.Envelope, policy Policy) (Expansion, error) {
 	expansion := Expansion{
 		LocalPaths:        taskPaths(task),
 		ExpansionStrategy: policy.ExpansionStrategy,
@@ -124,7 +131,7 @@ func expandContext(ctx context.Context, provider workflowRetrievalProvider, work
 		expansion.Summary = summarizeExpansion(expansion)
 		return expansion, nil
 	}
-	payload, err := hydrateWorkflowRetrieval(ctx, provider, workflowID, taskInstruction(task), taskVerification(task), policy.WorkflowLimit, policy.WorkflowMaxTokens)
+	payload, err := hydrateWorkflowRetrieval(ctx, provider, workflowID, policy.WorkflowLimit)
 	if err != nil {
 		return expansion, err
 	}
@@ -136,125 +143,47 @@ func expandContext(ctx context.Context, provider workflowRetrievalProvider, work
 	return expansion, nil
 }
 
-func hydrateWorkflowRetrieval(ctx context.Context, provider workflowRetrievalProvider, workflowID, instruction, verification string, limit, maxTokens int) (map[string]any, error) {
-	service := provider.RetrievalService()
-	if service == nil || strings.TrimSpace(workflowID) == "" {
+func hydrateWorkflowRetrieval(ctx context.Context, provider workflowArtifactLister, workflowID string, limit int) (map[string]any, error) {
+	if provider == nil || strings.TrimSpace(workflowID) == "" {
 		return nil, nil
 	}
-	queryText := buildWorkflowQuery(instruction, verification)
-	if queryText == "" {
-		return nil, nil
-	}
-	blocks, event, err := service.Retrieve(ctx, frameworkretrieval.RetrievalQuery{
-		Text:      queryText,
-		Scope:     "workflow:" + strings.TrimSpace(workflowID),
-		MaxTokens: maxTokens,
-		Limit:     limit,
-	})
+	artifacts, err := provider.ListWorkflowArtifacts(ctx, strings.TrimSpace(workflowID), "")
 	if err != nil {
 		return nil, err
 	}
-	results := contentBlockResults(blocks)
-	if len(results) == 0 {
-		if lister, ok := provider.(workflowKnowledgeLister); ok {
-			records, listErr := lister.ListKnowledge(ctx, strings.TrimSpace(workflowID), "", false)
-			if listErr != nil {
-				return nil, listErr
-			}
-			for _, rec := range records {
-				parts := make([]string, 0, 2)
-				if t := strings.TrimSpace(rec.Title); t != "" {
-					parts = append(parts, t)
-				}
-				if c := strings.TrimSpace(rec.Content); c != "" {
-					parts = append(parts, c)
-				}
-				if text := strings.Join(parts, ": "); text != "" {
-					results = append(results, workflowRetrievalResult{Text: text})
-				}
-			}
-		}
-		if len(results) == 0 {
-			return nil, nil
-		}
+	if limit > 0 && len(artifacts) > limit {
+		artifacts = artifacts[:limit]
 	}
-	texts := make([]string, 0, len(results))
-	citationCount := 0
-	serialized := make([]map[string]any, 0, len(results))
-	for _, result := range results {
-		texts = append(texts, result.Text)
-		citationCount += len(result.Citations)
-		entry := map[string]any{"text": result.Text}
-		if len(result.Citations) > 0 {
-			entry["citations"] = result.Citations
+	serialized := make([]map[string]any, 0, len(artifacts))
+	texts := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		entry := map[string]any{
+			"artifact_id":    artifact.ArtifactID,
+			"kind":           artifact.Kind,
+			"content_type":   artifact.ContentType,
+			"summary_text":   artifact.SummaryText,
+			"storage_kind":   artifact.StorageKind,
+			"created_at":     artifact.CreatedAt,
+			"run_id":         artifact.RunID,
+			"workflow_id":    artifact.WorkflowID,
+			"raw_size_bytes":  artifact.RawSizeBytes,
+			"compression":    artifact.CompressionMethod,
+			"summary_meta":   artifact.SummaryMetadata,
+			"inline_raw_text": artifact.InlineRawText,
+		}
+		if text := strings.TrimSpace(firstNonEmpty(artifact.SummaryText, artifact.InlineRawText)); text != "" {
+			entry["text"] = text
+			texts = append(texts, text)
 		}
 		serialized = append(serialized, entry)
 	}
 	return map[string]any{
-		"query":          queryText,
-		"scope":          "workflow:" + strings.TrimSpace(workflowID),
-		"cache_tier":     event.CacheTier,
-		"query_id":       event.QueryID,
-		"texts":          texts,
-		"results":        serialized,
-		"summary":        strings.Join(texts, "\n\n"),
-		"result_size":    len(texts),
-		"citation_count": citationCount,
+		"scope":       "workflow:" + strings.TrimSpace(workflowID),
+		"texts":       texts,
+		"results":     serialized,
+		"summary":     strings.Join(texts, "\n\n"),
+		"result_size": len(texts),
 	}, nil
-}
-
-func buildWorkflowQuery(instruction, verification string) string {
-	parts := make([]string, 0, 2)
-	for _, value := range []string{instruction, verification} {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			parts = append(parts, value)
-		}
-	}
-	return strings.Join(parts, "\n")
-}
-
-func contentBlockResults(blocks []core.ContentBlock) []workflowRetrievalResult {
-	results := make([]workflowRetrievalResult, 0, len(blocks))
-	for _, block := range blocks {
-		switch typed := block.(type) {
-		case core.TextContentBlock:
-			if text := strings.TrimSpace(typed.Text); text != "" {
-				results = append(results, workflowRetrievalResult{Text: text})
-			}
-		case core.StructuredContentBlock:
-			payload, ok := typed.Data.(map[string]any)
-			if !ok {
-				continue
-			}
-			text := strings.TrimSpace(fmt.Sprint(payload["text"]))
-			if text != "" && text != "<nil>" {
-				results = append(results, workflowRetrievalResult{
-					Text:      text,
-					Citations: parseCitations(payload["citations"]),
-				})
-			}
-		}
-	}
-	return results
-}
-
-func parseCitations(raw any) []frameworkretrieval.PackedCitation {
-	switch typed := raw.(type) {
-	case []frameworkretrieval.PackedCitation:
-		return append([]frameworkretrieval.PackedCitation{}, typed...)
-	case []any:
-		out := make([]frameworkretrieval.PackedCitation, 0, len(typed))
-		for _, item := range typed {
-			entry, ok := item.(frameworkretrieval.PackedCitation)
-			if ok {
-				out = append(out, entry)
-			}
-		}
-		return out
-	default:
-		return nil
-	}
 }
 
 func taskPaths(task *core.Task) []string {
@@ -275,7 +204,7 @@ func taskPaths(task *core.Task) []string {
 		out = append(out, value)
 	}
 	for _, value := range task.Metadata {
-		add(value)
+		add(fmt.Sprint(value))
 	}
 	if task.Context != nil {
 		for _, key := range []string{"path", "file", "file_path", "target_path", "manifest_path", "database_path"} {
@@ -312,4 +241,13 @@ func taskVerification(task *core.Task) string {
 		return ""
 	}
 	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

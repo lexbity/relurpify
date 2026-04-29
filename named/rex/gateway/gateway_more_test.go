@@ -14,20 +14,20 @@ type stubWorkflowReader struct {
 	run      *memory.WorkflowRunRecord
 }
 
-func (s stubWorkflowReader) GetWorkflow(context.Context, string) (*memory.WorkflowRecord, bool, error) {
+func (s stubWorkflowReader) GetWorkflow(context.Context, string) (memory.WorkflowRecord, bool, error) {
 	if s.workflow == nil {
-		return nil, false, nil
+		return memory.WorkflowRecord{}, false, nil
 	}
 	copy := *s.workflow
-	return &copy, true, nil
+	return copy, true, nil
 }
 
-func (s stubWorkflowReader) GetRun(context.Context, string) (*memory.WorkflowRunRecord, bool, error) {
+func (s stubWorkflowReader) GetRun(context.Context, string) (memory.WorkflowRunRecord, bool, error) {
 	if s.run == nil {
-		return nil, false, nil
+		return memory.WorkflowRunRecord{}, false, nil
 	}
 	copy := *s.run
-	return &copy, true, nil
+	return copy, true, nil
 }
 
 func TestDefaultGatewayDecideAndClassifyBranches(t *testing.T) {

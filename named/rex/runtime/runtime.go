@@ -9,7 +9,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	manifest "codeburg.org/lexbit/relurpify/named/rex/config"
 	"codeburg.org/lexbit/relurpify/named/rex/state"
 )
@@ -53,7 +52,7 @@ type PartitionDetector interface {
 // Manager coordinates long-running Nexus-managed rex work.
 type Manager struct {
 	cfg            manifest.Config
-	mem            memory.MemoryStore
+	mem            any
 	queue          chan WorkItem
 	mu             sync.RWMutex
 	health         Health
@@ -77,7 +76,7 @@ type Manager struct {
 	deadLetter []WorkItem
 }
 
-func New(cfg manifest.Config, mem memory.MemoryStore) *Manager {
+func New(cfg manifest.Config, mem any) *Manager {
 	cfg = normalizeConfig(cfg)
 	return &Manager{
 		cfg:       cfg,

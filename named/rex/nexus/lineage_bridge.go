@@ -155,11 +155,11 @@ func (b *LineageBridge) AfterExecute(ctx context.Context, workflowID, runID stri
 	}
 	attempt.LastProgressTime = b.nowUTC()
 	if execErr != nil {
-		attempt.State = core.AttemptStateFailed
-		binding.State = string(core.AttemptStateFailed)
+		attempt.State = fwfmp.AttemptStateFailed
+		binding.State = string(fwfmp.AttemptStateFailed)
 	} else {
-		attempt.State = core.AttemptStateCompleted
-		binding.State = string(core.AttemptStateCompleted)
+		attempt.State = fwfmp.AttemptStateCompleted
+		binding.State = string(fwfmp.AttemptStateCompleted)
 	}
 	if err := b.Service.Ownership.UpsertAttempt(ctx, *attempt); err != nil {
 		return err
@@ -600,10 +600,10 @@ func sessionIDFromEnvelope(env *contextdata.Envelope, task *core.Task) string {
 func defaultCapabilityEnvelope() fwfmp.CapabilityEnvelope {
 	return fwfmp.CapabilityEnvelope{
 		AllowedCapabilityIDs: []string{
-			string(core.CapabilityPlan),
-			string(core.CapabilityExecute),
-			string(core.CapabilityCode),
-			string(core.CapabilityExplain),
+			"plan",
+			"execute",
+			"code",
+			"explain",
 		},
 		AllowedTaskClasses: []string{"agent.run"},
 	}
@@ -622,14 +622,14 @@ func decodeFrameworkPayload(frameworkEvent core.FrameworkEvent) (map[string]any,
 
 func bridgeStateForFrameworkEvent(frameworkEvent core.FrameworkEvent) (string, bool, error) {
 	switch frameworkEvent.Type {
-	case core.FrameworkEventFMPHandoffOffered:
-		return string(core.AttemptStateHandoffOffered), true, nil
-	case core.FrameworkEventFMPHandoffAccepted:
-		return string(core.AttemptStateHandoffAccepted), true, nil
-	case core.FrameworkEventFMPResumeCommitted:
-		return string(core.AttemptStateCommittedRemote), true, nil
-	case core.FrameworkEventFMPFenceIssued:
-		return string(core.AttemptStateFenced), true, nil
+	case fwfmp.FrameworkEventFMPHandoffOffered:
+		return string(fwfmp.AttemptStateHandoffOffered), true, nil
+	case fwfmp.FrameworkEventFMPHandoffAccepted:
+		return string(fwfmp.AttemptStateHandoffAccepted), true, nil
+	case fwfmp.FrameworkEventFMPResumeCommitted:
+		return string(fwfmp.AttemptStateCommittedRemote), true, nil
+	case fwfmp.FrameworkEventFMPFenceIssued:
+		return string(fwfmp.AttemptStateFenced), true, nil
 	default:
 		return "", false, nil
 	}
@@ -653,17 +653,17 @@ func matchesFrameworkBinding(binding LineageBinding, payload map[string]any) boo
 
 func applyBridgeState(binding LineageBinding, payload map[string]any, state string) (string, bool) {
 	switch state {
-	case string(core.AttemptStateCommittedRemote):
+	case string(fwfmp.AttemptStateCommittedRemote):
 		oldAttemptID := strings.TrimSpace(stringValue(payload["old_attempt"]))
 		if oldAttemptID != "" && strings.EqualFold(binding.AttemptID, oldAttemptID) {
 			return state, true
 		}
 		newAttemptID := strings.TrimSpace(stringValue(payload["new_attempt"]))
 		if newAttemptID != "" && strings.EqualFold(binding.AttemptID, newAttemptID) {
-			return string(core.AttemptStateRunning), true
+			return string(fwfmp.AttemptStateRunning), true
 		}
 		return binding.State, false
-	case string(core.AttemptStateFenced):
+	case string(fwfmp.AttemptStateFenced):
 		attemptID := firstNonEmpty(stringValue(payload["attempt_id"]), stringValue(payload["old_attempt"]))
 		if attemptID != "" && strings.EqualFold(binding.AttemptID, attemptID) {
 			return state, true
@@ -679,13 +679,13 @@ func applyBridgeState(binding LineageBinding, payload map[string]any, state stri
 
 func bridgeMessageForEvent(eventType string) string {
 	switch eventType {
-	case core.FrameworkEventFMPHandoffOffered:
+	case fwfmp.FrameworkEventFMPHandoffOffered:
 		return "fmp handoff offered"
-	case core.FrameworkEventFMPHandoffAccepted:
+	case fwfmp.FrameworkEventFMPHandoffAccepted:
 		return "fmp handoff accepted"
-	case core.FrameworkEventFMPResumeCommitted:
+	case fwfmp.FrameworkEventFMPResumeCommitted:
 		return "fmp resume committed"
-	case core.FrameworkEventFMPFenceIssued:
+	case fwfmp.FrameworkEventFMPFenceIssued:
 		return "fmp fence issued"
 	default:
 		return "fmp lifecycle event"

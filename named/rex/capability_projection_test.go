@@ -12,7 +12,7 @@ import (
 func TestCapabilityProjectionFromEnvelopeAndRequiredCapabilities(t *testing.T) {
 	env := contextdata.NewEnvelope("test", "")
 	env.SetWorkingValue("fmp.capability_projection", fmp.CapabilityEnvelope{
-		AllowedCapabilityIDs: []string{string(core.CapabilityExecute), string(core.CapabilityCode)},
+		AllowedCapabilityIDs: []string{"execute", "code"},
 		AllowedTaskClasses:   []string{"agent.run"},
 	}, contextdata.MemoryClassTask)
 	projection, ok := capabilityProjectionFromEnvelope(env)
@@ -22,7 +22,7 @@ func TestCapabilityProjectionFromEnvelopeAndRequiredCapabilities(t *testing.T) {
 	if !containsFold(projection.AllowedCapabilityIDs, "execute") || containsFold(projection.AllowedCapabilityIDs, "plan") {
 		t.Fatalf("containsFold branch mismatch")
 	}
-	required := requiredCapabilities(route.RouteDecision{Family: route.FamilyPlanner, Mode: "planning"}, &core.Task{Type: core.TaskTypeCodeGeneration})
+	required := requiredCapabilities(route.RouteDecision{Family: route.FamilyPlanner, Mode: "planning"}, &core.Task{Type: string(core.TaskTypeCodeGeneration)})
 	if len(required) < 3 {
 		t.Fatalf("expected required capabilities: %+v", required)
 	}
@@ -31,24 +31,24 @@ func TestCapabilityProjectionFromEnvelopeAndRequiredCapabilities(t *testing.T) {
 func TestEnforceCapabilityProjectionBranches(t *testing.T) {
 	env := contextdata.NewEnvelope("test", "")
 	env.SetWorkingValue("fmp.capability_projection", fmp.CapabilityEnvelope{
-		AllowedCapabilityIDs: []string{string(core.CapabilityExecute), string(core.CapabilityCode)},
+		AllowedCapabilityIDs: []string{"execute", "code"},
 		AllowedTaskClasses:   []string{"agent.run"},
 	}, contextdata.MemoryClassTask)
-	if err := enforceCapabilityProjection(env, route.RouteDecision{Family: route.FamilyReAct, Mode: "analysis"}, &core.Task{Type: core.TaskTypeCodeGeneration}); err != nil {
+	if err := enforceCapabilityProjection(env, route.RouteDecision{Family: route.FamilyReAct, Mode: "analysis"}, &core.Task{Type: string(core.TaskTypeCodeGeneration)}); err != nil {
 		t.Fatalf("expected projection to pass: %v", err)
 	}
 	env.SetWorkingValue("fmp.capability_projection", fmp.CapabilityEnvelope{
-		AllowedCapabilityIDs: []string{string(core.CapabilityExecute)},
+		AllowedCapabilityIDs: []string{"execute"},
 		AllowedTaskClasses:   []string{"agent.run"},
 	}, contextdata.MemoryClassTask)
-	if err := enforceCapabilityProjection(env, route.RouteDecision{Family: route.FamilyReAct, Mode: "analysis"}, &core.Task{Type: core.TaskTypeCodeGeneration}); err == nil {
+	if err := enforceCapabilityProjection(env, route.RouteDecision{Family: route.FamilyReAct, Mode: "analysis"}, &core.Task{Type: string(core.TaskTypeCodeGeneration)}); err == nil {
 		t.Fatalf("expected missing code capability rejection")
 	}
 	env.SetWorkingValue("fmp.capability_projection", fmp.CapabilityEnvelope{
-		AllowedCapabilityIDs: []string{string(core.CapabilityExecute), string(core.CapabilityCode)},
+		AllowedCapabilityIDs: []string{"execute", "code"},
 		AllowedTaskClasses:   []string{"planner"},
 	}, contextdata.MemoryClassTask)
-	if err := enforceCapabilityProjection(env, route.RouteDecision{Family: route.FamilyPlanner, Mode: "planning"}, &core.Task{Type: core.TaskTypeCodeGeneration}); err == nil {
+	if err := enforceCapabilityProjection(env, route.RouteDecision{Family: route.FamilyPlanner, Mode: "planning"}, &core.Task{Type: string(core.TaskTypeCodeGeneration)}); err == nil {
 		t.Fatalf("expected task class rejection")
 	}
 	if err := enforceCapabilityProjection(nil, route.RouteDecision{}, nil); err != nil {

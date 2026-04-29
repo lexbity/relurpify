@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 func TestAmbiguityCreatesOperatorReviewAndSuppressesRetry(t *testing.T) {
@@ -109,7 +107,7 @@ func TestFMPBackedReconcilerShouldRetryUsesOwnershipGroundTruth(t *testing.T) {
 	r := &FMPBackedReconciler{
 		Base: &InMemoryReconciler{},
 		ResolveAttempt: func(context.Context, string, string) (*AttemptView, error) {
-			return &AttemptView{State: core.AttemptStateCommittedRemote, Fenced: true}, nil
+			return &AttemptView{State: AttemptStateCommittedRemote, Fenced: true}, nil
 		},
 	}
 	record := Record{

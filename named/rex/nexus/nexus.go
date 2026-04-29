@@ -8,9 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
 	"codeburg.org/lexbit/relurpify/named/rex/runtime"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
 // Projection is the Nexus-facing runtime snapshot for rex.
@@ -34,7 +34,7 @@ type Registration struct {
 	Name            string            `json:"name"`
 	RuntimeType     string            `json:"runtime_type"`
 	Managed         bool              `json:"managed"`
-	Capabilities    []core.Capability `json:"capabilities,omitempty"`
+	Capabilities    []string          `json:"capabilities,omitempty"`
 	ProjectionTiers []string          `json:"projection_tiers,omitempty"`
 }
 
@@ -53,16 +53,16 @@ type ManagedRuntime interface {
 
 type CallableRuntime interface {
 	ManagedRuntime
-	Capabilities() []core.Capability
+	Capabilities() []string
 }
 
 type Adapter struct {
 	name    string
 	runtime CallableRuntime
-	store   memory.WorkflowStateStore
+	store   *store.SQLiteWorkflowStore
 }
 
-func NewAdapter(name string, runtime CallableRuntime, store memory.WorkflowStateStore) *Adapter {
+func NewAdapter(name string, runtime CallableRuntime, store *store.SQLiteWorkflowStore) *Adapter {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" {
 		trimmed = "rex"
@@ -78,7 +78,7 @@ func (a *Adapter) Registration() Registration {
 		Name:            a.name,
 		RuntimeType:     "nexus-managed",
 		Managed:         true,
-		Capabilities:    append([]core.Capability{}, a.runtime.Capabilities()...),
+		Capabilities:    append([]string{}, a.runtime.Capabilities()...),
 		ProjectionTiers: []string{"hot", "warm"},
 	}
 }
@@ -99,29 +99,26 @@ func (a *Adapter) AdminSnapshot(ctx context.Context) (AdminSnapshot, error) {
 	if a.store == nil || strings.TrimSpace(projection.WorkflowID) == "" {
 		return snapshot, nil
 	}
-	refBase := memory.DefaultWorkflowProjectionRefs(projection.WorkflowID, projection.RunID, "", core.CoordinationRoleBackgroundAgent)
-	snapshot.WorkflowRefURI = append([]string{}, refBase...)
-	service := memory.WorkflowProjectionService{Store: a.store}
-	hot, err := service.Project(ctx, memory.WorkflowResourceRef{
-		WorkflowID: projection.WorkflowID,
-		RunID:      projection.RunID,
-		Tier:       memory.WorkflowProjectionTierHot,
-		Role:       core.CoordinationRoleBackgroundAgent,
-	})
-	if err != nil {
-		return AdminSnapshot{}, err
+	snapshot.WorkflowRefURI = []string{
+		projection.WorkflowID + "/" + projection.RunID + "/context",
+		projection.WorkflowID + "/" + projection.RunID + "/state",
 	}
-	warm, err := service.Project(ctx, memory.WorkflowResourceRef{
-		WorkflowID: projection.WorkflowID,
-		RunID:      projection.RunID,
-		Tier:       memory.WorkflowProjectionTierWarm,
-		Role:       core.CoordinationRoleBackgroundAgent,
-	})
-	if err != nil {
-		return AdminSnapshot{}, err
+	if workflow, ok, err := a.store.GetWorkflow(ctx, projection.WorkflowID); err == nil && ok {
+		snapshot.HotState = map[string]any{
+			"workflow_id": workflow.WorkflowID,
+			"task_id":     workflow.TaskID,
+			"task_type":   workflow.TaskType,
+			"instruction": workflow.Instruction,
+		}
 	}
-	snapshot.HotState = firstStructuredContent(hot)
-	snapshot.WarmState = firstStructuredContent(warm)
+	if run, ok, err := a.store.GetRun(ctx, projection.RunID); err == nil && ok {
+		snapshot.WarmState = map[string]any{
+			"run_id":      run.RunID,
+			"workflow_id": run.WorkflowID,
+			"status":      run.Status,
+			"agent_mode":  run.AgentMode,
+		}
+	}
 	return snapshot, nil
 }
 
@@ -145,18 +142,4 @@ func BuildProjection(manager *runtime.Manager, surface proof.ProofSurface) Proje
 	projection.RecoveryState = strings.ToLower(strings.TrimSpace(string(details.Health)))
 
 	return projection
-}
-
-func firstStructuredContent(result *core.ResourceReadResult) map[string]any {
-	if result == nil {
-		return nil
-	}
-	for _, block := range result.Contents {
-		if typed, ok := block.(core.StructuredContentBlock); ok {
-			if payload, ok := typed.Data.(map[string]any); ok {
-				return payload
-			}
-		}
-	}
-	return nil
 }

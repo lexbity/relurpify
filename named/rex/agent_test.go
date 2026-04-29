@@ -63,7 +63,7 @@ func TestAgentImplementsWorkflowExecutor(t *testing.T) {
 	if _, ok := executor.(interface {
 		Initialize(*core.Config) error
 		Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error)
-		Capabilities() []core.Capability
+		Capabilities() []string
 	}); !ok {
 		t.Fatalf("agent does not satisfy workflow executor shape")
 	}
@@ -105,14 +105,14 @@ func TestAgentExecuteRejectsCapabilityProjectionThatBlocksRequiredCapability(t *
 	agent := New(env)
 	env2 := contextdata.NewEnvelope("task-1", "")
 	env2.SetWorkingValue("fmp.capability_projection", fwfmp.CapabilityEnvelope{
-		AllowedCapabilityIDs: []string{string(core.CapabilityExecute)},
+		AllowedCapabilityIDs: []string{"execute"},
 		AllowedTaskClasses:   []string{"agent.run"},
 	}, contextdata.MemoryClassTask)
 
 	_, err := agent.Execute(context.Background(), &core.Task{
 		ID:          "task-1",
 		Instruction: "write code",
-		Type:        core.TaskTypeCodeGeneration,
+		Type:        string(core.TaskTypeCodeGeneration),
 		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": true},
 	}, env2)
 	if err == nil {
@@ -123,7 +123,7 @@ func TestAgentExecuteRejectsCapabilityProjectionThatBlocksRequiredCapability(t *
 func TestAgentCapabilitiesBuildGraphAndManagedAdapter(t *testing.T) {
 	agent := New(testEnv(t))
 	caps := agent.Capabilities()
-	if len(caps) == 0 || caps[0] != core.CapabilityPlan {
+	if len(caps) == 0 || caps[0] != "plan" {
 		t.Fatalf("unexpected capabilities: %+v", caps)
 	}
 	graphTask := &core.Task{

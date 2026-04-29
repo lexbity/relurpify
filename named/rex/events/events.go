@@ -242,20 +242,20 @@ func ToTask(event CanonicalEvent) *core.Task {
 	}
 }
 
-func taskTypeForEvent(eventType string, editPermitted bool) core.TaskType {
+func taskTypeForEvent(eventType string, editPermitted bool) string {
 	switch eventType {
 	case TypeWorkflowResume:
-		return core.TaskTypeAnalysis
+		return string(core.TaskTypePlan)
 	case TypeTaskRequested:
 		if editPermitted {
-			return core.TaskTypeCodeModification
+			return string(core.TaskTypeCodeGeneration)
 		}
-		return core.TaskTypeAnalysis
+		return string(core.TaskTypeReview)
 	default:
 		if editPermitted {
-			return core.TaskTypeCodeGeneration
+			return string(core.TaskTypeCodeGeneration)
 		}
-		return core.TaskTypeAnalysis
+		return string(core.TaskTypeReview)
 	}
 }
 
@@ -283,11 +283,11 @@ func cloneMap(in map[string]any) map[string]any {
 	return out
 }
 
-func cloneStringMap(in map[string]string) map[string]string {
+func cloneStringMap(in map[string]string) map[string]any {
 	if len(in) == 0 {
-		return map[string]string{}
+		return map[string]any{}
 	}
-	out := make(map[string]string, len(in))
+	out := make(map[string]any, len(in))
 	for k, v := range in {
 		out[k] = v
 	}

@@ -213,7 +213,7 @@ func AuthorizeOperatorAction(action OperatorAction, audit *AuditLog) error {
 
 type WorkflowLister interface {
 	ListWorkflows(context.Context, int) ([]memory.WorkflowRecord, error)
-	GetRun(context.Context, string) (*memory.WorkflowRunRecord, bool, error)
+	GetRun(context.Context, string) (memory.WorkflowRunRecord, bool, error)
 }
 
 type WorkflowStatusAggregator interface {

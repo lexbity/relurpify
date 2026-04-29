@@ -2,20 +2,19 @@ package gateway
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
 	"codeburg.org/lexbit/relurpify/named/rex/events"
+	rexstore "codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
-func newGatewayStore(t *testing.T) *db.SQLiteWorkflowStateStore {
+func newGatewayStore(t *testing.T) *rexstore.SQLiteWorkflowStore {
 	t.Helper()
-	store, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
+	store, err := rexstore.NewSQLiteWorkflowStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
+		t.Fatalf("NewSQLiteWorkflowStore: %v", err)
 	}
 	return store
 }
@@ -47,7 +46,7 @@ func TestResolveDuplicateStartCollapsesToSignalForExistingWorkflow(t *testing.T)
 	if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  workflowID,
 		TaskID:      "task-1",
-		TaskType:    core.TaskTypeAnalysis,
+		TaskType:    string(core.TaskTypePlan),
 		Instruction: "start managed work",
 		Status:      memory.WorkflowRunStatusRunning,
 	}); err != nil {
@@ -71,7 +70,7 @@ func TestResolveValidCallbackAcceptsMatchingExpectedWaitState(t *testing.T) {
 	if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-2",
 		TaskID:      "task-2",
-		TaskType:    core.TaskTypeAnalysis,
+		TaskType:    string(core.TaskTypePlan),
 		Instruction: "await callback",
 		Status:      memory.WorkflowRunStatusRunning,
 	}); err != nil {
@@ -110,7 +109,7 @@ func TestResolveRejectsStaleSignalsWithoutMutatingWorkflow(t *testing.T) {
 	if err := store.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-3",
 		TaskID:      "task-3",
-		TaskType:    core.TaskTypeAnalysis,
+		TaskType:    string(core.TaskTypePlan),
 		Instruction: "finished workflow",
 		Status:      memory.WorkflowRunStatusCompleted,
 	}); err != nil {

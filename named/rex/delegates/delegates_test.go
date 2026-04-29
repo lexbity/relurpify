@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
@@ -73,17 +74,17 @@ func TestResolveFallsBackAndErrorsWhenUnavailable(t *testing.T) {
 }
 
 type stubExecutor struct {
-	buildGraphFn func(*core.Task) (*graph.Graph, error)
+	buildGraphFn func(*core.Task) (*agentgraph.Graph, error)
 	executeFn    func(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error)
 }
 
 func (s stubExecutor) Initialize(*core.Config) error   { return nil }
-func (s stubExecutor) Capabilities() []core.Capability { return nil }
-func (s stubExecutor) BuildGraph(task *core.Task) (*graph.Graph, error) {
+func (s stubExecutor) Capabilities() []string          { return nil }
+func (s stubExecutor) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	if s.buildGraphFn != nil {
 		return s.buildGraphFn(task)
 	}
-	return &graph.Graph{}, nil
+	return &agentgraph.Graph{}, nil
 }
 func (s stubExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	if s.executeFn != nil {
@@ -98,9 +99,9 @@ func TestAgentDelegatePassesThroughGraphAndExecution(t *testing.T) {
 	delegate := agentDelegate{
 		family: "stub",
 		agent: stubExecutor{
-			buildGraphFn: func(task *core.Task) (*graph.Graph, error) {
+			buildGraphFn: func(task *core.Task) (*agentgraph.Graph, error) {
 				buildTaskID = task.ID
-				return &graph.Graph{}, nil
+				return &agentgraph.Graph{}, nil
 			},
 			executeFn: func(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error) {
 				executed = true

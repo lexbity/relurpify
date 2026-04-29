@@ -113,7 +113,7 @@ func (s SnapshotStore) QueryWorkflowRuntime(ctx context.Context, workflowID, run
 	return payload, nil
 }
 
-func summarizeArtifacts(records []memory.WorkflowArtifactRecord) []map[string]any {
+func summarizeArtifacts(records []store.WorkflowArtifactRecord) []map[string]any {
 	out := make([]map[string]any, 0, len(records))
 	for _, record := range records {
 		out = append(out, map[string]any{
@@ -134,7 +134,7 @@ func summarizeArtifacts(records []memory.WorkflowArtifactRecord) []map[string]an
 	return out
 }
 
-func decodeArtifactJSON(record memory.WorkflowArtifactRecord) map[string]any {
+func decodeArtifactJSON(record store.WorkflowArtifactRecord) map[string]any {
 	if strings.TrimSpace(record.InlineRawText) == "" {
 		return nil
 	}
@@ -145,21 +145,21 @@ func decodeArtifactJSON(record memory.WorkflowArtifactRecord) map[string]any {
 	return out
 }
 
-func completedStepIDs(events []memory.WorkflowEventRecord) []string {
+func completedStepIDs(events []store.WorkflowEventRecord) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0)
 	for _, event := range events {
-		if strings.TrimSpace(event.StepID) == "" {
+		if strings.TrimSpace(event.EventID) == "" {
 			continue
 		}
 		if !strings.Contains(strings.ToLower(event.EventType), "completed") && !strings.Contains(strings.ToLower(event.Message), "completed") {
 			continue
 		}
-		if _, ok := seen[event.StepID]; ok {
+		if _, ok := seen[event.EventID]; ok {
 			continue
 		}
-		seen[event.StepID] = struct{}{}
-		out = append(out, event.StepID)
+		seen[event.EventID] = struct{}{}
+		out = append(out, event.EventID)
 	}
 	sort.Strings(out)
 	return out

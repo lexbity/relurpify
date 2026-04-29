@@ -21,7 +21,7 @@ var _ fwfmp.RuntimeEndpoint = (*RuntimeEndpoint)(nil)
 const maxRuntimeEndpointProjections = 256
 
 type RuntimeEndpoint struct {
-	DescriptorValue     core.RuntimeDescriptor
+	DescriptorValue     fwfmp.RuntimeDescriptor
 	Packager            fwfmp.ContextPackager
 	WorkflowStore       *store.SQLiteWorkflowStore
 	LineageBindingStore store.LineageBindingStore
@@ -32,11 +32,11 @@ type RuntimeEndpoint struct {
 	projectionOrder     []string
 }
 
-func (e *RuntimeEndpoint) Descriptor(context.Context) (core.RuntimeDescriptor, error) {
+func (e *RuntimeEndpoint) Descriptor(context.Context) (fwfmp.RuntimeDescriptor, error) {
 	return e.DescriptorValue, nil
 }
 
-func (e *RuntimeEndpoint) ExportContext(ctx context.Context, lineage core.LineageRecord, attempt core.AttemptRecord) (*fwfmp.PortableContextPackage, error) {
+func (e *RuntimeEndpoint) ExportContext(ctx context.Context, lineage fwfmp.LineageRecord, attempt fwfmp.AttemptRecord) (*fwfmp.PortableContextPackage, error) {
 	if e == nil || e.Packager == nil {
 		return nil, fmt.Errorf("packager unavailable")
 	}
@@ -46,7 +46,7 @@ func (e *RuntimeEndpoint) ExportContext(ctx context.Context, lineage core.Lineag
 	})
 }
 
-func (e *RuntimeEndpoint) ValidateContext(_ context.Context, manifest core.ContextManifest, sealed core.SealedContext) error {
+func (e *RuntimeEndpoint) ValidateContext(_ context.Context, manifest fwfmp.ContextManifest, sealed fwfmp.SealedContext) error {
 	if strings.TrimSpace(manifest.SchemaVersion) == "" {
 		return fmt.Errorf("schema version required")
 	}
@@ -56,7 +56,7 @@ func (e *RuntimeEndpoint) ValidateContext(_ context.Context, manifest core.Conte
 	return nil
 }
 
-func (e *RuntimeEndpoint) ImportContext(ctx context.Context, _ core.LineageRecord, manifest core.ContextManifest, sealed core.SealedContext) (*fwfmp.PortableContextPackage, error) {
+func (e *RuntimeEndpoint) ImportContext(ctx context.Context, _ fwfmp.LineageRecord, manifest fwfmp.ContextManifest, sealed fwfmp.SealedContext) (*fwfmp.PortableContextPackage, error) {
 	if e == nil || e.Packager == nil {
 		return nil, fmt.Errorf("packager unavailable")
 	}
@@ -67,7 +67,7 @@ func (e *RuntimeEndpoint) ImportContext(ctx context.Context, _ core.LineageRecor
 	return pkg, nil
 }
 
-func (e *RuntimeEndpoint) CreateAttempt(ctx context.Context, lineage core.LineageRecord, accept core.HandoffAccept, pkg *fwfmp.PortableContextPackage) (*core.AttemptRecord, error) {
+func (e *RuntimeEndpoint) CreateAttempt(ctx context.Context, lineage fwfmp.LineageRecord, accept fwfmp.HandoffAccept, pkg *fwfmp.PortableContextPackage) (*fwfmp.AttemptRecord, error) {
 	if pkg == nil {
 		return nil, fmt.Errorf("portable package required")
 	}
@@ -94,24 +94,20 @@ func (e *RuntimeEndpoint) CreateAttempt(ctx context.Context, lineage core.Lineag
 			return nil, err
 		}
 	}
-	now := e.nowUTC()
-	return &core.AttemptRecord{
+	return &fwfmp.AttemptRecord{
 		AttemptID:        accept.ProvisionalAttemptID,
 		LineageID:        lineage.LineageID,
 		RuntimeID:        e.DescriptorValue.RuntimeID,
-		State:            core.AttemptStateRunning,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		ProvisionalState: core.ProvisionalStateConfirmed,
+		State:            fwfmp.AttemptStateRunning,
 	}, nil
 }
 
-func (e *RuntimeEndpoint) FenceAttempt(context.Context, core.FenceNotice) error {
+func (e *RuntimeEndpoint) FenceAttempt(context.Context, fwfmp.FenceNotice) error {
 	return nil
 }
 
-func (e *RuntimeEndpoint) IssueReceipt(_ context.Context, lineage core.LineageRecord, attempt core.AttemptRecord, _ *fwfmp.PortableContextPackage) (*core.ResumeReceipt, error) {
-	return &core.ResumeReceipt{
+func (e *RuntimeEndpoint) IssueReceipt(_ context.Context, lineage fwfmp.LineageRecord, attempt fwfmp.AttemptRecord, _ *fwfmp.PortableContextPackage) (*fwfmp.ResumeReceipt, error) {
+	return &fwfmp.ResumeReceipt{
 		ReceiptID:                   attempt.AttemptID + ":receipt",
 		LineageID:                   lineage.LineageID,
 		AttemptID:                   attempt.AttemptID,
@@ -119,11 +115,11 @@ func (e *RuntimeEndpoint) IssueReceipt(_ context.Context, lineage core.LineageRe
 		StartTime:                   e.nowUTC(),
 		CompatibilityVerified:       true,
 		CapabilityProjectionApplied: e.projectionForAttempt(attempt.AttemptID),
-		Status:                      core.ReceiptStatusRunning,
+		Status:                      fwfmp.ReceiptStatusRunning,
 	}, nil
 }
 
-func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, lineage core.LineageRecord, accept core.HandoffAccept) (*core.Task, *contextdata.Envelope, string, string, error) {
+func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, lineage fwfmp.LineageRecord, accept fwfmp.HandoffAccept) (*core.Task, *contextdata.Envelope, string, string, error) {
 	if len(pkg.ExecutionPayload) == 0 {
 		return nil, nil, "", "", fmt.Errorf("execution payload required")
 	}
@@ -170,18 +166,18 @@ func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, linea
 	return task, env, workflowID, runID, nil
 }
 
-func (e *RuntimeEndpoint) persistImport(ctx context.Context, workflowID, runID, lineageID string, task *core.Task, env *contextdata.Envelope, accept core.HandoffAccept) error {
+func (e *RuntimeEndpoint) persistImport(ctx context.Context, workflowID, runID, lineageID string, task *core.Task, env *contextdata.Envelope, accept fwfmp.HandoffAccept) error {
 	if e.LineageBindingStore == nil {
 		return nil
 	}
-	return e.LineageBindingStore.UpsertLineageBinding(ctx, memdb.LineageBindingRecord{
+	return e.LineageBindingStore.UpsertLineageBinding(ctx, store.LineageBindingRecord{
 		WorkflowID: workflowID,
 		RunID:      runID,
 		LineageID:  lineageID,
 		AttemptID:  accept.ProvisionalAttemptID,
 		RuntimeID:  e.DescriptorValue.RuntimeID,
 		SessionID:  importedSessionID(env, task),
-		State:      "running",
+		State:      string(fwfmp.AttemptStateRunning),
 		UpdatedAt:  e.nowUTC(),
 	})
 }
@@ -230,14 +226,14 @@ func (e *RuntimeEndpoint) nowUTC() time.Time {
 	return time.Now().UTC()
 }
 
-func (e *RuntimeEndpoint) rememberProjection(attemptID string, projection core.CapabilityEnvelope) {
+func (e *RuntimeEndpoint) rememberProjection(attemptID string, projection fwfmp.CapabilityEnvelope) {
 	if e == nil || strings.TrimSpace(attemptID) == "" {
 		return
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.projections == nil {
-		e.projections = map[string]core.CapabilityEnvelope{}
+		e.projections = map[string]fwfmp.CapabilityEnvelope{}
 	}
 	if _, ok := e.projections[attemptID]; ok {
 		e.projections[attemptID] = projection
@@ -261,14 +257,14 @@ func (e *RuntimeEndpoint) rememberProjection(attemptID string, projection core.C
 	e.projections[attemptID] = projection
 }
 
-func (e *RuntimeEndpoint) projectionForAttempt(attemptID string) core.CapabilityEnvelope {
+func (e *RuntimeEndpoint) projectionForAttempt(attemptID string) fwfmp.CapabilityEnvelope {
 	if e == nil || strings.TrimSpace(attemptID) == "" {
-		return core.CapabilityEnvelope{}
+		return fwfmp.CapabilityEnvelope{}
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.projections == nil {
-		return core.CapabilityEnvelope{}
+		return fwfmp.CapabilityEnvelope{}
 	}
 	return e.projections[attemptID]
 }

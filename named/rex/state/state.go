@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 )
 
 // Identity captures the durable workflow identity used by rex.
@@ -42,37 +43,27 @@ func ComputeIdentity(env envelope.Envelope) Identity {
 }
 
 type RuntimeSurfaces struct {
-	Workflow *db.SQLiteWorkflowStateStore `json:"-"`
+	Workflow *store.SQLiteWorkflowStore `json:"-"`
 }
 
 // ResolveRuntimeSurfaces exposes the workflow store when available.
-func ResolveRuntimeSurfaces(mem memory.MemoryStore) RuntimeSurfaces {
-	if typed, ok := mem.(*memory.CompositeRuntimeStore); ok {
-		if workflow, ok := typed.WorkflowStateStore.(*db.SQLiteWorkflowStateStore); ok {
-			return RuntimeSurfaces{Workflow: workflow}
-		}
+func ResolveRuntimeSurfaces(mem any) RuntimeSurfaces {
+	switch typed := mem.(type) {
+	case *store.SQLiteWorkflowStore:
+		return RuntimeSurfaces{Workflow: typed}
+	case interface {
+		WorkflowStore() *store.SQLiteWorkflowStore
+	}:
+		return RuntimeSurfaces{Workflow: typed.WorkflowStore()}
 	}
 	return RuntimeSurfaces{}
 }
 
 // RecoveryBoot scans workflow state for resumable work.
-func RecoveryBoot(ctx context.Context, mem memory.MemoryStore) ([]RecoveryCandidate, error) {
+func RecoveryBoot(ctx context.Context, mem any) ([]RecoveryCandidate, error) {
 	surfaces := ResolveRuntimeSurfaces(mem)
 	if surfaces.Workflow == nil {
 		return nil, nil
-	}
-	if lister, ok := any(surfaces.Workflow).(interface {
-		ListRunsByStatus(context.Context, []memory.WorkflowRunStatus, int) ([]memory.WorkflowRunRecord, error)
-	}); ok {
-		runs, err := lister.ListRunsByStatus(ctx, []memory.WorkflowRunStatus{memory.WorkflowRunStatusRunning, memory.WorkflowRunStatusNeedsReplan}, 128)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]RecoveryCandidate, 0, len(runs))
-		for _, run := range runs {
-			out = append(out, RecoveryCandidate{WorkflowID: run.WorkflowID, RunID: run.RunID, Status: string(run.Status)})
-		}
-		return out, nil
 	}
 	rows, err := surfaces.Workflow.ListWorkflows(ctx, 128)
 	if err != nil {
@@ -126,9 +117,9 @@ func NewRunRecord(identity Identity, agentName, agentMode string) memory.Workflo
 // EnsureWorkflowRun ensures rex workflow and run state exist in the workflow store.
 func EnsureWorkflowRun(ctx context.Context, store interface {
 	CreateWorkflow(context.Context, memory.WorkflowRecord) error
-	GetWorkflow(context.Context, string) (*memory.WorkflowRecord, bool, error)
+	GetWorkflow(context.Context, string) (memory.WorkflowRecord, bool, error)
 	CreateRun(context.Context, memory.WorkflowRunRecord) error
-	GetRun(context.Context, string) (*memory.WorkflowRunRecord, bool, error)
+	GetRun(context.Context, string) (memory.WorkflowRunRecord, bool, error)
 }, identity Identity, task *core.Task, agentMode string) error {
 	if store == nil {
 		return nil
@@ -166,9 +157,9 @@ func fallbackTaskID(task *core.Task) string {
 	return "task"
 }
 
-func fallbackTaskType(task *core.Task) core.TaskType {
+func fallbackTaskType(task *core.Task) string {
 	if task == nil || task.Type == "" {
-		return core.TaskTypeCodeGeneration
+		return string(core.TaskTypeCodeGeneration)
 	}
 	return task.Type
 }

@@ -18,10 +18,7 @@ func TestComputeIdentityStable(t *testing.T) {
 }
 
 func TestRecoveryBootWithNoWorkflowStore(t *testing.T) {
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
+	memStore := memory.NewWorkingMemoryStore()
 	candidates, err := RecoveryBoot(context.Background(), memStore)
 	if err != nil {
 		t.Fatalf("RecoveryBoot: %v", err)
