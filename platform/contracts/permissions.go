@@ -191,6 +191,12 @@ type NetworkPermissionChecker interface {
 	CheckNetwork(ctx context.Context, agentID, direction, protocol, host string, port int) error
 }
 
+// CapabilityChecker is the interface for checking capability usage permissions.
+// Implemented by framework/authorization.PermissionManager.
+type CapabilityChecker interface {
+	CheckCapability(ctx context.Context, agentID string, capability string) error
+}
+
 // NewFileSystemPermissionSet builds a permission set for the provided actions scoped to base.
 func NewFileSystemPermissionSet(base string, actions ...FileSystemAction) *PermissionSet {
 	scope := computeWorkspaceScope(base)
