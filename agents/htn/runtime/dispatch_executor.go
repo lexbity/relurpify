@@ -63,7 +63,7 @@ func (d *primitiveDispatcher) Initialize(cfg *core.Config) error {
 	return d.fallback.Initialize(cfg)
 }
 
-func (d *primitiveDispatcher) Capabilities() []core.Capability {
+func (d *primitiveDispatcher) Capabilities() []string {
 	if d == nil || d.fallback == nil {
 		return nil
 	}
@@ -149,7 +149,7 @@ func (d *primitiveDispatcher) invokeCapability(ctx context.Context, env *context
 		Success:  result.Success,
 		Data:     cloneAnyMap(result.Data),
 		Metadata: cloneAnyMap(result.Metadata),
-		Error:    execErr,
+		Error:    result.Error,
 	}
 	if execErr != nil && !result.Success {
 		return coreResult, decision, true, execErr

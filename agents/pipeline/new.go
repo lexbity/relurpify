@@ -47,7 +47,7 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
-func New(env agentenv.AgentEnvironment, opts ...Option) *PipelineAgent {
+func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *PipelineAgent {
 	agent := &PipelineAgent{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -58,7 +58,7 @@ func New(env agentenv.AgentEnvironment, opts ...Option) *PipelineAgent {
 	return agent
 }
 
-func (a *PipelineAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *PipelineAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
 	a.Model = env.Model
 	a.Tools = env.Registry
 	a.Config = env.Config

@@ -42,33 +42,33 @@ func ClassifyGoalWithLLM(
 	}
 
 	// Check cache first
-	if manifest.Cache != nil {
-		if cached := manifest.Cache.Get(taskInstruction); cached != nil {
+	if config.Cache != nil {
+		if cached := config.Cache.Get(taskInstruction); cached != nil {
 			return *cached
 		}
 	}
 
 	// Try LLM classification if enabled
-	if manifest.Enabled && model != nil {
+	if config.Enabled && model != nil {
 		goal := classifyViaLLM(taskInstruction, model, operators, config)
 		if goal != nil {
 			// Cache successful classification
-			if manifest.Cache != nil {
-				manifest.Cache.Set(taskInstruction, goal)
+			if config.Cache != nil {
+				config.Cache.Set(taskInstruction, goal)
 			}
 			return *goal
 		}
 
 		// If LLM fails but fallback is disabled, return empty
-		if !manifest.FallbackOnFail {
+		if !config.FallbackOnFail {
 			return types.GoalCondition{Description: taskInstruction}
 		}
 	}
 
 	// Fallback to keyword-based classification
 	goal := ClassifyGoal(taskInstruction, operators)
-	if manifest.Cache != nil {
-		manifest.Cache.Set(taskInstruction, &goal)
+	if config.Cache != nil {
+		config.Cache.Set(taskInstruction, &goal)
 	}
 	return goal
 }
@@ -84,7 +84,7 @@ func classifyViaLLM(
 	availablePredicates := PredicatesFromRegistry(operators)
 
 	// Set up timeout
-	ctx, cancel := context.WithTimeout(context.Background(), manifest.Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
 	defer cancel()
 
 	// Create a channel for the result to support timeout
@@ -110,7 +110,7 @@ func classifyViaLLM(
 		}
 
 		// Check confidence threshold
-		if res.resp.Confidence < manifest.MinConfidence {
+		if res.resp.Confidence < config.MinConfidence {
 			// Log: low confidence, will fall back
 			return nil
 		}

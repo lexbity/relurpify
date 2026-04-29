@@ -56,6 +56,8 @@ func NewRewooCheckpointStore(lifecycleRepo agentlifecycle.Repository, debugf fun
 // Phase 7: Currently stores in-memory; can be persisted to workflow store in future phases.
 func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID string, phase string, attempt int, env *contextdata.Envelope) error {
 	s.ensureCheckpointArtifactRefs(ctx, checkpointID, env)
+	workflowID := envGetString(env, "rewoo.workflow_id")
+	runID := envGetString(env, "rewoo.run_id")
 
 	// Extract relevant state keys for checkpoint
 	stateKeys := []string{

@@ -24,7 +24,7 @@ func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task,
 				"result":  lastMap,
 			}, contextdata.MemoryClassTask)
 			result.Success = true
-			result.Error = nil
+			result.Error = ""
 		}
 		if final, ok := env.GetWorkingValue("react.final_output"); ok {
 			if result.Data == nil {
@@ -53,7 +53,7 @@ func (a *ReActAgent) finalizeExecuteResult(ctx context.Context, task *core.Task,
 				result.Data["degraded"] = true
 			} else {
 				result.Success = false
-				result.Error = fmt.Errorf("%s", reason)
+				result.Error = reason
 			}
 		}
 	}

@@ -7,7 +7,7 @@ import (
 
 type Option func(*ReActAgent)
 
-func New(env agentenv.AgentEnvironment, opts ...Option) *ReActAgent {
+func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *ReActAgent {
 	agent := &ReActAgent{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -46,10 +46,10 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
-func (a *ReActAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *ReActAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
 	a.Model = env.Model
 	a.Tools = env.Registry
-	a.Memory = env.Memory
+	a.Memory = env.WorkingMemory
 	a.Config = env.Config
 	a.IndexManager = env.IndexManager
 	a.SearchEngine = env.SearchEngine

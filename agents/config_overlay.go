@@ -1,7 +1,6 @@
 package agents
 
 import (
-	contractpkg "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/manifest"
 )

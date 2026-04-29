@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -15,13 +16,13 @@ import (
 // This allows plan steps to be executed as part of the goal-con execution flow.
 type PlanStepAgent struct {
 	stepExecutor *StepExecutor
-	plan         *agentgraph.Plan
+	plan         *plan.Plan
 	currentIndex int
 	results      map[string]*StepExecutionResult
 }
 
 // NewPlanStepAgent creates an adapter for executing plan steps as an agent.
-func NewPlanStepAgent(registry *capability.Registry, plan *agentgraph.Plan) *PlanStepAgent {
+func NewPlanStepAgent(registry *capability.Registry, plan *plan.Plan) *PlanStepAgent {
 	return &PlanStepAgent{
 		stepExecutor: NewStepExecutor(registry),
 		plan:         plan,
@@ -39,11 +40,8 @@ func (a *PlanStepAgent) Initialize(cfg *core.Config) error {
 }
 
 // Capabilities returns the agent's declared capabilities.
-func (a *PlanStepAgent) Capabilities() []core.Capability {
-	return []core.Capability{
-		core.CapabilityExecute,
-		core.CapabilityCode,
-	}
+func (a *PlanStepAgent) Capabilities() []string {
+	return []string{"goalcon.execution"}
 }
 
 // BuildGraph creates an execution graph for plan steps.
@@ -186,7 +184,7 @@ func (n *stepExecutionNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}
 
 	// Find the step
-	var step *core.PlanStep
+	var step *plan.PlanStep
 	for i := range n.executor.plan.Steps {
 		if n.executor.plan.Steps[i].ID == n.stepID {
 			step = &n.executor.plan.Steps[i]
@@ -258,7 +256,7 @@ func (a *ExecutionAdapter) SetFailureMode(mode FailureMode) {
 // ExecutePlan executes all steps in a plan.
 func (a *ExecutionAdapter) ExecutePlan(
 	ctx context.Context,
-	plan *core.Plan,
+	plan *plan.Plan,
 	env *contextdata.Envelope,
 ) *core.Result {
 	if a == nil || plan == nil {
@@ -322,7 +320,7 @@ func (a *ExecutionAdapter) ExecutePlan(
 // ExecuteStep executes a single step.
 func (a *ExecutionAdapter) ExecuteStep(
 	ctx context.Context,
-	step core.PlanStep,
+	step plan.PlanStep,
 	env *contextdata.Envelope,
 ) *StepExecutionResult {
 	if a == nil {

@@ -1,6 +1,6 @@
 package agents
 
-import frameworkconfig "codeburg.org/lexbit/relurpify/framework/manifest"
+import frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 
 // Deprecated: use framework/manifest.New(workspace).ConfigRoot().
 // ConfigDir returns the workspace-local configuration directory.
@@ -20,9 +20,9 @@ type ModelRef = frameworkmanifest.ModelRef
 // FeatureFlags toggles runtime capabilities.
 type FeatureFlags = frameworkmanifest.FeatureFlags
 
-// Deprecated: use framework/manifest.ContextConfig.
+// Deprecated: use framework/manifest.ContextPolicy.
 // ContextConfig controls shared context.
-type ContextConfig = frameworkmanifest.ContextConfig
+type ContextConfig = frameworkmanifest.ContextPolicy
 
 // Deprecated: use framework/manifest.LoggingConfig.
 // LoggingConfig describes log output.

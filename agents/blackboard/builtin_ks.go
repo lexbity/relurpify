@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -90,7 +91,7 @@ func (k *AnalyzerKS) CanActivate(bb *Blackboard) bool {
 	return bb.HasFact("exploration.status") && len(bb.Issues) == 0
 }
 func (k *AnalyzerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
-	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityReviewerReview, map[string]any{
+	if res, ok, err := invokeCapabilityIfPresent(ctx, nil, tools, capabilityReviewerReview, map[string]any{
 		"instruction":         firstGoal(bb),
 		"artifact_summary":    factsSummary(bb),
 		"acceptance_criteria": append([]string(nil), bb.Goals...),
@@ -120,7 +121,7 @@ func (k *PlannerKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Issues) > 0 && len(bb.PendingActions) == 0 && len(bb.CompletedActions) == 0
 }
 func (k *PlannerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
-	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityPlannerPlan, map[string]any{
+	if res, ok, err := invokeCapabilityIfPresent(ctx, nil, tools, capabilityPlannerPlan, map[string]any{
 		"instruction": plannerInstruction(bb),
 	}); err != nil {
 		return err
@@ -155,7 +156,7 @@ func (k *ReviewKS) CanActivate(bb *Blackboard) bool {
 	return len(bb.Artifacts) > 0 && !bb.HasUnverifiedArtifacts() && len(bb.Issues) == 0
 }
 func (k *ReviewKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
-	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityReviewerReview, map[string]any{
+	if res, ok, err := invokeCapabilityIfPresent(ctx, nil, tools, capabilityReviewerReview, map[string]any{
 		"instruction":      firstGoal(bb),
 		"artifact_summary": artifactSummary(bb),
 		"mode":             "artifact_review",
@@ -180,7 +181,7 @@ func (k *ExecutorKS) Execute(ctx context.Context, bb *Blackboard, tools *capabil
 	// Drain pending actions and produce artifacts.
 	pending := append([]ActionRequest(nil), bb.PendingActions...)
 	for _, req := range pending {
-		outcome, err := executeActionRequest(ctx, tools, req)
+		outcome, err := executeActionRequest(ctx, nil, tools, req)
 		if err := bb.CompleteAction(ActionResult{
 			RequestID: req.ID,
 			Success:   err == nil,
@@ -220,7 +221,7 @@ func (k *VerifierKS) CanActivate(bb *Blackboard) bool {
 	return bb.HasUnverifiedArtifacts()
 }
 func (k *VerifierKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
-	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilityVerifierVerify, map[string]any{
+	if res, ok, err := invokeCapabilityIfPresent(ctx, nil, tools, capabilityVerifierVerify, map[string]any{
 		"instruction":           firstGoal(bb),
 		"artifact_summary":      artifactSummary(bb),
 		"verification_criteria": append([]string(nil), bb.Goals...),
@@ -303,7 +304,7 @@ func (k *SummarizerKS) CanActivate(bb *Blackboard) bool {
 }
 func (k *SummarizerKS) Execute(ctx context.Context, bb *Blackboard, tools *capability.Registry, _ core.LanguageModel, _ agentspec.AgentSemanticContext) error {
 	summary := buildBlackboardCompletionSummary(bb)
-	if res, ok, err := invokeCapabilityIfPresent(ctx, tools, capabilitySummarizerSummarize, map[string]any{
+	if res, ok, err := invokeCapabilityIfPresent(ctx, nil, tools, capabilitySummarizerSummarize, map[string]any{
 		"instruction":      firstGoal(bb),
 		"artifact_summary": artifactSummary(bb),
 		"fact_summary":     factsSummary(bb),
@@ -332,14 +333,14 @@ func DefaultKnowledgeSources() []KnowledgeSource {
 	}
 }
 
-func invokeCapabilityIfPresent(ctx context.Context, tools *capability.Registry, name string, args map[string]any) (*core.ToolResult, bool, error) {
+func invokeCapabilityIfPresent(ctx context.Context, state *contextdata.Envelope, tools *capability.Registry, name string, args map[string]any) (*core.ToolResult, bool, error) {
 	if tools == nil {
 		return nil, false, nil
 	}
 	if _, ok := tools.GetCapability(name); !ok {
 		return nil, false, nil
 	}
-	result, err := tools.InvokeCapability(ctx, core.NewContext(), name, args)
+	result, err := tools.InvokeCapability(ctx, state, name, args)
 	return result, true, err
 }
 
@@ -399,7 +400,7 @@ func enqueuePlannedActions(bb *Blackboard, result *core.ToolResult, source strin
 	return count, nil
 }
 
-func executeActionRequest(ctx context.Context, tools *capability.Registry, req ActionRequest) (string, error) {
+func executeActionRequest(ctx context.Context, state *contextdata.Envelope, tools *capability.Registry, req ActionRequest) (string, error) {
 	if tools == nil {
 		return fmt.Sprintf("completed: %s", req.Description), nil
 	}
@@ -411,7 +412,7 @@ func executeActionRequest(ctx context.Context, tools *capability.Registry, req A
 		if _, exists := tools.GetCapability(target); !exists {
 			return fmt.Sprintf("completed: %s", req.Description), nil
 		}
-		result, err := tools.InvokeCapability(ctx, core.NewContext(), target, req.Args)
+		result, err := tools.InvokeCapability(ctx, state, target, req.Args)
 		if err != nil {
 			return "", err
 		}
@@ -421,7 +422,7 @@ func executeActionRequest(ctx context.Context, tools *capability.Registry, req A
 		return fmt.Sprintf("completed: %s", req.Description), nil
 	}
 	if _, ok := tools.GetCapability(capabilityExecutorInvoke); ok {
-		result, err := tools.InvokeCapability(ctx, core.NewContext(), capabilityExecutorInvoke, map[string]any{
+		result, err := tools.InvokeCapability(ctx, state, capabilityExecutorInvoke, map[string]any{
 			"capability": target,
 			"args":       req.Args,
 		})
@@ -430,7 +431,7 @@ func executeActionRequest(ctx context.Context, tools *capability.Registry, req A
 		}
 		return summarizeCapabilityResult(result, req.Description), nil
 	}
-	result, err := tools.InvokeCapability(ctx, core.NewContext(), target, req.Args)
+	result, err := tools.InvokeCapability(ctx, state, target, req.Args)
 	if err != nil {
 		return "", err
 	}

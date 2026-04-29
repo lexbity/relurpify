@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
+	"codeburg.org/lexbit/relurpify/framework/search"
 )
 
 // ReActAgent implements the ReAct (Reason + Act) paradigm. It iteratively
@@ -17,18 +18,16 @@ import (
 type ReActAgent struct {
 	Model           core.LanguageModel
 	Tools           *capability.Registry
-	Memory          memory.MemoryStore
+	Memory          *memory.WorkingMemoryStore
 	Config          *core.Config
 	IndexManager    *ast.IndexManager
-	SearchEngine    core.SearchEngine
+	SearchEngine    *search.SearchEngine
 	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
 
 	// Internal state
-	contextPolicy    *core.ContextPolicy
-	sharedContext    *core.SharedContext
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
 	initialized      bool
 	Mode             string
@@ -40,10 +39,6 @@ func (a *ReActAgent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Tools == nil {
 		a.Tools = capability.NewRegistry()
-	}
-	if a.Config != nil && a.Config.ContextPolicy != nil {
-		a.contextPolicy = a.Config.ContextPolicy
-		a.sharedContext = core.NewSharedContext()
 	}
 	a.initialized = true
 	return nil
@@ -74,9 +69,8 @@ func (a *ReActAgent) Execute(ctx context.Context, task *core.Task, env *contextd
 
 // debugf is a helper for debug logging when telemetry is available.
 func (a *ReActAgent) debugf(format string, args ...interface{}) {
-	if a.Config != nil && a.Config.Telemetry != nil {
-		a.Config.Telemetry.Debugf(format, args...)
-	}
+	_ = format
+	_ = args
 }
 
 // streamMode returns the streaming mode, defaulting to blocking.

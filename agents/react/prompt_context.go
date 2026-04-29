@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	pl "codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
@@ -114,7 +114,7 @@ func (a *promptContextAssembler) planGoal(state *contextdata.Envelope) string {
 	if !ok || raw == nil {
 		return ""
 	}
-	plan, ok := raw.(agentgraph.Plan)
+	plan, ok := raw.(pl.Plan)
 	if !ok {
 		return ""
 	}
@@ -135,7 +135,7 @@ func (a *promptContextAssembler) currentStep() string {
 	if !ok || raw == nil {
 		return ""
 	}
-	if step, ok := raw.(agentgraph.PlanStep); ok {
+	if step, ok := raw.(pl.PlanStep); ok {
 		encoded, err := json.MarshalIndent(step, "", "  ")
 		if err == nil {
 			return string(encoded)
@@ -188,7 +188,7 @@ func (a *promptContextAssembler) declarativeMemory(state *contextdata.Envelope) 
 		}
 	}
 	if raw, ok := envelopeGet(state, "graph.declarative_memory_refs"); ok && raw != nil {
-		if refs, ok := raw.([]agentgraph.ContextReference); ok {
+		if refs, ok := raw.([]contextdata.ChunkReference); ok {
 			if formatted := formatMemoryReferenceList(refs); formatted != "" {
 				return formatted
 			}
@@ -246,25 +246,22 @@ func formatMemoryRetrievalPayload(payload map[string]any) string {
 	return strings.Join(parts, "\n")
 }
 
-func formatMemoryReferenceList(refs []agentgraph.ContextReference) string {
+func formatMemoryReferenceList(refs []contextdata.ChunkReference) string {
 	if len(refs) == 0 {
 		return ""
 	}
 	lines := make([]string, 0, len(refs))
 	for _, ref := range refs {
-		label := strings.TrimSpace(ref.URI)
-		if label == "" {
-			label = strings.TrimSpace(ref.ID)
-		}
+		label := strings.TrimSpace(string(ref.ChunkID))
 		if label == "" {
 			continue
 		}
 		line := "- Reference: " + label
-		if ref.Kind != "" {
-			line += fmt.Sprintf(" (%s)", ref.Kind)
+		if ref.IsSummary {
+			line += " (summary)"
 		}
-		if ref.Detail != "" {
-			line += " [" + strings.TrimSpace(ref.Detail) + "]"
+		if ref.Source != "" {
+			line += " [" + strings.TrimSpace(ref.Source) + "]"
 		}
 		lines = append(lines, line)
 	}
@@ -482,64 +479,8 @@ func (a *promptContextAssembler) compactHistory(state *contextdata.Envelope, com
 }
 
 func (a *promptContextAssembler) contextFiles(state *contextdata.Envelope) string {
-	if a == nil || a.agent == nil || a.agent.contextPolicy == nil || a.agent.contextPolicy.ContextManager == nil {
-		return renderContextFiles(a.task, 3000)
-	}
-	items := a.agent.contextPolicy.ContextManager.GetItems()
-	if len(items) == 0 {
-		return renderContextFiles(a.task, 3000)
-	}
-	type scoredItem struct {
-		score float64
-		text  string
-	}
-	var scored []scoredItem
-	for _, item := range items {
-		switch typed := item.(type) {
-		case *core.FileContextItem:
-			content := typed.Content
-			if content == "" {
-				content = typed.Summary
-			}
-			if strings.TrimSpace(content) == "" {
-				continue
-			}
-			scored = append(scored, scoredItem{
-				score: typed.RelevanceScore(),
-				text:  fmt.Sprintf("File: %s\n%s", typed.Path, truncateForPrompt(content, 1000)),
-			})
-		case *core.ToolResultContextItem:
-			payload := typed.Result
-			if payload == nil {
-				continue
-			}
-			text, ok := renderInsertionFilteredSummary(a.agent, a.task, typed.ToolName, payload, typed.Envelope)
-			if !ok || strings.TrimSpace(text) == "" {
-				continue
-			}
-			scored = append(scored, scoredItem{
-				score: typed.RelevanceScore(),
-				text:  fmt.Sprintf("Tool %s: %s", typed.ToolName, text),
-			})
-		}
-	}
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].score > scored[j].score
-	})
-	var blocks []string
-	remaining := 2200
-	for _, item := range scored {
-		if remaining <= 0 {
-			break
-		}
-		text := item.text
-		if len(text) > remaining {
-			text = text[:remaining]
-		}
-		blocks = append(blocks, text)
-		remaining -= len(text)
-	}
-	return strings.Join(blocks, "\n\n")
+	_ = state
+	return renderContextFiles(a.task, 3000)
 }
 
 func (a *promptContextAssembler) recentToolObservations(state *contextdata.Envelope) string {

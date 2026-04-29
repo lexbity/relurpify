@@ -1,7 +1,6 @@
 package htn
 
 import (
-	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
@@ -43,7 +42,7 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
-func New(env agentenv.AgentEnvironment, methods *MethodLibrary, opts ...Option) *HTNAgent {
+func New(env *agentenv.WorkspaceEnvironment, methods *MethodLibrary, opts ...Option) *HTNAgent {
 	agent := &HTNAgent{Methods: methods}
 	for _, opt := range opts {
 		if opt != nil {
@@ -51,13 +50,13 @@ func New(env agentenv.AgentEnvironment, methods *MethodLibrary, opts ...Option) 
 		}
 	}
 	if agent.PrimitiveExec == nil {
-		agent.PrimitiveExec = reactpkg.New(env)
+		agent.PrimitiveExec = &noopAgent{}
 	}
 	_ = agent.InitializeEnvironment(env)
 	return agent
 }
 
-func (a *HTNAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *HTNAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
 	a.Model = env.Model
 	a.Tools = env.Registry
 	a.Config = env.Config

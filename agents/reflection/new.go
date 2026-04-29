@@ -3,12 +3,12 @@ package reflection
 import (
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 )
 
 type Option func(*ReflectionAgent)
 
-func New(env agentenv.AgentEnvironment, delegate graph.WorkflowExecutor, opts ...Option) *ReflectionAgent {
+func New(env *agentenv.WorkspaceEnvironment, delegate graph.WorkflowExecutor, opts ...Option) *ReflectionAgent {
 	if delegate == nil {
 		delegate = reactpkg.New(env)
 	}
@@ -22,11 +22,11 @@ func New(env agentenv.AgentEnvironment, delegate graph.WorkflowExecutor, opts ..
 	return agent
 }
 
-func (a *ReflectionAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *ReflectionAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
 	a.Reviewer = env.Model
 	a.Config = env.Config
 	if envAware, ok := a.Delegate.(interface {
-		InitializeEnvironment(agentenv.AgentEnvironment) error
+		InitializeEnvironment(*agentenv.WorkspaceEnvironment) error
 	}); ok {
 		if err := envAware.InitializeEnvironment(env); err != nil {
 			return err

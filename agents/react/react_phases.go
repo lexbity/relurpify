@@ -11,6 +11,12 @@ import (
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
 )
 
+const (
+	contextmgrPhaseExplore = "explore"
+	contextmgrPhaseVerify  = "verify"
+	contextmgrPhaseEdit    = "edit"
+)
+
 func defaultIterationsForMode(mode string) int {
 	switch strings.ToLower(mode) {
 	case "code", "tdd":

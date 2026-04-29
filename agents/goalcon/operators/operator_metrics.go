@@ -1,10 +1,10 @@
 package operators
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
@@ -66,49 +66,36 @@ func (c OperatorMetricsCollection) GetOrCreateMetrics(name string) *OperatorMetr
 }
 
 // LoadMetricsFromMemory retrieves operator metrics from the memory store.
-func LoadMetricsFromMemory(store memory.MemoryStore) OperatorMetricsCollection {
+func LoadMetricsFromMemory(store *memory.WorkingMemoryStore) OperatorMetricsCollection {
 	if store == nil {
 		return make(OperatorMetricsCollection)
 	}
-
-	// Retrieve persisted metrics from project scope
-	record, exists, err := store.Recall(context.Background(), "goalcon.operator_metrics", memory.MemoryScopeProject)
-	if err != nil || !exists || record == nil {
+	record, ok := store.Scope("goalcon").Get("goalcon.operator_metrics")
+	if !ok {
 		return make(OperatorMetricsCollection)
 	}
-
-	// Parse JSON back to metrics collection
-	// The Value field is map[string]interface{}, so we need to re-marshal it
+	jsonStr, ok := record.Value.(string)
+	if !ok {
+		return make(OperatorMetricsCollection)
+	}
 	var metrics OperatorMetricsCollection
-	jsonBytes, err := json.Marshal(record.Value)
-	if err != nil {
+	if err := json.Unmarshal([]byte(jsonStr), &metrics); err != nil {
 		return make(OperatorMetricsCollection)
-	}
-
-	if err := json.Unmarshal(jsonBytes, &metrics); err != nil {
-		return make(OperatorMetricsCollection)
-	}
-
-	if metrics == nil {
-		metrics = make(OperatorMetricsCollection)
 	}
 	return metrics
 }
 
 // SaveMetricsToMemory persists operator metrics to the memory store.
-func SaveMetricsToMemory(store memory.MemoryStore, metrics OperatorMetricsCollection) error {
+func SaveMetricsToMemory(store *memory.WorkingMemoryStore, metrics OperatorMetricsCollection) error {
 	if store == nil || metrics == nil {
 		return nil
 	}
-
-	// Convert metrics to map[string]interface{} for MemoryStore
-	metricsMap := make(map[string]interface{})
-	for k, v := range metrics {
-		metricsMap[k] = v
+	data, err := json.Marshal(metrics)
+	if err != nil {
+		return err
 	}
-
-	// Store in project scope (persists across sessions)
-	return store.Remember(context.Background(), "goalcon.operator_metrics", metricsMap, memory.MemoryScopeProject)
+	store.Scope("goalcon").Set("goalcon.operator_metrics", string(data), core.MemoryClassWorking)
+	return nil
 }
 
 // MetricsSnapshot provides a read-only view of metrics at a point in time.

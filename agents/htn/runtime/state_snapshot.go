@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
-	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
 // LoadStateFromEnvelope reconstructs the canonical HTN state snapshot from
@@ -29,9 +28,9 @@ func LoadStateFromEnvelope(env *contextdata.Envelope) (*HTNState, bool, error) {
 		}
 	}
 	if raw, ok := env.GetWorkingValue(contextKeyPlan); ok {
-		var plan core.Plan
-		if decodeContextValue(raw, &plan) {
-			snapshot.Plan = clonePlan(&plan)
+		var planValue plan.Plan
+		if decodeContextValue(raw, &planValue) {
+			snapshot.Plan = clonePlan(&planValue)
 			loaded = true
 		}
 	}
@@ -186,12 +185,12 @@ func normalizeHTNState(snapshot *HTNState) {
 }
 
 // validatePlanShape checks that plan steps and dependencies are consistent.
-func validatePlanShape(plan *agentgraph.Plan) error {
-	if plan == nil {
+func validatePlanShape(p *plan.Plan) error {
+	if p == nil {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(plan.Steps))
-	for _, step := range plan.Steps {
+	seen := make(map[string]struct{}, len(p.Steps))
+	for _, step := range p.Steps {
 		if step.ID == "" {
 			return fmt.Errorf("htn: plan step id required")
 		}
@@ -200,7 +199,7 @@ func validatePlanShape(plan *agentgraph.Plan) error {
 		}
 		seen[step.ID] = struct{}{}
 	}
-	for stepID, deps := range plan.Dependencies {
+	for stepID, deps := range p.Dependencies {
 		if _, ok := seen[stepID]; !ok {
 			return fmt.Errorf("htn: dependency declared for unknown step %q", stepID)
 		}
@@ -214,19 +213,19 @@ func validatePlanShape(plan *agentgraph.Plan) error {
 }
 
 // clonePlan creates a deep copy of a plan.
-func clonePlan(plan *agentgraph.Plan) *agentgraph.Plan {
-	if plan == nil {
+func clonePlan(p *plan.Plan) *plan.Plan {
+	if p == nil {
 		return nil
 	}
-	cloned := *plan
-	cloned.Steps = append([]agentgraph.PlanStep(nil), plan.Steps...)
-	if plan.Dependencies != nil {
-		cloned.Dependencies = make(map[string][]string, len(plan.Dependencies))
-		for key, deps := range plan.Dependencies {
+	cloned := *p
+	cloned.Steps = append([]plan.PlanStep(nil), p.Steps...)
+	if p.Dependencies != nil {
+		cloned.Dependencies = make(map[string][]string, len(p.Dependencies))
+		for key, deps := range p.Dependencies {
 			cloned.Dependencies[key] = append([]string(nil), deps...)
 		}
 	}
-	cloned.Files = append([]string(nil), plan.Files...)
+	cloned.Files = append([]string(nil), p.Files...)
 	return &cloned
 }
 

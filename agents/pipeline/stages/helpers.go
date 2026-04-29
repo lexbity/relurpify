@@ -40,28 +40,11 @@ func renderContextFiles(task *core.Task, maxBytes int) string {
 	if maxBytes <= 0 {
 		maxBytes = 3000
 	}
-	var files []core.ContextFileContent
-	switch v := raw.(type) {
-	case []core.ContextFileContent:
-		files = append(files, v...)
-	case []any:
-		for _, item := range v {
-			m, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			files = append(files, core.ContextFileContent{
-				Path:      strings.TrimSpace(fmt.Sprint(m["path"])),
-				Content:   fmt.Sprint(m["content"]),
-				Summary:   strings.TrimSpace(fmt.Sprint(m["summary"])),
-				Truncated: m["truncated"] == true,
-			})
-		}
-	}
+	files := normalizeContextFiles(raw)
 	var b strings.Builder
 	remaining := maxBytes
 	for _, file := range files {
-		if file.Path == "" {
+		if strings.TrimSpace(file.Path) == "" {
 			continue
 		}
 		entry := renderContextFileEntry(file, remaining)
@@ -86,13 +69,13 @@ func renderContextFiles(task *core.Task, maxBytes int) string {
 	return strings.TrimSpace(b.String())
 }
 
-func renderContextFileEntry(file core.ContextFileContent, maxBytes int) string {
+func renderContextFileEntry(file contextFileContent, maxBytes int) string {
 	if maxBytes <= 0 || file.Path == "" {
 		return ""
 	}
 	header := fmt.Sprintf("File: %s", file.Path)
-	if file.Reference != nil && file.Reference.Detail != "" {
-		header += fmt.Sprintf(" [detail=%s]", file.Reference.Detail)
+	if detail := strings.TrimSpace(fmt.Sprint(file.Reference["detail"])); detail != "" && detail != "<nil>" {
+		header += fmt.Sprintf(" [detail=%s]", detail)
 	}
 	header += "\n"
 	remaining := maxBytes - len(header)
@@ -110,6 +93,63 @@ func renderContextFileEntry(file core.ContextFileContent, maxBytes int) string {
 		body = body[:remaining]
 	}
 	return header + body
+}
+
+type contextFileContent struct {
+	Path      string
+	Content   string
+	Summary   string
+	Truncated bool
+	Reference map[string]any
+}
+
+func normalizeContextFiles(raw any) []contextFileContent {
+	switch v := raw.(type) {
+	case []contextFileContent:
+		return append([]contextFileContent(nil), v...)
+	case []any:
+		out := make([]contextFileContent, 0, len(v))
+		for _, item := range v {
+			m, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			out = append(out, contextFileContent{
+				Path:      strings.TrimSpace(fmt.Sprint(m["path"])),
+				Content:   fmt.Sprint(m["content"]),
+				Summary:   strings.TrimSpace(fmt.Sprint(m["summary"])),
+				Truncated: m["truncated"] == true,
+				Reference: asStringAnyMap(m["reference"]),
+			})
+		}
+		return out
+	case []map[string]any:
+		out := make([]contextFileContent, 0, len(v))
+		for _, m := range v {
+			out = append(out, contextFileContent{
+				Path:      strings.TrimSpace(fmt.Sprint(m["path"])),
+				Content:   fmt.Sprint(m["content"]),
+				Summary:   strings.TrimSpace(fmt.Sprint(m["summary"])),
+				Truncated: m["truncated"] == true,
+				Reference: asStringAnyMap(m["reference"]),
+			})
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func asStringAnyMap(raw any) map[string]any {
+	m, ok := raw.(map[string]any)
+	if !ok || len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 func filePaths(selection FileSelection) []string {

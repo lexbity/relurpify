@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/contextstream"
@@ -199,7 +200,7 @@ func (e *rewooExecutor) streamMaxTokens() int {
 }
 
 // streamTriggerNode creates a streaming trigger node for the rewoo executor.
-func (e *rewooExecutor) streamTriggerNode(plan *RewooPlan) *graph.ContextStreamNode {
+func (e *rewooExecutor) streamTriggerNode(plan *RewooPlan) *graph.StreamTriggerNode {
 	if e.StreamTrigger == nil {
 		return nil
 	}

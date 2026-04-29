@@ -231,29 +231,10 @@ func (a *ReActAgent) getLastResult(env *contextdata.Envelope) *core.Result {
 }
 
 func (a *ReActAgent) enforceBudget(env *contextdata.Envelope) {
-	if a.contextPolicy == nil {
-		return
-	}
-	var tools []core.Tool
-	if catalog := a.executionCapabilityCatalog(); catalog != nil {
-		tools = catalog.ModelCallableTools()
-	} else if a.Tools != nil {
-		tools = a.Tools.ModelCallableTools()
-	}
-	a.contextPolicy.EnforceBudget(env, a.sharedContext, a.Model, tools, a.debugf)
 }
 
 func (a *ReActAgent) recordLatestInteraction(env *contextdata.Envelope) {
-	if a.contextPolicy == nil {
-		return
-	}
-	a.contextPolicy.RecordLatestInteraction(env, a.debugf)
 }
 
 func (a *ReActAgent) manageContextSignals(env *contextdata.Envelope) {
-	if a.contextPolicy == nil {
-		return
-	}
-	lastResult := a.getLastResult(env)
-	a.contextPolicy.HandleSignals(env, a.sharedContext, lastResult)
 }

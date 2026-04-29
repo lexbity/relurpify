@@ -8,7 +8,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // StatePayload retrieves workflow retrieval payload from state.
@@ -142,15 +141,7 @@ func formatWorkflowRetrievalPromptValue(payload map[string]any) string {
 		if ref := workflowRetrievalReference(result); ref != "" {
 			line += "\n   Reference: " + ref
 		}
-		if citations, ok := result["citations"].([]retrieval.PackedCitation); ok && len(citations) > 0 {
-			refs := make([]string, 0, len(citations))
-			for _, citation := range citations {
-				ref := firstPromptValue(citation.CanonicalURI, citation.ChunkID, citation.DocID)
-				if ref == "" {
-					continue
-				}
-				refs = append(refs, ref)
-			}
+		if refs := citationRefs(result["citations"]); len(refs) > 0 {
 			if len(refs) > 0 {
 				line += "\n   Sources: " + strings.Join(refs, ", ")
 			}
@@ -161,6 +152,49 @@ func formatWorkflowRetrievalPromptValue(payload map[string]any) string {
 		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
 	}
 	return strings.Join(sections, "\n")
+}
+
+func citationRefs(raw any) []string {
+	switch v := raw.(type) {
+	case []string:
+		refs := make([]string, 0, len(v))
+		for _, item := range v {
+			if ref := strings.TrimSpace(item); ref != "" {
+				refs = append(refs, ref)
+			}
+		}
+		return refs
+	case []any:
+		refs := make([]string, 0, len(v))
+		for _, item := range v {
+			if ref := citationRef(item); ref != "" {
+				refs = append(refs, ref)
+			}
+		}
+		return refs
+	case map[string]any:
+		if ref := citationRef(v); ref != "" {
+			return []string{ref}
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func citationRef(raw any) string {
+	switch v := raw.(type) {
+	case map[string]any:
+		return firstPromptValue(
+			strings.TrimSpace(fmt.Sprint(v["canonical_uri"])),
+			strings.TrimSpace(fmt.Sprint(v["chunk_id"])),
+			strings.TrimSpace(fmt.Sprint(v["doc_id"])),
+			strings.TrimSpace(fmt.Sprint(v["uri"])),
+			strings.TrimSpace(fmt.Sprint(v["id"])),
+		)
+	default:
+		return strings.TrimSpace(fmt.Sprint(raw))
+	}
 }
 
 func workflowRetrievalReference(result map[string]any) string {

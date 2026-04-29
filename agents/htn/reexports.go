@@ -24,7 +24,7 @@ var (
 	DecomposeResolved    = runtime.DecomposeResolved
 	NewMethodLibrary     = runtime.NewMethodLibrary
 	ResolveMethod        = runtime.ResolveMethod
-	LoadStateFromContext = runtime.LoadStateFromContext
+	LoadStateFromContext = runtime.LoadStateFromEnvelope
 	MergeHTNBranches     = runtime.MergeHTNBranches
 )
 

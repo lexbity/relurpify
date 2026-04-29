@@ -3,12 +3,12 @@ package planning
 import (
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
 	"codeburg.org/lexbit/relurpify/agents/goalcon/types"
-	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/agents/plan"
 )
 
 // PlanningResult captures the solver output.
 type PlanningResult struct {
-	Plan        *core.Plan
+	Plan        *plan.Plan
 	Depth       int
 	Unsatisfied []types.Predicate
 }

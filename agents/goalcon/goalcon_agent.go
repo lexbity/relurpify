@@ -19,7 +19,7 @@ import (
 type GoalConAgent struct {
 	Model            core.LanguageModel
 	Tools            *capability.Registry
-	Memory           memory.MemoryStore
+	Memory           *memory.WorkingMemoryStore
 	Config           *core.Config
 	Operators        *OperatorRegistry
 	PlanExecutor     graph.WorkflowExecutor
@@ -62,12 +62,8 @@ func (a *GoalConAgent) Initialize(cfg *core.Config) error {
 	return nil
 }
 
-func (a *GoalConAgent) Capabilities() []core.Capability {
-	return []core.Capability{
-		core.CapabilityPlan,
-		core.CapabilityExecute,
-		core.CapabilityCode,
-	}
+func (a *GoalConAgent) Capabilities() []string {
+	return []string{"goalcon"}
 }
 
 func (a *GoalConAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
@@ -112,7 +108,10 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contex
 	}
 
 	// Phase 5: Create audit trail for provenance tracking
-	planID := task.ID
+	planID := ""
+	if task != nil {
+		planID = task.ID
+	}
 	if planID == "" {
 		planID = "goalcon-" + fmt.Sprintf("%d", time.Now().UnixNano())
 	}
@@ -192,7 +191,7 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *core.Task, env *contex
 				"success_rate": provenance.SuccessRate,
 				"summary":      provenance.HumanSummary,
 			}
-			_ = a.Memory.Remember(ctx, fmt.Sprintf("goalcon.audit.%s", planID), provenanceData, memory.MemoryScopeProject)
+			a.Memory.Scope("goalcon").Set(fmt.Sprintf("goalcon.audit.%s", planID), provenanceData, core.MemoryClassWorking)
 		}
 	}
 
@@ -237,7 +236,7 @@ func (n *goalconNode) Execute(_ context.Context, _ *contextdata.Envelope) (*core
 type noopAgent struct{}
 
 func (n *noopAgent) Initialize(_ *core.Config) error { return nil }
-func (n *noopAgent) Capabilities() []core.Capability { return nil }
+func (n *noopAgent) Capabilities() []string          { return nil }
 func (n *noopAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	g := graph.NewGraph()
 	done := graph.NewTerminalNode("noop_done")

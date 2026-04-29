@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/htn/authoring"
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 // Phase 10: Persistence automation and knowledge integration.
@@ -108,19 +108,19 @@ func ValidateOutputAgainstSchema(output map[string]any, schema *OutputValidation
 
 // OptimizeStepOrdering generates scheduling hints for a plan based on cost classes and dependencies.
 // Returns steps ordered for optimal execution considering cost and parallelization safety.
-func OptimizeStepOrdering(plan *agentgraph.Plan, metadata map[string]OperatorMetadata) []SchedulingHint {
-	if plan == nil || len(plan.Steps) == 0 {
+func OptimizeStepOrdering(planValue *plan.Plan, metadata map[string]OperatorMetadata) []SchedulingHint {
+	if planValue == nil || len(planValue.Steps) == 0 {
 		return nil
 	}
 
-	hints := make([]SchedulingHint, 0, len(plan.Steps))
+	hints := make([]SchedulingHint, 0, len(planValue.Steps))
 
 	// Group steps by cost class
-	fastSteps := make([]agentgraph.PlanStep, 0)
-	mediumSteps := make([]agentgraph.PlanStep, 0)
-	slowSteps := make([]agentgraph.PlanStep, 0)
+	fastSteps := make([]plan.PlanStep, 0)
+	mediumSteps := make([]plan.PlanStep, 0)
+	slowSteps := make([]plan.PlanStep, 0)
 
-	for _, step := range plan.Steps {
+	for _, step := range planValue.Steps {
 		operatorName := step.Tool
 		if operatorName == "" {
 			operatorName = step.ID
@@ -188,13 +188,13 @@ func OptimizeStepOrdering(plan *agentgraph.Plan, metadata map[string]OperatorMet
 
 // SortStepsByOptimization reorders plan steps based on cost class optimization strategy.
 // Returns reordered slice of steps without modifying the original plan.
-func SortStepsByOptimization(steps []agentgraph.PlanStep, metadata map[string]OperatorMetadata, strategy string) []agentgraph.PlanStep {
+func SortStepsByOptimization(steps []plan.PlanStep, metadata map[string]OperatorMetadata, strategy string) []plan.PlanStep {
 	if len(steps) == 0 {
 		return steps
 	}
 
 	// Create a copy to avoid modifying original
-	sorted := make([]agentgraph.PlanStep, len(steps))
+	sorted := make([]plan.PlanStep, len(steps))
 	copy(sorted, steps)
 
 	// Sort based on strategy
@@ -222,7 +222,7 @@ func SortStepsByOptimization(steps []agentgraph.PlanStep, metadata map[string]Op
 }
 
 // Helper to get cost class for a step
-func getCostClassForStep(step agentgraph.PlanStep, metadata map[string]OperatorMetadata) authoring.CostClass {
+func getCostClassForStep(step plan.PlanStep, metadata map[string]OperatorMetadata) authoring.CostClass {
 	operatorName := step.Tool
 	if operatorName == "" {
 		operatorName = step.ID
@@ -301,10 +301,10 @@ func ExtractOutputValidationSchema(expectedOutput map[string]any) *OutputValidat
 }
 
 // ComputeEstimatedExecutionTime calculates expected duration for a plan based on historical data.
-func ComputeEstimatedExecutionTime(plan *agentgraph.Plan, metadata map[string]OperatorMetadata) int {
+func ComputeEstimatedExecutionTime(planValue *plan.Plan, metadata map[string]OperatorMetadata) int {
 	totalTime := 0
 
-	for _, step := range plan.Steps {
+	for _, step := range planValue.Steps {
 		operatorName := step.Tool
 		if operatorName == "" {
 			operatorName = step.ID
@@ -376,11 +376,11 @@ type KnowledgeQuery struct {
 // This enables learning from similar previous runs.
 // TODO: Reimplement without WorkflowStateStore dependency
 // per the agentlifecycle workflow-store removal plan
-func RetrieveRelevantKnowledge(ctx context.Context, store interface{}, query *KnowledgeQuery) []memory.KnowledgeRecord {
+func RetrieveRelevantKnowledge(ctx context.Context, store interface{}, query *KnowledgeQuery) []agentlifecycle.WorkflowEventRecord {
 	if store == nil || query == nil {
 		return nil
 	}
 	// Placeholder - knowledge retrieval to be reimplemented
 	// using agentlifecycle.Repository or WorkingMemory
-	return []memory.KnowledgeRecord{}
+	return []agentlifecycle.WorkflowEventRecord{}
 }

@@ -41,7 +41,7 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
-func New(env agentenv.AgentEnvironment, operators *OperatorRegistry, opts ...Option) *GoalConAgent {
+func New(env *agentenv.WorkspaceEnvironment, operators *OperatorRegistry, opts ...Option) *GoalConAgent {
 	agent := &GoalConAgent{Operators: operators}
 	for _, opt := range opts {
 		if opt != nil {
@@ -52,10 +52,13 @@ func New(env agentenv.AgentEnvironment, operators *OperatorRegistry, opts ...Opt
 	return agent
 }
 
-func (a *GoalConAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *GoalConAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
+	if env == nil {
+		return a.Initialize(nil)
+	}
 	a.Model = env.Model
 	a.Tools = env.Registry
-	a.Memory = env.Memory
+	a.Memory = env.WorkingMemory
 	a.Config = env.Config
 	return a.Initialize(env.Config)
 }

@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -16,11 +16,16 @@ func publishTaskState(env *contextdata.Envelope, task *core.Task) {
 	}
 	summary := TaskState{
 		ID:          task.ID,
-		Type:        task.Type,
+		Type:        core.TaskType(task.Type),
 		Instruction: task.Instruction,
 	}
 	if len(task.Metadata) > 0 {
-		summary.Metadata = mapsClone(task.Metadata)
+		summary.Metadata = make(map[string]string, len(task.Metadata))
+		for key, value := range task.Metadata {
+			if s, ok := value.(string); ok {
+				summary.Metadata[key] = s
+			}
+		}
 	}
 	env.SetWorkingValue(contextKeyTask, summary, contextdata.MemoryClassTask)
 	env.SetWorkingValue(contextKeyTaskType, task.Type, contextdata.MemoryClassTask)
@@ -58,19 +63,19 @@ func publishResolvedMethodState(env *contextdata.Envelope, method *ResolvedMetho
 }
 
 // publishPlanState records the decomposed plan in envelope working memory.
-func publishPlanState(env *contextdata.Envelope, plan *agentgraph.Plan) {
-	if env == nil || plan == nil {
+func publishPlanState(env *contextdata.Envelope, p *plan.Plan) {
+	if env == nil || p == nil {
 		return
 	}
-	cloned := *plan
-	cloned.Steps = append([]agentgraph.PlanStep(nil), plan.Steps...)
-	if plan.Dependencies != nil {
-		cloned.Dependencies = make(map[string][]string, len(plan.Dependencies))
-		for key, deps := range plan.Dependencies {
+	cloned := *p
+	cloned.Steps = append([]plan.PlanStep(nil), p.Steps...)
+	if p.Dependencies != nil {
+		cloned.Dependencies = make(map[string][]string, len(p.Dependencies))
+		for key, deps := range p.Dependencies {
 			cloned.Dependencies[key] = append([]string(nil), deps...)
 		}
 	}
-	cloned.Files = append([]string(nil), plan.Files...)
+	cloned.Files = append([]string(nil), p.Files...)
 	env.SetWorkingValue(contextKeyPlan, &cloned, contextdata.MemoryClassTask)
 	execution := loadExecutionState(env)
 	execution.PlannedStepCount = len(cloned.Steps)

@@ -40,7 +40,7 @@ func (ml *MethodLibrary) Find(task *core.Task) *Method {
 	}
 	var candidates []Method
 	for _, m := range ml.methods {
-		if m.TaskType != task.Type {
+		if m.TaskType != core.TaskType(task.Type) {
 			continue
 		}
 		if m.Precondition != nil && !m.Precondition(task) {
@@ -75,7 +75,7 @@ func (ml *MethodLibrary) FindAll(task *core.Task) []Method {
 	}
 	var candidates []Method
 	for _, m := range ml.methods {
-		if m.TaskType != task.Type {
+		if m.TaskType != core.TaskType(task.Type) {
 			continue
 		}
 		if m.Precondition != nil && !m.Precondition(task) {
@@ -123,22 +123,22 @@ func (ml *MethodLibrary) registerDefaults() {
 			TaskType: core.TaskTypeCodeGeneration,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeAnalysis, Instruction: "Explore the codebase to understand context for: {{.Instruction}}"},
-				{Name: "plan", Type: core.TaskTypePlanning, Instruction: "Plan the implementation for: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the codebase to understand context for: {{.Instruction}}"},
+				{Name: "plan", Type: core.TaskTypePlan, Instruction: "Plan the implementation for: {{.Instruction}}", DependsOn: []string{"explore"}},
 				{Name: "code", Type: core.TaskTypeCodeGeneration, Instruction: "Implement: {{.Instruction}}", DependsOn: []string{"plan"}},
-				{Name: "verify", Type: core.TaskTypeAnalysis, Instruction: "Verify the implementation for: {{.Instruction}}", DependsOn: []string{"code"}},
+				{Name: "verify", Type: core.TaskTypeExplain, Instruction: "Verify the implementation for: {{.Instruction}}", DependsOn: []string{"code"}},
 			},
 		},
 		{
 			Name:     "code-fix",
-			TaskType: core.TaskTypeCodeModification,
+			TaskType: core.TaskTypeExecute,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeAnalysis, Instruction: "Explore the codebase to understand the problem for: {{.Instruction}}"},
-				{Name: "diagnose", Type: core.TaskTypeAnalysis, Instruction: "Diagnose the root cause for: {{.Instruction}}", DependsOn: []string{"explore"}},
-				{Name: "plan", Type: core.TaskTypePlanning, Instruction: "Plan the fix for: {{.Instruction}}", DependsOn: []string{"diagnose"}},
-				{Name: "code", Type: core.TaskTypeCodeModification, Instruction: "Apply the fix for: {{.Instruction}}", DependsOn: []string{"plan"}},
-				{Name: "verify", Type: core.TaskTypeAnalysis, Instruction: "Verify the fix for: {{.Instruction}}", DependsOn: []string{"code"}},
+				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the codebase to understand the problem for: {{.Instruction}}"},
+				{Name: "diagnose", Type: core.TaskTypeExplain, Instruction: "Diagnose the root cause for: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "plan", Type: core.TaskTypePlan, Instruction: "Plan the fix for: {{.Instruction}}", DependsOn: []string{"diagnose"}},
+				{Name: "code", Type: core.TaskTypeExecute, Instruction: "Apply the fix for: {{.Instruction}}", DependsOn: []string{"plan"}},
+				{Name: "verify", Type: core.TaskTypeExplain, Instruction: "Verify the fix for: {{.Instruction}}", DependsOn: []string{"code"}},
 			},
 		},
 		{
@@ -146,27 +146,27 @@ func (ml *MethodLibrary) registerDefaults() {
 			TaskType: core.TaskTypeReview,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeAnalysis, Instruction: "Explore the code to be reviewed for: {{.Instruction}}"},
-				{Name: "analyze", Type: core.TaskTypeAnalysis, Instruction: "Analyze for issues in: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the code to be reviewed for: {{.Instruction}}"},
+				{Name: "analyze", Type: core.TaskTypeExplain, Instruction: "Analyze for issues in: {{.Instruction}}", DependsOn: []string{"explore"}},
 				{Name: "report", Type: core.TaskTypeReview, Instruction: "Produce a review report for: {{.Instruction}}", DependsOn: []string{"analyze"}},
 			},
 		},
 		{
 			Name:     "explain",
-			TaskType: core.TaskTypeAnalysis,
+			TaskType: core.TaskTypeExplain,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeAnalysis, Instruction: "Explore the relevant code for: {{.Instruction}}"},
-				{Name: "summarize", Type: core.TaskTypeAnalysis, Instruction: "Summarize and explain: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore the relevant code for: {{.Instruction}}"},
+				{Name: "summarize", Type: core.TaskTypeExplain, Instruction: "Summarize and explain: {{.Instruction}}", DependsOn: []string{"explore"}},
 			},
 		},
 		{
 			Name:     "plan-task",
-			TaskType: core.TaskTypePlanning,
+			TaskType: core.TaskTypePlan,
 			Priority: 0,
 			Subtasks: []SubtaskSpec{
-				{Name: "explore", Type: core.TaskTypeAnalysis, Instruction: "Explore context for planning: {{.Instruction}}"},
-				{Name: "plan", Type: core.TaskTypePlanning, Instruction: "Produce a detailed plan for: {{.Instruction}}", DependsOn: []string{"explore"}},
+				{Name: "explore", Type: core.TaskTypeExplain, Instruction: "Explore context for planning: {{.Instruction}}"},
+				{Name: "plan", Type: core.TaskTypePlan, Instruction: "Produce a detailed plan for: {{.Instruction}}", DependsOn: []string{"explore"}},
 			},
 		},
 	}

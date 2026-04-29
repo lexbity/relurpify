@@ -3,6 +3,7 @@ package rewoo
 import (
 	"fmt"
 
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/platform/contracts"
 )

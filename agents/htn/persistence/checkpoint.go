@@ -129,9 +129,9 @@ func restoreSnapshotToContext(env *contextdata.Envelope, snapshot *runtime.HTNSt
 	if snapshot.Task.ID != "" {
 		runtime.PublishTaskState(env, &core.Task{
 			ID:          snapshot.Task.ID,
-			Type:        snapshot.Task.Type,
+			Type:        string(snapshot.Task.Type),
 			Instruction: snapshot.Task.Instruction,
-			Metadata:    runtime.MapsClone(snapshot.Task.Metadata),
+			Metadata:    taskMetadataToAny(snapshot.Task.Metadata),
 		})
 	}
 
@@ -227,6 +227,17 @@ func persistDispatchMetadata(env *contextdata.Envelope, dispatcher string, targe
 		"timestamp":        time.Now().UTC().Unix(),
 	}
 	env.SetWorkingValue(runtime.ContextKeyCheckpoint, metadata, contextdata.MemoryClassTask)
+}
+
+func taskMetadataToAny(input map[string]string) map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 // persistRecoveryMetadata saves recovery diagnosis to envelope for resume.

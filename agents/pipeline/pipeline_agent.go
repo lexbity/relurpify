@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
@@ -156,20 +155,15 @@ func compactPipelineFinalOutputState(final map[string]any, results []StageResult
 	return value
 }
 
-func (a *PipelineAgent) Capabilities() []core.Capability {
-	return []core.Capability{
-		core.CapabilityPlan,
-		core.CapabilityExecute,
-		core.CapabilityCode,
-		core.CapabilityExplain,
-	}
+func (a *PipelineAgent) Capabilities() []string {
+	return []string{"pipeline"}
 }
 
 // BuildGraph returns a visualization graph of the pipeline stage sequence.
 // The returned graph is not executable; stage nodes are stubs that record
 // inspection metadata but do not invoke stage logic. Use Execute for actual
 // pipeline execution. A fully executable graph integration is planned for Phase 8.
-func (a *PipelineAgent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
+func (a *PipelineAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	stages, err := a.stagesForTask(task)
 	if err != nil {
 		return nil, err
@@ -177,9 +171,9 @@ func (a *PipelineAgent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 	if len(stages) == 0 {
 		return nil, fmt.Errorf("pipeline agent has no stages for task")
 	}
-	g := agentgraph.NewGraph()
+	g := graph.NewGraph()
 	stream := a.streamTriggerNode(task)
-	nodes := make([]agentgraph.Node, 0, len(stages)+2)
+	nodes := make([]graph.Node, 0, len(stages)+2)
 	if stream != nil {
 		nodes = append(nodes, stream)
 	}
@@ -189,7 +183,7 @@ func (a *PipelineAgent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 			stage: stage,
 		})
 	}
-	done := agentgraph.NewTerminalNode("pipeline_done")
+	done := graph.NewTerminalNode("pipeline_done")
 	nodes = append(nodes, done)
 	for _, node := range nodes {
 		if err := g.AddNode(node); err != nil {
@@ -363,7 +357,7 @@ func taskType(task *core.Task) core.TaskType {
 	if task == nil || task.Type == "" {
 		return core.TaskTypeCodeGeneration
 	}
-	return task.Type
+	return core.TaskType(task.Type)
 }
 
 func taskInstruction(task *core.Task) string {

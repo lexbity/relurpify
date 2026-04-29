@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/htn/runtime"
-	agentpipeline "codeburg.org/lexbit/relurpify/agents/pipeline"
-	"codeburg.org/lexbit/relurpify/agents/plan"
+	pl "codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
@@ -133,12 +132,8 @@ func (a *HTNAgent) Initialize(cfg *core.Config) error {
 }
 
 // Capabilities declares what this agent can do.
-func (a *HTNAgent) Capabilities() []core.Capability {
-	return []core.Capability{
-		core.CapabilityPlan,
-		core.CapabilityExecute,
-		core.CapabilityCode,
-	}
+func (a *HTNAgent) Capabilities() []string {
+	return []string{"htn"}
 }
 
 // BuildGraph returns a minimal single-node graph suitable for agenttest and
@@ -176,7 +171,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	if task != nil && task.Type == "" {
 		resolvedTask = &core.Task{
 			ID:          task.ID,
-			Type:        ClassifyTask(task),
+			Type:        string(ClassifyTask(task)),
 			Instruction: task.Instruction,
 			Context:     task.Context,
 			Metadata:    task.Metadata,
@@ -215,13 +210,13 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	// runtime.PublishResolvedMethodState(env, &resolvedMethod)
 
 	// Decompose into a plan using resolved method (includes operator metadata).
-	plan, err := DecomposeResolved(resolvedTask, &resolvedMethod)
+	compiledPlan, err := DecomposeResolved(resolvedTask, &resolvedMethod)
 	if err != nil {
 		return nil, fmt.Errorf("htn: decomposition failed: %w", err)
 	}
 
 	// Run preflight to check required capabilities.
-	preflightReport, preflightErr := runtime.PlanPreflight(plan, a.Tools)
+	preflightReport, preflightErr := runtime.PlanPreflight(compiledPlan, a.Tools)
 	// Agent-specific preflight state publishing
 	// runtime.PublishPreflightState(env, preflightReport, preflightErr)
 	if preflightErr != nil {
@@ -230,7 +225,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	_ = preflightReport
 
 	// Agent-specific plan state publishing
-	// runtime.PublishPlanState(env, plan)
+	// runtime.PublishPlanState(env, compiledPlan)
 	// Agent-specific execution state loading
 	// executionState := runtime.LoadExecutionState(env)
 	executionState := runtime.ExecutionState{}
@@ -240,22 +235,19 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	// runtime.PublishExecutionState(env, executionState)
 
 	// Execute via plan_executor.
-	stepIndexes := make(map[string]int, len(plan.Steps))
-	for idx, step := range plan.Steps {
+	stepIndexes := make(map[string]int, len(compiledPlan.Steps))
+	for idx, step := range compiledPlan.Steps {
 		stepIndexes[step.ID] = idx
 	}
-	var checkpointStore *agentpipeline.SQLitePipelineCheckpointStore
-	if surfaces.Workflow != nil && workflowID != "" && runID != "" {
-		checkpointStore = agentpipeline.NewSQLitePipelineCheckpointStore(surfaces.Workflow, workflowID, runID)
-	}
-	executor := &plan.PlanExecutor{
-		Options: plan.PlanExecutionOptions{
+	var checkpointStore any
+	executor := &pl.PlanExecutor{
+		Options: pl.PlanExecutionOptions{
 			BuildStepTask: a.buildPlanStepTask,
 			MergeBranches: runtime.MergeHTNBranches,
 			CompletedStepIDs: func(s *contextdata.Envelope) []string {
-				return runtime.CompletedStepsFromContext(s)
+				return runtime.CompletedStepsFromEnvelope(s)
 			},
-			Recover: func(ctx context.Context, step plan.PlanStep, stepTask *core.Task, s *contextdata.Envelope, err error) (*plan.StepRecovery, error) {
+			Recover: func(ctx context.Context, step pl.PlanStep, stepTask *core.Task, s *contextdata.Envelope, err error) (*pl.StepRecovery, error) {
 				diagnosis := fmt.Sprintf("retrying step %q after failure: %v", step.ID, err)
 				notes := []string{fmt.Sprintf("step %q failed with: %v", step.ID, err)}
 				s.SetWorkingValue(runtime.ContextKeyLastRecoveryDiag, diagnosis, contextdata.MemoryClassTask)
@@ -264,9 +256,9 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 					s.SetWorkingValue(runtime.ContextKeyLastFailureError, err.Error(), contextdata.MemoryClassTask)
 				}
 				s.SetWorkingValue(runtime.ContextKeyLastRecoveryNotes, notes, contextdata.MemoryClassTask)
-				return &plan.StepRecovery{Diagnosis: diagnosis, Notes: notes}, nil
+				return &pl.StepRecovery{Diagnosis: diagnosis, Notes: notes}, nil
 			},
-			AfterStep: func(step plan.PlanStep, s *contextdata.Envelope, result *plan.Result) {
+			AfterStep: func(step pl.PlanStep, s *contextdata.Envelope, result *pl.Result) {
 				a.afterStep(ctx, step, s, result, checkpointStore, stepIndexes, surfaces.Workflow, workflowID, runID, resolvedTask)
 			},
 		},
@@ -282,7 +274,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 		}
 	}
 	startTime := time.Now()
-	result, err := executor.Execute(ctx, primitiveAgent, resolvedTask, plan, env)
+	result, err := executor.Execute(ctx, primitiveAgent, resolvedTask, compiledPlan, env)
 	_ = time.Since(startTime) // executionDuration - used when persistence is re-enabled
 	if err != nil {
 		// Agent-specific workflow status update
@@ -306,8 +298,8 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	executionState.RunID = runID
 	executionState.CompletedSteps = append([]string(nil), completed...)
 	executionState.CompletedStepCount = len(completed)
-	if plan != nil {
-		executionState.PlannedStepCount = len(plan.Steps)
+	if compiledPlan != nil {
+		executionState.PlannedStepCount = len(compiledPlan.Steps)
 	}
 	// Agent-specific execution state publishing
 	// runtime.PublishExecutionState(env, executionState)
@@ -326,7 +318,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *core.Task, env *contextdat
 	return result, nil
 }
 
-func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *plan.Plan, step plan.PlanStep, env *contextdata.Envelope) *core.Task {
+func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, compiledPlan *pl.Plan, step pl.PlanStep, env *contextdata.Envelope) *core.Task {
 	stepTask := &core.Task{
 		ID:          parentTask.ID,
 		Type:        parentTask.Type,
@@ -340,8 +332,8 @@ func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *plan.Plan, ste
 		stepTask.Context["parent_state"] = env
 	}
 	stepTask.Context["current_step"] = step
-	if plan != nil && strings.TrimSpace(plan.Goal) != "" {
-		stepTask.Context["plan_goal"] = plan.Goal
+	if compiledPlan != nil && strings.TrimSpace(compiledPlan.Goal) != "" {
+		stepTask.Context["plan_goal"] = compiledPlan.Goal
 	}
 	// Bind step metadata onto the step task context
 	stepTask.Context["step_id"] = step.ID
@@ -367,16 +359,16 @@ func (a *HTNAgent) buildPlanStepTask(parentTask *core.Task, plan *plan.Plan, ste
 // operator outcome to the workflow store.
 func (a *HTNAgent) afterStep(
 	ctx context.Context,
-	step plan.PlanStep,
+	step pl.PlanStep,
 	env *contextdata.Envelope,
-	result *plan.Result,
-	checkpointStore *agentpipeline.SQLitePipelineCheckpointStore,
+	result *pl.Result,
+	checkpointStore any,
 	stepIndexes map[string]int,
 	wfStore interface{},
 	workflowID, runID string,
 	task *core.Task,
 ) {
-	completed := runtime.CompletedStepsFromContext(env)
+	completed := runtime.CompletedStepsFromEnvelope(env)
 	if !containsStepID(completed, step.ID) {
 		completed = append(completed, step.ID)
 	}
@@ -450,7 +442,7 @@ func containsStepID(values []string, stepID string) bool {
 type noopAgent struct{}
 
 func (n *noopAgent) Initialize(_ *core.Config) error { return nil }
-func (n *noopAgent) Capabilities() []core.Capability { return nil }
+func (n *noopAgent) Capabilities() []string          { return nil }
 func (n *noopAgent) BuildGraph(_ *core.Task) (*agentgraph.Graph, error) {
 	g := agentgraph.NewGraph()
 	done := agentgraph.NewTerminalNode("noop_done")

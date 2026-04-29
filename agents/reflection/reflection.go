@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	frameworkskills "codeburg.org/lexbit/relurpify/framework/skills"
@@ -48,8 +49,8 @@ func (a *ReflectionAgent) Execute(ctx context.Context, task *core.Task, env *con
 }
 
 // Capabilities returns capabilities.
-func (a *ReflectionAgent) Capabilities() []core.Capability {
-	return []core.Capability{core.CapabilityReview}
+func (a *ReflectionAgent) Capabilities() []string {
+	return []string{"reflection"}
 }
 
 // BuildGraph builds the review workflow.
@@ -335,8 +336,8 @@ func compactResultForReview(result *core.Result) map[string]any {
 		"node_id": strings.TrimSpace(result.NodeID),
 		"success": result.Success,
 	}
-	if result.Error != nil {
-		data["error"] = truncateReflectionString(result.Error.Error())
+	if strings.TrimSpace(result.Error) != "" {
+		data["error"] = truncateReflectionString(result.Error)
 	}
 	if len(result.Data) > 0 {
 		data["data"] = compactReflectionValue(result.Data, 0)

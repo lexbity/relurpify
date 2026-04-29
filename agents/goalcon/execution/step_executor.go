@@ -3,9 +3,11 @@ package execution
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/goalcon/audit"
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
@@ -13,7 +15,7 @@ import (
 
 // StepExecutionRequest encapsulates parameters for executing a single plan step.
 type StepExecutionRequest struct {
-	Step               core.PlanStep
+	Step               plan.PlanStep
 	Context            *contextdata.Envelope
 	CapabilityRegistry *capability.Registry
 	Timeout            time.Duration
@@ -177,7 +179,7 @@ func (e *StepExecutor) lookupCapability(toolName string) *core.CapabilityDescrip
 // In Phase 5+, this would integrate with real agents to execute the capability.
 func (e *StepExecutor) executeToolStep(
 	ctx context.Context,
-	step core.PlanStep,
+	step plan.PlanStep,
 	state *contextdata.Envelope,
 	cap *core.CapabilityDescriptor,
 ) (*core.Result, error) {
@@ -201,7 +203,7 @@ func (e *StepExecutor) executeToolStep(
 }
 
 // updateWorldState marks predicates as satisfied based on step success.
-func (e *StepExecutor) updateWorldState(ctx *contextdata.Envelope, step core.PlanStep) {
+func (e *StepExecutor) updateWorldState(ctx *contextdata.Envelope, step plan.PlanStep) {
 	if ctx == nil {
 		return
 	}
@@ -216,7 +218,7 @@ func (e *StepExecutor) updateWorldState(ctx *contextdata.Envelope, step core.Pla
 }
 
 // recordAudit records the capability invocation to the audit trail (Phase 5).
-func (e *StepExecutor) recordAudit(result *StepExecutionResult, step core.PlanStep, cap *core.CapabilityDescriptor, toolResult *core.Result) {
+func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanStep, cap *core.CapabilityDescriptor, toolResult *core.Result) {
 	if e == nil || e.auditTrail == nil || cap == nil {
 		return
 	}
@@ -227,8 +229,8 @@ func (e *StepExecutor) recordAudit(result *StepExecutionResult, step core.PlanSt
 		Data:    toolResult.Data,
 		Error:   "",
 	}
-	if toolResult.Error != nil {
-		toolResultEnv.Error = fmt.Sprintf("%v", toolResult.Error)
+	if strings.TrimSpace(toolResult.Error) != "" {
+		toolResultEnv.Error = toolResult.Error
 	}
 
 	// Create a minimal CapabilityResultEnvelope from the step execution
@@ -289,7 +291,7 @@ func (ec *ExecutorChain) SetFailureMode(mode FailureMode) {
 // ExecuteSteps executes a sequence of steps.
 func (ec *ExecutorChain) ExecuteSteps(
 	ctx context.Context,
-	steps []core.PlanStep,
+	steps []plan.PlanStep,
 	planContext *contextdata.Envelope,
 	registry *capability.Registry,
 ) []*StepExecutionResult {

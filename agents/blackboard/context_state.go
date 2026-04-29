@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 const (
@@ -29,6 +30,7 @@ const (
 	contextKeyControllerSelectionPolicy  = "blackboard.controller.selection_policy"
 	contextKeyControllerMergePolicy      = "blackboard.controller.merge_policy"
 	contextKeyRuntimeActive              = "blackboard.runtime.active"
+	contextKeyWorkingMemoryStore         = "blackboard.runtime.memory_store"
 	contextKeyResumeCheckpointID         = "blackboard.resume_checkpoint_id"
 	contextKeyResumeLatest               = "blackboard.resume_latest"
 	contextKeyMetrics                    = "blackboard.metrics"
@@ -127,6 +129,7 @@ func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller Co
 	envelopeSet(state, contextKeySummary, summaryText(snapshot, metrics))
 	envelopeSet(state, contextKeyTermination, controller.Termination)
 	envelopeSet(state, contextKeyExecutionSummary, executionSummary(snapshot, controller, metrics))
+	mirrorBlackboardToWorkingMemoryStore(state)
 	publishPersistenceCandidates(state, snapshot, controller, metrics)
 
 	// TODO: SetKnowledge is not available in envelope paradigm - requires streaming context assembly
@@ -135,6 +138,60 @@ func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller Co
 	// state.SetKnowledge(contextKnowledgeLastSource, controller.LastSource)
 	// state.SetKnowledge(contextKnowledgeGoalSatisfied, controller.GoalSatisfied)
 	// state.SetKnowledge(contextKnowledgeCounts, map[string]any{...})
+}
+
+func mirrorBlackboardToWorkingMemoryStore(state *contextdata.Envelope) {
+	if state == nil {
+		return
+	}
+	rawStore, ok := state.GetWorkingValue(contextKeyWorkingMemoryStore)
+	if !ok || rawStore == nil {
+		return
+	}
+	store, ok := rawStore.(*memory.WorkingMemoryStore)
+	if !ok || store == nil || state.TaskID == "" {
+		return
+	}
+	task := store.Scope(state.TaskID)
+	if task == nil {
+		return
+	}
+	keys := []string{
+		contextKeyGoals,
+		contextKeyFacts,
+		contextKeyHypotheses,
+		contextKeyIssues,
+		contextKeyPendingActions,
+		contextKeyCompletedActions,
+		contextKeyArtifacts,
+		contextKeyController,
+		contextKeyControllerNext,
+		contextKeyControllerCycle,
+		contextKeyControllerEligible,
+		contextKeyControllerLastError,
+		contextKeyControllerSelectedSpec,
+		contextKeyControllerSelectedContract,
+		contextKeyControllerContenders,
+		contextKeyControllerExecutionMode,
+		contextKeyControllerSelectionPolicy,
+		contextKeyControllerMergePolicy,
+		contextKeyRuntimeActive,
+		contextKeySummary,
+		contextKeySummaryRef,
+		contextKeySummaryArtifactSummary,
+		contextKeyTermination,
+		contextKeyPersistenceSummary,
+		contextKeyPersistenceDecision,
+		contextKeyPersistenceRoutine,
+		contextKeyAuditTrail,
+		contextKeyExecutionSummary,
+		contextKeyCheckpointRef,
+	}
+	for _, key := range keys {
+		if value, ok := state.GetWorkingValue(key); ok {
+			task.Set(key, value, core.MemoryClassWorking)
+		}
+	}
 }
 
 func loadNamespacedBlackboard(state *contextdata.Envelope) (*Blackboard, bool) {

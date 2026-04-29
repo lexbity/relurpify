@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 type reactObserveNode struct {
@@ -121,12 +120,14 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	}
 	env.SetWorkingValue("react.done", completed, contextdata.MemoryClassTask)
 
-	if n.agent.Memory != nil {
-		_ = n.agent.Memory.Remember(ctx, NewUUID(), map[string]interface{}{
-			"task":      n.task.Instruction,
-			"iteration": iter,
-			"decision":  decision,
-		}, memory.MemoryScopeSession)
+	if n.agent.Memory != nil && env != nil && strings.TrimSpace(env.TaskID) != "" {
+		scope := n.agent.Memory.Scope(env.TaskID)
+		scope.Set("react.iteration", iter, core.MemoryClassWorking)
+		scope.Set("react.decision", decision, core.MemoryClassWorking)
+		scope.Set("react.done", completed, core.MemoryClassWorking)
+		if len(lastMap) > 0 {
+			scope.Set("react.last_tool_result", lastMap, core.MemoryClassWorking)
+		}
 	}
 
 	if completed {
@@ -417,7 +418,7 @@ func stallThresholdForTask(task *core.Task) int {
 	if task == nil {
 		return 3
 	}
-	if task.Type == core.TaskTypeAnalysis {
+	if strings.EqualFold(string(task.Type), "analysis") {
 		return 6 // analysis tasks legitimately re-read the same files before converging
 	}
 	return 3

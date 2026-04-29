@@ -7,19 +7,17 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/agents/plan"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 // recordingPrimitiveAgent wraps a primitive executor and persists step outcomes
 // to the runtime and workflow memory stores after each execution.
 type recordingPrimitiveAgent struct {
-	delegate graph.WorkflowExecutor
-	workflow interface {
-		PutKnowledge(context.Context, memory.KnowledgeRecord) error
-		AppendEvent(context.Context, memory.WorkflowEventRecord) error
-	}
+	delegate   plan.WorkflowExecutor
+	workflow   any
 	workflowID string
 	runID      string
 }
@@ -45,26 +43,11 @@ func (a *recordingPrimitiveAgent) BranchExecutor() (plan.WorkflowExecutor, error
 	return branch, nil
 }
 
-func (a *recordingPrimitiveAgent) Initialize(cfg *core.Config) error {
-	if a == nil || a.delegate == nil {
-		return nil
-	}
-	return a.delegate.Initialize(cfg)
-}
+func (a *recordingPrimitiveAgent) Initialize(_ *core.Config) error { return nil }
 
-func (a *recordingPrimitiveAgent) Capabilities() []core.Capability {
-	if a == nil || a.delegate == nil {
-		return nil
-	}
-	return a.delegate.Capabilities()
-}
+func (a *recordingPrimitiveAgent) Capabilities() []string { return nil }
 
-func (a *recordingPrimitiveAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
-	if a == nil || a.delegate == nil {
-		return nil, nil
-	}
-	return a.delegate.BuildGraph(task)
-}
+func (a *recordingPrimitiveAgent) BuildGraph(_ *core.Task) (*graph.Graph, error) { return nil, nil }
 
 func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *core.Task, state *contextdata.Envelope) (*core.Result, error) {
 	if a == nil || a.delegate == nil {
@@ -76,42 +59,30 @@ func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *core.Task, 
 }
 
 func (a *recordingPrimitiveAgent) persistStep(ctx context.Context, task *core.Task, result *core.Result, execErr error) {
-	stepID, stepTitle := htnStepMetadata(task)
+	stepID, _ := htnStepMetadata(task)
 	if stepID == "" {
 		return
 	}
 	summary := htnResultSummary(result, execErr)
 	now := time.Now().UTC()
-	if a.workflow != nil && strings.TrimSpace(a.workflowID) != "" {
-		kind := memory.KnowledgeKindFact
-		title := "Primitive step result"
-		status := "accepted"
+	if wf, ok := a.workflow.(interface {
+		AppendEvent(context.Context, agentlifecycle.WorkflowEventRecord) error
+	}); ok && strings.TrimSpace(a.workflowID) != "" {
 		eventType := "step_completed"
 		if execErr != nil {
-			kind = memory.KnowledgeKindIssue
-			title = "Primitive step failure"
-			status = "open"
 			eventType = "step_failed"
 		}
-		_ = a.workflow.PutKnowledge(ctx, memory.KnowledgeRecord{
-			RecordID:   fmt.Sprintf("htn_knowledge_%d", now.UnixNano()),
-			WorkflowID: a.workflowID,
-			StepID:     stepID,
-			Kind:       kind,
-			Title:      title,
-			Content:    summary,
-			Status:     status,
-			Metadata:   map[string]any{"agent": "htn", "run_id": a.runID},
-			CreatedAt:  now,
-		})
-		_ = a.workflow.AppendEvent(ctx, memory.WorkflowEventRecord{
+		_ = wf.AppendEvent(ctx, agentlifecycle.WorkflowEventRecord{
 			EventID:    fmt.Sprintf("htn_event_%d", now.UnixNano()),
 			WorkflowID: a.workflowID,
 			RunID:      a.runID,
-			StepID:     stepID,
 			EventType:  eventType,
-			Message:    summary,
-			CreatedAt:  now,
+			Payload: map[string]any{
+				"step_id": stepID,
+				"summary": summary,
+				"agent":   "htn",
+			},
+			CreatedAt: now,
 		})
 	}
 }
@@ -126,9 +97,9 @@ func htnStepMetadata(task *core.Task) (string, string) {
 		return "", ""
 	}
 	switch step := raw.(type) {
-	case core.PlanStep:
+	case plan.PlanStep:
 		return step.ID, strings.TrimSpace(step.Description)
-	case *core.PlanStep:
+	case *plan.PlanStep:
 		if step == nil {
 			return "", ""
 		}

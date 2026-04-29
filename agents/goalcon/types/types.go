@@ -1,5 +1,7 @@
 package types
 
+import "codeburg.org/lexbit/relurpify/agents/plan"
+
 // Predicate is a satisfied or unsatisfied world-state fact.
 type Predicate string
 
@@ -61,8 +63,8 @@ func (w *WorldState) Clone() *WorldState {
 	return clone
 }
 
-func BuildPlan(description string, ops []*Operator) *core.Plan {
-	steps := make([]core.PlanStep, 0, len(ops))
+func BuildPlan(description string, ops []*Operator) *plan.Plan {
+	steps := make([]plan.PlanStep, 0, len(ops))
 	deps := make(map[string][]string)
 	for i, op := range ops {
 		stepID := stepIDFor(i, op)
@@ -70,7 +72,7 @@ func BuildPlan(description string, ops []*Operator) *core.Plan {
 		for k, v := range op.DefaultParams {
 			params[k] = v
 		}
-		steps = append(steps, core.PlanStep{
+		steps = append(steps, plan.PlanStep{
 			ID:          stepID,
 			Description: op.Description,
 			Tool:        op.Name,
@@ -88,7 +90,7 @@ func BuildPlan(description string, ops []*Operator) *core.Plan {
 			}
 		}
 	}
-	return &core.Plan{
+	return &plan.Plan{
 		Goal:         description,
 		Steps:        steps,
 		Dependencies: deps,

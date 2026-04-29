@@ -14,6 +14,7 @@ import (
 	reflectionpkg "codeburg.org/lexbit/relurpify/agents/reflection"
 	rewoopkg "codeburg.org/lexbit/relurpify/agents/rewoo"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -21,7 +22,7 @@ import (
 // the shared environment through InitializeEnvironment when supported.
 // This is a local dispatch table for generic agent paradigms only.
 // Named agents (e.g., coding, rex, architect) are handled by named/factory.BuildFromSpec.
-func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
+func BuildFromSpec(env *agentenv.WorkspaceEnvironment, spec core.AgentRuntimeSpec) (graph.WorkflowExecutor, error) {
 	agentType := strings.ToLower(strings.TrimSpace(spec.Implementation))
 	if agentType == "" && spec.Composition != nil {
 		agentType = strings.ToLower(strings.TrimSpace(spec.Composition.Type))
@@ -57,12 +58,12 @@ func BuildFromSpec(env agentenv.AgentEnvironment, spec core.AgentRuntimeSpec) (g
 // AgentBuilder preserves the existing chaining API for callers that only need
 // environment + implementation dispatch.
 type AgentBuilder struct {
-	env *agentenv.AgentEnvironment
+	env *agentenv.WorkspaceEnvironment
 }
 
 func NewAgentBuilder() *AgentBuilder { return &AgentBuilder{} }
 
-func (b *AgentBuilder) WithEnvironment(env *agentenv.AgentEnvironment) *AgentBuilder {
+func (b *AgentBuilder) WithEnvironment(env *agentenv.WorkspaceEnvironment) *AgentBuilder {
 	b.env = env
 	return b
 }
@@ -71,5 +72,5 @@ func (b *AgentBuilder) Build(agentType string) (graph.WorkflowExecutor, error) {
 	if b.env == nil {
 		return nil, fmt.Errorf("agent builder requires environment")
 	}
-	return BuildFromSpec(*b.env, core.AgentRuntimeSpec{Implementation: agentType})
+	return BuildFromSpec(b.env, core.AgentRuntimeSpec{Implementation: agentType})
 }

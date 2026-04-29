@@ -24,7 +24,7 @@ type BlackboardAgent struct {
 	// Tools is the capability registry available to knowledge sources.
 	Tools *capability.Registry
 	// Memory is the memory store for the agent.
-	Memory memory.MemoryStore
+	Memory *memory.WorkingMemoryStore
 	// Config holds runtime configuration.
 	Config *core.Config
 	// Sources is the set of knowledge sources evaluated each cycle.
@@ -62,13 +62,8 @@ func (a *BlackboardAgent) Initialize(cfg *core.Config) error {
 }
 
 // Capabilities declares what this agent can do.
-func (a *BlackboardAgent) Capabilities() []core.Capability {
-	return []core.Capability{
-		core.CapabilityPlan,
-		core.CapabilityExecute,
-		core.CapabilityCode,
-		core.CapabilityReview,
-	}
+func (a *BlackboardAgent) Capabilities() []string {
+	return []string{"blackboard"}
 }
 
 // BuildGraph returns the graph-native blackboard controller loop. The
@@ -90,7 +85,17 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		MaxCycles: a.MaxCycles,
 	}
 	stream := a.streamTriggerNode(task)
-	load := &blackboardLoadNode{id: "bb_load", goal: goal, maxCycles: maxCycles(a.MaxCycles)}
+	taskID := ""
+	if task != nil {
+		taskID = task.ID
+	}
+	load := &blackboardLoadNode{
+		id:        "bb_load",
+		goal:      goal,
+		maxCycles: maxCycles(a.MaxCycles),
+		taskID:    taskID,
+		store:     a.Memory,
+	}
 	evaluate := &blackboardEvaluateNode{id: "bb_evaluate", controller: controller}
 	dispatch := &blackboardDispatchNode{id: "bb_dispatch", controller: controller, tools: a.Tools, model: a.Model, semctx: a.SemanticContext}
 	if cfg := a.Config; cfg != nil {
@@ -118,27 +123,8 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	if stream != nil {
 		startNodeID = stream.ID()
 	}
-	if retrieveDeclarative != nil {
-		startNodeID = retrieveDeclarative.ID()
-	} else if retrieveProcedural != nil {
-		startNodeID = retrieveProcedural.ID()
-	}
 	if err := g.SetStart(startNodeID); err != nil {
 		return nil, err
-	}
-	if retrieveDeclarative != nil {
-		next := load.ID()
-		if retrieveProcedural != nil {
-			next = retrieveProcedural.ID()
-		}
-		if err := g.AddEdge(retrieveDeclarative.ID(), next, nil, false); err != nil {
-			return nil, err
-		}
-	}
-	if retrieveProcedural != nil {
-		if err := g.AddEdge(retrieveProcedural.ID(), load.ID(), nil, false); err != nil {
-			return nil, err
-		}
 	}
 	// Connect stream -> load if streaming is enabled, otherwise connect directly
 	if stream != nil {
@@ -168,15 +154,8 @@ func (a *BlackboardAgent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 		}
 	}
 	if nextAfterDoneDecision != done.ID() {
-		if summarize != nil {
-			if err := g.AddEdge(summarize.ID(), done.ID(), nil, false); err != nil {
-				return nil, err
-			}
-		}
-		if summarize == nil {
-			if err := g.AddEdge(nextAfterDoneDecision, done.ID(), nil, false); err != nil {
-				return nil, err
-			}
+		if err := g.AddEdge(nextAfterDoneDecision, done.ID(), nil, false); err != nil {
+			return nil, err
 		}
 	}
 	return g, nil
@@ -213,6 +192,9 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, env *con
 		env.SetWorkingValue("task.type", string(task.Type), contextdata.MemoryClassTask)
 		env.SetWorkingValue("task.instruction", task.Instruction, contextdata.MemoryClassTask)
 	}
+	if a.Memory != nil {
+		env.SetWorkingValue(contextKeyWorkingMemoryStore, a.Memory, contextdata.MemoryClassTask)
+	}
 	if cfg := a.Config; cfg != nil {
 		// Telemetry event emission - keep commented until envelope equivalent available
 		// emitBlackboardEvent(cfg.Telemetry, env, core.EventAgentStart, "", taskID(task), "blackboard agent start", map[string]any{
@@ -233,6 +215,11 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *core.Task, env *con
 		return nil, fmt.Errorf("blackboard: graph execution failed: %w", err)
 	}
 	controllerState := ControllerState{Termination: "goal_satisfied"}
+	if raw, ok := env.GetWorkingValue(contextKeyController); ok {
+		if typed, ok := raw.(ControllerState); ok {
+			controllerState = typed
+		}
+	}
 	switch controllerState.Termination {
 	case "goal_satisfied":
 	case "running":
@@ -343,10 +330,8 @@ func mirrorBlackboardArtifactReferences(env *contextdata.Envelope) {
 }
 
 func blackboardUsesStructuredPersistence(cfg *core.Config) bool {
-	if cfg == nil || cfg.UseStructuredPersistence == nil {
-		return true
-	}
-	return *cfg.UseStructuredPersistence
+	_ = cfg
+	return true
 }
 
 func taskID(task *core.Task) string {

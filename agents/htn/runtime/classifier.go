@@ -12,10 +12,10 @@ import (
 // classification should be cheap and deterministic for small models.
 func ClassifyTask(task *core.Task) core.TaskType {
 	if task == nil {
-		return core.TaskTypeAnalysis
+		return core.TaskTypeExplain
 	}
 	if task.Type != "" {
-		return task.Type
+		return core.TaskType(task.Type)
 	}
 	return classifyByKeyword(task.Instruction)
 }
@@ -34,7 +34,7 @@ func classifyByKeyword(instruction string) core.TaskType {
 	planKeywords := []string{"plan", "design", "outline", "strategy"}
 	for _, kw := range planKeywords {
 		if strings.Contains(lower, kw) {
-			return core.TaskTypePlanning
+			return core.TaskTypePlan
 		}
 	}
 
@@ -48,9 +48,9 @@ func classifyByKeyword(instruction string) core.TaskType {
 	modifyKeywords := []string{"fix", "refactor", "update", "change", "modify", "patch", "correct", "improve"}
 	for _, kw := range modifyKeywords {
 		if strings.Contains(lower, kw) {
-			return core.TaskTypeCodeModification
+			return core.TaskTypeExecute
 		}
 	}
 
-	return core.TaskTypeAnalysis
+	return core.TaskTypeExplain
 }

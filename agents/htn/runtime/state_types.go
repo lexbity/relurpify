@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
@@ -101,14 +102,14 @@ type CheckpointState struct {
 // HTNState is the canonical typed snapshot of HTN runtime state persisted in
 // the shared envelope.
 type HTNState struct {
-	SchemaVersion      int              `json:"schema_version"`
-	Task               TaskState        `json:"task"`
-	Method             MethodState      `json:"method"`
-	Plan               *agentgraph.Plan `json:"plan,omitempty"`
-	Execution          ExecutionState   `json:"execution"`
-	Metrics            Metrics          `json:"metrics"`
-	Preflight          PreflightState   `json:"preflight,omitempty"`
-	Termination        string           `json:"termination,omitempty"`
-	RetrievalApplied   bool             `json:"retrieval_applied"`
-	ResumeCheckpointID string           `json:"resume_checkpoint_id,omitempty"`
+	SchemaVersion      int            `json:"schema_version"`
+	Task               TaskState      `json:"task"`
+	Method             MethodState    `json:"method"`
+	Plan               *plan.Plan     `json:"plan,omitempty"`
+	Execution          ExecutionState `json:"execution"`
+	Metrics            Metrics        `json:"metrics"`
+	Preflight          PreflightState `json:"preflight,omitempty"`
+	Termination        string         `json:"termination,omitempty"`
+	RetrievalApplied   bool           `json:"retrieval_applied"`
+	ResumeCheckpointID string         `json:"resume_checkpoint_id,omitempty"`
 }

@@ -126,7 +126,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 					},
 				}
 				if len(toolErrors) > 0 {
-					result.Error = fmt.Errorf("%s", strings.Join(toolErrors, "; "))
+					result.Error = strings.Join(toolErrors, "; ")
 				}
 				env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 				return result, nil
@@ -159,14 +159,14 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		// Feed error back to the LLM so it can retry with a valid tool name.
 		errMsg := fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", toolName)
 		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
-		result := &core.Result{NodeID: n.id, Success: false, Error: fmt.Errorf("%s", errMsg)}
+		result := &core.Result{NodeID: n.id, Success: false, Error: errMsg}
 		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
 	if !n.agent.Tools.CapabilityAvailable(ctx, env, toolName) {
 		errMsg := fmt.Sprintf("tool %q is unavailable right now.", toolName)
 		env.SetWorkingValue("react.last_tool_result", map[string]interface{}{"error": errMsg}, contextdata.MemoryClassTask)
-		result := &core.Result{NodeID: n.id, Success: false, Error: fmt.Errorf("%s", errMsg)}
+		result := &core.Result{NodeID: n.id, Success: false, Error: errMsg}
 		env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
@@ -192,7 +192,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		Metadata: map[string]any{
 			"capability_result": envelope,
 		},
-		Error: parseError(res.Error),
+		Error: strings.TrimSpace(res.Error),
 	}
 	n.refreshIndexesAfterMutation(call, res)
 	env.SetWorkingValue("react.last_result", result, contextdata.MemoryClassTask)

@@ -47,7 +47,7 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
-func New(env agentenv.AgentEnvironment, opts ...Option) *BlackboardAgent {
+func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *BlackboardAgent {
 	agent := &BlackboardAgent{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -58,10 +58,13 @@ func New(env agentenv.AgentEnvironment, opts ...Option) *BlackboardAgent {
 	return agent
 }
 
-func (a *BlackboardAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *BlackboardAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
+	if env == nil {
+		return a.Initialize(nil)
+	}
 	a.Model = env.Model
 	a.Tools = env.Registry
-	a.Memory = env.Memory
+	a.Memory = env.WorkingMemory
 	a.Config = env.Config
 	return a.Initialize(env.Config)
 }

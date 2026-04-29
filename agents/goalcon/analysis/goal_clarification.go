@@ -43,7 +43,7 @@ type ClarificationSession struct {
 // GoalClarifier orchestrates goal clarification through HITL.
 type GoalClarifier struct {
 	hitlBroker        *authorization.HITLBroker
-	memoryStore       memory.MemoryStore
+	memoryStore       *memory.WorkingMemoryStore
 	analyzer          *AmbiguityAnalyzer
 	highRiskThreshold float32 // Threshold to require HITL (default 0.75)
 }
@@ -51,7 +51,7 @@ type GoalClarifier struct {
 // NewGoalClarifier creates a clarifier with HITL and memory store integration.
 func NewGoalClarifier(
 	hitlBroker *authorization.HITLBroker,
-	memoryStore memory.MemoryStore,
+	memoryStore *memory.WorkingMemoryStore,
 	analyzer *AmbiguityAnalyzer,
 ) *GoalClarifier {
 	if analyzer == nil {
@@ -232,7 +232,7 @@ func (session *ClarificationSession) ApplyChoices() *types.GoalCondition {
 // PersistToMemory saves clarification session to memory store.
 func (session *ClarificationSession) PersistToMemory(
 	ctx context.Context,
-	ms memory.MemoryStore,
+	ms *memory.WorkingMemoryStore,
 	planID string,
 ) error {
 	if session == nil || ms == nil {
@@ -266,9 +266,8 @@ func (session *ClarificationSession) PersistToMemory(
 	// Store in memory with project scope for plan-level persistence
 	// Key format: "clarification:<session_id>:<plan_id>"
 	key := fmt.Sprintf("clarification:%s:%s", session.ID, planID)
-	err := ms.Remember(ctx, key, data, memory.MemoryScopeProject)
-
-	return err
+	ms.Scope("goalcon").Set(key, data, core.MemoryClassWorking)
+	return nil
 }
 
 // FormatSessionSummary generates a human-readable summary of the clarification session.

@@ -7,7 +7,7 @@ import (
 
 type Option func(*PlannerAgent)
 
-func New(env agentenv.AgentEnvironment, opts ...Option) *PlannerAgent {
+func New(env *agentenv.WorkspaceEnvironment, opts ...Option) *PlannerAgent {
 	agent := &PlannerAgent{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -18,10 +18,10 @@ func New(env agentenv.AgentEnvironment, opts ...Option) *PlannerAgent {
 	return agent
 }
 
-func (a *PlannerAgent) InitializeEnvironment(env agentenv.AgentEnvironment) error {
+func (a *PlannerAgent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment) error {
 	a.Model = env.Model
 	a.Tools = env.Registry
-	a.Memory = env.Memory
+	a.Memory = env.WorkingMemory
 	a.Config = env.Config
 	return a.Initialize(env.Config)
 }

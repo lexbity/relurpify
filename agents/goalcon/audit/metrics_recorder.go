@@ -1,11 +1,10 @@
 package audit
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 )
@@ -111,21 +110,18 @@ type MetricsSnapshot struct {
 }
 
 const metricsMemoryKey = "goalcon.operator_metrics"
+const metricsMemoryScope = "goalcon"
 
 // LoadMetricsFromMemory loads previously persisted metrics from the memory store.
-func LoadMetricsFromMemory(store memory.MemoryStore) OperatorMetricsCollection {
+func LoadMetricsFromMemory(store *memory.WorkingMemoryStore) OperatorMetricsCollection {
 	if store == nil {
 		return make(OperatorMetricsCollection)
 	}
-	record, ok, err := store.Recall(context.Background(), metricsMemoryKey, memory.MemoryScopeProject)
-	if err != nil || !ok || record == nil {
-		return make(OperatorMetricsCollection)
-	}
-	raw, ok := record.Value["metrics_json"]
+	record, ok := store.Scope(metricsMemoryScope).Get(metricsMemoryKey)
 	if !ok {
 		return make(OperatorMetricsCollection)
 	}
-	jsonStr, ok := raw.(string)
+	jsonStr, ok := record.Value.(string)
 	if !ok {
 		return make(OperatorMetricsCollection)
 	}
@@ -137,7 +133,7 @@ func LoadMetricsFromMemory(store memory.MemoryStore) OperatorMetricsCollection {
 }
 
 // SaveMetricsToMemory persists metrics to the memory store.
-func SaveMetricsToMemory(store memory.MemoryStore, metrics OperatorMetricsCollection) error {
+func SaveMetricsToMemory(store *memory.WorkingMemoryStore, metrics OperatorMetricsCollection) error {
 	if store == nil {
 		return nil
 	}
@@ -145,14 +141,13 @@ func SaveMetricsToMemory(store memory.MemoryStore, metrics OperatorMetricsCollec
 	if err != nil {
 		return err
 	}
-	return store.Remember(context.Background(), metricsMemoryKey, map[string]interface{}{
-		"metrics_json": string(data),
-	}, memory.MemoryScopeProject)
+	store.Scope(metricsMemoryScope).Set(metricsMemoryKey, string(data), core.MemoryClassWorking)
+	return nil
 }
 
 // MetricsRecorder tracks execution outcomes and persists them to memory.
 type MetricsRecorder struct {
-	store          memory.MemoryStore
+	store          *memory.WorkingMemoryStore
 	metrics        OperatorMetricsCollection
 	autoSave       bool
 	saveInterval   int // Save after N recordings
@@ -160,7 +155,7 @@ type MetricsRecorder struct {
 }
 
 // NewMetricsRecorder creates a new metrics recorder.
-func NewMetricsRecorder(store memory.MemoryStore) *MetricsRecorder {
+func NewMetricsRecorder(store *memory.WorkingMemoryStore) *MetricsRecorder {
 	return &MetricsRecorder{
 		store:        store,
 		metrics:      make(OperatorMetricsCollection),
@@ -308,7 +303,7 @@ func (r *MetricsRecorder) ComparatorByQuality() func(op1, op2 interface{}) bool 
 
 // RecordPlanExecution records metrics for a complete plan execution.
 // Called after solving and executing a plan.
-func (r *MetricsRecorder) RecordPlanExecution(plan *agentgraph.Plan, result *core.Result, duration time.Duration) error {
+func (r *MetricsRecorder) RecordPlanExecution(plan *plan.Plan, result *core.Result, duration time.Duration) error {
 	if r == nil || plan == nil || result == nil {
 		return nil
 	}

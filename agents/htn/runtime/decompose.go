@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
-// Decompose converts a Method into a agentgraph.Plan relative to the given task.
+// Decompose converts a Method into a plan.Plan relative to the given task.
 // Each SubtaskSpec becomes a PlanStep with DependsOn wired into
 // Plan.Dependencies.
-func Decompose(task *core.Task, method *Method) (*agentgraph.Plan, error) {
+func Decompose(task *core.Task, method *Method) (*plan.Plan, error) {
 	if method == nil {
 		return nil, fmt.Errorf("htn: no method provided for decomposition")
 	}
@@ -24,7 +24,7 @@ func Decompose(task *core.Task, method *Method) (*agentgraph.Plan, error) {
 		instruction = task.Instruction
 	}
 
-	plan := &agentgraph.Plan{
+	compiled := &plan.Plan{
 		Goal:         instruction,
 		Dependencies: make(map[string][]string),
 	}
@@ -32,28 +32,28 @@ func Decompose(task *core.Task, method *Method) (*agentgraph.Plan, error) {
 	for _, spec := range method.Subtasks {
 		stepID := fmt.Sprintf("%s.%s", method.Name, spec.Name)
 		desc := expandInstruction(spec.Instruction, instruction)
-		step := agentgraph.PlanStep{
+		step := plan.PlanStep{
 			ID:          stepID,
 			Description: desc,
 			Expected:    fmt.Sprintf("Complete %s subtask", spec.Name),
 		}
-		plan.Steps = append(plan.Steps, step)
+		compiled.Steps = append(compiled.Steps, step)
 
 		if len(spec.DependsOn) > 0 {
 			deps := make([]string, 0, len(spec.DependsOn))
 			for _, depName := range spec.DependsOn {
 				deps = append(deps, fmt.Sprintf("%s.%s", method.Name, depName))
 			}
-			plan.Dependencies[stepID] = deps
+			compiled.Dependencies[stepID] = deps
 		}
 	}
 
-	return plan, nil
+	return compiled, nil
 }
 
-// DecomposeResolved converts a ResolvedMethod into a agentgraph.Plan relative to the given task.
+// DecomposeResolved converts a ResolvedMethod into a plan.Plan relative to the given task.
 // Each OperatorSpec becomes a PlanStep with the Executor as the Tool.
-func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*agentgraph.Plan, error) {
+func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*plan.Plan, error) {
 	if resolved == nil || resolved.Method == nil {
 		return nil, fmt.Errorf("htn: no resolved method provided for decomposition")
 	}
@@ -66,7 +66,7 @@ func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*agentgraph.P
 		instruction = task.Instruction
 	}
 
-	plan := &agentgraph.Plan{
+	compiled := &plan.Plan{
 		Goal:         instruction,
 		Dependencies: make(map[string][]string),
 	}
@@ -74,7 +74,7 @@ func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*agentgraph.P
 	for _, spec := range resolved.Operators {
 		stepID := spec.Name
 		desc := expandInstruction(spec.Instruction, instruction)
-		step := agentgraph.PlanStep{
+		step := plan.PlanStep{
 			ID:          stepID,
 			Description: desc,
 			Tool:        spec.Executor,
@@ -86,14 +86,14 @@ func DecomposeResolved(task *core.Task, resolved *ResolvedMethod) (*agentgraph.P
 				"operator_name":         spec.Name,
 			},
 		}
-		plan.Steps = append(plan.Steps, step)
+		compiled.Steps = append(compiled.Steps, step)
 
 		if len(spec.DependsOn) > 0 {
-			plan.Dependencies[stepID] = append([]string{}, spec.DependsOn...)
+			compiled.Dependencies[stepID] = append([]string{}, spec.DependsOn...)
 		}
 	}
 
-	return plan, nil
+	return compiled, nil
 }
 
 // expandInstruction substitutes {{.Instruction}} with the parent task instruction.

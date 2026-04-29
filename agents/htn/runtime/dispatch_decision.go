@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
@@ -43,7 +43,7 @@ func dispatchMetadata(task *core.Task) (string, []core.CapabilitySelector, map[s
 	}
 	if task != nil && task.Context != nil {
 		if raw, ok := task.Context["current_step"]; ok {
-			var step agentgraph.PlanStep
+			var step plan.PlanStep
 			if decodeContextValue(raw, &step) {
 				args["step"] = step
 				target := capabilityTargetForOperator(operatorExecutor(step))
@@ -54,7 +54,7 @@ func dispatchMetadata(task *core.Task) (string, []core.CapabilitySelector, map[s
 	return defaultDelegateTarget, []core.CapabilitySelector{{Kind: core.CapabilityKindTool, Name: defaultDelegateTarget}}, args
 }
 
-func operatorExecutor(step agentgraph.PlanStep) string {
+func operatorExecutor(step plan.PlanStep) string {
 	if step.Params != nil {
 		if raw, ok := step.Params["operator_executor"]; ok {
 			var typed string
@@ -66,7 +66,7 @@ func operatorExecutor(step agentgraph.PlanStep) string {
 	return step.Tool
 }
 
-func operatorName(step agentgraph.PlanStep) string {
+func operatorName(step plan.PlanStep) string {
 	if step.Params != nil {
 		if raw, ok := step.Params["operator_name"]; ok {
 			var typed string
@@ -86,7 +86,7 @@ func operatorNameFromTask(task *core.Task) string {
 		return ""
 	}
 	if raw, ok := task.Context["current_step"]; ok {
-		var step agentgraph.PlanStep
+		var step plan.PlanStep
 		if decodeContextValue(raw, &step) {
 			return operatorName(step)
 		}
@@ -107,7 +107,7 @@ func capabilityTargetForOperator(operator string) string {
 	}
 }
 
-func selectorsFromStep(step agentgraph.PlanStep) []core.CapabilitySelector {
+func selectorsFromStep(step plan.PlanStep) []core.CapabilitySelector {
 	if step.Params == nil {
 		return []core.CapabilitySelector{{Kind: core.CapabilityKindTool, Name: capabilityTargetForOperator(step.Tool)}}
 	}

@@ -221,7 +221,7 @@ func inferredManifestFromObservations(env *contextdata.Envelope, rule manifestIn
 }
 
 func inferredPathFromObservations(env *contextdata.Envelope, keys ...string) string {
-	observations := getToolObservations(state)
+	observations := getToolObservations(env)
 	for i := len(observations) - 1; i >= 0; i-- {
 		obs := observations[i]
 		for _, key := range keys {
@@ -259,7 +259,7 @@ func inferredCargoManifest(env *contextdata.Envelope) string {
 }
 
 func inferredPythonManifest(env *contextdata.Envelope) string {
-	return inferredManifestFromObservations(state, manifestInferenceRule{
+	return inferredManifestFromObservations(env, manifestInferenceRule{
 		tools:      []string{"python_workspace_detect", "python_project_metadata"},
 		dataKeys:   []string{"manifest_path"},
 		pathSuffix: []string{"pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"},

@@ -5,15 +5,16 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/framework/agentgraph"
+	"codeburg.org/lexbit/relurpify/agents/plan"
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 )
 
 // planPreflight checks plan step required capabilities against the registry.
 // If the registry has no capabilities registered, the check is skipped (allows
 // fallback dispatch to work without failing upfront).
-func planPreflight(plan *agentgraph.Plan, registry *capability.Registry) (*agentgraph.PreflightReport, error) {
-	report := &agentgraph.PreflightReport{GeneratedAt: time.Now().UTC()}
+func planPreflight(plan *plan.Plan, registry *capability.Registry) (*graph.PreflightReport, error) {
+	report := &graph.PreflightReport{GeneratedAt: time.Now().UTC()}
 	if plan == nil || registry == nil {
 		return report, nil
 	}
@@ -37,7 +38,7 @@ func planPreflight(plan *agentgraph.Plan, registry *capability.Registry) (*agent
 			continue
 		}
 		blocking := !isOptionalCapabilityTarget(target, step)
-		report.Issues = append(report.Issues, agentgraph.PreflightIssue{
+		report.Issues = append(report.Issues, graph.PreflightIssue{
 			NodeID:   step.ID,
 			Code:     "capability_missing",
 			Message:  fmt.Sprintf("required capability %q not registered", target),
@@ -53,7 +54,7 @@ func planPreflight(plan *agentgraph.Plan, registry *capability.Registry) (*agent
 
 // isOptionalCapabilityTarget returns true for capabilities that can be absent
 // without failing the entire plan — missing steps will fall back to react dispatch.
-func isOptionalCapabilityTarget(target string, step agentgraph.PlanStep) bool {
+func isOptionalCapabilityTarget(target string, step plan.PlanStep) bool {
 	optionalByName := map[string]bool{
 		"go_test":         true,
 		"go_build":        true,
@@ -75,7 +76,7 @@ func isOptionalCapabilityTarget(target string, step agentgraph.PlanStep) bool {
 }
 
 // capabilityTargetForStep resolves the dispatch target for a plan step.
-func capabilityTargetForStep(step agentgraph.PlanStep) string {
+func capabilityTargetForStep(step plan.PlanStep) string {
 	if step.Params != nil {
 		if raw, ok := step.Params["operator_executor"]; ok {
 			var typed string

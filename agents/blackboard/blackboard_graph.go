@@ -3,11 +3,14 @@ package blackboard
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	graph "codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/agentspec"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/memory"
 )
 
 // envelopeGet retrieves a value from envelope working memory.
@@ -42,6 +45,8 @@ type blackboardLoadNode struct {
 	id        string
 	goal      string
 	maxCycles int
+	taskID    string
+	store     *memory.WorkingMemoryStore
 	telemetry core.Telemetry
 }
 
@@ -57,6 +62,11 @@ func (n *blackboardLoadNode) Contract() graph.NodeContract {
 }
 
 func (n *blackboardLoadNode) Execute(_ context.Context, state *contextdata.Envelope) (*core.Result, error) {
+	if n.store != nil && strings.TrimSpace(n.taskID) != "" {
+		if err := hydrateBlackboardFromWorkingMemoryStore(state, n.store, n.taskID); err != nil {
+			return nil, err
+		}
+	}
 	bb := LoadFromContext(state, n.goal)
 	bb.Normalize()
 	memoryCount := hydrateBlackboardFromMemory(state, bb)
@@ -265,6 +275,21 @@ func activeBlackboard(state *contextdata.Envelope) (*Blackboard, error) {
 	envelopeSet(state, contextKeyRuntimeActive, bb)
 	bb.Normalize()
 	return bb, nil
+}
+
+func hydrateBlackboardFromWorkingMemoryStore(state *contextdata.Envelope, store *memory.WorkingMemoryStore, taskID string) error {
+	if state == nil || store == nil {
+		return nil
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return nil
+	}
+	results, err := store.Retrieve(context.Background(), memory.MemoryQuery{TaskID: taskID})
+	if err != nil {
+		return err
+	}
+	return store.HydrateIntoEnvelope(context.Background(), state, results)
 }
 
 func currentCycle(state *contextdata.Envelope) int {
