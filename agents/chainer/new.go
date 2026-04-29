@@ -2,6 +2,7 @@ package chainer
 
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -16,6 +17,34 @@ func WithChain(chain *Chain) Option {
 func WithChainBuilder(builder func(*core.Task) (*Chain, error)) Option {
 	return func(agent *ChainerAgent) {
 		agent.ChainBuilder = builder
+	}
+}
+
+// WithContextStreamTrigger wires an explicit streaming trigger into the chainer agent.
+func WithContextStreamTrigger(trigger *contextstream.Trigger) Option {
+	return func(a *ChainerAgent) {
+		a.StreamTrigger = trigger
+	}
+}
+
+// WithContextStreamMode sets whether chainer streaming blocks or runs in the background.
+func WithContextStreamMode(mode contextstream.Mode) Option {
+	return func(a *ChainerAgent) {
+		a.StreamMode = mode
+	}
+}
+
+// WithContextStreamQuery overrides the query sent to the streaming trigger.
+func WithContextStreamQuery(query string) Option {
+	return func(a *ChainerAgent) {
+		a.StreamQuery = query
+	}
+}
+
+// WithContextStreamMaxTokens overrides the chainer stream token budget.
+func WithContextStreamMaxTokens(maxTokens int) Option {
+	return func(a *ChainerAgent) {
+		a.StreamMaxTokens = maxTokens
 	}
 }
 

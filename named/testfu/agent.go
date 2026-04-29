@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	namedfactory "codeburg.org/lexbit/relurpify/named/factory"
 	runnerpkg "codeburg.org/lexbit/relurpify/named/testfu/runner"
 )
@@ -29,7 +30,7 @@ type Agent struct {
 }
 
 func init() {
-	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env ayenitd.WorkspaceEnvironment) graph.WorkflowExecutor {
+	namedfactory.RegisterNamedAgent("testfu", func(workspace string, env ayenitd.WorkspaceEnvironment) agentgraph.WorkflowExecutor {
 		return New(env, WithWorkspace(workspace))
 	})
 }
@@ -68,16 +69,13 @@ func (a *Agent) Initialize(cfg *core.Config) error {
 	return nil
 }
 
-func (a *Agent) Capabilities() []core.Capability {
-	return []core.Capability{
-		core.CapabilityExecute,
-		core.CapabilityExplain,
-	}
+func (a *Agent) Capabilities() []string {
+	return []string{"execute", "explain"}
 }
 
-func (a *Agent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
-	g := graph.NewGraph()
-	done := graph.NewTerminalNode("testfu_done")
+func (a *Agent) BuildGraph(_ *core.Task) (*agentgraph.Graph, error) {
+	g := agentgraph.NewGraph()
+	done := agentgraph.NewTerminalNode("testfu_done")
 	if err := g.AddNode(done); err != nil {
 		return nil, err
 	}
@@ -87,22 +85,22 @@ func (a *Agent) BuildGraph(_ *core.Task) (*graph.Graph, error) {
 	return g, nil
 }
 
-func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
-	if state == nil {
-		state = core.NewContext()
+func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+	if env == nil {
+		env = contextdata.NewEnvelope("", "")
 	}
 	request := parseRequest(task)
 	if request.Action == actionRunAgent {
-		return a.executeRunAgent(ctx, request, state)
+		return a.executeRunAgent(ctx, request, env)
 	}
 	report, allPassed, err := a.executeRequest(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 	failedCases := failedCaseNames(report)
-	state.Set("testfu.report", report)
-	state.Set("testfu.passed", allPassed)
-	state.Set("testfu.failed_cases", failedCases)
+	env.SetWorkingValue("testfu.report", report, contextdata.MemoryClassTask)
+	env.SetWorkingValue("testfu.passed", allPassed, contextdata.MemoryClassTask)
+	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
 	return &core.Result{
 		Success: allPassed,
 		Data: map[string]any{
@@ -113,7 +111,7 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, state *core.Contex
 	}, nil
 }
 
-func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, state *core.Context) (*core.Result, error) {
+func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, env *contextdata.Envelope) (*core.Result, error) {
 	suiteReports, allPassed, err := a.runAgentSuites(ctx, req)
 	if err != nil {
 		return nil, err
@@ -126,12 +124,12 @@ func (a *Agent) executeRunAgent(ctx context.Context, req runRequest, state *core
 	}
 	reportMap := map[string]any{"suites": suiteReports}
 	failedCases := failedCaseNames(reportMap)
-	state.Set("testfu.agent_suites_report", suiteReports)
-	state.Set("testfu.passed", allPassed)
-	state.Set("testfu.total_passed", totalPassed)
-	state.Set("testfu.total_failed", totalFailed)
-	state.Set("testfu.total_skipped", totalSkipped)
-	state.Set("testfu.failed_cases", failedCases)
+	env.SetWorkingValue("testfu.agent_suites_report", suiteReports, contextdata.MemoryClassTask)
+	env.SetWorkingValue("testfu.passed", allPassed, contextdata.MemoryClassTask)
+	env.SetWorkingValue("testfu.total_passed", totalPassed, contextdata.MemoryClassTask)
+	env.SetWorkingValue("testfu.total_failed", totalFailed, contextdata.MemoryClassTask)
+	env.SetWorkingValue("testfu.total_skipped", totalSkipped, contextdata.MemoryClassTask)
+	env.SetWorkingValue("testfu.failed_cases", failedCases, contextdata.MemoryClassTask)
 	return &core.Result{
 		Success: allPassed,
 		Data: map[string]any{

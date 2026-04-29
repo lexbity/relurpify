@@ -8,7 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	"codeburg.org/lexbit/relurpify/framework/capability"
 	"codeburg.org/lexbit/relurpify/framework/contextdata"
+	"codeburg.org/lexbit/relurpify/framework/contextstream"
 	"codeburg.org/lexbit/relurpify/framework/core"
+	"codeburg.org/lexbit/relurpify/framework/retrieval"
 )
 
 // ChainerAgent executes a deterministic chain of isolated LLM links.
@@ -18,12 +20,16 @@ import (
 // the envelope, runs the LLM call, parses the response, and writes the result
 // to its OutputKey.
 type ChainerAgent struct {
-	Model        core.LanguageModel
-	Tools        *capability.Registry
-	Config       *core.Config
-	Chain        *Chain
-	ChainBuilder func(*core.Task) (*Chain, error)
-	initialised  bool
+	Model           core.LanguageModel
+	Tools           *capability.Registry
+	Config          *core.Config
+	Chain           *Chain
+	ChainBuilder    func(*core.Task) (*Chain, error)
+	StreamTrigger   *contextstream.Trigger
+	StreamMode      contextstream.Mode
+	StreamQuery     string
+	StreamMaxTokens int
+	initialised     bool
 }
 
 func (a *ChainerAgent) Initialize(cfg *core.Config) error {
@@ -45,7 +51,11 @@ func (a *ChainerAgent) BuildGraph(task *core.Task) (*agentgraph.Graph, error) {
 		return nil, err
 	}
 	g := agentgraph.NewGraph()
-	nodes := make([]agentgraph.Node, 0, len(chain.Links)+1)
+	nodes := make([]agentgraph.Node, 0, len(chain.Links)+2)
+	stream := a.streamTriggerNode(task)
+	if stream != nil {
+		nodes = append(nodes, stream)
+	}
 	for i, link := range chain.Links {
 		nodes = append(nodes, &chainerLinkNode{id: fmt.Sprintf("chainer_link_%02d_%s", i, sanitizeLinkName(link.Name)), name: link.Name})
 	}
@@ -83,6 +93,9 @@ func (a *ChainerAgent) Execute(ctx context.Context, task *core.Task, env *contex
 	if env == nil {
 		env = contextdata.NewEnvelope("chainer", "session")
 	}
+	if err := a.executeStreamingTrigger(ctx, task, env); err != nil {
+		return nil, err
+	}
 
 	chain, err := a.resolveChain(task)
 	if err != nil {
@@ -119,6 +132,70 @@ func (a *ChainerAgent) resolveChain(task *core.Task) (*Chain, error) {
 	default:
 		return nil, fmt.Errorf("chainer: chain not configured")
 	}
+}
+
+func (a *ChainerAgent) streamMode() contextstream.Mode {
+	if a.StreamMode != "" {
+		return a.StreamMode
+	}
+	return contextstream.ModeBlocking
+}
+
+func (a *ChainerAgent) streamQuery(task *core.Task) string {
+	if strings.TrimSpace(a.StreamQuery) != "" {
+		return strings.TrimSpace(a.StreamQuery)
+	}
+	if task != nil {
+		return task.Instruction
+	}
+	return ""
+}
+
+func (a *ChainerAgent) streamMaxTokens() int {
+	if a.StreamMaxTokens > 0 {
+		return a.StreamMaxTokens
+	}
+	return 256
+}
+
+func (a *ChainerAgent) streamTriggerNode(task *core.Task) agentgraph.Node {
+	if a.StreamTrigger == nil {
+		return nil
+	}
+	query := a.streamQuery(task)
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	node := agentgraph.NewContextStreamNode("chainer_stream", a.StreamTrigger, retrieval.RetrievalQuery{Text: query}, a.streamMaxTokens())
+	node.Mode = a.streamMode()
+	node.BudgetShortfallPolicy = "emit_partial"
+	node.Metadata = map[string]any{"agent": "chainer"}
+	return node
+}
+
+func (a *ChainerAgent) executeStreamingTrigger(ctx context.Context, task *core.Task, env *contextdata.Envelope) error {
+	if a.StreamTrigger == nil {
+		return nil
+	}
+	query := a.streamQuery(task)
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	req := contextstream.Request{
+		ID:        "chainer_stream",
+		MaxTokens: a.streamMaxTokens(),
+		Mode:      a.streamMode(),
+		Query:     retrieval.RetrievalQuery{Text: query},
+	}
+	result, err := a.StreamTrigger.RequestBlocking(ctx, req)
+	if err != nil {
+		return err
+	}
+	if env != nil {
+		env.SetWorkingValue("chainer.stream.result", result, contextdata.MemoryClassTask)
+		env.SetWorkingValue("chainer.stream.query", query, contextdata.MemoryClassTask)
+	}
+	return nil
 }
 
 type chainerLinkNode struct {

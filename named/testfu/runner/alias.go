@@ -2,7 +2,7 @@ package runner
 
 import (
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/agentgraph"
 	agenttestpkg "codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
@@ -43,4 +43,5 @@ var FilterSuiteCasesByTags = agenttestpkg.FilterSuiteCasesByTags
 
 // RegisterNamedAgent is retained as a compatibility no-op so existing
 // named/testfu callers do not need to change imports during the runner merge.
-func RegisterNamedAgent(_ string, _ func(string, agentenv.AgentEnvironment) graph.WorkflowExecutor) {}
+func RegisterNamedAgent(_ string, _ func(string, agentenv.WorkspaceEnvironment) agentgraph.WorkflowExecutor) {
+}

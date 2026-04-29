@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 )
 
@@ -51,7 +52,7 @@ func (t *agentTool) Parameters() []core.ToolParameter {
 		{Name: "timeout", Type: "string", Description: "Optional timeout duration.", Required: false},
 	}
 }
-func (t *agentTool) Execute(ctx context.Context, state *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *agentTool) Execute(ctx context.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	if t == nil || t.agent == nil {
 		return nil, fmt.Errorf("testfu tool unavailable")
 	}
@@ -80,13 +81,14 @@ func (t *agentTool) Execute(ctx context.Context, state *core.Context, args map[s
 			task.Context["action"] = string(actionRunSuite)
 		}
 	}
-	result, err := t.agent.Execute(ctx, task, state)
+	env := contextdata.NewEnvelope(task.ID, "")
+	result, err := t.agent.Execute(ctx, task, env)
 	if err != nil {
 		return nil, err
 	}
 	return &core.ToolResult{Success: result.Success, Data: map[string]interface{}(result.Data)}, nil
 }
-func (t *agentTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t *agentTool) IsAvailable(context.Context) bool { return true }
 func (t *agentTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
 }
@@ -100,14 +102,14 @@ func (t *assertPassedTool) Category() string    { return "test" }
 func (t *assertPassedTool) Parameters() []core.ToolParameter {
 	return []core.ToolParameter{{Name: "passed", Type: "boolean", Description: "Passed flag from a prior testfu result.", Required: true}}
 }
-func (t *assertPassedTool) Execute(_ context.Context, _ *core.Context, args map[string]interface{}) (*core.ToolResult, error) {
+func (t *assertPassedTool) Execute(_ context.Context, args map[string]interface{}) (*core.ToolResult, error) {
 	passed, _ := args["passed"].(bool)
 	if passed {
 		return &core.ToolResult{Success: true, Data: map[string]interface{}{"passed": true}}, nil
 	}
 	return &core.ToolResult{Success: false, Error: "report indicates failure", Data: map[string]interface{}{"passed": false}}, nil
 }
-func (t *assertPassedTool) IsAvailable(context.Context, *core.Context) bool { return true }
+func (t *assertPassedTool) IsAvailable(context.Context) bool { return true }
 func (t *assertPassedTool) Permissions() core.ToolPermissions {
 	return core.ToolPermissions{Permissions: &core.PermissionSet{}}
 }
