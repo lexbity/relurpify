@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
+
+	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
 	"codeburg.org/lexbit/relurpify/named/rex/reconcile"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"github.com/stretchr/testify/require"
@@ -129,12 +131,12 @@ func TestLineageBridgeEnsureBindingAndHelperBranches(t *testing.T) {
 		UpdatedAt: time.Now().UTC(),
 	}))
 
-	state := core.NewContext()
-	state.Set("fmp.lineage_id", "lineage-2")
-	state.Set("gateway.session_id", "sess-2")
+	env := contextdata.NewEnvelope("test", "")
+	env.SetWorkingValue("fmp.lineage_id", "lineage-2", contextdata.MemoryClassTask)
+	env.SetWorkingValue("gateway.session_id", "sess-2", contextdata.MemoryClassTask)
 	bridge := &LineageBridge{WorkflowStore: store, RuntimeID: "rex", Now: func() time.Time { return time.Date(2026, 4, 8, 16, 0, 0, 0, time.UTC) }}
 
-	binding, err := bridge.ensureBinding(ctx, "wf-2", "run-2", &core.Task{Context: map[string]any{"session_id": "task-sess"}}, state, bridge.nowUTC())
+	binding, err := bridge.ensureBinding(ctx, "wf-2", "run-2", &core.Task{Context: map[string]any{"session_id": "task-sess"}}, env, bridge.nowUTC())
 	require.NoError(t, err)
 	require.NotNil(t, binding)
 	require.Equal(t, "lineage-2", binding.LineageID)
@@ -146,8 +148,8 @@ func TestLineageBridgeEnsureBindingAndHelperBranches(t *testing.T) {
 	require.NotNil(t, readBinding)
 	require.Equal(t, "lineage-2", readBinding.LineageID)
 
-	require.Equal(t, "sess-2", sessionIDFromState(state, nil))
-	require.Equal(t, "task-sess", sessionIDFromState(nil, &core.Task{Context: map[string]any{"session_id": "task-sess"}}))
+	require.Equal(t, "sess-2", sessionIDFromEnvelope(env, nil))
+	require.Equal(t, "task-sess", sessionIDFromEnvelope(nil, &core.Task{Context: map[string]any{"session_id": "task-sess"}}))
 
 	require.Equal(t, string(core.AttemptStateHandoffAccepted), func() string {
 		s, ok, err := bridgeStateForFrameworkEvent(core.FrameworkEvent{Type: core.FrameworkEventFMPHandoffAccepted})

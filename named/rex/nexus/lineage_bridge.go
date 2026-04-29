@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
 	"codeburg.org/lexbit/relurpify/named/rex/reconcile"
 	rexctx "codeburg.org/lexbit/relurpify/named/rex/rexctx"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
@@ -30,16 +30,15 @@ type LineageBinding struct {
 
 // LineageBridge projects rex workflow execution into FMP lineage and attempt state.
 type LineageBridge struct {
-	Service             *fwfmp.Service
-	WorkflowStore       *memdb.SQLiteWorkflowStateStore
-	LineageBindingStore memdb.LineageBindingStore
-	RuntimeID           string
-	Now                 func() time.Time
-	PolicyResolver      rexctx.TrustedContextResolver
+	Service        *fwfmp.Service
+	LifecycleRepo  agentlifecycle.Repository
+	RuntimeID      string
+	Now            func() time.Time
+	PolicyResolver rexctx.TrustedContextResolver
 }
 
 func (b *LineageBridge) HandleFrameworkEvent(ctx context.Context, frameworkEvent core.FrameworkEvent) error {
-	if b == nil || b.WorkflowStore == nil {
+	if b == nil || b.LifecycleRepo == nil {
 		return nil
 	}
 	state, ok, err := bridgeStateForFrameworkEvent(frameworkEvent)
@@ -62,13 +61,13 @@ func (b *LineageBridge) HandleFrameworkEvent(ctx context.Context, frameworkEvent
 				return err
 			}
 		}
-		if err := b.WorkflowStore.AppendEvent(ctx, memory.WorkflowEventRecord{
+		if err := b.LifecycleRepo.AppendEvent(ctx, agentlifecycle.WorkflowEventRecord{
 			EventID:    fmt.Sprintf("%s:%d", match.RunID, frameworkEvent.Seq),
 			WorkflowID: match.WorkflowID,
 			RunID:      match.RunID,
 			EventType:  frameworkEvent.Type,
-			Message:    bridgeMessageForEvent(frameworkEvent.Type),
-			Metadata:   payload,
+			Payload:    payload,
+			Sequence:   frameworkEvent.Seq,
 			CreatedAt:  frameworkEvent.Timestamp.UTC(),
 		}); err != nil {
 			return err
@@ -83,27 +82,27 @@ type matchedBinding struct {
 	Binding    LineageBinding
 }
 
-func (b *LineageBridge) BeforeExecute(ctx context.Context, workflowID, runID string, task *core.Task, state *core.Context) error {
-	if b == nil || b.WorkflowStore == nil {
+func (b *LineageBridge) BeforeExecute(ctx context.Context, workflowID, runID string, task *core.Task, env *contextdata.Envelope) error {
+	if b == nil || b.LifecycleRepo == nil {
 		return nil
 	}
 	now := b.nowUTC()
-	if err := b.persistTaskRequest(ctx, workflowID, runID, task, state, now); err != nil {
+	if err := b.persistTaskRequest(ctx, workflowID, runID, task, env, now); err != nil {
 		return err
 	}
-	trusted := b.resolveTrustedExecutionContext(ctx, task, state)
-	if state != nil {
+	trusted := b.resolveTrustedExecutionContext(ctx, task, env)
+	if env != nil {
 		if strings.TrimSpace(trusted.SessionID) != "" {
-			state.Set(rexkeys.GatewaySessionID, trusted.SessionID)
+			env.SetWorkingValue(rexkeys.GatewaySessionID, trusted.SessionID, contextdata.MemoryClassTask)
 		}
 		if strings.TrimSpace(string(trusted.SensitivityClass)) != "" {
-			state.Set("fmp.sensitivity_class", string(trusted.SensitivityClass))
+			env.SetWorkingValue("fmp.sensitivity_class", string(trusted.SensitivityClass), contextdata.MemoryClassTask)
 		}
 		if len(trusted.FederationTargets) > 0 {
-			state.Set("fmp.allowed_federation_targets", append([]string(nil), trusted.FederationTargets...))
+			env.SetWorkingValue("fmp.allowed_federation_targets", append([]string(nil), trusted.FederationTargets...), contextdata.MemoryClassTask)
 		}
 	}
-	binding, err := b.ensureBinding(ctx, workflowID, runID, task, state, now)
+	binding, err := b.ensureBinding(ctx, workflowID, runID, task, env, now)
 	if err != nil || binding == nil {
 		return err
 	}
@@ -115,11 +114,11 @@ func (b *LineageBridge) BeforeExecute(ctx context.Context, workflowID, runID str
 	if ok && !attempt.StartTime.IsZero() {
 		startTime = attempt.StartTime
 	}
-	record := core.AttemptRecord{
+	record := fwfmp.AttemptRecord{
 		AttemptID:        binding.AttemptID,
 		LineageID:        binding.LineageID,
 		RuntimeID:        binding.RuntimeID,
-		State:            core.AttemptStateRunning,
+		State:            fwfmp.AttemptStateRunning,
 		StartTime:        startTime,
 		LastProgressTime: now,
 	}
@@ -135,18 +134,18 @@ func (b *LineageBridge) BeforeExecute(ctx context.Context, workflowID, runID str
 	}
 	binding.State = string(record.State)
 	binding.UpdatedAt = now
-	state.Set(rexkeys.FMPLineageID, binding.LineageID)
-	state.Set(rexkeys.FMPAttemptID, binding.AttemptID)
-	state.Set(rexkeys.RexFMPLineageID, binding.LineageID)
-	state.Set(rexkeys.RexFMPAttemptID, binding.AttemptID)
+	env.SetWorkingValue(rexkeys.FMPLineageID, binding.LineageID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.FMPAttemptID, binding.AttemptID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RexFMPLineageID, binding.LineageID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RexFMPAttemptID, binding.AttemptID, contextdata.MemoryClassTask)
 	return b.persistBinding(ctx, workflowID, runID, *binding)
 }
 
-func (b *LineageBridge) AfterExecute(ctx context.Context, workflowID, runID string, _ *core.Task, state *core.Context, _ *core.Result, execErr error) error {
-	if b == nil || b.WorkflowStore == nil || b.Service == nil || b.Service.Ownership == nil {
+func (b *LineageBridge) AfterExecute(ctx context.Context, workflowID, runID string, _ *core.Task, env *contextdata.Envelope, _ *core.Result, execErr error) error {
+	if b == nil || b.LifecycleRepo == nil || b.Service == nil || b.Service.Ownership == nil {
 		return nil
 	}
-	binding, err := b.bindingFromState(ctx, workflowID, runID, state)
+	binding, err := b.bindingFromEnvelope(ctx, workflowID, runID, env)
 	if err != nil || binding == nil {
 		return err
 	}
@@ -169,25 +168,39 @@ func (b *LineageBridge) AfterExecute(ctx context.Context, workflowID, runID stri
 	return b.persistBinding(ctx, workflowID, runID, *binding)
 }
 
-func (b *LineageBridge) ensureBinding(ctx context.Context, workflowID, runID string, task *core.Task, state *core.Context, now time.Time) (*LineageBinding, error) {
-	if state != nil {
-		lineageID := strings.TrimSpace(state.GetString(rexkeys.FMPLineageID))
+func (b *LineageBridge) ensureBinding(ctx context.Context, workflowID, runID string, task *core.Task, env *contextdata.Envelope, now time.Time) (*LineageBinding, error) {
+	if env != nil {
+		lineageID := ""
+		if val, ok := env.GetWorkingValue(rexkeys.FMPLineageID); ok {
+			lineageID = strings.TrimSpace(fmt.Sprint(val))
+		}
 		if lineageID == "" {
-			lineageID = strings.TrimSpace(state.GetString(rexkeys.RexFMPLineageID))
+			if val, ok := env.GetWorkingValue(rexkeys.RexFMPLineageID); ok {
+				lineageID = strings.TrimSpace(fmt.Sprint(val))
+			}
 		}
 		if lineageID != "" {
-			attemptID := strings.TrimSpace(state.GetString(rexkeys.FMPAttemptID))
+			attemptID := ""
+			if val, ok := env.GetWorkingValue(rexkeys.FMPAttemptID); ok {
+				attemptID = strings.TrimSpace(fmt.Sprint(val))
+			}
 			if attemptID == "" {
-				attemptID = strings.TrimSpace(state.GetString(rexkeys.RexFMPAttemptID))
+				if val, ok := env.GetWorkingValue(rexkeys.RexFMPAttemptID); ok {
+					attemptID = strings.TrimSpace(fmt.Sprint(val))
+				}
 			}
 			if attemptID == "" {
 				attemptID = runID
+			}
+			sessionID := ""
+			if val, ok := env.GetWorkingValue(rexkeys.GatewaySessionID); ok {
+				sessionID = strings.TrimSpace(fmt.Sprint(val))
 			}
 			return &LineageBinding{
 				LineageID: lineageID,
 				AttemptID: attemptID,
 				RuntimeID: b.runtimeID(),
-				SessionID: strings.TrimSpace(state.GetString(rexkeys.GatewaySessionID)),
+				SessionID: sessionID,
 				UpdatedAt: now,
 			}, nil
 		}
@@ -199,8 +212,8 @@ func (b *LineageBridge) ensureBinding(ctx context.Context, workflowID, runID str
 	if b.Service == nil || b.Service.Ownership == nil {
 		return nil, nil
 	}
-	trusted := b.resolveTrustedExecutionContext(ctx, task, state)
-	sessionID := sessionIDFromState(state, task)
+	trusted := b.resolveTrustedExecutionContext(ctx, task, env)
+	sessionID := sessionIDFromEnvelope(env, task)
 	if sessionID == "" {
 		sessionID = trusted.SessionID
 	}
@@ -214,7 +227,7 @@ func (b *LineageBridge) ensureBinding(ctx context.Context, workflowID, runID str
 		TaskClass:                "agent.run",
 		ContextClass:             "workflow-runtime",
 		CapabilityEnvelope:       defaultCapabilityEnvelope(),
-		SensitivityClass:         trusted.SensitivityClass,
+		SensitivityClass:         fwfmp.SensitivityClass(trusted.SensitivityClass),
 		AllowedFederationTargets: append([]string(nil), trusted.FederationTargets...),
 	})
 	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "already exists") {
@@ -239,20 +252,33 @@ func (b *LineageBridge) ensureBinding(ctx context.Context, workflowID, runID str
 }
 
 func (b *LineageBridge) readBinding(ctx context.Context, workflowID, runID string) (*LineageBinding, error) {
-	if store := b.bindingStore(); store != nil {
-		record, ok, err := store.GetLineageBinding(ctx, workflowID, runID)
-		if err != nil {
-			return nil, err
-		}
-		if ok && record != nil {
-			return bindingFromRecord(*record), nil
+	if b.LifecycleRepo == nil {
+		return nil, nil
+	}
+	// Try to find lineage binding by workflow/run
+	bindings, err := b.LifecycleRepo.FindLineageBindingByWorkflow(ctx, workflowID)
+	if err != nil {
+		return nil, err
+	}
+	for _, binding := range bindings {
+		if binding.RunID == runID {
+			return &LineageBinding{
+				LineageID: binding.LineageID,
+				AttemptID: binding.AttemptID,
+				RuntimeID: b.runtimeID(),
+				UpdatedAt: binding.UpdatedAt,
+			}, nil
 		}
 	}
-	artifacts, err := b.WorkflowStore.ListWorkflowArtifacts(ctx, workflowID, runID)
+	// Fallback to artifact-based lookup
+	artifacts, err := b.LifecycleRepo.ListArtifacts(ctx, workflowID)
 	if err != nil {
 		return nil, err
 	}
 	for _, artifact := range artifacts {
+		if artifact.RunID != runID {
+			continue
+		}
 		if artifact.Kind != "rex.fmp_lineage" || strings.TrimSpace(artifact.InlineRawText) == "" {
 			continue
 		}
@@ -265,10 +291,16 @@ func (b *LineageBridge) readBinding(ctx context.Context, workflowID, runID strin
 	return nil, nil
 }
 
-func (b *LineageBridge) bindingFromState(ctx context.Context, workflowID, runID string, state *core.Context) (*LineageBinding, error) {
-	if state != nil {
-		lineageID := strings.TrimSpace(state.GetString(rexkeys.FMPLineageID))
-		attemptID := strings.TrimSpace(state.GetString(rexkeys.FMPAttemptID))
+func (b *LineageBridge) bindingFromEnvelope(ctx context.Context, workflowID, runID string, env *contextdata.Envelope) (*LineageBinding, error) {
+	if env != nil {
+		lineageID := ""
+		if val, ok := env.GetWorkingValue(rexkeys.FMPLineageID); ok {
+			lineageID = strings.TrimSpace(fmt.Sprint(val))
+		}
+		attemptID := ""
+		if val, ok := env.GetWorkingValue(rexkeys.FMPAttemptID); ok {
+			attemptID = strings.TrimSpace(fmt.Sprint(val))
+		}
 		if lineageID != "" && attemptID != "" {
 			return &LineageBinding{
 				LineageID: lineageID,
@@ -281,7 +313,7 @@ func (b *LineageBridge) bindingFromState(ctx context.Context, workflowID, runID 
 	return b.readBinding(ctx, workflowID, runID)
 }
 
-func (b *LineageBridge) persistTaskRequest(ctx context.Context, workflowID, runID string, task *core.Task, state *core.Context, now time.Time) error {
+func (b *LineageBridge) persistTaskRequest(ctx context.Context, workflowID, runID string, task *core.Task, env *contextdata.Envelope, now time.Time) error {
 	if task == nil {
 		return nil
 	}
@@ -293,40 +325,46 @@ func (b *LineageBridge) persistTaskRequest(ctx context.Context, workflowID, runI
 			"context":     task.Context,
 			"metadata":    task.Metadata,
 		},
-		"state": state.StateSnapshot(),
+		"env": env,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	return b.WorkflowStore.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
-		ArtifactID:      runID + ":task-request",
-		WorkflowID:      workflowID,
-		RunID:           runID,
-		Kind:            "rex.task_request",
-		ContentType:     "application/json",
-		StorageKind:     memory.ArtifactStorageInline,
-		SummaryText:     "rex task request",
-		InlineRawText:   string(raw),
-		SummaryMetadata: map[string]any{"session_id": b.executionSessionID(ctx, task, state)},
-		CreatedAt:       now,
+	return b.LifecycleRepo.UpsertArtifact(ctx, agentlifecycle.WorkflowArtifactRecord{
+		ArtifactID:        runID + ":task-request",
+		WorkflowID:        workflowID,
+		RunID:             runID,
+		Kind:              "rex.task_request",
+		ContentType:       "application/json",
+		StorageKind:       agentlifecycle.ArtifactStorageInline,
+		SummaryText:       "rex task request",
+		InlineRawText:     string(raw),
+		SummaryMetadata:   map[string]any{"session_id": b.executionSessionID(ctx, task, env)},
+		RawSizeBytes:      int64(len(raw)),
+		CompressionMethod: "none",
+		CreatedAt:         now,
 	})
 }
 
 func (b *LineageBridge) persistBinding(ctx context.Context, workflowID, runID string, binding LineageBinding) error {
-	if store := b.bindingStore(); store != nil {
-		return store.UpsertLineageBinding(ctx, memdb.LineageBindingRecord{
-			WorkflowID: workflowID,
-			RunID:      runID,
-			LineageID:  binding.LineageID,
-			AttemptID:  binding.AttemptID,
-			RuntimeID:  binding.RuntimeID,
-			SessionID:  binding.SessionID,
-			State:      binding.State,
-			UpdatedAt:  binding.UpdatedAt,
-		})
+	if b.LifecycleRepo == nil {
+		return nil
 	}
-	return nil
+	return b.LifecycleRepo.UpsertLineageBinding(ctx, agentlifecycle.LineageBindingRecord{
+		BindingID:   workflowID + ":" + runID,
+		WorkflowID:  workflowID,
+		RunID:       runID,
+		LineageID:   binding.LineageID,
+		AttemptID:   binding.AttemptID,
+		BindingType: "fmp",
+		Metadata: map[string]any{
+			"runtime_id": binding.RuntimeID,
+			"session_id": binding.SessionID,
+			"state":      binding.State,
+		},
+		UpdatedAt: binding.UpdatedAt,
+	})
 }
 
 // ApplyReconciliationOutcome updates FMP attempt state based on a reconciliation outcome.
@@ -336,7 +374,7 @@ func (b *LineageBridge) ApplyReconciliationOutcome(ctx context.Context, workflow
 		return nil
 	}
 
-	binding, err := b.bindingFromState(ctx, workflowID, runID, nil)
+	binding, err := b.bindingFromEnvelope(ctx, workflowID, runID, nil)
 	if err != nil || binding == nil {
 		return err
 	}
@@ -361,7 +399,7 @@ func (b *LineageBridge) ResolveReconciliationBinding(ctx context.Context, workfl
 	if b == nil || b.Service == nil || b.Service.Ownership == nil {
 		return nil, nil
 	}
-	binding, err := b.bindingFromState(ctx, workflowID, runID, nil)
+	binding, err := b.bindingFromEnvelope(ctx, workflowID, runID, nil)
 	if err != nil || binding == nil {
 		return nil, err
 	}
@@ -383,37 +421,45 @@ func (b *LineageBridge) ResolveReconciliationBinding(ctx context.Context, workfl
 }
 
 func (b *LineageBridge) findBindings(ctx context.Context, payload map[string]any) ([]matchedBinding, error) {
-	store := b.bindingStore()
-	if store == nil {
+	if b.LifecycleRepo == nil {
 		return nil, nil
 	}
 	candidates := bindingSearchCandidates(payload)
 	var out []matchedBinding
 	seen := map[string]struct{}{}
 	for _, candidate := range candidates {
-		var records []memdb.LineageBindingRecord
-		var err error
+		var records []agentlifecycle.LineageBindingRecord
 		if candidate.kind == "lineage" {
-			records, err = store.FindLineageBindingsByLineageID(ctx, candidate.value)
+			record, err := b.LifecycleRepo.FindLineageBindingByLineageID(ctx, candidate.value)
+			if err != nil {
+				return nil, err
+			}
+			if record != nil {
+				records = []agentlifecycle.LineageBindingRecord{*record}
+			}
 		} else {
-			records, err = store.FindLineageBindingsByAttemptID(ctx, candidate.value)
-		}
-		if err != nil {
-			return nil, err
+			record, err := b.LifecycleRepo.FindLineageBindingByAttemptID(ctx, candidate.value)
+			if err != nil {
+				return nil, err
+			}
+			if record != nil {
+				records = []agentlifecycle.LineageBindingRecord{*record}
+			}
 		}
 		for _, record := range records {
 			key := record.WorkflowID + "\x00" + record.RunID
 			if _, ok := seen[key]; ok {
 				continue
 			}
-			if !matchesFrameworkBinding(*bindingFromRecord(record), payload) {
+			binding := bindingFromRecord(record)
+			if !matchesFrameworkBinding(*binding, payload) {
 				continue
 			}
 			seen[key] = struct{}{}
 			out = append(out, matchedBinding{
 				WorkflowID: record.WorkflowID,
 				RunID:      record.RunID,
-				Binding:    *bindingFromRecord(record),
+				Binding:    *binding,
 			})
 		}
 	}
@@ -432,16 +478,6 @@ func (b *LineageBridge) nowUTC() time.Time {
 		return b.Now().UTC()
 	}
 	return time.Now().UTC()
-}
-
-func (b *LineageBridge) bindingStore() memdb.LineageBindingStore {
-	if b == nil {
-		return nil
-	}
-	if b.LineageBindingStore != nil {
-		return b.LineageBindingStore
-	}
-	return b.WorkflowStore
 }
 
 type bindingSearchCandidate struct {
@@ -471,34 +507,46 @@ func bindingSearchCandidates(payload map[string]any) []bindingSearchCandidate {
 	return out
 }
 
-func bindingFromRecord(record memdb.LineageBindingRecord) *LineageBinding {
-	return &LineageBinding{
+func bindingFromRecord(record agentlifecycle.LineageBindingRecord) *LineageBinding {
+	binding := &LineageBinding{
 		LineageID: record.LineageID,
 		AttemptID: record.AttemptID,
-		RuntimeID: record.RuntimeID,
-		SessionID: record.SessionID,
-		State:     record.State,
+		RuntimeID: "",
+		SessionID: "",
+		State:     "",
 		UpdatedAt: record.UpdatedAt,
 	}
+	if record.Metadata != nil {
+		if val, ok := record.Metadata["runtime_id"].(string); ok {
+			binding.RuntimeID = val
+		}
+		if val, ok := record.Metadata["session_id"].(string); ok {
+			binding.SessionID = val
+		}
+		if val, ok := record.Metadata["state"].(string); ok {
+			binding.State = val
+		}
+	}
+	return binding
 }
 
-func (b *LineageBridge) resolveTrustedExecutionContext(ctx context.Context, task *core.Task, state *core.Context) rexctx.TrustedExecutionContext {
+func (b *LineageBridge) resolveTrustedExecutionContext(ctx context.Context, task *core.Task, env *contextdata.Envelope) rexctx.TrustedExecutionContext {
 	if trusted, ok := rexctx.TrustedExecutionContextFromContext(ctx); ok {
 		return trusted
 	}
 	if b != nil && b.PolicyResolver != nil {
 		actor := core.EventActor{
 			TenantID: firstNonEmpty(
-				stateString(state, rexkeys.RexAdmissionTenantID),
-				stateString(state, rexkeys.GatewayTenantID),
+				envelopeString(env, rexkeys.RexAdmissionTenantID),
+				envelopeString(env, rexkeys.GatewayTenantID),
 			),
 			ID: firstNonEmpty(
-				stateString(state, rexkeys.GatewaySessionID),
-				sessionIDFromState(state, task),
+				envelopeString(env, rexkeys.GatewaySessionID),
+				sessionIDFromEnvelope(env, task),
 			),
 			Kind: firstNonEmpty(
-				stateString(state, rexkeys.RexWorkloadClass),
-				stateString(state, "gateway.role"),
+				envelopeString(env, rexkeys.RexWorkloadClass),
+				envelopeString(env, "gateway.role"),
 			),
 		}
 		if resolved, err := b.PolicyResolver.Resolve(ctx, actor); err == nil {
@@ -509,28 +557,33 @@ func (b *LineageBridge) resolveTrustedExecutionContext(ctx context.Context, task
 	return resolved
 }
 
-func (b *LineageBridge) executionSessionID(ctx context.Context, task *core.Task, state *core.Context) string {
+func (b *LineageBridge) executionSessionID(ctx context.Context, task *core.Task, env *contextdata.Envelope) string {
 	if trusted, ok := rexctx.TrustedExecutionContextFromContext(ctx); ok && strings.TrimSpace(trusted.SessionID) != "" {
 		return strings.TrimSpace(trusted.SessionID)
 	}
-	if sessionID := sessionIDFromState(state, task); strings.TrimSpace(sessionID) != "" {
+	if sessionID := sessionIDFromEnvelope(env, task); strings.TrimSpace(sessionID) != "" {
 		return strings.TrimSpace(sessionID)
 	}
 	return ""
 }
 
-func stateString(state *core.Context, key string) string {
-	if state == nil {
+func envelopeString(env *contextdata.Envelope, key string) string {
+	if env == nil {
 		return ""
 	}
-	return strings.TrimSpace(state.GetString(key))
+	if val, ok := env.GetWorkingValue(key); ok {
+		return strings.TrimSpace(fmt.Sprint(val))
+	}
+	return ""
 }
 
-func sessionIDFromState(state *core.Context, task *core.Task) string {
-	if state != nil {
+func sessionIDFromEnvelope(env *contextdata.Envelope, task *core.Task) string {
+	if env != nil {
 		for _, key := range []string{rexkeys.GatewaySessionID, rexkeys.SessionID} {
-			if value := strings.TrimSpace(state.GetString(key)); value != "" {
-				return value
+			if val, ok := env.GetWorkingValue(key); ok {
+				if value := strings.TrimSpace(fmt.Sprint(val)); value != "" {
+					return value
+				}
 			}
 		}
 	}
@@ -544,18 +597,15 @@ func sessionIDFromState(state *core.Context, task *core.Task) string {
 	return ""
 }
 
-func defaultCapabilityEnvelope() core.CapabilityEnvelope {
-	return core.CapabilityEnvelope{
+func defaultCapabilityEnvelope() fwfmp.CapabilityEnvelope {
+	return fwfmp.CapabilityEnvelope{
 		AllowedCapabilityIDs: []string{
 			string(core.CapabilityPlan),
 			string(core.CapabilityExecute),
 			string(core.CapabilityCode),
 			string(core.CapabilityExplain),
-			string(core.CapabilityHumanInLoop),
 		},
 		AllowedTaskClasses: []string{"agent.run"},
-		AllowChildTasks:    true,
-		AllowOnwardExport:  true,
 	}
 }
 

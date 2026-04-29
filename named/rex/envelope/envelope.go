@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 )
@@ -23,8 +24,8 @@ type Envelope struct {
 	Metadata           map[string]string
 }
 
-// Normalize builds an Envelope from task and state.
-func Normalize(task *core.Task, state *core.Context) Envelope {
+// Normalize builds an Envelope from task and framework envelope.
+func Normalize(task *core.Task, envelope *contextdata.Envelope) Envelope {
 	env := Envelope{
 		Source:   "task",
 		Metadata: map[string]string{},
@@ -34,7 +35,7 @@ func Normalize(task *core.Task, state *core.Context) Envelope {
 	}
 	env.TaskID = strings.TrimSpace(task.ID)
 	env.Instruction = strings.TrimSpace(task.Instruction)
-	env.Metadata = cloneStringMap(task.Metadata)
+	env.Metadata = mapStringString(task.Metadata)
 	if task.Context != nil {
 		env.Workspace = stringValue(task.Context["workspace"])
 		env.ModeHint = stringValue(task.Context["mode_hint"])
@@ -45,15 +46,21 @@ func Normalize(task *core.Task, state *core.Context) Envelope {
 		env.EditPermitted = boolValue(task.Context["edit_permitted"]) || boolValue(task.Context["mutation_allowed"])
 		env.CapabilitySnapshot = stringSlice(task.Context["capability_snapshot"])
 	}
-	if state != nil {
+	if envelope != nil {
 		if env.WorkflowID == "" {
-			env.WorkflowID = strings.TrimSpace(state.GetString(rexkeys.RexWorkflowID))
+			if val, ok := envelope.GetWorkingValue(rexkeys.RexWorkflowID); ok {
+				env.WorkflowID = strings.TrimSpace(fmt.Sprint(val))
+			}
 		}
 		if env.RunID == "" {
-			env.RunID = strings.TrimSpace(state.GetString(rexkeys.RexRunID))
+			if val, ok := envelope.GetWorkingValue(rexkeys.RexRunID); ok {
+				env.RunID = strings.TrimSpace(fmt.Sprint(val))
+			}
 		}
 		if env.ResumedRoute == "" {
-			env.ResumedRoute = strings.TrimSpace(state.GetString("rex.route"))
+			if val, ok := envelope.GetWorkingValue("rex.route"); ok {
+				env.ResumedRoute = strings.TrimSpace(fmt.Sprint(val))
+			}
 		}
 	}
 	if env.TaskID == "" {
@@ -104,6 +111,19 @@ func cloneStringMap(in map[string]string) map[string]string {
 	out := make(map[string]string, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+func mapStringString(in map[string]any) map[string]string {
+	if len(in) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		if s := fmt.Sprint(v); v != nil {
+			out[k] = strings.TrimSpace(s)
+		}
 	}
 	return out
 }

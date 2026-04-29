@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
@@ -46,7 +47,7 @@ type AdminSnapshot struct {
 
 // ManagedRuntime is the Nexus-facing contract exposed by rex.
 type ManagedRuntime interface {
-	Execute(context.Context, *core.Task, *core.Context) (*core.Result, error)
+	Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error)
 	RuntimeProjection() Projection
 }
 
@@ -82,11 +83,11 @@ func (a *Adapter) Registration() Registration {
 	}
 }
 
-func (a *Adapter) Invoke(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (a *Adapter) Invoke(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	if a == nil || a.runtime == nil {
 		return nil, fmt.Errorf("managed runtime unavailable")
 	}
-	return a.runtime.Execute(ctx, task, state)
+	return a.runtime.Execute(ctx, task, env)
 }
 
 func (a *Adapter) AdminSnapshot(ctx context.Context) (AdminSnapshot, error) {

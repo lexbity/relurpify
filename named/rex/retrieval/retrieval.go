@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
+
+	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
 	frameworkretrieval "codeburg.org/lexbit/relurpify/framework/retrieval"
 	"codeburg.org/lexbit/relurpify/named/rex/route"
 )
@@ -76,16 +78,20 @@ func ResolvePolicy(decision route.RouteDecision) Policy {
 }
 
 // ExpandWithWorkflowStore expands rex context using workflow retrieval surfaces.
-func ExpandWithWorkflowStore(ctx context.Context, store *db.SQLiteWorkflowStateStore, workflowID string, task *core.Task, state *core.Context, decision route.RouteDecision) (Expansion, error) {
-	return expandContext(ctx, store, workflowID, task, state, ResolvePolicy(decision))
+func ExpandWithWorkflowStore(ctx context.Context, store any, workflowID string, task *core.Task, env *contextdata.Envelope, decision route.RouteDecision) (Expansion, error) {
+	provider, ok := store.(workflowRetrievalProvider)
+	if !ok {
+		return Expansion{}, nil
+	}
+	return expandContext(ctx, provider, workflowID, task, env, ResolvePolicy(decision))
 }
 
-// Apply persists expansion into state and task context.
-func Apply(state *core.Context, task *core.Task, expansion Expansion) *core.Task {
-	if state != nil {
-		state.Set("rex.context_expansion", expansion)
+// Apply persists expansion into envelope and task context.
+func Apply(env *contextdata.Envelope, task *core.Task, expansion Expansion) *core.Task {
+	if env != nil {
+		env.SetWorkingValue("rex.context_expansion", expansion, contextdata.MemoryClassTask)
 		if len(expansion.WorkflowRetrieval) > 0 {
-			state.Set("pipeline.workflow_retrieval", expansion.WorkflowRetrieval)
+			env.SetWorkingValue("pipeline.workflow_retrieval", expansion.WorkflowRetrieval, contextdata.MemoryClassTask)
 		}
 	}
 	if task == nil {
@@ -108,7 +114,7 @@ func Apply(state *core.Context, task *core.Task, expansion Expansion) *core.Task
 	return cloned
 }
 
-func expandContext(ctx context.Context, provider workflowRetrievalProvider, workflowID string, task *core.Task, _ *core.Context, policy Policy) (Expansion, error) {
+func expandContext(ctx context.Context, provider workflowRetrievalProvider, workflowID string, task *core.Task, _ *contextdata.Envelope, policy Policy) (Expansion, error) {
 	expansion := Expansion{
 		LocalPaths:        taskPaths(task),
 		ExpansionStrategy: policy.ExpansionStrategy,

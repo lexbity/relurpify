@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/named/rex/config"
+	manifest "codeburg.org/lexbit/relurpify/named/rex/config"
 	"codeburg.org/lexbit/relurpify/named/rex/state"
 )
 
@@ -28,7 +29,7 @@ type WorkItem struct {
 	RunID      string
 	Attempts   int
 	Task       *core.Task
-	State      *core.Context
+	Envelope   *contextdata.Envelope
 	Execute    func(context.Context, WorkItem) error
 }
 
@@ -51,7 +52,7 @@ type PartitionDetector interface {
 
 // Manager coordinates long-running Nexus-managed rex work.
 type Manager struct {
-	cfg            config.Config
+	cfg            manifest.Config
 	mem            memory.MemoryStore
 	queue          chan WorkItem
 	mu             sync.RWMutex
@@ -76,7 +77,7 @@ type Manager struct {
 	deadLetter []WorkItem
 }
 
-func New(cfg config.Config, mem memory.MemoryStore) *Manager {
+func New(cfg manifest.Config, mem memory.MemoryStore) *Manager {
 	cfg = normalizeConfig(cfg)
 	return &Manager{
 		cfg:       cfg,
@@ -440,15 +441,15 @@ func max(a, b int) int {
 	return b
 }
 
-func normalizeConfig(cfg config.Config) config.Config {
+func normalizeConfig(cfg manifest.Config) manifest.Config {
 	if strings.TrimSpace(string(cfg.RuntimeMode)) == "" {
-		cfg.RuntimeMode = config.RuntimeModeNexusManaged
+		cfg.RuntimeMode = manifest.RuntimeModeNexusManaged
 	}
 	if cfg.QueueCapacity <= 0 {
 		cfg.QueueCapacity = 32
 	}
 	if cfg.WorkerCount <= 0 {
-		if cfg.RuntimeMode == config.RuntimeModeEmbedded {
+		if cfg.RuntimeMode == manifest.RuntimeModeEmbedded {
 			cfg.WorkerCount = 1
 		} else {
 			cfg.WorkerCount = 4

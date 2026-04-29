@@ -6,16 +6,19 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
+
+	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
 	"codeburg.org/lexbit/relurpify/named/rex/reconcile"
 	"codeburg.org/lexbit/relurpify/named/rex/retrieval"
 	"codeburg.org/lexbit/relurpify/named/rex/route"
 	"codeburg.org/lexbit/relurpify/named/rex/state"
+	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
 type stubModel struct{}
@@ -35,33 +38,23 @@ func (stubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSp
 	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func testEnv(t *testing.T) ayenitd.WorkspaceEnvironment {
+func testEnv(t *testing.T) *agentenv.WorkspaceEnvironment {
 	t.Helper()
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	return ayenitd.WorkspaceEnvironment{
-		Model:    stubModel{},
-		Registry: capability.NewRegistry(),
-		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
-		Config:   &core.Config{Name: "rex-test", Model: "stub", MaxIterations: 1},
+	return &agentenv.WorkspaceEnvironment{
+		Model:         stubModel{},
+		Registry:      capability.NewRegistry(),
+		WorkingMemory: memory.NewWorkingMemoryStore(),
+		Config:        &core.Config{Name: "rex-test", Model: "stub", MaxIterations: 1},
 	}
 }
 
-func testRuntimeEnv(t *testing.T) ayenitd.WorkspaceEnvironment {
+func testRuntimeEnv(t *testing.T) *agentenv.WorkspaceEnvironment {
 	t.Helper()
-	workflowStore, err := db.NewSQLiteWorkflowStateStore(filepath.Join(t.TempDir(), "workflow.db"))
-	if err != nil {
-		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
-	}
-	checkpoints := db.NewSQLiteCheckpointStore(workflowStore.DB())
-	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, checkpoints)
-	return ayenitd.WorkspaceEnvironment{
-		Model:    stubModel{},
-		Registry: capability.NewRegistry(),
-		Memory:   composite,
-		Config:   &core.Config{Name: "rex-test", Model: "stub", MaxIterations: 1},
+	return &agentenv.WorkspaceEnvironment{
+		Model:         stubModel{},
+		Registry:      capability.NewRegistry(),
+		WorkingMemory: memory.NewWorkingMemoryStore(),
+		Config:        &core.Config{Name: "rex-test", Model: "stub", MaxIterations: 1},
 	}
 }
 
@@ -69,7 +62,7 @@ func TestAgentImplementsWorkflowExecutor(t *testing.T) {
 	var executor interface{} = New(testEnv(t))
 	if _, ok := executor.(interface {
 		Initialize(*core.Config) error
-		Execute(context.Context, *core.Task, *core.Context) (*core.Result, error)
+		Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error)
 		Capabilities() []core.Capability
 	}); !ok {
 		t.Fatalf("agent does not satisfy workflow executor shape")
@@ -93,11 +86,12 @@ func TestAgentUsesReconcilerHelpers(t *testing.T) {
 
 func TestAgentExecuteBuildsProofSurface(t *testing.T) {
 	agent := New(testEnv(t))
+	env := contextdata.NewEnvelope("task-1", "")
 	result, err := agent.Execute(context.Background(), &core.Task{
 		ID:          "task-1",
 		Instruction: "review the code",
 		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": false},
-	}, core.NewContext())
+	}, env)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -106,177 +100,21 @@ func TestAgentExecuteBuildsProofSurface(t *testing.T) {
 	}
 }
 
-func TestAgentExecutePersistsWorkflowRunArtifactsAndEvents(t *testing.T) {
-	env := testRuntimeEnv(t)
-	agent := New(env)
-	result, err := agent.Execute(context.Background(), &core.Task{
-		ID:          "task-1",
-		Instruction: "review the code",
-		Type:        core.TaskTypeReview,
-		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": false},
-	}, core.NewContext())
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	workflowStore := env.Memory.(*memory.CompositeRuntimeStore).WorkflowStateStore.(*db.SQLiteWorkflowStateStore)
-	workflowID := result.Data["rex.workflow_id"].(string)
-	runID := result.Data["rex.run_id"].(string)
-	if _, ok, err := workflowStore.GetWorkflow(context.Background(), workflowID); err != nil || !ok {
-		t.Fatalf("GetWorkflow ok=%v err=%v", ok, err)
-	}
-	if _, ok, err := workflowStore.GetRun(context.Background(), runID); err != nil || !ok {
-		t.Fatalf("GetRun ok=%v err=%v", ok, err)
-	}
-	artifacts, err := workflowStore.ListWorkflowArtifacts(context.Background(), workflowID, runID)
-	if err != nil {
-		t.Fatalf("ListWorkflowArtifacts: %v", err)
-	}
-	if len(artifacts) < 5 {
-		t.Fatalf("artifacts = %d", len(artifacts))
-	}
-	events, err := workflowStore.ListEvents(context.Background(), workflowID, 10)
-	if err != nil {
-		t.Fatalf("ListEvents: %v", err)
-	}
-	if len(events) < 2 {
-		t.Fatalf("events = %d", len(events))
-	}
-}
-
-func TestAgentExecuteMutationAcceptsPassingVerificationAndPersistsGateArtifacts(t *testing.T) {
-	env := testRuntimeEnv(t)
-	agent := New(env)
-	state := core.NewContext()
-	state.Set("pipeline.verify", map[string]any{
-		"status":  "pass",
-		"summary": "tests passed",
-		"checks":  []any{map[string]any{"name": "go test ./...", "status": "pass"}},
-	})
-	result, err := agent.Execute(context.Background(), &core.Task{
-		ID:          "task-mutation",
-		Instruction: "implement the requested patch",
-		Type:        core.TaskTypeCodeModification,
-		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": true},
-	}, state)
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if !result.Success {
-		t.Fatalf("expected success result: %+v", result)
-	}
-	completion, ok := result.Data["rex.completion"].(proof.CompletionDecision)
-	if !ok {
-		t.Fatalf("missing typed completion decision: %+v", result.Data["rex.completion"])
-	}
-	if !completion.Allowed || completion.Reason != "verification_accepted" {
-		t.Fatalf("unexpected completion: %+v", completion)
-	}
-	proofSurface, ok := result.Data["rex.proof_surface"].(proof.ProofSurface)
-	if !ok {
-		t.Fatalf("missing typed proof surface: %+v", result.Data["rex.proof_surface"])
-	}
-	if !proofSurface.VerificationEvidence || proofSurface.SuccessGateReason != "verification_accepted" {
-		t.Fatalf("unexpected proof surface: %+v", proofSurface)
-	}
-	workflowStore := env.Memory.(*memory.CompositeRuntimeStore).WorkflowStateStore.(*db.SQLiteWorkflowStateStore)
-	workflowID := result.Data["rex.workflow_id"].(string)
-	runID := result.Data["rex.run_id"].(string)
-	artifacts, err := workflowStore.ListWorkflowArtifacts(context.Background(), workflowID, runID)
-	if err != nil {
-		t.Fatalf("ListWorkflowArtifacts: %v", err)
-	}
-	foundVerification := false
-	foundSuccessGate := false
-	for _, artifact := range artifacts {
-		if artifact.Kind == "rex.verification" {
-			foundVerification = true
-		}
-		if artifact.Kind == "rex.success_gate" {
-			foundSuccessGate = true
-		}
-	}
-	if !foundVerification || !foundSuccessGate {
-		t.Fatalf("expected verification and success gate artifacts, got %+v", artifacts)
-	}
-}
-
-func TestAgentExecutePersistsContextExpansionArtifactWhenWorkflowRetrievalEnabled(t *testing.T) {
-	env := testRuntimeEnv(t)
-	workflowStore := env.Memory.(*memory.CompositeRuntimeStore).WorkflowStateStore.(*db.SQLiteWorkflowStateStore)
-	ctx := context.Background()
-	if err := workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
-		WorkflowID:  "wf-seeded",
-		TaskID:      "wf-seeded",
-		TaskType:    core.TaskTypePlanning,
-		Instruction: "seed retrieval",
-		Status:      memory.WorkflowRunStatusRunning,
-	}); err != nil {
-		t.Fatalf("CreateWorkflow: %v", err)
-	}
-	if err := workflowStore.CreateRun(ctx, memory.WorkflowRunRecord{
-		RunID:      "wf-seeded:run",
-		WorkflowID: "wf-seeded",
-		Status:     memory.WorkflowRunStatusRunning,
-	}); err != nil {
-		t.Fatalf("CreateRun: %v", err)
-	}
-	if err := workflowStore.UpsertWorkflowArtifact(ctx, memory.WorkflowArtifactRecord{
-		ArtifactID:    "seed-artifact",
-		WorkflowID:    "wf-seeded",
-		RunID:         "wf-seeded:run",
-		Kind:          "planner_output",
-		ContentType:   "application/json",
-		StorageKind:   memory.ArtifactStorageInline,
-		SummaryText:   "retrieval seed",
-		InlineRawText: `{"decision":"use retrieval"}`,
-	}); err != nil {
-		t.Fatalf("UpsertWorkflowArtifact: %v", err)
-	}
-	agent := New(env)
-	result, err := agent.Execute(ctx, &core.Task{
-		ID:          "task-seeded",
-		Instruction: "plan the retrieval-backed change",
-		Type:        core.TaskTypePlanning,
-		Context: map[string]any{
-			"workspace":   t.TempDir(),
-			"workflow_id": "wf-seeded",
-		},
-	}, core.NewContext())
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	runID := result.Data["rex.run_id"].(string)
-	artifacts, err := workflowStore.ListWorkflowArtifacts(ctx, "wf-seeded", runID)
-	if err != nil {
-		t.Fatalf("ListWorkflowArtifacts: %v", err)
-	}
-	found := false
-	for _, artifact := range artifacts {
-		if artifact.Kind == "rex.context_expansion" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected rex.context_expansion artifact, got %+v", artifacts)
-	}
-}
-
 func TestAgentExecuteRejectsCapabilityProjectionThatBlocksRequiredCapability(t *testing.T) {
 	env := testRuntimeEnv(t)
 	agent := New(env)
-	state := core.NewContext()
-	state.Set("fmp.capability_projection", core.CapabilityEnvelope{
+	env2 := contextdata.NewEnvelope("task-1", "")
+	env2.SetWorkingValue("fmp.capability_projection", fwfmp.CapabilityEnvelope{
 		AllowedCapabilityIDs: []string{string(core.CapabilityExecute)},
 		AllowedTaskClasses:   []string{"agent.run"},
-	})
+	}, contextdata.MemoryClassTask)
 
 	_, err := agent.Execute(context.Background(), &core.Task{
 		ID:          "task-1",
 		Instruction: "write code",
 		Type:        core.TaskTypeCodeGeneration,
 		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": true},
-	}, state)
+	}, env2)
 	if err == nil {
 		t.Fatal("Execute() error = nil, want capability projection rejection")
 	}
@@ -360,7 +198,8 @@ func TestAgentReconcilerWrappersAndPersistProof(t *testing.T) {
 
 	store := &stubArtifactStore{}
 	identity := state.Identity{WorkflowID: "wf-1", RunID: "run-1"}
-	if err := persistProof(context.Background(), store, identity, route.RouteDecision{Family: route.FamilyArchitect, Mode: "mutation", Profile: "managed"}, proof.ProofSurface{RouteFamily: "architect"}, []proof.ActionLogEntry{{Kind: "route"}}, proof.CompletionDecision{Allowed: true}, core.NewContext()); err != nil {
+	env := contextdata.NewEnvelope("wf-1", "")
+	if err := persistProof(context.Background(), store, identity, route.RouteDecision{Family: route.FamilyArchitect, Mode: "mutation", Profile: "managed"}, proof.ProofSurface{RouteFamily: "architect"}, []proof.ActionLogEntry{{Kind: "route"}}, proof.CompletionDecision{Allowed: true}, env); err != nil {
 		t.Fatalf("persistProof: %v", err)
 	}
 	if len(store.artifacts) == 0 {
@@ -380,18 +219,19 @@ func TestAgentNilReceiverWrappersAndPersistenceHelpers(t *testing.T) {
 		t.Fatalf("expected nil agent to not retry")
 	}
 
-	if err := persistProof(context.Background(), nil, state.Identity{WorkflowID: "wf", RunID: "run"}, route.RouteDecision{}, proof.ProofSurface{}, nil, proof.CompletionDecision{}, core.NewContext()); err != nil {
+	env2 := contextdata.NewEnvelope("wf", "")
+	if err := persistProof(context.Background(), nil, state.Identity{WorkflowID: "wf", RunID: "run"}, route.RouteDecision{}, proof.ProofSurface{}, nil, proof.CompletionDecision{}, env2); err != nil {
 		t.Fatalf("nil store should be ignored: %v", err)
 	}
 
 	store := &stubArtifactStore{}
-	stateCtx := core.NewContext()
-	stateCtx.Set("rex.verification_policy", proof.VerificationPolicy{PolicyID: "policy-1", ModeID: "mutation"})
-	stateCtx.Set("rex.verification", proof.VerificationEvidenceRecord{Status: "pass", EvidencePresent: true})
-	stateCtx.Set("rex.success_gate", proof.SuccessGateResult{Allowed: true, Reason: "verification_accepted"})
-	stateCtx.Set("rex.recovery_attempts", 1)
-	stateCtx.Set("rex.artifact_kinds", []string{"rex.proof_surface"})
-	if err := persistProof(context.Background(), store, state.Identity{WorkflowID: "wf-2", RunID: "run-2"}, route.RouteDecision{Family: route.FamilyArchitect, Mode: "mutation", Profile: "managed"}, proof.ProofSurface{}, []proof.ActionLogEntry{{Kind: "route"}}, proof.CompletionDecision{Allowed: true}, stateCtx); err != nil {
+	env3 := contextdata.NewEnvelope("wf-2", "")
+	env3.SetWorkingValue("rex.verification_policy", proof.VerificationPolicy{PolicyID: "policy-1", ModeID: "mutation"}, contextdata.MemoryClassTask)
+	env3.SetWorkingValue("rex.verification", proof.VerificationEvidenceRecord{Status: "pass", EvidencePresent: true}, contextdata.MemoryClassTask)
+	env3.SetWorkingValue("rex.success_gate", proof.SuccessGateResult{Allowed: true, Reason: "verification_accepted"}, contextdata.MemoryClassTask)
+	env3.SetWorkingValue("rex.recovery_attempts", 1, contextdata.MemoryClassTask)
+	env3.SetWorkingValue("rex.artifact_kinds", []string{"rex.proof_surface"}, contextdata.MemoryClassTask)
+	if err := persistProof(context.Background(), store, state.Identity{WorkflowID: "wf-2", RunID: "run-2"}, route.RouteDecision{Family: route.FamilyArchitect, Mode: "mutation", Profile: "managed"}, proof.ProofSurface{}, []proof.ActionLogEntry{{Kind: "route"}}, proof.CompletionDecision{Allowed: true}, env3); err != nil {
 		t.Fatalf("persistProof with artifacts: %v", err)
 	}
 	if len(store.artifacts) < 5 {

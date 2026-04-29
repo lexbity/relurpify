@@ -10,7 +10,7 @@ import (
 )
 
 func TestManagerExecuteItemBranchesAndMax(t *testing.T) {
-	cfg := rexconfig.Default()
+	cfg := rexmanifest.Default()
 	manager := New(cfg, nil)
 
 	workerCalled := false
@@ -45,7 +45,7 @@ func TestManagerScanRecoveriesSetsHealthAndSnapshotCopies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	manager := New(rexconfig.Default(), memStore)
+	manager := New(rexmanifest.Default(), memStore)
 	manager.scanRecoveries(context.Background())
 	health, active, recoveries := manager.Snapshot()
 	if health != HealthHealthy {
@@ -65,7 +65,7 @@ func TestManagerBeginExecutionSuccessKeepsHealthHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	manager := New(rexconfig.Default(), memStore)
+	manager := New(rexmanifest.Default(), memStore)
 	finish := manager.BeginExecution("wf-1", "run-1")
 	finish(nil)
 	details := manager.Details()

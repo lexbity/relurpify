@@ -8,14 +8,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	frameworkconfig "codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	frameworkmanifest "codeburg.org/lexbit/relurpify/framework/manifest"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	"codeburg.org/lexbit/relurpify/named/rex/classify"
-	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
 	"codeburg.org/lexbit/relurpify/named/rex/delegates"
 	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 	"codeburg.org/lexbit/relurpify/named/rex/nexus"
@@ -31,9 +29,9 @@ import (
 // Agent is the Nexus-managed named runtime for rex.
 type Agent struct {
 	Config      *core.Config
-	Environment ayenitd.WorkspaceEnvironment
+	Environment *agentenv.WorkspaceEnvironment
 	Workspace   string
-	RexConfig   rexconfig.Config
+	RexConfig   rexmanifest.Config
 	Delegates   *delegates.Registry
 	Runtime     *rexruntime.Manager
 	Reconciler  reconcile.Reconciler
@@ -41,30 +39,23 @@ type Agent struct {
 	LastProof   proof.ProofSurface
 }
 
-func New(env ayenitd.WorkspaceEnvironment) *Agent {
+func New(env *agentenv.WorkspaceEnvironment) *Agent {
 	return NewWithWorkspace(env, "")
 }
 
-func NewWithWorkspace(env ayenitd.WorkspaceEnvironment, workspace string) *Agent {
+func NewWithWorkspace(env *agentenv.WorkspaceEnvironment, workspace string) *Agent {
 	agent := &Agent{}
 	_ = agent.InitializeEnvironment(env, workspace)
 	return agent
 }
 
-func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment, workspace string) error {
+func (a *Agent) InitializeEnvironment(env *agentenv.WorkspaceEnvironment, workspace string) error {
 	a.Environment = env
 	a.Config = env.Config
-	a.RexConfig = rexconfig.Default()
+	a.RexConfig = rexmanifest.Default()
 	a.Workspace = resolveWorkspaceRoot(workspace)
-	a.Delegates = delegates.NewRegistry(agentenv.AgentEnvironment{
-		Config:       env.Config,
-		Model:        env.Model,
-		Registry:     env.Registry,
-		IndexManager: env.IndexManager,
-		SearchEngine: env.SearchEngine,
-		Memory:       env.Memory,
-	}, a.Workspace)
-	a.Runtime = rexruntime.New(a.RexConfig, env.Memory)
+	a.Delegates = delegates.NewRegistry(env, a.Workspace)
+	a.Runtime = rexruntime.New(a.RexConfig, env.WorkingMemory)
 	a.Reconciler = &reconcile.InMemoryReconciler{}
 	return a.Initialize(env.Config)
 }
@@ -72,7 +63,7 @@ func (a *Agent) InitializeEnvironment(env ayenitd.WorkspaceEnvironment, workspac
 func (a *Agent) Initialize(cfg *core.Config) error {
 	a.Config = cfg
 	if a.Runtime == nil {
-		a.Runtime = rexruntime.New(a.RexConfig, a.Environment.Memory)
+		a.Runtime = rexruntime.New(a.RexConfig, a.Environment.WorkingMemory)
 	}
 	return nil
 }
@@ -99,27 +90,27 @@ func (a *Agent) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	return delegate.BuildGraph(task)
 }
 
-func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Context) (*core.Result, error) {
+func (a *Agent) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	var execErr error
 	var result *core.Result
-	if stateCtx == nil {
-		stateCtx = core.NewContext()
+	if env == nil {
+		env = contextdata.NewEnvelope(task.ID, "")
 	}
-	env := envelope.Normalize(task, stateCtx)
-	class := classify.Classify(env)
-	decision := route.Decide(env, class)
+	rexEnv := envelope.Normalize(task, env)
+	class := classify.Classify(rexEnv)
+	decision := route.Decide(rexEnv, class)
 	execPlan := route.BuildExecutionPlan(decision)
-	identity := state.ComputeIdentity(env)
-	stateCtx.Set(rexkeys.RexWorkflowID, identity.WorkflowID)
-	stateCtx.Set(rexkeys.RexRunID, identity.RunID)
-	stateCtx.Set("rex.route", decision.Family)
+	identity := state.ComputeIdentity(rexEnv)
+	env.SetWorkingValue(rexkeys.RexWorkflowID, identity.WorkflowID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RexRunID, identity.RunID, contextdata.MemoryClassTask)
+	env.SetWorkingValue("rex.route", decision.Family, contextdata.MemoryClassTask)
 	if a.Observer != nil {
-		if err := a.Observer.BeforeExecute(ctx, identity.WorkflowID, identity.RunID, task, stateCtx); err != nil {
+		if err := a.Observer.BeforeExecute(ctx, identity.WorkflowID, identity.RunID, task, env); err != nil {
 			execErr = err
 			return nil, err
 		}
 		defer func() {
-			_ = a.Observer.AfterExecute(ctx, identity.WorkflowID, identity.RunID, task, stateCtx, result, execErr)
+			_ = a.Observer.AfterExecute(ctx, identity.WorkflowID, identity.RunID, task, env, result, execErr)
 		}()
 	}
 	finishRuntime := a.Runtime.BeginExecution(identity.WorkflowID, identity.RunID)
@@ -127,8 +118,11 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 		finishRuntime(execErr)
 	}()
 
-	surfaces := state.ResolveRuntimeSurfaces(a.Environment.Memory)
-	eventSuffix := stateCtx.GetString(rexkeys.RexEventID)
+	surfaces := state.ResolveRuntimeSurfaces(a.Environment.WorkingMemory)
+	eventSuffix := ""
+	if val, ok := env.GetWorkingValue(rexkeys.RexEventID); ok {
+		eventSuffix = fmt.Sprint(val)
+	}
 	if eventSuffix == "" {
 		eventSuffix = "runtime"
 	}
@@ -149,9 +143,9 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 	}
 	executionTask := task
 	if execPlan.RequireRetrieval && surfaces.Workflow != nil {
-		expansion, err := retrieval.ExpandWithWorkflowStore(ctx, surfaces.Workflow, identity.WorkflowID, task, stateCtx, decision)
+		expansion, err := retrieval.ExpandWithWorkflowStore(ctx, surfaces.Workflow, identity.WorkflowID, task, env, decision)
 		if err == nil {
-			executionTask = retrieval.Apply(stateCtx, task, expansion)
+			executionTask = retrieval.Apply(env, task, expansion)
 			artifactKinds := []string{"rex.proof_surface", "rex.action_log", "rex.completion"}
 			if len(expansion.LocalPaths) > 0 {
 				artifactKinds = append(artifactKinds, "rex.context_expansion")
@@ -159,13 +153,13 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 			if len(expansion.WorkflowRetrieval) > 0 {
 				artifactKinds = append(artifactKinds, "rex.workflow_retrieval")
 			}
-			stateCtx.Set("rex.artifact_kinds", artifactKinds)
+			env.SetWorkingValue("rex.artifact_kinds", artifactKinds, contextdata.MemoryClassTask)
 			if surfaces.Workflow != nil {
 				_ = persistContextExpansion(ctx, surfaces.Workflow, identity, expansion)
 			}
 		}
 	}
-	if err := enforceCapabilityProjection(stateCtx, decision, task); err != nil {
+	if err := enforceCapabilityProjection(env, decision, task); err != nil {
 		execErr = err
 		return nil, err
 	}
@@ -174,19 +168,19 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 		execErr = err
 		return nil, err
 	}
-	result, err = delegate.Execute(ctx, executionTask, stateCtx)
-	completion := proof.EvaluateCompletion(decision, class, stateCtx)
+	result, err = delegate.Execute(ctx, executionTask, env)
+	completion := proof.EvaluateCompletion(decision, class, env)
 	artifactKinds := []string{"rex.proof_surface", "rex.action_log", "rex.completion", "rex.verification_policy", "rex.success_gate"}
-	if verification := proof.VerificationEvidence(stateCtx); verification.EvidencePresent {
+	if verification := proof.VerificationEvidence(env); verification.EvidencePresent {
 		artifactKinds = append(artifactKinds, "rex.verification")
 	}
-	if raw, ok := stateCtx.Get("rex.artifact_kinds"); ok {
+	if raw, ok := env.GetWorkingValue("rex.artifact_kinds"); ok {
 		if existing, ok := raw.([]string); ok {
 			artifactKinds = append(existing, artifactKinds...)
 		}
 	}
-	stateCtx.Set("rex.artifact_kinds", uniqueStrings(artifactKinds))
-	actionLog := proof.BuildActionLog(decision, class, stateCtx)
+	env.SetWorkingValue("rex.artifact_kinds", uniqueStrings(artifactKinds), contextdata.MemoryClassTask)
+	actionLog := proof.BuildActionLog(decision, class, env)
 	if result == nil {
 		result = &core.Result{Success: err == nil, Data: map[string]any{}}
 	}
@@ -194,14 +188,14 @@ func (a *Agent) Execute(ctx context.Context, task *core.Task, stateCtx *core.Con
 		result.Data = map[string]any{}
 	}
 	result.Data["rex.action_log"] = actionLog
-	a.LastProof = proof.BuildProofSurface(decision, result, stateCtx)
+	a.LastProof = proof.BuildProofSurface(decision, result, env)
 	result.Data["rex.proof_surface"] = a.LastProof
 	result.Data["rex.completion"] = completion
 	result.Data[rexkeys.RexWorkflowID] = identity.WorkflowID
 	result.Data[rexkeys.RexRunID] = identity.RunID
 	result.Data["rex.route"] = decision.Family
 	if surfaces.Workflow != nil {
-		_ = persistProof(ctx, surfaces.Workflow, identity, decision, a.LastProof, actionLog, completion, stateCtx)
+		_ = persistProof(ctx, surfaces.Workflow, identity, decision, a.LastProof, actionLog, completion, env)
 		status := memory.WorkflowRunStatusCompleted
 		var finishedAt *time.Time
 		now := time.Now().UTC()
@@ -240,7 +234,7 @@ func (a *Agent) RuntimeProjection() nexus.Projection {
 }
 
 func (a *Agent) ManagedAdapter() *nexus.Adapter {
-	surfaces := state.ResolveRuntimeSurfaces(a.Environment.Memory)
+	surfaces := state.ResolveRuntimeSurfaces(a.Environment.WorkingMemory)
 	return nexus.NewAdapter("rex", a, surfaces.Workflow)
 }
 
@@ -276,7 +270,7 @@ func (a *Agent) ShouldRetryAmbiguity(record reconcile.Record) bool {
 
 func persistProof(ctx context.Context, store interface {
 	UpsertWorkflowArtifact(context.Context, memory.WorkflowArtifactRecord) error
-}, identity state.Identity, decision route.RouteDecision, surface proof.ProofSurface, actionLog []proof.ActionLogEntry, completion proof.CompletionDecision, stateCtx *core.Context) error {
+}, identity state.Identity, decision route.RouteDecision, surface proof.ProofSurface, actionLog []proof.ActionLogEntry, completion proof.CompletionDecision, env *contextdata.Envelope) error {
 	if store == nil {
 		return nil
 	}
@@ -321,7 +315,7 @@ func persistProof(ctx context.Context, store interface {
 	}); err != nil {
 		return err
 	}
-	if raw, ok := stateCtx.Get("rex.verification_policy"); ok && raw != nil {
+	if raw, ok := env.GetWorkingValue("rex.verification_policy"); ok && raw != nil {
 		payload, err := json.Marshal(raw)
 		if err != nil {
 			return err
@@ -341,7 +335,7 @@ func persistProof(ctx context.Context, store interface {
 			return err
 		}
 	}
-	if raw, ok := stateCtx.Get("rex.verification"); ok && raw != nil {
+	if raw, ok := env.GetWorkingValue("rex.verification"); ok && raw != nil {
 		payload, err := json.Marshal(raw)
 		if err != nil {
 			return err
@@ -361,7 +355,7 @@ func persistProof(ctx context.Context, store interface {
 			return err
 		}
 	}
-	if raw, ok := stateCtx.Get("rex.success_gate"); ok && raw != nil {
+	if raw, ok := env.GetWorkingValue("rex.success_gate"); ok && raw != nil {
 		payload, err := json.Marshal(raw)
 		if err != nil {
 			return err
@@ -449,7 +443,7 @@ func resolveWorkspaceRoot(workspace string) string {
 	}
 	current := cwd
 	for {
-		if _, err := os.Stat(filepath.Join(current, frameworkconfig.DirName)); err == nil {
+		if _, err := os.Stat(filepath.Join(current, frameworkmanifest.DirName)); err == nil {
 			return current
 		}
 		parent := filepath.Dir(current)

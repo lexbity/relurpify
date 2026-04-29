@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/named/rex/route"
+	"codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
-func enforceCapabilityProjection(state *core.Context, decision route.RouteDecision, task *core.Task) error {
-	projection, ok := capabilityProjectionFromState(state)
+func enforceCapabilityProjection(env *contextdata.Envelope, decision route.RouteDecision, task *core.Task) error {
+	projection, ok := capabilityProjectionFromEnvelope(env)
 	if !ok {
 		return nil
 	}
@@ -24,21 +26,21 @@ func enforceCapabilityProjection(state *core.Context, decision route.RouteDecisi
 	return nil
 }
 
-func capabilityProjectionFromState(state *core.Context) (core.CapabilityEnvelope, bool) {
-	if state == nil {
-		return core.CapabilityEnvelope{}, false
+func capabilityProjectionFromEnvelope(env *contextdata.Envelope) (fmp.CapabilityEnvelope, bool) {
+	if env == nil {
+		return fmp.CapabilityEnvelope{}, false
 	}
-	raw, ok := state.Get("fmp.capability_projection")
+	raw, ok := env.GetWorkingValue("fmp.capability_projection")
 	if !ok || raw == nil {
-		return core.CapabilityEnvelope{}, false
+		return fmp.CapabilityEnvelope{}, false
 	}
-	if projection, ok := raw.(core.CapabilityEnvelope); ok {
+	if projection, ok := raw.(fmp.CapabilityEnvelope); ok {
 		return projection, true
 	}
-	if projection, ok := raw.(*core.CapabilityEnvelope); ok && projection != nil {
+	if projection, ok := raw.(*fmp.CapabilityEnvelope); ok && projection != nil {
 		return *projection, true
 	}
-	return core.CapabilityEnvelope{}, false
+	return fmp.CapabilityEnvelope{}, false
 }
 
 func requiredCapabilities(decision route.RouteDecision, task *core.Task) []string {

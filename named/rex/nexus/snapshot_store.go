@@ -7,8 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/framework/memory"
-	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
@@ -16,7 +15,7 @@ var _ fwfmp.RuntimeSnapshotStore = (*SnapshotStore)(nil)
 
 // SnapshotStore exposes rex workflow state through the FMP runtime snapshot seam.
 type SnapshotStore struct {
-	WorkflowStore *memdb.SQLiteWorkflowStateStore
+	WorkflowStore *store.SQLiteWorkflowStore
 }
 
 func (s SnapshotStore) QueryWorkflowRuntime(ctx context.Context, workflowID, runID string) (map[string]any, error) {
@@ -55,7 +54,7 @@ func (s SnapshotStore) QueryWorkflowRuntime(ctx context.Context, workflowID, run
 	}
 	if binding, ok, err := s.WorkflowStore.GetLineageBinding(ctx, workflowID, runID); err != nil {
 		return nil, err
-	} else if ok && binding != nil {
+	} else if ok {
 		payload["lineage_binding"] = binding
 	}
 	artifacts, err := s.WorkflowStore.ListWorkflowArtifacts(ctx, workflowID, runID)

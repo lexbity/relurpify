@@ -3,12 +3,15 @@ package nexus
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
+
+	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 	"github.com/stretchr/testify/require"
 )
@@ -24,16 +27,16 @@ func TestRuntimeEndpointCreateAttemptSchedulesRexExecution(t *testing.T) {
 		workflowID string
 		runID      string
 		task       *core.Task
-		state      *core.Context
+		env        *contextdata.Envelope
 	}
 	endpoint := &RuntimeEndpoint{
 		DescriptorValue: core.RuntimeDescriptor{RuntimeID: "rex"},
 		WorkflowStore:   workflowStore,
-		Schedule: func(_ context.Context, workflowID, runID string, task *core.Task, state *core.Context) error {
+		Schedule: func(_ context.Context, workflowID, runID string, task *core.Task, env *contextdata.Envelope) error {
 			scheduled.workflowID = workflowID
 			scheduled.runID = runID
 			scheduled.task = task
-			scheduled.state = state
+			scheduled.env = env
 			return nil
 		},
 		Now: func() time.Time { return time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC) },
@@ -63,7 +66,8 @@ func TestRuntimeEndpointCreateAttemptSchedulesRexExecution(t *testing.T) {
 	require.Equal(t, "attempt-1", scheduled.runID)
 	require.NotNil(t, scheduled.task)
 	require.Equal(t, "resume work", scheduled.task.Instruction)
-	require.Equal(t, "lineage-1", scheduled.state.GetString("fmp.lineage_id"))
+	val, _ := scheduled.env.GetWorkingValue("fmp.lineage_id")
+	require.Equal(t, "lineage-1", fmt.Sprint(val))
 	receipt, err := endpoint.IssueReceipt(context.Background(), core.LineageRecord{LineageID: "lineage-1"}, *attempt, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{string(core.CapabilityExecute)}, receipt.CapabilityProjectionApplied.AllowedCapabilityIDs)

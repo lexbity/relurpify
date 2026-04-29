@@ -10,7 +10,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
 	"codeburg.org/lexbit/relurpify/named/rex/envelope"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
 )

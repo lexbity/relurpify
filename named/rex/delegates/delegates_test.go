@@ -6,8 +6,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
 	"codeburg.org/lexbit/relurpify/framework/capability"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
 	"codeburg.org/lexbit/relurpify/framework/memory"
 	rexroute "codeburg.org/lexbit/relurpify/named/rex/route"
 )
@@ -29,16 +29,13 @@ func (stubModel) ChatWithTools(context.Context, []core.Message, []core.LLMToolSp
 	return &core.LLMResponse{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`}, nil
 }
 
-func testEnv(t *testing.T) agentenv.AgentEnvironment {
+func testEnv(t *testing.T) *agentenv.WorkspaceEnvironment {
 	t.Helper()
-	memStore, err := memory.NewHybridMemory(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewHybridMemory: %v", err)
-	}
-	return agentenv.AgentEnvironment{
-		Model:    stubModel{},
-		Registry: capability.NewRegistry(),
-		Memory:   memStore.WithVectorStore(memory.NewInMemoryVectorStore()),
+	memStore := memory.NewWorkingMemoryStore()
+	return &agentenv.WorkspaceEnvironment{
+		Model:         stubModel{},
+		Registry:      capability.NewRegistry(),
+		WorkingMemory: memStore,
 		Config: &core.Config{
 			Name:          "rex-test",
 			Model:         "stub",
@@ -77,7 +74,7 @@ func TestResolveFallsBackAndErrorsWhenUnavailable(t *testing.T) {
 
 type stubExecutor struct {
 	buildGraphFn func(*core.Task) (*graph.Graph, error)
-	executeFn    func(context.Context, *core.Task, *core.Context) (*core.Result, error)
+	executeFn    func(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error)
 }
 
 func (s stubExecutor) Initialize(*core.Config) error   { return nil }
@@ -88,9 +85,9 @@ func (s stubExecutor) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	}
 	return &graph.Graph{}, nil
 }
-func (s stubExecutor) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
+func (s stubExecutor) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
 	if s.executeFn != nil {
-		return s.executeFn(ctx, task, state)
+		return s.executeFn(ctx, task, env)
 	}
 	return &core.Result{Success: true}, nil
 }
@@ -105,7 +102,7 @@ func TestAgentDelegatePassesThroughGraphAndExecution(t *testing.T) {
 				buildTaskID = task.ID
 				return &graph.Graph{}, nil
 			},
-			executeFn: func(context.Context, *core.Task, *core.Context) (*core.Result, error) {
+			executeFn: func(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error) {
 				executed = true
 				return &core.Result{NodeID: "node-1", Success: true}, nil
 			},
@@ -118,7 +115,8 @@ func TestAgentDelegatePassesThroughGraphAndExecution(t *testing.T) {
 	if buildTaskID != "task-1" || graphResult == nil {
 		t.Fatalf("unexpected build graph result: task=%q graph=%v", buildTaskID, graphResult)
 	}
-	result, err := delegate.Execute(context.Background(), &core.Task{ID: "task-2"}, core.NewContext())
+	env := contextdata.NewEnvelope("task-2", "")
+	result, err := delegate.Execute(context.Background(), &core.Task{ID: "task-2"}, env)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

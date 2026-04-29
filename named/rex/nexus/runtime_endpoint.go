@@ -8,10 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	memdb "codeburg.org/lexbit/relurpify/framework/memory/db"
 	"codeburg.org/lexbit/relurpify/named/rex/rexkeys"
+	"codeburg.org/lexbit/relurpify/named/rex/store"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
 )
 
@@ -22,12 +23,12 @@ const maxRuntimeEndpointProjections = 256
 type RuntimeEndpoint struct {
 	DescriptorValue     core.RuntimeDescriptor
 	Packager            fwfmp.ContextPackager
-	WorkflowStore       *memdb.SQLiteWorkflowStateStore
-	LineageBindingStore memdb.LineageBindingStore
-	Schedule            func(context.Context, string, string, *core.Task, *core.Context) error
+	WorkflowStore       *store.SQLiteWorkflowStore
+	LineageBindingStore store.LineageBindingStore
+	Schedule            func(context.Context, string, string, *core.Task, *contextdata.Envelope) error
 	Now                 func() time.Time
 	mu                  sync.Mutex
-	projections         map[string]core.CapabilityEnvelope
+	projections         map[string]fwfmp.CapabilityEnvelope
 	projectionOrder     []string
 }
 
@@ -70,26 +71,26 @@ func (e *RuntimeEndpoint) CreateAttempt(ctx context.Context, lineage core.Lineag
 	if pkg == nil {
 		return nil, fmt.Errorf("portable package required")
 	}
-	task, state, workflowID, runID, err := e.rehydrateTask(pkg, lineage, accept)
+	task, env, workflowID, runID, err := e.rehydrateTask(pkg, lineage, accept)
 	if err != nil {
 		return nil, err
 	}
-	state.Set(rexkeys.FMPLineageID, lineage.LineageID)
-	state.Set(rexkeys.FMPAttemptID, accept.ProvisionalAttemptID)
-	state.Set("fmp.capability_projection", accept.AcceptedCapabilityProjection)
-	state.Set(rexkeys.RexFMPLineageID, lineage.LineageID)
-	state.Set(rexkeys.RexFMPAttemptID, accept.ProvisionalAttemptID)
+	env.SetWorkingValue(rexkeys.FMPLineageID, lineage.LineageID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.FMPAttemptID, accept.ProvisionalAttemptID, contextdata.MemoryClassTask)
+	env.SetWorkingValue("fmp.capability_projection", accept.AcceptedCapabilityProjection, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RexFMPLineageID, lineage.LineageID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RexFMPAttemptID, accept.ProvisionalAttemptID, contextdata.MemoryClassTask)
 	if e.WorkflowStore != nil {
 		if err := e.ensureImportedWorkflow(ctx, workflowID, runID, task); err != nil {
 			return nil, err
 		}
-		if err := e.persistImport(ctx, workflowID, runID, lineage.LineageID, task, state, accept); err != nil {
+		if err := e.persistImport(ctx, workflowID, runID, lineage.LineageID, task, env, accept); err != nil {
 			return nil, err
 		}
 	}
 	e.rememberProjection(accept.ProvisionalAttemptID, accept.AcceptedCapabilityProjection)
 	if e.Schedule != nil {
-		if err := e.Schedule(ctx, workflowID, runID, task, state); err != nil {
+		if err := e.Schedule(ctx, workflowID, runID, task, env); err != nil {
 			return nil, err
 		}
 	}
@@ -99,8 +100,9 @@ func (e *RuntimeEndpoint) CreateAttempt(ctx context.Context, lineage core.Lineag
 		LineageID:        lineage.LineageID,
 		RuntimeID:        e.DescriptorValue.RuntimeID,
 		State:            core.AttemptStateRunning,
-		StartTime:        now,
-		LastProgressTime: now,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+		ProvisionalState: core.ProvisionalStateConfirmed,
 	}, nil
 }
 
@@ -121,7 +123,7 @@ func (e *RuntimeEndpoint) IssueReceipt(_ context.Context, lineage core.LineageRe
 	}, nil
 }
 
-func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, lineage core.LineageRecord, accept core.HandoffAccept) (*core.Task, *core.Context, string, string, error) {
+func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, lineage core.LineageRecord, accept core.HandoffAccept) (*core.Task, *contextdata.Envelope, string, string, error) {
 	if len(pkg.ExecutionPayload) == 0 {
 		return nil, nil, "", "", fmt.Errorf("execution payload required")
 	}
@@ -132,24 +134,24 @@ func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, linea
 	taskMap, _ := payload["task"].(map[string]any)
 	task := &core.Task{
 		ID:          strings.TrimSpace(valueString(taskMap["id"])),
-		Type:        core.TaskType(strings.TrimSpace(valueString(taskMap["type"]))),
+		Type:        strings.TrimSpace(valueString(taskMap["type"])),
 		Instruction: strings.TrimSpace(valueString(taskMap["instruction"])),
 		Context:     mapStringAny(taskMap["context"]),
-		Metadata:    mapStringString(taskMap["metadata"]),
+		Metadata:    mapStringAny(taskMap["metadata"]),
 	}
 	if task.Type == "" {
-		task.Type = core.TaskTypeCodeGeneration
+		task.Type = "code-generation"
 	}
 	if task.Instruction == "" {
 		return nil, nil, "", "", fmt.Errorf("imported task instruction required")
 	}
-	state := core.NewContext()
+	env := contextdata.NewEnvelope(task.ID, "")
 	stateMap, _ := payload["state"].(map[string]any)
 	for key, value := range stateMap {
-		state.Set(key, value)
+		env.SetWorkingValue(key, value, contextdata.MemoryClassTask)
 	}
 	for key, value := range task.Context {
-		state.Set(key, value)
+		env.SetWorkingValue(key, value, contextdata.MemoryClassTask)
 	}
 	workflowID := strings.TrimSpace(valueString(stateMap[rexkeys.WorkflowID]))
 	if workflowID == "" {
@@ -161,14 +163,14 @@ func (e *RuntimeEndpoint) rehydrateTask(pkg *fwfmp.PortableContextPackage, linea
 	runID := accept.ProvisionalAttemptID
 	task.Context[rexkeys.WorkflowID] = workflowID
 	task.Context[rexkeys.RunID] = runID
-	state.Set(rexkeys.WorkflowID, workflowID)
-	state.Set(rexkeys.RunID, runID)
-	state.Set(rexkeys.RexWorkflowID, workflowID)
-	state.Set(rexkeys.RexRunID, runID)
-	return task, state, workflowID, runID, nil
+	env.SetWorkingValue(rexkeys.WorkflowID, workflowID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RunID, runID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RexWorkflowID, workflowID, contextdata.MemoryClassTask)
+	env.SetWorkingValue(rexkeys.RexRunID, runID, contextdata.MemoryClassTask)
+	return task, env, workflowID, runID, nil
 }
 
-func (e *RuntimeEndpoint) persistImport(ctx context.Context, workflowID, runID, lineageID string, task *core.Task, state *core.Context, accept core.HandoffAccept) error {
+func (e *RuntimeEndpoint) persistImport(ctx context.Context, workflowID, runID, lineageID string, task *core.Task, env *contextdata.Envelope, accept core.HandoffAccept) error {
 	if e.LineageBindingStore == nil {
 		return nil
 	}
@@ -178,8 +180,8 @@ func (e *RuntimeEndpoint) persistImport(ctx context.Context, workflowID, runID, 
 		LineageID:  lineageID,
 		AttemptID:  accept.ProvisionalAttemptID,
 		RuntimeID:  e.DescriptorValue.RuntimeID,
-		SessionID:  importedSessionID(state, task),
-		State:      string(core.AttemptStateRunning),
+		SessionID:  importedSessionID(env, task),
+		State:      "running",
 		UpdatedAt:  e.nowUTC(),
 	})
 }
@@ -271,13 +273,17 @@ func (e *RuntimeEndpoint) projectionForAttempt(attemptID string) core.Capability
 	return e.projections[attemptID]
 }
 
-func importedSessionID(state *core.Context, task *core.Task) string {
-	if state != nil {
-		if value := strings.TrimSpace(state.GetString(rexkeys.GatewaySessionID)); value != "" {
-			return value
+func importedSessionID(env *contextdata.Envelope, task *core.Task) string {
+	if env != nil {
+		if val, ok := env.GetWorkingValue(rexkeys.GatewaySessionID); ok {
+			if value := strings.TrimSpace(fmt.Sprint(val)); value != "" {
+				return value
+			}
 		}
-		if value := strings.TrimSpace(state.GetString(rexkeys.SessionID)); value != "" {
-			return value
+		if val, ok := env.GetWorkingValue(rexkeys.SessionID); ok {
+			if value := strings.TrimSpace(fmt.Sprint(val)); value != "" {
+				return value
+			}
 		}
 	}
 	if task != nil && task.Context != nil {

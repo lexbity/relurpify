@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
-	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
+
+	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
+
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
 	"codeburg.org/lexbit/relurpify/named/rex/runtime"
 )
@@ -21,7 +23,7 @@ type stubManagedRuntime struct {
 	invoked      bool
 }
 
-func (s *stubManagedRuntime) Execute(context.Context, *core.Task, *core.Context) (*core.Result, error) {
+func (s *stubManagedRuntime) Execute(context.Context, *core.Task, *contextdata.Envelope) (*core.Result, error) {
 	s.invoked = true
 	if s.result == nil {
 		s.result = &core.Result{Success: s.err == nil, Data: map[string]any{"rex.workflow_id": s.projection.WorkflowID}}
@@ -48,7 +50,7 @@ func TestBuildProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	manager := runtime.New(rexconfig.Default(), memStore)
+	manager := runtime.New(rexmanifest.Default(), memStore)
 	finish := manager.BeginExecution("wf-1", "run-1")
 	finish(nil)
 	projection := BuildProjection(manager, proof.ProofSurface{RouteFamily: "react"})
@@ -80,12 +82,13 @@ func TestAdapterInvokeUsesRuntimeExecutionPath(t *testing.T) {
 		result:     &core.Result{Success: true, Data: map[string]any{"rex.workflow_id": "wf-1"}},
 	}
 	adapter := NewAdapter("rex", managed, store)
+	env := contextdata.NewEnvelope("task-1", "")
 	result, err := adapter.Invoke(context.Background(), &core.Task{
 		ID:          "task-1",
 		Instruction: "review current state",
 		Type:        core.TaskTypeReview,
 		Context:     map[string]any{"workspace": t.TempDir(), "edit_permitted": false},
-	}, core.NewContext())
+	}, env)
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}

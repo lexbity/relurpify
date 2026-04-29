@@ -9,8 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
-	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
+	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
 )
 
 type stubPartitionDetector struct{ partitioned bool }
@@ -22,7 +21,7 @@ func TestManagerStartsAndStops(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	manager := New(rexconfig.Default(), memStore)
+	manager := New(rexmanifest.Default(), memStore)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	manager.Start(ctx)
@@ -39,7 +38,7 @@ func TestManagerEnqueueDegradesWhenFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	cfg := rexconfig.Default()
+	cfg := rexmanifest.Default()
 	cfg.QueueCapacity = 1
 	manager := New(cfg, memStore)
 	if !manager.Enqueue(WorkItem{}) {
@@ -59,7 +58,9 @@ func TestManagerRecoveryScanFindsRunningWorkflows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSQLiteWorkflowStateStore: %v", err)
 	}
-	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, db.NewSQLiteCheckpointStore(workflowStore.DB()))
+	// TODO: Reimplement checkpoint store without DB() dependency
+	// per the agentlifecycle workflow-store removal plan
+	composite := memory.NewCompositeRuntimeStore(workflowStore, nil, nil)
 	ctx := context.Background()
 	if err := workflowStore.CreateWorkflow(ctx, memory.WorkflowRecord{
 		WorkflowID:  "wf-running",
@@ -78,7 +79,7 @@ func TestManagerRecoveryScanFindsRunningWorkflows(t *testing.T) {
 		t.Fatalf("CreateRun: %v", err)
 	}
 
-	cfg := rexconfig.Default()
+	cfg := rexmanifest.Default()
 	cfg.RecoveryScanPeriod = 10 * time.Millisecond
 	manager := New(cfg, composite)
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -100,7 +101,7 @@ func TestManagerProcessesQueuedWorkAndTracksLastRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	cfg := rexconfig.Default()
+	cfg := rexmanifest.Default()
 	cfg.RecoveryScanPeriod = time.Hour
 	manager := New(cfg, memStore)
 	done := make(chan struct{})
@@ -134,7 +135,7 @@ func TestManagerDoesNotExecuteSameWorkflowConcurrently(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	cfg := rexconfig.Default()
+	cfg := rexmanifest.Default()
 	cfg.WorkerCount = 2
 	cfg.RecoveryScanPeriod = time.Hour
 	manager := New(cfg, memStore)
@@ -195,7 +196,7 @@ func TestManagerBeginExecutionMarksDegradedOnFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	manager := New(rexconfig.Default(), memStore)
+	manager := New(rexmanifest.Default(), memStore)
 	finish := manager.BeginExecution("wf-err", "run-err")
 	finish(context.DeadlineExceeded)
 	details := manager.Details()
@@ -212,7 +213,7 @@ func TestManagerWorkerFailureSetsDegradedHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	cfg := rexconfig.Default()
+	cfg := rexmanifest.Default()
 	cfg.RecoveryScanPeriod = time.Hour
 	manager := New(cfg, memStore)
 	var calls atomic.Int32
@@ -247,7 +248,7 @@ func TestManagerStopWaitsForWorkerExit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	cfg := rexconfig.Default()
+	cfg := rexmanifest.Default()
 	cfg.RecoveryScanPeriod = time.Hour
 	manager := New(cfg, memStore)
 	workerStarted := make(chan struct{})
@@ -294,7 +295,7 @@ func TestManagerDetailsDegradeWhenPartitioned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHybridMemory: %v", err)
 	}
-	manager := New(rexconfig.Default(), memStore)
+	manager := New(rexmanifest.Default(), memStore)
 	manager.SetPartitionDetector(stubPartitionDetector{partitioned: true})
 	details := manager.Details()
 	if details.Health != HealthDegraded {

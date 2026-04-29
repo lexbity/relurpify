@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	architectpkg "codeburg.org/lexbit/relurpify/agents/architect"
 	blackboardpkg "codeburg.org/lexbit/relurpify/agents/blackboard"
 	chainerpkg "codeburg.org/lexbit/relurpify/agents/chainer"
 	goalconpkg "codeburg.org/lexbit/relurpify/agents/goalcon"
@@ -14,9 +13,9 @@ import (
 	reactpkg "codeburg.org/lexbit/relurpify/agents/react"
 	rewoopkg "codeburg.org/lexbit/relurpify/agents/rewoo"
 	"codeburg.org/lexbit/relurpify/framework/agentenv"
-	"codeburg.org/lexbit/relurpify/framework/config"
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
-	"codeburg.org/lexbit/relurpify/framework/graph"
+	"codeburg.org/lexbit/relurpify/framework/manifest"
 	rexroute "codeburg.org/lexbit/relurpify/named/rex/route"
 )
 
@@ -24,7 +23,7 @@ import (
 type Delegate interface {
 	Family() string
 	BuildGraph(task *core.Task) (*graph.Graph, error)
-	Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error)
+	Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error)
 }
 
 type agentDelegate struct {
@@ -36,8 +35,8 @@ func (d agentDelegate) Family() string { return d.family }
 func (d agentDelegate) BuildGraph(task *core.Task) (*graph.Graph, error) {
 	return d.agent.BuildGraph(task)
 }
-func (d agentDelegate) Execute(ctx context.Context, task *core.Task, state *core.Context) (*core.Result, error) {
-	return d.agent.Execute(ctx, task, state)
+func (d agentDelegate) Execute(ctx context.Context, task *core.Task, env *contextdata.Envelope) (*core.Result, error) {
+	return d.agent.Execute(ctx, task, env)
 }
 
 // Registry holds rex delegate adapters.
@@ -45,8 +44,8 @@ type Registry struct {
 	delegates map[string]Delegate
 }
 
-func NewRegistry(env agentenv.AgentEnvironment, workspace string) *Registry {
-	paths := config.New(workspace)
+func NewRegistry(env *agentenv.WorkspaceEnvironment, workspace string) *Registry {
+	paths := manifest.New(workspace)
 	return &Registry{delegates: map[string]Delegate{
 		rexroute.FamilyReAct:     agentDelegate{family: rexroute.FamilyReAct, agent: reactWithPaths(env, paths.CheckpointsDir())},
 		rexroute.FamilyPlanner:   agentDelegate{family: rexroute.FamilyPlanner, agent: plannerpkg.New(env)},
@@ -72,20 +71,19 @@ func (r *Registry) Resolve(plan rexroute.ExecutionPlan) (Delegate, error) {
 	return nil, fmt.Errorf("rex delegate %q unavailable", plan.PrimaryFamily)
 }
 
-func reactWithPaths(env agentenv.AgentEnvironment, checkpointPath string) graph.WorkflowExecutor {
+func reactWithPaths(env *agentenv.WorkspaceEnvironment, _ string) graph.WorkflowExecutor {
 	agent := reactpkg.New(env)
-	agent.CheckpointPath = checkpointPath
 	return agent
 }
 
-func architectWithPaths(env agentenv.AgentEnvironment, checkpointPath, workflowStatePath string) graph.WorkflowExecutor {
-	agent := architectpkg.New(env, architectpkg.WithPlannerTools(env.Registry), architectpkg.WithExecutorTools(env.Registry))
-	agent.CheckpointPath = checkpointPath
-	agent.WorkflowStatePath = workflowStatePath
+func architectWithPaths(env *agentenv.WorkspaceEnvironment, _, workflowStatePath string) graph.WorkflowExecutor {
+	_ = workflowStatePath
+	// Architect agent temporarily unavailable - using react as fallback
+	agent := reactpkg.New(env)
 	return agent
 }
 
-func pipelineWithPaths(env agentenv.AgentEnvironment, workflowStatePath string) graph.WorkflowExecutor {
+func pipelineWithPaths(env *agentenv.WorkspaceEnvironment, workflowStatePath string) graph.WorkflowExecutor {
 	agent := pipelinepkg.New(env)
 	agent.WorkflowStatePath = workflowStatePath
 	return agent

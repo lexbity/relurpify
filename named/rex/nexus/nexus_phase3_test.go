@@ -7,10 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/framework/contextdata"
 	"codeburg.org/lexbit/relurpify/framework/core"
 	"codeburg.org/lexbit/relurpify/framework/memory"
-	"codeburg.org/lexbit/relurpify/framework/memory/db"
-	rexconfig "codeburg.org/lexbit/relurpify/named/rex/config"
+
+	// "codeburg.org/lexbit/relurpify/framework/memory/db" // TODO: package does not exist
+
 	"codeburg.org/lexbit/relurpify/named/rex/proof"
 	"codeburg.org/lexbit/relurpify/named/rex/runtime"
 	fwfmp "codeburg.org/lexbit/relurpify/relurpnet/fmp"
@@ -159,16 +161,16 @@ func TestLineageBridgeHelpersAndLifecycle(t *testing.T) {
 		Now:           func() time.Time { return time.Date(2026, 4, 8, 11, 0, 0, 0, time.UTC) },
 	}
 
-	state := core.NewContext()
-	state.Set("gateway.session_id", "sess-1")
-	state.Set("fmp.sensitivity_class", "restricted")
-	state.Set("fmp.allowed_federation_targets", []string{"mesh-a", "mesh-b"})
-	state.Set("fmp.lineage_id", "lineage-1")
-	state.Set("fmp.attempt_id", "attempt-1")
+	env := contextdata.NewEnvelope("test", "")
+	env.SetWorkingValue("gateway.session_id", "sess-1", contextdata.MemoryClassTask)
+	env.SetWorkingValue("fmp.sensitivity_class", "restricted", contextdata.MemoryClassTask)
+	env.SetWorkingValue("fmp.allowed_federation_targets", []string{"mesh-a", "mesh-b"}, contextdata.MemoryClassTask)
+	env.SetWorkingValue("fmp.lineage_id", "lineage-1", contextdata.MemoryClassTask)
+	env.SetWorkingValue("fmp.attempt_id", "attempt-1", contextdata.MemoryClassTask)
 
 	require.Equal(t, "rex", bridge.runtimeID())
 	require.Equal(t, time.Date(2026, 4, 8, 11, 0, 0, 0, time.UTC), bridge.nowUTC())
-	require.Equal(t, "sess-1", sessionIDFromState(state, &core.Task{Context: map[string]any{"session_id": "fallback"}}))
+	require.Equal(t, "sess-1", sessionIDFromEnvelope(env, &core.Task{Context: map[string]any{"session_id": "fallback"}}))
 	require.NotEmpty(t, defaultCapabilityEnvelope().AllowedCapabilityIDs)
 
 	require.Equal(t, string(core.AttemptStateCommittedRemote), func() string {
@@ -199,9 +201,9 @@ func TestLineageBridgeHelpersAndLifecycle(t *testing.T) {
 	require.Equal(t, "value", stringValue("value"))
 	require.Equal(t, "first", firstNonEmpty(" ", "first", "second"))
 
-	require.NoError(t, bridge.BeforeExecute(context.Background(), "wf-1", "run-1", &core.Task{Instruction: "resume"}, state))
-	require.NoError(t, bridge.AfterExecute(context.Background(), "wf-1", "run-1", &core.Task{Instruction: "resume"}, state, &core.Result{Success: true}, nil))
-	require.NoError(t, bridge.AfterExecute(context.Background(), "wf-1", "run-1", &core.Task{Instruction: "resume"}, state, &core.Result{Success: false}, context.Canceled))
+	require.NoError(t, bridge.BeforeExecute(context.Background(), "wf-1", "run-1", &core.Task{Instruction: "resume"}, env))
+	require.NoError(t, bridge.AfterExecute(context.Background(), "wf-1", "run-1", &core.Task{Instruction: "resume"}, env, &core.Result{Success: true}, nil))
+	require.NoError(t, bridge.AfterExecute(context.Background(), "wf-1", "run-1", &core.Task{Instruction: "resume"}, env, &core.Result{Success: false}, context.Canceled))
 
 	binding, err := bridge.ResolveReconciliationBinding(context.Background(), "wf-1", "run-1")
 	require.NoError(t, err)
@@ -240,7 +242,8 @@ func TestNexusAdapterAndSnapshotHelpers(t *testing.T) {
 	require.True(t, registration.Managed)
 	require.Equal(t, "nexus-managed", registration.RuntimeType)
 	require.NoError(t, func() error {
-		_, err := adapter.Invoke(ctx, &core.Task{Instruction: "run"}, core.NewContext())
+		env := contextdata.NewEnvelope("run", "")
+		_, err := adapter.Invoke(ctx, &core.Task{Instruction: "run"}, env)
 		return err
 	}())
 
@@ -249,7 +252,7 @@ func TestNexusAdapterAndSnapshotHelpers(t *testing.T) {
 	require.NotEmpty(t, snapshot.WorkflowRefURI)
 	require.Equal(t, "wf-1", snapshot.HotState["workflow_id"])
 
-	projection := BuildProjection(runtime.New(rexconfig.Default(), nil), proof.ProofSurface{RouteFamily: "react"})
+	projection := BuildProjection(runtime.New(rexmanifest.Default(), nil), proof.ProofSurface{RouteFamily: "react"})
 	require.False(t, projection.FailoverReady)
 	require.Equal(t, "healthy", projection.RecoveryState)
 

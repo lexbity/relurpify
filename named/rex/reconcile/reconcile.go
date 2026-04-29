@@ -7,8 +7,25 @@ import (
 	"strings"
 	"sync"
 	"time"
+)
 
-	"codeburg.org/lexbit/relurpify/framework/core"
+// AttemptState represents the lifecycle state of a resume attempt.
+// Defined here to avoid import cycle with relurpnet/fmp.
+type AttemptState string
+
+const (
+	AttemptStateCreated         AttemptState = "CREATED"
+	AttemptStateAdmitted        AttemptState = "ADMITTED"
+	AttemptStateRunning         AttemptState = "RUNNING"
+	AttemptStateCheckpointing   AttemptState = "CHECKPOINTING"
+	AttemptStateHandoffOffered  AttemptState = "HANDOFF_OFFERED"
+	AttemptStateHandoffAccepted AttemptState = "HANDOFF_ACCEPTED"
+	AttemptStateResumePending   AttemptState = "RESUME_PENDING"
+	AttemptStateCommittedRemote AttemptState = "COMMITTED_REMOTE"
+	AttemptStateFenced          AttemptState = "FENCED"
+	AttemptStateCompleted       AttemptState = "COMPLETED"
+	AttemptStateFailed          AttemptState = "FAILED"
+	AttemptStateOrphaned        AttemptState = "ORPHANED"
 )
 
 type Status string
@@ -60,8 +77,8 @@ type Binding struct {
 }
 
 type AttemptView struct {
-	State  core.AttemptState `json:"state"`
-	Fenced bool              `json:"fenced"`
+	State  AttemptState `json:"state"`
+	Fenced bool         `json:"fenced"`
 }
 
 // FMPBackedReconciler augments local Rex reconciliation with FMP ownership ground truth.
@@ -303,7 +320,7 @@ func attemptRetryable(attempt AttemptView) bool {
 		return false
 	}
 	switch attempt.State {
-	case core.AttemptStateCompleted, core.AttemptStateFailed, core.AttemptStateOrphaned, core.AttemptStateCommittedRemote, core.AttemptStateFenced:
+	case AttemptStateCompleted, AttemptStateFailed, AttemptStateOrphaned, AttemptStateCommittedRemote, AttemptStateFenced:
 		return false
 	default:
 		return true
